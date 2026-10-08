@@ -215,7 +215,7 @@ export const SITE_PALETTE_TOKENS: Readonly<
       '--poke-inverse': '#2b352f',
       '--poke-text-primary': '#2b352f',
       '--poke-text-secondary': '#566459',
-      '--poke-text-muted': '#5d6860',
+      '--poke-text-muted': '#5a655d',
       '--poke-text-tertiary': '#5d6860',
       '--poke-border': '#ccd3ba',
       '--poke-border-strong': '#b3bd9c',
@@ -387,6 +387,32 @@ export const SITE_PALETTE_TOKENS: Readonly<
       '--destructive': '#ff8b80',
       '--destructive-foreground': '#101a2c',
     },
+  },
+};
+
+/** The moment-chip colours, ink and translucent fill per chip. */
+export const SITE_MOMENT_NAMES = ['amber', 'red', 'purple', 'emerald', 'blue'] as const;
+export type SiteMomentName = (typeof SITE_MOMENT_NAMES)[number];
+
+/** Moment chips as Layer 1 declares them (`:root` / `[data-theme="dark"]` in
+ *  globals.css): mode-dependent, the same in every palette except the dark
+ *  overrides below. site-palette-css.test.ts locks these to the CSS. */
+export const SITE_MOMENT_TOKENS: Readonly<
+  Record<'light' | 'dark', Readonly<Record<SiteMomentName, { ink: string; bg: string }>>>
+> = {
+  light: {
+    amber: { ink: '#92400e', bg: 'rgba(245, 158, 11, 0.15)' },
+    red: { ink: '#991b1b', bg: 'rgba(239, 68, 68, 0.15)' },
+    purple: { ink: '#6b21a8', bg: 'rgba(168, 85, 247, 0.15)' },
+    emerald: { ink: '#065f46', bg: 'rgba(16, 185, 129, 0.15)' },
+    blue: { ink: '#1e40af', bg: 'rgba(59, 130, 246, 0.15)' },
+  },
+  dark: {
+    amber: { ink: '#fbbf24', bg: 'rgba(245, 158, 11, 0.2)' },
+    red: { ink: '#f87171', bg: 'rgba(239, 68, 68, 0.2)' },
+    purple: { ink: '#c084fc', bg: 'rgba(168, 85, 247, 0.2)' },
+    emerald: { ink: '#34d399', bg: 'rgba(16, 185, 129, 0.2)' },
+    blue: { ink: '#60a5fa', bg: 'rgba(59, 130, 246, 0.2)' },
   },
 };
 

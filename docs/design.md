@@ -44,8 +44,11 @@ in the incumbent warm palette without raw hex in components.
 
 ### Color (`poke-*` in Tailwind: `bg-poke-*`, `text-poke-*`, `border-poke-*`)
 
-Values below are the default **plaza** palette; the site palettes override
-every literal token on `<html>` ([Site palettes](#site-palettes)).
+Values below are the default **plaza** palette. The site palettes override
+the 43 base colour tokens (`BASE_TOKEN_NAMES`) on `<html>`; the moment chips
+and stat bars keep their plaza values, except that the dark sakura, mountain
+and clouds variants re-ink the red, purple and blue moment chips
+([Site palettes](#site-palettes)).
 
 | Token | Use | Sunlit | Moonlit |
 |---|---|---|---|
@@ -252,9 +255,10 @@ Token usage in className:
 
 ## Site palettes
 
-A per-device colour scheme for the whole site, carried over from the league
-worlds' text fallbacks. The default `plaza` is exactly the arena-sand palette
-above; a plaza user sees no change at all.
+A per-device colour scheme for the whole site, built from the colour cores
+of the four league worlds (Layer 0 below: the colours each world's DOM
+sections and its Lite page render in). The default `plaza` is exactly the
+arena-sand palette above; a plaza user sees no change at all.
 
 | Id | Label | Description | World dialect |
 |---|---|---|---|
@@ -281,7 +285,8 @@ Ids, labels and the token-name list live in `src/lib/design/site-palettes.ts`
   exactly matches a non-default id, swallows storage errors (the page renders
   plaza), never touches `data-theme`, and exits early on `/broadcast/*`.
   The CSP allows it through `script-src 'unsafe-inline'`; if the CSP ever moves
-  to hashes, `site-palette-script.test.ts` prints the `sha256-…` value.
+  to hashes, `site-palette-script.test.ts` pins the `sha256-…` value (a script
+  change must update it on purpose).
 - **Store and hook** (`src/lib/design/site-palette-store.ts`, `'use client'`).
   `useSitePalette()` is a `useSyncExternalStore` over the `<html>` attribute
   (the truth after first paint; `null` on the server and before hydration).
@@ -307,8 +312,11 @@ Ids, labels and the token-name list live in `src/lib/design/site-palettes.ts`
   is in it (`RouteNavReveal` treats a pointer over `#site-nav`'s subtree as on
   the bar), and the panel consumes its own Escape so the bar stays revealed.
   `PalettePickerSection` is the inline group inside the mobile drawer's scroll
-  region. Swatches read `var(--palette-<id>-<role>)`, so they show each palette
-  in the current light/dark mode with no hex.
+  region. Swatches read `var(--palette-<id>-<role>)` (ground, surface,
+  accent), so they show each palette in the current light/dark mode with no
+  hex. They preview the world cores: where the site lowers a core for AA, the
+  swatch shows the core, not the site token. Today that is only the sunlit
+  Sakura accent (core `#c2436c`, site `--poke-accent` `#b23a60`).
 - **No scene churn.** `WorldStateProvider` observes only `data-theme`; a
   palette switch never starts a theme veil or a scene generation.
 
@@ -319,7 +327,8 @@ Layer 0  palette cores   :root / [data-theme="dark"]    --palette-<id>-<role>   
 Layer 1  site base set   :root + themed world elements  --poke-*, --background, ShadCN, moments, stat bars  (plaza)
 Layer 2  site palettes   html[data-palette="<id>"] (+ [data-theme="dark"])  overrides Layer 1 on <html> only
 Layer 3  world blocks    [data-world="<ns>"]            --world-* = var(--palette-<palette>-*), --hud-* (unchanged)
-         root aliases    :root { --world-*: var(--poke-*) }   (arena-* outside worlds follows the site)
+         root aliases    :root { --world-ground: var(--poke-base); --world-ink: var(--poke-text-primary); … }
+                         (arena-* outside worlds follows the site)
          .league-hub     (unchanged)
 ```
 
@@ -403,7 +412,8 @@ only `--hud-*`). Every themed world is **pinned**: it renders the same whatever
 site palette the viewer picked ([Site palettes](#site-palettes)). The DOM-only
 `default` world declares no `--world-*`, so it reads the root aliases and
 follows the site palette. Outside any world
-the root aliases (`:root { --world-*: var(--poke-*) }`) still feed the
+the root aliases (`--world-ground: var(--poke-base)`, `--world-ink:
+var(--poke-text-primary)`, `--world-accent: var(--poke-accent)`, …) still feed the
 `arena-*` utilities, so those follow the site palette. A future world that
 wants a distinct dialect adds its cores to Layer 0 and a
 `[data-world="..."]` block that reads them. Both ink tiers meet WCAG AA

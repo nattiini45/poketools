@@ -105,4 +105,10 @@ describe('PalettePicker source contract', () => {
     expect(source).not.toContain('createPortal');
     expect(source).not.toMatch(/@radix-ui/);
   });
+
+  it('closes on a soft navigation: the open state is keyed to the pathname it opened on', () => {
+    expect(source).toContain('const pathname = usePathname();');
+    expect(source).toMatch(/const open = openOn !== null && openOn\.path === pathname;/);
+    expect(source).not.toMatch(/useState\(false\)/);
+  });
 });

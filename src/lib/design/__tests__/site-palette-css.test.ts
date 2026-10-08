@@ -8,7 +8,12 @@ import {
   type SitePaletteId,
   type SitePaletteMode,
 } from '../site-palettes';
-import { SITE_PALETTE_DARK_MOMENT_OVERRIDES, SITE_PALETTE_TOKENS } from '../site-palette-tokens';
+import {
+  SITE_MOMENT_NAMES,
+  SITE_MOMENT_TOKENS,
+  SITE_PALETTE_DARK_MOMENT_OVERRIDES,
+  SITE_PALETTE_TOKENS,
+} from '../site-palette-tokens';
 import { getRegisteredRouteThemeIds, getWorldByRouteThemeId, resolveWorld } from '@/lib/worlds/registry';
 import type { RouteThemeId } from '@/types/season';
 
@@ -405,13 +410,29 @@ describe('CSS <-> TS parity (values resolve to SITE_PALETTE_TOKENS)', () => {
     }
   }
 
-  it('the dark non-plaza blocks carry the moment-chip overrides; nothing else overrides moments', () => {
+  it('the dark non-plaza blocks carry exactly the moment-chip overrides; nothing else overrides moments', () => {
+    const overrideNames = Object.keys(SITE_PALETTE_DARK_MOMENT_OVERRIDES).sort();
     for (const id of ['sakura', 'mountain', 'clouds'] as const) {
       const dark = paletteBlock(id, 'dark');
       for (const [name, value] of Object.entries(SITE_PALETTE_DARK_MOMENT_OVERRIDES)) {
         expect(dark.decls.get(name), `${id} dark ${name}`).toBe(value);
       }
+      const darkMoments = dark.list.map(([n]) => n).filter((n) => n.startsWith('--poke-moment-')).sort();
+      expect(darkMoments, `${id} dark moment keys`).toEqual(overrideNames);
       expect(paletteBlock(id, 'light').list.some(([n]) => n.startsWith('--poke-moment-')), `${id} light`).toBe(false);
+    }
+  });
+
+  it('Layer 1 declares the moment chips SITE_MOMENT_TOKENS models (the contrast suite reads them)', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      const decls = layer1(mode).decls;
+      const declared = [...decls.keys()].filter((n) => n.startsWith('--poke-moment-')).sort();
+      const modeled = SITE_MOMENT_NAMES.flatMap((name) => [`--poke-moment-${name}`, `--poke-moment-${name}-bg`]).sort();
+      expect(declared, `${mode} moment keys`).toEqual(modeled);
+      for (const name of SITE_MOMENT_NAMES) {
+        expect(decls.get(`--poke-moment-${name}`), `${mode} ${name}`).toBe(SITE_MOMENT_TOKENS[mode][name].ink);
+        expect(decls.get(`--poke-moment-${name}-bg`), `${mode} ${name}-bg`).toBe(SITE_MOMENT_TOKENS[mode][name].bg);
+      }
     }
   });
 });
