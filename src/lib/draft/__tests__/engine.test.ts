@@ -563,7 +563,7 @@ describe('availablePricesSorted', () => {
   ];
 
   it('drops taken Pokémon (case-insensitive) and the excluded entry, prices missing costs at the fallback', () => {
-    expect(availablePricesSorted(entries, ['pikachu'], 5)).toEqual([5, 90]);
+    expect(availablePricesSorted(entries, ['PIKACHU'], 5)).toEqual([5, 90]);
     expect(availablePricesSorted(entries, [], 5, entries[0])).toEqual([5, 20]);
   });
 
@@ -607,6 +607,22 @@ describe('legacyPickerStall', () => {
       legacyPickerStall({ state: stateOf(), totalRounds: 3, availablePrices: [50], fallbackPrice: 0 }),
     ).toEqual({ player_id: 'A', remaining: 40, open_slots: 2, min_cost: 50 });
     expect(legacyPickerStall({ state: stateOf(), totalRounds: 3, availablePrices: [], fallbackPrice: 0 })).toBeNull();
+  });
+
+  it('a wildcard outside the pool list unsticks the picker when its price plus the cheapest rest fits', () => {
+    // 2 open picks, 40 points, pool [25, 30, 80]: 55 > 40 from the pool alone.
+    const base = { state: stateOf(), totalRounds: 3, availablePrices: [25, 30, 80], fallbackPrice: 10 };
+    // Wildcard at 10 + cheapest one more (25) = 35 <= 40: a pick passes the picks route.
+    expect(legacyPickerStall({ ...base, wildcardPrice: 10 })).toBeNull();
+    // Wildcard at 20 + 25 = 45 > 40: still stuck, and the report keeps the pool-list numbers.
+    expect(legacyPickerStall({ ...base, wildcardPrice: 20 })).toEqual({
+      player_id: 'A',
+      remaining: 40,
+      open_slots: 2,
+      min_cost: 55,
+    });
+    // No wildcard held: stuck.
+    expect(legacyPickerStall({ ...base, wildcardPrice: null })).not.toBeNull();
   });
 
   it('is null in free order, without prices, for a full roster, or once the draft is not running', () => {

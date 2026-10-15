@@ -31,6 +31,7 @@ vi.mock('@/lib/supabase/queries/format-rules', () => ({
 vi.mock('@/lib/supabase/queries/evolutions', () => ({
   getSeasonTrackers: vi.fn(),
   getAllTiers: vi.fn(),
+  getPlayerWildcards: vi.fn(async () => []),
 }));
 
 vi.mock('@/lib/draft/engine', () => ({

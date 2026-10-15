@@ -110,6 +110,18 @@ describe('POST /api/drafts/[id]/free-order', () => {
     expect(json).toMatchObject({ code: 'invalid_json' });
   });
 
+  it('a malformed id (a site admin passes the guard without a pool read) is 404 with no pool read or update', async () => {
+    const res = await POST(
+      new Request('http://localhost/api/drafts/not-a-uuid/free-order', { method: 'POST', body: '{}' }),
+      { params: Promise.resolve({ id: 'not-a-uuid' }) },
+    );
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 'POOL_NOT_FOUND' });
+    expect(vi.mocked(getDraftPoolById)).not.toHaveBeenCalled();
+    expect(vi.mocked(switchDraftPoolToFreeOrder)).not.toHaveBeenCalled();
+  });
+
   it('a missing pool is 404 POOL_NOT_FOUND', async () => {
     vi.mocked(getDraftPoolById).mockResolvedValue(null);
 

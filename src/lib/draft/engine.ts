@@ -290,13 +290,21 @@ export interface PickerStall {
 }
 
 /**
- * Snake/linear order with fixed costs: is the current picker stuck? They are when even the cheapest Pokémon still
- * available cannot fill their open picks, so every pick is refused (`INSUFFICIENT_BUDGET` or
- * `draft_pick_strands_roster`) and, with nobody else allowed to pick, the draft cannot go on. Taking the cheapest
- * Pokémon is the best move (any other pick plus the cheapest completion costs at least as much), so the check is
- * the cheapest `open_slots` prices against the budget. Same rule as the picks route: price only, tier limits not
- * folded in, and with fewer Pokémon left than open picks only the ones that still exist count. No Pokémon left at
- * all is not a budget stall (null).
+ * Snake/linear order with fixed costs: is the current picker stuck? They are when no pick passes the picks route:
+ * every pool-list pick is refused (`INSUFFICIENT_BUDGET` or `draft_pick_strands_roster`) and, in an evo league,
+ * so is a wildcard pick. With nobody else allowed to pick, the draft cannot go on.
+ *
+ * - Pool list: taking the cheapest Pokémon is the best move (any other pick plus the cheapest completion costs at
+ *   least as much), so the check is the cheapest `open_slots` prices against the budget.
+ * - Wildcard (`wildcardPrice`, the picker holds an undrafted wildcard outside the pool list): the picks route prices
+ *   it at the pool default and completes the roster from the pool list only, so it passes when that price plus the
+ *   cheapest `open_slots - 1` pool prices fit.
+ *
+ * Same rule as the picks route: price only, tier limits not folded in, and with fewer Pokémon left than open picks
+ * only the ones that still exist count. No Pokémon left at all is not a budget stall (null).
+ *
+ * Plain fixed-price pools only: callers must exclude Evolution Point Buy seasons, whose pools are also
+ * `draft_type` budget but price picks from the bound point-buy list, never from pool entries.
  */
 export function legacyPickerStall(i: {
   state: Pick<DraftState, 'pool' | 'current_picker' | 'turn_enforced' | 'budgets' | 'rosters'>;
@@ -304,6 +312,8 @@ export function legacyPickerStall(i: {
   /** From `availablePricesSorted` without an exclusion. */
   availablePrices: readonly number[] | null;
   fallbackPrice: number;
+  /** The pool default when the picker holds an undrafted wildcard outside the pool list; else null. */
+  wildcardPrice?: number | null;
 }): PickerStall | null {
   const { state } = i;
   const picker = state.current_picker;
@@ -326,6 +336,8 @@ export function legacyPickerStall(i: {
     const { count, cost } = minCompletion(i.availablePrices, openSlots);
     if (count === 0) return null;
     minCost = cost;
+    const wildcard = i.wildcardPrice ?? null;
+    if (wildcard !== null && wildcard + minCompletion(i.availablePrices, openSlots - 1).cost <= remaining) return null;
   }
   return minCost > remaining ? { player_id: picker, remaining, open_slots: openSlots, min_cost: minCost } : null;
 }

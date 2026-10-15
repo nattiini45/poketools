@@ -12,7 +12,7 @@ import { getSeasonParticipants, getSeasonById } from '@/lib/supabase/queries/sea
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { epbPack } from '@/lib/format-pack';
 import { SQL_DRAFT_PICKS_FALLBACK } from '@/lib/draft/sql-fallbacks';
-import { getAllTiers, getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
+import { getAllTiers, getPlayerWildcards, getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
 import {
   availablePricesSorted,
   computeDraftState,
@@ -191,17 +191,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json<ApiResult<DraftSnapshotDTO | DraftSnapshotUnchanged>>({ success: true, data: dto });
     }
 
-    // Only a running fixed-price draft in turn order can stall; only it reads the pool list for the check.
-    const canStall = pool.status === 'in_progress' && pool.pick_order !== 'free' && pool.draft_type === 'budget';
-    const [picks, participants, season, poolEntries] = await Promise.all([
+    const [picks, participants, season] = await Promise.all([
       getPicksByPool(id),
       getSeasonParticipants(pool.season_id),
       getSeasonById(pool.season_id),
-      canStall ? getPoolEntries(pool.season_id) : Promise.resolve(null),
     ]);
 
     const isEpb = season ? isEvolutionPointBuy(season.format_type) : false;
     const rules = isEpb ? await getFormatRules(pool.season_id) : null;
+    // Only a running fixed-price draft in turn order can stall, and only a plain one: EPB prices from its bound list,
+    // not the pool list. Only such a pool reads the pool list for the check.
+    const canStall =
+      !isEpb && pool.status === 'in_progress' && pool.pick_order !== 'free' && pool.draft_type === 'budget';
+    const poolEntries = canStall ? await getPoolEntries(pool.season_id) : null;
 
     // Seat order is the pool's seeded draw, not the participant read's row order.
     const participantIds = legacySeatOrder(pool.id, participants.map((p) => p.id));
@@ -211,16 +213,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const state = computeDraftState(pool, picks, participantIds, totalRounds);
 
-    // EPB prices from its bound list, not the pool list: the check covers plain fixed-price pools only.
-    const fallbackPrice = pool.default_point_cost ?? 0;
-    const stalledPicker = poolEntries !== null && !isEpb
-      ? legacyPickerStall({
-          state,
-          totalRounds,
-          availablePrices: availablePricesSorted(poolEntries, state.taken_pokemon, fallbackPrice),
-          fallbackPrice,
-        })
-      : null;
+    let stalledPicker: PickerStall | null = null;
+    if (poolEntries !== null) {
+      const fallbackPrice = pool.default_point_cost ?? 0;
+      const stallInput = {
+        state,
+        totalRounds,
+        availablePrices: availablePricesSorted(poolEntries, state.taken_pokemon, fallbackPrice),
+        fallbackPrice,
+      };
+      stalledPicker = legacyPickerStall(stallInput);
+      // Evo leagues: the picks route also takes the picker's own wildcard outside the pool list (at the pool
+      // default). The picker's wildcards are read only once the pool list alone leaves them stuck.
+      if (stalledPicker && stallInput.availablePrices !== null) {
+        const listed = new Set(poolEntries.map((e) => e.pokemon_name.toLowerCase()));
+        const taken = new Set(Array.from(state.taken_pokemon, (name) => name.toLowerCase()));
+        const wildcards = await getPlayerWildcards(pool.season_id, stalledPicker.player_id);
+        const hasWildcard = wildcards.some((w) => {
+          const base = w.base_pokemon.toLowerCase();
+          return !listed.has(base) && !taken.has(base);
+        });
+        if (hasWildcard) stalledPicker = legacyPickerStall({ ...stallInput, wildcardPrice: fallbackPrice });
+      }
+    }
 
     // The state is computed on the same rows the legacy pick route validates
     // against; only the payload's pick list is narrowed: voided picks dropped
