@@ -118,9 +118,13 @@ export default function PalettePicker() {
   // The panel belongs to the page it was opened on: the open state records
   // that pathname, so a soft navigation (back/forward, a router push from
   // elsewhere) closes it with no effect and no event. An object, so a null
-  // pathname (no App Router context, the tests) still opens.
+  // pathname (no App Router context, the tests) still opens. The first render on
+  // another pathname also drops the record (React's reset-state-during-render
+  // pattern), so a Back/Forward round trip to the page never re-opens the panel
+  // or moves focus into it.
   const pathname = usePathname();
   const [openOn, setOpenOn] = useState<{ path: string | null } | null>(null);
+  if (openOn !== null && openOn.path !== pathname) setOpenOn(null);
   const open = openOn !== null && openOn.path === pathname;
   const setOpen = (next: boolean) => setOpenOn(next ? { path: pathname } : null);
   const panelId = useId();

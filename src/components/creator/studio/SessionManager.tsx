@@ -177,7 +177,7 @@ export default function SessionManager() {
                 </button>
                 <button
                   onClick={() => handleDelete(s.id)}
-                  className="ml-4 text-xs text-poke-text-secondary hover:text-poke-danger-tint-ink transition-colors"
+                  className="ml-4 text-xs text-poke-text-secondary hover:text-poke-danger-ink transition-colors"
                 >
                   {t('sessions.delete')}
                 </button>
