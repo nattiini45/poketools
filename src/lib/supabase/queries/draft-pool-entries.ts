@@ -23,8 +23,10 @@ export const POOL_ENTRIES_READ_CHUNK = 1000;
 
 /**
  * Get all pool entries for a season, in `.range()` pages: the first page carries `count: 'exact'` and paging goes on
- * until that many rows arrived (one request for a list of up to 1000 entries). `id` breaks ties so no row repeats or
- * vanishes between pages.
+ * until that many rows arrived (one request for a list of up to 1000 entries). `id` breaks ties, so a static list
+ * pages exactly. Under concurrent edits the pages are not a snapshot: an entry inserted mid-read shifts later offsets
+ * forward (the repeat is dropped below), and one deleted behind the offset shifts them back, so a list edited while
+ * it is read can miss a live entry until the next read.
  */
 export async function getPoolEntries(seasonId: string): Promise<DraftPoolEntry[]> {
   const rows: EntryRow[] = [];
@@ -46,7 +48,15 @@ export async function getPoolEntries(seasonId: string): Promise<DraftPoolEntry[]
     if (chunk.length === 0) break; // entries were deleted while paging
     rows.push(...chunk);
   }
-  return rows.map(toEntry);
+  // An entry inserted mid-read shifts later offsets by one; drop the repeat (it would count a price twice).
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => {
+      if (seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    })
+    .map(toEntry);
 }
 
 /** Get a single pool entry by season + pokemon name. */

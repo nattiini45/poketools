@@ -697,6 +697,17 @@ describe('queries/draft-pool-entries', () => {
       expect(mockBuilder.select).toHaveBeenNthCalledWith(2, '*', undefined);
     });
 
+    it('drops the repeat an insert mid-read pushes onto the next page', async () => {
+      const page = (ids: number[]) => ids.map((k) => ({ ...poolEntryRow, id: `pe-${k}` }));
+      // 1001 rows when counted; one more lands before page two, shifting pe-999 to offset 1000.
+      mockBuilder.range
+        .mockResolvedValueOnce({ data: page(Array.from({ length: 1000 }, (_, k) => k)), error: null, count: 1001 })
+        .mockResolvedValueOnce({ data: page([999, 1000]), error: null, count: null });
+      const result = await getPoolEntries('s-1');
+      expect(result).toHaveLength(1001);
+      expect(new Set(result.map((e) => e.id)).size).toBe(1001);
+    });
+
     it('stops when entries vanish while paging', async () => {
       mockBuilder.range
         .mockResolvedValueOnce({ data: [poolEntryRow], error: null, count: 3 })
