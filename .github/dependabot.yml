@@ -14,3 +14,14 @@ updates:
       github-actions:
         patterns:
           - '*'
+  # npm: security updates only. A limit of 0 turns off routine version bumps;
+  # Dependabot security PRs still read this entry for their commit message.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    commit-message:
+      # Produces "build(deps): ..." / "build(deps-dev): ..." titles.
+      prefix: build
+      include: scope
