@@ -1,0 +1,35 @@
+# Every text file is LF in the repo and in every checkout, whatever core.autocrlf says. A CRLF
+# checkout (Git for Windows defaults to core.autocrlf=true) breaks shebang scripts under Vitest
+# ("#!/usr/bin/env node\r" is a SyntaxError), tests that match source text with \n regexes, and
+# every bash script ($'\r': command not found).
+# The 20 files already stored with CRLF or mixed endings keep their bytes: under text=auto, git add,
+# status and diff leave a blob that holds CR alone. `git hash-object` does not read the index and still
+# cleans them to LF, so the base-tree swap (scripts/gauntlet/swap.sh) also accepts a file whose raw bytes
+# are the ref's blob. Do NOT renormalise them (git add --renormalize): they are identical in the older
+# refs the swap uses (b230d7ff, 9716aa89), so a swap rewrites one only when the working tree edited it;
+# renormalised, every swap would write them back with CRLF over an LF index, and the runner's tree
+# check (scripts/gauntlet/lib/stamp.mjs, git diff <ref>) would read them as changed.
+# A file with lone CRs (every line CR CR LF: a tool translated LF to CRLF twice) is not text to
+# text=auto, so no rule here converts it and git add --renormalize leaves it as it is; an explicit
+# `text` would only turn CR CR LF into CRLF and dirty the 20 files above. `git ls-files --eol` shows
+# such a file as i/-text: rewrite its bytes to LF (tr -d '\r') and check `git diff -w` is empty.
+# The sync-standings route was one (2026-10, PR #65 follow-ups) and is LF now.
+* text=auto eol=lf
+
+# The gauntlet capture tools run under Git Bash, and the runner refuses CRLF queue files.
+scripts/gauntlet/** text eol=lf
+
+# Binary assets: never convert.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.glb binary
+*.hdr binary
+*.ktx2 binary
+*.wasm binary
+*.mp4 binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.xlsx binary

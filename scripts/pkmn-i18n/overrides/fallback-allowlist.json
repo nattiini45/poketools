@@ -1,0 +1,19 @@
+{
+  "_comment": "@pkmn ids allowed to have NO German name (English fallback at runtime), each with a reason. Gen 9 ids may never be listed (coverage.test.ts). Remove a row once a name exists: stale rows fail the test.",
+  "items": {
+    "berry": "Gen-2 relic, no PokeAPI German name",
+    "berserkgene": "Gen-2 relic, no PokeAPI German name",
+    "bitterberry": "Gen-2 relic, no PokeAPI German name",
+    "burntberry": "Gen-2 relic, no PokeAPI German name",
+    "goldberry": "Gen-2 relic, no PokeAPI German name",
+    "iceberry": "Gen-2 relic, no PokeAPI German name",
+    "mail": "Gen-2 relic, no PokeAPI German name",
+    "mintberry": "Gen-2 relic, no PokeAPI German name",
+    "miracleberry": "Gen-2 relic, no PokeAPI German name",
+    "mysteryberry": "Gen-2 relic, no PokeAPI German name",
+    "pinkbow": "Gen-2 relic, no PokeAPI German name",
+    "polkadotbow": "Gen-2 relic, no PokeAPI German name",
+    "przcureberry": "Gen-2 relic, no PokeAPI German name",
+    "psncureberry": "Gen-2 relic, no PokeAPI German name"
+  }
+}

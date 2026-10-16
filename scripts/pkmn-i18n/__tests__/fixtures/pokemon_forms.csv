@@ -1,0 +1,5 @@
+id,identifier,form_identifier,pokemon_id,introduced_in_version_group_id,is_default,is_battle_only,is_mega,form_order,order
+479,rotom,,479,12,1,0,0,1,1
+10008,rotom-heat,heat,10008,12,1,0,0,2,2
+10126,lycanroc-dusk,dusk,10126,18,1,0,0,3,3
+10300,enamorus-therian,therian,10300,24,1,0,0,2,2

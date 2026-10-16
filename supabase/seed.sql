@@ -1,0 +1,1 @@
+-- Intentionally empty. Local `supabase db reset` requires this file (see supabase/config.toml).

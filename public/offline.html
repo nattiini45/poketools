@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PokéTools Offline</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --surface: #ffffff;
+        --base: #faf7f2;
+        --text-primary: #1a1714;
+        --text-secondary: #6b6560;
+        --border: #e5dfd5;
+        --brand: #e3350d;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: var(--base);
+        color: var(--text-primary);
+        font-family: "DM Sans", system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+
+      .card {
+        width: min(92vw, 460px);
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        padding: 24px;
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.08);
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.4rem;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 0;
+        color: var(--text-secondary);
+        line-height: 1.5;
+      }
+
+      a {
+        margin-top: 16px;
+        display: inline-block;
+        color: white;
+        text-decoration: none;
+        background: var(--brand);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>You are offline</h1>
+      <p>PokéTools will reconnect automatically when your connection returns. Try reopening a previously visited page or refresh now.</p>
+      <a href="/">Go to home</a>
+    </main>
+  </body>
+</html>

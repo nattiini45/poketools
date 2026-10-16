@@ -1,0 +1,16 @@
+move_id,local_language_id,name
+1,9,Pound
+1,6,Pfund
+12,6,Guillotine
+446,9,Stealth Rock
+446,6,Tarnsteine
+580,9,Grassy Terrain
+580,6,Grasfeld
+581,9,Misty Terrain
+581,6,Nebelfeld
+604,9,Electric Terrain
+604,6,Elektrofeld
+678,9,Psychic Terrain
+678,6,Psychofeld
+900,9,Test Move
+900,6,Test’s Zug

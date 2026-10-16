@@ -1,0 +1,690 @@
+/*
+ * Draft tool tokens and layout (draft-frontend §5.3–§5.4, owner DF2a).
+ *
+ * - Tokens derive from the world palette (`--world-*`, `--hud-*`) with the
+ *   palette-aware `--poke-*` as fallback, so every world and both themes work.
+ * - No element uses a fixed dark fill (design rule "no dark slabs"). The only
+ *   literal hex colours are the violet CTA (SPEC:393-397), its white ink and
+ *   the four light price-tab pastels with their ink; `draft-tool-css.test.ts`
+ *   enforces this whitelist.
+ * - Red means "drafted" and nothing else: the low timer band, a negative
+ *   remaining budget and error toasts use amber/orange.
+ * - Uppercase is CSS only (`.caps`), so German gets German casing.
+ * - `.tokens` carries the custom properties only (no position, no paint), for
+ *   pieces rendered outside the screen root: the toast stack and the portalled
+ *   players sheet. `.root` adds the screen's ink, surface and stacking context.
+ */
+
+.tokens,
+.root {
+  --draft-cta: #7C3AED;
+  --draft-cta-hover: #8B5CF6;
+  --draft-cta-pressed: #6D28D9;
+  --draft-cta-ink: #FFFFFF;
+  --draft-cta-disabled-bg: var(--poke-muted);
+  --draft-cta-disabled-ink: var(--poke-text-muted);
+  --draft-surface: var(--world-surface, var(--poke-surface));
+  --draft-elevated: var(--world-elevated, var(--poke-elevated));
+  --draft-ink: var(--world-ink, var(--poke-text-primary));
+  --draft-ink-2: var(--world-ink-secondary, var(--poke-text-secondary));
+  --draft-border: var(--world-border, var(--poke-border));
+  --draft-accent: var(--world-accent, var(--poke-accent));
+  --draft-glow: var(--world-glow, var(--poke-glow));
+  --draft-wall: color-mix(in srgb, var(--hud-glass, var(--draft-elevated)) 18%, var(--draft-surface));
+  --draft-hex-line: color-mix(in srgb, var(--hud-glass-border, var(--draft-border)) 55%, transparent);
+  --draft-glass: color-mix(in srgb, var(--draft-surface) 82%, transparent);
+  --draft-dots: color-mix(in srgb, var(--draft-accent) 20%, transparent);
+  --draft-taken-bg: var(--poke-danger-light);
+  --draft-taken-border: var(--poke-danger);
+  --draft-taken-ink: var(--poke-danger-ink);
+  --draft-blocked-opacity: 0.45;
+  --draft-clock-ok: var(--poke-green);
+  --draft-clock-warn: var(--poke-yellow);
+  /* Orange, not red: red is reserved for drafted lines (design rule). */
+  --draft-clock-low: var(--poke-amber-ink);
+  --draft-warn-ink: var(--poke-amber-ink);
+  --draft-clock-track: var(--poke-muted);
+  --draft-tab-1: #FCE7A6;
+  --draft-tab-2: #FBCFA6;
+  --draft-tab-3: #C3DBF6;
+  --draft-tab-4: #C4E9CD;
+  --draft-tab-all: var(--draft-elevated);
+  --draft-tab-ink: #241A0C;
+
+  color: var(--draft-ink);
+}
+
+.root {
+  background: var(--draft-surface);
+  position: relative;
+}
+
+:global([data-theme="dark"]) .tokens,
+:global([data-theme="dark"]) .root {
+  --draft-glass: color-mix(in srgb, var(--draft-surface) 78%, transparent);
+  --draft-tab-1: rgba(234, 179, 8, 0.24);
+  --draft-tab-2: rgba(249, 115, 22, 0.24);
+  --draft-tab-3: rgba(59, 130, 246, 0.26);
+  --draft-tab-4: rgba(22, 163, 74, 0.26);
+  --draft-tab-ink: var(--draft-ink);
+  /* The CTA keeps the spec hexes in both themes. */
+}
+
+/* Banners, the CTA and "Draft paused": stored in sentence case (critique S4). */
+.caps {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Screen grid ─────────────────────────────────────────────────────── */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.clockRow,
+.orderRow {
+  min-width: 0;
+}
+
+.stagePane,
+.wallPane {
+  min-width: 0;
+  position: relative;
+}
+
+/*
+ * Phone: the left column dissolves (`display: contents`) so its parts can be
+ * ordered around the wall: selected card → wall → roster/picks/compare →
+ * sticky bottom bar (§5.3 phone list).
+ */
+.stagePane {
+  display: contents;
+}
+
+.stageCard,
+.extras {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.5rem;
+  border: 1px solid var(--draft-border);
+  border-radius: 0.75rem;
+  background: var(--draft-surface);
+}
+
+.clockRow {
+  order: 1;
+}
+.orderRow {
+  order: 2;
+}
+.stageCard,
+.stagePane {
+  order: 3;
+}
+.wallPane {
+  order: 4;
+}
+.extras {
+  order: 5;
+}
+.bottomBar {
+  order: 6;
+}
+
+@media (min-width: 768px) {
+  .stagePane {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--draft-border);
+    border-radius: 0.75rem;
+    background: var(--draft-surface);
+  }
+  .stageCard,
+  .extras {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+}
+
+.wallPane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--draft-border);
+  border-radius: 0.75rem;
+  background: var(--draft-wall);
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* Static hex lattice (the mockup's pulsing glow is dropped, §5.4). */
+.wallPane::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--draft-hex-line);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 0 56 16.2v32.3L28 64.7 0 48.5V16.2zM28 64.7V97M0 97h0M56 97h0' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 0 56 16.2v32.3L28 64.7 0 48.5V16.2zM28 64.7V97M0 97h0M56 97h0' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") repeat;
+  -webkit-mask-size: 56px 97px;
+  mask-size: 56px 97px;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* Tablet: two columns, no diagonal. */
+@media (min-width: 768px) {
+  .screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+  .clockRow,
+  .orderRow {
+    grid-column: 1 / -1;
+  }
+  .orderRow {
+    display: none;
+  }
+}
+
+/* Desktop: the Prompt 9 split with a diagonal edge. */
+@media (min-width: 1024px) {
+  .screen {
+    grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr);
+    gap: 0;
+    row-gap: 0.5rem;
+    height: calc(100dvh - var(--nav-h, 64px));
+    min-height: 640px;
+  }
+  .orderRow {
+    display: block;
+  }
+  .stagePane {
+    overflow-y: auto;
+    border-radius: 0.75rem 0 0 0.75rem;
+    padding-right: 3.75rem;
+    clip-path: polygon(0 0, 100% 0, calc(100% - 48px) 100%, 0 100%);
+    z-index: 1;
+  }
+  .wallPane {
+    margin-left: -48px;
+    padding-left: calc(48px + 0.75rem);
+    border-radius: 0 0.75rem 0.75rem 0;
+  }
+}
+
+/* ── Left stage ──────────────────────────────────────────────────────── */
+
+/* Info box: the navbar glass recipe. */
+.glass {
+  background: var(--draft-glass);
+  border: 1px solid var(--draft-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--draft-ink) 8%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+}
+
+/* Amber halftone behind the staged sprites (never red). */
+.halftone {
+  position: relative;
+  isolation: isolate;
+}
+
+.halftone::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(var(--draft-dots) 1.4px, transparent 1.6px) 0 0 / 10px 10px;
+  -webkit-mask: radial-gradient(ellipse at 55% 55%, black 20%, transparent 72%);
+  mask: radial-gradient(ellipse at 55% 55%, black 20%, transparent 72%);
+  pointer-events: none;
+}
+
+.previewStage {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  grid-template-rows: auto auto;
+  align-items: end;
+  justify-items: center;
+  min-height: 11rem;
+  padding: 0.5rem;
+}
+
+.previewS2 {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.previewS3 {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.previewS1 {
+  grid-column: 2;
+  grid-row: 2;
+  margin-top: -1.5rem;
+}
+
+.previewCompact {
+  min-height: 7rem;
+}
+
+/*
+ * Cost, the DRAFT button and the admin switch. A direct child of the stage
+ * pane (not of the card), so `sticky` is bounded by the whole left column and
+ * the button stays in view while the roster, picks and compare tray scroll
+ * (§5.3). At lg+ the pane is its own scroller and the dock also sticks to the
+ * top once the card has scrolled away.
+ */
+.ctaDock {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  order: 3;
+  padding-top: 0.5rem;
+  background: linear-gradient(to top, var(--draft-surface) 70%, transparent);
+}
+
+@media (min-width: 1024px) {
+  .ctaDock {
+    top: 0;
+    padding-bottom: 0.25rem;
+    background: var(--draft-surface);
+  }
+}
+
+.cta {
+  display: inline-flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  border: 2px solid transparent;
+  font-weight: 800;
+  font-size: 1.125rem;
+  background: var(--draft-cta);
+  color: var(--draft-cta-ink);
+  cursor: pointer;
+}
+
+.cta:hover:not(:disabled) {
+  background: var(--draft-cta-hover);
+}
+
+.cta:active:not(:disabled) {
+  background: var(--draft-cta-pressed);
+}
+
+.cta:disabled {
+  background: var(--draft-cta-disabled-bg);
+  color: var(--draft-cta-disabled-ink);
+  cursor: not-allowed;
+}
+
+/* Admin pick-on-behalf: visibly different (outline violet). */
+.ctaAdmin {
+  background: transparent;
+  color: var(--draft-cta);
+  border-color: var(--draft-cta);
+}
+
+.ctaAdmin:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--draft-cta) 10%, transparent);
+}
+
+.ctaAdmin:active:not(:disabled) {
+  background: color-mix(in srgb, var(--draft-cta) 18%, transparent);
+}
+
+:global([data-theme="dark"]) .ctaAdmin {
+  color: var(--draft-cta-hover);
+  border-color: var(--draft-cta-hover);
+}
+
+.focusable:focus-visible,
+.cta:focus-visible {
+  outline: 2px solid var(--poke-focus);
+  outline-offset: 2px;
+}
+
+/* Roster dock tiles: slanted like the wall. */
+.dockTile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  min-height: 3.75rem;
+  border: 1px solid var(--draft-border);
+  border-radius: 0.375rem;
+  background: var(--draft-elevated);
+  transform: skewX(-6deg);
+}
+
+.dockTile > * {
+  transform: skewX(6deg);
+}
+
+.dockEmpty {
+  border-style: dashed;
+  background: transparent;
+}
+
+/* ── Clock ───────────────────────────────────────────────────────────── */
+
+.clockBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--draft-border);
+  border-radius: 0.75rem;
+  background: var(--draft-glass);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 767px) {
+  .clockBar {
+    position: sticky;
+    top: var(--nav-h, 64px);
+    z-index: 20;
+  }
+}
+
+.timerTrack {
+  position: relative;
+  height: 0.5rem;
+  min-width: 6rem;
+  flex: 1 1 8rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--draft-clock-track);
+}
+
+.timerTrackCompact {
+  height: 4px;
+}
+
+.timerFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+
+.bandOk {
+  background: var(--draft-clock-ok);
+}
+
+.bandWarn {
+  background: var(--draft-clock-warn);
+}
+
+.bandLow {
+  background: var(--draft-clock-low);
+}
+
+.bandPaused {
+  background: var(--draft-ink-2);
+}
+
+.digits {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.banner {
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--draft-cta) 14%, var(--draft-surface));
+  color: var(--draft-ink);
+  border: 1px solid color-mix(in srgb, var(--draft-cta) 45%, transparent);
+}
+
+.bannerPaused {
+  background: color-mix(in srgb, var(--poke-yellow) 22%, var(--draft-surface));
+  border-color: color-mix(in srgb, var(--poke-yellow) 55%, transparent);
+}
+
+/* ── Order strip ─────────────────────────────────────────────────────── */
+
+.orderStrip {
+  display: flex;
+  gap: 0.375rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
+.orderChip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 11rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--draft-border);
+  border-radius: 9999px;
+  background: var(--draft-elevated);
+  font-size: 0.8125rem;
+}
+
+.orderChipViewer {
+  border-color: var(--draft-accent);
+  box-shadow: 0 0 0 2px var(--draft-glow);
+  font-weight: 700;
+}
+
+.orderBreak {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 2px;
+  margin: 0 0.25rem;
+  border-radius: 1px;
+  background: var(--draft-border);
+}
+
+/* ── Breakpoint variants ─────────────────────────────────────────────── */
+
+/*
+ * One of two renderings per breakpoint (the full timer and sprites from
+ * 768 px, the compact ones on phones). `display: contents` keeps the wrapper
+ * out of the layout; `display: none` also drops the hidden copy from the
+ * accessibility tree.
+ */
+.wideOnly {
+  display: contents;
+}
+.phoneOnly {
+  display: none;
+}
+
+/* Tablet: the order strip collapses into the clock bar as "Next 5" (§5.3). */
+.nextFive {
+  display: none;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .nextFive {
+    display: flex;
+    flex: 1 1 100%;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .nextSingle {
+    display: none;
+  }
+}
+
+/*
+ * Phone-only collapsible sections (`PhoneSection`, §5.3 items 3 and 8). From
+ * 768 px the wrapper and body vanish from the layout and the toggle hides.
+ */
+.phoneSection,
+.phoneBody {
+  display: contents;
+}
+.phoneToggle {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .wideOnly {
+    display: none;
+  }
+  .phoneOnly {
+    display: contents;
+  }
+  .phoneSection {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .phoneBody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+  .phoneBodyCollapsed {
+    display: none;
+  }
+  .phoneToggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 44px;
+    width: 100%;
+    padding: 0 0.25rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: left;
+    background: transparent;
+    color: var(--draft-ink);
+  }
+  .phoneSection .phoneHideHeading {
+    display: none;
+  }
+}
+
+/* ── Phone bottom bar ────────────────────────────────────────────────── */
+
+.bottomBar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .bottomBar {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem 0;
+    background: linear-gradient(to top, var(--draft-surface) 80%, transparent);
+  }
+  .bottomBar .cta {
+    min-height: 48px;
+    width: auto;
+    flex: 0 0 auto;
+    padding: 0 1.5rem;
+  }
+  /* The bottom bar carries the DRAFT button; cost and the admin switch stay. */
+  .stageCta {
+    display: none;
+  }
+  .ctaDock {
+    position: static;
+    padding: 0.5rem;
+    border: 1px solid var(--draft-border);
+    border-radius: 0.75rem;
+    background: var(--draft-surface);
+  }
+  .ctaDockPhoneEmpty {
+    display: none;
+  }
+}
+
+/* ── Toasts ──────────────────────────────────────────────────────────── */
+
+.toastStack {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(28rem, calc(100vw - 2rem));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--draft-border);
+  border-left-width: 4px;
+  border-radius: 0.625rem;
+  background: var(--draft-surface);
+  color: var(--draft-ink);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--draft-ink) 14%, transparent);
+  pointer-events: auto;
+}
+
+.toastSuccess {
+  border-left-color: var(--poke-green);
+}
+
+.toastError {
+  border-left-color: var(--poke-yellow);
+}
+
+.toastInfo {
+  border-left-color: var(--draft-accent);
+}
+
+/* ── Motion (reduced-motion users get none) ─────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  .timerFill {
+    transition: width 250ms linear, background-color 120ms ease;
+  }
+  .dockTile,
+  .orderChip,
+  .cta {
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  }
+  .dockTile:hover {
+    transform: skewX(-6deg) translateY(-2px);
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--require",
+        "./.claude/local-assets.cjs",
+        "node_modules/next/dist/bin/next",
+        "dev"
+      ],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "board",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--require",
+        "./.claude/local-assets.cjs",
+        "node_modules/next/dist/bin/next",
+        "dev",
+        "--port",
+        "3111"
+      ],
+      "port": 3111
+    },
+    {
+      "name": "board-local",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--require",
+        "./.claude/local-assets.cjs",
+        "node_modules/next/dist/bin/next",
+        "dev",
+        "--port",
+        "3111"
+      ],
+      "port": 3111
+    },
+    {
+      "name": "prod-local",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--require",
+        "./.claude/local-assets.cjs",
+        "node_modules/next/dist/bin/next",
+        "start",
+        "--port",
+        "3112"
+      ],
+      "port": 3112
+    }
+  ]
+}

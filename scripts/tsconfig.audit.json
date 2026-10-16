@@ -1,0 +1,14 @@
+{
+  "$comment": "Run-only tsconfig for the §28 season audit script. Used by `tsx` via `--tsconfig scripts/tsconfig.audit.json` so the reconcile import chain can resolve the `server-only` marker package (no top-level dep, no Next build alias under tsx). It maps `server-only` to the existing no-op stub `src/test/server-only-stub.ts` (the SAME stub Vitest uses) and `next/cache` to `src/test/next-cache-stub.ts` (revalidatePath throws its static-generation invariant outside a Next request context, which would abort repair-mode runs mid-season after the data writes). The root tsconfig.json is NOT modified, so the Next.js server-only guard stays intact for the app build, and the app keeps the real next/cache. This file is NOT consumed by `tsc --noEmit` (typecheck) — typecheck uses the root tsconfig which already includes scripts/*.ts via **/*.ts.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@/*": ["../src/*"],
+      "@format-pack": ["../src/format-packs/private", "../src/format-packs/example"],
+      "server-only": ["../src/test/server-only-stub.ts"],
+      "next/cache": ["../src/test/next-cache-stub.ts"]
+    }
+  },
+  "include": ["./run-season-audit.ts"]
+}

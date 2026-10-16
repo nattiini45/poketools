@@ -1,0 +1,488 @@
+{
+  "sky": "{\"v\":\"\\n  varying vec3 vWorldPos;\\n  void main() {\\n    vec4 world = modelMatrix * vec4(position, 1.0);\\n    vWorldPos = world.xyz;\\n    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\\n  }\\n\",\"f\":\"\\n  \\n  uniform vec3 uZenith;\\n  uniform vec3 uHorizon;\\n  uniform vec3 uGlow;\\n  uniform vec3 uSunPos;\\n  uniform float uNight;\\n  uniform float uGain;\\n  uniform float uSat;\\n  uniform vec3 uDayHorizon;\\n  uniform vec3 uDayMid;\\n  uniform vec3 uDayZenith;\\n  uniform vec3 uPeach;\\n  uniform vec3 uLilac;\\n\\n  uniform vec3 uCloudBelly;\\n  uniform vec3 uCloudMid;\\n  uniform vec3 uCloudLit;\\n  uniform vec3 uSilver;\\n  uniform vec3 uSkyGold;\\n  uniform float uCloudTaps;\\n  varying vec3 vWorldPos;\\n  \\nuniform vec4 uCalmRects[ 4 ];\\nuniform float uCalmCount;\\nuniform vec2 uCalmViewport;\\nuniform float uCalmFeather;\\nfloat calmAt( vec2 fragCoord ) {\\n  vec2 uv = fragCoord / max( uCalmViewport, vec2( 1.0 ) );\\n  float calm = 0.0;\\n  for ( int i = 0; i < 4; i ++ ) {\\n    if ( float( i ) >= uCalmCount ) break;\\n    vec4 r = uCalmRects[ i ];\\n    vec2 d = max( r.xy - uv, uv - r.zw );\\n    float outside = max( d.x, d.y );\\n    calm = max( calm, 1.0 - smoothstep( 0.0, max( uCalmFeather, 1e-4 ), outside ) );\\n  }\\n  return calm;\\n}\\n\\n  \\n  float hash13(vec3 p) {\\n    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453123);\\n  }\\n\\n  float hash12(vec2 p) {\\n    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);\\n  }\\n\\n  float vnoise(vec2 p) {\\n    vec2 i = floor(p);\\n    vec2 f = fract(p);\\n    vec2 u = f * f * (3.0 - 2.0 * f);\\n    float a = hash12(i);\\n    float b = hash12(i + vec2(1.0, 0.0));\\n    float c = hash12(i + vec2(0.0, 1.0));\\n    float d = hash12(i + vec2(1.0, 1.0));\\n    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\\n  }\\n\\n\\n  float fbm(vec2 p) {\\n    float v = 0.0;\\n    float amp = 0.5;\\n    mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);\\n    for (int i = 0; i < 5; i++) {\\n      v += amp * vnoise(p);\\n      p = rot * p * 2.03 + vec2(1.7, 9.2);\\n      amp *= 0.5;\\n    }\\n    return v;\\n  }\\n\\n  // Day cumulus variant (C-038): octave-1 damped (0.3 vs 0.5) so the field's\\n  // per-slice mean drifts less across the frozen station bands — absolute\\n  // cover thresholds then hold their meaning at every station.\\n  float fbmDay(vec2 p) {\\n    float v = 0.0;\\n    float amp = 0.3;\\n    mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);\\n    for (int i = 0; i < 5; i++) {\\n      if (i == 1) amp = 0.4;\\n      v += amp * vnoise(p);\\n      p = rot * p * 2.03 + vec2(1.7, 9.2);\\n      amp *= 0.5;\\n    }\\n    return v;\\n  }\\n\\n  \\n  vec3 skyDayClear(vec3 dir) {\\n    float elev = dir.y;\\n    float t = smoothstep(-0.02, 0.30, elev);\\n    const float MID_T = 0.316406;\\n    vec3 col = t < MID_T\\n      ? mix(uDayHorizon, uDayMid, t / MID_T)\\n      : mix(uDayMid, uDayZenith, (t - MID_T) / (1.0 - MID_T));\\n    float haze = exp(-max(elev, 0.0) * 5.0);\\n    col = mix(col, uDayHorizon, haze * 0.180);\\n\\n    vec3 sunDir = normalize(uSunPos - cameraPosition);\\n    float mu = max(dot(dir, sunDir), 0.0);\\n    col += uGlow * (pow(mu, 36.0) * 0.16 + pow(mu, 140.0) * 0.28);\\n    col += uGlow * pow(mu, 6.0) * 0.14;\\n\\n    // Low azimuth lobes: peach toward the sun, lilac away from it, so the two\\n    // board stations differ in sky temperature (pulse warm, schedule cool).\\n    vec2 sunAz = normalize(sunDir.xz);\\n    float azLen = length(dir.xz);\\n    if (azLen > 1e-4) {\\n      vec2 dirAz = dir.xz / azLen;\\n      float low = 1.0 - smoothstep(0.02, 0.34, elev);\\n      float toward = dot(dirAz, sunAz);\\n      col = mix(col, uPeach, pow(max(toward, 0.0), 1.6) * low * 0.42);\\n      col = mix(col, uLilac, pow(max(-toward, 0.0), 1.6) * low * 0.18);\\n    }\\n    return col;\\n  }\\n\\n  /** The night CLEAR sky: the verbatim night gradient, haze and corona (no clouds, no stars). */\\n  vec3 skyNightClear(vec3 dir) {\\n    float elev = dir.y;\\n    float zenithMix = smoothstep(0.12, 0.52, elev);\\n    vec3 col = mix(uHorizon, uZenith, zenithMix);\\n    float haze = exp(-max(elev, 0.0) * 3.6);\\n    col = mix(col, uHorizon, haze * 0.28);\\n    vec3 sunDir = normalize(uSunPos - cameraPosition);\\n    float mu = max(dot(dir, sunDir), 0.0);\\n    col += mix(uHorizon, uGlow, 0.18) * pow(mu, 42.0) * 0.12;\\n    return col;\\n  }\\n\\n  vec3 skyClear(vec3 dir) {\\n    return uNight > 0.5 ? skyNightClear(dir) : skyDayClear(dir);\\n  }\\n\\n  /** AgX compensation (see SKY_GRADE). */\\n  vec3 skyGrade(vec3 col) {\\n    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));\\n    return mix(vec3(lum), col, uSat) * uGain;\\n  }\\n\\n\\n  void main() {\\n    vec3 dir = normalize(vWorldPos - cameraPosition);\\n    float elev = dir.y;\\n    vec3 col;\\n\\n    if (uNight > 0.5) {\\n      // ── NIGHT: the pre-pilot shader, verbatim ─────────────────────────────\\n      // Pulse-768 sky is elev ~0.32–0.44. Night saturating at 0.16 made σ=0.\\n      // Top of that band stays near the (7,4,51) anchor; lower band still hazes.\\n      float zenithMix = smoothstep(\\n        mix(-0.18, 0.12, uNight),\\n        mix(0.42, 0.52, uNight),\\n        elev\\n      );\\n      col = mix(uHorizon, uZenith, zenithMix);\\n      float haze = exp(-max(elev, 0.0) * mix(3.2, 3.6, uNight));\\n      col = mix(col, uHorizon, haze * mix(0.42, 0.28, uNight));\\n\\n      vec3 sunDir = normalize(uSunPos - cameraPosition);\\n      float mu = max(dot(dir, sunDir), 0.0);\\n      float mie = pow(mu, 36.0);\\n      float disc = pow(mu, 140.0);\\n      col += uGlow * (mie * 0.16 + disc * 0.28) * (1.0 - uNight);\\n\\n      vec2 sunAz = normalize(sunDir.xz);\\n      vec2 dirAz = dir.xz;\\n      float azLen = length(dirAz);\\n      float lobe = azLen > 1e-4\\n        ? pow(max(dot(dirAz / azLen, sunAz), 0.0), 2.5)\\n          * (1.0 - smoothstep(0.02, 0.34, elev))\\n          * (1.0 - uNight)\\n        : 0.0;\\n      col = mix(col, mix(uHorizon, uGlow, 0.42), lobe * 0.3);\\n\\n      // Tight night corona only — wide pow() washed the whole band to mid-slate.\\n      float corona = pow(mu, 42.0);\\n      col += mix(uHorizon, uGlow, 0.18) * corona * 0.12 * uNight;\\n\\n      if (elev > 0.02) {\\n        vec2 cloudUv = dir.xz / (elev + 0.18) * 0.55 + vec2(3.1, 7.4);\\n        float field = fbm(cloudUv);\\n        float cover = smoothstep(0.46, 0.78, field);\\n        float thick = smoothstep(0.52, 0.92, field);\\n        float fade = smoothstep(0.02, 0.22, elev);\\n        vec3 dayCloud = mix(vec3(0.86, 0.90, 0.96), vec3(1.0, 0.99, 0.97), thick);\\n        dayCloud -= vec3(0.10, 0.08, 0.05) * (1.0 - thick) * cover;\\n        vec3 nightCloud = mix(uZenith, uHorizon, 0.5) * 1.35;\\n        vec3 cloud = mix(dayCloud, nightCloud, uNight);\\n        float amount = cover * fade * mix(0.92, 0.26, uNight);\\n        col = mix(col, cloud, amount);\\n      }\\n\\n      // Point stars: one jittered disc per azimuth/elevation cell, ~1.5 px at\\n      // 1440, instead of lighting whole 3D hash cells (which read as squares).\\n      vec2 suv = vec2(atan(dir.z, dir.x) * 28.0, dir.y * 60.0);\\n      vec2 cell = floor(suv);\\n      vec2 jitter = vec2(hash13(vec3(cell, 1.0)), hash13(vec3(cell, 2.0))) - 0.5;\\n      float seed = hash13(vec3(cell, 3.0));\\n      float d = length(fract(suv) - 0.5 - jitter * 0.6);\\n      float stars = step(0.93, seed) * (1.0 - smoothstep(0.0, 0.09 + 0.07 * seed, d))\\n        * smoothstep(0.18, 0.62, elev) * uNight;\\n      col += vec3(0.72, 0.78, 0.92) * stars * (0.12 + 0.22 * seed);\\n      col += (hash13(dir * 220.0) - 0.5) * mix(0.006, 0.012, uNight);\\n    } else {\\n      // ── DAY: the painted sky ──────────────────────────────────────────────\\n      col = skyDayClear(dir);\\n      float contrast = mix(1.0, 0.15, calmAt(gl_FragCoord.xy));\\n      vec3 sunDir = normalize(uSunPos - cameraPosition);\\n      float mu = max(dot(dir, sunDir), 0.0);\\n\\n      float cover = 0.0;\\n      if (elev > 0.015) {\\n        vec2 cloudUv = dir.xz / (elev + 0.18) * 2.6 + vec2(3.1, 7.4);\\n        float field = fbmDay(cloudUv);\\n        // LOOK r6 (L5): more cover toward the sun's azimuth and in the low band.\\n        vec2 coverAz = normalize(sunDir.xz + vec2(1e-5));\\n        float coverLen = length(dir.xz);\\n        float sunAzW = coverLen > 1e-4 ? pow(max(dot(dir.xz / coverLen, coverAz), 0.0), 2.0) : 0.0;\\n        float lowBand = 1.0 - smoothstep(0.05, 0.3, elev);\\n        float coverBias = 0.10 * sunAzW + 0.12 * lowBand;\\n        cover = smoothstep(0.44 - coverBias, 0.60 - coverBias, field);\\n        if (cover > 0.0) {\\n          // Self-shadow: density toward the sun in the cloud plane. The tap\\n          // count is a uniform bound (quality.cloudTaps), one program.\\n          vec2 toSun = normalize(sunDir.xz + vec2(1e-5)) * 0.09;\\n          float occ = 0.0;\\n          float taps = 0.0;\\n          for (int i = 0; i < 4; i++) {\\n            if (float(i) >= uCloudTaps) break;\\n            occ += smoothstep(0.44, 0.70, fbmDay(cloudUv + toSun * float(i + 1)));\\n            taps += 1.0;\\n          }\\n          occ /= max(taps, 1.0);\\n          float thick = smoothstep(0.52, 0.78, field);\\n          float light = clamp(1.1 - 0.75 * occ - 0.2 * thick + 0.1 * (1.0 - cover), 0.0, 1.0);\\n\\n          // LOOK r6 (L5): a cumulus seen against the sun is backlit — its body darkens.\\n          light *= mix(1.0, 0.35, smoothstep(0.30, 0.80, mu) * thick);\\n          // Soft 3-band shading: belly → mid → lit.\\n          float b = light * 2.0;\\n          float stepped = min(floor(b), 1.0) + smoothstep(0.3, 0.7, b - min(floor(b), 1.0));\\n          b = mix(b, stepped, 0.7);\\n          vec3 cloud = b < 1.0 ? mix(uCloudBelly, uCloudMid, b) : mix(uCloudMid, uCloudLit, b - 1.0);\\n\\n          // Silver lining on thin sun-facing edges — LOOK r6: gold toward the\\n          // sun, at the silver's own luminance (hue, never more light).\\n          float edge = cover * (1.0 - smoothstep(0.46 - coverBias, 0.56 - coverBias, field));\\n          float silverL = dot(uSilver, vec3(0.2126, 0.7152, 0.0722));\\n          vec3 goldLining = uSkyGold * (silverL / max(dot(uSkyGold, vec3(0.2126, 0.7152, 0.0722)), 1e-4));\\n          vec3 lining = mix(uSilver, goldLining, smoothstep(0.2, 0.8, pow(mu, 2.0)));\\n          cloud = mix(cloud, lining, edge * (0.25 + 0.75 * pow(mu, 3.0)) * 0.7);\\n\\n          float fade = smoothstep(0.015, 0.10, elev);\\n          col = mix(col, cloud, cover * fade * contrast);\\n        }\\n      }\\n\\n      // Cirrus: thin wind-combed streaks above elevation 0.18, 0.18 opacity.\\n      if (elev > 0.18) {\\n        vec2 cuv = dir.xz / (elev + 0.05);\\n        cuv = mat2(0.94, 0.34, -0.34, 0.94) * cuv * vec2(0.6, 3.2) + vec2(11.3, 4.7);\\n        float streak = smoothstep(0.52, 0.78, fbm(cuv));\\n        float ci = smoothstep(0.18, 0.30, elev) * (1.0 - cover);\\n        col = mix(col, uCloudLit, streak * ci * 0.18 * contrast);\\n      }\\n\\n      // LOOK r4 (rules contre-jour hero): crepuscular rays fanning from the low\\n      // sun across the sky gap — static, warm, flattened inside the calm rects.\\n      {\\n        vec3 raySun = normalize(uSunPos - cameraPosition);\\n        vec3 rayX = normalize(cross(raySun, vec3(0.0, 1.0, 0.0)));\\n        vec3 rayY = cross(rayX, raySun);\\n        vec3 rayQ = dir - raySun * dot(dir, raySun);\\n        float rayAng = atan(dot(rayQ, rayY), dot(rayQ, rayX));\\n        float fan = smoothstep(0.45, 0.95, 0.5 + 0.5 * sin(rayAng * 9.0 + 1.7 * sin(rayAng * 9.0)));\\n        float reach = pow(max(dot(dir, raySun), 0.0), 1.00) * smoothstep(-0.05, 0.2, elev);\\n        float rayCalm = 1.0 - calmAt(gl_FragCoord.xy);\\n        float rayAmt = (fan * 0.500 + 0.080) * reach * rayCalm;\\n        // LOOK r6 (L4a): the dark sectors between the rays deepen (cool, never lighter).\\n        col *= mix(vec3(1.0), vec3(0.720, 0.800, 0.940), (1.0 - fan) * 0.550 * reach * rayCalm);\\n        col = mix(col, uPeach * 1.080, clamp(rayAmt, 0.0, 1.0));\\n      }\\n\\n      col += (hash13(dir * 220.0) - 0.5) * 0.006;\\n    }\\n\\n    // AgX compensation (SKY_GRADE): the post stack's operator pulls saturated\\n    // mid-tones toward grey, so the authored token colours are pre-saturated\\n    // and lifted to land where they were painted.\\n    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));\\n    col = mix(vec3(lum), col, uSat) * uGain;\\n    if (uNight < 0.5) {\\n      float capL = dot(col, vec3(0.2126, 0.7152, 0.0722));\\n      float over = max(capL - 0.500, 0.0);\\n      float capped = capL - over + over / (1.0 + over / 0.280);\\n      col *= capL > 1e-4 ? capped / capL : 1.0;\\n    }\\n\\n    gl_FragColor = vec4(col, 1.0);\\n  }\\n\",\"defines\":{},\"side\":2,\"toneMapped\":true,\"fog\":false,\"transparent\":false,\"blending\":1,\"key\":\"onBeforeCompile( /* shaderobject, renderer */ ) {}\"}",
+  "skyline": "{\"v\":\"\\n  uniform float uKind;\\n  attribute float aBand;\\n  varying vec2 vUv;\\n  varying float vBand;\\n  varying vec3 vWorldPos;\\n\\n  void main() {\\n    vUv = uv;\\n    vBand = aBand;\\n    #ifdef USE_INSTANCING\\n      mat4 m = modelMatrix * instanceMatrix;\\n    #else\\n      mat4 m = modelMatrix;\\n    #endif\\n    vec4 world;\\n    if (uKind < 0.5) {\\n      world = m * vec4(position, 1.0);\\n    } else {\\n      // Axial billboard: the instance's local +Y (scaled) is the shaft axis\\n      // from its entry (y = 0) to its landing (y = 1); local X scale is the\\n      // width. The quad turns about the axis to face the camera.\\n      vec3 origin = (m * vec4(0.0, 0.0, 0.0, 1.0)).xyz;\\n      vec3 axis = (m * vec4(0.0, 1.0, 0.0, 0.0)).xyz;\\n      float width = length((m * vec4(1.0, 0.0, 0.0, 0.0)).xyz);\\n      vec3 p = origin + axis * position.y;\\n      vec3 axisN = normalize(axis);\\n      vec3 side = cross(axisN, normalize(cameraPosition - p));\\n      float sl = length(side);\\n      side = sl > 1e-4 ? side / sl : normalize(cross(axisN, vec3(0.0, 0.0, 1.0)));\\n      world = vec4(p + side * position.x * width, 1.0);\\n    }\\n    vWorldPos = world.xyz;\\n    gl_Position = projectionMatrix * viewMatrix * world;\\n  }\\n\",\"f\":\"\\n  uniform float uKind;\\n  \\n  uniform vec3 uZenith;\\n  uniform vec3 uHorizon;\\n  uniform vec3 uGlow;\\n  uniform vec3 uSunPos;\\n  uniform float uNight;\\n  uniform float uGain;\\n  uniform float uSat;\\n  uniform vec3 uDayHorizon;\\n  uniform vec3 uDayMid;\\n  uniform vec3 uDayZenith;\\n  uniform vec3 uPeach;\\n  uniform vec3 uLilac;\\n\\n  // Skyline (kind 0).\\n  uniform sampler2D uAtlas;\\n  uniform vec2 uAtlasTexel;\\n  uniform vec3 uInk[3];\\n  uniform vec3 uLayerMix;\\n  uniform vec3 uRimWarm;\\n  uniform vec3 uWindow;\\n  uniform float uCalmDL;\\n  // Shaft (kind 1).\\n  uniform vec3 uColor;\\n  uniform float uIntensity;\\n  uniform float uCap;\\n  uniform vec4 uFade;\\n  uniform float uPhase;\\n  varying vec2 vUv;\\n  varying float vBand;\\n  varying vec3 vWorldPos;\\n  \\nuniform vec4 uCalmRects[ 4 ];\\nuniform float uCalmCount;\\nuniform vec2 uCalmViewport;\\nuniform float uCalmFeather;\\nfloat calmAt( vec2 fragCoord ) {\\n  vec2 uv = fragCoord / max( uCalmViewport, vec2( 1.0 ) );\\n  float calm = 0.0;\\n  for ( int i = 0; i < 4; i ++ ) {\\n    if ( float( i ) >= uCalmCount ) break;\\n    vec4 r = uCalmRects[ i ];\\n    vec2 d = max( r.xy - uv, uv - r.zw );\\n    float outside = max( d.x, d.y );\\n    calm = max( calm, 1.0 - smoothstep( 0.0, max( uCalmFeather, 1e-4 ), outside ) );\\n  }\\n  return calm;\\n}\\n\\n  \\n  float hash13(vec3 p) {\\n    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453123);\\n  }\\n\\n  float hash12(vec2 p) {\\n    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);\\n  }\\n\\n  float vnoise(vec2 p) {\\n    vec2 i = floor(p);\\n    vec2 f = fract(p);\\n    vec2 u = f * f * (3.0 - 2.0 * f);\\n    float a = hash12(i);\\n    float b = hash12(i + vec2(1.0, 0.0));\\n    float c = hash12(i + vec2(0.0, 1.0));\\n    float d = hash12(i + vec2(1.0, 1.0));\\n    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\\n  }\\n\\n  \\n  vec3 skyDayClear(vec3 dir) {\\n    float elev = dir.y;\\n    float t = smoothstep(-0.02, 0.30, elev);\\n    const float MID_T = 0.316406;\\n    vec3 col = t < MID_T\\n      ? mix(uDayHorizon, uDayMid, t / MID_T)\\n      : mix(uDayMid, uDayZenith, (t - MID_T) / (1.0 - MID_T));\\n    float haze = exp(-max(elev, 0.0) * 5.0);\\n    col = mix(col, uDayHorizon, haze * 0.180);\\n\\n    vec3 sunDir = normalize(uSunPos - cameraPosition);\\n    float mu = max(dot(dir, sunDir), 0.0);\\n    col += uGlow * (pow(mu, 36.0) * 0.16 + pow(mu, 140.0) * 0.28);\\n    col += uGlow * pow(mu, 6.0) * 0.14;\\n\\n    // Low azimuth lobes: peach toward the sun, lilac away from it, so the two\\n    // board stations differ in sky temperature (pulse warm, schedule cool).\\n    vec2 sunAz = normalize(sunDir.xz);\\n    float azLen = length(dir.xz);\\n    if (azLen > 1e-4) {\\n      vec2 dirAz = dir.xz / azLen;\\n      float low = 1.0 - smoothstep(0.02, 0.34, elev);\\n      float toward = dot(dirAz, sunAz);\\n      col = mix(col, uPeach, pow(max(toward, 0.0), 1.6) * low * 0.42);\\n      col = mix(col, uLilac, pow(max(-toward, 0.0), 1.6) * low * 0.18);\\n    }\\n    return col;\\n  }\\n\\n  /** The night CLEAR sky: the verbatim night gradient, haze and corona (no clouds, no stars). */\\n  vec3 skyNightClear(vec3 dir) {\\n    float elev = dir.y;\\n    float zenithMix = smoothstep(0.12, 0.52, elev);\\n    vec3 col = mix(uHorizon, uZenith, zenithMix);\\n    float haze = exp(-max(elev, 0.0) * 3.6);\\n    col = mix(col, uHorizon, haze * 0.28);\\n    vec3 sunDir = normalize(uSunPos - cameraPosition);\\n    float mu = max(dot(dir, sunDir), 0.0);\\n    col += mix(uHorizon, uGlow, 0.18) * pow(mu, 42.0) * 0.12;\\n    return col;\\n  }\\n\\n  vec3 skyClear(vec3 dir) {\\n    return uNight > 0.5 ? skyNightClear(dir) : skyDayClear(dir);\\n  }\\n\\n  /** AgX compensation (see SKY_GRADE). */\\n  vec3 skyGrade(vec3 col) {\\n    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));\\n    return mix(vec3(lum), col, uSat) * uGain;\\n  }\\n\\n\\n  float channelOf(vec4 t, float band) {\\n    return band < 0.5 ? t.r : (band < 1.5 ? t.g : t.b);\\n  }\\n\\n  float lstarOf(float y) {\\n    y = max(y, 0.0);\\n    return y > 0.008856 ? 116.0 * pow(y, 1.0 / 3.0) - 16.0 : 903.3 * y;\\n  }\\n\\n  float yOfLstar(float l) {\\n    return l > 8.0 ? pow((l + 16.0) / 116.0, 3.0) : max(l, 0.0) / 903.3;\\n  }\\n\\n  void main() {\\n    float calm = calmAt(gl_FragCoord.xy);\\n    if (uKind < 0.5) {\\n      float band = floor(vBand + 0.5);\\n      vec4 texel = texture2D(uAtlas, vUv);\\n      float cov = channelOf(texel, band);\\n      // Cut on the bilinear 0.5 contour with a ~1.5 px screen-space AA ramp.\\n      float h = clamp(fwidth(cov) * 0.75, 0.02, 0.5);\\n      float alpha = smoothstep(0.5 - h, 0.5 + h, cov);\\n      if (alpha < 0.004) discard;\\n\\n      vec3 dir = normalize(vWorldPos - cameraPosition);\\n      vec3 sky = skyClear(dir);\\n      int bi = int(band);\\n      vec3 ink = bi == 0 ? uInk[0] : (bi == 1 ? uInk[1] : uInk[2]);\\n      float k = bi == 0 ? uLayerMix.x : (bi == 1 ? uLayerMix.y : uLayerMix.z);\\n      vec3 col = mix(ink, sky, k);\\n\\n      // Busy terms (× (1 − calm)): the warm sun-side roofline rim by day and\\n      // the static near-band night windows.\\n      float busy = 1.0 - calm;\\n      float above = channelOf(texture2D(uAtlas, vUv + vec2(0.0, uAtlasTexel.y * 3.0)), band);\\n      float roof = clamp(cov - above, 0.0, 1.0);\\n      vec3 sunDir = normalize(uSunPos - cameraPosition);\\n      vec2 sunAz = normalize(sunDir.xz);\\n      float azLen = length(dir.xz);\\n      float sunSide = azLen > 1e-4 ? pow(max(dot(dir.xz / azLen, sunAz), 0.0), 1.5) : 0.0;\\n      col += uRimWarm * roof * sunSide * (1.0 - uNight) * busy;\\n\\n      vec3 graded = skyGrade(col);\\n      vec3 skyGraded = skyGrade(sky);\\n      // Calm clamp: behind a face the silhouette stays within uCalmDL L* of the local sky.\\n      float yc = dot(graded, vec3(0.2126, 0.7152, 0.0722));\\n      float ls = lstarOf(dot(skyGraded, vec3(0.2126, 0.7152, 0.0722)));\\n      float lt = clamp(lstarOf(yc), ls - uCalmDL, ls + uCalmDL);\\n      vec3 clamped = graded * (yc > 1e-6 ? yOfLstar(lt) / yc : 1.0);\\n      graded = mix(graded, clamped, calm);\\n\\n      float win = bi == 0 ? texel.a * uNight * busy : 0.0;\\n      graded = mix(graded, uWindow, win);\\n      gl_FragColor = vec4(graded, alpha);\\n    } else {\\n      float across = 1.0 - abs(vUv.x * 2.0 - 1.0);\\n      float soft = smoothstep(0.0, 1.0, across);\\n      soft *= soft;\\n      float along = smoothstep(uFade.x, uFade.y, vUv.y) * (1.0 - smoothstep(uFade.z, uFade.w, vUv.y));\\n      // Static dust: a fixed phase, so a still at t = 0 reads the same as any other.\\n      float dust = 0.85 + 0.15 * vnoise(vUv * vec2(6.0, 40.0) + vec2(uPhase, 0.0));\\n      float amount = min(max(uIntensity, 0.0), uCap) * soft * along * dust * (1.0 - calm);\\n      gl_FragColor = vec4(uColor * amount, 1.0);\\n    }\\n  }\\n\",\"defines\":{},\"side\":2,\"toneMapped\":false,\"fog\":false,\"transparent\":true,\"blending\":1,\"key\":\"onBeforeCompile( /* shaderobject, renderer */ ) {}\"}",
+  "skylineUniforms": {
+    "atlasTexel": [
+      0.00048828125,
+      0.001953125
+    ],
+    "inkDay": [
+      [
+        0.20155625378383743,
+        0.23455058215026167,
+        0.36130677977297226
+      ],
+      [
+        0.2541520943200296,
+        0.3049873140591091,
+        0.46778379610254284
+      ],
+      [
+        0.3231432091022285,
+        0.3967552307153359,
+        0.5647115056965487
+      ]
+    ],
+    "mixDay": [
+      0.45,
+      0.62,
+      0.78
+    ],
+    "rim": [
+      0.22,
+      0.14178553003195593,
+      0.07109150600249027
+    ]
+  },
+  "skylineGeometry": {
+    "vertices": 1542,
+    "weightedSum": 91469.20150089264,
+    "bands": [
+      {
+        "id": "near",
+        "index": 0,
+        "radius": 70,
+        "height": 20.072177003116554,
+        "horizonMix": {
+          "day": 0.45,
+          "night": 0.7
+        },
+        "seam": 2.356194490192345
+      },
+      {
+        "id": "mid",
+        "index": 1,
+        "radius": 100,
+        "height": 28.674538575880792,
+        "horizonMix": {
+          "day": 0.62,
+          "night": 0.8
+        },
+        "seam": 2.356194490192345
+      },
+      {
+        "id": "far",
+        "index": 2,
+        "radius": 140,
+        "height": 40.14435400623311,
+        "horizonMix": {
+          "day": 0.78,
+          "night": 0.88
+        },
+        "seam": 2.356194490192345
+      }
+    ]
+  },
+  "shaftFx": "{\"v\":\"\\n  uniform float uKind;\\n  attribute float aBand;\\n  varying vec2 vUv;\\n  varying float vBand;\\n  varying vec3 vWorldPos;\\n\\n  void main() {\\n    vUv = uv;\\n    vBand = aBand;\\n    #ifdef USE_INSTANCING\\n      mat4 m = modelMatrix * instanceMatrix;\\n    #else\\n      mat4 m = modelMatrix;\\n    #endif\\n    vec4 world;\\n    if (uKind < 0.5) {\\n      world = m * vec4(position, 1.0);\\n    } else {\\n      // Axial billboard: the instance's local +Y (scaled) is the shaft axis\\n      // from its entry (y = 0) to its landing (y = 1); local X scale is the\\n      // width. The quad turns about the axis to face the camera.\\n      vec3 origin = (m * vec4(0.0, 0.0, 0.0, 1.0)).xyz;\\n      vec3 axis = (m * vec4(0.0, 1.0, 0.0, 0.0)).xyz;\\n      float width = length((m * vec4(1.0, 0.0, 0.0, 0.0)).xyz);\\n      vec3 p = origin + axis * position.y;\\n      vec3 axisN = normalize(axis);\\n      vec3 side = cross(axisN, normalize(cameraPosition - p));\\n      float sl = length(side);\\n      side = sl > 1e-4 ? side / sl : normalize(cross(axisN, vec3(0.0, 0.0, 1.0)));\\n      world = vec4(p + side * position.x * width, 1.0);\\n    }\\n    vWorldPos = world.xyz;\\n    gl_Position = projectionMatrix * viewMatrix * world;\\n  }\\n\",\"f\":\"\\n  uniform float uKind;\\n  \\n  uniform vec3 uZenith;\\n  uniform vec3 uHorizon;\\n  uniform vec3 uGlow;\\n  uniform vec3 uSunPos;\\n  uniform float uNight;\\n  uniform float uGain;\\n  uniform float uSat;\\n  uniform vec3 uDayHorizon;\\n  uniform vec3 uDayMid;\\n  uniform vec3 uDayZenith;\\n  uniform vec3 uPeach;\\n  uniform vec3 uLilac;\\n\\n  // Skyline (kind 0).\\n  uniform sampler2D uAtlas;\\n  uniform vec2 uAtlasTexel;\\n  uniform vec3 uInk[3];\\n  uniform vec3 uLayerMix;\\n  uniform vec3 uRimWarm;\\n  uniform vec3 uWindow;\\n  uniform float uCalmDL;\\n  // Shaft (kind 1).\\n  uniform vec3 uColor;\\n  uniform float uIntensity;\\n  uniform float uCap;\\n  uniform vec4 uFade;\\n  uniform float uPhase;\\n  varying vec2 vUv;\\n  varying float vBand;\\n  varying vec3 vWorldPos;\\n  \\nuniform vec4 uCalmRects[ 4 ];\\nuniform float uCalmCount;\\nuniform vec2 uCalmViewport;\\nuniform float uCalmFeather;\\nfloat calmAt( vec2 fragCoord ) {\\n  vec2 uv = fragCoord / max( uCalmViewport, vec2( 1.0 ) );\\n  float calm = 0.0;\\n  for ( int i = 0; i < 4; i ++ ) {\\n    if ( float( i ) >= uCalmCount ) break;\\n    vec4 r = uCalmRects[ i ];\\n    vec2 d = max( r.xy - uv, uv - r.zw );\\n    float outside = max( d.x, d.y );\\n    calm = max( calm, 1.0 - smoothstep( 0.0, max( uCalmFeather, 1e-4 ), outside ) );\\n  }\\n  return calm;\\n}\\n\\n  \\n  float hash13(vec3 p) {\\n    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453123);\\n  }\\n\\n  float hash12(vec2 p) {\\n    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);\\n  }\\n\\n  float vnoise(vec2 p) {\\n    vec2 i = floor(p);\\n    vec2 f = fract(p);\\n    vec2 u = f * f * (3.0 - 2.0 * f);\\n    float a = hash12(i);\\n    float b = hash12(i + vec2(1.0, 0.0));\\n    float c = hash12(i + vec2(0.0, 1.0));\\n    float d = hash12(i + vec2(1.0, 1.0));\\n    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\\n  }\\n\\n  \\n  vec3 skyDayClear(vec3 dir) {\\n    float elev = dir.y;\\n    float t = smoothstep(-0.02, 0.30, elev);\\n    const float MID_T = 0.316406;\\n    vec3 col = t < MID_T\\n      ? mix(uDayHorizon, uDayMid, t / MID_T)\\n      : mix(uDayMid, uDayZenith, (t - MID_T) / (1.0 - MID_T));\\n    float haze = exp(-max(elev, 0.0) * 5.0);\\n    col = mix(col, uDayHorizon, haze * 0.180);\\n\\n    vec3 sunDir = normalize(uSunPos - cameraPosition);\\n    float mu = max(dot(dir, sunDir), 0.0);\\n    col += uGlow * (pow(mu, 36.0) * 0.16 + pow(mu, 140.0) * 0.28);\\n    col += uGlow * pow(mu, 6.0) * 0.14;\\n\\n    // Low azimuth lobes: peach toward the sun, lilac away from it, so the two\\n    // board stations differ in sky temperature (pulse warm, schedule cool).\\n    vec2 sunAz = normalize(sunDir.xz);\\n    float azLen = length(dir.xz);\\n    if (azLen > 1e-4) {\\n      vec2 dirAz = dir.xz / azLen;\\n      float low = 1.0 - smoothstep(0.02, 0.34, elev);\\n      float toward = dot(dirAz, sunAz);\\n      col = mix(col, uPeach, pow(max(toward, 0.0), 1.6) * low * 0.42);\\n      col = mix(col, uLilac, pow(max(-toward, 0.0), 1.6) * low * 0.18);\\n    }\\n    return col;\\n  }\\n\\n  /** The night CLEAR sky: the verbatim night gradient, haze and corona (no clouds, no stars). */\\n  vec3 skyNightClear(vec3 dir) {\\n    float elev = dir.y;\\n    float zenithMix = smoothstep(0.12, 0.52, elev);\\n    vec3 col = mix(uHorizon, uZenith, zenithMix);\\n    float haze = exp(-max(elev, 0.0) * 3.6);\\n    col = mix(col, uHorizon, haze * 0.28);\\n    vec3 sunDir = normalize(uSunPos - cameraPosition);\\n    float mu = max(dot(dir, sunDir), 0.0);\\n    col += mix(uHorizon, uGlow, 0.18) * pow(mu, 42.0) * 0.12;\\n    return col;\\n  }\\n\\n  vec3 skyClear(vec3 dir) {\\n    return uNight > 0.5 ? skyNightClear(dir) : skyDayClear(dir);\\n  }\\n\\n  /** AgX compensation (see SKY_GRADE). */\\n  vec3 skyGrade(vec3 col) {\\n    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));\\n    return mix(vec3(lum), col, uSat) * uGain;\\n  }\\n\\n\\n  float channelOf(vec4 t, float band) {\\n    return band < 0.5 ? t.r : (band < 1.5 ? t.g : t.b);\\n  }\\n\\n  float lstarOf(float y) {\\n    y = max(y, 0.0);\\n    return y > 0.008856 ? 116.0 * pow(y, 1.0 / 3.0) - 16.0 : 903.3 * y;\\n  }\\n\\n  float yOfLstar(float l) {\\n    return l > 8.0 ? pow((l + 16.0) / 116.0, 3.0) : max(l, 0.0) / 903.3;\\n  }\\n\\n  void main() {\\n    float calm = calmAt(gl_FragCoord.xy);\\n    if (uKind < 0.5) {\\n      float band = floor(vBand + 0.5);\\n      vec4 texel = texture2D(uAtlas, vUv);\\n      float cov = channelOf(texel, band);\\n      // Cut on the bilinear 0.5 contour with a ~1.5 px screen-space AA ramp.\\n      float h = clamp(fwidth(cov) * 0.75, 0.02, 0.5);\\n      float alpha = smoothstep(0.5 - h, 0.5 + h, cov);\\n      if (alpha < 0.004) discard;\\n\\n      vec3 dir = normalize(vWorldPos - cameraPosition);\\n      vec3 sky = skyClear(dir);\\n      int bi = int(band);\\n      vec3 ink = bi == 0 ? uInk[0] : (bi == 1 ? uInk[1] : uInk[2]);\\n      float k = bi == 0 ? uLayerMix.x : (bi == 1 ? uLayerMix.y : uLayerMix.z);\\n      vec3 col = mix(ink, sky, k);\\n\\n      // Busy terms (× (1 − calm)): the warm sun-side roofline rim by day and\\n      // the static near-band night windows.\\n      float busy = 1.0 - calm;\\n      float above = channelOf(texture2D(uAtlas, vUv + vec2(0.0, uAtlasTexel.y * 3.0)), band);\\n      float roof = clamp(cov - above, 0.0, 1.0);\\n      vec3 sunDir = normalize(uSunPos - cameraPosition);\\n      vec2 sunAz = normalize(sunDir.xz);\\n      float azLen = length(dir.xz);\\n      float sunSide = azLen > 1e-4 ? pow(max(dot(dir.xz / azLen, sunAz), 0.0), 1.5) : 0.0;\\n      col += uRimWarm * roof * sunSide * (1.0 - uNight) * busy;\\n\\n      vec3 graded = skyGrade(col);\\n      vec3 skyGraded = skyGrade(sky);\\n      // Calm clamp: behind a face the silhouette stays within uCalmDL L* of the local sky.\\n      float yc = dot(graded, vec3(0.2126, 0.7152, 0.0722));\\n      float ls = lstarOf(dot(skyGraded, vec3(0.2126, 0.7152, 0.0722)));\\n      float lt = clamp(lstarOf(yc), ls - uCalmDL, ls + uCalmDL);\\n      vec3 clamped = graded * (yc > 1e-6 ? yOfLstar(lt) / yc : 1.0);\\n      graded = mix(graded, clamped, calm);\\n\\n      float win = bi == 0 ? texel.a * uNight * busy : 0.0;\\n      graded = mix(graded, uWindow, win);\\n      gl_FragColor = vec4(graded, alpha);\\n    } else {\\n      float across = 1.0 - abs(vUv.x * 2.0 - 1.0);\\n      float soft = smoothstep(0.0, 1.0, across);\\n      soft *= soft;\\n      float along = smoothstep(uFade.x, uFade.y, vUv.y) * (1.0 - smoothstep(uFade.z, uFade.w, vUv.y));\\n      // Static dust: a fixed phase, so a still at t = 0 reads the same as any other.\\n      float dust = 0.85 + 0.15 * vnoise(vUv * vec2(6.0, 40.0) + vec2(uPhase, 0.0));\\n      float amount = min(max(uIntensity, 0.0), uCap) * soft * along * dust * (1.0 - calm);\\n      gl_FragColor = vec4(uColor * amount, 1.0);\\n    }\\n  }\\n\",\"defines\":{},\"side\":2,\"toneMapped\":false,\"fog\":false,\"transparent\":true,\"blending\":2,\"key\":\"onBeforeCompile( /* shaderobject, renderer */ ) {}\"}",
+  "sunShafts": {
+    "vertex": "\n  attribute vec3 aStart;\n  attribute vec3 aEnd;\n  attribute float aWidth;\n  attribute float aSeed;\n  varying vec2 vShaft;\n  varying float vLen;\n  varying float vSeed;\n  varying float vEye;\n  varying float vAxial;\n  void main() {\n    vec3 start = ( modelMatrix * vec4( aStart, 1.0 ) ).xyz;\n    vec3 end = ( modelMatrix * vec4( aEnd, 1.0 ) ).xyz;\n    vec3 axis = end - start;\n    float len = max( length( axis ), 1e-4 );\n    vec3 dir = axis / len;\n    vec3 p = start + axis * position.y;\n    vec3 side = cross( dir, cameraPosition - p );\n    float sideLen = length( side );\n    side = sideLen > 1e-4 ? side / sideLen : vec3( 1.0, 0.0, 0.0 );\n    // LOOK r6 (L4a): wide at the pool, tapering as it climbs toward the sun.\n    float width = aWidth * mix( 1.30, 0.70, position.y );\n    vec3 world = p + side * position.x * width;\n    vShaft = vec2( position.x * 2.0, position.y );\n    vLen = len;\n    vSeed = aSeed;\n    vEye = length( cameraPosition - world );\n    // How nearly the eye looks down the beam's own axis (1 = along it).\n    vAxial = abs( dot( dir, normalize( cameraPosition - p ) ) );\n    gl_Position = projectionMatrix * viewMatrix * vec4( world, 1.0 );\n  }\n",
+    "fragment": "\n  uniform vec3 uColor;\n  uniform float uStrength;\n  \nuniform vec4 uCalmRects[ 4 ];\nuniform float uCalmCount;\nuniform vec2 uCalmViewport;\nuniform float uCalmFeather;\nfloat calmAt( vec2 fragCoord ) {\n  vec2 uv = fragCoord / max( uCalmViewport, vec2( 1.0 ) );\n  float calm = 0.0;\n  for ( int i = 0; i < 4; i ++ ) {\n    if ( float( i ) >= uCalmCount ) break;\n    vec4 r = uCalmRects[ i ];\n    vec2 d = max( r.xy - uv, uv - r.zw );\n    float outside = max( d.x, d.y );\n    calm = max( calm, 1.0 - smoothstep( 0.0, max( uCalmFeather, 1e-4 ), outside ) );\n  }\n  return calm;\n}\n\n  varying vec2 vShaft;\n  varying float vLen;\n  varying float vSeed;\n  varying float vEye;\n  varying float vAxial;\n  void main() {\n    float a = 1.0 - min( abs( vShaft.x ), 1.0 );\n    // LOOK r6 (L4a): a flatter core with a defined edge — a beam, not a haze.\n    float across = smoothstep( 0.0, 0.45, a );\n    // LOOK r6 (L4a): soft where the beam starts, full strength almost to its\n    // top — only the last 18 % fades (r5 killed the upper 65 %).\n    float along = smoothstep( 0.0, 0.08, vShaft.y ) * ( 1.0 - smoothstep( 0.82, 1.0, vShaft.y ) );\n    // Static dust streaks in the beam's own frame (no time term).\n    float m = vShaft.y * vLen;\n    float streak = 0.5 + 0.5 * sin( vShaft.x * 7.0 + vSeed * 6.2831 + sin( m * 0.9 + vSeed * 3.0 ) * 1.3 );\n    // LOOK r6 (L4a): stronger striation, so a wide beam reads as rays, not fog.\n    float dust = 0.45 + 0.55 * streak * streak;\n    // Never a slab across the lens when an eye passes close to a beam, nor\n    // when it looks down a beam's own axis (the billboard turns edge-on).\n    float nearFade = smoothstep( 1.5, 5.0, vEye );\n    float axialFade = 1.0 - smoothstep( 0.75, 0.97, vAxial );\n    float calm = calmAt( gl_FragCoord.xy );\n    float k = across * along * dust * nearFade * axialFade * ( 1.0 - calm );\n    gl_FragColor = vec4( uColor * ( uStrength * k ), 1.0 );\n  }\n"
+  },
+  "canopy": {
+    "key": "tree-canopy-painted-v4",
+    "sss": "#if NUM_DIR_LIGHTS > 0\n{\n  vec3 sssL = directionalLights[ 0 ].direction;\n  float sssBack = saturate( - dot( sssL, geometryViewDir ) );\n  float sssB2 = sssBack * sssBack;\n  float sssThin = 1.0 - smoothstep( 0.500, 0.95, diffuseColor.a );\n  float sssRim = saturate( ( vColor.r - 0.550 ) / 0.450 );\n  float sssEdge = sssRim * smoothstep( 0.45, 0.92, 1.0 - saturate( dot( normal, geometryViewDir ) ) );\n  float sssT = sssB2 * ( 0.35 + 0.65 * sssB2 ) * ( 0.15 + 0.85 * max( sssThin, sssEdge ) ) * max( uLeafSSS, 0.0 );\n  vec3 sssKey = directionalLights[ 0 ].color;\n  #ifdef PAINT_KEY_SCALE\n  sssKey *= PAINT_KEY_SCALE;\n  #endif\n  float sssLum = max( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 0.0 );\n  vec3 sssAlb = mix( diffuseColor.rgb * vec3( 1.350, 1.000, 0.550 ), vec3( 1.000, 0.620, 0.220 ) * max( sssLum, 0.180 ) * 2.20, saturate( 0.10 + 0.90 * max( sssThin, sssEdge ) ) );\n  float sssSil = uLeafSil * ( 1.0 - sssEdge ) * smoothstep( 0.15, 0.60, sssBack );\n  reflectedLight.indirectDiffuse *= 1.0 - 0.45 * sssSil;\n  reflectedLight.directDiffuse *= 1.0 - 0.30 * sssSil;\n  reflectedLight.directDiffuse += min( sssAlb * sssKey * sssT, vec3( 1.200 ) );\n}\n#endif\n{\n  float lampDown = saturate( - dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ) );\n  reflectedLight.directDiffuse += uLeafLamp * vLeafLamp * ( 0.45 + 0.55 * lampDown ) * mix( diffuseColor.rgb * 2.0, vec3( 0.35 ), 0.3 );\n}",
+    "vertex": "#define STANDARD\nvarying vec3 vViewPosition;\n#ifdef USE_TRANSMISSION\n\tvarying vec3 vWorldPosition;\n#endif\n#include <common>\nuniform float uTime;\nattribute float aSway;\nattribute float aPhase;\nattribute float aLamp;\nvarying float vLeafLamp;\n#include <batching_pars_vertex>\n#include <uv_pars_vertex>\n#include <displacementmap_pars_vertex>\n#include <color_pars_vertex>\n#include <fog_pars_vertex>\n#include <normal_pars_vertex>\n#include <morphtarget_pars_vertex>\n#include <skinning_pars_vertex>\n#include <shadowmap_pars_vertex>\n#include <logdepthbuf_pars_vertex>\n#include <clipping_planes_pars_vertex>\nvoid main() {\n\t#include <uv_vertex>\n\t#include <color_vertex>\n\t#include <morphinstance_vertex>\n\t#include <morphcolor_vertex>\n\t#include <batching_vertex>\n\t#include <beginnormal_vertex>\n\t#include <morphnormal_vertex>\n\t#include <skinbase_vertex>\n\t#include <skinnormal_vertex>\n\t#include <defaultnormal_vertex>\n\t#include <normal_vertex>\n\t#include <begin_vertex>\nfloat windAmp = aSway * 0.11;\ntransformed.x += sin(uTime * 1.6 + aPhase) * windAmp;\ntransformed.z += cos(uTime * 1.15 + aPhase * 1.7) * windAmp * 0.7;\nvLeafLamp = aLamp;\n\t#include <morphtarget_vertex>\n\t#include <skinning_vertex>\n\t#include <displacementmap_vertex>\n\t#include <project_vertex>\n\t#include <logdepthbuf_vertex>\n\t#include <clipping_planes_vertex>\n\tvViewPosition = - mvPosition.xyz;\n\t#include <worldpos_vertex>\n\t#include <shadowmap_vertex>\n\t#include <fog_vertex>\n#ifdef USE_TRANSMISSION\n\tvWorldPosition = worldPosition.xyz;\n#endif\n}",
+    "fragment": "#define STANDARD\n#ifdef PHYSICAL\n\t#define IOR\n\t#define USE_SPECULAR\n#endif\nuniform vec3 diffuse;\nuniform vec3 emissive;\nuniform float roughness;\nuniform float metalness;\nuniform float opacity;\n#ifdef IOR\n\tuniform float ior;\n#endif\n#ifdef USE_SPECULAR\n\tuniform float specularIntensity;\n\tuniform vec3 specularColor;\n\t#ifdef USE_SPECULAR_COLORMAP\n\t\tuniform sampler2D specularColorMap;\n\t#endif\n\t#ifdef USE_SPECULAR_INTENSITYMAP\n\t\tuniform sampler2D specularIntensityMap;\n\t#endif\n#endif\n#ifdef USE_CLEARCOAT\n\tuniform float clearcoat;\n\tuniform float clearcoatRoughness;\n#endif\n#ifdef USE_DISPERSION\n\tuniform float dispersion;\n#endif\n#ifdef USE_IRIDESCENCE\n\tuniform float iridescence;\n\tuniform float iridescenceIOR;\n\tuniform float iridescenceThicknessMinimum;\n\tuniform float iridescenceThicknessMaximum;\n#endif\n#ifdef USE_SHEEN\n\tuniform vec3 sheenColor;\n\tuniform float sheenRoughness;\n\t#ifdef USE_SHEEN_COLORMAP\n\t\tuniform sampler2D sheenColorMap;\n\t#endif\n\t#ifdef USE_SHEEN_ROUGHNESSMAP\n\t\tuniform sampler2D sheenRoughnessMap;\n\t#endif\n#endif\n#ifdef USE_ANISOTROPY\n\tuniform vec2 anisotropyVector;\n\t#ifdef USE_ANISOTROPYMAP\n\t\tuniform sampler2D anisotropyMap;\n\t#endif\n#endif\nvarying vec3 vViewPosition;\n#include <common>\nuniform float uLeafSSS;\nuniform float uLeafSil;\nuniform vec3 uLeafLamp;\nvarying float vLeafLamp;\n#include <dithering_pars_fragment>\n#include <color_pars_fragment>\n#include <uv_pars_fragment>\n#include <map_pars_fragment>\n#include <alphamap_pars_fragment>\n#include <alphatest_pars_fragment>\n#include <alphahash_pars_fragment>\n#include <aomap_pars_fragment>\n#include <lightmap_pars_fragment>\n#include <emissivemap_pars_fragment>\n#include <iridescence_fragment>\n#include <cube_uv_reflection_fragment>\n#include <envmap_common_pars_fragment>\n#include <envmap_physical_pars_fragment>\n#include <fog_pars_fragment>\n#include <lights_pars_begin>\n#include <normal_pars_fragment>\n#include <lights_physical_pars_fragment>\n#include <transmission_pars_fragment>\n#include <shadowmap_pars_fragment>\n#include <bumpmap_pars_fragment>\n#include <normalmap_pars_fragment>\n#include <clearcoat_pars_fragment>\n#include <iridescence_pars_fragment>\n#include <roughnessmap_pars_fragment>\n#include <metalnessmap_pars_fragment>\n#include <logdepthbuf_pars_fragment>\n#include <clipping_planes_pars_fragment>\nvoid main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n\t#include <clipping_planes_fragment>\n\tReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );\n\tvec3 totalEmissiveRadiance = emissive;\n\t#include <logdepthbuf_fragment>\n\t#include <map_fragment>\n\t#include <color_fragment>\n\t#include <alphamap_fragment>\n\t#include <alphatest_fragment>\n\t#include <alphahash_fragment>\n\t#include <roughnessmap_fragment>\n\t#include <metalnessmap_fragment>\n\t#include <normal_fragment_begin>\nnormal = normalize( vNormal );\nnonPerturbedNormal = normal;\n\t#include <normal_fragment_maps>\n\t#include <clearcoat_normal_fragment_begin>\n\t#include <clearcoat_normal_fragment_maps>\n\t#include <emissivemap_fragment>\n\t#include <lights_physical_fragment>\n\t#include <lights_fragment_begin>\n\t#include <lights_fragment_maps>\n\t#include <lights_fragment_end>\n#if NUM_DIR_LIGHTS > 0\n{\n  vec3 sssL = directionalLights[ 0 ].direction;\n  float sssBack = saturate( - dot( sssL, geometryViewDir ) );\n  float sssB2 = sssBack * sssBack;\n  float sssThin = 1.0 - smoothstep( 0.500, 0.95, diffuseColor.a );\n  float sssRim = saturate( ( vColor.r - 0.550 ) / 0.450 );\n  float sssEdge = sssRim * smoothstep( 0.45, 0.92, 1.0 - saturate( dot( normal, geometryViewDir ) ) );\n  float sssT = sssB2 * ( 0.35 + 0.65 * sssB2 ) * ( 0.15 + 0.85 * max( sssThin, sssEdge ) ) * max( uLeafSSS, 0.0 );\n  vec3 sssKey = directionalLights[ 0 ].color;\n  #ifdef PAINT_KEY_SCALE\n  sssKey *= PAINT_KEY_SCALE;\n  #endif\n  float sssLum = max( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 0.0 );\n  vec3 sssAlb = mix( diffuseColor.rgb * vec3( 1.350, 1.000, 0.550 ), vec3( 1.000, 0.620, 0.220 ) * max( sssLum, 0.180 ) * 2.20, saturate( 0.10 + 0.90 * max( sssThin, sssEdge ) ) );\n  float sssSil = uLeafSil * ( 1.0 - sssEdge ) * smoothstep( 0.15, 0.60, sssBack );\n  reflectedLight.indirectDiffuse *= 1.0 - 0.45 * sssSil;\n  reflectedLight.directDiffuse *= 1.0 - 0.30 * sssSil;\n  reflectedLight.directDiffuse += min( sssAlb * sssKey * sssT, vec3( 1.200 ) );\n}\n#endif\n{\n  float lampDown = saturate( - dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ) );\n  reflectedLight.directDiffuse += uLeafLamp * vLeafLamp * ( 0.45 + 0.55 * lampDown ) * mix( diffuseColor.rgb * 2.0, vec3( 0.35 ), 0.3 );\n}\n\t#include <aomap_fragment>\n\tvec3 totalDiffuse = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;\n\tvec3 totalSpecular = reflectedLight.directSpecular + reflectedLight.indirectSpecular;\n\t#include <transmission_fragment>\n\tvec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;\n\t#ifdef USE_SHEEN\n \n\t\toutgoingLight = outgoingLight + sheenSpecularDirect + sheenSpecularIndirect;\n \n \t#endif\n\t#ifdef USE_CLEARCOAT\n\t\tfloat dotNVcc = saturate( dot( geometryClearcoatNormal, geometryViewDir ) );\n\t\tvec3 Fcc = F_Schlick( material.clearcoatF0, material.clearcoatF90, dotNVcc );\n\t\toutgoingLight = outgoingLight * ( 1.0 - material.clearcoat * Fcc ) + ( clearcoatSpecularDirect + clearcoatSpecularIndirect ) * material.clearcoat;\n\t#endif\n\t#include <opaque_fragment>\n\t#include <tonemapping_fragment>\n\t#include <colorspace_fragment>\n\t#include <fog_fragment>\n\t#include <premultiplied_alpha_fragment>\n\t#include <dithering_fragment>\n}"
+  },
+  "painted": {
+    "key": "paint-v6",
+    "lights": "\nvec3 geometryPosition = - vViewPosition;\nvec3 geometryNormal = normal;\nvec3 geometryViewDir = ( isOrthographic ) ? vec3( 0, 0, 1 ) : normalize( vViewPosition );\nvec3 geometryClearcoatNormal = vec3( 0.0 );\n#ifdef USE_CLEARCOAT\n\tgeometryClearcoatNormal = clearcoatNormal;\n#endif\n#ifdef USE_IRIDESCENCE\n\tfloat dotNVi = saturate( dot( normal, geometryViewDir ) );\n\tif ( material.iridescenceThickness == 0.0 ) {\n\t\tmaterial.iridescence = 0.0;\n\t} else {\n\t\tmaterial.iridescence = saturate( material.iridescence );\n\t}\n\tif ( material.iridescence > 0.0 ) {\n\t\tmaterial.iridescenceFresnelDielectric = evalIridescence( 1.0, material.iridescenceIOR, dotNVi, material.iridescenceThickness, material.specularColor );\n\t\tmaterial.iridescenceFresnelMetallic = evalIridescence( 1.0, material.iridescenceIOR, dotNVi, material.iridescenceThickness, material.diffuseColor );\n\t\tmaterial.iridescenceFresnel = mix( material.iridescenceFresnelDielectric, material.iridescenceFresnelMetallic, material.metalness );\n\t\tmaterial.iridescenceF0 = Schlick_to_F0( material.iridescenceFresnel, 1.0, dotNVi );\n\t}\n#endif\nIncidentLight directLight;\n#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )\n\tPointLight pointLight;\n\t#if defined( USE_SHADOWMAP ) && NUM_POINT_LIGHT_SHADOWS > 0\n\tPointLightShadow pointLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_POINT_LIGHTS; i ++ ) {\n\t\tpointLight = pointLights[ i ];\n\t\tgetPointLightInfo( pointLight, geometryPosition, directLight );\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_POINT_LIGHT_SHADOWS ) && ( defined( SHADOWMAP_TYPE_PCF ) || defined( SHADOWMAP_TYPE_BASIC ) )\n\t\tpointLightShadow = pointLightShadows[ i ];\n\t\tdirectLight.color *= ( directLight.visible && receiveShadow ) ? getPointShadow( pointShadowMap[ i ], pointLightShadow.shadowMapSize, pointLightShadow.shadowIntensity, pointLightShadow.shadowBias, pointLightShadow.shadowRadius, vPointShadowCoord[ i ], pointLightShadow.shadowCameraNear, pointLightShadow.shadowCameraFar ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )\n\tSpotLight spotLight;\n\tvec4 spotColor;\n\tvec3 spotLightCoord;\n\tbool inSpotLightMap;\n\t#if defined( USE_SHADOWMAP ) && NUM_SPOT_LIGHT_SHADOWS > 0\n\tSpotLightShadow spotLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_SPOT_LIGHTS; i ++ ) {\n\t\tspotLight = spotLights[ i ];\n\t\tgetSpotLightInfo( spotLight, geometryPosition, directLight );\n\t\t#if ( UNROLLED_LOOP_INDEX < NUM_SPOT_LIGHT_SHADOWS_WITH_MAPS )\n\t\t#define SPOT_LIGHT_MAP_INDEX UNROLLED_LOOP_INDEX\n\t\t#elif ( UNROLLED_LOOP_INDEX < NUM_SPOT_LIGHT_SHADOWS )\n\t\t#define SPOT_LIGHT_MAP_INDEX NUM_SPOT_LIGHT_MAPS\n\t\t#else\n\t\t#define SPOT_LIGHT_MAP_INDEX ( UNROLLED_LOOP_INDEX - NUM_SPOT_LIGHT_SHADOWS + NUM_SPOT_LIGHT_SHADOWS_WITH_MAPS )\n\t\t#endif\n\t\t#if ( SPOT_LIGHT_MAP_INDEX < NUM_SPOT_LIGHT_MAPS )\n\t\t\tspotLightCoord = vSpotLightCoord[ i ].xyz / vSpotLightCoord[ i ].w;\n\t\t\tinSpotLightMap = all( lessThan( abs( spotLightCoord * 2. - 1. ), vec3( 1.0 ) ) );\n\t\t\tspotColor = texture2D( spotLightMap[ SPOT_LIGHT_MAP_INDEX ], spotLightCoord.xy );\n\t\t\tdirectLight.color = inSpotLightMap ? directLight.color * spotColor.rgb : directLight.color;\n\t\t#endif\n\t\t#undef SPOT_LIGHT_MAP_INDEX\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_SPOT_LIGHT_SHADOWS )\n\t\tspotLightShadow = spotLightShadows[ i ];\n\t\tdirectLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( spotShadowMap[ i ], spotLightShadow.shadowMapSize, spotLightShadow.shadowIntensity, spotLightShadow.shadowBias, spotLightShadow.shadowRadius, vSpotLightCoord[ i ] ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )\n\tDirectionalLight directionalLight;\n\tfloat paintShadow;\n\t#if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0\n\tDirectionalLightShadow directionalLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_DIR_LIGHTS; i ++ ) {\n\t\tdirectionalLight = directionalLights[ i ];\n\t\tgetDirectionalLightInfo( directionalLight, directLight );\n\t\tpaintShadow = 1.0;\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_DIR_LIGHT_SHADOWS )\n\t\tdirectionalLightShadow = directionalLightShadows[ i ];\n\t\tpaintShadow = ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;\n\t\t#endif\n\t\tRE_Direct_Paint( directLight, paintShadow, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_RECT_AREA_LIGHTS > 0 ) && defined( RE_Direct_RectArea )\n\tRectAreaLight rectAreaLight;\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_RECT_AREA_LIGHTS; i ++ ) {\n\t\trectAreaLight = rectAreaLights[ i ];\n\t\tRE_Direct_RectArea( rectAreaLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if defined( RE_IndirectDiffuse )\n\tvec3 iblIrradiance = vec3( 0.0 );\n\tvec3 irradiance = getAmbientLightIrradiance( ambientLightColor );\n\t#if defined( USE_LIGHT_PROBES )\n\t\tirradiance += getLightProbeIrradiance( lightProbe, geometryNormal );\n\t#endif\n\t#if ( NUM_HEMI_LIGHTS > 0 )\n\t\t#pragma unroll_loop_start\n\t\tfor ( int i = 0; i < NUM_HEMI_LIGHTS; i ++ ) {\n\t\t\tirradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );\n\t\t}\n\t\t#pragma unroll_loop_end\n\t#endif\n\t#ifdef USE_LIGHT_PROBES_GRID\n\t\tvec3 probeWorldPos = ( ( vec4( geometryPosition, 1.0 ) - viewMatrix[ 3 ] ) * viewMatrix ).xyz;\n\t\tvec3 probeWorldNormal = transformNormalByInverseViewMatrix( geometryNormal, viewMatrix );\n\t\tirradiance += getLightProbeGridIrradiance( probeWorldPos, probeWorldNormal );\n\t#endif\n#endif\n#if defined( RE_IndirectSpecular )\n\tvec3 radiance = vec3( 0.0 );\n\tvec3 clearcoatRadiance = vec3( 0.0 );\n#endif",
+    "fog": "#ifdef USE_FOG\n\t#ifdef FOG_EXP2\n\t\tfloat fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );\n\t#else\n\t\tfloat fogFactor = smoothstep( fogNear, fogFar, vFogDepth );\n\t#endif\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );\n\n\t{\n\t\tvec3 paintWorldPos = ( ( vec4( - vViewPosition, 1.0 ) - viewMatrix[ 3 ] ) * viewMatrix ).xyz;\n\t\tvec3 paintRay = paintWorldPos - cameraPosition;\n\t\tfloat paintDist = length( paintRay );\n\t\tfloat paintAir = 1.0 - exp( - uAir.y * max( paintDist - uAir.x, 0.0 ) );\n\t\tfloat paintY = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );\n\t\tgl_FragColor.rgb = mix( gl_FragColor.rgb, paintY * uAirHue, paintAir * uAir.z );\n\t\tfloat paintLift = ( 1.0 - exp( - uAir.y * max( paintDist - uAirLiftStart, 0.0 ) ) ) * uAir.w;\n\t\t// LOOK r4: a broad sunward lobe, so contre-jour distance glows warm (rules).\n\t\tfloat paintSunward = smoothstep( - 0.1, 0.75, dot( paintRay / max( paintDist, 1e-4 ), uSunDir ) );\n\t\tgl_FragColor.rgb = mix( gl_FragColor.rgb, mix( uAirLift, uAirSun, paintSunward ), paintLift );\n\t}\n\n#endif\n\n\tgl_FragColor.rgb = max( mix( vec3( dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), gl_FragColor.rgb, mix( 1.0, uPaintSat * ( 1.0 + uShadeSat * paintShade ), uPaintRole.w ) ), vec3( 0.0 ) );\n\n",
+    "pars": "\nuniform vec3 uPaintBand;\nuniform vec4 uPaintRole;\nuniform vec3 uShadowFill;\nuniform vec3 uTermWarm;\nuniform vec3 uRim;\nuniform vec3 uIblTint;\nuniform float uPaintSat;\nuniform vec3 uKeyScale;\nuniform vec3 uHemiSky;\nuniform vec3 uHemiGround;\nuniform float uHemiOn;\nuniform float uIblSpec;\nuniform vec3 uBounce;\nuniform vec3 uPointWarm;\nuniform vec3 uShadowForm;\nuniform float uShadeSat;\nuniform vec4 uShadeHue;\nuniform float uRimPow;\nuniform vec3 uMoonCatch;\nuniform float uLumaCeil;\n// LOOK r5: how much of this fragment is in the key's FORM shade (written by\n// RE_Direct_Paint, read by the painted chroma so form shade keeps its\n// albedo's colour). LOOK r6: cast shade is excluded — it takes the cool hue.\nfloat paintShade = 0.0;\n// LOOK r6 (L2): how much of this fragment is in the key's CAST shade (read\n// after the lights resolve, so the indirect diffuse takes the same hue).\nfloat paintCast = 0.0;\n#define PAINT_KEY_SCALE uKeyScale\nfloat paintLuma( const in vec3 c ) { return dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ); }\nvec3 paintPointTint( const in vec3 c ) {\n\tfloat warm = smoothstep( 0.05, 0.35, ( c.r - c.b ) / max( c.r, 1e-4 ) ) * smoothstep( 0.0, 0.12, c.g - c.b );\n\treturn mix( vec3( 1.0 ), uPointWarm, warm );\n}\nvoid RE_Direct_Paint( const in IncidentLight directLight, const in float sh, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {\n\tIncidentLight keyLight = directLight;\n\tkeyLight.color *= uKeyScale;\n\tIncidentLight physLight = keyLight;\n\tphysLight.color *= sh;\n\tReflectedLight phys = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );\n\tRE_Direct( physLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, phys );\n\treflectedLight.directSpecular += phys.directSpecular;\n\tfloat k = uPaintRole.x;\n\tif ( k <= 0.0 ) {\n\t\treflectedLight.directDiffuse += phys.directDiffuse;\n\t\treturn;\n\t}\n\tfloat ndl = dot( geometryNormal, directLight.direction );\n\tfloat wrapL = saturate( ( ndl + uPaintBand.x ) / ( 1.0 + uPaintBand.x ) );\n\tfloat band = smoothstep( uPaintBand.y, uPaintBand.z, ndl );\n\tfloat lit = mix( wrapL, band, uPaintRole.z );\n\tfloat amt = lit * sh;\n\tvec3 albedo = BRDF_Lambert( material.diffuseContribution );\n\tfloat keyLum = paintLuma( keyLight.color );\n\tvec3 painted = keyLight.color * amt * albedo;\n\t// LOOK r5: CAST shade (a sun-facing surface under a caster) takes the cool\n\t// sky fill; FORM shade (facing away from the key) takes the near-neutral\n\t// form fill — so shade is the local albedo, darker and a little cooler,\n\t// never a global lilac overlay.\n\tfloat paintSunward = smoothstep( - 0.05, 0.3, ndl );\n\tvec3 paintFill = mix( uShadowForm, uShadowFill, paintSunward );\n\tpainted += paintFill * ( keyLum * ( 1.0 - amt ) ) * albedo;\n\t// LOOK r6 (L2): CAST shade is a HUE shift at matched luminance toward the\n\t// cool sky (the golden-hour colour script) — never a value drop and never\n\t// a global overlay; form shade keeps its albedo (and the shade chroma).\n\tfloat castT = paintSunward * ( 1.0 - amt );\n\tpainted = mix( painted, vec3( paintLuma( painted ) ) * uShadeHue.rgb * 1.08, castT * uShadeHue.w );\n\tpaintShade = max( paintShade, ( 1.0 - amt ) - castT );\n\tpaintCast = max( paintCast, castT * k );\n\tpainted += uTermWarm * ( keyLum * lit * ( 1.0 - lit ) * 4.0 * sh ) * albedo;\n\tfloat paintUp = dot( geometryNormal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) );\n\tpainted += uBounce * ( keyLum * ( 1.0 - amt ) * ( 0.5 - 0.5 * paintUp ) ) * albedo;\n\tfloat fres = pow( 1.0 - saturate( dot( geometryNormal, geometryViewDir ) ), uRimPow );\n\tfloat backlit = saturate( - dot( geometryViewDir, directLight.direction ) );\n\t// LOOK r4 (contre-jour): the backlit rim survives a third of the way into cast\n\t// shade — the painterly halo on edges against a low sun (rules).\n\t// LOOK r6 (L6.1): the rim traces SILHOUETTES — never the open ground or a\n\t// flat roof seen at grazing incidence (the wide night rim lit the setts blue).\n\tfloat rimFlat = 1.0 - smoothstep( 0.7, 0.95, paintUp );\n\tvec3 rim = min( uRim * ( fres * ( 0.9 * saturate( ndl + 0.35 ) * sh + 1.4 * backlit * backlit * mix( 0.33, 1.0, sh ) ) * uPaintRole.y * rimFlat ), vec3( 0.9 ) );\n\t// LOOK r6 (L6.1): moon catch — up-facing ledges above the setts (cornices,\n\t// sills, zinc, heads) take a cool sheen, so the big planes read moonlit.\n\tfloat paintWy = ( ( vec4( geometryPosition, 1.0 ) - viewMatrix[ 3 ] ) * viewMatrix ).y;\n\tvec3 moon = uMoonCatch * ( smoothstep( 0.55, 0.9, paintUp ) * smoothstep( 0.25, 0.6, paintWy ) ) * material.diffuseContribution;\n\treflectedLight.directDiffuse += mix( phys.directDiffuse, painted, k ) + ( rim + moon ) * k;\n}\n",
+    "ibl": "\n\tiblIrradiance *= uIblTint;\n\t#if defined( RE_IndirectSpecular )\n\tradiance *= uIblSpec;\n\t#endif\n\t#if NUM_HEMI_LIGHTS > 0\n\tirradiance += uHemiOn * ( mix( uHemiGround, uHemiSky, 0.5 * dot( geometryNormal, hemisphereLights[ 0 ].direction ) + 0.5 ) - getHemisphereLightIrradiance( hemisphereLights[ 0 ], geometryNormal ) );\n\t#endif\n",
+    "ceil": "\n\t// LOOK r6 (L2): the sky light INTO cast shade takes the same cool hue at\n\t// matched luminance (the direct fill already did, in RE_Direct_Paint).\n\tif ( uShadeHue.w > 0.0 && paintCast > 0.0 ) {\n\t\treflectedLight.indirectDiffuse = mix( reflectedLight.indirectDiffuse, vec3( paintLuma( reflectedLight.indirectDiffuse ) ) * uShadeHue.rgb * 1.08, paintCast * uShadeHue.w );\n\t}\n\tif ( uLumaCeil > 0.0 && uPaintRole.x > 0.0 ) {\n\t\tfloat pcL = paintLuma( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse );\n\t\tfloat pcOver = max( pcL - uLumaCeil, 0.0 );\n\t\tfloat pcS = pcL > 1e-5 ? ( pcL - pcOver + pcOver / ( 1.0 + pcOver / ( 0.5 * uLumaCeil ) ) ) / pcL : 1.0;\n\t\treflectedLight.directDiffuse *= pcS;\n\t\treflectedLight.indirectDiffuse *= pcS;\n\t}\n",
+    "fragment": "#define STANDARD\n#ifdef PHYSICAL\n\t#define IOR\n\t#define USE_SPECULAR\n#endif\nuniform vec3 diffuse;\nuniform vec3 emissive;\nuniform float roughness;\nuniform float metalness;\nuniform float opacity;\n#ifdef IOR\n\tuniform float ior;\n#endif\n#ifdef USE_SPECULAR\n\tuniform float specularIntensity;\n\tuniform vec3 specularColor;\n\t#ifdef USE_SPECULAR_COLORMAP\n\t\tuniform sampler2D specularColorMap;\n\t#endif\n\t#ifdef USE_SPECULAR_INTENSITYMAP\n\t\tuniform sampler2D specularIntensityMap;\n\t#endif\n#endif\n#ifdef USE_CLEARCOAT\n\tuniform float clearcoat;\n\tuniform float clearcoatRoughness;\n#endif\n#ifdef USE_DISPERSION\n\tuniform float dispersion;\n#endif\n#ifdef USE_IRIDESCENCE\n\tuniform float iridescence;\n\tuniform float iridescenceIOR;\n\tuniform float iridescenceThicknessMinimum;\n\tuniform float iridescenceThicknessMaximum;\n#endif\n#ifdef USE_SHEEN\n\tuniform vec3 sheenColor;\n\tuniform float sheenRoughness;\n\t#ifdef USE_SHEEN_COLORMAP\n\t\tuniform sampler2D sheenColorMap;\n\t#endif\n\t#ifdef USE_SHEEN_ROUGHNESSMAP\n\t\tuniform sampler2D sheenRoughnessMap;\n\t#endif\n#endif\n#ifdef USE_ANISOTROPY\n\tuniform vec2 anisotropyVector;\n\t#ifdef USE_ANISOTROPYMAP\n\t\tuniform sampler2D anisotropyMap;\n\t#endif\n#endif\nvarying vec3 vViewPosition;\n#include <common>\n#include <dithering_pars_fragment>\n#include <color_pars_fragment>\n#include <uv_pars_fragment>\n#include <map_pars_fragment>\n#include <alphamap_pars_fragment>\n#include <alphatest_pars_fragment>\n#include <alphahash_pars_fragment>\n#include <aomap_pars_fragment>\n#include <lightmap_pars_fragment>\n#include <emissivemap_pars_fragment>\n#include <iridescence_fragment>\n#include <cube_uv_reflection_fragment>\n#include <envmap_common_pars_fragment>\n#include <envmap_physical_pars_fragment>\n#include <fog_pars_fragment>\n#include <lights_pars_begin>\n#include <normal_pars_fragment>\n#include <lights_physical_pars_fragment>\n\nuniform vec3 uPaintBand;\nuniform vec4 uPaintRole;\nuniform vec3 uShadowFill;\nuniform vec3 uTermWarm;\nuniform vec3 uRim;\nuniform vec3 uIblTint;\nuniform float uPaintSat;\nuniform vec3 uKeyScale;\nuniform vec3 uHemiSky;\nuniform vec3 uHemiGround;\nuniform float uHemiOn;\nuniform float uIblSpec;\nuniform vec3 uBounce;\nuniform vec3 uPointWarm;\nuniform vec3 uShadowForm;\nuniform float uShadeSat;\nuniform vec4 uShadeHue;\nuniform float uRimPow;\nuniform vec3 uMoonCatch;\nuniform float uLumaCeil;\n// LOOK r5: how much of this fragment is in the key's FORM shade (written by\n// RE_Direct_Paint, read by the painted chroma so form shade keeps its\n// albedo's colour). LOOK r6: cast shade is excluded — it takes the cool hue.\nfloat paintShade = 0.0;\n// LOOK r6 (L2): how much of this fragment is in the key's CAST shade (read\n// after the lights resolve, so the indirect diffuse takes the same hue).\nfloat paintCast = 0.0;\n#define PAINT_KEY_SCALE uKeyScale\nfloat paintLuma( const in vec3 c ) { return dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ); }\nvec3 paintPointTint( const in vec3 c ) {\n\tfloat warm = smoothstep( 0.05, 0.35, ( c.r - c.b ) / max( c.r, 1e-4 ) ) * smoothstep( 0.0, 0.12, c.g - c.b );\n\treturn mix( vec3( 1.0 ), uPointWarm, warm );\n}\nvoid RE_Direct_Paint( const in IncidentLight directLight, const in float sh, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {\n\tIncidentLight keyLight = directLight;\n\tkeyLight.color *= uKeyScale;\n\tIncidentLight physLight = keyLight;\n\tphysLight.color *= sh;\n\tReflectedLight phys = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );\n\tRE_Direct( physLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, phys );\n\treflectedLight.directSpecular += phys.directSpecular;\n\tfloat k = uPaintRole.x;\n\tif ( k <= 0.0 ) {\n\t\treflectedLight.directDiffuse += phys.directDiffuse;\n\t\treturn;\n\t}\n\tfloat ndl = dot( geometryNormal, directLight.direction );\n\tfloat wrapL = saturate( ( ndl + uPaintBand.x ) / ( 1.0 + uPaintBand.x ) );\n\tfloat band = smoothstep( uPaintBand.y, uPaintBand.z, ndl );\n\tfloat lit = mix( wrapL, band, uPaintRole.z );\n\tfloat amt = lit * sh;\n\tvec3 albedo = BRDF_Lambert( material.diffuseContribution );\n\tfloat keyLum = paintLuma( keyLight.color );\n\tvec3 painted = keyLight.color * amt * albedo;\n\t// LOOK r5: CAST shade (a sun-facing surface under a caster) takes the cool\n\t// sky fill; FORM shade (facing away from the key) takes the near-neutral\n\t// form fill — so shade is the local albedo, darker and a little cooler,\n\t// never a global lilac overlay.\n\tfloat paintSunward = smoothstep( - 0.05, 0.3, ndl );\n\tvec3 paintFill = mix( uShadowForm, uShadowFill, paintSunward );\n\tpainted += paintFill * ( keyLum * ( 1.0 - amt ) ) * albedo;\n\t// LOOK r6 (L2): CAST shade is a HUE shift at matched luminance toward the\n\t// cool sky (the golden-hour colour script) — never a value drop and never\n\t// a global overlay; form shade keeps its albedo (and the shade chroma).\n\tfloat castT = paintSunward * ( 1.0 - amt );\n\tpainted = mix( painted, vec3( paintLuma( painted ) ) * uShadeHue.rgb * 1.08, castT * uShadeHue.w );\n\tpaintShade = max( paintShade, ( 1.0 - amt ) - castT );\n\tpaintCast = max( paintCast, castT * k );\n\tpainted += uTermWarm * ( keyLum * lit * ( 1.0 - lit ) * 4.0 * sh ) * albedo;\n\tfloat paintUp = dot( geometryNormal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) );\n\tpainted += uBounce * ( keyLum * ( 1.0 - amt ) * ( 0.5 - 0.5 * paintUp ) ) * albedo;\n\tfloat fres = pow( 1.0 - saturate( dot( geometryNormal, geometryViewDir ) ), uRimPow );\n\tfloat backlit = saturate( - dot( geometryViewDir, directLight.direction ) );\n\t// LOOK r4 (contre-jour): the backlit rim survives a third of the way into cast\n\t// shade — the painterly halo on edges against a low sun (rules).\n\t// LOOK r6 (L6.1): the rim traces SILHOUETTES — never the open ground or a\n\t// flat roof seen at grazing incidence (the wide night rim lit the setts blue).\n\tfloat rimFlat = 1.0 - smoothstep( 0.7, 0.95, paintUp );\n\tvec3 rim = min( uRim * ( fres * ( 0.9 * saturate( ndl + 0.35 ) * sh + 1.4 * backlit * backlit * mix( 0.33, 1.0, sh ) ) * uPaintRole.y * rimFlat ), vec3( 0.9 ) );\n\t// LOOK r6 (L6.1): moon catch — up-facing ledges above the setts (cornices,\n\t// sills, zinc, heads) take a cool sheen, so the big planes read moonlit.\n\tfloat paintWy = ( ( vec4( geometryPosition, 1.0 ) - viewMatrix[ 3 ] ) * viewMatrix ).y;\n\tvec3 moon = uMoonCatch * ( smoothstep( 0.55, 0.9, paintUp ) * smoothstep( 0.25, 0.6, paintWy ) ) * material.diffuseContribution;\n\treflectedLight.directDiffuse += mix( phys.directDiffuse, painted, k ) + ( rim + moon ) * k;\n}\n\n\nuniform vec3 uAirHue;\nuniform vec4 uAir;\nuniform float uAirLiftStart;\nuniform vec3 uAirLift;\nuniform vec3 uAirSun;\nuniform vec3 uSunDir;\n\n#include <transmission_pars_fragment>\n#include <shadowmap_pars_fragment>\n#include <bumpmap_pars_fragment>\n#include <normalmap_pars_fragment>\n#include <clearcoat_pars_fragment>\n#include <iridescence_pars_fragment>\n#include <roughnessmap_pars_fragment>\n#include <metalnessmap_pars_fragment>\n#include <logdepthbuf_pars_fragment>\n#include <clipping_planes_pars_fragment>\nvoid main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n\t#include <clipping_planes_fragment>\n\tReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );\n\tvec3 totalEmissiveRadiance = emissive;\n\t#include <logdepthbuf_fragment>\n\t#include <map_fragment>\n\t#include <color_fragment>\n\t#include <alphamap_fragment>\n\t#include <alphatest_fragment>\n\t#include <alphahash_fragment>\n\t#include <roughnessmap_fragment>\n\t#include <metalnessmap_fragment>\n\t#include <normal_fragment_begin>\n\t#include <normal_fragment_maps>\n\t#include <clearcoat_normal_fragment_begin>\n\t#include <clearcoat_normal_fragment_maps>\n\t#include <emissivemap_fragment>\n\t#include <lights_physical_fragment>\n\t\nvec3 geometryPosition = - vViewPosition;\nvec3 geometryNormal = normal;\nvec3 geometryViewDir = ( isOrthographic ) ? vec3( 0, 0, 1 ) : normalize( vViewPosition );\nvec3 geometryClearcoatNormal = vec3( 0.0 );\n#ifdef USE_CLEARCOAT\n\tgeometryClearcoatNormal = clearcoatNormal;\n#endif\n#ifdef USE_IRIDESCENCE\n\tfloat dotNVi = saturate( dot( normal, geometryViewDir ) );\n\tif ( material.iridescenceThickness == 0.0 ) {\n\t\tmaterial.iridescence = 0.0;\n\t} else {\n\t\tmaterial.iridescence = saturate( material.iridescence );\n\t}\n\tif ( material.iridescence > 0.0 ) {\n\t\tmaterial.iridescenceFresnelDielectric = evalIridescence( 1.0, material.iridescenceIOR, dotNVi, material.iridescenceThickness, material.specularColor );\n\t\tmaterial.iridescenceFresnelMetallic = evalIridescence( 1.0, material.iridescenceIOR, dotNVi, material.iridescenceThickness, material.diffuseColor );\n\t\tmaterial.iridescenceFresnel = mix( material.iridescenceFresnelDielectric, material.iridescenceFresnelMetallic, material.metalness );\n\t\tmaterial.iridescenceF0 = Schlick_to_F0( material.iridescenceFresnel, 1.0, dotNVi );\n\t}\n#endif\nIncidentLight directLight;\n#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )\n\tPointLight pointLight;\n\t#if defined( USE_SHADOWMAP ) && NUM_POINT_LIGHT_SHADOWS > 0\n\tPointLightShadow pointLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_POINT_LIGHTS; i ++ ) {\n\t\tpointLight = pointLights[ i ];\n\t\tgetPointLightInfo( pointLight, geometryPosition, directLight );\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_POINT_LIGHT_SHADOWS ) && ( defined( SHADOWMAP_TYPE_PCF ) || defined( SHADOWMAP_TYPE_BASIC ) )\n\t\tpointLightShadow = pointLightShadows[ i ];\n\t\tdirectLight.color *= ( directLight.visible && receiveShadow ) ? getPointShadow( pointShadowMap[ i ], pointLightShadow.shadowMapSize, pointLightShadow.shadowIntensity, pointLightShadow.shadowBias, pointLightShadow.shadowRadius, vPointShadowCoord[ i ], pointLightShadow.shadowCameraNear, pointLightShadow.shadowCameraFar ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )\n\tSpotLight spotLight;\n\tvec4 spotColor;\n\tvec3 spotLightCoord;\n\tbool inSpotLightMap;\n\t#if defined( USE_SHADOWMAP ) && NUM_SPOT_LIGHT_SHADOWS > 0\n\tSpotLightShadow spotLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_SPOT_LIGHTS; i ++ ) {\n\t\tspotLight = spotLights[ i ];\n\t\tgetSpotLightInfo( spotLight, geometryPosition, directLight );\n\t\t#if ( UNROLLED_LOOP_INDEX < NUM_SPOT_LIGHT_SHADOWS_WITH_MAPS )\n\t\t#define SPOT_LIGHT_MAP_INDEX UNROLLED_LOOP_INDEX\n\t\t#elif ( UNROLLED_LOOP_INDEX < NUM_SPOT_LIGHT_SHADOWS )\n\t\t#define SPOT_LIGHT_MAP_INDEX NUM_SPOT_LIGHT_MAPS\n\t\t#else\n\t\t#define SPOT_LIGHT_MAP_INDEX ( UNROLLED_LOOP_INDEX - NUM_SPOT_LIGHT_SHADOWS + NUM_SPOT_LIGHT_SHADOWS_WITH_MAPS )\n\t\t#endif\n\t\t#if ( SPOT_LIGHT_MAP_INDEX < NUM_SPOT_LIGHT_MAPS )\n\t\t\tspotLightCoord = vSpotLightCoord[ i ].xyz / vSpotLightCoord[ i ].w;\n\t\t\tinSpotLightMap = all( lessThan( abs( spotLightCoord * 2. - 1. ), vec3( 1.0 ) ) );\n\t\t\tspotColor = texture2D( spotLightMap[ SPOT_LIGHT_MAP_INDEX ], spotLightCoord.xy );\n\t\t\tdirectLight.color = inSpotLightMap ? directLight.color * spotColor.rgb : directLight.color;\n\t\t#endif\n\t\t#undef SPOT_LIGHT_MAP_INDEX\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_SPOT_LIGHT_SHADOWS )\n\t\tspotLightShadow = spotLightShadows[ i ];\n\t\tdirectLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( spotShadowMap[ i ], spotLightShadow.shadowMapSize, spotLightShadow.shadowIntensity, spotLightShadow.shadowBias, spotLightShadow.shadowRadius, vSpotLightCoord[ i ] ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )\n\tDirectionalLight directionalLight;\n\tfloat paintShadow;\n\t#if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0\n\tDirectionalLightShadow directionalLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_DIR_LIGHTS; i ++ ) {\n\t\tdirectionalLight = directionalLights[ i ];\n\t\tgetDirectionalLightInfo( directionalLight, directLight );\n\t\tpaintShadow = 1.0;\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_DIR_LIGHT_SHADOWS )\n\t\tdirectionalLightShadow = directionalLightShadows[ i ];\n\t\tpaintShadow = ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;\n\t\t#endif\n\t\tRE_Direct_Paint( directLight, paintShadow, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_RECT_AREA_LIGHTS > 0 ) && defined( RE_Direct_RectArea )\n\tRectAreaLight rectAreaLight;\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_RECT_AREA_LIGHTS; i ++ ) {\n\t\trectAreaLight = rectAreaLights[ i ];\n\t\tRE_Direct_RectArea( rectAreaLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if defined( RE_IndirectDiffuse )\n\tvec3 iblIrradiance = vec3( 0.0 );\n\tvec3 irradiance = getAmbientLightIrradiance( ambientLightColor );\n\t#if defined( USE_LIGHT_PROBES )\n\t\tirradiance += getLightProbeIrradiance( lightProbe, geometryNormal );\n\t#endif\n\t#if ( NUM_HEMI_LIGHTS > 0 )\n\t\t#pragma unroll_loop_start\n\t\tfor ( int i = 0; i < NUM_HEMI_LIGHTS; i ++ ) {\n\t\t\tirradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );\n\t\t}\n\t\t#pragma unroll_loop_end\n\t#endif\n\t#ifdef USE_LIGHT_PROBES_GRID\n\t\tvec3 probeWorldPos = ( ( vec4( geometryPosition, 1.0 ) - viewMatrix[ 3 ] ) * viewMatrix ).xyz;\n\t\tvec3 probeWorldNormal = transformNormalByInverseViewMatrix( geometryNormal, viewMatrix );\n\t\tirradiance += getLightProbeGridIrradiance( probeWorldPos, probeWorldNormal );\n\t#endif\n#endif\n#if defined( RE_IndirectSpecular )\n\tvec3 radiance = vec3( 0.0 );\n\tvec3 clearcoatRadiance = vec3( 0.0 );\n#endif\n\t#include <lights_fragment_maps>\n\t\n\tiblIrradiance *= uIblTint;\n\t#if defined( RE_IndirectSpecular )\n\tradiance *= uIblSpec;\n\t#endif\n\t#if NUM_HEMI_LIGHTS > 0\n\tirradiance += uHemiOn * ( mix( uHemiGround, uHemiSky, 0.5 * dot( geometryNormal, hemisphereLights[ 0 ].direction ) + 0.5 ) - getHemisphereLightIrradiance( hemisphereLights[ 0 ], geometryNormal ) );\n\t#endif\n\n#include <lights_fragment_end>\n\n\t// LOOK r6 (L2): the sky light INTO cast shade takes the same cool hue at\n\t// matched luminance (the direct fill already did, in RE_Direct_Paint).\n\tif ( uShadeHue.w > 0.0 && paintCast > 0.0 ) {\n\t\treflectedLight.indirectDiffuse = mix( reflectedLight.indirectDiffuse, vec3( paintLuma( reflectedLight.indirectDiffuse ) ) * uShadeHue.rgb * 1.08, paintCast * uShadeHue.w );\n\t}\n\tif ( uLumaCeil > 0.0 && uPaintRole.x > 0.0 ) {\n\t\tfloat pcL = paintLuma( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse );\n\t\tfloat pcOver = max( pcL - uLumaCeil, 0.0 );\n\t\tfloat pcS = pcL > 1e-5 ? ( pcL - pcOver + pcOver / ( 1.0 + pcOver / ( 0.5 * uLumaCeil ) ) ) / pcL : 1.0;\n\t\treflectedLight.directDiffuse *= pcS;\n\t\treflectedLight.indirectDiffuse *= pcS;\n\t}\n\n\t#include <aomap_fragment>\n\tvec3 totalDiffuse = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;\n\tvec3 totalSpecular = reflectedLight.directSpecular + reflectedLight.indirectSpecular;\n\t#include <transmission_fragment>\n\tvec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;\n\t#ifdef USE_SHEEN\n \n\t\toutgoingLight = outgoingLight + sheenSpecularDirect + sheenSpecularIndirect;\n \n \t#endif\n\t#ifdef USE_CLEARCOAT\n\t\tfloat dotNVcc = saturate( dot( geometryClearcoatNormal, geometryViewDir ) );\n\t\tvec3 Fcc = F_Schlick( material.clearcoatF0, material.clearcoatF90, dotNVcc );\n\t\toutgoingLight = outgoingLight * ( 1.0 - material.clearcoat * Fcc ) + ( clearcoatSpecularDirect + clearcoatSpecularIndirect ) * material.clearcoat;\n\t#endif\n\t#include <opaque_fragment>\n\t#include <tonemapping_fragment>\n\t#include <colorspace_fragment>\n\t#ifdef USE_FOG\n\t#ifdef FOG_EXP2\n\t\tfloat fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );\n\t#else\n\t\tfloat fogFactor = smoothstep( fogNear, fogFar, vFogDepth );\n\t#endif\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );\n\n\t{\n\t\tvec3 paintWorldPos = ( ( vec4( - vViewPosition, 1.0 ) - viewMatrix[ 3 ] ) * viewMatrix ).xyz;\n\t\tvec3 paintRay = paintWorldPos - cameraPosition;\n\t\tfloat paintDist = length( paintRay );\n\t\tfloat paintAir = 1.0 - exp( - uAir.y * max( paintDist - uAir.x, 0.0 ) );\n\t\tfloat paintY = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );\n\t\tgl_FragColor.rgb = mix( gl_FragColor.rgb, paintY * uAirHue, paintAir * uAir.z );\n\t\tfloat paintLift = ( 1.0 - exp( - uAir.y * max( paintDist - uAirLiftStart, 0.0 ) ) ) * uAir.w;\n\t\t// LOOK r4: a broad sunward lobe, so contre-jour distance glows warm (rules).\n\t\tfloat paintSunward = smoothstep( - 0.1, 0.75, dot( paintRay / max( paintDist, 1e-4 ), uSunDir ) );\n\t\tgl_FragColor.rgb = mix( gl_FragColor.rgb, mix( uAirLift, uAirSun, paintSunward ), paintLift );\n\t}\n\n#endif\n\n\tgl_FragColor.rgb = max( mix( vec3( dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), gl_FragColor.rgb, mix( 1.0, uPaintSat * ( 1.0 + uShadeSat * paintShade ), uPaintRole.w ) ), vec3( 0.0 ) );\n\n\n\t#include <premultiplied_alpha_fragment>\n\t#include <dithering_fragment>\n}"
+  },
+  "halo": {
+    "key": "plaza-lamp-halo-v1",
+    "vertex": "\n  attribute vec3 aCenter;\n  attribute vec3 aColor;\n  attribute float aRadius;\n  varying vec2 vHalo;\n  varying vec3 vColor;\n  void main() {\n    // The view matrix's rows are the camera's right / up axes in world space.\n    vec3 right = vec3( viewMatrix[ 0 ][ 0 ], viewMatrix[ 1 ][ 0 ], viewMatrix[ 2 ][ 0 ] );\n    vec3 up = vec3( viewMatrix[ 0 ][ 1 ], viewMatrix[ 1 ][ 1 ], viewMatrix[ 2 ][ 1 ] );\n    vec3 world = aCenter + ( right * position.x + up * position.y ) * aRadius;\n    vHalo = position.xy;\n    vColor = aColor;\n    gl_Position = projectionMatrix * viewMatrix * vec4( world, 1.0 );\n  }\n",
+    "fragment": "\n  uniform float uGain;\n  \nuniform vec4 uCalmRects[ 4 ];\nuniform float uCalmCount;\nuniform vec2 uCalmViewport;\nuniform float uCalmFeather;\nfloat calmAt( vec2 fragCoord ) {\n  vec2 uv = fragCoord / max( uCalmViewport, vec2( 1.0 ) );\n  float calm = 0.0;\n  for ( int i = 0; i < 4; i ++ ) {\n    if ( float( i ) >= uCalmCount ) break;\n    vec4 r = uCalmRects[ i ];\n    vec2 d = max( r.xy - uv, uv - r.zw );\n    float outside = max( d.x, d.y );\n    calm = max( calm, 1.0 - smoothstep( 0.0, max( uCalmFeather, 1e-4 ), outside ) );\n  }\n  return calm;\n}\n\n  varying vec2 vHalo;\n  varying vec3 vColor;\n  void main() {\n    float r2 = dot( vHalo, vHalo );\n    float glow = exp( - r2 * 5.0 ) * 0.35 + exp( - r2 * 40.0 ) * 0.25;\n    // A faint vertical rain smear below the head (static).\n    float smear = exp( - vHalo.x * vHalo.x * 60.0 ) * smoothstep( - 1.0, - 0.5, vHalo.y ) * ( 1.0 - smoothstep( - 0.1, 0.2, vHalo.y ) ) * 0.06;\n    float fade = 1.0 - smoothstep( 0.8, 1.0, sqrt( r2 ) );\n    float a = ( glow + smear ) * fade * uGain * ( 1.0 - calmAt( gl_FragCoord.xy ) );\n    gl_FragColor = vec4( vColor * a, 1.0 );\n  }\n"
+  },
+  "contactBlobs": {
+    "vertex": "\n  attribute float aFade;\n  varying vec2 vUv;\n  varying float vFade;\n  void main() {\n    vUv = uv * 2.0 - 1.0;\n    vFade = aFade;\n    gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);\n  }\n",
+    "fragment": "\n  uniform vec3 uColor;\n  uniform float uOpacity;\n  varying vec2 vUv;\n  varying float vFade;\n  void main() {\n    float r2 = dot(vUv, vUv);\n    float a = 1.0 - min(r2, 1.0);\n    // LOOK r5: a firmer core ((1 − r²)^1.5) so the figure sits on the setts.\n    a = a * sqrt(a) * uOpacity * vFade;\n    if (a <= 0.002) discard;\n    gl_FragColor = vec4(uColor, a);\n  }\n"
+  },
+  "skyBody": {
+    "vertex": "\n  varying vec2 vUv;\n  void main() {\n    vUv = uv;\n    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n  }\n",
+    "fragment": "\n  uniform vec3 uColor;\n  uniform float uGain;\n  uniform float uNight;\n  varying vec2 vUv;\n\n  void main() {\n    vec2 d = vUv - 0.5;\n    float r = length(d) * 2.0;\n\n    if (uNight < 0.5) {\n      float core = exp(-r * r * 18.0);\n      float halo = exp(-r * r * 4.4);\n      float a = (core * 1.15 + halo * 0.38) * uGain;\n      gl_FragColor = vec4(uColor * (0.35 + a), clamp(a, 0.0, 1.0));\n      return;\n    }\n\n    // Few-px hot core. Inner/halo weights stay below 1 so they cannot\n    // flatten into a circular 255 plateau (r2 failure).\n    float core = exp(-r * r * 720.0);\n    float inner = exp(-r * r * 36.0);\n    float halo = exp(-r * r * 6.4);\n    float veil = exp(-r * r * 5.2);\n    float a = (core * 1.35 + inner * 0.16 + halo * 0.10 + veil * 0.045) * uGain;\n    vec3 col = mix(uColor, vec3(1.0), core);\n    gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));\n  }\n"
+  },
+  "ashlar": {
+    "key": "paint-ashlar-v3",
+    "pars": "\nuniform vec3 uAshCalmMin[ 8 ];\nuniform vec3 uAshCalmMax[ 8 ];\nuniform float uAshCalmCount;\nuniform float uAshCalmFeather;\nuniform vec4 uAshCourse;\nuniform vec4 uAshBay;\nuniform vec4 uAshBlock;\nfloat ashHash( vec2 p ) { return fract( sin( dot( p, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ); }\n// LOOK r6: a smooth 1-D value noise (drip columns — soft, never a stucco grain).\nfloat ashNoise1( float x, float salt ) {\n\tfloat i = floor( x );\n\tfloat f = fract( x );\n\treturn mix( ashHash( vec2( i, salt ) ), ashHash( vec2( i + 1.0, salt ) ), f * f * ( 3.0 - 2.0 * f ) );\n}\nfloat ashCalmAt( vec3 p ) {\n\tfloat calm = 0.0;\n\tfor ( int i = 0; i < 8; i ++ ) {\n\t\tif ( float( i ) >= uAshCalmCount ) break;\n\t\tvec3 d = max( uAshCalmMin[ i ] - p, p - uAshCalmMax[ i ] );\n\t\tfloat outside = max( max( d.x, d.y ), d.z );\n\t\tcalm = max( calm, 1.0 - smoothstep( 0.0, max( uAshCalmFeather, 1e-3 ), outside ) );\n\t}\n\treturn calm;\n}\n",
+    "map": "\n\tvec3 ashW = ( ( vec4( - vViewPosition, 1.0 ) - viewMatrix[ 3 ] ) * viewMatrix ).xyz;\n\tvec3 ashN = abs( normalize( cross( dFdx( ashW ), dFdy( ashW ) ) ) );\n\tfloat ashKeep = uAshBay.z * ( 1.0 - ashCalmAt( ashW ) );\n\tfloat ashWall = 1.0 - step( 0.7, ashN.y );\n\tfloat ashS = ashN.x > ashN.z ? ashW.z : ashW.x;\n\tfloat ashAbove = step( uAshCourse.x, ashW.y );\n\tfloat ashCH = mix( 0.5, uAshCourse.y, ashAbove );\n\tfloat ashCy = ( ashW.y - uAshCourse.x * ashAbove ) / ashCH;\n\tfloat ashRow = floor( ashCy );\n\tfloat ashFy = fract( ashCy );\n\tfloat ashStagger = mod( ashRow, 2.0 ) * 0.5 + ( ashHash( vec2( ashRow, 3.1 ) ) - 0.5 ) * 0.2;\n\tfloat ashCx = ashS / uAshCourse.z + ashStagger;\n\tfloat ashCol = floor( ashCx );\n\tfloat ashFx = fract( ashCx );\n\tvec2 ashFw = vec2( fwidth( ashS ), fwidth( ashW.y ) );\n\tfloat ashDy = min( ashFy, 1.0 - ashFy ) * ashCH;\n\tfloat ashDx = min( ashFx, 1.0 - ashFx ) * uAshCourse.z;\n\tfloat ashJw = mix( 0.03, 0.020, ashAbove );\n\tfloat ashJointH = 1.0 - smoothstep( ashJw, ashJw + ashFw.y * 1.5, ashDy );\n\tfloat ashJointV = ashAbove * ( 1.0 - smoothstep( 0.020, 0.020 + ashFw.x * 1.5, ashDx ) );\n\tfloat ashFade = 1.0 - smoothstep( 0.08, 0.25, max( ashFw.y / ashCH, ashFw.x / uAshCourse.z ) );\n\tfloat ashCourse = uAshCourse.w * ashWall * ashFade;\n\tfloat ashJoint = max( ashJointH, ashJointV ) * ashCourse * ashKeep;\n\tfloat ashBumpY = ashJointH * ashCourse * ashKeep * ( ashFy < 0.5 ? 1.0 : - 1.0 );\n\tfloat ashJitter = ( ashHash( vec2( ashCol, ashRow ) + uAshBay.x ) - 0.5 ) * 0.14 * ashCourse;\n\tfloat ashPillow = ( 1.0 - smoothstep( 0.0, 0.07, min( ashDy, mix( 1.0, ashDx, ashAbove ) ) ) ) * 0.08 * ashCourse;\n\tfloat ashTop = ( smoothstep( 0.55, 1.0, ashFy ) * 0.035 ) * ashCourse;\n\tfloat ashGrime = ( 1.0 - smoothstep( 0.0, 1.4, ashW.y ) ) * 0.16;\n\tfloat ashBayU = mod( ashS - uAshBay.x, uAshBay.y ) - 0.5 * uAshBay.y;\n\tfloat ashSillBelow = mod( ( uAshCourse.x + 0.11 ) - ashW.y, 3.2 );\n\tfloat ashStreakCol = ( 1.0 - smoothstep( 0.3, 0.55, abs( ashBayU ) ) ) * ( 0.4 + 0.6 * ashHash( vec2( floor( ashS * 7.0 ), 11.0 ) ) );\n\tfloat ashStreak = ( 1.0 - smoothstep( 0.0, 1.3, ashSillBelow ) ) * ashStreakCol * step( 2.4, ashW.y ) * ashWall * 0.09;\n\tfloat ashLift = smoothstep( 0.0, 12.0, ashW.y ) * 0.04;\n\t#ifdef USE_MAP\n\t\t// Calm the painted grain toward its own mean (never inside a calm box's\n\t\t// flat read: the blend is the same everywhere, so the calm stays flat).\n\t\tdiffuseColor.rgb = mix( diffuseColor.rgb, diffuse * texture2D( map, vMapUv, 3.5 ).rgb, 0.60 * uAshBay.z );\n\t#endif\n\tfloat ashDetail = - ashJoint * 0.34 + ( ashJitter + ashTop - ashStreak - ashPillow ) * ashKeep - ashGrime * ( 0.5 + 0.5 * ashKeep ) + ashLift;\n\tdiffuseColor.rgb *= max( 0.0, 1.0 + ashDetail );\n\t// ── LOOK r6 (L1 lots, L3 weathering / storey bands / reveals): façade-only ──\n\tfloat ashFac = step( 1e-3, uAshBlock.y );\n\tfloat ashAlong = mix( ashW.x, ashW.z, uAshBlock.w );\n\tfloat ashAw = fwidth( ashAlong );\n\tfloat ashY = ashW.y;\n\tfloat ashTopY = uAshBlock.x;\n\t// Lots every |w| bays, seams on the pilasters, feathered over 0.15 m.\n\tfloat ashLotOn = step( 0.5, abs( uAshBay.w ) );\n\tfloat ashLotW = max( abs( uAshBay.w ), 1.0 ) * uAshBay.y;\n\tfloat ashLotT = ( ashAlong - uAshBay.x + sign( uAshBay.w ) * 0.42 * uAshBay.y ) / ashLotW;\n\tfloat ashLotI = floor( ashLotT );\n\tfloat ashLotF = smoothstep( 0.0, 0.15 / ashLotW, fract( ashLotT ) );\n\tvec2 ashLotSalt = vec2( 5.7, 9.1 ) + uAshBay.x * 0.37;\n\tvec2 ashLotA = vec2( ashHash( vec2( ashLotI - 1.0, ashLotSalt.x ) ), ashHash( vec2( ashLotI - 1.0, ashLotSalt.y ) ) );\n\tvec2 ashLotB = vec2( ashHash( vec2( ashLotI, ashLotSalt.x ) ), ashHash( vec2( ashLotI, ashLotSalt.y ) ) );\n\tfloat ashLotV = ( mix( ashLotA.x, ashLotB.x, ashLotF ) - 0.5 ) * 0.160 * ashLotOn;\n\tfloat ashLotC = mix( step( 0.500, ashLotA.y ), step( 0.500, ashLotB.y ), ashLotF ) * ashLotOn;\n\t// Storey bands: a darker, cooler podium; the piano nobile lightest; a lift toward the crown.\n\tfloat ashPod = ( 1.0 - smoothstep( uAshCourse.x - 0.15, uAshCourse.x + 0.15, ashY ) ) * ashFac;\n\tfloat ashNob = smoothstep( uAshCourse.x - 0.15, uAshCourse.x + 0.15, ashY ) * ( 1.0 - smoothstep( ashTopY - 0.1, ashTopY + 0.2, ashY ) );\n\tfloat ashCrown = smoothstep( uAshCourse.x + 0.4, ashTopY, ashY ) * ( 1.0 - smoothstep( ashTopY + 0.3, ashTopY + 0.6, ashY ) );\n\tfloat ashUpN = dot( normalize( vNormal ), normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) );\n\tfloat ashLip = smoothstep( 0.6, 0.85, ashUpN ) * step( 0.5, ashY );\n\tvec3 ashBand = mix( vec3( 1.0 ), vec3( 0.820, 0.850, 0.920 ), ashPod )\n\t\t* ( 1.0 + ( 0.050 * ashNob + 0.030 * ashCrown + 0.140 * ashLip ) * ashFac + ashLotV );\n\tashBand *= mix( vec3( 1.0 ), vec3( 0.97, 0.985, 1.02 ), ashLotC * uAshBlock.z );\n\t// Weathering (darker AND cooler): drips under the string courses and the\n\t// cornice, soot under the cornice, base grime, and the sill streaks × 1.8.\n\tfloat ashColN = mix( ashNoise1( ashAlong * 3.2, 17.0 ), 0.5, smoothstep( 0.04, 0.15, ashAw ) );\n\tfloat ashColN2 = mix( ashNoise1( ashAlong * 1.3 + 4.0, 23.0 ), 0.5, smoothstep( 0.1, 0.35, ashAw ) );\n\tfloat ashBelow = mod( uAshCourse.x - ashY, 3.20 );\n\tfloat ashDripOn = step( uAshCourse.x - 1.6, ashY ) * step( ashY, ashTopY + 0.02 ) * ashWall;\n\tfloat ashDrip = ( 1.0 - smoothstep( 0.0, mix( 0.50, 1.50, ashColN2 ), ashBelow ) ) * ( 0.3 + 0.7 * smoothstep( 0.35, 0.8, ashColN ) ) * ashDripOn;\n\tfloat ashSoot = smoothstep( ashTopY - 1.4, ashTopY - 0.05, ashY ) * step( ashY, ashTopY + 0.02 ) * ( 0.5 + 0.5 * ashColN ) * ashWall;\n\tfloat ashBase = 1.0 - smoothstep( 0.0, 2.20, ashY );\n\tashBase *= ashBase * ( 0.7 + 0.3 * ashColN2 );\n\tfloat ashWeather = clamp( ( ashDrip * 1.30 + ashSoot * 1.00 + ashBase * 1.00 + ashStreak * 5.000 ) * uAshBlock.y, 0.0, 1.0 );\n\t// Window reveals: faces along the façade axis (jambs) and soffits inside a window rect.\n\tfloat ashAlongN = mix( ashN.x, ashN.z, uAshBlock.w );\n\tfloat ashBayA = mod( ashAlong - uAshBay.x + 0.5 * uAshBay.y, uAshBay.y ) - 0.5 * uAshBay.y;\n\tfloat ashInWin = ( 1.0 - smoothstep( 0.62, 0.8, abs( ashBayA ) ) ) * max(\n\t\tsmoothstep( 0.4, 0.55, ashY ) * ( 1.0 - smoothstep( 2.75, 2.9, ashY ) ),\n\t\tsmoothstep( uAshCourse.x, uAshCourse.x + 0.15, ashY ) * ( 1.0 - smoothstep( uAshCourse.x + 1.75, uAshCourse.x + 1.9, ashY ) ) );\n\tfloat ashJamb = max( smoothstep( 0.55, 0.8, ashAlongN ), smoothstep( 0.6, 0.85, - ashUpN ) ) * ashInWin * ashFac;\n\tvec3 ashR6 = mix( vec3( 1.0 ), ashBand, ashKeep )\n\t\t* mix( vec3( 1.0 ), vec3( 0.620, 0.680, 0.800 ), ashWeather * ashKeep )\n\t\t* mix( vec3( 1.0 ), vec3( 0.720, 0.780, 0.840 ), ashJamb * ashKeep );\n\tdiffuseColor.rgb *= ashR6;\n",
+    "roughness": "\n\troughnessFactor = min( 1.0, roughnessFactor + ashJoint * 0.12 );\n",
+    "normal": "\n\tnormal = normalize( normal + ( viewMatrix * vec4( 0.0, ashBumpY * 0.35, 0.0, 0.0 ) ).xyz );\n",
+    "feather": 0.6
+  },
+  "calmGlsl": "\nuniform vec4 uCalmRects[ 4 ];\nuniform float uCalmCount;\nuniform vec2 uCalmViewport;\nuniform float uCalmFeather;\nfloat calmAt( vec2 fragCoord ) {\n  vec2 uv = fragCoord / max( uCalmViewport, vec2( 1.0 ) );\n  float calm = 0.0;\n  for ( int i = 0; i < 4; i ++ ) {\n    if ( float( i ) >= uCalmCount ) break;\n    vec4 r = uCalmRects[ i ];\n    vec2 d = max( r.xy - uv, uv - r.zw );\n    float outside = max( d.x, d.y );\n    calm = max( calm, 1.0 - smoothstep( 0.0, max( uCalmFeather, 1e-4 ), outside ) );\n  }\n  return calm;\n}\n",
+  "values": {
+    "plazaPaint": {
+      "day": {
+        "key": {
+          "color": "#ffd688",
+          "intensity": 6.2
+        },
+        "hemisphere": {
+          "sky": "#aebfe6",
+          "ground": "#c8a47e",
+          "intensity": 0.26,
+          "keyGain": 0.08
+        },
+        "band": {
+          "wrap": 0.35,
+          "lo": -0.05,
+          "hi": 0.3
+        },
+        "shadow": {
+          "tint": "#b2bee0",
+          "lift": 0.2,
+          "form": {
+            "tint": "#bcc8d2",
+            "lift": 0.22
+          },
+          "hue": {
+            "color": "#78b0d8",
+            "strength": 0.45
+          }
+        },
+        "shadeSat": 0.4,
+        "terminator": {
+          "color": "#ff9a5c",
+          "strength": 0.16
+        },
+        "rim": {
+          "color": "#ffe6b0",
+          "strength": 0.8
+        },
+        "rimPower": 4.5,
+        "roles": {
+          "env": {
+            "k": 1,
+            "rimScale": 0.5,
+            "bandMix": 0.55
+          },
+          "figure": {
+            "k": 1,
+            "rimScale": 1.8,
+            "bandMix": 0.7
+          },
+          "frame": {
+            "k": 1,
+            "rimScale": 0,
+            "bandMix": 0.3,
+            "sat": 0
+          },
+          "foliage": {
+            "k": 1,
+            "rimScale": 0.2,
+            "bandMix": 0.45
+          }
+        },
+        "air": {
+          "start": 18,
+          "density": 0.035,
+          "hue": "#b4c4dc",
+          "chroma": 0.2,
+          "lift": 0.07,
+          "liftStart": 32,
+          "sun": "#ffc98a"
+        },
+        "ibl": {
+          "tint": "#b0bcd8",
+          "strength": 1,
+          "environment": 0.45
+        },
+        "saturation": 1.12,
+        "bounce": {
+          "color": "#ffb877",
+          "strength": 0.07
+        }
+      },
+      "night": {
+        "key": {
+          "color": "#a8b8f0",
+          "intensity": 1.1
+        },
+        "hemisphere": {
+          "sky": "#2a4470",
+          "ground": "#4a3424",
+          "intensity": 0.18,
+          "keyGain": 0.06
+        },
+        "band": {
+          "wrap": 0.35,
+          "lo": -0.05,
+          "hi": 0.3
+        },
+        "shadow": {
+          "tint": "#2b3570",
+          "lift": 0.06
+        },
+        "terminator": {
+          "color": "#ff9a5c",
+          "strength": 0
+        },
+        "rim": {
+          "color": "#9fb0ff",
+          "strength": 0.6
+        },
+        "rimPower": 2.6,
+        "moonCatch": {
+          "color": "#9fb0ff",
+          "strength": 0.18
+        },
+        "lumaCeil": 0.9,
+        "roles": {
+          "env": {
+            "k": 1,
+            "rimScale": 0.5,
+            "bandMix": 0.55
+          },
+          "figure": {
+            "k": 1,
+            "rimScale": 1.8,
+            "bandMix": 0.7
+          },
+          "frame": {
+            "k": 1,
+            "rimScale": 0,
+            "bandMix": 0.3,
+            "sat": 0
+          },
+          "foliage": {
+            "k": 1,
+            "rimScale": 0.03,
+            "bandMix": 0.45,
+            "sat": 1.65
+          }
+        },
+        "air": {
+          "start": 8,
+          "density": 0.022,
+          "hue": "#2f5f86",
+          "chroma": 0.45,
+          "lift": 0,
+          "liftStart": 25,
+          "sun": "#ffd7a0"
+        },
+        "ibl": {
+          "tint": "#8a98d8",
+          "strength": 1,
+          "environment": 0.3,
+          "specular": 0.15
+        },
+        "saturation": 1.15,
+        "pointWarm": {
+          "color": "#ffc890",
+          "strength": 2.2
+        }
+      },
+      "shadow": {
+        "mapSize": 1024,
+        "box": 32,
+        "radius": 3,
+        "bias": -0.0005,
+        "normalBias": 0.03
+      }
+    },
+    "paintedSkyDay": {
+      "horizon": "#f2d7ae",
+      "mid": "#9cc0e4",
+      "zenith": "#4a8fd0",
+      "peach": "#ffc890",
+      "lilac": "#c7c3e0",
+      "cloudBelly": "#8790c8",
+      "cloudMid": "#e6dce8",
+      "cloudLit": "#fff3de",
+      "silver": "#fff0c8",
+      "gold": "#ffc27a"
+    },
+    "skyCoverBias": {
+      "sun": 0.1,
+      "low": 0.12
+    },
+    "skyDayHaze": 0.18,
+    "skyMidElevation": 0.1,
+    "calmCloudContrast": 0.15,
+    "skyDayLumaCap": {
+      "knee": 0.5,
+      "peak": 0.78
+    },
+    "skyRays": {
+      "count": 9,
+      "falloff": 1,
+      "strength": 0.5,
+      "wash": 0.08,
+      "gain": 1.08,
+      "shadow": 0.55
+    },
+    "skyShadowRay": [
+      0.72,
+      0.8,
+      0.94
+    ],
+    "skyContreJourCloud": {
+      "body": 0.35,
+      "mu": [
+        0.3,
+        0.8
+      ]
+    },
+    "skyGrade": {
+      "day": {
+        "gain": 1.22,
+        "sat": 1.35
+      },
+      "night": {
+        "gain": 1.15,
+        "sat": 1.35
+      },
+      "postOff": {
+        "gain": 1,
+        "sat": 1
+      }
+    },
+    "skylineAtlas": {
+      "width": 2048,
+      "height": 512,
+      "topElevationDeg": 16,
+      "layers": [
+        {
+          "id": "near",
+          "radius": 70,
+          "channel": 0
+        },
+        {
+          "id": "mid",
+          "radius": 100,
+          "channel": 1
+        },
+        {
+          "id": "far",
+          "radius": 140,
+          "channel": 2
+        }
+      ]
+    },
+    "leafSssLevels": {
+      "day": 1.5,
+      "night": 0.05
+    },
+    "leafLampColor": "#ffc890",
+    "leafGold": {
+      "body": [
+        1.35,
+        1,
+        0.55
+      ],
+      "gold": [
+        1,
+        0.62,
+        0.22
+      ],
+      "lumFloor": 0.18,
+      "gain": 2.2
+    },
+    "plazaLeafLook": {
+      "day": {
+        "sil": 1,
+        "lamp": 0
+      },
+      "night": {
+        "sil": 0,
+        "lamp": 0.5
+      }
+    },
+    "nightCanopyTint": "#5a8f6e",
+    "postOffKeyNeutral": {
+      "color": "#fff1e0",
+      "mix": 0.55
+    },
+    "postOffShadeShift": {
+      "color": "#d0b89c",
+      "mix": 0.25
+    },
+    "postOffSaturation": 0.97,
+    "contreJour": {
+      "bounce": 1.6,
+      "lift": 0.35,
+      "shade": 0.1
+    },
+    "sceneKey": [
+      3.4,
+      0.22,
+      0.1
+    ],
+    "lampHalo": {
+      "radius": 0.78,
+      "pad": 0.2,
+      "gain": {
+        "day": 0,
+        "night": 2.2
+      }
+    },
+    "plazaLampHalos": [
+      {
+        "id": "halo:lamp:-10.6,-13.4",
+        "center": [
+          -10.6,
+          4.1,
+          -13.4
+        ],
+        "radius": 0.78,
+        "color": "#ffc27a"
+      },
+      {
+        "id": "halo:lamp:10.6,-13.4",
+        "center": [
+          10.6,
+          4.1,
+          -13.4
+        ],
+        "radius": 0.78,
+        "color": "#ffc27a"
+      },
+      {
+        "id": "halo:lamp:-7.6,12.6",
+        "center": [
+          -7.6,
+          4.1,
+          12.6
+        ],
+        "radius": 0.78,
+        "color": "#ffc27a"
+      },
+      {
+        "id": "halo:lamp:7.6,12.6",
+        "center": [
+          7.6,
+          4.1,
+          12.6
+        ],
+        "radius": 0.78,
+        "color": "#ffc27a"
+      },
+      {
+        "id": "halo:gate-lantern:left",
+        "center": [
+          -3.8,
+          7.260000000000001,
+          15.649999999999999
+        ],
+        "radius": 0.78,
+        "color": "#ffcb87"
+      },
+      {
+        "id": "halo:gate-lantern:right",
+        "center": [
+          3.8,
+          7.260000000000001,
+          15.649999999999999
+        ],
+        "radius": 0.78,
+        "color": "#ffcb87"
+      }
+    ],
+    "vignette": 0.3
+  }
+}

@@ -1,0 +1,5 @@
+import { defineNamespace } from '@/i18n/define';
+import en from './en';
+import de from './de';
+
+export const matchAiMessages = defineNamespace('match/ai', en, de);

@@ -1,0 +1,1180 @@
+/*
+ * Pokéball loading ceremony (W7) — see BallLoader.tsx for the contract.
+ *
+ * Transform/opacity-only animation throughout (no layout- or paint-affecting
+ * property is ever animated; the shafts' length fade is a static mask), all
+ * time-based CSS. The sphere is a CSS-3D illusion: two full-size discs
+ * clipped to their hemispheres share ONE key-light model (upper-left
+ * specular, lower-right rim light, core shadow), so the halves read as a
+ * single lit sphere; the lid hinges on a perspective parent.
+ *
+ * ONE COMPOSITOR TIMELINE (wave 2, W7 change of technique). The reveal is a
+ * single pre-scheduled set of CSS animations that all start in the ONE
+ * commit that renders `data-revealing` (the same commit writes
+ * `html[data-route-handoff]`, whose canvas fade in globals.css is part of the
+ * same timeline). Every beat is an `animation-delay` offset from that commit
+ * and every animated property is `transform` or `opacity` (compositor-only,
+ * with `will-change` pre-promotion while the ball is docked), so a
+ * main-thread stall (a shader link, a long task) cannot stutter or desync it.
+ * JS only decides the plan for that commit and writes two custom properties
+ * on `<html>` in the same layout phase:
+ *   --ball-lead  the flight lead (260 ms, every width since wave-2 r3)
+ *   --ball-k     the time scale (1, or < 1 for a late arm's shortened
+ *                ceremony: ball-loader-state `ceremonyPlan`)
+ * Every delay below is (lead + beat) × k, every duration beat × k.
+ *
+ * Timeline from the reveal (t = 0), unscaled, after the lead:
+ *   lead       first 260 ms: the ball flies from its chip dock to screen
+ *              centre (every width, wave-2 r3); at ≤ 640 px it also grows
+ *              to its full 72 px (laid out at 72 px and docked at scale
+ *              32/72, so it lands crisp)
+ *   0–100 ms   the "click": a crisp squash, the button flashes white and a
+ *              thin click ring snaps off it
+ *   100–300    the lid hinges BACK about the rear of the sphere (3D) and
+ *              flips its dark inner shell toward the viewer; the chamber
+ *              mouth glows white-hot (BALL_TIMING.hingeStartMs = 100)
+ *   240        RELEASE (BALL_TIMING.handoffMs): the capture-release beam
+ *              bursts from the ball's hinge line:
+ *     +0–600     a WHITE core burst, at full intensity from +60 to +270
+ *     +0–700     12 saturated red (#e3350d) shafts with white-hot cores,
+ *                at full intensity from +105 to +350
+ *     +0–620     a white rim ring with a red halo, expanding
+ *     +0–520     the capture wavefront (white core, red glow both sides)
+ *                sweeps from the ball past the far corner while the canvas
+ *                fades in under it (globals.css W7 block: same delay, curve
+ *                and duration, opacity only)
+ *     +0–760     sparks
+ *   300–600    the ball pops out (scale up + fade: it leaves, it does not
+ *              linger over the world)
+ * The machine is `done` at (lead + 1060) × k (BALL_TIMING.openMs), after the
+ * last beat, and never before the timeline's real end once its start is
+ * read. `data-reduced` (reduced motion, or under 600 ms of ball life left):
+ * a 200 ms crossfade, no beam.
+ */
+
+.root {
+  /* The timeline's two inputs (written on <html> by BallLoader in the
+     reveal commit; the defaults are the authored wide-screen timeline). */
+  --k: var(--ball-k, 1);
+  /* Release-beat scale (wave-2 r2): a short ceremony squeezes the lead-in
+     (--k) first and keeps the red/white release (--kb) at >= 600 ms. */
+  --kb: var(--ball-kb, 1);
+  --lead: var(--ball-lead, 0ms);
+  --ball-size: min(14vmin, 96px);
+  /* The beam's own scale unit: never smaller than a readable burst. */
+  --beam-unit: max(var(--ball-size), 72px);
+  /* Just above the route HUD's 56 px band, clear of the home indicator. */
+  --dock-bottom: calc(56px + 20px + env(safe-area-inset-bottom, 0px));
+  /* The ball's docked visual size (its box on wide screens). */
+  --dock-size: var(--ball-size);
+  --dock-scale: 1;
+  /* The loader CHIP (wave-2 r2): the docked ball plus one status line on a
+     small authored surface. BallLoader places it by the keep-out law
+     (`placeLoaderChip`: inside the viewport with a >= 16 px gutter and the
+     safe area, over no visible page text) and writes --dock-x / --dock-y
+     inline; these defaults are its bottom-centre start. */
+  --chip-pad: 8px;
+  --line-gap: 6px;
+  --line-h: 16px;
+  --chip-w: 212px;
+  --chip-below: calc(var(--dock-size) / 2 + var(--line-gap) + var(--line-h) + var(--chip-pad));
+  --dock-y: calc(50cqh - 16px - env(safe-area-inset-bottom, 0px) - var(--chip-below));
+  --dock-x: 0px;
+  /* Where the ceremony plays: screen centre at EVERY width (wave-2 r3 —
+     the 1440 burst fired from the docked chip's corner; D2). The ball flies
+     there from its dock on the lead (`ballFly`). */
+  --reveal-x: 0px;
+  --reveal-y: 0px;
+  --scrim-scale: 2.6;
+  --ball-red-hi: #ff7a66;
+  --ball-red: #e3350d;
+  --ball-red-lo: #8e1606;
+  --ball-white-hi: #ffffff;
+  --ball-white: #eceef3;
+  --ball-white-lo: #9aa0ad;
+  --ball-ink: #15161b;
+  /* Capture-release red: the Pokéball's own #e3350d, fully saturated. */
+  --beam-red: 227, 53, 13;
+  --beam-hot: 255, 96, 60;
+
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+  overflow: hidden;
+  container-type: size;
+  opacity: 1;
+}
+
+/* Narrow screens (the bottom-sheet tier, D2 "does not cover data"): a small
+   ball docked INSIDE the 56 px HUD band, in the right-hand gutter the nav
+   pill yields while the ball is loading (globals.css, W7 block), so it sits
+   over neither a card row nor a nav chip. No scrim here: the band already
+   separates it from the page, and a dark halo would dim the pill.
+   Review r3: 32 px, 4 px from the right edge. At 390 the cards' text
+   column ends ≈ 41 px from the edge, so the ball's box (x ≥ 354) keeps a
+   ≥ 5 px gap from it (r2's 36 px / 6 px touched the "12 Pkt." row end).
+   The trace self-check (BallLoader) records any visible-text overlap.
+   Wave 2: the ceremony no longer opens in this dock (r5: the burst fired
+   half off-screen from the corner). On the reveal the ball first flies to
+   screen centre (`ballFly`, the lead), and the click, the beam and the exit
+   play there: the one moment the ball crosses the page, which D2 allows at
+   the ceremony. The ball is laid out at 72 px and docked at scale 32/72, so
+   the flight scales it UP to its native raster. */
+@media (max-width: 640px) {
+  .root {
+    --ball-size: 72px;
+    --dock-size: 32px;
+    --dock-scale: 0.4444;
+    --chip-w: 200px;
+  }
+
+}
+
+/* Any failure path: the Lite page is already there — just get out of the way. */
+.root[data-ball-phase='aborted'] {
+  opacity: 0;
+  transition: opacity 150ms linear;
+}
+
+/* ── The chip: ball + status line, an authored surface off the data ────── */
+
+.chip {
+  position: absolute;
+  left: calc(50% + var(--dock-x));
+  top: calc(50% + var(--dock-y) - var(--dock-size) / 2 - var(--chip-pad));
+  width: var(--chip-w);
+  height: calc(var(--dock-size) + var(--chip-pad) + var(--chip-below));
+  border-radius: 18px;
+  /* Design rule: no dark box behind the ball. The chip stays as the
+     placement/measure box (keep-out, band fallback) but paints nothing; the
+     ball floats on the page and the status line carries its own halo. */
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  transform: translateX(-50%);
+  animation: fadeIn 260ms ease-out both;
+  will-change: opacity;
+}
+
+.root[data-revealing] .chip {
+  animation: fadeOut calc(160ms * var(--k)) ease-out both;
+}
+
+/* Latched placement (wave-2 r3): the docked chip is not shown until
+   BallLoader has placed it once (`data-placed`), so it never appears at the
+   CSS default spot and then jumps. `visibility` only (never animated); the
+   reveal always shows. */
+.root[data-ball-phase='loading']:not([data-revealing]):not([data-placed]) > div,
+.root[data-ball-phase='loading']:not([data-revealing]):not([data-placed]) .status {
+  visibility: hidden;
+}
+
+/* Band fallback (wave-2 r3, `data-chip="band"`): no clear slot on the page,
+   so the chip docks as a compact ROW in the bottom HUD band — the ball at
+   the row's left (the dock), the status line beside it. */
+.root[data-chip='band'] .chip {
+  left: calc(50% + var(--dock-x) - var(--dock-size) / 2 - var(--chip-pad));
+  height: calc(var(--dock-size) + var(--chip-pad) * 2);
+  transform: none;
+}
+
+.root[data-chip='band'] .status {
+  left: calc(50% + var(--dock-x) + var(--dock-size) / 2 + var(--line-gap));
+  top: calc(50% + var(--dock-y) - var(--line-h) / 2);
+  width: calc(var(--chip-w) - var(--dock-size) - var(--chip-pad) * 2 - var(--line-gap));
+  transform: none;
+  text-align: left;
+}
+
+/* The status line: the loader's one polite live region. Always mounted;
+   shown under the docked ball, transparent (still announced) otherwise. */
+.status {
+  position: absolute;
+  left: calc(50% + var(--dock-x));
+  top: calc(50% + var(--dock-y) + var(--dock-size) / 2 + var(--line-gap));
+  width: calc(var(--chip-w) - var(--chip-pad) * 2);
+  margin: 0;
+  transform: translateX(-50%);
+  font-size: 13px;
+  line-height: var(--line-h);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  /* Page ink on the page's own ground (light cream / dark theme alike), with a
+     soft halo in the page background colour so the line stays legible over
+     whatever sits behind the docked ball. */
+  color: var(--foreground, #241a0c);
+  text-shadow:
+    0 0 6px var(--background, #e8d9b5),
+    0 0 2px var(--background, #e8d9b5);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.status[data-shown] {
+  opacity: 1;
+}
+
+/* Progress truth (wave-2 r3): at the arm the line reads the world's `ready`
+   copy and fades out WITH the chip (same duration and scale), so it never
+   outlives its surface over the page. */
+.root[data-revealing] .status[data-shown] {
+  animation: fadeOut calc(160ms * var(--k)) ease-out both;
+}
+
+/* Resolves the safe-area insets to px for the placement (never painted). */
+.safeProbe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── Scrim: behind the ball only, never a veil over the page (D2) ─────── */
+
+.scrim {
+  position: absolute;
+  left: calc(50% + var(--dock-x));
+  bottom: calc(var(--dock-bottom) + var(--dock-size) / 2);
+  width: calc(var(--dock-size) * var(--scrim-scale));
+  height: calc(var(--dock-size) * var(--scrim-scale));
+  border-radius: 50%;
+  /* A soft lift in the page's own background colour (not a dark smudge):
+     it separates the ball from busy content beneath without reading as a box. */
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--background, #e8d9b5) 70%, transparent),
+    color-mix(in srgb, var(--background, #e8d9b5) 30%, transparent) 60%,
+    transparent
+  );
+  transform: translate(-50%, 50%);
+  animation: fadeIn 260ms ease-out both;
+  will-change: opacity;
+}
+
+.root[data-revealing] .scrim {
+  animation: fadeOut calc(220ms * var(--k)) ease-out both;
+}
+
+/* ── The ball's carrier: docked while loading; flies to centre, opens, pops ── */
+
+.flight {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--ball-size);
+  height: var(--ball-size);
+  margin: calc(var(--ball-size) / -2) 0 0 calc(var(--ball-size) / -2);
+  transform: translate(var(--dock-x), var(--dock-y)) scale(var(--dock-scale));
+  animation: ballEnter 280ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* The flight to the reveal point (screen centre, every width), then the pop
+   under the core burst's peak.
+   `ballPop` fills FORWARDS only: during its delay the flight's end pose
+   holds (a backwards fill would snap the ball to the reveal point before it
+   flew there). */
+.root[data-revealing] .flight {
+  animation:
+    ballFly calc(var(--lead) * var(--k)) cubic-bezier(0.3, 0, 0.2, 1) 0ms both,
+    ballPop calc(300ms * var(--kb)) cubic-bezier(0.4, 0, 0.8, 0.6) calc(calc((var(--lead) + 240ms) * var(--k)) + 60ms * var(--kb)) forwards;
+}
+
+/* ── Wobble: one franchise rock per REAL milestone rise (1:1) ─────────────
+   Started imperatively from the progress store (BallLoader): `data-rock`
+   alternates a / b, two identical keyframe sets, so a rise during a rock
+   restarts it by an animation-name swap (no reflow), with its startTime
+   pinned to the rise. */
+
+.wobble {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 94%;
+  will-change: transform;
+}
+
+.wobble[data-rock='a'] {
+  animation: wobble 620ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+
+.wobble[data-rock='b'] {
+  animation: wobble_b 620ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+
+/* A wobble in flight is preempted by the reveal, never waited on. */
+.root[data-revealing] .wobble {
+  animation: none;
+}
+
+/* ── The sphere ────────────────────────────────────────────────────────── */
+
+.ball {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: calc(var(--ball-size) * 4);
+  filter: drop-shadow(0 calc(var(--ball-size) * 0.08) calc(var(--ball-size) * 0.1) rgba(8, 10, 16, 0.35));
+}
+
+.root[data-revealing] .ball {
+  animation: ballClick calc(100ms * var(--k)) cubic-bezier(0.3, 0, 0.2, 1) calc(var(--lead) * var(--k)) both;
+}
+
+/* The lid: a 3D group hinged at the REAR of the sphere (transform-origin
+   z = −radius), carrying the red outer shell and, on its back face, the dark
+   inner shell that turns toward the viewer as it swings open. */
+.lid {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform-origin: 50% 50% calc(var(--ball-size) * -0.5);
+  will-change: transform;
+}
+
+.upper,
+.lidInner,
+.lower {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  /* Core shadow + lower-right rim light + ink outline, shared by both halves. */
+  box-shadow:
+    inset calc(var(--ball-size) * -0.07) calc(var(--ball-size) * -0.09) calc(var(--ball-size) * 0.14) rgba(0, 0, 0, 0.34),
+    inset calc(var(--ball-size) * 0.03) calc(var(--ball-size) * 0.04) calc(var(--ball-size) * 0.08) rgba(255, 255, 255, 0.22),
+    inset 0 0 0 calc(var(--ball-size) * 0.028) var(--ball-ink);
+}
+
+.upper {
+  clip-path: inset(0 0 50% 0);
+  backface-visibility: hidden;
+  background:
+    /* Soft specular highlight — the key light, upper left. */
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.95) 0 5%, rgba(255, 255, 255, 0.35) 11%, transparent 20%),
+    /* Rim light catching the lower-right limb. */
+    radial-gradient(circle at 50% 50%, transparent 60%, rgba(255, 200, 190, 0.22) 67%, transparent 71%),
+    radial-gradient(circle at 36% 30%, var(--ball-red-hi) 0%, var(--ball-red) 38%, var(--ball-red-lo) 78%, #4a0a03 100%);
+  transform-origin: 50% 50%;
+}
+
+.lower {
+  clip-path: inset(50% 0 0 0);
+  background:
+    radial-gradient(circle at 50% 50%, transparent 60%, rgba(255, 255, 255, 0.4) 67%, transparent 71%),
+    radial-gradient(circle at 36% 30%, var(--ball-white-hi) 0%, var(--ball-white) 42%, var(--ball-white-lo) 82%, #6b7080 100%);
+}
+
+/* The lid's inner shell: the back face of the same hemisphere (mirrored
+   about the hemisphere's own mid-line so it covers the same half), lit from
+   below by the chamber. Invisible until the lid swings past edge-on. */
+.lidInner {
+  clip-path: inset(0 0 50% 0);
+  backface-visibility: hidden;
+  transform-origin: 50% 25%;
+  transform: rotateX(180deg);
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 50%, rgba(255, 236, 230, 0.55), rgba(var(--beam-red), 0.28) 55%, transparent 80%),
+    radial-gradient(circle at 50% 50%, #3b3e48 0%, #1c1d23 55%, #0b0b0e 100%);
+}
+
+.root[data-revealing] .lid {
+  animation: lidOpen calc(200ms * var(--k)) cubic-bezier(0.25, 0.85, 0.3, 1.05) calc((var(--lead) + 100ms) * var(--k)) both;
+}
+
+/* The capture chamber's light, revealed as the lid lifts. */
+.mouth {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 36%;
+  height: 28%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #ffffff, #ffe3de 40%, rgba(var(--beam-hot), 0.8) 75%, transparent);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.root[data-revealing] .mouth {
+  animation: mouthGlow calc(260ms * var(--k)) ease-out calc((var(--lead) + 100ms) * var(--k)) both;
+}
+
+.band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: calc(var(--ball-size) * 0.09);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2a2b32, var(--ball-ink) 45%, #050506);
+  transform: translateY(-50%);
+}
+
+.button {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--ball-size) * 0.27);
+  height: calc(var(--ball-size) * 0.27);
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #ffffff, #e6e8ee 60%, #b9bdc8);
+  box-shadow:
+    0 0 0 calc(var(--ball-size) * 0.045) var(--ball-ink),
+    inset 0 calc(var(--ball-size) * -0.01) calc(var(--ball-size) * 0.02) rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -50%);
+}
+
+/* Inner ring of the button. */
+.buttonCore {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffffff, #f1f2f6 55%, #cfd3dc);
+  box-shadow: 0 0 0 calc(var(--ball-size) * 0.012) rgba(20, 22, 28, 0.35);
+}
+
+/* Red pulse (wobble) / white flash (click) — an opacity-only overlay. */
+.buttonCore::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--beam-red), 0.95), rgba(var(--beam-red), 0.35) 60%, transparent);
+  opacity: 0;
+}
+
+/*
+ * Idle breath (wave-2 r2): between milestone rocks the button glows in and
+ * out — a compositor-only opacity loop, so the docked ball stays visibly
+ * alive through a main-thread stall (GLBs parsing while the page waits)
+ * instead of sitting frozen. Loading only; never during the reveal, never
+ * with reduced motion.
+ */
+.buttonCore::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95), rgba(var(--beam-red), 0.28) 62%, transparent);
+  opacity: 0;
+}
+
+.root[data-ball-phase='loading']:not([data-revealing]):not([data-reduced]) .buttonCore::before {
+  animation: buttonBreath 1600ms ease-in-out infinite;
+}
+
+.wobble[data-rock='a'] .buttonCore::after {
+  animation: buttonPulse 620ms ease-out both;
+}
+
+.wobble[data-rock='b'] .buttonCore::after {
+  animation: buttonPulse_b 620ms ease-out both;
+}
+
+.root[data-revealing] .buttonCore::after {
+  background: radial-gradient(closest-side, #ffffff, rgba(255, 236, 232, 0.8) 55%, transparent);
+  animation: buttonFlash calc(160ms * var(--k)) ease-out calc(var(--lead) * var(--k)) both;
+}
+
+/* The "click": one thin white ring snapping off the button. */
+.button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: calc(var(--ball-size) * 0.02) solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 calc(var(--ball-size) * 0.08) rgba(255, 255, 255, 0.8);
+  opacity: 0;
+}
+
+.root[data-revealing] .button::after {
+  animation: clickRing calc(220ms * var(--k)) cubic-bezier(0.1, 0.8, 0.3, 1) calc((var(--lead) + 10ms) * var(--k)) both;
+}
+
+/* ── Capture-release beam: bursts from the reveal point ─────────────────── */
+
+/* Screen centre at every width (after the flight). */
+.beam {
+  position: absolute;
+  left: calc(50% + var(--reveal-x));
+  top: calc(50% + var(--reveal-y));
+  width: 0;
+  height: 0;
+}
+
+/* Pre-promoted while the ball is docked (opacity 0 until the release), so
+   the reveal commit creates no layer and the compositor owns every beat. */
+.glow,
+.sweep,
+.core,
+.ring,
+.ray,
+.spark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* A local white-to-red bloom around the ball — the burst's body, not a
+   page-wide tint (r2 read as a faint pink wash). */
+.glow {
+  width: 90vmin;
+  height: 90vmin;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 246, 242, 0.95) 14%,
+    rgba(var(--beam-hot), 0.75) 32%,
+    rgba(var(--beam-red), 0.35) 55%,
+    rgba(var(--beam-red), 0) 78%
+  );
+  transform: translate(-50%, -50%) scale(0.2);
+}
+
+/* The capture wavefront: a white-hot band with saturated red glow on both
+   sides, scaled (transform only) from the ball past the farthest corner on
+   the SAME delay, curve and duration as the canvas fade-in (globals.css W7
+   block), so the world appears as it passes. 310 vmax: from a corner dock
+   the far corner is ≤ 141.5 vmax away. */
+.sweep {
+  width: 310vmax;
+  height: 310vmax;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgba(var(--beam-red), 0) 86%,
+    rgba(var(--beam-red), 0.7) 91%,
+    rgba(255, 236, 230, 1) 93.4%,
+    #ffffff 94.4%,
+    rgba(var(--beam-red), 0.95) 96.2%,
+    rgba(var(--beam-red), 0) 100%
+  );
+  transform: translate(-50%, -50%) scale(0.02);
+}
+
+.core {
+  width: calc(var(--beam-unit) * 1.3);
+  height: calc(var(--beam-unit) * 1.3);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #ffffff 0 55%, rgba(255, 240, 236, 0.95) 72%, rgba(var(--beam-hot), 0.6) 88%, transparent);
+  box-shadow:
+    0 0 calc(var(--beam-unit) * 0.5) calc(var(--beam-unit) * 0.12) rgba(255, 255, 255, 0.95),
+    0 0 calc(var(--beam-unit) * 1.1) calc(var(--beam-unit) * 0.2) rgba(var(--beam-red), 0.9);
+  transform: translate(-50%, -50%) scale(0.3);
+}
+
+/* Rim ring: a crisp white ring with a saturated red halo, off the hinge line. */
+.ring {
+  width: calc(var(--beam-unit) * 2);
+  height: calc(var(--beam-unit) * 2);
+  border-radius: 50%;
+  border: calc(var(--beam-unit) * 0.07) solid #ffffff;
+  box-shadow:
+    0 0 calc(var(--beam-unit) * 0.22) calc(var(--beam-unit) * 0.05) rgba(var(--beam-red), 0.95),
+    inset 0 0 calc(var(--beam-unit) * 0.22) calc(var(--beam-unit) * 0.04) rgba(var(--beam-red), 0.85);
+  transform: translate(-50%, -50%) scale(0.3);
+}
+
+/* Shafts: saturated red beams with a white-hot core line, fading along
+   their length through a static mask (paint-only, never animated). Long
+   enough to cross the viewport from a corner dock. */
+.ray {
+  width: calc(var(--beam-unit) * 0.26);
+  height: 150vmax;
+  margin-left: calc(var(--beam-unit) * -0.13);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--beam-red), 0) 0%,
+    rgba(var(--beam-red), 1) 22%,
+    rgba(var(--beam-hot), 1) 38%,
+    #ffffff 50%,
+    rgba(var(--beam-hot), 1) 62%,
+    rgba(var(--beam-red), 1) 78%,
+    rgba(var(--beam-red), 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 40%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 40%, transparent 100%);
+  transform-origin: 50% 0;
+  transform: rotate(var(--ray-angle)) scale(1, 0.04);
+}
+
+.spark {
+  width: calc(var(--beam-unit) * 0.1);
+  height: calc(var(--beam-unit) * 0.1);
+  margin: calc(var(--beam-unit) * -0.05) 0 0 calc(var(--beam-unit) * -0.05);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #ffffff, #ffffff 35%, rgba(var(--beam-red), 1) 70%, transparent);
+  transform: rotate(var(--spark-angle)) translateY(0);
+}
+
+/* ENGINE r3 (CAR r2: a 0.17-0.25 s compositor stall right after the arm, in
+   every world): while docked, every beam layer sits at its PEAK scale
+   (still at opacity 0, so nothing shows). The compositor rasters a
+   transform-animated layer at the animation's largest scale; parked at the
+   start scale (0.02-0.3), the layers were rastered small during the load
+   and had to be re-rastered (with their gradient, mask and blur shaders
+   built for the first time) in the arm's first frames. Parked at the peak,
+   that work happens while the ball is docked and the arm reuses the tiles.
+   The keyframes (fill `both`) own the transform from the arm on.
+   A layer at opacity 0 is never rastered at all, so the docked opacity is
+   a hair above it (0.002: under half an 8-bit level even for white on
+   black) — enough for the compositor to raster the tiles and build the
+   raster shaders before the arm, invisible on the page. */
+/* R6 (the 317 ms post-ball stall): the pre-raster is STAGGERED. A part is
+   only lifted to the pre-raster opacity once the loader has marked it
+   (`data-warm`, one BEAM_PRERASTER step at a time — ball-loader-state), so
+   each step's layers raster as their own small GPU task instead of every
+   layer in the first docked frame. Unmarked parts stay at opacity 0 (never
+   rastered); the reveal rasters any part a short load did not reach. */
+.root[data-ball-phase='loading']:not([data-revealing]) :is(.glow, .sweep, .core, .ring, .ray, .spark)[data-warm] {
+  opacity: 0.002;
+}
+
+.root:not([data-revealing]) .glow {
+  transform: translate(-50%, -50%) scale(1.3);
+}
+
+.root:not([data-revealing]) .sweep {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* ENGINE r5 (CAR r4: the arm frame presented 90-110 ms late in every world).
+   Parked at its peak scale the sweep is 310 vmax — far larger than the
+   viewport — so only its on-screen tiles were rastered while docked. The
+   reveal's first keyframe (scale 0.02, fill `both`, applied in the arm
+   commit) brings the WHOLE layer on screen at once, and its every tile was
+   rastered in the arm's first frames: a 20 + 11 ms GPU-main raster, a
+   90-100 ms present gap (probe A/B: hiding the sweep alone removes it).
+   While docked, a held animation with the reveal's own scale range keeps the
+   layer at the start pose (steps(1, end) over a duration no load reaches):
+   the compositor rasters it at the animation's maximum scale — the reveal's
+   raster scale — with every tile on screen, so the arm reuses the tiles.
+   Still at 0.002 opacity, so nothing shows; never under reduced motion. */
+/* ENGINE-FIX (CAR r11: ~29 compositor fps while loading). A marked part is
+   lifted to the pre-raster opacity for ONE pulse (400 ms, like the HUD
+   primer) and then back to 0: long enough for its tiles and raster programs
+   to be built, and it is then no longer composited. Held at 0.002 (r6–r10)
+   the whole beam — the 310 vmax sweep, the glow, twelve rays with their mask
+   layers — was drawn into EVERY compositor frame for the rest of the load
+   (seconds), GPU fill competing with the load warm's links and uploads for
+   the ANGLE GPU main thread. A/B, sakura cold rung 0: 29.2 / 29.2 -> 30.5 /
+   33.1 fps, loading median interval 46 / 48 -> 43 / 35 ms, the opening beat
+   unchanged (the arm reuses the tiles). The sweep keeps its held scale
+   animation beside the pulse. */
+.root[data-ball-phase='loading']:not([data-revealing]):not([data-reduced]) :is(.glow, .core, .ring, .ray, .spark)[data-warm] {
+  animation: beamPrime 400ms steps(1, end) forwards;
+}
+.root[data-ball-phase='loading']:not([data-revealing]):not([data-reduced]) .sweep[data-warm] {
+  animation:
+    sweepPark 100000s steps(1, end) infinite,
+    beamPrime 400ms steps(1, end) forwards;
+}
+@keyframes beamPrime {
+  from {
+    opacity: 0.002;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.root:not([data-revealing]) .core {
+  transform: translate(-50%, -50%) scale(4);
+}
+
+.root:not([data-revealing]) .ring {
+  transform: translate(-50%, -50%) scale(6);
+}
+
+.root:not([data-revealing]) .ray {
+  transform: rotate(var(--ray-angle)) scale(1, 1.1);
+}
+
+/* ── R6 E8: the route HUD, pre-rastered from the handoff ─────────────────
+   R6 trace: the moment `world-route-live` first shows the route HUD, its
+   glass bar (a backdrop-filter blur + saturate, blurred shadows, a
+   text-shadow) is painted and rastered for the first time — a 56 ms GPU
+   raster task with Skia program links inside the release window. From the
+   handoff (the arm commit, while the ball is still flying) the HUD is laid
+   out and painted at the pre-raster opacity, so its layers and blur
+   programs are built before the release; `world-route-live` then only lifts
+   the opacity (the HUD's own 200 ms transition). It takes no pointer events
+   until then. `:has(.root)` keeps this module selector pure (the loader
+   root is mounted in every route world). */
+:global(html[data-route-handoff]:not(.world-route-live)):has(.root) :global(.world-nav-hud) {
+  visibility: visible;
+  opacity: 0.002;
+}
+
+:global(html[data-route-handoff]:not(.world-route-live)):has(.root) :global(.world-nav-hud-bar) {
+  pointer-events: none;
+}
+
+/* R6 E8, part 2: the arm frame above pre-rasters the HUD, and its first
+   raster linked the glass bar's programs there (a 113-133 ms gap at the arm
+   in the r6 i4 traces). The primer carries the SAME paint effects — the
+   backdrop blur + saturate, the blurred drop and inset shadows, the sheen
+   gradient, the heading text-shadow — on a small pill inside the loader,
+   shown at the pre-raster opacity for one moment of the docked stagger (its
+   `data-beam-step`), then back to 0 so the backdrop pass stops. Never
+   interactive, never under reduced motion. */
+.hudPrimer {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  height: 2.75rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--hud-glass-border, rgba(206, 234, 250, 0.44));
+  border-radius: 9999px;
+  background:
+    linear-gradient(180deg, var(--hud-glass-sheen, rgba(219, 240, 252, 0.3)), transparent 55%),
+    var(--hud-glass, rgba(30, 104, 150, 0.42));
+  box-shadow:
+    var(--hud-shadow, 0 10px 28px rgba(8, 42, 64, 0.32)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  color: var(--hud-ink, #f0f9ff);
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  text-shadow: 0 1px 8px rgba(2, 30, 40, 0.5);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.root[data-ball-phase='loading']:not([data-revealing]):not([data-reduced]) .hudPrimer[data-warm] {
+  animation: hudPrime 400ms steps(1, end) forwards;
+}
+
+@keyframes hudPrime {
+  from {
+    opacity: 0.002;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Every beat is a delay off `data-revealing` (one commit with the handoff
+   attribute): (lead + 240 ms) × k, where 240 ms = BALL_TIMING.handoffMs
+   (pinned by the contract test). */
+.root[data-revealing] .glow {
+  animation: beamGlow calc(600ms * var(--kb)) cubic-bezier(0.2, 0.7, 0.3, 1) calc((var(--lead) + 240ms) * var(--k)) both;
+}
+
+.root[data-revealing] .sweep {
+  animation: beamSweep calc(520ms * var(--kb)) cubic-bezier(0.25, 0.7, 0.35, 1) calc((var(--lead) + 240ms) * var(--k)) both;
+}
+
+.root[data-revealing] .core {
+  animation: beamCore calc(600ms * var(--kb)) cubic-bezier(0.2, 0.8, 0.3, 1) calc((var(--lead) + 240ms) * var(--k)) both;
+}
+
+.root[data-revealing] .ring {
+  animation: beamRing calc(620ms * var(--kb)) cubic-bezier(0.15, 0.8, 0.3, 1) calc((var(--lead) + 240ms) * var(--k)) both;
+}
+
+.root[data-revealing] .ray {
+  animation: beamRay calc(700ms * var(--kb)) cubic-bezier(0.2, 0.8, 0.3, 1)
+    calc(calc((var(--lead) + 240ms) * var(--k)) + var(--ray-delay, 0ms) * var(--kb)) both;
+}
+
+.root[data-revealing] .spark {
+  animation: beamSpark calc(680ms * var(--kb)) cubic-bezier(0.15, 0.75, 0.35, 1)
+    calc(calc((var(--lead) + 240ms) * var(--k)) + var(--spark-delay, 0ms) * var(--kb)) both;
+}
+
+/* ── Reduced motion / quick: static ball, one opacity crossfade, no beam ── */
+
+.root[data-reduced] .flight,
+.root[data-reduced] .scrim,
+.root[data-reduced] .chip {
+  animation: fadeIn 200ms linear both;
+}
+
+.root[data-reduced][data-revealing] .flight,
+.root[data-reduced][data-revealing] .scrim,
+.root[data-reduced][data-revealing] .chip {
+  animation: fadeOut 200ms linear both;
+}
+
+.root[data-reduced] .wobble,
+.root[data-reduced] .ball,
+.root[data-reduced] .lid,
+.root[data-reduced] .button::after,
+.root[data-reduced] .mouth,
+.root[data-reduced] .buttonCore::after {
+  animation: none;
+}
+
+.root[data-reduced] .beam {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wobble[data-rock],
+  .root[data-revealing] .ball,
+  .root[data-revealing] .lid,
+  .root[data-revealing] .button::after,
+  .root[data-revealing] .mouth,
+  .wobble[data-rock] .buttonCore::after,
+  .root[data-revealing] .buttonCore::after,
+  .root[data-ball-phase='loading']:not([data-revealing]):not([data-reduced]) .buttonCore::before {
+    animation: none;
+  }
+
+  .root .flight,
+  .root .scrim,
+  .root .chip {
+    animation: fadeIn 200ms linear both;
+  }
+
+  .root[data-revealing] .flight,
+  .root[data-revealing] .scrim,
+  .root[data-revealing] .chip {
+    animation: fadeOut 200ms linear both;
+  }
+
+  .status {
+    transition: none;
+  }
+
+  .beam {
+    display: none;
+  }
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ballEnter {
+  from {
+    opacity: 0;
+    transform: translate(var(--dock-x), calc(var(--dock-y) + 14px)) scale(calc(var(--dock-scale) * 0.88));
+  }
+  to {
+    opacity: 1;
+    transform: translate(var(--dock-x), var(--dock-y)) scale(var(--dock-scale));
+  }
+}
+
+/* Dock → reveal point (screen centre), growing to the native size at
+   ≤ 640 px (the docked scale is 1 on wide screens). */
+@keyframes ballFly {
+  from {
+    opacity: 1;
+    transform: translate(var(--dock-x), var(--dock-y)) scale(var(--dock-scale));
+  }
+  to {
+    opacity: 1;
+    transform: translate(var(--reveal-x), var(--reveal-y)) scale(1);
+  }
+}
+
+/* Out of the reveal point: a quick swell and gone — never a lingering ghost. */
+@keyframes ballPop {
+  0% {
+    opacity: 1;
+    transform: translate(var(--reveal-x), var(--reveal-y)) scale(1);
+  }
+  45% {
+    opacity: 0.85;
+    transform: translate(var(--reveal-x), var(--reveal-y)) scale(1.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--reveal-x), var(--reveal-y)) scale(1.8);
+  }
+}
+
+/* Rock left-right about the contact point, then settle — the franchise shake. */
+@keyframes wobble {
+  0% {
+    transform: translateX(0) rotate(0deg);
+  }
+  16% {
+    transform: translateX(-5%) rotate(-17deg);
+  }
+  36% {
+    transform: translateX(4%) rotate(13deg);
+  }
+  54% {
+    transform: translateX(-2%) rotate(-7deg);
+  }
+  72% {
+    transform: translateX(1%) rotate(3deg);
+  }
+  86% {
+    transform: translateX(0) rotate(-1deg);
+  }
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+/* The same rock under a second name: the a / b restart swap. */
+@keyframes wobble_b {
+  0% {
+    transform: translateX(0) rotate(0deg);
+  }
+  16% {
+    transform: translateX(-5%) rotate(-17deg);
+  }
+  36% {
+    transform: translateX(4%) rotate(13deg);
+  }
+  54% {
+    transform: translateX(-2%) rotate(-7deg);
+  }
+  72% {
+    transform: translateX(1%) rotate(3deg);
+  }
+  86% {
+    transform: translateX(0) rotate(-1deg);
+  }
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+@keyframes ballClick {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.04, 0.93);
+  }
+}
+
+@keyframes clickRing {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+/* Hinged at the rear: the front edge rises and swings back, the outer shell
+   passes edge-on, and the inner shell ends tilted toward the viewer. */
+@keyframes lidOpen {
+  from {
+    transform: rotateX(0deg);
+  }
+  to {
+    transform: rotateX(118deg);
+  }
+}
+
+@keyframes mouthGlow {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.4);
+  }
+  35% {
+    opacity: 1;
+    transform: scaleY(1.15);
+  }
+  100% {
+    opacity: 0.9;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes buttonPulse {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes buttonPulse_b {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes buttonBreath {
+  0%,
+  100% {
+    opacity: 0.08;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes buttonFlash {
+  0% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Full intensity from +60 to +240 ms (of 600). */
+@keyframes beamGlow {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.3);
+  }
+}
+
+/* The docked sweep's pre-raster hold (see `.sweep` above): the reveal's scale
+   range, held at its first keyframe. */
+@keyframes sweepPark {
+  0% {
+    transform: translate(-50%, -50%) scale(0.02);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes beamSweep {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.02);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* The white core burst: full intensity from +60 to +270 ms (≥ 150 ms peak). */
+@keyframes beamCore {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
+  45% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(4);
+  }
+}
+
+@keyframes beamRing {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(6);
+  }
+}
+
+/* Shafts: full intensity from +105 to +350 ms (of 700). */
+@keyframes beamRay {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--ray-angle)) scale(1, 0.04);
+  }
+  15% {
+    opacity: 1;
+    transform: rotate(var(--ray-angle)) scale(1, 0.75);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(var(--ray-angle)) scale(0.8, 1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--ray-angle)) scale(0.3, 1.1);
+  }
+}
+
+@keyframes beamSpark {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--spark-angle)) translateY(0) scale(1);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--spark-angle)) translateY(calc(var(--spark-reach) * -1)) scale(0.4);
+  }
+}

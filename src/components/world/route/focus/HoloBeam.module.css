@@ -1,0 +1,95 @@
+/*
+ * Holo beam (wave 2, seat 2C) — see HoloBeam.tsx for the contract.
+ *
+ * The path carries `pathLength="1"`, so `stroke-dasharray: 1 1` and a
+ * dash offset of 1 → 0 draw it from the subject end to the panel end
+ * whatever its pixel length; 0 → 1 retracts it back into the subject.
+ * `data-stage` on the root drives it:
+ *   off      nothing shown
+ *   armed    offset 1, no transition (the committed start value)
+ *   draw     offset 0 over 420 ms; the dock dot flares once as the stroke
+ *            lands (the beam "dissolving into the panel border"), then the
+ *            stroke settles to a faint tether
+ *   retract  offset 1 over 220 ms
+ * Transitions/animations touch stroke-dashoffset and opacity only.
+ *
+ * Brightness (anti-pattern 10): the world's HUD focus colour at ≤ 0.85 alpha,
+ * a 1.5 px stroke — never brighter than a board's paper white. Stacking: under
+ * the docked panel (z 25), so the stroke meets the panel's edge rather than
+ * painting over its glass. The component renders nothing under reduced
+ * motion; the media block below is a second guard.
+ */
+
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.beam {
+  fill: none;
+  stroke: var(--hud-focus, #5eead4);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  opacity: 0;
+  filter: drop-shadow(0 0 3px var(--hud-focus, #5eead4));
+}
+
+.dock {
+  fill: var(--hud-focus, #5eead4);
+  opacity: 0;
+}
+
+.root[data-stage='armed'] .beam {
+  opacity: 0.85;
+  transition: none;
+}
+
+.root[data-stage='draw'] .beam {
+  stroke-dashoffset: 0;
+  opacity: 0.55;
+  transition:
+    stroke-dashoffset 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 600ms ease 420ms;
+}
+
+.root[data-stage='draw'] .dock {
+  animation: holo-beam-dock 700ms ease-out 360ms forwards;
+}
+
+.root[data-stage='retract'] .beam {
+  stroke-dashoffset: 1;
+  opacity: 0.55;
+  transition: stroke-dashoffset 220ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+.root[data-stage='retract'] .dock {
+  opacity: 0;
+  transition: opacity 120ms linear;
+}
+
+/* The landing: a quick swell of the dock node that settles to a dim bead on
+   the panel edge — the beam reads as feeding the panel, then gets quiet. */
+@keyframes holo-beam-dock {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    display: none;
+  }
+}

@@ -1,0 +1,63 @@
+/** Player dashboard (`/dashboard`): greeting banner, "Now", leagues, tournaments, history (owner T18). */
+export default {
+  pageTitle: 'Dashboard',
+  notRegistered: 'You are signed in but not registered as a player. Ask an admin to add you.',
+  greeting: {
+    morning: 'Good morning, {name}!',
+    afternoon: 'Good afternoon, {name}!',
+    evening: 'Good evening, {name}!',
+  },
+  intro: "Here's what's happening with your leagues and tournaments.",
+  winStreak: '{n} win streak',
+  editAvatar: 'Edit avatar',
+  settings: 'Settings',
+  stats: {
+    matches: 'Matches',
+    winRate: 'Win Rate',
+    teams: 'Teams',
+    rating: 'Rating',
+  },
+  now: {
+    title: 'Now',
+    needAttention: {
+      one: '{count} match needs attention',
+      other: '{count} matches need attention',
+    },
+    nothingNeeded: 'Nothing needs your attention right now',
+    allCaughtUp: "You're all caught up! No matches need your attention.",
+    versus: 'vs {name}',
+    upcoming: 'Upcoming',
+    scheduled: 'Scheduled {date}',
+    planTeam: 'Plan Team',
+    submitResult: 'Submit Result',
+    confirmResult: 'Confirm Result',
+  },
+  leagues: {
+    title: 'My Leagues',
+    standings: { one: '{count} standing', other: '{count} standings' },
+    allLeagues: 'All leagues',
+    empty: 'No active league standings yet.',
+    rank: 'Rank <strong>#{rank}</strong> of {total}<muted> · {wins}W–{losses}L</muted>',
+    statsSoon: 'Stats coming soon — no completed matches yet.',
+  },
+  tournaments: {
+    title: 'My Tournaments',
+    activeCount: '{count} active',
+    empty: 'No active tournaments. Join one to get started!',
+  },
+  history: {
+    title: 'History',
+    summary: {
+      one: '{wins}W–{losses}L · {count} team',
+      other: '{wins}W–{losses}L · {count} teams',
+    },
+    recentMatches: 'Recent matches',
+    noCompleted: 'No completed matches yet.',
+    myTeams: 'My teams',
+    newTeam: 'New Team',
+    noTeams: 'No teams yet. Build your first team!',
+    createTeam: 'Create Team',
+    pokemonCount: '{count} Pokémon',
+    locked: 'Locked',
+  },
+} as const;

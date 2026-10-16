@@ -1,0 +1,31 @@
+{{/*
+  Supabase Auth template: "Confirm signup" (config key: confirmation).
+  Bilingual (i18n-core §6.6): sign-up stores the viewer's UI language in
+  user_metadata.locale (.Data.locale). "en" -> English, "de" -> German,
+  anything else (accounts created before the language switch) -> German, then English.
+  The link goes through /auth/confirm (button-gated token_hash verification).
+  Subject (not branched): "Bestätige deine E-Mail-Adresse / Confirm your email"
+  The hosted project's copy lives in the dashboard: see docs/i18n.md "Emails".
+  Template comment: renders nothing in the sent email.
+*/}}
+{{ if eq .Data.locale "en" }}
+<h2>Confirm your email</h2>
+<p>Thanks for signing up for PokéTools! Confirm your email address to finish creating your account:</p>
+<p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Confirm my email address</a></p>
+<p>If you didn't sign up, you can ignore this email.</p>
+{{ else if eq .Data.locale "de" }}
+<h2>Bestätige deine E-Mail-Adresse</h2>
+<p>Danke, dass du dich bei PokéTools registriert hast! Bestätige deine E-Mail-Adresse, um dein Konto fertig einzurichten:</p>
+<p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">E-Mail-Adresse bestätigen</a></p>
+<p>Wenn du dich nicht registriert hast, kannst du diese E-Mail einfach ignorieren.</p>
+{{ else }}
+<h2>Bestätige deine E-Mail-Adresse</h2>
+<p>Danke, dass du dich bei PokéTools registriert hast! Bestätige deine E-Mail-Adresse, um dein Konto fertig einzurichten:</p>
+<p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">E-Mail-Adresse bestätigen</a></p>
+<p>Wenn du dich nicht registriert hast, kannst du diese E-Mail einfach ignorieren.</p>
+<hr>
+<h2>Confirm your email</h2>
+<p>Thanks for signing up for PokéTools! Confirm your email address to finish creating your account:</p>
+<p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Confirm my email address</a></p>
+<p>If you didn't sign up, you can ignore this email.</p>
+{{ end }}

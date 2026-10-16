@@ -1,0 +1,55 @@
+/** The player profile page and `src/components/profile/**`. Owned by T02. */
+export default {
+  page: {
+    spotlight: 'Pokémon Spotlight',
+    rating: 'Rating',
+    unrated: 'Unrated',
+    noRatedMatch: 'This player has not completed a rated match yet.',
+    signatures: 'Signature Pokémon',
+    achievements: 'Achievements',
+    participations: 'Participations',
+    trophies: 'Trophies',
+    recentMatches: 'Recent Matches',
+    noRecentMatches: 'No completed matches yet',
+    upcomingMatches: 'Upcoming Matches',
+    noUpcomingMatches: 'No upcoming matches',
+    streaks: 'Streaks',
+    streakHint: 'Win streaks appear after 3 wins in a row.',
+    signInPrompt: 'Sign in with Discord to view match history and streak details.',
+    signIn: 'Sign in',
+  },
+  header: {
+    ps: 'PS:',
+    champions: 'Champs:',
+    memberSince: 'Member since {date}',
+    record: 'Record',
+    recordValue: '{wins}-{losses}',
+    winRate: 'Win %',
+    totalKos: 'Total KOs',
+    pokemon: 'Pokemon',
+    titles: 'Titles',
+    form: 'Form',
+  },
+  matchList: {
+    empty: 'No matches',
+    viewMatch: 'View match vs {opponent}',
+  },
+  participations: {
+    current: 'Current ({count})',
+    past: 'Past ({count})',
+    emptyCurrent: 'No current participations',
+    emptyPast: 'No past participations',
+    standing: '<em>{rank}</em> / {total} · {wins}W-{losses}L',
+    kos: '{count}K',
+  },
+  spotlight: {
+    mostUsed: 'Most Used',
+    topKillers: 'Top Killers',
+    gamesWinRate: { one: '{count} game · {winRate} WR', other: '{count} games · {winRate} WR' },
+    kosOverall: { one: '{count} KO · <em>{rank}</em>', other: '{count} KOs · <em>{rank}</em>' },
+  },
+  /** English ordinals by suffix; German writes "3." for all of them. */
+  ordinal: { st: '{n}st', nd: '{n}nd', rd: '{n}rd', th: '{n}th' },
+  /** "3rd overall" — German says "Platz 3 gesamt". */
+  overallRank: { st: '{n}st overall', nd: '{n}nd overall', rd: '{n}rd overall', th: '{n}th overall' },
+} as const;

@@ -1,0 +1,2426 @@
+{
+  "female": {
+    "base": {
+      "default": [
+        {
+          "color": "light",
+          "filename": "default-light.png",
+          "optionId": "female-base-default-light"
+        },
+        {
+          "color": "pale",
+          "filename": "default-pale.png",
+          "optionId": "female-base-default-pale"
+        },
+        {
+          "color": "dark",
+          "filename": "default-dark.png",
+          "optionId": "female-base-default-dark"
+        },
+        {
+          "color": "medium",
+          "filename": "default-medium.png",
+          "optionId": "female-base-default-medium"
+        }
+      ]
+    },
+    "bottoms": {
+      "beach-bottom": [
+        {
+          "color": "black",
+          "filename": "beach-bottom-black.png",
+          "optionId": "female-bottoms-beach-bottom-black"
+        },
+        {
+          "color": "blue",
+          "filename": "beach-bottom-blue.png",
+          "optionId": "female-bottoms-beach-bottom-blue"
+        },
+        {
+          "color": "green",
+          "filename": "beach-bottom-green.png",
+          "optionId": "female-bottoms-beach-bottom-green"
+        },
+        {
+          "color": "pink",
+          "filename": "beach-bottom-pink.png",
+          "optionId": "female-bottoms-beach-bottom-pink"
+        },
+        {
+          "color": "red",
+          "filename": "beach-bottom-red.png",
+          "optionId": "female-bottoms-beach-bottom-red"
+        }
+      ],
+      "capri": [
+        {
+          "color": "aqua",
+          "filename": "capri-aqua.png",
+          "optionId": "female-bottoms-capri-aqua"
+        },
+        {
+          "color": "beige",
+          "filename": "capri-beige.png",
+          "optionId": "female-bottoms-capri-beige"
+        },
+        {
+          "color": "black",
+          "filename": "capri-black.png",
+          "optionId": "female-bottoms-capri-black"
+        },
+        {
+          "color": "green",
+          "filename": "capri-green.png",
+          "optionId": "female-bottoms-capri-green"
+        },
+        {
+          "color": "navy",
+          "filename": "capri-navy.png",
+          "optionId": "female-bottoms-capri-navy"
+        }
+      ],
+      "classy-bottom": [
+        {
+          "color": "black",
+          "filename": "classy-bottom-black.png",
+          "optionId": "female-bottoms-classy-bottom-black"
+        },
+        {
+          "color": "blue",
+          "filename": "classy-bottom-blue.png",
+          "optionId": "female-bottoms-classy-bottom-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "classy-bottom-brown.png",
+          "optionId": "female-bottoms-classy-bottom-brown"
+        },
+        {
+          "color": "grey",
+          "filename": "classy-bottom-grey.png",
+          "optionId": "female-bottoms-classy-bottom-grey"
+        },
+        {
+          "color": "red",
+          "filename": "classy-bottom-red.png",
+          "optionId": "female-bottoms-classy-bottom-red"
+        }
+      ],
+      "evening-bottom": [
+        {
+          "color": "beige",
+          "filename": "evening-bottom-beige.png",
+          "optionId": "female-bottoms-evening-bottom-beige"
+        },
+        {
+          "color": "black",
+          "filename": "evening-bottom-black.png",
+          "optionId": "female-bottoms-evening-bottom-black"
+        },
+        {
+          "color": "grey",
+          "filename": "evening-bottom-grey.png",
+          "optionId": "female-bottoms-evening-bottom-grey"
+        },
+        {
+          "color": "navy",
+          "filename": "evening-bottom-navy.png",
+          "optionId": "female-bottoms-evening-bottom-navy"
+        },
+        {
+          "color": "wine",
+          "filename": "evening-bottom-wine.png",
+          "optionId": "female-bottoms-evening-bottom-wine"
+        }
+      ],
+      "jeans": [
+        {
+          "color": "grey",
+          "filename": "jeans-grey.png",
+          "optionId": "female-bottoms-jeans-grey"
+        },
+        {
+          "color": "blue",
+          "filename": "jeans-blue.png",
+          "optionId": "female-bottoms-jeans-blue"
+        },
+        {
+          "color": "aqua",
+          "filename": "jeans-aqua.png",
+          "optionId": "female-bottoms-jeans-aqua"
+        },
+        {
+          "color": "black",
+          "filename": "jeans-black.png",
+          "optionId": "female-bottoms-jeans-black"
+        },
+        {
+          "color": "navy",
+          "filename": "jeans-navy.png",
+          "optionId": "female-bottoms-jeans-navy"
+        }
+      ],
+      "jumpsuit-pants": [
+        {
+          "color": "black",
+          "filename": "jumpsuit-pants-black.png",
+          "optionId": "female-bottoms-jumpsuit-pants-black"
+        },
+        {
+          "color": "blue",
+          "filename": "jumpsuit-pants-blue.png",
+          "optionId": "female-bottoms-jumpsuit-pants-blue"
+        },
+        {
+          "color": "green",
+          "filename": "jumpsuit-pants-green.png",
+          "optionId": "female-bottoms-jumpsuit-pants-green"
+        },
+        {
+          "color": "red",
+          "filename": "jumpsuit-pants-red.png",
+          "optionId": "female-bottoms-jumpsuit-pants-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "jumpsuit-pants-yellow.png",
+          "optionId": "female-bottoms-jumpsuit-pants-yellow"
+        }
+      ],
+      "jumpsuit-pants-alt": [
+        {
+          "color": "black",
+          "filename": "jumpsuit-pants-alt-black.png",
+          "optionId": "female-bottoms-jumpsuit-pants-alt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "jumpsuit-pants-alt-blue.png",
+          "optionId": "female-bottoms-jumpsuit-pants-alt-blue"
+        },
+        {
+          "color": "green",
+          "filename": "jumpsuit-pants-alt-green.png",
+          "optionId": "female-bottoms-jumpsuit-pants-alt-green"
+        },
+        {
+          "color": "red",
+          "filename": "jumpsuit-pants-alt-red.png",
+          "optionId": "female-bottoms-jumpsuit-pants-alt-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "jumpsuit-pants-alt-yellow.png",
+          "optionId": "female-bottoms-jumpsuit-pants-alt-yellow"
+        }
+      ],
+      "long-skirt": [
+        {
+          "color": "black",
+          "filename": "long-skirt-black.png",
+          "optionId": "female-bottoms-long-skirt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "long-skirt-blue.png",
+          "optionId": "female-bottoms-long-skirt-blue"
+        },
+        {
+          "color": "green",
+          "filename": "long-skirt-green.png",
+          "optionId": "female-bottoms-long-skirt-green"
+        },
+        {
+          "color": "pink",
+          "filename": "long-skirt-pink.png",
+          "optionId": "female-bottoms-long-skirt-pink"
+        },
+        {
+          "color": "purple",
+          "filename": "long-skirt-purple.png",
+          "optionId": "female-bottoms-long-skirt-purple"
+        }
+      ],
+      "lords-pants": [
+        {
+          "color": "default",
+          "filename": "lords-pants-default.png",
+          "optionId": "female-bottoms-lords-pants-default"
+        }
+      ],
+      "pants-and-boots": [
+        {
+          "color": "beige",
+          "filename": "pants-and-boots-beige.png",
+          "optionId": "female-bottoms-pants-and-boots-beige"
+        },
+        {
+          "color": "black",
+          "filename": "pants-and-boots-black.png",
+          "optionId": "female-bottoms-pants-and-boots-black"
+        },
+        {
+          "color": "grey",
+          "filename": "pants-and-boots-grey.png",
+          "optionId": "female-bottoms-pants-and-boots-grey"
+        },
+        {
+          "color": "blue",
+          "filename": "pants-and-boots-blue.png",
+          "optionId": "female-bottoms-pants-and-boots-blue"
+        },
+        {
+          "color": "navy",
+          "filename": "pants-and-boots-navy.png",
+          "optionId": "female-bottoms-pants-and-boots-navy"
+        }
+      ],
+      "pencil-skirt": [
+        {
+          "color": "black",
+          "filename": "pencil-skirt-black.png",
+          "optionId": "female-bottoms-pencil-skirt-black"
+        },
+        {
+          "color": "green",
+          "filename": "pencil-skirt-green.png",
+          "optionId": "female-bottoms-pencil-skirt-green"
+        },
+        {
+          "color": "grey",
+          "filename": "pencil-skirt-grey.png",
+          "optionId": "female-bottoms-pencil-skirt-grey"
+        },
+        {
+          "color": "navy",
+          "filename": "pencil-skirt-navy.png",
+          "optionId": "female-bottoms-pencil-skirt-navy"
+        },
+        {
+          "color": "wine",
+          "filename": "pencil-skirt-wine.png",
+          "optionId": "female-bottoms-pencil-skirt-wine"
+        }
+      ],
+      "ribbon-skirt": [
+        {
+          "color": "blue",
+          "filename": "ribbon-skirt-blue.png",
+          "optionId": "female-bottoms-ribbon-skirt-blue"
+        },
+        {
+          "color": "green",
+          "filename": "ribbon-skirt-green.png",
+          "optionId": "female-bottoms-ribbon-skirt-green"
+        },
+        {
+          "color": "pink",
+          "filename": "ribbon-skirt-pink.png",
+          "optionId": "female-bottoms-ribbon-skirt-pink"
+        },
+        {
+          "color": "red",
+          "filename": "ribbon-skirt-red.png",
+          "optionId": "female-bottoms-ribbon-skirt-red"
+        },
+        {
+          "color": "wine",
+          "filename": "ribbon-skirt-wine.png",
+          "optionId": "female-bottoms-ribbon-skirt-wine"
+        }
+      ],
+      "school-girl": [
+        {
+          "color": "black",
+          "filename": "school-girl-black.png",
+          "optionId": "female-bottoms-school-girl-black"
+        },
+        {
+          "color": "light",
+          "filename": "school-girl-light.png",
+          "optionId": "female-bottoms-school-girl-light"
+        }
+      ],
+      "shorts": [
+        {
+          "color": "black",
+          "filename": "shorts-black.png",
+          "optionId": "female-bottoms-shorts-black"
+        },
+        {
+          "color": "blue",
+          "filename": "shorts-blue.png",
+          "optionId": "female-bottoms-shorts-blue"
+        },
+        {
+          "color": "green",
+          "filename": "shorts-green.png",
+          "optionId": "female-bottoms-shorts-green"
+        },
+        {
+          "color": "red",
+          "filename": "shorts-red.png",
+          "optionId": "female-bottoms-shorts-red"
+        },
+        {
+          "color": "white",
+          "filename": "shorts-white.png",
+          "optionId": "female-bottoms-shorts-white"
+        }
+      ]
+    },
+    "hair": {
+      "hair-1": [
+        {
+          "color": "black",
+          "filename": "hair-1-black.png",
+          "optionId": "female-hair-hair-1-black"
+        },
+        {
+          "color": "blonde",
+          "filename": "hair-1-blonde.png",
+          "optionId": "female-hair-hair-1-blonde"
+        },
+        {
+          "color": "blue",
+          "filename": "hair-1-blue.png",
+          "optionId": "female-hair-hair-1-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "hair-1-brown.png",
+          "optionId": "female-hair-hair-1-brown"
+        },
+        {
+          "color": "cyan",
+          "filename": "hair-1-cyan.png",
+          "optionId": "female-hair-hair-1-cyan"
+        },
+        {
+          "color": "ginger",
+          "filename": "hair-1-ginger.png",
+          "optionId": "female-hair-hair-1-ginger"
+        },
+        {
+          "color": "green",
+          "filename": "hair-1-green.png",
+          "optionId": "female-hair-hair-1-green"
+        },
+        {
+          "color": "pink",
+          "filename": "hair-1-pink.png",
+          "optionId": "female-hair-hair-1-pink"
+        },
+        {
+          "color": "red",
+          "filename": "hair-1-red.png",
+          "optionId": "female-hair-hair-1-red"
+        },
+        {
+          "color": "violet",
+          "filename": "hair-1-violet.png",
+          "optionId": "female-hair-hair-1-violet"
+        },
+        {
+          "color": "white",
+          "filename": "hair-1-white.png",
+          "optionId": "female-hair-hair-1-white"
+        }
+      ],
+      "hair-2": [
+        {
+          "color": "black",
+          "filename": "hair-2-black.png",
+          "optionId": "female-hair-hair-2-black"
+        },
+        {
+          "color": "blue",
+          "filename": "hair-2-blue.png",
+          "optionId": "female-hair-hair-2-blue"
+        },
+        {
+          "color": "cyan",
+          "filename": "hair-2-cyan.png",
+          "optionId": "female-hair-hair-2-cyan"
+        },
+        {
+          "color": "ginger",
+          "filename": "hair-2-ginger.png",
+          "optionId": "female-hair-hair-2-ginger"
+        },
+        {
+          "color": "green",
+          "filename": "hair-2-green.png",
+          "optionId": "female-hair-hair-2-green"
+        },
+        {
+          "color": "pink",
+          "filename": "hair-2-pink.png",
+          "optionId": "female-hair-hair-2-pink"
+        },
+        {
+          "color": "purple",
+          "filename": "hair-2-purple.png",
+          "optionId": "female-hair-hair-2-purple"
+        },
+        {
+          "color": "blonde",
+          "filename": "hair-2-blonde.png",
+          "optionId": "female-hair-hair-2-blonde"
+        },
+        {
+          "color": "brown",
+          "filename": "hair-2-brown.png",
+          "optionId": "female-hair-hair-2-brown"
+        },
+        {
+          "color": "red",
+          "filename": "hair-2-red.png",
+          "optionId": "female-hair-hair-2-red"
+        },
+        {
+          "color": "white",
+          "filename": "hair-2-white.png",
+          "optionId": "female-hair-hair-2-white"
+        }
+      ],
+      "hair-3": [
+        {
+          "color": "black",
+          "filename": "hair-3-black.png",
+          "optionId": "female-hair-hair-3-black"
+        },
+        {
+          "color": "blonde",
+          "filename": "hair-3-blonde.png",
+          "optionId": "female-hair-hair-3-blonde"
+        },
+        {
+          "color": "blue",
+          "filename": "hair-3-blue.png",
+          "optionId": "female-hair-hair-3-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "hair-3-brown.png",
+          "optionId": "female-hair-hair-3-brown"
+        },
+        {
+          "color": "cyan",
+          "filename": "hair-3-cyan.png",
+          "optionId": "female-hair-hair-3-cyan"
+        },
+        {
+          "color": "ginger",
+          "filename": "hair-3-ginger.png",
+          "optionId": "female-hair-hair-3-ginger"
+        },
+        {
+          "color": "green",
+          "filename": "hair-3-green.png",
+          "optionId": "female-hair-hair-3-green"
+        },
+        {
+          "color": "pink",
+          "filename": "hair-3-pink.png",
+          "optionId": "female-hair-hair-3-pink"
+        },
+        {
+          "color": "purple",
+          "filename": "hair-3-purple.png",
+          "optionId": "female-hair-hair-3-purple"
+        },
+        {
+          "color": "red",
+          "filename": "hair-3-red.png",
+          "optionId": "female-hair-hair-3-red"
+        },
+        {
+          "color": "white",
+          "filename": "hair-3-white.png",
+          "optionId": "female-hair-hair-3-white"
+        }
+      ],
+      "hair-4": [
+        {
+          "color": "black",
+          "filename": "hair-4-black.png",
+          "optionId": "female-hair-hair-4-black"
+        },
+        {
+          "color": "blonde",
+          "filename": "hair-4-blonde.png",
+          "optionId": "female-hair-hair-4-blonde"
+        },
+        {
+          "color": "blue",
+          "filename": "hair-4-blue.png",
+          "optionId": "female-hair-hair-4-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "hair-4-brown.png",
+          "optionId": "female-hair-hair-4-brown"
+        },
+        {
+          "color": "cyan",
+          "filename": "hair-4-cyan.png",
+          "optionId": "female-hair-hair-4-cyan"
+        },
+        {
+          "color": "ginger",
+          "filename": "hair-4-ginger.png",
+          "optionId": "female-hair-hair-4-ginger"
+        },
+        {
+          "color": "green",
+          "filename": "hair-4-green.png",
+          "optionId": "female-hair-hair-4-green"
+        },
+        {
+          "color": "pink",
+          "filename": "hair-4-pink.png",
+          "optionId": "female-hair-hair-4-pink"
+        },
+        {
+          "color": "purple",
+          "filename": "hair-4-purple.png",
+          "optionId": "female-hair-hair-4-purple"
+        },
+        {
+          "color": "red",
+          "filename": "hair-4-red.png",
+          "optionId": "female-hair-hair-4-red"
+        },
+        {
+          "color": "white",
+          "filename": "hair-4-white.png",
+          "optionId": "female-hair-hair-4-white"
+        }
+      ]
+    },
+    "hats": {
+      "baguette": [
+        {
+          "color": "default",
+          "filename": "baguette-default.png",
+          "optionId": "female-hats-baguette-default"
+        }
+      ],
+      "beanie": [
+        {
+          "color": "black",
+          "filename": "beanie-black.png",
+          "optionId": "female-hats-beanie-black"
+        },
+        {
+          "color": "purple",
+          "filename": "beanie-purple.png",
+          "optionId": "female-hats-beanie-purple"
+        }
+      ],
+      "bonnet": [
+        {
+          "color": "default",
+          "filename": "bonnet-default.png",
+          "optionId": "female-hats-bonnet-default"
+        }
+      ],
+      "cate": [
+        {
+          "color": "default",
+          "filename": "cate-default.png",
+          "optionId": "female-hats-cate-default"
+        }
+      ],
+      "crown": [
+        {
+          "color": "gold",
+          "filename": "crown-gold.png",
+          "optionId": "female-hats-crown-gold"
+        },
+        {
+          "color": "silver",
+          "filename": "crown-silver.png",
+          "optionId": "female-hats-crown-silver"
+        }
+      ],
+      "devil": [
+        {
+          "color": "default",
+          "filename": "devil-default.png",
+          "optionId": "female-hats-devil-default"
+        }
+      ],
+      "feather-hat": [
+        {
+          "color": "default",
+          "filename": "feather-hat-default.png",
+          "optionId": "female-hats-feather-hat-default"
+        }
+      ],
+      "fedora": [
+        {
+          "color": "default",
+          "filename": "fedora-default.png",
+          "optionId": "female-hats-fedora-default"
+        }
+      ],
+      "flower": [
+        {
+          "color": "blue",
+          "filename": "flower-blue.png",
+          "optionId": "female-hats-flower-blue"
+        },
+        {
+          "color": "red",
+          "filename": "flower-red.png",
+          "optionId": "female-hats-flower-red"
+        }
+      ],
+      "glasses": [
+        {
+          "color": "blue",
+          "filename": "glasses-blue.png",
+          "optionId": "female-hats-glasses-blue"
+        },
+        {
+          "color": "red",
+          "filename": "glasses-red.png",
+          "optionId": "female-hats-glasses-red"
+        }
+      ],
+      "hair-band": [
+        {
+          "color": "default",
+          "filename": "hair-band-default.png",
+          "optionId": "female-hats-hair-band-default"
+        }
+      ],
+      "headband": [
+        {
+          "color": "default",
+          "filename": "headband-default.png",
+          "optionId": "female-hats-headband-default"
+        }
+      ],
+      "mining": [
+        {
+          "color": "default",
+          "filename": "mining-default.png",
+          "optionId": "female-hats-mining-default"
+        }
+      ],
+      "poop": [
+        {
+          "color": "default",
+          "filename": "poop-default.png",
+          "optionId": "female-hats-poop-default"
+        }
+      ],
+      "ribbon": [
+        {
+          "color": "default",
+          "filename": "ribbon-default.png",
+          "optionId": "female-hats-ribbon-default"
+        }
+      ],
+      "straw-hat": [
+        {
+          "color": "default",
+          "filename": "straw-hat-default.png",
+          "optionId": "female-hats-straw-hat-default"
+        }
+      ],
+      "sun-hat": [
+        {
+          "color": "default",
+          "filename": "sun-hat-default.png",
+          "optionId": "female-hats-sun-hat-default"
+        }
+      ],
+      "youngster-hat": [
+        {
+          "color": "bee",
+          "filename": "youngster-hat-bee.png",
+          "optionId": "female-hats-youngster-hat-bee"
+        },
+        {
+          "color": "blue",
+          "filename": "youngster-hat-blue.png",
+          "optionId": "female-hats-youngster-hat-blue"
+        }
+      ]
+    },
+    "tops": {
+      "beach-top": [
+        {
+          "color": "black",
+          "filename": "beach-top-black.png",
+          "optionId": "female-tops-beach-top-black"
+        },
+        {
+          "color": "blue",
+          "filename": "beach-top-blue.png",
+          "optionId": "female-tops-beach-top-blue"
+        },
+        {
+          "color": "green",
+          "filename": "beach-top-green.png",
+          "optionId": "female-tops-beach-top-green"
+        },
+        {
+          "color": "pink",
+          "filename": "beach-top-pink.png",
+          "optionId": "female-tops-beach-top-pink"
+        },
+        {
+          "color": "red",
+          "filename": "beach-top-red.png",
+          "optionId": "female-tops-beach-top-red"
+        }
+      ],
+      "classy-top": [
+        {
+          "color": "beige",
+          "filename": "classy-top-beige.png",
+          "optionId": "female-tops-classy-top-beige"
+        },
+        {
+          "color": "black",
+          "filename": "classy-top-black.png",
+          "optionId": "female-tops-classy-top-black"
+        },
+        {
+          "color": "grey",
+          "filename": "classy-top-grey.png",
+          "optionId": "female-tops-classy-top-grey"
+        },
+        {
+          "color": "navy",
+          "filename": "classy-top-navy.png",
+          "optionId": "female-tops-classy-top-navy"
+        },
+        {
+          "color": "wine",
+          "filename": "classy-top-wine.png",
+          "optionId": "female-tops-classy-top-wine"
+        }
+      ],
+      "collared-shirt": [
+        {
+          "color": "navy",
+          "filename": "collared-shirt-navy.png",
+          "optionId": "female-tops-collared-shirt-navy"
+        },
+        {
+          "color": "black",
+          "filename": "collared-shirt-black.png",
+          "optionId": "female-tops-collared-shirt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "collared-shirt-blue.png",
+          "optionId": "female-tops-collared-shirt-blue"
+        },
+        {
+          "color": "white",
+          "filename": "collared-shirt-white.png",
+          "optionId": "female-tops-collared-shirt-white"
+        },
+        {
+          "color": "wine",
+          "filename": "collared-shirt-wine.png",
+          "optionId": "female-tops-collared-shirt-wine"
+        }
+      ],
+      "formal-top": [
+        {
+          "color": "beige",
+          "filename": "formal-top-beige.png",
+          "optionId": "female-tops-formal-top-beige"
+        },
+        {
+          "color": "black",
+          "filename": "formal-top-black.png",
+          "optionId": "female-tops-formal-top-black"
+        },
+        {
+          "color": "blue",
+          "filename": "formal-top-blue.png",
+          "optionId": "female-tops-formal-top-blue"
+        },
+        {
+          "color": "pink",
+          "filename": "formal-top-pink.png",
+          "optionId": "female-tops-formal-top-pink"
+        },
+        {
+          "color": "red",
+          "filename": "formal-top-red.png",
+          "optionId": "female-tops-formal-top-red"
+        }
+      ],
+      "hoodie": [
+        {
+          "color": "black",
+          "filename": "hoodie-black.png",
+          "optionId": "female-tops-hoodie-black"
+        },
+        {
+          "color": "purple",
+          "filename": "hoodie-purple.png",
+          "optionId": "female-tops-hoodie-purple"
+        },
+        {
+          "color": "blue",
+          "filename": "hoodie-blue.png",
+          "optionId": "female-tops-hoodie-blue"
+        },
+        {
+          "color": "green",
+          "filename": "hoodie-green.png",
+          "optionId": "female-tops-hoodie-green"
+        },
+        {
+          "color": "red",
+          "filename": "hoodie-red.png",
+          "optionId": "female-tops-hoodie-red"
+        }
+      ],
+      "jumpsuit-alt-top": [
+        {
+          "color": "black",
+          "filename": "jumpsuit-alt-top-black.png",
+          "optionId": "female-tops-jumpsuit-alt-top-black"
+        },
+        {
+          "color": "blue",
+          "filename": "jumpsuit-alt-top-blue.png",
+          "optionId": "female-tops-jumpsuit-alt-top-blue"
+        },
+        {
+          "color": "green",
+          "filename": "jumpsuit-alt-top-green.png",
+          "optionId": "female-tops-jumpsuit-alt-top-green"
+        },
+        {
+          "color": "red",
+          "filename": "jumpsuit-alt-top-red.png",
+          "optionId": "female-tops-jumpsuit-alt-top-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "jumpsuit-alt-top-yellow.png",
+          "optionId": "female-tops-jumpsuit-alt-top-yellow"
+        }
+      ],
+      "jumpsuit-top": [
+        {
+          "color": "black",
+          "filename": "jumpsuit-top-black.png",
+          "optionId": "female-tops-jumpsuit-top-black"
+        },
+        {
+          "color": "blue",
+          "filename": "jumpsuit-top-blue.png",
+          "optionId": "female-tops-jumpsuit-top-blue"
+        },
+        {
+          "color": "green",
+          "filename": "jumpsuit-top-green.png",
+          "optionId": "female-tops-jumpsuit-top-green"
+        },
+        {
+          "color": "red",
+          "filename": "jumpsuit-top-red.png",
+          "optionId": "female-tops-jumpsuit-top-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "jumpsuit-top-yellow.png",
+          "optionId": "female-tops-jumpsuit-top-yellow"
+        }
+      ],
+      "lord-shirt": [
+        {
+          "color": "purple",
+          "filename": "lord-shirt-purple.png",
+          "optionId": "female-tops-lord-shirt-purple"
+        },
+        {
+          "color": "red",
+          "filename": "lord-shirt-red.png",
+          "optionId": "female-tops-lord-shirt-red"
+        }
+      ],
+      "open-jacket": [
+        {
+          "color": "orange",
+          "filename": "open-jacket-orange.png",
+          "optionId": "female-tops-open-jacket-orange"
+        },
+        {
+          "color": "blue",
+          "filename": "open-jacket-blue.png",
+          "optionId": "female-tops-open-jacket-blue"
+        },
+        {
+          "color": "green",
+          "filename": "open-jacket-green.png",
+          "optionId": "female-tops-open-jacket-green"
+        },
+        {
+          "color": "pink",
+          "filename": "open-jacket-pink.png",
+          "optionId": "female-tops-open-jacket-pink"
+        },
+        {
+          "color": "red",
+          "filename": "open-jacket-red.png",
+          "optionId": "female-tops-open-jacket-red"
+        }
+      ],
+      "scarf-shirt": [
+        {
+          "color": "black",
+          "filename": "scarf-shirt-black.png",
+          "optionId": "female-tops-scarf-shirt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "scarf-shirt-blue.png",
+          "optionId": "female-tops-scarf-shirt-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "scarf-shirt-brown.png",
+          "optionId": "female-tops-scarf-shirt-brown"
+        },
+        {
+          "color": "red",
+          "filename": "scarf-shirt-red.png",
+          "optionId": "female-tops-scarf-shirt-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "scarf-shirt-yellow.png",
+          "optionId": "female-tops-scarf-shirt-yellow"
+        }
+      ],
+      "school-uniform-top": [
+        {
+          "color": "dark",
+          "filename": "school-uniform-top-dark.png",
+          "optionId": "female-tops-school-uniform-top-dark"
+        },
+        {
+          "color": "light",
+          "filename": "school-uniform-top-light.png",
+          "optionId": "female-tops-school-uniform-top-light"
+        }
+      ],
+      "shirt-combo": [
+        {
+          "color": "black",
+          "filename": "shirt-combo-black.png",
+          "optionId": "female-tops-shirt-combo-black"
+        },
+        {
+          "color": "blue",
+          "filename": "shirt-combo-blue.png",
+          "optionId": "female-tops-shirt-combo-blue"
+        },
+        {
+          "color": "red",
+          "filename": "shirt-combo-red.png",
+          "optionId": "female-tops-shirt-combo-red"
+        },
+        {
+          "color": "white",
+          "filename": "shirt-combo-white.png",
+          "optionId": "female-tops-shirt-combo-white"
+        },
+        {
+          "color": "wine",
+          "filename": "shirt-combo-wine.png",
+          "optionId": "female-tops-shirt-combo-wine"
+        }
+      ],
+      "t-shirt": [
+        {
+          "color": "black",
+          "filename": "t-shirt-black.png",
+          "optionId": "female-tops-t-shirt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "t-shirt-blue.png",
+          "optionId": "female-tops-t-shirt-blue"
+        },
+        {
+          "color": "green",
+          "filename": "t-shirt-green.png",
+          "optionId": "female-tops-t-shirt-green"
+        },
+        {
+          "color": "red",
+          "filename": "t-shirt-red.png",
+          "optionId": "female-tops-t-shirt-red"
+        },
+        {
+          "color": "white",
+          "filename": "t-shirt-white.png",
+          "optionId": "female-tops-t-shirt-white"
+        }
+      ],
+      "tank-top": [
+        {
+          "color": "pink",
+          "filename": "tank-top-pink.png",
+          "optionId": "female-tops-tank-top-pink"
+        },
+        {
+          "color": "black",
+          "filename": "tank-top-black.png",
+          "optionId": "female-tops-tank-top-black"
+        },
+        {
+          "color": "green",
+          "filename": "tank-top-green.png",
+          "optionId": "female-tops-tank-top-green"
+        },
+        {
+          "color": "navy",
+          "filename": "tank-top-navy.png",
+          "optionId": "female-tops-tank-top-navy"
+        },
+        {
+          "color": "red",
+          "filename": "tank-top-red.png",
+          "optionId": "female-tops-tank-top-red"
+        }
+      ],
+      "trench-coat": [
+        {
+          "color": "black",
+          "filename": "trench-coat-black.png",
+          "optionId": "female-tops-trench-coat-black"
+        },
+        {
+          "color": "brown",
+          "filename": "trench-coat-brown.png",
+          "optionId": "female-tops-trench-coat-brown"
+        },
+        {
+          "color": "navy",
+          "filename": "trench-coat-navy.png",
+          "optionId": "female-tops-trench-coat-navy"
+        },
+        {
+          "color": "purple",
+          "filename": "trench-coat-purple.png",
+          "optionId": "female-tops-trench-coat-purple"
+        },
+        {
+          "color": "red",
+          "filename": "trench-coat-red.png",
+          "optionId": "female-tops-trench-coat-red"
+        }
+      ],
+      "turtleneck": [
+        {
+          "color": "black",
+          "filename": "turtleneck-black.png",
+          "optionId": "female-tops-turtleneck-black"
+        },
+        {
+          "color": "brownish",
+          "filename": "turtleneck-brownish.png",
+          "optionId": "female-tops-turtleneck-brownish"
+        },
+        {
+          "color": "green",
+          "filename": "turtleneck-green.png",
+          "optionId": "female-tops-turtleneck-green"
+        },
+        {
+          "color": "magenta",
+          "filename": "turtleneck-magenta.png",
+          "optionId": "female-tops-turtleneck-magenta"
+        },
+        {
+          "color": "white",
+          "filename": "turtleneck-white.png",
+          "optionId": "female-tops-turtleneck-white"
+        }
+      ],
+      "v-neck": [
+        {
+          "color": "green",
+          "filename": "v-neck-green.png",
+          "optionId": "female-tops-v-neck-green"
+        },
+        {
+          "color": "orange",
+          "filename": "v-neck-orange.png",
+          "optionId": "female-tops-v-neck-orange"
+        },
+        {
+          "color": "purple",
+          "filename": "v-neck-purple.png",
+          "optionId": "female-tops-v-neck-purple"
+        },
+        {
+          "color": "yellow",
+          "filename": "v-neck-yellow.png",
+          "optionId": "female-tops-v-neck-yellow"
+        },
+        {
+          "color": "black",
+          "filename": "v-neck-black.png",
+          "optionId": "female-tops-v-neck-black"
+        }
+      ],
+      "vest": [
+        {
+          "color": "grey",
+          "filename": "vest-grey.png",
+          "optionId": "female-tops-vest-grey"
+        },
+        {
+          "color": "wine",
+          "filename": "vest-wine.png",
+          "optionId": "female-tops-vest-wine"
+        },
+        {
+          "color": "black",
+          "filename": "vest-black.png",
+          "optionId": "female-tops-vest-black"
+        },
+        {
+          "color": "blue",
+          "filename": "vest-blue.png",
+          "optionId": "female-tops-vest-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "vest-brown.png",
+          "optionId": "female-tops-vest-brown"
+        }
+      ]
+    }
+  },
+  "male": {
+    "base": {
+      "default": [
+        {
+          "color": "dark",
+          "filename": "default-dark.png",
+          "optionId": "male-base-default-dark"
+        },
+        {
+          "color": "light",
+          "filename": "default-light.png",
+          "optionId": "male-base-default-light"
+        },
+        {
+          "color": "medium",
+          "filename": "default-medium.png",
+          "optionId": "male-base-default-medium"
+        },
+        {
+          "color": "pale",
+          "filename": "default-pale.png",
+          "optionId": "male-base-default-pale"
+        }
+      ]
+    },
+    "bottoms": {
+      "beach-bottom": [
+        {
+          "color": "black",
+          "filename": "beach-bottom-black.png",
+          "optionId": "male-bottoms-beach-bottom-black"
+        },
+        {
+          "color": "blue",
+          "filename": "beach-bottom-blue.png",
+          "optionId": "male-bottoms-beach-bottom-blue"
+        },
+        {
+          "color": "green",
+          "filename": "beach-bottom-green.png",
+          "optionId": "male-bottoms-beach-bottom-green"
+        },
+        {
+          "color": "pink",
+          "filename": "beach-bottom-pink.png",
+          "optionId": "male-bottoms-beach-bottom-pink"
+        },
+        {
+          "color": "red",
+          "filename": "beach-bottom-red.png",
+          "optionId": "male-bottoms-beach-bottom-red"
+        }
+      ],
+      "capri": [
+        {
+          "color": "aqua",
+          "filename": "capri-aqua.png",
+          "optionId": "male-bottoms-capri-aqua"
+        },
+        {
+          "color": "beige",
+          "filename": "capri-beige.png",
+          "optionId": "male-bottoms-capri-beige"
+        },
+        {
+          "color": "black",
+          "filename": "capri-black.png",
+          "optionId": "male-bottoms-capri-black"
+        },
+        {
+          "color": "green",
+          "filename": "capri-green.png",
+          "optionId": "male-bottoms-capri-green"
+        },
+        {
+          "color": "navy",
+          "filename": "capri-navy.png",
+          "optionId": "male-bottoms-capri-navy"
+        }
+      ],
+      "classy-pants": [
+        {
+          "color": "beige",
+          "filename": "classy-pants-beige.png",
+          "optionId": "male-bottoms-classy-pants-beige"
+        },
+        {
+          "color": "black",
+          "filename": "classy-pants-black.png",
+          "optionId": "male-bottoms-classy-pants-black"
+        },
+        {
+          "color": "grey",
+          "filename": "classy-pants-grey.png",
+          "optionId": "male-bottoms-classy-pants-grey"
+        },
+        {
+          "color": "navy",
+          "filename": "classy-pants-navy.png",
+          "optionId": "male-bottoms-classy-pants-navy"
+        },
+        {
+          "color": "wine",
+          "filename": "classy-pants-wine.png",
+          "optionId": "male-bottoms-classy-pants-wine"
+        }
+      ],
+      "formal-pants": [
+        {
+          "color": "black",
+          "filename": "formal-pants-black.png",
+          "optionId": "male-bottoms-formal-pants-black"
+        },
+        {
+          "color": "blue",
+          "filename": "formal-pants-blue.png",
+          "optionId": "male-bottoms-formal-pants-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "formal-pants-brown.png",
+          "optionId": "male-bottoms-formal-pants-brown"
+        },
+        {
+          "color": "grey",
+          "filename": "formal-pants-grey.png",
+          "optionId": "male-bottoms-formal-pants-grey"
+        },
+        {
+          "color": "red",
+          "filename": "formal-pants-red.png",
+          "optionId": "male-bottoms-formal-pants-red"
+        }
+      ],
+      "jeans": [
+        {
+          "color": "aqua",
+          "filename": "jeans-aqua.png",
+          "optionId": "male-bottoms-jeans-aqua"
+        },
+        {
+          "color": "black",
+          "filename": "jeans-black.png",
+          "optionId": "male-bottoms-jeans-black"
+        },
+        {
+          "color": "grey",
+          "filename": "jeans-grey.png",
+          "optionId": "male-bottoms-jeans-grey"
+        },
+        {
+          "color": "blue",
+          "filename": "jeans-blue.png",
+          "optionId": "male-bottoms-jeans-blue"
+        },
+        {
+          "color": "navy",
+          "filename": "jeans-navy.png",
+          "optionId": "male-bottoms-jeans-navy"
+        }
+      ],
+      "jumpsuit-pants": [
+        {
+          "color": "black",
+          "filename": "jumpsuit-pants-black.png",
+          "optionId": "male-bottoms-jumpsuit-pants-black"
+        },
+        {
+          "color": "blue",
+          "filename": "jumpsuit-pants-blue.png",
+          "optionId": "male-bottoms-jumpsuit-pants-blue"
+        },
+        {
+          "color": "green",
+          "filename": "jumpsuit-pants-green.png",
+          "optionId": "male-bottoms-jumpsuit-pants-green"
+        },
+        {
+          "color": "red",
+          "filename": "jumpsuit-pants-red.png",
+          "optionId": "male-bottoms-jumpsuit-pants-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "jumpsuit-pants-yellow.png",
+          "optionId": "male-bottoms-jumpsuit-pants-yellow"
+        }
+      ],
+      "jumpsuit-pants-alt": [
+        {
+          "color": "black",
+          "filename": "jumpsuit-pants-alt-black.png",
+          "optionId": "male-bottoms-jumpsuit-pants-alt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "jumpsuit-pants-alt-blue.png",
+          "optionId": "male-bottoms-jumpsuit-pants-alt-blue"
+        },
+        {
+          "color": "green",
+          "filename": "jumpsuit-pants-alt-green.png",
+          "optionId": "male-bottoms-jumpsuit-pants-alt-green"
+        },
+        {
+          "color": "red",
+          "filename": "jumpsuit-pants-alt-red.png",
+          "optionId": "male-bottoms-jumpsuit-pants-alt-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "jumpsuit-pants-alt-yellow.png",
+          "optionId": "male-bottoms-jumpsuit-pants-alt-yellow"
+        }
+      ],
+      "long-skirt": [
+        {
+          "color": "black",
+          "filename": "long-skirt-black.png",
+          "optionId": "male-bottoms-long-skirt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "long-skirt-blue.png",
+          "optionId": "male-bottoms-long-skirt-blue"
+        },
+        {
+          "color": "green",
+          "filename": "long-skirt-green.png",
+          "optionId": "male-bottoms-long-skirt-green"
+        },
+        {
+          "color": "pink",
+          "filename": "long-skirt-pink.png",
+          "optionId": "male-bottoms-long-skirt-pink"
+        },
+        {
+          "color": "purple",
+          "filename": "long-skirt-purple.png",
+          "optionId": "male-bottoms-long-skirt-purple"
+        }
+      ],
+      "lord-suit-pants": [
+        {
+          "color": "default",
+          "filename": "lord-suit-pants-default.png",
+          "optionId": "male-bottoms-lord-suit-pants-default"
+        }
+      ],
+      "pants-and-boots": [
+        {
+          "color": "beige",
+          "filename": "pants-and-boots-beige.png",
+          "optionId": "male-bottoms-pants-and-boots-beige"
+        },
+        {
+          "color": "black",
+          "filename": "pants-and-boots-black.png",
+          "optionId": "male-bottoms-pants-and-boots-black"
+        },
+        {
+          "color": "grey",
+          "filename": "pants-and-boots-grey.png",
+          "optionId": "male-bottoms-pants-and-boots-grey"
+        },
+        {
+          "color": "blue",
+          "filename": "pants-and-boots-blue.png",
+          "optionId": "male-bottoms-pants-and-boots-blue"
+        },
+        {
+          "color": "navy",
+          "filename": "pants-and-boots-navy.png",
+          "optionId": "male-bottoms-pants-and-boots-navy"
+        }
+      ],
+      "pencil-skirt": [
+        {
+          "color": "black",
+          "filename": "pencil-skirt-black.png",
+          "optionId": "male-bottoms-pencil-skirt-black"
+        },
+        {
+          "color": "green",
+          "filename": "pencil-skirt-green.png",
+          "optionId": "male-bottoms-pencil-skirt-green"
+        },
+        {
+          "color": "grey",
+          "filename": "pencil-skirt-grey.png",
+          "optionId": "male-bottoms-pencil-skirt-grey"
+        },
+        {
+          "color": "navy",
+          "filename": "pencil-skirt-navy.png",
+          "optionId": "male-bottoms-pencil-skirt-navy"
+        },
+        {
+          "color": "wine",
+          "filename": "pencil-skirt-wine.png",
+          "optionId": "male-bottoms-pencil-skirt-wine"
+        }
+      ],
+      "ribbon-skirt": [
+        {
+          "color": "blue",
+          "filename": "ribbon-skirt-blue.png",
+          "optionId": "male-bottoms-ribbon-skirt-blue"
+        },
+        {
+          "color": "green",
+          "filename": "ribbon-skirt-green.png",
+          "optionId": "male-bottoms-ribbon-skirt-green"
+        },
+        {
+          "color": "pink",
+          "filename": "ribbon-skirt-pink.png",
+          "optionId": "male-bottoms-ribbon-skirt-pink"
+        },
+        {
+          "color": "red",
+          "filename": "ribbon-skirt-red.png",
+          "optionId": "male-bottoms-ribbon-skirt-red"
+        },
+        {
+          "color": "wine",
+          "filename": "ribbon-skirt-wine.png",
+          "optionId": "male-bottoms-ribbon-skirt-wine"
+        }
+      ],
+      "school-uniform-bottom": [
+        {
+          "color": "dark",
+          "filename": "school-uniform-bottom-dark.png",
+          "optionId": "male-bottoms-school-uniform-bottom-dark"
+        },
+        {
+          "color": "light",
+          "filename": "school-uniform-bottom-light.png",
+          "optionId": "male-bottoms-school-uniform-bottom-light"
+        }
+      ],
+      "shorts": [
+        {
+          "color": "black",
+          "filename": "shorts-black.png",
+          "optionId": "male-bottoms-shorts-black"
+        },
+        {
+          "color": "blue",
+          "filename": "shorts-blue.png",
+          "optionId": "male-bottoms-shorts-blue"
+        },
+        {
+          "color": "green",
+          "filename": "shorts-green.png",
+          "optionId": "male-bottoms-shorts-green"
+        },
+        {
+          "color": "red",
+          "filename": "shorts-red.png",
+          "optionId": "male-bottoms-shorts-red"
+        },
+        {
+          "color": "white",
+          "filename": "shorts-white.png",
+          "optionId": "male-bottoms-shorts-white"
+        }
+      ]
+    },
+    "hair": {
+      "hair-1": [
+        {
+          "color": "black",
+          "filename": "hair-1-black.png",
+          "optionId": "male-hair-hair-1-black"
+        },
+        {
+          "color": "blonde",
+          "filename": "hair-1-blonde.png",
+          "optionId": "male-hair-hair-1-blonde"
+        },
+        {
+          "color": "blue",
+          "filename": "hair-1-blue.png",
+          "optionId": "male-hair-hair-1-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "hair-1-brown.png",
+          "optionId": "male-hair-hair-1-brown"
+        },
+        {
+          "color": "cyan",
+          "filename": "hair-1-cyan.png",
+          "optionId": "male-hair-hair-1-cyan"
+        },
+        {
+          "color": "ginger",
+          "filename": "hair-1-ginger.png",
+          "optionId": "male-hair-hair-1-ginger"
+        },
+        {
+          "color": "green",
+          "filename": "hair-1-green.png",
+          "optionId": "male-hair-hair-1-green"
+        },
+        {
+          "color": "pink",
+          "filename": "hair-1-pink.png",
+          "optionId": "male-hair-hair-1-pink"
+        },
+        {
+          "color": "purple",
+          "filename": "hair-1-purple.png",
+          "optionId": "male-hair-hair-1-purple"
+        },
+        {
+          "color": "red",
+          "filename": "hair-1-red.png",
+          "optionId": "male-hair-hair-1-red"
+        },
+        {
+          "color": "white",
+          "filename": "hair-1-white.png",
+          "optionId": "male-hair-hair-1-white"
+        }
+      ],
+      "hair-2": [
+        {
+          "color": "black",
+          "filename": "hair-2-black.png",
+          "optionId": "male-hair-hair-2-black"
+        },
+        {
+          "color": "blonde",
+          "filename": "hair-2-blonde.png",
+          "optionId": "male-hair-hair-2-blonde"
+        },
+        {
+          "color": "blue",
+          "filename": "hair-2-blue.png",
+          "optionId": "male-hair-hair-2-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "hair-2-brown.png",
+          "optionId": "male-hair-hair-2-brown"
+        },
+        {
+          "color": "cyan",
+          "filename": "hair-2-cyan.png",
+          "optionId": "male-hair-hair-2-cyan"
+        },
+        {
+          "color": "ginger",
+          "filename": "hair-2-ginger.png",
+          "optionId": "male-hair-hair-2-ginger"
+        },
+        {
+          "color": "green",
+          "filename": "hair-2-green.png",
+          "optionId": "male-hair-hair-2-green"
+        },
+        {
+          "color": "pink",
+          "filename": "hair-2-pink.png",
+          "optionId": "male-hair-hair-2-pink"
+        },
+        {
+          "color": "red",
+          "filename": "hair-2-red.png",
+          "optionId": "male-hair-hair-2-red"
+        },
+        {
+          "color": "violet",
+          "filename": "hair-2-violet.png",
+          "optionId": "male-hair-hair-2-violet"
+        },
+        {
+          "color": "white",
+          "filename": "hair-2-white.png",
+          "optionId": "male-hair-hair-2-white"
+        }
+      ],
+      "hair-3": [
+        {
+          "color": "black",
+          "filename": "hair-3-black.png",
+          "optionId": "male-hair-hair-3-black"
+        },
+        {
+          "color": "blond",
+          "filename": "hair-3-blond.png",
+          "optionId": "male-hair-hair-3-blond"
+        },
+        {
+          "color": "blue",
+          "filename": "hair-3-blue.png",
+          "optionId": "male-hair-hair-3-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "hair-3-brown.png",
+          "optionId": "male-hair-hair-3-brown"
+        },
+        {
+          "color": "cyan",
+          "filename": "hair-3-cyan.png",
+          "optionId": "male-hair-hair-3-cyan"
+        },
+        {
+          "color": "ginger",
+          "filename": "hair-3-ginger.png",
+          "optionId": "male-hair-hair-3-ginger"
+        },
+        {
+          "color": "green",
+          "filename": "hair-3-green.png",
+          "optionId": "male-hair-hair-3-green"
+        },
+        {
+          "color": "pink",
+          "filename": "hair-3-pink.png",
+          "optionId": "male-hair-hair-3-pink"
+        },
+        {
+          "color": "purple",
+          "filename": "hair-3-purple.png",
+          "optionId": "male-hair-hair-3-purple"
+        },
+        {
+          "color": "red",
+          "filename": "hair-3-red.png",
+          "optionId": "male-hair-hair-3-red"
+        },
+        {
+          "color": "white",
+          "filename": "hair-3-white.png",
+          "optionId": "male-hair-hair-3-white"
+        }
+      ],
+      "hair-4": [
+        {
+          "color": "black",
+          "filename": "hair-4-black.png",
+          "optionId": "male-hair-hair-4-black"
+        },
+        {
+          "color": "blond",
+          "filename": "hair-4-blond.png",
+          "optionId": "male-hair-hair-4-blond"
+        },
+        {
+          "color": "blue",
+          "filename": "hair-4-blue.png",
+          "optionId": "male-hair-hair-4-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "hair-4-brown.png",
+          "optionId": "male-hair-hair-4-brown"
+        },
+        {
+          "color": "cyan",
+          "filename": "hair-4-cyan.png",
+          "optionId": "male-hair-hair-4-cyan"
+        },
+        {
+          "color": "ginger",
+          "filename": "hair-4-ginger.png",
+          "optionId": "male-hair-hair-4-ginger"
+        },
+        {
+          "color": "green",
+          "filename": "hair-4-green.png",
+          "optionId": "male-hair-hair-4-green"
+        },
+        {
+          "color": "pink",
+          "filename": "hair-4-pink.png",
+          "optionId": "male-hair-hair-4-pink"
+        },
+        {
+          "color": "purple",
+          "filename": "hair-4-purple.png",
+          "optionId": "male-hair-hair-4-purple"
+        },
+        {
+          "color": "red",
+          "filename": "hair-4-red.png",
+          "optionId": "male-hair-hair-4-red"
+        },
+        {
+          "color": "white",
+          "filename": "hair-4-white.png",
+          "optionId": "male-hair-hair-4-white"
+        }
+      ]
+    },
+    "hats": {
+      "beanie": [
+        {
+          "color": "black",
+          "filename": "beanie-black.png",
+          "optionId": "male-hats-beanie-black"
+        },
+        {
+          "color": "purple",
+          "filename": "beanie-purple.png",
+          "optionId": "male-hats-beanie-purple"
+        }
+      ],
+      "beret": [
+        {
+          "color": "default",
+          "filename": "beret-default.png",
+          "optionId": "male-hats-beret-default"
+        }
+      ],
+      "bonnet": [
+        {
+          "color": "default",
+          "filename": "bonnet-default.png",
+          "optionId": "male-hats-bonnet-default"
+        }
+      ],
+      "cat-ears": [
+        {
+          "color": "default",
+          "filename": "cat-ears-default.png",
+          "optionId": "male-hats-cat-ears-default"
+        }
+      ],
+      "crown": [
+        {
+          "color": "gold",
+          "filename": "crown-gold.png",
+          "optionId": "male-hats-crown-gold"
+        },
+        {
+          "color": "silver",
+          "filename": "crown-silver.png",
+          "optionId": "male-hats-crown-silver"
+        }
+      ],
+      "devil": [
+        {
+          "color": "default",
+          "filename": "devil-default.png",
+          "optionId": "male-hats-devil-default"
+        }
+      ],
+      "feather-hat": [
+        {
+          "color": "default",
+          "filename": "feather-hat-default.png",
+          "optionId": "male-hats-feather-hat-default"
+        }
+      ],
+      "fedora": [
+        {
+          "color": "default",
+          "filename": "fedora-default.png",
+          "optionId": "male-hats-fedora-default"
+        }
+      ],
+      "flower": [
+        {
+          "color": "blue",
+          "filename": "flower-blue.png",
+          "optionId": "male-hats-flower-blue"
+        },
+        {
+          "color": "red",
+          "filename": "flower-red.png",
+          "optionId": "male-hats-flower-red"
+        }
+      ],
+      "glasses": [
+        {
+          "color": "blue",
+          "filename": "glasses-blue.png",
+          "optionId": "male-hats-glasses-blue"
+        },
+        {
+          "color": "red",
+          "filename": "glasses-red.png",
+          "optionId": "male-hats-glasses-red"
+        }
+      ],
+      "hair-band": [
+        {
+          "color": "default",
+          "filename": "hair-band-default.png",
+          "optionId": "male-hats-hair-band-default"
+        }
+      ],
+      "headband": [
+        {
+          "color": "default",
+          "filename": "headband-default.png",
+          "optionId": "male-hats-headband-default"
+        }
+      ],
+      "mining": [
+        {
+          "color": "default",
+          "filename": "mining-default.png",
+          "optionId": "male-hats-mining-default"
+        }
+      ],
+      "poop": [
+        {
+          "color": "default",
+          "filename": "poop-default.png",
+          "optionId": "male-hats-poop-default"
+        }
+      ],
+      "ribbon": [
+        {
+          "color": "default",
+          "filename": "ribbon-default.png",
+          "optionId": "male-hats-ribbon-default"
+        }
+      ],
+      "straw-hat": [
+        {
+          "color": "default",
+          "filename": "straw-hat-default.png",
+          "optionId": "male-hats-straw-hat-default"
+        }
+      ],
+      "sun-hat": [
+        {
+          "color": "default",
+          "filename": "sun-hat-default.png",
+          "optionId": "male-hats-sun-hat-default"
+        }
+      ],
+      "youngster-hat": [
+        {
+          "color": "blue",
+          "filename": "youngster-hat-blue.png",
+          "optionId": "male-hats-youngster-hat-blue"
+        },
+        {
+          "color": "yellow",
+          "filename": "youngster-hat-yellow.png",
+          "optionId": "male-hats-youngster-hat-yellow"
+        }
+      ]
+    },
+    "tops": {
+      "beach-top": [
+        {
+          "color": "black",
+          "filename": "beach-top-black.png",
+          "optionId": "male-tops-beach-top-black"
+        },
+        {
+          "color": "blue",
+          "filename": "beach-top-blue.png",
+          "optionId": "male-tops-beach-top-blue"
+        },
+        {
+          "color": "green",
+          "filename": "beach-top-green.png",
+          "optionId": "male-tops-beach-top-green"
+        },
+        {
+          "color": "pink",
+          "filename": "beach-top-pink.png",
+          "optionId": "male-tops-beach-top-pink"
+        },
+        {
+          "color": "red",
+          "filename": "beach-top-red.png",
+          "optionId": "male-tops-beach-top-red"
+        }
+      ],
+      "classy-top": [
+        {
+          "color": "beige",
+          "filename": "classy-top-beige.png",
+          "optionId": "male-tops-classy-top-beige"
+        },
+        {
+          "color": "black",
+          "filename": "classy-top-black.png",
+          "optionId": "male-tops-classy-top-black"
+        },
+        {
+          "color": "grey",
+          "filename": "classy-top-grey.png",
+          "optionId": "male-tops-classy-top-grey"
+        },
+        {
+          "color": "navy",
+          "filename": "classy-top-navy.png",
+          "optionId": "male-tops-classy-top-navy"
+        },
+        {
+          "color": "wine",
+          "filename": "classy-top-wine.png",
+          "optionId": "male-tops-classy-top-wine"
+        }
+      ],
+      "collared-shirt": [
+        {
+          "color": "black",
+          "filename": "collared-shirt-black.png",
+          "optionId": "male-tops-collared-shirt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "collared-shirt-blue.png",
+          "optionId": "male-tops-collared-shirt-blue"
+        },
+        {
+          "color": "navy",
+          "filename": "collared-shirt-navy.png",
+          "optionId": "male-tops-collared-shirt-navy"
+        },
+        {
+          "color": "white",
+          "filename": "collared-shirt-white.png",
+          "optionId": "male-tops-collared-shirt-white"
+        },
+        {
+          "color": "wine",
+          "filename": "collared-shirt-wine.png",
+          "optionId": "male-tops-collared-shirt-wine"
+        }
+      ],
+      "formal-top": [
+        {
+          "color": "black",
+          "filename": "formal-top-black.png",
+          "optionId": "male-tops-formal-top-black"
+        },
+        {
+          "color": "beige",
+          "filename": "formal-top-beige.png",
+          "optionId": "male-tops-formal-top-beige"
+        },
+        {
+          "color": "blue",
+          "filename": "formal-top-blue.png",
+          "optionId": "male-tops-formal-top-blue"
+        },
+        {
+          "color": "pink",
+          "filename": "formal-top-pink.png",
+          "optionId": "male-tops-formal-top-pink"
+        },
+        {
+          "color": "red",
+          "filename": "formal-top-red.png",
+          "optionId": "male-tops-formal-top-red"
+        }
+      ],
+      "hoodie": [
+        {
+          "color": "black",
+          "filename": "hoodie-black.png",
+          "optionId": "male-tops-hoodie-black"
+        },
+        {
+          "color": "blue",
+          "filename": "hoodie-blue.png",
+          "optionId": "male-tops-hoodie-blue"
+        },
+        {
+          "color": "green",
+          "filename": "hoodie-green.png",
+          "optionId": "male-tops-hoodie-green"
+        },
+        {
+          "color": "purple",
+          "filename": "hoodie-purple.png",
+          "optionId": "male-tops-hoodie-purple"
+        },
+        {
+          "color": "red",
+          "filename": "hoodie-red.png",
+          "optionId": "male-tops-hoodie-red"
+        }
+      ],
+      "jumpsuit-alt-top": [
+        {
+          "color": "black",
+          "filename": "jumpsuit-alt-top-black.png",
+          "optionId": "male-tops-jumpsuit-alt-top-black"
+        },
+        {
+          "color": "blue",
+          "filename": "jumpsuit-alt-top-blue.png",
+          "optionId": "male-tops-jumpsuit-alt-top-blue"
+        },
+        {
+          "color": "green",
+          "filename": "jumpsuit-alt-top-green.png",
+          "optionId": "male-tops-jumpsuit-alt-top-green"
+        },
+        {
+          "color": "red",
+          "filename": "jumpsuit-alt-top-red.png",
+          "optionId": "male-tops-jumpsuit-alt-top-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "jumpsuit-alt-top-yellow.png",
+          "optionId": "male-tops-jumpsuit-alt-top-yellow"
+        }
+      ],
+      "jumpsuit-top": [
+        {
+          "color": "black",
+          "filename": "jumpsuit-top-black.png",
+          "optionId": "male-tops-jumpsuit-top-black"
+        },
+        {
+          "color": "blue",
+          "filename": "jumpsuit-top-blue.png",
+          "optionId": "male-tops-jumpsuit-top-blue"
+        },
+        {
+          "color": "green",
+          "filename": "jumpsuit-top-green.png",
+          "optionId": "male-tops-jumpsuit-top-green"
+        },
+        {
+          "color": "red",
+          "filename": "jumpsuit-top-red.png",
+          "optionId": "male-tops-jumpsuit-top-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "jumpsuit-top-yellow.png",
+          "optionId": "male-tops-jumpsuit-top-yellow"
+        }
+      ],
+      "lord-suit-top": [
+        {
+          "color": "purple",
+          "filename": "lord-suit-top-purple.png",
+          "optionId": "male-tops-lord-suit-top-purple"
+        },
+        {
+          "color": "red",
+          "filename": "lord-suit-top-red.png",
+          "optionId": "male-tops-lord-suit-top-red"
+        }
+      ],
+      "open-jacket": [
+        {
+          "color": "blue",
+          "filename": "open-jacket-blue.png",
+          "optionId": "male-tops-open-jacket-blue"
+        },
+        {
+          "color": "green",
+          "filename": "open-jacket-green.png",
+          "optionId": "male-tops-open-jacket-green"
+        },
+        {
+          "color": "pink",
+          "filename": "open-jacket-pink.png",
+          "optionId": "male-tops-open-jacket-pink"
+        },
+        {
+          "color": "red",
+          "filename": "open-jacket-red.png",
+          "optionId": "male-tops-open-jacket-red"
+        },
+        {
+          "color": "orange",
+          "filename": "open-jacket-orange.png",
+          "optionId": "male-tops-open-jacket-orange"
+        }
+      ],
+      "scarf-top": [
+        {
+          "color": "black",
+          "filename": "scarf-top-black.png",
+          "optionId": "male-tops-scarf-top-black"
+        },
+        {
+          "color": "blue",
+          "filename": "scarf-top-blue.png",
+          "optionId": "male-tops-scarf-top-blue"
+        },
+        {
+          "color": "brown",
+          "filename": "scarf-top-brown.png",
+          "optionId": "male-tops-scarf-top-brown"
+        },
+        {
+          "color": "red",
+          "filename": "scarf-top-red.png",
+          "optionId": "male-tops-scarf-top-red"
+        },
+        {
+          "color": "yellow",
+          "filename": "scarf-top-yellow.png",
+          "optionId": "male-tops-scarf-top-yellow"
+        }
+      ],
+      "school-uniform": [
+        {
+          "color": "dark",
+          "filename": "school-uniform-dark.png",
+          "optionId": "male-tops-school-uniform-dark"
+        },
+        {
+          "color": "light",
+          "filename": "school-uniform-light.png",
+          "optionId": "male-tops-school-uniform-light"
+        }
+      ],
+      "shirt-combo": [
+        {
+          "color": "black",
+          "filename": "shirt-combo-black.png",
+          "optionId": "male-tops-shirt-combo-black"
+        },
+        {
+          "color": "blue",
+          "filename": "shirt-combo-blue.png",
+          "optionId": "male-tops-shirt-combo-blue"
+        },
+        {
+          "color": "red",
+          "filename": "shirt-combo-red.png",
+          "optionId": "male-tops-shirt-combo-red"
+        },
+        {
+          "color": "white",
+          "filename": "shirt-combo-white.png",
+          "optionId": "male-tops-shirt-combo-white"
+        },
+        {
+          "color": "wine",
+          "filename": "shirt-combo-wine.png",
+          "optionId": "male-tops-shirt-combo-wine"
+        }
+      ],
+      "t-shirt": [
+        {
+          "color": "black",
+          "filename": "t-shirt-black.png",
+          "optionId": "male-tops-t-shirt-black"
+        },
+        {
+          "color": "blue",
+          "filename": "t-shirt-blue.png",
+          "optionId": "male-tops-t-shirt-blue"
+        },
+        {
+          "color": "green",
+          "filename": "t-shirt-green.png",
+          "optionId": "male-tops-t-shirt-green"
+        },
+        {
+          "color": "red",
+          "filename": "t-shirt-red.png",
+          "optionId": "male-tops-t-shirt-red"
+        },
+        {
+          "color": "white",
+          "filename": "t-shirt-white.png",
+          "optionId": "male-tops-t-shirt-white"
+        }
+      ],
+      "tank-top": [
+        {
+          "color": "black",
+          "filename": "tank-top-black.png",
+          "optionId": "male-tops-tank-top-black"
+        },
+        {
+          "color": "green",
+          "filename": "tank-top-green.png",
+          "optionId": "male-tops-tank-top-green"
+        },
+        {
+          "color": "navy",
+          "filename": "tank-top-navy.png",
+          "optionId": "male-tops-tank-top-navy"
+        },
+        {
+          "color": "pink",
+          "filename": "tank-top-pink.png",
+          "optionId": "male-tops-tank-top-pink"
+        },
+        {
+          "color": "red",
+          "filename": "tank-top-red.png",
+          "optionId": "male-tops-tank-top-red"
+        }
+      ],
+      "trench-coat": [
+        {
+          "color": "beige",
+          "filename": "trench-coat-beige.png",
+          "optionId": "male-tops-trench-coat-beige"
+        },
+        {
+          "color": "black",
+          "filename": "trench-coat-black.png",
+          "optionId": "male-tops-trench-coat-black"
+        },
+        {
+          "color": "navy",
+          "filename": "trench-coat-navy.png",
+          "optionId": "male-tops-trench-coat-navy"
+        },
+        {
+          "color": "purple",
+          "filename": "trench-coat-purple.png",
+          "optionId": "male-tops-trench-coat-purple"
+        },
+        {
+          "color": "red",
+          "filename": "trench-coat-red.png",
+          "optionId": "male-tops-trench-coat-red"
+        }
+      ],
+      "turtleneck": [
+        {
+          "color": "beige",
+          "filename": "turtleneck-beige.png",
+          "optionId": "male-tops-turtleneck-beige"
+        },
+        {
+          "color": "black",
+          "filename": "turtleneck-black.png",
+          "optionId": "male-tops-turtleneck-black"
+        },
+        {
+          "color": "green",
+          "filename": "turtleneck-green.png",
+          "optionId": "male-tops-turtleneck-green"
+        },
+        {
+          "color": "white",
+          "filename": "turtleneck-white.png",
+          "optionId": "male-tops-turtleneck-white"
+        },
+        {
+          "color": "wine",
+          "filename": "turtleneck-wine.png",
+          "optionId": "male-tops-turtleneck-wine"
+        }
+      ],
+      "v-neck": [
+        {
+          "color": "black",
+          "filename": "v-neck-black.png",
+          "optionId": "male-tops-v-neck-black"
+        },
+        {
+          "color": "green",
+          "filename": "v-neck-green.png",
+          "optionId": "male-tops-v-neck-green"
+        },
+        {
+          "color": "orange",
+          "filename": "v-neck-orange.png",
+          "optionId": "male-tops-v-neck-orange"
+        },
+        {
+          "color": "purple",
+          "filename": "v-neck-purple.png",
+          "optionId": "male-tops-v-neck-purple"
+        },
+        {
+          "color": "yellow",
+          "filename": "v-neck-yellow.png",
+          "optionId": "male-tops-v-neck-yellow"
+        }
+      ],
+      "vest": [
+        {
+          "color": "beige",
+          "filename": "vest-beige.png",
+          "optionId": "male-tops-vest-beige"
+        },
+        {
+          "color": "black",
+          "filename": "vest-black.png",
+          "optionId": "male-tops-vest-black"
+        },
+        {
+          "color": "blue",
+          "filename": "vest-blue.png",
+          "optionId": "male-tops-vest-blue"
+        },
+        {
+          "color": "grey",
+          "filename": "vest-grey.png",
+          "optionId": "male-tops-vest-grey"
+        },
+        {
+          "color": "wine",
+          "filename": "vest-wine.png",
+          "optionId": "male-tops-vest-wine"
+        }
+      ]
+    }
+  }
+}

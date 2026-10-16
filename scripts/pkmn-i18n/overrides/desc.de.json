@@ -1,0 +1,3 @@
+{
+  "_comment": "Reviewed German game texts that win over PokeAPI flavour text. Key = \"move|ability|item:<@pkmn id>\", e.g. \"move:ceaselessedge\". Slot for official Scarlet/Violet texts typed in from the games (PokeAPI has no German SV text; design pkmn-l10n.md §8 O1)."
+}

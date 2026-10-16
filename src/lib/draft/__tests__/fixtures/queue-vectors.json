@@ -1,0 +1,395 @@
+{
+  "$comment": "Worked queue vectors (draft-backend §5.6/§5.7, package B-RPC). Data, not code: the queue algorithm lives only in SQL (M5). queue-vectors.schema.test.ts validates the shape (no DB); the maintainer-only draft RPC parity suite (private companion overlay, DRAFT_RPC_LIVE_DB=1) replays every case against a LOCAL supabase stack. Times are seconds from T0 = draft start (initial) or publish (redraft). Queue labels: '<sort_key> <alias>' plus '(m)' for a make-up slot; the current slot comes first. Default seats Brock=S(1) Serena=B(2) Dawn=K(3) Misty=N(4), roster 3, live 300/150 s, slow ladder 12h/6h/3h/1.5h; a pick step takes the cheapest legal line of that suite's list fixture (its default budget unless setup.budgets says otherwise). Additive fields beyond §5.7: setup.ladder, steps 'assign'/'forfeit', expect.durations (label -> seconds), expect.done (aliases), expect.paused (pool pause_reason).",
+  "vectors": [
+    {
+      "id": "Q1",
+      "spec": "SPEC:598-606",
+      "title": "Misty times out on #4: his second normal pick stays, the make-up goes behind Dawn's next slot",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 331, "do": "tick" }
+      ],
+      "expect": {
+        "queue": ["5 N", "6 K", "6.5 N(m)", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "5", "player": "N", "kind": "normal", "status": "active", "deadline_at": 630 },
+        "durations": { "5 N": 300, "6 K": 300, "6.5 N(m)": 150 }
+      }
+    },
+    {
+      "id": "Q2",
+      "spec": "SPEC:588-589",
+      "title": "The make-up times out too: the next make-up again runs 150 s (the 2:30 floor, never halved)",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 331, "do": "tick" },
+        { "at": 340, "do": "pick", "player": "N" },
+        { "at": 350, "do": "pick", "player": "K" },
+        { "at": 501, "do": "tick" }
+      ],
+      "expect": {
+        "queue": ["7 B", "7.5 N(m)", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "7", "player": "B", "kind": "normal", "status": "active", "deadline_at": 800 },
+        "durations": { "7.5 N(m)": 150 }
+      }
+    },
+    {
+      "id": "Q3",
+      "title": "After the make-up is picked, Misty's later normal slot runs 300 s again",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 331, "do": "tick" },
+        { "at": 340, "do": "pick", "player": "N" },
+        { "at": 350, "do": "pick", "player": "K" },
+        { "at": 501, "do": "tick" },
+        { "at": 510, "do": "pick", "player": "B" },
+        { "at": 520, "do": "pick", "player": "N" }
+      ],
+      "expect": {
+        "queue": ["8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "8", "player": "S", "kind": "normal", "status": "active", "deadline_at": 820 },
+        "durations": { "12 N": 300 }
+      }
+    },
+    {
+      "id": "Q4",
+      "title": "Brock times out at the start of his double pick: #9 stays, the make-up goes behind Serena's #10",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 40, "do": "pick", "player": "N" },
+        { "at": 50, "do": "pick", "player": "N" },
+        { "at": 60, "do": "pick", "player": "K" },
+        { "at": 70, "do": "pick", "player": "B" },
+        { "at": 371, "do": "tick" }
+      ],
+      "expect": {
+        "queue": ["9 S", "10 B", "10.5 S(m)", "11 K", "12 N"],
+        "active": { "key": "9", "player": "S", "kind": "normal", "status": "active", "deadline_at": 670 }
+      }
+    },
+    {
+      "id": "Q5",
+      "title": "Last slot times out with nobody behind: in-place make-up (150 s) and an admin alert, repeating",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 40, "do": "pick", "player": "N" },
+        { "at": 50, "do": "pick", "player": "N" },
+        { "at": 60, "do": "pick", "player": "K" },
+        { "at": 70, "do": "pick", "player": "B" },
+        { "at": 80, "do": "pick", "player": "S" },
+        { "at": 90, "do": "pick", "player": "S" },
+        { "at": 100, "do": "pick", "player": "B" },
+        { "at": 110, "do": "pick", "player": "K" },
+        { "at": 411, "do": "tick" },
+        { "at": 561, "do": "tick" }
+      ],
+      "expect": {
+        "queue": ["14 N(m)"],
+        "active": { "key": "14", "player": "N", "kind": "makeup", "status": "active", "deadline_at": 710 },
+        "durations": { "14 N(m)": 150 },
+        "alerts": ["inplace_timeout"]
+      }
+    },
+    {
+      "id": "Q6",
+      "title": "#11 Dawn times out while #12 Misty is pending and last: the make-up goes behind #12",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 40, "do": "pick", "player": "N" },
+        { "at": 50, "do": "pick", "player": "N" },
+        { "at": 60, "do": "pick", "player": "K" },
+        { "at": 70, "do": "pick", "player": "B" },
+        { "at": 80, "do": "pick", "player": "S" },
+        { "at": 90, "do": "pick", "player": "S" },
+        { "at": 100, "do": "pick", "player": "B" },
+        { "at": 401, "do": "tick" }
+      ],
+      "expect": {
+        "queue": ["12 N", "13 K(m)"],
+        "active": { "key": "12", "player": "N", "kind": "normal", "status": "active", "deadline_at": 700 }
+      }
+    },
+    {
+      "id": "Q7",
+      "spec": "SPEC:646-654",
+      "title": "Slow draft: Misty times out on #4 → ladder stage 1; his next slot and the make-up run 6 h",
+      "setup": {
+        "mode": "slow", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 43231, "do": "tick" }
+      ],
+      "expect": {
+        "queue": ["5 N", "6 K", "6.5 N(m)", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "5", "player": "N", "kind": "normal", "status": "active", "deadline_at": 64830 },
+        "penalty_stage": { "N": 1, "K": 0 },
+        "durations": { "5 N": 21600, "6 K": 43200, "6.5 N(m)": 21600 }
+      }
+    },
+    {
+      "id": "Q7b",
+      "title": "Slow ladder continues 3 h → 1.5 h and stays at the 1.5 h floor",
+      "setup": {
+        "mode": "slow", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 43231, "do": "tick" },
+        { "at": 64831, "do": "tick" },
+        { "at": 64840, "do": "pick", "player": "K" },
+        { "at": 75641, "do": "tick" },
+        { "at": 81041, "do": "tick" }
+      ],
+      "expect": {
+        "queue": ["7 B", "7.25 N(m)", "7.5 N(m)", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "7", "player": "B", "kind": "normal", "status": "active", "deadline_at": 124240 },
+        "penalty_stage": { "N": 3 },
+        "durations": { "7.25 N(m)": 5400, "7.5 N(m)": 5400, "12 N": 5400 }
+      }
+    },
+    {
+      "id": "Q8",
+      "title": "Pause freezes the remaining time; an extension while paused is refused",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 180, "do": "pause" },
+        { "at": 200, "do": "extension", "player": "S", "kind": "plus120" }
+      ],
+      "expect": {
+        "queue": ["1 S", "2 B", "3 K", "4 N", "5 N", "6 K", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "1", "player": "S", "kind": "normal", "status": "active", "deadline_at": null, "remaining_ms_at_pause": 120000 },
+        "error": "DRAFT_PAUSED",
+        "paused": "admin"
+      }
+    },
+    {
+      "id": "Q8b",
+      "title": "Resume restores the exact remaining time",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 180, "do": "pause" },
+        { "at": 2000, "do": "resume" }
+      ],
+      "expect": {
+        "queue": ["1 S", "2 B", "3 K", "4 N", "5 N", "6 K", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "1", "player": "S", "kind": "normal", "status": "active", "deadline_at": 2120, "remaining_ms_at_pause": null },
+        "paused": null
+      }
+    },
+    {
+      "id": "Q9",
+      "title": "Extensions: +2:00 then +1:00, once each per draft",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 100, "do": "extension", "player": "N", "kind": "plus120" },
+        { "at": 110, "do": "extension", "player": "N", "kind": "plus60" }
+      ],
+      "expect": {
+        "queue": ["4 N", "5 N", "6 K", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "4", "player": "N", "kind": "normal", "status": "active", "deadline_at": 510 }
+      }
+    },
+    {
+      "id": "Q9b",
+      "title": "A second +2:00 is refused",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 100, "do": "extension", "player": "N", "kind": "plus120" },
+        { "at": 110, "do": "extension", "player": "N", "kind": "plus120" }
+      ],
+      "expect": {
+        "queue": ["4 N", "5 N", "6 K", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "4", "player": "N", "kind": "normal", "status": "active", "deadline_at": 450 },
+        "error": "EXTENSION_USED"
+      }
+    },
+    {
+      "id": "Q9c",
+      "title": "An extension works the same on a make-up slot",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 331, "do": "tick" },
+        { "at": 340, "do": "pick", "player": "N" },
+        { "at": 350, "do": "pick", "player": "K" },
+        { "at": 360, "do": "extension", "player": "N", "kind": "plus120" }
+      ],
+      "expect": {
+        "queue": ["6.5 N(m)", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "6.5", "player": "N", "kind": "makeup", "status": "active", "deadline_at": 620 }
+      }
+    },
+    {
+      "id": "Q9d",
+      "title": "Slow drafts have no extensions",
+      "setup": {
+        "mode": "slow", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 5, "do": "extension", "player": "S", "kind": "plus120" }
+      ],
+      "expect": {
+        "queue": ["1 S", "2 B", "3 K", "4 N", "5 N", "6 K", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "1", "player": "S", "kind": "normal", "status": "active", "deadline_at": 43200 },
+        "error": "EXTENSION_NOT_ALLOWED"
+      }
+    },
+    {
+      "id": "Q10",
+      "title": "Cascade: nobody polls for 20 min; one late resolution replays every timeout at its own deadline",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 3,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "B", "seat": 2 }, { "player": "K", "seat": 3 }, { "player": "N", "seat": 4 }]
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "pick", "player": "B" },
+        { "at": 30, "do": "pick", "player": "K" },
+        { "at": 1200, "do": "tick" }
+      ],
+      "expect": {
+        "queue": ["6.375 K(m)", "6.4375 N(m)", "6.5 N(m)", "7 B", "8 S", "9 S", "10 B", "11 K", "12 N"],
+        "active": { "key": "6.375", "player": "K", "kind": "makeup", "status": "active", "deadline_at": 1230 }
+      }
+    },
+    {
+      "id": "Q11",
+      "title": "Redraft generation: worst first; each player only in rounds 1..drops",
+      "setup": {
+        "mode": "live", "kind": "redraft", "roster_size": 3,
+        "seats": [
+          { "player": "K", "seat": 1, "drops": 3 },
+          { "player": "N", "seat": 2, "drops": 1 },
+          { "player": "B", "seat": 3, "drops": 0 },
+          { "player": "S", "seat": 4, "drops": 2 }
+        ]
+      },
+      "steps": [],
+      "expect": {
+        "queue": ["1 K", "2 N", "3 S", "4 S", "5 K", "6 K"],
+        "active": { "key": "1", "player": "K", "kind": "normal", "status": "active", "deadline_at": 300 },
+        "done": ["B"]
+      }
+    },
+    {
+      "id": "Q12",
+      "title": "Blocked slot: 2 open slots, 21 points left, the two cheapest legal lines cost 12 + 12",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 2,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "P", "seat": 2 }],
+        "budgets": { "P": 21 }
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" }
+      ],
+      "expect": {
+        "queue": ["2 P", "3 P", "4 S"],
+        "active": { "key": "2", "player": "P", "kind": "normal", "status": "blocked", "deadline_at": null },
+        "alerts": ["blocked"],
+        "paused": "blocked_slot"
+      }
+    },
+    {
+      "id": "Q12b",
+      "title": "Admin forfeits the blocked slot and resumes",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 2,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "P", "seat": 2 }],
+        "budgets": { "P": 21 }
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "forfeit" }
+      ],
+      "expect": {
+        "queue": ["3 P", "4 S"],
+        "active": { "key": "3", "player": "P", "kind": "normal", "status": "active", "deadline_at": 320 },
+        "paused": null
+      }
+    },
+    {
+      "id": "Q12c",
+      "title": "Admin assign bypasses the budget; the next slot of the same player blocks again",
+      "setup": {
+        "mode": "live", "kind": "initial", "roster_size": 2,
+        "seats": [{ "player": "S", "seat": 1 }, { "player": "P", "seat": 2 }],
+        "budgets": { "P": 21 }
+      },
+      "steps": [
+        { "at": 10, "do": "pick", "player": "S" },
+        { "at": 20, "do": "assign", "player": "P" }
+      ],
+      "expect": {
+        "queue": ["3 P", "4 S"],
+        "active": { "key": "3", "player": "P", "kind": "normal", "status": "blocked", "deadline_at": null },
+        "paused": "blocked_slot"
+      }
+    }
+  ]
+}

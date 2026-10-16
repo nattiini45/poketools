@@ -1,0 +1,55 @@
+import { defineDe } from '@/i18n/define';
+import type en from './en';
+
+export default defineDe<typeof en>()({
+  page: {
+    spotlight: 'Pokémon im Rampenlicht',
+    rating: 'Wertung',
+    unrated: 'Ohne Wertung',
+    noRatedMatch: 'Dieser Spieler hat noch kein gewertetes Spiel abgeschlossen.',
+    signatures: 'Signature-Pokémon',
+    achievements: 'Erfolge',
+    participations: 'Teilnahmen',
+    trophies: 'Trophäen',
+    recentMatches: 'Letzte Spiele',
+    noRecentMatches: 'Noch keine abgeschlossenen Spiele',
+    upcomingMatches: 'Anstehende Spiele',
+    noUpcomingMatches: 'Keine anstehenden Spiele',
+    streaks: 'Serien',
+    streakHint: 'Siegesserien erscheinen ab 3 Siegen in Folge.',
+    signInPrompt: 'Melde dich mit Discord an, um Spielverlauf und Serien zu sehen.',
+    signIn: 'Anmelden',
+  },
+  header: {
+    ps: 'PS:',
+    champions: 'Champs:',
+    memberSince: 'Mitglied seit {date}',
+    record: 'Bilanz',
+    recordValue: '{wins}-{losses}',
+    winRate: 'Siege %',
+    totalKos: 'KOs gesamt',
+    pokemon: 'Pokémon',
+    titles: 'Titel',
+    form: 'Form',
+  },
+  matchList: {
+    empty: 'Keine Spiele',
+    viewMatch: 'Spiel gegen {opponent} ansehen',
+  },
+  participations: {
+    current: 'Aktuell ({count})',
+    past: 'Vergangen ({count})',
+    emptyCurrent: 'Keine aktuellen Teilnahmen',
+    emptyPast: 'Keine vergangenen Teilnahmen',
+    standing: '<em>{rank}</em> / {total} · {wins}S-{losses}N',
+    kos: '{count}K',
+  },
+  spotlight: {
+    mostUsed: 'Am häufigsten genutzt',
+    topKillers: 'Top-Killer',
+    gamesWinRate: { one: '{count} Partie · {winRate} Siege', other: '{count} Partien · {winRate} Siege' },
+    kosOverall: { one: '{count} KO · <em>{rank}</em>', other: '{count} KOs · <em>{rank}</em>' },
+  },
+  ordinal: { st: '{n}.', nd: '{n}.', rd: '{n}.', th: '{n}.' },
+  overallRank: { st: 'Platz {n} gesamt', nd: 'Platz {n} gesamt', rd: 'Platz {n} gesamt', th: 'Platz {n} gesamt' },
+});

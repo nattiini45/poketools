@@ -1,0 +1,176 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requirePlayer } from '@/lib/auth/helpers';
+import { safeErrorResponse } from '@/lib/api/error-response';
+import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
+import { getMatchById, updateMatchStatus } from '@/lib/supabase/queries/matches';
+import { validateTransition } from '@/lib/tournament/match-state';
+import { revalidateMatchPages } from '@/lib/revalidation';
+import { emitDiscordEvent } from '@/lib/discord/notify';
+import { emitSocialEvent } from '@/lib/social/notify';
+import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { finalizeMatchCompletion } from '@/lib/match/finalize';
+import { confirmMatchSchema, formatZodErrors } from '@/lib/validation';
+import { logAuditEvent } from '@/lib/audit/log';
+import { checkRateLimit } from '@/lib/utils/rate-limit';
+import type { ApiResult } from '@/types/api';
+import type { Match } from '@/types/match';
+
+interface RouteParams {
+  params: Promise<{ mid: string }>;
+}
+
+// Authenticated — confirm or dispute a match result
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  try {
+    const player = await requirePlayer();
+    const { mid } = await params;
+
+    const rateResult = checkRateLimit(`confirm-match:${player.playerId}`, 30, 60 * 60 * 1000);
+    if (!rateResult.allowed) {
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: `Rate limit exceeded. Try again in ${rateResult.retryAfterSeconds}s.`,
+          code: 'rate_limited',
+          params: { seconds: rateResult.retryAfterSeconds },
+        },
+        { status: 429, headers: { 'Retry-After': String(rateResult.retryAfterSeconds) } }
+      );
+    }
+
+    const rawBody = await request.json();
+    const parsedBody = confirmMatchSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      const issues = formatZodErrors(parsedBody.error);
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: issues, code: 'validation_failed', params: { issues } },
+        { status: 400 }
+      );
+    }
+    const { action, winner_id: requestedWinnerId, notes } = parsedBody.data;
+
+    const match = await getMatchById(mid);
+
+    if (!match) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Match not found', code: 'match_not_found' },
+        { status: 404 }
+      );
+    }
+
+    const targetStatus = action === 'confirm' ? 'completed' as const : 'disputed' as const;
+
+    // Site admins or resource admins for this tournament can act as admin
+    const hasAdminAccess = player.isAdmin ||
+      await isResourceAdminFor(player.playerId, 'tournament', match.tournament_id);
+
+    if ((requestedWinnerId || notes) && !hasAdminAccess) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Only admins can override match winner or notes', code: 'match_override_admin_only' },
+        { status: 403 }
+      );
+    }
+
+    const winnerId = targetStatus === 'completed'
+      ? requestedWinnerId ?? match.winner_id
+      : undefined;
+
+    if (targetStatus === 'completed' && winnerId !== match.player_1_id && winnerId !== match.player_2_id) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Winner must be one of the match participants', code: 'match_winner_not_participant' },
+        { status: 400 }
+      );
+    }
+
+    const result = validateTransition(match.status, targetStatus, {
+      actor_id: player.playerId,
+      is_admin: hasAdminAccess,
+      winner_id: winnerId ?? undefined,
+      player_1_id: match.player_1_id,
+      player_2_id: match.player_2_id,
+    });
+
+    if (!result.valid) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: result.error ?? 'Invalid transition', code: result.code, params: result.params },
+        { status: 400 }
+      );
+    }
+
+    // The confirmer should not be the submitter (unless admin)
+    if (action === 'confirm' && match.submitter_id === player.playerId && !hasAdminAccess) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Cannot confirm your own submission', code: 'match_confirm_own_submission' },
+        { status: 400 }
+      );
+    }
+
+    const previousStatus = match.status;
+    const updated = await updateMatchStatus(
+      mid,
+      targetStatus,
+      targetStatus === 'completed' ? winnerId : undefined,
+      player.playerId,
+      notes,
+      previousStatus
+    );
+
+    if (!updated) {
+      const current = await getMatchById(mid);
+      return NextResponse.json<ApiResult<Match>>({
+        success: true,
+        data: current ?? match,
+      });
+    }
+
+    if (hasAdminAccess && (requestedWinnerId || notes || match.status === 'disputed')) {
+      logAuditEvent({
+        actor_id: player.playerId,
+        actor_name: player.name,
+        action: 'match.override',
+        resource_type: 'match',
+        resource_id: mid,
+        resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+        changes: {
+          status: { before: previousStatus, after: targetStatus },
+          winner_id: { before: match.winner_id, after: targetStatus === 'completed' ? winnerId : match.winner_id },
+          notes: { before: match.notes, after: notes ?? match.notes },
+        },
+      });
+    }
+
+    if (targetStatus === 'completed' && winnerId) {
+      await finalizeMatchCompletion({
+        match: { ...match, winner_id: winnerId, status: 'completed' },
+        winnerId,
+        previousStatus,
+      });
+    } else {
+      await revalidateMatchPages(match.tournament_id, match.id);
+      const tournament = await getTournamentById(match.tournament_id);
+      if (tournament) {
+        const disputePayload = {
+          event_type: 'match_disputed' as const,
+          tournament_id: match.tournament_id,
+          season_id: tournament.season_id,
+          data: {
+            kind: 'match_disputed' as const,
+            player_1_name: match.player_1_name,
+            player_2_name: match.player_2_name,
+            disputer_name: player.name,
+            tournament_name: tournament.name,
+          },
+        };
+        void emitDiscordEvent(disputePayload);
+        void emitSocialEvent(disputePayload);
+      }
+    }
+
+    return NextResponse.json<ApiResult<Match>>({
+      success: true,
+      data: updated,
+    });
+  } catch (err) {
+    return safeErrorResponse(err, 'Failed to update match');
+  }
+}

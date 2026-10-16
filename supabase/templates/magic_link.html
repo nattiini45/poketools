@@ -1,0 +1,31 @@
+{{/*
+  Supabase Auth template: "Magic link" (config key: magic_link).
+  The app does not send magic links today (NextAuth Credentials + password);
+  the template exists so a future use is bilingual from the start.
+  Bilingual (i18n-core §6.6): .Data.locale (user_metadata.locale, stored at sign-up)
+  "en" -> English, "de" -> German, anything else -> German, then English.
+  Subject (not branched): "Dein Anmeldelink / Your sign-in link"
+  The hosted project's copy lives in the dashboard: see docs/i18n.md "Emails".
+  Template comment: renders nothing in the sent email.
+*/}}
+{{ if eq .Data.locale "en" }}
+<h2>Your sign-in link</h2>
+<p>Use this link to sign in to PokéTools:</p>
+<p><a href="{{ .ConfirmationURL }}">Sign in</a></p>
+<p>If you didn't ask for this, you can ignore this email.</p>
+{{ else if eq .Data.locale "de" }}
+<h2>Dein Anmeldelink</h2>
+<p>Mit diesem Link meldest du dich bei PokéTools an:</p>
+<p><a href="{{ .ConfirmationURL }}">Anmelden</a></p>
+<p>Wenn du das nicht warst, kannst du diese E-Mail einfach ignorieren.</p>
+{{ else }}
+<h2>Dein Anmeldelink</h2>
+<p>Mit diesem Link meldest du dich bei PokéTools an:</p>
+<p><a href="{{ .ConfirmationURL }}">Anmelden</a></p>
+<p>Wenn du das nicht warst, kannst du diese E-Mail einfach ignorieren.</p>
+<hr>
+<h2>Your sign-in link</h2>
+<p>Use this link to sign in to PokéTools:</p>
+<p><a href="{{ .ConfirmationURL }}">Sign in</a></p>
+<p>If you didn't ask for this, you can ignore this email.</p>
+{{ end }}

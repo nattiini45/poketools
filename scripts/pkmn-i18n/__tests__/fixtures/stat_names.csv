@@ -1,0 +1,8 @@
+stat_id,local_language_id,name
+1,9,HP
+1,6,KP
+2,6,Angriff
+3,6,Verteidigung
+4,6,Spezialangriff
+5,6,Spezialverteidigung
+6,6,Initiative

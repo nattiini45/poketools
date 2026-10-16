@@ -1,0 +1,5 @@
+move_damage_class_id,local_language_id,name,description
+1,6,status,Kein Schaden
+2,6,physisch,Physischer Schaden
+3,6,spezial,Spezieller Schaden
+2,9,physical,Physical damage

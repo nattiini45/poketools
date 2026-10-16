@@ -1,0 +1,24 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { safeErrorResponse } from '@/lib/api/error-response';
+import { getPlayerRating } from '@/lib/supabase/queries/ratings';
+import type { ApiResult } from '@/types/api';
+import type { PlayerRating } from '@/types/rating';
+
+interface RouteParams {
+  params: Promise<{ playerId: string }>;
+}
+
+// Public: no auth required
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  try {
+    const { playerId } = await params;
+    const rating = await getPlayerRating(playerId);
+
+    return NextResponse.json<ApiResult<PlayerRating | null>>({
+      success: true,
+      data: rating,
+    });
+  } catch (err) {
+    return safeErrorResponse(err, 'Failed to fetch player rating');
+  }
+}

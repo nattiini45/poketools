@@ -1,0 +1,9 @@
+id,identifier,generation_id,type_id,power,pp,accuracy,priority,target_id,damage_class_id,effect_id,effect_chance,contest_type_id,contest_effect_id,super_contest_effect_id
+1,pound,1,1,40,35,100,0,10,2,1,,5,1,5
+12,guillotine,1,1,,5,30,0,10,2,39,,1,9,
+446,stealth-rock,4,6,,20,,0,6,1,267,,,,
+580,grassy-terrain,6,12,,10,,0,12,1,352,,,,
+581,misty-terrain,6,18,,10,,0,12,1,353,,,,
+604,electric-terrain,6,13,,10,,0,12,1,369,,,,
+678,psychic-terrain,7,14,,10,,0,12,1,395,,,,
+900,test-move,9,1,,10,,0,10,1,1,,,,
