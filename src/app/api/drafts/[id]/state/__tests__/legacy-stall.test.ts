@@ -16,7 +16,11 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 }));
 vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({ getPoolEntries: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-rules', () => ({ getFormatRules: vi.fn(async () => null) }));
-vi.mock('@/lib/supabase/queries/evolutions', () => ({ getSeasonTrackers: vi.fn(async () => []), getAllTiers: vi.fn() }));
+vi.mock('@/lib/supabase/queries/evolutions', () => ({
+  getSeasonTrackers: vi.fn(async () => []),
+  getAllTiers: vi.fn(),
+  getPlayerWildcards: vi.fn(async () => []),
+}));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: vi.fn() }));
 vi.mock('@/lib/draft/progress-engine', () => ({
   loadDraftTokenLedger: vi.fn(),
@@ -29,6 +33,7 @@ import { GET } from '@/app/api/drafts/[id]/state/route';
 import { getDraftPoolById } from '@/lib/supabase/queries/drafts';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
+import { getPlayerWildcards } from '@/lib/supabase/queries/evolutions';
 import { legacySeatOrder } from '@/lib/draft/engine';
 
 const POOL_ID = '11111111-1111-4111-8111-111111111111';
@@ -85,9 +90,26 @@ describe('GET /api/drafts/[id]/state — stalled_picker', () => {
     expect((await getState()).stalled_picker).toEqual({ player_id: FIRST, remaining: 100, open_slots: 3, min_cost: 130 });
   });
 
-  it('is null while the cheapest completion fits', async () => {
+  it('is null while the cheapest completion fits, without reading wildcards', async () => {
     vi.mocked(getPoolEntries).mockResolvedValue([entry('A', 30), entry('B', 30), entry('C', 40)] as never);
     expect((await getState()).stalled_picker).toBeNull();
+    expect(vi.mocked(getPlayerWildcards)).not.toHaveBeenCalled();
+  });
+
+  it("a stuck picker's undrafted wildcard outside the pool list (priced at the pool default) clears the stall", async () => {
+    // Default 10 + the cheapest two pool prices (40 + 40) = 90 <= 100: the picks route accepts the wildcard.
+    vi.mocked(getDraftPoolById).mockResolvedValue(pool({ default_point_cost: 10 }) as never);
+    vi.mocked(getPlayerWildcards).mockResolvedValue([{ base_pokemon: 'Eevee', player_id: FIRST }] as never);
+
+    expect((await getState()).stalled_picker).toBeNull();
+    expect(vi.mocked(getPlayerWildcards)).toHaveBeenCalledWith('season-1', FIRST);
+  });
+
+  it('a wildcard that is in the pool list or already taken does not count', async () => {
+    vi.mocked(getDraftPoolById).mockResolvedValue(pool({ default_point_cost: 10 }) as never);
+    vi.mocked(getPlayerWildcards).mockResolvedValue([{ base_pokemon: 'a', player_id: FIRST }] as never);
+
+    expect((await getState()).stalled_picker).toMatchObject({ player_id: FIRST, min_cost: 130 });
   });
 
   it('prices entries without a cost at the pool default, and every open pick at it without a pool list', async () => {
@@ -110,8 +132,9 @@ describe('GET /api/drafts/[id]/state — stalled_picker', () => {
     expect(vi.mocked(getPoolEntries)).not.toHaveBeenCalled();
   });
 
-  it('is null for an Evolution Point Buy season (it prices from its bound list)', async () => {
+  it('is null and reads no pool list for an Evolution Point Buy season (it prices from its bound list)', async () => {
     vi.mocked(getSeasonById).mockResolvedValue({ id: 'season-1', format_type: 'evolution_point_buy' } as never);
     expect((await getState()).stalled_picker ?? null).toBeNull();
+    expect(vi.mocked(getPoolEntries)).not.toHaveBeenCalled();
   });
 });

@@ -294,7 +294,11 @@ A **phase** is stored as a `tournaments` row with `season_id` set. League admin 
 > for a running pool in snake/linear order with fixed prices (not EPB), the current picker whose open picks (this one
 > included) cost more at the cheapest Pokémon still available than their points (`{ player_id, remaining, open_slots,
 > min_cost }`, else null; the pool list is read only for such pools). Same rule as `draft_pick_strands_roster`: price
-> only, tier limits not folded in; no Pokémon left at all is not reported. The board shows the stuck player and
+> only, tier limits not folded in; no Pokémon left at all is not reported. **Wildcard exception:** in an evo league the
+> picks route also takes the picker's own undrafted wildcard from outside the pool list, priced at the pool default, so
+> a picker who holds one is not stalled while that price plus the cheapest pool-list completion of their other open
+> picks fits their points (the picker's wildcards are read only once the pool list alone leaves them stuck).
+> The board shows the stuck player and
 > everyone else what is going on (`DraftStallNotice`); admins get **Switch to free order**:
 > `POST /api/drafts/[id]/free-order` (`requireDraftAdmin`, body `{ reason? }` ≤ 500) sets `pick_order = 'free'` with one
 > guarded UPDATE (engine legacy, status in_progress, order not free), audits `draft.pick_order.free` (`from`, `reason`)

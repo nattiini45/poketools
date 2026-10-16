@@ -673,28 +673,55 @@ describe('queries/drafts — picks', () => {
 // ====================================================================
 describe('queries/draft-pool-entries', () => {
   describe('getPoolEntries', () => {
-    it('returns entries ordered by tier then name', async () => {
-      // Chain: .from.select.eq.order('power_tier').order('pokemon_name')
-      // First .order returns mockBuilder for chaining, second is terminal.
-      mockBuilder.order
-        .mockReturnValueOnce(mockBuilder)
-        .mockReturnValueOnce({ data: [poolEntryRow], error: null });
+    it('returns entries ordered by tier, then name, then id, in one counted page', async () => {
+      mockBuilder.range.mockResolvedValueOnce({ data: [poolEntryRow], error: null, count: 1 });
       const result = await getPoolEntries('s-1');
       expect(result).toHaveLength(1);
       expect(result[0].pokemon_name).toBe('Pikachu');
+      expect(mockBuilder.select).toHaveBeenCalledWith('*', { count: 'exact' });
+      expect(mockBuilder.order.mock.calls.map((c) => c[0])).toEqual(['power_tier', 'pokemon_name', 'id']);
+      expect(mockBuilder.range).toHaveBeenCalledTimes(1);
+      expect(mockBuilder.range).toHaveBeenCalledWith(0, 999);
+    });
+
+    it('pages past max_rows until the counted total arrived', async () => {
+      const page = (n: number, offset: number) =>
+        Array.from({ length: n }, (_, k) => ({ ...poolEntryRow, id: `pe-${offset + k}` }));
+      mockBuilder.range
+        .mockResolvedValueOnce({ data: page(1000, 0), error: null, count: 1500 })
+        .mockResolvedValueOnce({ data: page(500, 1000), error: null, count: null });
+      const result = await getPoolEntries('s-1');
+      expect(result).toHaveLength(1500);
+      expect(mockBuilder.range).toHaveBeenNthCalledWith(2, 1000, 1999);
+      // Only the first page asks for the count.
+      expect(mockBuilder.select).toHaveBeenNthCalledWith(2, '*', undefined);
+    });
+
+    it('drops the repeat an insert mid-read pushes onto the next page', async () => {
+      const page = (ids: number[]) => ids.map((k) => ({ ...poolEntryRow, id: `pe-${k}` }));
+      // 1001 rows when counted; one more lands before page two, shifting pe-999 to offset 1000.
+      mockBuilder.range
+        .mockResolvedValueOnce({ data: page(Array.from({ length: 1000 }, (_, k) => k)), error: null, count: 1001 })
+        .mockResolvedValueOnce({ data: page([999, 1000]), error: null, count: null });
+      const result = await getPoolEntries('s-1');
+      expect(result).toHaveLength(1001);
+      expect(new Set(result.map((e) => e.id)).size).toBe(1001);
+    });
+
+    it('stops when entries vanish while paging', async () => {
+      mockBuilder.range
+        .mockResolvedValueOnce({ data: [poolEntryRow], error: null, count: 3 })
+        .mockResolvedValueOnce({ data: [], error: null, count: null });
+      expect(await getPoolEntries('s-1')).toHaveLength(1);
     });
 
     it('returns empty array when none', async () => {
-      mockBuilder.order
-        .mockReturnValueOnce(mockBuilder)
-        .mockReturnValueOnce({ data: [], error: null });
+      mockBuilder.range.mockResolvedValueOnce({ data: [], error: null, count: 0 });
       expect(await getPoolEntries('s-1')).toEqual([]);
     });
 
     it('throws on error', async () => {
-      mockBuilder.order
-        .mockReturnValueOnce(mockBuilder)
-        .mockReturnValueOnce({ data: null, error: new Error('err') });
+      mockBuilder.range.mockResolvedValueOnce({ data: null, error: new Error('err'), count: null });
       await expect(getPoolEntries('s-1')).rejects.toThrow('err');
     });
   });

@@ -15,17 +15,48 @@ function toEntry(row: EntryRow): DraftPoolEntry {
   };
 }
 
-/** Get all pool entries for a season. */
-export async function getPoolEntries(seasonId: string): Promise<DraftPoolEntry[]> {
-  const { data, error } = await supabase
-    .from('draft_pool_entries')
-    .select('*')
-    .eq('season_id', seasonId)
-    .order('power_tier')
-    .order('pokemon_name');
+/**
+ * Rows per request when reading a season's pool list. PostgREST caps every response at `max_rows` (1000), and a
+ * National Dex pool with forms has more entries than that, so one unbounded read would silently drop the rest.
+ */
+export const POOL_ENTRIES_READ_CHUNK = 1000;
 
-  if (error) throw error;
-  return data.map(toEntry);
+/**
+ * Get all pool entries for a season, in `.range()` pages: the first page carries `count: 'exact'` and paging goes on
+ * until that many rows arrived (one request for a list of up to 1000 entries). `id` breaks ties, so a static list
+ * pages exactly. Under concurrent edits the pages are not a snapshot: an entry inserted mid-read shifts later offsets
+ * forward (the repeat is dropped below), and one deleted behind the offset shifts them back, so a list edited while
+ * it is read can miss a live entry until the next read.
+ */
+export async function getPoolEntries(seasonId: string): Promise<DraftPoolEntry[]> {
+  const rows: EntryRow[] = [];
+  let total: number | null = null;
+  while (total === null || rows.length < total) {
+    const from: number = rows.length;
+    const page: { data: EntryRow[] | null; error: unknown; count: number | null } = await supabase
+      .from('draft_pool_entries')
+      .select('*', total === null ? { count: 'exact' } : undefined)
+      .eq('season_id', seasonId)
+      .order('power_tier')
+      .order('pokemon_name')
+      .order('id')
+      .range(from, from + POOL_ENTRIES_READ_CHUNK - 1);
+
+    if (page.error) throw page.error;
+    const chunk = page.data ?? [];
+    if (total === null) total = page.count ?? chunk.length;
+    if (chunk.length === 0) break; // entries were deleted while paging
+    rows.push(...chunk);
+  }
+  // An entry inserted mid-read shifts later offsets by one; drop the repeat (it would count a price twice).
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => {
+      if (seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    })
+    .map(toEntry);
 }
 
 /** Get a single pool entry by season + pokemon name. */

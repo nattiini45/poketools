@@ -20,7 +20,11 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonById: vi.fn(async () => ({ id: 'season-1', format_type: 'draft' })),
 }));
 vi.mock('@/lib/supabase/queries/format-rules', () => ({ getFormatRules: vi.fn(async () => null) }));
-vi.mock('@/lib/supabase/queries/evolutions', () => ({ getSeasonTrackers: vi.fn(), getAllTiers: vi.fn() }));
+vi.mock('@/lib/supabase/queries/evolutions', () => ({
+  getSeasonTrackers: vi.fn(),
+  getAllTiers: vi.fn(),
+  getPlayerWildcards: vi.fn(async () => []),
+}));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: vi.fn() }));
 vi.mock('@/lib/draft/progress-engine', () => ({
   loadDraftTokenLedger: vi.fn(),

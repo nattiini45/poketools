@@ -47,6 +47,12 @@ type BoardError =
   | { kind: 'api'; error: ApiErrorLike }
   | { kind: 'local'; key: 'loadState' | 'makePick' | 'undo' | 'statusChange' | 'freeOrder' };
 
+/** The current picker's stall, if any (only the current picker can be stalled; an older server sends no field). */
+function stallOf(state: DraftBoardState) {
+  const stall = state.stalled_picker ?? null;
+  return state.turn_enforced && stall && stall.player_id === state.current_picker ? stall : null;
+}
+
 function pollError(message: string, detail?: ApiErrorLike): BoardError {
   if (detail) return { kind: 'api', error: detail };
   return message === DRAFT_STATE_LOAD_ERROR
@@ -125,6 +131,8 @@ export default function DraftBoard({
         sink: {
           onState: (next) => {
             setState(next);
+            // The stall cleared (another admin switched, an undo, the pool completed): close its confirmation.
+            if (!stallOf(next)) setConfirming((open) => (open === 'freeOrder' ? null : open));
             setError(null);
             setLoading(false);
           },
@@ -311,11 +319,7 @@ export default function DraftBoard({
     state.current_picker !== null &&
     (turnEnforced ? isMyTurn || isAdmin : isAdmin || (isParticipant && state.pool.draft_type !== 'auction'));
   const picker = pickerOf(state, { currentPlayerId, isAdmin, pickFor });
-  // Only the current picker can be stalled; an older server sends no field.
-  const stall =
-    turnEnforced && state.stalled_picker && state.stalled_picker.player_id === state.current_picker
-      ? state.stalled_picker
-      : null;
+  const stall = stallOf(state);
   const stalledName = stall ? (playerNames[stall.player_id] ?? tLegacy('unknownPlayer')) : '';
 
   const epbMeta = state.epb;
@@ -473,7 +477,7 @@ export default function DraftBoard({
       )}
 
       <ConfirmDialog
-        open={confirming === 'freeOrder'}
+        open={confirming === 'freeOrder' && stall !== null}
         onClose={() => setConfirming(null)}
         onConfirm={handleFreeOrder}
         title={t('board.stall.confirmTitle')}
