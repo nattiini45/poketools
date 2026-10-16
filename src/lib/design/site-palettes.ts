@@ -45,7 +45,10 @@ export type SitePaletteCoreRole =
   | 'accent' | 'accent-strong' | 'focus' | 'live' | 'border';
 
 /** CSS reference to a palette's core colour in the CURRENT light/dark mode —
- *  used by the picker swatches so they need no hex and no mode logic. */
+ *  used by the picker swatches so they need no hex and no mode logic.
+ *  A swatch previews the world core, not the site token: where the site
+ *  lowers a core for AA it differs (today only the sunlit Sakura accent,
+ *  core #c2436c vs site --poke-accent #b23a60, a darker step of the same hue). */
 export function sitePaletteSwatchVar(id: SitePaletteId, role: SitePaletteCoreRole): string {
   return `var(--palette-${id}-${role})`;
 }

@@ -20,8 +20,12 @@ const HERE = join(fileURLToPath(import.meta.url), '..');
 const SRC = join(HERE, '..', '..', '..');
 const read = (path: string) => readFileSync(join(SRC, path), 'utf8');
 
-/** A bare text utility (a `hover:` / `dark:` variant is a different pair). */
-const STATIC_INK = /(?<![:\w-])text-(red-500|red-400|amber-600|yellow-700)\b/g;
+/**
+ * A static status ink, bare or as a `hover:` variant (both paint on the same
+ * palette surface). A `dark:` variant is left alone: it pairs with its own
+ * dark fill, not with a palette surface.
+ */
+const STATIC_INK = /(?<![:\w-])(?:hover:)?text-(red-500|red-400|amber-600|yellow-700)\b/g;
 
 const MIGRATED: Record<string, string> = {
   'app/admin/wiki/WikiModerationPanel.tsx': 'text-poke-danger-ink',

@@ -87,9 +87,10 @@ describe('site palette pre-paint script', () => {
     );
   });
 
-  it('reports its CSP hash (for a future nonce/hash CSP)', () => {
+  it('pins its CSP hash (for a future hash-based CSP; today script-src allows inline)', () => {
+    // A script change must update this on purpose: a hash-based CSP that
+    // lists a stale hash would silently block the pre-paint script.
     const hash = createHash('sha256').update(SITE_PALETTE_PREPAINT_SCRIPT, 'utf8').digest('base64');
-    console.info(`[site-palette] pre-paint script CSP hash: 'sha256-${hash}'`);
-    expect(hash).toMatch(/^[A-Za-z0-9+/]{43}=$/);
+    expect(`'sha256-${hash}'`).toBe("'sha256-cGaDnhtFQKVrZbsH+P8zwvVLc/ctFlLyaZY42x26XLk='");
   });
 });

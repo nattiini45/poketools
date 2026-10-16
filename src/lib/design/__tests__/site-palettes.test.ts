@@ -13,7 +13,12 @@ import {
   type SitePaletteId,
   type SitePaletteMode,
 } from '../site-palettes';
-import { SITE_PALETTE_DARK_MOMENT_OVERRIDES, SITE_PALETTE_TOKENS } from '../site-palette-tokens';
+import {
+  SITE_MOMENT_NAMES,
+  SITE_MOMENT_TOKENS,
+  SITE_PALETTE_DARK_MOMENT_OVERRIDES,
+  SITE_PALETTE_TOKENS,
+} from '../site-palette-tokens';
 import { getRegisteredRouteThemeIds, getWorldByRouteThemeId } from '@/lib/worlds/registry';
 import { contrastRatio, over, withAlpha } from './wcag';
 
@@ -192,23 +197,9 @@ describe('completeness', () => {
 const YELLOW_700 = '#a16207'; // Badge.tsx light-mode yellow ink (static Tailwind)
 const BLUE_300 = '#93c5fd'; // Badge.tsx dark-mode blue ink override (static Tailwind)
 
-/** Moment chips (globals.css, mode-dependent, palette-independent). */
-const MOMENTS: Record<SitePaletteMode, ReadonlyArray<readonly [string, string, string]>> = {
-  light: [
-    ['amber', '#92400e', 'rgba(245, 158, 11, 0.15)'],
-    ['red', '#991b1b', 'rgba(239, 68, 68, 0.15)'],
-    ['purple', '#6b21a8', 'rgba(168, 85, 247, 0.15)'],
-    ['emerald', '#065f46', 'rgba(16, 185, 129, 0.15)'],
-    ['blue', '#1e40af', 'rgba(59, 130, 246, 0.15)'],
-  ],
-  dark: [
-    ['amber', '#fbbf24', 'rgba(245, 158, 11, 0.2)'],
-    ['red', '#f87171', 'rgba(239, 68, 68, 0.2)'],
-    ['purple', '#c084fc', 'rgba(168, 85, 247, 0.2)'],
-    ['emerald', '#34d399', 'rgba(16, 185, 129, 0.2)'],
-    ['blue', '#60a5fa', 'rgba(59, 130, 246, 0.2)'],
-  ],
-};
+/** Moment chips (Layer 1 in globals.css, locked to the CSS by site-palette-css.test.ts). */
+const MOMENTS = (mode: SitePaletteMode): ReadonlyArray<readonly [string, string, string]> =>
+  SITE_MOMENT_NAMES.map((name) => [name, SITE_MOMENT_TOKENS[mode][name].ink, SITE_MOMENT_TOKENS[mode][name].bg]);
 
 interface Pair {
   group: string;
@@ -262,7 +253,9 @@ function pairs(id: SitePaletteId, mode: SitePaletteMode): Pair[] {
   add('status-fill', 'on-green', v('--poke-on-green'), 'green-hover', v('--poke-green-hover'), 4.5);
   add('status-fill', 'secondary-foreground', v('--secondary-foreground'), 'secondary (blue)', v('--poke-blue'), 4.5);
   add('status-fill', 'destructive-foreground', v('--destructive-foreground'), 'destructive', v('--destructive'), 4.5);
-  add('status-fill', 'ink on yellow fill', mode === 'light' ? v('--poke-text-primary') : v('--poke-base'), 'yellow', v('--poke-yellow'), 4.5);
+  // No text sits on a solid bg-poke-yellow (progress fills and the
+  // LegalityBadge dot only); yellow text pairs use yellow-light (badge row
+  // below, and component inks). Add a pair here when a component puts text on it.
 
   add('badge', 'accent', v('--poke-accent'), 'accent-light/surface', tint(v('--poke-accent-light')), 4.5);
   add('badge', 'blue', mode === 'dark' ? BLUE_300 : v('--poke-blue'), 'blue-light/surface', tint(v('--poke-blue-light')), 4.5);
@@ -279,7 +272,7 @@ function pairs(id: SitePaletteId, mode: SitePaletteMode): Pair[] {
   );
 
   const overrides: Record<string, string> = SITE_PALETTE_DARK_MOMENT_OVERRIDES;
-  for (const [name, fg0, bg] of MOMENTS[mode]) {
+  for (const [name, fg0, bg] of MOMENTS(mode)) {
     const fg = mode === 'dark' && id !== 'plaza' ? (overrides[`--poke-moment-${name}`] ?? fg0) : fg0;
     add('moment', `moment-${name}`, fg, `moment-${name}-bg/surface`, over(bg, surface), 4.5);
   }
@@ -417,8 +410,9 @@ describe('contrast floor (I4)', () => {
       const light = pairs(id, 'light').map((p) => `${p.group}|${p.bgName}`);
       const dark = pairs(id, 'dark').map((p) => `${p.group}|${p.bgName}`);
       expect(light).toEqual(dark);
-      // The 88 rows of the spec's contrast table (palette-spec v2 §3).
-      expect(light).toHaveLength(88);
+      // The 88 rows of the spec's contrast table (palette-spec v2 §3), less
+      // "ink on yellow fill": no component puts text on bg-poke-yellow.
+      expect(light).toHaveLength(87);
     }
   });
 

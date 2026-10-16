@@ -417,7 +417,7 @@ html[data-palette="mountain"] {
   --poke-inverse: var(--palette-mountain-ink);
   --poke-text-primary: var(--palette-mountain-ink);
   --poke-text-secondary: var(--palette-mountain-ink-secondary);
-  --poke-text-muted: #5d6860;
+  --poke-text-muted: #5a655d;
   --poke-text-tertiary: #5d6860;
   --poke-border: var(--palette-mountain-border);
   --poke-border-strong: #b3bd9c;

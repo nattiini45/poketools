@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { FOCUS_RING } from '@/components/ui/panel';
 import {
   SITE_PALETTES,
@@ -114,7 +115,18 @@ export default function PalettePicker() {
   const { palette, setPalette } = useSitePalette();
   const t = useT(uiMessages);
   const copy = useMessages(uiMessages).palette;
-  const [open, setOpen] = useState(false);
+  // The panel belongs to the page it was opened on: the open state records
+  // that pathname, so a soft navigation (back/forward, a router push from
+  // elsewhere) closes it with no effect and no event. An object, so a null
+  // pathname (no App Router context, the tests) still opens. The first render on
+  // another pathname also drops the record (React's reset-state-during-render
+  // pattern), so a Back/Forward round trip to the page never re-opens the panel
+  // or moves focus into it.
+  const pathname = usePathname();
+  const [openOn, setOpenOn] = useState<{ path: string | null } | null>(null);
+  if (openOn !== null && openOn.path !== pathname) setOpenOn(null);
+  const open = openOn !== null && openOn.path === pathname;
+  const setOpen = (next: boolean) => setOpenOn(next ? { path: pathname } : null);
   const panelId = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -142,7 +154,7 @@ export default function PalettePicker() {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
     const closeToTrigger = () => {
-      setOpen(false);
+      setOpenOn(null);
       triggerRef.current?.focus();
     };
     // Native listener on the wrapper, not React's onKeyDown: the App Router's
@@ -165,11 +177,11 @@ export default function PalettePicker() {
     // relatedTarget (a press on non-focusable panel space) is not "out".
     const onFocusOut = (event: FocusEvent) => {
       const next = event.relatedTarget;
-      if (next instanceof Node && !wrapper.contains(next)) setOpen(false);
+      if (next instanceof Node && !wrapper.contains(next)) setOpenOn(null);
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Node && wrapper.contains(event.target)) return;
-      setOpen(false);
+      setOpenOn(null);
     };
     wrapper.addEventListener('keydown', onKeyDown);
     wrapper.addEventListener('focusout', onFocusOut);
@@ -191,7 +203,7 @@ export default function PalettePicker() {
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={label}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen(!open)}
         className={`p-2 rounded-poke-md text-poke-text-secondary hover:bg-poke-elevated hover:text-poke-text-primary transition-colors ${FOCUS_RING}`}
       >
         {/* The applied palette's ground and accent, straight from CSS: right before hydration too. */}

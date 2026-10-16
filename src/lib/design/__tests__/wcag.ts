@@ -27,7 +27,12 @@ export function parseColor(input: string): Rgba {
   }
   const fnMatch = /^rgba?\(([^)]+)\)$/i.exec(c);
   if (fnMatch) {
+    // Plain numbers only: `Number('75%')` is NaN, and a NaN channel makes every
+    // `contrastRatio(...) < floor` check false, so a bad colour would pass.
     const p = fnMatch[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    if ((p.length !== 3 && p.length !== 4) || !p.every(Number.isFinite)) {
+      throw new Error(`unsupported colour: ${input}`);
+    }
     return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
   }
   throw new Error(`unsupported colour: ${input}`);
