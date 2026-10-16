@@ -264,7 +264,7 @@ export async function run({
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'plc-toolkit-fetch-private-assets',
+        'User-Agent': 'poketools-fetch-private-assets',
       },
       redirect: 'follow',
     });

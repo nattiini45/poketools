@@ -58,7 +58,7 @@ describe('createPokepaste', () => {
   live('creates a real paste against pokepast.es', async () => {
     const res = await createPokepaste({
       paste: 'Pikachu @ Light Ball\nAbility: Static\n- Thunderbolt\n- Volt Switch\n',
-      title: 'plc-toolkit smoke test',
+      title: 'poketools smoke test',
     });
     expect(res.url).toMatch(/^https:\/\/pokepast\.es\/\w+/);
   }, 15000);

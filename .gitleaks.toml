@@ -1,4 +1,4 @@
-title = "plc-toolkit gitleaks config"
+title = "poketools gitleaks config"
 
 [extend]
 useDefault = true

@@ -1,4 +1,4 @@
-# plc-toolkit — Copilot instructions
+# PokéTools — Copilot instructions
 
 > See [`AGENTS.md`](../AGENTS.md) for the full guide. This is the short version
 > that steers Copilot chat, review, and the coding agent.
