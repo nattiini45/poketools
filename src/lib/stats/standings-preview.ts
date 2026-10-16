@@ -7,6 +7,7 @@ import type { StandingsRow } from '@/types/game';
 
 export interface StandingsPreviewRow {
   rank: number;
+  player_id: string;
   player_name: string;
   wins: number;
   losses: number;
@@ -15,6 +16,7 @@ export interface StandingsPreviewRow {
 function toPreviewRows(standings: StandingsRow[], limit: number): StandingsPreviewRow[] {
   return standings.slice(0, limit).map((row, index) => ({
     rank: index + 1,
+    player_id: row.player_id,
     player_name: row.player_name,
     wins: row.wins,
     losses: row.losses,
@@ -71,20 +73,25 @@ export async function getStandingsPreview(
 }
 
 /**
- * Current player rank in an active league (dashboard mini-standings).
+ * A limit no league reaches, so a preview read with it holds the whole table.
+ * The dashboard reads every league through the cached preview, and the row
+ * count is the league's player total.
  */
-export async function getPlayerRankInLeague(
-  seasonId: string,
+export const FULL_STANDINGS_LIMIT = 1000;
+
+export interface PlayerStandingSnapshot {
+  rank: number;
+  total: number;
+  wins: number;
+  losses: number;
+}
+
+/** One player's rank in a full standings table (dashboard league cards). */
+export function playerStandingFromRows(
+  rows: readonly StandingsPreviewRow[],
   playerId: string,
-): Promise<{ rank: number; total: number; wins: number; losses: number } | null> {
-  const standings = await loadLeagueStandings(seasonId);
-  const index = standings.findIndex((s) => s.player_id === playerId);
-  if (index === -1) return null;
-  const row = standings[index];
-  return {
-    rank: index + 1,
-    total: standings.length,
-    wins: row.wins,
-    losses: row.losses,
-  };
+): PlayerStandingSnapshot | null {
+  const row = rows.find((r) => r.player_id === playerId);
+  if (!row) return null;
+  return { rank: row.rank, total: rows.length, wins: row.wins, losses: row.losses };
 }
