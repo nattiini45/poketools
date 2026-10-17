@@ -5,9 +5,9 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "predev": "node scripts/generate-placeholder-avatars.mjs --quiet",
+    "predev": "node scripts/mirror-private-overlay.mjs && node scripts/generate-placeholder-avatars.mjs --quiet",
     "dev": "next dev",
-    "prebuild": "node scripts/fetch-private-assets.mjs && node scripts/generate-placeholder-avatars.mjs --quiet",
+    "prebuild": "node scripts/fetch-private-assets.mjs && node scripts/mirror-private-overlay.mjs && node scripts/generate-placeholder-avatars.mjs --quiet",
     "build": "next build",
     "assets:placeholders": "node scripts/generate-placeholder-avatars.mjs",
     "assets:fetch": "node scripts/fetch-private-assets.mjs",
