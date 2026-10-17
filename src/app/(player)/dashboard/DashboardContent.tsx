@@ -4,9 +4,11 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import type { Player } from '@/types/player';
 import type { MatchWithPlayers } from '@/types/match';
-import type { Team } from '@/types/team';
 import type { TournamentWithDetails } from '@/types/tournament';
-import type { SeasonWithDetails } from '@/types/season';
+import type { SeasonFormatType, SeasonStatus } from '@/types/season';
+import type { PlayerStandingSnapshot } from '@/lib/stats/standings-preview';
+import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
+import type { TeamUsed } from './teams-used';
 import { motion, staggerContainer, staggerItem } from '@/components/shared/motion';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
@@ -20,7 +22,7 @@ import RatingBadge from '@/components/gamification/RatingBadge';
 import type { PlayerRating } from '@/types/rating';
 import type { PlayerStreaks } from '@/types/streak';
 import { compareMatchesByScheduledAt } from '@/lib/match/compare-scheduled-at';
-import { useFormatter, useRequestTime, useT } from '@/i18n/client';
+import { useDataLocale, useFormatter, useRequestTime, useT } from '@/i18n/client';
 import type { Formatter } from '@/i18n/format';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
@@ -30,7 +32,10 @@ import { enumMessages } from '@/i18n/messages/enums';
 export interface LeagueStandingSnapshot {
   leagueId: string;
   leagueName: string;
-  snapshot: { rank: number; total: number; wins: number; losses: number } | null;
+  status: SeasonStatus;
+  formatType: SeasonFormatType;
+  participantCount: number;
+  snapshot: PlayerStandingSnapshot | null;
 }
 
 interface Props {
@@ -40,12 +45,11 @@ interface Props {
   customAvatarUrl?: string;
   initialPlayer: Player | null;
   initialMatches: MatchWithPlayers[];
-  initialTeams: Team[];
   initialTournaments: TournamentWithDetails[];
-  initialLeagues: SeasonWithDetails[];
   playerRating: PlayerRating | null;
   playerStreaks: PlayerStreaks | null;
   leagueStandings: LeagueStandingSnapshot[];
+  teamsUsed: TeamUsed[];
 }
 
 export type GreetingKey = 'morning' | 'afternoon' | 'evening';
@@ -78,16 +82,67 @@ function statusVariant(status: string): 'green' | 'yellow' | 'accent' | 'gray' {
 /** scheduled_at ASC with unscheduled matches last — mirrors getUpcomingMatches */
 const compareScheduledAt = compareMatchesByScheduledAt;
 
+/** History's "Teams used": the Pokémon brought per league and standalone tournament. */
+export function TeamsUsedList({ teamsUsed }: { teamsUsed: TeamUsed[] }) {
+  const t = useT(dashboardMessages);
+  const dataLocale = useDataLocale();
+  const table = useClientTable(teamsUsed, []);
+
+  if (teamsUsed.length === 0) {
+    return <p className="text-sm text-poke-text-muted py-2">{t('history.noTeamsUsed')}</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <TablePagination
+        page={table.page}
+        totalPages={table.totalPages}
+        perPage={table.perPage}
+        totalItems={table.totalItems}
+        onPageChange={table.setPage}
+        onPerPageChange={table.handlePerPageChange}
+      />
+      {table.pageRows.map((team) => (
+        <Card key={`${team.kind}:${team.id}`} variant="outlined" padding="sm" className="text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <Link
+              href={team.kind === 'league' ? `/leagues/${team.id}` : `/tournaments/${team.id}`}
+              className="font-heading font-semibold text-poke-text-primary truncate hover:text-poke-accent transition-colors"
+            >
+              {team.name}
+            </Link>
+            <Badge variant="gray" size="sm">
+              {team.kind === 'league' ? t('history.kindLeague') : t('history.kindTournament')}
+            </Badge>
+          </div>
+          <p className="text-xs text-poke-text-muted mt-1">
+            {t('history.pokemonCount', { count: team.pokemon.length })}
+          </p>
+          <ul className="flex flex-wrap gap-1.5 mt-2">
+            {team.pokemon.map((p) => (
+              <li
+                key={p.name}
+                className="rounded-poke-md border border-poke-border bg-poke-elevated px-2 py-0.5 text-xs text-poke-text-primary"
+              >
+                {t('history.brought', { name: localizeSpecies(p.name, dataLocale), count: p.brought })}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function DashboardContent({
   playerId, playerName, avatarUrl, customAvatarUrl,
   initialPlayer: _initialPlayer,
   initialMatches,
-  initialTeams,
   initialTournaments,
-  initialLeagues,
   playerRating,
   playerStreaks,
   leagueStandings,
+  teamsUsed,
 }: Props) {
   const t = useT(dashboardMessages);
   const tc = useT(commonMessages);
@@ -97,9 +152,7 @@ export default function DashboardContent({
   const requestTime = useRequestTime();
   const greeting = greetingKey(hourInZone(formatter, requestTime));
   const matches = initialMatches;
-  const teams = initialTeams;
   const tournaments = initialTournaments;
-  const leagues = initialLeagues;
 
   // Actionable: pending confirmation first, then scheduled|in_progress by scheduled_at
   const pendingConfirmation = matches.filter((m) => m.status === 'pending_confirmation');
@@ -119,19 +172,14 @@ export default function DashboardContent({
   ).length;
   const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
 
+  // League stages are tournaments too; they belong to their league's card.
   const standaloneTournaments = useMemo(
-    () => tournaments.filter((t) => t.season_id === null),
+    () => tournaments.filter((t) => !t.season_id),
     [tournaments],
   );
-  const allTournaments = useMemo(
-    () => [
-      ...leagues.map((l) => ({ kind: 'league' as const, item: l })),
-      ...standaloneTournaments.map((t) => ({ kind: 'tournament' as const, item: t })),
-    ],
-    [leagues, standaloneTournaments],
-  );
 
-  const tournamentsTable = useClientTable(allTournaments, []);
+  const leaguesTable = useClientTable(leagueStandings, []);
+  const tournamentsTable = useClientTable(standaloneTournaments, []);
   const matchesTable = useClientTable(recentMatches, []);
 
   return (
@@ -187,7 +235,7 @@ export default function DashboardContent({
               <p className="text-xs text-poke-text-muted font-heading uppercase tracking-wide">{t('stats.winRate')}</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-heading font-bold text-poke-text-primary">{teams.length}</p>
+              <p className="text-2xl font-heading font-bold text-poke-text-primary">{teamsUsed.length}</p>
               <p className="text-xs text-poke-text-muted font-heading uppercase tracking-wide">{t('stats.teams')}</p>
             </div>
             <div className="text-center flex flex-col items-center">
@@ -274,7 +322,7 @@ export default function DashboardContent({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <Section
             title={t('leagues.title')}
-            subtitle={t('leagues.standings', { count: leagueStandings.length })}
+            subtitle={t('leagues.count', { count: leagueStandings.length })}
             action={
               <Link href="/leagues">
                 <Button variant="ghost" size="sm">{t('leagues.allLeagues')}</Button>
@@ -285,14 +333,31 @@ export default function DashboardContent({
               <p className="text-sm text-poke-text-muted py-2">{t('leagues.empty')}</p>
             ) : (
               <div className="space-y-3">
-                {leagueStandings.map(({ leagueId, leagueName, snapshot }) => (
-                  <Card key={leagueId} variant="outlined" padding="sm" hover>
-                    <Link
-                      href={`/leagues/${leagueId}`}
-                      className="font-heading font-semibold text-poke-text-primary truncate block hover:text-poke-accent transition-colors"
-                    >
-                      {leagueName}
-                    </Link>
+                <TablePagination
+                  page={leaguesTable.page}
+                  totalPages={leaguesTable.totalPages}
+                  perPage={leaguesTable.perPage}
+                  totalItems={leaguesTable.totalItems}
+                  onPageChange={leaguesTable.setPage}
+                  onPerPageChange={leaguesTable.handlePerPageChange}
+                />
+                {leaguesTable.pageRows.map(({ leagueId, leagueName, status, formatType, participantCount, snapshot }) => (
+                  <Card key={leagueId} variant="outlined" padding="sm" hover className="text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <Link
+                        href={`/leagues/${leagueId}`}
+                        className="font-heading font-semibold text-poke-text-primary truncate hover:text-poke-accent transition-colors"
+                      >
+                        {leagueName}
+                      </Link>
+                      <Badge variant={statusVariant(status)} size="sm">
+                        {enumLabel(te, 'seasonStatus', status)}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-poke-text-muted">
+                      <span>{enumLabel(te, 'formatType', formatType)}</span>
+                      <span>{tc('units.players', { count: participantCount })}</span>
+                    </div>
                     {snapshot ? (
                       <p className="text-sm text-poke-text-secondary mt-1">
                         {t.rich('leagues.rank', {
@@ -308,7 +373,7 @@ export default function DashboardContent({
                       </p>
                     ) : (
                       <p className="text-xs text-poke-text-muted mt-1">
-                        {t('leagues.statsSoon')}
+                        {status === 'completed' ? t('leagues.noFinalStanding') : t('leagues.statsSoon')}
                       </p>
                     )}
                   </Card>
@@ -319,9 +384,9 @@ export default function DashboardContent({
 
           <Section
             title={t('tournaments.title')}
-            subtitle={t('tournaments.activeCount', { count: leagues.length + standaloneTournaments.length })}
+            subtitle={t('tournaments.count', { count: standaloneTournaments.length })}
           >
-              {allTournaments.length === 0 ? (
+              {standaloneTournaments.length === 0 ? (
                 <p className="text-sm text-poke-text-muted py-2">
                   {t('tournaments.empty')}
                 </p>
@@ -335,43 +400,24 @@ export default function DashboardContent({
                     onPageChange={tournamentsTable.setPage}
                     onPerPageChange={tournamentsTable.handlePerPageChange}
                   />
-                  {tournamentsTable.pageRows.map((entry) =>
-                    entry.kind === 'league' ? (
-                      <Link key={entry.item.id} href={`/leagues/${entry.item.id}`}>
-                        <Card variant="outlined" padding="sm" hover className="text-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-heading font-semibold text-poke-text-primary truncate">
-                              {entry.item.name}
-                            </span>
-                            <Badge variant={statusVariant(entry.item.status)} size="sm">
-                              {enumLabel(te, 'seasonStatus', entry.item.status)}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-poke-text-muted">
-                            <span>{enumLabel(te, 'formatType', entry.item.format_type)}</span>
-                            <span>{tc('units.players', { count: entry.item.participant_count })}</span>
-                          </div>
-                        </Card>
-                      </Link>
-                    ) : (
-                      <Link key={entry.item.id} href={`/tournaments/${entry.item.id}`}>
-                        <Card variant="outlined" padding="sm" hover className="text-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-heading font-semibold text-poke-text-primary truncate">
-                              {entry.item.name}
-                            </span>
-                            <Badge variant={statusVariant(entry.item.status)} size="sm">
-                              {enumLabel(te, 'tournamentStatus', entry.item.status)}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-poke-text-muted">
-                            <span>{enumLabel(te, 'bracketType', entry.item.bracket_type)}</span>
-                            <span>{tc('units.players', { count: entry.item.participant_count })}</span>
-                          </div>
-                        </Card>
-                      </Link>
-                    ),
-                  )}
+                  {tournamentsTable.pageRows.map((tournament) => (
+                    <Link key={tournament.id} href={`/tournaments/${tournament.id}`}>
+                      <Card variant="outlined" padding="sm" hover className="text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-heading font-semibold text-poke-text-primary truncate">
+                            {tournament.name}
+                          </span>
+                          <Badge variant={statusVariant(tournament.status)} size="sm">
+                            {enumLabel(te, 'tournamentStatus', tournament.status)}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-poke-text-muted">
+                          <span>{enumLabel(te, 'bracketType', tournament.bracket_type)}</span>
+                          <span>{tc('units.players', { count: tournament.participant_count })}</span>
+                        </div>
+                      </Card>
+                    </Link>
+                  ))}
                 </div>
               )}
           </Section>
@@ -382,7 +428,7 @@ export default function DashboardContent({
             title={t('history.title')}
             collapsible
             defaultCollapsed
-            subtitle={t('history.summary', { count: teams.length, wins, losses })}
+            subtitle={t('history.summary', { count: teamsUsed.length, wins, losses })}
           >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <div>
@@ -428,39 +474,12 @@ export default function DashboardContent({
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-secondary">{t('history.myTeams')}</h3>
+                <h3 className="text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-secondary">{t('history.teamsUsed')}</h3>
                 <Link href="/teambuilder">
-                  <Button variant="ghost" size="sm">{t('history.newTeam')}</Button>
+                  <Button variant="ghost" size="sm">{t('history.teambuilder')}</Button>
                 </Link>
               </div>
-          {teams.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-poke-text-muted mb-3">{t('history.noTeams')}</p>
-              <Link href="/teambuilder">
-                <Button variant="primary" size="sm">{t('history.createTeam')}</Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {teams.map((team) => (
-                <Link key={team.id} href={`/dashboard/team/${team.id}`}>
-                  <Card variant="outlined" padding="sm" hover>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-heading font-semibold text-poke-text-primary">
-                        {t('history.pokemonCount', { count: team.pokemon.length })}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {team.locked && <Badge variant="yellow" size="sm">{t('history.locked')}</Badge>}
-                        <span className="text-xs text-poke-text-muted">
-                          {formatter.instant(team.updated_at, 'date')}
-                        </span>
-                      </div>
-                    </div>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          )}
+              <TeamsUsedList teamsUsed={teamsUsed} />
             </div>
             </div>
           </Section>

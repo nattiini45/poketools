@@ -422,6 +422,59 @@ export async function getAllTimePlayerAggregates(
   return data.map(toPlayerAggregate);
 }
 
+/** One Pokémon a player brought in one league or tournament (from player_aggregates). */
+export interface PlayerScopeUsageRow {
+  scope_type: 'league' | 'tournament';
+  scope_id: string;
+  pokemon_name: string;
+  total_brought: number;
+}
+
+const PLAYER_SCOPE_USAGE_CHUNK = 1000;
+
+function playerScopeUsagePage(playerId: string, from: number, withCount: boolean) {
+  return supabase
+    .from('player_aggregates')
+    .select('id, scope_type, scope_id, pokemon_name, total_brought', withCount ? { count: 'exact' } : undefined)
+    .eq('player_id', playerId)
+    .in('scope_type', ['league', 'tournament'])
+    .gt('total_brought', 0)
+    // Unique tiebreaker, so no row repeats or vanishes between pages.
+    .order('id', { ascending: true })
+    .range(from, from + PLAYER_SCOPE_USAGE_CHUNK - 1);
+}
+
+/**
+ * Every Pokémon a player brought, per league and per tournament scope. Paged
+ * with `.range()` up to the exact count, so `max_rows` cannot truncate it.
+ * League-stage games appear under both their stage (tournament scope) and
+ * their league; callers decide which scope to show.
+ */
+export async function getPlayerScopeUsage(playerId: string): Promise<PlayerScopeUsageRow[]> {
+  const rows: PlayerScopeUsageRow[] = [];
+  let total: number | null = null;
+  let from = 0;
+  while (total === null || from < total) {
+    const { data, error, count } = await playerScopeUsagePage(playerId, from, total === null);
+
+    if (error) throw error;
+    const chunk = data ?? [];
+    if (total === null) total = count ?? chunk.length;
+    if (chunk.length === 0) break; // rows were deleted while paging
+    from += chunk.length;
+    for (const row of chunk) {
+      if ((row.scope_type !== 'league' && row.scope_type !== 'tournament') || row.scope_id === null) continue;
+      rows.push({
+        scope_type: row.scope_type,
+        scope_id: row.scope_id,
+        pokemon_name: row.pokemon_name,
+        total_brought: row.total_brought,
+      });
+    }
+  }
+  return rows;
+}
+
 /**
  * Get global kill rankings for specific Pokémon by name.
  * Returns { rank, total_ranked } for each requested name, plus total count.
