@@ -18,6 +18,11 @@ vi.mock('@/lib/auth/helpers', () => ({
   },
 }));
 
+vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
+  checkPublicRateLimit: vi.fn(async () => ({ allowed: true, remaining: 59, retryAfterSeconds: 0 })),
+}));
+
 vi.mock('@/lib/supabase/queries/teams', () => ({
   getTeamById: vi.fn(),
   getTeamByShareToken: vi.fn(),

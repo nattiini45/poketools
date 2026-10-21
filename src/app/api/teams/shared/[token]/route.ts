@@ -4,18 +4,24 @@ import type { ApiResult } from '@/types/api';
 import { getTeamByShareToken } from '@/lib/supabase/queries/teams';
 import { filterTeamForShare } from '@/lib/team/visibility';
 import { isValidUuid } from '@/lib/utils/uuid';
+import { checkPublicRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 
 /**
  * GET /api/teams/shared/[token]
  * Public: no auth required. The token itself is the authorization; only an
  * enabled link (`share_enabled_at` set) resolves, and the response is the
- * `SharedTeamView` allowlist (never the token).
+ * `SharedTeamView` allowlist (never the token). Rate-limited per client IP
+ * (60/min, fail open) before the token is looked at, so neither token holders
+ * nor well-formed guesses can spend unbounded Supabase queries.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
+    const rateResult = await checkPublicRateLimit('team-shared', req, { limit: 60, windowSeconds: 60 });
+    if (!rateResult.allowed) return rateLimitedResponse(rateResult.retryAfterSeconds);
+
     const { token } = await params;
 
     // Tokens are UUID v4 (`setTeamShareToken`): anything else cannot match.

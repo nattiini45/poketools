@@ -257,6 +257,29 @@ describe('POST /api/manual-result', () => {
     expect(payload.params).toEqual({ playerId: OUTSIDER });
   });
 
+  it('returns 400 and records nothing when the caller repeats their own stat block', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(match as never);
+    const ownBlock = validBody.pokemon_stats[0];
+    const body = { ...validBody, pokemon_stats: Array.from({ length: 100 }, () => ownBlock) };
+
+    const response = await POST(makeRequest(body));
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.code).toBe('validation_failed');
+    expect(recordGameResult).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 and records nothing for a duplicated player block within the two-block limit', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(match as never);
+    const ownBlock = validBody.pokemon_stats[0];
+
+    const response = await POST(makeRequest({ ...validBody, pokemon_stats: [ownBlock, ownBlock] }));
+
+    expect(response.status).toBe(400);
+    expect(recordGameResult).not.toHaveBeenCalled();
+  });
+
   // ---- happy path ----
 
   it('records the game result and returns 200', async () => {

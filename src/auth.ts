@@ -19,8 +19,40 @@ import { syncSpriteStyleCookieAtSignIn } from '@/lib/pkmn/sprite-style-signin.se
 import type { AuthProvider, SessionPlayer } from '@/types/auth';
 import type { Player } from '@/types/player';
 
-/** Cookie carrying a signed "link Discord to this player" intent (see /api/account/link-discord). */
-export const LINK_DISCORD_COOKIE = '__poketools_link_discord';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+/**
+ * Cookie carrying a signed "link Discord to this player" intent (see
+ * /api/account/link-discord). In production it takes the `__Host-` prefix, so
+ * the browser only accepts it Secure, host-only and on path `/` (a sibling
+ * subdomain cannot plant one). `__Host-` needs Secure, which dev on
+ * http://localhost lacks, so dev keeps an unprefixed name.
+ */
+export const LINK_DISCORD_COOKIE = IS_PRODUCTION
+  ? '__Host-poketools_link_discord'
+  : 'poketools_link_discord';
+
+type CookieStore = Awaited<ReturnType<typeof cookies>>;
+
+/**
+ * Expires the link intent. The deletion repeats the cookie's path and Secure
+ * flag: a browser ignores a `__Host-` Set-Cookie that is not Secure.
+ */
+function clearLinkIntent(cookieStore: CookieStore): void {
+  cookieStore.delete({ name: LINK_DISCORD_COOKIE, path: '/', secure: IS_PRODUCTION });
+}
+
+/**
+ * Player id of the live session on the current request, or null. A link
+ * intent is honoured only for the player who is still signed in (the token
+ * alone is a bearer credential that can outlive the session that minted it).
+ * Declared with an explicit return type so the callback that calls it does
+ * not make `auth`'s inferred type circular.
+ */
+async function currentSessionPlayerId(): Promise<string | null> {
+  const session = await auth();
+  return session?.player?.playerId ?? null;
+}
 
 /**
  * How long the player copy inside the session JWT is trusted before the jwt
@@ -86,17 +118,22 @@ interface AuthIdentity {
   provider: AuthProvider;
   /** Discord snowflake or Supabase auth user UUID */
   id: string;
-  /** Verified email (credentials provider only) */
+  /**
+   * GoTrue-confirmed sign-in email (credentials provider only); confirmation
+   * is enforced only by the project's Confirm email setting.
+   */
   email?: string | null;
 }
 
 function isSuperadminIdentity(identity: AuthIdentity): boolean {
   if (identity.provider === 'credentials') {
-    const superadminEmail = process.env.SUPERADMIN_EMAIL;
+    // Same normalization as `isReservedSuperadminEmail` in
+    // `@/lib/auth/helpers` (not imported: helpers imports this module).
+    const superadminEmail = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();
     return (
       !!superadminEmail &&
-      !!identity.email &&
-      identity.email.toLowerCase() === superadminEmail.toLowerCase()
+      typeof identity.email === 'string' &&
+      identity.email.trim().toLowerCase() === superadminEmail
     );
   }
   const superadminId = process.env.SUPERADMIN_DISCORD_ID;
@@ -196,11 +233,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!intent) return true;
 
       // Single-use: always consume the intent, even on failure
-      cookieStore.delete(LINK_DISCORD_COOKIE);
+      clearLinkIntent(cookieStore);
 
       const playerId = verifyLinkToken(intent.value, requireEnv('NEXTAUTH_SECRET'));
       if (!playerId) {
         // Expired/forged intent — abort instead of silently creating a second player
+        return '/auth/error?error=LinkExpired';
+      }
+
+      // The intent binds only a player id. Honour it only while that player's
+      // session is still live on this browser, so a leftover or planted
+      // intent cannot attach someone else's Discord to the minting player.
+      let sessionPlayerId: string | null;
+      try {
+        sessionPlayerId = await currentSessionPlayerId();
+      } catch (err) {
+        console.warn('[auth] discord link session check failed:', err instanceof Error ? err.message : String(err));
+        return '/auth/error?error=Default';
+      }
+      if (sessionPlayerId !== playerId) {
         return '/auth/error?error=LinkExpired';
       }
 
@@ -328,6 +379,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.player = token.player ?? null;
       session.provider = token.provider ?? 'discord';
       return session;
+    },
+  },
+
+  events: {
+    // A pending link intent ends with the session that minted it.
+    async signOut() {
+      clearLinkIntent(await cookies());
     },
   },
 

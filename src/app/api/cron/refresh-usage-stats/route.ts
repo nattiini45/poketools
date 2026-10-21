@@ -13,7 +13,7 @@ import { importAllStats } from '@/lib/smogon/import-stats';
 import { importAllSets } from '@/lib/smogon/import-sets';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { expirePublicTags, publicTags } from '@/lib/revalidation';
-import { timingSafeCompare } from '@/lib/utils/crypto';
+import { secretsEqual } from '@/lib/utils/crypto';
 import type { ApiResult } from '@/types/api';
 
 export const maxDuration = 300;
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   if (
     !authHeader ||
     !authHeader.startsWith('Bearer ') ||
-    !timingSafeCompare(authHeader.slice(7), cronSecret)
+    !secretsEqual(authHeader.slice(7), cronSecret)
   ) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Unauthorized', code: 'cron_unauthorized' },

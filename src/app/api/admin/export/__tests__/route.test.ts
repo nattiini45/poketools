@@ -61,6 +61,22 @@ describe('POST /api/admin/export', () => {
     expect(limitMock).toHaveBeenCalledWith(10);
   });
 
+  it('neutralizes formula-leading cells in CSV exports', async () => {
+    limitMock.mockResolvedValueOnce({
+      data: [{ name: 'Ash', ps_username: '=1+1', rating_delta: -5 }],
+      error: null,
+    });
+
+    const res = await POST(request({ resource: 'players', format: 'csv', limit: 10 }));
+    const text = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(text).toContain('"\'=1+1"');
+    expect(text).toContain('"-5"');
+    const cells = text.split('\n').flatMap((line) => line.split(','));
+    expect(cells.some((cell) => cell.startsWith('"='))).toBe(false);
+  });
+
   it('returns 429 when export rate limit is exhausted', async () => {
     vi.mocked(checkAndRecordAdminExport).mockResolvedValueOnce({
       allowed: false,

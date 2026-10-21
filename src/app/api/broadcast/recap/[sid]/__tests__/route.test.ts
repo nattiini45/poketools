@@ -27,7 +27,14 @@ vi.mock('@/lib/api/error-response', () => ({
   safeErrorResponse: vi.fn((_err: unknown, fallback: string) => NextResponse.json({ success: false, error: fallback }, { status: 500 })),
 }));
 
+// The limiter decision is mocked; the 429 body comes from the real `rateLimitedResponse`.
+vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
+  checkPublicRateLimit: vi.fn(async () => ({ allowed: true, remaining: 29, retryAfterSeconds: 0 })),
+}));
+
 import { GET } from '../route';
+import { checkPublicRateLimit } from '@/lib/utils/rate-limit';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -39,8 +46,22 @@ import { makeRequest, makeParams } from '@/lib/__tests__/helpers/api-request';
 // ── Test data ─────────────────────────────────────────────────────────
 
 const mockSeason = { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Season One' };
-const mockTournament = { id: '22222222-2222-4222-8222-222222222222', name: 'Round Robin' };
-const mockRound = { id: '33333333-3333-4333-8333-333333333333', name: 'Week 1', round_number: 1 };
+const mockTournament = {
+  id: '22222222-2222-4222-8222-222222222222',
+  name: 'Round Robin',
+  season_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+};
+const mockRound = {
+  id: '33333333-3333-4333-8333-333333333333',
+  name: 'Week 1',
+  round_number: 1,
+  tournament_id: '22222222-2222-4222-8222-222222222222',
+};
+const validQuery = {
+  tournament_id: '22222222-2222-4222-8222-222222222222',
+  round_id: '33333333-3333-4333-8333-333333333333',
+};
+const SID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const mockRecap = {
   matches: [],
   stat_leaders: [],
@@ -193,6 +214,64 @@ describe('GET /api/broadcast/recap/[sid]', () => {
     expect(res.status).toBe(200);
     expect(resolveContentLocale).toHaveBeenCalledWith({ seasonId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' });
     expect(composeWeeklyRecap).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en' }));
+  });
+
+  it('returns 404 tournament_not_found when the tournament belongs to another season', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue(mockSeason as never);
+    vi.mocked(getTournamentById).mockResolvedValue({
+      ...mockTournament,
+      season_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    } as never);
+    vi.mocked(getRoundById).mockResolvedValue(mockRound as never);
+
+    const res = await GET(makeRequest(undefined, validQuery), { params: makeParams({ sid: SID }) });
+    const json = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(json.code).toBe('tournament_not_found');
+    expect(composeWeeklyRecap).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 round_not_found when the round belongs to another tournament', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue(mockSeason as never);
+    vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
+    vi.mocked(getRoundById).mockResolvedValue({
+      ...mockRound,
+      tournament_id: '44444444-4444-4444-8444-444444444444',
+    } as never);
+
+    const res = await GET(makeRequest(undefined, validQuery), { params: makeParams({ sid: SID }) });
+    const json = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(json.code).toBe('round_not_found');
+    expect(composeWeeklyRecap).not.toHaveBeenCalled();
+  });
+
+  it('returns 429 with Retry-After when the per-IP limit is exhausted', async () => {
+    vi.mocked(checkPublicRateLimit).mockResolvedValueOnce({ allowed: false, remaining: 0, retryAfterSeconds: 42 });
+
+    const res = await GET(makeRequest(undefined, validQuery), { params: makeParams({ sid: SID }) });
+    const json = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('42');
+    expect(json.code).toBe('rate_limited');
+    expect(checkPublicRateLimit).toHaveBeenCalledWith('broadcast-recap', expect.anything(), { limit: 30, windowSeconds: 60 });
+    expect(getSeasonById).not.toHaveBeenCalled();
+    expect(composeWeeklyRecap).not.toHaveBeenCalled();
+  });
+
+  it('sets an edge Cache-Control header on a 200', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue(mockSeason as never);
+    vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
+    vi.mocked(getRoundById).mockResolvedValue(mockRound as never);
+    vi.mocked(composeWeeklyRecap).mockResolvedValue(mockRecap as never);
+
+    const res = await GET(makeRequest(undefined, validQuery), { params: makeParams({ sid: SID }) });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('public, s-maxage=30, stale-while-revalidate=60');
   });
 
   it('delegates to safeErrorResponse on thrown error', async () => {

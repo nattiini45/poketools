@@ -15,7 +15,7 @@ import {
   type FinalizeWorklistCursor,
 } from '@/lib/supabase/queries/matches';
 import { logAuditEvent } from '@/lib/audit/log';
-import { timingSafeCompare } from '@/lib/utils/crypto';
+import { secretsEqual } from '@/lib/utils/crypto';
 import { formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
 
@@ -125,7 +125,7 @@ async function handle(request: Request) {
     );
   }
 
-  if (!authHeader || !authHeader.startsWith('Bearer ') || !timingSafeCompare(authHeader.slice(7), cronSecret)) {
+  if (!authHeader || !authHeader.startsWith('Bearer ') || !secretsEqual(authHeader.slice(7), cronSecret)) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Unauthorized', code: 'cron_unauthorized' },
       { status: 401 }

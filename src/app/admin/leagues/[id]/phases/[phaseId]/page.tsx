@@ -3,7 +3,9 @@ import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
-import { getSession, isAdmin } from '@/lib/auth/helpers';
+import { getLiveAccess } from '@/lib/auth/helpers';
+import { isValidUuid } from '@/lib/utils/uuid';
+import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
@@ -30,25 +32,50 @@ interface PageProps {
   params: Promise<{ id: string; phaseId: string }>;
 }
 
+/**
+ * `/admin/leagues/[id]/phases/[phaseId]` — one phase's admin page. Gated per league from
+ * `getLiveAccess()` before any phase read: a non-admin gets only `AdminGuard`, an admin of
+ * another league a forbidden notice; site admins and this league's admins pass. Malformed ids are a 404.
+ */
 export default async function AdminLeaguePhasePage({ params }: PageProps) {
   const { id: seasonId, phaseId } = await params;
-  const [league, tournament, rounds, rulesets, leagueHasGroups, session, t, tEnum, tCommon] = await Promise.all([
+  // A route id that is not a uuid names no league or phase: 404 before any read (it would reach Postgres and 500).
+  if (!isValidUuid(seasonId) || !isValidUuid(phaseId)) notFound();
+  const [access, t, tEnum, tCommon] = await Promise.all([
+    getLiveAccess(),
+    getT(leagueAdminMessages),
+    getT(enumMessages),
+    getT(commonMessages),
+  ]);
+
+  // Not an admin (or signed out): AdminGuard renders the denial or redirects; no phase data is read.
+  if (!access?.isAnyAdmin) return <AdminGuard>{null}</AdminGuard>;
+  // An admin, but of another league: the same per-league check as the write APIs, before any phase read.
+  if (
+    !access.isSiteAdmin &&
+    !(access.player && (await isResourceAdminFor(access.player.playerId, 'season', seasonId)))
+  ) {
+    return (
+      <AdminGuard>
+        <p className="p-8 text-center text-poke-text-secondary">{t('phasePage.forbidden')}</p>
+      </AdminGuard>
+    );
+  }
+
+  const [league, tournament, rounds, rulesets, leagueHasGroups] = await Promise.all([
     getSeasonById(seasonId),
     getTournamentWithDetails(phaseId),
     getRoundsByTournament(phaseId),
     listRulesets(),
     // A league with groups owns its phases' groups (the panel shows them read-only).
     seasonHasGroups(seasonId),
-    getSession(),
-    getT(leagueAdminMessages),
-    getT(enumMessages),
-    getT(commonMessages),
   ]);
 
   if (!league || !tournament || tournament.season_id !== seasonId) notFound();
 
   const phase = buildLeaguePhase(tournament, rounds);
-  const isSiteAdmin = isAdmin(session);
+  // Phase delete is site-admin only, decided from the live row (never the session copy).
+  const isSiteAdmin = access.isSiteAdmin;
   const isNewPhase = phase.participant_count > 0 && phase.rounds_total === 0;
 
   return (

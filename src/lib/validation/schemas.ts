@@ -437,10 +437,50 @@ const pokemonStatSchema = z.object({
   turns_active: z.number().int().min(0).default(0),
 });
 
-const playerPokemonStatsSchema = z.object({
-  player_id: uuid,
-  pokemon: z.array(pokemonStatSchema).min(1).max(6),
-});
+const playerPokemonStatsSchema = z
+  .object({
+    player_id: uuid,
+    pokemon: z.array(pokemonStatSchema).min(1).max(6),
+  })
+  .superRefine((block, ctx) => {
+    // A team brings each Pokémon once; a repeated row would be written (and
+    // counted toward evolution progress) once per copy.
+    const seen = new Set<string>();
+    block.pokemon.forEach((poke, i) => {
+      const key = poke.pokemon_name.trim().toLowerCase();
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Each Pokémon may appear only once per player',
+          path: ['pokemon', i, 'pokemon_name'],
+        });
+      }
+      seen.add(key);
+    });
+  });
+
+/**
+ * One game's per-player stat blocks: at most one block per player of the
+ * two-player match. The route flattens every row into battle stats, so a
+ * repeated block would multiply that player's recorded KOs and progress.
+ */
+const gamePokemonStatsSchema = z
+  .array(playerPokemonStatsSchema)
+  .min(1)
+  .max(2)
+  .superRefine((blocks, ctx) => {
+    const seen = new Set<string>();
+    blocks.forEach((block, i) => {
+      if (seen.has(block.player_id)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Each player may have only one stat block',
+          path: [i, 'player_id'],
+        });
+      }
+      seen.add(block.player_id);
+    });
+  });
 
 export const parseReplaySchema = z.object({
   match_id: uuid,
@@ -483,7 +523,7 @@ export const manualResultMomentSchema = z.object({
 export const manualResultSchema = z.object({
   match_id: uuid,
   winner_id: uuid,
-  pokemon_stats: z.array(playerPokemonStatsSchema).min(1),
+  pokemon_stats: gamePokemonStatsSchema,
   screenshot_url: z.string().url().max(500).optional(),
   moments: z.array(manualResultMomentSchema).max(MANUAL_RESULT_MAX_MOMENTS).optional(),
 });
@@ -500,7 +540,7 @@ export const replayPreviewSchema = z.object({
 export const replayImportSchema = z.object({
   replay_url: z.string().trim().min(1).max(500),
   winner_id: uuid,
-  pokemon_stats: z.array(playerPokemonStatsSchema).min(1),
+  pokemon_stats: gamePokemonStatsSchema,
 });
 
 export const confirmMatchSchema = z.object({
@@ -903,8 +943,11 @@ export const validateSetSchema = z.object({
   moves: z.array(z.string().trim().max(FIELD_LIMITS.NAME)).max(4).optional(),
 });
 
+/** Max characters of team text, whether pasted or fetched from pokepast.es. */
+export const IMPORT_TEAM_TEXT_MAX = 50_000;
+
 export const importTeamSchema = z.object({
-  text: z.string().max(50000).optional(),
+  text: z.string().max(IMPORT_TEAM_TEXT_MAX).optional(),
   url: z.string().url().max(500).optional(),
   ruleset_id: uuid.optional(),
 }).refine((data) => data.text || data.url, {
