@@ -5,6 +5,7 @@ import type en from './en';
 const P = formatPack.messages.de.leagueAdminSeasonPage;
 
 export default defineDe<typeof en>()({
+  forbidden: 'Nur Admins dieser Liga können ihre Admin-Seite öffnen.',
   header: {
     subtitle: '{format}',
     subtitleWithRuleset: '{format} · {ruleset}',

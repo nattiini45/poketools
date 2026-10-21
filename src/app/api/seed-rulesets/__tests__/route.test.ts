@@ -130,6 +130,8 @@ describe('POST /api/seed-rulesets', () => {
     process.env.BOOTSTRAP_MODE_ENABLED = 'true';
     process.env.BOOTSTRAP_SECRET = 'correct-secret';
 
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     const req = makeRequest({ secret: 'wrong-secret' });
     const res = await POST(req);
     const json = await res.json();
@@ -137,6 +139,13 @@ describe('POST /api/seed-rulesets', () => {
     expect(res.status).toBe(403);
     expect(json.error).toBe('Invalid or missing bootstrap secret.');
     expect(json.code).toBe('seed_rulesets_secret_invalid');
+    // The rejection leaves a value-free server-side trace.
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const logged = warnSpy.mock.calls.flat().map(String).join(' ');
+    expect(logged).toContain('[seed-rulesets]');
+    expect(logged).not.toContain('correct-secret');
+    expect(logged).not.toContain('wrong-secret');
+    warnSpy.mockRestore();
   });
 
   it('returns 403 when bootstrap secret is missing from body', async () => {
@@ -185,7 +194,7 @@ describe('POST /api/seed-rulesets', () => {
     const res = await POST(makeRequest({ secret: 'guess' }));
 
     expect(res.status).toBe(429);
-    expect(checkRateLimit).toHaveBeenCalledWith('bootstrap', '127.0.0.1', { limit: 5, windowSeconds: 900 });
+    expect(checkRateLimit).toHaveBeenCalledWith('bootstrap', '127.0.0.1', { limit: 5, windowSeconds: 900, failMode: 'closed' });
   });
 
   it('refuses an invalid BOOTSTRAP_MODE_ENABLED value loudly (misconfiguration, not a silent off)', async () => {

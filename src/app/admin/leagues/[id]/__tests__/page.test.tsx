@@ -11,6 +11,7 @@ import { LEAGUE_ADMIN_TABS, type LeagueAdminTab } from '@/lib/league-admin/tabs'
 const mocks = vi.hoisted(() => ({
   locale: 'en' as 'en' | 'de',
   getLiveAccess: vi.fn(),
+  isResourceAdminFor: vi.fn(),
   getSeasonWithDetails: vi.fn(),
   getSeasonParticipants: vi.fn(),
   listRulesets: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonWithDetails: mocks.getSeasonWithDetails,
   getSeasonParticipants: mocks.getSeasonParticipants,
 }));
+vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: mocks.isResourceAdminFor }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
 vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolBySeason: mocks.getDraftPoolBySeason,
@@ -234,13 +236,14 @@ const PARTICIPANTS = [
 ];
 
 function liveAccess(overrides: Partial<{ isSiteAdmin: boolean; isAnyAdmin: boolean }> = {}) {
-  return { player: { id: 'u1' }, isSiteAdmin: true, isAnyAdmin: true, isCreator: true, ...overrides };
+  return { player: { playerId: 'u1' }, isSiteAdmin: true, isAnyAdmin: true, isCreator: true, ...overrides };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.locale = 'en';
   mocks.getLiveAccess.mockResolvedValue(liveAccess());
+  mocks.isResourceAdminFor.mockResolvedValue(true);
   mocks.getSeasonWithDetails.mockResolvedValue(season());
   mocks.getSeasonParticipants.mockResolvedValue(PARTICIPANTS);
   mocks.listRulesets.mockResolvedValue([]);
@@ -405,6 +408,30 @@ describe('site-admin parts follow the live access check', () => {
     expect(visibleText(danger)).toContain('Only site admins can delete a league.');
     // The cascade list is for the people who can delete.
     expect(visibleText(danger)).not.toContain('together with');
+    expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('u1', 'season', S1);
+  });
+
+  it('an admin of another league: the forbidden notice, no header, tabs or tab data', async () => {
+    for (const tab of LEAGUE_ADMIN_TABS) {
+      vi.clearAllMocks();
+      mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+      mocks.isResourceAdminFor.mockResolvedValue(false);
+      mocks.getSeasonWithDetails.mockResolvedValue(season());
+      const tree = await render(tab);
+      expect((tree as El).type, tab).toBe(AdminGuard);
+      expect(visibleText(tree), tab).toBe('Only admins of this league can open its admin page.');
+      expect(findByType(tree, LeagueStatusControl), tab).toHaveLength(0);
+      expect(findByType(tree, LeagueAdminTabs), tab).toHaveLength(0);
+      expect(tabReads(), tab).toEqual([]);
+      expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('u1', 'season', S1);
+    }
+    mocks.locale = 'de';
+    expect(visibleText(await render())).toBe('Nur Admins dieser Liga können ihre Admin-Seite öffnen.');
+  });
+
+  it('a site admin skips the per-league check', async () => {
+    await render('settings');
+    expect(mocks.isResourceAdminFor).not.toHaveBeenCalled();
   });
 
   it('the delete hint lists what the delete removes, what refuses it and what it keeps (en + de)', async () => {

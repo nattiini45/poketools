@@ -71,4 +71,21 @@ Project: your Supabase project (`<project-ref>`)
   (no DB-level FK — an `ON DELETE SET NULL` could violate the CHECK).
 - Superadmin: `SUPERADMIN_DISCORD_ID` matches Discord sessions only;
   optional `SUPERADMIN_EMAIL` matches email sessions only.
+  Both email checks trim and lowercase before comparing
+  (`isReservedSuperadminEmail` in `src/lib/auth/helpers.ts`). The match is on
+  the GoTrue-confirmed sign-in email; confirmation is enforced only by the
+  project's Confirm email setting.
+- `SUPERADMIN_EMAIL` can be linked only from the `SUPERADMIN_DISCORD_ID`
+  account: `POST /api/account/link-email` refuses it for any other player (or
+  for everyone when `SUPERADMIN_DISCORD_ID` is unset) with the same generic
+  `email_login_create_failed` 400 a GoTrue client error returns, so the route
+  is not an oracle for the reserved address (audit CF-02).
+- The Discord link intent cookie is single-use and binds only a player id
+  (HMAC of `playerId.exp`, 10-minute TTL). The `signIn` callback honours it
+  only while the player who minted it still has a live session on that
+  browser (`auth()` must resolve to the same `playerId`); otherwise it
+  answers `LinkExpired` and links nothing. Signing out clears a pending
+  intent (`events.signOut`). In production the cookie is
+  `__Host-poketools_link_discord` (Secure, host-only, path `/`); dev on
+  http://localhost uses the unprefixed `poketools_link_discord`.
 - Unlink and change-email flows are not implemented (link-only v1).

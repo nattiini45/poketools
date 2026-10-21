@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -56,9 +56,16 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
 }
 
 describe('POST /api/import-team', () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequirePlayer.mockResolvedValue({ playerId: 'p-1' });
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
   });
 
   it('parses team from text successfully', async () => {
@@ -172,6 +179,106 @@ describe('POST /api/import-team', () => {
       expect(res.status).toBe(502);
       expect(json.error).toBe('Failed to fetch from pokepast.es');
       expect(json.code).toBe('team_import_pokepaste_fetch_failed');
+      expect(errorSpy).toHaveBeenCalledWith('[api/import-team] pokepast.es returned HTTP 503 for paste abc123');
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('fetches pokepast.es with a timeout signal and no caching', async () => {
+    mockParseTeam.mockReturnValue([{ species: 'Garchomp' }]);
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('Garchomp', { status: 200 }));
+    try {
+      const res = await POST(makeRequest({ url: 'https://pokepast.es/abc123' }));
+
+      expect(res.status).toBe(200);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(url).toBe('https://pokepast.es/abc123/raw');
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      expect(init?.cache).toBe('no-store');
+      expect(mockParseTeam).toHaveBeenCalledWith('Garchomp');
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('returns 502 fetch_failed when the pokepast.es fetch times out', async () => {
+    const timeout = new DOMException('The operation timed out.', 'TimeoutError');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(timeout);
+    try {
+      const res = await POST(makeRequest({ url: 'https://pokepast.es/abc123' }));
+      const json = await res.json();
+
+      expect(res.status).toBe(502);
+      expect(json.code).toBe('team_import_pokepaste_fetch_failed');
+      expect(mockParseTeam).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[api/import-team] pokepast.es fetch failed (network/timeout) for paste abc123:',
+        timeout
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('returns 502 without parsing when pokepast.es declares an oversized Content-Length', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Garchomp', { status: 200, headers: { 'content-length': '50001' } })
+    );
+    try {
+      const res = await POST(makeRequest({ url: 'https://pokepast.es/abc123' }));
+      const json = await res.json();
+
+      expect(res.status).toBe(502);
+      expect(json.code).toBe('team_import_pokepaste_fetch_failed');
+      expect(mockParseTeam).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[api/import-team] pokepast.es paste abc123 declares Content-Length 50001 > 50000'
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('returns 502 without parsing when the pokepast.es body is oversized', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('x'.repeat(50_001), { status: 200 }));
+    try {
+      const res = await POST(makeRequest({ url: 'https://pokepast.es/abc123' }));
+      const json = await res.json();
+
+      expect(res.status).toBe(502);
+      expect(json.code).toBe('team_import_pokepaste_fetch_failed');
+      expect(mockParseTeam).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith('[api/import-team] pokepast.es paste abc123 body is 50001 chars > 50000');
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('returns 502 and logs the error when the pokepast.es body cannot be read', async () => {
+    const readError = new Error('stream reset');
+    const body = new ReadableStream({
+      pull(controller) {
+        controller.error(readError);
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
+    try {
+      const res = await POST(makeRequest({ url: 'https://pokepast.es/abc123' }));
+      const json = await res.json();
+
+      expect(res.status).toBe(502);
+      expect(json.code).toBe('team_import_pokepaste_fetch_failed');
+      expect(mockParseTeam).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[api/import-team] pokepast.es body read failed for paste abc123:',
+        readError
+      );
     } finally {
       fetchSpy.mockRestore();
     }

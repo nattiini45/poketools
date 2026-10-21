@@ -8,6 +8,52 @@ import { validateTeam } from '@/lib/pkmn/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
 import type { ImportTeamResponse } from '@/types/team';
+import { IMPORT_TEAM_TEXT_MAX } from '@/lib/validation/schemas';
+
+const POKEPASTE_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Fetches a paste's raw text, bounded in time and size like pasted text.
+ * Returns null on network error, timeout, non-2xx, or an oversized body;
+ * each cause is logged distinctly (with the paste id) before returning.
+ */
+async function fetchPokepaste(pasteId: string): Promise<string | null> {
+  let res: Response;
+  try {
+    res = await fetch(`https://pokepast.es/${pasteId}/raw`, {
+      signal: AbortSignal.timeout(POKEPASTE_FETCH_TIMEOUT_MS),
+      cache: 'no-store',
+    });
+  } catch (err) {
+    console.error(`[api/import-team] pokepast.es fetch failed (network/timeout) for paste ${pasteId}:`, err);
+    return null;
+  }
+  if (!res.ok) {
+    console.error(`[api/import-team] pokepast.es returned HTTP ${res.status} for paste ${pasteId}`);
+    return null;
+  }
+  const declared = parseInt(res.headers.get('content-length') ?? '0', 10);
+  if (declared > IMPORT_TEAM_TEXT_MAX) {
+    console.error(
+      `[api/import-team] pokepast.es paste ${pasteId} declares Content-Length ${declared} > ${IMPORT_TEAM_TEXT_MAX}`
+    );
+    return null;
+  }
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (err) {
+    console.error(`[api/import-team] pokepast.es body read failed for paste ${pasteId}:`, err);
+    return null;
+  }
+  if (text.length > IMPORT_TEAM_TEXT_MAX) {
+    console.error(
+      `[api/import-team] pokepast.es paste ${pasteId} body is ${text.length} chars > ${IMPORT_TEAM_TEXT_MAX}`
+    );
+    return null;
+  }
+  return text;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,14 +86,14 @@ export async function POST(request: NextRequest) {
         );
       }
       const pasteId = pokepastMatch[1];
-      const res = await fetch(`https://pokepast.es/${pasteId}/raw`);
-      if (!res.ok) {
+      const fetched = await fetchPokepaste(pasteId);
+      if (fetched === null) {
         return NextResponse.json<ApiResult<never>>(
           { success: false, error: 'Failed to fetch from pokepast.es', code: 'team_import_pokepaste_fetch_failed' },
           { status: 502 }
         );
       }
-      rawText = await res.text();
+      rawText = fetched;
     }
 
     // Parse the team

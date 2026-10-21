@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requirePlayer } from '@/lib/auth/helpers';
+import { isReservedSuperadminEmail, requirePlayer } from '@/lib/auth/helpers';
 import { getPlayerById, linkAuthUserToPlayer } from '@/lib/supabase/queries/players';
 import { createAuthClient } from '@/lib/supabase/auth-client';
 import { safeErrorResponse } from '@/lib/api/error-response';
@@ -17,7 +17,17 @@ import type { ApiResult } from '@/types/api';
  *
  * Explicit duplicate-email error is acceptable here: the caller is
  * authenticated, unlike the public signup route.
+ *
+ * SUPERADMIN_EMAIL is reserved: only the SUPERADMIN_DISCORD_ID player may
+ * link it (CF-02). Anyone else gets the generic create-failed 400, so the
+ * route does not reveal which address is reserved.
  */
+const CREATE_FAILED_BODY: ApiResult<never> = {
+  success: false,
+  error: 'Could not create the email login. Check the email and password and try again.',
+  code: 'email_login_create_failed',
+};
+
 export async function POST(request: NextRequest) {
   try {
     const sessionPlayer = await requirePlayer();
@@ -45,6 +55,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const superadminDiscordId = process.env.SUPERADMIN_DISCORD_ID;
+    const isDiscordSuperadmin = !!superadminDiscordId && player.discord_id === superadminDiscordId;
+    if (isReservedSuperadminEmail(parsed.data.email) && !isDiscordSuperadmin) {
+      return NextResponse.json<ApiResult<never>>(CREATE_FAILED_BODY, { status: 400 });
+    }
+
     const client = createAuthClient();
     const { data, error } = await client.auth.signUp({
       email: parsed.data.email,
@@ -57,10 +73,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       if (error.status && error.status >= 400 && error.status < 500) {
-        return NextResponse.json<ApiResult<never>>(
-          { success: false, error: 'Could not create the email login. Check the email and password and try again.', code: 'email_login_create_failed' },
-          { status: 400 }
-        );
+        return NextResponse.json<ApiResult<never>>(CREATE_FAILED_BODY, { status: 400 });
       }
       throw error;
     }

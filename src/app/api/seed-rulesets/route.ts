@@ -11,8 +11,8 @@ import { checkRateLimit, getClientIp, rateLimitedResponse } from '@/lib/utils/ra
 import type { BaseFormat } from '@/types/ruleset';
 import type { ApiResult } from '@/types/api';
 
-/** Bootstrap-secret attempts per client IP; the same bucket and cap as `POST /api/bootstrap`. */
-const BOOTSTRAP_RATE_LIMIT = { limit: 5, windowSeconds: 15 * 60 };
+/** Bootstrap-secret attempts per client IP; the same bucket, cap and fail-closed mode as `POST /api/bootstrap`. */
+const BOOTSTRAP_RATE_LIMIT = { limit: 5, windowSeconds: 15 * 60, failMode: 'closed' } as const;
 
 /** The bootstrap body: only the secret is read; a missing one is refused as an invalid secret. */
 const seedBootstrapBodySchema = z.object({ secret: z.string().max(512).optional() });
@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
       const expectedSecret = readEnv(bootstrapEnvSchema).BOOTSTRAP_SECRET;
 
       if (!expectedSecret || !secret || !secretsEqual(secret, expectedSecret)) {
+        // Value-free: never log the submitted or the expected secret.
+        console.warn('[seed-rulesets] rejected an invalid bootstrap secret');
         return NextResponse.json<ApiResult<never>>(
           { success: false, error: 'Invalid or missing bootstrap secret.', code: 'seed_rulesets_secret_invalid' },
           { status: 403 }

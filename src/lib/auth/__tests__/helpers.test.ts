@@ -54,6 +54,7 @@ import {
   isAdmin,
   isCreator,
   isSuperadmin,
+  isReservedSuperadminEmail,
   isAnyAdmin,
   AuthError,
 } from '../helpers';
@@ -238,6 +239,41 @@ describe('isSuperadmin', () => {
   it('returns false for credentials session when SUPERADMIN_EMAIL is unset', () => {
     const session: Session = { ...makeSession(makePlayer()), provider: 'credentials' };
     expect(isSuperadmin(session)).toBe(false);
+  });
+});
+
+describe('isReservedSuperadminEmail', () => {
+  it('matches SUPERADMIN_EMAIL case-insensitively and ignoring surrounding whitespace', () => {
+    process.env.SUPERADMIN_EMAIL = '  Boss@Example.com ';
+    expect(isReservedSuperadminEmail('boss@example.com')).toBe(true);
+    expect(isReservedSuperadminEmail('  BOSS@EXAMPLE.COM	')).toBe(true);
+  });
+
+  it('does not match a different address', () => {
+    process.env.SUPERADMIN_EMAIL = 'boss@example.com';
+    expect(isReservedSuperadminEmail('boss2@example.com')).toBe(false);
+    expect(isReservedSuperadminEmail('')).toBe(false);
+    expect(isReservedSuperadminEmail(null)).toBe(false);
+    expect(isReservedSuperadminEmail(undefined)).toBe(false);
+  });
+
+  it('returns false when SUPERADMIN_EMAIL is unset or blank', () => {
+    expect(isReservedSuperadminEmail('boss@example.com')).toBe(false);
+    expect(isReservedSuperadminEmail('')).toBe(false);
+    process.env.SUPERADMIN_EMAIL = '   ';
+    expect(isReservedSuperadminEmail('')).toBe(false);
+    expect(isReservedSuperadminEmail('   ')).toBe(false);
+  });
+
+  it('isSuperadmin uses the same normalization for credentials sessions', () => {
+    process.env.SUPERADMIN_EMAIL = ' Boss@Example.com ';
+    const base = makeSession(makePlayer());
+    const session: Session = {
+      ...base,
+      provider: 'credentials',
+      user: { ...base.user, email: 'boss@example.com ' },
+    };
+    expect(isSuperadmin(session)).toBe(true);
   });
 });
 

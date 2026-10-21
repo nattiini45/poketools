@@ -94,7 +94,90 @@ describe('GET /api/proxy-image', () => {
     expect(body.code).toBe('proxy_url_not_allowed');
   });
 
+  it('returns 403 for an allowed host on a non-default port', async () => {
+    mockFetchSuccess();
+    const res = await GET(
+      makeRequest(undefined, { url: 'https://play.pokemonshowdown.com:8443/sprites/gen5/pikachu.png' }),
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.code).toBe('proxy_url_not_allowed');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 for an allowed host with embedded credentials', async () => {
+    mockFetchSuccess();
+    const res = await GET(
+      makeRequest(undefined, { url: 'https://user:pass@play.pokemonshowdown.com/sprites/gen5/pikachu.png' }),
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.code).toBe('proxy_url_not_allowed');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   // ── Happy path ─────────────────────────────────────────────────────
+
+  it('refuses upstream redirects instead of following them', async () => {
+    mockFetchSuccess('image/png');
+
+    await GET(makeRequest(undefined, { url: 'https://play.pokemonshowdown.com/sprites/gen5/pikachu.png' }));
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://play.pokemonshowdown.com/sprites/gen5/pikachu.png',
+      expect.objectContaining({ redirect: 'error' }),
+    );
+  });
+
+  it('fetches only the allowlisted origin plus the vetted path, never the caller query or fragment', async () => {
+    mockFetchSuccess('image/png');
+
+    await GET(
+      makeRequest(undefined, { url: 'https://play.pokemonshowdown.com/sprites/gen5/pikachu.png?x=1#frag' }),
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://play.pokemonshowdown.com/sprites/gen5/pikachu.png',
+      expect.anything(),
+    );
+  });
+
+  it.each([
+    'https://play.pokemonshowdown.com/sprites/%2e%2e/secret.png',
+    'https://play.pokemonshowdown.com/sprites/gen5//pikachu.png',
+    'https://play.pokemonshowdown.com/sprites/%E0%A4%A.png',
+  ])('refuses an empty, dot or malformed sprite path segment: %s', async (url) => {
+    mockFetchSuccess('image/png');
+
+    const res = await GET(makeRequest(undefined, { url }));
+
+    expect(res.status).toBe(403);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('re-encodes each sprite path segment so an encoded slash stays inside it', async () => {
+    mockFetchSuccess('image/png');
+
+    await GET(makeRequest(undefined, { url: 'https://img.pokemondb.net/sprites/home/normal/a%2Fb.png' }));
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://img.pokemondb.net/sprites/home/normal/a%2Fb.png',
+      expect.anything(),
+    );
+  });
+
+  it('accepts an image content type with parameters and returns the bare type', async () => {
+    mockFetchSuccess('image/png; charset=binary');
+
+    const res = await GET(
+      makeRequest(undefined, { url: 'https://play.pokemonshowdown.com/sprites/gen5/pikachu.png' }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('image/png');
+  });
 
   it('proxies an image from Showdown sprites', async () => {
     mockFetchSuccess('image/png');
@@ -185,6 +268,30 @@ describe('GET /api/proxy-image', () => {
     expect(res.status).toBe(502);
     expect(body.error).toContain('Upstream did not return an image');
     expect(body.code).toBe('proxy_upstream_not_image');
+  });
+
+  it('returns 502 for an SVG upstream response', async () => {
+    mockFetchSuccess('image/svg+xml');
+
+    const res = await GET(
+      makeRequest(undefined, { url: 'https://play.pokemonshowdown.com/sprites/gen5/pikachu.svg' }),
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(body.code).toBe('proxy_upstream_not_image');
+  });
+
+  it('returns 502 when the upstream redirects (fetch rejects the redirect)', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed: unexpected redirect'));
+
+    const res = await GET(
+      makeRequest(undefined, { url: 'https://play.pokemonshowdown.com/sprites/gen5/pikachu.png' }),
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(body.error).toContain('Proxy fetch failed');
   });
 
   it('returns 502 when fetch throws (network error)', async () => {

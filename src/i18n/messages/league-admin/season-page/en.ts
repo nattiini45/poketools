@@ -10,6 +10,8 @@ import { formatPack } from '@/lib/format-pack';
 const P = formatPack.messages.en.leagueAdminSeasonPage;
 
 export default {
+  /** An admin of another league opened this one's admin page. */
+  forbidden: 'Only admins of this league can open its admin page.',
   header: {
     /** `{format}` = enums `formatType`. */
     subtitle: '{format}',

@@ -54,3 +54,14 @@ regexes = [
   '''^route-standby-v\d+$''',
 ]
 targetRules = ["generic-api-key"]
+
+# Share-link route test fixture. generic-api-key fires on `const TOKEN = '<uuid>'`
+# in the GET /api/teams/shared/[token] test (925d1805): the value is a made-up
+# UUID v4 used as a share token in mocked queries, not a credential. Pinned to
+# that one test file and the exact value so a real secret there still fires.
+[[allowlists]]
+description = "Synthetic share-token UUID in the shared-team route test"
+condition = "AND"
+paths = ['''^src/app/api/teams/shared/\[token\]/__tests__/route\.test\.ts$''']
+regexes = ['''^3f2b8c1e-9a4d-4e6f-8b2a-7c5d1e0f9a3b$''']
+targetRules = ["generic-api-key"]
