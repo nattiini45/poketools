@@ -64,9 +64,18 @@ export function parseCsv(text: string): CsvParseResult {
   return { headers, rows };
 }
 
+// Cells a spreadsheet would read as a formula (OWASP CSV injection prefix set,
+// also after leading whitespace). Quoting is only CSV framing and does not
+// stop `"=HYPERLINK(...)"` from evaluating, so such cells get a `'` prefix.
+const FORMULA_PREFIX = /^\s*[=+\-@\t\r]/;
+
 function escapeCsvValue(value: unknown): string {
   if (value === null || value === undefined) return '';
-  const stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  let stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  // Numbers and booleans are not attacker text; keep e.g. -5 numeric.
+  if (typeof value !== 'number' && typeof value !== 'boolean' && typeof value !== 'bigint' && FORMULA_PREFIX.test(stringValue)) {
+    stringValue = `'${stringValue}`;
+  }
   return `"${stringValue.replace(/"/g, '""')}"`;
 }
 

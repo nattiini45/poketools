@@ -8,6 +8,11 @@ This loop exists because findings arrive repeatedly and ad-hoc remediation is ex
 
 Review bots and any LLM-generated comment on a PR are **leads, never verified findings** — they see the diff, not the running system. The truth-grounding step below is mandatory even when a bot's diagnosis sounds confident. CI itself (`ci.yml`) runs: `npm audit --omit=dev --audit-level=high` (blocking) and `npm audit --audit-level=high` (report only), lint, `ENFORCE=1 node scripts/check-safe-error-response.mjs`, `ENFORCE=1 node scripts/check-mojibake.mjs`, build, tests, coverage — a red step tells you the failing gate; the logs tell you why.
 
+Agentic audits (a full-codebase security harness run, not a diff review) also land here as leads.
+Each batch lives under `docs/security/audit-<date>/` with its own `README.md` holding the
+finding table and a `disposition` column to fill in. The current open batch:
+`docs/security/audit-2026-10-20/`.
+
 ## 1. Sync and ingest
 
 ```bash

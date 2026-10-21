@@ -15,7 +15,54 @@ const ALLOWED_ORIGINS: { host: string; pathPrefix: string }[] = [
   { host: 'img.pokemondb.net', pathPrefix: '/sprites/' },
 ];
 
-const ALLOWED_CONTENT_TYPE_PREFIX = 'image/';
+/**
+ * Raster types only. SVG is excluded on purpose: served same-origin it can run
+ * script under the site CSP, and no sprite style needs it.
+ */
+const ALLOWED_CONTENT_TYPES: ReadonlySet<string> = new Set([
+  'image/png',
+  'image/gif',
+  'image/jpeg',
+  'image/webp',
+]);
+
+/**
+ * The fetch target for an allowlisted request. Each host is a literal
+ * `https://host/sprites/` prefix, so only the path below `/sprites/` comes
+ * from the caller and can never change the host (CodeQL js/request-forgery).
+ */
+function upstreamUrl(host: string, spritePath: string): string {
+  switch (host) {
+    case 'play.pokemonshowdown.com':
+      return `https://play.pokemonshowdown.com/sprites/${spritePath}`;
+    case 'img.pokemondb.net':
+      return `https://img.pokemondb.net/sprites/${spritePath}`;
+    default:
+      throw new Error(`proxy-image: no upstream for allowlisted host ${host}`);
+  }
+}
+
+/**
+ * Re-encodes the caller's path below `/sprites/` one segment at a time, so a
+ * segment can never carry a `/`, `?`, `#` or `@` into the upstream URL.
+ * Null for an empty, `.` or `..` segment (an encoded `%2e%2e` would
+ * otherwise climb out of `/sprites/` once fetch normalises the path) or a
+ * malformed percent escape.
+ */
+function encodeSpritePath(rawPath: string): string | null {
+  const segments: string[] = [];
+  for (const raw of rawPath.split('/')) {
+    let segment: string;
+    try {
+      segment = decodeURIComponent(raw);
+    } catch {
+      return null;
+    }
+    if (segment === '' || segment === '.' || segment === '..') return null;
+    segments.push(encodeURIComponent(segment));
+  }
+  return segments.join('/');
+}
 
 /** Browser: 1 day. CDN edge: 7 days, plus 1 day stale-while-revalidate. */
 const PROXY_IMAGE_CACHE_CONTROL =
@@ -48,11 +95,17 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Check host + path-prefix allowlist
-  const allowed = ALLOWED_ORIGINS.some(
-    (o) => parsed.hostname === o.host && parsed.pathname.startsWith(o.pathPrefix)
+  // Check host + path-prefix allowlist. `host` includes any port, so a
+  // non-default port or embedded credentials never match.
+  const origin = ALLOWED_ORIGINS.find(
+    (o) =>
+      parsed.host === o.host &&
+      parsed.port === '' &&
+      !parsed.username &&
+      !parsed.password &&
+      parsed.pathname.startsWith(o.pathPrefix)
   );
-  if (!allowed) {
+  if (!origin) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Domain or path not allowed', code: 'proxy_url_not_allowed' },
       { status: 403 }
@@ -60,7 +113,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    // The upstream URL is rebuilt from the allowlisted origin and the vetted
+    // path only (no query, fragment or credentials from the caller), so the
+    // request target never comes from user input. Redirects are refused: the
+    // allowlist above only vets the first hop.
+    const spritePath = encodeSpritePath(parsed.pathname.slice(origin.pathPrefix.length));
+    if (spritePath === null) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Domain or path not allowed', code: 'proxy_url_not_allowed' },
+        { status: 403 }
+      );
+    }
+    const response = await fetch(upstreamUrl(origin.host, spritePath), {
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
+    });
     if (!response.ok) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Upstream fetch failed', code: 'proxy_upstream_failed' },
@@ -69,8 +136,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Validate upstream actually returned an image
-    const contentType = response.headers.get('content-type') ?? '';
-    if (!contentType.startsWith(ALLOWED_CONTENT_TYPE_PREFIX)) {
+    const contentType = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Upstream did not return an image', code: 'proxy_upstream_not_image' },
         { status: 502 }
@@ -84,6 +151,7 @@ export async function GET(req: NextRequest) {
     // repeat views never re-run this function or re-hit the upstream host.
     return new NextResponse(buffer, {
       headers: {
+        // Normalised value from the allowlist, never the raw upstream header.
         'Content-Type': contentType,
         'Cache-Control': PROXY_IMAGE_CACHE_CONTROL,
       },

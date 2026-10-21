@@ -8,6 +8,7 @@ import LeagueStatusControl from '@/components/league/LeagueStatusControl';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
+import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import {
   LEAGUE_ADMIN_TAB_PARAM,
@@ -57,7 +58,8 @@ const PANELS: Record<LeagueAdminTab, (ctx: LeagueAdminPanelContext) => Promise<R
  * tab shares the league row and the live access read, the overview needs
  * nothing else.
  *
- * A malformed `[id]` (not a uuid) is a 404 before any read.
+ * A malformed `[id]` (not a uuid) is a 404 before any read. A resource admin of another
+ * league gets a forbidden notice and no tab data: only site admins and this league's admins pass.
  *
  * Site-admin-only parts (test-league flag, league admins, phase delete, league
  * delete) are decided from `getLiveAccess()` (one memoised read shared with the
@@ -77,6 +79,15 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
   if (!league) notFound();
   // Not an admin (or signed out): AdminGuard renders the denial or redirects; no tab data is read.
   if (!access?.isAnyAdmin) return <AdminGuard>{null}</AdminGuard>;
+  // An admin, but of another league: the same per-league check as the draft control panel
+  // (`gateDraftAdmin`) and the write APIs (`requireResourceAdmin('season', id)`), before any tab read.
+  if (!access.isSiteAdmin && !(access.player && (await isResourceAdminFor(access.player.playerId, 'season', id)))) {
+    return (
+      <AdminGuard>
+        <p className="p-8 text-center text-poke-text-secondary">{t('forbidden')}</p>
+      </AdminGuard>
+    );
+  }
 
   const tabs = availableLeagueAdminTabs(league.format_type);
   const activeTab = parseLeagueAdminTab(query[LEAGUE_ADMIN_TAB_PARAM], tabs);

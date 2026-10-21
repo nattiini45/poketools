@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { cacheHeaders } from '@/lib/api/cache';
+import { checkPublicRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { composeWeeklyRecap } from '@/lib/broadcast/recap-engine';
@@ -25,13 +27,20 @@ interface RouteContext {
  * Returns EnrichedRecap with full match data, team rosters, pokemon scores,
  * stat leaders, standings movement, and pokemon usage stats.
  */
-// Public: no auth required — recap overlays poll it without a session
+// Public: no auth required — recap overlays poll it without a session.
+// One recap fans out into dozens of reads, so cache misses are limited per IP
+// (the edge cache below collapses legitimate overlay polling).
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { sid } = await context.params;
-    // A malformed id names no row: 404 before the query (Postgres would reject the filter with a 500).
+    // A malformed id names no row: 404 before any DB work, the limiter's rpc
+    // included (Postgres would reject the filter with a 500).
     const invalidId = rejectInvalidPathId(sid, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
+
+    const rate = await checkPublicRateLimit('broadcast-recap', request, { limit: 30, windowSeconds: 60 });
+    if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
+
     const tournamentId = request.nextUrl.searchParams.get('tournament_id');
     const roundId = request.nextUrl.searchParams.get('round_id');
     const lang = request.nextUrl.searchParams.get('lang');
@@ -68,13 +77,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { status: 404 }
       );
     }
-    if (!tournament) {
+    // The stage and round must belong to this league, or the overlay would
+    // show one league's name over another league's results.
+    if (!tournament || tournament.season_id !== season.id) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Tournament not found', code: 'tournament_not_found' },
         { status: 404 }
       );
     }
-    if (!round) {
+    if (!round || round.tournament_id !== tournament.id) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Round not found', code: 'round_not_found' },
         { status: 404 }
@@ -94,10 +105,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       locale,
     });
 
-    return NextResponse.json<ApiResult<EnrichedRecap>>({
-      success: true,
-      data: recap,
-    });
+    return NextResponse.json<ApiResult<EnrichedRecap>>(
+      { success: true, data: recap },
+      { headers: cacheHeaders(30, 60) }
+    );
   } catch (err) {
     return safeErrorResponse(err, 'Failed to generate broadcast recap');
   }

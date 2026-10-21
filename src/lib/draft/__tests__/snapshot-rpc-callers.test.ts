@@ -38,7 +38,7 @@ describe('draft_snapshot RPC callers', () => {
       .map((file) => path.relative(SRC, file));
     expect(callers.filter((file) => !ALLOWED.has(file))).toEqual([]);
     expect(callers).toContain(path.join('lib', 'draft', 'snapshot.ts'));
-  });
+  }, 60_000); // reads every source file under src/: slow on a cold, loaded runner
 
   // A source check only: the behaviour (no viewer gets the refusal instant from the snapshot) is pinned in
   // snapshot.test.ts, "publish_refused_at (never mapped ...)".

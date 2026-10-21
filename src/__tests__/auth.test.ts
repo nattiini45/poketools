@@ -18,14 +18,15 @@ vi.mock('react', async () => {
 
 // ── Capture the NextAuth config so the callbacks can be driven directly ──
 
-const { captured } = vi.hoisted(() => ({
+const { captured, mockAuth } = vi.hoisted(() => ({
   captured: { config: null as NextAuthConfig | null },
+  mockAuth: vi.fn(),
 }));
 
 vi.mock('next-auth', () => ({
   default: vi.fn((config: NextAuthConfig) => {
     captured.config = config;
-    return { handlers: {}, auth: vi.fn(), signIn: vi.fn(), signOut: vi.fn() };
+    return { handlers: {}, auth: mockAuth, signIn: vi.fn(), signOut: vi.fn() };
   }),
 }));
 vi.mock('next-auth/providers/discord', () => ({
@@ -59,13 +60,18 @@ vi.mock('@/lib/supabase/queries/players', async (importOriginal) => {
 });
 
 import * as React from 'react';
+import { cookies } from 'next/headers';
 import { syncSpriteStyleCookieAtSignIn } from '@/lib/pkmn/sprite-style-signin.server';
+import { verifyLinkToken } from '@/lib/utils/crypto';
 import {
   getSessionPlayerRowByIdentity,
+  getPlayerByDiscordId,
   createPlayer,
   updatePlayer,
+  linkDiscordToPlayer,
 } from '@/lib/supabase/queries/players';
 import {
+  LINK_DISCORD_COOKIE,
   SESSION_PLAYER_TTL_MS,
   isSessionRefreshDue,
   loadSessionPlayer,
@@ -75,6 +81,10 @@ const mockedRead = vi.mocked(getSessionPlayerRowByIdentity);
 const mockedCreate = vi.mocked(createPlayer);
 const mockedUpdate = vi.mocked(updatePlayer);
 const mockedSpriteSync = vi.mocked(syncSpriteStyleCookieAtSignIn);
+const mockedCookies = vi.mocked(cookies);
+const mockedVerifyLink = vi.mocked(verifyLinkToken);
+const mockedGetByDiscord = vi.mocked(getPlayerByDiscordId);
+const mockedLink = vi.mocked(linkDiscordToPlayer);
 
 type Callbacks = NonNullable<NextAuthConfig['callbacks']>;
 type JwtParams = Parameters<NonNullable<Callbacks['jwt']>>[0];
@@ -542,5 +552,111 @@ describe('loadSessionPlayer', () => {
   it('returns null when the identity has no player', async () => {
     mockedRead.mockResolvedValue(null);
     expect(await loadSessionPlayer('credentials', 'auth-uuid-1')).toBeNull();
+  });
+});
+
+// ── signIn callback: Discord link intent (CF-01 / F4) ───────────────
+
+describe('signIn callback link intent', () => {
+  type SignInParams = Parameters<NonNullable<Callbacks['signIn']>>[0];
+
+  const cookieGet = vi.fn();
+  const cookieDelete = vi.fn();
+
+  beforeEach(() => {
+    cookieGet.mockReturnValue({ name: LINK_DISCORD_COOKIE, value: 'signed-intent' });
+    mockedCookies.mockResolvedValue({ get: cookieGet, delete: cookieDelete } as unknown as Awaited<ReturnType<typeof cookies>>);
+    mockedVerifyLink.mockReturnValue('P');
+    mockedGetByDiscord.mockResolvedValue(null);
+  });
+
+  async function runSignIn(): Promise<string | boolean> {
+    const signInCb = config().callbacks?.signIn;
+    if (!signInCb) throw new Error('signIn callback missing');
+    return signInCb({
+      account: { provider: 'discord', type: 'oauth', providerAccountId: 'D2' },
+      profile: { id: 'D2' },
+      user: { id: 'D2' },
+    } as unknown as SignInParams);
+  }
+
+  function expectIntentConsumed(): void {
+    expect(cookieDelete).toHaveBeenCalledWith(expect.objectContaining({ name: LINK_DISCORD_COOKIE, path: '/' }));
+  }
+
+  it('uses an unprefixed cookie name outside production (__Host- needs Secure)', () => {
+    expect(LINK_DISCORD_COOKIE).toBe('poketools_link_discord');
+  });
+
+  it('refuses the link when no session is live on the request', async () => {
+    mockAuth.mockResolvedValue(null);
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+
+    expectIntentConsumed();
+    expect(mockedLink).not.toHaveBeenCalled();
+    expect(mockedGetByDiscord).not.toHaveBeenCalled();
+  });
+
+  it('refuses the link when the live session belongs to another player', async () => {
+    mockAuth.mockResolvedValue({ player: makeSessionPlayer({ playerId: 'Q' }) });
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+
+    expectIntentConsumed();
+    expect(mockedLink).not.toHaveBeenCalled();
+  });
+
+  it('refuses the link when the session has no player', async () => {
+    mockAuth.mockResolvedValue({ player: null });
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+    expect(mockedLink).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the session check throws', async () => {
+    mockAuth.mockRejectedValue(new Error('jwt decode failed'));
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=Default');
+
+    expectIntentConsumed();
+    expect(mockedLink).not.toHaveBeenCalled();
+  });
+
+  it('links Discord when the minting player is still signed in', async () => {
+    mockAuth.mockResolvedValue({ player: makeSessionPlayer({ playerId: 'P' }) });
+
+    await expect(runSignIn()).resolves.toBe(true);
+
+    expectIntentConsumed();
+    expect(mockedLink).toHaveBeenCalledWith('P', 'D2');
+  });
+
+  it('a forged or expired intent is refused before the session is read', async () => {
+    mockedVerifyLink.mockReturnValue(null);
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+
+    expectIntentConsumed();
+    expect(mockAuth).not.toHaveBeenCalled();
+    expect(mockedLink).not.toHaveBeenCalled();
+  });
+
+  it('a Discord sign-in without an intent never reads the session', async () => {
+    cookieGet.mockReturnValue(undefined);
+
+    await expect(runSignIn()).resolves.toBe(true);
+
+    expect(cookieDelete).not.toHaveBeenCalled();
+    expect(mockAuth).not.toHaveBeenCalled();
+  });
+
+  it('sign-out clears a pending intent', async () => {
+    const signOutEvent = config().events?.signOut;
+    if (!signOutEvent) throw new Error('signOut event missing');
+
+    await signOutEvent({ token: discordToken() } as Parameters<typeof signOutEvent>[0]);
+
+    expectIntentConsumed();
   });
 });

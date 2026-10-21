@@ -278,22 +278,29 @@ export function isAdmin(session: Session | null): boolean {
 }
 
 /**
+ * True when `email` is the configured SUPERADMIN_EMAIL (trimmed,
+ * case-insensitive). False when SUPERADMIN_EMAIL is unset or blank. Used to
+ * stop anyone but the Discord superadmin from linking that address (CF-02).
+ */
+export function isReservedSuperadminEmail(email: string | null | undefined): boolean {
+  const reserved = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();
+  if (!reserved || typeof email !== 'string') return false;
+  return email.trim().toLowerCase() === reserved;
+}
+
+/**
  * Check if user is the superadmin (SUPERADMIN_DISCORD_ID or SUPERADMIN_EMAIL).
  * Identity-based, so never stale.
  */
 export function isSuperadmin(session: Session | null): boolean {
   if (!session) return false;
 
-  // Email/password sessions: match on verified email.
+  // Email/password sessions: match on the GoTrue-confirmed sign-in email;
+  // confirmation is enforced only by the project's Confirm email setting.
   // (Checked via !== 'credentials' so pre-existing JWTs without a provider
   // field keep working as Discord sessions.)
   if (session.provider === 'credentials') {
-    const superadminEmail = process.env.SUPERADMIN_EMAIL;
-    return (
-      !!superadminEmail &&
-      !!session.user?.email &&
-      session.user.email.toLowerCase() === superadminEmail.toLowerCase()
-    );
+    return isReservedSuperadminEmail(session.user?.email);
   }
 
   const superadminId = process.env.SUPERADMIN_DISCORD_ID;

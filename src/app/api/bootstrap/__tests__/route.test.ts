@@ -113,7 +113,7 @@ describe('POST /api/bootstrap', () => {
 
     const res = await POST(makeRequest({ secret: SECRET }));
 
-    expect(checkRateLimit).toHaveBeenCalledWith('bootstrap', '203.0.113.9', { limit: 5, windowSeconds: 900 });
+    expect(checkRateLimit).toHaveBeenCalledWith('bootstrap', '203.0.113.9', { limit: 5, windowSeconds: 900, failMode: 'closed' });
     expect(res.status).toBe(429);
     expect((await res.json()).code).toBe('rate_limited');
     expect(adminLimit).not.toHaveBeenCalled();
@@ -121,11 +121,32 @@ describe('POST /api/bootstrap', () => {
   });
 
   it('returns 403 when the secret is wrong (no session read, no promotion)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const res = await POST(makeRequest({ secret: 'wrong-secret' }));
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toContain('Invalid or missing bootstrap secret');
     expect(body.code).toBe('bootstrap_secret_invalid');
+    expect(auth).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+    // The rejection leaves a value-free server-side trace.
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const logged = warnSpy.mock.calls.flat().map(String).join(' ');
+    expect(logged).toContain('[bootstrap]');
+    expect(logged).not.toContain(SECRET);
+    expect(logged).not.toContain('wrong-secret');
+    warnSpy.mockRestore();
+  });
+
+  it('fails closed when the limiter is unavailable: no admin query, no secret check, no promotion', async () => {
+    const unavailable = new Error('limiter unavailable');
+    checkRateLimit.mockRejectedValueOnce(unavailable);
+
+    const res = await POST(makeRequest({ secret: SECRET }));
+
+    expect(safeErrorResponse).toHaveBeenCalledWith(unavailable, 'Bootstrap failed');
+    expect(res.status).toBe(500);
+    expect(adminLimit).not.toHaveBeenCalled();
     expect(auth).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });

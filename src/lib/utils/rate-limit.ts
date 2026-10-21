@@ -299,7 +299,7 @@ export function getClientIp(request: Pick<Request, 'headers'>): string {
 
 /**
  * Per-IP limit of a public route (`/api/proxy-image`, `/api/replay-frames`,
- * the `/api/calc/*` routes).
+ * `/api/broadcast/recap`, the `/api/calc/*` routes).
  * Keyed on {@link findClientIp}. A request without a client address header
  * never happens on the production host (it always sets one); it is a local
  * run without a proxy: `next dev`, a local `next start` or the capture

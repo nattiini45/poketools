@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 import type { Player } from '@/types/player';
 
@@ -10,6 +10,7 @@ vi.mock('@/lib/supabase/auth-client', () => ({
 
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: vi.fn(),
+  isReservedSuperadminEmail: vi.fn(),
   AuthError: class AuthError extends Error {
     statusCode: number;
     constructor(message: string, statusCode: number) {
@@ -25,7 +26,7 @@ vi.mock('@/lib/supabase/queries/players', () => ({
 }));
 
 import { POST } from '@/app/api/account/link-email/route';
-import { requirePlayer } from '@/lib/auth/helpers';
+import { isReservedSuperadminEmail, requirePlayer } from '@/lib/auth/helpers';
 import { getPlayerById, linkAuthUserToPlayer } from '@/lib/supabase/queries/players';
 
 const mockPlayer: Player = {
@@ -63,6 +64,11 @@ describe('POST /api/account/link-email', () => {
     vi.clearAllMocks();
     vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'player-1' } as Awaited<ReturnType<typeof requirePlayer>>);
     vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
+    vi.mocked(isReservedSuperadminEmail).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    delete process.env.SUPERADMIN_DISCORD_ID;
   });
 
   it('returns 409 when an email login is already linked', async () => {
@@ -151,5 +157,54 @@ describe('POST /api/account/link-email', () => {
     expect(body.code).toBe('validation_failed');
     expect(body.params).toEqual({ issues: body.error });
     expect(signUp).not.toHaveBeenCalled();
+  });
+
+  describe('reserved SUPERADMIN_EMAIL (CF-02)', () => {
+    const RESERVED_BODY = { email: 'boss@example.com', password: 'pikachu123' };
+
+    beforeEach(() => {
+      vi.mocked(isReservedSuperadminEmail).mockImplementation(
+        (email) => email?.trim().toLowerCase() === 'boss@example.com'
+      );
+    });
+
+    it('refuses a non-superadmin with the generic create-failed 400 and never calls signUp', async () => {
+      process.env.SUPERADMIN_DISCORD_ID = 'superadmin-discord';
+
+      const res = await POST(makeRequest(RESERVED_BODY));
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body).toEqual({
+        success: false,
+        error: 'Could not create the email login. Check the email and password and try again.',
+        code: 'email_login_create_failed',
+      });
+      expect(isReservedSuperadminEmail).toHaveBeenCalledWith('boss@example.com');
+      expect(signUp).not.toHaveBeenCalled();
+      expect(linkAuthUserToPlayer).not.toHaveBeenCalled();
+    });
+
+    it('refuses everyone when SUPERADMIN_DISCORD_ID is unset', async () => {
+      const res = await POST(makeRequest(RESERVED_BODY));
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('email_login_create_failed');
+      expect(signUp).not.toHaveBeenCalled();
+    });
+
+    it('lets the Discord superadmin link the reserved address', async () => {
+      process.env.SUPERADMIN_DISCORD_ID = mockPlayer.discord_id as string;
+      signUp.mockResolvedValue({
+        data: { user: { id: 'auth-boss', identities: [{ id: 'i-1' }] } },
+        error: null,
+      });
+      vi.mocked(linkAuthUserToPlayer).mockResolvedValue({ ...mockPlayer, auth_user_id: 'auth-boss' });
+
+      const res = await POST(makeRequest(RESERVED_BODY));
+
+      expect(res.status).toBe(200);
+      expect(signUp).toHaveBeenCalledWith(expect.objectContaining({ email: 'boss@example.com' }));
+      expect(linkAuthUserToPlayer).toHaveBeenCalledWith('player-1', 'auth-boss');
+    });
   });
 });

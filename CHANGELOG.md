@@ -21,6 +21,37 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   - The avatar randomiser draws from Web Crypto instead of `Math.random()`.
   - Maintainer scripts create temp files with `mkdtemp` and avoid check-then-use file races.
 
+## [0.2.2] - 2026-10-20
+
+Security fixes from the 2026-10-20 dual-harness audit.
+
+### Security
+
+- **Audit batch 2026-10-20 dispositioned.** All 24 leads in `docs/security/audit-2026-10-20/` now carry a disposition;
+  the fixes below close every valid one. Owner decisions are listed in that README (replay-to-match binding, the
+  reserved superadmin address in public signup, an optional `battle_stats` unique index).
+- **Discord linking is bound to the signed-in session.** A pending link intent links only when the live session
+  belongs to the player that started it, and the cookie is `__Host-` prefixed in production.
+- **Linking `SUPERADMIN_EMAIL` as an email login** is refused unless the caller is the `SUPERADMIN_DISCORD_ID` account.
+- **Manual and replay-import game stats are bounded:** at most two player blocks, one per player, and no Pokémon twice
+  in one block, so one request can no longer multiply evolution progress or aggregates.
+- **League and phase admin pages** admit only site admins and admins of that league.
+- **The broadcast recap overlay** is rate-limited per IP, edge-cached for 30 s, and 404s when the tournament or
+  round does not belong to the league in the path.
+- **The image proxy** refuses redirects and non-default ports and narrows the accepted image types.
+- **Cron routes** compare `CRON_SECRET` with the length-independent `secretsEqual`.
+- **Team import from pokepast.es** has a fetch timeout and the same 50 000-character cap as pasted text.
+- **The admin CSV export** neutralises formula-leading cells.
+- **The XLSX importer** caps sheet rows, columns and dense cells, the zip entry count, and the total inflated size
+  per archive, and inflates entries lazily.
+- **The bootstrap secret's per-IP attempt cap now fails closed.** `POST /api/bootstrap` and the bootstrap-secret path
+  of `POST /api/seed-rulesets` answer 503 `rate_limit_unavailable` while the limiter store is unavailable, instead of
+  comparing the secret with no attempt cap. A rejected bootstrap secret is now logged server-side (a `console.warn`
+  line without the submitted or the expected value).
+- **The public share-link read is rate-limited per client IP.** `GET /api/teams/shared/[token]` now allows 60
+  requests per minute per IP (failing open, like the other public routes) and answers 429 `rate_limited` with
+  `Retry-After` beyond that, before the token is validated or looked up.
+
 ## [0.2.1] - 2026-10-19
 
 Test leagues now stay out of player ratings and all-time statistics: their games no longer move ratings.

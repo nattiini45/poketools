@@ -10,8 +10,12 @@ import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import { bootstrapEnvSchema, readEnv } from '@/lib/env';
 
-/** Bootstrap attempts per client IP: a brute-force cap on BOOTSTRAP_SECRET (fails open, logged). */
-const BOOTSTRAP_RATE_LIMIT = { limit: 5, windowSeconds: 15 * 60 };
+/**
+ * Bootstrap attempts per client IP: a brute-force cap on BOOTSTRAP_SECRET.
+ * Fails closed (503 `rate_limit_unavailable`): a one-time admin promotion is
+ * worth more than its availability while the limiter store is down.
+ */
+const BOOTSTRAP_RATE_LIMIT = { limit: 5, windowSeconds: 15 * 60, failMode: 'closed' } as const;
 
 /**
  * POST /api/bootstrap
@@ -77,6 +81,8 @@ export async function POST(request: NextRequest) {
 
     // 2. Secret.
     if (!secretsEqual(zodResult.data.secret, expectedSecret)) {
+      // Value-free: never log the submitted or the expected secret.
+      console.warn('[bootstrap] rejected an invalid bootstrap secret');
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Invalid or missing bootstrap secret.', code: 'bootstrap_secret_invalid' },
         { status: 403 }

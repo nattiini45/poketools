@@ -115,6 +115,8 @@ export default {
     },
   },
   phasePage: {
+    /** An admin of another league opened this league's phase page. */
+    forbidden: 'Only admins of this league can open its phases.',
     subtitle: '{league} · Phase {order} · {bracket} · {bestOf} · {status}',
     /** Goes to the league admin page's Phases tab (`?tab=phases`). */
     back: '← Back to {name}: Phases',

@@ -95,6 +95,7 @@ export default defineDe<typeof en>()({
     },
   },
   phasePage: {
+    forbidden: 'Nur Admins dieser Liga können ihre Phasen öffnen.',
     subtitle: '{league} · Phase {order} · {bracket} · {bestOf} · {status}',
     back: '← Zurück zu {name}: Phasen',
     newPhaseHint:
