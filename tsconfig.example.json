@@ -1,0 +1,17 @@
+{
+  "$comment": "Type-checks the app against the public EXAMPLE format pack only (`npm run typecheck:example`), the pack a public checkout and CI build. tsconfig.json lists the private pack first in `paths`, so on a maintainer checkout plain `tsc` checks the private pack; this config pins `@format-pack` and `@pack-extensions` to the example pack and leaves out the private pack folder. Overlay-mirror outputs (self-ignoring private roots under src/) are type-checked when on disk; they import only public modules and each other, so the result is the same with or without the overlay. Keep `paths` and `exclude` in step with tsconfig.json (both replace the base value wholesale). See docs/format-packs.md, 'How each tool resolves @format-pack'.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@format-pack": ["./src/format-packs/example"],
+      "@pack-extensions": ["./src/format-packs/example/extensions"]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "gauntlet",
+    "src/format-packs/private"
+  ]
+}

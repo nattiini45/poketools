@@ -1,0 +1,56 @@
+title = "poketools gitleaks config"
+
+[extend]
+useDefault = true
+
+# Synthetic Discord snowflake IDs in Vitest fixtures — not real credentials.
+[[allowlists]]
+description = "Synthetic Discord snowflake IDs in Vitest fixtures"
+condition = "AND"
+paths = ['''__tests__/''']
+regexes = [
+  '''^123456789012345678$''',
+  '''^111111111111111111$''',
+  '''^100000000000000001$''',
+]
+targetRules = ["discord-client-id"]
+
+# board/ holds agent round transcripts. generic-api-key fires on markdown prose
+# that lists high-entropy log filenames — e.g. board/rounds/C-106/r1-regate.md:15
+# (commit 916e8a36), a 60-char span crossing backticks, slashes and a colon,
+# which no real credential does. board/ became untracked per-machine state in
+# 2398d84d, so no new tracked content can land there; gitleaks scans history,
+# which is why untracking alone does not clear the finding.
+#
+# If board/ is ever tracked again, DELETE this allowlist first — otherwise a
+# genuine entropy-only hit under board/ would be silently hidden. (Provider
+# rules — AWS keys, private keys, etc. — still fire on board/ paths regardless.)
+[[allowlists]]
+description = "Agent transcript prose in board/ (untracked; historical false positives)"
+condition = "AND"
+# Kept anchored at the repository root: `(^|/)board/` would also allow any
+# nested board/ folder. History scans (the CI gitleaks job) report
+# repository-relative paths, so the anchor matches there.
+paths = ['''^board/''']
+targetRules = ["generic-api-key"]
+
+# Shader program-cache keys. generic-api-key fires on a `*_KEY = '<slug>-vN'`
+# constant, but these are three.js customProgramCacheKey strings bumped on GLSL
+# changes (fd0aae48), not credentials. Pinned to the two files and the exact
+# slug shape so a real secret in either file still fires.
+[[allowlists]]
+description = "three.js program-cache keys (versioned slugs), not credentials"
+condition = "AND"
+# `(^|/)` instead of `^` so the pins also match when gitleaks reports an
+# absolute or prefixed path (`gitleaks dir <path>` on an export or a checkout
+# below another folder). The full file path, `$` and the value regexes keep
+# the allowlist as narrow as before.
+paths = [
+  '''(^|/)src/components/world/evoliga/route/plaza/paint-ground\.ts$''',
+  '''(^|/)src/components/world/route/useStandbyDim\.ts$''',
+]
+regexes = [
+  '''^paint-ground-v\d+$''',
+  '''^route-standby-v\d+$''',
+]
+targetRules = ["generic-api-key"]

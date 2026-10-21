@@ -1,0 +1,93 @@
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Security audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+        # Blocking gate on what ships. Dev tooling is reported by the next step.
+
+      - name: Security audit (all dependencies, report only)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+        # Non-blocking since 2026-10-06: braces <=3.0.3 (GHSA-vfj7-8cjw-p6xm)
+        # has no patched release and reaches dev tooling only (Tailwind 3,
+        # @next/eslint-plugin-next, @gltf-transform/cli) at their latest versions.
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Safe error response guard (enforce)
+        run: ENFORCE=1 node scripts/check-safe-error-response.mjs
+        # Enforce: fails CI when any route-handler catch block returns a
+        # response without routing through safeErrorResponse. Wave 1.2 cleared
+        # all offenders; intentional non-returning swallows are exempt.
+
+      - name: Double-encoding (mojibake) guard (enforce)
+        run: ENFORCE=1 node scripts/check-mojibake.mjs
+        # Enforce: fails CI when any tracked text file (*.md/*.ts/*.tsx/*.js/
+        # *.jsx/*.mjs/*.cjs/*.json/*.sql/*.html/*.css) contains a double-encoding
+        # artifact (UTF-8 mistakenly decoded as cp1252 and re-saved). Prevents
+        # recurrence of the 2026-07-08 docs corruption. Legitimate occurrences
+        # can be exempted with a `mojibake-allow` marker.
+
+      - name: i18n hard-coded string check (enforce)
+        run: ENFORCE=1 node scripts/check-i18n-strings.mjs --all
+        # Enforce: fails CI on any user-facing literal that bypasses src/i18n
+        # or any locale hazard (docs/i18n.md). Flipped from report-only by the
+        # i18n sweep (i18n-core §12.2 #2); keep in step with the 5b-i18n-strings
+        # STEPS entry in scripts/verify-ci.mjs.
+
+      - name: Type-check (example format pack)
+        run: npm run typecheck:example
+        # tsc against the pack this job builds (tsconfig.example.json pins @format-pack to the
+        # example pack), so the result does not depend on whether a private pack is on disk.
+
+      - name: Type-check & build
+        run: npm run build
+        env:
+          # CI builds and tests the public example pack (docs/format-packs.md); pinned so a
+          # private pack can never be picked up here. Keep in step with BUILD_ENV in scripts/verify-ci.mjs.
+          FORMAT_PACK: example
+          # The type check needs ~2.5 GB since the i18n catalogs landed; the runner's
+          # default Node heap (~2 GB) ran out. Keep in step with BUILD_ENV in scripts/verify-ci.mjs.
+          NODE_OPTIONS: --max-old-space-size=4096
+          # Build needs these but won't actually connect
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          NEXTAUTH_SECRET: ci-secret
+          NEXTAUTH_URL: http://localhost:3000
+          DISCORD_CLIENT_ID: placeholder
+          DISCORD_CLIENT_SECRET: placeholder
+
+      - name: Run tests
+        run: npm test
+
+      - name: Test coverage
+        run: npm run test:coverage

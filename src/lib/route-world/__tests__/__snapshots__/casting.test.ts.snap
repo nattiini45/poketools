@@ -1,0 +1,127 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`cast snapshots (tracked manifest × {empty roster, route-preview fixture roster}) > probe slots 1`] = `
+{
+  "empty": {
+    "sakura:core-probe-float:0": "models/regular/259.glb r1",
+    "sakura:core-probe-float:1": "models/regular/72.glb r1",
+    "sakura:core-probe-flyer:0": "models/regular/149.glb r0",
+    "sakura:core-probe-surfacer:0": "— no-candidate",
+    "sakura:core-probe-wader:0": "models/regular/183.glb r0",
+  },
+  "fixture": {
+    "sakura:core-probe-float:0": "models/regular/259.glb r1",
+    "sakura:core-probe-float:1": "models/regular/72.glb r1",
+    "sakura:core-probe-flyer:0": "models/regular/149.glb r0",
+    "sakura:core-probe-surfacer:0": "— no-candidate",
+    "sakura:core-probe-wader:0": "models/regular/183.glb r0",
+  },
+}
+`;
+
+exports[`cast snapshots (tracked manifest × {empty roster, route-preview fixture roster}) > synthetic world fixture: clouds 1`] = `
+{
+  "displaced": {
+    "clouds:flyer:0": "models/regular/6.glb r1",
+    "clouds:hover:0": "models/regular/196.glb r3",
+    "clouds:hover:1": "models/regular/200.glb r1",
+    "clouds:rider:0": "models/regular/790.glb r3",
+  },
+  "empty": {
+    "clouds:flyer:0": "models/regular/149.glb r0",
+    "clouds:hover:0": "models/regular/25.glb r1",
+    "clouds:hover:1": "models/regular/81.glb r0",
+    "clouds:rider:0": "models/hisuian/100.glb r0",
+  },
+  "fixture": {
+    "clouds:flyer:0": "models/regular/149.glb r0",
+    "clouds:hover:0": "models/regular/25.glb r1",
+    "clouds:hover:1": "models/regular/81.glb r0",
+    "clouds:rider:0": "models/hisuian/100.glb r0",
+  },
+}
+`;
+
+exports[`cast snapshots (tracked manifest × {empty roster, route-preview fixture roster}) > synthetic world fixture: mountain 1`] = `
+{
+  "displaced": {
+    "mountain:floe:0": "models/regular/117.glb r1",
+    "mountain:flyer:0": "models/hisuian/628.glb r1",
+    "mountain:guardian:0": "models/regular/248.glb r1",
+    "mountain:snow:0": "models/regular/91.glb r2",
+    "mountain:snow:1": "models/regular/221.glb r2",
+  },
+  "empty": {
+    "mountain:floe:0": "models/regular/501.glb r0",
+    "mountain:flyer:0": "models/regular/149.glb r0",
+    "mountain:guardian:0": "models/regular/330.glb r0",
+    "mountain:snow:0": "models/regular/997.glb r0",
+    "mountain:snow:1": "models/regular/996.glb r0",
+  },
+  "fixture": {
+    "mountain:floe:0": "models/regular/501.glb r0",
+    "mountain:flyer:0": "models/regular/149.glb r0",
+    "mountain:guardian:0": "models/regular/330.glb r0",
+    "mountain:snow:0": "models/regular/997.glb r0",
+    "mountain:snow:1": "models/regular/996.glb r0",
+  },
+}
+`;
+
+exports[`cast snapshots (tracked manifest × {empty roster, route-preview fixture roster}) > synthetic world fixture: plaza 1`] = `
+{
+  "displaced": {
+    "plaza:flyer:0": "models/hisuian/628.glb r1",
+    "plaza:loiter:0": "models/regular/150.glb r1",
+    "plaza:walker:0": "models/regular/149.glb r2",
+    "plaza:walker:1": "models/regular/183.glb r2",
+  },
+  "empty": {
+    "plaza:flyer:0": "models/galarian/145.glb r0",
+    "plaza:loiter:0": "models/regular/658.glb r0",
+    "plaza:walker:0": "models/regular/909.glb r1",
+    "plaza:walker:1": "models/regular/910.glb r1",
+  },
+  "fixture": {
+    "plaza:flyer:0": "models/galarian/145.glb r0",
+    "plaza:loiter:0": "models/regular/658.glb r0",
+    "plaza:walker:0": "models/regular/909.glb r1",
+    "plaza:walker:1": "models/regular/910.glb r1",
+  },
+}
+`;
+
+exports[`cast snapshots (tracked manifest × {empty roster, route-preview fixture roster}) > synthetic world fixture: sakura 1`] = `
+{
+  "displaced": {
+    "sakura:floater:0": "models/regular/271.glb r3",
+    "sakura:floater:1": "models/regular/117.glb r4",
+    "sakura:flyer:0": "models/regular/146.glb r1",
+    "sakura:grove:0": "models/regular/810.glb r2",
+    "sakura:grove:1": "models/regular/168.glb r3",
+    "sakura:sitter:0": "models/regular/72.glb r1",
+    "sakura:surfacer:0": "models/regular/230.glb r0 relaxed",
+    "sakura:wader:0": "— excluded-all",
+  },
+  "empty": {
+    "sakura:floater:0": "models/regular/183.glb r1",
+    "sakura:floater:1": "models/regular/134.glb r2",
+    "sakura:flyer:0": "models/regular/149.glb r0",
+    "sakura:grove:0": "models/regular/1.glb r0",
+    "sakura:grove:1": "models/regular/811.glb r0",
+    "sakura:sitter:0": "models/regular/159.glb r0",
+    "sakura:surfacer:0": "models/regular/160.glb r0",
+    "sakura:wader:0": "models/regular/658.glb r0",
+  },
+  "fixture": {
+    "sakura:floater:0": "models/regular/183.glb r1",
+    "sakura:floater:1": "models/regular/134.glb r2",
+    "sakura:flyer:0": "models/regular/149.glb r0",
+    "sakura:grove:0": "models/regular/1.glb r0",
+    "sakura:grove:1": "models/regular/811.glb r0",
+    "sakura:sitter:0": "models/regular/159.glb r0",
+    "sakura:surfacer:0": "models/regular/160.glb r0",
+    "sakura:wader:0": "models/regular/658.glb r0",
+  },
+}
+`;

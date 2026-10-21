@@ -1,0 +1,28 @@
+{
+  "repo": "PokeAPI/pokeapi",
+  "commit": "2fe95532d27a9bf340575253aff50868319d8182",
+  "license": "BSD-3-Clause",
+  "csvPath": "data/v2/csv",
+  "csvSha256": {
+    "abilities": "74c3588ad48e08e54ff01f432899a4028c3e91508bbd53201df85e1f6b9e9ef3",
+    "ability_flavor_text": "5ab2165547dce3897b1d88e654f0159511680b1d84f93fd4f265752b66904adb",
+    "ability_names": "8acb80c42210f86ae747dc3347b060d69cd2574a9dbfaf74774ae632ca6348da",
+    "item_flavor_text": "f85281c97e4a423fb6ae673a3d2cfab116ac2e7bb9fcdecfb43ac8b1e1fb8676",
+    "item_names": "c4ad0b446e395c378d8ba75d6900f051cc9ebb99431d4000adeac35f492852f0",
+    "items": "f08cd6dc30b447cb91cbe9232c79052e8521f32f6105bb1489b5bfabf4ca3241",
+    "move_damage_class_prose": "f890c70036dd5390964fd671146cc78e8781b5e9d55740bc584ab216a74d9fcb",
+    "move_flavor_text": "43177df8d76dac477fc837aa19b2a50d74ee2c94e47fb827506768c58b360087",
+    "move_names": "99e23ee38ea53d1473474d463b87651deac3cd4928750f8186feae66da45c147",
+    "moves": "8aafd37bf78f19471495c05b201545180f50f0a08a2a2a844d69f9837dd39ac9",
+    "nature_names": "a6bf8bedb9822d0e966a3036885e33e1306172b3a6566edc22d02ff2e7155031",
+    "natures": "3536990f6adeaa1735551a6afe798649d22426e161c937da09d3ae9a5381309c",
+    "pokemon_form_names": "f496066d02fab12c18d10cce0af2f748d09cb7e296ecc784cc8682f8c4da8625",
+    "pokemon_forms": "99bf8f7ad4dc1f2e291357a090cef6a575623ec3cbf9030d0e33656e6e608ae2",
+    "pokemon_species_names": "820cde17074cdb1c2b0595c997fb8f998e773bd5da3bb525dec85703c86c5fd9",
+    "stat_names": "c58f9cc3c0b3bd004f9e5b84ba7590e42f15ffc6f2d58acc7ee39c9298ae83c3",
+    "type_names": "685230c51074cf2f723debcf827a4df4c36ab0ec7e929c806ad65a3e40958705",
+    "types": "37f039c8d722f47d51ba1c5c5ecf9b7007235b1a9a1af2827645c777b70307c8",
+    "version_groups": "28da8d89d8eb4966941f81a9e62b3990510ed4d76dd774158246551a8e7707a7"
+  },
+  "licenseSha256": "1c04595dc662981c20956ae4251dfa7b62b475c345eddf98bc9b904cb2373f2c"
+}

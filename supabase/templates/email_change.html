@@ -1,0 +1,31 @@
+{{/*
+  Supabase Auth template: "Change email address" (config key: email_change).
+  Bilingual (i18n-core §6.6): .Data.locale (user_metadata.locale, stored at sign-up)
+  "en" -> English, "de" -> German, anything else -> German, then English.
+  The app has no own email-change page, so the link is Supabase's default
+  .ConfirmationURL flow.
+  Subject (not branched): "Bestätige deine neue E-Mail-Adresse / Confirm your new email"
+  The hosted project's copy lives in the dashboard: see docs/i18n.md "Emails".
+  Template comment: renders nothing in the sent email.
+*/}}
+{{ if eq .Data.locale "en" }}
+<h2>Confirm your new email</h2>
+<p>You asked to change the email address of your PokéTools account from {{ .Email }} to {{ .NewEmail }}. Confirm the change here:</p>
+<p><a href="{{ .ConfirmationURL }}">Confirm the new address</a></p>
+<p>If you didn't ask for this, ignore this email and your address stays the same.</p>
+{{ else if eq .Data.locale "de" }}
+<h2>Bestätige deine neue E-Mail-Adresse</h2>
+<p>Du möchtest die E-Mail-Adresse deines PokéTools-Kontos von {{ .Email }} auf {{ .NewEmail }} ändern. Bestätige die Änderung hier:</p>
+<p><a href="{{ .ConfirmationURL }}">Neue Adresse bestätigen</a></p>
+<p>Wenn du das nicht warst, ignoriere diese E-Mail einfach. Deine Adresse bleibt dann unverändert.</p>
+{{ else }}
+<h2>Bestätige deine neue E-Mail-Adresse</h2>
+<p>Du möchtest die E-Mail-Adresse deines PokéTools-Kontos von {{ .Email }} auf {{ .NewEmail }} ändern. Bestätige die Änderung hier:</p>
+<p><a href="{{ .ConfirmationURL }}">Neue Adresse bestätigen</a></p>
+<p>Wenn du das nicht warst, ignoriere diese E-Mail einfach. Deine Adresse bleibt dann unverändert.</p>
+<hr>
+<h2>Confirm your new email</h2>
+<p>You asked to change the email address of your PokéTools account from {{ .Email }} to {{ .NewEmail }}. Confirm the change here:</p>
+<p><a href="{{ .ConfirmationURL }}">Confirm the new address</a></p>
+<p>If you didn't ask for this, ignore this email and your address stays the same.</p>
+{{ end }}

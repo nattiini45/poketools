@@ -1,0 +1,32 @@
+{{/*
+  Supabase Auth template: "Invite user" (config key: invite).
+  The app does not send invites today; the template exists so a future use is
+  bilingual from the start. For an invite, .Data is the `data` passed to
+  inviteUserByEmail, so the inviter sets `locale` there.
+  Bilingual (i18n-core §6.6): .Data.locale "en" -> English, "de" -> German,
+  anything else -> German, then English.
+  Subject (not branched): "Du wurdest zu PokéTools eingeladen / You have been invited to PokéTools"
+  The hosted project's copy lives in the dashboard: see docs/i18n.md "Emails".
+  Template comment: renders nothing in the sent email.
+*/}}
+{{ if eq .Data.locale "en" }}
+<h2>You have been invited</h2>
+<p>You have been invited to join PokéTools. Accept the invite to create your account:</p>
+<p><a href="{{ .ConfirmationURL }}">Accept the invite</a></p>
+<p>If you weren't expecting this, you can ignore this email.</p>
+{{ else if eq .Data.locale "de" }}
+<h2>Du wurdest eingeladen</h2>
+<p>Du wurdest zu PokéTools eingeladen. Nimm die Einladung an, um dein Konto anzulegen:</p>
+<p><a href="{{ .ConfirmationURL }}">Einladung annehmen</a></p>
+<p>Wenn du keine Einladung erwartet hast, kannst du diese E-Mail einfach ignorieren.</p>
+{{ else }}
+<h2>Du wurdest eingeladen</h2>
+<p>Du wurdest zu PokéTools eingeladen. Nimm die Einladung an, um dein Konto anzulegen:</p>
+<p><a href="{{ .ConfirmationURL }}">Einladung annehmen</a></p>
+<p>Wenn du keine Einladung erwartet hast, kannst du diese E-Mail einfach ignorieren.</p>
+<hr>
+<h2>You have been invited</h2>
+<p>You have been invited to join PokéTools. Accept the invite to create your account:</p>
+<p><a href="{{ .ConfirmationURL }}">Accept the invite</a></p>
+<p>If you weren't expecting this, you can ignore this email.</p>
+{{ end }}

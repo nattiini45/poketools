@@ -1,0 +1,159 @@
+/*
+ * Focus hover brackets + label pill (wave 2, seat 2C) — see
+ * FocusHoverOverlay.tsx for the contract.
+ *
+ * Positions are written per frame as `transform` (plus the bracket box's
+ * width / height) by the projection loop; nothing here animates layout.
+ * Colours come from the world's HUD tokens (`--hud-*`, globals.css), so every
+ * world's brackets match its own chips. Brightness rule (anti-pattern 10):
+ * the strokes are the HUD focus teal / pink at < 1 alpha and the pill is the
+ * panel glass — nothing here outshines a board's paper white.
+ *
+ * Stacking: under the docked panel (z 25) and the HUD nav (z 30), over the
+ * canvas (z 0). Never interactive.
+ */
+
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.root[data-visible='true'] {
+  opacity: 1;
+}
+
+.brackets {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+
+.frame {
+  position: absolute;
+  inset: 0;
+}
+
+.corner {
+  --arm: 14px;
+  --stroke: 2px;
+
+  position: absolute;
+  width: var(--arm);
+  height: var(--arm);
+  border: 0 solid var(--hud-focus, #5eead4);
+  opacity: 0.9;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.45));
+}
+
+.tl {
+  top: 0;
+  left: 0;
+  border-top-width: var(--stroke);
+  border-left-width: var(--stroke);
+  border-top-left-radius: 4px;
+}
+
+.tr {
+  top: 0;
+  right: 0;
+  border-top-width: var(--stroke);
+  border-right-width: var(--stroke);
+  border-top-right-radius: 4px;
+}
+
+.bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: var(--stroke);
+  border-left-width: var(--stroke);
+  border-bottom-left-radius: 4px;
+}
+
+.br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: var(--stroke);
+  border-right-width: var(--stroke);
+  border-bottom-right-radius: 4px;
+}
+
+/* Touch settle breathe: two soft swells inside 1.6 s (BREATHE_MS), then
+   gone. Opacity + a 3 % scale only; the component never renders this mode
+   under reduced motion, and the media guard below is belt and braces. */
+.root[data-mode='breathe'] .frame {
+  animation: focus-hover-breathe 1600ms ease-in-out forwards;
+}
+
+@keyframes focus-hover-breathe {
+  0% {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(1.015);
+  }
+  75% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  max-width: min(20rem, calc(100vw - 2rem));
+  padding: 0.4375rem 0.75rem;
+  border: 1px solid var(--hud-glass-border, rgba(200, 244, 250, 0.42));
+  border-radius: 0.75rem;
+  color: var(--hud-ink, #f0fdfa);
+  background: var(--hud-panel-glass, rgba(6, 82, 110, 0.8));
+  box-shadow: var(--hud-shadow, 0 10px 28px rgba(4, 40, 56, 0.3));
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  will-change: transform;
+}
+
+.label {
+  /* Wraps rather than truncates: a clipped subject name is lost information. */
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.hint {
+  white-space: nowrap;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  color: var(--hud-ink-muted, rgba(240, 253, 250, 0.82));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    transition: opacity 120ms linear;
+  }
+
+  .root[data-mode='breathe'] .frame {
+    animation: none;
+    opacity: 0;
+  }
+}

@@ -1,0 +1,72 @@
+import Link from 'next/link';
+import Section from '@/components/ui/Section';
+import EditableDescription from '@/components/shared/EditableDescription';
+import { getFormatter, getT } from '@/i18n/server';
+import { enumLabel } from '@/i18n/content/enum-label';
+import { enumMessages } from '@/i18n/messages/enums';
+import type { LeagueAdminPanelContext } from './context';
+
+/**
+ * Overview tab (the default): the league at a glance and its description.
+ * Renders from the league row alone, no read of its own.
+ */
+export async function overviewPanel({ id, league, t }: LeagueAdminPanelContext) {
+  const [tEnum, formatter] = await Promise.all([getT(enumMessages), getFormatter()]);
+  // Calendar days (Postgres `date`): zone-free, so the server may format them.
+  const start = league.start_date ? formatter.calendarDate(league.start_date) : null;
+  const end = league.end_date ? formatter.calendarDate(league.end_date) : null;
+  const dates =
+    start && end
+      ? t('overview.dateRange', { start, end })
+      : start
+        ? t('overview.startOnly', { start })
+        : end
+          ? t('overview.endOnly', { end })
+          : t('overview.noDates');
+
+  // The battle format, where the league type fixes it (point buy plays singles); a draft league takes it
+  // from its ruleset, so it is not repeated here.
+  const battleFormat =
+    league.format_type === 'doubles'
+      ? t('overview.battleFormatDoubles')
+      : league.format_type === 'singles' || league.format_type === 'evolution_point_buy'
+        ? t('overview.battleFormatSingles')
+        : null;
+
+  const facts: { term: string; value: string }[] = [
+    { term: t('overview.format'), value: enumLabel(tEnum, 'formatType', league.format_type) },
+    ...(battleFormat ? [{ term: t('overview.battleFormat'), value: battleFormat }] : []),
+    { term: t('overview.ruleset'), value: league.ruleset_name ?? t('overview.noRuleset') },
+    { term: t('overview.status'), value: enumLabel(tEnum, 'seasonStatus', league.status) },
+    { term: t('overview.participants'), value: String(league.participant_count) },
+    { term: t('overview.phases'), value: String(league.tournament_count) },
+    { term: t('overview.dates'), value: dates },
+  ];
+
+  return (
+    <>
+      <Section title={t('overview.title')}>
+        <div className="space-y-4">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2" data-admin-overview-facts>
+            {facts.map((fact) => (
+              <div key={fact.term} className="min-w-0">
+                <dt className="text-xs font-heading text-poke-text-muted">{fact.term}</dt>
+                <dd className="text-sm text-poke-text-primary break-words">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <Link
+            href={`/leagues/${id}`}
+            className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
+          >
+            {t('overview.publicPage')}
+          </Link>
+        </div>
+      </Section>
+
+      <Section title={t('description.title')} subtitle={t('description.subtitle')}>
+        <EditableDescription resourceType="season" resourceId={id} initialValue={league.description} />
+      </Section>
+    </>
+  );
+}

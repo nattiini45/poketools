@@ -1,0 +1,62 @@
+import { defineDe } from '@/i18n/define';
+import type en from './en';
+
+/** German for `stats`. The table wording is the reviewed hub copy (`league-hub/copy.ts` DE_SHARED.insights). */
+export default defineDe<typeof en>()({
+  usage: {
+    pokemon: 'Pokémon',
+    usage: 'Nutzung %',
+    teams: 'Im Team',
+    efficiency: 'Eff.',
+    kos: 'KOs',
+    koedRate: 'Besiegt %',
+    bringRate: 'Eingesetzt %',
+    leadRate: 'Lead %',
+    winRate: 'Siege %',
+    empty: 'Noch keine Nutzungsdaten.',
+  },
+  kills: {
+    pokemon: 'Pokémon',
+    kos: 'KOs',
+    koed: 'Besiegt',
+    diff: 'Diff.',
+    teams: 'Im Team',
+    brought: 'Eingesetzt',
+    efficiency: 'Eff.',
+    empty: 'Noch keine Kill-Daten.',
+  },
+  moves: {
+    loading: 'Attacken werden geladen …',
+    empty: 'Noch keine Attacken-Daten.',
+    noMatches: 'Keine Attacke passt zu den Filtern.',
+    loadFailed: 'Attacken-Daten konnten nicht geladen werden.',
+    pokemon: 'Pokémon',
+    move: 'Attacke',
+    searchPokemon: 'Pokémon suchen …',
+    searchMoves: 'Attacken suchen …',
+    clearFilters: 'Filter zurücksetzen',
+    byPokemon: 'Nach Pokémon',
+    byMove: 'Nach Attacke',
+    used: 'Genutzt',
+  },
+  standings: {
+    player: 'Spieler',
+    wins: 'S',
+    losses: 'N',
+    gameWins: 'Partien S',
+    gameLosses: 'Partien N',
+    diff: 'Diff.',
+    empty: 'Noch keine abgeschlossenen Spiele',
+  },
+  h2h: {
+    title: '{player1} vs. {player2}',
+    matches: { one: '{count} Spiel', other: '{count} Spiele' },
+    games: { one: '{count} Partie', other: '{count} Partien' },
+    gameRecord: 'Partien: {wins}–{losses}',
+    noMatches: 'Diese Spieler sind noch nicht gegeneinander angetreten',
+    loadError: 'Direkter Vergleich konnte nicht geladen werden: {message}',
+    loadFailed: 'Die Spiele des direkten Vergleichs konnten nicht geladen werden',
+    retry: 'Erneut versuchen',
+    loading: 'Wird geladen …',
+  },
+});

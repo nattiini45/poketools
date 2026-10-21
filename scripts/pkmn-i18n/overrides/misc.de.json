@@ -1,0 +1,16 @@
+{
+  "_comment": "Hand-reviewed labels with no PokeAPI German source. Status names/abbreviations: pokewiki.de/Statusproblem.",
+  "statsShort": { "hp": "KP", "atk": "Angr.", "def": "Vert.", "spa": "Sp.-Angr.", "spd": "Sp.-Vert.", "spe": "Init." },
+  "status": {
+    "brn": { "long": "Verbrennung", "short": "BRT" },
+    "par": { "long": "Paralyse", "short": "PAR" },
+    "psn": { "long": "Vergiftung", "short": "GIF" },
+    "tox": { "long": "Schwere Vergiftung", "short": "GIF" },
+    "slp": { "long": "Schlaf", "short": "SLF" },
+    "frz": { "long": "Gefroren", "short": "GFR" }
+  },
+  "weather": {
+    "Sun": "Sonne", "Rain": "Regen", "Sand": "Sandsturm", "Snow": "Schnee", "Hail": "Hagel",
+    "Harsh Sunshine": "Extremes Sonnenlicht", "Heavy Rain": "Starkregen", "Strong Winds": "Starke Winde"
+  }
+}

@@ -1,0 +1,206 @@
+import { defineDe } from '@/i18n/define';
+import type en from './en';
+
+/**
+ * German copy of the route themes (T21). The plaza's station beats, card
+ * titles and loader lines are the reviewed EvoLiga wording, kept verbatim.
+ */
+export default defineDe<typeof en>()({
+  stations: {
+    plaza: {
+      pulse: { title: 'Puls', beat: 'Die Saison existiert – und das ist ihr Stand.' },
+      roster: { title: 'Point-Buy-Liste', beat: 'Das sind die Linien, die du kaufen kannst.' },
+      teams: { title: 'Teams', beat: 'Jeder Trainer hält eine Arena – das hat er gedraftet.' },
+      schedule: { title: 'Spielplan', beat: 'Hier wird gespielt – und hier steht die Tabelle.' },
+      rules: { title: 'Regelwerk', beat: 'Und das sind die Regeln, die all dem Bedeutung geben.' },
+    },
+    sakura: {
+      pulse: { title: 'Puls', beat: 'Die Saison läuft – und der See führt Buch.' },
+      roster: { title: 'Point-Buy-Liste', beat: 'Das sind die Linien in voller Blüte – wähle sie mit Bedacht.' },
+      teams: { title: 'Teams', beat: 'Jeder Trainer hütet eine Arena – dafür hat er gedraftet.' },
+      schedule: { title: 'Spielplan', beat: 'Hier wird gespielt – und hier steht die Tabelle.' },
+      rules: { title: 'Regelwerk', beat: 'Und das sind die Regeln, die all dem Bedeutung geben.' },
+    },
+    mountain: {
+      pulse: { title: 'Puls', beat: 'Die Saison steht ganz oben – der Gipfel führt Buch.' },
+      roster: { title: 'Point-Buy-Liste', beat: 'Das sind die Linien im Wegregister – wähle sie mit Bedacht.' },
+      teams: { title: 'Teams', beat: 'Jeder Trainer hütet einen Steinmann – dafür hat er gedraftet.' },
+      schedule: { title: 'Spielplan', beat: 'Hier wird gespielt – und die Wegweiser sagen, wann.' },
+      rules: { title: 'Regelwerk', beat: 'Und das sind die Regeln des Passes – sie gelten bei jedem Wetter.' },
+    },
+    clouds: {
+      pulse: { title: 'Puls', beat: 'Die Saison segelt durch den Himmel – das Flaggschiff führt Buch.' },
+      roster: { title: 'Point-Buy-Liste', beat: 'Das sind die Linien im Register – wähle sie mit Bedacht.' },
+      teams: { title: 'Teams', beat: 'Jeder Trainer hütet eine Schwebeinsel – dafür hat er gedraftet.' },
+      schedule: { title: 'Spielplan', beat: 'Hier wird gespielt – und die Tafel sagt, wann.' },
+      rules: { title: 'Regelwerk', beat: 'Und das sind die Regeln der Inseln – sie gelten in jeder Höhe.' },
+    },
+  },
+  loader: {
+    loading: '3D-Welt wird geladen – die Seite ist bereits nutzbar',
+    ready: '3D-Welt bereit',
+    failed: 'Die 3D-Welt konnte nicht geladen werden.',
+    retry: '3D-Welt erneut laden',
+  },
+  nav: {
+    sakura: { label: 'Bereiche im Sakura Park', brand: 'Sakura Park' },
+    mountain: { label: 'Bereiche am Mountain Pass', brand: 'Mountain Pass' },
+    clouds: { label: 'Bereiche auf Skyisle', brand: 'Skyisle' },
+  },
+  sections: {
+    sakura: {
+      place: 'Sakura Park',
+      scheduleUpcomingPainted: 'auf die Bannerreihe gemalt',
+      teamsIntro:
+        'Jeder Trainer hütet eine Arena – seine Statue steht auf der Ostterrasse, sein Ass auf dem Sockel und sein Name auf der Tafel darunter.',
+      rosterPointBuy: {
+        one: '{count} Entwicklungslinie in voller Blüte – die vollständige Point-Buy-Liste, an die Schreinwand gemalt und nach Preisgruppen sortiert.',
+        other:
+          '{count} Entwicklungslinien in voller Blüte – die vollständige Point-Buy-Liste, an die Schreinwand gemalt und nach Preisgruppen sortiert.',
+      },
+      rosterEmpty: 'Noch keine Linien auf der Point-Buy-Liste – die Wand füllt sich, während die Liste gedraftet wird.',
+      rulesPlaysBy: 'Der Park spielt nach',
+      rulesSpiritHeading: 'Entwicklung & Geist des Parks',
+      rulesPlaqueNote: 'Die rote Sprosse des Turnierbaums auf der Torii-Tafel trägt dieselben Zahlen, die du hier liest.',
+      rulesFormatNote: 'Die Tafel am Torii zeigt dasselbe Format und dasselbe Best-of, das du hier liest.',
+    },
+    mountain: {
+      place: 'Mountain Pass',
+      scheduleUpcomingPainted: 'auf die Wegweiser gemalt',
+      teamsIntro:
+        'Jeder Trainer hütet einen Steinmann – seine Statue steht auf der Ostterrasse, sein Ass auf der Deckplatte und sein Name auf der Platte darunter.',
+      rosterPointBuy: {
+        one: '{count} Entwicklungslinie im Wegregister – die vollständige Point-Buy-Liste, an die Hüttenwand gemalt und nach Preisgruppen sortiert.',
+        other:
+          '{count} Entwicklungslinien im Wegregister – die vollständige Point-Buy-Liste, an die Hüttenwand gemalt und nach Preisgruppen sortiert.',
+      },
+      rosterEmpty: 'Noch keine Linien auf der Point-Buy-Liste – das Register füllt sich, während die Liste gedraftet wird.',
+      rulesPlaysBy: 'Der Pass spielt nach',
+      rulesSpiritHeading: 'Entwicklung & Geist des Passes',
+      rulesPlaqueNote: 'Die Tafel am Passtor trägt dieselben Zahlen, die du hier liest.',
+      rulesFormatNote: 'Die Tafel am Passtor zeigt dasselbe Format und dasselbe Best-of, das du hier liest.',
+    },
+    clouds: {
+      place: 'Skyisle',
+      scheduleUpcomingPainted: 'auf das Spielplan-Luftschiff gemalt',
+      teamsIntro:
+        'Jeder Trainer hütet eine Schwebeinsel – sie schwebt über der Ass-Insel, sein Ass thront unter seinem Namen auf der Tafel.',
+      rosterPointBuy: {
+        one: '{count} Entwicklungslinie im Register – die vollständige Point-Buy-Liste, auf das Segel des Register-Luftschiffs gemalt und nach Preisgruppen sortiert.',
+        other:
+          '{count} Entwicklungslinien im Register – die vollständige Point-Buy-Liste, auf das Segel des Register-Luftschiffs gemalt und nach Preisgruppen sortiert.',
+      },
+      rosterEmpty: 'Noch keine Linien auf der Point-Buy-Liste – das Register füllt sich, während die Liste gedraftet wird.',
+      rulesPlaysBy: 'Die Inseln spielen nach',
+      rulesSpiritHeading: 'Entwicklung & Geist der Inseln',
+      rulesPlaqueNote: 'Die Tafel am Halo-Tor trägt dieselben Zahlen, die du hier liest.',
+      rulesFormatNote: 'Die Tafel am Halo-Tor zeigt dasselbe Format und dasselbe Best-of, das du hier liest.',
+    },
+  },
+  subjects: {
+    sakura: {
+      pulse: 'Puls-Tafel – der Liga-Bildschirm im Jumbotron-Felsen',
+      roster: 'Kaderwand – der bemalte Fries des Schreins',
+      schedule: 'Spielplan-Banner – Spiele, Ergebnisse und die Tabelle',
+      rules: 'Ligaregeln – die hängende Gakuzuka-Tafel am Torii',
+    },
+    mountain: {
+      pulse: 'Puls-Tafel – die Schieferwand der Gipfelstation',
+      roster: 'Wegregister – der bemalte Kaderfries der Hütte',
+      schedule: 'Wegweiser – Spiele, Ergebnisse und die Tabelle',
+      rules: 'Ligaregeln – die hängende Tafel am Passtor',
+    },
+    clouds: {
+      pulse: 'Puls-Tafel – das Tabellensegel des Flaggschiffs',
+      roster: 'Das Register – das Kadersegel',
+      schedule: 'Spielplan-Tafel – das Spielsegel',
+      rules: 'Ligaregeln – die hängende Tafel am Halo-Tor',
+    },
+    rollCall: 'Trainer-Appell – alle Trainer in Tabellenreihenfolge',
+    ace: '{species} – das Ass von {name}',
+  },
+  paint: {
+    plazaLed: {
+      arena: 'Deine Arena.',
+      glory: 'Dein Glanz.',
+      ticker: 'Liga live  •  Spieltag aktuell  •  Arenen offen',
+    },
+    status: { open: 'Offen', live: 'Live', done: 'Ende' },
+    livePill: 'Live {home}–{away}',
+    kickoffLive: 'Live · {pair}',
+    kickoffNext: 'Nächster Anpfiff · {date} {time}',
+    matchesPlayed: { one: '{count} Spiel gespielt', other: '{count} Spiele gespielt' },
+    matchesFlown: { one: '{count} Spiel ausgetragen', other: '{count} Spiele ausgetragen' },
+    trainers: { one: '{count} Trainer', other: '{count} Trainer' },
+    matchday: 'Spieltag {n}',
+    matchdayShort: 'ST {n}',
+    firstHalf: 'Hinrunde',
+    secondHalf: 'Rückrunde',
+    more: '+{count} weitere',
+    versus: '{home} vs. {away}',
+    standingPoints: '{points} Pkt.',
+    priceBand: '{price} P · {band}',
+    priceBandPlain: '{price} P {band}',
+    gym: '{type}-Arena',
+    openGym: 'Offene Arena',
+    empty: {
+      noTable: 'Noch keine Tabelle',
+      formsPark: 'Sie entsteht mit den ersten Ergebnissen im Park',
+      formsPass: 'Sie entsteht mit den ersten Ergebnissen am Pass',
+      formsIsles: 'Sie entsteht mit den ersten Ergebnissen der Inseln',
+      nothingPosted: 'Noch nichts ausgehängt',
+      noRosterLines: 'Noch keine Linien',
+      noFixtures: 'Noch keine Spiele angesetzt',
+    },
+    table: { trainer: 'Trainer', win: 'S', loss: 'N', diff: 'Diff.', points: 'Pkt.' },
+    fixturesBoard: { match: 'Spiel', kickoff: 'Anpfiff', status: 'Status' },
+    heading: {
+      fixtures: 'Spiele',
+      upNext: 'Als Nächstes',
+      results: 'Ergebnisse',
+      pulse: 'Puls',
+      table: 'Tabelle',
+      standings: 'Tabelle',
+      schedule: 'Spielplan',
+      later: 'Später',
+      latest: 'Neueste',
+      season: 'Saison',
+      top: 'Top {count}',
+      roster: 'Kader',
+    },
+    brand: {
+      sakuraBand: 'Sakura-Park-Liga',
+      summit: 'Gipfeltabelle',
+      summitShort: 'Tabelle',
+      skyisleStandings: 'Skyisle-Tabelle',
+      skyisleFixtures: 'Skyisle-Spielplan',
+    },
+    note: {
+      rosterWallAll: 'Kaderwand – {shown} von {total} Linien · tippe auf die Wand für alle {total}',
+      rosterWallSome: 'Kaderwand – {shown} von {total} Linien · tippe auf die Wand, um sie aus der Nähe zu lesen',
+      rosterWall: 'Kaderwand · tippe auf die Wand, um sie aus der Nähe zu lesen',
+      linesUpClose: '{shown} von {total} Linien · zum Lesen antippen',
+      trailRegister: 'Wegregister · zum Lesen antippen',
+      register: 'Das Register · zum Lesen antippen',
+    },
+    rules: {
+      titlePark: 'Regeln des Parks',
+      titlePass: 'Regeln des Passes',
+      titleIsles: 'Regeln der Inseln',
+      draftBudget: 'Draft-Budget',
+      linesPerTrainer: 'Linien pro Trainer',
+      linesEach: 'Linien je Trainer',
+      teraStage1: 'Tera – Stufe 1',
+      bannedMoves: 'Gebannte Attacken',
+      compactDraft: 'Draft',
+      compactLines: 'Linien',
+      compactTera: 'Tera',
+      compactBanned: 'Gebannt',
+      budgetValue: '{points} P',
+      teraFree: 'Freies Tera',
+      teraStab: 'Nur STAB',
+      teraNone: 'Kein Tera',
+      defaultsNote: 'Keine eigenen Regeln hinterlegt – es gelten die Liga-Standards.',
+    },
+  },
+});

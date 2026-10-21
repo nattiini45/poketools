@@ -1,0 +1,50 @@
+{
+  "description": "Quiet-hours vectors, hand-derived. Replayed by the public TS test (src/lib/draft/__tests__/quiet-hours.test.ts) against src/lib/draft/time.ts and, on a local stack, by the opt-in parity test (src/lib/draft/__tests__/quiet-hours-sql-parity.live-db.test.ts, LOCAL_DB_URL) against the SQL helpers of supabase/migrations/20261018140100_draft_quiet_hours.sql. Instants are UTC. quiet = null means no quiet hours.",
+  "quiet": {
+    "berlin": { "startHour": 0, "endHour": 6, "timeZone": "Europe/Berlin" },
+    "berlin2to6": { "startHour": 2, "endHour": 6, "timeZone": "Europe/Berlin" },
+    "utc1to2": { "startHour": 1, "endHour": 2, "timeZone": "UTC" }
+  },
+  "windowEnd": [
+    { "name": "CEST night, inside", "quiet": "berlin", "at": "2026-10-18T01:00:00Z", "expected": "2026-10-18T04:00:00Z" },
+    { "name": "exactly at the window start", "quiet": "berlin", "at": "2026-10-17T22:00:00Z", "expected": "2026-10-18T04:00:00Z" },
+    { "name": "exactly at the window end (running again)", "quiet": "berlin", "at": "2026-10-18T04:00:00Z", "expected": null },
+    { "name": "one ms before the window", "quiet": "berlin", "at": "2026-10-17T21:59:59.999Z", "expected": null },
+    { "name": "afternoon", "quiet": "berlin", "at": "2026-10-18T13:00:00Z", "expected": null },
+    { "name": "DST end night (7 h window), in the repeated hour", "quiet": "berlin", "at": "2026-10-25T01:30:00Z", "expected": "2026-10-25T05:00:00Z" },
+    { "name": "DST end night, last held minute", "quiet": "berlin", "at": "2026-10-25T04:59:00Z", "expected": "2026-10-25T05:00:00Z" },
+    { "name": "DST start night (5 h window)", "quiet": "berlin", "at": "2027-03-27T23:30:00Z", "expected": "2027-03-28T04:00:00Z" },
+    { "name": "start hour in the spring gap resolves to the offset before", "quiet": "berlin2to6", "at": "2027-03-28T01:30:00Z", "expected": "2027-03-28T04:00:00Z" },
+    { "name": "spring gap: before the shifted start", "quiet": "berlin2to6", "at": "2027-03-28T00:59:00Z", "expected": null },
+    { "name": "start hour in the autumn overlap resolves to the offset after", "quiet": "berlin2to6", "at": "2026-10-25T01:00:00Z", "expected": "2026-10-25T05:00:00Z" },
+    { "name": "autumn overlap: the first 02:30 is not held yet", "quiet": "berlin2to6", "at": "2026-10-25T00:30:00Z", "expected": null },
+    { "name": "no quiet hours", "quiet": null, "at": "2026-10-18T01:00:00Z", "expected": null }
+  ],
+  "running": [
+    { "name": "across a CEST night", "quiet": "berlin", "from": "2026-10-17T21:55:00Z", "to": "2026-10-18T04:15:00Z", "expected_ms": 1200000 },
+    { "name": "entirely inside a window", "quiet": "berlin", "from": "2026-10-18T00:00:00Z", "to": "2026-10-18T03:00:00Z", "expected_ms": 0 },
+    { "name": "pause inside a window freezes the unheld rest", "quiet": "berlin", "from": "2026-10-18T01:00:00Z", "to": "2026-10-18T04:15:00Z", "expected_ms": 900000 },
+    { "name": "DST end night holds 7 h", "quiet": "berlin", "from": "2026-10-24T21:00:00Z", "to": "2026-10-25T06:00:00Z", "expected_ms": 7200000 },
+    { "name": "DST start night holds 5 h", "quiet": "berlin", "from": "2027-03-27T22:00:00Z", "to": "2027-03-28T05:00:00Z", "expected_ms": 7200000 },
+    { "name": "two nights", "quiet": "berlin", "from": "2026-10-18T18:00:00Z", "to": "2026-10-21T12:00:00Z", "expected_ms": 172800000 },
+    { "name": "reversed span", "quiet": "berlin", "from": "2026-10-18T12:00:00Z", "to": "2026-10-18T11:00:00Z", "expected_ms": 0 },
+    { "name": "no quiet hours = wall time", "quiet": null, "from": "2026-10-17T21:55:00Z", "to": "2026-10-18T04:15:00Z", "expected_ms": 22800000 }
+  ],
+  "add": [
+    { "name": "live 5:00 ending exactly at the window start", "quiet": "berlin", "from": "2026-10-17T21:55:00Z", "ms": 300000, "expected": "2026-10-17T22:00:00Z" },
+    { "name": "span across the window start (23:55 + 20 min)", "quiet": "berlin", "from": "2026-10-17T21:55:00Z", "ms": 1200000, "expected": "2026-10-18T04:15:00Z" },
+    { "name": "start inside the window", "quiet": "berlin", "from": "2026-10-18T01:00:00Z", "ms": 43200000, "expected": "2026-10-18T16:00:00Z" },
+    { "name": "start exactly at the window end", "quiet": "berlin", "from": "2026-10-18T04:00:00Z", "ms": 3600000, "expected": "2026-10-18T05:00:00Z" },
+    { "name": "start exactly at the window start", "quiet": "berlin", "from": "2026-10-17T22:00:00Z", "ms": 60000, "expected": "2026-10-18T04:01:00Z" },
+    { "name": "extension on a deadline at the window start", "quiet": "berlin", "from": "2026-10-17T22:00:00Z", "ms": 120000, "expected": "2026-10-18T04:02:00Z" },
+    { "name": "zero ms inside a window returns the start unchanged", "quiet": "berlin", "from": "2026-10-18T01:00:00Z", "ms": 0, "expected": "2026-10-18T01:00:00Z" },
+    { "name": "slow 12 h from 20:00", "quiet": "berlin", "from": "2026-10-18T18:00:00Z", "ms": 43200000, "expected": "2026-10-19T12:00:00Z" },
+    { "name": "48 h across two nights", "quiet": "berlin", "from": "2026-10-18T18:00:00Z", "ms": 172800000, "expected": "2026-10-21T12:00:00Z" },
+    { "name": "DST end night (7 h held)", "quiet": "berlin", "from": "2026-10-24T21:00:00Z", "ms": 7200000, "expected": "2026-10-25T06:00:00Z" },
+    { "name": "DST start night (5 h held)", "quiet": "berlin", "from": "2027-03-27T22:00:00Z", "ms": 7200000, "expected": "2027-03-28T05:00:00Z" },
+    { "name": "resume inside a window", "quiet": "berlin", "from": "2026-10-18T02:00:00Z", "ms": 900000, "expected": "2026-10-18T04:15:00Z" },
+    { "name": "resume in the afternoon", "quiet": "berlin", "from": "2026-10-18T10:00:00Z", "ms": 900000, "expected": "2026-10-18T10:15:00Z" },
+    { "name": "UTC zone, 1-2 window", "quiet": "utc1to2", "from": "2026-10-18T00:30:00Z", "ms": 3600000, "expected": "2026-10-18T02:30:00Z" },
+    { "name": "no quiet hours = wall addition", "quiet": null, "from": "2026-10-17T21:55:00Z", "ms": 1200000, "expected": "2026-10-17T22:15:00Z" }
+  ]
+}

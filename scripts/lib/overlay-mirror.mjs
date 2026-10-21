@@ -1,0 +1,817 @@
+/**
+ * overlay-mirror.mjs
+ *
+ * Plans and applies the copy of the private pack's `overlay/` folder into `src/` (see
+ * scripts/mirror-private-overlay.mjs for the CLI and docs/format-packs.md for the flow).
+ *
+ * The copies are generated files that must never reach the public repository, and the public
+ * repository must not even name them. So outputs only ever land in whole private folders, and each
+ * such folder ignores itself:
+ *   - every output belongs to an OUTPUT ROOT: the shallowest folder on its path under `src/` that
+ *     holds no git-tracked file (`overlay/lib/x/a.ts` -> root `src/lib/x/`). An output
+ *     with no such folder would be a single file dropped into a public folder and is refused
+ *     (FILE_IN_PUBLIC_DIR): mirror whole private folders only;
+ *   - the mirror writes a self-ignoring `.gitignore` (`*`) into every output root before it
+ *     copies anything there, and lists the roots in the manifest. No public `.gitignore` names a
+ *     private folder, yet `git add -A` can never pick an output up;
+ *   - an output root that already holds anything else (a file the manifest does not list, or a
+ *     `.gitignore` the mirror did not write) is refused (ROOT_HAS_FOREIGN_FILES): the root's `*`
+ *     would hide it;
+ *   - a destination that git tracks is refused (TRACKED);
+ *   - as a final check, every output must be ignored by the `.gitignore` files committed at HEAD
+ *     plus the roots' self-ignoring ones (NOT_COMMITTED_IGNORED): an uncommitted `.gitignore` edit,
+ *     a local `.git/info/exclude` or a global excludes file does not count;
+ *   - symlinks in the overlay or at a destination are refused (SYMLINK), and so is any path that
+ *     would land outside `src/` (OUTSIDE_TARGET), or an overlay file that would replace a root's
+ *     own `.gitignore` (RESERVED_NAME);
+ *   - an output edited in place since the last run is refused (EDITED_IN_PLACE) unless forced;
+ *   - an untracked file already at a destination that differs from the overlay source is refused
+ *     (UNTRACKED_DIFFERS); a byte-identical one is adopted into the manifest.
+ * One refusal stops the whole run before anything is written.
+ *
+ * `.overlay-manifest.json` at the repository root records every output (destination -> source and
+ * sha256 of the bytes written) and every output root. Before the first copy or delete of a run, a
+ * pending manifest is written that already lists every planned output (with the sha256 of the
+ * bytes it replaces as `prior`) and keeps every output and root still to be removed; the final
+ * manifest drops `prior`. So a run that crashes between copies and the final manifest leaves only
+ * outputs the manifest knows, and the next run simply finishes the job instead of refusing them. A
+ * crash mid-copy can also leave a `<output>.overlay-tmp` temp file beside an output the manifest
+ * lists (current or about to be removed) or beside a root's `.gitignore`: those are the mirror's own,
+ * so the next run deletes them instead of refusing the root. The one exception is a temp of that
+ * name that git tracks: a name alone does not make a file the mirror's, so it is refused (TRACKED)
+ * and never deleted. Outputs whose source left the overlay are
+ * deleted (and their emptied folders pruned); a root left without outputs loses its `.gitignore`
+ * and is pruned too, so a removed route cannot linger. When the overlay folder is gone but the
+ * manifest still lists outputs, the run fails (OVERLAY_MISSING_WITH_OUTPUTS) unless `prune` is
+ * set, which removes them. Without an overlay and without a manifest (a public checkout) the run
+ * is a no-op that never calls git.
+ *
+ * File-system and git errors are not swallowed: a git failure is a GIT_UNAVAILABLE refusal
+ * (fail closed) and any other error propagates to the caller.
+ */
+
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  rmdirSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+
+export const MANIFEST_NAME = '.overlay-manifest.json';
+/** Version 2 adds `roots`; a version 1 manifest (no roots) is still read. */
+export const MANIFEST_VERSION = 2;
+const READABLE_MANIFEST_VERSIONS = new Set([1, 2]);
+/** Overlay location and mirror target, relative to the repository root. */
+export const OVERLAY_REL = 'src/format-packs/private/overlay';
+export const TARGET_REL = 'src';
+/** Suffix of the temp file each output is copied to before it is renamed into place. */
+export const OUTPUT_TMP_SUFFIX = '.overlay-tmp';
+/** The self-ignoring file the mirror keeps in every output root. */
+export const ROOT_IGNORE_NAME = '.gitignore';
+export const ROOT_IGNORE_CONTENT =
+  '# Generated by scripts/mirror-private-overlay.mjs: this folder is a mirrored private overlay output.\n' +
+  '# It ignores itself and everything in it, so it can never be committed. Never edit or commit it.\n' +
+  '*\n';
+
+/** Refusal reasons; each names one distinct cause. */
+export const REASON = Object.freeze({
+  TRACKED: 'TRACKED',
+  NOT_COMMITTED_IGNORED: 'NOT_COMMITTED_IGNORED',
+  FILE_IN_PUBLIC_DIR: 'FILE_IN_PUBLIC_DIR',
+  ROOT_HAS_FOREIGN_FILES: 'ROOT_HAS_FOREIGN_FILES',
+  RESERVED_NAME: 'RESERVED_NAME',
+  SYMLINK: 'SYMLINK',
+  OUTSIDE_TARGET: 'OUTSIDE_TARGET',
+  EDITED_IN_PLACE: 'EDITED_IN_PLACE',
+  UNTRACKED_DIFFERS: 'UNTRACKED_DIFFERS',
+  OVERLAY_MISSING_WITH_OUTPUTS: 'OVERLAY_MISSING_WITH_OUTPUTS',
+  GIT_UNAVAILABLE: 'GIT_UNAVAILABLE',
+});
+
+const CASE_INSENSITIVE = process.platform === 'win32' || process.platform === 'darwin';
+
+/** @param {string} p */
+function fold(p) {
+  return CASE_INSENSITIVE ? p.toLowerCase() : p;
+}
+
+/** @param {string} p */
+function toPosix(p) {
+  return p.split(sep).join('/');
+}
+
+/** @param {string} abs */
+export function sha256File(abs) {
+  return createHash('sha256').update(readFileSync(abs)).digest('hex');
+}
+
+/**
+ * Every file under `overlayDir`, skipping `__tests__` folders at any depth. Symlinks are not
+ * followed; they are returned separately so the plan can refuse them.
+ * @param {string} overlayDir absolute
+ * @returns {{ files: string[], symlinks: string[] }} overlay-relative posix paths
+ */
+export function walkOverlay(overlayDir) {
+  /** @type {string[]} */
+  const files = [];
+  /** @type {string[]} */
+  const symlinks = [];
+  /** @param {string} dir */
+  const walk = (dir) => {
+    for (const name of readdirSync(dir).sort()) {
+      if (name === '__tests__') continue;
+      const full = join(dir, name);
+      const st = lstatSync(full);
+      const rel = toPosix(relative(overlayDir, full));
+      if (st.isSymbolicLink()) symlinks.push(rel);
+      else if (st.isDirectory()) walk(full);
+      else if (st.isFile()) files.push(rel);
+    }
+  };
+  walk(overlayDir);
+  return { files, symlinks };
+}
+
+/**
+ * Every entry under `rootAbs` (repo-relative posix paths): files and symlinks; folders are walked.
+ * @param {string} repoRoot absolute
+ * @param {string} rootAbs absolute
+ * @returns {{ files: string[], symlinks: string[] }}
+ */
+function walkRoot(repoRoot, rootAbs) {
+  /** @type {string[]} */
+  const files = [];
+  /** @type {string[]} */
+  const symlinks = [];
+  /** @param {string} dir */
+  const walk = (dir) => {
+    for (const name of readdirSync(dir).sort()) {
+      const full = join(dir, name);
+      const st = lstatSync(full);
+      const rel = toPosix(relative(repoRoot, full));
+      if (st.isSymbolicLink()) symlinks.push(rel);
+      else if (st.isDirectory()) walk(full);
+      else files.push(rel);
+    }
+  };
+  walk(rootAbs);
+  return { files, symlinks };
+}
+
+/**
+ * Read the manifest. A missing file is an empty manifest; a malformed one throws, because
+ * guessing which outputs were generated could delete or keep the wrong files.
+ * @param {string} root
+ * @returns {{ version: number, files: Record<string, ManifestEntry>, roots: string[] }}
+ */
+export function readManifest(root) {
+  const path = join(root, MANIFEST_NAME);
+  if (!existsSync(path)) return { version: MANIFEST_VERSION, files: {}, roots: [] };
+  const raw = readFileSync(path, 'utf8');
+  /** @type {unknown} */
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`[mirror-private-overlay] ${MANIFEST_NAME} is not valid JSON (${err instanceof Error ? err.message : String(err)}); delete it and the mirrored outputs, then re-run`);
+  }
+  const bad = (why) =>
+    new Error(`[mirror-private-overlay] ${MANIFEST_NAME} is malformed (${why}); delete it and the mirrored outputs, then re-run`);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw bad('not an object');
+  const { version, files, roots } = /** @type {Record<string, unknown>} */ (parsed);
+  if (typeof version !== 'number' || !READABLE_MANIFEST_VERSIONS.has(version)) throw bad(`unsupported version ${JSON.stringify(version)}`);
+  if (!files || typeof files !== 'object' || Array.isArray(files)) throw bad('"files" is not an object');
+  /** @type {Record<string, ManifestEntry>} */
+  const out = {};
+  for (const [dest, entry] of Object.entries(files)) {
+    if (!entry || typeof entry !== 'object') throw bad(`entry ${dest} is not an object`);
+    const { source, sha256, prior } = /** @type {Record<string, unknown>} */ (entry);
+    if (typeof source !== 'string' || typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) {
+      throw bad(`entry ${dest} needs a string "source" and a hex "sha256"`);
+    }
+    if (prior !== undefined && (typeof prior !== 'string' || !/^[0-9a-f]{64}$/.test(prior))) {
+      throw bad(`entry ${dest} has a "prior" that is not a hex sha256`);
+    }
+    if (!isSafeRepoRel(dest, TARGET_REL) || !isSafeRepoRel(source, OVERLAY_REL)) {
+      throw bad(`entry ${dest} points outside ${TARGET_REL}/ or ${OVERLAY_REL}/`);
+    }
+    out[dest] = prior === undefined ? { source, sha256 } : { source, sha256, prior };
+  }
+  /** @type {string[]} */
+  const rootList = [];
+  if (version >= 2) {
+    if (!Array.isArray(roots)) throw bad('"roots" is not an array');
+    for (const r of roots) {
+      if (typeof r !== 'string' || !isSafeRepoRel(r, TARGET_REL)) throw bad(`root ${JSON.stringify(r)} points outside ${TARGET_REL}/`);
+      rootList.push(r);
+    }
+  }
+  return { version: MANIFEST_VERSION, files: out, roots: rootList };
+}
+
+/**
+ * A repo-relative posix path under `prefix/` with no `.`/`..` segments and no absolute form.
+ * @param {string} rel
+ * @param {string} prefix
+ */
+function isSafeRepoRel(rel, prefix) {
+  if (isAbsolute(rel) || rel.includes('\\')) return false;
+  const segments = rel.split('/');
+  if (segments.some((s) => s === '' || s === '.' || s === '..')) return false;
+  return rel.startsWith(`${prefix}/`);
+}
+
+/**
+ * One manifest entry. `prior` appears only in a pending manifest (written before a run's copies):
+ * the sha256 of the bytes the planned write replaces, which a crashed run may have left in place.
+ * @typedef {{ source: string, sha256: string, prior?: string }} ManifestEntry
+ */
+
+/**
+ * Write the manifest atomically (temp file + rename) with sorted keys.
+ * @param {string} root
+ * @param {Record<string, ManifestEntry>} files
+ * @param {string[]} roots
+ */
+export function writeManifest(root, files, roots) {
+  const sorted = Object.fromEntries(Object.keys(files).sort().map((k) => [k, files[k]]));
+  const path = join(root, MANIFEST_NAME);
+  const tmp = `${path}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify({ version: MANIFEST_VERSION, roots: [...roots].sort(), files: sorted }, null, 2)}\n`);
+  renameSync(tmp, path);
+}
+
+/**
+ * Real git answers for the plan.
+ * @param {string} root
+ * @returns {{ trackedSet: () => Set<string>, committedIgnored: (rels: string[], selfIgnoredRoots?: string[]) => Set<string> }}
+ */
+export function gitQueries(root) {
+  return {
+    trackedSet() {
+      const out = execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+      return new Set(out.split('\0').filter(Boolean).map(fold));
+    },
+    committedIgnored(rels, selfIgnoredRoots = []) {
+      return committedIgnoredSet(root, rels, selfIgnoredRoots);
+    },
+  };
+}
+
+/**
+ * The subset of `rels` that the `.gitignore` files COMMITTED at HEAD ignore, together with the
+ * self-ignoring `.gitignore` the mirror keeps in each of `selfIgnoredRoots`. Working-tree edits to
+ * a committed `.gitignore` do not count (a fresh clone would not have them). The HEAD blob of
+ * every tracked regular-file `.gitignore`, plus the roots' generated one, is written into a
+ * scratch work tree, and git answers through an empty scratch repository over that tree: its
+ * `info/exclude` is empty, `core.excludesFile` points at a missing file, and `--no-index` ignores
+ * any index, so only those files can match. Every git call runs with an explicit cwd, so the
+ * answer does not depend on where the caller was started. A repository without a HEAD commit
+ * throws (the caller fails closed).
+ * @param {string} root
+ * @param {string[]} rels repo-relative posix paths
+ * @param {string[]} [selfIgnoredRoots] repo-relative posix folders that carry ROOT_IGNORE_CONTENT
+ * @returns {Set<string>} folded paths that are ignored
+ */
+export function committedIgnoredSet(root, rels, selfIgnoredRoots = []) {
+  const result = new Set();
+  if (rels.length === 0) return result;
+  const scratch = mkdtempSync(join(tmpdir(), 'overlay-mirror-git-'));
+  try {
+    const work = join(scratch, 'work');
+    const gitDir = join(scratch, 'repo', '.git');
+    mkdirSync(work);
+    // -z: "<mode> SP <type> SP <oid> TAB <path>" NUL per entry. Mode 100644/100755 only: git does
+    // not read a symlinked .gitignore.
+    const tree = execFileSync('git', ['ls-tree', '-r', '-z', '--full-tree', 'HEAD'], {
+      cwd: root,
+      encoding: 'utf8',
+      // stderr is captured, so a git failure carries its message in the thrown error.
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    for (const entry of tree.split('\0')) {
+      const tab = entry.indexOf('\t');
+      if (tab < 0) continue;
+      const [mode, type, oid] = entry.slice(0, tab).split(' ');
+      const path = entry.slice(tab + 1);
+      if (type !== 'blob' || (mode !== '100644' && mode !== '100755')) continue;
+      if (path !== '.gitignore' && !path.endsWith('/.gitignore')) continue;
+      const bytes = execFileSync('git', ['cat-file', 'blob', oid], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+      const dest = join(work, ...path.split('/'));
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, bytes);
+    }
+    for (const r of selfIgnoredRoots) {
+      const dest = join(work, ...r.split('/'), ROOT_IGNORE_NAME);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, ROOT_IGNORE_CONTENT);
+    }
+    execFileSync('git', ['init', '-q', join(scratch, 'repo')], { cwd: scratch, stdio: 'ignore', windowsHide: true });
+    writeFileSync(join(gitDir, 'info', 'exclude'), '');
+    let out = '';
+    try {
+      out = execFileSync(
+        'git',
+        [
+          `--git-dir=${gitDir}`,
+          `--work-tree=${work}`,
+          '-c',
+          `core.excludesFile=${join(scratch, 'no-global-excludes')}`,
+          'check-ignore',
+          '--no-index',
+          '--stdin',
+          '-z',
+          '-v',
+          '-n',
+        ],
+        { cwd: work, stdio: ['pipe', 'pipe', 'pipe'], input: rels.map((r) => `${r}\0`).join(''), encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 }
+      );
+    } catch (err) {
+      // check-ignore exits 1 when nothing matched; with -n every path is printed, so 1 is still an answer.
+      const status = err && typeof err === 'object' && 'status' in err ? err.status : null;
+      if (status !== 1) throw err;
+      out = String(/** @type {{ stdout?: unknown }} */ (err).stdout ?? '');
+    }
+    // -v -n -z: <source> NUL <line> NUL <pattern> NUL <path> NUL per path; empty source = no match.
+    const fields = out.split('\0');
+    for (let i = 0; i + 3 < fields.length; i += 4) {
+      const [source, , pattern, path] = fields.slice(i, i + 4);
+      if (source !== '' && !pattern.startsWith('!')) result.add(fold(path));
+    }
+    return result;
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Every folder that holds a tracked file (folded repo-relative posix paths, ancestors included).
+ * @param {Set<string>} tracked folded tracked paths
+ */
+function trackedDirsOf(tracked) {
+  const dirs = new Set();
+  for (const file of tracked) {
+    let at = file.lastIndexOf('/');
+    while (at > 0) {
+      const dir = file.slice(0, at);
+      if (dirs.has(dir)) break;
+      dirs.add(dir);
+      at = dir.lastIndexOf('/');
+    }
+  }
+  return dirs;
+}
+
+/**
+ * The output root of `dest`: the shallowest folder under `src/` on its path that holds no tracked
+ * file. Null when every folder on the way is public (the output would be a single private file in
+ * a public folder).
+ * @param {string} dest repo-relative posix path under `src/`
+ * @param {Set<string>} trackedDirs from trackedDirsOf
+ * @returns {string | null}
+ */
+export function outputRootOf(dest, trackedDirs) {
+  const segments = dest.split('/');
+  // segments[0] is 'src'; the last segment is the file name.
+  for (let i = 2; i < segments.length; i += 1) {
+    const candidate = segments.slice(0, i).join('/');
+    if (!trackedDirs.has(fold(candidate))) return candidate;
+  }
+  return null;
+}
+
+/**
+ * The real path of the nearest existing ancestor of `abs` (inclusive).
+ * @param {string} abs
+ */
+function realNearest(abs) {
+  let current = abs;
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current) return current;
+    current = parent;
+  }
+  return realpathSync.native(current);
+}
+
+/**
+ * @typedef {{ dest: string, source: string, sha256: string, onDisk?: string }} Entry
+ * @typedef {{ path: string, reason: string, detail: string }} Refusal
+ * @typedef {{
+ *   root: string,
+ *   overlayPresent: boolean,
+ *   writes: Entry[],
+ *   adopts: Entry[],
+ *   keeps: Entry[],
+ *   removes: { dest: string }[],
+ *   tempRemoves: string[],
+ *   refusals: Refusal[],
+ *   roots: string[],
+ *   rootIgnoreWrites: string[],
+ *   rootIgnoreRemoves: string[],
+ *   manifestFiles: Record<string, { source: string, sha256: string }>,
+ *   manifestChanged: boolean,
+ *   pendingManifest: { files: Record<string, ManifestEntry>, roots: string[] },
+ * }} Plan
+ */
+
+/**
+ * Work out what a run would do without touching the work tree.
+ * @param {{
+ *   root: string,
+ *   force?: boolean,
+ *   prune?: boolean,
+ *   git?: { trackedSet: () => Set<string>, committedIgnored: (rels: string[], selfIgnoredRoots?: string[]) => Set<string> },
+ * }} options
+ * @returns {Plan}
+ */
+export function planOverlayMirror({ root, force = false, prune = false, git }) {
+  const rootAbs = resolve(root);
+  const overlayDir = join(rootAbs, OVERLAY_REL);
+  const targetDir = join(rootAbs, TARGET_REL);
+  const manifest = readManifest(rootAbs);
+  const overlayPresent = existsSync(overlayDir);
+
+  /** @type {Plan} */
+  const plan = {
+    root: rootAbs,
+    overlayPresent,
+    writes: [],
+    adopts: [],
+    keeps: [],
+    removes: [],
+    tempRemoves: [],
+    refusals: [],
+    roots: [],
+    rootIgnoreWrites: [],
+    rootIgnoreRemoves: [],
+    manifestFiles: {},
+    manifestChanged: false,
+    pendingManifest: { files: {}, roots: [] },
+  };
+  const manifestDests = Object.keys(manifest.files);
+
+  if (!overlayPresent) {
+    if (manifestDests.length === 0 && manifest.roots.length === 0) return plan;
+    if (!prune) {
+      plan.refusals.push({
+        path: OVERLAY_REL,
+        reason: REASON.OVERLAY_MISSING_WITH_OUTPUTS,
+        detail: `the overlay folder is missing but ${MANIFEST_NAME} lists ${manifestDests.length} mirrored output(s); restore the overlay, or pass --prune to delete the outputs`,
+      });
+      return plan;
+    }
+  }
+
+  /** @type {Map<string, { source: string, sha256: string }>} desired outputs by dest */
+  const desired = new Map();
+  if (overlayPresent) {
+    const { files, symlinks } = walkOverlay(overlayDir);
+    for (const rel of symlinks) {
+      plan.refusals.push({ path: `${OVERLAY_REL}/${rel}`, reason: REASON.SYMLINK, detail: 'the overlay contains a symlink; copy the real file instead' });
+    }
+    for (const rel of files) {
+      const source = `${OVERLAY_REL}/${rel}`;
+      const dest = `${TARGET_REL}/${rel}`;
+      desired.set(dest, { source, sha256: sha256File(join(rootAbs, source)) });
+    }
+  }
+
+  // Git is asked only when there is something to write or delete.
+  const toCheck = [...desired.keys()];
+  /** @type {Map<string, string>} dest -> its output root */
+  const rootOf = new Map();
+  if (toCheck.length > 0 || manifestDests.length > 0 || manifest.roots.length > 0) {
+    const queries = git ?? gitQueries(rootAbs);
+    /** @type {Set<string>} */
+    let tracked;
+    try {
+      tracked = queries.trackedSet();
+    } catch (err) {
+      plan.refusals.push({
+        path: '.',
+        reason: REASON.GIT_UNAVAILABLE,
+        detail: `git could not confirm the outputs are untracked and ignored (${err instanceof Error ? err.message : String(err)})`,
+      });
+      return plan;
+    }
+
+    const trackedDirs = trackedDirsOf(tracked);
+    /** @type {Set<string>} */
+    const roots = new Set();
+    for (const dest of toCheck) {
+      const outputRoot = outputRootOf(dest, trackedDirs);
+      if (outputRoot === null) {
+        plan.refusals.push({
+          path: dest,
+          reason: REASON.FILE_IN_PUBLIC_DIR,
+          detail: `every folder on the way holds tracked files, so this would be a private file inside a public folder; move it into a private folder of its own (overlay/${dest.slice(TARGET_REL.length + 1, dest.lastIndexOf('/'))}/<private-folder>/)`,
+        });
+        continue;
+      }
+      if (fold(dest) === fold(`${outputRoot}/${ROOT_IGNORE_NAME}`)) {
+        plan.refusals.push({ path: dest, reason: REASON.RESERVED_NAME, detail: `${ROOT_IGNORE_NAME} at an output root is the mirror's own self-ignoring file` });
+        continue;
+      }
+      rootOf.set(dest, outputRoot);
+      roots.add(outputRoot);
+    }
+    plan.roots = [...roots].sort();
+
+    /** @type {Set<string>} */
+    let ignored;
+    try {
+      ignored = queries.committedIgnored(toCheck, plan.roots);
+    } catch (err) {
+      plan.refusals.push({
+        path: '.',
+        reason: REASON.GIT_UNAVAILABLE,
+        detail: `git could not confirm the outputs are untracked and ignored (${err instanceof Error ? err.message : String(err)})`,
+      });
+      return plan;
+    }
+
+    const realTarget = realpathSync.native(targetDir);
+    const realTargetPrefix = fold(realTarget.endsWith(sep) ? realTarget : realTarget + sep);
+    for (const dest of new Set([...toCheck, ...manifestDests])) {
+      if (tracked.has(fold(dest))) {
+        plan.refusals.push({ path: dest, reason: REASON.TRACKED, detail: 'git tracks this path; an overlay file must never replace or delete a tracked file' });
+        continue;
+      }
+      const abs = join(rootAbs, dest);
+      if (!fold(realNearest(abs) + sep).startsWith(realTargetPrefix)) {
+        plan.refusals.push({ path: dest, reason: REASON.OUTSIDE_TARGET, detail: `the path resolves outside ${TARGET_REL}/ (junction or symlink on the way)` });
+        continue;
+      }
+      if (isSymlink(abs)) {
+        plan.refusals.push({ path: dest, reason: REASON.SYMLINK, detail: 'the output path is a symlink' });
+      }
+    }
+    for (const dest of rootOf.keys()) {
+      if (!ignored.has(fold(dest))) {
+        plan.refusals.push({
+          path: dest,
+          reason: REASON.NOT_COMMITTED_IGNORED,
+          detail: 'neither a committed .gitignore nor the output root\'s self-ignoring .gitignore ignores this output (a negation pattern?)',
+        });
+      }
+    }
+
+    // Each root, current or stale, may hold only the mirror's own files: the root's `*` would hide anything else.
+    const allowed = new Set([...rootOf.keys(), ...manifestDests].map(fold));
+    // Temp files a crashed copy left beside an output the mirror knows (current, or recorded and
+    // about to be removed): the mirror's own bytes, deleted by the next run.
+    const ownTemps = new Set([...rootOf.keys(), ...manifestDests].map((d) => fold(`${d}${OUTPUT_TMP_SUFFIX}`)));
+    for (const r of new Set([...plan.roots, ...manifest.roots])) {
+      const rootAbsDir = join(rootAbs, r);
+      if (!existsSync(rootAbsDir)) continue;
+      if (isSymlink(rootAbsDir)) {
+        plan.refusals.push({ path: r, reason: REASON.SYMLINK, detail: 'the output root is a symlink' });
+        continue;
+      }
+      const { files, symlinks } = walkRoot(rootAbs, rootAbsDir);
+      const ignoreFile = `${r}/${ROOT_IGNORE_NAME}`;
+      const foreign = [
+        ...symlinks,
+        ...files.filter((f) => {
+          if (allowed.has(fold(f))) return false;
+          if (fold(f) === fold(ignoreFile)) return readFileSync(join(rootAbs, f), 'utf8') !== ROOT_IGNORE_CONTENT;
+          // A crash mid-copy, or between writing the root's .gitignore temp file and renaming it.
+          if (ownTemps.has(fold(f)) || fold(f) === fold(ignoreFile + OUTPUT_TMP_SUFFIX)) {
+            // A temp's name alone does not make it the mirror's: a tracked file is never deleted.
+            if (tracked.has(fold(f))) {
+              plan.refusals.push({ path: f, reason: REASON.TRACKED, detail: 'git tracks this path; an overlay file must never replace or delete a tracked file' });
+            } else {
+              plan.tempRemoves.push(f);
+            }
+            return false;
+          }
+          return true;
+        }),
+      ];
+      if (foreign.length > 0) {
+        const shown = foreign.slice(0, 5).join(', ');
+        plan.refusals.push({
+          path: r,
+          reason: REASON.ROOT_HAS_FOREIGN_FILES,
+          detail: `the output root holds files the mirror did not write (${shown}${foreign.length > 5 ? ', ...' : ''}); its self-ignoring .gitignore would hide them, so move them away first`,
+        });
+      }
+    }
+  }
+
+  plan.tempRemoves.sort();
+
+  for (const [dest, { source, sha256 }] of desired) {
+    const abs = join(rootAbs, dest);
+    const recorded = manifest.files[dest];
+    if (!existsSync(abs)) {
+      plan.writes.push({ dest, source, sha256 });
+      continue;
+    }
+    if (isSymlink(abs)) continue; // refused above
+    const onDisk = sha256File(abs);
+    if (recorded) {
+      // `prior`: a pending manifest from a run that crashed before this copy; the bytes it was
+      // about to replace are still the mirror's own.
+      if (onDisk === sha256) {
+        plan.keeps.push({ dest, source, sha256 });
+      } else if (onDisk === recorded.sha256 || onDisk === recorded.prior || force) {
+        plan.writes.push({ dest, source, sha256, onDisk });
+      } else {
+        plan.refusals.push({
+          path: dest,
+          reason: REASON.EDITED_IN_PLACE,
+          detail: `the output was edited since it was mirrored; edit ${source} instead (pass --force to overwrite the output)`,
+        });
+      }
+    } else if (onDisk === sha256) {
+      plan.adopts.push({ dest, source, sha256 });
+    } else {
+      plan.refusals.push({
+        path: dest,
+        reason: REASON.UNTRACKED_DIFFERS,
+        detail: `an untracked file that differs from ${source} is already there; move it away or delete it, then re-run`,
+      });
+    }
+  }
+
+  for (const dest of manifestDests) {
+    if (desired.has(dest)) continue;
+    const abs = join(rootAbs, dest);
+    if (!existsSync(abs)) {
+      plan.removes.push({ dest });
+      continue;
+    }
+    if (isSymlink(abs)) continue; // refused above
+    const onDiskRemoved = sha256File(abs);
+    if (onDiskRemoved === manifest.files[dest].sha256 || onDiskRemoved === manifest.files[dest].prior || force) {
+      plan.removes.push({ dest });
+    } else {
+      plan.refusals.push({
+        path: dest,
+        reason: REASON.EDITED_IN_PLACE,
+        detail: 'the output of a removed overlay file was edited since it was mirrored; move it away, or pass --force to delete it',
+      });
+    }
+  }
+
+  for (const r of plan.roots) {
+    const ignoreAbs = join(rootAbs, r, ROOT_IGNORE_NAME);
+    if (!existsSync(ignoreAbs) || readFileSync(ignoreAbs, 'utf8') !== ROOT_IGNORE_CONTENT) plan.rootIgnoreWrites.push(r);
+  }
+  const current = new Set(plan.roots.map(fold));
+  plan.rootIgnoreRemoves = manifest.roots.filter((r) => !current.has(fold(r))).sort();
+
+  for (const e of [...plan.writes, ...plan.adopts, ...plan.keeps]) {
+    plan.manifestFiles[e.dest] = { source: e.source, sha256: e.sha256 };
+  }
+  // Written before the first copy or delete: every planned output (with the bytes it replaces as
+  // `prior`), plus every recorded output and root still to be removed.
+  /** @type {Record<string, ManifestEntry>} */
+  const pendingFiles = {};
+  for (const { dest } of plan.removes) pendingFiles[dest] = manifest.files[dest];
+  for (const [dest, entry] of Object.entries(plan.manifestFiles)) pendingFiles[dest] = entry;
+  for (const e of plan.writes) {
+    pendingFiles[e.dest] = e.onDisk !== undefined && e.onDisk !== e.sha256
+      ? { source: e.source, sha256: e.sha256, prior: e.onDisk }
+      : { source: e.source, sha256: e.sha256 };
+  }
+  plan.pendingManifest = { files: pendingFiles, roots: [...new Set([...plan.roots, ...plan.rootIgnoreRemoves])].sort() };
+  plan.manifestChanged =
+    JSON.stringify(sortedEntries(plan.manifestFiles)) !== JSON.stringify(sortedEntries(manifest.files)) ||
+    JSON.stringify(plan.roots) !== JSON.stringify([...manifest.roots].sort()) ||
+    readManifestVersionOnDisk(rootAbs) !== MANIFEST_VERSION;
+  return plan;
+}
+
+/** The version field of the manifest on disk; null without a manifest. */
+function readManifestVersionOnDisk(rootAbs) {
+  const path = join(rootAbs, MANIFEST_NAME);
+  if (!existsSync(path)) return MANIFEST_VERSION;
+  const { version } = /** @type {{ version?: unknown }} */ (JSON.parse(readFileSync(path, 'utf8')));
+  return version;
+}
+
+/**
+ * True when `abs` is a symlink (dangling or not); false when it is anything else or missing.
+ * @param {string} abs
+ */
+function isSymlink(abs) {
+  try {
+    return lstatSync(abs).isSymbolicLink();
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+/** @param {Record<string, unknown>} files */
+function sortedEntries(files) {
+  return Object.keys(files).sort().map((k) => [k, files[k]]);
+}
+
+/** True when applying the plan would change anything on disk. */
+export function planHasChanges(/** @type {Plan} */ plan) {
+  return (
+    plan.writes.length > 0 ||
+    plan.removes.length > 0 ||
+    plan.tempRemoves.length > 0 ||
+    plan.rootIgnoreWrites.length > 0 ||
+    plan.rootIgnoreRemoves.length > 0 ||
+    plan.manifestChanged
+  );
+}
+
+/**
+ * Apply a plan with no refusals: write the pending manifest (see the file header), then each output
+ * root's self-ignoring `.gitignore` (so no output is ever visible to git, not even mid-run), delete
+ * the stale temp files of a crashed run, copy, delete, drop the `.gitignore` of roots
+ * left without outputs, prune emptied folders up to `src/`, then write the manifest (or delete it
+ * when nothing is mirrored any more).
+ * @param {Plan} plan
+ */
+export function applyOverlayMirror(plan) {
+  if (plan.refusals.length > 0) throw new Error('[mirror-private-overlay] refusing to apply a plan with refusals');
+  const targetDir = join(plan.root, TARGET_REL);
+  if (plan.writes.length > 0 || plan.removes.length > 0 || plan.rootIgnoreRemoves.length > 0) {
+    writeManifest(plan.root, plan.pendingManifest.files, plan.pendingManifest.roots);
+  }
+  for (const r of plan.rootIgnoreWrites) {
+    const abs = join(plan.root, r, ROOT_IGNORE_NAME);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(`${abs}${OUTPUT_TMP_SUFFIX}`, ROOT_IGNORE_CONTENT);
+    renameSync(`${abs}${OUTPUT_TMP_SUFFIX}`, abs);
+  }
+  // Stale temps of a crashed run go before any copy, so a root left without outputs can be pruned.
+  for (const rel of plan.tempRemoves) rmSync(join(plan.root, rel), { force: true });
+  for (const { dest, source } of plan.writes) {
+    const abs = join(plan.root, dest);
+    mkdirSync(dirname(abs), { recursive: true });
+    // Temp copy + rename, like the manifest: a crash mid-copy never leaves a partial output that
+    // a later run would refuse as EDITED_IN_PLACE or UNTRACKED_DIFFERS.
+    const tmp = `${abs}${OUTPUT_TMP_SUFFIX}`;
+    copyFileSync(join(plan.root, source), tmp);
+    renameSync(tmp, abs);
+  }
+  for (const { dest } of plan.removes) {
+    const abs = join(plan.root, dest);
+    rmSync(abs, { force: true });
+    pruneEmptyDirs(dirname(abs), targetDir);
+  }
+  for (const r of plan.rootIgnoreRemoves) {
+    const rootAbsDir = join(plan.root, r);
+    rmSync(join(rootAbsDir, ROOT_IGNORE_NAME), { force: true });
+    pruneEmptyDirs(rootAbsDir, targetDir);
+  }
+  if (planHasChanges(plan)) {
+    if (Object.keys(plan.manifestFiles).length === 0 && plan.roots.length === 0) rmSync(join(plan.root, MANIFEST_NAME), { force: true });
+    else writeManifest(plan.root, plan.manifestFiles, plan.roots);
+  }
+}
+
+/**
+ * Remove `dir` and its parents while they are empty, stopping at `stop` (exclusive).
+ * @param {string} dir
+ * @param {string} stop
+ */
+function pruneEmptyDirs(dir, stop) {
+  let current = dir;
+  const stopFold = fold(resolve(stop));
+  while (fold(resolve(current)) !== stopFold && fold(resolve(current)).startsWith(stopFold + sep)) {
+    if (!existsSync(current) || readdirSync(current).length > 0) return;
+    rmdirSync(current);
+    current = dirname(current);
+  }
+}
+
+/**
+ * Human-readable summary lines for a plan.
+ * @param {Plan} plan
+ * @returns {string[]}
+ */
+export function describePlan(plan) {
+  const lines = [];
+  for (const r of plan.refusals) lines.push(`refused ${r.reason}: ${r.path}: ${r.detail}`);
+  for (const r of plan.rootIgnoreWrites) lines.push(`ignore ${r}/ (self-ignoring ${ROOT_IGNORE_NAME})`);
+  for (const e of plan.writes) lines.push(`write ${e.dest} <- ${e.source}`);
+  for (const e of plan.adopts) lines.push(`adopt ${e.dest} (identical to ${e.source})`);
+  for (const e of plan.removes) lines.push(`remove ${e.dest} (its overlay source is gone)`);
+  for (const t of plan.tempRemoves) lines.push(`clean ${t} (temp file of a crashed run)`);
+  for (const r of plan.rootIgnoreRemoves) lines.push(`drop ${r}/ (no mirrored output left)`);
+  return lines;
+}

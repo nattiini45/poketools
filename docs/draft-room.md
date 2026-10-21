@@ -1,0 +1,346 @@
+# Draft Room Module
+> The EvoLiga draft tool for **Evolution Point Buy (EPB)** leagues: the pick screen with its finder, the secret-drop redraft, the token centre, the admin control panel with its audit trail, the draft overlays and the trainer-avatar editor. The UI is bilingual (English default, German). This page is the public reference; the original frontend and backend design specs are maintainer-only and not in this repo. The data contract is summarised in [poketools-spec.md §5](./poketools-spec.md).
+
+## Overview
+The draft room is the pick-by-pick front end for EvoLiga draft pools. It exists only for seasons whose `format_type` is EPB (`isEvolutionPointBuy`). For any other format, `/leagues/[id]/draft` shows the standard draft board, and an EPB league that opens that URL is redirected to the draft room.
+
+The season's bound point-buy list is the only source of draftable evolution lines. Each line is keyed by a stable `line_id` (`@/lib/draft/line-identity`), so branched lines such as Oshawott → Samurott / Hisuian Samurott are separate options.
+
+The UI is a thin client over the **queue engine**. The server owns every rule: whose turn it is, the clocks, the budgets, draftability, make-up slots and penalties. The server returns all of it in one `DraftSnapshotDTO`. The client renders the snapshot, explains why a line is or is not draftable (with `ReasonDTO` codes from the server), and sends picks.
+
+Two rules hold throughout:
+- There is no optimistic state. A pick applies the snapshot in the response and then refreshes.
+- Translated text is never stored in state. State holds keys, reason codes or `ApiErrorLike`.
+
+Kinds of pool and mode:
+- **Pool kinds:** `initial` and `redraft`. The redraft adds a secret-drop submission phase, a reveal, and picks into A/B/C redraft slots.
+- **Modes:** `live`, with a per-pick clock, extensions and make-up slots for timeouts, and `slow`, with long slot deadlines, a penalty ladder and reminders at 8, 4 and 1 hours.
+- **Quiet hours** (`supabase/migrations/20261018140100_draft_quiet_hours.sql`; TS mirror `src/lib/draft/time.ts`). A pool may carry a daily window `[start, end)` of local hours in an IANA time zone (`draft_pools.quiet_start_hour`, `quiet_end_hour`, `quiet_timezone`; it never crosses local midnight and its real length follows DST). Inside it every pick clock is held (live and make-up slots, the slow ladder, extensions, a redraft's pick phase) while picking stays allowed. Deadlines remain absolute instants in running time, so none falls inside a window; pause and resume keep the running time left; reminder thresholds compare running time; turn pings and reminders due in a window go out when it ends. The window comes from the active format pack (`epb.draftClock.quietHours`, accessor `draftQuietHours()`) when `POST /api/drafts` creates the pool, and cannot be changed afterwards (`draft_configure` refuses it); a pool created before keeps no quiet hours. The redraft submission deadline is a wall-clock instant and is not held.
+- **Completability** (`supabase/migrations/20261018140200_draft_pool_completability.sql`; TS twin `src/lib/draft/completability.ts`). A drafting pool is always completable: every participant can still fill every open slot at once with distinct free lines it may take, within its remaining budget. The player on the clock therefore always has a legal pick, and no slot is ever blocked or forfeited. Refusals: `LEAGUE_NOT_COMPLETABLE` at start, `POOL_NOT_COMPLETABLE` for a pick, override, correction or void that would break it, (its copy stays the player-facing one, lead ruling round 4: the player must know why a pick is refused, and "split into smaller groups" would not help them mid-draft; only `LEAGUE_NOT_COMPLETABLE` and the admin Draft tab's group gate tell admins to split) `POOL_CHECK_LIMIT` when the bounded exact search (10 000 steps) cannot prove a completion, `REDRAFT_NOT_COMPLETABLE` at a redraft publish (the submissions stay secret).
+  - **Refused deadline publish (ops).** When the submission deadline passes and the publish is refused, `draft__tick` reports `publish_refused` and the `draft-ticks` cron logs `redraft publish refused for pool <id>: <code>` and counts it (`publishRefused` in its JSON body). The tick then backs off (`draft_pools.publish_refused_at` / `publish_refused_version`): every snapshot read ticks, so it searches again only after the pool changed (`state_version`, e.g. the admin moved the deadline or edited restrictions) or an hour later, and reports `publish_backoff` meanwhile (`publishBackoff` in the cron body, not logged). Cost: a refusal at the 10 000-step cap holds the season's advisory lock for about 4 s, so at most once per pool change or hour. The fix is the admin's: move the deadline so the players can change their drops, or lift restrictions; the admin publish button is not backed off.
+  - **Legacy-engine pools are outside the gate, so point-buy seasons refuse them.** `POST /api/drafts` creates only queue pools for a point-buy season. A legacy-engine pool that still exists in such a season (one created before the queue engine, or one whose season changed format) can neither be activated (`PATCH /api/drafts/[id]` to `in_progress`) nor take a pick (`POST /api/drafts/[id]/picks`): both answer `409 POOL_ENGINE_LEGACY_EPB`. Moving it back to `pending` or `complete` stays allowed. To draft, an admin moves it back to `pending`, deletes it (`DELETE /api/drafts/[id]`, pending legacy pools only) and creates a queue pool; `POST /api/drafts` answers `POOL_EXISTS` while any other initial pool of the league (or group) remains, except a pending legacy placeholder with no picks or teams, which it replaces. A pool that teams were drafted from cannot be deleted: `teams.draft_pool_id` (`fk_teams_draft_pool`) has no ON DELETE action, so the DELETE answers `409 POOL_HAS_TEAMS` and the pool stays as the record of those teams; a pool a redraft points at (`parent_pool_id`) answers `409 POOL_HAS_REDRAFT`. The route maps the 23503 by constraint name; any other foreign-key failure propagates unmapped. A DELETE that succeeds removes the pool's picks, slots and participants with it (those foreign keys cascade); for a pending legacy placeholder that is intended, and the `POOL_ENGINE_LEGACY_EPB` copy says so.
+  - **Before applying `20261018140200` to a database with running drafts.** Its last section refuses the whole migration (`COMPLETABILITY_INVARIANT`) when a queue pool in `drafting` has a blocked slot or cannot complete; it never repairs data. Check first, read-only: `select p.id, p.season_id from draft_pools p where p.engine = 'queue' and p.phase = 'drafting';` and `select s.draft_pool_id, count(*) from draft_slots s join draft_pools p on p.id = s.draft_pool_id where s.status = 'blocked' and p.phase = 'drafting' group by 1;`. No running pool: nothing to do. Otherwise resolve each one by hand first (void and requeue, or end it while in setup).
+- **League groups** (`supabase/migrations/20261018180000_league_groups.sql`; TS: `src/lib/supabase/queries/season-groups.ts`; line availability per group lives in the SQL only). A league may split its trainers into groups (`season_groups`, `season_group_members`: one group per trainer per league, members are league participants). Each group drafts its own pools: `draft_pools.season_group_id`, one initial and one live redraft pool per (league, group), seats = exactly the group's members (`draft_create_pool(..., p_season_group_id)`, `draft_configure` re-seating), the redraft's parent = the group's initial pool. Lines are unique per group (`evolution_tracker.season_group_id`, key `(season_id, season_group_id, line_id)`): two groups can each draft the same line, one group cannot hold it twice. Availability, completability, the snapshot's `taken`, abort, void, redraft publish/restore/submission, the season ledger (`epb__season_remaining_points`: base = the trainer's group's initial pool), Draft Kill Token window and Comeback spend window (opens with the trainer's group's redraft) are all scoped to the group. A league without groups carries NULL everywhere and behaves as before (filters are `IS NOT DISTINCT FROM`). Guards: `SEASON_GROUP_REQUIRED` (a pool of a grouped league must name its group), `SEASON_GROUP_LOCKED` (membership frozen while a group has a live pool), `SEASON_GROUPS_SCHEDULED` (membership final once a phase has a round, `20261018202000_league_groups_locks.sql`), `SEASON_GROUP_TOO_SMALL` (two trainers per group), `SEASON_GROUP_SUBSTITUTION_LOCKED` (no substitution of a trainer whose group's pool is drafting: the pool keeps the outgoing seat), `SEASON_GROUPS_AFTER_DRAFT` (a league that drafted without groups cannot add any), `SEASON_GROUP_INVALID`, `SEASON_GROUP_MEMBERS_INVALID`, `SEASON_GROUP_IN_USE`; the full membership rules: [Season, League groups](./season.md#league-groups-schedule-and-standings). `getDraftPoolBySeason` serves leagues without groups only and throws `GroupedLeaguePoolLookupError` for a grouped one, also before any group has a pool (a league without a pool adds one head count of its groups, so no caller reads "no draft" for a grouped league); use `getDraftPoolBySeasonGroup` / `getDraftPoolsBySeasonWithGroups`. Its callers, each pinned with a grouped-league test: `getInitialPoolForPlayer` (`player-pool.ts`) and the season ledger (`loadDraftTokenLedger`) catch exactly that error and switch to the group reads; the admin Draft tab (`DraftPanel`) reads the groups first and never calls it for a grouped league; `POST /api/drafts` refuses a legacy pool in a grouped league before its `POOL_EXISTS` check, and `GET /api/drafts/[id]/state` answers `409 POOL_ENGINE_LEGACY` for a legacy pool that names a group, so the legacy state's season-wide `taken_line_identities` is never served to a group. Neither `getDraftPoolsBySeasonWithGroups` nor `getDraftPoolsBySeason` has a deploy-before-migrate guard (a database without the league-groups or the queue-engine migration answers 42703/PGRST200/PGRST204 and the page fails loudly; the `getDraftPoolsBySeason` fallback to an empty list was removed by the lead ruling round 5): the release order is migrate first ([Season, Deploy order](./season.md#league-groups-schedule-and-standings)). The league page's `hasDraftPool` (world payload) has no fallback either: a failed pool read fails the payload instead of reporting "no draft". Its embeds (`seasons ( season_groups ( count ) )`, `season_groups ( name, sort_order )`) were checked against the local PostgREST (one grouped and one ungrouped league). The editor writes through `season_groups_replace` (atomic). The snapshot never carries a refused automatic publish (for any viewer); admins read it through `src/lib/supabase/queries/draft-publish-refusals.ts`.
+  - **App layer (league groups, unit 2).** The groups are made on the admin league page's Participants tab (`LeagueGroupsEditor`, routes `/api/seasons/[id]/groups/**`, see [Admin](./admin.md#league-groups)). `POST /api/drafts` creates a group's pool from a queue body with `season_group_id` (seats = the group's members in roster order, or an admin order that must be exactly those members; a redraft's order is the group's own first-half table, `getGroupFirstHalfTables` in `src/lib/tournament/group-first-half.ts`: every match of its members counted, cross-group matches included, over the primary phase's first half of planned weeks, shared by every group; when that table does not hold exactly the group's members, the league's first-half table restricted to them). A league with groups refuses a body without a group (`SEASON_GROUP_REQUIRED`) or with another league's group (`SEASON_GROUP_INVALID`); a league without groups refuses any `season_group_id` and its RPC call stays exactly as before (no `p_season_group_id` key). A legacy-engine (non-point-buy) pool is refused in a league with groups (`409 draft_groups_need_point_buy`): a legacy pool has no seats, so nothing would keep a trainer to their own group's pool. Every single-pool reader is group-aware: the team builder, the dashboard team page, `POST /api/validate-team` and `GET /api/drafts?season_id=` read the trainer's own group's initial pool through `getInitialPoolForPlayer` (`src/lib/draft/player-pool.ts`: one query without groups, the same one as before), the token overview (`/api/seasons/[id]/tokens/**`) takes each trainer's initial-draft phase, purchase cutoff and Redraft completion from their own group's pools, the season ledger reads every group's initial pool (G1), and the legacy board (`/leagues/[id]/draft`) shows no board for a league with groups (it never has a legacy pool). The admin Draft tab shows one card per group ([Admin](./admin.md#draft-tab-with-league-groups)).
+
+## Routes
+
+| Route | File | Who | What |
+|---|---|---|---|
+| `/leagues/[id]/draft-room` | `src/app/(public)/leagues/[id]/draft-room/page.tsx` (+ `client.tsx` re-exporting `DraftToolClient`) | public; picks need a session | The pick screen. `?pool=<uuid>` selects a pool; `?world=` overrides the world |
+| `/leagues/[id]/redraft` | `src/app/(public)/leagues/[id]/redraft/page.tsx` | participants (sign-in prompt otherwise) | Secret drop submission, lock, reveal, then a link to the room |
+| `/leagues/[id]/tokens` | `src/app/(public)/leagues/[id]/tokens/page.tsx` | signed in | Token centre: Participation, Draft Kill and Comeback tokens, progress sources |
+| `/leagues/[id]/draft` | `src/app/(public)/leagues/[id]/draft/page.tsx` | public | Standard (non-EPB) draft board; EPB leagues redirect to the draft room |
+| `/admin/leagues/[id]?tab=draft` | `src/app/admin/leagues/[id]/page.tsx` (`_components/panels/DraftPanel.tsx`) | any admin (`AdminGuard`); writes are resource-guarded | The league admin page's **Draft** tab: creates the draft (Draft Room), links the control panel and the Redraft, and is the league page's only home of `TokenAdminSummary`. See [Admin, league admin page](./admin.md#league-admin-page-adminleaguesid) |
+| `/admin/leagues/[id]/draft` | `src/app/admin/leagues/[id]/draft/page.tsx` | site admin or season resource admin | Draft control panel (`DraftControlPanel`); `?pool=<id>` opens that pool's tab |
+| `/admin/leagues/[id]/draft/audit` | `src/app/admin/leagues/[id]/draft/audit/page.tsx` | idem | Read-only audit trail (`?pool=&action=&player=`) |
+| `/draft-room/trainer-creator` | `src/app/(public)/draft-room/trainer-creator/` | signed in | 3D trainer avatar editor (saves via `PUT /api/avatar/3d`) |
+| `/broadcast/draft/[did]/{live,pick,replay}` | `src/app/(broadcast)/broadcast/draft/[did]/` | OBS sources | Draft viewer, pick reveal and replay overlays |
+| `/draft-preview` | `src/app/(public)/draft-preview/` | **dev only** (404 in production) | Fixture preview of every screen state (see [Dev preview](#dev-preview-draft-preview)) |
+
+## File Structure
+```
+src/lib/draft-finder/                 # Finder engine (pure, client-safe; no @pkmn/* outside *.server.ts)
+├── index-types.ts                    # DraftSearchIndex schema (INDEX_SCHEMA_VERSION)
+├── build-index.server.ts             # Builds the index from list entries with @pkmn/data (server only)
+├── line-catalog.ts                   # buildLineCatalog (narrow per-line props) + hashCatalog
+├── names-port.ts                     # NameResolver over @/lib/pkmn/i18n (the only importer in this dir)
+├── prepare.ts / search.ts            # Prepared index; bilingual word-prefix search (EN + DE always)
+├── filter-types.ts / reducer.ts      # FinderFilters, FinderViewState, finderReducer (pin, compare, chips, sheet state)
+├── filter-groups.ts                  # Filter sheet groups: per-group counts, default-open groups, per-group reset
+├── engine.ts                         # compileCriteria / evaluateLine / runFinder + "why it matches"
+├── chips.ts / sort.ts / tabs.ts      # Active-filter chips, sort keys, price tabs (the pack's `epb.priceTabs`, plus all)
+└── ability-defense.ts                # Ability-aware type defence (Levitate, Flash Fire, …)
+
+src/lib/draft-ui/                     # Pick-screen view logic (pure, tested)
+├── snapshot-types.ts                 # Re-exports of the DTOs in @/types/draft-queue
+├── snapshot-adapter.ts               # toDraftViewModel: the only reader of DTO field names
+├── select-pool.ts                    # Which pool the room shows (?pool > in_progress > submissions > initial)
+├── clock.ts                          # computeClock, bands (ok/warn/low), formatCountdown
+├── reasons.ts                        # ReasonDTO → draft/shared.reasons key + params
+├── armed-confirm.ts                  # Confirm dialog arming (1200 ms) reducer
+├── notify-schedule.ts                # Turn alert + slow reminders (8/4/1 h), deduped per slot
+├── progress-display.ts / progress-labels.ts  # Progress-source breakdown (Kills / Draft Kill / Comeback / Participation)
+├── storage.ts                        # Safe local/session storage (prefs, pin, notify opt-in, dedupe)
+└── constants.ts                      # Poll cadences, hover delay, arm delay
+
+src/components/draft-tool/            # The pick screen
+├── data-source.ts                    # DraftDataSource port + createHttpDataSource (the only module with URLs)
+├── DraftToolClient.tsx               # Container: poll, index, favourites, finder, clock, turn watch, dialog
+├── DraftToolScreen.tsx               # Presentation; draft-tool.module.css holds the scoped tokens
+├── hooks/                            # use-draft-snapshot, use-turn-watch, use-clock, use-search-index, …
+├── layout/                           # ClockBar, TimerBar, UpcomingOrderStrip, PlayersSheet, PhoneSection
+├── left/                             # LinePreview, InfoBox, DraftButton (+ cta-state), CostConsequence,
+│                                     #   MatchExplanation, CompareTray, MyRosterDock, RecentPicks
+├── right/                            # FinderBar, PriceTabs, RosterWall, RosterCard, HoverDetails,
+│                                     #   FilterPanel (filter sheet) + filters/* (FilterGroup, …), ActiveFilterChips
+├── dialogs/                          # ConfirmPickDialog, RedraftSlotChooser
+├── feedback/                         # DraftToast, LiveAnnouncer, NotifyToggle, announcements
+└── shared/ArmedConfirmDialog.tsx     # Shared armed-confirm dialog (also used by tokens and admin)
+
+src/components/draft-redraft/         # RedraftCenter, RedraftSubmissionPanel, RedraftReveal, RedraftPhaseNotice,
+                                      #   redraft-source.ts (RedraftSource port)
+src/components/draft-tokens/          # TokenCenter, CosmoTokenCard, DraftKillTokenCard, ComebackTokenCard,
+                                      #   ProgressSourcesTable, token-source.ts (TokenSource port), token-view.ts
+src/components/draft-admin/           # DraftControlPanel, RoomAdminSheet (the room's admin sheet),
+                                      #   pool-admin.tsx (shared per-pool sections), LiveControls, CreateRedraft,
+                                      #   InstanceConfigForm, PenaltyStageEditor, PickCorrectionTable,
+                                      #   RedraftPhaseManager, TokenAdminSummary, DraftAuditViewer, admin-actions.ts
+src/components/broadcast/overlays/    # DraftViewer, DraftPickReveal, DraftReplayPlayer
+src/lib/draft-room/trainer-config.ts  # TrainerConfig + avatar presets
+
+src/lib/draft/                        # Engine contracts used by the UI (backend-owned)
+├── snapshot.ts                       # getDraftSnapshot / toDraftSnapshotDTO / toMyTurnDTO (server)
+├── use-visible-poll.ts               # createVisiblePoller / useVisiblePoll (D37 cadence)
+├── errors.ts / rpc-errors.ts / http.ts  # Draft error codes, RPC error mapping, draftErrorResponse
+├── budget.ts / draftability.ts / tokens.ts / redraft-order.ts / schemas.ts
+└── line-identity.ts / price-tabs.ts / utility-categories.ts / epb-thresholds.ts / progress-sources.ts
+
+src/i18n/messages/draft/{shared,screen,finder,redraft,tokens,admin,discord,legacy}/   # UI namespaces (en/de/index)
+src/i18n/messages/errors/draft/        # API error codes (errors/draft-legacy for the old routes)
+```
+
+## Core Functions/Classes
+
+### `DraftToolClient` — `src/components/draft-tool/DraftToolClient.tsx`
+The pick screen's state owner.
+- **Props:** `poolId`, `seasonId`, `leagueName`, `catalog`, `initialSnapshot`, `indexUrl`, `viewer { playerId, isSiteAdmin }`, `links { redraft, tokens, admin, adminAudit, trainerCreator }` (`admin` / `adminAudit` are the control page and the audit trail, null unless the viewer is a pool admin).
+- **Optional preview props:** `initialIndex`, `dataSource`, `adminActions` (the admin sheet's writes) and `initialAdminTab` (opens the admin sheet at mount).
+- **What it wires:** the snapshot poll, the lazy search index, favourites, the finder reducer and engine, the clock, the my-turn watch, the confirm dialog, the toasts, the screen-reader announcer and, for pool admins, the admin sheet (see [Admin sheet in the room](#admin-sheet-in-the-room)).
+- **Output:** it renders `DraftToolScreen`.
+
+### Admin sheet in the room
+`src/components/draft-admin/RoomAdminSheet.tsx`. Owner feedback 2026-10-18: admins no longer switch between the room and the control page during a draft.
+- **Entry.** Pool admins (`vm.viewer.isPoolAdmin`, live from the snapshot) get an **Admin** button in the clock row (`ClockBar` `onOpenAdmin`, `aria-haspopup="dialog"`, `aria-expanded`). It opens a right-hand Radix sheet (`max-w-xl`, full width on phones). Players and spectators have no button. The room's nav no longer links the control page; the sheet's footer does.
+- **Tabs.** WAI-ARIA tabs with automatic activation (arrows, Home, End): **Live** (start, pause/resume with a reason, abort, "Pick for the active player", and "Create Redraft" once a completed Initial draft is shown; in a league with groups it reads "Create Redraft for <group>" and creates the shown pool's group's Redraft: the page passes the pool's group to the sheet, which sends its `season_group_id`), **Picks** (void / correct), **Settings** (`InstanceConfigForm`), **Redraft** (Redraft pools only: deadline, submissions, publish, restore) and **Penalties** (slow mode only). The footer links the audit trail and the full control page, both with `?pool=` of the room's pool; both pages read it (validated against the season's queue pools, an unknown id falls back to the running pool, else the newest), so the control page opens on the same pool's tab as the room. Token balances and the Comeback switch live on the league admin page's Draft tab only (`?tab=draft`; the control page links there).
+- **Lazy code.** `DraftToolClient` loads the sheet with `React.lazy(loadRoomAdminSheet)` (`src/components/draft-tool/admin-sheet-loader.ts`, a dynamic import) the first time the Admin button is used, prefetching on hover or focus. Nothing under `src/components/draft-tool` imports `draft-admin` at runtime otherwise (type imports only; a test scans for it), so players never download admin code.
+- **Chunk failures.** While the chunk loads, a small status notice (`clock.adminLoading`) shows at the bottom of the room. If the chunk cannot load (a stale chunk after a deploy, a dropped connection), `AdminSheetBoundary` (`src/components/draft-tool/AdminSheetBoundary.tsx`) catches it, logs it to the console and shows an amber-outlined notice (`clock.adminLoadFailed`) with **Try again** (a fresh `React.lazy`, because `lazy` caches a rejected import) and Close. The boundary catches every render error of the sheet; `isChunkLoadError` tells the two apart, and a runtime error of the loaded sheet gets its own wording (`clock.adminCrashed`, "ran into an error") with the same Try again (a fresh mount). The hover/focus prefetch logs a failed chunk (`console.error`) instead of leaving an unhandled rejection; the click path reports it through the boundary. The room itself keeps running. These strings live in the room's `draft/screen` namespace, not `draft/admin`, so the player bundle stays free of admin copy.
+- **One poller.** The sheet never polls. It reads the room's snapshot (`vm`, `dto`, `serverOffsetMs`, `refresh`, `applySnapshot`) and builds `createAdminDraftActions(poolId, seasonId)` itself (inside the lazy chunk). A write refreshes the room's snapshot; a rule error applies the snapshot it carries.
+- **Lazy tab data.** Only the open tab is mounted, so the Redraft submissions (BE #20) load when the Redraft tab opens. Only the selected tab carries `aria-controls` (the other tabs' panels are not in the DOM). The room's server render does no admin read.
+- **The pick stays in the room.** "Pick for the active player" (shown while someone else is on the clock) switches the room's admin override on, closes the sheet and moves the focus to the override switch; the admin then chooses the line on the wall and confirms with the reason in the room's confirm dialog. The override switch under the DRAFT button is unchanged.
+- **The pause banner stays in the room.** "Draft paused" keeps showing in the room's clock bar; the sheet does not repeat the clock and only names "Draft paused" in its header, because on phones it covers the room. There is no blocked-slot banner any more: nothing writes a blocked slot since the completability migration (`20261018140200`), so the banner, its `clock.blocked` copy and the old `live-blocked` preview were removed.
+- **Refused automatic publish.** The sheet's Redraft tab shows the amber "Automatic publish refused at <time>" notice, like the control page. The time comes with the tab's submissions read: `GET /api/drafts/[id]/redraft/submissions` answers `{ submissions, publish_refused_at }` (`draft_pools.publish_refused_at`, pool admins only). The section re-reads it when the pool's state version or the Redraft phase moves, and once a minute while the Redraft is locked (deadline passed, nothing published), because the deadline tick's refusal does not bump the state version (`redraftSubmissionsRead` in `pool-admin.tsx`; `useVisiblePoll`, paused in a hidden tab). Preview: `/draft-preview?scenario=admin-room-refused`. See [Admin, Draft control](./admin.md#draft-control-admin-leaguesiddraft-and-the-rooms-admin-sheet).
+- **Nested dialogs.** The armed confirms (start, abort, void, correct, publish, Create Redraft) are Radix dialogs inside the sheet's content: Radix stacks them, Escape closes only the top one, and focus returns to the control that opened it. Closing the sheet returns focus to the Admin button (or to the override switch after "Pick for").
+- **Colours in the room.** Inside the sheet (`AdminSurfaceProvider surface="room"`), destructive actions (abort, void) use the amber warn tone instead of the red danger button, because red means "drafted" in the room. The control page keeps its red danger buttons. The sections' main actions (Start draft, Save settings, Save deadline, Publish, Restore, the penalty Save, Create Redraft and the matching confirms) use a neutral draft-ink outline in the room (`usePrimaryButton`) instead of the theme accent, which is red-ish in some worlds; the control page keeps the accent. Tokens carry `--poke-*` fallbacks because the armed confirms portal outside the room's token scope; the sheet itself and the chunk notices (`AdminSheetBoundary`) carry them too, so every admin surface in the room renders with or without a world.
+- **Shared sections.** `pool-admin.tsx` holds the per-pool sections (`PoolAdminSectionView`, `poolAdminSections`, `settle`); the control page stacks them in cards with its own per-tab poll, the sheet shows them as tabs.
+
+### `DraftDataSource` — `src/components/draft-tool/data-source.ts`
+The data port. It exposes `fetchSnapshot(since)`, `fetchMyTurn`, `fetchIndex`, `getFavorites` / `setFavorite`, `postPick` and `postExtension`.
+- Failures are values. A snapshot read returns `{ kind: 'auth' | 'error' | 'unchanged' | 'full' }`. A write returns `ApiCall<T>`, where a rule error may carry a fresh `snapshot`.
+- `createHttpDataSource(poolId, seasonId)` is the production implementation.
+- The redraft and token screens follow the same pattern with their own ports, `RedraftSource` and `TokenSource`, each with an HTTP default and an injectable fake.
+
+### `toDraftViewModel` — `src/lib/draft-ui/snapshot-adapter.ts`
+Turns a `DraftSnapshotDTO` into the `DraftViewModel`:
+- the active slot and the viewer flags;
+- the upcoming order with round breaks and make-up slots;
+- the participants with their rosters;
+- the recent picks;
+- per-line card states (`available | drafted | blocked | mine`) with their reasons;
+- `remainingAfterPick`.
+
+It is the only module that reads DTO field names, so a field added by the backend never breaks the UI.
+
+### `runFinder` — `src/lib/draft-finder/engine.ts`
+Runs over the prepared index. It combines:
+- the text query, which always searches English and German names with transliteration;
+- type, move, ability, utility-category, stat, price and defence criteria, with a `same_stage | anywhere` stage mode;
+- the price tab and the sort key.
+
+It returns the matching line ids, the tab counts and a per-line explanation of why each line matched.
+
+### `buildDraftSearchIndex` — `src/lib/draft-finder/build-index.server.ts`
+Builds the per-list search index on the server from the list entries with `@pkmn/data`. The index holds stages, types, abilities, learnsets, stats, move and ability names, and the utility categories. It is served by `GET /api/point-buy-lists/[id]/search-index?v=<schema>&h=<catalogHash>`, which keeps an in-process memo and sends an immutable cache header for bound lists. An unbound version is private and `no-store` for site admins and 404 for everyone else. A malformed list id answers 404 `INVALID_POINT_BUY_LIST_ID` before any query.
+
+### `buildLineCatalog` — `src/lib/draft-finder/line-catalog.ts`
+The narrow per-line props, one row per list line: price, stages, override-aware cumulative thresholds and labels. It is built on the server and passed to the client. It deliberately leaves out the rationale, history and sources prose. `hashCatalog(entries)` versions the index URL.
+
+### `selectPool` — `src/lib/draft-ui/select-pool.ts`
+Decides which pool the room shows, in this order:
+1. a valid `?pool=` that belongs to this season;
+2. the pool that is `in_progress` (a redraft wins);
+3. a redraft in its submissions phase (the room shows a notice linking to `/leagues/[id]/redraft`);
+4. the initial pool.
+
+In a league with groups the room first narrows the pools to one group (`scopePoolsToGroup`, `src/lib/draft-ui/group-pools.ts`): the group of a valid `?pool=`, else the signed-in viewer's own group (one `season_group_members` read, only in a league with groups), else the first group with a pool; `selectPool` then picks among that group's pools. The redraft page does the same with the groups' Redraft pools.
+
+### Group switch — `src/components/draft-tool/shared/GroupPoolPicker.tsx`
+In a league that drafts per group, the draft room and the redraft page show a group switch under the title: a `<nav>` with one link per group that has a draft (`?pool=<that group's default pool>`; the room's default per `selectPool`, the redraft page's latest Redraft), labelled by the group name (`translateEngineLabel('group', …)`, so `Group A` reads `Gruppe A` in German), the shown group `aria-current="page"`, the viewer's own group marked "your group". Anyone can switch (lead ruling round 4: the boards are public, every group's snapshot is readable by anyone, so hiding the links from players would hide nothing; admins use it to move between the groups' drafts). Another group's draft is read-only for a trainer of the league, also one in no group (`isOtherGroupReadOnly`, `src/lib/draft-ui/group-pools.ts`; a signed-in non-admin in no group costs one roster head count, `isLeagueParticipant`, to tell a trainer from a spectator): the snapshot seats them nowhere there (`viewer.isParticipant` false, so no pick controls render) and every pick route refuses them (`NOT_PARTICIPANT`); the switch says so in a `role="note"` line ("You can follow this draft, but you pick only in your own group's draft"; not shown to pool admins, who act on behalf of anyone, nor to spectators). A viewer whose group has no draft yet sees the first group's and is told so. Plain links: no client state, browser history works, keyboard and screen readers get a landmark and the current item. Colours are the draft tokens with the palette fallbacks (`--draft-border` → `--poke-border`, …); only the shown group's chip has a fill, the elevated surface token (`--draft-elevated` → `--poke-elevated`), no red, no violet, no fixed dark box; 44px targets; the colour transition only under `prefers-reduced-motion: no-preference`; labels wrap (German ~30% longer). Copy: `draft/groups` (EN/DE). A league without groups renders no switch and reads no group.
+
+### Server pages
+- **`/leagues/[id]/draft-room`** answers a malformed league id with `notFound()` before any read (`isValidUuid`; Postgres would otherwise reject the uuid cast with a 500). It then loads in three waves, each in parallel: (1) the live access check (`getLiveAccess`, one `players` read for a signed-in viewer), the season, the translator and the locale; (2) the pools and, for an admin who is not a site admin, the resource-admin check (`isResourceAdminFor`, awaited as `gateDraftAdmin` does); (3) the snapshot (`getDraftSnapshot(pool.id, viewer, { tick: false })`), the list entries and the format rules. That is at most 7 Supabase reads cold (6 for a spectator); a league with groups adds the signed-in viewer's group (8), and for a signed-in non-admin in no group one roster head count (9). Accepted trade-off (round 3): a failed live-player read fails the room's render (the route's error boundary) instead of guessing the viewer, because the viewer's identity and the pool-admin flag must be live; it is not caught and not downgraded to a spectator view. The snapshot read alone is soft (logged, seeds null, the client polls).
+- **Live admin seed.** The viewer, `isPoolAdmin` (site admin, or resource admin of the season in good standing, as `gateDraftAdmin` decides) and the admin links come from the live check, never from the up-to-5-minutes-stale session copy, so a revoked admin gets no admin snapshot fields (`redraft.admin_slots`, `activePlayerLineStatus`) and no Admin button on the first paint. A failed live read fails closed (error boundary). The snapshot stays the public allowlist DTO; admin-only fields are present only for a pool-admin viewer, as before.
+- **Seeds never tick.** Every page seed passes `{ tick: false }`, because a Server Component render must not advance a clock or publish a redraft (critique B9). Only the route handlers tick. On the control page (`/admin/leagues/[id]/draft`) a failed snapshot seed is not caught: it reaches the admin error boundary ("Try again"), so the panel never opens a pool tab whose state it could not read (round 5, AGENTS rule 5). The room keeps its soft seed (above), because its client polls the same read anyway.
+- **Narrow props.** Participants reach the client only inside the snapshot DTO, which the backend builds with an allowlist mapper. Admin pages pass `toPublicPlayerRef` rows (`{ id, name }`).
+
+## Data Flows
+- **Snapshot poll.** `useDraftSnapshot` polls `GET /api/drafts/[id]/state?since=<state_version>` every 3 s while the tab is visible and pauses while it is hidden (`useVisiblePoll`).
+  - An `unchanged` answer only updates the server clock offset.
+  - A 401 or 403 stops the poll and switches to the spectator view. Anonymous viewers therefore see the server seed.
+  - A failed read keeps the last state and marks it `stale`.
+- **Turn watch.** `useTurnWatch` calls `GET /api/drafts/[id]/my-turn` every 60 s, and only while the tab is hidden. This is the single sanctioned exception to D37.
+  - It raises browser notifications when the viewer opted in for that pool and permission is granted.
+  - Alerts are deduped per slot across tabs through `storage.ts`.
+- **Discord notifications** (server side, `src/lib/draft/notify.ts`, embeds in `src/lib/discord/draft-embeds.ts`, texts in `draft/discord` in the league's webhook language).
+  - **Turn ping, live and slow.** When a slot becomes active, the player is @mentioned once (email-only players get the embed without the mention). A live draft's embed names the pick time in minutes (`timer_seconds`; seconds when the timer is not whole minutes). A slow draft's embed names the deadline as Discord timestamps plus the league time.
+  - **Reminders, slow only.** 8 h, 4 h and 1 h before the deadline; thresholds a slot started past are never sent. Live drafts get no reminders.
+  - **Exactly once.** `draft_claim_notifications` claims each event under a marker on the slot (`notified_turn_at`, `reminder_mask`, `alert_notified_at`) or the pool (`publish_notified_at`) with `FOR UPDATE SKIP LOCKED`, so concurrent callers never send one event twice. A paused pool's slot is claimed after the resume.
+  - **Who claims.** The pick route and the redraft publish route, inside `after()`. `scheduleDraftNotifications(poolId)` (one claim RPC inside `after()`, fire-and-forget, never throws) is called by the admin writes that can move the clock: start, resume, void, correct and redraft restore-drop. The polled reads (`state`, `my-turn`) call it **only** when their tick resolved a timeout (`timeouts_resolved > 0` from `draft_snapshot` / `draft_my_turn`) or published a redraft, never on a plain poll (Supabase quota). The `draft-ticks` cron sweeps whatever these miss.
+  - `published_now` and `timeouts_resolved` never reach the client: the snapshot mappers return them beside the DTO.
+- **Pick.**
+  1. The DRAFT button opens `ConfirmPickDialog`. Cancel has focus, and the confirm button arms after 1200 ms.
+  2. Confirming sends `POST /api/drafts/[id]/picks` with `{ slot_id, line_id, client_request_id, redraft_slot_id?, on_behalf_of?, override_reason? }`. The `client_request_id` is created when the dialog opens and reused on retry, so the request is idempotent.
+  3. A `201` carries the new `snapshot`, which is applied at once before the poll refreshes. A rule error may also carry a snapshot, which is applied too.
+- **Extensions.** In live mode, `POST …/extensions { kind: 'plus120' | 'plus60', slot_id }`.
+- **Favourites.** Favourites are server-side (`GET`/`PUT …/favorites`). The pinned line and the preferences are per-tab storage only.
+- **Redraft.**
+  - The player's own submission is fetched client-side from the owner-guarded `GET/PUT …/redraft/submission` and is never server-rendered.
+  - When the deadline passes, the submission locks. Publishing reveals the drops, and the picks then go into the redraft slots (`RedraftSlotChooser`).
+- **Tokens.**
+  - `TokenCenter` loads `GET /api/seasons/[id]/tokens/me`. An admin can view another player with `?player_id=`.
+  - A Draft Kill Token is bought with `POST …/draft-kill-tokens`.
+  - Comeback Tokens are spent with `POST …/comeback-tokens/spend`, which accepts several allocations in one call. Spending is open only while an admin has opened it.
+- **Admin.**
+  - Each control in the panel is one admin route: config, start/abort, pause, void, correct, penalty stage, redraft settings, publish, restore. There is no blocked-slot resolver: every pick keeps the pool completable (pool gate, `src/lib/draft/completability.ts` + `draft__pool_completable`), so the player on the clock always has a legal pick; a line whose pick would strand another player shows `POOL_NOT_COMPLETABLE` (or `POOL_CHECK_LIMIT` when the bounded check could not decide).
+  - Every write refreshes the snapshot afterwards (in the room: the room's own snapshot, one poller).
+  - Void and correct are refused unless the pool is paused.
+  - Every admin write is recorded in the audit trail with a reason.
+- **Broadcast.**
+  - **Locale.** The overlays resolve their language with `resolveOverlayLocale`: `?lang=` first, then the league language, and never the viewer cookie.
+  - **Polling.** They poll at the cadence set by `?poll=` and send `?since=`. A 401 or 403 stops the poller.
+  - **Labels.** Line labels come from `localizeLineLabel`. The replay uses `localizeSpecies`, because replay events carry no `line_id`.
+
+## i18n
+- **Namespaces.** Every visible string comes from `useT(<namespace>)` or `getT(<namespace>)`:
+  - `draft/shared`: reasons, countdowns, points;
+  - `draft/screen`: the pick screen and its pages;
+  - `draft/finder`: filters, chips, tabs;
+  - `draft/redraft`, `draft/tokens`, `draft/admin`;
+  - `draft/discord`: the Discord announcement texts for draft events;
+  - `draft/legacy` (with `draft/legacy/{board,evolution,pages}`): the old draft UI;
+  - `glossary`: the fixed terms such as "Draft"/„Draften", "Draft paused"/„Draft pausiert" and the token names.
+- **League tuning prose** (token rules, the participation line, price-group labels, the stage-lock and line-rule texts) comes from the active format pack's `messages`, spliced into these namespaces; utility-category labels come from `utilityLabel` ([Format Packs](./format-packs.md#messages)).
+- **API errors** render through `useApiErrorText(errorsDraft)(err)`. An unknown code falls back to the English `error`.
+- **Pokémon, move, ability and type names** never appear in message files. They come from the pkmn layer (`NameResolver`, `<PkmnName>`) in the **data locale**, which is the viewer's language unless they chose "keep Pokémon terms in English".
+- **Dates and countdowns.** Client components format them with `useFormatter()`. Absolute deadlines render `<LocalTime … zone="both">`, which adds the `Europe/Berlin` league time when the viewer's zone differs.
+- **Search** always matches both languages, so a German user can type "Glurak" or "Charizard".
+
+## Visual rules (pick screen)
+- **Tokens.** Colours come from scoped tokens in `draft-tool.module.css` (`.root` / `.tokens`). These map to the world tokens (`--world-*`) and fall back to the theme tokens (`--poke-*`). Dark mode is set under `[data-theme="dark"]`. There are no fixed dark slabs. Components inside that scope (the screen under `.root`; the portalled players sheet, filter sheet and toasts, which carry `.tokens`) use bare `var(--draft-*)`, because the scope always defines them. Only surfaces that can render outside it carry inline `--poke-*` fallbacks (`var(--draft-border,var(--poke-border))`): the room's admin sheet, its armed confirms and the `AdminSheetBoundary` notices (see "Colours in the room").
+- **Red is reserved for drafted cards** (`--draft-taken-*`). A clock running low is amber, and an error toast is yellow.
+- **The DRAFT button is violet** (`--draft-cta`). Disabled, it is grey, and the reason sentence shows beside it. An admin pick-on-behalf uses the outlined violet variant. Nothing else is violet: the admin override switch under it uses the neutral `--draft-ink` accent, and the clock bar's "You're on the clock" / "You're next" banners are neutral ink on the elevated surface (only the paused banner is tinted, amber). `draft-tool-css.test.ts` fails when a rule other than `.cta` / `.ctaAdmin` uses `--draft-cta`.
+- **Admin sheet.** Neutral tokens only (`--draft-surface`, `--draft-border`, `--draft-ink` for the selected tab's outline: `--draft-accent` is the world accent, rose in Sakura, so it is not used for admin chrome); amber for destructive actions and warnings; no violet, no red. Tabs, links and the close button are 44 px tall on phones, and the sections' buttons, selects, text and number inputs and checkbox labels too; labels wrap (no fixed widths). No motion.
+- **Layout.** The pick screen is a single column below 768 px, two panes from 768 px, and a 5/7 grid from 1024 px. On phones the roster, the picks and the compare tray become collapsible sections, and the filter sheet fills the screen.
+- **Line wall.** Top to bottom: the finder bar, the active-filter chip row, the price tabs, then the card grid.
+  - **The chip row is always rendered.** With no filter it shows "No filters" (German "Keine Filter"), so the wall never jumps when the first chip appears or the last one goes; it also renders before the search index loads (chips then come straight from the view state). It is where the match count across all tabs sits next to the filters ("48 lines"); the finder bar has no count, and while the filter sheet is open its footer repeats the same count as the action label ("Show 48 lines"). Only the chip list scrolls sideways; "Clear all filters" and the count sit outside that scroller, so many chips never push them out of view. On phones the chip buttons and "Clear all" are 44 px tall (the row keeps that height when empty, so it never jumps). "Clear all filters" shows only while there are chips.
+  - **Price tabs are always visible.** They sit directly under the finder bar and chip row, outside the grid. Below 1024 px the page scrolls, so the tabs stick under the site nav, on a glass background. On phones the whole clock row (`.clockRow`, a direct child of the screen) sticks under the nav and the tabs stick directly beneath it (`--nav-h + --draft-clock-h`); the clock bar alone is not sticky, because its parent is exactly its height and could never move. From 1024 px the tabs are a fixed row of the wall pane. They render in every state: before the search index loads and after it fails, each tab shows its catalog total (no `matching/total`), so the strip never pops in above the grid. Counts read `matching/total` while filters are active, else the total. Switching tabs never clears the filters or the pinned line; on desktop it scrolls the grid back to the top. Phones scroll the tab strip sideways (one row); from 768 px it wraps (`md:flex-wrap`, compact padding), so all tabs with their `matching/total` badges stay visible on tablets and narrow desktops.
+  - **The grid scrolls.** From 1024 px the screen has a fixed height (`100dvh` minus the nav and minus the public layout's `main` padding, `--draft-page-pad-y`, 3rem, so the page itself does not scroll past it), and the grid wrapper (`.wallScroll`, the `RosterWall` root) is the scroll container. It stays `position: relative`, because the arrow-key walk measures card offsets against it, and a focused card scrolls into view inside it (scroll margins keep it clear of the sticky bars and the phone bottom bar). Below 1024 px the page scrolls.
+  - **Sticky offsets are measured.** `useStickyOffsets` writes `--nav-h` (the height of `#site-nav`, 0 without a nav) and `--draft-clock-h` (the clock row) onto the screen root and follows resizes. The CSS default on `.root` (`4rem + 1px`, the NavBar's `h-16` plus its border) only holds before hydration.
+  - **Every card has the same size and inner grid** on every breakpoint: the `--draft-card-h` height token and fixed rows for the sprite (`--draft-card-sprite`), the one-line name with an ellipsis, the owner line and the branch line. The owner and branch rows are always rendered, empty when unused, so names, sprites and price badges line up across a row, and grid rows share one height (`grid-auto-rows: var(--draft-card-h)`). Long names and branch labels truncate and carry a `title`. The pinned ring is a box-shadow, so it does not change the card's size.
+  - **Sprites follow the viewer's sprite style** (broadcast renders by default; HOME, animated or pixel by choice: [`pkmn.md`](./pkmn.md#sprite-styles)). Every room sprite is a `PokemonSprite` in the fixed `--draft-card-sprite` box with `object-fit: contain`; a missing render steps down to HOME inside the same box, so the card grid never shifts. To check the room in each style, use the "Pokémon sprites" row on `/draft-preview` (`?sprites=site|broadcast|home|animated|pixel`, this page only, the cookie is untouched) or the NavBar language menu; without `NEXT_PUBLIC_SPRITES_URL` (or an empty map) the broadcast style shows HOME.
+  - **Finder bar.** From 768 px the search field has a 16rem basis and grows; the other controls wrap below it rather than squeezing it. The Filters button reads "Filters (n)" with the number of active filters (the chip count; the search text is not a filter) and opens the filter sheet (`aria-haspopup="dialog"`). The Filters button points `aria-controls` at the sheet only while it is open (a closed Radix dialog renders no element with that id), and its loading pulse runs only under `prefers-reduced-motion: no-preference`. The search field is 44 px tall on phones.
+- **Filter sheet** (`right/FilterPanel.tsx`; owner feedback 2026-10-18 replaced the anchored panel, which the stage pane's diagonal clipped and which grew past the pane).
+  - **A portalled Radix dialog**, outside the wall pane, so nothing clips it. From 768 px it is a side sheet on the left edge (`max-w-md`), over the stage pane, so the wall stays in view and updates live behind a light scrim; on phones it fills the screen. Its content carries `.tokens` (it is outside `.root`). Radix gives the focus trap, Escape, `aria-modal` and focus return; focus goes back to the Filters button by id (`filterTriggerId`), also in browsers that do not focus a clicked button.
+  - **Sticky header and footer**, only the groups scroll. The header has the title and the close button. The footer has the primary "Show N lines" button (the live `matchingAllTabs` count, in `--draft-accent`; violet stays reserved for DRAFT), which closes the sheet, and "Clear all filters" as an accent text link while anything is set. Filters apply live; there is no apply step, so closing never loses a selection.
+  - **Five collapsible groups**, each a disclosure (`h3` > button with `aria-expanded`) with its active-filter count and a per-group "Reset" while the group has something to clear: **Pokémon** (type, and the maximum price), **Moves and abilities**, **Base stats** (the header summarises the thresholds, e.g. "Spe ≥ 80 · BST ≥ 500"), **Utility** (the pack's categories, each with its member expander) and **Defensive matchups** (formerly "Advanced"). Group counts are the chips of that group, so they add up to "Filters (n)". A reset clears that group's filters and puts its "Any / Require all" back to "Any"; "Count abilities" is a preference and stays, as with "Clear all". A lone "Require all" (types or moves set to all with nothing picked) is not a chip, so the group counts 0, but it is not the default either, so the group offers its Reset (and "Clear all" resets it); decided in round 3, tested in `filter-groups.test.ts`.
+  - **Which groups are open.** Until the viewer opens or closes a group, the Pokémon group and every group with an active filter are open. After that the viewer's choice holds. The open groups, the utility expanders (until toggled: the categories with picked members), the defensive relation and the move and ability search queries live in the finder view state (`filterSheet`), so closing and reopening the sheet keeps them. None of it is persisted across reloads. The finder itself reads only the filters, stage mode, tab, sort, "Show drafted" and the pinned line (`FinderQueryView`): `DraftToolClient` memoises on those, so a keystroke in a picker search or a group toggle does not re-run the finder.
+  - **Maximum price vs. price tabs.** The slider in the Pokémon group is labelled "Maximum price (points)" and hides lines that cost more; a hint under it says the price tabs above the lines pick the price range. The tabs stay the band selector.
+  - **Sizing.** Headers and labels wrap, nothing has a fixed width (German runs ~30% longer). The base-stat fields fill the sheet width in 4.5rem columns. On phones every control is at least 44 px tall. The sheet slides in only under `prefers-reduced-motion: no-preference`.
+- **Motion** runs only under `prefers-reduced-motion: no-preference`.
+
+## Dev preview (`/draft-preview`)
+`src/app/(public)/draft-preview/` renders the real components against an in-memory `createFakeDataSource` and deterministic scenarios over the synthetic 48-line example list (`fixture-lines.example.json`, generated from the example format pack by `scripts/draft/make-example-list-fixtures.ts`; see [Format Packs](./format-packs.md#testing)).
+- **No network.** The page builds the search index on the server (CPU only). Nothing reads Supabase, and the tests fail on any `fetch`.
+- **Production.** The route 404s in production.
+- **Query parameters:**
+  - `?scenario=` takes one of `live-my-turn` (default), `live-waiting`, `live-up-next`, `live-paused`, `live-makeup`, `live-ext-used`, `live-reasons`, `live-filters`, `live-confirm`, `live-wall`, `live-filters-more`, `live-index-loading`, `live-index-failed`, `slow-my-turn`, `slow-penalty`, `redraft-submission`, `redraft-locked`, `redraft-reveal`, `redraft-picking`, `complete`, `spectator`, `signed-out`, `admin-panel`, `admin-publish-refused`, `admin-tokens`, `admin-audit`, `admin-room`, `admin-room-sheet`, `admin-room-refused`, `tokens-before`, `tokens-open`, `tokens-comeback` or `many-drafted`.
+  - `?world=evoliga|sakura|mountain|clouds|none` picks the world. `none` shows the plain-theme fallbacks.
+  - `?lang=en|de` sets the UI language for the preview only. The NavBar still follows the `plc_locale` cookie, so for a fully German screenshot also pick Deutsch in the NavBar language switch (or set `plc_locale=de`) before loading the URL.
+  - `?pkmn=en|de` sets the Pokémon-name language. If `pkmn` is missing, it follows `?lang=`, so a plain `?lang=de` URL already shows German Pokémon names. `?lang=de&pkmn=en` is the "keep Pokémon terms in English" case.
+  - `?groups=1` shows the league-groups switch above the screen (fixture groups: the viewer's Group A shown, Group B one link away), as the room and the redraft page show it in a league that drafts per group; the "League groups" chip row toggles it. Check it at 375 px (wraps, no horizontal scroll), in German (longer labels) and in both themes. With `admin-panel`, `admin-audit` or `admin-room-sheet` it also puts the fixture pools in Group A: the control panel's and the audit trail's tabs read "Group A · Initial draft" / "Group A · Redraft 1", and "Create Redraft" reads "Create Redraft for Group A" (panel and room sheet).
+- **Screens.** Each scenario mounts its real screen with every port injected (`createFakeDataSource` implements `DraftDataSource`, `RedraftSource`, `TokenSource` and `AdminDraftActions`; admin writes bump `state_version` in memory):
+  - `redraft-submission`, `redraft-locked` and `redraft-reveal` mount `RedraftCenter` (`dataSource` + `redraftSource`); `redraft-picking` mounts the pick screen with its A/B/C slots, as the draft room does;
+  - `tokens-before`, `tokens-open` and `tokens-comeback` mount `TokenCenter` (`source`);
+  - `admin-panel` mounts `DraftControlPanel` (`dataSourceFor`, `actionsFor`) on two pools: the completed initial draft and a picking Redraft whose admin snapshot carries `redraft.admin_slots`. It has no token summary (the Tokens card links the league admin page); `admin-publish-refused` mounts it on a Redraft past its deadline with the control page's `publishRefusedAt` admin data (the amber "Automatic publish refused at" notice); `admin-tokens` mounts `TokenAdminSummary` as the league admin page's Draft tab shows it, with the Comeback switch (`hasRedraft: false`) toggling through the fake's `setComebackOpen`, so it stays fetch-free;
+  - `admin-audit` mounts `DraftAuditViewer` with a `loadPage` over the fixture audit rows;
+  - `admin-room` mounts the pick screen for a pool admin while someone else is on the clock (the Admin button in the clock row, the override switch under DRAFT); `admin-room-sheet` opens the admin sheet on its Live tab over a paused draft (the room's "Draft paused" banner, Picks with void/correct enabled); `admin-room-refused` opens it on the Redraft tab of a locked Redraft whose automatic publish the tick refused (the tab's submissions read answers with `publish_refused_at`, so the amber notice shows after the read; the control-page twin `admin-publish-refused` answers the same instant). The fake is the sheet's `AdminDraftActions` (`adminActions`), so its writes change the room's in-memory state;
+  - every other scenario mounts the pick screen (`DraftToolClient`). The presets of `live-reasons`, `live-filters`, `live-confirm` and `live-wall` (pinned line, filters, the open filter sheet, open confirm dialog) go in through its preview-only props `initialView` and `initialConfirmLineId`, so they are in the first render; a preset view skips the stored finder prefs.
+- **Filter states.** `live-filters` opens the filter sheet: Pokémon, Moves and abilities and Defensive matchups open with their counts and resets, Base stats and Utility collapsed, "Show N lines" in the footer; close it for the chip row and "Filters (3)". `live-my-turn` shows the empty chip row ("No filters"); `live-wall` a single chip and "Filters (1)". `live-filters-more` opens the sheet with the other two groups in use: Base stats with its header summary ("Spe ≥ 80 · BST ≥ 500") and a Utility category with one picked member, expanded ("Filters (4)"); the category is the active pack's first one with a counting move member. `live-index-loading` (the index never arrives: Filters disabled, tabs with catalog totals) and `live-index-failed` (the index failed: the room says so, tabs with catalog totals) get no server index and their own index URL (`init.indexState` in the fake).
+- **Picker copy** comes from `draft/screen` `preview.*` (EN/DE).
+- **Theme.** There is no theme query parameter. Use the NavBar theme toggle, or emulate `prefers-color-scheme` with the stored theme set to `system`, which is the default. You can also set `localStorage.theme = 'dark' | 'light'` and reload.
+- **Screenshot matrix (draft-frontend §11.2).** Scenarios `live-my-turn`, `live-paused`, `slow-my-turn`, `redraft-picking`, `spectator`, `admin-panel` and `tokens-open` (extras: `redraft-submission`, `redraft-reveal`, `tokens-comeback`, `admin-audit`, `many-drafted`). For each scenario `S` shoot three URLs (base `http://localhost:3000`):
+  - EN: `/draft-preview?scenario=S&lang=en`
+  - DE: `/draft-preview?scenario=S&lang=de`
+  - DE with English Pokémon names: `/draft-preview?scenario=S&lang=de&pkmn=en`
+
+  Each at viewports 375×812 and desktop (1440×900; the full matrix adds 1280×720 and 768×1024) via `resize_window`, and in light and dark via `resize_window({ colorScheme })` with the stored theme left at `system` (reset with `preset: 'desktop'` afterwards). Check each shot for:
+  1. no fixed dark slab;
+  2. red only on drafted cards (every other state and error text uses the amber warn tokens; destructive admin buttons may stay red on the control page, never in the room's admin sheet);
+  3. a violet DRAFT button, and a grey disabled button with its reason;
+  4. a price badge on every card;
+  5. distinguishable branched pairs: Pichu, Ralts, Poliwag, Oddish and Eevee, and cards with and without a branch line of identical size, with names on one baseline (`live-wall` pins Pichu, whose branch label "→ Raichu-Alola" (German "→ Alola-Raichu") is the longest in this fixture list; real lists have longer ones, e.g. "→ Ursaluna-Bloodmoon", which truncate the same way, under a `≤22 P` filter);
+  6. the price tabs visible without scrolling, and the grid scrolling under them (desktop: the grid scrolls inside the wall pane; tablet and phone: the tabs stick under the nav while the page scrolls);
+  7. no horizontal scroll at 375 px (`document.documentElement.scrollWidth <= innerWidth`);
+  8. visible focus rings;
+  9. German strings that fit without clipping.
+
+## Dependencies
+- **External libraries:** none beyond the app stack. `@pkmn/data` (through `@/lib/pkmn`) is used **only** in `*.server.ts` and server pages. Client components never import `@pkmn/*`, which a test enforces.
+- **Internal modules:**
+  - `@/lib/draft/*`: the queue engine contracts, the snapshot, the polling, and the error codes.
+  - `@/types/draft-queue`: the DTOs (`DraftSnapshotDTO`, `MyTurnDTO`, `RedraftSubmissionDTO`, `TokenOverviewDTO`, `AdminPoolSummary`, `AuditEntryDTO`).
+  - `@/lib/supabase/queries/{drafts,drafts-queue,drafts-redraft,drafts-audit,drafts-favorites,point-buy-lists,format-rules}`.
+  - `@/lib/pkmn/i18n`: localised names and search folding.
+  - `@/i18n/*`: the runtime, the formatter, `LocalTime` and the API error text.
+  - `@/lib/worlds/registry` + `@/components/world/WorldShell`: the room renders inside the season's world.
+  - `@/lib/broadcast/overlay-locale`: the overlay language.
+
+## API Routes
+Backend-owned. The authoritative list is draft-backend §8.1. All routes use the `{ success, data } | { success: false, error, code?, params?, snapshot? }` envelope.
+- **Player routes:**
+  - `GET /api/drafts/[id]/state?since=`: the snapshot, or `unchanged`. Needs a session.
+  - `GET …/my-turn`: the turn watch.
+  - `POST …/picks`: makes a pick.
+  - `POST …/extensions`: adds time in live mode.
+  - `GET`/`PUT …/favorites`.
+  - `GET`/`PUT …/redraft/submission`.
+- **Tokens:**
+  - `GET /api/seasons/[id]/tokens/me`.
+  - `POST /api/seasons/[id]/draft-kill-tokens`.
+  - `POST /api/seasons/[id]/comeback-tokens/spend`.
+  - Admin: `POST …/comeback-tokens/open`.
+- **Admin routes** (each write is audited and requires a reason):
+  - `GET`/`POST /api/drafts`: list or create pools.
+  - `PATCH …/config`.
+  - `POST …/start` (refused with `LEAGUE_NOT_COMPLETABLE` when the league can never fill every roster) and `POST …/end` (an abort: a running initial draft voids every pick and is cancelled; a running redraft cannot be aborted).
+  - `POST …/pause`.
+  - `POST …/picks/[pickId]/void` (always requeues, no forfeit) and `POST …/picks/[pickId]/correct`: paused only.
+  - `POST …/participants/[playerId]/penalty`.
+  - `GET …/audit`.
+  - `GET …/redraft/submissions` (`{ submissions, publish_refused_at }`).
+  - `PATCH …/redraft`.
+  - `POST …/redraft/publish`.
+  - `POST …/redraft/slots/[redraftSlotId]/restore`.
+- **Search index:** `GET /api/point-buy-lists/[id]/search-index?v=&h=`.
+- **Replay:** `GET`/`POST …/replay-events` (POST: site admin, a commentary, pause or trade event validated by `replayEventCreateSchema` in `src/lib/draft/schemas.ts`; `data` is stored as `event_data`, the server assigns `sequence_number` and `wall_clock_time`, a pick event answers 400 `REPLAY_PICK_EVENTS_AUTO`). `POST …/undo` is the legacy admin undo.
+
+## Tests
+- `src/lib/draft-finder/__tests__/`: the engine vectors, search, the reducer, tabs and sort, the real index, the ability ids, and client-safe imports.
+- `src/lib/draft-ui/__tests__/`: the clock, the notification schedule, the snapshot adapter, reasons, the progress display and armed confirm.
+- `src/components/draft-tool/__tests__/`: the turn watch, the confirm dialog, screen rendering in EN and DE, the CSS hex whitelist, and `admin-gating.test.tsx` (no Admin button and no admin chunk for players, the lazy load on open, the chunk-failure notices, no runtime `draft-admin` import, the same number of snapshot hooks in the room for a pool admin as for a player, focus after "Pick for").
+- `src/components/draft-admin/__tests__/room-admin-sheet.test.tsx`: the sheet's tabs per pool kind and mode, only the open tab mounted (and only it carries `aria-controls`), the sheet's single-poller guard ("RoomAdminSheet: one poller": it never calls `useDraftSnapshot`), the Redraft tab's submissions/refusal read rules, the override hand-off, amber destructive actions, nested dialogs inside the sheet (handler shape only: the repo has no DOM test environment, so focus return and Escape across the stack are checked in the browser pass).
+- `src/components/draft-{redraft,tokens,admin}/__tests__/`, the page tests under `draft-room`, `redraft`, `tokens` and `admin/leagues/[id]/draft`, and `src/components/broadcast/overlays/__tests__/draft-overlays.test.tsx`.
+- **Rules all of them follow:**
+  - Page tests check the query budget, assert that seeds use `{ tick: false }`, and run `expectNoPrivatePlayerData` on the serialised props.
+  - All tests are DB-free, with a mocked Supabase client.
+- `src/app/(public)/draft-preview/__tests__/` renders every scenario in EN and DE with `fetch` stubbed.
+- League groups: `src/lib/draft-ui/__tests__/group-pools.test.ts` (group selection), `src/components/draft-tool/shared/__tests__/GroupPoolPicker.test.tsx`, `src/lib/draft/__tests__/player-pool.test.ts`, the grouped cases in the `draft-room`, `redraft`, `api/drafts`, `api/seasons/[id]/tokens`, `api/validate-team` and dashboard team page tests, each next to an unchanged ungrouped case.
+
+## Related Modules
+- [Draft](./draft.md)
+- [Evolution Point Buy](./evolution-point-buy.md)
+- [Format Packs](./format-packs.md)
+- [i18n](./i18n.md)
+- [PKMN](./pkmn.md)
+- [Worlds](./worlds.md)
+- [Broadcast](./broadcast.md)

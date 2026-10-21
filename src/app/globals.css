@@ -1,0 +1,2155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 18px; /* 112.5% — improves readability at 100% OS scaling */
+  }
+
+  * {
+    @apply border-border;
+  }
+}
+
+/* ─── Palette cores ───
+   The ONE place each palette's world-contract values live. Two consumers:
+   the world blocks ([data-world], Layer 3) and the site palettes
+   (html[data-palette], Layer 2). Never read from components (except the
+   palette picker's swatches). Light here; moonlit under [data-theme="dark"]. */
+:root {
+  --palette-plaza-ground: #E8D9B5;
+  --palette-plaza-surface: #FFF8E9;
+  --palette-plaza-elevated: #FAEED6;
+  --palette-plaza-ink: #241A0C;
+  --palette-plaza-ink-secondary: #5C4E37;
+  --palette-plaza-accent: #C05E0A;
+  --palette-plaza-accent-strong: #8F4206;
+  --palette-plaza-focus: #B54708;
+  --palette-plaza-live: #166534;
+  --palette-plaza-border: #E3D2AC;
+  --palette-plaza-glow: rgba(192, 94, 10, 0.28);
+  --palette-sakura-ground: #f4e0e4;
+  --palette-sakura-surface: #fdf8f2;
+  --palette-sakura-elevated: #faeef1;
+  --palette-sakura-ink: #3a2333;
+  --palette-sakura-ink-secondary: #5d4153;
+  --palette-sakura-accent: #c2436c;
+  --palette-sakura-accent-strong: #992e55;
+  --palette-sakura-focus: #a1325b;
+  --palette-sakura-live: #1d7a53;
+  --palette-sakura-border: #e6ccd3;
+  --palette-mountain-ground: #e3e7d6;
+  --palette-mountain-surface: #f8f6ee;
+  --palette-mountain-elevated: #edefdf;
+  --palette-mountain-ink: #2b352f;
+  --palette-mountain-ink-secondary: #566459;
+  --palette-mountain-accent: #97481e;
+  --palette-mountain-accent-strong: #8c421c;
+  --palette-mountain-focus: #8f441c;
+  --palette-mountain-live: #176344;
+  --palette-mountain-border: #ccd3ba;
+  --palette-clouds-ground: #e6edf4;
+  --palette-clouds-surface: #fbfdff;
+  --palette-clouds-elevated: #eff4f9;
+  --palette-clouds-ink: #223246;
+  --palette-clouds-ink-secondary: #4b5c72;
+  --palette-clouds-accent: #9c5a10;
+  --palette-clouds-accent-strong: #8a4d0c;
+  --palette-clouds-focus: #8f5210;
+  --palette-clouds-live: #176348;
+  --palette-clouds-border: #cddae6;
+}
+
+[data-theme="dark"] {
+  --palette-plaza-ground: #0E0B06;
+  --palette-plaza-surface: #171208;
+  --palette-plaza-elevated: #241C0E;
+  --palette-plaza-ink: #F5EDDD;
+  --palette-plaza-ink-secondary: #C4B596;
+  --palette-plaza-accent: #F5B84B;
+  --palette-plaza-accent-strong: #FFD166;
+  --palette-plaza-focus: #FB923C;
+  --palette-plaza-live: #4ADE80;
+  --palette-plaza-border: #453C24;
+  --palette-plaza-glow: rgba(245, 184, 75, 0.15);
+  --palette-sakura-ground: #1f1826;
+  --palette-sakura-surface: #2b2033;
+  --palette-sakura-elevated: #352942;
+  --palette-sakura-ink: #f5e9f1;
+  --palette-sakura-ink-secondary: #d3bcca;
+  --palette-sakura-accent: #f08cae;
+  --palette-sakura-accent-strong: #f7a8c3;
+  --palette-sakura-focus: #f2a0be;
+  --palette-sakura-live: #6fd7a8;
+  --palette-sakura-border: #453351;
+  --palette-mountain-ground: #1c2230;
+  --palette-mountain-surface: #272f41;
+  --palette-mountain-elevated: #323b50;
+  --palette-mountain-ink: #eef2f8;
+  --palette-mountain-ink-secondary: #c5cfde;
+  --palette-mountain-accent: #e9a56c;
+  --palette-mountain-accent-strong: #f2bd8d;
+  --palette-mountain-focus: #efb584;
+  --palette-mountain-live: #6fd7a8;
+  --palette-mountain-border: #3e4a63;
+  --palette-clouds-ground: #101a2c;
+  --palette-clouds-surface: #18263a;
+  --palette-clouds-elevated: #1f2f47;
+  --palette-clouds-ink: #eaf1fa;
+  --palette-clouds-ink-secondary: #c3d2e4;
+  --palette-clouds-accent: #f0b264;
+  --palette-clouds-accent-strong: #f6c786;
+  --palette-clouds-focus: #f2bb79;
+  --palette-clouds-live: #6fd7a8;
+  --palette-clouds-border: #34465f;
+}
+
+/* ─── Site base set (Layer 1: plaza, sunlit variant) ───
+   The whole app shares the EvoLiga plaza's warm sand contract: ground /
+   surface / elevated sands, warm inks, amber accent. The former brand red
+   #E3350D survives only as --poke-danger (destructive actions, loss/error
+   semantics). The eleven world-contract values reference the plaza palette
+   cores (Layer 0 above), the same cores the world blocks read, so base app
+   and worlds never drift. A viewer's site palette (html[data-palette],
+   Layer 2 below) overrides this set on <html> only. The themed world
+   elements re-declare it (the :where list), so every themed [data-world]
+   subtree keeps plaza --poke-* and its own pinned --world-* whatever the
+   site palette. The DOM-only default world is not listed: it has no ground
+   of its own, so it follows the site palette (docs/design.md § Site
+   palettes). */
+:root,
+:where([data-world="evoliga"], [data-world="sakura"], [data-world="mountain"], [data-world="clouds"]) {
+  --background: var(--palette-plaza-ground);
+  --foreground: var(--palette-plaza-ink);
+
+  /* ShadCN semantic tokens (mapped to poke palette) */
+  --card: var(--poke-surface);
+  --card-foreground: var(--poke-text-primary);
+  --popover: var(--poke-surface);
+  --popover-foreground: var(--poke-text-primary);
+  --primary: var(--poke-accent);
+  --primary-foreground: var(--poke-surface);
+  --secondary: var(--poke-blue);
+  --secondary-foreground: #FFFFFF;
+  --muted: var(--poke-muted);
+  --muted-foreground: var(--poke-text-muted);
+  --accent: var(--poke-elevated);
+  --accent-foreground: var(--poke-text-primary);
+  --destructive: var(--poke-danger, #DC2626);
+  --destructive-foreground: #FFFFFF;
+  --border: var(--poke-border);
+  --input: var(--poke-border);
+  --ring: var(--poke-focus);
+  --radius: 0.5rem;
+
+  --poke-base: var(--palette-plaza-ground);
+  --poke-surface: var(--palette-plaza-surface);
+  --poke-elevated: var(--palette-plaza-elevated);
+  --poke-muted: #F1E4C8;
+  --poke-inverse: #241A0C;
+
+  --poke-text-primary: var(--palette-plaza-ink);
+  --poke-text-secondary: var(--palette-plaza-ink-secondary);
+  --poke-text-muted: #8B7B5E;
+  --poke-text-tertiary: #A3926F;
+
+  --poke-border: var(--palette-plaza-border);
+  --poke-border-strong: #C9B183;
+
+  --poke-accent: var(--palette-plaza-accent);
+  --poke-accent-strong: var(--palette-plaza-accent-strong);
+  --poke-accent-light: #F7E8CF;
+  --poke-focus: var(--palette-plaza-focus);
+  --poke-live: var(--palette-plaza-live);
+  --poke-glow: var(--palette-plaza-glow);
+
+  --poke-blue: #3B82F6;
+  --poke-blue-hover: #2563EB;
+  --poke-green: #16A34A;
+  --poke-green-hover: #15803D;
+  --poke-yellow: #EAB308;
+  --poke-danger: #DC2626;
+  --poke-danger-hover: #B91C1C;
+  --poke-plum: #7A3B5C;
+
+  --poke-blue-light: #EFF6FF;
+  --poke-green-light: #F0FDF4;
+  --poke-yellow-light: #FEFCE8;
+  --poke-danger-light: #FEF2F2;
+  --poke-plum-light: #F3E3EA;
+
+  /* Warning / error inks and text on status fills (Tailwind poke.yellow-ink,
+     poke.danger-ink, poke.danger-tint-ink, poke.amber-ink, poke.on-*). Plaza
+     keeps the old static Tailwind values (yellow-700, red-500, red-400,
+     amber-600, white); the other site palettes give contrast-checked inks,
+     and their dark blocks switch the on-colours to dark ink (their hues are
+     light). */
+  --poke-yellow-ink: #a16207;
+  --poke-danger-ink: #ef4444;
+  --poke-danger-tint-ink: #f87171;
+  --poke-amber-ink: #d97706;
+  --poke-on-blue: #FFFFFF;
+  --poke-on-green: #FFFFFF;
+  --poke-on-danger: #FFFFFF;
+
+  /* Stat bar HSL variables (light theme) */
+  --stat-bar-sat: 85%;
+  --stat-bar-light: 45%;
+  --stat-bar-light-hover: 35%;
+  --stat-bar-text-light: 55%;
+
+  /* Moment badge colors (light mode — darker text for contrast on cream) */
+  --poke-moment-amber: #92400e;
+  --poke-moment-amber-bg: rgba(245, 158, 11, 0.15);
+  --poke-moment-red: #991b1b;
+  --poke-moment-red-bg: rgba(239, 68, 68, 0.15);
+  --poke-moment-purple: #6b21a8;
+  --poke-moment-purple-bg: rgba(168, 85, 247, 0.15);
+  --poke-moment-emerald: #065f46;
+  --poke-moment-emerald-bg: rgba(16, 185, 129, 0.15);
+  --poke-moment-blue: #1e40af;
+  --poke-moment-blue-bg: rgba(59, 130, 246, 0.15);
+}
+
+/* ─── Moonlit variant (dark theme) ───
+   Declares the full base set (status hues included, same values as the
+   sunlit block) so each mode is complete on its own. */
+[data-theme="dark"],
+[data-theme="dark"] :where([data-world="evoliga"], [data-world="sakura"], [data-world="mountain"], [data-world="clouds"]) {
+  --background: var(--palette-plaza-ground);
+  --foreground: var(--palette-plaza-ink);
+
+  --card: var(--poke-surface);
+  --card-foreground: var(--poke-text-primary);
+  --popover: var(--poke-surface);
+  --popover-foreground: var(--poke-text-primary);
+  --primary: var(--poke-accent);
+  --primary-foreground: #171208;
+  --secondary: var(--poke-blue);
+  --secondary-foreground: #ededed;
+  --muted: var(--poke-muted);
+  --muted-foreground: var(--poke-text-muted);
+  --accent: var(--poke-elevated);
+  --accent-foreground: var(--poke-text-primary);
+  --destructive: #DC2626;
+  --destructive-foreground: #ededed;
+  --border: var(--poke-border);
+  --input: var(--poke-border);
+  --ring: var(--poke-focus);
+
+  --poke-base: var(--palette-plaza-ground);
+  --poke-surface: var(--palette-plaza-surface);
+  --poke-elevated: var(--palette-plaza-elevated);
+  --poke-muted: #1D160A;
+  --poke-inverse: #F5EDDD;
+
+  --poke-text-primary: var(--palette-plaza-ink);
+  --poke-text-secondary: var(--palette-plaza-ink-secondary);
+  --poke-text-muted: #97886A;
+  --poke-text-tertiary: #7D6F52;
+
+  --poke-border: var(--palette-plaza-border);
+  --poke-border-strong: #5C5133;
+
+  --poke-accent: var(--palette-plaza-accent);
+  --poke-accent-strong: var(--palette-plaza-accent-strong);
+  --poke-accent-light: rgba(245, 184, 75, 0.16);
+  --poke-focus: var(--palette-plaza-focus);
+  --poke-live: var(--palette-plaza-live);
+  --poke-glow: var(--palette-plaza-glow);
+
+  --poke-blue: #3B82F6;
+  --poke-blue-hover: #2563EB;
+  --poke-green: #16A34A;
+  --poke-green-hover: #15803D;
+  --poke-yellow: #EAB308;
+  --poke-danger: #DC2626;
+  --poke-danger-hover: #B91C1C;
+  --poke-plum: #E39BB8;
+
+  --poke-blue-light: rgba(59, 130, 246, 0.15);
+  --poke-green-light: rgba(22, 163, 74, 0.15);
+  --poke-yellow-light: rgba(234, 179, 8, 0.15);
+  --poke-danger-light: rgba(220, 38, 38, 0.15);
+  --poke-plum-light: rgba(227, 155, 184, 0.16);
+
+  --poke-yellow-ink: #a16207;
+  --poke-danger-ink: #ef4444;
+  --poke-danger-tint-ink: #f87171;
+  --poke-amber-ink: #d97706;
+  --poke-on-blue: #FFFFFF;
+  --poke-on-green: #FFFFFF;
+  --poke-on-danger: #FFFFFF;
+
+  /* Stat bar HSL variables (dark theme) */
+  --stat-bar-sat: 85%;
+  --stat-bar-light: 55%;
+  --stat-bar-light-hover: 45%;
+  --stat-bar-text-light: 65%;
+
+  /* Moment badge colors (dark mode — brighter text for contrast on dark) */
+  --poke-moment-amber: #fbbf24;
+  --poke-moment-amber-bg: rgba(245, 158, 11, 0.2);
+  --poke-moment-red: #f87171;
+  --poke-moment-red-bg: rgba(239, 68, 68, 0.2);
+  --poke-moment-purple: #c084fc;
+  --poke-moment-purple-bg: rgba(168, 85, 247, 0.2);
+  --poke-moment-emerald: #34d399;
+  --poke-moment-emerald-bg: rgba(16, 185, 129, 0.2);
+  --poke-moment-blue: #60a5fa;
+  --poke-moment-blue-bg: rgba(59, 130, 246, 0.2);
+}
+
+/* ─── Site palettes (data-palette on <html>) ───
+   The viewer's per-device colour scheme (src/lib/design/site-palettes.ts;
+   set before first paint by the inline script in src/app/layout.tsx).
+   Absent attribute = plaza (Layer 1). Only <html> matches: themed world
+   subtrees re-declare the plaza set (Layer 1's :where list) and pin their
+   own --world-* (Layer 3), so themed worlds never change with the site
+   palette (the DOM-only default world follows it).
+   Every block declares the FULL base set — dark blocks too, because the
+   light block (0,1,1) also beats plaza's dark block (0,1,0).
+   Contrast: every text pair >= 4.5:1, every UI pair >= 3:1 (computed, see
+   docs/design.md § Site palettes). */
+html[data-palette="sakura"] {
+  --background: var(--palette-sakura-ground);
+  --foreground: var(--palette-sakura-ink);
+  --poke-base: var(--palette-sakura-ground);
+  --poke-surface: var(--palette-sakura-surface);
+  --poke-elevated: var(--palette-sakura-elevated);
+  --poke-muted: #f7e8eb;
+  --poke-inverse: var(--palette-sakura-ink);
+  --poke-text-primary: var(--palette-sakura-ink);
+  --poke-text-secondary: var(--palette-sakura-ink-secondary);
+  --poke-text-muted: #74586a;
+  --poke-text-tertiary: #795e6f;
+  --poke-border: var(--palette-sakura-border);
+  --poke-border-strong: #d6aebb;
+  --poke-accent: #b23a60; /* site floor: world accent #c2436c fails 4.5:1 */
+  --poke-accent-strong: var(--palette-sakura-accent-strong);
+  --poke-accent-light: #f8e1e8;
+  --poke-focus: var(--palette-sakura-focus);
+  --poke-live: #1c744f; /* site floor: world live #1d7a53 fails 4.5:1 */
+  --poke-glow: rgba(178, 58, 96, 0.28);
+  --poke-blue: #285c82;
+  --poke-blue-hover: #1f4b6b;
+  --poke-green: #186545;
+  --poke-green-hover: #135036;
+  --poke-yellow: #d6a01e;
+  --poke-danger: #ba372a;
+  --poke-danger-hover: #9c2d22;
+  --poke-plum: #7a3b6e;
+  --poke-blue-light: #e5eff6;
+  --poke-green-light: #e3f1ea;
+  --poke-yellow-light: #fcf6e3;
+  --poke-danger-light: #fae4e1;
+  --poke-plum-light: #f2e1ee;
+  --poke-yellow-ink: #854d0e;
+  --poke-danger-ink: var(--poke-danger);
+  --poke-danger-tint-ink: var(--poke-danger-hover);
+  --poke-amber-ink: #92400e;
+  --poke-on-blue: #ffffff;
+  --poke-on-green: #ffffff;
+  --poke-on-danger: #ffffff;
+  --primary-foreground: var(--poke-surface);
+  --secondary-foreground: var(--poke-on-blue);
+  --destructive: var(--poke-danger);
+  --destructive-foreground: var(--poke-on-danger);
+}
+
+html[data-palette="sakura"][data-theme="dark"] {
+  --background: var(--palette-sakura-ground);
+  --foreground: var(--palette-sakura-ink);
+  --poke-base: var(--palette-sakura-ground);
+  --poke-surface: var(--palette-sakura-surface);
+  --poke-elevated: var(--palette-sakura-elevated);
+  --poke-muted: #30253a;
+  --poke-inverse: var(--palette-sakura-ink);
+  --poke-text-primary: var(--palette-sakura-ink);
+  --poke-text-secondary: var(--palette-sakura-ink-secondary);
+  --poke-text-muted: #b49fae;
+  --poke-text-tertiary: #a8929f;
+  --poke-border: var(--palette-sakura-border);
+  --poke-border-strong: #5a4569;
+  --poke-accent: var(--palette-sakura-accent);
+  --poke-accent-strong: var(--palette-sakura-accent-strong);
+  --poke-accent-light: rgba(240, 140, 174, 0.16);
+  --poke-focus: var(--palette-sakura-focus);
+  --poke-live: var(--palette-sakura-live);
+  --poke-glow: rgba(240, 140, 174, 0.15);
+  --poke-blue: #8cc4ea;
+  --poke-blue-hover: #a6d2f0;
+  --poke-green: #6fd7a8;
+  --poke-green-hover: #8fe3bd;
+  --poke-yellow: #f2c55c;
+  --poke-danger: #ff8f84;
+  --poke-danger-hover: #ffaba3;
+  --poke-plum: #e7a6d8;
+  --poke-blue-light: rgba(140, 196, 234, 0.15);
+  --poke-green-light: rgba(111, 215, 168, 0.15);
+  --poke-yellow-light: rgba(242, 197, 92, 0.15);
+  --poke-danger-light: rgba(255, 143, 132, 0.15);
+  --poke-plum-light: rgba(231, 166, 216, 0.16);
+  --poke-yellow-ink: #f2c55c;
+  --poke-danger-ink: var(--poke-danger);
+  --poke-danger-tint-ink: var(--poke-danger-hover);
+  --poke-amber-ink: #fbbf24;
+  --poke-on-blue: #1f1826;
+  --poke-on-green: #1f1826;
+  --poke-on-danger: #1f1826;
+  --primary-foreground: var(--poke-surface);
+  --secondary-foreground: var(--poke-on-blue);
+  --destructive: var(--poke-danger);
+  --destructive-foreground: var(--poke-on-danger);
+  --poke-moment-red: #fca5a5;
+  --poke-moment-purple: #d8b4fe;
+  --poke-moment-blue: #93c5fd;
+}
+
+html[data-palette="mountain"] {
+  --background: var(--palette-mountain-ground);
+  --foreground: var(--palette-mountain-ink);
+  --poke-base: var(--palette-mountain-ground);
+  --poke-surface: var(--palette-mountain-surface);
+  --poke-elevated: var(--palette-mountain-elevated);
+  --poke-muted: #e8ebdc;
+  --poke-inverse: var(--palette-mountain-ink);
+  --poke-text-primary: var(--palette-mountain-ink);
+  --poke-text-secondary: var(--palette-mountain-ink-secondary);
+  --poke-text-muted: #5a655d;
+  --poke-text-tertiary: #5d6860;
+  --poke-border: var(--palette-mountain-border);
+  --poke-border-strong: #b3bd9c;
+  --poke-accent: var(--palette-mountain-accent);
+  --poke-accent-strong: var(--palette-mountain-accent-strong);
+  --poke-accent-light: #f3e6dc;
+  --poke-focus: var(--palette-mountain-focus);
+  --poke-live: var(--palette-mountain-live);
+  --poke-glow: rgba(151, 72, 30, 0.28);
+  --poke-blue: #2b5c82;
+  --poke-blue-hover: #224a69;
+  --poke-green: #176344;
+  --poke-green-hover: #114f36;
+  --poke-yellow: #c99a1e;
+  --poke-danger: #b3261e;
+  --poke-danger-hover: #941f19;
+  --poke-plum: #6d3f63;
+  --poke-blue-light: #e3ecf2;
+  --poke-green-light: #e0eee6;
+  --poke-yellow-light: #faf6e4;
+  --poke-danger-light: #f8e3e0;
+  --poke-plum-light: #efe3ec;
+  --poke-yellow-ink: #854d0e;
+  --poke-danger-ink: var(--poke-danger);
+  --poke-danger-tint-ink: var(--poke-danger-hover);
+  --poke-amber-ink: #92400e;
+  --poke-on-blue: #ffffff;
+  --poke-on-green: #ffffff;
+  --poke-on-danger: #ffffff;
+  --primary-foreground: var(--poke-surface);
+  --secondary-foreground: var(--poke-on-blue);
+  --destructive: var(--poke-danger);
+  --destructive-foreground: var(--poke-on-danger);
+}
+
+html[data-palette="mountain"][data-theme="dark"] {
+  --background: var(--palette-mountain-ground);
+  --foreground: var(--palette-mountain-ink);
+  --poke-base: var(--palette-mountain-ground);
+  --poke-surface: var(--palette-mountain-surface);
+  --poke-elevated: var(--palette-mountain-elevated);
+  --poke-muted: #2c3447;
+  --poke-inverse: var(--palette-mountain-ink);
+  --poke-text-primary: var(--palette-mountain-ink);
+  --poke-text-secondary: var(--palette-mountain-ink-secondary);
+  --poke-text-muted: #a6b1c2;
+  --poke-text-tertiary: #9ba6b7;
+  --poke-border: var(--palette-mountain-border);
+  --poke-border-strong: #52607d;
+  --poke-accent: var(--palette-mountain-accent);
+  --poke-accent-strong: var(--palette-mountain-accent-strong);
+  --poke-accent-light: rgba(233, 165, 108, 0.16);
+  --poke-focus: var(--palette-mountain-focus);
+  --poke-live: var(--palette-mountain-live);
+  --poke-glow: rgba(233, 165, 108, 0.15);
+  --poke-blue: #abd3ef;
+  --poke-blue-hover: #c7e1f5;
+  --poke-green: #8bdfb9;
+  --poke-green-hover: #aceace;
+  --poke-yellow: #f0c75e;
+  --poke-danger: #ff8a7a;
+  --poke-danger-hover: #ffa597;
+  --poke-plum: #dba6cf;
+  --poke-blue-light: rgba(171, 211, 239, 0.15);
+  --poke-green-light: rgba(139, 223, 185, 0.15);
+  --poke-yellow-light: rgba(240, 199, 94, 0.15);
+  --poke-danger-light: rgba(255, 138, 122, 0.15);
+  --poke-plum-light: rgba(219, 166, 207, 0.16);
+  --poke-yellow-ink: #f0c75e;
+  --poke-danger-ink: var(--poke-danger);
+  --poke-danger-tint-ink: var(--poke-danger-hover);
+  --poke-amber-ink: #fbbf24;
+  --poke-on-blue: #1c2230;
+  --poke-on-green: #1c2230;
+  --poke-on-danger: #1c2230;
+  --primary-foreground: var(--poke-surface);
+  --secondary-foreground: var(--poke-on-blue);
+  --destructive: var(--poke-danger);
+  --destructive-foreground: var(--poke-on-danger);
+  --poke-moment-red: #fca5a5;
+  --poke-moment-purple: #d8b4fe;
+  --poke-moment-blue: #93c5fd;
+}
+
+html[data-palette="clouds"] {
+  --background: var(--palette-clouds-ground);
+  --foreground: var(--palette-clouds-ink);
+  --poke-base: var(--palette-clouds-ground);
+  --poke-surface: var(--palette-clouds-surface);
+  --poke-elevated: var(--palette-clouds-elevated);
+  --poke-muted: #eaf0f6;
+  --poke-inverse: var(--palette-clouds-ink);
+  --poke-text-primary: var(--palette-clouds-ink);
+  --poke-text-secondary: var(--palette-clouds-ink-secondary);
+  --poke-text-muted: #56677c;
+  --poke-text-tertiary: #5b6b80;
+  --poke-border: var(--palette-clouds-border);
+  --poke-border-strong: #a9bdd1;
+  --poke-accent: var(--palette-clouds-accent);
+  --poke-accent-strong: var(--palette-clouds-accent-strong);
+  --poke-accent-light: #f6ecdf;
+  --poke-focus: var(--palette-clouds-focus);
+  --poke-live: var(--palette-clouds-live);
+  --poke-glow: rgba(156, 90, 16, 0.28);
+  --poke-blue: #1c5898;
+  --poke-blue-hover: #164578;
+  --poke-green: #176247;
+  --poke-green-hover: #114e39;
+  --poke-yellow: #cf9b14;
+  --poke-danger: #b42318;
+  --poke-danger-hover: #951c13;
+  --poke-plum: #6b3f74;
+  --poke-blue-light: #e4eef8;
+  --poke-green-light: #e1f0e9;
+  --poke-yellow-light: #fcf7e6;
+  --poke-danger-light: #f9e3e1;
+  --poke-plum-light: #efe4f2;
+  --poke-yellow-ink: #854d0e;
+  --poke-danger-ink: var(--poke-danger);
+  --poke-danger-tint-ink: var(--poke-danger-hover);
+  --poke-amber-ink: #92400e;
+  --poke-on-blue: #ffffff;
+  --poke-on-green: #ffffff;
+  --poke-on-danger: #ffffff;
+  --primary-foreground: var(--poke-surface);
+  --secondary-foreground: var(--poke-on-blue);
+  --destructive: var(--poke-danger);
+  --destructive-foreground: var(--poke-on-danger);
+}
+
+html[data-palette="clouds"][data-theme="dark"] {
+  --background: var(--palette-clouds-ground);
+  --foreground: var(--palette-clouds-ink);
+  --poke-base: var(--palette-clouds-ground);
+  --poke-surface: var(--palette-clouds-surface);
+  --poke-elevated: var(--palette-clouds-elevated);
+  --poke-muted: #1b2b41;
+  --poke-inverse: var(--palette-clouds-ink);
+  --poke-text-primary: var(--palette-clouds-ink);
+  --poke-text-secondary: var(--palette-clouds-ink-secondary);
+  --poke-text-muted: #9fb0c6;
+  --poke-text-tertiary: #93a5bc;
+  --poke-border: var(--palette-clouds-border);
+  --poke-border-strong: #4a6181;
+  --poke-accent: var(--palette-clouds-accent);
+  --poke-accent-strong: var(--palette-clouds-accent-strong);
+  --poke-accent-light: rgba(240, 178, 100, 0.16);
+  --poke-focus: var(--palette-clouds-focus);
+  --poke-live: var(--palette-clouds-live);
+  --poke-glow: rgba(240, 178, 100, 0.15);
+  --poke-blue: #86c5f0;
+  --poke-blue-hover: #a2d3f4;
+  --poke-green: #6fd7a8;
+  --poke-green-hover: #8fe3bd;
+  --poke-yellow: #f2c75a;
+  --poke-danger: #ff8b80;
+  --poke-danger-hover: #ffa69d;
+  --poke-plum: #d9a8e0;
+  --poke-blue-light: rgba(134, 197, 240, 0.15);
+  --poke-green-light: rgba(111, 215, 168, 0.15);
+  --poke-yellow-light: rgba(242, 199, 90, 0.15);
+  --poke-danger-light: rgba(255, 139, 128, 0.15);
+  --poke-plum-light: rgba(217, 168, 224, 0.16);
+  --poke-yellow-ink: #f2c75a;
+  --poke-danger-ink: var(--poke-danger);
+  --poke-danger-tint-ink: var(--poke-danger-hover);
+  --poke-amber-ink: #fbbf24;
+  --poke-on-blue: #101a2c;
+  --poke-on-green: #101a2c;
+  --poke-on-danger: #101a2c;
+  --primary-foreground: var(--poke-surface);
+  --secondary-foreground: var(--poke-on-blue);
+  --destructive: var(--poke-danger);
+  --destructive-foreground: var(--poke-on-danger);
+  --poke-moment-red: #fca5a5;
+  --poke-moment-purple: #d8b4fe;
+  --poke-moment-blue: #93c5fd;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+/* ─── Warm form controls ─── */
+select,
+option {
+  color: var(--poke-text-primary);
+  background-color: var(--poke-surface);
+  border: 1px solid var(--poke-border);
+  border-radius: 0.5rem;
+}
+
+input,
+textarea {
+  color: var(--poke-text-primary);
+  background-color: var(--poke-surface);
+  border: 1px solid var(--poke-border);
+  border-radius: 0.5rem;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--poke-text-muted);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--poke-focus);
+  box-shadow: 0 0 0 3px var(--poke-glow);
+}
+
+/* Date inputs */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Site chrome glass (plaza HUD recipe, warm variant): translucent surface
+   + blur + sheen. Light keeps the raw surface at 80%; the moonlit surface is
+   nearly black, so the dark chrome lifts one step to stay distinguishable
+   from the page ground. */
+[data-navbar-glass] {
+  background-color: color-mix(in srgb, var(--poke-surface) 80%, transparent);
+}
+
+[data-theme="dark"] [data-navbar-glass] {
+  background-color: color-mix(in srgb, var(--poke-elevated) 78%, transparent);
+}
+[data-navbar-glass]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 55%);
+}
+
+[data-theme="dark"] [data-navbar-glass]::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 55%);
+}
+
+/* ─── Season world tokens ───
+   Outside any world shell --world-* alias the site's --poke-* values at the
+   root, so arena-* utilities used there (draft arena, a league hub outside a
+   themed world) follow the site palette, and sunlit/moonlit switching comes
+   free via [data-theme="dark"]. Every themed [data-world="..."] element
+   pins its own dialect to the palette cores (Layer 0; evoliga pins plaza),
+   so a themed world never changes with the site palette. The DOM-only
+   default world pins nothing (see below). Mapped as the
+   `arena-*` Tailwind color scale.
+   See docs/design.md — World Tokens (11-token contract). */
+:root {
+  --world-ground: var(--poke-base);
+  --world-surface: var(--poke-surface);
+  --world-elevated: var(--poke-elevated);
+  --world-ink: var(--poke-text-primary);
+  --world-ink-secondary: var(--poke-text-secondary);
+  --world-accent: var(--poke-accent);
+  --world-accent-strong: var(--poke-accent-strong);
+  --world-focus: var(--poke-focus);
+  --world-live: var(--poke-live);
+  --world-glow: var(--poke-glow);
+  --world-border: var(--poke-border);
+}
+
+/* The DOM-only default world (the resolveWorld fallback) declares no
+   --world-* and is not in Layer 1's :where list: it paints no ground of its
+   own (WorldShell renders data-world-ground only for themed worlds), so it
+   follows the site palette like any other page instead of putting plaza
+   panels on a palette-coloured body. */
+
+/* League hub (inside a world's #pulse section): the shared components it
+   reuses (brackets, insights tables, ruleset, Core Liga cores) are styled
+   with poke-* utilities, so inside the hub the poke tokens read the world's
+   palette. In the plaza (no --world-* override) this is the identity; in the
+   park, pass and sky island the reused tables follow the theme, sunlit and
+   moonlit. No cycle: --world-* arrive here as inherited computed values. */
+.league-hub {
+  --poke-base: var(--world-ground);
+  --poke-surface: var(--world-surface);
+  --poke-elevated: var(--world-elevated);
+  --poke-muted: var(--world-elevated);
+  --poke-text-primary: var(--world-ink);
+  --poke-text-secondary: var(--world-ink-secondary);
+  --poke-text-muted: var(--world-ink-secondary);
+  --poke-text-tertiary: var(--world-ink-secondary);
+  --poke-accent: var(--world-accent);
+  --poke-accent-strong: var(--world-accent-strong);
+  --poke-focus: var(--world-focus);
+  --poke-live: var(--world-live);
+  --poke-glow: var(--world-glow);
+  --poke-border: var(--world-border);
+  --poke-border-strong: var(--world-border);
+}
+
+/* Route-tier plaza: keep section height for the conductor, hide the paint.
+   (The site NavBar's live state — hidden but reachable — is the D33 block
+   after the W7 loader rules.) The page-header hide skips dialog subtrees:
+   the docked `?team=` panel's own header row (name, badge, ace) carries the
+   same utility classes. */
+html.world-route-live main .flex.items-start.justify-between:not(dialog *) {
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  margin: 0;
+}
+html.world-route-live [data-world-ground] {
+  display: none;
+}
+/* `:not(dialog *)`: the docked overlays (`?rules=gate`, `?board=…`) are
+   <dialog>s inside `[data-world-route]`, and their bodies use <section>s.
+   Matched here they were forced to 100vh with every child hidden — the
+   panel opened as a blank title bar (PR #65 test pass, R4). A dialog is the
+   one thing on the route tier that is NOT a station, so its subtree is left
+   alone; the station sections (and so the conductor's offsets) are matched
+   exactly as before. */
+html.world-route-live [data-world-route] section:not(dialog *) {
+  /* One viewport of orbit per station — hidden tables must not extend scroll. */
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  background: transparent;
+}
+/* The league hub (#pulse's `after` slot) is hidden with its station, but its
+   padding, border and top margin still made a ~92 px box inside #pulse.
+   Out of the layout entirely while the world is the page; #pulse keeps its
+   fixed 100vh, so no station offset moves. */
+html.world-route-live [data-world-route] #league-hub {
+  display: none;
+}
+html.world-route-live [data-world-route] section:not(dialog *) > * {
+  visibility: hidden;
+  /* ENGINE r5 (D23, CAR r4: 56 sprite fetches during the sweep). Hidden paint
+     alone still lays the tables out, so their lazy <img>s fetched and decoded
+     as the sweep scrolled near them. Skipping the subtree's rendering keeps
+     them unrequested while the world is the page; the section box (and so
+     the conductor's measurement) is unchanged — its height is fixed above. */
+  content-visibility: hidden;
+}
+
+/* === W7 loader === */
+/* The route canvas is INERT until the handoff. Its wrapper is positioned at
+   z-index 0, so by paint order it lies over the non-positioned sections from
+   the moment it mounts. Until the handoff it stays at opacity 0 with no
+   pointer events: the semantic page stays readable and usable through the
+   whole load (D2), while the renderer keeps rendering and compiling
+   underneath (opacity never parks a WebGL canvas).
+
+   TWO-PHASE handoff (gauntlet r3, blank-frame veto — HideHtmlOnRoute):
+   1. `html[data-route-handoff]`: the canvas rises to opacity 1 OVER the
+      still-painted sections (faded in under the beam on the ceremony path,
+      a short transition otherwise).
+   2. `html.world-route-live` (the section-hiding rules above): only after
+      the canvas has composited at opacity 1 with nothing still animating.
+   No rule here hides the canvas once either mark is set, and no frame can
+   show neither page nor world. Lite never mounts the canvas. The late
+   phase-2 flip has no visual dependency: it hides sections that are
+   already fully covered by the opaque canvas. */
+[data-route-canvas] {
+  transition: opacity 180ms ease-out 0ms;
+}
+html:not(.world-route-live):not([data-route-handoff]) [data-route-canvas] {
+  opacity: 0;
+}
+/* Pre-promoted while inert (wave 2): the release fade then starts on an
+   existing compositor layer, never a layer created in the reveal frame. */
+html:not(.world-route-live) [data-route-canvas] {
+  pointer-events: none;
+  will-change: opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The reduced-motion ceremony IS this crossfade (no beam). */
+  [data-route-canvas] {
+    transition-duration: 200ms;
+    transition-timing-function: linear;
+  }
+}
+/* The beam CARRIES the world in (wave 2, compositor-only). While the ball is
+   revealing (and not on its reduced / quick crossfade) the canvas fades in
+   by OPACITY on the SAME delay, curve and duration as the ball's capture
+   wavefront (BallLoader.module.css `.sweep`): (lead + 240 ms) × k, 520 ms
+   × k — 240 ms = BALL_TIMING.handoffMs; `--ball-lead` / `--ball-k` are the
+   ceremony plan BallLoader writes on <html> in the SAME commit that renders
+   `data-revealing` (and this attribute). One commit, one timeline, and
+   opacity only: the r3–r5 clip-path iris was main-thread paint work, so a
+   shader-link stall froze it mid-reveal (the handoff-stutter veto); an
+   opacity animation runs on the compositor however stalled the page is.
+   Until the delay the canvas holds at 0 (fill `both`), so the page stays
+   fully visible. The rule drops away when the ball finishes (`done`), and
+   the sections are only hidden once this animation has finished (phase 2). */
+/* D32: never under the theme veil — a veiled swap's generation arms behind
+   the opaque veil, and its (invisible) ceremony must not drop the live
+   canvas back to 0. */
+html[data-route-handoff]:not([data-route-veil]):has([data-ball-loader][data-revealing]:not([data-reduced])) [data-route-canvas] {
+  transition: none;
+  /* Wave-2 r2: the fade is a RELEASE beat, so its duration runs at the
+     release scale (`--ball-kb`); the delay is the lead-in (`--ball-k`). */
+  animation: route-canvas-release calc(520ms * var(--ball-kb, 1)) cubic-bezier(0.25, 0.7, 0.35, 1)
+    calc((var(--ball-lead, 0ms) + 240ms) * var(--ball-k, 1)) both;
+}
+/* The site NavBar leaves WITH the page (gauntlet r4: it floated over the sky
+   and the beam through handoff phase 1). Phase 2's rule above keeps its flow
+   slot and hides its paint; from phase 1 on it fades out on the canvas's own
+   opacity transition (180 ms ease-out; 200 ms linear under reduced motion)
+   and takes no pointer events. Flow is untouched (opacity only), so the
+   conductor's scroll offsets do not move. */
+html[data-route-handoff] body > nav {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-route-handoff] body > nav {
+    transition: opacity 200ms linear 0ms;
+  }
+}
+@keyframes route-canvas-release {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-route-handoff]:has([data-ball-loader][data-revealing]) [data-route-canvas] {
+    animation: none;
+    transition: opacity 200ms linear;
+  }
+}
+/* Narrow screens (D2 "does not cover data"): while the ball is docked
+   (loading) it sits on its CHIP (ball + status line, wave-2 r2), placed by
+   the keep-out law over no visible text, entirely inside the viewport with a
+   16 px gutter (BallLoader `placeLoaderChip`) — no longer in the HUD band's
+   right-hand gutter, where r5 clipped it at the edge over a table row. At
+   the reveal it flies to screen centre and bursts there. The chip's band is
+   reserved at the END of the semantic page (a spacer after the content —
+   never padding on a station section, so the conductor's section offsets do
+   not move), so the last card row can always scroll clear of it. */
+@media (max-width: 640px) {
+  html:not([data-route-veil]):has([data-ball-loader][data-ball-phase="loading"]) [data-world-route]::after {
+    content: "";
+    display: block;
+    height: 104px;
+  }
+}
+/* === end W7 === */
+
+/* === D33 nav reveal === */
+/* The site NavBar stays reachable inside the 3D world (owner, 2026-09-28).
+   While the world is the page it is slid out above the viewport — hidden by
+   default, so the stills and the data faces are untouched — and revealed by
+   RouteNavReveal (`html[data-route-nav="open"]`: the pointer resting at the
+   top edge, the HUD menu chip on touch) or by keyboard focus inside it.
+   TRANSFORM / OPACITY ONLY: the sticky flow slot (its 64 px) never changes,
+   so useScrollConductor's section offsets never move. Not `visibility`, so
+   Tab from the page start still reaches it.
+   First reveal without a hitch: the hidden bar stays a drawn compositor
+   layer (`will-change` + the 0.002 pre-raster opacity, E8's dialect) fully
+   above the viewport, so its tiles and its blur / saturate programs exist
+   before the first reveal — the slide is then a transform on an existing
+   layer. (Its glass is the HUD's own blur(18px) saturate(1.25), linked by
+   the loader's HUD primer during the ceremony, and the bar itself is painted
+   over the page for the whole load.) Phase 1 keeps the fade above. */
+html.world-route-live body > nav {
+  visibility: visible;
+  transform: translate3d(0, calc(-100% - 16px), 0);
+  opacity: 0.002;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition:
+    transform 240ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 0ms linear 240ms;
+}
+/* Tab into the hidden bar must not scroll the page (the conductor would
+   move): focus scrolling measures the bar where it is parked, above the
+   viewport, so every control's scroll area is shifted into view (it covers
+   the open pose as well, so a focused control never scrolls either way). */
+html:is(.world-route-live, [data-route-handoff]) body > nav * {
+  scroll-margin-top: -160px;
+  scroll-margin-bottom: 160px;
+}
+html:is(.world-route-live, [data-route-handoff])[data-route-nav="open"] body > nav,
+html:is(.world-route-live, [data-route-handoff]) body > nav:has(:focus-visible) {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0ms linear 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Instant show / hide. */
+  html.world-route-live body > nav,
+  html:is(.world-route-live, [data-route-handoff])[data-route-nav="open"] body > nav,
+  html:is(.world-route-live, [data-route-handoff]) body > nav:has(:focus-visible) {
+    transition: none;
+  }
+}
+/* The HUD's menu chip (WorldNav): touch / coarse pointers only — there is no
+   hover to reach the top edge with. Hidden on fine pointers, so the desktop
+   HUD (and its stills) are unchanged. */
+html:is(.world-route-live, [data-route-handoff]) .world-nav-hud-menu {
+  display: none;
+}
+@media (hover: none), (any-pointer: coarse) {
+  html:is(.world-route-live, [data-route-handoff]) .world-nav-hud-menu {
+    display: inline-flex;
+  }
+}
+html.world-route-live .world-nav-hud-menu[aria-expanded="true"] {
+  background: var(--hud-chip-active);
+  color: var(--hud-chip-active-ink);
+  box-shadow: inset 0 0 0 1px var(--hud-chip-active-ring);
+}
+/* === end D33 nav reveal === */
+
+/* === D32 theme veil === */
+/* A day/night switch after the reveal fades the world to a veil in the
+   world's page background colour (`--world-ground`: the theme token, never
+   a fixed dark slab — D25) while the new theme's generation loads, links
+   and uploads behind it (theme-veil-store). Driven by `html[data-route-veil]`
+   alone (in | opaque | out): an opacity transition on its own compositor
+   layer (promoted from the handoff on, so the fade never creates it), so a
+   busy main thread cannot stall it. It sits at the canvas's z-index after it
+   in DOM order: the HUD, the Station Card, panels and the NavBar stay above,
+   and the page chrome switches theme at once. Reduced motion: instant. */
+html:is(.world-route-live, [data-route-handoff], [data-route-veil]) .route-theme-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--world-ground, var(--poke-base));
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  will-change: opacity;
+}
+html[data-route-veil] .route-theme-veil {
+  visibility: visible;
+  /* Nothing under the veil is interactive while the world swaps. */
+  pointer-events: auto;
+}
+html[data-route-veil="in"] .route-theme-veil,
+html[data-route-veil="opaque"] .route-theme-veil {
+  opacity: 1;
+  transition: opacity 220ms cubic-bezier(0.33, 0, 0.2, 1);
+}
+html[data-route-veil="out"] .route-theme-veil {
+  opacity: 0;
+  transition: opacity 240ms cubic-bezier(0.4, 0, 0.6, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-route-veil] .route-theme-veil {
+    transition: none;
+  }
+}
+/* The veiled swap has no ball: its generation is revealed by the veil, so
+   the loader (which follows every new generation) stays invisible. */
+html[data-route-veil] [data-ball-loader] {
+  visibility: hidden;
+}
+/* The Station Card is DOM chrome above the veil, but under a veiled swap it
+   goes with the world: it fades out with the veil's fade-in, stays hidden
+   while the veil is opaque (the unmount, the exit replay and the re-enter as
+   the new generation begins and settles all run unseen), and fades back in
+   with the veil's fade-out — one hide and one show per swap, never a pop at
+   full opacity over the veil. `filter: opacity()`, not `opacity`: the card's
+   own enter / exit animations own `opacity` (an animation outranks a normal
+   declaration) and must keep running so their animationend still fires. At
+   rest the filter is `none`, so the card's stills never change. */
+html:is(.world-route-live, [data-route-handoff], [data-route-veil]) .world-station-card {
+  transition: filter 240ms cubic-bezier(0.4, 0, 0.6, 1);
+}
+html[data-route-veil="in"] .world-station-card,
+html[data-route-veil="opaque"] .world-station-card {
+  filter: opacity(0);
+  pointer-events: none;
+  /* ENGINE-A4: the card's fade starts two frames AFTER the veil's (34 ms) and
+     ends with it (186 + 34 = the veil's 220 ms). The veil's first frame
+     promotes and rasters its full-viewport layer — 48 ms at 390 / dpr 2 —
+     and a fade begun in that same frame lost half the card in one step
+     (0.979 -> 0.548, a pop to the eye). Delayed, that frame shows the card
+     whole; the fade then runs on ordinary frames. */
+  transition: filter 186ms cubic-bezier(0.33, 0, 0.2, 1) 34ms;
+}
+html[data-route-veil="opaque"] .world-station-card {
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:is(.world-route-live, [data-route-handoff], [data-route-veil]) .world-station-card,
+  html[data-route-veil="in"] .world-station-card,
+  html[data-route-veil="opaque"] .world-station-card {
+    transition: none;
+  }
+}
+/* A quiet line on the veil, only once a swap takes longer than a blink:
+   ENGINE-FIX (D32) — from 600 ms into the opaque hold (the 220 ms fade-in
+   + 600 ms), with the loader's Pokéball above it. */
+html[data-route-veil] .route-theme-veil-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0 1rem;
+  text-align: center;
+  color: var(--world-ink-secondary, var(--poke-text-secondary));
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  animation: route-veil-status-in 240ms ease-out 820ms both;
+}
+html[data-route-veil] .route-theme-veil-title {
+  color: var(--world-ink, var(--poke-text-primary));
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+html[data-route-veil] .route-theme-veil-progress {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes route-veil-status-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-route-veil] .route-theme-veil-status {
+    animation: none;
+  }
+}
+/* === end D32 theme veil === */
+
+/* === D32 veil Pokéball (ENGINE-FIX) === */
+/* The glyph on the veil's status line once the opaque hold passes ~600 ms:
+   the loader's own ball (BallLoader.module.css colours) — a small object on
+   the page-colour veil, never a chip, box or slab behind anything (D25; the
+   veil sheet itself stays the `--world-ground` token, D32 block above). */
+/* Red over white, the ink band and the white button. It rocks on the
+   compositor (transform only); still under reduced motion. */
+html[data-route-veil] .route-theme-veil-ball {
+  position: relative;
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 0.375rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.85) 0 6%, transparent 18%),
+    linear-gradient(180deg, #e3350d 0 45%, #15161b 45% 55%, #eceef3 55% 100%);
+  box-shadow:
+    inset 0 0 0 2px #15161b,
+    inset -4px -5px 8px rgba(0, 0, 0, 0.22);
+  transform-origin: 50% 90%;
+  animation: route-veil-ball-rock 1400ms ease-in-out 820ms infinite;
+  will-change: transform;
+}
+html[data-route-veil] .route-theme-veil-ball-button {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffffff, #e6e8ee 60%, #b9bdc8);
+  box-shadow: 0 0 0 2px #15161b;
+  transform: translate(-50%, -50%);
+}
+@keyframes route-veil-ball-rock {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-14deg);
+  }
+  75% {
+    transform: rotate(14deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-route-veil] .route-theme-veil-ball {
+    animation: none;
+  }
+}
+/* === end D32 veil Pokéball === */
+
+/* ZA teal-glass HUD (route-tier WorldNav). Layered glass floating over the
+   plaza: an outer frosted teal shell (bar-04 teal ≈ 18,134,171) around an
+   inner darker track that carries the station chips. The nav landmark keeps
+   its 56 px band — the capture harness stamps that box onto the FBO. */
+[data-world="evoliga"] {
+  /* Plaza world-contract pin: the plaza cores, whatever the site palette. */
+  --world-ground: var(--palette-plaza-ground);
+  --world-surface: var(--palette-plaza-surface);
+  --world-elevated: var(--palette-plaza-elevated);
+  --world-ink: var(--palette-plaza-ink);
+  --world-ink-secondary: var(--palette-plaza-ink-secondary);
+  --world-accent: var(--palette-plaza-accent);
+  --world-accent-strong: var(--palette-plaza-accent-strong);
+  --world-focus: var(--palette-plaza-focus);
+  --world-live: var(--palette-plaza-live);
+  --world-glow: var(--palette-plaza-glow);
+  --world-border: var(--palette-plaza-border);
+  --hud-glass: rgba(12, 122, 160, 0.46);
+  --hud-glass-sheen: rgba(190, 244, 250, 0.28);
+  --hud-glass-border: rgba(200, 244, 250, 0.42);
+  --hud-track: rgba(3, 34, 48, 0.58);
+  --hud-track-border: rgba(2, 20, 30, 0.45);
+  --hud-panel-glass: rgba(6, 82, 110, 0.8);
+  --hud-ink: #f0fdfa;
+  --hud-ink-muted: rgba(240, 253, 250, 0.82);
+  --hud-chip-hover: rgba(255, 255, 255, 0.12);
+  --hud-chip-active: rgba(94, 234, 212, 0.22);
+  --hud-chip-active-ring: rgba(153, 246, 228, 0.55);
+  --hud-chip-active-ink: #ecfeff;
+  --hud-focus: #5eead4;
+  --hud-shadow: 0 10px 28px rgba(4, 40, 56, 0.3);
+  --hud-selection: rgba(45, 212, 191, 0.35);
+}
+
+[data-theme="dark"] [data-world="evoliga"] {
+  --hud-glass: rgba(8, 90, 122, 0.5);
+  --hud-glass-sheen: rgba(94, 234, 212, 0.2);
+  --hud-glass-border: rgba(94, 234, 212, 0.4);
+  --hud-track: rgba(1, 18, 28, 0.62);
+  --hud-track-border: rgba(0, 8, 14, 0.55);
+  --hud-panel-glass: rgba(5, 62, 86, 0.84);
+  --hud-ink: #f0fdfa;
+  --hud-ink-muted: rgba(240, 253, 250, 0.78);
+  --hud-chip-hover: rgba(240, 253, 250, 0.1);
+  --hud-chip-active: rgba(94, 234, 212, 0.2);
+  --hud-chip-active-ring: rgba(94, 234, 212, 0.6);
+  --hud-chip-active-ink: #ecfeff;
+  --hud-focus: #5eead4;
+  --hud-shadow: 0 12px 32px rgba(0, 12, 14, 0.5);
+  --hud-selection: rgba(45, 212, 191, 0.4);
+}
+
+/* ─── Sakura Park world tokens (C-093) ───
+   The cherry-blossom lakeside park's own dialect of the 11-token world
+   contract: sunlit = blossom-paper grounds with plum inks, moonlit = dusk
+   plum grounds with petal-light inks. Body-text AA was computed, not
+   eyeballed (WCAG relative luminance): sunlit ink #3a2333 on ground
+   #f4e0e4 = 11.33:1 (secondary #5d4153 = 7.09:1); moonlit ink #f5e9f1 on
+   ground #1f1826 = 14.63:1 (secondary #d3bcca = 9.71:1) — all ≥ 4.5:1.
+   The HUD dialect is rose glass (the park's festival lanterns), defined in
+   both modes because the route-tier WorldNav reads these vars directly. */
+[data-world="sakura"] {
+  --world-ground: var(--palette-sakura-ground);
+  --world-surface: var(--palette-sakura-surface);
+  --world-elevated: var(--palette-sakura-elevated);
+  --world-ink: var(--palette-sakura-ink);
+  --world-ink-secondary: var(--palette-sakura-ink-secondary);
+  --world-accent: var(--palette-sakura-accent);
+  --world-accent-strong: var(--palette-sakura-accent-strong);
+  --world-focus: var(--palette-sakura-focus);
+  --world-live: var(--palette-sakura-live);
+  --world-border: var(--palette-sakura-border);
+  --world-glow: var(--palette-plaza-glow);
+  --hud-glass: rgba(150, 52, 92, 0.42);
+  --hud-glass-sheen: rgba(255, 226, 236, 0.3);
+  --hud-glass-border: rgba(255, 214, 228, 0.44);
+  --hud-track: rgba(46, 12, 28, 0.58);
+  --hud-track-border: rgba(30, 8, 18, 0.45);
+  --hud-panel-glass: rgba(88, 30, 54, 0.8);
+  --hud-ink: #fff1f6;
+  --hud-ink-muted: rgba(255, 241, 246, 0.82);
+  --hud-chip-hover: rgba(255, 255, 255, 0.12);
+  --hud-chip-active: rgba(244, 114, 182, 0.24);
+  --hud-chip-active-ring: rgba(251, 146, 190, 0.55);
+  --hud-chip-active-ink: #fff0f5;
+  --hud-focus: #f472b6;
+  --hud-shadow: 0 10px 28px rgba(56, 10, 32, 0.32);
+  --hud-selection: rgba(244, 114, 182, 0.35);
+}
+
+[data-theme="dark"] [data-world="sakura"] {
+  --hud-glass: rgba(96, 34, 62, 0.5);
+  --hud-glass-sheen: rgba(244, 114, 182, 0.2);
+  --hud-glass-border: rgba(244, 114, 182, 0.38);
+  --hud-track: rgba(16, 8, 18, 0.62);
+  --hud-track-border: rgba(8, 4, 10, 0.55);
+  --hud-panel-glass: rgba(62, 22, 44, 0.84);
+  --hud-ink: #fff1f6;
+  --hud-ink-muted: rgba(255, 241, 246, 0.78);
+  --hud-chip-hover: rgba(255, 241, 246, 0.1);
+  --hud-chip-active: rgba(244, 114, 182, 0.2);
+  --hud-chip-active-ring: rgba(244, 114, 182, 0.6);
+  --hud-chip-active-ink: #fff0f5;
+  --hud-focus: #f472b6;
+  --hud-shadow: 0 12px 32px rgba(10, 4, 8, 0.5);
+  --hud-selection: rgba(244, 114, 182, 0.4);
+}
+
+/* ─── Mountain Pass world tokens (C-094) ───
+   The alpine valley's own dialect of the 11-token world contract: sunlit =
+   meadow-paper grounds with spruce inks and trail-rust accents, moonlit =
+   deep night grounds with snow-light inks. Body-text AA was computed, not
+   eyeballed (WCAG relative luminance): sunlit ink #2b352f on ground
+   #e3e7d6 = 10.08:1 (secondary #566459 = 4.96:1); moonlit ink #eef2f8 on
+   ground #1c2230 = 14.15:1 (secondary #c5cfde = 10.11:1) — all ≥ 4.5:1,
+   and the accent/strong/focus/live text roles also pass on all three
+   surfaces (accent #97481e = 5.11/5.95/5.52; accent-strong #8c421c =
+   5.73/6.67/6.19; focus #8f441c = 5.53/6.44/5.98; live #176344 =
+   5.74/6.68/6.20). The HUD dialect is storm-glass teal (the valley's
+   storm-lantern glass), defined in both modes because the route-tier
+   WorldNav reads these vars directly. */
+[data-world="mountain"] {
+  --world-ground: var(--palette-mountain-ground);
+  --world-surface: var(--palette-mountain-surface);
+  --world-elevated: var(--palette-mountain-elevated);
+  --world-ink: var(--palette-mountain-ink);
+  --world-ink-secondary: var(--palette-mountain-ink-secondary);
+  --world-accent: var(--palette-mountain-accent);
+  --world-accent-strong: var(--palette-mountain-accent-strong);
+  --world-focus: var(--palette-mountain-focus);
+  --world-live: var(--palette-mountain-live);
+  --world-border: var(--palette-mountain-border);
+  --world-glow: var(--palette-plaza-glow);
+  --hud-glass: rgba(20, 96, 96, 0.42);
+  --hud-glass-sheen: rgba(214, 242, 238, 0.3);
+  --hud-glass-border: rgba(206, 236, 230, 0.44);
+  --hud-track: rgba(10, 32, 32, 0.58);
+  --hud-track-border: rgba(6, 20, 20, 0.45);
+  --hud-panel-glass: rgba(14, 66, 66, 0.8);
+  --hud-ink: #f0fdfc;
+  --hud-ink-muted: rgba(240, 253, 252, 0.82);
+  --hud-chip-hover: rgba(255, 255, 255, 0.12);
+  --hud-chip-active: rgba(94, 212, 200, 0.24);
+  --hud-chip-active-ring: rgba(146, 232, 220, 0.55);
+  --hud-chip-active-ink: #ecfffc;
+  --hud-focus: #5ed4c8;
+  --hud-shadow: 0 10px 28px rgba(8, 40, 38, 0.32);
+  --hud-selection: rgba(94, 212, 200, 0.35);
+}
+
+[data-theme="dark"] [data-world="mountain"] {
+  --hud-glass: rgba(14, 62, 66, 0.5);
+  --hud-glass-sheen: rgba(94, 212, 200, 0.2);
+  --hud-glass-border: rgba(94, 212, 200, 0.38);
+  --hud-track: rgba(6, 16, 20, 0.62);
+  --hud-track-border: rgba(3, 8, 10, 0.55);
+  --hud-panel-glass: rgba(10, 48, 52, 0.84);
+  --hud-ink: #f0fdfc;
+  --hud-ink-muted: rgba(240, 253, 252, 0.78);
+  --hud-chip-hover: rgba(240, 253, 252, 0.1);
+  --hud-chip-active: rgba(94, 212, 200, 0.2);
+  --hud-chip-active-ring: rgba(94, 212, 200, 0.6);
+  --hud-chip-active-ink: #ecfffc;
+  --hud-focus: #5ed4c8;
+  --hud-shadow: 0 12px 32px rgba(2, 8, 10, 0.5);
+  --hud-selection: rgba(94, 212, 200, 0.4);
+}
+
+/* ─── Skyisle world tokens (C-095) ───
+   The sky-island chain's own dialect of the 11-token world contract: sunlit
+   = cloud-paper grounds with slate-blue inks and sun-gold accents, moonlit =
+   luminous dusk grounds with cloud-light inks. Body-text AA was computed,
+   not eyeballed (WCAG relative luminance): sunlit ink #223246 on ground
+   #e6edf4 = 11.03:1 (secondary #4b5c72 = 5.79:1); moonlit ink #eaf1fa on
+   ground #101a2c = 15.31:1 (secondary #c3d2e4 = 11.32:1) — all ≥ 4.5:1,
+   and the accent/strong/focus/live text roles also pass on all three
+   surfaces (accent #9c5a10 = 4.58/5.30/4.89; accent-strong #8a4d0c =
+   5.65/6.54/6.03; focus #8f5210 = 5.26/6.09/5.61; live #176348 =
+   6.10/7.07/6.51 on ground/surface/elevated). The HUD dialect is sky-glass
+   azure (the isles' high-altitude air), defined in both modes because the
+   route-tier WorldNav reads these vars directly. */
+[data-world="clouds"] {
+  --world-ground: var(--palette-clouds-ground);
+  --world-surface: var(--palette-clouds-surface);
+  --world-elevated: var(--palette-clouds-elevated);
+  --world-ink: var(--palette-clouds-ink);
+  --world-ink-secondary: var(--palette-clouds-ink-secondary);
+  --world-accent: var(--palette-clouds-accent);
+  --world-accent-strong: var(--palette-clouds-accent-strong);
+  --world-focus: var(--palette-clouds-focus);
+  --world-live: var(--palette-clouds-live);
+  --world-border: var(--palette-clouds-border);
+  --world-glow: var(--palette-plaza-glow);
+  --hud-glass: rgba(30, 104, 150, 0.42);
+  --hud-glass-sheen: rgba(219, 240, 252, 0.3);
+  --hud-glass-border: rgba(206, 234, 250, 0.44);
+  --hud-track: rgba(8, 34, 52, 0.58);
+  --hud-track-border: rgba(5, 22, 34, 0.45);
+  --hud-panel-glass: rgba(12, 70, 106, 0.8);
+  --hud-ink: #f0f9ff;
+  --hud-ink-muted: rgba(240, 249, 255, 0.82);
+  --hud-chip-hover: rgba(255, 255, 255, 0.12);
+  --hud-chip-active: rgba(124, 212, 240, 0.24);
+  --hud-chip-active-ring: rgba(166, 228, 248, 0.55);
+  --hud-chip-active-ink: #ecfaff;
+  --hud-focus: #7cd4f0;
+  --hud-shadow: 0 10px 28px rgba(8, 42, 64, 0.32);
+  --hud-selection: rgba(124, 212, 240, 0.35);
+}
+
+[data-theme="dark"] [data-world="clouds"] {
+  --hud-glass: rgba(12, 52, 82, 0.5);
+  --hud-glass-sheen: rgba(124, 212, 240, 0.2);
+  --hud-glass-border: rgba(124, 212, 240, 0.38);
+  --hud-track: rgba(4, 14, 24, 0.62);
+  --hud-track-border: rgba(2, 8, 14, 0.55);
+  --hud-panel-glass: rgba(8, 40, 64, 0.84);
+  --hud-ink: #f0f9ff;
+  --hud-ink-muted: rgba(240, 249, 255, 0.78);
+  --hud-chip-hover: rgba(240, 249, 255, 0.1);
+  --hud-chip-active: rgba(124, 212, 240, 0.2);
+  --hud-chip-active-ring: rgba(124, 212, 240, 0.6);
+  --hud-chip-active-ink: #ecfaff;
+  --hud-focus: #7cd4f0;
+  --hud-shadow: 0 12px 32px rgba(0, 4, 10, 0.5);
+  --hud-selection: rgba(124, 212, 240, 0.4);
+}
+
+.world-nav-hud {
+  pointer-events: none;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.75rem 0.5rem;
+  transition: opacity 200ms ease;
+}
+
+/* Outer glass shell. */
+.world-nav-hud-bar {
+  pointer-events: auto;
+  display: flex;
+  max-width: 100%;
+  height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.375rem 0.25rem 0.875rem;
+  border: 1px solid var(--hud-glass-border);
+  border-radius: 9999px;
+  background:
+    linear-gradient(180deg, var(--hud-glass-sheen), transparent 55%),
+    var(--hud-glass);
+  box-shadow:
+    var(--hud-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+
+.world-nav-hud-brand {
+  flex: none;
+  color: var(--hud-ink);
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 8px rgba(2, 30, 40, 0.5);
+}
+
+/* Inner track — darker glass the chips sit in. */
+.world-nav-hud-track {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  gap: 0.125rem;
+  overflow-x: auto;
+  padding: 0 0.2rem;
+  border: 1px solid var(--hud-track-border);
+  border-radius: 9999px;
+  background: var(--hud-track);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  scrollbar-width: none;
+}
+
+.world-nav-hud-track::-webkit-scrollbar {
+  display: none;
+}
+
+.world-nav-hud-chip {
+  display: inline-flex;
+  min-height: 1.85rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.8rem;
+  border-radius: 9999px;
+  color: var(--hud-ink-muted);
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition: color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.world-nav-hud-chip:hover {
+  background: var(--hud-chip-hover);
+  color: var(--hud-ink);
+}
+
+.world-nav-hud-chip:focus-visible {
+  outline: 2px solid var(--hud-focus);
+  outline-offset: 2px;
+}
+
+.world-nav-hud-chip.is-active {
+  background: var(--hud-chip-active);
+  color: var(--hud-chip-active-ink);
+  box-shadow:
+    inset 0 0 0 1px var(--hud-chip-active-ring),
+    0 0 14px rgba(94, 234, 212, 0.35);
+}
+
+.world-nav-hud-chip.is-active::before {
+  content: '';
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: var(--hud-focus);
+  box-shadow: 0 0 8px var(--hud-focus);
+}
+
+/* Compact chips below the desktop band: the five German labels must fit the
+   pill without the track clipping the last word (C-031 measured "Regelwe…"
+   cut at the right frame edge on 390). */
+@media (max-width: 767px) {
+  .world-nav-hud {
+    padding: 0 0.5rem 0.375rem;
+  }
+  .world-nav-hud-brand {
+    display: none;
+  }
+  .world-nav-hud-bar {
+    max-width: 100%;
+    padding-left: 0.25rem;
+  }
+  .world-nav-hud-track {
+    gap: 0.0625rem;
+    padding: 0 0.125rem;
+  }
+  .world-nav-hud-chip {
+    gap: 0.25rem;
+    padding: 0 0.5rem;
+    font-size: 0.6875rem;
+  }
+}
+
+/* Bottom edge (≤ 640 px, the bottom-sheet tier): the pill spans the frame
+   edge to edge so the rightmost nav item is always fully inside the frame. */
+@media (max-width: 640px) {
+  .world-nav-hud {
+    padding: 0 0.5rem 0.4375rem;
+  }
+  .world-nav-hud-bar {
+    width: 100%;
+  }
+  .world-nav-hud-track {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+.world-nav-hud ::selection {
+  background: var(--hud-selection);
+  color: var(--hud-chip-active-ink);
+}
+
+/* W6 round 2 (gauntlet: "at 390 the route HUD pill overlays the semantic
+   page's bottom rows while the ball loads"): the fixed pill is chrome OF the
+   world, so it exists only once the world does. Before the handoff the
+   semantic page is the whole surface and nothing floats over its rows (the
+   site header stays; the loading window is bounded by the 10 s readiness
+   deadline, and a Lite fallback flips WorldNav to its in-flow sticky bar).
+   `visibility` also drops the pill from the tab order and the a11y tree
+   while hidden; it switches instantly, so on the flip the opacity fades the
+   pill in under the reveal (the transition lives on `.world-nav-hud`). */
+html:not(.world-route-live) .world-nav-hud {
+  visibility: hidden;
+  opacity: 0;
+}
+
+html.world-route-live .world-nav-hud {
+  visibility: visible;
+}
+
+/* Focus mode (ADR-0003): the docked panel owns its edge and the nav yields —
+   the HUD never sits over the panel (plaza look sheet). Wide viewports: the
+   pill centres in the space left of the right rail. At ≤ 767 px the bottom
+   sheet owns the HUD's edge, so the nav fades out for the duration of the
+   focus. Fidelity wave 2 (2B): aligned to the 767 px sheet breakpoint (it
+   was 1023 px, which hid the HUD beside a 768–1023 px right rail that leaves
+   the bottom edge free; the track scrolls and keeps the active chip centred
+   in the narrower seat — W1 hud block).
+   W6: a panel playing its exit (`data-closing`) no longer holds the nav, so
+   the pill glides back WHILE the panel leaves (transition in the W6 block). */
+@media (min-width: 768px) {
+  html:has(.world-focus-panel[open]:not([data-closing])) .world-nav-hud {
+    padding-right: calc(min(26rem, 100vw - 2rem) + 1.5rem);
+  }
+}
+
+@media (max-width: 767px) {
+  html:has(.world-focus-panel[open]:not([data-closing])) .world-nav-hud {
+    opacity: 0;
+  }
+
+  html:has(.world-focus-panel[open]:not([data-closing])) .world-nav-hud-bar {
+    pointer-events: none;
+  }
+}
+
+/* ZA teal-glass Focus panel (ADR-0003). Non-modal <dialog> docked as a right
+   rail on wide viewports and a bottom sheet on mobile; the plaza stays
+   visible and orbitable behind it. The arena token scale is remapped inside
+   so server-rendered overlay bodies read on glass without edits. */
+.world-focus-panel {
+  --world-surface: rgba(255, 255, 255, 0.08);
+  --world-elevated: rgba(255, 255, 255, 0.1);
+  --world-ink: var(--hud-ink);
+  --world-ink-secondary: var(--hud-ink-muted);
+  --world-border: rgba(240, 253, 250, 0.16);
+  --world-accent: #99f6e4;
+  --world-accent-strong: #ccfbf1;
+  --world-focus: var(--hud-focus);
+
+  position: fixed;
+  inset: auto 1rem 1rem auto;
+  top: calc(56px + 1rem);
+  z-index: 25;
+  margin: 0;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 56px - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--hud-glass-border);
+  border-radius: 1.25rem;
+  color: var(--hud-ink);
+  background:
+    linear-gradient(180deg, var(--hud-glass-sheen), transparent 38%),
+    var(--hud-panel-glass);
+  box-shadow:
+    var(--hud-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  animation: world-focus-panel-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.world-focus-panel:not([open]) {
+  display: none;
+}
+
+.world-focus-panel::backdrop {
+  display: none;
+}
+
+.world-focus-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--world-border);
+}
+
+.world-focus-panel-title {
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--hud-ink);
+}
+
+.world-focus-panel-close {
+  flex: none;
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--hud-ink-muted);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.world-focus-panel-close:hover {
+  background: var(--hud-chip-hover);
+  color: var(--hud-ink);
+}
+
+.world-focus-panel-close:focus-visible {
+  outline: 2px solid var(--hud-focus);
+  outline-offset: 2px;
+}
+
+.world-focus-panel-body {
+  overflow-y: auto;
+  padding: 1rem 1.25rem 1.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hud-glass-border) transparent;
+}
+
+.world-focus-panel ::selection {
+  background: var(--hud-selection);
+  color: var(--hud-chip-active-ink);
+}
+
+/* W6: the right rail enters FROM the right edge it docks to (it used to rise
+   from below). The bottom sheet's own edge lives in the W6 block below. */
+@keyframes world-focus-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Bottom sheet (≤ 767 px): the panel owns the bottom edge; focus framing
+   lifts the subject above it (SHEET_FRAME_COVERAGE in route-world/focus.ts).
+   Above 767 px the panel stays the desktop right rail. W6 aligned this with
+   the 767 px `mobile` breakpoint of WorldStateProvider / panelFrameOffset —
+   it used to switch at 640 px, so 641–767 px framed the subject for a sheet
+   while the panel sat on the right. */
+@media (max-width: 767px) {
+  .world-focus-panel {
+    inset: auto 0.75rem 0.75rem 0.75rem;
+    top: auto;
+    width: auto;
+    max-height: 46vh;
+    border-radius: 1.25rem 1.25rem 0.5rem 0.5rem;
+  }
+
+  .world-focus-panel-head {
+    position: relative;
+    padding-top: 0.875rem;
+  }
+
+  /* Grabber: the sheet affordance, a lit teal bar above the title. */
+  .world-focus-panel-head::before {
+    content: '';
+    position: absolute;
+    top: 0.4375rem;
+    left: 50%;
+    width: 2.75rem;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background: var(--hud-chip-active-ring);
+    opacity: 0.55;
+    transform: translateX(-50%);
+  }
+}
+
+/* === W6 transitions === */
+/* One edge per panel (bar W6): a docked Focus panel enters from the edge it
+   docks to and exits to that SAME edge — right rail ≥ 768 px, bottom sheet
+   ≤ 767 px. ContextOverlay sets `data-closing` and keeps the dialog open
+   until the exit animation ends, then closes it (focus restore unchanged).
+   An interrupted exit (the panel re-opened mid-exit) drops the attribute
+   and the entry replays — from the same edge, so the direction still holds. */
+@keyframes world-focus-panel-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes world-focus-panel-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes world-focus-panel-out-bottom {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+@keyframes world-focus-panel-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes world-focus-panel-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.world-focus-panel[data-closing] {
+  animation: world-focus-panel-out 240ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .world-focus-panel {
+    animation-name: world-focus-panel-in-bottom;
+  }
+
+  .world-focus-panel[data-closing] {
+    animation-name: world-focus-panel-out-bottom;
+  }
+}
+
+/* Subject B tapped while A is focused: the panel stays docked and only its
+   body cross-fades (ContextOverlay keys the body by subject). */
+.world-focus-panel-body {
+  animation: world-focus-panel-fade-in 200ms ease-out;
+}
+
+/* The desktop nav pill glides to and from its yielded seat instead of
+   jumping sideways when a panel opens or closes. */
+.world-nav-hud {
+  transition:
+    opacity 200ms ease,
+    padding-right 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Reduced motion: opacity only — no slide, no glide. */
+@media (prefers-reduced-motion: reduce) {
+  .world-focus-panel,
+  .world-focus-panel-body {
+    animation-name: world-focus-panel-fade-in;
+  }
+
+  .world-focus-panel[data-closing] {
+    animation-name: world-focus-panel-fade-out;
+  }
+
+  .world-nav-hud {
+    transition: opacity 200ms ease;
+  }
+}
+/* === end W6 === */
+
+/* === W1 hud === */
+/* Fidelity wave 2 (2B): the route HUD track never truncates a chip. Chips
+   never shrink (`flex: none` + nowrap), the track scrolls, and WorldNav
+   centres the active chip on every nearest-station change. 16 px edge fades
+   show that more chips sit past an edge — only on the edge that has them
+   (`data-fade`, set by WorldNav from the scroll position). `safe center`
+   keeps the phone track centred while it fits, and start-aligned (so the
+   first chip stays reachable) once it overflows. */
+.world-nav-hud-track > li,
+.world-nav-hud-chip {
+  flex: none;
+  white-space: nowrap;
+}
+
+.world-nav-hud-track {
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 16px;
+}
+
+.world-nav-hud-track[data-fade="start"] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px);
+  mask-image: linear-gradient(to right, transparent 0, #000 16px);
+}
+
+.world-nav-hud-track[data-fade="end"] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+}
+
+.world-nav-hud-track[data-fade="both"] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+}
+
+@media (max-width: 640px) {
+  .world-nav-hud-track {
+    justify-content: safe center;
+  }
+}
+/* === end W1 hud === */
+
+/* === W1 card === */
+/* Fidelity wave 2 (2B; D15): the Station Card (StationCard.tsx). Placed by
+   inline left / top|bottom / width / max-height from `placeStationCard`
+   (clear of every padded data face); `max-height` + `overflow: hidden` keep
+   the drawn box inside that tested rect. It shares the HUD's teal glass and
+   sits under the docked panel (25) and the HUD (30), beside the 2C overlays
+   (24). Enter / exit: an 8 px translate plus fade on the edge named by the
+   conductor's latched direction (`data-edge`); reduced motion → opacity
+   only. The animation runs on the `[data-station-caption]` box itself, so
+   the harness reads its opacity. */
+.world-station-card {
+  position: fixed;
+  z-index: 24;
+  box-sizing: border-box;
+  /* The box hugs its content inside the placement rect (wave-2 r2): never a
+     stretched slot, whatever an ancestor rule says about height. */
+  height: auto;
+  min-height: 0;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  overflow: hidden;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--hud-glass-border);
+  border-radius: 1rem;
+  color: var(--hud-ink);
+  background:
+    linear-gradient(180deg, var(--hud-glass-sheen), transparent 45%),
+    var(--hud-panel-glass);
+  box-shadow:
+    var(--hud-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  animation: world-station-card-in-bottom 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.world-station-card[data-card-state="enter"][data-edge="top"] {
+  animation-name: world-station-card-in-top;
+}
+
+.world-station-card[data-card-state="exit"] {
+  animation: world-station-card-out-top 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+}
+
+.world-station-card[data-card-state="exit"][data-edge="bottom"] {
+  animation-name: world-station-card-out-bottom;
+}
+
+/* A right-hand card yields to the desktop rail docked on that side. */
+/* Rows never shrink: an overfull box clips its LAST row (the actions)
+   instead of squeezing the beat mid-line (wave-2 r2 1440 still). */
+.world-station-card > * {
+  flex: none;
+}
+
+.world-station-card[data-yield] {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.world-station-card[data-collapsed="true"] {
+  padding-block: 0.5rem;
+}
+
+.world-station-card-kicker {
+  overflow: hidden;
+  color: var(--hud-ink-muted);
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1rem;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.world-station-card-beat {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--hud-ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.world-station-card[data-variant="narrow"] .world-station-card-beat {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.world-station-card-digest {
+  color: var(--hud-ink);
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.world-station-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.125rem;
+}
+
+.world-station-card[data-variant="compact"],
+.world-station-card[data-variant="strip"] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.world-station-card[data-variant="compact"] .world-station-card-actions,
+.world-station-card[data-variant="strip"] .world-station-card-actions {
+  margin-top: 0;
+}
+
+.world-station-card-cta {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  padding: 0 0.875rem;
+  border-radius: 9999px;
+  color: var(--hud-chip-active-ink);
+  background: var(--hud-chip-active);
+  box-shadow: inset 0 0 0 1px var(--hud-chip-active-ring);
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background-color 150ms ease;
+}
+
+.world-station-card-cta:hover {
+  background: var(--hud-chip-hover);
+}
+
+.world-station-card-lite {
+  color: var(--hud-ink-muted);
+  font-size: 0.8125rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.world-station-card-lite:hover {
+  color: var(--hud-ink);
+}
+
+.world-station-card-cta:focus-visible,
+.world-station-card-lite:focus-visible,
+.world-roll-call-chip:focus-visible {
+  outline: 2px solid var(--hud-focus);
+  outline-offset: 2px;
+}
+
+/* Teams at 390: the roll-call rail in the digest slot (TeamsRollCallRail). */
+.world-roll-call-rail {
+  display: flex;
+  gap: 0.375rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  margin-inline: -0.25rem;
+  padding: 0.125rem 0.25rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.world-roll-call-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.world-roll-call-rail > li {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+.world-roll-call-chip {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--hud-glass-border);
+  border-radius: 9999px;
+  color: var(--hud-ink);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.world-roll-call-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border-radius: 9999px;
+  background: var(--hud-ink-muted);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.world-roll-call-rank {
+  color: var(--hud-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phone band: 44 px tap targets, one step larger kicker. */
+@media (max-width: 767px) {
+  .world-station-card {
+    gap: 0.5rem;
+  }
+
+  .world-station-card-kicker {
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
+  }
+
+  .world-station-card-cta {
+    min-height: 2.75rem;
+    padding: 0 1rem;
+  }
+
+  .world-station-card-lite {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+  }
+}
+
+@keyframes world-station-card-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes world-station-card-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes world-station-card-out-top {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes world-station-card-out-bottom {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes world-station-card-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes world-station-card-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion (the forced-route case): opacity only — no slide. */
+@media (prefers-reduced-motion: reduce) {
+  .world-station-card,
+  .world-station-card[data-card-state="enter"][data-edge="top"] {
+    animation-name: world-station-card-fade-in;
+  }
+
+  .world-station-card[data-card-state="exit"],
+  .world-station-card[data-card-state="exit"][data-edge="bottom"] {
+    animation-name: world-station-card-fade-out;
+  }
+}
+/* === end W1 card === */
+

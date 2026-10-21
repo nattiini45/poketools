@@ -1,0 +1,156 @@
+/**
+ * The point-buy battle ruleset (FA-4): built from the active format pack (the example pack in
+ * the public test project), non-custom, and ensured once (an existing usable row is reused).
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Ruleset } from '@/types/ruleset';
+
+vi.mock('@/lib/supabase/queries/rulesets', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/supabase/queries/rulesets')>();
+  return {
+    // The pure predicate stays real; the reads and writes are faked.
+    isCustomLeagueRuleset: actual.isCustomLeagueRuleset,
+    listRulesetsByName: vi.fn(),
+    createRuleset: vi.fn(),
+    updateRuleset: vi.fn(),
+  };
+});
+
+import {
+  createRuleset,
+  isCustomLeagueRuleset,
+  listRulesetsByName,
+  updateRuleset,
+} from '@/lib/supabase/queries/rulesets';
+import { formatPack } from '@/lib/format-pack';
+import { ensurePointBuyBattleRuleset, pointBuyBattleRulesetInput } from '../point-buy-battle-ruleset';
+
+function row(overrides: Partial<Ruleset> = {}): Ruleset {
+  return {
+    id: 'rs-1',
+    name: 'Evolution Point Buy',
+    base_format: 'gen9',
+    is_doubles: false,
+    clauses: ['Item Clause'],
+    bans: { pokemon: [], moves: [], items: [], abilities: [] },
+    additions: { pokemon: [] },
+    custom_rules_string: '',
+    min_shared_type_pct: 0,
+    team_constraints: null,
+    created_by: null,
+    created_at: '',
+    updated_at: '',
+    ...overrides,
+  };
+}
+
+describe('pointBuyBattleRulesetInput', () => {
+  it('derives a Gen 9 singles, non-custom ruleset from the active pack', () => {
+    const input = pointBuyBattleRulesetInput();
+
+    expect(input.name).toBe(formatPack.messages.en.leagueAdmin.form.battleRulesetName);
+    expect(input.base_format).toBe('gen9');
+    expect(input.is_doubles).toBe(false);
+    expect(input.clauses).toEqual(['Item Clause']);
+    // Bans come from the season's format_rules only; the shared row carries none.
+    expect(input.banned_pokemon).toEqual([]);
+    expect(input.banned_moves).toEqual([]);
+    expect(input.banned_items).toEqual([]);
+    expect(input.banned_abilities).toEqual([]);
+    expect(input.added_pokemon).toEqual([]);
+    expect(input.custom_rules_string).toBe('');
+    expect(input.team_constraints).toBeNull();
+  });
+
+  it('stays non-custom, so resolveEffectiveRuleset treats it as a base ruleset', () => {
+    const input = pointBuyBattleRulesetInput();
+    expect(
+      isCustomLeagueRuleset(
+        row({
+          custom_rules_string: input.custom_rules_string,
+          team_constraints: input.team_constraints,
+          additions: { pokemon: input.added_pokemon },
+        }),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('ensurePointBuyBattleRuleset', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('creates the row once when none exists', async () => {
+    vi.mocked(listRulesetsByName).mockResolvedValue([]);
+    vi.mocked(createRuleset).mockResolvedValue(row({ id: 'new' }));
+
+    const result = await ensurePointBuyBattleRuleset('admin-1');
+
+    expect(result).toEqual({ ruleset: row({ id: 'new' }), created: true, bansCleared: false });
+    expect(listRulesetsByName).toHaveBeenCalledWith(pointBuyBattleRulesetInput().name);
+    expect(createRuleset).toHaveBeenCalledTimes(1);
+    expect(createRuleset).toHaveBeenCalledWith(pointBuyBattleRulesetInput(), 'admin-1');
+  });
+
+  it('reuses the oldest usable row instead of inserting another (idempotent)', async () => {
+    vi.mocked(listRulesetsByName).mockResolvedValue([row({ id: 'old' }), row({ id: 'newer' })]);
+
+    const result = await ensurePointBuyBattleRuleset('admin-1');
+
+    expect(result).toEqual({ ruleset: row({ id: 'old' }), created: false, bansCleared: false });
+    expect(createRuleset).not.toHaveBeenCalled();
+    expect(updateRuleset).not.toHaveBeenCalled();
+  });
+
+  it('clears bans on a reused row so they cannot outlive a format_rules edit', async () => {
+    const banned = row({
+      id: 'old',
+      bans: { pokemon: [], moves: ['Last Respects'], items: ['Bright Powder'], abilities: [] },
+    });
+    vi.mocked(listRulesetsByName).mockResolvedValue([banned]);
+    vi.mocked(updateRuleset).mockResolvedValue(row({ id: 'old' }));
+
+    const result = await ensurePointBuyBattleRuleset('admin-1');
+
+    expect(updateRuleset).toHaveBeenCalledTimes(1);
+    expect(updateRuleset).toHaveBeenCalledWith('old', {
+      banned_pokemon: [],
+      banned_moves: [],
+      banned_items: [],
+      banned_abilities: [],
+    });
+    expect(result).toEqual({ ruleset: row({ id: 'old' }), created: false, bansCleared: true });
+    expect(createRuleset).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed ban clear', async () => {
+    vi.mocked(listRulesetsByName).mockResolvedValue([
+      row({ id: 'old', bans: { pokemon: ['Koraidon'], moves: [], items: [], abilities: [] } }),
+    ]);
+    vi.mocked(updateRuleset).mockRejectedValue(new Error('update failed'));
+
+    await expect(ensurePointBuyBattleRuleset('admin-1')).rejects.toThrow('update failed');
+  });
+
+  it('skips same-named rows that are doubles, another format, or custom', async () => {
+    vi.mocked(listRulesetsByName).mockResolvedValue([
+      row({ id: 'doubles', is_doubles: true }),
+      row({ id: 'tier', base_format: 'gen9ru' }),
+      row({ id: 'custom', custom_rules_string: 'Species Clause' }),
+    ]);
+    vi.mocked(createRuleset).mockResolvedValue(row({ id: 'new' }));
+
+    const result = await ensurePointBuyBattleRuleset(null);
+
+    expect(result.created).toBe(true);
+    expect(result.ruleset.id).toBe('new');
+  });
+
+  it('propagates a failed read without inserting', async () => {
+    vi.mocked(listRulesetsByName).mockRejectedValue(new Error('read failed'));
+
+    await expect(ensurePointBuyBattleRuleset('admin-1')).rejects.toThrow('read failed');
+    expect(createRuleset).not.toHaveBeenCalled();
+  });
+});

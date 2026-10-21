@@ -1,0 +1,174 @@
+import { defineDe } from '@/i18n/define';
+import type en from './en';
+
+export default defineDe<typeof en>()({
+  roster: {
+    loading: 'Kader wird geladen …',
+    heading: 'Ligakader ({count})',
+    closedArchived: 'Diese Liga ist archiviert: In ihrem Kader kann niemand mehr ausgewechselt werden.',
+    closedCompleted: 'Diese Liga ist abgeschlossen: In ihrem Kader kann niemand mehr ausgewechselt werden.',
+    empty: 'Noch keine Teilnehmer.',
+    testBadge: 'Test',
+    gymTypeTitle: 'Arenaleiter-Typ',
+    noType: 'Kein Typ',
+    linkAccount: 'Konto verknüpfen',
+    substitute: 'Auswechseln',
+    remove: 'Entfernen',
+    reservesHeading: 'Nachgerückte Reservespieler ({count})',
+    reservesHint:
+      'Per Wechsel nur für eine Phase eingetragen, nicht im Ligakader. Sie können je Phase ersetzt werden.',
+    addHeading: 'Spieler hinzufügen',
+    searchLabel: 'Spieler suchen',
+    searchPlaceholder: 'Tippen zum Suchen …',
+    selected: 'Ausgewählt ({count})',
+    removeAria: '{name} entfernen',
+    removeAriaFallback: 'Spieler entfernen',
+    adding: 'Wird hinzugefügt …',
+    addCount: { one: '{count} Spieler hinzufügen', other: '{count} Spieler hinzufügen' },
+    createGuest: '+ Gast anlegen',
+    guestName: 'Name des Gasts',
+    guestPlaceholder: 'Anzeigename',
+    creating: 'Wird angelegt …',
+    create: 'Anlegen',
+    cancel: 'Abbrechen',
+    errors: {
+      loadFailed: 'Kaderdaten konnten nicht geladen werden',
+      addFailed: 'Spieler konnten nicht hinzugefügt werden',
+      guestFailed: 'Gast konnte nicht angelegt werden',
+      removeFailed: 'Spieler konnte nicht entfernt werden',
+      typeFailed: 'Typ konnte nicht geändert werden',
+      linkFailed: 'Konto konnte nicht verknüpft werden',
+    },
+  },
+  substitute: {
+    title: '{name} auswechseln',
+    replacement: 'Ersatzspieler',
+    selectPlayer: 'Spieler auswählen …',
+    guestOption: '{name} (Gast)',
+    scope: 'Geltungsbereich',
+    scopeLeague: 'Ganze Liga (alle aktiven Phasen)',
+    scopePhaseOnly: 'Nur {phase}',
+    noScope: '{name} ist in keiner aktiven Phase eingetragen: Es gibt nichts auszuwechseln.',
+    phaseOnlyHint: 'Ein Wechsel nur für eine Phase lässt den Ligakader unverändert – nutze ihn, um Reservespieler nachrücken zu lassen.',
+    previewConfirm: 'Vorschau und bestätigen',
+  },
+  link: {
+    title: 'Konto für {name} verknüpfen',
+    hint: 'Wähle das frisch registrierte Konto, das mit diesem Gast zusammengeführt werden soll. Das Quellkonto darf keine Teilnahmen, Spiele oder Teams haben.',
+    selectAccount: 'Registriertes Konto auswählen …',
+    linking: 'Wird verknüpft …',
+    submit: 'Konto verknüpfen',
+  },
+  dialog: {
+    confirmTitle: 'Wechsel bestätigen',
+    doneTitle: 'Wechsel erledigt',
+    replaceLeague:
+      'Ersetze <b>{outName}</b> durch <b>{inName}</b> in der ganzen Liga. Die Historie abgeschlossener Spiele bleibt unberührt. Der Ligakader wird aktualisiert.',
+    replacePhase:
+      'Ersetze <b>{outName}</b> durch <b>{inName}</b> in der gewählten Phase. Die Historie abgeschlossener Spiele bleibt unberührt. Der Ligakader ändert sich nicht (Reservespieler rückt nach).',
+    replaced: '<b>{inName}</b> hat <b>{outName}</b> ersetzt.',
+    loadingMatches: 'Betroffene Spiele werden geladen …',
+    cancel: 'Abbrechen',
+    close: 'Schließen',
+    confirm: 'Wechsel bestätigen',
+    substituting: 'Wird ausgewechselt …',
+    errors: {
+      previewFailed: 'Die Vorschau des Wechsels konnte nicht geladen werden',
+      applyFailed: 'Der Spieler konnte nicht ausgewechselt werden',
+    },
+  },
+  preview: {
+    rosterSwap: 'Tausch im Ligakader: <b>{answer}</b>',
+    yes: 'Ja',
+    no: 'Nein',
+    phaseEnrollments: 'Phaseneinträge: <b>{count}</b>',
+    noMatches: 'Keine angesetzten Spiele ohne Partien müssen angepasst werden.',
+    matchesHeading: 'Anzupassende Spiele ({count})',
+    match: '{player1} vs. {player2}',
+    nothingToSubstitute: 'Nichts auszuwechseln: Weder ein Kadereintrag noch ein Phasenplatz noch ein Spiel würde sich ändern.',
+  },
+  skipped: {
+    heading: {
+      one: '{count} angesetztes Spiel wurde nicht angepasst und bleibt beim ausgeschiedenen Spieler:',
+      other: '{count} angesetzte Spiele wurden nicht angepasst und bleiben beim ausgeschiedenen Spieler:',
+    },
+    match: '{tournament}: {player1} vs. {player2} ({reason})',
+    reason: {
+      has_games: 'inzwischen wurde ein Ergebnis gemeldet',
+      changed: 'das Spiel hat sich inzwischen geändert',
+    },
+  },
+  partial: {
+    stopped: 'Der Wechsel ist mittendrin abgebrochen: Die Schritte vor dem Fehler bleiben gespeichert.',
+    previewBelow: 'Die Vorschau unten zeigt, was noch offen ist.',
+    recheckFailed:
+      'Auch die Prüfung, was noch offen ist, ist fehlgeschlagen; schließe den Dialog und öffne ihn erneut, um es zu sehen.',
+    finish:
+      'Bestätige ihn mit {name}, um ihn abzuschließen; ein anderer Ersatzspieler würde {name} auf den bereits übergebenen Plätzen lassen.',
+    possiblyWithPreview:
+      'Der Wechsel ist möglicherweise mittendrin abgebrochen: Die Anfrage ist fehlgeschlagen, bevor der Server melden konnte, was er gespeichert hat, und ein Gruppenplatz oder stornierte Spielvorschläge können schon übergeben sein, ohne dass die Vorschau unten das zeigt. Bestätige ihn mit {name}, um ihn abzuschließen; ein anderer Ersatzspieler könnte {name} mit einem Gruppenplatz zurücklassen, ohne eingetragen zu sein.',
+    possiblyNoPreview:
+      'Der Wechsel ist möglicherweise mittendrin abgebrochen: Die Anfrage ist fehlgeschlagen, bevor der Server melden konnte, was er gespeichert hat, und ein Gruppenplatz oder stornierte Spielvorschläge können schon übergeben sein. Bestätige ihn mit {name}, um ihn abzuschließen; ein anderer Ersatzspieler könnte {name} mit einem Gruppenplatz zurücklassen, ohne eingetragen zu sein.',
+    steps: {
+      proposalsCancelled: {
+        one: 'Offene Vorschläge für {count} Spiel storniert',
+        other: 'Offene Vorschläge für {count} Spiele storniert',
+      },
+      matchesRepaired: { one: '{count} Spiel neu gepaart', other: '{count} Spiele neu gepaart' },
+      groupHandedOver: 'Gruppenplatz übergeben in: {phases}',
+      enrollmentMoved: 'Eintrag verschoben in: {phases}',
+      rosterSwapped: 'Ligakader getauscht',
+      phaseFallback: 'unbekannte Phase',
+    },
+  },
+  cores: {
+    loading: 'Cores werden geladen …',
+    poolHeading: {
+      one: 'Kuratierter Core-Pool ({count} Typ-Trio)',
+      other: 'Kuratierter Core-Pool ({count} Typ-Trios)',
+    },
+    poolHint:
+      'Jedes Typ-Trio ist eine mögliche Core-Liga-Zuteilung. Manuelle und zufällige Zuteilung ziehen nur aus dieser Liste. Keine zwei Teilnehmer bekommen dasselbe Trio.',
+    remove: 'Entfernen',
+    addTriple: '+ Trio hinzufügen',
+    savePool: 'Pool speichern',
+    bulkHeading: 'Zufällig zuteilen',
+    forceReroll: 'Neu würfeln erzwingen (überschreibt bestehende Cores)',
+    rerollAll: 'Alle Cores neu würfeln',
+    assignMissing: 'Teilnehmern ohne Core einen zuteilen',
+    participantsHeading: {
+      one: 'Cores der Teilnehmer ({count} Teilnehmer)',
+      other: 'Cores der Teilnehmer ({count} Teilnehmer)',
+    },
+    participantsHint:
+      'Wähle für jeden Spieler ein Trio aus dem Pool oder entferne Zuteilungen einzeln. Nach dem Entfernen steht die Auswahl auf dem nächsten freien Pool-Eintrag.',
+    savePoolFirst: 'Speichere einen Core-Pool, bevor du Teilnehmern Cores zuteilst.',
+    columns: {
+      player: 'Spieler',
+      core: 'Core',
+      assignedAt: 'Zugeteilt am',
+      actions: 'Aktionen',
+    },
+    offPool: 'Der aktuelle Core ist nicht im Pool – wähle ein Trio aus dem Pool, um das zu beheben',
+    save: 'Speichern',
+    assign: 'Zuteilen',
+    clear: 'Entfernen',
+    info: {
+      poolSaved: 'Pool gespeichert',
+      assigned: 'Cores zugeteilt: {assigned}; bestehende behalten: {kept}.',
+      coreSaved: 'Core gespeichert',
+      coreCleared: 'Core entfernt',
+    },
+    errors: {
+      loadFailed: 'Cores konnten nicht geladen werden',
+      poolEmpty: 'Der Pool braucht mindestens ein Trio',
+      duplicateTypes: 'Das Trio {triple} enthält einen Typ doppelt',
+      duplicateTriple: 'Doppeltes Trio im Pool: {triple}',
+      selectCore: 'Wähle einen Core aus dem Pool',
+      requestFailed: 'Cores konnten nicht gespeichert werden',
+    },
+  },
+  participants: {
+    heading: 'Core-Liga-Zuteilungen',
+  },
+});

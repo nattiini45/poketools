@@ -1,0 +1,194 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+coverage_output.txt
+audit-report.json
+.kilo/
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env files
+.env
+.env*.local
+
+# claude: per-machine settings and worktrees stay local; the shared launch config
+# and the preloads it uses (local assets, local Supabase stack) are tracked on purpose
+.claude/*
+!.claude/launch.json
+!.claude/local-assets.cjs
+!.claude/local-db.cjs
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# retired one-off migration tooling: any local copy (dumps, logs) stays out of version control
+scripts/migrate-supabase/
+
+# agent working artifacts
+handoff.md
+# the agent board is local working state, not shipped source (untracked 2026-09-23)
+# root-anchored: an unanchored `board/` would also swallow
+# src/components/world/evoliga/route/plaza/board/
+/board/
+AI_RISK_FINDINGS.md
+codex_task.md
+docs/codex_task.md
+.agents/
+.kilocode/
+.qoder/
+.workbuddy-ai/
+skills-lock.json
+.dbg/
+.mimosa/
+.zcode/
+
+# root scratch probe artifacts (agent card probes; committed backups stay tracked)
+# widened _c0* -> _c* 2026-09-13 hygiene: gate persist-log copies (_cc086r1-… etc.)
+# minted untracked files outside the old pattern; tracked backups stay tracked
+/_c*
+__pycache__/
+.gate-fast-*
+/_gate_*
+/_jury-*
+
+# media (large binaries stay local, never commit)
+docs/*.mp4
+
+# capture output: scripts/capture-route.mjs writes evidence stills + sidecars under
+# gauntlet/evidence/ (covered by /gauntlet/ below)
+
+# private companion overlay (maintainers only; see .internal/README.md when attached)
+# Maintainer-only dev harness, design specs and agent notes. They live in a separate private
+# repo whose work tree is this checkout, so they sit at these paths locally but are never part
+# of this repo. Public code must not import any of them.
+/.internal/
+/gauntlet/
+/scripts/gauntlet/
+/scripts/board-card.mjs
+/scripts/board-dispatch.mjs
+/scripts/board-packet.mjs
+/scripts/channel-probe.mjs
+/scripts/__tests__/d42-tools-*.test.mjs
+/scripts/__tests__/gauntlet-kbars.test.mjs
+/scripts/__tests__/gauntlet-queues.test.mjs
+/scripts/__tests__/gauntlet-r41.test.mjs
+/scripts/__tests__/gauntlet-r42.test.mjs
+/scripts/__tests__/gauntlet-r43.test.mjs
+/scripts/__tests__/gauntlet-r45.test.mjs
+/scripts/__tests__/gauntlet-r51.test.mjs
+/scripts/__tests__/gauntlet-swap.test.mjs
+/scripts/__tests__/board-card.test.mjs
+/scripts/__tests__/board-dispatch.test.mjs
+/scripts/__tests__/board-packet.test.mjs
+/scripts/__tests__/channel-probe.test.mjs
+/scripts/__tests__/agent-handoff-format.test.mjs
+/scripts/__tests__/fixtures/c064-r1-return.md
+/.skills/
+/docs/superpowers/
+/docs/agent-handoff-format.md
+/docs/agent-learned.md
+/HANDOFF.md
+/docs/DEFERRED.md
+/scripts/deferred-rows.mjs
+/scripts/draft/make-synthetic-list-fixtures.mjs
+/src/format-packs/private/
+/docs/format-pack-private/
+/supabase/migrations-legacy/
+
+# overlay mirror outputs: scripts/mirror-private-overlay.mjs copies the private pack's overlay/
+# into private roots under src/ (generated; edit the overlay, never the copy). Each root carries
+# a self-ignoring .gitignore the mirror writes, so no public file names a private root.
+# .overlay-manifest.json records what the mirror wrote, so stale outputs can be removed.
+/.overlay-manifest.json
+/.overlay-manifest.json.tmp
+
+# retired agent and tooling artifacts; kept out of version control
+/.trae/
+/docs/archive/
+/tools/persist_log.py
+/scripts/_debug_replays.mjs
+
+# world-asset pipeline working directories (scripts/world-assets/) — outputs live in Supabase Storage
+scripts/world-assets/.cache/
+scripts/world-assets/out/
+# local mirror of the world-assets bucket (bake-manifest.mjs --mirror). The
+# binaries stay local (published artefacts live in Supabase Storage). The world
+# manifests (manifest.v3.json, the shipped one; manifest.json, the published v2
+# descriptor) list a league's figure pool, so they are untracked: a checkout
+# does not include them. A maintainer keeps them in the private companion
+# overlay, which tracks both paths; if a pull removed them, restore them with
+#   git --git-dir=<overlay> checkout -- public/models/world/manifest.json public/models/world/manifest.v3.json
+# Without them the manifest tests skip, and the route world renders at the
+# viewer's tier with sprite billboards instead of 3D figures and no props (the
+# loader falls back to an empty manifest). Only the attribution is tracked.
+public/models/world/*
+!public/models/world/ATTRIBUTION.md
+# the manifest lists env/ATTRIBUTION.md as a shipped environment asset,
+# so it must be in the repo too — un-ignore the dir, then re-include just that file
+!public/models/world/env/
+public/models/world/env/*
+!public/models/world/env/ATTRIBUTION.md
+
+# avatar sprite source layers (scripts/deploy-avatar-sprites.mjs input; the deployed copies live in public/avatar/)
+/avatars/
+
+# third-party game assets that are not distributed with this repository (see NOTICE.md).
+# A fresh checkout gets generated placeholder avatar layers (scripts/generate-placeholder-avatars.mjs,
+# run by predev/prebuild); maintainers' builds fetch the real files (scripts/fetch-private-assets.mjs).
+/public/avatar/
+/public/models/draft-room/
+# broadcast sprite renders: the deployment re-hosts them in its `sprites` bucket; the local mirror
+# (scripts/sprites/mirror-broadcast.mjs output) and its download cache are never committed
+/public/sprites/
+scripts/sprites/.cache/
+
+# EvoLiga Point Buy: the league's workbooks are supplied privately by the league organiser
+# and never committed (the import scripts take them via --file)
+EvoLiga Point Buy.zip
+EvoLiga Point Buy/
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# ESLint cache
+.eslintcache
+
+# PokeAPI CSV cache for the German Pokémon data generator (scripts/pkmn-i18n/fetch-csv.mjs); outputs are committed
+scripts/pkmn-i18n/.cache/
+
+# OpenWiki tool state (the scheduled workflow was removed; the wiki is hand-maintained)
+/openwiki/.last-update.json
+
+# Maintainer review deliverables (internal engineering reports that discuss the private history;
+# never published with the public repo)
+/deliverables/

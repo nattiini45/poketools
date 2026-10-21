@@ -1,0 +1,776 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import type { Round, RoundStatus, RoundWithMatches } from '@/types/round';
+import type { PublicMatch } from '@/lib/match/public-match';
+import type { Tournament } from '@/types/tournament';
+import type { ApiResult } from '@/types/api';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import Card from '@/components/ui/Card';
+import Alert from '@/components/ui/Alert';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import ManualRoundForm from './ManualRoundForm';
+import { isLegacyElimBracketData } from '@/components/bracket/legacy';
+import { useLocale, useT } from '@/i18n/client';
+import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
+import { useApiErrorText } from '@/i18n/use-api-error';
+import { enumLabel } from '@/i18n/content/enum-label';
+import { translateEngineLabel } from '@/i18n/content/engine-labels';
+import { commonMessages } from '@/i18n/messages/common';
+import { contentMessages } from '@/i18n/messages/content';
+import { enumMessages } from '@/i18n/messages/enums';
+import { errorsAdmin, errorsMatches, errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
+import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
+import { apiFailure, type UiError } from './ui-error';
+
+const BEST_OF_OPTIONS = [1, 3, 5, 7] as const;
+
+type RoundErrorKey = `rounds.errors.${keyof typeof tournamentsAdminMessages.en.rounds.errors}`;
+
+interface RoundManagerProps {
+  tournament: Tournament;
+  initialRounds: Round[];
+}
+
+export type RoundMatchesLoad =
+  | { ok: true; matches: PublicMatch[] }
+  | { ok: false; error: string; code?: string };
+
+/**
+ * The English message of a request that never produced an API body (offline,
+ * non-JSON). `RoundMatchesPanel` shows it in the viewer's language.
+ */
+export const ROUND_MATCHES_LOAD_FAILED = 'Failed to load matches';
+
+/**
+ * Fetch one round's matches (`GET /api/tournaments/[id]/rounds/[rid]`). A
+ * failed request comes back as an error, never as an empty list: "No matches
+ * in this round." must mean the round has none.
+ */
+export async function fetchRoundMatches(
+  tournamentId: string,
+  roundId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<RoundMatchesLoad> {
+  try {
+    const res = await fetchImpl(`/api/tournaments/${tournamentId}/rounds/${roundId}`);
+    const result = (await res.json()) as ApiResult<RoundWithMatches>;
+    if (!result.success) {
+      return result.code ? { ok: false, error: result.error, code: result.code } : { ok: false, error: result.error };
+    }
+    return { ok: true, matches: result.data.matches };
+  } catch {
+    return { ok: false, error: ROUND_MATCHES_LOAD_FAILED };
+  }
+}
+
+interface RoundMatchesPanelProps {
+  loading: boolean;
+  /** The failed load's message; matches are not shown while it is set. */
+  error: string | null;
+  /** The failed load's API error code, when the server sent one. */
+  errorCode?: string | null;
+  matches: PublicMatch[] | undefined;
+  onRetry: () => void;
+}
+
+/** The expanded round's match list: loading, a failed load with retry, empty, or the matches. */
+export function RoundMatchesPanel({ loading, error, errorCode, matches, onRetry }: RoundMatchesPanelProps) {
+  const t = useT(tournamentsAdminMessages);
+  const tEnum = useT(enumMessages);
+  const errorText = useApiErrorText(errorsTournaments);
+  if (loading) {
+    return <p className="text-xs text-poke-text-muted">{t('rounds.loadingMatches')}</p>;
+  }
+  if (error) {
+    const message =
+      !errorCode && error === ROUND_MATCHES_LOAD_FAILED
+        ? t('rounds.loadMatchesFailed')
+        : errorText({ error, code: errorCode });
+    return (
+      <Alert variant="error" className="flex items-center justify-between gap-3">
+        <span>{t('rounds.matchesError', { error: message })}</span>
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          {t('rounds.retry')}
+        </Button>
+      </Alert>
+    );
+  }
+  if (!matches || matches.length === 0) {
+    return <p className="text-xs text-poke-text-muted">{t('rounds.noMatches')}</p>;
+  }
+  return (
+    <div className="space-y-1">
+      {matches.map((m) => (
+        <Link
+          key={m.id}
+          href={`/admin/matches/${m.id}`}
+          className="flex items-center justify-between p-2 rounded-poke-md hover:bg-poke-elevated text-sm transition-colors"
+        >
+          <div className="flex items-center gap-2 text-poke-text-primary">
+            <span className={m.winner_id === m.player_1_id ? 'font-semibold' : m.winner_id ? 'text-poke-text-muted' : ''}>
+              {m.player_1_name}
+            </span>
+            <span className="text-poke-text-muted">{t('rounds.versus')}</span>
+            <span className={m.winner_id === m.player_2_id ? 'font-semibold' : m.winner_id ? 'text-poke-text-muted' : ''}>
+              {m.player_2_name}
+            </span>
+          </div>
+          <Badge variant={m.winner_id ? 'green' : 'gray'} size="sm">
+            {enumLabel(tEnum, 'matchStatus', m.winner_id ? 'completed' : m.status)}
+          </Badge>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+export default function RoundManager({
+  tournament,
+  initialRounds,
+}: RoundManagerProps) {
+  const [rounds, setRounds] = useState<Round[]>(initialRounds);
+  const [generating, setGenerating] = useState(false);
+  const [generatingAll, setGeneratingAll] = useState(false);
+  const t = useT(tournamentsAdminMessages);
+  const tCommon = useT(commonMessages);
+  const tContent = useT(contentMessages);
+  const tEnum = useT(enumMessages);
+  const locale = useLocale();
+  // errorsSeasons: a grouped league's phase refuses round generation with league-group codes
+  // (PHASE_PLAYER_WITHOUT_LEAGUE_GROUP, PHASE_GROUPS_STALE; src/lib/tournament/group-rounds.ts, createRound).
+  const errorText = useApiErrorText(errorsTournaments, errorsAdmin, errorsMatches, errorsSeasons);
+  const [error, setError] = useState<UiError<RoundErrorKey> | null>(null);
+  const [expandedRound, setExpandedRound] = useState<string | null>(null);
+  const [matchesByRound, setMatchesByRound] = useState<Record<string, PublicMatch[]>>({});
+  const [loadingMatches, setLoadingMatches] = useState<string | null>(null);
+  const [matchErrors, setMatchErrors] = useState<Record<string, { error: string; code?: string }>>({});
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [resetRoundId, setResetRoundId] = useState<string | null>(null);
+  const [resettingRound, setResettingRound] = useState(false);
+  const [deleteRoundId, setDeleteRoundId] = useState<string | null>(null);
+  const [deletingRound, setDeletingRound] = useState(false);
+  const [generatingBracket, setGeneratingBracket] = useState(false);
+  const [regeneratingBracket, setRegeneratingBracket] = useState(false);
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const [regenNeedsCascade, setRegenNeedsCascade] = useState(false);
+  const [regenCascadeMessage, setRegenCascadeMessage] = useState<ApiErrorLike | null>(null);
+  const [resetNeedsCascade, setResetNeedsCascade] = useState(false);
+  const [repairingBracket, setRepairingBracket] = useState(false);
+  /** Matches the last repair materialized; null hides the notice. */
+  const [repairInfo, setRepairInfo] = useState<number | null>(null);
+  const [bracketResetEnabled, setBracketResetEnabled] = useState(
+    tournament.bracket_reset_enabled ?? true
+  );
+  const [savingResetToggle, setSavingResetToggle] = useState(false);
+  const [resetToggleInfo, setResetToggleInfo] = useState<'enabled' | 'disabled' | null>(null);
+
+  const isRoundRobin = tournament.bracket_type === 'round_robin';
+  const isElimination =
+    tournament.bracket_type === 'single_elim' ||
+    tournament.bracket_type === 'double_elim';
+  const isLegacyElim =
+    isElimination && isLegacyElimBracketData(rounds);
+
+  async function generateBracket() {
+    setGeneratingBracket(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/tournaments/${tournament.id}/generate-bracket`, {
+        method: 'POST',
+      });
+      const result = await res.json();
+      if (!result.success) {
+        setError(apiFailure(result));
+        return;
+      }
+      const roundsRes = await fetch(`/api/tournaments/${tournament.id}/rounds`);
+      const roundsJson: ApiResult<Round[]> = await roundsRes.json();
+      if (roundsJson.success) setRounds(roundsJson.data);
+    } catch {
+      setError({ key: 'rounds.errors.generateBracket' });
+    } finally {
+      setGeneratingBracket(false);
+    }
+  }
+
+  async function handleRegenerateBracket() {
+    setRegeneratingBracket(true);
+    setError(null);
+    setRepairInfo(null);
+    try {
+      const res = await fetch(`/api/tournaments/${tournament.id}/regenerate-bracket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cascade: regenNeedsCascade }),
+      });
+      const result = await res.json();
+      if (!result.success) {
+        if (result.code === 'REGENERATE_PLAYED' && !regenNeedsCascade) {
+          setRegenNeedsCascade(true);
+          setRegenCascadeMessage(toApiErrorLike(result));
+          return;
+        }
+        setError(apiFailure(result));
+        setConfirmRegenerate(false);
+        setRegenNeedsCascade(false);
+        setRegenCascadeMessage(null);
+        return;
+      }
+      const roundsRes = await fetch(`/api/tournaments/${tournament.id}/rounds`);
+      const roundsJson: ApiResult<Round[]> = await roundsRes.json();
+      if (roundsJson.success) {
+        setRounds(roundsJson.data);
+        setMatchesByRound({});
+        setExpandedRound(null);
+      }
+      setConfirmRegenerate(false);
+      setRegenNeedsCascade(false);
+      setRegenCascadeMessage(null);
+    } catch {
+      setError({ key: 'rounds.errors.regenerateBracket' });
+      setConfirmRegenerate(false);
+      setRegenNeedsCascade(false);
+      setRegenCascadeMessage(null);
+    } finally {
+      setRegeneratingBracket(false);
+    }
+  }
+
+  async function handleRepairBracket() {
+    setRepairingBracket(true);
+    setError(null);
+    setRepairInfo(null);
+    try {
+      const res = await fetch(`/api/tournaments/${tournament.id}/repair-bracket`, {
+        method: 'POST',
+      });
+      const result = await res.json();
+      if (!result.success) {
+        setError(apiFailure(result));
+        return;
+      }
+      const materialized: number = result.data?.slots_materialized ?? 0;
+      setRepairInfo(materialized);
+      const roundsRes = await fetch(`/api/tournaments/${tournament.id}/rounds`);
+      const roundsJson: ApiResult<Round[]> = await roundsRes.json();
+      if (roundsJson.success) setRounds(roundsJson.data);
+      setMatchesByRound({});
+    } catch {
+      setError({ key: 'rounds.errors.repairBracket' });
+    } finally {
+      setRepairingBracket(false);
+    }
+  }
+
+  async function handleToggleBracketReset(enabled: boolean) {
+    setSavingResetToggle(true);
+    setError(null);
+    setResetToggleInfo(null);
+    try {
+      const res = await fetch(`/api/tournaments/${tournament.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bracket_reset_enabled: enabled }),
+      });
+      const result = await res.json();
+      if (!result.success) {
+        setError(apiFailure(result));
+        return;
+      }
+      setBracketResetEnabled(enabled);
+      setMatchesByRound({});
+      setResetToggleInfo(enabled ? 'enabled' : 'disabled');
+    } catch {
+      setError({ key: 'rounds.errors.toggleReset' });
+    } finally {
+      setSavingResetToggle(false);
+    }
+  }
+
+  async function handleDeleteRound() {
+    if (!deleteRoundId) return;
+    setDeletingRound(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/rounds/${deleteRoundId}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (!result.success) {
+        setError(apiFailure(result));
+        setDeleteRoundId(null);
+        return;
+      }
+      setRounds((prev) => prev.filter((r) => r.id !== deleteRoundId));
+      setMatchesByRound((prev) => {
+        const next = { ...prev };
+        delete next[deleteRoundId];
+        return next;
+      });
+      setDeleteRoundId(null);
+    } catch {
+      setError({ key: 'rounds.errors.deleteRound' });
+      setDeleteRoundId(null);
+    } finally {
+      setDeletingRound(false);
+    }
+  }
+
+  async function generateNextRound() {
+    setGenerating(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/generate-round/${tournament.id}`, {
+        method: 'POST',
+      });
+      const result: ApiResult<Round> = await res.json();
+
+      if (!result.success) {
+        setError(apiFailure(result));
+        return;
+      }
+
+      setRounds((prev) => [...prev, result.data]);
+    } catch {
+      setError({ key: 'rounds.errors.generateRound' });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function generateAllRounds() {
+    setGeneratingAll(true);
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `/api/tournaments/${tournament.id}/generate-all-rounds`,
+        { method: 'POST' }
+      );
+      const result: ApiResult<Round[]> = await res.json();
+
+      if (!result.success) {
+        setError(apiFailure(result));
+        return;
+      }
+
+      setRounds((prev) => [...prev, ...result.data]);
+    } catch {
+      setError({ key: 'rounds.errors.generateAll' });
+    } finally {
+      setGeneratingAll(false);
+    }
+  }
+
+  function handleManualRoundCreated(round: Round) {
+    setRounds((prev) => [...prev, round]);
+    setShowManualForm(false);
+  }
+
+  async function updateRoundBo(roundId: string, bestOf: number) {
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/tournaments/${tournament.id}/rounds/${roundId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ best_of: bestOf }),
+        }
+      );
+      const result: ApiResult<Round> = await res.json();
+
+      if (!result.success) {
+        setError(apiFailure(result));
+        return;
+      }
+
+      setRounds((prev) =>
+        prev.map((r) => (r.id === roundId ? result.data : r))
+      );
+    } catch {
+      setError({ key: 'rounds.errors.updateBestOf' });
+    }
+  }
+
+  async function updateRoundStatus(roundId: string, status: RoundStatus) {
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/tournaments/${tournament.id}/rounds/${roundId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status }),
+        }
+      );
+      const result: ApiResult<Round> = await res.json();
+
+      if (!result.success) {
+        setError(apiFailure(result));
+        return;
+      }
+
+      setRounds((prev) =>
+        prev.map((r) => (r.id === roundId ? result.data : r))
+      );
+    } catch {
+      setError({ key: 'rounds.errors.updateStatus' });
+    }
+  }
+
+  async function toggleRoundMatches(roundId: string) {
+    if (expandedRound === roundId) {
+      setExpandedRound(null);
+      return;
+    }
+
+    setExpandedRound(roundId);
+
+    if (!matchesByRound[roundId]) {
+      await loadRoundMatches(roundId);
+    }
+  }
+
+  async function loadRoundMatches(roundId: string) {
+    setLoadingMatches(roundId);
+    setMatchErrors((prev) => {
+      const next = { ...prev };
+      delete next[roundId];
+      return next;
+    });
+    const result = await fetchRoundMatches(tournament.id, roundId);
+    if (result.ok) {
+      setMatchesByRound((prev) => ({ ...prev, [roundId]: result.matches }));
+    } else {
+      // Shown in the expanded panel with a retry, not as an empty round.
+      setMatchErrors((prev) => ({
+        ...prev,
+        [roundId]: result.code ? { error: result.error, code: result.code } : { error: result.error },
+      }));
+    }
+    setLoadingMatches(null);
+  }
+
+  async function handleResetRound() {
+    if (!resetRoundId) return;
+    setResettingRound(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/rounds/${resetRoundId}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cascade: resetNeedsCascade }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        // Update local state — round goes to pending, clear cached matches
+        setRounds((prev) =>
+          prev.map((r) =>
+            r.id === resetRoundId ? { ...r, status: 'pending' as RoundStatus } : r
+          )
+        );
+        setMatchesByRound((prev) => {
+          const updated = { ...prev };
+          delete updated[resetRoundId];
+          return updated;
+        });
+        setExpandedRound(null);
+        setResetRoundId(null);
+        setResetNeedsCascade(false);
+      } else if (result.code === 'DOWNSTREAM_PLAYED' && !resetNeedsCascade) {
+        setResetNeedsCascade(true);
+      } else {
+        setError(apiFailure(result));
+        setResetRoundId(null);
+        setResetNeedsCascade(false);
+      }
+    } catch {
+      setError({ key: 'rounds.errors.resetRound' });
+      setResetRoundId(null);
+      setResetNeedsCascade(false);
+    } finally {
+      setResettingRound(false);
+    }
+  }
+
+  // Round Robin pairings are deterministic, so rounds can be generated
+  // in advance without waiting for previous rounds to complete.
+  const canGenerate =
+    tournament.status !== 'completed' &&
+    (rounds.length === 0 ||
+      isRoundRobin ||
+      rounds[rounds.length - 1].status === 'completed');
+
+  const isBusy =
+    generating || generatingAll || generatingBracket || regeneratingBracket || repairingBracket;
+  const isStructureElim = isElimination && !isLegacyElim;
+
+  return (
+    <div className="space-y-4">
+      {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
+      {repairInfo !== null && <Alert variant="success">{t('rounds.repaired', { count: repairInfo })}</Alert>}
+      {resetToggleInfo && (
+        <Alert variant="success">
+          {resetToggleInfo === 'enabled' ? t('rounds.resetEnabled') : t('rounds.resetDisabled')}
+        </Alert>
+      )}
+
+      <div className="flex items-center gap-4 flex-wrap">
+        {isElimination && !isLegacyElim && rounds.length === 0 && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={generateBracket}
+            disabled={showManualForm || isBusy}
+            loading={generatingBracket}
+          >
+            {t('rounds.generateBracket')}
+          </Button>
+        )}
+        {isStructureElim && rounds.length > 0 && (
+          <>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                setRegenNeedsCascade(false);
+                setRegenCascadeMessage(null);
+                setConfirmRegenerate(true);
+              }}
+              disabled={isBusy}
+              loading={regeneratingBracket}
+            >
+              {t('rounds.regenerateBracket')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRepairBracket}
+              disabled={isBusy}
+              loading={repairingBracket}
+            >
+              {t('rounds.repairBracket')}
+            </Button>
+          </>
+        )}
+        {(!isElimination || isLegacyElim) && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={generateNextRound}
+            disabled={!canGenerate || showManualForm || isBusy}
+            loading={generating}
+          >
+            {t('rounds.generateNext')}
+          </Button>
+        )}
+        {isRoundRobin && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={generateAllRounds}
+            disabled={!canGenerate || showManualForm || isBusy}
+            loading={generatingAll}
+          >
+            {t('rounds.generateAll')}
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowManualForm((v) => !v)}
+          disabled={!canGenerate || isBusy}
+          className="border border-poke-border"
+        >
+          {showManualForm ? t('rounds.cancelManual') : t('rounds.createManual')}
+        </Button>
+        <span className="text-sm text-poke-text-secondary">
+          {enumLabel(tEnum, 'bracketType', tournament.bracket_type)} &middot;{' '}
+          {tCommon('bestOf', { count: tournament.best_of_default })}
+        </span>
+        {tournament.bracket_type === 'double_elim' && (
+          <label className="flex items-center gap-2 text-sm text-poke-text-primary">
+            <input
+              type="checkbox"
+              checked={bracketResetEnabled}
+              disabled={savingResetToggle || isBusy}
+              onChange={(e) => handleToggleBracketReset(e.target.checked)}
+              className="rounded accent-poke-accent"
+            />
+            {tContent('slot.ifNecessary', { label: t('rounds.grandFinalsReset') })}
+          </label>
+        )}
+      </div>
+
+      {showManualForm && (
+        <ManualRoundForm
+          tournamentId={tournament.id}
+          bestOfDefault={tournament.best_of_default}
+          onRoundCreated={handleManualRoundCreated}
+          onCancel={() => setShowManualForm(false)}
+        />
+      )}
+
+      {rounds.length === 0 ? (
+        <p className="text-sm text-poke-text-muted">
+          {t('rounds.empty')}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {rounds.map((round) => {
+            const isExpanded = expandedRound === round.id;
+            const matches = matchesByRound[round.id];
+
+            return (
+              <Card key={round.id} variant="outlined" padding="none">
+                <div className="p-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => toggleRoundMatches(round.id)}
+                    className="text-left flex-1"
+                  >
+                    <h4 className="font-heading font-medium text-sm text-poke-text-primary">
+                      <span className="mr-1.5 text-poke-text-muted">{isExpanded ? '▾' : '▸'}</span>
+                      {translateEngineLabel('round', round.name, locale)}
+                      <span className="ml-2 text-xs text-poke-text-muted font-normal">
+                        {tCommon('bestOf', { count: round.best_of })}
+                      </span>
+                    </h4>
+                    <Badge variant={getStatusVariant(round.status)} size="sm">
+                      {enumLabel(tEnum, 'roundStatus', round.status)}
+                    </Badge>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {round.status === 'pending' && (
+                      <select
+                        value={round.best_of}
+                        onChange={(e) => updateRoundBo(round.id, Number(e.target.value))}
+                        className="border border-poke-border rounded-poke-md px-2 py-1 text-xs bg-poke-surface text-poke-text-primary"
+                      >
+                        {BEST_OF_OPTIONS.map((bo) => (
+                          <option key={bo} value={bo}>
+                            {tCommon('bestOf', { count: bo })}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {round.status === 'pending' && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => updateRoundStatus(round.id, 'active')}
+                      >
+                        {t('rounds.start')}
+                      </Button>
+                    )}
+                    {round.status === 'active' && (
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => updateRoundStatus(round.id, 'completed')}
+                      >
+                        {t('rounds.complete')}
+                      </Button>
+                    )}
+                    {round.status !== 'pending' && (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => {
+                          setResetNeedsCascade(false);
+                          setResetRoundId(round.id);
+                        }}
+                      >
+                        {t('rounds.reset')}
+                      </Button>
+                    )}
+                    {!isStructureElim && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteRoundId(round.id)}
+                        className="text-poke-danger"
+                      >
+                        {t('rounds.delete')}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="border-t border-poke-border px-3 py-2">
+                    <RoundMatchesPanel
+                      loading={loadingMatches === round.id}
+                      error={matchErrors[round.id]?.error ?? null}
+                      errorCode={matchErrors[round.id]?.code ?? null}
+                      matches={matches}
+                      onRetry={() => void loadRoundMatches(round.id)}
+                    />
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+      <ConfirmDialog
+        open={confirmRegenerate}
+        onClose={() => {
+          setConfirmRegenerate(false);
+          setRegenNeedsCascade(false);
+          setRegenCascadeMessage(null);
+        }}
+        onConfirm={handleRegenerateBracket}
+        title={regenNeedsCascade ? t('rounds.regenerateDialog.cascadeTitle') : t('rounds.regenerateDialog.title')}
+        message={
+          regenNeedsCascade
+            ? t('rounds.regenerateDialog.cascadeMessage', {
+                cascade: regenCascadeMessage
+                  ? errorText(regenCascadeMessage)
+                  : t('rounds.regenerateDialog.cascadeFallback'),
+              })
+            : t('rounds.regenerateDialog.message')
+        }
+        confirmLabel={
+          regenNeedsCascade ? t('rounds.regenerateDialog.cascadeConfirm') : t('rounds.regenerateDialog.confirm')
+        }
+        loading={regeneratingBracket}
+      />
+      <ConfirmDialog
+        open={deleteRoundId !== null}
+        onClose={() => setDeleteRoundId(null)}
+        onConfirm={handleDeleteRound}
+        title={t('rounds.deleteDialog.title')}
+        message={t('rounds.deleteDialog.message')}
+        confirmLabel={t('rounds.deleteDialog.confirm')}
+        loading={deletingRound}
+      />
+      <ConfirmDialog
+        open={resetRoundId !== null}
+        onClose={() => {
+          setResetRoundId(null);
+          setResetNeedsCascade(false);
+        }}
+        onConfirm={handleResetRound}
+        title={resetNeedsCascade ? t('rounds.resetDialog.cascadeTitle') : t('rounds.resetDialog.title')}
+        message={resetNeedsCascade ? t('rounds.resetDialog.cascadeMessage') : t('rounds.resetDialog.message')}
+        confirmLabel={resetNeedsCascade ? t('rounds.resetDialog.cascadeConfirm') : t('rounds.resetDialog.confirm')}
+        loading={resettingRound}
+      />
+    </div>
+  );
+}
+
+function getStatusVariant(status: RoundStatus): 'gray' | 'blue' | 'green' {
+  switch (status) {
+    case 'pending':
+      return 'gray';
+    case 'active':
+      return 'blue';
+    case 'completed':
+      return 'green';
+  }
+}

@@ -1,0 +1,30 @@
+{{/*
+  Supabase Auth template: "Reset password" (config key: recovery).
+  Bilingual (i18n-core §6.6): .Data.locale (user_metadata.locale, stored at sign-up)
+  "en" -> English, "de" -> German, anything else -> German, then English.
+  The link goes through /auth/reset-password (token_hash verified server-side).
+  Subject (not branched): "Setze dein Passwort zurück / Reset your password"
+  The hosted project's copy lives in the dashboard: see docs/i18n.md "Emails".
+  Template comment: renders nothing in the sent email.
+*/}}
+{{ if eq .Data.locale "en" }}
+<h2>Reset your password</h2>
+<p>Someone asked to reset the password of your PokéTools account. Choose a new password here:</p>
+<p><a href="{{ .SiteURL }}/auth/reset-password?token_hash={{ .TokenHash }}&type=recovery">Reset my password</a></p>
+<p>If you didn't ask for this, you can ignore this email. Your password stays the same.</p>
+{{ else if eq .Data.locale "de" }}
+<h2>Setze dein Passwort zurück</h2>
+<p>Für dein PokéTools-Konto wurde ein neues Passwort angefordert. Hier kannst du es festlegen:</p>
+<p><a href="{{ .SiteURL }}/auth/reset-password?token_hash={{ .TokenHash }}&type=recovery">Passwort zurücksetzen</a></p>
+<p>Wenn du das nicht warst, kannst du diese E-Mail ignorieren. Dein Passwort bleibt dann unverändert.</p>
+{{ else }}
+<h2>Setze dein Passwort zurück</h2>
+<p>Für dein PokéTools-Konto wurde ein neues Passwort angefordert. Hier kannst du es festlegen:</p>
+<p><a href="{{ .SiteURL }}/auth/reset-password?token_hash={{ .TokenHash }}&type=recovery">Passwort zurücksetzen</a></p>
+<p>Wenn du das nicht warst, kannst du diese E-Mail ignorieren. Dein Passwort bleibt dann unverändert.</p>
+<hr>
+<h2>Reset your password</h2>
+<p>Someone asked to reset the password of your PokéTools account. Choose a new password here:</p>
+<p><a href="{{ .SiteURL }}/auth/reset-password?token_hash={{ .TokenHash }}&type=recovery">Reset my password</a></p>
+<p>If you didn't ask for this, you can ignore this email. Your password stays the same.</p>
+{{ end }}
