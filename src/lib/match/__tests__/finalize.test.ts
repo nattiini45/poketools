@@ -74,6 +74,10 @@ vi.mock('@/lib/match/epb-matchday', () => ({
   runEpbMatchdayHooks: vi.fn(),
 }));
 
+vi.mock('@/lib/match/evolution-match-evaluator', () => ({
+  creditMatchRealKills: vi.fn(),
+}));
+
 import { createRatingScope } from '@/lib/rating/rating-scope';
 import {
   FINALIZE_HEAL_POLICY,
@@ -94,6 +98,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { runEpbMatchdayHooks } from '@/lib/match/epb-matchday';
+import { creditMatchRealKills } from '@/lib/match/evolution-match-evaluator';
 import { checkAchievements } from '@/lib/gamification/achievements';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { recomputeStreaks, updateStreaks } from '@/lib/gamification/streaks';
@@ -159,6 +164,9 @@ describe('finalizeMatchCompletion', () => {
     vi.mocked(getParticipants).mockResolvedValue([]);
     vi.mocked(propagateBracketOnMatchComplete).mockResolvedValue();
     vi.mocked(runEpbMatchdayHooks).mockResolvedValue();
+    vi.mocked(creditMatchRealKills).mockResolvedValue({
+      applied: ['game-1'], alreadyApplied: [], notCompleted: [], missing: [], events: [],
+    });
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -221,7 +229,7 @@ describe('finalizeMatchCompletion', () => {
     expect(revalidateMatchPages).not.toHaveBeenCalled();
   });
 
-  it('does not run EPB matchday hooks for non-EPB seasons', async () => {
+  it('does not run EPB matchday hooks or credit real kills for non-EPB seasons', async () => {
     await finalizeMatchCompletion({
       match,
       winnerId: 'player-1',
@@ -229,6 +237,96 @@ describe('finalizeMatchCompletion', () => {
     });
 
     expect(runEpbMatchdayHooks).not.toHaveBeenCalled();
+    expect(creditMatchRealKills).not.toHaveBeenCalled();
+  });
+
+  it('credits the real kills of every game at completion (CF-07), before the matchday hooks', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({
+      id: 'tournament-1',
+      name: 'EvoLiga',
+      season_id: 'season-1',
+      season_format_type: 'evolution_point_buy',
+    } as never);
+    vi.mocked(getRoundById).mockResolvedValue({ id: 'round-1', round_number: 3 } as never);
+    const stat = { id: 's1', game_id: 'game-2', player_id: 'player-1', pokemon_name: 'Charmander', kos_dealt: 2 };
+    vi.mocked(getBattleStatsByMatch).mockResolvedValue({ 'game-2': [stat] } as never);
+    const order: string[] = [];
+    vi.mocked(creditMatchRealKills).mockImplementation(async () => {
+      order.push('kills');
+      return { applied: ['game-1', 'game-2'], alreadyApplied: [], notCompleted: [], missing: [], events: [] };
+    });
+    vi.mocked(runEpbMatchdayHooks).mockImplementation(async () => {
+      order.push('hooks');
+    });
+
+    const result = await finalizeMatchCompletion({
+      match,
+      winnerId: 'player-1',
+      previousStatus: 'pending_confirmation',
+    });
+
+    expect(result).toEqual({ finalized: true, complete: true, failed_steps: [] });
+    expect(creditMatchRealKills).toHaveBeenCalledTimes(1);
+    expect(creditMatchRealKills).toHaveBeenCalledWith({
+      seasonId: 'season-1',
+      matchday: 3,
+      playerIds: ['player-1', 'player-2'],
+      // the match's game without stats too, and every game with stats
+      gameIds: ['game-1', 'game-2'],
+      statsByGame: { 'game-2': [stat] },
+    });
+    expect(order).toEqual(['kills', 'hooks']);
+    expect(runEpbMatchdayHooks).toHaveBeenCalledWith(expect.objectContaining({ matchday: 3, battleStats: [stat] }));
+  });
+
+  it('credits nothing again on a repeated finalize call for an already completed match', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({
+      id: 'tournament-1',
+      name: 'EvoLiga',
+      season_id: 'season-1',
+      season_format_type: 'evolution_point_buy',
+    } as never);
+
+    const result = await finalizeMatchCompletion({
+      match: { ...match, status: 'completed' },
+      winnerId: 'player-1',
+      previousStatus: 'completed',
+    });
+
+    expect(result).toEqual({ finalized: false, reason: 'already_completed' });
+    expect(creditMatchRealKills).not.toHaveBeenCalled();
+  });
+
+  it('blocks the matchday hooks when the real-kill credit fails, and heals both', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({
+      id: 'tournament-1',
+      name: 'EvoLiga',
+      season_id: 'season-1',
+      season_format_type: 'evolution_point_buy',
+    } as never);
+    vi.mocked(getRoundById).mockResolvedValue({ id: 'round-1', round_number: 3 } as never);
+    const err = new Error('credit rpc failed');
+    vi.mocked(creditMatchRealKills).mockRejectedValue(err);
+
+    const result = await finalizeMatchCompletion({
+      match,
+      winnerId: 'player-1',
+      previousStatus: 'pending_confirmation',
+    });
+
+    expect(result.failed_steps).toEqual(['epb_real_kills', 'epb_hooks']);
+    expect(runEpbMatchdayHooks).not.toHaveBeenCalled();
+    expect(markMatchFinalized).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith('[match-finalize] step "epb_real_kills" failed for match match-1', err);
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'match.finalize_failed',
+        metadata: expect.objectContaining({
+          failed_steps: ['epb_real_kills', 'epb_hooks'],
+          healed_automatically: ['epb_real_kills', 'epb_hooks'],
+        }),
+      })
+    );
   });
 
   it('runs EPB matchday hooks once for evolution_point_buy seasons', async () => {
@@ -444,12 +542,13 @@ describe('finalizeMatchCompletion', () => {
       previousStatus: 'pending_confirmation',
     });
 
-    expect(result.failed_steps).toEqual(['battle_stats', 'streaks', 'announcements', 'epb_hooks']);
+    expect(result.failed_steps).toEqual(['battle_stats', 'streaks', 'announcements', 'epb_real_kills', 'epb_hooks']);
     expect(updateRatings).toHaveBeenCalled();
     expect(updateSignatures).toHaveBeenCalledTimes(2);
     expect(checkAchievements).toHaveBeenCalledTimes(2);
     expect(updateStreaks).not.toHaveBeenCalled();
     expect(runEpbMatchdayHooks).not.toHaveBeenCalled();
+    expect(creditMatchRealKills).not.toHaveBeenCalled();
     expect(emitDiscordEvent).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledWith(
       '[match-finalize] step "streaks" not run for match match-1: "battle_stats" failed'
@@ -469,6 +568,7 @@ describe('finalizeMatchCompletion', () => {
       'tournament',
       'achievements',
       'announcements',
+      'epb_real_kills',
       'epb_hooks',
       'bracket_propagation',
     ]);
@@ -510,7 +610,8 @@ describe('finalizeMatchCompletion', () => {
       previousStatus: 'pending_confirmation',
     });
 
-    expect(result.failed_steps).toEqual(['epb_hooks']);
+    expect(result.failed_steps).toEqual(['epb_real_kills', 'epb_hooks']);
+    expect(creditMatchRealKills).not.toHaveBeenCalled();
     expect(runEpbMatchdayHooks).not.toHaveBeenCalled();
   });
 
@@ -643,7 +744,7 @@ describe('finalizeMatchCompletion', () => {
       expect(errorSpy).toHaveBeenCalledWith('[match-heal] step "ratings" failed for match match-1', boom);
     });
 
-    it('re-runs the EPB hooks only while the match has no snapshots', async () => {
+    it('re-runs the real-kill credit on every heal (once per game by its marker) and the hooks only while there are no snapshots', async () => {
       vi.mocked(getTournamentById).mockResolvedValue({
         id: 'tournament-1',
         name: 'EvoLiga',
@@ -655,6 +756,9 @@ describe('finalizeMatchCompletion', () => {
       const result = await healMatchFinalization(completed);
 
       expect(result.healed).toBe(true);
+      expect(creditMatchRealKills).toHaveBeenCalledWith(
+        expect.objectContaining({ seasonId: 'season-1', matchday: 5, gameIds: ['game-1'] })
+      );
       expect(runEpbMatchdayHooks).toHaveBeenCalledWith({
         match: completed,
         seasonId: 'season-1',
@@ -663,12 +767,35 @@ describe('finalizeMatchCompletion', () => {
       });
 
       vi.mocked(runEpbMatchdayHooks).mockClear();
+      vi.mocked(creditMatchRealKills).mockClear();
+      vi.mocked(creditMatchRealKills).mockResolvedValue({
+        applied: [], alreadyApplied: ['game-1'], notCompleted: [], missing: [], events: [],
+      });
       vi.mocked(getMatchSnapshots).mockResolvedValue([{ match_id: 'match-1' }] as never);
 
       const second = await healMatchFinalization(completed);
 
       expect(second.healed).toBe(true);
+      // Called again, but the game is already credited: the RPC writes nothing.
+      expect(creditMatchRealKills).toHaveBeenCalledTimes(1);
       expect(runEpbMatchdayHooks).not.toHaveBeenCalled();
+    });
+
+    it('stops before the hooks when the healed credit fails, and keeps the match on the worklist', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({
+        id: 'tournament-1',
+        name: 'EvoLiga',
+        season_id: 'season-1',
+        season_format_type: 'evolution_point_buy',
+      } as never);
+      vi.mocked(getRoundById).mockResolvedValue({ id: 'round-1', round_number: 5 } as never);
+      vi.mocked(creditMatchRealKills).mockRejectedValue(new Error('credit rpc failed'));
+
+      const result = await healMatchFinalization(completed);
+
+      expect(result).toEqual({ healed: false, failed_steps: ['epb_real_kills', 'epb_hooks'] });
+      expect(runEpbMatchdayHooks).not.toHaveBeenCalled();
+      expect(markMatchFinalized).not.toHaveBeenCalled();
     });
 
     it('reports a failing EPB re-run and keeps the match on the worklist', async () => {

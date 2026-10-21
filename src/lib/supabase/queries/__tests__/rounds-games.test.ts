@@ -49,6 +49,11 @@ import {
   createGame,
   GameNumberConflictError,
   GAMES_MATCH_GAME_NUMBER_KEY,
+  GAMES_REPLAY_HASH_KEY,
+  ReplayAlreadyRecordedError,
+  BATTLE_STATS_GAME_PLAYER_POKEMON_KEY,
+  BattleStatsDuplicatePokemonError,
+  findGameIdByReplayHash,
   markGameParsed,
   updateGameWinner,
   deleteUncountedGameRow,
@@ -361,6 +366,38 @@ describe('queries/games', () => {
       errorSpy.mockRestore();
     });
 
+    it('stores the replay hash in the same insert, and null when there is none', async () => {
+      const hash = 'ab'.repeat(32);
+      mockBuilder.single.mockResolvedValue({ data: gameRow, error: null });
+      await createGame({
+        match_id: 'm-1', game_number: 1, winner_id: 'p-1', source: 'ps_replay', exclude_all_time: false,
+        replay_url: 'https://replay.pokemonshowdown.com/test', replay_hash: hash,
+      });
+      expect(mockBuilder.insert).toHaveBeenLastCalledWith(expect.objectContaining({ replay_hash: hash }));
+
+      await createGame({ match_id: 'm-1', game_number: 2, winner_id: 'p-1', source: 'manual', exclude_all_time: false });
+      expect(mockBuilder.insert).toHaveBeenLastCalledWith(expect.objectContaining({ replay_hash: null }));
+    });
+
+    it('maps a unique violation of games_replay_hash_key to a 409 replay_already_recorded (race-safe F1)', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const pgError = {
+        code: '23505',
+        message: `duplicate key value violates unique constraint "${GAMES_REPLAY_HASH_KEY}"`,
+      };
+      mockBuilder.single.mockResolvedValue({ data: null, error: pgError });
+
+      const err = await createGame({
+        match_id: 'm-1', game_number: 1, winner_id: 'p-1', source: 'ps_replay', exclude_all_time: false,
+        replay_url: 'gen9ou-1', replay_hash: 'ab'.repeat(32),
+      }).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(ReplayAlreadyRecordedError);
+      expect(err).toMatchObject({ code: 'replay_already_recorded', statusCode: 409 });
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('[createGame] replay gen9ou-1 of match m-1'), pgError);
+      errorSpy.mockRestore();
+    });
+
     it('rethrows an unrelated unique violation unchanged (no masking)', async () => {
       const pgError = {
         code: '23505',
@@ -539,6 +576,43 @@ describe('queries/games', () => {
           game_id: 'g-1', player_id: 'p-1', pokemon_name: 'Pikachu',
         }]),
       ).rejects.toThrow('ins fail');
+    });
+
+    it('maps the one-row-per-Pokémon unique index to a 409 battle_stats_duplicate_pokemon (CF-06)', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const pgError = {
+        code: '23505',
+        message: `duplicate key value violates unique constraint "${BATTLE_STATS_GAME_PLAYER_POKEMON_KEY}"`,
+      };
+      mockBuilder.select.mockReturnValue({ data: null, error: pgError });
+
+      const err = await createBattleStats([
+        { game_id: 'g-1', player_id: 'p-1', pokemon_name: 'Pikachu' },
+        { game_id: 'g-1', player_id: 'p-1', pokemon_name: 'pikachu' },
+      ]).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(BattleStatsDuplicatePokemonError);
+      expect(err).toMatchObject({ code: 'battle_stats_duplicate_pokemon', statusCode: 409 });
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('game g-1'), pgError);
+      errorSpy.mockRestore();
+    });
+  });
+
+  // ── findGameIdByReplayHash ──
+  describe('findGameIdByReplayHash', () => {
+    it('returns the bound game id, or null', async () => {
+      const hash = 'cd'.repeat(32);
+      mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { id: 'g-9' }, error: null });
+      await expect(findGameIdByReplayHash(hash)).resolves.toBe('g-9');
+      expect(mockBuilder.eq).toHaveBeenCalledWith('replay_hash', hash);
+
+      mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+      await expect(findGameIdByReplayHash(hash)).resolves.toBeNull();
+    });
+
+    it('throws on a read error (fail closed)', async () => {
+      mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: new Error('read fail') });
+      await expect(findGameIdByReplayHash('cd'.repeat(32))).rejects.toThrow('read fail');
     });
   });
 

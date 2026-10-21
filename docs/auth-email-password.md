@@ -80,6 +80,16 @@ Project: your Supabase project (`<project-ref>`)
   for everyone when `SUPERADMIN_DISCORD_ID` is unset) with the same generic
   `email_login_create_failed` 400 a GoTrue client error returns, so the route
   is not an oracle for the reserved address (audit CF-02).
+- `SUPERADMIN_EMAIL` cannot be signed up: `POST /api/auth/signup` never calls
+  GoTrue `signUp` for it and answers with the same generic success as any
+  signup, after the same rate limit and the same constant delay (no
+  enumeration of the reserved address; audit CF-02). The operator creates the
+  superadmin's email/password login by signing in with Discord as the
+  `SUPERADMIN_DISCORD_ID` account and linking the address there (Dashboard →
+  Settings → Login methods, `POST /api/account/link-email`). An auth user
+  created on that address before this check (or from the Supabase dashboard)
+  is not removed by it: check `auth.users` for the address once after
+  deploying.
 - The Discord link intent cookie is single-use and binds only a player id
   (HMAC of `playerId.exp`, 10-minute TTL). The `signIn` callback honours it
   only while the player who minted it still has a live session on that

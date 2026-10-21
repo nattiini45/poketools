@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
+import { fetchBoundReplay } from '@/lib/pkmn/replay-binding';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { emitMatchResultEffects } from '@/lib/match/result-effects';
@@ -9,7 +10,6 @@ import { replayImportSchema, formatZodErrors } from '@/lib/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
-import type { BattleStatInsert } from '@/types/game';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
 interface RouteParams {
@@ -19,10 +19,17 @@ interface RouteParams {
 /**
  * POST /api/admin/matches/[id]/replay-import
  *
- * Admin/organizer-only. Records a game from replay-parsed but MANUALLY ASSIGNED
- * stats — deliberately skipping the username legibility gate so an organizer can
- * import a replay where a sub played under a different Showdown name. The two
- * sides must still be assigned to the two registered match participants. Audited.
+ * Admin/organizer-only. Records a game from a replay whose two sides the
+ * organizer assigns to the registered match participants by hand — deliberately
+ * skipping the username legibility gate so an organizer can import a replay
+ * where a sub played under a different Showdown name. Audited.
+ *
+ * The organizer chooses only the side assignment. The route fetches the replay
+ * again and records the winner and stats parsed from it, with its hash, through
+ * the same bound-replay path as /api/parse-replay (audit lead F1, owner decision
+ * 2026-10-20); corrections afterwards go through the admin game editor. The
+ * body carries the preview's `replay_hash`: a replay that hashes differently now
+ * is refused with 409 `replay_changed_since_preview` before anything is written.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -64,55 +71,33 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
     const body = zodResult.data;
 
-    // Winner must be one of the two registered participants.
-    if (body.winner_id !== match.player_1_id && body.winner_id !== match.player_2_id) {
+    // Fetch the replay once more, hash it and parse it: the organizer reviewed
+    // the preview of `body.replay_hash`, so a different battle is refused.
+    const replay = await fetchBoundReplay(body.replay_url);
+    if (replay.hash !== body.replay_hash) {
+      console.error(
+        `[replay-import] replay ${body.replay_url} for match ${matchId} hashes to ${replay.hash}, ` +
+          `the preview had ${body.replay_hash}`
+      );
       return NextResponse.json<ApiResult<never>>(
-        { success: false, error: 'Winner must be a match participant', code: 'replay_import_winner_not_participant' },
-        { status: 400 }
+        {
+          success: false,
+          error: 'The replay changed after it was previewed. Parse it again and review it before importing.',
+          code: 'replay_changed_since_preview',
+        },
+        { status: 409 }
       );
     }
 
-    // Build battle stat inserts; every assigned player must be a participant.
-    const battleStats: BattleStatInsert[] = [];
-    for (const playerStats of body.pokemon_stats) {
-      if (
-        playerStats.player_id !== match.player_1_id &&
-        playerStats.player_id !== match.player_2_id
-      ) {
-        return NextResponse.json<ApiResult<never>>(
-          {
-            success: false,
-            error: `Player ${playerStats.player_id} is not in this match`,
-            code: 'match_player_not_participant',
-            params: { playerId: playerStats.player_id },
-          },
-          { status: 400 }
-        );
-      }
-
-      for (const poke of playerStats.pokemon) {
-        battleStats.push({
-          game_id: '', // set by pipeline
-          player_id: playerStats.player_id,
-          pokemon_name: poke.pokemon_name,
-          was_brought: poke.was_brought ?? true,
-          was_lead: poke.was_lead ?? false,
-          kos_dealt: poke.kos_dealt ?? 0,
-          was_koed: poke.was_koed ?? false,
-          moves_used: poke.moves_used ?? [],
-          turns_active: poke.turns_active ?? 0,
-        });
-      }
-    }
-
     // is_admin: true — the route already authorized the organizer for this match,
-    // so the pipeline's participant check is intentionally bypassed.
+    // so the pipeline's participant check is intentionally bypassed. The
+    // pipeline still requires the two sides to be the match's two participants
+    // and reads the winner and stats from the bound replay.
     const result = await recordGameResult({
       match_id: matchId,
-      winner_id: body.winner_id,
-      replay_url: body.replay_url,
       source: 'ps_replay',
-      battle_stats: battleStats,
+      replay,
+      side_player_ids: body.side_player_ids,
       submitter_id: player.playerId,
       is_admin: true,
     });
@@ -137,11 +122,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         match_id: matchId,
         tournament_id: match.tournament_id,
         replay_url: body.replay_url,
-        winner_id: body.winner_id,
+        replay_hash: replay.hash,
+        winner_id: result.game_winner_id,
         legibility_gate_bypassed: true,
-        assignments: body.pokemon_stats.map((p) => ({
-          player_id: p.player_id,
-          pokemon_count: p.pokemon.length,
+        assignments: replay.parsed.players.map((side, index) => ({
+          ps_username: side.ps_username,
+          player_id: body.side_player_ids[index],
+          pokemon_count: side.pokemon.length,
         })),
         match_status: result.match_status,
       },

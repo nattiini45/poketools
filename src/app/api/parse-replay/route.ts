@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { fetchReplay, parseReplayLog } from '@/lib/pkmn/replay';
+import { fetchBoundReplay } from '@/lib/pkmn/replay-binding';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { getPlayerByPsUsername } from '@/lib/supabase/queries/players';
 import { getMatchById } from '@/lib/supabase/queries/matches';
@@ -9,7 +9,6 @@ import { emitMatchResultEffects } from '@/lib/match/result-effects';
 import { parseReplaySchema, formatZodErrors } from '@/lib/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
-import type { BattleStatInsert } from '@/types/game';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,9 +28,11 @@ export async function POST(request: NextRequest) {
     }
     const body = zodResult.data;
 
-    // 1. Fetch and parse replay
-    const replay = await fetchReplay(body.replay_url);
-    const parsed = parseReplayLog(replay.log);
+    // 1. Fetch the replay once, hash it and parse it: the recorded winner and
+    //    stats come from this bound replay and its hash goes on the game row
+    //    (audit lead F1, owner decision 2026-10-20).
+    const replay = await fetchBoundReplay(body.replay_url);
+    const parsed = replay.parsed;
 
     // 2. Match PS usernames → Player IDs
     const match = await getMatchById(body.match_id);
@@ -85,48 +86,21 @@ export async function POST(request: NextRequest) {
       playerMap.set(parsedPlayer.ps_username, dbPlayer.id);
     }
 
-    // 3. Determine winner player ID
-    const winnerId = playerMap.get(parsed.winner_ps_username);
-    if (!winnerId) {
-      return NextResponse.json<ApiResult<never>>(
-        { success: false, error: `Could not determine winner from replay`, code: 'replay_winner_unknown' },
-        { status: 400 }
-      );
-    }
-
-    // 4. Build battle stat inserts
-    const battleStats: BattleStatInsert[] = [];
-    for (const parsedPlayer of parsed.players) {
-      const playerId = playerMap.get(parsedPlayer.ps_username);
-      if (!playerId) continue;
-
-      for (const poke of parsedPlayer.pokemon) {
-        battleStats.push({
-          game_id: '', // will be set by pipeline
-          player_id: playerId,
-          pokemon_name: poke.pokemon_name,
-          was_brought: poke.was_brought,
-          was_lead: poke.was_lead,
-          kos_dealt: poke.kos_dealt,
-          was_koed: poke.was_koed,
-          moves_used: poke.moves_used,
-          turns_active: poke.turns_active,
-        });
-      }
-    }
-
-    // 5. Run the shared game pipeline
+    // 3. Run the shared game pipeline. Winner and stats are read from the
+    //    bound replay there (400 `replay_winner_unknown` when the log names no
+    //    side as the winner); a battle already recorded for any game is 409
+    //    `replay_already_recorded`.
+    const sidePlayerIds = parsed.players.map((p) => playerMap.get(p.ps_username) ?? '');
     const result = await recordGameResult({
       match_id: body.match_id,
-      winner_id: winnerId,
-      replay_url: body.replay_url,
       source: 'ps_replay',
-      battle_stats: battleStats,
+      replay,
+      side_player_ids: [sidePlayerIds[0] ?? '', sidePlayerIds[1] ?? ''],
       submitter_id: player.playerId,
       is_admin: player.isAdmin,
     });
 
-    // 6. Shared post-record side effects (revalidate, notify, AI, aggregates)
+    // 4. Shared post-record side effects (revalidate, notify, AI, aggregates)
     await emitMatchResultEffects(body.match_id, {
       boReached: result.bo_reached,
       requestCookie: request.headers.get('cookie'),

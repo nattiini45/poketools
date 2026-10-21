@@ -196,6 +196,7 @@ function setupStore(structure: ReturnType<typeof buildSingleElimStructure>): Sto
     return summaries.map((g) => ({
       ...g,
       match_id: id,
+      replay_hash: null,
       parsed: true,
       exclude_all_time: false,
       created_at: '2026-01-01T00:00:00.000Z',

@@ -1657,6 +1657,29 @@ export type Database = {
           },
         ]
       }
+      epb_kill_credit_epochs: {
+        Row: {
+          epoch: number
+          season_id: string
+        }
+        Insert: {
+          epoch?: number
+          season_id: string
+        }
+        Update: {
+          epoch?: number
+          season_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "epb_kill_credit_epochs_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: true
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       epb_token_grants: {
         Row: {
           created_at: string
@@ -2057,11 +2080,14 @@ export type Database = {
           created_at: string
           edit_lease_token: string | null
           edit_lease_until: string | null
+          evolution_applied_at: string | null
+          evolution_credits: Json | null
           exclude_all_time: boolean
           game_number: number
           id: string
           match_id: string
           parsed: boolean
+          replay_hash: string | null
           replay_url: string
           source: Database["public"]["Enums"]["game_source"]
           stats_locked: boolean
@@ -2073,11 +2099,14 @@ export type Database = {
           created_at?: string
           edit_lease_token?: string | null
           edit_lease_until?: string | null
+          evolution_applied_at?: string | null
+          evolution_credits?: Json | null
           exclude_all_time?: boolean
           game_number: number
           id?: string
           match_id: string
           parsed?: boolean
+          replay_hash?: string | null
           replay_url?: string
           source?: Database["public"]["Enums"]["game_source"]
           stats_locked?: boolean
@@ -2089,11 +2118,14 @@ export type Database = {
           created_at?: string
           edit_lease_token?: string | null
           edit_lease_until?: string | null
+          evolution_applied_at?: string | null
+          evolution_credits?: Json | null
           exclude_all_time?: boolean
           game_number?: number
           id?: string
           match_id?: string
           parsed?: boolean
+          replay_hash?: string | null
           replay_url?: string
           source?: Database["public"]["Enums"]["game_source"]
           stats_locked?: boolean
@@ -4993,6 +5025,10 @@ export type Database = {
         }
         Returns: Json
       }
+      epb__lock_kill_credit_epoch: {
+        Args: { p_season_id: string }
+        Returns: number
+      }
       epb__season_remaining_points: {
         Args: { p_player_id: string; p_season_id: string }
         Returns: number
@@ -5036,6 +5072,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      epb_credit_game_kills: {
+        Args: { p_credits: Json; p_game_id: string }
+        Returns: string
+      }
       epb_fold_id: { Args: { p_name: string }; Returns: string }
       epb_grant_and_apply_tokens: {
         Args: {
@@ -5047,6 +5087,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      epb_kill_credit_epoch: { Args: { p_season_id: string }; Returns: number }
       epb_line_id: {
         Args: { p_base: string; p_stage2: string; p_stage3: string }
         Returns: string
@@ -5088,6 +5129,23 @@ export type Database = {
           p_season_id: string
         }
         Returns: Json
+      }
+      epb_sync_game_kill_credit: {
+        Args: {
+          p_credited_match_ids: string[]
+          p_expected_epoch: number
+          p_game_credits: Json
+          p_season_id: string
+        }
+        Returns: Json
+      }
+      epb_uncredit_game_kills: {
+        Args: {
+          p_debits: Json
+          p_expected_applied_at: string
+          p_game_id: string
+        }
+        Returns: string
       }
       get_item_usage_for_pokemon: {
         Args: {

@@ -94,7 +94,6 @@ export default function SubmitResultClient({
         <ReplayImportForm
           matchId={matchId}
           players={players}
-          generation={generation}
           redirectTo={redirectTo}
           initialReplayUrl={carryUrl || undefined}
           autoParse={Boolean(carryUrl)}

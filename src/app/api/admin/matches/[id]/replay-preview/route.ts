@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { fetchReplay, parseReplayLog } from '@/lib/pkmn/replay';
+import { fetchBoundReplay } from '@/lib/pkmn/replay-binding';
+import { findGameIdByReplayHash, ReplayAlreadyRecordedError } from '@/lib/supabase/queries/games';
 import { getPlayerByPsUsername } from '@/lib/supabase/queries/players';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
@@ -20,7 +21,9 @@ interface RouteParams {
  *
  * Admin/organizer-only. Fetches + parses a Showdown replay and returns the
  * parsed stats WITHOUT the username legibility gate, plus best-effort
- * side→player suggestions for the manual-assign editor. Writes nothing.
+ * side→player suggestions for the manual-assign editor and the replay's hash
+ * (sent back by the import). A battle already recorded for any game is refused
+ * here already (409 `replay_already_recorded`). Writes nothing.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -63,8 +66,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const body = zodResult.data;
 
     // Parse the replay — NO username gate.
-    const replay = await fetchReplay(body.replay_url);
-    const parsed = parseReplayLog(replay.log);
+    const replay = await fetchBoundReplay(body.replay_url);
+    const parsed = replay.parsed;
+
+    // The import would refuse this battle; say so before the organizer reviews it.
+    const existingGameId = await findGameIdByReplayHash(replay.hash);
+    if (existingGameId) {
+      console.error(`[replay-preview] replay hash ${replay.hash} is already bound to game ${existingGameId}`);
+      throw new ReplayAlreadyRecordedError();
+    }
 
     // Best-effort suggestions: map a parsed side to a participant only when the
     // PS username resolves to one of the two registered players.
@@ -82,6 +92,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       parsed,
       winner_ps_username: parsed.winner_ps_username,
       suggestions,
+      replay_hash: replay.hash,
     };
 
     return NextResponse.json<ApiResult<ReplayPreviewResult>>({ success: true, data });

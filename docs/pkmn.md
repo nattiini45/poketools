@@ -15,7 +15,9 @@ src/lib/pkmn/
 ├── game-pipeline.ts  # Replay/manual game result pipeline helpers
 ├── german-names.ts  # German → English species name map (incl. import aliases), derived from i18n/data/species.de.json
 ├── i18n/  # German/English Pokémon data layer (see Localization below)
+├── replay-binding.ts  # BoundReplay: one fetched log, its hash and its parsed stats; the replay result (winner, stats) per side
 ├── replay-frames.ts  # Frame extraction from replay logs
+├── replay-identity.ts  # Replay hash (SHA-256 of the canonical battle log) and the backfill's collision check; dependency-free
 ├── replay.ts  # Replay fetch/parse
 ├── set-resolver.ts  # Set resolution helpers
 ├── speed-benchmarks.ts  # Speed benchmark helpers
@@ -55,6 +57,14 @@ src/lib/pkmn/
 - **File**: `validation.ts`
 - **Purpose**: Ruleset and draft-ownership validation
 - **Key Methods**: `validateTeam()`, `validateDraftOwnership()`
+
+### Replay binding (one battle, one game)
+- **Files**: `replay-identity.ts`, `replay-binding.ts`; consumer `game-pipeline.ts` (`recordGameResult`)
+- **Rule** (owner decision 2026-10-20, audit lead F1): a game recorded from a Showdown replay takes its winner and its battle stats from that replay, and its `games` row stores the replay's hash (`games.replay_hash`) in the same insert. A battle already bound to a game, in any match, is refused with 409 `replay_already_recorded`. The per-match URL check (`duplicate_replay`) stays in front of it.
+- **What is hashed**: the replay JSON's `log`, canonicalised by `canonicalReplayLog`: line endings normalised, trailing whitespace trimmed, only protocol lines kept, chat / join / leave / rename / server HTML / timer / moderation lines dropped, `|split|` blocks reduced to their public line, everything after the first `|win|` or `|tie|` dropped. Timestamps (`|t:|`), `|player|` lines, team preview and every turn stay. The digest is `sha256("poketools-replay-hash-v1\n" + lines.join("\n"))`, 64 lowercase hex characters. The same battle as a bare id, full URL, `.json`, `?p2`, `#turn-5`, private `-<password>` link or a later upload gives the same hash; a different battle gives a different one. A rule change bumps `REPLAY_HASH_VERSION` and needs a fresh backfill.
+- **`BoundReplay`**: made only by `bindReplay(url, log)` / `fetchBoundReplay(url)`, which hash and parse the same log (a brand keeps a hand-built object from type-checking). `recordGameResult` accepts a replay result only as `{ source: 'ps_replay', replay, side_player_ids }`: no winner or stats field exists on that input. `resultFromBoundReplay` maps side p1/p2 to the two given players (both must be the match's participants, one per side: 400 `match_player_not_participant` / `replay_sides_not_distinct`) and takes the winner from the side the `|win|` line names (400 `replay_winner_unknown` otherwise).
+- **Callers**: `POST /api/parse-replay` (sides resolved from the PS usernames), `POST /api/admin/matches/[id]/replay-import` (sides assigned by the organizer; see [Match](./match.md#replay-binding)). `POST /api/admin/matches/[id]/replay-preview` returns the hash and refuses an already-recorded battle up front.
+- **Backfill**: games recorded before 2026-10-20 have `replay_hash` NULL until a maintainer runs `scripts/backfill-replay-hashes.ts` (dry run by default; refuses to write on any collision; 1 request per second to replay.pokemonshowdown.com).
 
 ### Localization (DE/EN)
 - **Directory**: `src/lib/pkmn/i18n/` (design: the Pokémon localisation spec, maintainer-only; not in this repo)

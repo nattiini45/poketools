@@ -49,6 +49,7 @@ Bound list versions on non-upcoming seasons are immutable — bump `--version` t
 ## Matchday ops
 
 - A line that reaches the pack's `epb.stageLock.stage` by matchday `byMatchday` is suspended for the next `suspendMatchdays` matchdays and cannot be submitted (example pack: stage 3 by matchday 2, one matchday).
+- Real kills count for evolution only once a result is confirmed (opponent confirm, auto-confirm, or your dispute resolution); a submitted result waiting for confirmation, or under dispute, moves no line. Editing a game of a confirmed match takes its kills back until the match is confirmed again.
 - Evolution points: max 1 per player per matchday. Use **Recalculate evolution points** if a dispute re-confirm drifted counters.
 - Match reset clears `match_evolution_snapshots`.
 

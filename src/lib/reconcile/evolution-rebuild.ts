@@ -46,8 +46,6 @@ import { lineLookup } from '@/lib/match/epb-stage-resolution';
 import {
   buildFormToTrackerIndex,
   applyStageTransitions,
-  applyKillDelta,
-  type KillStat,
 } from '@/lib/match/epb-tracker-apply';
 import { getSeasonLineThresholds, type LineThresholds } from '@/lib/draft/epb-thresholds';
 import { isLineBrought } from '@/lib/draft/epb-team-validation';
@@ -61,7 +59,11 @@ import {
   earnsEvolutionPoint,
 } from '@/lib/draft/point-buy-engine';
 import { epbPack } from '@/lib/format-pack';
-import { getSeasonTrackers, updateTracker } from '@/lib/supabase/queries/evolutions';
+import {
+  getSeasonTrackers,
+  updateTracker,
+  type GameKillCredit,
+} from '@/lib/supabase/queries/evolutions';
 import {
   insertEvolutionEvents,
 } from '@/lib/supabase/queries/evolution-events';
@@ -73,6 +75,7 @@ import { readAllPages } from '@/lib/supabase/read-all-pages';
 import type { EvolutionTracker, EvolutionEvent } from '@/types/evolution';
 import type { BattleStat } from '@/types/game';
 import type { Match } from '@/types/match';
+import type { Json } from '@/types/database';
 
 // ── Public types ──────────────────────────────────────────────────
 
@@ -141,6 +144,24 @@ export interface ComputedEvolutionState {
   computedTrackers: ComputedTracker[];
   computedEvents: ComputedMatchdayEvent[];
   impossibleLineups: ImpossibleLineup[];
+  /**
+   * The matches whose real kills the computed `real_kills` include (every
+   * match the rebuild replayed). `applyComputedEvolutionState` marks their
+   * games credited and clears the marker of every other game of the season
+   * (`games.evolution_applied_at`, `epb_sync_game_kill_credit`), so a later
+   * completion credits exactly the games the rebuilt trackers do not hold.
+   * Set by `computeEvolutionStateCore`; a state built without it (tests)
+   * leaves the markers alone.
+   */
+  creditedMatchIds?: string[];
+  /**
+   * Per game of the replayed matches, the real kills the computed trackers
+   * hold for it ({tracker_id, amount}, one entry per tracker, sorted by
+   * tracker id); a game without credited kills is absent. Stored as the
+   * game's credit ledger (`games.evolution_credits`), which an admin edit
+   * debits exactly (`epb_uncredit_game_kills`).
+   */
+  creditsByGame?: Record<string, GameKillCredit[]>;
 }
 
 export interface EvolutionMismatch {
@@ -300,7 +321,8 @@ function baseStageKey(playerId: string, basePokemon: string, matchday: number): 
  * fetches and delegates here.
  *
  * Order mirrors `runEpbMatchdayHooks` (epb-matchday.ts) WITHOUT the snapshot
- * write, with real kills applied first (as the per-game pipeline does):
+ * write, with real kills applied first (as finalize does: step epb_real_kills
+ * runs before the matchday hooks):
  *   per matchday, ascending:
  *     1. clearExpiredSuspensions (suspended_until_matchday < matchday → null)
  *     2. real kills (form→tracker index) → recompute total_kos → stage transitions
@@ -403,6 +425,8 @@ export function computeEvolutionStateCore(input: RebuildInput): ComputedEvolutio
   }
 
   const computedEvents: ComputedMatchdayEvent[] = [];
+  // Per game: tracker id → real kills credited (the games' credit ledgers).
+  const killsByGame = new Map<string, Map<string, number>>();
 
   // Track the max stage reached per (player, base_pokemon) by each matchday for
   // impossible-lineup detection. Indexed by matchday so we can read the value
@@ -449,14 +473,20 @@ export function computeEvolutionStateCore(input: RebuildInput): ComputedEvolutio
     // views (forms reflect evolutions that happened in earlier matchdays).
     const formToTracker = buildFormToTrackerIndex(presentViews, lines);
 
-    // 2. Real kills from battle_stats (sign +1, drop zero/negative).
+    // 2. Real kills from battle_stats (zero/negative rows dropped, like applyKillDelta).
     const touchedTrackerIds = new Set<string>();
-    for (const stat of applyKillDelta(battleStats as KillStat[], 1)) {
+    for (const stat of battleStats) {
+      if (!(stat.kos_dealt > 0)) continue;
       const tracker = formToTracker.get(`${stat.player_id}::${stat.pokemon_name}`);
       if (!tracker) continue;
 
       const w = workingById.get(tracker.id);
       if (!w) continue;
+      if (stat.game_id) {
+        const gameKills = killsByGame.get(stat.game_id) ?? new Map<string, number>();
+        gameKills.set(tracker.id, (gameKills.get(tracker.id) ?? 0) + stat.kos_dealt);
+        killsByGame.set(stat.game_id, gameKills);
+      }
       w.real_kills = Math.max(0, w.real_kills + stat.kos_dealt);
       w.total_kos = recomputeTotalKos(w);
       // keep live view in sync so applyStageTransitions reads the new total
@@ -632,7 +662,20 @@ export function computeEvolutionStateCore(input: RebuildInput): ComputedEvolutio
     }
   }
 
-  return { computedTrackers: working, computedEvents, impossibleLineups };
+  const creditsByGame: Record<string, GameKillCredit[]> = {};
+  for (const [gameId, byTracker] of killsByGame) {
+    creditsByGame[gameId] = [...byTracker.entries()]
+      .map(([tracker_id, amount]) => ({ tracker_id, amount }))
+      .sort((a, b) => (a.tracker_id < b.tracker_id ? -1 : a.tracker_id > b.tracker_id ? 1 : 0));
+  }
+
+  return {
+    computedTrackers: working,
+    computedEvents,
+    impossibleLineups,
+    creditedMatchIds: matches.map((m) => m.match.id),
+    creditsByGame,
+  };
 }
 
 // ── Thin async loaders ────────────────────────────────────────────
@@ -940,15 +983,78 @@ type TrackerUpdateColumns = {
 };
 
 /**
+ * The season changed under a rebuild: a real-kill credit, a debit or another
+ * rebuild's sync committed after it read the season, or a match it credited is
+ * no longer completed (`epb_sync_game_kill_credit` answered 'stale' and wrote
+ * nothing). `repairSeasonEvolution` starts over from a fresh read.
+ */
+export class StaleKillCreditError extends Error {
+  constructor(readonly reason: string) {
+    super(`EPB kill credit changed during the season rebuild (${reason})`);
+    this.name = 'StaleKillCreditError';
+  }
+}
+
+/** Rebuild attempts before a still-stale fence is reported as an error. */
+const REBUILD_ATTEMPTS = 3;
+
+/**
+ * The season's real-kill credit counter (`epb_kill_credit_epoch`), bumped by
+ * every credit, debit and rebuild sync. Read BEFORE the rebuild reads the
+ * season: the sync refuses when it moved meanwhile.
+ */
+export async function readKillCreditEpoch(seasonId: string): Promise<number> {
+  // supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql
+  const { data, error } = await supabase.rpc('epb_kill_credit_epoch', { p_season_id: seasonId });
+  if (error) throw error;
+  const epoch = typeof data === 'string' ? Number(data) : data;
+  if (typeof epoch !== 'number' || !Number.isSafeInteger(epoch) || epoch < 0) {
+    throw new Error(`epb_kill_credit_epoch returned an unexpected result: ${JSON.stringify(data)}`);
+  }
+  return epoch;
+}
+
+/**
+ * Align the season's per-game credit markers and ledgers with the rebuilt
+ * trackers (`epb_sync_game_kill_credit`), fenced on `killCreditEpoch`.
+ * Throws `StaleKillCreditError` when the fence failed (nothing written).
+ */
+async function syncSeasonGameKillCredit(
+  seasonId: string,
+  killCreditEpoch: number,
+  creditedMatchIds: readonly string[],
+  creditsByGame: Readonly<Record<string, readonly GameKillCredit[]>>
+): Promise<void> {
+  const { data, error } = await supabase.rpc('epb_sync_game_kill_credit', {
+    p_season_id: seasonId,
+    p_expected_epoch: killCreditEpoch,
+    p_credited_match_ids: [...creditedMatchIds],
+    p_game_credits: creditsByGame as unknown as Json,
+  });
+  if (error) throw error;
+  const row = data as { status?: unknown; reason?: unknown } | null;
+  if (row?.status === 'synced') return;
+  if (row?.status === 'stale') throw new StaleKillCreditError(String(row.reason));
+  throw new Error(`epb_sync_game_kill_credit returned an unexpected result: ${JSON.stringify(data)}`);
+}
+
+/**
  * Apply a pre-computed evolution state to the season (write path). Extracted
  * from `repairSeasonEvolution` so the grouped-insert + recalc ordering is
  * unit-testable with a `computeEvolutionStateCore` result and no DB/loader
- * mock. See `repairSeasonEvolution` for the full contract.
+ * mock. See `repairSeasonEvolution` for the full contract. A state with
+ * `creditedMatchIds` needs `killCreditEpoch`, the counter read before the
+ * state was computed (`readKillCreditEpoch`).
  */
 export async function applyComputedEvolutionState(
   seasonId: string,
-  computed: ComputedEvolutionState
+  computed: ComputedEvolutionState,
+  killCreditEpoch?: number
 ): Promise<RepairResult> {
+  if (computed.creditedMatchIds && killCreditEpoch === undefined) {
+    throw new Error('applyComputedEvolutionState: the kill-credit epoch read before the compute is required');
+  }
+
   let trackersUpdated = 0;
   for (const ct of computed.computedTrackers) {
     const updates: TrackerUpdateColumns = {
@@ -996,6 +1102,24 @@ export async function applyComputedEvolutionState(
   // Recompute evolution_points_awarded from the freshly-written events.
   const ep = await recalculateEvolutionPoints(seasonId);
 
+  // LAST write: the trackers now hold the real kills of exactly the replayed
+  // (completed) matches, so align the per-game credit markers and ledgers with
+  // that (CF-07). A pending or disputed match's games lose theirs (their kills,
+  // credited at submission before 2026-10-20, were just dropped), so its
+  // completion credits them. Fenced: a credit or debit that committed after
+  // this rebuild read the season (the counter moved), or a credited match that
+  // left `completed`, makes the sync refuse with nothing written
+  // (StaleKillCreditError) and the caller rebuilds again; a credit after the
+  // sync applies to the fully rebuilt trackers.
+  if (computed.creditedMatchIds && killCreditEpoch !== undefined) {
+    await syncSeasonGameKillCredit(
+      seasonId,
+      killCreditEpoch,
+      computed.creditedMatchIds,
+      computed.creditsByGame ?? {}
+    );
+  }
+
   return {
     trackersUpdated,
     eventsRewritten,
@@ -1010,6 +1134,8 @@ export async function applyComputedEvolutionState(
  * pattern — the repo uses sequential writes here because no single RPC owns
  * the multi-table tracker+event recompute).
  *
+ *   0. Read the season's real-kill credit counter (`readKillCreditEpoch`)
+ *      BEFORE any season read: it fences step 4.
  *   1. Update each tracker's mutable columns to the computed values via
  *      `updateTracker` (only currency/stage/suspension cols — never id/
  *      season_id/player_id/base_pokemon/draft_tokens/kill_tokens).
@@ -1018,12 +1144,33 @@ export async function applyComputedEvolutionState(
  *      (is_manual = true) are PRESERVED — they are non-match sources (§21).
  *   3. Recompute `evolution_points_awarded` via `recalculateEvolutionPoints`
  *      (it rebuilds from evolution_events, so events must be written first).
- *   4. NEVER touch `match_evolution_snapshots` (§13), draft_token/kill_token
+ *   4. Align `games.evolution_applied_at` and the credit ledger
+ *      `games.evolution_credits` with the rebuilt real kills: the replayed
+ *      matches' games are marked credited with the per-game credits the
+ *      rebuild computed, every other game of the season is unmarked
+ *      (`epb_sync_game_kill_credit`), so match completion credits exactly the
+ *      games the trackers do not hold yet and an edit debits exactly what they
+ *      hold. Refused when a credit, debit or other rebuild committed since
+ *      step 0 (or a credited match left `completed`): the whole rebuild runs
+ *      again from a fresh read, up to REBUILD_ATTEMPTS times, then the
+ *      StaleKillCreditError is thrown (re-run the season reconcile).
+ *   5. NEVER touch `match_evolution_snapshots` (§13), draft_token/kill_token
  *      grants, or evo_progress_log admin_correction rows.
  *
  * Returns counts + the impossible lineups for surfacing to admins.
  */
 export async function repairSeasonEvolution(seasonId: string): Promise<RepairResult> {
-  const computed = await computeSeasonEvolutionState(seasonId);
-  return applyComputedEvolutionState(seasonId, computed);
+  for (let attempt = 1; ; attempt += 1) {
+    const killCreditEpoch = await readKillCreditEpoch(seasonId);
+    const computed = await computeSeasonEvolutionState(seasonId);
+    try {
+      return await applyComputedEvolutionState(seasonId, computed, killCreditEpoch);
+    } catch (err) {
+      if (!(err instanceof StaleKillCreditError) || attempt >= REBUILD_ATTEMPTS) throw err;
+      console.warn(
+        `[evolution-rebuild] season ${seasonId}: ${err.message}; rebuilding again ` +
+          `(attempt ${attempt + 1} of ${REBUILD_ATTEMPTS})`
+      );
+    }
+  }
 }

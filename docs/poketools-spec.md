@@ -193,8 +193,12 @@ Games are unique per `(match_id, game_number)`: a concurrent submission of the s
 | game_number | Number | 1, 2, 3... |
 | winner | Relation → Players | |
 | replay_url | URL | PS or Champions replay |
+| replay_hash | Text | nullable; SHA-256 (64 lowercase hex) of the replay's canonical battle log (`src/lib/pkmn/replay-identity.ts`), written in the insert that records a replay result; **unique where set** (one battle, one game, across all matches). NULL for manual results and for replay games recorded before 2026-10-20 until `scripts/backfill-replay-hashes.ts` fills them. Migration `20261020100000_games_replay_hash.sql` |
 | source | Select | ps_replay / manual / champions |
 | parsed | Checkbox | whether stats have been extracted |
+| evolution_applied_at | Timestamp | nullable; EPB only: when the game's real kills were credited to the evolution trackers, which happens once, when its match reaches `completed` (finalize step `epb_real_kills`, `epb_credit_game_kills`), never at submission. NULL while not credited. Games that existed on 2026-10-20 were credited at submission and carry the backfill time. Written only by `epb_credit_game_kills` / `epb_uncredit_game_kills` / `epb_sync_game_kill_credit`, in the same transaction as the tracker writes. Migration `20261020100200_games_evolution_credit.sql`; rules in `docs/evolution-point-buy.md` ("Match Lifecycle Wiring") |
+
+A game recorded from a replay takes its winner and its battle stats from that same hashed replay, never from a client-supplied value (owner decision 2026-10-20, audit lead F1). A battle already bound to any game is refused with 409 `replay_already_recorded`; see `docs/match.md` ("Replay Binding").
 
 ### 4.7 Rulesets
 | Field | Type | Notes |
@@ -246,6 +250,8 @@ Games are unique per `(match_id, game_number)`: a concurrent submission of the s
 | moves_used | Text | JSON array of move names |
 | turns_active | Number | |
 | match_won | Checkbox | did player win this game |
+
+One row per Pokémon per player per game: unique index `battle_stats_game_player_pokemon_key` on `(game_id, player_id, lower(regexp_replace(pokemon_name, '^[set]+|[set]+$', '', 'g')))` with `[set]` exactly JavaScript's trim set (migration `20261021100200_battle_stats_pokemon_key_js_trim.sql`, which replaced the `lower(btrim(pokemon_name))` key of `20261020100100_battle_stats_unique_pokemon.sql`; audit lead CF-06), the database twin of the request schemas' rule; a violation is 409 `battle_stats_duplicate_pokemon`.
 
 ### 4.10 Aggregates (pre-computed, written on every replay parse)
 | Field | Type | Notes |
@@ -443,6 +449,7 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `evolution_tiers` | Per player and line: power tier and stage thresholds |
 | `evolution_events` | Development-event log |
 | `evo_progress_log` | Progress log of every point source |
+| `epb_kill_credit_epochs` | Per-season counter fencing EvoLiga kill credits, debits and rebuild syncs (`20261021100100`) |
 | `match_evolution_snapshots` | Tracker state per match appearance, written by the match evaluator (replaced only through `epb_replace_match_snapshots`) |
 | `epb_animation_views` | Which evolution replays a player has seen |
 | `epb_token_grants` | One-shot gate for token allocation |
@@ -797,7 +804,10 @@ Player pastes replay URL → POST /api/parse-replay
               moves used per Pokémon, KOs, leads (doubles), turn counts
   4. Match PS usernames → Players DB (discord_id anchor)
      → If no match: flag match as disputed, notify admin, abort
-  5. Write Game record to database (status: parsed)
+  4a. Hash the fetched log (replay_hash, src/lib/pkmn/replay-identity.ts); the winner and
+      the stats below come from this same log (BoundReplay). A battle already bound to any
+      game → 409 replay_already_recorded, nothing written (docs/match.md "Replay Binding")
+  5. Write Game record to database (status: parsed), replay_hash in the same insert
   6. Write Battle Stats rows (one per Pokémon per player)
   7. Check if match Bo threshold reached (e.g. Bo3: someone at 2 wins)
      → If yes: set Match status = pending_confirmation, set winner
@@ -807,6 +817,8 @@ Player pastes replay URL → POST /api/parse-replay
      → Update Aggregates for parent league scope (if exists)
      → Update Aggregates for all_time scope
   9. Notify opponent to confirm (pending_confirmation state)
+  EPB seasons: no evolution progress here. The game's real kills are credited
+  when the match reaches completed (§8), once per game (games.evolution_applied_at).
 ```
 
 ### 6.2 Manual Result Entry Flow (Pokémon Champions / override)
@@ -820,6 +832,7 @@ Player/Admin submits manual form → POST /api/manual-result
   3. Write Battle Stats rows
   4. Check Bo threshold → update Match status
   5. Trigger same aggregate update pipeline as replay flow
+  EPB seasons: no evolution progress here either (credited at completion, §8)
 ```
 
 ### 6.3 Team Import Flow
@@ -1038,6 +1051,8 @@ pending_confirmation  (Bo threshold reached, winner determined)
               ▼
            completed  (admin manual override)
 ```
+
+**Evolution progress follows the confirmed result** (EPB seasons; owner decision 2026-10-20, audit lead CF-07). A game's real kills reach the evolution trackers only when its match enters `completed` (opponent confirm, auto-confirm timeout, admin dispute resolution), in the finalize step `epb_real_kills` that runs before the EPB matchday hooks; `pending_confirmation` and `disputed` results move no tracker. Each game is credited exactly once (`games.evolution_applied_at`, §4.6), so the finalize heal and a re-confirm never count it twice. A game edit that moves a completed match back debits its credited kills (the next completion credits the edited stats); a game delete, match reset or season reconcile rebuilds the season from its completed matches and re-syncs the markers. Aggregates are unaffected: they are still counted at submission.
 
 ---
 

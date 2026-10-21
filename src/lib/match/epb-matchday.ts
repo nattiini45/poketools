@@ -235,16 +235,17 @@ function trackerSnapshotFields(tracker: EvolutionTracker) {
 }
 
 /**
- * Roll back matchday-hook writes made at/after `runStartedAt` for the
- * players in this match only. EPB round-robin has one match per player per
- * matchday, so scoping by player_id / their tracker ids avoids clobbering
- * concurrent finalizations for other pairings that share the same matchday.
+ * Roll back this run's matchday-hook writes for the players in this match
+ * only. EPB round-robin has one match per player per matchday, so scoping by
+ * player_id / their tracker ids avoids clobbering concurrent finalizations
+ * for other pairings that share the same matchday.
  */
 async function rollbackMatchdayWrites(
   matchId: string,
   seasonId: string,
   matchday: number,
   baseline: EvolutionTracker[],
+  baselineEventIds: ReadonlySet<string>,
   playerIds: string[],
   runStartedAt: string
 ): Promise<void> {
@@ -259,26 +260,36 @@ async function rollbackMatchdayWrites(
   }
 
   try {
-    const { error } = await supabase
-      .from('evolution_events')
-      .delete()
-      .eq('season_id', seasonId)
-      .eq('matchday', matchday)
-      .in('player_id', playerIds)
-      .gte('created_at', runStartedAt);
-    if (error) throw error;
+    // Only the events this run wrote: the players' non-manual events of this
+    // matchday that were not there when the run started (`baselineEventIds`,
+    // read before any hook write). The stage transitions the real-kill credit
+    // wrote just before the hooks (finalize step epb_real_kills) are in the
+    // baseline, so they survive whatever the database clock says about their
+    // created_at, and with them the matchday's Evolution Point.
+    const ownEventIds = (await getSeasonEvolutionEvents(seasonId, matchday))
+      .filter((e) => playerIdSet.has(e.player_id) && !e.is_manual && !baselineEventIds.has(e.id))
+      .map((e) => e.id);
+    if (ownEventIds.length > 0) {
+      const { error } = await supabase.from('evolution_events').delete().in('id', ownEventIds);
+      if (error) throw error;
+    }
   } catch (err) {
     console.error('EPB matchday rollback: failed to delete evolution events', err);
   }
 
   if (trackerIds.length > 0) {
     try {
+      // The hooks write only cosmo_point / admin_correction rows. The match's
+      // real kills were credited just before the hooks (finalize step
+      // epb_real_kills, marked per game) and are not this run's writes: never
+      // delete them, even when the database clock runs ahead of runStartedAt.
       const { error } = await supabase
         .from('evo_progress_log')
         .delete()
         .eq('season_id', seasonId)
         .eq('matchday', matchday)
         .in('tracker_id', trackerIds)
+        .neq('source', 'real_kill')
         .gte('created_at', runStartedAt);
       if (error) throw error;
     } catch (err) {
@@ -308,11 +319,14 @@ export async function runEpbMatchdayHooks(input: EpbMatchdayInput): Promise<void
   const playerIds = [match.player_1_id, match.player_2_id];
 
   // Registered teams decide "brought" for participation tokens. A failed read throws
-  // before any write: it is never read as "no team".
-  const [baseline, registeredByPlayer] = await Promise.all([
+  // before any write: it is never read as "no team". The matchday's events read
+  // here are the rollback's baseline (it deletes only events this run added).
+  const [baseline, registeredByPlayer, baselineEvents] = await Promise.all([
     getSeasonTrackers(seasonId),
     getRegisteredSpeciesByMatch(match.id),
+    getSeasonEvolutionEvents(seasonId, matchday),
   ]);
+  const baselineEventIds = new Set(baselineEvents.map((e) => e.id));
   const runStartedAt = new Date().toISOString();
 
   try {
@@ -373,6 +387,7 @@ export async function runEpbMatchdayHooks(input: EpbMatchdayInput): Promise<void
       seasonId,
       matchday,
       baseline,
+      baselineEventIds,
       playerIds,
       runStartedAt
     );

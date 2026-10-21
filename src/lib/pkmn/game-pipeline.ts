@@ -3,6 +3,7 @@ import {
   getGameById, getGamesByMatch, getBattleStatsByGame,
   deleteBattleStatsByGame, deleteUncountedGameRow, updateGameWinner,
   setGameStatsLocked, claimGameEditLease, releaseGameEditLease,
+  findGameIdByReplayHash, ReplayAlreadyRecordedError,
 } from '@/lib/supabase/queries/games';
 import { buildGameAggregateDeltas, rollbackGameAggregates } from '@/lib/supabase/queries/aggregates';
 import { shouldExcludeFromAllTime } from '@/lib/supabase/queries/test-accounts';
@@ -30,8 +31,8 @@ import { getRoundById, getRoundsByTournament, updateRoundStatus } from '@/lib/su
 import { hasReachedBoThreshold, validateTransition } from '@/lib/tournament/match-state';
 import { checkPlayerEvolutions } from '@/lib/draft/evolution-engine';
 import {
-  applyRealKillsFromGame,
-  rollbackRealKillsFromGame,
+  creditMatchRealKills,
+  uncreditGameRealKills,
   recheckEpbStages,
 } from '@/lib/match/evolution-match-evaluator';
 import { deleteMatchAnalysis } from '@/lib/supabase/queries/match-analyses';
@@ -45,6 +46,7 @@ import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
 import { cleanMatchChildren } from '@/lib/match/match-children';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { normalizeReplayUrlOrId } from '@/lib/pkmn/replay';
+import { resultFromBoundReplay, type BoundReplay } from '@/lib/pkmn/replay-binding';
 import type { MatchStatus, MatchWithPlayers } from '@/types/match';
 import type { Round } from '@/types/round';
 import type { ParticipantWithSeed } from '@/types/tournament';
@@ -56,24 +58,86 @@ import type {
 import type { EvolutionEvent } from '@/types/evolution';
 import type { ImpossibleLineup } from '@/lib/reconcile/evolution-rebuild';
 
-interface GamePipelineInput {
+interface GamePipelineBase {
   match_id: string;
-  winner_id: string;
-  replay_url?: string;
-  screenshot_url?: string;
-  source: GameSource;
-  battle_stats: BattleStatInsert[];
   submitter_id: string;
   /** When true, bypasses participant check (admin submitting on behalf of players) */
   is_admin?: boolean;
 }
 
+/** A result entered by hand (manual form, Champions): the caller supplies winner and stats. */
+export interface EnteredGameInput extends GamePipelineBase {
+  source: Exclude<GameSource, 'ps_replay'>;
+  winner_id: string;
+  battle_stats: BattleStatInsert[];
+  screenshot_url?: string;
+}
+
+/**
+ * A result read from a Showdown replay (owner decision 2026-10-20, audit lead F1). There is no
+ * winner or stats field: both come from `replay`, the same fetched log its hash was computed
+ * from, and the hash is stored on the game row in the insert that records the result. The caller
+ * only says which registered player played each side.
+ */
+export interface ReplayGameInput extends GamePipelineBase {
+  source: 'ps_replay';
+  replay: BoundReplay;
+  /** The registered player of replay side p1 and of side p2, in that order. */
+  side_player_ids: readonly [string, string];
+}
+
+export type GamePipelineInput = EnteredGameInput | ReplayGameInput;
+
+/** What one recordGameResult call writes, whichever input it came from. */
+interface RecordedResult {
+  winner_id: string;
+  battle_stats: BattleStatInsert[];
+  replay_url?: string;
+  replay_hash?: string;
+  screenshot_url?: string;
+}
+
+function resolveRecordedResult(input: GamePipelineInput, match: MatchWithPlayers): RecordedResult {
+  if (input.source === 'ps_replay') {
+    const { winner_id, battle_stats } = resultFromBoundReplay(
+      input.replay,
+      input.side_player_ids,
+      [match.player_1_id, match.player_2_id],
+    );
+    return { winner_id, battle_stats, replay_url: input.replay.url, replay_hash: input.replay.hash };
+  }
+  return {
+    winner_id: input.winner_id,
+    battle_stats: input.battle_stats,
+    screenshot_url: input.screenshot_url,
+  };
+}
+
+/**
+ * Refuse a battle that is already bound to a game, in any match. A read before the first write;
+ * the unique index on `games.replay_hash` refuses a concurrent duplicate at the insert
+ * (`createGame` maps it to the same error).
+ */
+async function assertReplayHashUnused(replayHash: string | undefined): Promise<void> {
+  if (!replayHash) return;
+  const existingGameId = await findGameIdByReplayHash(replayHash);
+  if (existingGameId) {
+    console.error(`[game-pipeline] replay hash ${replayHash} is already bound to game ${existingGameId}`);
+    throw new ReplayAlreadyRecordedError();
+  }
+}
+
 interface GamePipelineResult {
   game_id: string;
+  /** The recorded game's winner (for a replay result: read from the replay). */
+  game_winner_id: string;
   match_status: string;
   match_winner_id: string | null;
   bo_reached: boolean;
-  /** Evolution events triggered by this game (empty if not an evo-league) */
+  /**
+   * Evolution events triggered by this game: legacy evolution-tier leagues only. Always empty for
+   * an Evolution Point Buy season, whose real kills wait for the confirmed result (match finalize).
+   */
   evolution_events: EvolutionEvent[];
 }
 
@@ -135,8 +199,49 @@ async function requireRound(roundId: string): Promise<Round> {
 }
 
 /**
+ * Compensation for a game row whose battle stats or aggregate job could not be
+ * written (`recordGameResult` steps 2-3): delete the row while its aggregates
+ * are not counted (`deleteUncountedGameRow`; its stats and jobs cascade). The
+ * unique `games.replay_hash` index stays the race guard: the row held the hash
+ * until this delete, so a concurrent submission of the same battle was refused
+ * meanwhile. Never throws; the caller rethrows the original error. 'counted'
+ * means the job was written and applied after all, so the game is complete and
+ * stays. A failed delete leaves the row: logged with the admin game delete as
+ * the remedy.
+ */
+async function discardUnfinishedGame(gameId: string): Promise<void> {
+  try {
+    const outcome = await deleteUncountedGameRow(gameId);
+    if (outcome === 'counted') {
+      console.error(
+        `[game-pipeline] game ${gameId} failed after its insert but its aggregates were applied; the game is kept`
+      );
+    }
+  } catch (cleanupError) {
+    console.error(
+      `[game-pipeline] game ${gameId} failed after its insert and could not be removed; it has no stats or no ` +
+        `aggregate job and keeps its replay hash until an admin deletes it (admin game delete)`,
+      cleanupError
+    );
+  }
+}
+
+/**
  * Shared pipeline for recording a game result + stats + aggregates.
- * Used by both POST /api/parse-replay and POST /api/manual-result.
+ * Used by POST /api/parse-replay, POST /api/admin/matches/[id]/replay-import
+ * (both `ReplayGameInput`) and POST /api/manual-result (`EnteredGameInput`).
+ *
+ * Replay binding (audit lead F1, owner decision 2026-10-20): a replay result's
+ * winner and stats come from its `BoundReplay`, and the game row stores that
+ * replay's hash in the same insert. A battle already bound to any game, in any
+ * match, is refused with 409 `replay_already_recorded` (pre-check here, then
+ * the unique index on `games.replay_hash` at the insert, race-safe); the
+ * per-match URL check (`duplicate_replay`) stays in front of it.
+ *
+ * Evolution Point Buy progress is NOT applied here (owner decision 2026-10-20 on
+ * audit lead CF-07): a game's real kills are credited when its match reaches
+ * `completed`, once per game (`games.evolution_applied_at`), by the finalize
+ * step `epb_real_kills` (src/lib/match/finalize.ts). Aggregates stay here.
  *
  * Every write to games/battle_stats must reach the aggregates (AGENTS.md):
  * a new game enqueues an aggregate job here, which the queue applies with
@@ -146,8 +251,13 @@ async function requireRound(roundId: string): Promise<Round> {
  * transaction, fenced on the marker).
  *
  * NOTE: Steps 1-3 (game + stats + job) are individually atomic but not
- * wrapped in a single DB transaction. A partial failure between steps could
- * leave a game without stats or without a job (the scope rebuild repairs it).
+ * wrapped in a single DB transaction. When step 2 or 3 fails, the game row
+ * written in step 1 is deleted again (`discardUnfinishedGame`, fenced on the
+ * aggregate marker, cascading any stats) before the error propagates, so the
+ * replay's hash is free for a retry. Only when that delete fails too does a
+ * game without stats or without a job remain; it is logged, a new submission
+ * of its battle answers 409 `replay_already_recorded`, and an admin removes
+ * it with the admin game delete (the scope rebuild repairs a missing job).
  * Everything that can fail on a read (match, round, tournament) runs before
  * the first write. Concurrent submissions: UNIQUE (match_id, game_number)
  * turns a lost game-number race into a 409 before anything is written, and
@@ -172,12 +282,16 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
     throw new Error(`Cannot submit game for match in ${match.status} state`);
   }
 
-  // Round context, read once and BEFORE the first write: round_number doubles
-  // as the matchday for EPB progress logging, best_of drives the Bo threshold
-  // check below. A failed read aborts here with nothing written.
+  // Round context, read once and BEFORE the first write: best_of drives the Bo
+  // threshold check below. A failed read aborts here with nothing written.
   const round = await requireRound(match.round_id);
 
-  assertReplayNotDuplicate(match, input.replay_url);
+  // Winner and stats: from the bound replay for a replay result, as entered otherwise. Throws
+  // (nothing written) when the replay's sides are not the two participants or it names no winner.
+  const recorded = resolveRecordedResult(input, match);
+
+  assertReplayNotDuplicate(match, recorded.replay_url);
+  await assertReplayHashUnused(recorded.replay_hash);
 
   // Get tournament context for scope IDs
   const tournament = await getTournamentById(match.tournament_id);
@@ -222,58 +336,51 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
   const game = await createGame({
     match_id: input.match_id,
     game_number: gameNumber,
-    winner_id: input.winner_id,
-    replay_url: input.replay_url,
+    winner_id: recorded.winner_id,
+    replay_url: recorded.replay_url,
+    replay_hash: recorded.replay_hash ?? null,
     source: input.source,
     parsed: true,
     exclude_all_time: excludeAllTime,
   });
 
   // 2. Write Battle Stats with game_id and match_won
-  const statsWithGameId: BattleStatInsert[] = input.battle_stats.map((s) => ({
+  const statsWithGameId: BattleStatInsert[] = recorded.battle_stats.map((s) => ({
     ...s,
     game_id: game.id,
-    match_won: s.player_id === input.winner_id,
+    match_won: s.player_id === recorded.winner_id,
   }));
 
-  const _createdStats = await createBattleStats(statsWithGameId);
+  try {
+    await createBattleStats(statsWithGameId);
 
-  // 3. Enqueue aggregate update (processed asynchronously)
-  await enqueueAggregateJob(
-    game.id,
-    match.tournament_id,
-    tournament.season_id
-  );
+    // 3. Enqueue aggregate update (processed asynchronously)
+    await enqueueAggregateJob(
+      game.id,
+      match.tournament_id,
+      tournament.season_id
+    );
+  } catch (error) {
+    // The game row is committed but its stats or its job are not: remove it,
+    // so it neither counts as a game win nor keeps the replay's hash bound
+    // (a retry would answer 409 replay_already_recorded against it).
+    await discardUnfinishedGame(game.id);
+    throw error;
+  }
 
-  // 3b. Check evolutions for both participants (evo-league hook).
+  // 3b. Evolutions. EPB: nothing here; the game's real kills are credited
+  // when the match is completed (finalize step `epb_real_kills`), never for a
+  // result that is still pending confirmation or disputed (CF-07). Do NOT run
+  // checkPlayerEvolutions for EPB: it re-derives total_kos from battle_stats
+  // alone and would erase token/cosmo contributions. Legacy evo-leagues keep
+  // their battle_stats re-sum here.
   let evolutionEvents: EvolutionEvent[] = [];
-  if (tournament.season_id) {
-    if (tournament.season_format_type === 'evolution_point_buy') {
-      // EPB: progress + stage resolution is owned by the match evaluator.
-      // Do NOT run checkPlayerEvolutions — it re-derives total_kos from
-      // battle_stats alone and would erase token/cosmo contributions.
-      try {
-        evolutionEvents = await applyRealKillsFromGame(
-          tournament.season_id,
-          statsWithGameId.map((s) => ({
-            player_id: s.player_id,
-            pokemon_name: s.pokemon_name,
-            kos_dealt: s.kos_dealt ?? 0,
-          })),
-          { matchday: round.round_number }
-        );
-      } catch (err) {
-        // Don't block result recording on progress-tracking failures;
-        // real_kills can be reconciled from battle_stats later.
-        console.error('applyRealKillsFromGame failed; game recorded without progress update', err);
-      }
-    } else {
-      const [p1Events, p2Events] = await Promise.all([
-        checkPlayerEvolutions(tournament.season_id, match.player_1_id),
-        checkPlayerEvolutions(tournament.season_id, match.player_2_id),
-      ]);
-      evolutionEvents = [...p1Events, ...p2Events];
-    }
+  if (tournament.season_id && !isEvolutionPointBuy(tournament.season_format_type ?? '')) {
+    const [p1Events, p2Events] = await Promise.all([
+      checkPlayerEvolutions(tournament.season_id, match.player_1_id),
+      checkPlayerEvolutions(tournament.season_id, match.player_2_id),
+    ]);
+    evolutionEvents = [...p1Events, ...p2Events];
   }
 
   // 4. Check Bo threshold and update match status
@@ -315,7 +422,7 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
       status: targetStatus,
       winnerId: matchWinnerId,
       submitterId: input.submitter_id,
-      autoConfirmAt: getAutoConfirmAt(input.source, input.screenshot_url),
+      autoConfirmAt: getAutoConfirmAt(input.source, recorded.screenshot_url),
       confirmedAt: null,
     });
     if (updated) {
@@ -338,6 +445,7 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
 
   return {
     game_id: game.id,
+    game_winner_id: recorded.winner_id,
     match_status: newStatus,
     match_winner_id: matchWinnerId,
     bo_reached: boResult.reached,
@@ -587,59 +695,134 @@ interface EvolutionRecheckResult {
 }
 
 /**
- * Helper: re-check evolutions for both players in an evo-league.
- *
- * Format-aware: for evolution_point_buy seasons, tracker progress is owned by
- * the match evaluator — deleted/added stats adjust real_kills, then stages are
- * re-resolved from total_kos (which preserves token/cosmo contributions).
- * Legacy evo-leagues use checkPlayerEvolutions (battle_stats re-sum).
- * The season's format is threaded from the already-fetched tournament
- * (getTournamentById joins seasons.format_type) — no extra query.
- *
- * The game change is already committed when this runs, so an EPB failure does
- * not turn the admin request into an error that reads as "nothing saved": it
- * is logged with its cause and returned as `failed: true`, which the result
- * carries to the admin (never an empty success).
+ * Helper: re-check evolutions for both players in a LEGACY evo-league
+ * (checkPlayerEvolutions, battle_stats re-sum). Evolution Point Buy seasons
+ * never come here: delete and reset rebuild the season
+ * (`repairSeasonEvolution`), an edit goes through `recheckEpbAfterEdit`.
  */
 async function recheckEvolutions(
   seasonId: string | null,
-  seasonFormatType: string | null | undefined,
   player1Id: string,
-  player2Id: string,
-  opts: {
-    deletedStats?: { player_id: string; pokemon_name: string; kos_dealt: number }[];
-    addedStats?: { player_id: string; pokemon_name: string; kos_dealt: number }[];
-  } = {}
+  player2Id: string
 ): Promise<EvolutionRecheckResult> {
   if (!seasonId) return { events: [], failed: false };
-
-  if (seasonFormatType === 'evolution_point_buy') {
-    const events: EvolutionEvent[] = [];
-    try {
-      if (opts.deletedStats && opts.deletedStats.length > 0) {
-        await rollbackRealKillsFromGame(seasonId, opts.deletedStats);
-      }
-      if (opts.addedStats && opts.addedStats.length > 0) {
-        events.push(...await applyRealKillsFromGame(seasonId, opts.addedStats));
-      }
-      // Re-resolve stages (covers devolutions after rollback)
-      events.push(...await recheckEpbStages(seasonId, [player1Id, player2Id]));
-      return { events, failed: false };
-    } catch (err) {
-      console.error(
-        `[game-pipeline] EPB evolution recheck failed for season ${seasonId} after the game change was saved; ` +
-          'reported to the admin as evolution_recheck_failed (season reconcile repairs it)',
-        err
-      );
-      return { events, failed: true };
-    }
-  }
 
   const [p1, p2] = await Promise.all([
     checkPlayerEvolutions(seasonId, player1Id),
     checkPlayerEvolutions(seasonId, player2Id),
   ]);
   return { events: [...p1, ...p2], failed: false };
+}
+
+/**
+ * EPB evolution after an admin game edit (`editGame` step 7). Real kills are
+ * credited per game only while its match is completed (CF-07,
+ * `games.evolution_applied_at`), and an edit moves a completed match out of
+ * `completed` (`reevaluateMatchStatus`, step 6), so:
+ *   1. a credited game (marker set in `game`, the read made before the edit's
+ *      writes) is debited by its credit ledger (`games.evolution_credits`;
+ *      the old stats only for a legacy marker without a ledger), fenced on
+ *      that marker
+ *      (`uncreditGameRealKills`); this includes a game of a still-pending
+ *      match credited at submission before 2026-10-20;
+ *   2. AFTER the debit the match status is re-read, and when the match is
+ *      completed the edited stats are credited (`creditMatchRealKills`,
+ *      idempotent per marker; the SQL re-checks `completed` in its own
+ *      transaction). The re-read closes the edit-vs-confirm race: a confirm that
+ *      lands after step 6 but before the debit finds the marker still set
+ *      (its finalize credit answers 'already_applied'), the debit then clears
+ *      it, and without this credit the completed match would silently lose
+ *      the game's kills. A confirm that lands after the re-read finds the
+ *      marker NULL, so its finalize (or the heal cron, which only handles
+ *      completed matches) credits the stats then in the database;
+ *   3. stages are re-resolved for both players (covers devolutions).
+ * Why the debit is not moved before step 6 instead: it would run while a
+ * completed match is still completed, so a failure of step 6 would leave a
+ * completed, finalized match with the game debited and nobody left to credit
+ * it (no confirm, and the heal cron skips finalized matches).
+ *
+ * 'already_applied' on that credit means a concurrent finalize credited the
+ * game after the debit. That is the edited stats, unless the finalize may
+ * have read the stats before the edit wrote them: a confirm that beat step 6
+ * (`statusConflict`), or a finalize of the completed match already in flight
+ * when the edit read a NULL marker (`wasCompleted` without a debit). Those are
+ * reported, as is a game gone meanwhile. 'match_not_completed' (the match left
+ * `completed` again after the re-read) is not: the next completion credits it.
+ *
+ * The game change is already committed when this runs, so a failure does not
+ * turn the admin request into an error that reads as "nothing saved": it is
+ * logged with its cause and returned as `failed: true`, which the result
+ * carries to the admin (`evolution_recheck_failed`; the season reconcile
+ * repairs it). A lost marker race ('marker_changed') is reported the same
+ * way: what was counted can then only be rebuilt.
+ */
+async function recheckEpbAfterEdit(input: {
+  seasonId: string;
+  matchId: string;
+  matchday: number;
+  playerIds: readonly [string, string];
+  game: Game;
+  oldStats: BattleStat[];
+  newStats: BattleStat[];
+  /** The match was completed when the edit read it (before any write). */
+  wasCompleted: boolean;
+  /** Step 6 lost its compare-and-set (a concurrent writer moved the match first). */
+  statusConflict: boolean;
+}): Promise<EvolutionRecheckResult> {
+  const { seasonId, game } = input;
+  const events: EvolutionEvent[] = [];
+  let failed = false;
+  try {
+    const debit = await uncreditGameRealKills(seasonId, game, input.oldStats);
+    if (debit === 'marker_changed' || debit === 'game_missing') {
+      console.error(
+        `[game-pipeline] EPB real kills of game ${game.id} were not debited after its edit (${debit}); ` +
+          'reported to the admin as evolution_recheck_failed (season reconcile repairs it)'
+      );
+      failed = true;
+    } else {
+      // The marker is NULL now. Re-read the status AFTER the debit: a confirm
+      // that landed before it saw the old marker and credited nothing.
+      const latest = await getMatchById(input.matchId);
+      if (latest?.status === 'completed') {
+        const credit = await creditMatchRealKills({
+          seasonId,
+          matchday: input.matchday,
+          playerIds: input.playerIds,
+          gameIds: [game.id],
+          statsByGame: { [game.id]: input.newStats },
+        });
+        events.push(...credit.events);
+        const concurrentCreditHoldsEditedStats =
+          !input.statusConflict && (debit === 'rolled_back' || !input.wasCompleted);
+        // 'match_not_completed': the match left `completed` again after the
+        // re-read; the marker is NULL, so its next completion credits the game.
+        const settled =
+          credit.applied.length > 0 ||
+          credit.notCompleted.length > 0 ||
+          (credit.alreadyApplied.length > 0 && concurrentCreditHoldsEditedStats);
+        if (!settled) {
+          console.error(
+            `[game-pipeline] EPB real kills of game ${game.id} could not be credited with the edited stats ` +
+              `(already: ${credit.alreadyApplied.length}, not completed: ${credit.notCompleted.length}, ` +
+              `missing: ${credit.missing.length}); reported as evolution_recheck_failed (season reconcile repairs it)`
+          );
+          failed = true;
+        }
+      }
+    }
+
+    // Re-resolve stages (covers devolutions after the debit).
+    events.push(...await recheckEpbStages(seasonId, [...input.playerIds]));
+    return { events, failed };
+  } catch (err) {
+    console.error(
+      `[game-pipeline] EPB evolution recheck failed for season ${seasonId} after the game change was saved; ` +
+        'reported to the admin as evolution_recheck_failed (season reconcile repairs it)',
+      err
+    );
+    return { events, failed: true };
+  }
 }
 
 /**
@@ -796,7 +979,7 @@ export async function deleteGame(
   await preflightUncompleteRebuild(match);
 
   // 1. Rollback aggregates + delete data (aggregates first for safety)
-  const deletedStats = await rollbackAndDeleteGame(gameId, match.tournament_id, tournament.season_id);
+  await rollbackAndDeleteGame(gameId, match.tournament_id, tournament.season_id);
 
   // 2. Re-evaluate match status
   const { status, statusConflict } = await reevaluateMatchStatus(
@@ -839,10 +1022,7 @@ export async function deleteGame(
     };
     // EPB carries progression detail in the repair result, not in events.
   } else {
-    const recheck = await recheckEvolutions(
-      tournament.season_id, tournament.season_format_type, match.player_1_id, match.player_2_id,
-      { deletedStats }
-    );
+    const recheck = await recheckEvolutions(tournament.season_id, match.player_1_id, match.player_2_id);
     evolutionEvents = recheck.events;
     evolutionRecheckFailed = recheck.failed;
   }
@@ -1084,10 +1264,6 @@ export async function resetMatch(
     }
     throw new MatchResetPartialError(removed, failures.map((failure) => failure.reason));
   }
-  const deletedStats = settled.flatMap((result) =>
-    result.status === 'fulfilled' ? result.value : []
-  );
-
   // 2. Clean orphaned match-derived children (prep teams, proposals, moments,
   //    animation views, cleared team/cast/agent pointers, social image).
   const childrenCleanup = await cleanMatchChildren(matchId);
@@ -1127,7 +1303,8 @@ export async function resetMatch(
 
   // 6. Evolution rebuild.
   // EPB: rebuild the whole season chronologically via repairSeasonEvolution
-  // (replaces the inverse rollbackRealKillsFromGame/recheckEpbStages path).
+  // (the per-game debit is only used by an edit; the rebuild also re-syncs
+  // the games' real-kill credit markers).
   // The deleted games' battle_stats are already gone, and
   // repairSeasonEvolution recomputes from remaining completed matches, so
   // this match is naturally excluded. Capture the full RepairResult so the
@@ -1152,10 +1329,7 @@ export async function resetMatch(
     };
     // EPB carries progression detail in the repair result, not in events.
   } else {
-    const recheck = await recheckEvolutions(
-      tournament.season_id, tournament.season_format_type, match.player_1_id, match.player_2_id,
-      { deletedStats }
-    );
+    const recheck = await recheckEvolutions(tournament.season_id, match.player_1_id, match.player_2_id);
     evolutionEvents = recheck.events;
     evolutionRecheckFailed = recheck.failed;
   }
@@ -1450,6 +1624,8 @@ async function editClaimedGame(
   //    the re-apply commits re-queues it.
   let newStats: BattleStat[];
   let oldStats: BattleStat[];
+  // The step-1 read: its evolution marker fences the EPB debit in step 7.
+  let editedGame: Game;
   let gameGone = false;
   try {
     const game = await readGameAfterJobCancel(input.game_id);
@@ -1457,6 +1633,7 @@ async function editClaimedGame(
       gameGone = true; // deleted meanwhile: nothing left to count
       throw new GameNotFoundError();
     }
+    editedGame = game;
 
     // 2. Fetch old stats and roll their aggregates back together with the
     //    marker (one transaction, fenced on the marker read above). A
@@ -1514,11 +1691,23 @@ async function editClaimedGame(
     wasCompleted, status, match.player_1_id, match.player_2_id
   );
 
-  // 7. Re-check evolutions (EPB: swap old stats' kills for new stats' kills)
-  const recheck = await recheckEvolutions(
-    tournament.season_id, tournament.season_format_type, match.player_1_id, match.player_2_id,
-    { deletedStats: oldStats, addedStats: newStats }
-  );
+  // 7. Re-check evolutions. EPB: debit the game's credited kills (the match
+  //    left `completed`), then re-read the match and credit the edited stats
+  //    if a concurrent confirm completed it again meanwhile (also between
+  //    step 6 and the debit). Legacy: battle_stats re-sum.
+  const recheck = tournament.season_id && isEvolutionPointBuy(tournament.season_format_type ?? '')
+    ? await recheckEpbAfterEdit({
+        seasonId: tournament.season_id,
+        matchId: match.id,
+        matchday: round.round_number,
+        playerIds: [match.player_1_id, match.player_2_id],
+        game: editedGame,
+        oldStats,
+        newStats,
+        wasCompleted,
+        statusConflict,
+      })
+    : await recheckEvolutions(tournament.season_id, match.player_1_id, match.player_2_id);
 
   return {
     match_status: status,
