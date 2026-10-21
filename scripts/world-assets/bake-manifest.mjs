@@ -278,12 +278,12 @@ async function main() {
 async function enrichMirror() {
   const io = await registerMeshoptDecoder(new NodeIO().registerExtensions(ALL_EXTENSIONS));
   const file = join(MIRROR_DIR, 'manifest.json');
-  if (!existsSync(file)) {
+  const before = readTextIfPresent(file);
+  if (before === null) {
     log(`no mirror manifest at ${file}: the world manifests are untracked; a maintainer restores it from the private companion overlay that tracks it, or run the full bake`);
     process.exitCode = 1;
     return;
   }
-  const before = readFileSync(file, 'utf8');
   const current = JSON.parse(before);
   const readRoot = async (rel) => {
     const glb = join(MIRROR_DIR, rel);
@@ -296,6 +296,16 @@ async function enrichMirror() {
   log(
     `enriched ${file} → v${manifest.version}: ${stats.figures} figures, clipMeta ${stats.withMeta}, primaryType ${stats.withType}, GLB missing locally ${stats.missingGlb}; ${before.length} → ${after.length} bytes`,
   );
+}
+
+/** A file's text, or null when it does not exist (read-then-write, no exists check to race). */
+function readTextIfPresent(file) {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err?.code === 'ENOENT') return null;
+    throw err;
+  }
 }
 
 /** A mirror/out file the manifest may list (scratch `_` / `.` paths never are). */
@@ -321,12 +331,12 @@ async function readProp(io, baseDir, file) {
 async function refreshMirrorManifest() {
   const io = await registerMeshoptDecoder(new NodeIO().registerExtensions(ALL_EXTENSIONS));
   const file = join(MIRROR_DIR, 'manifest.json');
-  if (!existsSync(file)) {
+  const before = readTextIfPresent(file);
+  if (before === null) {
     log(`no mirror manifest at ${file}: the world manifests are untracked; a maintainer restores it from the private companion overlay that tracks it, or run the full bake`);
     process.exitCode = 1;
     return;
   }
-  const before = readFileSync(file, 'utf8');
   const current = JSON.parse(before);
   const envDir = join(MIRROR_DIR, 'env');
   const environment = walkFiles(envDir)

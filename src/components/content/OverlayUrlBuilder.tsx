@@ -164,10 +164,12 @@ export default function OverlayUrlBuilder({
     }
   }, [typeDef, matches, seasons, draftPools, t, tBoard]);
 
-  // Compute the generated URL (always with the overlay language)
+  // Compute the generated URL (always with the overlay language). The entity
+  // ID is a path segment and the player type takes it as free text, so encode
+  // it: a typed "/", "?" or "#" must not reshape the overlay path.
   const generatedUrl = useMemo(() => {
     if (!selectedType || !entityId) return '';
-    return buildOverlayUrl(selectedType, entityId, config, { ...extras, lang });
+    return buildOverlayUrl(selectedType, encodeURIComponent(entityId), config, { ...extras, lang });
   }, [selectedType, entityId, config, extras, lang]);
 
   const handleCopy = useCallback(async () => {

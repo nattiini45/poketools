@@ -4837,15 +4837,12 @@ async function runLookProbe(page, section, pngPath, probe) {
 
 /** --audit on: one DRAW-LEDGER.md row per landed station (file created with its header if missing). */
 async function appendDrawLedger({ section, viewport, audit }) {
-  let exists = true;
+  // Exclusive create ('wx') writes the header only when the ledger does not exist yet; an existing ledger is kept.
+  await mkdir(dirname(DRAW_LEDGER_PATH), { recursive: true });
   try {
-    await stat(DRAW_LEDGER_PATH);
-  } catch {
-    exists = false;
-  }
-  if (!exists) {
-    await mkdir(dirname(DRAW_LEDGER_PATH), { recursive: true });
-    await writeFile(DRAW_LEDGER_PATH, `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n`, 'utf8');
+    await writeFile(DRAW_LEDGER_PATH, `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n`, { encoding: 'utf8', flag: 'wx' });
+  } catch (err) {
+    if (err?.code !== 'EEXIST') throw err;
   }
   const row = drawLedgerRow({
     at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),

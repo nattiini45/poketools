@@ -18,7 +18,7 @@
 //   ENFORCE=1 node scripts/check-mojibake.mjs # enforce
 
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readdirSync, readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { scanText } from './mojibake-scan.mjs';
 
@@ -95,20 +95,26 @@ const offenders = [];
 let scanned = 0;
 for (const file of files) {
   const rel = file.split(sep).join('/').replace(/^\.\//, '');
-  let size;
+  // Stat and read through one descriptor, so the size check covers the bytes actually read.
+  let fd;
   try {
-    const st = statSync(file);
-    if (!st.isFile()) continue; // listed by git but deleted or replaced in the work tree
-    size = st.size;
+    fd = openSync(file, 'r');
   } catch {
-    continue;
+    continue; // listed by git but deleted in the work tree
   }
-  if (size > MAX_BYTES) {
-    skipped.push(rel);
-    continue;
+  let text;
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile()) continue; // replaced by a directory or other non-file in the work tree
+    if (st.size > MAX_BYTES) {
+      skipped.push(rel);
+      continue;
+    }
+    text = readFileSync(fd, 'utf8');
+  } finally {
+    closeSync(fd);
   }
   scanned += 1;
-  const text = readFileSync(file, 'utf8');
   for (const o of scanText(text)) {
     offenders.push({ file: rel, ...o });
   }

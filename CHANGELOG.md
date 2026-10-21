@@ -8,6 +8,19 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Security
+
+- **Dependency:** the `vite` override is raised to `^8.1.6`, which fixes three `launch-editor` advisories (dev only).
+- **Code scanning:** the open CodeQL findings are worked through:
+  - The replay link check in the submit form compares the parsed hostname.
+  - Overlay URLs encode entity ids.
+  - The Smogon import decodes each HTML entity once.
+  - Markdown table cells escape backslashes.
+  - Test-account passwords draw characters uniformly (`crypto.randomInt`).
+  - The weekly recap pins its locale to a known value before picking a translator.
+  - The avatar randomiser draws from Web Crypto instead of `Math.random()`.
+  - Maintainer scripts create temp files with `mkdtemp` and avoid check-then-use file races.
+
 ## [0.2.1] - 2026-10-19
 
 Test leagues now stay out of player ratings and all-time statistics: their games no longer move ratings.

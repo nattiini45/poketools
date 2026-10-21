@@ -71,7 +71,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -621,8 +621,8 @@ let formationModule = null;
 export async function loadFormationModule() {
   if (formationModule) return formationModule;
   const esbuild = require('esbuild');
-  const dir = join(tmpdir(), 'd42-decimate-figures');
-  mkdirSync(dir, { recursive: true });
+  // A private, uniquely named scratch dir (mkdtemp), removed once the bundle is imported.
+  const dir = mkdtempSync(join(tmpdir(), 'd42-decimate-figures-'));
   const entry = join(dir, `formation-entry-${process.pid}.ts`);
   writeFileSync(
     entry,
@@ -637,8 +637,12 @@ export async function loadFormationModule() {
     ].join('\n'),
   );
   const outfile = join(dir, `formation-${process.pid}.mjs`);
-  await esbuild.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, alias: { '@': join(REPO, 'src') }, logLevel: 'error' });
-  formationModule = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
+  try {
+    await esbuild.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, alias: { '@': join(REPO, 'src') }, logLevel: 'error' });
+    formationModule = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
   return formationModule;
 }
 

@@ -90,6 +90,19 @@ describe('reconciliation report (example list fixture)', () => {
     expect(md).not.toContain('## Gen 9 utility sheet');
   });
 
+  it('escapes backslashes before pipes so a markdown table row keeps its columns', async () => {
+    const base = await build();
+    // The value is `C:\x\|y`: a trailing-style backslash directly before a pipe.
+    const name = String.raw`C:\x\|y`;
+    const r = { ...base, unresolved_names: [{ line_id: entries[0].line_id, stage: 1 as const, name, reason: 'not_in_dex' as const }] };
+    const md = renderReconciliationMarkdown(r);
+    const row = md.split('\n').find((l) => l.includes('C:'));
+    expect(row).toBe(`| ${entries[0].line_id} | 1 | ${String.raw`C:\\x\\\|y`} | not_in_dex |`);
+    // Drop escaped backslashes, then escaped pipes: the remaining pipes delimit exactly 4 columns.
+    const delimiters = row!.replace(/\\\\/g, '').replace(/\\\|/g, '').split('|');
+    expect(delimiters.length - 2).toBe(4);
+  });
+
   it('reports a duplicate line id and an out-of-tab price', async () => {
     const dup = { ...entries[0], line_number: 49, price: 0 };
     const r = await buildReconciliationReport({ entries: [...entries, dup], overview: {}, generatedAt: GENERATED_AT });

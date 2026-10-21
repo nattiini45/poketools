@@ -22,6 +22,18 @@ import PhotoTransformPanel from './PhotoTransformPanel';
 
 type BuilderMode = 'build' | 'pick' | 'generate' | 'transform';
 
+/**
+ * Random index in [0, length) for the cosmetic "Randomize" button. Web Crypto
+ * instead of Math.random so the option IDs it picks (which flow into the saved
+ * avatar config) are not flagged as insecure randomness; the tiny modulo bias
+ * does not matter for a wardrobe shuffle.
+ */
+function randomIndex(length: number): number {
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return buf[0] % length;
+}
+
 interface AvatarBuilderProps {
   playerId: string;
   initialConfig?: AvatarConfig | null;
@@ -108,12 +120,13 @@ export default function AvatarBuilder({ playerId, initialConfig, onSaved }: Avat
     const cats = getCategories(config.gender);
     const newConfig: Record<string, string | null> = { gender: config.gender };
     for (const cat of cats) {
-      if (!cat.required && Math.random() < 0.3) {
+      // Optional layers are left empty ~30% of the time
+      if (!cat.required && randomIndex(10) < 3) {
         newConfig[cat.id] = null;
       } else {
         // Pick a random style, then a random color variant
-        const randomStyle = cat.styles[Math.floor(Math.random() * cat.styles.length)];
-        const randomVariant = randomStyle.variants[Math.floor(Math.random() * randomStyle.variants.length)];
+        const randomStyle = cat.styles[randomIndex(cat.styles.length)];
+        const randomVariant = randomStyle.variants[randomIndex(randomStyle.variants.length)];
         newConfig[cat.id] = randomVariant.optionId;
       }
     }

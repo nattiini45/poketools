@@ -22,8 +22,9 @@
  * pokepast.es is mocked so no eval ever publishes to the network.
  */
 
-import { readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { mkdtempSync, readFileSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join, resolve } from 'path';
 import type { EvalCase, EvalExpect } from '../src/lib/ai/agent/__tests__/evals/golden-set';
 
 // ─── Env loading (mirrors scripts/agent-smoke.ts) ────────────────────
@@ -282,6 +283,8 @@ async function main(): Promise<void> {
     : provider.AGENT_MODELS.filter((m) => m.tier === 'T0').map((m) => m.id);
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  // A fresh owner-only directory per run (mkdtemp), not a predictable name in the shared temp dir.
+  const outDir = mkdtempSync(join(tmpdir(), 'agent-eval-'));
   console.error(`Eval harness — ${cases.length} case(s) × ${modelIds.length} model(s)\n`);
 
   for (const modelId of modelIds) {
@@ -308,7 +311,7 @@ async function main(): Promise<void> {
     }
 
     const summary = summarise(results);
-    const outPath = `/tmp/agent-eval-${modelId}-${stamp}.json`;
+    const outPath = join(outDir, `${modelId.replace(/[^\w.-]/g, '_')}-${stamp}.json`);
     writeFileSync(
       outPath,
       JSON.stringify({ model: modelId, timestamp: stamp, summary, results }, null, 2),

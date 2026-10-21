@@ -46,7 +46,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -130,8 +130,8 @@ async function bundleConsolidate() {
   const figure = join(REPO, 'src', 'components', 'world', 'route', 'figures', 'Figure.tsx');
   const source = readFileSync(figure, 'utf8');
   const exported = /export function consolidateFigureMeshes\(/.test(source);
-  const dir = join(tmpdir(), 'd42-parity');
-  mkdirSync(dir, { recursive: true });
+  // A private, uniquely named scratch dir (mkdtemp), removed once the bundle is imported.
+  const dir = mkdtempSync(join(tmpdir(), 'd42-parity-'));
   const entry = join(dir, `consolidate-entry-${process.pid}-${process.env.D42_WORKER ?? 'm'}.ts`);
   let entrySource;
   if (exported) {
@@ -174,8 +174,13 @@ async function bundleConsolidate() {
     },
   };
   const outfile = join(dir, `consolidate-${process.pid}-${process.env.D42_WORKER ?? 'm'}.mjs`);
-  await esbuild.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, plugins: [stub], logLevel: 'error', jsx: 'automatic' });
-  const mod = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
+  let mod;
+  try {
+    await esbuild.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, plugins: [stub], logLevel: 'error', jsx: 'automatic' });
+    mod = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
   return { consolidateFigureMeshes: mod.consolidateFigureMeshes, source: exported ? 'worktree Figure.tsx export (ENGINE-F)' : 'local copy of Figure.tsx (export not landed)' };
 }
 

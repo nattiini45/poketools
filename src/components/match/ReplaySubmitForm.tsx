@@ -31,6 +31,23 @@ type FormError =
   | { kind: 'submitFailed' }
   | { kind: 'api'; error: ApiErrorLike };
 
+const REPLAY_HOST = 'replay.pokemonshowdown.com';
+
+/**
+ * Client-side pre-check: a bare replay ID, or an http(s) URL whose host is the
+ * Showdown replay server. The API re-derives the ID and only ever fetches from
+ * that host, so this only spares the user a doomed round trip.
+ */
+function isReplayUrlOrId(value: string): boolean {
+  if (/^[a-z0-9-]+$/.test(value)) return true;
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.hostname === REPLAY_HOST;
+  } catch {
+    return false;
+  }
+}
+
 export default function ReplaySubmitForm({
   matchId,
   onSuccess,
@@ -63,11 +80,7 @@ export default function ReplaySubmitForm({
       return;
     }
 
-    const isValid =
-      replayUrl.includes('replay.pokemonshowdown.com') ||
-      /^[a-z0-9-]+$/.test(replayUrl.trim());
-
-    if (!isValid) {
+    if (!isReplayUrlOrId(replayUrl.trim())) {
       setError({ kind: 'invalidUrl' });
       return;
     }

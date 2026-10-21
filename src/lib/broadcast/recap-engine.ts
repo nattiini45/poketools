@@ -64,7 +64,8 @@ export async function composeWeeklyRecap(
     roundName,
     roundNumber,
   } = options;
-  const locale: Locale = options.locale ?? 'en';
+  // Pinned to a literal so a caller passing an unchecked string still gets a known translator.
+  const locale: Locale = options.locale === 'de' ? 'de' : 'en';
   const t = createTranslator(broadcastCasterMessages, locale);
 
   // Get completed matches in the specified round

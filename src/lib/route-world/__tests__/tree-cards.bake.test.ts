@@ -204,7 +204,13 @@ describe('public/textures/world bake', () => {
     for (const card of cards) {
       const path = join(OUT_DIR, card.file);
       const expected = encodePng(card.data, card.size);
-      const shipped = existsSync(path) ? readFileSync(path) : null;
+      // Read directly (no existsSync pre-check): a missing card is simply re-baked.
+      let shipped: Buffer | null = null;
+      try {
+        shipped = readFileSync(path);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      }
       if (!shipped || !Buffer.from(shipped).equals(expected)) {
         writeFileSync(path, expected);
       }
