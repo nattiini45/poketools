@@ -99,8 +99,10 @@ for (const file of files) {
   let fd;
   try {
     fd = openSync(file, 'r');
-  } catch {
-    continue; // listed by git but deleted in the work tree
+  } catch (err) {
+    // Listed by git but deleted (or a parent replaced) in the work tree; any other read failure must not shrink the scan.
+    if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') continue;
+    throw err;
   }
   let text;
   try {

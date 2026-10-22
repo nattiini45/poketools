@@ -20,7 +20,7 @@
  * Usage: node scripts/generate-placeholder-avatars.mjs [--quiet]
  */
 
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
@@ -196,7 +196,11 @@ export function generatePlaceholders({ manifest, outDir }) {
       throw new Error(`refusing unsafe avatar path: ${layer.rel.join('/')}`);
     }
     mkdirSync(dirname(target), { recursive: true });
-    // Exclusive create ('wx') is the existence check itself: an existing layer is kept, never overwritten.
+    // Fast path only: skips rendering for layers already on disk. The 'wx' create below is what guarantees no overwrite.
+    if (existsSync(target)) {
+      kept++;
+      continue;
+    }
     try {
       writeFileSync(target, renderPlaceholder(layer.category, layer.colour), { flag: 'wx' });
       written++;

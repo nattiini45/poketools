@@ -225,6 +225,16 @@ describe('buildOverlayUrl', () => {
     const url = buildOverlayUrl('match_live', 'abc123');
     expect(url).toBe('/broadcast/match/abc123/live');
   });
+
+  it('encodes the entity id as one path segment', () => {
+    expect(buildOverlayUrl('player_spotlight', '../a/b?x=1#y')).toBe('/broadcast/player/..%2Fa%2Fb%3Fx%3D1%23y/spotlight');
+    expect(buildOverlayUrl('player_spotlight', '$&')).toBe('/broadcast/player/%24%26/spotlight');
+  });
+
+  it('replaces a lone surrogate instead of throwing', () => {
+    expect(buildOverlayUrl('player_spotlight', 'a\uD800b')).toBe('/broadcast/player/a%EF%BF%BDb/spotlight');
+    expect(buildOverlayUrl('player_spotlight', '😀')).toBe('/broadcast/player/%F0%9F%98%80/spotlight');
+  });
 });
 
 // ── OVERLAY_TYPES ───────────────────────────────────────────────────

@@ -4843,6 +4843,9 @@ async function appendDrawLedger({ section, viewport, audit }) {
     await writeFile(DRAW_LEDGER_PATH, `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n`, { encoding: 'utf8', flag: 'wx' });
   } catch (err) {
     if (err?.code !== 'EEXIST') throw err;
+    // EEXIST also fires for a dangling symlink or a directory; appending there would lose the header.
+    const st = await stat(DRAW_LEDGER_PATH).catch(() => null);
+    if (!st?.isFile()) throw new Error(`draw ledger path is not a regular file: ${DRAW_LEDGER_PATH}`);
   }
   const row = drawLedgerRow({
     at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),

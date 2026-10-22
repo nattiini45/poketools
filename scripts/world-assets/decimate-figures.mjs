@@ -624,25 +624,33 @@ export async function loadFormationModule() {
   // A private, uniquely named scratch dir (mkdtemp), removed once the bundle is imported.
   const dir = mkdtempSync(join(tmpdir(), 'd42-decimate-figures-'));
   const entry = join(dir, `formation-entry-${process.pid}.ts`);
-  writeFileSync(
-    entry,
-    [
-      "export { makeTeamsSite, teamsFormation, teamsLandedPose, PLAZA_TEAMS_PLAN } from '@/lib/route-world/teams-formation';",
-      "export { PLAZA_STATIONS } from '@/components/world/themes/plaza/theme';",
-      "export { SAKURA_STATIONS } from '@/components/world/themes/sakura/theme';",
-      "export { MOUNTAIN_STATIONS } from '@/components/world/themes/mountain/theme';",
-      "export { ACES_LINE } from '@/components/world/themes/sakura/furniture/layout';",
-      "export { CAIRN_LINE } from '@/components/world/themes/mountain/furniture/layout';",
-      "export { VIEWPORTS } from '@/lib/route-world/data-surfaces';",
-    ].join('\n'),
-  );
   const outfile = join(dir, `formation-${process.pid}.mjs`);
+  let mod;
   try {
+    writeFileSync(
+      entry,
+      [
+        "export { makeTeamsSite, teamsFormation, teamsLandedPose, PLAZA_TEAMS_PLAN } from '@/lib/route-world/teams-formation';",
+        "export { PLAZA_STATIONS } from '@/components/world/themes/plaza/theme';",
+        "export { SAKURA_STATIONS } from '@/components/world/themes/sakura/theme';",
+        "export { MOUNTAIN_STATIONS } from '@/components/world/themes/mountain/theme';",
+        "export { ACES_LINE } from '@/components/world/themes/sakura/furniture/layout';",
+        "export { CAIRN_LINE } from '@/components/world/themes/mountain/furniture/layout';",
+        "export { VIEWPORTS } from '@/lib/route-world/data-surfaces';",
+      ].join('\n'),
+    );
     await esbuild.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, alias: { '@': join(REPO, 'src') }, logLevel: 'error' });
-    formationModule = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
+    mod = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    // Best effort: a locked scratch file (Windows AV/indexer) must not replace the build's own error.
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(`[decimate-figures] could not remove ${dir}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
+  // Cached only once the whole load succeeded.
+  formationModule = mod;
   return formationModule;
 }
 

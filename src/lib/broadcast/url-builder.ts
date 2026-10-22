@@ -322,9 +322,15 @@ export function serializeConfig(
   return params;
 }
 
+/** Lone UTF-16 surrogates, which `encodeURIComponent` refuses with a URIError. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
 /**
  * Build a complete overlay URL from type, entity ID, and config.
  * Returns a root-relative path (e.g., `/broadcast/match/abc123/preview?theme=light`).
+ * The entity ID is encoded as one path segment: a "/", "?" or "#" in free text
+ * (the player ID) cannot reshape the path, and a lone surrogate becomes U+FFFD
+ * instead of throwing.
  */
 export function buildOverlayUrl(
   typeKey: OverlayTypeKey,
@@ -333,7 +339,8 @@ export function buildOverlayUrl(
   extras?: Record<string, string | number | boolean>
 ): string {
   const typeDef = OVERLAY_TYPES[typeKey];
-  const path = typeDef.pathTemplate.replace('[id]', entityId);
+  const segment = encodeURIComponent(entityId.replace(LONE_SURROGATE, '\uFFFD'));
+  const path = typeDef.pathTemplate.replace('[id]', () => segment);
   const params = serializeConfig(config ?? {}, extras);
   const qs = params.toString();
   return qs ? `${path}?${qs}` : path;
