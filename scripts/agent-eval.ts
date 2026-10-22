@@ -313,7 +313,7 @@ async function main(): Promise<void> {
 
     const summary = summarise(results);
     outDir ??= mkdtempSync(join(tmpdir(), 'agent-eval-'));
-    const outPath = join(outDir,`${modelId.replace(/[^\w.-]/g, '_')}-${stamp}.json`);
+    const outPath = join(outDir, `${modelId.replace(/[^\w.-]/g, '_')}-${stamp}.json`);
     writeFileSync(
       outPath,
       JSON.stringify({ model: modelId, timestamp: stamp, summary, results }, null, 2),

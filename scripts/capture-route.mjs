@@ -199,8 +199,8 @@
  * --warm-cache, --net-throttle, --dolly-at, --contrast-repeat, --look-probe.
  */
 import { chromium } from 'playwright';
-import { mkdir, open, readFile, stat, writeFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { lstat, mkdir, open, readFile, stat, writeFile } from 'node:fs/promises';
+import { constants as fsConstants, readFileSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, resolve } from 'node:path';
@@ -4849,12 +4849,26 @@ async function appendDrawLedger({ section, viewport, audit }) {
     sourceStamp: invocation.sourceStamp?.newestSrcMtime ?? null,
   });
   await mkdir(dirname(DRAW_LEDGER_PATH), { recursive: true });
-  // One append-mode handle creates a missing ledger (through a symlink too) and never truncates;
-  // the header goes in when the opened file is still empty, so no path check runs before the write.
-  const fh = await open(DRAW_LEDGER_PATH, 'a');
+  // Exclusive create: only the run that creates the ledger writes the header, so concurrent runs never
+  // duplicate it. An existing ledger is opened without O_CREAT, so a dangling link cannot create a file.
+  let fh;
+  let created = false;
   try {
-    const { size } = await fh.stat();
-    const header = size === 0 ? `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n` : '';
+    fh = await open(DRAW_LEDGER_PATH, 'wx');
+    created = true;
+  } catch (err) {
+    if (err?.code !== 'EEXIST') throw err;
+    fh = await open(DRAW_LEDGER_PATH, fsConstants.O_WRONLY | fsConstants.O_APPEND);
+  }
+  try {
+    // Write only when the handle is the regular file at the path itself (same device and inode as lstat sees):
+    // a symlink, directory or other entry there is refused, never written through. Windows has no O_NOFOLLOW,
+    // and there 'wx' even follows a dangling link, so the check runs on the handle for both branches.
+    const [opened, atPath] = await Promise.all([fh.stat(), lstat(DRAW_LEDGER_PATH)]);
+    if (!atPath.isFile() || atPath.dev !== opened.dev || atPath.ino !== opened.ino) {
+      throw new Error(`refusing to write the draw ledger: ${DRAW_LEDGER_PATH} is not a regular file`);
+    }
+    const header = created ? `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n` : '';
     await fh.appendFile(`${header}${row}\n`, 'utf8');
   } finally {
     await fh.close();
