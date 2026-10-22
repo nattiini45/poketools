@@ -169,17 +169,26 @@ describe('avatarPngDataUri', () => {
 // ── generateMatchCardImage ────────────────────────────────────────────
 
 describe('generateMatchCardImage with WebP avatars', () => {
-  it('control: satori cannot decode a WebP avatar URL on its own', async () => {
-    // Documents the bug this module works around (satori logs, then drops the image).
-    const response = new ImageResponse(
-      <div style={{ display: 'flex', width: 64, height: 64 }}>
-        <img src={CONTROL_THUMB_URL} width={44} height={44} alt="" />
-      </div>,
-      { width: 64, height: 64 },
-    );
-    await response.arrayBuffer();
+  it('control: satori cannot draw a WebP avatar URL on its own', async () => {
+    // Documents the bug this module works around: satori drops the WebP, so the avatar box stays
+    // transparent. Older Next.js builds also logged "Unsupported image type"; 16.4 drops it silently,
+    // so the control checks the pixels. The same box with a PNG data URI is drawn.
+    async function alphaInsideAvatar(src: string): Promise<number> {
+      const response = new ImageResponse(
+        <div style={{ display: 'flex', width: 64, height: 64 }}>
+          <img src={src} width={44} height={44} alt="" />
+        </div>,
+        { width: 64, height: 64 },
+      );
+      const { data, info } = await sharp(Buffer.from(await response.arrayBuffer()))
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      return data[(22 * info.width + 22) * info.channels + 3];
+    }
 
-    expect(loggedText()).toContain('Unsupported image type');
+    expect(await alphaInsideAvatar(CONTROL_THUMB_URL)).toBe(0);
+    expect(await alphaInsideAvatar(`data:image/png;base64,${pngAvatar.toString('base64')}`)).toBe(255);
   });
 
   it('renders the card with PNG data URIs: no satori image errors, and satori fetches nothing', async () => {
