@@ -52,13 +52,13 @@ export default defineDe<typeof en>()({
     reparse: 'Replay erneut auslesen',
     parse: 'Replay auslesen',
     skipNote:
-      'Der Namensabgleich wird hier übersprungen. Ordne jede Seite des Replays dem richtigen angemeldeten Spieler zu und prüfe vor dem Import die Statistiken.',
+      'Der Namensabgleich wird hier übersprungen. Ordne jede Seite des Replays dem richtigen angemeldeten Spieler zu. Sieger und Statistiken werden genau so eingetragen, wie das Replay sie zeigt; korrigieren kannst du sie danach, indem du die Partie bearbeitest.',
     sideAssignment: 'Seitenzuordnung',
     swapSides: '⇄ Seiten tauschen',
     side: 'Seite {n}',
-    name: 'Name',
-    moves: 'Attacken (mit Komma getrennt)',
-    movesPlaceholder: 'Attacke1, Attacke2',
+    winnerFromReplay: 'Sieger (laut Replay): {name}',
+    noWinner: 'Das Replay nennt keinen Sieger und kann daher nicht importiert werden.',
+    moves: 'Attacken',
     importGame: 'Partie importieren',
   },
   editor: {

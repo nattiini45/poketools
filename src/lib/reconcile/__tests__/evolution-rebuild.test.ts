@@ -706,14 +706,23 @@ describe('impossible-lineup detection — branched base keyed by line_id', () =>
 const {
   mockGetSeasonTrackers,
   mockUpdateTracker,
+  mockRpc,
   mockInsertEvolutionEvents,
   mockRecalculateEvolutionPoints,
 } = vi.hoisted(() => ({
   mockGetSeasonTrackers: vi.fn(),
   mockUpdateTracker: vi.fn(),
+  // The kill-credit fence RPCs (epb_kill_credit_epoch, epb_sync_game_kill_credit).
+  mockRpc: vi.fn(),
   mockInsertEvolutionEvents: vi.fn(),
   mockRecalculateEvolutionPoints: vi.fn(),
 }));
+
+/** Default fence: epoch 7, every sync succeeds. */
+function rpcSynced(fn: string): { data: unknown; error: null } {
+  if (fn === 'epb_kill_credit_epoch') return { data: 7, error: null };
+  return { data: { status: 'synced', marked: 0, rewritten: 0, cleared: 0 }, error: null };
+}
 
 vi.mock('@/lib/supabase/queries/evolutions', () => ({
   getSeasonTrackers: mockGetSeasonTrackers,
@@ -757,10 +766,16 @@ vi.mock('@/lib/supabase/client', () => {
   builder.maybeSingle = vi.fn().mockResolvedValue(emptyResult);
   // Make the builder itself thenable so `await builder` resolves.
   builder.then = (_resolve: (v: unknown) => void) => Promise.resolve(emptyResult).then(_resolve);
+  builder.rpc = mockRpc;
   return { supabase: builder };
 });
 
-import { diffEvolutionState, repairSeasonEvolution, applyComputedEvolutionState } from '../evolution-rebuild';
+import {
+  diffEvolutionState,
+  repairSeasonEvolution,
+  applyComputedEvolutionState,
+  StaleKillCreditError,
+} from '../evolution-rebuild';
 
 describe('diffEvolutionState', () => {
   beforeEach(() => {
@@ -845,6 +860,8 @@ describe('repairSeasonEvolution — grouped insert preserves matchday', () => {
       players_updated: 1,
       points_awarded: 1,
     });
+    mockRpc.mockReset();
+    mockRpc.mockImplementation(async (fn: string) => rpcSynced(fn));
   });
 
   it('inserts events once per distinct matchday with that matchday in ctx (EP not zeroed)', async () => {
@@ -896,7 +913,7 @@ describe('repairSeasonEvolution — grouped insert preserves matchday', () => {
 
     // Drive the actual write path with the computed state (no DB/loader mock
     // needed — applyComputedEvolutionState takes the state directly).
-    const result = await applyComputedEvolutionState('season-1', computed);
+    const result = await applyComputedEvolutionState('season-1', computed, 7);
 
     // One insert call per distinct matchday (md1 and md2), each carrying that
     // matchday in its ctx — NOT a single flat insert with matchday defaulted.
@@ -917,6 +934,18 @@ describe('repairSeasonEvolution — grouped insert preserves matchday', () => {
     expect(mockRecalculateEvolutionPoints).toHaveBeenCalledWith('season-1');
     expect(result.eventsRewritten).toBe(computed.computedEvents.length);
     expect(result.evolutionPoints.points_awarded).toBeGreaterThan(0);
+
+    // CF-07: the per-game credit markers and ledgers follow the rebuilt real
+    // kills: the replayed matches' games are marked with their credits, every
+    // other game of the season is not; fenced on the epoch read before.
+    expect(computed.creditedMatchIds).toEqual(['m1', 'm2']);
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith('epb_sync_game_kill_credit', {
+      p_season_id: 'season-1',
+      p_expected_epoch: 7,
+      p_credited_match_ids: ['m1', 'm2'],
+      p_game_credits: { 'g-1': [{ tracker_id: 't-dreepy', amount: 3 }, { tracker_id: 't-gastly', amount: 5 }] },
+    });
   });
 
   it('repairSeasonEvolution calls recalculateEvolutionPoints after the grouped insert', async () => {
@@ -935,6 +964,156 @@ describe('repairSeasonEvolution — grouped insert preserves matchday', () => {
     // With no matches there are no events to insert, so recalc still ran (the
     // wipe+recompute still executes) but produced 0 points from the mock.
     expect(mockInsertEvolutionEvents).not.toHaveBeenCalled();
+    // No completed match replayed: every game of the season loses its credit
+    // marker (a pending match's games are credited at its completion).
+    expect(mockRpc).toHaveBeenCalledWith('epb_kill_credit_epoch', { p_season_id: 'season-1' });
+    expect(mockRpc).toHaveBeenCalledWith('epb_sync_game_kill_credit', {
+      p_season_id: 'season-1',
+      p_expected_epoch: 7,
+      p_credited_match_ids: [],
+      p_game_credits: {},
+    });
+  });
+});
+
+// ── Kill-credit ledger + season fence (PR #12 review, CF-07) ──────────────
+
+describe('computeEvolutionStateCore — per-game credit ledger', () => {
+  it('records, per game, the real kills each tracker got from it (sorted, zero rows dropped)', () => {
+    const state = computeEvolutionStateCore({
+      trackers: [
+        makeTracker({ id: 't-b', base_pokemon: 'Dreepy' }),
+        makeTracker({ id: 't-a', base_pokemon: 'Gastly' }),
+      ],
+      lines: [
+        dreepyLine,
+        { base_pokemon: 'Gastly', stage2_pokemon: 'Haunter', stage3_pokemon: 'Gengar', stage2_kos: 5, stage3_kos: 15 },
+      ],
+      matches: [
+        {
+          match: makeMatch({ id: 'm1' }),
+          matchday: 1,
+          battleStats: [
+            stat('player-1', 'Dreepy', 2, 'g-1'),
+            stat('player-1', 'Gastly', 1, 'g-1'),
+            stat('player-1', 'Drakloak', 1, 'g-2'), // evolved form of the same line, game 2
+            stat('player-1', 'Gastly', 0, 'g-2'), // zero KOs: credits nothing
+            stat('player-2', 'Pikachu', 4, 'g-2'), // untracked: credits nothing
+          ],
+        },
+      ],
+      snapshots: [],
+    });
+
+    expect(state.creditsByGame).toEqual({
+      'g-1': [
+        { tracker_id: 't-a', amount: 1 },
+        { tracker_id: 't-b', amount: 2 },
+      ],
+      'g-2': [{ tracker_id: 't-b', amount: 1 }],
+    });
+    // The ledger sums to the rebuilt real kills.
+    expect(findTracker(state, 'Dreepy').real_kills).toBe(3);
+    expect(findTracker(state, 'Gastly').real_kills).toBe(1);
+  });
+});
+
+describe('repairSeasonEvolution — fenced against concurrent credits', () => {
+  beforeEach(async () => {
+    mockGetSeasonTrackers.mockReset();
+    mockGetSeasonTrackers.mockResolvedValue([makeTracker({ id: 't-dreepy', base_pokemon: 'Dreepy' })]);
+    const { getSeasonLineThresholds } = await import('@/lib/draft/epb-thresholds');
+    (getSeasonLineThresholds as ReturnType<typeof vi.fn>).mockResolvedValue([dreepyLine]);
+    mockUpdateTracker.mockReset();
+    mockInsertEvolutionEvents.mockReset();
+    mockRecalculateEvolutionPoints.mockReset();
+    mockRecalculateEvolutionPoints.mockResolvedValue({ players_updated: 0, points_awarded: 0 });
+    mockRpc.mockReset();
+  });
+
+  it('reads the epoch before the season and syncs as the last write', async () => {
+    const order: string[] = [];
+    mockRpc.mockImplementation(async (fn: string) => {
+      order.push(fn);
+      return rpcSynced(fn);
+    });
+    mockGetSeasonTrackers.mockImplementation(async () => {
+      order.push('read trackers');
+      return [makeTracker({ id: 't-dreepy', base_pokemon: 'Dreepy' })];
+    });
+    mockUpdateTracker.mockImplementation(async () => {
+      order.push('write tracker');
+    });
+    mockRecalculateEvolutionPoints.mockImplementation(async () => {
+      order.push('recalc points');
+      return { players_updated: 0, points_awarded: 0 };
+    });
+
+    await repairSeasonEvolution('season-1');
+
+    expect(order[0]).toBe('epb_kill_credit_epoch');
+    expect(order.indexOf('read trackers')).toBeGreaterThan(0);
+    expect(order[order.length - 1]).toBe('epb_sync_game_kill_credit');
+    expect(order.indexOf('recalc points')).toBeLessThan(order.indexOf('epb_sync_game_kill_credit'));
+  });
+
+  it('a credit that landed during the rebuild (stale fence) makes it rebuild again from a fresh read', async () => {
+    let epoch = 7;
+    let syncs = 0;
+    mockRpc.mockImplementation(async (fn: string, args: { p_expected_epoch?: number }) => {
+      if (fn === 'epb_kill_credit_epoch') return { data: epoch, error: null };
+      syncs += 1;
+      if (syncs === 1) {
+        epoch = 8; // a finalize credit committed between the read and the sync
+        return { data: { status: 'stale', reason: 'credit_changed' }, error: null };
+      }
+      expect(args.p_expected_epoch).toBe(8);
+      return { data: { status: 'synced', marked: 0, rewritten: 0, cleared: 0 }, error: null };
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await repairSeasonEvolution('season-1');
+
+    expect(syncs).toBe(2);
+    // Each attempt re-read the season and rewrote the trackers.
+    expect(mockGetSeasonTrackers.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(mockUpdateTracker).toHaveBeenCalledTimes(2);
+    expect(mockRecalculateEvolutionPoints).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('gives up with StaleKillCreditError after three stale attempts', async () => {
+    mockRpc.mockImplementation(async (fn: string) =>
+      fn === 'epb_kill_credit_epoch'
+        ? { data: 7, error: null }
+        : { data: { status: 'stale', reason: 'match_changed' }, error: null }
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(repairSeasonEvolution('season-1')).rejects.toBeInstanceOf(StaleKillCreditError);
+    expect(mockRpc.mock.calls.filter(([fn]) => fn === 'epb_sync_game_kill_credit')).toHaveLength(3);
+    warn.mockRestore();
+  });
+
+  it('an unexpected sync result or RPC error is thrown, never retried', async () => {
+    mockRpc.mockImplementation(async (fn: string) =>
+      fn === 'epb_kill_credit_epoch' ? { data: 7, error: null } : { data: null, error: new Error('boom') }
+    );
+    await expect(repairSeasonEvolution('season-1')).rejects.toThrow('boom');
+    expect(mockRpc.mock.calls.filter(([fn]) => fn === 'epb_sync_game_kill_credit')).toHaveLength(1);
+  });
+
+  it('refuses to apply a state with credited matches without the epoch (no unfenced sync)', async () => {
+    const computed = computeEvolutionStateCore({
+      trackers: [makeTracker({ id: 't-dreepy', base_pokemon: 'Dreepy' })],
+      lines: [dreepyLine],
+      matches: [],
+      snapshots: [],
+    });
+    await expect(applyComputedEvolutionState('season-1', computed)).rejects.toThrow('epoch');
+    expect(mockUpdateTracker).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });
 

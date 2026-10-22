@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase/auth-client';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
+import { isReservedSuperadminEmail } from '@/lib/auth/helpers';
 import { checkAuthRateLimit } from '@/lib/auth/rate-limits';
 import { rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { signupSchema, formatZodErrors } from '@/lib/validation';
@@ -17,11 +18,28 @@ import type { ApiResult } from '@/types/api';
 // Anti-enumeration: an already-registered email returns the same generic
 // success message as a fresh signup.
 //
+// Reserved address (audit lead CF-02): the SUPERADMIN_EMAIL address is never
+// signed up here. An email/password session on that address is superadmin
+// (`isSuperadmin`), so a self-service account on it would be a takeover once
+// confirmed. The request gets the same rate limit, the same constant delay and
+// the same generic success as any signup, and `signUp` is never called. The
+// operator creates that login by linking the address from the
+// SUPERADMIN_DISCORD_ID account (POST /api/account/link-email,
+// docs/auth-email-password.md).
+//
 // The viewer's UI language (`plc_locale` cookie) is stored as
 // `user_metadata.locale`, so the Supabase email templates
 // (`supabase/templates/*.html`) can pick English or German (i18n-core §6.6).
 
 const GENERIC_SUCCESS = 'Check your inbox to confirm your email address.';
+
+/** The one success body every accepted signup gets (fresh, already registered, reserved). */
+function genericSuccessResponse() {
+  return NextResponse.json<ApiResult<{ message: string }>>({
+    success: true,
+    data: { message: GENERIC_SUCCESS },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,6 +63,9 @@ export async function POST(request: NextRequest) {
 
     // Constant delay to blunt brute-force/enumeration timing
     await new Promise((r) => setTimeout(r, 500));
+
+    // CF-02: no account for the reserved superadmin address, and no tell.
+    if (isReservedSuperadminEmail(email)) return genericSuccessResponse();
 
     const client = createAuthClient();
     const { data, error } = await client.auth.signUp({
@@ -75,10 +96,7 @@ export async function POST(request: NextRequest) {
     // still return the generic success (no enumeration).
     void data;
 
-    return NextResponse.json<ApiResult<{ message: string }>>({
-      success: true,
-      data: { message: GENERIC_SUCCESS },
-    });
+    return genericSuccessResponse();
   } catch (err) {
     return safeErrorResponse(err, 'Signup failed', 500, 'signup_error');
   }

@@ -39,15 +39,27 @@ vi.mock('@/lib/supabase/queries/resource-admins', () => ({
   isResourceAdminFor: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/games', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/supabase/queries/games')>('@/lib/supabase/queries/games');
+  return {
+    findGameIdByReplayHash: vi.fn(async () => null),
+    ReplayAlreadyRecordedError: actual.ReplayAlreadyRecordedError,
+  };
+});
+
 import { POST } from '@/app/api/admin/matches/[id]/replay-preview/route';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { fetchReplay, parseReplayLog } from '@/lib/pkmn/replay';
 import { getPlayerByPsUsername } from '@/lib/supabase/queries/players';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
+import { findGameIdByReplayHash, ReplayAlreadyRecordedError } from '@/lib/supabase/queries/games';
+import { safeErrorResponse } from '@/lib/api/error-response';
+import { computeReplayHash } from '@/lib/pkmn/replay-identity';
 
 const MATCH_ID = 'daa274a2-59da-43fd-84a5-8cede96e15a4';
 const REPLAY_URL = 'https://replay.pokemonshowdown.com/test';
+const REPLAY_LOG = ['|player|p1|alice_ps', '|player|p2|subby', '|turn|1', '|win|alice_ps'].join('\n');
 
 const ADMIN = { playerId: 'admin1', name: 'Admin', isAdmin: true, isResourceAdmin: false, isCreator: false, psUsername: '', championsUsername: '', avatarUrl: null, status: 'active' } as const;
 const NON_ADMIN = { playerId: 'user1', name: 'User', isAdmin: false, isResourceAdmin: false, isCreator: false, psUsername: '', championsUsername: '', avatarUrl: null, status: 'active' } as const;
@@ -106,7 +118,7 @@ describe('POST /api/admin/matches/[id]/replay-preview', () => {
 
   it('parses without the username gate and returns best-effort suggestions', async () => {
     vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
-    vi.mocked(fetchReplay).mockResolvedValue({ log: 'log', id: '1', format: 'gen9', players: ['alice_ps', 'subby'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'subby'] as [string, string], winner: 'alice_ps' });
     vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
     // alice_ps resolves to participant p1; "subby" (the substitute) resolves to nobody.
     vi.mocked(getPlayerByPsUsername).mockImplementation(async (username: string) => {
@@ -123,13 +135,30 @@ describe('POST /api/admin/matches/[id]/replay-preview', () => {
       { ps_username: 'alice_ps', suggested_player_id: 'p1' },
       { ps_username: 'subby', suggested_player_id: null },
     ]);
+    // The hash of the same log the stats came from, for the import to send back.
+    expect(body.data.replay_hash).toBe(computeReplayHash(REPLAY_LOG));
+    expect(vi.mocked(findGameIdByReplayHash)).toHaveBeenCalledWith(computeReplayHash(REPLAY_LOG));
     // Resource-admin lookup is skipped for site admins.
     expect(vi.mocked(isResourceAdminFor)).not.toHaveBeenCalled();
   });
 
+  it('refuses a battle already recorded for any game (replay_already_recorded)', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'subby'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
+    vi.mocked(findGameIdByReplayHash).mockResolvedValueOnce('game-elsewhere');
+
+    const res = await POST(makeRequest({ replay_url: REPLAY_URL }), makeParams());
+    expect(res.status).toBe(500); // the mocked safeErrorResponse
+    const err = vi.mocked(safeErrorResponse).mock.calls[0][0];
+    expect(err).toBeInstanceOf(ReplayAlreadyRecordedError);
+    expect(err).toMatchObject({ code: 'replay_already_recorded', statusCode: 409 });
+    expect(vi.mocked(getPlayerByPsUsername)).not.toHaveBeenCalled();
+  });
+
   it('does not suggest a player who is not a participant in this match', async () => {
     vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
-    vi.mocked(fetchReplay).mockResolvedValue({ log: 'log', id: '1', format: 'gen9', players: ['alice_ps', 'subby'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'subby'] as [string, string], winner: 'alice_ps' });
     vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
     // alice_ps resolves to a registered player who is NOT in this match.
     vi.mocked(getPlayerByPsUsername).mockImplementation(async (username: string) => {

@@ -427,6 +427,17 @@ export const seasonUpdateSchema = z.object({
 
 // ─── Match / Game Schemas ────────────────────────────────────────────
 
+/**
+ * The one-row-per-Pokémon key of a game's battle stats, per player. The JS
+ * twin of the battle_stats unique index key
+ * `lower(regexp_replace(pokemon_name, '^[ws]+|[ws]+$', '', 'g'))`, where [ws]
+ * is exactly String.prototype.trim's whitespace set
+ * (supabase/migrations/20261021100200_battle_stats_pokemon_key_js_trim.sql).
+ */
+export function battleStatPokemonKey(pokemonName: string): string {
+  return pokemonName.trim().toLowerCase();
+}
+
 const pokemonStatSchema = z.object({
   pokemon_name: z.string().trim().min(1).max(FIELD_LIMITS.NAME),
   was_brought: z.boolean().default(true),
@@ -447,7 +458,7 @@ const playerPokemonStatsSchema = z
     // counted toward evolution progress) once per copy.
     const seen = new Set<string>();
     block.pokemon.forEach((poke, i) => {
-      const key = poke.pokemon_name.trim().toLowerCase();
+      const key = battleStatPokemonKey(poke.pokemon_name);
       if (seen.has(key)) {
         ctx.addIssue({
           code: 'custom',
@@ -534,13 +545,18 @@ export const replayPreviewSchema = z.object({
 });
 
 /**
- * Admin replay-import: record a game from replay-parsed but manually-assigned
- * stats. `match_id` comes from the route param; the replay_url is preserved.
+ * Admin replay-import: record a game from a replay whose sides an organizer
+ * assigns by hand (the username gate is skipped). `match_id` comes from the
+ * route param. There is no winner or stats field: the route fetches the replay
+ * again and records the winner and stats parsed from it (audit lead F1, owner
+ * decision 2026-10-20). `side_player_ids` are the players of replay side p1
+ * and p2; `replay_hash` is the preview's hash, so a replay that changed since
+ * the organizer reviewed it is refused (409 `replay_changed_since_preview`).
  */
 export const replayImportSchema = z.object({
   replay_url: z.string().trim().min(1).max(500),
-  winner_id: uuid,
-  pokemon_stats: gamePokemonStatsSchema,
+  replay_hash: z.string().regex(/^[0-9a-f]{64}$/),
+  side_player_ids: z.tuple([uuid, uuid]),
 });
 
 export const confirmMatchSchema = z.object({
@@ -925,7 +941,24 @@ export const adminGameEditSchema = z.object({
     was_koed: z.boolean().optional(),
     moves_used: z.array(z.string().trim().max(FIELD_LIMITS.LABEL)).max(4).optional(),
     turns_active: z.number().int().min(0).optional(),
-  })).optional(),
+  })).superRefine((rows, ctx) => {
+    // One row per Pokémon per player (the battle_stats unique index on
+    // game_id, player_id and battleStatPokemonKey's DB twin). The edit deletes the
+    // game's rows before it inserts these, so a repeat must fail here, before
+    // anything is written.
+    const seen = new Set<string>();
+    rows.forEach((row, i) => {
+      const key = `${row.player_id}|${battleStatPokemonKey(row.pokemon_name)}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Each Pokémon may appear only once per player',
+          path: [i, 'pokemon_name'],
+        });
+      }
+      seen.add(key);
+    });
+  }).optional(),
   // Optimistic concurrency: the game's updated_at as the editor loaded it (409 admin_game_edit_stale when it moved on).
   expected_updated_at: z.iso.datetime({ offset: true }).optional(),
 });

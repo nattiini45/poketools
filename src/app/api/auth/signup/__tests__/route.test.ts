@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 const signUp = vi.fn();
@@ -12,6 +12,10 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/lib/supabase/auth-client', () => ({
   createAuthClient: () => ({ auth: { signUp } }),
 }));
+
+// The route uses the real isReservedSuperadminEmail (src/lib/auth/helpers.ts);
+// only the NextAuth instance helpers imports is stubbed.
+vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 
 import { POST } from '@/app/api/auth/signup/route';
 import { rateLimitKey } from '@/lib/utils/rate-limit';
@@ -231,6 +235,73 @@ describe('POST /api/auth/signup rate limit (H8)', () => {
     expect(res.status).toBe(503);
     expect(json.code).toBe('rate_limit_unavailable');
     expect(signUp).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/auth/signup - reserved superadmin address (CF-02)', () => {
+  const RESERVED = 'boss@example.com';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('SUPERADMIN_EMAIL', RESERVED);
+    rpc.mockResolvedValue({ data: [{ allowed: true, hits: 1, retry_after_seconds: 0 }], error: null });
+    stubConstantTimeDelay();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  async function normalSignupResponse() {
+    signUp.mockResolvedValueOnce({ data: { user: { id: 'auth-1', identities: [{ id: 'i-1' }] } }, error: null });
+    const res = await POST(makeRequest(VALID_BODY));
+    return { status: res.status, body: await res.json() };
+  }
+
+  it('never creates the account and answers exactly like a normal signup, after the rate limit and the constant delay', async () => {
+    const normal = await normalSignupResponse();
+    vi.clearAllMocks();
+    stubConstantTimeDelay();
+    rpc.mockResolvedValue({ data: [{ allowed: true, hits: 1, retry_after_seconds: 0 }], error: null });
+
+    const res = await POST(makeRequest({ ...VALID_BODY, email: '  BOSS@Example.com ' }));
+
+    expect(signUp).not.toHaveBeenCalled();
+    expect(res.status).toBe(normal.status);
+    expect(await res.json()).toEqual(normal.body);
+    // Same rate limit as any signup (per IP and per normalized email) …
+    expect(rpc).toHaveBeenCalledWith('rate_limit_hit', expect.objectContaining({
+      p_key: rateLimitKey('signup-email', RESERVED),
+    }));
+    // … and the same constant delay.
+    expect(globalThis.setTimeout).toHaveBeenCalledWith(expect.any(Function), 500);
+  });
+
+  it('is rate limited like any signup', async () => {
+    rpc.mockResolvedValueOnce({ data: [{ allowed: false, hits: 99, retry_after_seconds: 600 }], error: null });
+
+    const res = await POST(makeRequest({ ...VALID_BODY, email: RESERVED }));
+
+    expect(res.status).toBe(429);
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it('still signs up every other address', async () => {
+    signUp.mockResolvedValueOnce({ data: { user: { id: 'auth-1', identities: [{ id: 'i-1' }] } }, error: null });
+
+    const res = await POST(makeRequest(VALID_BODY));
+
+    expect(res.status).toBe(200);
+    expect(signUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('reserves nothing when SUPERADMIN_EMAIL is unset', async () => {
+    vi.stubEnv('SUPERADMIN_EMAIL', '');
+    signUp.mockResolvedValueOnce({ data: { user: { id: 'auth-1', identities: [{ id: 'i-1' }] } }, error: null });
+
+    await POST(makeRequest({ ...VALID_BODY, email: RESERVED }));
+
+    expect(signUp).toHaveBeenCalledTimes(1);
   });
 });
 

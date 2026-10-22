@@ -14,10 +14,22 @@ export interface Game {
   game_number: number;
   winner_id: string | null;
   replay_url: string;
+  /**
+   * SHA-256 of the replay's canonical battle log (`src/lib/pkmn/replay-identity.ts`), unique
+   * across all games; null for a game not recorded from a replay (and for replay games recorded
+   * before 2026-10-20 until `scripts/backfill-replay-hashes.ts` fills them).
+   */
+  replay_hash: string | null;
   source: GameSource;
   parsed: boolean;
   stats_locked: boolean;
   aggregate_applied_at?: string | null;
+  /**
+   * When the game's real kills were credited to the Evolution Point Buy trackers (at match
+   * completion, `epb_credit_game_kills`); null while they are not. Games older than 2026-10-20
+   * carry the backfill time (they were credited at submission).
+   */
+  evolution_applied_at?: string | null;
   exclude_all_time: boolean;
   created_at: string;
   updated_at: string;
@@ -28,6 +40,8 @@ export interface GameCreateInput {
   game_number: number;
   winner_id: string | null;
   replay_url?: string;
+  /** Set only together with a replay the result was read from (`BoundReplay.hash`). */
+  replay_hash?: string | null;
   source: GameSource;
   parsed?: boolean;
   exclude_all_time: boolean;
@@ -131,6 +145,11 @@ export interface ReplayPreviewResult {
   parsed: ParsedBattleStats;
   winner_ps_username: string;
   suggestions: ReplaySideSuggestion[];
+  /**
+   * The previewed battle's replay hash. The import sends it back as `replay_hash`, and the route
+   * refuses (409 `replay_changed_since_preview`) when the replay it fetches again hashes differently.
+   */
+  replay_hash: string;
 }
 
 // ─── API Request/Response Types ──────────────────────────────────────

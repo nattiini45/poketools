@@ -86,9 +86,11 @@ import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { buildGamePokemonStats, computePokemonScoreFromGameStats } from '@/lib/discord/helpers';
+import { computeReplayHash } from '@/lib/pkmn/replay-identity';
 
 const MATCH_ID = '12345678-1234-4123-8123-123456789abc';
 const REPLAY_URL = 'https://replay.pokemonshowdown.com/test';
+const REPLAY_LOG = ['|player|p1|alice_ps', '|player|p2|bob_ps', '|turn|1', '|win|alice_ps'].join('\n');
 
 const PLAYER = { playerId: 'p1', name: 'Alice', isAdmin: false, isResourceAdmin: false, isCreator: false, psUsername: '', championsUsername: '', avatarUrl: null, status: 'active' } as const;
 
@@ -170,7 +172,7 @@ describe('POST /api/parse-replay', () => {
   // ── Match not found ───────────────────────────────────────
 
   it('returns 404 when match not found', async () => {
-    vi.mocked(fetchReplay).mockResolvedValue({ log: 'log', id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
     vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
     vi.mocked(getMatchById).mockResolvedValue(null);
 
@@ -184,7 +186,7 @@ describe('POST /api/parse-replay', () => {
   // ── PS username not registered ────────────────────────────
 
   it('returns 400 when PS username cannot be matched', async () => {
-    vi.mocked(fetchReplay).mockResolvedValue({ log: 'log', id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
     vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
     vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
     vi.mocked(getPlayerByPsUsername).mockResolvedValue(null);
@@ -203,7 +205,7 @@ describe('POST /api/parse-replay', () => {
   // ── Player not in match ───────────────────────────────────
 
   it('returns 400 when player is not a match participant', async () => {
-    vi.mocked(fetchReplay).mockResolvedValue({ log: 'log', id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
     vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
     vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
     // Return a player that is NOT in the match
@@ -224,7 +226,7 @@ describe('POST /api/parse-replay', () => {
   // ── Happy path ────────────────────────────────────────────
 
   it('processes a valid replay and returns game result', async () => {
-    vi.mocked(fetchReplay).mockResolvedValue({ log: 'log', id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
     vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
     vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
     vi.mocked(getPlayerByPsUsername).mockImplementation(async (username: string) => {
@@ -245,22 +247,47 @@ describe('POST /api/parse-replay', () => {
     expect(body.success).toBe(true);
     expect(body.data).toEqual(gameResult);
 
+    // No winner or stats from the route: the pipeline reads both from the
+    // bound replay, whose hash is the hash of the fetched log.
+    expect(vi.mocked(recordGameResult)).toHaveBeenCalledTimes(1);
+    const input = vi.mocked(recordGameResult).mock.calls[0][0];
+    expect(input).toMatchObject({
+      match_id: MATCH_ID,
+      source: 'ps_replay',
+      side_player_ids: ['p1', 'p2'],
+      submitter_id: 'p1',
+      is_admin: false,
+    });
+    expect(input).not.toHaveProperty('winner_id');
+    expect(input).not.toHaveProperty('battle_stats');
+    if (input.source !== 'ps_replay') throw new Error('expected a replay input');
+    expect(input.replay.url).toBe(REPLAY_URL);
+    expect(input.replay.hash).toBe(computeReplayHash(REPLAY_LOG));
+    expect(input.replay.parsed).toEqual(fakeParsed);
+  });
+
+  it('passes the sides in replay order when the opponent uploaded the replay', async () => {
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['bob_ps', 'alice_ps'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(parseReplayLog).mockReturnValue({ ...fakeParsed, players: [fakeParsed.players[1], fakeParsed.players[0]] });
+    vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
+    vi.mocked(getPlayerByPsUsername).mockImplementation(async (username: string) => {
+      if (username === 'alice_ps') return { id: 'p1', name: 'Alice' } as never;
+      if (username === 'bob_ps') return { id: 'p2', name: 'Bob' } as never;
+      return null;
+    });
+    vi.mocked(recordGameResult).mockResolvedValue({ game_id: 'g1', bo_reached: false } as never);
+
+    const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+    expect(res.status).toBe(200);
     expect(vi.mocked(recordGameResult)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        match_id: MATCH_ID,
-        winner_id: 'p1',
-        replay_url: REPLAY_URL,
-        source: 'ps_replay',
-        submitter_id: 'p1',
-        is_admin: false,
-      }),
+      expect.objectContaining({ side_player_ids: ['p2', 'p1'] }),
     );
   });
 
   // ── Discord notification fire-and-forget ──────────────────
 
   it('fires Discord notification when tournament exists', async () => {
-    vi.mocked(fetchReplay).mockResolvedValue({ log: 'log', id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
     vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
     vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
     vi.mocked(getPlayerByPsUsername).mockImplementation(async (username: string) => {

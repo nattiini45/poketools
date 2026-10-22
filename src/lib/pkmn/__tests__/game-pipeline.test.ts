@@ -1,8 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─── Mock all query imports ─────────────────────────────────────────
 
-vi.mock('@/lib/supabase/queries/games', () => ({
+vi.mock('@/lib/supabase/queries/games', async () => ({
+  ReplayAlreadyRecordedError: (
+    await vi.importActual<typeof import('@/lib/supabase/queries/games')>('@/lib/supabase/queries/games')
+  ).ReplayAlreadyRecordedError,
+  findGameIdByReplayHash: vi.fn(async () => null),
   createGame: vi.fn(async (input: Record<string, unknown>) => ({ id: 'game-1', ...input })),
   createBattleStats: vi.fn(async (stats: unknown[]) => stats.map((s, i) => ({ id: `stat-${i}`, ...(s as Record<string, unknown>) }))),
   getNextGameNumber: vi.fn(async () => 1),
@@ -143,8 +147,11 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 vi.mock('@/lib/match/evolution-match-evaluator', () => ({
-  applyRealKillsFromGame: vi.fn(async () => []),
-  rollbackRealKillsFromGame: vi.fn(async () => undefined),
+  creditMatchRealKills: vi.fn(async () => ({
+    applied: ['game-1'], alreadyApplied: [], notCompleted: [], missing: [], events: [],
+  })),
+  // Default: the edited game was never credited (no marker).
+  uncreditGameRealKills: vi.fn(async () => 'not_applied'),
   recheckEpbStages: vi.fn(async () => []),
 }));
 
@@ -185,7 +192,11 @@ import {
   transitionMatchStatus, updateMatchStatus,
 } from '@/lib/supabase/queries/matches';
 import { getRoundById, updateRoundStatus } from '@/lib/supabase/queries/rounds';
-import { applyRealKillsFromGame } from '@/lib/match/evolution-match-evaluator';
+import {
+  creditMatchRealKills,
+  recheckEpbStages,
+  uncreditGameRealKills,
+} from '@/lib/match/evolution-match-evaluator';
 import { applyGameAggregatesNow, cancelAggregateJobsForGame, enqueueAggregateJob } from '@/lib/match/aggregate-queue';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { hasReachedBoThreshold, validateTransition } from '@/lib/tournament/match-state';
@@ -202,7 +213,9 @@ import {
   getGameWinCounts,
   releaseGameEditLease,
   updateGameWinner,
+  findGameIdByReplayHash,
 } from '@/lib/supabase/queries/games';
+import type { BoundReplay } from '@/lib/pkmn/replay-binding';
 import { buildGameAggregateDeltas, rollbackGameAggregates } from '@/lib/supabase/queries/aggregates';
 import { shouldExcludeFromAllTime } from '@/lib/supabase/queries/test-accounts';
 import { planRatingRebuild, rebuildRatingsForPlayers } from '@/lib/rating/updateRatings';
@@ -211,6 +224,205 @@ import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { cleanMatchChildren } from '@/lib/match/match-children';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
+
+const REPLAY_HASH = 'ab'.repeat(32);
+
+/** A bound replay as `bindReplay` returns it (stats as the parser emits them). */
+function boundReplay(overrides: Partial<{ url: string; hash: string; winner: string }> = {}): BoundReplay {
+  return {
+    url: overrides.url ?? 'https://replay.pokemonshowdown.com/gen9ou-42',
+    hash: overrides.hash ?? REPLAY_HASH,
+    parsed: {
+      winner_ps_username: overrides.winner ?? 'bob_ps',
+      players: [
+        {
+          ps_username: 'alice_ps',
+          pokemon: [
+            { pokemon_name: 'Pikachu', was_brought: true, was_lead: true, kos_dealt: 0, was_koed: true, moves_used: ['Thunderbolt'], turns_active: 2 },
+          ],
+        },
+        {
+          ps_username: 'bob_ps',
+          pokemon: [
+            { pokemon_name: 'Garchomp', was_brought: true, was_lead: true, kos_dealt: 1, was_koed: false, moves_used: ['Earthquake'], turns_active: 2 },
+          ],
+        },
+      ],
+    },
+  } as unknown as BoundReplay;
+}
+
+describe('recordGameResult: replay binding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('records the winner and stats of the bound replay and stores its hash in the game insert', async () => {
+    const result = await recordGameResult({
+      match_id: 'match-1',
+      source: 'ps_replay',
+      replay: boundReplay(),
+      side_player_ids: ['player-1', 'player-2'],
+      submitter_id: 'player-1',
+    });
+
+    // bob_ps (side p2 = player-2) won according to the replay.
+    expect(result.game_winner_id).toBe('player-2');
+    expect(findGameIdByReplayHash).toHaveBeenCalledWith(REPLAY_HASH);
+    expect(createGame).toHaveBeenCalledWith(expect.objectContaining({
+      winner_id: 'player-2',
+      replay_url: 'https://replay.pokemonshowdown.com/gen9ou-42',
+      replay_hash: REPLAY_HASH,
+      source: 'ps_replay',
+    }));
+    expect(createBattleStats).toHaveBeenCalledWith([
+      expect.objectContaining({ game_id: 'game-1', player_id: 'player-1', pokemon_name: 'Pikachu', kos_dealt: 0, match_won: false }),
+      expect.objectContaining({ game_id: 'game-1', player_id: 'player-2', pokemon_name: 'Garchomp', kos_dealt: 1, match_won: true }),
+    ]);
+  });
+
+  it('follows the side assignment: swapped sides swap the winner and the stats owners', async () => {
+    const result = await recordGameResult({
+      match_id: 'match-1',
+      source: 'ps_replay',
+      replay: boundReplay(),
+      side_player_ids: ['player-2', 'player-1'],
+      submitter_id: 'admin-user',
+      is_admin: true,
+    });
+
+    expect(result.game_winner_id).toBe('player-1');
+    expect(createBattleStats).toHaveBeenCalledWith([
+      expect.objectContaining({ player_id: 'player-2', pokemon_name: 'Pikachu', match_won: false }),
+      expect.objectContaining({ player_id: 'player-1', pokemon_name: 'Garchomp', match_won: true }),
+    ]);
+  });
+
+  it('refuses a battle already bound to a game in any match (409, nothing written)', async () => {
+    vi.mocked(findGameIdByReplayHash).mockResolvedValueOnce('game-in-another-match');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(recordGameResult({
+      match_id: 'match-1',
+      source: 'ps_replay',
+      replay: boundReplay(),
+      side_player_ids: ['player-1', 'player-2'],
+      submitter_id: 'player-1',
+    })).rejects.toMatchObject({ name: 'ReplayAlreadyRecordedError', code: 'replay_already_recorded', statusCode: 409 });
+
+    expect(updateMatchStatus).not.toHaveBeenCalled();
+    expect(createGame).not.toHaveBeenCalled();
+    expect(createBattleStats).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('refuses a replay whose log names no side as the winner (400, nothing written)', async () => {
+    await expect(recordGameResult({
+      match_id: 'match-1',
+      source: 'ps_replay',
+      replay: boundReplay({ winner: '' }),
+      side_player_ids: ['player-1', 'player-2'],
+      submitter_id: 'player-1',
+    })).rejects.toMatchObject({ code: 'replay_winner_unknown', statusCode: 400 });
+    expect(createGame).not.toHaveBeenCalled();
+  });
+
+  it('refuses a side assigned to a player outside the match', async () => {
+    await expect(recordGameResult({
+      match_id: 'match-1',
+      source: 'ps_replay',
+      replay: boundReplay(),
+      side_player_ids: ['player-1', 'stranger'],
+      submitter_id: 'admin-user',
+      is_admin: true,
+    })).rejects.toMatchObject({ code: 'match_player_not_participant', params: { playerId: 'stranger' }, statusCode: 400 });
+    expect(createGame).not.toHaveBeenCalled();
+  });
+
+  it('refuses both sides assigned to the same player', async () => {
+    await expect(recordGameResult({
+      match_id: 'match-1',
+      source: 'ps_replay',
+      replay: boundReplay(),
+      side_player_ids: ['player-1', 'player-1'],
+      submitter_id: 'admin-user',
+      is_admin: true,
+    })).rejects.toMatchObject({ code: 'replay_sides_not_distinct', statusCode: 400 });
+    expect(createGame).not.toHaveBeenCalled();
+  });
+
+  describe('a failure after the game insert', () => {
+    const replayInput = () => ({
+      match_id: 'match-1',
+      source: 'ps_replay' as const,
+      replay: boundReplay(),
+      side_player_ids: ['player-1', 'player-2'] as [string, string],
+      submitter_id: 'player-1',
+    });
+
+    it('deletes the game again when its stats insert fails, freeing the hash, and rethrows', async () => {
+      const statsError = new Error('stats insert failed');
+      vi.mocked(createBattleStats).mockRejectedValueOnce(statsError);
+
+      await expect(recordGameResult(replayInput())).rejects.toBe(statsError);
+
+      expect(createGame).toHaveBeenCalledWith(expect.objectContaining({ replay_hash: REPLAY_HASH }));
+      expect(deleteUncountedGameRow).toHaveBeenCalledWith('game-1');
+      expect(enqueueAggregateJob).not.toHaveBeenCalled();
+      expect(transitionMatchStatus).not.toHaveBeenCalled();
+    });
+
+    it('deletes the game (and its stats, by cascade) when the aggregate job cannot be enqueued', async () => {
+      const queueError = new Error('enqueue failed');
+      vi.mocked(enqueueAggregateJob).mockRejectedValueOnce(queueError);
+
+      await expect(recordGameResult(replayInput())).rejects.toBe(queueError);
+
+      expect(createBattleStats).toHaveBeenCalled();
+      expect(deleteUncountedGameRow).toHaveBeenCalledWith('game-1');
+      expect(transitionMatchStatus).not.toHaveBeenCalled();
+    });
+
+    it('rethrows the original error and logs the admin game delete when the clean-up fails too', async () => {
+      const statsError = new Error('stats insert failed');
+      vi.mocked(createBattleStats).mockRejectedValueOnce(statsError);
+      vi.mocked(deleteUncountedGameRow).mockRejectedValueOnce(new Error('delete failed'));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(recordGameResult(replayInput())).rejects.toBe(statsError);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('admin game delete'),
+        expect.objectContaining({ message: 'delete failed' })
+      );
+      errorSpy.mockRestore();
+    });
+
+    it('keeps a game whose aggregates were applied after all (fenced delete answers counted)', async () => {
+      const queueError = new Error('enqueue response lost');
+      vi.mocked(enqueueAggregateJob).mockRejectedValueOnce(queueError);
+      vi.mocked(deleteUncountedGameRow).mockResolvedValueOnce('counted');
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(recordGameResult(replayInput())).rejects.toBe(queueError);
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('the game is kept'));
+      errorSpy.mockRestore();
+    });
+  });
+
+  it('writes no replay hash for an entered result', async () => {
+    await recordGameResult({
+      match_id: 'match-1',
+      winner_id: 'player-1',
+      source: 'manual' as const,
+      battle_stats: [],
+      submitter_id: 'player-1',
+    });
+    expect(findGameIdByReplayHash).not.toHaveBeenCalled();
+    expect(createGame).toHaveBeenCalledWith(expect.objectContaining({ replay_hash: null }));
+  });
+});
 
 describe('recordGameResult', () => {
   beforeEach(() => {
@@ -282,10 +494,9 @@ describe('recordGameResult', () => {
     await expect(
       recordGameResult({
         match_id: 'match-1',
-        winner_id: 'player-2',
-        replay_url: 'https://replay.pokemonshowdown.com/gen9ou-1234567890#turn-5',
         source: 'ps_replay',
-        battle_stats: [],
+        replay: boundReplay({ url: 'https://replay.pokemonshowdown.com/gen9ou-1234567890#turn-5' }),
+        side_player_ids: ['player-1', 'player-2'],
         submitter_id: 'player-1',
       })
     ).rejects.toMatchObject({
@@ -293,6 +504,7 @@ describe('recordGameResult', () => {
       code: 'duplicate_replay',
       statusCode: 409,
     });
+    expect(createGame).not.toHaveBeenCalled();
   });
 
   it('allows admin to submit on behalf of players', async () => {
@@ -545,8 +757,8 @@ describe('deleteGame', () => {
 
     const result = await deleteGame('game-1', 'admin-1');
 
-    // EPB evolution: repairSeasonEvolution runs (whole-season rebuild); the
-    // inverse rollbackRealKillsFromGame/recheckEpbStages path is NOT used.
+    // EPB evolution: repairSeasonEvolution runs (whole-season rebuild, which
+    // also re-syncs the per-game credit markers); no per-game debit is used.
     expect(repairSeasonEvolution).toHaveBeenCalledTimes(1);
     expect(repairSeasonEvolution).toHaveBeenCalledWith('season-epb');
     // Result carries the mocked impossible lineups from the repair.
@@ -672,11 +884,12 @@ describe('resetMatch', () => {
 
     const result = await resetMatch('match-1', 'admin-1');
 
-    // EPB evolution: repairSeasonEvolution runs (NOT the inverse
-    // rollbackRealKillsFromGame/recheckEpbStages, which are mocked but
-    // should NOT be called from resetMatch's EPB branch).
+    // EPB evolution: repairSeasonEvolution runs (NOT the per-game debit
+    // uncreditGameRealKills, which is mocked but must not be called from
+    // resetMatch's EPB branch).
     expect(repairSeasonEvolution).toHaveBeenCalledTimes(1);
     expect(repairSeasonEvolution).toHaveBeenCalledWith('season-epb');
+    expect(uncreditGameRealKills).not.toHaveBeenCalled();
     // Ratings: rebuildRatingsForPlayers replays both players chronologically.
     expect(rebuildRatingsForPlayers).toHaveBeenCalledTimes(1);
     expect(rebuildRatingsForPlayers).toHaveBeenCalledWith(['player-1', 'player-2']);
@@ -1740,7 +1953,7 @@ describe('editGame: EPB evolution recheck failure is reported, never an empty su
       id: 'tourney-1', season_id: 'season-epb', season_format_type: 'evolution_point_buy',
     } as Awaited<ReturnType<typeof getTournamentById>>);
     const err = new Error('tracker read failed');
-    vi.mocked(applyRealKillsFromGame).mockRejectedValueOnce(err);
+    vi.mocked(uncreditGameRealKills).mockRejectedValueOnce(err);
     vi.mocked(getBattleStatsByGame).mockResolvedValueOnce([
       {
         id: 's1', game_id: 'game-1', player_id: 'player-1', pokemon_name: 'Pikachu', was_brought: true,
@@ -1759,6 +1972,225 @@ describe('editGame: EPB evolution recheck failure is reported, never an empty su
 
   it('omits the flag when the recheck succeeds', async () => {
     const result = await editGame({ game_id: 'game-1', admin_id: 'admin-1' });
+    expect(result).not.toHaveProperty('evolution_recheck_failed');
+  });
+});
+
+// ─── CF-07: EPB real kills wait for the confirmed result ──────────────
+
+const EPB_TOURNAMENT = {
+  id: 'tourney-1', season_id: 'season-epb', ruleset_id: null,
+  name: 'EvoLiga', best_of_default: 3, season_format_type: 'evolution_point_buy',
+} as unknown as Awaited<ReturnType<typeof getTournamentById>>;
+
+describe('recordGameResult: EPB progress waits for the confirmed result (CF-07)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('credits no evolution progress at submission, while aggregates are still enqueued', async () => {
+    vi.mocked(getTournamentById).mockResolvedValueOnce(EPB_TOURNAMENT);
+    // The submission reaches the Bo threshold: the match goes to pending_confirmation.
+    vi.mocked(hasReachedBoThreshold).mockReturnValueOnce({ reached: true, winner_id_index: 1 });
+
+    const result = await recordGameResult({
+      ...baseInput,
+      battle_stats: [
+        {
+          game_id: '', player_id: 'player-1', pokemon_name: 'Charmander', was_brought: true, was_lead: true,
+          kos_dealt: 3, was_koed: false, moves_used: [], turns_active: 4,
+        },
+      ],
+    });
+
+    expect(result.match_status).toBe('pending_confirmation');
+    expect(result.evolution_events).toEqual([]);
+    expect(creditMatchRealKills).not.toHaveBeenCalled();
+    expect(recheckEpbStages).not.toHaveBeenCalled();
+    expect(checkPlayerEvolutions).not.toHaveBeenCalled();
+    expect(enqueueAggregateJob).toHaveBeenCalledWith('game-1', 'tourney-1', 'season-epb');
+  });
+});
+
+describe('editGame: EPB real-kill debit and credit (CF-07)', () => {
+  const credited = {
+    id: 'game-1', match_id: 'match-1', game_number: 1, winner_id: 'player-1',
+    replay_url: '', source: 'manual', parsed: true, stats_locked: false,
+    aggregate_applied_at: '2026-05-21T00:00:00Z',
+    evolution_applied_at: '2026-05-21T00:05:00Z',
+    exclude_all_time: false, updated_at: '2026-05-21T00:00:01.123456+00:00',
+  } as unknown as Awaited<ReturnType<typeof getGameById>>;
+  const oldStat = {
+    id: 's1', game_id: 'game-1', player_id: 'player-1', pokemon_name: 'Charmander', was_brought: true,
+    was_lead: true, kos_dealt: 3, was_koed: false, moves_used: [], turns_active: 5, match_won: true, created_at: '',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getGameWinCounts).mockResolvedValue({ player_1_wins: 2, player_2_wins: 0, player_ids: ['p1', 'p2'] as [string, string] });
+    vi.mocked(hasReachedBoThreshold).mockReturnValue({ reached: true, winner_id_index: 1 });
+    vi.mocked(getTournamentById).mockResolvedValue(EPB_TOURNAMENT);
+    vi.mocked(getGameById).mockResolvedValue(credited);
+    vi.mocked(getBattleStatsByGame).mockResolvedValue([oldStat]);
+    vi.mocked(uncreditGameRealKills).mockResolvedValue('rolled_back');
+  });
+
+  afterEach(() => {
+    // Back to the module factories' defaults for the suites below.
+    for (const mock of [
+      hasReachedBoThreshold, getGameWinCounts, getTournamentById, getGameById, getBattleStatsByGame,
+      uncreditGameRealKills, getMatchById,
+    ]) {
+      vi.mocked(mock).mockReset();
+    }
+  });
+
+  it('debits a credited game by its old stats, fenced on the marker read before the edit, and credits nothing while the match is not completed', async () => {
+    vi.mocked(getMatchById)
+      .mockResolvedValueOnce({ ...matchWithStatus('completed'), winner_id: 'player-1' } as MatchRow)
+      // The re-read after the debit: the edit moved the match to pending_confirmation.
+      .mockResolvedValueOnce({ ...matchWithStatus('pending_confirmation'), winner_id: 'player-1' } as MatchRow);
+
+    const result = await editGame({
+      game_id: 'game-1',
+      admin_id: 'admin-1',
+      battle_stats: [{ player_id: 'player-1', pokemon_name: 'Charmander', kos_dealt: 1 }],
+    } as Parameters<typeof editGame>[0]);
+
+    expect(result.match_status).toBe('pending_confirmation');
+    expect(uncreditGameRealKills).toHaveBeenCalledTimes(1);
+    expect(uncreditGameRealKills).toHaveBeenCalledWith('season-epb', credited, [oldStat]);
+    // The edited stats wait for the next completion.
+    expect(creditMatchRealKills).not.toHaveBeenCalled();
+    expect(recheckEpbStages).toHaveBeenCalledWith('season-epb', ['player-1', 'player-2']);
+    expect(result).not.toHaveProperty('evolution_recheck_failed');
+  });
+
+  it('credits the edited stats when a concurrent confirm completed the match during the edit', async () => {
+    vi.mocked(getMatchById)
+      .mockResolvedValueOnce({ ...matchWithStatus('pending_confirmation') } as MatchRow)
+      // Step 6 lost its compare-and-set: the status the confirm left …
+      .mockResolvedValueOnce({ ...matchWithStatus('completed'), winner_id: 'player-1' } as MatchRow)
+      // … and the re-read after the debit.
+      .mockResolvedValueOnce({ ...matchWithStatus('completed'), winner_id: 'player-1' } as MatchRow);
+    vi.mocked(transitionMatchStatus).mockResolvedValueOnce(null);
+    vi.mocked(getRoundById).mockResolvedValueOnce(round({ round_number: 6 }));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await editGame({ game_id: 'game-1', admin_id: 'admin-1' });
+
+    expect(result.match_status).toBe('completed');
+    expect(creditMatchRealKills).toHaveBeenCalledWith({
+      seasonId: 'season-epb',
+      matchday: 6,
+      playerIds: ['player-1', 'player-2'],
+      gameIds: ['game-1'],
+      statsByGame: { 'game-1': [oldStat] },
+    });
+    expect(result).not.toHaveProperty('evolution_recheck_failed');
+    logged.mockRestore();
+  });
+
+  it('flags the result when the debit lost a marker race', async () => {
+    vi.mocked(getMatchById).mockResolvedValue({ ...matchWithStatus('completed'), winner_id: 'player-1' } as MatchRow);
+    vi.mocked(uncreditGameRealKills).mockResolvedValueOnce('marker_changed');
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await editGame({ game_id: 'game-1', admin_id: 'admin-1' });
+
+    expect(result.evolution_recheck_failed).toBe(true);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('were not debited after its edit (marker_changed)'));
+    logged.mockRestore();
+  });
+
+  /**
+   * Edit-vs-confirm race on a completed match. An in-memory model of the rows
+   * the race touches (match status, the game's evolution marker, the tracker's
+   * real kills) backs the mocks, and the opponent's confirm (status ->
+   * completed, then finalize's per-game credit) is injected at one point of
+   * the edit. Old stats: 3 KOs (credited); edited stats: 1 KO.
+   */
+  function modelEditConfirmRace(confirmAt: 'after_status_change' | 'after_debit') {
+    const db = {
+      status: 'completed' as string,
+      marker: credited!.evolution_applied_at as string | null,
+      kills: oldStat.kos_dealt,
+      stats: [oldStat] as Array<{ kos_dealt: number }>,
+    };
+    const sum = (stats: ReadonlyArray<{ kos_dealt?: number }>) => stats.reduce((n, s) => n + (s.kos_dealt ?? 0), 0);
+    /** The confirm and its finalize credit (`creditGameKills` semantics) with the stats in the table now. */
+    const confirmAndFinalize = () => {
+      db.status = 'completed';
+      if (db.marker === null) {
+        db.kills += sum(db.stats);
+        db.marker = 'finalize-credit';
+      }
+    };
+
+    vi.mocked(getMatchById).mockImplementation(async () => (
+      { ...matchWithStatus(db.status), winner_id: 'player-1' } as MatchRow
+    ));
+    vi.mocked(createBattleStats).mockImplementationOnce(async (rows) => {
+      db.stats = rows as Array<{ kos_dealt: number }>;
+      return rows.map((r, i) => ({ id: `stat-${i}`, ...r })) as Awaited<ReturnType<typeof createBattleStats>>;
+    });
+    vi.mocked(transitionMatchStatus).mockImplementationOnce(async (id, t) => {
+      db.status = t.status;
+      if (confirmAt === 'after_status_change') confirmAndFinalize();
+      return { id, status: t.status } as Awaited<ReturnType<typeof transitionMatchStatus>>;
+    });
+    vi.mocked(uncreditGameRealKills).mockImplementationOnce(async (_season, game, stats) => {
+      if (db.marker === null) return 'not_applied';
+      if (db.marker !== game.evolution_applied_at) return 'marker_changed';
+      db.kills = Math.max(0, db.kills - sum(stats));
+      db.marker = null;
+      if (confirmAt === 'after_debit') confirmAndFinalize();
+      return 'rolled_back';
+    });
+    vi.mocked(creditMatchRealKills).mockImplementationOnce(async (input) => {
+      const result = { applied: [] as string[], alreadyApplied: [] as string[], notCompleted: [] as string[], missing: [], events: [] };
+      if (db.status !== 'completed') result.notCompleted.push('game-1');
+      else if (db.marker !== null) result.alreadyApplied.push('game-1');
+      else {
+        db.kills += sum(input.statsByGame['game-1'] ?? []);
+        db.marker = 'edit-credit';
+        result.applied.push('game-1');
+      }
+      return result;
+    });
+    return db;
+  }
+
+  it('regression: a confirm landing between the status change and the debit keeps the edited kills credited', async () => {
+    const db = modelEditConfirmRace('after_status_change');
+
+    const result = await editGame({
+      game_id: 'game-1',
+      admin_id: 'admin-1',
+      battle_stats: [{ player_id: 'player-1', pokemon_name: 'Charmander', kos_dealt: 1 }],
+    } as Parameters<typeof editGame>[0]);
+
+    // The match is completed and holds exactly the edited game's kills, once.
+    expect(db.status).toBe('completed');
+    expect(db.marker).toBe('edit-credit');
+    expect(db.kills).toBe(1);
+    expect(uncreditGameRealKills).toHaveBeenCalledTimes(1);
+    expect(creditMatchRealKills).toHaveBeenCalledTimes(1);
+    expect(result).not.toHaveProperty('evolution_recheck_failed');
+  });
+
+  it('regression: a confirm landing after the debit is credited once by its finalize, not again by the edit', async () => {
+    const db = modelEditConfirmRace('after_debit');
+
+    const result = await editGame({
+      game_id: 'game-1',
+      admin_id: 'admin-1',
+      battle_stats: [{ player_id: 'player-1', pokemon_name: 'Charmander', kos_dealt: 1 }],
+    } as Parameters<typeof editGame>[0]);
+
+    expect(db.status).toBe('completed');
+    expect(db.marker).toBe('finalize-credit');
+    expect(db.kills).toBe(1);
     expect(result).not.toHaveProperty('evolution_recheck_failed');
   });
 });
@@ -1851,7 +2283,7 @@ describe('recordGameResult: round read', () => {
     expect(hasReachedBoThreshold).toHaveBeenCalledWith(5, 1, 0);
   });
 
-  it('passes the round number as the EPB matchday', async () => {
+  it('applies no EPB progress at submission (it waits for the completed match)', async () => {
     vi.mocked(getRoundById).mockResolvedValueOnce(round({ round_number: 4 }));
     vi.mocked(getTournamentById).mockResolvedValueOnce({
       id: 'tourney-1', season_id: 'season-epb', ruleset_id: null,
@@ -1860,7 +2292,8 @@ describe('recordGameResult: round read', () => {
 
     await recordGameResult(baseInput);
 
-    expect(applyRealKillsFromGame).toHaveBeenCalledWith('season-epb', [], { matchday: 4 });
+    expect(creditMatchRealKills).not.toHaveBeenCalled();
+    expect(checkPlayerEvolutions).not.toHaveBeenCalled();
   });
 });
 

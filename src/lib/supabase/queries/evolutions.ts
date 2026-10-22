@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import type { Tables, TablesInsert } from '@/types/database';
+import type { Json, Tables, TablesInsert } from '@/types/database';
 import type {
   EvolutionTier,
   EvolutionTierFormData,
@@ -489,6 +489,110 @@ export async function applyTrackerProgressWithLog(
 
   if (error) throw error;
   return toTracker(data);
+}
+
+// ─── Per-game real-kill credit (games.evolution_applied_at) ──────
+
+/**
+ * One tracker's share of one game's real kills: a positive KO count. Built in
+ * TS from the game's battle_stats (`buildGameKillCredits` in
+ * src/lib/match/evolution-match-evaluator.ts), one entry per tracker, sorted
+ * by tracker id so concurrent credits take the tracker row locks in one order.
+ */
+export interface GameKillCredit {
+  tracker_id: string;
+  amount: number;
+}
+
+/** What `creditGameKills` did (supabase/migrations/20261020100200_games_evolution_credit.sql). */
+export type GameKillCreditOutcome =
+  | 'applied'
+  | 'already_applied'
+  | 'match_not_completed'
+  | 'game_missing';
+
+function toGameKillCreditOutcome(raw: string): GameKillCreditOutcome {
+  switch (raw) {
+    case 'applied':
+    case 'already_applied':
+    case 'match_not_completed':
+    case 'game_missing':
+      return raw;
+  }
+  throw new Error(`epb_credit_game_kills returned an unknown outcome: ${JSON.stringify(raw)}`);
+}
+
+/**
+ * Credit one game's real kills to the EPB trackers, set
+ * `games.evolution_applied_at` and record exactly what was credited in the
+ * game's credit ledger `games.evolution_credits`, in ONE transaction under the
+ * season's kill-credit fence (`epb_kill_credit_epochs`, bumped on every write)
+ * and the game row lock (`epb_credit_game_kills`,
+ * supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql). Only
+ * for a completed match (owner decision on audit lead CF-07): progress waits
+ * for the confirmed result.
+ *   - 'applied': credited now (each entry through `epb_apply_progress`, logged
+ *     as 'real_kill' on the match's matchday).
+ *   - 'already_applied': the marker is set; nothing written (a finalize re-run,
+ *     a heal, or a game credited at submission before 2026-10-20).
+ *   - 'match_not_completed': the match left `completed` meanwhile (a reset or
+ *     an admin edit); nothing written, the next completion credits it.
+ *   - 'game_missing': the game is gone; nothing written.
+ * A tracker that is not one of the match's players' trackers in its season, a
+ * non-positive amount or a repeated tracker is refused (the RPC raises,
+ * nothing written).
+ */
+export async function creditGameKills(
+  gameId: string,
+  credits: readonly GameKillCredit[]
+): Promise<GameKillCreditOutcome> {
+  const { data, error } = await supabase.rpc('epb_credit_game_kills', {
+    p_game_id: gameId,
+    p_credits: credits as unknown as Json,
+  });
+  if (error) throw error;
+  return toGameKillCreditOutcome(data);
+}
+
+/** What `uncreditGameKills` did. */
+export type GameKillDebitOutcome = 'rolled_back' | 'not_applied' | 'marker_changed' | 'game_missing';
+
+function toGameKillDebitOutcome(raw: string): GameKillDebitOutcome {
+  switch (raw) {
+    case 'rolled_back':
+    case 'not_applied':
+    case 'marker_changed':
+    case 'game_missing':
+      return raw;
+  }
+  throw new Error(`epb_uncredit_game_kills returned an unknown outcome: ${JSON.stringify(raw)}`);
+}
+
+/**
+ * Reverse a credited game's real kills (subtracted and clamped at 0, logged
+ * on the match's matchday) and clear `games.evolution_applied_at` and
+ * `games.evolution_credits`, in ONE transaction under the season's kill-credit
+ * fence and the game row lock, fenced on the marker the caller read
+ * (`epb_uncredit_game_kills`, like `rollback_game_aggregates`). The RPC debits
+ * the game's credit ledger (`games.evolution_credits`; trackers retired since
+ * are skipped); the caller's `debits` (positive amounts, built from the stats
+ * read with the marker) are only the fallback for a legacy marker without a
+ * ledger. Outcomes: 'rolled_back' | 'not_applied' (marker NULL) |
+ * 'marker_changed' (credited again since the read) | 'game_missing'. Only
+ * 'rolled_back' wrote anything.
+ */
+export async function uncreditGameKills(
+  gameId: string,
+  expectedAppliedAt: string,
+  debits: readonly GameKillCredit[]
+): Promise<GameKillDebitOutcome> {
+  const { data, error } = await supabase.rpc('epb_uncredit_game_kills', {
+    p_game_id: gameId,
+    p_expected_applied_at: expectedAppliedAt,
+    p_debits: debits as unknown as Json,
+  });
+  if (error) throw error;
+  return toGameKillDebitOutcome(data);
 }
 
 /**

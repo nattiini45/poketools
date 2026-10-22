@@ -31,7 +31,8 @@ const caseInsensitiveFs = process.platform === 'win32' || process.platform === '
 /** @type {string[]} */
 const dirs = [];
 afterEach(() => {
-  while (dirs.length > 0) rmSync(/** @type {string} */ (dirs.pop()), { recursive: true, force: true });
+  // Retries: a git child process can still be writing into the temp repo's .git when the test ends (ENOTEMPTY on CI).
+  while (dirs.length > 0) rmSync(/** @type {string} */ (dirs.pop()), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function git(root, ...args) {

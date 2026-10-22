@@ -55,13 +55,13 @@ export default {
     reparse: 'Re-parse replay',
     parse: 'Parse replay',
     skipNote:
-      'The username check is skipped here. Assign each replay side to the correct registered player, then review the stats before importing.',
+      'The username check is skipped here. Assign each replay side to the correct registered player. The winner and the stats are recorded exactly as the replay shows them; correct them afterwards in the game editor if needed.',
     sideAssignment: 'Side assignment',
     swapSides: '⇄ Swap sides',
     side: 'Side {n}',
-    name: 'Name',
-    moves: 'Moves (comma sep.)',
-    movesPlaceholder: 'Move1, Move2',
+    winnerFromReplay: 'Winner (from the replay): {name}',
+    noWinner: 'The replay names no winner, so it cannot be imported.',
+    moves: 'Moves',
     importGame: 'Import game',
   },
   editor: {

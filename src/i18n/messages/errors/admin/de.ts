@@ -45,6 +45,8 @@ export default defineDe<typeof en>()({
   game_edit_empty: 'Gib winner_id und/oder battle_stats an, damit sich etwas ändert.',
   round_delete_not_allowed: 'Löschen kannst du nur die neueste Runde oder Runden ohne gespielte Partien.',
   replay_import_winner_not_participant: 'Der Sieger muss einer der beiden Spieler dieses Spiels sein.',
+  replay_changed_since_preview:
+    'Das Replay hat sich seit der Vorschau geändert. Lies es erneut aus und prüfe es, bevor du es importierst.',
 
   player_import_duplicate_discord_id: 'Diese discord_id kommt im Import mehrfach vor.',
   player_import_discord_id_exists: 'Es gibt schon einen Spieler mit dieser discord_id.',

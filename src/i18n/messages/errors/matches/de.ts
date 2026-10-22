@@ -35,6 +35,11 @@ export default defineDe<typeof en>()({
   manual_result_winner_not_participant: 'Der Sieger muss einer der beiden Spieler dieses Spiels sein.',
   replay_player_not_in_match: 'Spieler „{username}“ ({player}) gehört nicht zu diesem Spiel.',
   replay_winner_unknown: 'Aus dem Replay ließ sich kein Sieger ermitteln.',
+  replay_already_recorded:
+    'Mit diesem Replay wurde schon ein Partieergebnis eingetragen. Jeder Kampf kann nur einmal eingetragen werden.',
+  replay_sides_not_distinct: 'Beide Seiten des Replays gehören zum selben Spieler.',
+  battle_stats_duplicate_pokemon:
+    'Ein Pokémon steht für denselben Spieler zweimal in dieser Partie. Jedes Pokémon kann pro Spieler und Partie nur einmal eingetragen werden.',
   match_result_conflict:
     'Im selben Moment wurde ein anderes Ergebnis für dieses Spiel eingetragen. Lade das Spiel neu und reiche es noch einmal ein.',
   match_finalize_incomplete: {

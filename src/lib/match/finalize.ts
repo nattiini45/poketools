@@ -11,6 +11,7 @@ import { getRatingHistoryByMatch, getRatingHistoryByMatches, loadRatingScope } f
 import { matchCountsForRatings } from '@/lib/rating/rating-scope';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { runEpbMatchdayHooks } from '@/lib/match/epb-matchday';
+import { creditMatchRealKills } from '@/lib/match/evolution-match-evaluator';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { buildGamePokemonStats, computePokemonScoreFromGameStats } from '@/lib/discord/helpers';
 import { checkAchievements } from '@/lib/gamification/achievements';
@@ -49,6 +50,7 @@ export const FINALIZE_STEPS = [
   'signatures',
   'achievements',
   'announcements',
+  'epb_real_kills',
   'epb_hooks',
   'bracket_propagation',
   'mark_finalized',
@@ -62,7 +64,10 @@ export type FinalizeStep = (typeof FINALIZE_STEPS)[number];
  *   revalidate (cache expiry), tournament / battle_stats (reads), streaks
  *   (`recomputeStreaks` replays the player's completed matches from scratch;
  *   the incremental `updateStreaks` is NOT replay-safe), signatures
- *   (recomputed from aggregates), epb_hooks (deduped per tracker and matchday:
+ *   (recomputed from aggregates), epb_real_kills (each game is credited once:
+ *   `epb_credit_game_kills` sets `games.evolution_applied_at` in the same
+ *   transaction and answers 'already_applied' afterwards; the stage recheck
+ *   after it is state-based), epb_hooks (deduped per tracker and matchday:
  *   Cosmo award unique index, Evolution Point log check, suspension and stage
  *   checks are state-based, snapshots go through the replace RPC, and the
  *   orchestrator rolls its own writes back on failure; re-run only while the
@@ -92,6 +97,7 @@ export const FINALIZE_HEAL_POLICY: Readonly<Record<FinalizeStep, 'rerun' | 'veri
   signatures: 'rerun',
   achievements: 'not_rerun',
   announcements: 'not_rerun',
+  epb_real_kills: 'rerun',
   epb_hooks: 'rerun',
   bracket_propagation: 'rerun',
   mark_finalized: 'rerun',
@@ -196,21 +202,49 @@ function isElimTournament(tournament: Tournament): boolean {
 }
 
 /**
+ * EPB real kills (owner decision 2026-10-20 on audit lead CF-07): evolution
+ * progress waits for the confirmed result, so the real kills of the match's
+ * games are credited here, at completion, never at submission. Each game is
+ * credited at most once (`games.evolution_applied_at`, set in the credit's own
+ * transaction), so a finalize re-run or a heal credits nothing twice, and a
+ * game credited at submission before 2026-10-20 carries the backfilled marker.
+ * Runs before the matchday hooks: the hooks' Participation Token rule reads
+ * the stage the kills reached, as the season rebuild does. A missing round is a
+ * failure (the matchday is unknown). Returns the matchday for the hooks.
+ */
+async function runEpbRealKillsStep(
+  match: MatchWithPlayers,
+  seasonId: string,
+  statsByGame: Record<string, BattleStat[]>
+): Promise<number> {
+  const round = await getRoundById(match.round_id);
+  if (!round) throw new Error(`Round ${match.round_id} not found; EPB matchday unknown`);
+  await creditMatchRealKills({
+    seasonId,
+    matchday: round.round_number,
+    playerIds: [match.player_1_id, match.player_2_id],
+    // Every game of the match (a game without stats is marked with no credit).
+    gameIds: [...new Set([...match.games.map((game) => game.id), ...Object.keys(statsByGame)])],
+    statsByGame,
+  });
+  return round.round_number;
+}
+
+/**
  * EPB matchday hooks (cosmo, stage recheck, lock, EP, snapshots). The
- * orchestrator rolls its own writes back and rethrows on failure; a missing
- * round is a failure too (it used to be skipped silently).
+ * orchestrator rolls its own writes back and rethrows on failure. Runs after
+ * `runEpbRealKillsStep`, which resolved the matchday.
  */
 async function runEpbStep(
   match: MatchWithPlayers,
   seasonId: string,
+  matchday: number,
   battleStats: BattleStat[]
 ): Promise<void> {
-  const round = await getRoundById(match.round_id);
-  if (!round) throw new Error(`Round ${match.round_id} not found; EPB matchday unknown`);
   await runEpbMatchdayHooks({
     match,
     seasonId,
-    matchday: round.round_number,
+    matchday,
     battleStats,
   });
 }
@@ -543,14 +577,24 @@ export async function finalizeMatchCompletion({
     );
   }
 
-  // Evolution Point Buy matchday hooks (EPB seasons only). Independent of the
-  // rating / streak / achievement steps above.
+  // Evolution Point Buy (EPB seasons only): real kills of the now confirmed
+  // result, then the matchday hooks. Independent of the rating / streak /
+  // achievement steps above; the hooks need the kills step.
   if (!tournament) {
+    runner.blocked('epb_real_kills', 'tournament');
     runner.blocked('epb_hooks', 'tournament');
   } else if (isEpbTournament(tournament)) {
-    if (flatStats) {
-      await runner.run('epb_hooks', () => runEpbStep(match, tournament.season_id, flatStats));
+    if (statsByGame && flatStats) {
+      const kills = await runner.run('epb_real_kills', () =>
+        runEpbRealKillsStep(match, tournament.season_id, statsByGame)
+      );
+      if (kills.ok) {
+        await runner.run('epb_hooks', () => runEpbStep(match, tournament.season_id, kills.value, flatStats));
+      } else {
+        runner.blocked('epb_hooks', 'epb_real_kills');
+      }
     } else {
+      runner.blocked('epb_real_kills', 'battle_stats');
       runner.blocked('epb_hooks', 'battle_stats');
     }
   }
@@ -670,23 +714,35 @@ export async function healMatchFinalization(
   });
 
   if (!tournament) {
+    runner.blocked('epb_real_kills', 'tournament');
     runner.blocked('epb_hooks', 'tournament');
     runner.blocked('bracket_propagation', 'tournament');
   } else {
     if (isEpbTournament(tournament)) {
-      // Snapshots are the hooks' last write and are rolled back with the rest
-      // on failure, so existing snapshots mean the hooks already completed:
-      // re-running them would overwrite the point-in-time snapshots with
-      // today's tracker state.
-      const snapshotsStep = await runner.run('epb_hooks', () => getMatchSnapshots(match.id));
-      if (snapshotsStep.ok && snapshotsStep.value.length === 0) {
-        const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
-        if (statsStep.ok) {
-          const flatStats = Object.values(statsStep.value).flat();
-          await runner.run('epb_hooks', () => runEpbStep(match, tournament.season_id, flatStats));
+      // Real kills first, always: every game is credited at most once (its
+      // marker), so a re-run credits only the games the first run did not.
+      const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
+      if (statsStep.ok) {
+        const statsByGame = statsStep.value;
+        const kills = await runner.run('epb_real_kills', () =>
+          runEpbRealKillsStep(match, tournament.season_id, statsByGame)
+        );
+        if (kills.ok) {
+          // Snapshots are the hooks' last write and are rolled back with the
+          // rest on failure, so existing snapshots mean the hooks already
+          // completed: re-running them would overwrite the point-in-time
+          // snapshots with today's tracker state.
+          const snapshotsStep = await runner.run('epb_hooks', () => getMatchSnapshots(match.id));
+          if (snapshotsStep.ok && snapshotsStep.value.length === 0) {
+            const flatStats = Object.values(statsByGame).flat();
+            await runner.run('epb_hooks', () => runEpbStep(match, tournament.season_id, kills.value, flatStats));
+          }
         } else {
-          runner.blocked('epb_hooks', 'battle_stats');
+          runner.blocked('epb_hooks', 'epb_real_kills');
         }
+      } else {
+        runner.blocked('epb_real_kills', 'battle_stats');
+        runner.blocked('epb_hooks', 'battle_stats');
       }
     }
     if (isElimTournament(tournament)) {

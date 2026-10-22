@@ -49,6 +49,13 @@ export default {
   manual_result_winner_not_participant: 'Winner must be a match participant',
   replay_player_not_in_match: 'Player "{username}" ({player}) is not a participant in this match',
   replay_winner_unknown: 'Could not determine winner from replay',
+  // A replay's battle is bound to at most one game, in any match (games.replay_hash, unique; 409, nothing written)
+  replay_already_recorded: 'This replay was already used to record a game result. Each battle can be recorded only once.',
+  // Both replay sides resolved (or were assigned) to the same registered player (400, nothing written)
+  replay_sides_not_distinct: 'Both sides of the replay belong to the same player.',
+  // battle_stats unique (game_id, player_id, lower(btrim(pokemon_name))): one Pokémon twice for one player in a game (409, nothing written)
+  battle_stats_duplicate_pokemon:
+    'A Pokémon appears twice for the same player in this game. Each Pokémon can be recorded once per player and game.',
   // Two submissions for one match raced for the same game number (games_match_id_game_number_key)
   match_result_conflict: 'Another result was recorded for this match at the same moment. Reload the match and submit again.',
   // confirm-match: the completion is saved, but finalize steps failed (details in the server log and the match.finalize_failed audit event)
