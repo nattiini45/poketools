@@ -6,12 +6,13 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
 import Input from '@/components/ui/Input';
-import PokemonAutocomplete from '@/components/shared/PokemonAutocomplete';
-import { useT } from '@/i18n/client';
+import { useDataLocale, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsAdmin, errorsMatches } from '@/i18n/messages/errors';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
+import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
+import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import type { ReplayPreviewResult, ParsedPokemonStat } from '@/types/game';
 
 /** A form error: a client-side check (by key) or an API failure. Translated at render. */
@@ -19,8 +20,6 @@ type FormError =
   | { kind: 'enterReplayUrl' }
   | { kind: 'parseFailed' }
   | { kind: 'expectedTwo'; count: number }
-  | { kind: 'selectWinner' }
-  | { kind: 'needPokemon'; name: string }
   | { kind: 'importFailed' }
   | { kind: 'api'; error: ApiErrorLike };
 
@@ -36,67 +35,59 @@ interface ReplayImportFormProps {
   initialReplayUrl?: string;
   /** Auto-parse on mount when an initial URL is supplied. */
   autoParse?: boolean;
-  /** Format generation for autocomplete filtering. */
-  generation?: number;
   /** URL to redirect to after a successful import. */
   redirectTo?: string;
 }
 
-interface PokemonStatInput {
-  pokemon_name: string;
-  kos_dealt: number;
-  was_koed: boolean;
-  was_lead: boolean;
-  was_brought: boolean;
-  moves_used: string;
-  turns_active: number;
+/** The previewed replay: what the import records (winner and stats are not editable here). */
+interface PreviewState {
+  psUsernames: [string, string];
+  sidePokemon: [ParsedPokemonStat[], ParsedPokemonStat[]];
+  /** Index of the side the replay names as the winner, or null when it names none. */
+  winnerSide: 0 | 1 | null;
+  replayHash: string;
 }
 
-function parsedToInput(p: ParsedPokemonStat): PokemonStatInput {
-  return {
-    pokemon_name: p.pokemon_name,
-    kos_dealt: p.kos_dealt,
-    was_koed: p.was_koed,
-    was_lead: p.was_lead,
-    was_brought: p.was_brought,
-    moves_used: p.moves_used.join(', '),
-    turns_active: p.turns_active,
-  };
-}
-
+/**
+ * Admin replay import with manual side assignment (the username gate is skipped).
+ *
+ * The organizer only assigns the two replay sides to the two match participants. The winner and
+ * the stats are the replay's own (audit lead F1, owner decision 2026-10-20): the route fetches the
+ * replay again, refuses it when it no longer hashes like this preview, and records what it parsed.
+ * Corrections afterwards go through the game editor.
+ */
 export default function ReplayImportForm({
   matchId,
   players,
   initialReplayUrl,
   autoParse,
-  generation,
   redirectTo,
 }: ReplayImportFormProps) {
   const router = useRouter();
   const t = useT(matchFormsMessages);
+  const dataLocale = useDataLocale();
   const apiErrorText = useApiErrorText(errorsAdmin, errorsMatches);
 
   const [replayUrl, setReplayUrl] = useState(initialReplayUrl ?? '');
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<FormError | null>(null);
 
-  // Parsed state (set once the replay is parsed)
-  const [psUsernames, setPsUsernames] = useState<[string, string] | null>(null);
-  const [sidePokemon, setSidePokemon] = useState<[PokemonStatInput[], PokemonStatInput[]] | null>(null);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const [swapped, setSwapped] = useState(false);
-  const [winnerId, setWinnerId] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<FormError | null>(null);
   const [successKey, setSuccessKey] = useState<'importedComplete' | 'importedMore' | null>(null);
 
   const parseAbortRef = useRef<AbortController | null>(null);
+  // The latest parse request: an older response, or one arriving once an import started, is
+  // dropped so the shown side mapping and winner are always the ones the import sends.
+  const parseSeqRef = useRef(0);
+  const submittingRef = useRef(false);
 
   function clearParsedPreview() {
-    setPsUsernames(null);
-    setSidePokemon(null);
+    setPreview(null);
     setSwapped(false);
-    setWinnerId('');
     setParseError(null);
     setSubmitError(null);
     setSuccessKey(null);
@@ -110,10 +101,6 @@ export default function ReplayImportForm({
         return t('replayImport.parseFailed');
       case 'expectedTwo':
         return t('replayImport.expectedTwo', { count: e.count });
-      case 'selectWinner':
-        return t('common.selectWinner');
-      case 'needPokemon':
-        return t('common.needPokemon', { name: e.name });
       case 'importFailed':
         return t('replayImport.importFailed');
       case 'api':
@@ -134,6 +121,7 @@ export default function ReplayImportForm({
 
   async function handleParse(e?: React.FormEvent) {
     e?.preventDefault();
+    if (submittingRef.current) return;
     setParseError(null);
     setSubmitError(null);
     setSuccessKey(null);
@@ -145,8 +133,11 @@ export default function ReplayImportForm({
     }
 
     setParsing(true);
+    parseAbortRef.current?.abort();
     const controller = new AbortController();
     parseAbortRef.current = controller;
+    const seq = ++parseSeqRef.current;
+    const isStale = () => controller.signal.aborted || seq !== parseSeqRef.current || submittingRef.current;
 
     try {
       const res = await fetch(`/api/admin/matches/${matchId}/replay-preview`, {
@@ -157,7 +148,7 @@ export default function ReplayImportForm({
       });
       const json: { success: boolean; data?: ReplayPreviewResult; error?: string } = await res.json();
 
-      if (controller.signal.aborted) return;
+      if (isStale()) return;
 
       if (!json.success || !json.data) {
         const apiError = toApiErrorLike(json);
@@ -165,30 +156,30 @@ export default function ReplayImportForm({
         return;
       }
 
-      const preview = json.data;
-      const sides = preview.parsed.players;
+      const data = json.data;
+      const sides = data.parsed.players;
       if (sides.length !== 2) {
         setParseError({ kind: 'expectedTwo', count: sides.length });
         return;
       }
 
-      // Pre-fill assignment from best-effort suggestions.
-      const sug = preview.suggestions;
+      // Pre-fill the assignment from the best-effort suggestions.
+      const sug = data.suggestions;
       const initSwapped =
         sug[0]?.suggested_player_id === players[1].id ||
         sug[1]?.suggested_player_id === players[0].id;
 
-      // Default winner: the registered player assigned to the winning side.
-      const winningSideIdx = sides.findIndex((s) => s.ps_username === preview.winner_ps_username);
-      const resolvedWinnerSide = (winningSideIdx === -1 ? 0 : winningSideIdx) as 0 | 1;
-      const defaultWinner = players[initSwapped ? (1 - resolvedWinnerSide) : resolvedWinnerSide];
+      const winningSideIdx = sides.findIndex((s) => s.ps_username === data.winner_ps_username);
 
-      setPsUsernames([sides[0].ps_username, sides[1].ps_username]);
-      setSidePokemon([sides[0].pokemon.map(parsedToInput), sides[1].pokemon.map(parsedToInput)]);
+      setPreview({
+        psUsernames: [sides[0].ps_username, sides[1].ps_username],
+        sidePokemon: [sides[0].pokemon, sides[1].pokemon],
+        winnerSide: winningSideIdx === 0 || winningSideIdx === 1 ? winningSideIdx : null,
+        replayHash: data.replay_hash,
+      });
       setSwapped(initSwapped);
-      setWinnerId(defaultWinner.id);
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (isStale() || (err instanceof DOMException && err.name === 'AbortError')) return;
       setParseError({ kind: 'parseFailed' });
     } finally {
       if (parseAbortRef.current === controller) {
@@ -214,105 +205,24 @@ export default function ReplayImportForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoParse, initialReplayUrl]);
 
-  function swapSides() {
-    setSwapped((s) => !s);
-    // Keep the winning side consistent: the win follows the side, not the player.
-    setWinnerId((prev) =>
-      prev === players[0].id ? players[1].id : prev === players[1].id ? players[0].id : prev
-    );
-  }
-
-  function updatePokemon(
-    sideIdx: 0 | 1,
-    pokeIdx: number,
-    field: keyof PokemonStatInput,
-    value: string | number | boolean
-  ) {
-    setSidePokemon((prev) => {
-      if (!prev) return prev;
-      const updated = [prev[0], prev[1]] as [PokemonStatInput[], PokemonStatInput[]];
-      updated[sideIdx] = [...updated[sideIdx]];
-      updated[sideIdx][pokeIdx] = { ...updated[sideIdx][pokeIdx], [field]: value };
-      return updated;
-    });
-  }
-
-  function addPokemon(sideIdx: 0 | 1) {
-    setSidePokemon((prev) => {
-      if (!prev) return prev;
-      const updated = [prev[0], prev[1]] as [PokemonStatInput[], PokemonStatInput[]];
-      updated[sideIdx] = [
-        ...updated[sideIdx],
-        {
-          pokemon_name: '',
-          kos_dealt: 0,
-          was_koed: false,
-          was_lead: false,
-          was_brought: true,
-          moves_used: '',
-          turns_active: 0,
-        },
-      ];
-      return updated;
-    });
-  }
-
-  function removePokemon(sideIdx: 0 | 1, pokeIdx: number) {
-    setSidePokemon((prev) => {
-      if (!prev) return prev;
-      const updated = [prev[0], prev[1]] as [PokemonStatInput[], PokemonStatInput[]];
-      updated[sideIdx] = updated[sideIdx].filter((_, i) => i !== pokeIdx);
-      return updated;
-    });
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError(null);
     setSuccessKey(null);
 
-    if (!sidePokemon || !psUsernames) return;
+    // Never import while a (re-)parse is in flight: the preview on screen may be about to change.
+    if (!preview || preview.winnerSide === null || parseAbortRef.current || submittingRef.current) return;
 
-    if (!winnerId) {
-      setSubmitError({ kind: 'selectWinner' });
-      return;
-    }
-
-    for (let sideIdx = 0; sideIdx < 2; sideIdx++) {
-      const valid = sidePokemon[sideIdx].filter((p) => p.pokemon_name.trim());
-      if (valid.length === 0) {
-        setSubmitError({ kind: 'needPokemon', name: assignedPlayer(sideIdx as 0 | 1).name });
-        return;
-      }
-    }
-
+    submittingRef.current = true;
     setSubmitting(true);
     try {
-      const pokemon_stats = ([0, 1] as const).map((sideIdx) => ({
-        player_id: assignedPlayer(sideIdx).id,
-        pokemon: sidePokemon[sideIdx]
-          .filter((p) => p.pokemon_name.trim())
-          .map((p) => ({
-            pokemon_name: p.pokemon_name.trim(),
-            kos_dealt: p.kos_dealt,
-            was_koed: p.was_koed,
-            was_lead: p.was_lead,
-            was_brought: p.was_brought,
-            moves_used: p.moves_used
-              .split(',')
-              .map((m) => m.trim())
-              .filter(Boolean),
-            turns_active: p.turns_active,
-          })),
-      }));
-
       const res = await fetch(`/api/admin/matches/${matchId}/replay-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           replay_url: replayUrl.trim(),
-          winner_id: winnerId,
-          pokemon_stats,
+          replay_hash: preview.replayHash,
+          side_player_ids: [assignedPlayer(0).id, assignedPlayer(1).id],
         }),
       });
       const json = await res.json();
@@ -331,11 +241,10 @@ export default function ReplayImportForm({
     } catch {
       setSubmitError({ kind: 'importFailed' });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
-
-  const isParsed = Boolean(psUsernames && sidePokemon);
 
   return (
     <div className="space-y-5">
@@ -352,12 +261,12 @@ export default function ReplayImportForm({
         />
         {parseError && <Alert variant="error">{errorMessage(parseError)}</Alert>}
         <Button type="submit" variant="secondary" loading={parsing} disabled={submitting}>
-          {isParsed ? t('replayImport.reparse') : t('replayImport.parse')}
+          {preview ? t('replayImport.reparse') : t('replayImport.parse')}
         </Button>
       </form>
 
-      {/* Step 2: Assign sides + edit + submit */}
-      {isParsed && psUsernames && sidePokemon && (
+      {/* Step 2: Assign sides, review the replay's result, import */}
+      {preview && (
         <form onSubmit={handleSubmit} className="space-y-6">
           <Alert variant="info">
             {t('replayImport.skipNote')}
@@ -369,7 +278,7 @@ export default function ReplayImportForm({
               <h3 className="font-heading font-semibold text-sm text-poke-text-primary">
                 {t('replayImport.sideAssignment')}
               </h3>
-              <Button type="button" variant="ghost" onClick={swapSides} disabled={submitting}>
+              <Button type="button" variant="ghost" onClick={() => setSwapped((s) => !s)} disabled={submitting || parsing}>
                 {t('replayImport.swapSides')}
               </Button>
             </div>
@@ -377,7 +286,7 @@ export default function ReplayImportForm({
               {([0, 1] as const).map((sideIdx) => (
                 <div key={sideIdx} className="flex items-center gap-2">
                   <span className="font-mono text-poke-text-secondary">
-                    {psUsernames[sideIdx] || t('replayImport.side', { n: sideIdx + 1 })}
+                    {preview.psUsernames[sideIdx] || t('replayImport.side', { n: sideIdx + 1 })}
                   </span>
                   <span className="text-poke-text-muted">→</span>
                   <span className="font-heading font-semibold text-poke-text-primary">
@@ -388,145 +297,62 @@ export default function ReplayImportForm({
             </div>
           </Card>
 
-          {/* Winner */}
-          <div>
-            <label className="block text-sm font-heading font-semibold text-poke-text-primary mb-2">
-              {t('common.winner')}
-            </label>
-            <div className="flex gap-3">
-              {players.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setWinnerId(p.id)}
-                  className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
-                    winnerId === p.id
-                      ? 'bg-poke-blue text-poke-on-blue border-poke-blue shadow-poke-sm'
-                      : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
-                  }`}
-                >
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Winner: the replay's, following the side assignment */}
+          {preview.winnerSide === null ? (
+            <Alert variant="error">{t('replayImport.noWinner')}</Alert>
+          ) : (
+            <p className="text-sm font-heading font-semibold text-poke-text-primary">
+              {t('replayImport.winnerFromReplay', { name: assignedPlayer(preview.winnerSide).name })}
+            </p>
+          )}
 
-          {/* Per-side editable stats */}
+          {/* Per-side stats, read-only */}
           {([0, 1] as const).map((sideIdx) => (
             <Card key={sideIdx} variant="outlined" padding="md">
               <h3 className="font-heading font-semibold text-sm text-poke-text-primary mb-3">
                 {t('common.pokemonOf', { name: assignedPlayer(sideIdx).name })}{' '}
                 <span className="font-mono font-normal text-xs text-poke-text-muted">
-                  ({psUsernames[sideIdx]})
+                  ({preview.psUsernames[sideIdx]})
                 </span>
               </h3>
 
-              <div className="space-y-3">
-                {sidePokemon[sideIdx].map((poke, pokeIdx) => (
-                  <div key={pokeIdx} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-3">
-                      <label className="text-[10px] text-poke-text-muted">{t('replayImport.name')}</label>
-                      <PokemonAutocomplete
-                        value={poke.pokemon_name}
-                        onChange={(name) => updatePokemon(sideIdx, pokeIdx, 'pokemon_name', name)}
-                        generation={generation}
-                        placeholder={t('common.pokemonName')}
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <label className="text-[10px] text-poke-text-muted">{t('common.kos')}</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={poke.kos_dealt}
-                        onChange={(e) =>
-                          updatePokemon(sideIdx, pokeIdx, 'kos_dealt', parseInt(e.target.value) || 0)
-                        }
-                        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <label className="text-[10px] text-poke-text-muted">{t('common.turns')}</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={poke.turns_active}
-                        onChange={(e) =>
-                          updatePokemon(sideIdx, pokeIdx, 'turns_active', parseInt(e.target.value) || 0)
-                        }
-                        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <label className="text-[10px] text-poke-text-muted">{t('replayImport.moves')}</label>
-                      <input
-                        type="text"
-                        value={poke.moves_used}
-                        onChange={(e) => updatePokemon(sideIdx, pokeIdx, 'moves_used', e.target.value)}
-                        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
-                        placeholder={t('replayImport.movesPlaceholder')}
-                      />
-                    </div>
-                    <div className="col-span-3 flex gap-3 items-center pb-1.5">
-                      <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
-                        <input
-                          type="checkbox"
-                          checked={poke.was_koed}
-                          onChange={(e) => updatePokemon(sideIdx, pokeIdx, 'was_koed', e.target.checked)}
-                        />
-                        {t('common.koed')}
-                      </label>
-                      <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
-                        <input
-                          type="checkbox"
-                          checked={poke.was_lead}
-                          onChange={(e) => updatePokemon(sideIdx, pokeIdx, 'was_lead', e.target.checked)}
-                        />
-                        {t('common.lead')}
-                      </label>
-                      <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
-                        <input
-                          type="checkbox"
-                          checked={poke.was_brought}
-                          onChange={(e) =>
-                            updatePokemon(sideIdx, pokeIdx, 'was_brought', e.target.checked)
-                          }
-                        />
-                        {t('common.brought')}
-                      </label>
-                    </div>
-                    <div className="col-span-1 flex items-end pb-1.5">
-                      {sidePokemon[sideIdx].length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removePokemon(sideIdx, pokeIdx)}
-                          className="text-poke-accent text-xs hover:underline"
-                          title={t('common.remove')}
-                        >
-                          &times;
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] text-poke-text-muted">
+                      <th className="py-1 pr-2 font-normal">{t('common.pokemonName')}</th>
+                      <th className="py-1 pr-2 font-normal">{t('common.kos')}</th>
+                      <th className="py-1 pr-2 font-normal">{t('common.turns')}</th>
+                      <th className="py-1 pr-2 font-normal">{t('replayImport.moves')}</th>
+                      <th className="py-1 pr-2 font-normal">{t('common.koed')}</th>
+                      <th className="py-1 pr-2 font-normal">{t('common.lead')}</th>
+                      <th className="py-1 font-normal">{t('common.brought')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.sidePokemon[sideIdx].map((poke) => (
+                      <tr key={poke.pokemon_name} className="border-t border-poke-border text-poke-text-primary">
+                        <td className="py-1 pr-2">{localizeSpecies(poke.pokemon_name, dataLocale)}</td>
+                        <td className="py-1 pr-2">{poke.kos_dealt}</td>
+                        <td className="py-1 pr-2">{poke.turns_active}</td>
+                        <td className="py-1 pr-2 text-poke-text-secondary">
+                          {poke.moves_used.map((m) => localizeMove(m, dataLocale)).join(', ')}
+                        </td>
+                        <td className="py-1 pr-2">{poke.was_koed ? '✓' : ''}</td>
+                        <td className="py-1 pr-2">{poke.was_lead ? '✓' : ''}</td>
+                        <td className="py-1">{poke.was_brought ? '✓' : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-
-              {sidePokemon[sideIdx].length < 6 && (
-                <button
-                  type="button"
-                  onClick={() => addPokemon(sideIdx)}
-                  className="mt-2 text-xs text-poke-blue hover:underline font-heading font-semibold"
-                >
-                  {t('common.addPokemon')}
-                </button>
-              )}
             </Card>
           ))}
 
           {submitError && <Alert variant="error">{errorMessage(submitError)}</Alert>}
           {successKey && <Alert variant="success">{t(`replayImport.${successKey}`)}</Alert>}
 
-          <Button type="submit" variant="primary" loading={submitting}>
+          <Button type="submit" variant="primary" loading={submitting} disabled={preview.winnerSide === null || parsing}>
             {t('replayImport.importGame')}
           </Button>
         </form>

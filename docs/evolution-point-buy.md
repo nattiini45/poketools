@@ -180,11 +180,48 @@ comes from the pack's messages.
 
 ## Match Lifecycle Wiring
 
-Game submission (`recordGameResult`) applies real kills and resolves stages.
-Match completion (`finalizeMatchCompletion`, called from confirm-match and
-the auto-confirm cron) runs, for EPB seasons only, with `matchday` = the
-match's `rounds.round_number`:
+**Evolution progress waits for the confirmed result** (owner decision
+2026-10-20 on audit lead CF-07). Game submission (`recordGameResult`) records
+the game, its `battle_stats` and its aggregate job, and credits **no** real
+kills: a result that is still `pending_confirmation`, or `disputed`, moves no
+tracker. The kills come from the game's `battle_stats` rows, which hold at
+most one row per Pokémon per player per game (request schemas, plus the
+unique index of `20261020100100_battle_stats_unique_pokemon.sql`, keyed on
+JavaScript's trim set since `20261021100200_battle_stats_pokemon_key_js_trim.sql`;
+audit lead CF-06). A replay game's rows are the parsed stats of its replay, and one
+battle can be recorded for only one game (`games.replay_hash`, see
+[Match](./match.md#replay-binding)), so the same battle cannot add real kills
+twice either.
 
+Match completion (`finalizeMatchCompletion`, called from confirm-match, the
+auto-confirm cron and an admin's dispute resolution through confirm-match)
+runs, for EPB seasons only, with `matchday` = the match's
+`rounds.round_number`:
+
+0. **Real kills** (finalize step `epb_real_kills`, `creditMatchRealKills` in
+   `src/lib/match/evolution-match-evaluator.ts`): every game of the match is
+   credited **once**. Per game, `epb_credit_game_kills` adds each tracker's KOs
+   through `epb_apply_progress` (logged `real_kill` on the matchday), sets
+   `games.evolution_applied_at` and records what it credited in the game's
+   credit ledger `games.evolution_credits` (`[{tracker_id, amount}]`), in one
+   transaction under the season's credit fence and the game row lock
+   (`supabase/migrations/20261020100200_games_evolution_credit.sql`,
+   `20261021100100_epb_game_kill_credit_ledger.sql`). A game
+   whose marker is set answers `already_applied` and writes nothing, so a
+   finalize re-run or the cron heal (`FINALIZE_HEAL_POLICY.epb_real_kills =
+   'rerun'`) never counts a game twice; a match that is no longer `completed`
+   (reset or edited meanwhile) answers `match_not_completed` and writes nothing.
+   The function also refuses a tracker that is not one of the match's players'
+   trackers in its season. Stages are then re-resolved for both players
+   (`recheckEpbStages`, events on the matchday). It runs before the steps
+   below, so the Participation Token rule sees the stage the kills reached,
+   in the same order as the season rebuild. When it fails, the matchday hooks
+   are not run (`epb_hooks` blocked) and the heal retries both. When the
+   hooks below fail, their rollback deletes only the evolution events the
+   hook run added (the matchday's events are read before its first write and
+   kept by id), so the stage transitions this step wrote, and the matchday's
+   Evolution Point that depends on them, survive whatever the database clock
+   says about their `created_at`.
 1. `clearExpiredSuspensions` — suspensions served in earlier matchdays reset.
 2. `awardCosmoPoint` — `epb.participationPoints.perMatchday` **Participation
    Tokens** per participation line (a pack `lineRules` entry with
@@ -218,9 +255,98 @@ earned − Σ `epb_comeback_token_spends` (no legacy grant stock is
 subtracted); spending opens once the redraft is
 complete or the admin switch `format_rules.comeback_spend_open` is on.
 
-Idempotency comes from finalize's `previousStatus === 'completed'` guard
-plus evolution-point matchday dedupe. Match reset deletes
+Idempotency comes from finalize's `previousStatus === 'completed'` guard,
+the per-game real-kill marker (`games.evolution_applied_at`) plus
+evolution-point matchday dedupe. Match reset deletes
 `match_evolution_snapshots` so historical pages cannot go stale.
+
+**Admin changes and the real-kill marker.** New credit is made only for a
+completed match's games, but a game of a match that is not completed can
+still hold credited kills: the games of matches that were in flight when the
+migration ran (credited at submission, see below), and the other games of a
+completed match after an admin edit of one of its games (only the edited game
+is debited; the others keep their credit and marker while the match waits for
+its next confirmation, which credits nothing more for them). Every path keeps
+the marker equal to what the trackers hold:
+
+- **Game edit** (`editGame`): an edit moves a completed match back to
+  `pending_confirmation` (or earlier), so a credited game is debited
+  (`epb_uncredit_game_kills`, fenced on the marker read before the edit's
+  writes; logged as negative `real_kill` on the same matchday, so the
+  matchday's snapshot deltas net out) and its marker and ledger cleared. The
+  debit is the game's ledger: exactly the amounts credited, to the trackers
+  that got them, even when a redraft or trade has since changed which tracker
+  one of the game's forms maps to. A tracker retired since (redraft drop,
+  trade) is skipped: its kills were carried into the replacement line's
+  `transferred_evo_progress`, a snapshot taken at the drop that the season
+  rebuild preserves as well, so the edit does not follow them. A game whose
+  marker predates the ledger (credited before 2026-10-21, season not rebuilt
+  since) is debited, as before, by its old stats mapped through today's
+  trackers; one rebuild of the season writes the ledger of every credited
+  game. The
+  edited stats are credited when the match is confirmed again, to the
+  trackers that cover the game's forms then (what the season rebuild
+  computes too). After the debit the
+  edit re-reads the match: when a concurrent confirm completed it during the
+  edit (also between the status change and the debit, when that confirm's
+  finalize still saw the old marker and credited nothing), the edited stats
+  are credited at once. A lost marker race, or a credit that cannot be made, is
+  reported as `evolution_recheck_failed` (the season reconcile repairs it).
+- **Game delete, match reset, season reconcile** rebuild the season
+  (`repairSeasonEvolution`), which recomputes `real_kills` from the completed
+  matches only and then, as its last write, aligns the markers and ledgers
+  (`epb_sync_game_kill_credit`): games of the matches it replayed are marked
+  with the per-game credits the rebuild computed, every other game of the
+  season is unmarked, so a later completion credits exactly the games the
+  trackers do not hold. The sync is fenced: every credit, debit and sync bumps
+  the season's counter (`epb_kill_credit_epochs`, whose row lock serialises
+  them), the rebuild reads it before it reads the season, and the sync refuses
+  with nothing written when it moved or a credited match left `completed`; the
+  rebuild then runs again from a fresh read (up to three attempts, then it
+  fails and the reconcile is re-run). So a confirm that credits while a
+  rebuild runs is never overwritten or unmarked. The Participation Token,
+  stage-lock and Evolution Point writes of a concurrent matchday hook run are
+  not fenced (as before). A dispute itself changes
+  nothing: a disputed match has nothing credited, and it is credited when an
+  admin resolves it to `completed` (or nothing, when the admin resets it).
+- **Games recorded before 2026-10-20** were credited at submission. The
+  migration marks every game that existed then, whatever its match's status,
+  so nothing is credited twice and nothing is reversed: an in-flight match's
+  progress stays visible until its completion, which credits nothing more for
+  those games; a reset, a delete or a reconcile of its season drops and
+  unmarks them like any pending game, and an edit debits them.
+- **Deploy**: apply `20261020100200_games_evolution_credit.sql`, deploy
+  right after, then mark the games submitted in between (the old code credited
+  them at submission; the statement is in the migration header).
+- **Local proof** (2026-10-20, local stack, BEGIN ... ROLLBACK): games that
+  existed before the migration (one of a completed, one of a pending match)
+  are marked and keep their `updated_at`, the default is dropped, a new game is
+  unmarked; credit while pending → `match_not_completed`, nothing written;
+  after completion → `applied` (+3, one `real_kill` log row on matchday 4),
+  again → `already_applied`; a backfilled game → `already_applied`; a tracker
+  of another player or season, a repeated tracker and a zero amount → 22023;
+  debit with a wrong marker → `marker_changed`, with the right one →
+  `rolled_back` (matchday 4 nets to 0), again → `not_applied`; the sync marks
+  and clears per credited match and leaves other seasons alone; EXECUTE for
+  `service_role` only. Two sessions on committed rows: a second credit of the
+  same game waited on the first one's row lock and answered `already_applied`
+  (one increment, one log row).
+- **Ledger and fence** (`20261021100100_epb_game_kill_credit_ledger.sql`):
+  apply, then deploy right away (it drops the unfenced sync signature, so a
+  rebuild by the previous build fails loudly in between), then run the season
+  reconcile once per EPB season so every credited game gets its ledger.
+  Local proof (2026-10-21, local stack, BEGIN ... ROLLBACK): a credit writes
+  the ledger and bumps the counter, `already_applied` does not; a debit whose
+  caller-built debits name another tracker debits the ledger's tracker and
+  leaves the other alone; a ledger tracker deleted meanwhile is skipped; a
+  legacy marker (no ledger) debits the caller's debits; the sync with an old
+  counter answers `stale` / `credit_changed` with nothing written, with the
+  current one marks both games (the one without kills gets `[]`) and bumps
+  the counter, an identical second sync rewrites nothing, a credited match
+  that left `completed` answers `match_changed`, a zero amount, a repeated
+  tracker and a game outside the credited matches → 22023; a ledger without a
+  marker violates the CHECK; `service_role` can call the functions (including
+  the internal lock helper they call), `authenticated` cannot.
 
 ## Token Ledger
 

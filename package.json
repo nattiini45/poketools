@@ -1,6 +1,6 @@
 {
   "name": "poketools",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Competitive Pokemon league and tournament management platform",
   "license": "MIT",
   "private": true,
@@ -94,7 +94,7 @@
     "globals": "^14.0.0",
     "meshoptimizer": "1.2.0",
     "playwright": "^1.62.1",
-    "postcss": "^8.5.26",
+    "postcss": "^8.5.30",
     "supabase": "^2.78.1",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
@@ -104,7 +104,7 @@
   "overrides": {
     "uuid": "^11.1.1",
     "esbuild": "0.28.1",
-    "vite": "^8.1.6",
+    "vite": "^8.3.5",
     "postcss": "$postcss",
     "sharp": "$sharp",
     "minimatch": "^10.2.5",

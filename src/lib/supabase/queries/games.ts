@@ -15,10 +15,12 @@ function toGame(row: GameRow): Game {
     game_number: row.game_number,
     winner_id: row.winner_id,
     replay_url: row.replay_url,
+    replay_hash: row.replay_hash,
     source: row.source,
     parsed: row.parsed,
     stats_locked: row.stats_locked,
     aggregate_applied_at: row.aggregate_applied_at,
+    evolution_applied_at: row.evolution_applied_at,
     exclude_all_time: row.exclude_all_time,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -87,6 +89,59 @@ export class GameNumberConflictError extends UserFacingError {
   }
 }
 
+/**
+ * UNIQUE index on `games (replay_hash) WHERE replay_hash IS NOT NULL`
+ * (supabase/migrations/20261020100000_games_replay_hash.sql).
+ */
+export const GAMES_REPLAY_HASH_KEY = 'games_replay_hash_key';
+
+/**
+ * The battle behind this replay is already bound to a recorded game, in this
+ * match or any other (owner decision 2026-10-20, audit lead F1). Thrown by the
+ * pipeline's pre-check and, race-safe, by `createGame` when the unique index
+ * refuses the insert; nothing is written. HTTP 409, code
+ * `replay_already_recorded`. The pipeline deletes a game again when its stats
+ * or aggregate job fail after the insert; if that delete fails too, the game
+ * keeps the hash and this error points at it until an admin deletes it (admin
+ * game delete; the match page lists it without stats).
+ */
+export class ReplayAlreadyRecordedError extends UserFacingError {
+  constructor() {
+    super(
+      'This replay was already used to record a game result. Each battle can be recorded only once.',
+      { code: 'replay_already_recorded', status: 409 },
+    );
+    this.name = 'ReplayAlreadyRecordedError';
+  }
+}
+
+/**
+ * UNIQUE index on `battle_stats (game_id, player_id, <key>)`, the database twin
+ * of the request schemas' one-row-per-Pokémon rule. Since
+ * supabase/migrations/20261021100200_battle_stats_pokemon_key_js_trim.sql the
+ * key is `lower(regexp_replace(pokemon_name, '^[set]+|[set]+$', '', 'g'))`
+ * with `[set]` exactly JavaScript's trim set, so it matches
+ * `battleStatPokemonKey` (src/lib/validation/schemas.ts); it replaced the
+ * `lower(btrim(pokemon_name))` key of 20261020100100 under the same name.
+ */
+export const BATTLE_STATS_GAME_PLAYER_POKEMON_KEY = 'battle_stats_game_player_pokemon_key';
+
+/**
+ * A stats write named the same Pokémon twice for one player in one game. The
+ * request schemas refuse this first (400 `validation_failed`); this is the
+ * database backstop for any writer that skipped them. HTTP 409, code
+ * `battle_stats_duplicate_pokemon`; the insert wrote no row.
+ */
+export class BattleStatsDuplicatePokemonError extends UserFacingError {
+  constructor() {
+    super(
+      'A Pokémon appears twice for the same player in this game. Each Pokémon can be recorded once per player and game.',
+      { code: 'battle_stats_duplicate_pokemon', status: 409 },
+    );
+    this.name = 'BattleStatsDuplicatePokemonError';
+  }
+}
+
 /** A Postgres unique violation of exactly `constraint` (others are not ours to map). */
 function isUniqueViolationOf(error: unknown, constraint: string): boolean {
   if (typeof error !== 'object' || error === null) return false;
@@ -104,6 +159,7 @@ export async function createGame(input: GameCreateInput): Promise<Game> {
     game_number: input.game_number,
     winner_id: input.winner_id,
     replay_url: input.replay_url ?? '',
+    replay_hash: input.replay_hash ?? null,
     source: input.source,
     parsed: input.parsed ?? false,
     exclude_all_time: input.exclude_all_time,
@@ -123,9 +179,33 @@ export async function createGame(input: GameCreateInput): Promise<Game> {
       );
       throw new GameNumberConflictError();
     }
+    if (isUniqueViolationOf(error, GAMES_REPLAY_HASH_KEY)) {
+      console.error(
+        `[createGame] replay ${input.replay_url ?? ''} of match ${input.match_id} is already bound to a game ` +
+          `(concurrent or repeated submission of the same battle)`,
+        error
+      );
+      throw new ReplayAlreadyRecordedError();
+    }
     throw error;
   }
   return toGame(data);
+}
+
+/**
+ * The id of the game the battle with this replay hash is bound to, or null.
+ * The pipeline's pre-check before any write; the unique index stays the
+ * race-safe guard (`createGame`).
+ */
+export async function findGameIdByReplayHash(replayHash: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('games')
+    .select('id')
+    .eq('replay_hash', replayHash)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id ?? null;
 }
 
 export async function markGameParsed(gameId: string): Promise<void> {
@@ -153,7 +233,13 @@ export async function updateGameWinner(gameId: string, winnerId: string): Promis
 // `apply_aggregate_job` sets it with the increments, `rollback_game_aggregates`
 // clears it with the decrements (src/lib/supabase/queries/aggregates.ts). No
 // standalone marker write exists, so the marker can never disagree with the
-// counts it describes.
+// counts it describes. The same holds for `games.evolution_applied_at` and its
+// credit ledger `games.evolution_credits`: only the EPB credit functions write
+// them, the ledger only together with the marker (a CHECK keeps it NULL while
+// the marker is NULL) and both with the tracker writes (`creditGameKills` /
+// `uncreditGameKills` in src/lib/supabase/queries/evolutions.ts, and the
+// season rebuild's `epb_sync_game_kill_credit` called from
+// src/lib/reconcile/evolution-rebuild.ts).
 
 /**
  * Mark a game as manually edited. Future re-parse / bulk import tooling should
@@ -355,7 +441,16 @@ export async function createBattleStats(stats: BattleStatInsert[]): Promise<Batt
     .insert(inserts)
     .select();
 
-  if (error) throw error;
+  if (error) {
+    if (isUniqueViolationOf(error, BATTLE_STATS_GAME_PLAYER_POKEMON_KEY)) {
+      console.error(
+        `[createBattleStats] duplicate Pokémon for one player in game ${stats[0]?.game_id ?? '?'}`,
+        error
+      );
+      throw new BattleStatsDuplicatePokemonError();
+    }
+    throw error;
+  }
   return data.map(toBattleStat);
 }
 

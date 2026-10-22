@@ -46,6 +46,7 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     game_number: 1,
     winner_id: 'player-1',
     replay_url: '',
+    replay_hash: null,
     source: 'manual',
     parsed: true,
     stats_locked: false,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { manualResultSchema, replayImportSchema } from '@/lib/validation/schemas';
+import { adminGameEditSchema, manualResultSchema, replayImportSchema } from '@/lib/validation/schemas';
 import { buildGamePayload, createInitialState } from '@/lib/broadcast/tracker-reducer';
 
 const MATCH_ID = '12345678-1234-4123-8123-123456789abc';
@@ -65,22 +65,51 @@ describe('manualResultSchema pokemon_stats', () => {
   });
 });
 
-describe('replayImportSchema pokemon_stats', () => {
-  const replayBody = (pokemon_stats: unknown[]) => ({
+describe('replayImportSchema (side assignment only, F1)', () => {
+  const HASH = 'ab'.repeat(32);
+  const importBody = (overrides: Record<string, unknown> = {}) => ({
     replay_url: 'https://replay.pokemonshowdown.com/gen9-1',
-    winner_id: P1_ID,
-    pokemon_stats,
+    replay_hash: HASH,
+    side_player_ids: [P1_ID, P2_ID],
+    ...overrides,
   });
 
-  it('accepts a normal two-player payload', () => {
-    expect(replayImportSchema.safeParse(replayBody([block(P1_ID, P1_TEAM), block(P2_ID, P2_TEAM)])).success).toBe(
-      true
+  it('accepts the URL, the preview hash and one player per replay side', () => {
+    expect(replayImportSchema.safeParse(importBody()).success).toBe(true);
+  });
+
+  it('carries no winner or stats: client-sent values are stripped', () => {
+    const parsed = replayImportSchema.parse(
+      importBody({ winner_id: P2_ID, pokemon_stats: [block(P1_ID, ['Pikachu'])] })
     );
+    expect(parsed).toEqual(importBody());
   });
 
-  it('rejects repeated blocks for one player', () => {
-    const blocks = Array.from({ length: 3 }, () => block(P1_ID, ['Pikachu']));
-    expect(replayImportSchema.safeParse(replayBody(blocks)).success).toBe(false);
-    expect(replayImportSchema.safeParse(replayBody(blocks.slice(0, 2))).success).toBe(false);
+  it('rejects a malformed hash and a side list that is not two player ids', () => {
+    expect(replayImportSchema.safeParse(importBody({ replay_hash: HASH.toUpperCase() })).success).toBe(false);
+    expect(replayImportSchema.safeParse(importBody({ replay_hash: undefined })).success).toBe(false);
+    expect(replayImportSchema.safeParse(importBody({ side_player_ids: [P1_ID] })).success).toBe(false);
+    expect(replayImportSchema.safeParse(importBody({ side_player_ids: [P1_ID, P2_ID, P1_ID] })).success).toBe(false);
+    expect(replayImportSchema.safeParse(importBody({ side_player_ids: [P1_ID, 'not-a-uuid'] })).success).toBe(false);
+  });
+});
+
+describe('adminGameEditSchema battle_stats (CF-06)', () => {
+  const row = (player_id: string, pokemon_name: string) => ({ player_id, pokemon_name, kos_dealt: 1 });
+
+  it('accepts one row per Pokémon per player, mirrors included', () => {
+    expect(adminGameEditSchema.safeParse({
+      battle_stats: [row(P1_ID, 'Pikachu'), row(P2_ID, 'Pikachu'), row(P1_ID, 'Gengar')],
+    }).success).toBe(true);
+  });
+
+  it('rejects the same Pokémon twice for one player, ignoring case and whitespace', () => {
+    const result = adminGameEditSchema.safeParse({
+      battle_stats: [row(P1_ID, 'Pikachu'), row(P2_ID, 'Charizard'), row(P1_ID, ' PIKACHU ')],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toContainEqual(
+      expect.objectContaining({ path: ['battle_stats', 2, 'pokemon_name'] })
+    );
   });
 });

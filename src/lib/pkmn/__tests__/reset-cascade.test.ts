@@ -114,8 +114,8 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 vi.mock('@/lib/match/evolution-match-evaluator', () => ({
-  applyRealKillsFromGame: vi.fn(async () => []),
-  rollbackRealKillsFromGame: vi.fn(),
+  creditMatchRealKills: vi.fn(),
+  uncreditGameRealKills: vi.fn(),
   recheckEpbStages: vi.fn(async () => []),
 }));
 
@@ -333,6 +333,7 @@ describe('resetMatch cascade', () => {
       return summaries.map((g) => ({
         ...g,
         match_id: id,
+        replay_hash: null,
         parsed: true,
         exclude_all_time: false,
         created_at: '2026-01-01T00:00:00.000Z',

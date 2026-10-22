@@ -7,8 +7,10 @@
  * `resolveEpbStageTransitions` in epb-stage-resolution) and query modules
  * (evolutions, evolution-events, epb-thresholds). The query modules are
  * vi.mocked so we feed controlled tracker/threshold data and assert the
- * coordination: real KOs parsed & applied, stage transitions recorded as
- * events, rollback reverses the delta, persistence calls fire correctly.
+ * coordination: real KOs parsed into per-tracker credits, each game credited
+ * through the marker RPC once (CF-07: at match completion, never twice),
+ * stage transitions resolved and recorded as events, the edit debit fenced on
+ * the marker.
  * The pure helpers are left REAL so the stage-resolution behavior is
  * genuinely exercised.
  */
@@ -19,13 +21,15 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const {
   mockGetSeasonTrackers,
   mockUpdateTracker,
-  mockApplyTrackerProgressWithLog,
+  mockCreditGameKills,
+  mockUncreditGameKills,
   mockInsertEvolutionEvents,
   mockGetSeasonLineThresholds,
 } = vi.hoisted(() => ({
   mockGetSeasonTrackers: vi.fn(),
   mockUpdateTracker: vi.fn(),
-  mockApplyTrackerProgressWithLog: vi.fn(),
+  mockCreditGameKills: vi.fn(),
+  mockUncreditGameKills: vi.fn(),
   mockInsertEvolutionEvents: vi.fn(),
   mockGetSeasonLineThresholds: vi.fn(),
 }));
@@ -33,7 +37,8 @@ const {
 vi.mock('@/lib/supabase/queries/evolutions', () => ({
   getSeasonTrackers: mockGetSeasonTrackers,
   updateTracker: mockUpdateTracker,
-  applyTrackerProgressWithLog: mockApplyTrackerProgressWithLog,
+  creditGameKills: mockCreditGameKills,
+  uncreditGameKills: mockUncreditGameKills,
   // Pulled in transitively by epb-tracker-apply via epb-team-validation; not
   // called by the evaluator, but the mock must satisfy the import graph.
   getTrackerByLine: vi.fn(),
@@ -50,9 +55,11 @@ vi.mock('@/lib/draft/epb-thresholds', () => ({
 
 // ── Import after mocks ─────────────────────────────────────────────
 import {
-  applyRealKillsFromGame,
-  rollbackRealKillsFromGame,
+  buildGameKillCredits,
+  creditMatchRealKills,
+  uncreditGameRealKills,
 } from '../evolution-match-evaluator';
+import { buildFormToTrackerIndex } from '@/lib/match/epb-tracker-apply';
 import type { EvolutionTracker } from '@/types/evolution';
 import type { LineThresholds } from '@/lib/match/epb-stage-resolution';
 
@@ -102,294 +109,193 @@ beforeEach(() => {
   mockUpdateTracker.mockResolvedValue(undefined);
 });
 
-// ── applyRealKillsFromGame — real KOs parsed & applied ──────────────
 
-describe('applyRealKillsFromGame', () => {
-  it('returns [] and skips persistence when there are no trackers', async () => {
-    mockGetSeasonTrackers.mockResolvedValue([]);
-    mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
+function creditInput(overrides: Partial<Parameters<typeof creditMatchRealKills>[0]> = {}) {
+  return {
+    seasonId: 's1',
+    matchday: 3,
+    playerIds: ['p1', 'p2'] as const,
+    gameIds: ['g1'],
+    statsByGame: { g1: [{ player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 3 }] },
+    ...overrides,
+  };
+}
 
-    const events = await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 3 },
+// ── buildGameKillCredits — real KOs parsed into per-tracker credits ──
+
+describe('buildGameKillCredits', () => {
+  const lines = [
+    charLine(),
+    charLine({ base_pokemon: 'Squirtle', stage2_pokemon: 'Wartortle', stage3_pokemon: 'Blastoise' }),
+  ];
+
+  it('sums one entry per tracker, drops zero/negative and untracked rows, sorts by tracker id', () => {
+    const index = buildFormToTrackerIndex(
+      [
+        makeTracker({ id: 't-z', base_pokemon: 'Charmander', current_form: 'Charmander' }),
+        makeTracker({ id: 't-a', base_pokemon: 'Squirtle', current_form: 'Squirtle' }),
+      ],
+      lines
+    );
+
+    expect(
+      buildGameKillCredits(
+        [
+          { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 2 },
+          { player_id: 'p1', pokemon_name: 'Charmeleon', kos_dealt: 1 }, // evolved form of the same line
+          { player_id: 'p1', pokemon_name: 'Squirtle', kos_dealt: 1 },
+          { player_id: 'p1', pokemon_name: 'Squirtle', kos_dealt: 0 }, // dropped
+          { player_id: 'p1', pokemon_name: 'Squirtle', kos_dealt: -4 }, // dropped
+          { player_id: 'p1', pokemon_name: 'Pikachu', kos_dealt: 6 }, // untracked
+          { player_id: 'p2', pokemon_name: 'Charmander', kos_dealt: 5 }, // another player's mon
+        ],
+        index
+      )
+    ).toEqual([
+      { tracker_id: 't-a', amount: 1 },
+      { tracker_id: 't-z', amount: 3 },
     ]);
-
-    expect(events).toEqual([]);
-    expect(mockApplyTrackerProgressWithLog).not.toHaveBeenCalled();
-    expect(mockInsertEvolutionEvents).not.toHaveBeenCalled();
   });
 
-  it('applies positive KOs to the matching tracker and persists the updated total', async () => {
-    const tracker = makeTracker({ total_kos: 2, real_kills: 2, current_stage: 1 });
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
-    mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
-    // Below the stage-2 threshold (total 4) — no stage transition yet.
-    mockApplyTrackerProgressWithLog.mockResolvedValue(
-      makeTracker({ total_kos: 3, real_kills: 3, current_stage: 1 })
-    );
-
-    const events = await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 1 },
-    ], { matchday: 2 });
-
-    // No stage crossed → no evolution events.
-    expect(events).toEqual([]);
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledWith(
-      't-char', 'real_kill', 1,
-      expect.objectContaining({ matchday: 2, note: 'KO from battle' })
-    );
-    // No stage transition → no form/stage updateTracker call.
-    expect(mockUpdateTracker).not.toHaveBeenCalled();
-    // insertEvolutionEvents is still invoked (with an empty events array is
-    // a no-op inside the mocked impl; the evaluator calls it unconditionally).
-    expect(mockInsertEvolutionEvents).toHaveBeenCalledWith(
-      [],
-      expect.objectContaining({ season_id: 's1', matchday: 2 })
-    );
+  it('returns no credit for a game without stats', () => {
+    expect(buildGameKillCredits([], buildFormToTrackerIndex([makeTracker()], lines))).toEqual([]);
   });
+});
 
-  it('records a stage transition as an EvolutionEvent when KOs cross the stage-2 threshold', async () => {
-    const tracker = makeTracker({ total_kos: 2, real_kills: 2, current_stage: 1 });
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
+// ── creditMatchRealKills — completion-time credit, once per game ─────
+
+describe('creditMatchRealKills', () => {
+  it('credits each game once through the marker RPC and records the stage transition on the matchday', async () => {
     mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
-    // +3 KOs → total_kos 5 ≥ stage2_kos 4 → Charmander → Charmeleon.
-    mockApplyTrackerProgressWithLog.mockResolvedValue(
-      makeTracker({ total_kos: 5, real_kills: 5, current_stage: 1 })
-    );
+    mockGetSeasonTrackers
+      // credit index: before the credit
+      .mockResolvedValueOnce([makeTracker({ total_kos: 2, real_kills: 2 })])
+      // stage recheck: the RPC raised the total to 5 (stage-2 threshold 4)
+      .mockResolvedValueOnce([makeTracker({ total_kos: 5, real_kills: 5 })]);
+    mockCreditGameKills.mockResolvedValue('applied');
 
-    const events = await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 3 },
-    ], { matchday: 3 });
+    const result = await creditMatchRealKills(creditInput());
 
-    expect(events).toHaveLength(1);
-    const event = events[0];
-    expect(event).toMatchObject({
+    expect(mockCreditGameKills).toHaveBeenCalledTimes(1);
+    expect(mockCreditGameKills).toHaveBeenCalledWith('g1', [{ tracker_id: 't-char', amount: 3 }]);
+    expect(result.applied).toEqual(['g1']);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({
       player_id: 'p1',
-      base_pokemon: 'Charmander',
       previous_form: 'Charmander',
       new_form: 'Charmeleon',
       new_stage: 2,
-      previous_stage: 1,
-      is_devolution: false,
-      total_kos: 5,
       tracker_id: 't-char',
     });
-
-    // The form/stage update is persisted.
     expect(mockUpdateTracker).toHaveBeenCalledWith(
       't-char',
       expect.objectContaining({ current_form: 'Charmeleon', current_stage: 2 })
     );
-    // The event is persisted to evolution_events with the matchday context.
     expect(mockInsertEvolutionEvents).toHaveBeenCalledWith(
-      events,
+      result.events,
       expect.objectContaining({ season_id: 's1', matchday: 3 })
     );
   });
 
-  it('records a double stage transition (stage 1 → 3) when KOs cross both thresholds', async () => {
-    const tracker = makeTracker({ total_kos: 2, real_kills: 2, current_stage: 1 });
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
+  it('credits nothing twice on a re-run: an already credited game writes nothing, the stage recheck stays state-based', async () => {
     mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
-    // +15 KOs → total_kos 17 ≥ stage3_kos 14 → Charmander → Charmeleon → Charizard.
-    mockApplyTrackerProgressWithLog.mockResolvedValue(
-      makeTracker({ total_kos: 17, real_kills: 17, current_stage: 1 })
-    );
+    // The first run already credited the kills and resolved the stage.
+    mockGetSeasonTrackers.mockResolvedValue([
+      makeTracker({ current_form: 'Charmeleon', current_stage: 2, total_kos: 5, real_kills: 5 }),
+    ]);
+    mockCreditGameKills.mockResolvedValue('already_applied');
 
-    const events = await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 15 },
-    ], { matchday: 4 });
+    const result = await creditMatchRealKills(creditInput());
 
-    // Two transitions: stage 2 then stage 3.
-    expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({ new_form: 'Charmeleon', new_stage: 2, previous_stage: 1 });
-    expect(events[1]).toMatchObject({ new_form: 'Charizard', new_stage: 3, previous_stage: 2 });
-    // Final persisted form is the terminal stage.
-    expect(mockUpdateTracker).toHaveBeenCalledWith(
-      't-char',
-      expect.objectContaining({ current_form: 'Charizard', current_stage: 3 })
-    );
+    expect(result).toMatchObject({ applied: [], alreadyApplied: ['g1'], events: [] });
+    expect(mockUpdateTracker).not.toHaveBeenCalled();
   });
 
-  it('matches KOs recorded under an EVOLVED form name, not just the base form', async () => {
-    // A line that already evolved records KOs under "Charmeleon" (its current
-    // form). buildFormToTrackerIndex maps every form of the line to the
-    // tracker, so the stat still resolves.
-    const tracker = makeTracker({
-      current_form: 'Charmeleon',
-      current_stage: 2,
-      total_kos: 4,
-      real_kills: 4,
-    });
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
+  it('calls the RPC for every game, sorted, including a game without stats', async () => {
     mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
-    mockApplyTrackerProgressWithLog.mockResolvedValue(
-      makeTracker({ current_form: 'Charmeleon', current_stage: 2, total_kos: 7, real_kills: 7 })
-    );
+    mockGetSeasonTrackers.mockResolvedValue([makeTracker()]);
+    mockCreditGameKills.mockResolvedValue('applied');
 
-    const events = await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmeleon', kos_dealt: 3 },
+    await creditMatchRealKills(creditInput({
+      gameIds: ['g2', 'g1', 'g2'],
+      statsByGame: { g1: [{ player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 1 }] },
+    }));
+
+    expect(mockCreditGameKills.mock.calls).toEqual([
+      ['g1', [{ tracker_id: 't-char', amount: 1 }]],
+      ['g2', []],
     ]);
-
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledWith(
-      't-char', 'real_kill', 3, expect.objectContaining({ note: 'KO from battle' })
-    );
-    // 7 < 14 (stage3_kos) → still stage 2, no transition.
-    expect(events).toEqual([]);
   });
 
-  it('drops zero / negative KO rows before applying (applyKillDelta filter)', async () => {
-    const tracker = makeTracker({ total_kos: 2, real_kills: 2 });
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
+  it('reports games of a match that left completed, and resolves no stage for them', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
-    mockApplyTrackerProgressWithLog.mockResolvedValue(
-      makeTracker({ total_kos: 3, real_kills: 3 })
-    );
+    mockGetSeasonTrackers.mockResolvedValue([makeTracker()]);
+    mockCreditGameKills.mockResolvedValueOnce('match_not_completed');
 
-    await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 0 }, // dropped
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: -5 }, // dropped
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 1 }, // applied
-    ]);
+    const result = await creditMatchRealKills(creditInput());
 
-    // Only the positive row reaches the apply RPC.
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledTimes(1);
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledWith(
-      't-char', 'real_kill', 1, expect.anything()
-    );
+    expect(result).toMatchObject({ applied: [], notCompleted: ['g1'], events: [] });
+    expect(mockGetSeasonTrackers).toHaveBeenCalledTimes(1); // no stage recheck
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('not credited: the match left completed'), ['g1']);
+    logged.mockRestore();
   });
 
-  it('skips stats for an unknown form (no matching tracker)', async () => {
-    const tracker = makeTracker();
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
+  it('propagates a failed credit (the step fails; the uncredited games stay uncredited)', async () => {
     mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
+    mockGetSeasonTrackers.mockResolvedValue([makeTracker()]);
+    const err = new Error('rpc failed');
+    mockCreditGameKills.mockRejectedValueOnce(err);
 
-    const events = await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Pikachu', kos_dealt: 6 },
-    ]);
-
-    expect(events).toEqual([]);
-    expect(mockApplyTrackerProgressWithLog).not.toHaveBeenCalled();
+    await expect(creditMatchRealKills(creditInput())).rejects.toBe(err);
+    expect(mockUpdateTracker).not.toHaveBeenCalled();
   });
 
-  it('continues applying progress even if event persistence throws (non-fatal)', async () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const tracker = makeTracker({ total_kos: 2, real_kills: 2 });
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
-    mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
-    mockApplyTrackerProgressWithLog.mockResolvedValue(
-      makeTracker({ total_kos: 5, real_kills: 5 })
-    );
-    mockInsertEvolutionEvents.mockRejectedValue(new Error('db down'));
-
-    const events = await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 3 },
-    ]);
-
-    // The stage transition is still computed and returned...
-    expect(events).toHaveLength(1);
-    expect(events[0].new_form).toBe('Charmeleon');
-    // ...and the form/stage update still persisted (progress not undone).
-    expect(mockUpdateTracker).toHaveBeenCalled();
-    // The persistence failure is logged, not thrown.
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
-  });
-
-  it('does not mutate the input trackers array beyond the touched set', async () => {
-    const touched = makeTracker({ id: 't-a', base_pokemon: 'Charmander', total_kos: 2, real_kills: 2 });
-    const untouched = makeTracker({ id: 't-b', player_id: 'p1', base_pokemon: 'Squirtle', current_form: 'Squirtle', total_kos: 0, real_kills: 0 });
-    mockGetSeasonTrackers.mockResolvedValue([touched, untouched]);
-    mockGetSeasonLineThresholds.mockResolvedValue([
-      charLine(),
-      charLine({ base_pokemon: 'Squirtle', stage2_pokemon: 'Wartortle', stage3_pokemon: 'Blastoise' }),
-    ]);
-    mockApplyTrackerProgressWithLog.mockResolvedValue(
-      makeTracker({ total_kos: 3, real_kills: 3 })
-    );
-
-    await applyRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 1 },
-    ]);
-
-    // Only the Charmander tracker received an apply call.
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledTimes(1);
-    expect(mockUpdateTracker).not.toHaveBeenCalled(); // no stage crossed
+  it('does nothing without games', async () => {
+    const result = await creditMatchRealKills(creditInput({ gameIds: [], statsByGame: {} }));
+    expect(result.applied).toEqual([]);
+    expect(mockGetSeasonTrackers).not.toHaveBeenCalled();
+    expect(mockCreditGameKills).not.toHaveBeenCalled();
   });
 });
 
-// ── rollbackRealKillsFromGame (undo path) ──────────────────────────
+// ── uncreditGameRealKills — admin edit debit, fenced on the marker ───
 
-describe('rollbackRealKillsFromGame', () => {
-  it('subtracts KOs with a negative sign for a deleted game', async () => {
-    const tracker = makeTracker({ total_kos: 5, real_kills: 5 });
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
+describe('uncreditGameRealKills', () => {
+  it('debits the credited stats, fenced on the marker it read', async () => {
     mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
-    // Apply path mutates real_kills/total_kos on the returned tracker; the
-    // rollback returns the decremented values.
-    mockApplyTrackerProgressWithLog.mockResolvedValue(
-      makeTracker({ total_kos: 2, real_kills: 2 })
+    mockGetSeasonTrackers.mockResolvedValue([makeTracker({ total_kos: 5, real_kills: 5 })]);
+    mockUncreditGameKills.mockResolvedValue('rolled_back');
+
+    const outcome = await uncreditGameRealKills(
+      's1',
+      { id: 'g1', evolution_applied_at: '2026-10-20T10:00:00Z' },
+      [{ player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 3 }]
     );
 
-    await rollbackRealKillsFromGame('s1', [
+    expect(outcome).toBe('rolled_back');
+    expect(mockUncreditGameKills).toHaveBeenCalledWith('g1', '2026-10-20T10:00:00Z', [
+      { tracker_id: 't-char', amount: 3 },
+    ]);
+  });
+
+  it('writes nothing for a game that was never credited', async () => {
+    const outcome = await uncreditGameRealKills('s1', { id: 'g1', evolution_applied_at: null }, [
       { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 3 },
     ]);
 
-    // applyKillDelta signs the row with -1; the RPC receives the negative
-    // amount (clamping-at-0 happens server-side in the real RPC).
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledWith(
-      't-char', 'real_kill', -3,
-      expect.objectContaining({ note: 'Rollback: game deleted' })
-    );
-    // Rollback does NOT resolve stage transitions or persist events.
-    expect(mockUpdateTracker).not.toHaveBeenCalled();
-    expect(mockInsertEvolutionEvents).not.toHaveBeenCalled();
+    expect(outcome).toBe('not_applied');
+    expect(mockUncreditGameKills).not.toHaveBeenCalled();
+    expect(mockGetSeasonTrackers).not.toHaveBeenCalled();
   });
 
-  it('reverses the delta across multiple lines in one call', async () => {
-    const charT = makeTracker({ id: 't-char', base_pokemon: 'Charmander', current_form: 'Charmander', total_kos: 5, real_kills: 5 });
-    const squirtT = makeTracker({ id: 't-squirt', base_pokemon: 'Squirtle', current_form: 'Squirtle', total_kos: 3, real_kills: 3 });
-    mockGetSeasonTrackers.mockResolvedValue([charT, squirtT]);
-    mockGetSeasonLineThresholds.mockResolvedValue([
-      charLine(),
-      charLine({ base_pokemon: 'Squirtle', stage2_pokemon: 'Wartortle', stage3_pokemon: 'Blastoise' }),
-    ]);
-    mockApplyTrackerProgressWithLog.mockResolvedValue(makeTracker({ total_kos: 0, real_kills: 0 }));
-
-    await rollbackRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 2 },
-      { player_id: 'p1', pokemon_name: 'Squirtle', kos_dealt: 1 },
-    ]);
-
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledTimes(2);
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenNthCalledWith(1, 't-char', 'real_kill', -2, expect.anything());
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenNthCalledWith(2, 't-squirt', 'real_kill', -1, expect.anything());
-  });
-
-  it('no-ops when there are no trackers', async () => {
-    mockGetSeasonTrackers.mockResolvedValue([]);
+  it('passes a lost marker race through', async () => {
     mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
+    mockGetSeasonTrackers.mockResolvedValue([makeTracker()]);
+    mockUncreditGameKills.mockResolvedValue('marker_changed');
 
-    await rollbackRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 3 },
-    ]);
-
-    expect(mockApplyTrackerProgressWithLog).not.toHaveBeenCalled();
-  });
-
-  it('drops zero / negative KO rows before signing (rollback path)', async () => {
-    const tracker = makeTracker();
-    mockGetSeasonTrackers.mockResolvedValue([tracker]);
-    mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
-    mockApplyTrackerProgressWithLog.mockResolvedValue(makeTracker());
-
-    await rollbackRealKillsFromGame('s1', [
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 0 }, // dropped
-      { player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 2 }, // applied as -2
-    ]);
-
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledTimes(1);
-    expect(mockApplyTrackerProgressWithLog).toHaveBeenCalledWith(
-      't-char', 'real_kill', -2, expect.anything()
-    );
+    await expect(
+      uncreditGameRealKills('s1', { id: 'g1', evolution_applied_at: '2026-10-20T10:00:00Z' }, [])
+    ).resolves.toBe('marker_changed');
   });
 });

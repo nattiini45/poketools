@@ -74,6 +74,8 @@ export default {
   game_edit_empty: 'Provide winner_id and/or battle_stats to update',
   round_delete_not_allowed: 'Only the latest round or rounds with zero games can be deleted',
   replay_import_winner_not_participant: 'Winner must be a match participant',
+  // Replay import: the replay fetched again hashes differently from the preview the organizer reviewed (409, nothing written)
+  replay_changed_since_preview: 'The replay changed after it was previewed. Parse it again and review it before importing.',
 
   // Player import (per-row results of api/admin/players/import)
   player_import_duplicate_discord_id: 'Duplicate discord_id in import payload',

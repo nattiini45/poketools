@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import { getMatchById } from '@/lib/supabase/queries/matches';
-import { supabase } from '@/lib/supabase/client';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import ReplayImportForm from '@/components/match/ReplayImportForm';
 import PageContainer from '@/components/ui/PageContainer';
@@ -38,26 +37,6 @@ export default async function ImportReplayPage({ params }: PageProps) {
 
   const canImport = match.status === 'scheduled' || match.status === 'in_progress';
 
-  // Resolve the format generation for Pokémon autocomplete filtering.
-  let generation = 9;
-  try {
-    const { data: tournament } = await supabase
-      .from('tournaments')
-      .select('rulesets(base_format)')
-      .eq('id', match.tournament_id)
-      .single();
-    const baseFormat = (tournament?.rulesets as { base_format: string } | null)?.base_format;
-    if (baseFormat) {
-      const genMatch = /^gen(\d+)/.exec(baseFormat);
-      if (genMatch) {
-        const parsed = parseInt(genMatch[1], 10);
-        if (parsed >= 1 && parsed <= 9) generation = parsed;
-      }
-    }
-  } catch {
-    generation = 9;
-  }
-
   const [t, tEnums] = await Promise.all([getT(adminCoreMessages), getT(enumMessages)]);
 
   return (
@@ -85,8 +64,7 @@ export default async function ImportReplayPage({ params }: PageProps) {
               { id: match.player_1_id, name: match.player_1_name },
               { id: match.player_2_id, name: match.player_2_name },
             ]}
-            generation={generation}
-            redirectTo={`/admin/matches/${id}`}
+              redirectTo={`/admin/matches/${id}`}
           />
         )}
 

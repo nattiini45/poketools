@@ -37,10 +37,11 @@ export const SEASON_DELETE_CASCADES: Readonly<Record<SeasonDeleteGroup, readonly
 };
 
 /**
- * Cascaded tables the hint does not name: a baseline table the public app neither reads nor writes (spec 4.13).
+ * Cascaded tables the hint does not name: a baseline table the public app neither reads nor writes (spec 4.13), and
+ * the internal EvoLiga kill-credit fence counter (`epb_kill_credit_epochs`, 20261021100100).
  * Listed so the schema check still accounts for every cascade.
  */
-export const SEASON_DELETE_UNNAMED_CASCADES: readonly string[] = ['legacy_standings'];
+export const SEASON_DELETE_UNNAMED_CASCADES: readonly string[] = ['legacy_standings', 'epb_kill_credit_epochs'];
 
 /** Tables that refuse the delete while they hold rows of the league. */
 export const SEASON_DELETE_BLOCKERS: Readonly<Record<SeasonDeleteBlocker, readonly string[]>> = {

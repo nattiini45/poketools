@@ -49,14 +49,15 @@ Matches are the atomic competition unit. A match links two players, belongs to a
 ### Result submission paths
 - **Replay import** — Parse Pokémon Showdown replay URL (`POST /api/parse-replay`)
 - **Manual result** — Direct stat entry (`POST /api/manual-result`)
-- **Admin import** — Admin replay import with manual assign (`POST /api/admin/matches/[id]/replay-import`)
+- **Admin import** — Admin replay import with manual side assignment (`POST /api/admin/matches/[id]/replay-import`); winner and stats still come from the replay
+- **Replay binding** — a replay game stores the replay's hash (`games.replay_hash`, unique): one battle can be recorded for one game only (409 `replay_already_recorded`), and its winner and stats always come from that same replay. `docs/match.md` ("Replay Binding")
 
 ### Key files
 - `src/lib/match/aggregate-queue.ts` — aggregate job queue (`enqueueAggregateJob`, `applyGameAggregatesNow`); `src/lib/supabase/queries/aggregates.ts` — `buildGameAggregateDeltas`, `rollbackGameAggregates`
 - `src/lib/match/result-effects.ts` — Post-result side effects (achievements, streaks, social, Discord)
 
 ### Completion and finalize
-- Confirming a result (`POST /api/confirm-match/[mid]`, or the auto-confirm cron when the deadline passes) flips the match to `completed` with a compare-and-set, then runs finalize (`src/lib/match/finalize.ts`): each side effect (ratings, streaks, signatures, achievements, announcements, EPB hooks, bracket propagation) is its own guarded step, so one failure never skips the others.
+- Confirming a result (`POST /api/confirm-match/[mid]`, or the auto-confirm cron when the deadline passes) flips the match to `completed` with a compare-and-set, then runs finalize (`src/lib/match/finalize.ts`): each side effect (ratings, streaks, signatures, achievements, announcements, EPB real kills, EPB hooks, bracket propagation) is its own guarded step, so one failure never skips the others. EPB real kills are credited here, once per game (`games.evolution_applied_at`), never at game submission: a result waiting for confirmation or under dispute moves no evolution tracker (CF-07, `docs/evolution-point-buy.md`).
 - `matches.finalized_at` is set only when every step succeeded. The auto-confirm cron heals older completed matches without it by re-running only the replay-safe steps; ratings, achievements and announcements are never re-run. A failing run answers 5xx with the failed match ids. Runbook: `docs/match.md` ("Finalize Integrity and Heal").
 - Games are unique per `(match_id, game_number)`: a racing second submission gets 409 `match_result_conflict`.
 
@@ -118,7 +119,7 @@ The replay pipeline parses Pokémon Showdown replay URLs into structured game da
 1. Player or admin submits replay URL → `POST /api/parse-replay`
 2. `@pkmn/protocol` + `@pkmn/client` parses the battle log
 3. Battle stats extracted (KOs, damage, switches, etc.)
-4. `games` row created with `parsed = true`
+4. `games` row created with `parsed = true` and the replay's hash (`replay_hash`, `src/lib/pkmn/replay-identity.ts`); a battle already recorded is refused
 5. An aggregate job is queued; `apply_aggregate_job` adds the game to usage, standings and move stats
 
 ### Key files
