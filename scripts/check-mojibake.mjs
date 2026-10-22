@@ -105,6 +105,7 @@ for (const file of files) {
     throw err;
   }
   let text;
+  // Every exit from this block, the `continue`s included, runs the finally that closes fd.
   try {
     const st = fstatSync(fd);
     if (!st.isFile()) continue; // replaced by a directory or other non-file in the work tree

@@ -199,7 +199,7 @@
  * --warm-cache, --net-throttle, --dolly-at, --contrast-repeat, --look-probe.
  */
 import { chromium } from 'playwright';
-import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, stat, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -4837,16 +4837,6 @@ async function runLookProbe(page, section, pngPath, probe) {
 
 /** --audit on: one DRAW-LEDGER.md row per landed station (file created with its header if missing). */
 async function appendDrawLedger({ section, viewport, audit }) {
-  // Exclusive create ('wx') writes the header only when the ledger does not exist yet; an existing ledger is kept.
-  await mkdir(dirname(DRAW_LEDGER_PATH), { recursive: true });
-  try {
-    await writeFile(DRAW_LEDGER_PATH, `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n`, { encoding: 'utf8', flag: 'wx' });
-  } catch (err) {
-    if (err?.code !== 'EEXIST') throw err;
-    // EEXIST also fires for a dangling symlink or a directory; appending there would lose the header.
-    const st = await stat(DRAW_LEDGER_PATH).catch(() => null);
-    if (!st?.isFile()) throw new Error(`draw ledger path is not a regular file: ${DRAW_LEDGER_PATH}`);
-  }
   const row = drawLedgerRow({
     at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     tag,
@@ -4858,7 +4848,17 @@ async function appendDrawLedger({ section, viewport, audit }) {
     audit,
     sourceStamp: invocation.sourceStamp?.newestSrcMtime ?? null,
   });
-  await appendFile(DRAW_LEDGER_PATH, `${row}\n`, 'utf8');
+  await mkdir(dirname(DRAW_LEDGER_PATH), { recursive: true });
+  // One append-mode handle creates a missing ledger (through a symlink too) and never truncates;
+  // the header goes in when the opened file is still empty, so no path check runs before the write.
+  const fh = await open(DRAW_LEDGER_PATH, 'a');
+  try {
+    const { size } = await fh.stat();
+    const header = size === 0 ? `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n` : '';
+    await fh.appendFile(`${header}${row}\n`, 'utf8');
+  } finally {
+    await fh.close();
+  }
 }
 
 // ---------------------------------------------------------------------------

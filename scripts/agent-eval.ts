@@ -284,7 +284,8 @@ async function main(): Promise<void> {
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   // A fresh owner-only directory per run (mkdtemp), not a predictable name in the shared temp dir.
-  const outDir = mkdtempSync(join(tmpdir(), 'agent-eval-'));
+  // Created on the first write, so a run where every model is skipped leaves nothing behind.
+  let outDir: string | undefined;
   console.error(`Eval harness — ${cases.length} case(s) × ${modelIds.length} model(s)\n`);
 
   for (const modelId of modelIds) {
@@ -311,7 +312,8 @@ async function main(): Promise<void> {
     }
 
     const summary = summarise(results);
-    const outPath = join(outDir, `${modelId.replace(/[^\w.-]/g, '_')}-${stamp}.json`);
+    outDir ??= mkdtempSync(join(tmpdir(), 'agent-eval-'));
+    const outPath = join(outDir,`${modelId.replace(/[^\w.-]/g, '_')}-${stamp}.json`);
     writeFileSync(
       outPath,
       JSON.stringify({ model: modelId, timestamp: stamp, summary, results }, null, 2),

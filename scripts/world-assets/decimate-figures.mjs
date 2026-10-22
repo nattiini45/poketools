@@ -623,10 +623,10 @@ export async function loadFormationModule() {
   const esbuild = require('esbuild');
   // A private, uniquely named scratch dir (mkdtemp), removed once the bundle is imported.
   const dir = mkdtempSync(join(tmpdir(), 'd42-decimate-figures-'));
-  const entry = join(dir, `formation-entry-${process.pid}.ts`);
-  const outfile = join(dir, `formation-${process.pid}.mjs`);
   let mod;
   try {
+    const entry = join(dir, `formation-entry-${process.pid}.ts`);
+    const outfile = join(dir, `formation-${process.pid}.mjs`);
     writeFileSync(
       entry,
       [

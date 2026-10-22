@@ -421,7 +421,8 @@ function main() {
   try {
     dest = mkdtempSync(join(tmpRoot, 'poketools-verify-ci-'));
   } catch (error) {
-    fail(`could not create a temp directory in ${tmpRoot}: ${error instanceof Error ? error.message : String(error)}`);
+    // Node's fs message already leads with the errno (ENOENT, EACCES, EMFILE).
+    return fail(`could not create a temp directory in ${tmpRoot}: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   console.log(`[verify-ci] branch=${branch} head=${head}`);
@@ -430,7 +431,11 @@ function main() {
     encoding: 'utf8',
   });
   if (clone.status !== 0) {
-    rmSync(dest, { recursive: true, force: true });
+    try {
+      rmSync(dest, { recursive: true, force: true });
+    } catch {
+      // Best effort: the clone error below is the diagnostic that matters.
+    }
     fail(`clone failed: ${(clone.stderr || clone.stdout || clone.error?.message || `exit ${clone.status}`).trim()}`);
   }
   // Created AFTER the clone: git refuses to clone into a non-empty directory.

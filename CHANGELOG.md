@@ -10,10 +10,13 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Security
 
-- **Dependency:** the `vite` override is raised to `^8.3.5` (taken from the Dependabot bump), which fixes three `launch-editor` advisories (dev only).
+- **Dependencies (dev only):**
+  - The `vite` override is raised to `^8.3.5` (taken from the Dependabot bump), which fixes three `launch-editor` advisories.
+  - `vitest` and `@vitest/coverage-v8` move to `^4.1.12`, which fixes two `@vitest/mocker` advisories.
+- **Dependencies:** `postcss` moves to `^8.5.30`, the minimum `vite` 8.3.5 declares. The root override applies it to `next` and `tailwindcss` too.
 - **Code scanning:** the open CodeQL findings are worked through:
-  - The replay link check in the submit form compares the parsed hostname.
-  - Overlay URLs encode entity ids.
+  - The replay link check in the submit form matches the anchored `https://replay.pokemonshowdown.com/` prefix the server strips, instead of a substring.
+  - Overlay URLs encode entity ids (a lone surrogate becomes U+FFFD).
   - The Smogon import decodes each HTML entity once.
   - Markdown table cells escape backslashes.
   - Test-account passwords draw characters uniformly (`crypto.randomInt`).

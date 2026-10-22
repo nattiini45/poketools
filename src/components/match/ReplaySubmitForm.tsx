@@ -31,7 +31,11 @@ type FormError =
   | { kind: 'submitFailed' }
   | { kind: 'api'; error: ApiErrorLike };
 
-/** The prefix the server's `normalizeReplayUrlOrId` strips, matched the same (case-sensitive) way. */
+/**
+ * The prefix the server's `normalizeReplayUrlOrId` strips, matched the same
+ * case-sensitive way on purpose: the server would fail an uppercase host too,
+ * so it is refused here with the immediate `invalidUrl` message.
+ */
 const REPLAY_URL_PREFIX = /^https?:\/\/replay\.pokemonshowdown\.com\//;
 
 /**
