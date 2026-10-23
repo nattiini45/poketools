@@ -259,21 +259,26 @@ describe('GET /api/admin/matches: scope of requested ids', () => {
 });
 
 describe('GET /api/admin/matches: validation', () => {
-  it('keeps a __proto__ parameter off the prototype; the schema drops it', async () => {
+  it('keeps a __proto__ parameter off the prototype and refuses it as an unknown parameter', async () => {
     const parse = vi.spyOn(adminMatchListQuerySchema, 'safeParse');
     try {
       const res = await GET(req('?__proto__=x&__proto__=y&page=2&page_size=25'));
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(400);
 
-      // The object the handler hands to the schema: the keys are plain data, the prototype is untouched.
+      // The object the handler hands to the schema: `__proto__` is a plain own key, the prototype is untouched.
       const raw = parse.mock.calls[0][0] as Record<string, unknown>;
       expect(Object.getPrototypeOf(raw)).toBe(Object.prototype);
+      expect(Object.prototype.hasOwnProperty.call(raw, '__proto__')).toBe(true);
       expect(Object.prototype.hasOwnProperty.call(raw, 'page')).toBe(true);
     } finally {
       parse.mockRestore();
     }
+    expect(listAdminMatchesPage).not.toHaveBeenCalled();
+  });
 
-    // The query the handler passes on carries only the known filters.
+  it('passes on only the known filters, with a plain prototype', async () => {
+    await GET(req('?page=2&page_size=25'));
+
     const passed = vi.mocked(listAdminMatchesPage).mock.calls[0][0];
     expect(passed).toMatchObject({ page: 2, pageSize: 25 });
     expect(Object.getPrototypeOf(passed)).toBe(Object.prototype);

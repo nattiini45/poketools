@@ -70,6 +70,7 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Dependencies:**
   - `next` moves to `^16.4.2`, which fixes a critical remote-code-execution advisory in the image optimizer when SVG files are used ([GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw)) and a Server Actions denial of service ([GHSA-p3m5-59mp-jv5r](https://github.com/advisories/GHSA-p3m5-59mp-jv5r)). `sharp` follows to `^0.35.5`, the minimum `next` 16.4.2 declares.
   - `postcss` moves to `^8.5.30`, the minimum `vite` 8.3.5 declares. The root override applies it to `next` and `tailwindcss` too.
+  - `zod` moves to `^4.6.7`, which fixes memory exhaustion while validating oversized constrained collections ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)).
 - **Code scanning:** the open CodeQL findings are worked through:
   - The replay link check in the submit form matches the anchored `https://replay.pokemonshowdown.com/` prefix the server strips, instead of a substring.
   - Overlay URLs encode entity ids (a lone surrogate becomes U+FFFD).
