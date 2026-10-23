@@ -64,6 +64,14 @@ describe('DashboardView', () => {
     expect(html).toContain('Attention Required');
   });
 
+  it('treats a response without recent_activity like a null one', () => {
+    const { recent_activity: _omitted, ...rest } = RESOURCE_DATA;
+    const html = renderWithI18n(<DashboardView data={rest as DashboardData} />);
+    expect(html).not.toContain('Recent Activity');
+    expect(html).not.toContain('lg:grid-cols-2');
+    expect(html).toContain('Attention Required');
+  });
+
   it('names the league next to the phase of an attention row', () => {
     const html = renderWithI18n(<DashboardView data={RESOURCE_DATA} />);
     expect(html).toContain('Summer League · Group stage');

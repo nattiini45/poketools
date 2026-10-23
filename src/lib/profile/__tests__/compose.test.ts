@@ -74,11 +74,11 @@ vi.mock('@/lib/tournament/season-standings', () => ({
 }));
 
 vi.mock('@/lib/tournament/scoring-byes', () => ({
-  loadScoringByes: vi.fn(async () => []),
+  loadScoringByesBatch: vi.fn(async (tournaments: { id: string }[]) => new Map(tournaments.map((t) => [t.id, []]))),
 }));
 
 import { composePlayerProfile } from '../compose';
-import { loadScoringByes } from '@/lib/tournament/scoring-byes';
+import { loadScoringByesBatch } from '@/lib/tournament/scoring-byes';
 import { getPlayerById, getPlayerParticipations } from '@/lib/supabase/queries/players';
 import { getMatchesByPlayerWithTournament } from '@/lib/supabase/queries/matches';
 import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
@@ -447,16 +447,67 @@ describe('composePlayerProfile', () => {
   it('scores the stored byes of a Swiss tournament in the profile standing', async () => {
     const { computeStandingsFromContext } = await import('@/lib/tournament/season-standings');
     const byes = [{ player_id: 'player-1', round_number: 1 }];
-    vi.mocked(loadScoringByes).mockResolvedValueOnce(byes);
+    vi.mocked(loadScoringByesBatch).mockResolvedValueOnce(new Map([['t-swiss', byes]]));
     vi.mocked(listTournamentsByIds).mockResolvedValueOnce([
       { id: 't-swiss', name: 'Swiss Cup', status: 'active', bracket_type: 'swiss', season_id: null },
     ] as Awaited<ReturnType<typeof listTournamentsByIds>>);
 
     await composePlayerProfile('player-1');
 
-    expect(loadScoringByes).toHaveBeenCalledWith(expect.objectContaining({ id: 't-swiss', bracket_type: 'swiss' }));
     const options = vi.mocked(computeStandingsFromContext).mock.calls[0][5];
     expect(options).toEqual({ byes });
+  });
+
+  it('reads the byes of every Swiss tournament in ONE batched call, not one read per tournament', async () => {
+    const { computeStandingsFromContext } = await import('@/lib/tournament/season-standings');
+    const byesOne = [{ player_id: 'player-1', round_number: 1 }];
+    const byesTwo = [{ player_id: 'player-1', round_number: 2 }];
+    vi.mocked(loadScoringByesBatch).mockResolvedValueOnce(
+      new Map([
+        ['t-swiss-1', byesOne],
+        ['t-swiss-2', byesTwo],
+        ['t-rr', []],
+      ]),
+    );
+    vi.mocked(listTournamentsByIds).mockResolvedValueOnce([
+      { id: 't-swiss-1', name: 'Swiss One', status: 'active', bracket_type: 'swiss', season_id: null },
+      { id: 't-swiss-2', name: 'Swiss Two', status: 'completed', bracket_type: 'swiss', season_id: null },
+      { id: 't-rr', name: 'Round Robin', status: 'active', bracket_type: 'round_robin', season_id: null },
+      { id: 't-later', name: 'Later', status: 'upcoming', bracket_type: 'swiss', season_id: null },
+    ] as Awaited<ReturnType<typeof listTournamentsByIds>>);
+
+    await composePlayerProfile('player-1');
+
+    expect(loadScoringByesBatch).toHaveBeenCalledTimes(1);
+    // Only the tournaments that get a table are asked for (the upcoming one is not).
+    expect(vi.mocked(loadScoringByesBatch).mock.calls[0][0].map((t) => t.id)).toEqual([
+      't-swiss-1',
+      't-swiss-2',
+      't-rr',
+    ]);
+    const byesPerTable = vi.mocked(computeStandingsFromContext).mock.calls.map((call) => call[5]);
+    expect(byesPerTable).toEqual([{ byes: byesOne }, { byes: byesTwo }, { byes: [] }]);
+  });
+
+  it('a failed bye read costs the Swiss standings (logged), not the profile or the other tables', async () => {
+    const failure = new Error('rounds unavailable');
+    vi.mocked(loadScoringByesBatch).mockRejectedValueOnce(failure);
+    vi.mocked(listTournamentsByIds).mockResolvedValueOnce([
+      { id: 't-swiss', name: 'Swiss Cup', status: 'active', bracket_type: 'swiss', season_id: null },
+      { id: 't-rr', name: 'Round Robin', status: 'active', bracket_type: 'round_robin', season_id: null },
+    ] as Awaited<ReturnType<typeof listTournamentsByIds>>);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const profile = await composePlayerProfile('player-1');
+      expect(profile).not.toBeNull();
+      const byId = Object.fromEntries(profile!.current_participations.map((p) => [p.id, p.standing]));
+      expect(byId['t-swiss']).toBeNull();
+      expect(byId['t-rr']).not.toBeNull();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('bye rounds failed'), failure);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('a failed season-context read costs only the season-bound standings (logged), never the profile', async () => {

@@ -233,6 +233,37 @@ describe('queries/players', () => {
       expect(mockBuilder.or).toHaveBeenNthCalledWith(2, 'discord_id.not.is.null,auth_user_id.not.is.null');
     });
 
+    it('orders by name, then id, by default', async () => {
+      mockBuilder.range.mockReturnValue({ data: [], error: null, count: 0 });
+      await listPlayers();
+      expect(mockBuilder.order.mock.calls).toEqual([['name', { ascending: true }], ['id']]);
+    });
+
+    it('orders by the requested column and breaks ties by name, then id', async () => {
+      mockBuilder.range.mockReturnValue({ data: [], error: null, count: 0 });
+      await listPlayers({ sort: { column: 'ps_username', direction: 'desc' } });
+      expect(mockBuilder.order.mock.calls).toEqual([
+        ['ps_username', { ascending: false }],
+        ['name'],
+        ['id'],
+      ]);
+    });
+
+    it('keeps only what the public directory shows when visibleOnly is set', async () => {
+      mockBuilder.eq
+        .mockReturnValueOnce(mockBuilder)
+        .mockReturnValueOnce({ data: [], error: null, count: 0 });
+      await listPlayers({ visibleOnly: true });
+      expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'active');
+      expect(mockBuilder.eq).toHaveBeenCalledWith('is_test_account', false);
+    });
+
+    it('does not filter by status or test account without visibleOnly', async () => {
+      mockBuilder.range.mockReturnValue({ data: [], error: null, count: 0 });
+      await listPlayers();
+      expect(mockBuilder.eq).not.toHaveBeenCalled();
+    });
+
     it('clamps limit to 200', async () => {
       mockBuilder.range.mockReturnValue({ data: [], error: null, count: 0 });
       await listPlayers({ limit: 500 });

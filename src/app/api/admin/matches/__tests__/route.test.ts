@@ -31,6 +31,7 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
 }));
 
 import { GET } from '@/app/api/admin/matches/route';
+import { adminMatchListQuerySchema } from '@/lib/admin/match-list';
 import { requireAnyAdmin, AuthError } from '@/lib/auth/helpers';
 import { getAdminScope } from '@/lib/auth/admin-scope';
 import type { AdminScope } from '@/lib/auth/admin-scope';
@@ -148,8 +149,48 @@ describe('GET /api/admin/matches: guard', () => {
     vi.mocked(getAdminScope).mockResolvedValue({ ...SEASON_ADMIN_SCOPE, tournamentIds: many });
     const res = await GET(req());
     expect(res.status).toBe(400);
-    expect((await res.json()).code).toBe('validation_failed');
+    const body = await res.json();
+    expect(body.code).toBe('validation_failed');
+    expect(body.error).toContain('league or tournament filter narrows the list');
     expect(listAdminMatchesPage).not.toHaveBeenCalled();
+  });
+
+  describe('narrowing a scope wider than the cap', () => {
+    const wide = [
+      PHASE_A,
+      ...Array.from({ length: 100 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`),
+    ];
+    const WIDE_SCOPE: AdminScope = { ...SEASON_ADMIN_SCOPE, tournamentIds: wide };
+
+    it('lets season_id narrow it to the in-scope phases of that league only', async () => {
+      const outside = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      vi.mocked(getAdminScope).mockResolvedValue(WIDE_SCOPE);
+      vi.mocked(listTournamentIdsBySeason).mockResolvedValue([PHASE_A, outside]);
+
+      const res = await GET(req(`?season_id=${SEASON}`));
+
+      expect(res.status).toBe(200);
+      expect(listAdminMatchesPage).toHaveBeenCalledTimes(1);
+      expect(listAdminMatchesPage).toHaveBeenCalledWith(expect.objectContaining({ tournamentIds: [PHASE_A] }));
+    });
+
+    it('lets tournament_id narrow it to that one tournament', async () => {
+      vi.mocked(getAdminScope).mockResolvedValue(WIDE_SCOPE);
+
+      const res = await GET(req(`?tournament_id=${PHASE_A}`));
+
+      expect(res.status).toBe(200);
+      expect(listAdminMatchesPage).toHaveBeenCalledWith(expect.objectContaining({ tournamentIds: [PHASE_A] }));
+    });
+
+    it('still refuses the unfiltered view and a league that alone exceeds the cap', async () => {
+      vi.mocked(getAdminScope).mockResolvedValue(WIDE_SCOPE);
+      vi.mocked(listTournamentIdsBySeason).mockResolvedValue(wide);
+
+      expect((await GET(req())).status).toBe(400);
+      expect((await GET(req(`?season_id=${SEASON}`))).status).toBe(400);
+      expect(listAdminMatchesPage).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -219,10 +260,26 @@ describe('GET /api/admin/matches: scope of requested ids', () => {
 
 describe('GET /api/admin/matches: validation', () => {
   it('keeps a __proto__ parameter off the prototype; the schema drops it', async () => {
-    const res = await GET(req('?__proto__=x&__proto__=y&page=2&page_size=25'));
-    expect(res.status).toBe(200);
-    expect(listAdminMatchesPage).toHaveBeenCalledWith(expect.objectContaining({ page: 2, pageSize: 25 }));
-    expect(Object.getPrototypeOf({})).toBe(Object.prototype);
+    const parse = vi.spyOn(adminMatchListQuerySchema, 'safeParse');
+    try {
+      const res = await GET(req('?__proto__=x&__proto__=y&page=2&page_size=25'));
+      expect(res.status).toBe(200);
+
+      // The object the handler hands to the schema: the keys are plain data, the prototype is untouched.
+      const raw = parse.mock.calls[0][0] as Record<string, unknown>;
+      expect(Object.getPrototypeOf(raw)).toBe(Object.prototype);
+      expect(Object.prototype.hasOwnProperty.call(raw, 'page')).toBe(true);
+    } finally {
+      parse.mockRestore();
+    }
+
+    // The query the handler passes on carries only the known filters.
+    const passed = vi.mocked(listAdminMatchesPage).mock.calls[0][0];
+    expect(passed).toMatchObject({ page: 2, pageSize: 25 });
+    expect(Object.getPrototypeOf(passed)).toBe(Object.prototype);
+    expect(Object.keys(passed)).not.toContain('__proto__');
+    expect(Object.keys(passed)).not.toContain('constructor');
+    expect(({} as Record<string, unknown>).x).toBeUndefined();
   });
 
   it.each([
@@ -236,6 +293,7 @@ describe('GET /api/admin/matches: validation', () => {
     ['page_size not offered', '?page_size=7'],
     ['page_size above the maximum', '?page_size=1000'],
     ['unknown parameter', '?limit=500'],
+    ['constructor parameter', '?constructor=x'],
     ['repeated parameter', '?page=1&page=2'],
     ['standalone with season_id', `?standalone=true&season_id=${SEASON}`],
   ])('400s %s with the shared validation code', async (_label, search) => {

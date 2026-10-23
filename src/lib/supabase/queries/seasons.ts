@@ -227,6 +227,34 @@ export async function getSeasonStageIds(seasonId: string): Promise<string[]> {
   return (data ?? []).map((row) => row.id as string);
 }
 
+/** The stage ids of a season with the two facts that decide whether its table scores Swiss byes. */
+export interface SeasonStageBrackets {
+  stageIds: string[];
+  hasSwissStage: boolean;
+  /** The season's format, read through the stage rows; null for a season without a stage. */
+  formatType: SeasonFormatType | null;
+}
+
+/**
+ * `getSeasonStageIds` that also tells whether a stage is Swiss and which format the season has, in the SAME
+ * query (the season rides on the stage rows as an embed). A caller that reads the Swiss stages' rounds only for a
+ * league that has one decides from this alone, so a league without a Swiss stage pays no extra read.
+ */
+export async function getSeasonStageBrackets(seasonId: string): Promise<SeasonStageBrackets> {
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select('id, bracket_type, seasons ( format_type )')
+    .eq('season_id', seasonId);
+
+  if (error) throw error;
+  const rows = data ?? [];
+  return {
+    stageIds: rows.map((row) => row.id as string),
+    hasSwissStage: rows.some((row) => row.bracket_type === 'swiss'),
+    formatType: (rows[0]?.seasons as { format_type: SeasonFormatType } | null | undefined)?.format_type ?? null,
+  };
+}
+
 /**
  * Format type per season id, in one query. Lets a caller that computes
  * standings for many tournaments (the profile composer) resolve every

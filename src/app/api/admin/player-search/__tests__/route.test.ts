@@ -153,6 +153,34 @@ describe('GET /api/admin/player-search', () => {
     });
   });
 
+  describe('what the search can see', () => {
+    it('limits a season admin to what the public directory shows, across the whole directory', async () => {
+      await search({ q: 'ma', season_id: SEASON_ID });
+
+      const options = vi.mocked(listPlayers).mock.calls[0][0];
+      expect(options?.visibleOnly).toBe(true);
+      // The scope is a guard, not a filter: the picker finds players who are not participants yet.
+      expect(Object.keys(options ?? {}).sort()).toEqual(['limit', 'offset', 'search', 'visibleOnly']);
+    });
+
+    it('limits a tournament admin the same way', async () => {
+      await search({ q: 'ma', tournament_id: TOURNAMENT_ID });
+
+      expect(vi.mocked(listPlayers).mock.calls[0][0]?.visibleOnly).toBe(true);
+    });
+
+    it('lets a site admin search every account, banned, suspended and test accounts included', async () => {
+      vi.mocked(requireAnyAdmin).mockResolvedValue(siteAdmin);
+
+      await search({ q: 'ma' });
+      await search({ q: 'ma', season_id: SEASON_ID, registered: '1' });
+
+      for (const [options] of vi.mocked(listPlayers).mock.calls) {
+        expect(options).not.toHaveProperty('visibleOnly');
+      }
+    });
+  });
+
   describe('validation', () => {
     it.each([
       ['a missing q', {}],
@@ -179,25 +207,31 @@ describe('GET /api/admin/player-search', () => {
     it('trims q and accepts the 64 and 20 boundaries', async () => {
       await search({ q: `  ${'x'.repeat(64)}  `, season_id: SEASON_ID, limit: '20' });
 
-      expect(listPlayers).toHaveBeenCalledWith({ limit: 20, offset: 0, search: 'x'.repeat(64) });
+      expect(listPlayers).toHaveBeenCalledWith({ limit: 20, offset: 0, search: 'x'.repeat(64), visibleOnly: true });
     });
 
     it('passes the typed text to the player search unchanged, so a name or Showdown username can match', async () => {
       await search({ q: 'a_b%c,d', season_id: SEASON_ID });
 
-      expect(listPlayers).toHaveBeenCalledWith({ limit: 10, offset: 0, search: 'a_b%c,d' });
+      expect(listPlayers).toHaveBeenCalledWith({ limit: 10, offset: 0, search: 'a_b%c,d', visibleOnly: true });
     });
 
     it('defaults the limit to 10', async () => {
       await search({ q: 'ma', season_id: SEASON_ID });
 
-      expect(listPlayers).toHaveBeenCalledWith({ limit: 10, offset: 0, search: 'ma' });
+      expect(listPlayers).toHaveBeenCalledWith({ limit: 10, offset: 0, search: 'ma', visibleOnly: true });
     });
 
     it('asks for registered accounts only with registered=1 (the guest-link picker)', async () => {
       await search({ q: 'ma', season_id: SEASON_ID, registered: '1' });
 
-      expect(listPlayers).toHaveBeenCalledWith({ limit: 10, offset: 0, search: 'ma', registeredOnly: true });
+      expect(listPlayers).toHaveBeenCalledWith({
+        limit: 10,
+        offset: 0,
+        search: 'ma',
+        registeredOnly: true,
+        visibleOnly: true,
+      });
     });
 
     it('rejects any other registered value', async () => {

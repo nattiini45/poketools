@@ -90,7 +90,10 @@ describe('RoundByeNotice', () => {
   });
 });
 
-describe('RoundManager round card', () => {
+// A static render runs no effects, so the participant names never arrive: this pins that the round card
+// does not show a bye line (not even the "Unknown player" fallback) before they have settled. The line
+// itself is covered by the RoundByeNotice tests above.
+describe('RoundManager round card before the participants load', () => {
   const tournament = {
     id: 't-1',
     name: 'Weekly',
@@ -99,7 +102,7 @@ describe('RoundManager round card', () => {
     status: 'active',
   } as unknown as Tournament;
 
-  it('renders rounds with and without a bye (the bye line waits for the names)', () => {
+  it('renders the rounds without a bye line while the names load', () => {
     const html = renderWithI18n(
       <RoundManager
         tournament={tournament}

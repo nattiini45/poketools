@@ -13,8 +13,8 @@ import Alert from '@/components/ui/Alert';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import ManualRoundForm from './ManualRoundForm';
 import { isLegacyElimBracketData } from '@/components/bracket/legacy';
-import { useLocale, useRequestTime, useT } from '@/i18n/client';
-import { LocalTime } from '@/i18n/LocalTime';
+import { useLocale, useT } from '@/i18n/client';
+import { LocalTime, useMinuteClock } from '@/i18n/LocalTime';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { enumLabel } from '@/i18n/content/enum-label';
@@ -318,8 +318,9 @@ export default function RoundManager({
   // Bye names: the participants are fetched once, and only when a round has a bye.
   const [participantNames, setParticipantNames] = useState<Record<string, string> | null>(null);
   const [participantNamesSettled, setParticipantNamesSettled] = useState(false);
-  // The request's time, so the server and the first client render agree (rule T4).
-  const now = useRequestTime();
+  // The request's time on the server and in the first client render (rule T4), then the shared
+  // minute clock, so a deadline that passes while the page is open flips the overdue badge.
+  const now = useMinuteClock();
 
   const hasByes = rounds.some((r) => (r.bye_player_ids ?? []).length > 0);
   useEffect(() => {

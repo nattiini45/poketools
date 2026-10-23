@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { clearExpiredSuspensions } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
-import { timingSafeCompare } from '@/lib/utils/crypto';
+import { secretsEqual } from '@/lib/utils/crypto';
 import type { ApiResult } from '@/types/api';
 
 interface ExpireSuspensionsResult {
@@ -33,7 +33,7 @@ async function handle(request: Request) {
     );
   }
 
-  if (!authHeader || !authHeader.startsWith('Bearer ') || !timingSafeCompare(authHeader.slice(7), cronSecret)) {
+  if (!authHeader || !authHeader.startsWith('Bearer ') || !secretsEqual(authHeader.slice(7), cronSecret)) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Unauthorized', code: 'cron_unauthorized' },
       { status: 401 }

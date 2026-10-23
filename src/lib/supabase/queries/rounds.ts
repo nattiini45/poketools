@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Tables } from '@/types/database';
 import type { Round, RoundStatus } from '@/types/round';
+import type { RoundByeSource } from '@/lib/tournament/byes';
 
 type RoundRow = Tables<'rounds'>;
 
@@ -31,6 +32,76 @@ export async function getRoundsByTournament(tournamentId: string): Promise<Round
 
   if (error) throw error;
   return data.map(toRound);
+}
+
+/** The columns of a round that standings read to score its byes. */
+export interface ByeRound extends RoundByeSource {
+  id: string;
+  tournament_id: string;
+}
+
+function toByeRound(row: Pick<RoundRow, 'id' | 'tournament_id' | 'round_number' | 'bye_player_ids'>): ByeRound {
+  return {
+    id: row.id,
+    tournament_id: row.tournament_id,
+    round_number: row.round_number,
+    bye_player_ids: row.bye_player_ids ?? [],
+  };
+}
+
+/** The PostgREST `max_rows` ceiling (`supabase/config.toml`); a full page may have been cut, so the read pages. */
+const BYE_ROUNDS_PAGE_SIZE = 1000;
+
+/**
+ * The bye columns of every round of the given tournaments, in ONE query per page (not one per tournament), grouped
+ * by tournament in round order. A tournament without rounds maps to an empty list. Selects only what the standings
+ * need, so the batch stays small for a season or a profile with many Swiss tournaments.
+ */
+export async function getByeRoundsByTournamentIds(
+  tournamentIds: readonly string[],
+): Promise<Map<string, ByeRound[]>> {
+  const unique = [...new Set(tournamentIds)];
+  const grouped = new Map<string, ByeRound[]>(unique.map((id) => [id, []]));
+  if (unique.length === 0) return grouped;
+
+  for (let from = 0; ; from += BYE_ROUNDS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('rounds')
+      .select('id, tournament_id, round_number, bye_player_ids')
+      .in('tournament_id', unique)
+      .order('tournament_id')
+      .order('round_number')
+      .range(from, from + BYE_ROUNDS_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    for (const row of data) grouped.get(row.tournament_id)?.push(toByeRound(row));
+    if (data.length < BYE_ROUNDS_PAGE_SIZE) break;
+  }
+  return grouped;
+}
+
+/**
+ * The bye columns of every round of a season's Swiss stages, in one query: the stage filter runs in the database
+ * (an inner embed on the round's tournament), so the caller needs neither the stage list nor one read per stage.
+ * Rounds come in stage, then round order.
+ */
+export async function getSwissByeRoundsBySeason(seasonId: string): Promise<ByeRound[]> {
+  const rounds: ByeRound[] = [];
+  for (let from = 0; ; from += BYE_ROUNDS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('rounds')
+      .select('id, tournament_id, round_number, bye_player_ids, tournaments!inner ( season_id, bracket_type )')
+      .eq('tournaments.season_id', seasonId)
+      .eq('tournaments.bracket_type', 'swiss')
+      .order('tournament_id')
+      .order('round_number')
+      .range(from, from + BYE_ROUNDS_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    rounds.push(...data.map(toByeRound));
+    if (data.length < BYE_ROUNDS_PAGE_SIZE) break;
+  }
+  return rounds;
 }
 
 export async function getRoundById(id: string): Promise<Round | null> {

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ResourceAdminWithPlayer, AdminResourceType } from '@/types/resource-admin';
-import type { ApiErrorLike } from '@/i18n/api-errors';
 import { useT } from '@/i18n/client';
+import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { uiMessages } from '@/i18n/messages/ui';
 import Alert from '@/components/ui/Alert';
@@ -21,6 +21,33 @@ interface ResourceAdminManagerProps {
   resourceId: string;
 }
 
+/** A refused or failed grant / revoke: which one, and why (translated at render). */
+type WriteFailure = { action: 'add' | 'remove'; error: ApiErrorLike };
+
+/**
+ * Sends one grant (POST) or revoke (DELETE). Resolves to `null` when the server accepted it,
+ * else to the failure to show: the refusal's code (forbidden, a server error), or a network
+ * error when the request never got an answer. A body that is not JSON is an unknown error.
+ */
+export async function changeResourceAdmin(
+  method: 'POST' | 'DELETE',
+  body: { player_id: string; resource_type: AdminResourceType; resource_id: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<ApiErrorLike | null> {
+  try {
+    const res = await fetchImpl('/api/resource-admins', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return null;
+    const json: unknown = await res.json().catch(() => null);
+    return toApiErrorLike(json);
+  } catch (err) {
+    return toApiErrorLike(err);
+  }
+}
+
 export default function ResourceAdminManager({
   resourceType,
   resourceId,
@@ -30,6 +57,7 @@ export default function ResourceAdminManager({
   const [admins, setAdmins] = useState<ResourceAdminWithPlayer[]>([]);
   const [selected, setSelected] = useState<PlayerSearchHit | null>(null);
   const [searchError, setSearchError] = useState<ApiErrorLike | null>(null);
+  const [writeFailure, setWriteFailure] = useState<WriteFailure | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   /** Hits seen in the picker, to turn a picked id back into a name. */
@@ -72,6 +100,7 @@ export default function ResourceAdminManager({
     return outcome.hits.map((hit) => ({
       label: hit.name,
       value: hit.id,
+      disabled: adminPlayerIds.has(hit.id),
       meta: { alreadyAdmin: adminPlayerIds.has(hit.id) },
     }));
   };
@@ -79,44 +108,32 @@ export default function ResourceAdminManager({
   async function handleAdd() {
     if (!selected) return;
     setSaving(true);
-    try {
-      const res = await fetch('/api/resource-admins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_id: selected.id,
-          resource_type: resourceType,
-          resource_id: resourceId,
-        }),
-      });
-      if (res.ok) {
-        setSelected(null);
-        await fetchAdmins();
-      }
-    } catch {
-      // silently fail
+    setWriteFailure(null);
+    const error = await changeResourceAdmin('POST', {
+      player_id: selected.id,
+      resource_type: resourceType,
+      resource_id: resourceId,
+    });
+    if (error) {
+      // The pick stays, so the admin can retry.
+      setWriteFailure({ action: 'add', error });
+    } else {
+      setSelected(null);
+      await fetchAdmins();
     }
     setSaving(false);
   }
 
   async function handleRemove(playerId: string) {
     setSaving(true);
-    try {
-      const res = await fetch('/api/resource-admins', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_id: playerId,
-          resource_type: resourceType,
-          resource_id: resourceId,
-        }),
-      });
-      if (res.ok) {
-        await fetchAdmins();
-      }
-    } catch {
-      // silently fail
-    }
+    setWriteFailure(null);
+    const error = await changeResourceAdmin('DELETE', {
+      player_id: playerId,
+      resource_type: resourceType,
+      resource_id: resourceId,
+    });
+    if (error) setWriteFailure({ action: 'remove', error });
+    else await fetchAdmins();
     setSaving(false);
   }
 
@@ -180,6 +197,13 @@ export default function ResourceAdminManager({
         </button>
       </div>
       {searchError && <Alert variant="error">{errorText(searchError)}</Alert>}
+      {writeFailure && (
+        <Alert variant="error">
+          {t(writeFailure.action === 'add' ? 'resourceAdmins.addFailed' : 'resourceAdmins.removeFailed', {
+            reason: errorText(writeFailure.error),
+          })}
+        </Alert>
+      )}
     </div>
   );
 }

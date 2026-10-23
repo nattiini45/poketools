@@ -227,6 +227,36 @@ describe('buildRoundRecapPrompt', () => {
     expect(calls[1][5]).toMatchObject({ byes: [{ player_id: 'p2', round_number: 1 }] });
   });
 
+  it('says in the standings that a bye is a win without a match, counting only the byes through the recapped round', async () => {
+    vi.mocked(getTournamentById).mockResolvedValueOnce({
+      id: 'tourney-1', season_id: null, ruleset_id: null, name: 'Swiss Cup', best_of_default: 3,
+      bracket_type: 'swiss', description: null, is_doubles: false, status: 'active',
+    } as unknown as Awaited<ReturnType<typeof getTournamentById>>);
+    vi.mocked(getRoundById).mockResolvedValueOnce({
+      id: 'round-2', name: 'Round 2', round_number: 2, best_of: 3,
+    } as Awaited<ReturnType<typeof getRoundById>>);
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce([
+      { round_number: 1, bye_player_ids: ['p1'] },
+      { round_number: 3, bye_player_ids: ['p1'] },
+    ] as Awaited<ReturnType<typeof getRoundsByTournament>>);
+
+    const result = await buildRoundRecapPrompt('tourney-1', 'round-2');
+
+    const lines = result.userPrompt.split('\n');
+    const alice = lines.find((line) => line.includes('Alice') && line.includes('pts'));
+    expect(alice).toContain('(1W-0L, incl. 1 bye win without a match)');
+    const bob = lines.find((line) => line.includes('Bob') && line.includes('pts'));
+    expect(bob).toContain('(0W-1L)');
+    expect(bob).not.toContain('bye');
+  });
+
+  it('writes the plain record when no bye is stored', async () => {
+    const result = await buildRoundRecapPrompt('tourney-1', 'round-1');
+
+    expect(result.userPrompt).toContain('(1W-0L)');
+    expect(result.userPrompt).not.toContain('bye win');
+  });
+
   it('builds pokemonTypes lookup from match details', async () => {
     vi.mocked(getMatchesByRound).mockResolvedValueOnce([
       {
@@ -291,6 +321,24 @@ describe('buildRoundForecastPrompt', () => {
 
     const result = await buildRoundForecastPrompt('tourney-1', 'round-1');
     expect(result.userPrompt).toContain('STANDINGS');
+  });
+
+  it('says in the standings that a bye is a win without a match', async () => {
+    vi.mocked(getTournamentById).mockResolvedValueOnce({
+      id: 'tourney-1', season_id: null, ruleset_id: null, name: 'Swiss Cup', best_of_default: 3,
+      bracket_type: 'swiss', description: null, is_doubles: false, status: 'active',
+    } as unknown as Awaited<ReturnType<typeof getTournamentById>>);
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce([
+      { round_number: 1, bye_player_ids: ['p1'] },
+    ] as Awaited<ReturnType<typeof getRoundsByTournament>>);
+    vi.mocked(getCompletedMatchRecords).mockResolvedValueOnce([
+      { player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1', round_number: 1 },
+    ] as Awaited<ReturnType<typeof getCompletedMatchRecords>>);
+
+    const result = await buildRoundForecastPrompt('tourney-1', 'round-1');
+
+    expect(result.userPrompt).toContain('Alice: 3pts (1W-0L, incl. 1 bye win without a match)');
+    expect(result.userPrompt).toContain('Bob: 0pts (0W-1L)');
   });
 
   it('skips standings when no records exist', async () => {

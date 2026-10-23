@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Player } from '@/types/player';
+import { PLAYER_SORT_COLUMNS } from '@/lib/players/player-sort';
 import { lastPage, localDateTimeToIso, openDialog, rosterQuery } from '../roster-helpers';
 
 describe('localDateTimeToIso', () => {
@@ -49,6 +50,36 @@ describe('rosterQuery', () => {
 
   it('never sends a negative offset', () => {
     expect(rosterQuery({ page: 0, perPage: 20, search: '' })).toBe('limit=20&offset=0');
+  });
+});
+
+describe('rosterQuery sorting', () => {
+  it('adds the sort column and direction of the table header state', () => {
+    expect(rosterQuery({ page: 1, perPage: 50, search: '', sort: { key: 'ps_username', direction: 'desc' } })).toBe(
+      'limit=50&offset=0&sort=ps_username&dir=desc',
+    );
+  });
+
+  it('keeps the search next to the sort and sends every orderable column', () => {
+    for (const key of PLAYER_SORT_COLUMNS) {
+      const query = new URLSearchParams(
+        rosterQuery({ page: 2, perPage: 20, search: 'ash', sort: { key, direction: 'asc' } }),
+      );
+      expect(query.get('sort')).toBe(key);
+      expect(query.get('dir')).toBe('asc');
+      expect(query.get('search')).toBe('ash');
+      expect(query.get('offset')).toBe('20');
+    }
+  });
+
+  it('leaves the default order to the server without a sort', () => {
+    expect(rosterQuery({ page: 1, perPage: 50, search: '', sort: null })).toBe('limit=50&offset=0');
+  });
+
+  it('never sends a column the API does not order by', () => {
+    expect(rosterQuery({ page: 1, perPage: 50, search: '', sort: { key: 'actions', direction: 'asc' } })).toBe(
+      'limit=50&offset=0',
+    );
   });
 });
 

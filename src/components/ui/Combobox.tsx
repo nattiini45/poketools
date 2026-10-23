@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useId,
   useState,
   useRef,
   useCallback,
@@ -22,6 +23,28 @@ export interface ComboboxOption {
   value: string;
   /** Arbitrary payload rendered via `renderOption` */
   meta?: Record<string, unknown>;
+  /**
+   * Shown but not pickable (e.g. "already on the roster"): `aria-disabled`, skipped by the arrow
+   * keys, and a click or Enter leaves the dropdown open. The caller's `renderOption` shows why.
+   */
+  disabled?: boolean;
+}
+
+/**
+ * The term an async picker searches for: the query without surrounding whitespace, or `null` while it
+ * is shorter than `minQueryLength` (a blank query is no query: the API refuses it).
+ */
+export function asyncSearchTerm(query: string, minQueryLength: number): string | null {
+  const term = query.trim();
+  return term.length < minQueryLength ? null : term;
+}
+
+/** The next pickable option from `from` in direction `dir` (1 / -1); `from` itself when there is none. */
+export function nextEnabledIndex(options: readonly ComboboxOption[], from: number, dir: 1 | -1): number {
+  for (let i = from + dir; i >= 0 && i < options.length; i += dir) {
+    if (!options[i].disabled) return i;
+  }
+  return from;
 }
 
 interface ComboboxBaseProps {
@@ -93,6 +116,8 @@ export default function Combobox(props: ComboboxProps) {
     mode,
   } = props;
   const t = useT(uiMessages);
+  /** Characters typed before a search runs, and before an empty result is reported. */
+  const minQueryLength = props.minQueryLength ?? 2;
 
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<ComboboxOption[]>([]);
@@ -106,7 +131,9 @@ export default function Combobox(props: ComboboxProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** The in-flight search; a newer query aborts it so a slow answer never overwrites a newer one. */
   const requestRef = useRef<AbortController | null>(null);
-  const listId = useRef(`cb-list-${Math.random().toString(36).slice(2, 8)}`).current;
+  const uid = useId();
+  const listId = `${uid}-list`;
+  const inputId = `${uid}-input`;
 
   /* ── Async fetch ──────────────────────────────────────────────────── */
 
@@ -116,7 +143,8 @@ export default function Combobox(props: ComboboxProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       requestRef.current?.abort();
       requestRef.current = null;
-      if (q.length < (props.minQueryLength ?? 2)) {
+      const term = asyncSearchTerm(q, minQueryLength);
+      if (term === null) {
         setOptions([]);
         setLoading(false);
         return;
@@ -126,7 +154,7 @@ export default function Combobox(props: ComboboxProps) {
         const controller = new AbortController();
         requestRef.current = controller;
         try {
-          const url = props.fetchUrl.replace('{q}', encodeURIComponent(q));
+          const url = props.fetchUrl.replace('{q}', encodeURIComponent(term));
           const res = await fetch(url, { signal: controller.signal });
           const json: unknown = await res.json();
           if (controller.signal.aborted) return;
@@ -143,7 +171,7 @@ export default function Combobox(props: ComboboxProps) {
         }
       }, 200);
     },
-    [mode, props],
+    [mode, props, minQueryLength],
   );
 
   // Unmount: drop a pending debounce and abort an in-flight search.
@@ -191,6 +219,7 @@ export default function Combobox(props: ComboboxProps) {
   /* ── Selection ────────────────────────────────────────────────────── */
 
   function selectOption(opt: ComboboxOption) {
+    if (opt.disabled) return;
     onChange(opt.value);
     setQuery('');
     setOptions([]);
@@ -220,11 +249,11 @@ export default function Combobox(props: ComboboxProps) {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setHighlightIdx((prev) => Math.min(prev + 1, options.length - 1));
+        setHighlightIdx((prev) => nextEnabledIndex(options, prev, 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setHighlightIdx((prev) => Math.max(prev - 1, 0));
+        setHighlightIdx((prev) => (prev < 0 ? nextEnabledIndex(options, -1, 1) : nextEnabledIndex(options, prev, -1)));
         break;
       case 'Enter':
         e.preventDefault();
@@ -273,6 +302,8 @@ export default function Combobox(props: ComboboxProps) {
   /* ── Display value ────────────────────────────────────────────────── */
 
   const displayValue = open ? query : value;
+  /** What an async search was (or would be) run for; the empty-state hints key off it. */
+  const searchedQuery = mode === 'async' ? query.trim() : query;
 
   /* ── Highlight matching text ──────────────────────────────────────── */
 
@@ -304,7 +335,7 @@ export default function Combobox(props: ComboboxProps) {
   return (
     <div ref={wrapperRef} className={cn('relative', className)}>
       {label && (
-        <label className="block text-xs font-heading font-semibold text-poke-text-secondary mb-1">
+        <label htmlFor={inputId} className="block text-xs font-heading font-semibold text-poke-text-secondary mb-1">
           {label}
         </label>
       )}
@@ -327,6 +358,7 @@ export default function Combobox(props: ComboboxProps) {
 
         <input
           ref={inputRef}
+          id={inputId}
           type="text"
           role="combobox"
           aria-expanded={open}
@@ -335,6 +367,7 @@ export default function Combobox(props: ComboboxProps) {
           aria-activedescendant={
             highlightIdx >= 0 ? `${listId}-opt-${highlightIdx}` : undefined
           }
+          aria-label={label ? undefined : placeholder || undefined}
           autoComplete="off"
           disabled={disabled}
           value={displayValue}
@@ -382,7 +415,7 @@ export default function Combobox(props: ComboboxProps) {
               {t('combobox.searching')}
             </li>
           )}
-          {!loading && options.length === 0 && query.length >= 2 && (
+          {!loading && options.length === 0 && searchedQuery.length >= minQueryLength && (
             <li className="px-3 py-2 text-sm text-poke-text-muted">{t('combobox.noResults')}</li>
           )}
           {!loading &&
@@ -392,14 +425,18 @@ export default function Combobox(props: ComboboxProps) {
                 id={`${listId}-opt-${i}`}
                 role="option"
                 aria-selected={i === highlightIdx}
+                aria-disabled={opt.disabled ? true : undefined}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   selectOption(opt);
                 }}
-                onMouseEnter={() => setHighlightIdx(i)}
+                onMouseEnter={() => {
+                  if (!opt.disabled) setHighlightIdx(i);
+                }}
                 className={`
-                  px-3 py-1.5 text-sm cursor-pointer transition-colors
-                  ${i === highlightIdx ? 'bg-poke-elevated text-poke-text-primary' : 'hover:bg-poke-elevated/50'}
+                  px-3 py-1.5 text-sm transition-colors
+                  ${opt.disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+                  ${i === highlightIdx ? 'bg-poke-elevated text-poke-text-primary' : opt.disabled ? '' : 'hover:bg-poke-elevated/50'}
                 `}
               >
                 {(renderOption ?? defaultRenderOption)(opt, i === highlightIdx)}
@@ -409,9 +446,9 @@ export default function Combobox(props: ComboboxProps) {
       )}
 
       {/* No results hint for open + empty */}
-      {open && !loading && options.length === 0 && query.length >= 2 && mode === 'async' && (
+      {open && !loading && options.length === 0 && searchedQuery.length >= minQueryLength && mode === 'async' && (
         <div className="absolute z-20 w-full mt-1 bg-poke-surface border border-poke-border rounded-poke-md shadow-poke-lg px-3 py-2 text-sm text-poke-text-muted">
-          {t('combobox.noResultsFor', { query })}
+          {t('combobox.noResultsFor', { query: searchedQuery })}
         </div>
       )}
     </div>

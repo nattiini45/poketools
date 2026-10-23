@@ -5,7 +5,7 @@ import { getCompletedMatchRecordsBatch } from '@/lib/supabase/queries/matches';
 import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
 import { getGlobalKillRankForPokemon, getAllTimePlayerAggregates } from '@/lib/supabase/queries/aggregates';
 import { listTournamentsByIds, getParticipantsBatch } from '@/lib/supabase/queries/tournaments';
-import { loadScoringByes } from '@/lib/tournament/scoring-byes';
+import { loadScoringByesBatch } from '@/lib/tournament/scoring-byes';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
@@ -192,9 +192,16 @@ async function loadParticipationStandings(
   );
 
   const standingsTournamentIds = tournamentsNeedingStandings.map((t) => t.id);
-  const [participantsByTournament, matchRecordsByTournament, seasonContexts] = await Promise.all([
+  const [participantsByTournament, matchRecordsByTournament, byesByTournament, seasonContexts] = await Promise.all([
     getParticipantsBatch(standingsTournamentIds),
     getCompletedMatchRecordsBatch(standingsTournamentIds),
+    // A Swiss tournament's table scores the byes stored on its rounds: one rounds read for all of them.
+    // Disclosed fallback, as the per-tournament read had: a failed rounds read costs the Swiss tournaments their
+    // standing (a table without its byes would be wrong), never the profile.
+    loadScoringByesBatch(tournamentsNeedingStandings).catch((err: unknown) => {
+      console.error('[profile/compose] bye rounds failed — Swiss tournaments show no standing:', err);
+      return null;
+    }),
     // Disclosed fallback, as before this batching: a failed season lookup
     // costs the season-bound tournaments their standing, never the profile.
     loadSeasonStandingsContexts(tournamentsNeedingStandings.map((t) => t.season_id)).catch(
@@ -210,6 +217,7 @@ async function loadParticipationStandings(
 
   for (const t of tournamentsNeedingStandings) {
     if (t.season_id && seasonContexts === null) continue;
+    if (t.bracket_type === 'swiss' && byesByTournament === null) continue;
     try {
       const participants = participantsByTournament.get(t.id) ?? [];
       const matchRecords = matchRecordsByTournament.get(t.id) ?? [];
@@ -219,8 +227,7 @@ async function loadParticipationStandings(
       for (const p of participants) participantNames[p.id] = p.name;
 
       const context = (t.season_id ? seasonContexts?.get(t.season_id) : undefined) ?? NO_SEASON_CONTEXT;
-      // A Swiss tournament's table scores the byes stored on its rounds.
-      const byes = await loadScoringByes(t);
+      const byes = byesByTournament?.get(t.id) ?? [];
       const standings = computeStandingsFromContext(
         context,
         participantIds,

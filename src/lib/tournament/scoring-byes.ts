@@ -9,8 +9,13 @@
  */
 
 import type { BracketType } from '@/types/tournament';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { scoringByeRecords } from './byes';
+import {
+  getByeRoundsByTournamentIds,
+  getRoundsByTournament,
+  getSwissByeRoundsBySeason,
+  type ByeRound,
+} from '@/lib/supabase/queries/rounds';
+import { groupRoundsByStage, scoringByeRecords } from './byes';
 import type { ByeRecord } from './types';
 
 /**
@@ -25,6 +30,29 @@ export async function loadScoringByes(tournament: {
 }): Promise<ByeRecord[]> {
   if (tournament.bracket_type !== 'swiss') return [];
   return scoringByeRecords(tournament.bracket_type, await getRoundsByTournament(tournament.id));
+}
+
+/**
+ * The stored bye rounds of a season's Swiss stages, keyed by stage id, in ONE rounds read (the stage filter runs
+ * in the database). A stage without a Swiss round is absent from the map.
+ */
+export async function loadSeasonSwissByeRounds(seasonId: string): Promise<Map<string, ByeRound[]>> {
+  return groupRoundsByStage(await getSwissByeRoundsBySeason(seasonId));
+}
+
+/**
+ * `loadScoringByes` for many tournaments at once: one rounds read for all the Swiss ones, none when there is no
+ * Swiss tournament. Every tournament in the list has an entry (empty for a non-Swiss one), so a caller indexes the
+ * result without a fallback.
+ */
+export async function loadScoringByesBatch(
+  tournaments: readonly { id: string; bracket_type?: BracketType | null }[],
+): Promise<Map<string, ByeRecord[]>> {
+  const swissIds = tournaments.filter((t) => t.bracket_type === 'swiss').map((t) => t.id);
+  const roundsByTournament = swissIds.length > 0 ? await getByeRoundsByTournamentIds(swissIds) : new Map<string, ByeRound[]>();
+  return new Map(
+    tournaments.map((t) => [t.id, scoringByeRecords(t.bracket_type, roundsByTournament.get(t.id) ?? [])] as const),
+  );
 }
 
 /** Keep the byes of rounds up to and including `roundNumber` (a "through round N" table). */

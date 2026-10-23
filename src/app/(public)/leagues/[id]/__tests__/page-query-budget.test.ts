@@ -247,6 +247,32 @@ describe('league page — route-world branch query budget', () => {
     expect(findByName(page, 'SakuraWorld')).toBeDefined();
   });
 
+  it('non-EPB with a Swiss stage: the stored byes cost ONE extra rounds read, within the budget', async () => {
+    const tables = buildFixtureTables();
+    for (const row of tables.tournaments) {
+      if (row.season_id === SAKURA_SEASON_ID) row.bracket_type = 'swiss';
+    }
+    fake.current = createFakeSupabase(tables);
+
+    await renderPage(SAKURA_SEASON_ID);
+
+    const read = fake.current.queries.map((q) => q.table);
+    // The 10 reads of a league without a Swiss stage + the Swiss stages' bye rounds, in the same wave.
+    expect(read).toHaveLength(11);
+    expect(read.filter((table) => table === 'rounds')).toHaveLength(1);
+    expect(read.length).toBeLessThanOrEqual(WORLD_BRANCH_BUDGET);
+    expectNoStatsReads();
+  });
+
+  it('a league without a Swiss stage reads no rounds (its budget is unchanged)', async () => {
+    for (const seasonId of [EPB_SEASON_ID, SAKURA_SEASON_ID]) {
+      fake.current!.reset();
+      fakeNextCache.reset();
+      await renderPage(seasonId);
+      expect(fake.current!.queries.map((q) => q.table)).not.toContain('rounds');
+    }
+  });
+
   it('each table is read at most once (no season, stage, participant or tracker re-read)', async () => {
     await renderPage(EPB_SEASON_ID);
 

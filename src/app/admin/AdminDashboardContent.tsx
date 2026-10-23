@@ -177,7 +177,7 @@ export function DashboardView({
 
       {/* Attention Required + Recent Activity: side by side on lg */}
       <div
-        className={`grid grid-cols-1 gap-6 items-start ${recent_activity !== null ? 'lg:grid-cols-2' : ''}`}
+        className={`grid grid-cols-1 gap-6 items-start ${Array.isArray(recent_activity) ? 'lg:grid-cols-2' : ''}`}
       >
         {/* Attention Required */}
         <Section
@@ -231,7 +231,7 @@ export function DashboardView({
         </Section>
 
         {/* Recent Activity: site admins only (the audit trail is not scoped) */}
-        {recent_activity !== null && (
+        {Array.isArray(recent_activity) && (
           <Section
             title={t('dashboard.activity.title')}
             subtitle={t('dashboard.activity.count', { count: recent_activity.length })}

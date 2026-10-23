@@ -15,6 +15,7 @@ import {
   ADMIN_MATCH_SEARCH_PLAYER_CAP,
   ADMIN_MATCH_STATUSES,
   STANDALONE_LEAGUE,
+  adminMatchLastPage,
   buildMatchListApiQuery,
   buildMatchListSearch,
   parseMatchListUrl,
@@ -57,9 +58,96 @@ async function getJson<T>(url: string, signal: AbortSignal): Promise<{ ok: true;
   }
 }
 
-export default function AdminMatchList() {
+/**
+ * `update(patch)` for the list's filters: merges the patch into the URL state and hands the
+ * new query string to `replace`. The state it merges into is a ref moved on every update, not
+ * only when the router re-renders with the new URL, so two updates in one tick (a debounced
+ * search firing right after a status click) compose instead of the second dropping the first.
+ */
+export function useMatchListUpdate(url: MatchListUrlState, replace: (search: string) => void) {
+  const urlRef = useRef(url);
+  useEffect(() => {
+    urlRef.current = url;
+  }, [url]);
+
+  return useCallback(
+    (patch: Partial<MatchListUrlState>) => {
+      const next = { ...urlRef.current, ...patch };
+      urlRef.current = next;
+      replace(buildMatchListSearch(next));
+    },
+    [replace],
+  );
+}
+
+/**
+ * The list footer: the shown range, "page x of y" and the previous / next buttons. The last page
+ * is capped at `ADMIN_MATCH_MAX_PAGE` (the API answers 400 above it), so a list longer than that
+ * never offers a page it cannot load.
+ */
+export function MatchListPager({
+  page,
+  shownPage,
+  total,
+  pageSize,
+  from,
+  to,
+  onPageChange,
+}: {
+  /** The page the URL asks for (the buttons step from it). */
+  page: number;
+  /** The page of the response on screen. */
+  shownPage: number;
+  total: number;
+  pageSize: number;
+  from: number;
+  to: number;
+  onPageChange: (page: number) => void;
+}) {
   const t = useT(shellMessages);
   const f = useFormatter();
+  const totalPages = adminMatchLastPage(total, pageSize);
+
+  return (
+    <div className="flex items-center justify-between pt-2">
+      <div className="flex flex-wrap gap-x-3 text-xs text-poke-text-muted">
+        <span>
+          {t('admin.matches.range', {
+            from: f.number(from),
+            to: f.number(to),
+            total: f.number(total),
+          })}
+        </span>
+        {totalPages > 1 && (
+          <span>{t('admin.matches.pageOf', { page: f.number(shownPage), pages: f.number(totalPages) })}</span>
+        )}
+      </div>
+      {totalPages > 1 && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            disabled={page <= 1}
+            className={`${getButtonClasses('ghost', 'sm')} disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            {t('admin.matches.previous')}
+          </button>
+          <button
+            type="button"
+            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+            disabled={page >= totalPages}
+            className={`${getButtonClasses('ghost', 'sm')} disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            {t('admin.matches.next')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function AdminMatchList() {
+  const t = useT(shellMessages);
   const errorText = useApiErrorText(errorsAdmin);
   const router = useRouter();
   const pathname = usePathname();
@@ -67,18 +155,11 @@ export default function AdminMatchList() {
 
   // The URL is the source of truth for status, league, phase, q and page.
   const url = useMemo(() => parseMatchListUrl(searchParams), [searchParams]);
-  const urlRef = useRef(url);
-  useEffect(() => {
-    urlRef.current = url;
-  }, [url]);
-
-  const update = useCallback(
-    (patch: Partial<MatchListUrlState>) => {
-      const search = buildMatchListSearch({ ...urlRef.current, ...patch });
-      router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
-    },
+  const replaceSearch = useCallback(
+    (search: string) => router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false }),
     [router, pathname],
   );
+  const update = useMatchListUpdate(url, replaceSearch);
 
   // ── Search box: local text, sent to the URL (and so the server) after a pause ──
   const [searchInput, setSearchInput] = useState(url.q);
@@ -151,12 +232,11 @@ export default function AdminMatchList() {
 
   const total = data?.total ?? 0;
   const pageSize = data?.pageSize ?? 50;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // A page past the last one (a stale link, or rows removed meanwhile): step back to the last page.
   useEffect(() => {
     if (data && data.rows.length === 0 && data.total > 0 && url.page > 1) {
-      update({ page: Math.max(1, Math.ceil(data.total / data.pageSize)) });
+      update({ page: adminMatchLastPage(data.total, data.pageSize) });
     }
   }, [data, url.page, update]);
 
@@ -180,6 +260,11 @@ export default function AdminMatchList() {
 
   const leagueKnown = url.league === '' || isStandalone || selectedLeague !== undefined;
   const phaseKnown = url.phase === '' || phaseChoices.some((p) => p.id === url.phase);
+
+  // A deep-linked id the choices do not (yet) contain: a neutral label while they load, the id only once they
+  // failed to load or really lack it.
+  const optionsPending = options === null && optionsError === null;
+  const unknownOptionLabel = (id: string) => (optionsPending ? t('admin.matches.loadingOption') : id);
 
   const firstShown = total === 0 || !data ? 0 : (data.page - 1) * data.pageSize + 1;
   const lastShown = data ? firstShown + data.rows.length - 1 : 0;
@@ -218,7 +303,7 @@ export default function AdminMatchList() {
           >
             <option value="">{t('admin.matches.allLeagues')}</option>
             <option value={STANDALONE_LEAGUE}>{t('admin.matches.noLeague')}</option>
-            {!leagueKnown && <option value={url.league}>{url.league}</option>}
+            {!leagueKnown && <option value={url.league}>{unknownOptionLabel(url.league)}</option>}
             {options?.leagues.map((league) => (
               <option key={league.id} value={league.id}>
                 {optionLabel(league.name, { archived: league.archived, test: league.is_test_season })}
@@ -233,7 +318,7 @@ export default function AdminMatchList() {
             className={SELECT_CLASSES}
           >
             <option value="">{phaseAll}</option>
-            {!phaseKnown && <option value={url.phase}>{url.phase}</option>}
+            {!phaseKnown && <option value={url.phase}>{unknownOptionLabel(url.phase)}</option>}
             {phaseChoices.map((phase) => (
               <option key={phase.id} value={phase.id}>
                 {optionLabel(phase.name, { archived: phase.archived })}
@@ -359,41 +444,15 @@ export default function AdminMatchList() {
             })}
           </AnimatedList>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between pt-2">
-            <div className="flex flex-wrap gap-x-3 text-xs text-poke-text-muted">
-              <span>
-                {t('admin.matches.range', {
-                  from: f.number(firstShown),
-                  to: f.number(lastShown),
-                  total: f.number(total),
-                })}
-              </span>
-              {totalPages > 1 && (
-                <span>{t('admin.matches.pageOf', { page: f.number(data.page), pages: f.number(totalPages) })}</span>
-              )}
-            </div>
-            {totalPages > 1 && (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => update({ page: Math.max(1, url.page - 1) })}
-                  disabled={url.page <= 1}
-                  className={`${getButtonClasses('ghost', 'sm')} disabled:opacity-40 disabled:cursor-not-allowed`}
-                >
-                  {t('admin.matches.previous')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => update({ page: Math.min(totalPages, url.page + 1) })}
-                  disabled={url.page >= totalPages}
-                  className={`${getButtonClasses('ghost', 'sm')} disabled:opacity-40 disabled:cursor-not-allowed`}
-                >
-                  {t('admin.matches.next')}
-                </button>
-              </div>
-            )}
-          </div>
+          <MatchListPager
+            page={url.page}
+            shownPage={data.page}
+            total={total}
+            pageSize={pageSize}
+            from={firstShown}
+            to={lastShown}
+            onPageChange={(page) => update({ page })}
+          />
         </>
       )}
     </div>

@@ -173,11 +173,8 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
     const enrolledIds = new Set(participants.map((p) => p.id));
     return outcome.hits.map((hit) => {
       seenHits.current.set(hit.id, hit);
-      return {
-        label: hit.name,
-        value: hit.id,
-        meta: { is_guest: hit.is_guest, enrolled: unavailableForEnrolment(hit, enrolledIds) === 'enrolled' },
-      };
+      const enrolled = unavailableForEnrolment(hit, enrolledIds) === 'enrolled';
+      return { label: hit.name, value: hit.id, disabled: enrolled, meta: { is_guest: hit.is_guest, enrolled } };
     });
   }
 

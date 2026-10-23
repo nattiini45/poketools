@@ -382,3 +382,61 @@ describe('buildWorldRouteData — query budget', () => {
     expect(seasonRead.select).toMatch(/tournaments \( count \)/);
   });
 });
+
+describe('buildWorldRouteData — Swiss byes in the season table', () => {
+  /** The fixture league with its stage(s) switched to Swiss and p3 holding a stored bye in round 1. */
+  function swissTables(stageIds: string[]) {
+    const tables = buildFixtureTables();
+    for (const row of tables.tournaments) {
+      if (stageIds.includes(row.id as string)) row.bracket_type = 'swiss';
+    }
+    tables.rounds = [
+      {
+        id: 'bye-round-1',
+        tournament_id: stageIds[0],
+        round_number: 1,
+        bye_player_ids: ['p3'],
+      },
+    ];
+    return tables;
+  }
+
+  async function winsOf(seasonId: string, playerId: string): Promise<number> {
+    const data = wire(await buildWorldRouteData(seasonId)) as { standings: StandingWire[] };
+    return data.standings.find((row) => row.player_id === playerId)!.wins;
+  }
+
+  it('a Swiss stage bye scores as a win in the season standings tab', async () => {
+    const withoutBye = await winsOf(SAKURA_SEASON_ID, 'p3');
+
+    fake.current = createFakeSupabase(swissTables(['s-stage-1']));
+    const withBye = await winsOf(SAKURA_SEASON_ID, 'p3');
+
+    expect(withBye).toBe(withoutBye + 1);
+  });
+
+  it('the bye read joins the one wave: 11 reads, a single rounds read of the Swiss stages', async () => {
+    fake.current = createFakeSupabase(swissTables(['s-stage-1']));
+
+    await buildWorldRouteData(SAKURA_SEASON_ID);
+
+    const tables = fake.current.queries.map((q) => q.table);
+    expect(tables).toHaveLength(11);
+    expect(tables.filter((table) => table === 'rounds')).toHaveLength(1);
+  });
+
+  it('a league without a Swiss stage reads no rounds', async () => {
+    await buildWorldRouteData(SAKURA_SEASON_ID);
+
+    expect(fake.current!.queries.map((q) => q.table)).not.toContain('rounds');
+  });
+
+  it('Evolution Point Buy standings never read byes, even with a Swiss stage', async () => {
+    fake.current = createFakeSupabase(swissTables(['e-stage-1']));
+
+    await buildWorldRouteData(EPB_SEASON_ID);
+
+    expect(fake.current.queries).toHaveLength(11);
+    expect(fake.current.queries.map((q) => q.table)).not.toContain('rounds');
+  });
+});

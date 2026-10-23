@@ -2,12 +2,16 @@ import { getStagesBySeasonId } from './tournaments';
 import { getPublicSeasonParticipants } from './seasons';
 import { getMatchesByTournamentIds } from './matches';
 import { getSeasonGroups } from './season-groups';
+import type { ByeRound } from './rounds';
 import {
   computeStandingsFromContext,
   loadSeasonStandingsContext,
   type SeasonStandingsContext,
 } from '@/lib/tournament/season-standings';
-import type { Standing, MatchRecord } from '@/lib/tournament/types';
+import { loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
+import { scoringByeRecordsForStages } from '@/lib/tournament/byes';
+import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import type { Standing, MatchRecord, ByeRecord } from '@/lib/tournament/types';
 import { rankCombinedTable, splitGroupTables, type CombinedRanking } from '@/lib/tournament/group-standings';
 import type { MatchWithPlayers } from '@/types/match';
 import { toPublicMatch, type PublicMatch, type PublicMatchSource } from '@/lib/match/public-match';
@@ -175,8 +179,12 @@ export function deriveRankChanges(
   return changes;
 }
 
-/** The stage fields the schedule reads. */
-export type LeagueScheduleStage = Pick<TournamentWithDetails, 'id' | 'name'>;
+/**
+ * The stage fields the schedule reads. `bracket_type` decides whether the stage's stored byes score: a Swiss stage
+ * scores them as wins; a stage without it (or any other type) scores none.
+ */
+export type LeagueScheduleStage = Pick<TournamentWithDetails, 'id' | 'name'> &
+  Partial<Pick<TournamentWithDetails, 'bracket_type'>>;
 
 /** The participant fields the schedule reads (public columns only). */
 export type LeagueScheduleParticipant = Pick<PublicSeasonParticipant, 'id' | 'name' | 'avatar_url'>;
@@ -192,6 +200,12 @@ export interface LeagueScheduleInput {
   context: SeasonStandingsContext;
   /** The league's groups in display order (`getSeasonGroups`); empty or absent for a league without groups. */
   groups?: readonly LeagueScheduleGroup[];
+  /**
+   * The stored bye rounds per Swiss stage id (`loadSeasonSwissByeRounds`); a missing id means none. Each Swiss bye
+   * counts in the season table as a win, like in the stage's own table. Absent for a league that scores none, and
+   * never read by Evolution Point Buy standings.
+   */
+  byeRoundsByStage?: ReadonlyMap<string, readonly ByeRound[]>;
 }
 
 /**
@@ -230,9 +244,58 @@ export async function getLeagueSchedule(
     preloaded.groups ?? getSeasonGroups(seasonId).then(toLeagueScheduleGroups),
   ]);
 
-  const matchesByStage = await getMatchesByTournamentIds(stages.map((stage) => stage.id));
+  // One rounds read for every Swiss stage. A league without a Swiss stage has no bye to score, and Evolution Point
+  // Buy standings never read byes, so neither reads the rounds.
+  const readsByes =
+    stages.some((stage) => stage.bracket_type === 'swiss') &&
+    (context.formatType === null || !isEvolutionPointBuy(context.formatType));
+  const [matchesByStage, byeRoundsByStage] = await Promise.all([
+    getMatchesByTournamentIds(stages.map((stage) => stage.id)),
+    readsByes ? loadSeasonSwissByeRounds(seasonId) : undefined,
+  ]);
 
-  return assembleLeagueSchedule({ stages, participants, matchesByStage, context, groups });
+  return assembleLeagueSchedule({ stages, participants, matchesByStage, context, groups, byeRoundsByStage });
+}
+
+/**
+ * The Swiss byes the season table scores, as `[current, previous]`: all of them, and the ones that stood before the
+ * latest matchday. A bye is part of the table the moment its round is generated. A round with results stands where
+ * its matchday does (matchdays are ordered by kickoff, so a delayed lower-numbered round can be the latest one);
+ * a round nobody has played yet was generated after the latest matchday when it follows that matchday's round in
+ * its stage. Pure.
+ */
+function seasonByes(
+  stages: readonly LeagueScheduleStage[],
+  byeRoundsByStage: ReadonlyMap<string, readonly ByeRound[]>,
+  matchdays: readonly CompletedMatchday[],
+): { current: ByeRecord[]; previous: ByeRecord[] } {
+  // No previous table before a second matchday: every bye stands.
+  const latestMatchdayRoundId = matchdays.length > 1 ? matchdays[matchdays.length - 1].roundId : null;
+  const playedBefore = new Set(matchdays.slice(0, -1).map((day) => day.roundId));
+  const played = new Set(matchdays.map((day) => day.roundId));
+  let latestRound: ByeRound | undefined;
+  if (latestMatchdayRoundId) {
+    for (const rounds of byeRoundsByStage.values()) {
+      latestRound = rounds.find((round) => round.id === latestMatchdayRoundId) ?? latestRound;
+    }
+  }
+
+  const standsBeforeLatest = (round: ByeRound) => {
+    if (latestMatchdayRoundId === null) return true;
+    if (played.has(round.id)) return playedBefore.has(round.id);
+    return !(
+      latestRound &&
+      round.tournament_id === latestRound.tournament_id &&
+      round.round_number > latestRound.round_number
+    );
+  };
+  const earlier = new Map(
+    [...byeRoundsByStage].map(([stageId, rounds]) => [stageId, rounds.filter(standsBeforeLatest)] as const),
+  );
+  return {
+    current: scoringByeRecordsForStages(stages, byeRoundsByStage),
+    previous: scoringByeRecordsForStages(stages, earlier),
+  };
 }
 
 /**
@@ -273,12 +336,19 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
     .filter((f) => f.match.status === 'completed')
     .map(toMatchRecord);
 
+  // Every match counts for one point per win here, whatever its stage, so a Swiss stage's bye is worth that win
+  // too (the stage's own table uses the same single point). Evolution Point Buy standings ignore byes. A legacy
+  // round holds no bye, so a league without Swiss byes is exactly the table it always was.
+  const matchdays = completedMatchdays(fixtures);
+  const byes = seasonByes(stages, input.byeRoundsByStage ?? new Map(), matchdays);
+
   const standings = computeStandingsFromContext(
     context,
     participantIds,
     participantNames,
     matchRecords,
     participantAvatars,
+    { byes: byes.current },
   );
 
   // Rank movement vs the previous matchday: recompute the table over the
@@ -295,7 +365,6 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
   // skewed for tied rows. A correct fix needs a stored per-matchday snapshot
   // or an award-level ledger (schema change) — deliberately NOT implemented
   // here; see AGENTS.md "Escalate When".
-  const matchdays = completedMatchdays(fixtures);
   const previousStandings =
     matchdays.length > 1
       ? computeStandingsFromContext(
@@ -304,6 +373,7 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
           participantNames,
           matchdays.slice(0, -1).flatMap((day) => day.records),
           participantAvatars,
+          { byes: byes.previous },
         )
       : null;
   if (groups.length === 0) {

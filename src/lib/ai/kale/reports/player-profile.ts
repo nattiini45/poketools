@@ -6,6 +6,7 @@ import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tourn
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
+import { countByesByPlayer, formatRecord } from '@/lib/tournament/byes';
 import type { ReportDefinition } from '../registry';
 import type { PromptTask, PipelineMode, ValidationResult, ReportParams } from '../types';
 import type { PlayerProfileContent } from '@/types/tournament-report';
@@ -25,6 +26,8 @@ interface PlayerProfileFactPack {
     final_rank: number;
     kd: number;
   };
+  /** Wins in `seasonRecord` that are Swiss byes (a win without a match); 0 when the standings hold none. */
+  seasonByeWins: number;
   signaturePokemon: {
     pokemonName: string;
     timesUsed: number;
@@ -75,11 +78,13 @@ async function buildFactPack(params: ReportParams): Promise<PlayerProfileFactPac
     participantAvatars[p.id] = p.avatar_url;
   }
 
+  // A Swiss tournament's standings score its stored byes as wins; the record handed to the prompts says so.
+  const byes = await loadScoringByes(tournament);
   const standings = await computeStandingsForSeason(
     tournament.season_id,
     participantIds, participantNames, allMatchRecords,
     participantAvatars,
-    { pointsPerWin: 3, pointsPerDraw: 1, byes: await loadScoringByes(tournament) },
+    { pointsPerWin: 3, pointsPerDraw: 1, byes },
     gymTypes
   );
 
@@ -121,6 +126,7 @@ async function buildFactPack(params: ReportParams): Promise<PlayerProfileFactPac
       final_rank,
       kd: playerStanding?.kill_differential ?? 0,
     },
+    seasonByeWins: countByesByPlayer(byes)[params.playerId] ?? 0,
     signaturePokemon,
     notableWins,
     totalMatches: allMatchRecords.filter(
@@ -139,7 +145,8 @@ const RULES = `CRITICAL: Use ONLY the facts provided. Do not invent stats or cla
 function getPromptTasks(factPack: unknown, mode: PipelineMode): PromptTask[] {
   const fp = factPack as PlayerProfileFactPack;
 
-  const record = `${fp.seasonRecord.wins}W-${fp.seasonRecord.losses}L${fp.seasonRecord.draws > 0 ? `-${fp.seasonRecord.draws}D` : ''}, ${fp.seasonRecord.points}pts, #${fp.seasonRecord.final_rank}, KD: ${fp.seasonRecord.kd > 0 ? '+' : ''}${fp.seasonRecord.kd}`;
+  const winLoss = formatRecord(fp.seasonRecord.wins, fp.seasonRecord.losses, fp.seasonRecord.draws, fp.seasonByeWins ?? 0);
+  const record = `${winLoss}, ${fp.seasonRecord.points}pts, #${fp.seasonRecord.final_rank}, KD: ${fp.seasonRecord.kd > 0 ? '+' : ''}${fp.seasonRecord.kd}`;
   const pokemonList = fp.signaturePokemon
     .map((p) => `${p.pokemonName}: ${p.timesUsed} uses, ${p.totalKos} KOs`)
     .join('\n');

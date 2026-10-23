@@ -1,6 +1,6 @@
 import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
-import { postgrestQuoted } from '@/lib/supabase/postgrest-filter';
+import { ilikeAnyOf, postgrestQuoted } from '@/lib/supabase/postgrest-filter';
 import { releaseTeamsFromMatches } from './teams';
 import type { Tables } from '@/types/database';
 import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
@@ -221,13 +221,6 @@ export async function listAdminMatchesPage(params: AdminMatchListParams): Promis
   return { rows, total: count ?? rows.length };
 }
 
-/** `.or()` filter: case-insensitive "contains" over name and Showdown username. */
-function matchSearchPlayerFilter(search: string): string {
-  const likeEscaped = search.replace(/[\\%_]/g, (char) => `\\${char}`);
-  const quoted = `%${likeEscaped}%`.replace(/[\\"]/g, (char) => `\\${char}`);
-  return `name.ilike."${quoted}",ps_username.ilike."${quoted}"`;
-}
-
 /**
  * Ids of the players whose name or Showdown username contains `search`
  * (bounded by `ADMIN_MATCH_SEARCH_PLAYER_CAP`; `truncated` says more match).
@@ -240,7 +233,7 @@ export async function findPlayerIdsForMatchSearch(
   const { data, error } = await supabase
     .from('players')
     .select('id')
-    .or(matchSearchPlayerFilter(search))
+    .or(ilikeAnyOf(['name', 'ps_username'], search))
     .order('name')
     .order('id')
     .limit(ADMIN_MATCH_SEARCH_PLAYER_CAP + 1);

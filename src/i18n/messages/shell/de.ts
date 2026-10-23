@@ -78,6 +78,8 @@ export default defineDe<typeof en>()({
       allTournaments: 'Alle Turniere',
       archivedOption: '{name} (archiviert)',
       testOption: '{name} (Test)',
+      /** The select label of a deep-linked league or phase while the filter choices load. */
+      loadingOption: 'Wird geladen …',
       leaguePhase: '{league} / {phase}',
       searchTruncated: 'Deine Suche passt auf viele Spieler. Nur die ersten {count} sind enthalten; gib mehr vom Namen ein, um einzugrenzen.',
       filtersFailed: 'Die Liga- und Phasenfilter konnten nicht geladen werden.',

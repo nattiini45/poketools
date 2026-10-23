@@ -118,6 +118,9 @@ vi.mock('@/lib/supabase/queries/ratings', () => ({
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(async () => [{ id: 'r1', round_number: 1 }]),
+  getSwissByeRoundsBySeason: vi.fn(async () => [
+    { id: 'r1', tournament_id: 'tournament-1', round_number: 1, bye_player_ids: ['player-1'] },
+  ]),
 }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   listSeasons: vi.fn(async () => [{ id: S, name: 'Liga' }]),
@@ -178,6 +181,7 @@ import { listSeasons, getSeasonWithDetails } from '@/lib/supabase/queries/season
 import { buildWorldRouteData } from '@/lib/worlds/route-data';
 import { getLeagueSchedule } from '@/lib/supabase/queries/league-standings';
 import { getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
+import { getSwissByeRoundsBySeason } from '@/lib/supabase/queries/rounds';
 import { getItemUsageForPokemon } from '@/lib/supabase/queries/teams';
 import { PRIVATE_MATCH_FIELDS, PUBLIC_MATCH_FIELDS } from '@/lib/match/public-match';
 import { expectNoPrivateMatchData } from '@/lib/match/__tests__/private-match-fields';
@@ -215,6 +219,7 @@ const CALLS = {
   seasonTrackers: () => publicReads.seasonTrackers(S),
   seasonFormatRules: () => publicReads.seasonFormatRules(S),
   seasonBattleStats: () => publicReads.seasonBattleStats(S),
+  seasonByeRounds: () => publicReads.seasonByeRounds(S),
   seasonMatchRecords: () => publicReads.seasonMatchRecords(S),
   worldRouteData: () => publicReads.worldRouteData(S, PRELOAD),
   leagueSchedule: () => publicReads.leagueSchedule(S, {}),
@@ -400,6 +405,7 @@ describe('public read cache — the write-route helpers expire exactly the reads
     'seasonTrackers',
     'seasonFormatRules',
     'seasonBattleStats',
+    'seasonByeRounds',
     'seasonMatchRecords',
     'worldRouteData',
     'leagueSchedule',
@@ -457,6 +463,32 @@ describe('public read cache — the write-route helpers expire exactly the reads
 
     expect(fakeNextCache.expiredTags.length).toBeGreaterThan(0);
     for (const { profile } of fakeNextCache.expiredTags) expect(profile).toEqual({ expire: 0 });
+  });
+});
+
+describe('public read cache — the batched bye rounds follow the rounds they batch', () => {
+  it('seasonByeRounds is one season-tagged entry per league and a second read is a hit', async () => {
+    await publicReads.seasonByeRounds(S);
+    await publicReads.seasonByeRounds(S);
+    await publicReads.seasonByeRounds('season-2');
+
+    expect(getSwissByeRoundsBySeason).toHaveBeenCalledTimes(2);
+    expect(fakeNextCache.reads.map((r) => [r.tags, r.revalidate, r.hit])).toEqual([
+      [[publicTags.season(S)], PUBLIC_DETAIL_TTL_S, false],
+      [[publicTags.season(S)], PUBLIC_DETAIL_TTL_S, true],
+      [[publicTags.season('season-2')], PUBLIC_DETAIL_TTL_S, false],
+    ]);
+  });
+
+  it('a new round (expireTournamentReads of the stage and its league) expires the stage rounds and the batched read', async () => {
+    await publicReads.tournamentRounds(T);
+    await publicReads.seasonByeRounds(S);
+
+    expireTournamentReads(T, S);
+
+    await publicReads.tournamentRounds(T);
+    await publicReads.seasonByeRounds(S);
+    expect(fakeNextCache.reads.map((r) => r.hit)).toEqual([false, false, false, false]);
   });
 });
 

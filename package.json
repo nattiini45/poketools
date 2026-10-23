@@ -1,6 +1,6 @@
 {
   "name": "poketools",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Competitive Pokemon league and tournament management platform",
   "license": "MIT",
   "private": true,

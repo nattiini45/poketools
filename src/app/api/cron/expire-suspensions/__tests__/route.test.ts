@@ -13,10 +13,20 @@ vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
 }));
 
+vi.mock('@/lib/utils/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/utils/crypto')>();
+  return {
+    ...actual,
+    secretsEqual: vi.fn(actual.secretsEqual),
+    timingSafeCompare: vi.fn(actual.timingSafeCompare),
+  };
+});
+
 import { GET, POST } from '@/app/api/cron/expire-suspensions/route';
 import { clearExpiredSuspensions } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { secretsEqual, timingSafeCompare } from '@/lib/utils/crypto';
 
 const originalCronSecret = process.env.CRON_SECRET;
 
@@ -35,7 +45,8 @@ describe('/api/cron/expire-suspensions', () => {
   });
 
   afterEach(() => {
-    process.env.CRON_SECRET = originalCronSecret;
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
   });
 
   it('returns cron_not_configured and logs when CRON_SECRET is missing', async () => {
@@ -59,6 +70,20 @@ describe('/api/cron/expire-suspensions', () => {
     expect(res.status).toBe(401);
     expect(body.code).toBe('cron_unauthorized');
     expect(clearExpiredSuspensions).not.toHaveBeenCalled();
+  });
+
+  it('rejects a token of a different length than the secret', async () => {
+    const res = await POST(request('a-much-longer-token-than-the-configured-secret'));
+
+    expect(res.status).toBe(401);
+    expect(clearExpiredSuspensions).not.toHaveBeenCalled();
+  });
+
+  it('compares the token with the length-independent secretsEqual', async () => {
+    await POST(request('secret'));
+
+    expect(secretsEqual).toHaveBeenCalledWith('secret', 'secret');
+    expect(timingSafeCompare).not.toHaveBeenCalled();
   });
 
   it('rejects a missing Authorization header', async () => {

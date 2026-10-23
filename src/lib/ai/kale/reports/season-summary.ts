@@ -3,6 +3,7 @@ import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getAggregates, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
+import { countByesByPlayer, formatRecord } from '@/lib/tournament/byes';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import type { ReportDefinition } from '../registry';
 import type { PromptTask, PipelineMode, ValidationResult, ReportParams } from '../types';
@@ -54,11 +55,14 @@ async function buildFactPack(params: ReportParams): Promise<SeasonSummaryFactPac
     gymTypes[p.id] = p.gym_type;
   }
 
+  // A Swiss tournament's standings score its stored byes as wins; each record says how many of its wins are byes.
+  const byes = await loadScoringByes(tournament);
+  const byeCounts = countByesByPlayer(byes);
   const standings = await computeStandingsForSeason(
     seasonId,
     participantIds, participantNames, allMatchRecords,
     participantAvatars,
-    { pointsPerWin: 3, pointsPerDraw: 1, byes: await loadScoringByes(tournament) },
+    { pointsPerWin: 3, pointsPerDraw: 1, byes },
     gymTypes
   );
 
@@ -67,7 +71,7 @@ async function buildFactPack(params: ReportParams): Promise<SeasonSummaryFactPac
     player_name: s.player_name,
     player_id: s.player_id,
     points: s.points,
-    record: `${s.wins}W-${s.losses}L${s.draws > 0 ? `-${s.draws}D` : ''}`,
+    record: formatRecord(s.wins, s.losses, s.draws, byeCounts[s.player_id] ?? 0),
     kd: `${s.kill_differential > 0 ? '+' : ''}${s.kill_differential}`,
     gymType: s.gym_type,
   }));
@@ -85,7 +89,7 @@ async function buildFactPack(params: ReportParams): Promise<SeasonSummaryFactPac
     ? {
         player_name: mvpStanding.player_name,
         player_id: mvpStanding.player_id,
-        reason: `Finished #1 with ${mvpStanding.points}pts (${mvpStanding.wins}W-${mvpStanding.losses}L), KD: ${mvpStanding.kill_differential > 0 ? '+' : ''}${mvpStanding.kill_differential}`,
+        reason: `Finished #1 with ${mvpStanding.points}pts (${formatRecord(mvpStanding.wins, mvpStanding.losses, mvpStanding.draws, byeCounts[mvpStanding.player_id] ?? 0)}), KD: ${mvpStanding.kill_differential > 0 ? '+' : ''}${mvpStanding.kill_differential}`,
       }
     : { player_name: '', player_id: '', reason: '' };
 

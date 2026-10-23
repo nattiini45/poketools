@@ -17,7 +17,8 @@ import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { errorsAdmin, errorsPlayers } from '@/i18n/messages/errors';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { LocalTime } from '@/i18n/LocalTime';
-import type { TablePageSize } from '@/lib/ui/table-params';
+import type { PlayerSortColumn } from '@/lib/players/player-sort';
+import { cycleColumnSort, type ColumnSortState, type TablePageSize } from '@/lib/ui/table-params';
 import {
   DEFAULT_ROSTER_PAGE_SIZE,
   lastPage,
@@ -61,6 +62,8 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   const [perPage, setPerPage] = useState<TablePageSize>(DEFAULT_ROSTER_PAGE_SIZE);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  // null = the directory's default order (name, ascending); the server applies the order.
+  const [sort, setSort] = useState<ColumnSortState | null>(null);
   // `loaded` flips once the first request settles; later requests keep the table mounted.
   const [loaded, setLoaded] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -93,7 +96,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     const requestId = ++latestRequest.current;
     setFetching(true);
     try {
-      const res = await fetch(`/api/players?${rosterQuery({ page, perPage, search })}`);
+      const res = await fetch(`/api/players?${rosterQuery({ page, perPage, search, sort })}`);
       const json = (await res.json()) as ApiResult<Player[]> | PlayersPage;
       if (requestId !== latestRequest.current) return;
       if (json.success) {
@@ -117,7 +120,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         setLoaded(true);
       }
     }
-  }, [page, perPage, search]);
+  }, [page, perPage, search, sort]);
 
   useEffect(() => {
     fetchPlayers();
@@ -163,6 +166,13 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
       clearTimeout(handle);
     };
   }, [linkGuest, linkSearch]);
+
+  // Ordering is the server's job (the table only holds one page): a header click
+  // cycles asc, desc, default and restarts at the first page.
+  const handleSort = useCallback((column: string) => {
+    setSort((current) => cycleColumnSort(current, column));
+    setPage(1);
+  }, []);
 
   const handleAdd = async (data: PlayerRegistration) => {
     const res = await fetch('/api/players', {
@@ -371,8 +381,9 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
 
   const rosterColumns = useMemo((): Column<Player>[] => [
     {
-      key: 'name',
+      key: 'name' satisfies PlayerSortColumn,
       header: t('players.columns.name'),
+      sortable: true,
       render: (player) =>
         editingId === player.id ? (
           <input
@@ -388,8 +399,9 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         ),
     },
     {
-      key: 'discord',
+      key: 'discord_id' satisfies PlayerSortColumn,
       header: t('players.columns.discordId'),
+      sortable: true,
       render: (player) =>
         editingId === player.id ? (
           <input
@@ -402,8 +414,9 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         ),
     },
     {
-      key: 'ps',
+      key: 'ps_username' satisfies PlayerSortColumn,
       header: t('players.columns.psUsername'),
+      sortable: true,
       render: (player) =>
         editingId === player.id ? (
           <input
@@ -416,8 +429,9 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         ),
     },
     {
-      key: 'status',
+      key: 'status' satisfies PlayerSortColumn,
       header: t('players.columns.status'),
+      sortable: true,
       render: (player) => (
         <span className="inline-flex flex-wrap items-center gap-2">
           <Badge variant={statusVariant(player.status)}>
@@ -578,6 +592,8 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
           keyExtractor={(player) => player.id}
           emptyMessage={search ? t('players.noMatches') : t('players.empty')}
           clientEngine={false}
+          sort={sort}
+          onSort={handleSort}
           page={page}
           perPage={perPage}
           totalItems={total}

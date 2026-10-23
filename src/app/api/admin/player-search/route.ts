@@ -46,11 +46,14 @@ function validationFailed(issues: string) {
  * is site-admin only and unsearched, so it cannot serve a league or tournament
  * admin and never reaches players past its first page.
  *
- * - Any live admin may call it. A site admin needs no scope. A resource admin
- *   must name exactly one of `season_id` / `tournament_id` and be an admin of
- *   it (`requireResourceAdmin`: a tournament also passes for an admin of its
- *   parent season), so the endpoint is not a site-wide player directory for
- *   every scoped admin.
+ * - Any live admin may call it. A site admin needs no scope and searches every
+ *   account. A resource admin must name exactly one of `season_id` /
+ *   `tournament_id` and be an admin of it (`requireResourceAdmin`: a tournament
+ *   also passes for an admin of its parent season). The scope is a guard, not a
+ *   filter: the picker exists to find players who are not yet participants, so
+ *   the search covers the whole directory. A resource admin sees only what the
+ *   public player directory shows (active, non-test accounts), so banned,
+ *   suspended and test accounts stay hidden from them.
  * - `q` is a trimmed 1-64 character text, passed to `listPlayers` unchanged: a
  *   case-insensitive contains match on the player name or Showdown username
  *   (both public profile fields). `limit` is 1-20 (default 10).
@@ -92,6 +95,8 @@ export async function GET(request: NextRequest) {
       offset: 0,
       search: q,
       ...(registered === '1' ? { registeredOnly: true } : {}),
+      // A site admin keeps the full view; a scoped admin gets the public directory's.
+      ...(player.isAdmin ? {} : { visibleOnly: true }),
     });
     const hits: PlayerSearchHit[] = data.map((row) => ({
       ...toPublicPlayerRef(row),

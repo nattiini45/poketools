@@ -161,7 +161,7 @@ const UNAVAILABLE_KEY = {
  * (`unavailable`) stays in the list, greyed out with the reason, so the admin
  * sees why a player cannot be chosen instead of finding them missing.
  */
-function usePlayerSearch(
+export function usePlayerSearch(
   seasonId: string,
   unavailable: (hit: PlayerSearchHit) => RosterUnavailable | null,
   options?: { registeredOnly?: boolean },
@@ -181,11 +181,10 @@ function usePlayerSearch(
       setError(null);
       setMore(searchTruncation(outcome));
       for (const hit of outcome.hits) seen.current.set(hit.id, hit);
-      return outcome.hits.map((hit) => ({
-        label: hit.name,
-        value: hit.id,
-        meta: { is_guest: hit.is_guest, unavailable: unavailable(hit) },
-      }));
+      return outcome.hits.map((hit) => {
+        const reason = unavailable(hit);
+        return { label: hit.name, value: hit.id, disabled: reason !== null, meta: { is_guest: hit.is_guest, unavailable: reason } };
+      });
     },
     [unavailable],
   );
@@ -195,6 +194,12 @@ function usePlayerSearch(
     setMore(null);
   }, []);
 
+  /** The hit for a picked id, only while the picker would still accept it. */
+  const pick = (id: string): PlayerSearchHit | null => {
+    const hit = seen.current.get(id);
+    return hit && unavailable(hit) === null ? hit : null;
+  };
+
   return {
     fetchUrl: playerSearchUrl({ seasonId }, options),
     transformResults,
@@ -202,11 +207,12 @@ function usePlayerSearch(
     minQueryLength: PLAYER_SEARCH_MIN_QUERY,
     error,
     more,
-    /** The hit for a picked id, only while the picker would still accept it. */
-    pick: (id: string): PlayerSearchHit | null => {
-      const hit = seen.current.get(id);
-      return hit && unavailable(hit) === null ? hit : null;
-    },
+    pick,
+    /**
+     * The selection a single-pick input holds after a change: a cleared input or a
+     * refused hit selects nobody, so the input and the action it enables agree.
+     */
+    select: (id: string): PlayerSearchHit | null => (id ? pick(id) : null),
     reset: () => {
       setError(null);
       setMore(null);
@@ -730,7 +736,7 @@ export default function LeagueRosterManager({
                 mode="async"
                 label={t('substitute.replacement')}
                 value={substituteIn?.name ?? ''}
-                onChange={(id) => setSubstituteIn(id ? substituteSearch.pick(id) ?? substituteIn : null)}
+                onChange={(id) => setSubstituteIn(substituteSearch.select(id))}
                 placeholder={t('substitute.selectPlayer')}
                 fetchUrl={substituteSearch.fetchUrl}
                 transformResults={substituteSearch.transformResults}
@@ -817,7 +823,7 @@ export default function LeagueRosterManager({
               <Combobox
                 mode="async"
                 value={linkSource?.name ?? ''}
-                onChange={(id) => setLinkSource(id ? linkSearch.pick(id) ?? linkSource : null)}
+                onChange={(id) => setLinkSource(linkSearch.select(id))}
                 placeholder={t('link.selectAccount')}
                 fetchUrl={linkSearch.fetchUrl}
                 transformResults={linkSearch.transformResults}

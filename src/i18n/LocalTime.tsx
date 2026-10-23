@@ -84,15 +84,26 @@ function getClockSnapshot(): number {
 }
 
 /**
+ * The current time, as an epoch in milliseconds. The first render (server and
+ * hydration) is the provider's `requestTime`; after mount it follows the wall
+ * clock and re-ticks every 60 s, on the clock every `<RelativeTime>` shares.
+ * For a value derived from "now" (an overdue flag) that must change while the
+ * page stays open.
+ */
+export function useMinuteClock(): number {
+  const requestTime = useRequestTime();
+  const getServerSnapshot = useMemo(() => () => requestTime, [requestTime]);
+  return useSyncExternalStore(subscribeClock, getClockSnapshot, getServerSnapshot);
+}
+
+/**
  * "5 minutes ago". The first render (server and hydration) uses the
  * provider's `requestTime`; after mount it follows the wall clock and
  * re-ticks every 60 s.
  */
 export function RelativeTime({ value, className }: { value: Instant; className?: string }) {
   const formatter = useFormatter();
-  const requestTime = useRequestTime();
-  const getServerSnapshot = useMemo(() => () => requestTime, [requestTime]);
-  const now = useSyncExternalStore(subscribeClock, getClockSnapshot, getServerSnapshot);
+  const now = useMinuteClock();
   return (
     <time dateTime={toIso(value)} className={className}>
       {formatter.relative(value, now)}

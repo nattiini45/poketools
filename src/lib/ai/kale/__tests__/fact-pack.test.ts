@@ -18,6 +18,7 @@ vi.mock('@/lib/supabase/queries/rulesets', () => ({
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundById: vi.fn(),
+  getRoundsByTournament: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -55,7 +56,7 @@ import { computeMarginDescription, buildRecapFactPack, buildForecastFactPack } f
 import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
-import { getRoundById } from '@/lib/supabase/queries/rounds';
+import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getMatchesByRound, getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
@@ -697,5 +698,80 @@ describe('buildForecastFactPack', () => {
     } as never);
     const open = await buildForecastFactPack('tourney-1', 'round-1');
     expect(open.matchups[0].player1Team).toEqual(['Pikachu']);
+  });
+});
+
+// ─── Byes in the record ─────────────────────────────────────────────
+
+describe('standing records with Swiss byes', () => {
+  function useSwissTournament(rounds: { round_number: number; bye_player_ids: string[] }[]) {
+    vi.mocked(getTournamentById).mockResolvedValue({
+      id: 'tourney-1',
+      name: 'Swiss Cup',
+      best_of_default: 3,
+      ruleset_id: 'ruleset-1',
+      season_id: null,
+      bracket_type: 'swiss',
+    } as ReturnType<typeof getTournamentById> extends Promise<infer T> ? T : never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue(
+      rounds as ReturnType<typeof getRoundsByTournament> extends Promise<infer T> ? T : never,
+    );
+  }
+
+  it('recap: a record that holds a bye win says it is a win without a match', async () => {
+    setupRecapMocks();
+    useSwissTournament([
+      { round_number: 1, bye_player_ids: ['p1'] },
+      // Later rounds are not part of the table "through round 1".
+      { round_number: 2, bye_player_ids: ['p1'] },
+    ]);
+
+    const result = await buildRecapFactPack('tourney-1', 'round-1');
+
+    expect(result.currentStandings[0].recordString).toBe('1W-0L, incl. 1 bye win without a match');
+    expect(result.currentStandings[1].recordString).toBe('0W-1L');
+    // The numeric fields stay the table's own.
+    expect(result.currentStandings[0].wins).toBe(1);
+  });
+
+  it('recap: the previous table counts the byes of one round fewer', async () => {
+    setupRecapMocks();
+    vi.mocked(getRoundById).mockResolvedValue({
+      id: 'round-2',
+      name: 'Round 2',
+      round_number: 2,
+    } as ReturnType<typeof getRoundById> extends Promise<infer T> ? T : never);
+    vi.mocked(getCompletedMatchRecords).mockResolvedValue([
+      { player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1', round_number: 1 },
+    ] as ReturnType<typeof getCompletedMatchRecords> extends Promise<infer T> ? T : never);
+    useSwissTournament([
+      { round_number: 1, bye_player_ids: ['p1'] },
+      { round_number: 2, bye_player_ids: ['p1'] },
+    ]);
+
+    const result = await buildRecapFactPack('tourney-1', 'round-2');
+
+    expect(result.currentStandings[0].recordString).toBe('1W-0L, incl. 2 bye wins without a match');
+    expect(result.previousStandings![0].recordString).toBe('1W-0L, incl. 1 bye win without a match');
+  });
+
+  it('recap: a tournament without byes keeps the plain record', async () => {
+    setupRecapMocks();
+
+    const result = await buildRecapFactPack('tourney-1', 'round-1');
+
+    expect(result.currentStandings[0].recordString).toBe('1W-0L');
+  });
+
+  it('forecast: the standings behind the matchups name the bye win too', async () => {
+    setupRecapMocks();
+    useSwissTournament([{ round_number: 1, bye_player_ids: ['p2'] }]);
+
+    const result = await buildForecastFactPack('tourney-1', 'round-1');
+
+    expect(result.currentStandings.map((s) => s.recordString)).toEqual([
+      '1W-0L',
+      '0W-1L, incl. 1 bye win without a match',
+    ]);
   });
 });

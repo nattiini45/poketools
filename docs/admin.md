@@ -19,7 +19,7 @@ src/app/admin/
 ├── tournaments/        # list, new (TournamentCreator), [id]/rounds, archived
 ├── rulesets/           # list, new, [id]/edit
 ├── matches/            # list (server-side filters), [id] (AdminMatchActions), [id]/games/[gid]/edit, [id]/import-replay
-├── players/            # roster (PlayerRoster; server search and paging)
+├── players/            # roster (PlayerRoster; server search, paging and sorting)
 ├── achievements/       # AchievementDefinitionsManager
 ├── social/             # Discord / X / Threads / Bluesky config
 ├── wiki/               # WikiModerationPanel (notes, reports)
@@ -31,7 +31,8 @@ src/app/admin/
 
 src/app/api/admin/      # guarded route handlers (see API Routes)
 src/lib/admin/
-└── export-rate-limit.ts  # daily export quota via Supabase RPC
+├── export-rate-limit.ts  # daily export quota via Supabase RPC
+└── match-list.ts         # matches list query contract and URL state
 ```
 
 ## Core Functions/Classes
@@ -42,7 +43,7 @@ src/lib/admin/
 - **Export rate limit** — `checkAndRecordAdminExport()` in `src/lib/admin/export-rate-limit.ts`: enforces `ADMIN_EXPORT_DAILY_LIMIT = 20` via the `check_and_record_admin_export` Supabase RPC, returning `{ allowed, remaining, reset_at }`.
 - **Dashboard content** — `AdminDashboardContent.tsx`: live counts, attention-required matches, and recent audit activity fed by `/api/admin/dashboard`. A resource admin sees only the attention queue and counts of their own competitions; the site-wide counts and the activity feed are for site admins.
 - **Matches list** — `/admin/matches` filters by status, league (with phase), tournament and a text search on the server (`status`, `season_id`, `tournament_id`, `q`), pages with `.range()` and an exact total, and keeps the filters in the URL. Each row shows its League and Phase. The League and Phase choices come from `/api/admin/matches/filter-options`.
-- **Player pickers** — the roster, substitute, link, enrolment and league-admin pickers use the server-search `Combobox` (aborts a superseded request, shows a fetch error, waits for a minimum query length) over `/api/admin/player-search`; the Players page searches and pages on the server (`roster-helpers.ts`).
+- **Player pickers** — the roster, substitute, link, enrolment and league-admin pickers use the server-search `Combobox` (aborts a superseded request, shows a fetch error, waits for a minimum query length) over `/api/admin/player-search`; the Players page searches, pages and sorts on the server (`roster-helpers.ts`; `GET /api/players` takes `sort` = `name` | `discord_id` | `ps_username` | `status` and `dir` = `asc` | `desc`, default name ascending, and answers anything else with `400`).
 - **Round deadlines** — `RoundManager` edits a round's deadline through `PATCH /api/tournaments/[id]/rounds/[rid]` (audited, expires the tournament's read tags) and flags an overdue round.
 - **Aggregate maintenance** — `GET`/`POST /api/admin/aggregates`: query aggregate-job queue stats, or `drain` pending jobs / `rebuild` a scope (`tournament`, `league`, `all_time`) from `battle_stats`.
 - **Reconcile** — `POST /api/admin/reconcile`: dry-run (`repair: false`) or repair season-derived data, scoped to one `season` or `all`.
@@ -126,9 +127,9 @@ A league may split its trainers into groups (design: one round robin, one table 
 All routes call `requireAdmin()` unless noted below (the scoped dashboard, matches, filter-options and player-search routes call `requireAnyAdmin()`), and return `ApiResult` envelopes; errors go through `safeErrorResponse`.
 
 - **Dashboard & audit**: `/api/admin/dashboard` (counts + attention + activity; scoped to the caller's leagues and tournaments for resource admins, who get no site-wide counts and no activity feed), `/api/admin/audit-log`.
-- **Player search**: `/api/admin/player-search` (any admin; a resource admin must name a `season_id` or `tournament_id` they administer; returns public refs only; `registered=1` keeps only accounts with a login). Used by the roster, substitute, link, enrolment and league-admin pickers (`src/lib/players/player-search.ts`).
+- **Player search**: `/api/admin/player-search` (any admin; a resource admin must name a `season_id` or `tournament_id` they administer, which is a guard and not a filter: the search covers the whole directory, but a resource admin sees only what the public player directory shows, so banned, suspended and test accounts stay hidden, while a site admin sees every account; returns public refs only; `registered=1` keeps only accounts with a login). Used by the roster, substitute, link, enrolment and league-admin pickers (`src/lib/players/player-search.ts`).
 - **Data export/import**: `/api/admin/export`, `/api/admin/players/import`, `/api/admin/import-sets`, `/api/admin/import-sample-sets`, `/api/admin/import-stats`, `/api/admin/import-usage-stats`, `/api/admin/import/point-buy`, `/api/admin/import/team-roles`.
-- **Match/game operations**: `/api/admin/matches` (any admin, scoped; server-side `status`, `season_id`, `tournament_id`, `q`, `page`, `page_size` with an exact total), `/api/admin/matches/filter-options` (scoped leagues with phases, and standalone tournaments), `/api/admin/matches/[id]/reset`, `/api/admin/matches/[id]/replay-import`, `/api/admin/matches/[id]/replay-preview`, `/api/admin/games/[id]`.
+- **Match/game operations**: `/api/admin/matches` (any admin, scoped; server-side `status`, `season_id`, `tournament_id`, `q`, `page` (1 to 1000), `page_size` with an exact total), `/api/admin/matches/filter-options` (scoped leagues with phases, and standalone tournaments), `/api/admin/matches/[id]/reset`, `/api/admin/matches/[id]/replay-import`, `/api/admin/matches/[id]/replay-preview`, `/api/admin/games/[id]`.
   - Replay import (`/import-replay`, `replay-preview` + `replay-import`): the organizer assigns the two replay sides to the participants; the winner and stats are the replay's own and are not editable in the form (correct them afterwards in the game editor). The import sends the preview's `replay_hash` back and is refused with 409 `replay_changed_since_preview` when the replay changed, or 409 `replay_already_recorded` when the battle is already recorded for any game. See `docs/match.md` ("Replay Binding").
   - The per-match admin pages (`/admin/matches/[id]`, `/import-replay`, `/games/[gid]/edit`) need more than `AdminGuard`'s any-admin check: the viewer must be a site admin or a resource admin of that match's tournament or league. `canAdministerMatch(match.tournament_id)` in `src/app/admin/matches/[id]/match-access.tsx` decides it from the live `getLiveAccess()` read; any other admin sees `MatchAccessDenied`. It is the same rule as `/api/admin/matches/[id]/reset` and `/api/admin/games/[id]`.
 - **Player discipline**: `/api/admin/players/[id]/suspend`, `/api/admin/players/[id]/unsuspend`. Timed suspensions are lifted by the `/api/cron/expire-suspensions` cron (every 15 minutes, one audit event per player).

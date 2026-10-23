@@ -166,7 +166,7 @@ A **phase** is stored as a `tournaments` row with `season_id` set. League admin 
 | pairings_generated | Checkbox | |
 | bracket_side | Text | nullable — `winners` / `losers` / `grand_finals` for elimination bracket columns |
 | deadline | Timestamptz | nullable; set and cleared by admins in RoundManager (`PATCH /api/tournaments/[id]/rounds/[rid]`, audited, expires the tournament's read tags) |
-| bye_player_ids | UUID[] | not null, default `{}` (migration `20261023145151_rounds_bye_player_ids.sql`). Players with a bye in this Swiss or round-robin round, written at generation (generate, generate-all, manual). Swiss: a stored bye is a win worth the stage's win points, adds no games, kills or Buchholz, and blocks a second bye. Round-robin byes score nothing; phases with groups follow the week plan and store no bye; elimination byes are structural and not stored. |
+| bye_player_ids | UUID[] | not null, default `{}` (migration `20261023145151_rounds_bye_player_ids.sql`). Players with a bye in this Swiss or round-robin round, written at generation (generate, generate-all, manual). Swiss: a stored bye is a win worth the stage's win points, adds no games, kills or Buchholz, and blocks a second bye. Round-robin byes score nothing; a grouped round robin phase follows the week plan and stores no bye, a grouped Swiss phase stores each group's bye; elimination byes are structural and not stored. |
 
 ### 4.5 Matches
 | Field | Type | Notes |
@@ -732,12 +732,14 @@ POST /api/tournaments/[id]/regenerate-bracket Admin: wipe and rebuild SE/DE brac
 POST /api/tournaments/[id]/repair-bracket     Admin: re-run bye resolution + slot materialization
 GET  /api/admin/dashboard               Any admin: counts, attention queue, recent audit (a resource admin gets only
                                             their own leagues and tournaments, no site-wide counts or activity)
-GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, q, page, page_size;
+GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, q, page (1-1000), page_size;
                                             returns an exact total
 GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, and standalone tournaments
 GET  /api/admin/player-search              Any admin (a resource admin names a season_id or tournament_id they
-                                            administer): public player refs only; `registered=1` keeps accounts
-                                            with a login
+                                            administer; the scope is a guard, not a filter): public player refs
+                                            only; a resource admin sees only active, non-test accounts (what the
+                                            public directory shows), a site admin every account; `registered=1`
+                                            keeps accounts with a login
 DELETE /api/admin/rounds/[id]               Admin: delete latest round or zero-game round
                                             (400 STRUCTURE_ELIM_ROUND_DELETE for v2 elim)
 
@@ -754,6 +756,8 @@ POST .../groups/repair                      Hand group rows left by pre-handover
                                             an apply names the reviewed `moves`, 409 PLAN_CHANGED if they differ)
 POST /api/seasons/[id]/participants/substitute  League (`scope: 'league'`) or phase (`scope: <phaseId>`) substitute
 POST /api/seasons/[id]/advance              Advance to next phase (optional `force`; same guards as sync)
+GET  /api/players (admin)                    Player directory page: `limit`, `offset`, `search`, `sort` (name | discord_id |
+                                            ps_username | status), `dir` (asc | desc); default name ascending; exact total
 POST /api/players (admin)                   Create registered or guest (`is_guest: true`) players
 POST /api/players/[id]/claim (admin)      Link Discord onto guest row (409 SOURCE_HAS_ACTIVITY if source has data; 409 SOURCE_NOT_ACTIVE if the source is banned or suspended)
 POST /api/tournaments                       Rejects `season_id` — use phases API instead

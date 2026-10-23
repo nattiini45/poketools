@@ -8,6 +8,7 @@ import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
 import { decideMatchRosterVisibility, type TeamViewer } from '@/lib/team/visibility';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { byesThroughRound, loadScoringByes } from '@/lib/tournament/scoring-byes';
+import { countByesByPlayer, formatRecord } from '@/lib/tournament/byes';
 import { aggregateTeamFromStats, computePokemonScore, computeQuickStats } from '@/lib/match/aggregation';
 import { buildRulesetSection, parseGenFromFormat } from './context-builder';
 import { renderCoreAssignments } from './league-context';
@@ -213,7 +214,14 @@ export async function buildRoundRecapPrompt(
   sections.push(formatTournamentSection(tournament, round));
   sections.push(buildRulesetSection(ruleset, tournament.is_doubles ?? false, gen));
   sections.push(formatMatchDetailsSection(matchDetails, round.name, currentStandings, previousStandings));
-  sections.push(formatStandingsSection(currentStandings, previousStandings, round.name));
+  sections.push(
+    formatStandingsSection(
+      currentStandings,
+      previousStandings,
+      round.name,
+      countByesByPlayer(byesThroughRound(byes, round.round_number)),
+    ),
+  );
 
   return {
     systemPrompt: buildRecapSystemPrompt(gen),
@@ -250,12 +258,13 @@ export async function buildRoundForecastPrompt(
   const { participantIds, participantNames, participantAvatars, gymTypes } =
     buildParticipantLookups(participants, seasonData);
 
+  const byes = await loadScoringByes(tournament);
   const currentStandings = allMatchRecords.length > 0
     ? await computeStandingsForSeason(
         tournament.season_id,
         participantIds, participantNames, allMatchRecords,
         participantAvatars,
-        { pointsPerWin: 3, pointsPerDraw: 1, byes: await loadScoringByes(tournament) },
+        { pointsPerWin: 3, pointsPerDraw: 1, byes },
         gymTypes
       )
     : [];
@@ -271,7 +280,7 @@ export async function buildRoundForecastPrompt(
   sections.push(buildRulesetSection(ruleset, tournament.is_doubles ?? false, gen));
 
   if (currentStandings.length > 0) {
-    sections.push(formatStandingsSection(currentStandings, null, 'Current'));
+    sections.push(formatStandingsSection(currentStandings, null, 'Current', countByesByPlayer(byes)));
   }
 
   sections.push(formatPairingsSection(roundMatches, currentStandings, allMatchRecords, playerTeams));
@@ -597,7 +606,8 @@ function formatTeamRoster(team: AggregatedPokemon[]): string {
 function formatStandingsSection(
   current: Standing[],
   previous: Standing[] | null,
-  label: string
+  label: string,
+  byeCounts: Readonly<Record<string, number>> = {}
 ): string {
   if (current.length === 0) return '## STANDINGS\nNo standings data.\n';
 
@@ -617,7 +627,7 @@ function formatStandingsSection(
       if (change > 0) delta = ` (up ${change})`;
       else if (change < 0) delta = ` (down ${Math.abs(change)})`;
     }
-    const record = `${s.wins}W-${s.losses}L${s.draws > 0 ? `-${s.draws}D` : ''}`;
+    const record = formatRecord(s.wins, s.losses, s.draws, byeCounts[s.player_id] ?? 0);
     const kd = s.kill_differential !== 0
       ? ` | KD: ${s.kill_differential > 0 ? '+' : ''}${s.kill_differential}`
       : '';

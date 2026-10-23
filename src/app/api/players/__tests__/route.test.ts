@@ -152,6 +152,71 @@ describe('GET /api/players', () => {
     expect(vi.mocked(listPlayers)).not.toHaveBeenCalled();
   });
 
+  describe('sorting', () => {
+    const admin = {
+      playerId: 'admin-1',
+      name: 'Admin',
+      isAdmin: true,
+      isResourceAdmin: false,
+      isCreator: false,
+      psUsername: '',
+      championsUsername: '',
+      avatarUrl: null,
+      status: 'active' as const,
+    };
+
+    function get(query: string) {
+      const request = { url: `http://localhost:3000/api/players${query}` } as unknown as NextRequest;
+      return GET(request);
+    }
+
+    beforeEach(() => {
+      vi.mocked(requireAdmin).mockResolvedValue(admin);
+      vi.mocked(listPlayers).mockResolvedValue({ data: [], total: 0 });
+    });
+
+    it('leaves the order to the query default (name ascending) without sort or dir', async () => {
+      await get('');
+
+      expect(vi.mocked(listPlayers).mock.calls[0][0]?.sort).toBeUndefined();
+    });
+
+    it.each(['name', 'discord_id', 'ps_username', 'status'])('passes sort=%s with its direction', async (column) => {
+      const response = await get(`?sort=${column}&dir=desc&search=ash&limit=20&offset=40`);
+
+      expect(response.status).toBe(200);
+      expect(vi.mocked(listPlayers)).toHaveBeenCalledWith({
+        limit: 20,
+        offset: 40,
+        search: 'ash',
+        sort: { column, direction: 'desc' },
+      });
+    });
+
+    it('defaults the direction to ascending and the column to name', async () => {
+      await get('?sort=status');
+      await get('?dir=desc');
+
+      expect(vi.mocked(listPlayers).mock.calls[0][0]?.sort).toEqual({ column: 'status', direction: 'asc' });
+      expect(vi.mocked(listPlayers).mock.calls[1][0]?.sort).toEqual({ column: 'name', direction: 'desc' });
+    });
+
+    it.each([
+      ['a column outside the whitelist', '?sort=is_admin'],
+      ['a column the table does not have', '?sort=password'],
+      ['an injected order expression', '?sort=name.desc,id'],
+      ['an unknown direction', '?sort=name&dir=sideways'],
+      ['an empty sort', '?sort='],
+    ])('rejects %s with validation_failed', async (_label, query) => {
+      const response = await get(query);
+      const body = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(body.code).toBe('validation_failed');
+      expect(vi.mocked(listPlayers)).not.toHaveBeenCalled();
+    });
+  });
+
   it('returns the exact total so the caller can page past the first window', async () => {
     vi.mocked(requireAdmin).mockResolvedValue({
       playerId: 'admin-1',

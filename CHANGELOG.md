@@ -8,6 +8,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-23
+
 ### Upgrade notes
 
 - **Apply migration `20261023145151_rounds_bye_player_ids.sql` BEFORE deploying the code.** It adds
@@ -22,24 +24,32 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Resource-admin scoping.** League and tournament admins now see only their own competitions in the admin area. The
   dashboard and the matches list are scoped to their leagues and tournaments (no site-wide counts and no activity
   feed for them), the pages of one league, phase or tournament refuse another league's admin with a "no access"
-  notice, and the site-admin-only pages and the archived lists are closed to them.
+  notice, the site-admin-only pages are closed to them, and the archived lists show only their own competitions.
 - **Matches filters.** `/admin/matches` filters by status, league (with phase), tournament and a text search on the
-  server, pages through the full result with an exact total, and keeps the filters in the URL. Rows show their league
-  and phase. The filter choices come from the new `GET /api/admin/matches/filter-options`.
+  server, pages through the full result (up to page 1,000) with an exact total, and keeps the filters in the URL. Rows
+  show their league and phase. The filter choices come from the new `GET /api/admin/matches/filter-options`.
 - **Player search in the pickers.** The roster, substitute, link, enrolment and league-admin player pickers search the
   server as you type (`GET /api/admin/player-search`, public fields only), so they no longer cut off at the first
-  page of players. The admin Players page searches and pages on the server too.
+  page of players. League and tournament admins find the accounts the public player list shows (active, not test
+  accounts); site admins find every account. A pick the picker refuses (a player already on the roster, for
+  example) clears the selection instead of keeping the previous player. The admin Players page searches, sorts
+  (name, Discord ID, Showdown username, status) and pages on the server too.
 - **Round deadlines.** The round manager can set, change and clear a round's deadline; the change is audited, and an
-  overdue round shows a badge.
+  overdue round shows a badge, also when the deadline passes while the page is open.
 - **Swiss byes are stored and scored.** A round remembers who had a bye, a later round never gives a second bye while
-  another player has none, and a Swiss bye counts as a win in a single tournament's standings. Round-robin byes score
-  nothing.
+  another player has none, and a Swiss bye counts as a win from the moment its round is generated: in the
+  tournament's table, the league's season standings, the standings preview and Insights. Round-robin byes score
+  nothing, and Evolution Point Buy standings never count byes. AI recaps, forecasts and Kale reports say when a
+  record includes a bye win.
 - **Timed suspensions end on time.** A cron lifts a suspension once its end has passed and writes one audit event per
   player.
 - **Doubles phases.** The phase form has a doubles checkbox.
 
 ### Changed
 
+- **`GET /api/admin/matches` answers a page, not a list.** The response is now `{ rows, total, page, pageSize,
+  searchTruncated }` instead of an array capped at 200 rows, and unknown query parameters or a bad `status` are
+  refused with a 400. A script reading the old array must read `rows` and page through the result.
 - The player ban and suspend actions share one Ban dialog, and a suspension's end is sent as an exact time (an ISO
   date-time with offset; a value without one is refused).
 - The admin link in the decision-match (tie-break) panel opens the tournament's rounds page instead of a page
@@ -50,6 +60,7 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - Player pickers no longer miss players beyond the first page of results.
 - A Swiss round could give the same player a bye twice while others had none, because byes were not remembered.
 - A suspension past its end stayed active until an admin lifted it by hand.
+- Adding or removing a league or tournament admin failed silently; the admin manager now shows the error.
 
 ### Security
 

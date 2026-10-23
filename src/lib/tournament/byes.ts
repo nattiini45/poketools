@@ -14,7 +14,7 @@ export interface RoundByeSource {
 export function byeRecordsFromRounds(rounds: readonly RoundByeSource[]): ByeRecord[] {
   const records: ByeRecord[] = [];
   for (const round of rounds) {
-    for (const playerId of round.bye_player_ids) {
+    for (const playerId of round.bye_player_ids ?? []) {
       records.push({ player_id: playerId, round_number: round.round_number });
     }
   }
@@ -32,4 +32,48 @@ export function scoringByeRecords(
   rounds: readonly RoundByeSource[],
 ): ByeRecord[] {
   return bracketType === 'swiss' ? byeRecordsFromRounds(rounds) : [];
+}
+
+/**
+ * The byes that count in a season-wide table: every stage's scoring byes, each by the rule of the stage it
+ * belongs to (only a Swiss stage scores). `roundsByStage` holds the stored rounds per stage id; a missing id means
+ * the stage has none.
+ */
+export function scoringByeRecordsForStages(
+  stages: readonly { id: string; bracket_type?: BracketType | null }[],
+  roundsByStage: ReadonlyMap<string, readonly RoundByeSource[]>,
+): ByeRecord[] {
+  return stages.flatMap((stage) => scoringByeRecords(stage.bracket_type, roundsByStage.get(stage.id) ?? []));
+}
+
+/**
+ * Rounds grouped by the stage (tournament) they belong to, in input order. A stage without a round is absent from
+ * the map. Pure: shared by the server loader and by readers that hold the rounds as cached JSON.
+ */
+export function groupRoundsByStage<R extends { tournament_id: string }>(rounds: readonly R[]): Map<string, R[]> {
+  const byStage = new Map<string, R[]>();
+  for (const round of rounds) {
+    const stageRounds = byStage.get(round.tournament_id);
+    if (stageRounds) stageRounds.push(round);
+    else byStage.set(round.tournament_id, [round]);
+  }
+  return byStage;
+}
+
+/** How many scoring byes each player holds, by player id. */
+export function countByesByPlayer(byes: readonly ByeRecord[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const bye of byes) counts[bye.player_id] = (counts[bye.player_id] ?? 0) + 1;
+  return counts;
+}
+
+/**
+ * A win-loss record as text ("3W-1L-1D"). A bye counts in `wins` without a match behind it, so a record that
+ * holds byes says so ("3W-1L, incl. 1 bye win without a match"): text built from the record then reconciles with
+ * the match list.
+ */
+export function formatRecord(wins: number, losses: number, draws: number, byeWins = 0): string {
+  const record = `${wins}W-${losses}L${draws > 0 ? `-${draws}D` : ''}`;
+  if (byeWins <= 0) return record;
+  return `${record}, incl. ${byeWins} bye win${byeWins === 1 ? '' : 's'} without a match`;
 }

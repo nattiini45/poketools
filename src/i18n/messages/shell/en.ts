@@ -82,6 +82,8 @@ export default {
       allTournaments: 'All Tournaments',
       archivedOption: '{name} (archived)',
       testOption: '{name} (test)',
+      /** The select label of a deep-linked league or phase while the filter choices load. */
+      loadingOption: 'Loading...',
       leaguePhase: '{league} / {phase}',
       searchTruncated: 'Your search matches many players. Only the first {count} are included; type more of the name to narrow it down.',
       filtersFailed: 'Failed to load the league and phase filters',

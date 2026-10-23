@@ -26,6 +26,15 @@ void _allStatusesListed;
 export const ADMIN_MATCH_PAGE_SIZES = [25, 50, 100] as const;
 export const ADMIN_MATCH_DEFAULT_PAGE_SIZE = 50;
 export const ADMIN_MATCH_SEARCH_MAX_LENGTH = 100;
+/**
+ * Last page a request may ask for: at 100 rows per page that is a 100,000-row offset, far past
+ * any real list. A deeper page is a bad value (API 400, URL falls back to page 1), not a scan.
+ */
+export const ADMIN_MATCH_MAX_PAGE = 1000;
+/** The last page of a list of `total` rows: at least 1, and never past the last page the API answers. */
+export function adminMatchLastPage(total: number, pageSize: number): number {
+  return Math.min(ADMIN_MATCH_MAX_PAGE, Math.max(1, Math.ceil(total / pageSize)));
+}
 /** Players a search term expands to; a broader term is flagged as truncated, never silently cut. */
 export const ADMIN_MATCH_SEARCH_PLAYER_CAP = 40;
 
@@ -66,7 +75,7 @@ export const adminMatchListQuerySchema = z
       emptyAsAbsent,
       z.string().trim().min(1).max(ADMIN_MATCH_SEARCH_MAX_LENGTH).optional(),
     ),
-    page: z.preprocess(emptyAsAbsent, z.coerce.number().int().min(1).max(1_000_000).default(1)),
+    page: z.preprocess(emptyAsAbsent, z.coerce.number().int().min(1).max(ADMIN_MATCH_MAX_PAGE).default(1)),
     page_size: z.preprocess(
       emptyAsAbsent,
       z.coerce
@@ -129,7 +138,7 @@ export function parseMatchListUrl(params: { get(name: string): string | null }):
     league: league === STANDALONE_LEAGUE || UUID.safeParse(league).success ? league : '',
     phase: UUID.safeParse(phase).success ? phase : '',
     q: (params.get('q') ?? '').slice(0, ADMIN_MATCH_SEARCH_MAX_LENGTH),
-    page: Number.isFinite(page) && page >= 1 ? page : 1,
+    page: Number.isFinite(page) && page >= 1 && page <= ADMIN_MATCH_MAX_PAGE ? page : 1,
   };
 }
 

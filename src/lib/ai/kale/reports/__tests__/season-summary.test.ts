@@ -20,6 +20,9 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 vi.mock('@/lib/tournament/season-standings', () => ({
   computeStandingsForSeason: vi.fn(),
 }));
+vi.mock('@/lib/tournament/scoring-byes', () => ({
+  loadScoringByes: vi.fn(),
+}));
 
 // ─── Import after mocks ────────────────────────────────────────────
 
@@ -29,6 +32,7 @@ import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getAggregates, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 
 const mockGetSeasonById = vi.mocked(getSeasonById);
 const mockGetSeasonParticipants = vi.mocked(getSeasonParticipants);
@@ -37,6 +41,7 @@ const mockGetAggregates = vi.mocked(getAggregates);
 const mockGetTotalGames = vi.mocked(getTotalGamesInScope);
 const mockGetTournament = vi.mocked(getTournamentById);
 const mockComputeStandings = vi.mocked(computeStandingsForSeason);
+const mockLoadByes = vi.mocked(loadScoringByes);
 
 // ─── Fixtures ──────────────────────────────────────────────────────
 
@@ -58,6 +63,7 @@ function setupMocks() {
     { pokemon_name: 'Pikachu', total_brought: 10, total_kos_dealt: 15, total_games: 10, total_wins: 7 },
   ] as never);
   mockGetTotalGames.mockResolvedValue(10 as never);
+  mockLoadByes.mockResolvedValue([]);
   mockComputeStandings.mockResolvedValue([
     { player_id: 'p1', player_name: 'Ash', wins: 4, losses: 1, draws: 0, points: 12, kill_differential: 8, gym_type: 'Electric' },
     { player_id: 'p2', player_name: 'Gary', wins: 1, losses: 4, draws: 0, points: 3, kill_differential: -8, gym_type: 'Ground' },
@@ -98,6 +104,45 @@ describe('seasonSummaryDefinition', () => {
       expect(factPack.totalGames).toBe(10);
       expect((factPack.finalStandings as Array<unknown>).length).toBe(2);
       expect((factPack.seasonMvp as Record<string, unknown>).player_name).toBe('Ash');
+    });
+  });
+
+  describe('buildFactPack with Swiss byes', () => {
+    const params = { tournamentId: 't1', roundId: 'r1' };
+
+    it('says how many wins of a record are byes, in the standings and in the champion line', async () => {
+      mockLoadByes.mockResolvedValue([
+        { player_id: 'p1', round_number: 1 },
+        { player_id: 'p1', round_number: 3 },
+      ]);
+
+      const fp = (await seasonSummaryDefinition.buildFactPack(params)) as {
+        finalStandings: { player_id: string; record: string }[];
+        seasonMvp: { reason: string };
+      };
+
+      expect(fp.finalStandings.find((s) => s.player_id === 'p1')?.record).toBe(
+        '4W-1L, incl. 2 bye wins without a match',
+      );
+      expect(fp.finalStandings.find((s) => s.player_id === 'p2')?.record).toBe('1W-4L');
+      expect(fp.seasonMvp.reason).toContain('(4W-1L, incl. 2 bye wins without a match)');
+      expect(mockComputeStandings.mock.calls[0][5]).toMatchObject({
+        byes: [
+          { player_id: 'p1', round_number: 1 },
+          { player_id: 'p1', round_number: 3 },
+        ],
+      });
+    });
+
+    it('leaves every record unannotated when the standings hold no byes', async () => {
+      const fp = (await seasonSummaryDefinition.buildFactPack(params)) as {
+        finalStandings: { record: string }[];
+        seasonMvp: { reason: string };
+      };
+
+      expect(fp.finalStandings.map((s) => s.record)).toEqual(['4W-1L', '1W-4L']);
+      expect(fp.seasonMvp.reason).toContain('(4W-1L)');
+      expect(JSON.stringify(fp)).not.toContain('bye');
     });
   });
 

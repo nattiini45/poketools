@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ADMIN_MATCH_MAX_PAGE,
+  adminMatchLastPage,
   adminMatchListQuerySchema,
   buildMatchListApiQuery,
   buildMatchListSearch,
@@ -42,6 +44,8 @@ describe('adminMatchListQuerySchema', () => {
     ['page 0', { page: '0' }],
     ['non-numeric page', { page: 'two' }],
     ['fractional page', { page: '1.5' }],
+    ['page past the last allowed page', { page: String(ADMIN_MATCH_MAX_PAGE + 1) }],
+    ['a million pages deep', { page: '1000000' }],
     ['page_size 10', { page_size: '10' }],
     ['page_size 1000', { page_size: '1000' }],
     ['unknown key', { limit: '10' }],
@@ -59,6 +63,11 @@ describe('adminMatchListQuerySchema', () => {
     const r = parse({ q: '  mara  ', page: '3', season_id: UUID_A, tournament_id: UUID_B });
     expect(r.success && r.data.q).toBe('mara');
     expect(r.success && r.data.page).toBe(3);
+  });
+
+  it('accepts the last allowed page', () => {
+    const r = parse({ page: String(ADMIN_MATCH_MAX_PAGE) });
+    expect(r.success && r.data.page).toBe(ADMIN_MATCH_MAX_PAGE);
   });
 
   it('treats empty values as absent', () => {
@@ -81,6 +90,22 @@ describe('match list URL state', () => {
     expect(bad).toEqual({ status: '', league: '', phase: '', q: '', page: 1 });
 
     expect(parseMatchListUrl(new URLSearchParams(`league=${STANDALONE_LEAGUE}`)).league).toBe(STANDALONE_LEAGUE);
+  });
+
+  it('adminMatchLastPage is at least 1 and never past the last page the API answers', () => {
+    expect(adminMatchLastPage(0, 50)).toBe(1);
+    expect(adminMatchLastPage(50, 50)).toBe(1);
+    expect(adminMatchLastPage(51, 50)).toBe(2);
+    expect(adminMatchLastPage(ADMIN_MATCH_MAX_PAGE * 50, 50)).toBe(ADMIN_MATCH_MAX_PAGE);
+    expect(adminMatchLastPage(ADMIN_MATCH_MAX_PAGE * 50 + 1, 50)).toBe(ADMIN_MATCH_MAX_PAGE);
+    expect(adminMatchLastPage(10_000_000, 25)).toBe(ADMIN_MATCH_MAX_PAGE);
+  });
+
+  it('keeps the page within the range the API accepts', () => {
+    const page = (value: number) => parseMatchListUrl(new URLSearchParams(`page=${value}`)).page;
+    expect(page(ADMIN_MATCH_MAX_PAGE)).toBe(ADMIN_MATCH_MAX_PAGE);
+    expect(page(ADMIN_MATCH_MAX_PAGE + 1)).toBe(1);
+    expect(page(99_999_999)).toBe(1);
   });
 
   it('round-trips through buildMatchListSearch and omits defaults', () => {

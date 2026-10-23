@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
     if (tournamentIds !== null && tournamentIds.length === 0) return respond(empty());
     if (tournamentIds !== null && tournamentIds.length > ADMIN_MATCH_SCOPE_CAP) {
       // One `IN` list per request: a scope this wide would overflow the URL, so ask for a narrower filter.
-      const issues = `Your scope covers more than ${ADMIN_MATCH_SCOPE_CAP} tournaments; filter by a league or tournament`;
+      const issues = `Your scope covers more than ${ADMIN_MATCH_SCOPE_CAP} tournaments; a league or tournament filter narrows the list`;
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: issues, code: 'validation_failed', params: { issues } },
         { status: 400 }

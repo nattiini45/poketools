@@ -12,6 +12,8 @@ import type { PlayerStatus } from '@/types/player';
 import type { AvatarConfig } from '@/types/avatar';
 import type { AuthProvider, SessionPlayer } from '@/types/auth';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { ilikeAnyOf } from '@/lib/supabase/postgrest-filter';
+import { DEFAULT_PLAYER_SORT, type PlayerSort } from '@/lib/players/player-sort';
 
 type PlayerRow = Tables<'players'>;
 
@@ -265,16 +267,27 @@ export async function listPlayers(
      * auth guards reject it, so offering it would only end in a refusal.
      */
     registeredOnly?: boolean;
+    /**
+     * Only what the public player directory shows: active, non-test accounts. For callers
+     * that are not site admins; a banned, suspended or test account stays out of their view.
+     */
+    visibleOnly?: boolean;
+    /** Order of the page (default: name, ascending). Ties fall back to name, then id, so paging is stable. */
+    sort?: PlayerSort;
   }
 ): Promise<{ data: Player[]; total: number }> {
   const limit = Math.min(options?.limit ?? 50, 200);
   const offset = options?.offset ?? 0;
+  const sort = options?.sort ?? DEFAULT_PLAYER_SORT;
 
-  let query = supabase
-    .from('players')
-    .select('*', { count: 'exact' })
-    .order('name')
-    .range(offset, offset + limit - 1);
+  let query = supabase.from('players').select('*', { count: 'exact' });
+  query = query.order(sort.column, { ascending: sort.direction === 'asc' });
+  if (sort.column !== 'name') query = query.order('name');
+  query = query.order('id').range(offset, offset + limit - 1);
+
+  if (options?.visibleOnly) {
+    query = query.eq('status', 'active').eq('is_test_account', false);
+  }
 
   if (options?.search) {
     query = query.or(playerSearchFilter(options.search));
@@ -301,9 +314,7 @@ export async function listPlayers(
  * filter early or add a condition of its own.
  */
 export function playerSearchFilter(search: string): string {
-  const likeEscaped = search.replace(/[\\%_]/g, (char) => `\\${char}`);
-  const quoted = `%${likeEscaped}%`.replace(/[\\"]/g, (char) => `\\${char}`);
-  return `name.ilike."${quoted}",ps_username.ilike."${quoted}"`;
+  return ilikeAnyOf(['name', 'ps_username'], search);
 }
 
 /**

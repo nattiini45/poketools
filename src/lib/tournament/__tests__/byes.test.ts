@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { byeRecordsFromRounds, scoringByeRecords } from '../byes';
+import {
+  byeRecordsFromRounds,
+  countByesByPlayer,
+  formatRecord,
+  groupRoundsByStage,
+  scoringByeRecords,
+  scoringByeRecordsForStages,
+} from '../byes';
 import { buildPairingHistory, computeStandings, havePlayed } from '../standings';
 import { generateSwissRound } from '../swiss';
 import { BYE_PLAYER_ID } from '../types';
@@ -43,6 +50,90 @@ describe('scoringByeRecords (only a Swiss stage scores its byes)', () => {
     for (const bracketType of ['round_robin', 'single_elim', 'double_elim', null, undefined] as const) {
       expect(scoringByeRecords(bracketType, rounds)).toEqual([]);
     }
+  });
+});
+
+describe('bye timing (a bye scores from the moment its round is generated)', () => {
+  // A round starts `pending` and is completed by hand; the status never gates a bye, so a bye is scored while its
+  // round is pending or active, and a reset round (back to pending) keeps it.
+  const pendingRound = { round_number: 2, bye_player_ids: ['e'], status: 'pending' as const };
+  const completedRound = { ...pendingRound, status: 'completed' as const };
+
+  it('scores the bye of a pending round exactly like the bye of a completed one', () => {
+    const records = scoringByeRecords('swiss', [pendingRound]);
+    expect(records).toEqual([{ player_id: 'e', round_number: 2 }]);
+    expect(records).toEqual(scoringByeRecords('swiss', [completedRound]));
+
+    const standings = computeStandings(['a', 'e'], names, [], {}, { byes: records });
+    const eve = standings.find((s) => s.player_id === 'e')!;
+    expect(eve.wins).toBe(1);
+    expect(eve.points).toBe(1);
+  });
+});
+
+describe('scoringByeRecordsForStages (season-wide tables)', () => {
+  const stages = [
+    { id: 'swiss-stage', bracket_type: 'swiss' as const },
+    { id: 'rr-stage', bracket_type: 'round_robin' as const },
+    { id: 'untyped-stage' },
+  ];
+
+  it('scores each Swiss stage by its own rounds and no other stage', () => {
+    const roundsByStage = new Map([
+      ['swiss-stage', [{ round_number: 1, bye_player_ids: ['e'] }]],
+      ['rr-stage', [{ round_number: 1, bye_player_ids: ['d'] }]],
+      ['untyped-stage', [{ round_number: 1, bye_player_ids: ['c'] }]],
+    ]);
+    expect(scoringByeRecordsForStages(stages, roundsByStage)).toEqual([{ player_id: 'e', round_number: 1 }]);
+  });
+
+  it('is empty for stages without rounds and for rounds without byes (legacy rounds hold {})', () => {
+    expect(scoringByeRecordsForStages(stages, new Map())).toEqual([]);
+    expect(
+      scoringByeRecordsForStages(stages, new Map([['swiss-stage', [{ round_number: 1, bye_player_ids: [] }]]])),
+    ).toEqual([]);
+  });
+});
+
+describe('groupRoundsByStage', () => {
+  it('groups rounds by their stage in input order and leaves a stage without rounds out', () => {
+    const rounds = [
+      { id: 'a', tournament_id: 's1', round_number: 1 },
+      { id: 'b', tournament_id: 's2', round_number: 1 },
+      { id: 'c', tournament_id: 's1', round_number: 2 },
+    ];
+
+    const grouped = groupRoundsByStage(rounds);
+
+    expect([...grouped.keys()]).toEqual(['s1', 's2']);
+    expect(grouped.get('s1')?.map((round) => round.id)).toEqual(['a', 'c']);
+    expect(grouped.get('s2')?.map((round) => round.id)).toEqual(['b']);
+    expect(grouped.has('s3')).toBe(false);
+    expect(groupRoundsByStage([]).size).toBe(0);
+  });
+});
+
+describe('countByesByPlayer and formatRecord', () => {
+  it('counts the byes per player', () => {
+    expect(
+      countByesByPlayer([
+        { player_id: 'a', round_number: 1 },
+        { player_id: 'b', round_number: 1 },
+        { player_id: 'a', round_number: 3 },
+      ]),
+    ).toEqual({ a: 2, b: 1 });
+    expect(countByesByPlayer([])).toEqual({});
+  });
+
+  it('writes a plain record when there is no bye, exactly as before', () => {
+    expect(formatRecord(3, 1, 0)).toBe('3W-1L');
+    expect(formatRecord(3, 1, 2)).toBe('3W-1L-2D');
+    expect(formatRecord(3, 1, 0, 0)).toBe('3W-1L');
+  });
+
+  it('says that a bye is a win without a match', () => {
+    expect(formatRecord(3, 1, 0, 1)).toBe('3W-1L, incl. 1 bye win without a match');
+    expect(formatRecord(4, 0, 1, 2)).toBe('4W-0L-1D, incl. 2 bye wins without a match');
   });
 });
 

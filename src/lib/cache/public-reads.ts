@@ -19,7 +19,7 @@ import { getUsageByFormat } from '@/lib/supabase/queries/meta-usage';
 import { getPlayersByIds, getPublicPlayers } from '@/lib/supabase/queries/players';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { getLeaderboardEntries, getRatingHistory } from '@/lib/supabase/queries/ratings';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getRoundsByTournament, getSwissByeRoundsBySeason } from '@/lib/supabase/queries/rounds';
 import {
   getPublicSeasonParticipants,
   getSeasonById,
@@ -376,6 +376,15 @@ const seasonBattleStats = cache((seasonId: string) =>
   cachedRead(seasonSpec('season-battle-stats', seasonId), () => getBattleStatsForSeason(seasonId)),
 );
 
+/**
+ * The bye rounds of every Swiss stage of a league, flat, in ONE query (the stage filter runs in the database), for
+ * the season-wide tables that score a Swiss bye as a win. Tagged with the league like its other reads: a round
+ * write (`expireTournamentReads(stageId, seasonId)`) and a league write expire it with the stage's own rounds.
+ */
+const seasonByeRounds = cache((seasonId: string) =>
+  cachedRead(seasonSpec('season-bye-rounds', seasonId), () => getSwissByeRoundsBySeason(seasonId)),
+);
+
 /** Completed match records of every stage of a league, flattened. */
 const seasonMatchRecords = cache((seasonId: string) =>
   cachedRead(seasonSpec('season-match-records', seasonId), async (): Promise<MatchRecord[]> => {
@@ -442,8 +451,10 @@ const tournament = cache((tournamentId: string) =>
   cachedRead(tournamentSpec('tournament', tournamentId), () => getTournamentWithDetails(tournamentId)),
 );
 
+// `-v2`: rounds now carry `bye_player_ids`; the new name keeps Data Cache entries written before that deploy
+// (no bye list) from ever being served again.
 const tournamentRounds = cache((tournamentId: string) =>
-  cachedRead(tournamentSpec('tournament-rounds', tournamentId), () => getRoundsByTournament(tournamentId)),
+  cachedRead(tournamentSpec('tournament-rounds-v2', tournamentId), () => getRoundsByTournament(tournamentId)),
 );
 
 /** A tournament's (or league stage's) matches, narrowed to `PublicMatch` before they are cached. */
@@ -584,6 +595,7 @@ export const publicReads = {
   seasonTrackers,
   seasonFormatRules,
   seasonBattleStats,
+  seasonByeRounds,
   seasonMatchRecords,
   worldRouteData,
   leagueSchedule,
