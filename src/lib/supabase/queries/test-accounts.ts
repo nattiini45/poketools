@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import { supabase } from '../client';
 import { toPlayer } from './players';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -49,10 +49,11 @@ const PASSWORD_ALPHABET =
   'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%^&*-';
 
 function generatePassword(length = 20): string {
-  const bytes = randomBytes(length);
+  // randomInt draws uniformly; `byte % alphabet.length` would favour the
+  // first 256 % 65 characters.
   let out = '';
   for (let i = 0; i < length; i += 1) {
-    out += PASSWORD_ALPHABET[bytes[i] % PASSWORD_ALPHABET.length];
+    out += PASSWORD_ALPHABET[randomInt(PASSWORD_ALPHABET.length)];
   }
   return out;
 }

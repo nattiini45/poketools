@@ -34,7 +34,7 @@
 // importing the module does not run the CLI.
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -412,17 +412,32 @@ function main() {
   if (branch === 'HEAD') fail('detached HEAD — check out a branch first.');
   const head = git(['rev-parse', '--short', 'HEAD']);
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const dest = resolve(tmpdir(), `poketools-verify-ci-${stamp}`);
   // The cleanup at the end is a recursive delete; never let it point into the repo.
-  if (dest.startsWith(REPO_ROOT)) fail(`refusing to use ${dest} — it is inside the repository.`);
+  // Checked on the temp root before anything is created, so refusing leaves nothing behind.
+  const tmpRoot = resolve(tmpdir());
+  if (tmpRoot.startsWith(REPO_ROOT)) fail(`refusing to use ${tmpRoot} — it is inside the repository.`);
+  // mkdtemp creates a fresh, unpredictably named, owner-only directory; git clones into an empty one.
+  let dest;
+  try {
+    dest = mkdtempSync(join(tmpRoot, 'poketools-verify-ci-'));
+  } catch (error) {
+    // Node's fs message already leads with the errno (ENOENT, EACCES, EMFILE).
+    return fail(`could not create a temp directory in ${tmpRoot}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   console.log(`[verify-ci] branch=${branch} head=${head}`);
   console.log(`[verify-ci] clone -> ${dest}`);
   const clone = spawnSync('git', ['clone', '-q', '--branch', branch, '--single-branch', REPO_ROOT, dest], {
     encoding: 'utf8',
   });
-  if (clone.status !== 0) fail(`clone failed: ${(clone.stderr || clone.stdout).trim()}`);
+  if (clone.status !== 0) {
+    try {
+      rmSync(dest, { recursive: true, force: true });
+    } catch {
+      // Best effort: the clone error below is the diagnostic that matters.
+    }
+    fail(`clone failed: ${(clone.stderr || clone.stdout || clone.error?.message || `exit ${clone.status}`).trim()}`);
+  }
   // Created AFTER the clone: git refuses to clone into a non-empty directory.
   const logDir = join(dest, 'ci-logs');
   mkdirSync(logDir, { recursive: true });

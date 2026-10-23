@@ -164,7 +164,8 @@ export default function OverlayUrlBuilder({
     }
   }, [typeDef, matches, seasons, draftPools, t, tBoard]);
 
-  // Compute the generated URL (always with the overlay language)
+  // Compute the generated URL (always with the overlay language). buildOverlayUrl
+  // encodes the entity ID, which the player type takes as free text.
   const generatedUrl = useMemo(() => {
     if (!selectedType || !entityId) return '';
     return buildOverlayUrl(selectedType, entityId, config, { ...extras, lang });

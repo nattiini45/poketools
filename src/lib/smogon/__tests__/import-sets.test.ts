@@ -122,6 +122,32 @@ describe('importGenerationSets', () => {
     expect(pikachuSet!.description).toBe('Hits hard with Light Ball');
   });
 
+  it('decodes each HTML entity exactly once and strips nested tags', async () => {
+    const analyses = {
+      Pikachu: {
+        gen9ou: {
+          sets: {
+            'Standard Attacker': { description: '<p>Use &amp;lt;b&amp;gt; &amp; <scr<b>ipt>alert(1)</scr</b>ipt> &quot;x&quot; &#39;y&#39;</p>' },
+          },
+        },
+      },
+    };
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeSetsJson()) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(analyses) });
+
+    await importGenerationSets(9);
+
+    const batchCall = mockUpsertBatch.mock.calls[0][0];
+    const pikachuSet = batchCall.find((r: Record<string, unknown>) => r.pokemon_name === 'Pikachu');
+    // `&amp;lt;` is the literal text `&lt;`, not `<`.
+    expect(pikachuSet!.description).toContain('Use &lt;b&gt; & ');
+    expect(pikachuSet!.description).toContain(`"x" 'y'`);
+    // `<scr<b>` goes as one tag, so no `<` survives to open a tag; the stray `ipt>` text is inert.
+    expect(pikachuSet!.description).not.toContain('<');
+    expect(pikachuSet!.description).toBe(`Use &lt;b&gt; & ipt>alert(1)ipt> "x" 'y'`);
+  });
+
   it('normalizes array EVs to first spread', async () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeSetsJson()) })

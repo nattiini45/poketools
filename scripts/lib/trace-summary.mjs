@@ -27,7 +27,7 @@
  * Exit 0 = summarised, 2 = usage / unreadable trace.
  */
 import { createReadStream } from 'node:fs';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { open, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -455,9 +455,16 @@ export async function streamTraceEvents(path, { highWaterMark = 8 * 1024 * 1024 
  * array): whole-file up to `streamAboveBytes`, stream-parsed above it.
  */
 export async function loadTraceFile(path, { streamAboveBytes = TRACE_STREAM_ABOVE_BYTES, highWaterMark } = {}) {
-  const { size } = await stat(path);
-  if (size > streamAboveBytes) return streamTraceEvents(path, highWaterMark ? { highWaterMark } : {});
-  const raw = await readFile(path, 'utf8');
+  // Size and whole-file read go through one handle, so the size check covers the bytes read.
+  const fh = await open(path, 'r');
+  let raw;
+  try {
+    const { size } = await fh.stat();
+    if (size > streamAboveBytes) return await streamTraceEvents(path, highWaterMark ? { highWaterMark } : {});
+    raw = await fh.readFile('utf8');
+  } finally {
+    await fh.close();
+  }
   return traceEventsOf(JSON.parse(raw));
 }
 

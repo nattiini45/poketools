@@ -19,11 +19,12 @@ import { renderWithI18n } from '@/test/i18n';
 import type { Ruleset } from '@/types/ruleset';
 
 function textOf(html: string): string {
+  // `&amp;` is decoded last so an escaped entity such as `&amp;nbsp;` is not double-unescaped.
   return html
     .replace(/<[^>]+>/g, ' ')
     .replace(/&#x27;/g, "'")
-    .replace(/&amp;/g, '&')
     .replace(/&nbsp;| | /g, ' ')
+    .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
     .trim();
 }

@@ -419,6 +419,16 @@ async function runPool(jobs, size) {
   return results;
 }
 
+/** Parsed JSON of a file, or null when it does not exist (no exists check to race the later write). */
+function readJsonIfPresent(file) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch (err) {
+    if (err?.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
 export async function compressMirror({ src, out, recipe, recipeFor = {}, overlay = null, noReorder = [], noReorderBlend = false, only = null, jobs = 8 }) {
   assertPinnedMeshopt();
   for (const r of [recipe, ...Object.values(recipeFor)]) if (!RECIPES[r]) throw new Error(`unknown recipe ${r}`);
@@ -426,7 +436,7 @@ export async function compressMirror({ src, out, recipe, recipeFor = {}, overlay
   if (!existsSync(join(src, 'manifest.json'))) throw new Error(`no manifest.json in ${src}`);
   mkdirSync(out, { recursive: true });
   const reportFile = join(out, '_encode.json');
-  const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
+  const previous = readJsonIfPresent(reportFile);
   const stamp = encoderStamp({ recipe, recipeSpec: RECIPES[recipe], quantizationVolume: 'scene', indexMode: indexModeOf(recipe) });
   const sameEncoder = previous && JSON.stringify(previous.stamp) === JSON.stringify(stamp);
   const prevRows = new Map((sameEncoder ? previous.files : []).map((row) => [row.file, row]));

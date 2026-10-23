@@ -20,7 +20,7 @@
  * Usage: node scripts/generate-placeholder-avatars.mjs [--quiet]
  */
 
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
@@ -195,12 +195,36 @@ export function generatePlaceholders({ manifest, outDir }) {
     if (!layer.rel.every((s) => SAFE_SEGMENT.test(s) && s !== '..') || !target.startsWith(root + sep)) {
       throw new Error(`refusing unsafe avatar path: ${layer.rel.join('/')}`);
     }
-    if (existsSync(target)) {
+    mkdirSync(dirname(target), { recursive: true });
+    // The exclusive create is the existence check: an existing layer fails with EEXIST
+    // before anything is rendered, and is never overwritten.
+    let fd;
+    try {
+      fd = openSync(target, 'wx');
+    } catch (err) {
+      if (err?.code !== 'EEXIST') throw err;
       kept++;
       continue;
     }
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, renderPlaceholder(layer.category, layer.colour), { flag: 'wx' });
+    let complete = false;
+    try {
+      writeFileSync(fd, renderPlaceholder(layer.category, layer.colour));
+      complete = true;
+    } finally {
+      try {
+        closeSync(fd);
+      } finally {
+        // A failed render must not leave an empty file that later runs would keep as a real layer;
+        // removing it is best effort, so it never replaces the render's own error.
+        if (!complete) {
+          try {
+            rmSync(target, { force: true });
+          } catch (err) {
+            console.warn(`[avatar] could not remove the partial ${target}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      }
+    }
     written++;
   }
   return { written, kept };

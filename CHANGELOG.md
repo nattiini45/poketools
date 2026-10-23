@@ -8,6 +8,24 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Security
+
+- **Dependencies (dev only):**
+  - The `vite` override is raised to `^8.3.5` (taken from the Dependabot bump), which fixes three `launch-editor` advisories.
+  - `vitest` and `@vitest/coverage-v8` move to `^4.1.12`, which fixes two `@vitest/mocker` advisories.
+- **Dependencies:**
+  - `next` moves to `^16.4.2`, which fixes a critical remote-code-execution advisory in the image optimizer when SVG files are used ([GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw)) and a Server Actions denial of service ([GHSA-p3m5-59mp-jv5r](https://github.com/advisories/GHSA-p3m5-59mp-jv5r)). `sharp` follows to `^0.35.5`, the minimum `next` 16.4.2 declares.
+  - `postcss` moves to `^8.5.30`, the minimum `vite` 8.3.5 declares. The root override applies it to `next` and `tailwindcss` too.
+- **Code scanning:** the open CodeQL findings are worked through:
+  - The replay link check in the submit form matches the anchored `https://replay.pokemonshowdown.com/` prefix the server strips, instead of a substring.
+  - Overlay URLs encode entity ids (a lone surrogate becomes U+FFFD).
+  - The Smogon import decodes each HTML entity once.
+  - Markdown table cells escape backslashes.
+  - Test-account passwords draw characters uniformly (`crypto.randomInt`).
+  - The weekly recap pins its locale to a known value before picking a translator.
+  - The avatar randomiser draws from Web Crypto instead of `Math.random()`.
+  - Maintainer scripts create temp files with `mkdtemp` and avoid check-then-use file races.
+
 ## [0.2.3] - 2026-10-20
 
 Owner decisions on the 2026-10-20 audit: replays are bound to one game by hash, duplicate stats rows are refused by the database, and EvoLiga evolution progress waits for the confirmed result. **Three migrations; see each entry for the deploy order.**

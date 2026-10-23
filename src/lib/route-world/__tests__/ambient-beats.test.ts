@@ -472,7 +472,7 @@ describe('ambient-beats: R34 / R35 fix pass', () => {
     const src = readFileSync(resolve(__dirname, '../../../components/world/route/figures/FigureDirector.tsx'), 'utf8');
     expect(src).not.toMatch(/\bimport\s*\(/);
     for (const name of ['PLAZA_DATA_SURFACES', 'SAKURA_DATA_SURFACES', 'MOUNTAIN_DATA_SURFACES', 'CLOUDS_DATA_SURFACES']) {
-      expect(src).toMatch(new RegExp(`^import \{ ${name} \} from '[^']+/data-faces';$`, 'm'));
+      expect(src).toMatch(new RegExp(`^import \\{ ${name} \\} from '[^']+/data-faces';$`, 'm'));
     }
   });
 });

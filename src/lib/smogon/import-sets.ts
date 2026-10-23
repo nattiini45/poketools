@@ -52,17 +52,30 @@ interface AnalysesFile {
   };
 }
 
+const HTML_ENTITIES: Readonly<Record<string, string>> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  '#39': "'",
+};
+
 /**
- * Strip HTML tags to plain text for descriptions.
+ * Strip HTML tags to plain text for descriptions. The result is stored and
+ * rendered as text (React escapes it), never as HTML.
  */
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  // Repeat until no tag pattern is left (the shape CodeQL expects for multi-character stripping).
+  // One pass already leaves no `<…>`: `<scr<b>ipt>` becomes the inert text `ipt>`.
+  let text = html;
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]+>/g, '');
+  } while (text !== previous);
+  return text
+    // One pass, so `&amp;lt;` decodes to the literal `&lt;`, not to `<`.
+    .replace(/&(amp|lt|gt|quot|#39);/g, (_, name: string) => HTML_ENTITIES[name])
     .replace(/\s+/g, ' ')
     .trim();
 }

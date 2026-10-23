@@ -146,7 +146,7 @@ describe('PR #65 review: an actor hands its open hero ticket back to the bus on 
       expect(step.indexOf('bus = ctx.bus;'), file).toBeLessThan(step.indexOf('ctx.bus.request('));
       const cleanup = actor.slice(actor.lastIndexOf('return () => {'));
       expect(cleanup, file).toMatch(
-        /^return \(\) => \{\s*(\/\/[^\n]*\s*)*if \(ticket !== null && bus !== null\) bus\.release\(ticket\);\s*ticket = null;\s*releaseActor\(\);\s*releaseLatch\(\);/,
+        /^return \(\) => \{\s*(?:\/\/[^\n]*\n\s*)*if \(ticket !== null && bus !== null\) bus\.release\(ticket\);\s*ticket = null;\s*releaseActor\(\);\s*releaseLatch\(\);/,
       );
     }
   });

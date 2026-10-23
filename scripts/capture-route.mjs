@@ -199,8 +199,8 @@
  * --warm-cache, --net-throttle, --dolly-at, --contrast-repeat, --look-probe.
  */
 import { chromium } from 'playwright';
-import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { lstat, mkdir, open, readFile, stat, writeFile } from 'node:fs/promises';
+import { constants as fsConstants, readFileSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, resolve } from 'node:path';
@@ -4837,16 +4837,6 @@ async function runLookProbe(page, section, pngPath, probe) {
 
 /** --audit on: one DRAW-LEDGER.md row per landed station (file created with its header if missing). */
 async function appendDrawLedger({ section, viewport, audit }) {
-  let exists = true;
-  try {
-    await stat(DRAW_LEDGER_PATH);
-  } catch {
-    exists = false;
-  }
-  if (!exists) {
-    await mkdir(dirname(DRAW_LEDGER_PATH), { recursive: true });
-    await writeFile(DRAW_LEDGER_PATH, `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n`, 'utf8');
-  }
   const row = drawLedgerRow({
     at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     tag,
@@ -4858,7 +4848,28 @@ async function appendDrawLedger({ section, viewport, audit }) {
     audit,
     sourceStamp: invocation.sourceStamp?.newestSrcMtime ?? null,
   });
-  await appendFile(DRAW_LEDGER_PATH, `${row}\n`, 'utf8');
+  await mkdir(dirname(DRAW_LEDGER_PATH), { recursive: true });
+  // Exclusive create writes the header exactly once: a concurrent or later run gets EEXIST and only appends.
+  // On POSIX, O_EXCL also refuses a symlink at the path, so nothing is created through a link.
+  try {
+    await writeFile(DRAW_LEDGER_PATH, `# Draw ledger\n\n${DRAW_LEDGER_ROWS_MARKER}\n\n${DRAW_LEDGER_HEADER.join('\n')}\n`, { encoding: 'utf8', flag: 'wx' });
+  } catch (err) {
+    if (err?.code !== 'EEXIST') throw err;
+  }
+  // The row goes through a handle opened without O_CREAT (a dangling link fails instead of creating a file),
+  // and only when that handle is the regular file at the path itself (same device and inode as lstat sees):
+  // a symlink, directory or other entry there is refused, never appended through. Windows has no O_NOFOLLOW,
+  // so the check runs on the handle.
+  const fh = await open(DRAW_LEDGER_PATH, fsConstants.O_WRONLY | fsConstants.O_APPEND);
+  try {
+    const [opened, atPath] = await Promise.all([fh.stat(), lstat(DRAW_LEDGER_PATH)]);
+    if (!atPath.isFile() || atPath.dev !== opened.dev || atPath.ino !== opened.ino) {
+      throw new Error(`refusing to write the draw ledger: ${DRAW_LEDGER_PATH} is not a regular file`);
+    }
+    await fh.appendFile(`${row}\n`, 'utf8');
+  } finally {
+    await fh.close();
+  }
 }
 
 // ---------------------------------------------------------------------------

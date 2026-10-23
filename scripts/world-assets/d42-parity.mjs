@@ -46,7 +46,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -130,52 +130,62 @@ async function bundleConsolidate() {
   const figure = join(REPO, 'src', 'components', 'world', 'route', 'figures', 'Figure.tsx');
   const source = readFileSync(figure, 'utf8');
   const exported = /export function consolidateFigureMeshes\(/.test(source);
-  const dir = join(tmpdir(), 'd42-parity');
-  mkdirSync(dir, { recursive: true });
-  const entry = join(dir, `consolidate-entry-${process.pid}-${process.env.D42_WORKER ?? 'm'}.ts`);
-  let entrySource;
-  if (exported) {
-    entrySource = `export { consolidateFigureMeshes } from ${JSON.stringify(figure.split('\\').join('/'))};\n`;
-  } else {
-    // ENGINE-F's export not landed yet: a local copy of the three functions.
-    const pick = (name) => {
-      const start = source.indexOf(`function ${name}(`);
-      let depth = 0;
-      let i = source.indexOf('{', start);
-      for (; i < source.length; i += 1) {
-        if (source[i] === '{') depth += 1;
-        else if (source[i] === '}' && (depth -= 1) === 0) break;
-      }
-      return source.slice(start, i + 1);
+  // A private, uniquely named scratch dir (mkdtemp), removed once the bundle is imported.
+  const dir = mkdtempSync(join(tmpdir(), 'd42-parity-'));
+  let mod;
+  try {
+    const entry = join(dir, `consolidate-entry-${process.pid}-${process.env.D42_WORKER ?? 'm'}.ts`);
+    let entrySource;
+    if (exported) {
+      entrySource = `export { consolidateFigureMeshes } from ${JSON.stringify(figure.split('\\').join('/'))};\n`;
+    } else {
+      // ENGINE-F's export not landed yet: a local copy of the three functions.
+      const pick = (name) => {
+        const start = source.indexOf(`function ${name}(`);
+        let depth = 0;
+        let i = source.indexOf('{', start);
+        for (; i < source.length; i += 1) {
+          if (source[i] === '{') depth += 1;
+          else if (source[i] === '}' && (depth -= 1) === 0) break;
+        }
+        return source.slice(start, i + 1);
+      };
+      entrySource = [
+        "import * as THREE from 'three';",
+        "import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';",
+        pick('mergeableGeometry'),
+        pick('mergeFamilyKey'),
+        `export ${pick('consolidateFigureMeshes')}`,
+      ].join('\n');
+    }
+    writeFileSync(entry, entrySource);
+    // three and its examples resolve to the ESM URLs the loader below imports,
+    // so the bundle and the loader share ONE three module instance.
+    const stub = {
+      name: 'd42-stub',
+      setup(build) {
+        build.onResolve({ filter: /.*/ }, (args) => {
+          if (args.path === 'three' || args.path.startsWith('three/examples/jsm/')) return { path: esmUrl(args.path), external: true };
+          if (args.importer && args.importer.endsWith('Figure.tsx')) return { path: args.path, namespace: 'stub' };
+          return null;
+        });
+        build.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
+          contents: 'module.exports = new Proxy(function () {}, { get: (t, k) => (k === "__esModule" ? true : function () {}) });',
+          loader: 'js',
+        }));
+      },
     };
-    entrySource = [
-      "import * as THREE from 'three';",
-      "import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';",
-      pick('mergeableGeometry'),
-      pick('mergeFamilyKey'),
-      `export ${pick('consolidateFigureMeshes')}`,
-    ].join('\n');
+    const outfile = join(dir, `consolidate-${process.pid}-${process.env.D42_WORKER ?? 'm'}.mjs`);
+    await esbuild.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, plugins: [stub], logLevel: 'error', jsx: 'automatic' });
+    mod = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
+  } finally {
+    // Best effort: a locked scratch file (Windows AV/indexer) must not replace the build's own error.
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(`[d42-parity] could not remove ${dir}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
-  writeFileSync(entry, entrySource);
-  // three and its examples resolve to the ESM URLs the loader below imports,
-  // so the bundle and the loader share ONE three module instance.
-  const stub = {
-    name: 'd42-stub',
-    setup(build) {
-      build.onResolve({ filter: /.*/ }, (args) => {
-        if (args.path === 'three' || args.path.startsWith('three/examples/jsm/')) return { path: esmUrl(args.path), external: true };
-        if (args.importer && args.importer.endsWith('Figure.tsx')) return { path: args.path, namespace: 'stub' };
-        return null;
-      });
-      build.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
-        contents: 'module.exports = new Proxy(function () {}, { get: (t, k) => (k === "__esModule" ? true : function () {}) });',
-        loader: 'js',
-      }));
-    },
-  };
-  const outfile = join(dir, `consolidate-${process.pid}-${process.env.D42_WORKER ?? 'm'}.mjs`);
-  await esbuild.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, plugins: [stub], logLevel: 'error', jsx: 'automatic' });
-  const mod = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
   return { consolidateFigureMeshes: mod.consolidateFigureMeshes, source: exported ? 'worktree Figure.tsx export (ENGINE-F)' : 'local copy of Figure.tsx (export not landed)' };
 }
 

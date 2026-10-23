@@ -358,7 +358,8 @@ export async function buildReconciliationReport(input: ReconciliationInput): Pro
 
 function cell(value: unknown): string {
   if (value === null || value === undefined) return '—';
-  return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  // Backslash first, so a value ending in `\` cannot turn the added `\|` into `\\|`.
+  return String(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
 function table(headers: string[], rows: unknown[][]): string[] {

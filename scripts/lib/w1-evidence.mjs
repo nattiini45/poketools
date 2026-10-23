@@ -888,9 +888,9 @@ export const DRAW_LEDGER_HEADER = [
   '|---|---|---|---|---|---|---|---|---|---|---|',
 ];
 
-/** One DRAW-LEDGER.md table row (pipes in values are escaped). */
+/** One DRAW-LEDGER.md table row (backslashes and pipes in values are escaped). */
 export function drawLedgerRow({ at, tag, world, theme, station, viewport, rung, audit, sourceStamp }) {
-  const cell = (v) => String(v ?? '—').replace(/\|/g, '\\|');
+  const cell = (v) => String(v ?? '—').replace(/[\\|]/g, '\\$&');
   const calls =
     audit && audit.verdict === 'measured'
       ? `${audit.calls} (${audit.callsMin}–${audit.callsMax})`

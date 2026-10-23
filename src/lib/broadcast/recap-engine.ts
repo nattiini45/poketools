@@ -19,7 +19,7 @@ import type {
   RecapMatchSummary,
 } from '@/types/broadcast';
 import type { MatchRecord } from '@/lib/tournament/types';
-import type { Locale } from '@/i18n/config';
+import { isLocale, type Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { broadcastCasterMessages } from '@/i18n/messages/broadcast-caster';
 import { withOutputLanguage } from '@/lib/ai/language';
@@ -64,7 +64,8 @@ export async function composeWeeklyRecap(
     roundName,
     roundNumber,
   } = options;
-  const locale: Locale = options.locale ?? 'en';
+  // Validated so a caller passing an unchecked string still gets a known translator.
+  const locale: Locale = isLocale(options.locale) ? options.locale : 'en';
   const t = createTranslator(broadcastCasterMessages, locale);
 
   // Get completed matches in the specified round
