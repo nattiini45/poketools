@@ -47,6 +47,28 @@ export function nextEnabledIndex(options: readonly ComboboxOption[], from: numbe
   return from;
 }
 
+/**
+ * Picks `option`: calls `onChange` with its value and returns `true`. A disabled option is not
+ * pickable, so nothing is called and `false` comes back (the caller then leaves the dropdown open).
+ * Click and Enter both pick through here.
+ */
+export function pickOption(option: ComboboxOption, onChange: (value: string) => void): boolean {
+  if (option.disabled) return false;
+  onChange(option.value);
+  return true;
+}
+
+/**
+ * Splits `text` around the first case-insensitive occurrence of `term` for highlighting, or `null`
+ * when there is no term or no match. An async picker passes the trimmed term it searched for.
+ */
+export function splitHighlight(text: string, term: string): { before: string; match: string; after: string } | null {
+  if (!term) return null;
+  const idx = text.toLowerCase().indexOf(term.toLowerCase());
+  if (idx < 0) return null;
+  return { before: text.slice(0, idx), match: text.slice(idx, idx + term.length), after: text.slice(idx + term.length) };
+}
+
 interface ComboboxBaseProps {
   /** Field label shown above input */
   label?: string;
@@ -219,8 +241,7 @@ export default function Combobox(props: ComboboxProps) {
   /* ── Selection ────────────────────────────────────────────────────── */
 
   function selectOption(opt: ComboboxOption) {
-    if (opt.disabled) return;
-    onChange(opt.value);
+    if (!pickOption(opt, onChange)) return;
     setQuery('');
     setOptions([]);
     setOpen(false);
@@ -308,14 +329,13 @@ export default function Combobox(props: ComboboxProps) {
   /* ── Highlight matching text ──────────────────────────────────────── */
 
   function highlightMatch(text: string) {
-    if (!query) return text;
-    const idx = text.toLowerCase().indexOf(query.toLowerCase());
-    if (idx < 0) return text;
+    const parts = splitHighlight(text, searchedQuery);
+    if (!parts) return text;
     return (
       <>
-        {text.slice(0, idx)}
-        <span className="font-bold text-poke-blue">{text.slice(idx, idx + query.length)}</span>
-        {text.slice(idx + query.length)}
+        {parts.before}
+        <span className="font-bold text-poke-blue">{parts.match}</span>
+        {parts.after}
       </>
     );
   }

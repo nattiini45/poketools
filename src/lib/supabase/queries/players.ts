@@ -281,7 +281,11 @@ export async function listPlayers(
   const sort = options?.sort ?? DEFAULT_PLAYER_SORT;
 
   let query = supabase.from('players').select('*', { count: 'exact' });
-  query = query.order(sort.column, { ascending: sort.direction === 'asc' });
+  // `discord_id` is nullable: blank rows go last in both directions, so they never fill the first page.
+  query = query.order(sort.column, {
+    ascending: sort.direction === 'asc',
+    ...(sort.column === 'discord_id' ? { nullsFirst: false } : {}),
+  });
   if (sort.column !== 'name') query = query.order('name');
   query = query.order('id').range(offset, offset + limit - 1);
 

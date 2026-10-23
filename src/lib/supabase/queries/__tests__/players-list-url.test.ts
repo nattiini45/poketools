@@ -62,6 +62,15 @@ describe('listPlayers request URL', () => {
     expect(requestedUrl().searchParams.get('order')).toBe('status.desc,name.asc,id.asc');
   });
 
+  it.each([
+    ['asc', 'discord_id.asc.nullslast,name.asc,id.asc'],
+    ['desc', 'discord_id.desc.nullslast,name.asc,id.asc'],
+  ] as const)('puts accounts without a Discord ID last when sorting %s', async (direction, order) => {
+    await listPlayers({ sort: { column: 'discord_id', direction } });
+
+    expect(requestedUrl().searchParams.get('order')).toBe(order);
+  });
+
   it('restricts to active, non-test accounts with visibleOnly', async () => {
     await listPlayers({ search: 'Ash', visibleOnly: true });
 

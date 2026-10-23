@@ -71,6 +71,16 @@ describe('getByeRoundsByTournamentIds', () => {
     ]);
   });
 
+  it('orders by a unique final key so the pages never skip or repeat a row', async () => {
+    await getByeRoundsByTournamentIds(['t1']);
+
+    expect(h.calls.filter((c) => c.method === 'order').map((c) => c.args)).toEqual([
+      ['tournament_id'],
+      ['round_number'],
+      ['id'],
+    ]);
+  });
+
   it('throws on a read error rather than returning rounds without byes', async () => {
     const failure = { message: 'timeout', code: '' };
     h.pages.push({ data: null, error: failure });
@@ -98,6 +108,16 @@ describe('getSwissByeRoundsBySeason', () => {
     expect(rounds).toEqual([
       { id: 'r1', tournament_id: 't1', round_number: 1, bye_player_ids: ['p1'] },
       { id: 'r2', tournament_id: 't2', round_number: 1, bye_player_ids: [] },
+    ]);
+  });
+
+  it('orders by a unique final key so the pages never skip or repeat a row', async () => {
+    await getSwissByeRoundsBySeason('season-1');
+
+    expect(h.calls.filter((c) => c.method === 'order').map((c) => c.args)).toEqual([
+      ['tournament_id'],
+      ['round_number'],
+      ['id'],
     ]);
   });
 

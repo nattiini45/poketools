@@ -68,6 +68,7 @@ export default defineDe<typeof en>()({
     add: 'Admin hinzufügen',
     addFailed: 'Der Admin konnte nicht hinzugefügt werden: {reason}',
     removeFailed: 'Der Admin konnte nicht entfernt werden: {reason}',
+    loadFailed: 'Die Admins konnten nicht geladen werden: {reason}',
   },
   archive: {
     archive: 'Archivieren',

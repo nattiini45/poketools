@@ -71,6 +71,8 @@ export async function getByeRoundsByTournamentIds(
       .in('tournament_id', unique)
       .order('tournament_id')
       .order('round_number')
+      // Neither key is unique, so `id` makes the page boundaries stable.
+      .order('id')
       .range(from, from + BYE_ROUNDS_PAGE_SIZE - 1);
 
     if (error) throw error;
@@ -95,6 +97,8 @@ export async function getSwissByeRoundsBySeason(seasonId: string): Promise<ByeRo
       .eq('tournaments.bracket_type', 'swiss')
       .order('tournament_id')
       .order('round_number')
+      // Neither key is unique, so `id` makes the page boundaries stable.
+      .order('id')
       .range(from, from + BYE_ROUNDS_PAGE_SIZE - 1);
 
     if (error) throw error;

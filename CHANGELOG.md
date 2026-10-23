@@ -31,8 +31,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Player search in the pickers.** The roster, substitute, link, enrolment and league-admin player pickers search the
   server as you type (`GET /api/admin/player-search`, public fields only), so they no longer cut off at the first
   page of players. League and tournament admins find the accounts the public player list shows (active, not test
-  accounts); site admins find every account. A pick the picker refuses (a player already on the roster, for
-  example) clears the selection instead of keeping the previous player. The admin Players page searches, sorts
+  accounts); site admins find every account. Players the picker cannot take (a player already on the roster, for
+  example) are shown greyed out with the reason and cannot be picked. The admin Players page searches, sorts
   (name, Discord ID, Showdown username, status) and pages on the server too.
 - **Round deadlines.** The round manager can set, change and clear a round's deadline; the change is audited, and an
   overdue round shows a badge, also when the deadline passes while the page is open.

@@ -48,6 +48,32 @@ export async function changeResourceAdmin(
   }
 }
 
+/** The admins of a resource, or why they could not be loaded. */
+export type LoadResourceAdminsOutcome =
+  | { ok: true; admins: ResourceAdminWithPlayer[] }
+  | { ok: false; error: ApiErrorLike };
+
+/**
+ * Reads the admins of a resource. A refusal, a server error, a body that is not JSON or a lost
+ * connection resolves to the error to show, never to an empty list: an empty list means "no admins".
+ */
+export async function loadResourceAdmins(
+  resourceType: AdminResourceType,
+  resourceId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<LoadResourceAdminsOutcome> {
+  try {
+    const res = await fetchImpl(`/api/resource-admins?resource_type=${resourceType}&resource_id=${resourceId}`);
+    const json = (await res.json().catch(() => null)) as { success?: boolean; data?: unknown } | null;
+    if (res.ok && json?.success === true && Array.isArray(json.data)) {
+      return { ok: true, admins: json.data as ResourceAdminWithPlayer[] };
+    }
+    return { ok: false, error: toApiErrorLike(json) };
+  } catch (err) {
+    return { ok: false, error: toApiErrorLike(err) };
+  }
+}
+
 export default function ResourceAdminManager({
   resourceType,
   resourceId,
@@ -58,20 +84,20 @@ export default function ResourceAdminManager({
   const [selected, setSelected] = useState<PlayerSearchHit | null>(null);
   const [searchError, setSearchError] = useState<ApiErrorLike | null>(null);
   const [writeFailure, setWriteFailure] = useState<WriteFailure | null>(null);
+  const [loadFailure, setLoadFailure] = useState<ApiErrorLike | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   /** Hits seen in the picker, to turn a picked id back into a name. */
   const seenHits = useRef(new Map<string, PlayerSearchHit>());
 
   const fetchAdmins = useCallback(async () => {
-    try {
-      const res = await fetch(
-        `/api/resource-admins?resource_type=${resourceType}&resource_id=${resourceId}`
-      );
-      const json = await res.json();
-      if (json.success) setAdmins(json.data);
-    } catch {
-      // silently fail
+    const outcome = await loadResourceAdmins(resourceType, resourceId);
+    if (outcome.ok) {
+      setAdmins(outcome.admins);
+      setLoadFailure(null);
+    } else {
+      // The list on screen stays as it was; the alert says it may be out of date.
+      setLoadFailure(outcome.error);
     }
   }, [resourceType, resourceId]);
 
@@ -146,7 +172,8 @@ export default function ResourceAdminManager({
   return (
     <div className="space-y-3">
       {admins.length === 0 ? (
-        <p className="text-sm text-poke-text-secondary">{t('resourceAdmins.none')}</p>
+        // A failed load is not "no admins": the alert below says why the list is missing.
+        loadFailure ? null : <p className="text-sm text-poke-text-secondary">{t('resourceAdmins.none')}</p>
       ) : (
         <ul className="space-y-2">
           {admins.map((admin) => (
@@ -196,6 +223,9 @@ export default function ResourceAdminManager({
           {t('resourceAdmins.add')}
         </button>
       </div>
+      {loadFailure && (
+        <Alert variant="error">{t('resourceAdmins.loadFailed', { reason: errorText(loadFailure) })}</Alert>
+      )}
       {searchError && <Alert variant="error">{errorText(searchError)}</Alert>}
       {writeFailure && (
         <Alert variant="error">

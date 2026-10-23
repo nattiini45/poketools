@@ -77,6 +77,7 @@ export default {
     /** `{reason}` is the API's refusal, in the viewer's language. */
     addFailed: 'Could not add the admin: {reason}',
     removeFailed: 'Could not remove the admin: {reason}',
+    loadFailed: 'Could not load the admins: {reason}',
   },
   archive: {
     archive: 'Archive',

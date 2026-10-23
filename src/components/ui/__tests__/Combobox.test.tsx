@@ -29,7 +29,7 @@ vi.mock('react', async (importOriginal) => {
   return { ...actual, default: { ...actual, useState }, useState };
 });
 
-const { default: Combobox, asyncSearchTerm, nextEnabledIndex } = await import('../Combobox');
+const { default: Combobox, asyncSearchTerm, nextEnabledIndex, pickOption, splitHighlight } = await import('../Combobox');
 
 function render(props: { minQueryLength?: number; label?: string; placeholder?: string }, locale: 'en' | 'de' = 'en') {
   seed.falseSeen = 0;
@@ -151,5 +151,49 @@ describe('nextEnabledIndex', () => {
     expect(nextEnabledIndex(options, 3, 1)).toBe(3);
     expect(nextEnabledIndex(options, 1, -1)).toBe(1);
     expect(nextEnabledIndex([{ label: 'a', value: 'a', disabled: true }], -1, 1)).toBe(-1);
+  });
+});
+
+describe('pickOption', () => {
+  it('calls onChange with the value of an enabled option and reports the pick', () => {
+    const onChange = vi.fn();
+
+    expect(pickOption({ label: 'Misty', value: 'm' }, onChange)).toBe(true);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('m');
+  });
+
+  it('does nothing for a disabled option, whether it is clicked or chosen with Enter', () => {
+    const onChange = vi.fn();
+    const option = { label: 'Ash', value: 'a', disabled: true };
+
+    // Both paths (click and Enter) pick through this helper, so the guard is one place.
+    expect(pickOption(option, onChange)).toBe(false);
+    expect(pickOption(option, onChange)).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('splitHighlight', () => {
+  it('splits around the first case-insensitive match, keeping the text as written', () => {
+    expect(splitHighlight('Ash Ketchum', 'ash')).toEqual({ before: '', match: 'Ash', after: ' Ketchum' });
+    expect(splitHighlight('Ash Ketchum', 'KET')).toEqual({ before: 'Ash ', match: 'Ket', after: 'chum' });
+  });
+
+  it('finds nothing without a term or a match', () => {
+    expect(splitHighlight('Ash', '')).toBeNull();
+    expect(splitHighlight('Ash', 'misty')).toBeNull();
+  });
+});
+
+describe('Combobox highlight', () => {
+  const HIGHLIGHT = '<span class="font-bold text-poke-blue">Ash</span>';
+
+  beforeEach(() => {
+    seed.options = [{ label: 'Ash', value: 'a' }];
+  });
+
+  it.each(['ash', 'ash ', ' ash', ' ash '])('highlights the name for the async query %j (the search trims it)', (query) => {
+    seed.query = query;
+    expect(render({ minQueryLength: 1 })).toContain(HIGHLIGHT);
   });
 });
