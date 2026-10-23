@@ -96,12 +96,16 @@ describe('client boundary: use-client modules', { timeout: FILE_WALK_TIMEOUT_MS 
 
   it('never import an @pkmn/* package', () => {
     const offending = [...graph.packages].filter((p) => p.startsWith('@pkmn/'));
-    // Name which client-reachable file imports it, for a useful failure message.
-    const importers = [...graph.files].filter((f) =>
-      f.endsWith('.json') || PREEXISTING_PKMN_BRIDGES.has(f)
-        ? false
-        : runtimeSpecifiers(f).some((s) => s.startsWith('@pkmn/')),
-    );
+    // Name which client-reachable file imports it, for a useful failure message. Only on a failure: re-reading every
+    // reachable file is slow under coverage, and an importer always shows up in `offending` first.
+    const importers =
+      offending.length === 0
+        ? []
+        : [...graph.files].filter((f) =>
+            f.endsWith('.json') || PREEXISTING_PKMN_BRIDGES.has(f)
+              ? false
+              : runtimeSpecifiers(f).some((s) => s.startsWith('@pkmn/')),
+          );
     expect({ offending, importers: importers.map((f) => importChain(graph, f)) }).toEqual({
       offending: [],
       importers: [],
