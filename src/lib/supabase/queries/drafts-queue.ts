@@ -1,6 +1,5 @@
 /**
- * Queue-engine draft RPCs used by the snapshot, pick, turn and extension routes
- * (draft-backend §6.2, §6.4, §6.6; package B-SNAP). Each wrapper is exactly one
+ * Queue-engine draft RPCs used by the snapshot, pick, turn and extension routes. Each wrapper is exactly one
  * RPC (`callDraftRpc`: a rule violation becomes `DraftRuleError`) and reads the
  * jsonb result field by field.
  *
@@ -110,7 +109,7 @@ export async function applyDraftExtension(a: {
   return { deadline_at: str(r.deadline_at), state_version: num(r.state_version) };
 }
 
-/** Queue pools the cron ticks: open submissions or a running draft (draft-backend §11.2; the draft-ticks cron). */
+/** Queue pools the cron ticks: open submissions or a running draft (the draft-ticks cron). */
 export async function listTickablePools(limit: number): Promise<{ id: string; season_id: string }[]> {
   const { data, error } = await supabase
     .from('draft_pools')

@@ -11,7 +11,7 @@
  * a blocked slot any more.
  *
  * "You are on the clock" and "Draft paused" are stored in sentence case and
- * rendered ALL CAPS through `.caps` (critique S4).
+ * rendered ALL CAPS through `.caps`.
  */
 import type { ReactNode } from 'react';
 import { ShieldCheck, Users } from 'lucide-react';

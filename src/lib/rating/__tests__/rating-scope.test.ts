@@ -1,6 +1,6 @@
 /**
  * The one TypeScript predicate of "which completed matches count toward
- * ratings" (owner decision 2026-10-19: test leagues do not). The SQL mirror,
+ * ratings" (test leagues do not). The SQL mirror,
  * `public.match_in_test_season`, is checked against its migration text here
  * and proven on the local stack (docs/rating.md, "Test leagues").
  */

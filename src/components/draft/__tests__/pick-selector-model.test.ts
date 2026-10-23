@@ -15,7 +15,7 @@ import {
   rowPointCost,
 } from '../pick-selector-model';
 
-describe('remainingAfterPick (draft-backend §13.2)', () => {
+describe('remainingAfterPick', () => {
   it('is the remaining budget minus the cost of the selected line', () => {
     expect(remainingAfterPick(40, 12)).toBe(28);
     expect(remainingAfterPick(12, 12)).toBe(0);

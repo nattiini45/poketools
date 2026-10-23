@@ -15,8 +15,7 @@ interface RouteParams {
 }
 
 /**
- * POST /api/seasons/[id]/comeback-tokens/spend — spend Comeback Tokens on the player's own lines
- * (draft-backend §8.1 #27, §6.9, BR-5).
+ * POST /api/seasons/[id]/comeback-tokens/spend — spend Comeback Tokens on the player's own lines.
  *
  * Body `{ allocations: [{ line_id, count 1..20 }] (1..9 lines), client_request_id }`. Comeback
  * Tokens are earned by shutout losses and may be spent once the redraft is complete or the admin

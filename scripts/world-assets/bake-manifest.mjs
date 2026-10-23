@@ -17,7 +17,7 @@
  * `pool` coverage section already in the mirror is carried forward, so a
  * re-bake never drops what pool-coverage.mjs baked.
  *
- * Hero props under out/props/ (card C-030) get their own section with the
+ * Hero props under out/props/ get their own section with the
  * stats the bar checks: name, file, kb, triangles, bounds. Empty until
  * props.mjs has generated + transform.mjs has processed the props.
  *
@@ -113,7 +113,7 @@ const MANIFEST_VERSION = MANIFEST_VERSION_V3;
 
 // Keep in sync with props.mjs and transform.mjs (lib.mjs stays figure-only).
 const OUT_PROPS_DIR = join(OUT_DIR, 'props');
-/** Post-transform bar (card C-030): ≤ 40 k triangles and ≤ 1.5 MB per prop. */
+/** Post-transform bar: ≤ 40 k triangles and ≤ 1.5 MB per prop. */
 const PROP_TRI_CEILING = 40000;
 const PROP_KB_CEILING = 1500;
 

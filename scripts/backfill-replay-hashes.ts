@@ -1,7 +1,6 @@
 /**
  * Backfill `games.replay_hash` for games recorded from a replay before the replay binding
- * (owner decision 2026-10-20, audit lead F1; migration
- * supabase/migrations/20261020100000_games_replay_hash.sql).
+ * (migration supabase/migrations/20261020100000_games_replay_hash.sql).
  *
  * For every game with a non-empty `replay_url` and no `replay_hash`, the script fetches the replay
  * from replay.pokemonshowdown.com with the app's own `fetchReplay` and hashes its log with the

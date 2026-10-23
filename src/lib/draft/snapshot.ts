@@ -1,5 +1,5 @@
 /**
- * Draft snapshot glue (draft-backend §7.9, §10.1; critique B8/B9). Server only.
+ * Draft snapshot glue. Server only.
  *
  * `getDraftSnapshot` is one `draft_snapshot` RPC plus the allowlist mapper
  * `toDraftSnapshotDTO`, which copies the raw RPC output field by field (no
@@ -411,7 +411,7 @@ export function toDraftSnapshotDTO(raw: unknown, viewer: ViewerContext | null): 
 /**
  * The draft snapshot for one viewer: one `draft_snapshot` RPC. Route handlers keep the
  * default `tick: true` and expire the draft reads when `publishedNow`; page seeds pass
- * `{ tick: false }` (critique B9). With `since` equal to the current `state_version` the
+ * `{ tick: false }`. With `since` equal to the current `state_version` the
  * RPC answers `unchanged`.
  */
 export async function getDraftSnapshot(

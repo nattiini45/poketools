@@ -87,10 +87,9 @@ export const GATE = {
 } as const;
 
 /**
- * Card C-043 introduced the four Meshy hero props (world manifest `props[]`)
- * as standalone plaza furniture; card C-054 — the deep station replacement
- * C-043 explicitly deferred — MOVED three of them into the stations' authored
- * fixtures, consuming their standalone seats:
+ * The four Meshy hero props (world manifest `props[]`) started as standalone
+ * plaza furniture; the deep station replacement later MOVED three of them
+ * into the stations' authored fixtures, consuming their standalone seats:
  *
  *  - `haussmann-lamp-post` (20,319 tris) now renders at PlazaHall's six
  *    committed `LAMP_POSTS` street-lamp seats (C-041 baseline), fitted to

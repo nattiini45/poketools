@@ -48,7 +48,7 @@ src/lib/rating/
 
 ### Test leagues
 
-Owner decision 2026-10-19: games in a test league (`seasons.is_test_season`) do not move player ratings. Standalone tournaments (no season) and normal leagues are unchanged; test ACCOUNTS (`players.is_test_account`) are a separate rule (the leaderboard leaves them out on read).
+Games in a test league (`seasons.is_test_season`) do not move player ratings. Standalone tournaments (no season) and normal leagues are unchanged; test ACCOUNTS (`players.is_test_account`) are a separate rule (the leaderboard leaves them out on read).
 
 - **One predicate, mirrored in SQL.** `matchCountsForRatings(match, scope)` (`src/lib/rating/rating-scope.ts`) is false for a match whose tournament belongs to a test league; `loadRatingScope()` (`src/lib/supabase/queries/ratings.ts`) reads the test leagues' tournament ids (two narrow paged reads). The database mirrors it in `public.match_in_test_season(match_id)` (`supabase/migrations/20261019130000_ratings_skip_test_seasons.sql`, service-role only).
 - **Live path.** `updateRatings` checks the match against the current scope before it reads history or computes anything and returns `{ status: 'skipped_test_season' }` with nothing written; otherwise `{ status: 'rated', ...change }`. `rating_apply_match_result` repeats the check under its locks, after the match read and before the idempotency check, and answers `skipped_test_season` (nothing written), so a caller that skips the TS check, or a flag set in between, still writes nothing. Finalize announces no rating milestone for a skipped match; the gamification backfill goes through `updateRatings` and skips the same matches.

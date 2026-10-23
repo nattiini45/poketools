@@ -1,6 +1,5 @@
 /**
- * Error catalog `errors/draft-legacy` (owner DL-API after the G0-ERR seed,
- * i18n-core §4.1, draft-backend §8.6). Lower-case codes of the legacy draft
+ * Error catalog `errors/draft-legacy`. Lower-case codes of the legacy draft
  * routes (`api/{evolutions,point-buy-lists,team-roles,draft-pool-entries,
  * draft-pool-templates,draft-tier-limits}`, `api/seasons/[id]/{progress,
  * evolution-points,redraft/phase}`,

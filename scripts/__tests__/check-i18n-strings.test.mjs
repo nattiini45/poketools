@@ -398,7 +398,7 @@ describe('file selection', () => {
     expect(isScannable('scripts/check-i18n-strings.mjs')).toBe(false);
   });
 
-  it('the repo allowlist has a reason per glob and lists only the draft-preview fixtures (critique F16)', () => {
+  it('the repo allowlist has a reason per glob and lists only the draft-preview fixtures', () => {
     const allowlist = loadAllowlist();
     expect(allowlist.files.every((f) => f.reason.length > 0)).toBe(true);
     expect(isAllowlisted('src/app/(public)/draft-preview/fixtures.ts', allowlist)).toBe(true);

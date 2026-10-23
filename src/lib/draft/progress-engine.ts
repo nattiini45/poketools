@@ -2,8 +2,7 @@
  * Progress engine for Evolution Point Buy format.
  * Handles applying progress from various sources to evolution trackers.
  *
- * The progress sources stay separate (draft-backend §12.1, SPEC Prompt 7;
- * column map in `progress-sources.ts`): self-earned real kills (`real_kills`,
+ * The progress sources stay separate (column map in `progress-sources.ts`): self-earned real kills (`real_kills`,
  * the only number shown as kills and used in public kill rankings),
  * `transferred_evo_progress`, Draft Kill Tokens (`draft_tokens`), Comeback
  * Tokens (`kill_tokens`) and Participation Tokens (`cosmo_points`). Every source is
@@ -144,7 +143,7 @@ export async function applyProgress(
 // ── Draft Kill Tokens ─────────────────────────────────────────────
 
 /**
- * Buy one Draft Kill Token for an owned line (draft-backend BR-4, §6.9):
+ * Buy one Draft Kill Token for an owned line:
  * +1 progress for the season's token ratio in points, within the per-player and
  * per-line limits, never triggers an evolution, points never come back. The rules
  * are re-checked by the `epb_purchase_draft_token` RPC under the season lock; this

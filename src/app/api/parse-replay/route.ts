@@ -29,8 +29,7 @@ export async function POST(request: NextRequest) {
     const body = zodResult.data;
 
     // 1. Fetch the replay once, hash it and parse it: the recorded winner and
-    //    stats come from this bound replay and its hash goes on the game row
-    //    (audit lead F1, owner decision 2026-10-20).
+    //    stats come from this bound replay and its hash goes on the game row.
     const replay = await fetchBoundReplay(body.replay_url);
     const parsed = replay.parsed;
 

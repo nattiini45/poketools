@@ -28,7 +28,7 @@ vi.mock('@/i18n/server', async () => {
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonWithDetails: mocks.getSeasonWithDetails }));
 vi.mock('@/lib/supabase/queries/point-buy-lists', () => ({ getListEntries: mocks.getListEntries }));
 vi.mock('@/lib/auth/helpers', () => ({ getSessionPlayer: mocks.getSessionPlayer }));
-// The page must never read a snapshot (no tick during a render, critique B9).
+// The page must never read a snapshot (no tick during a render).
 vi.mock('@/lib/draft/snapshot', () => ({ getDraftSnapshot: mocks.getDraftSnapshot }));
 vi.mock('@/components/draft-tokens/TokenCenter', () => ({ default: function TokenCenterStub() { return null; } }));
 

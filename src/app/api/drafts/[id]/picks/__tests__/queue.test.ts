@@ -1,6 +1,5 @@
 /**
- * POST /api/drafts/[id]/picks on a queue-engine pool (draft-backend §8.1 #9,
- * §8.3; B-SNAP). The RPC layer is mocked at `callDraftRpc` (the real
+ * POST /api/drafts/[id]/picks on a queue-engine pool. The RPC layer is mocked at `callDraftRpc` (the real
  * `toDraftRuleError`, `drafts-queue` and `snapshot` modules run); `after()`
  * collects its callbacks so the test can run the notifications explicitly.
  */

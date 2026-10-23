@@ -315,6 +315,27 @@ describe('product name and glossary', () => {
   });
 });
 
+/**
+ * Ids that only resolve in the maintainer's private notes: audit leads, review critiques, private
+ * design-spec sections, deferred-work rows and dated owner rulings. Applied migrations keep theirs
+ * (they are never edited), so the source scan skips `supabase/migrations/`.
+ */
+const INTERNAL_REF = /audit lead|\bCF-\d{2}\b|critique [A-Z]?\d|draft-backend|\bD-\d{3}\b|owner decision (\d{4}|pending|on)|\bcard C-\d{3}\b/i;
+
+describe('public source (internal references)', () => {
+  const files = publicFiles('src', 'scripts', 'openwiki', ':(glob)*.md', 'docs').filter(
+    (f) => /\.(c?m?[jt]sx?|md|json|css|sql|py)$/.test(f) && f !== 'scripts/__tests__/public-docs.test.mjs'
+  );
+
+  it('scans the public source', () => {
+    expect(files).toContain('src/lib/draft/snapshot.ts');
+  });
+
+  it('cites no private review, audit or spec ids', () => {
+    expect(files.filter((f) => INTERNAL_REF.test(read(f)))).toEqual([]);
+  });
+});
+
 describe('public docs (owner rulings)', () => {
   const docs = publicFiles(':(glob)*.md', 'docs', 'openwiki').filter(
     (f) => f.endsWith('.md') && !f.startsWith('docs/format-pack-private/') && !f.startsWith('docs/superpowers/')

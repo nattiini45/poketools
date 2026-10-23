@@ -80,7 +80,7 @@ function legacyPoolsSection(seasonId: string, pools: readonly AdminPoolSummary[]
  * resource check of this season, before any draft read. Only queue-engine
  * pools get tabs; legacy (pre-M2) pools are listed with links. Every queue
  * pool's snapshot is seeded with `{ tick: false }` (a render never advances a
- * clock, critique B9); a failed read throws to the admin error boundary (`src/app/admin/error.tsx`,
+ * clock); a failed read throws to the admin error boundary (`src/app/admin/error.tsx`,
  * with "Try again"), never a silently empty tab.
  */
 export default async function AdminDraftPage({ params, searchParams }: PageProps) {

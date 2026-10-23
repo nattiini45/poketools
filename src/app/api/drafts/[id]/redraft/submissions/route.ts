@@ -14,7 +14,7 @@ interface RouteParams {
 
 /**
  * GET /api/drafts/[id]/redraft/submissions — every participant's SECRET drop
- * list, for the pool admin only (draft-backend §8.1 #20, §10.4), plus
+ * list, for the pool admin only, plus
  * `publish_refused_at` (`draft_pools.publish_refused_at`: the deadline tick
  * refused to publish this Redraft; null = never), which the room's admin sheet
  * shows on its Redraft tab. The guard runs before any read; players without a

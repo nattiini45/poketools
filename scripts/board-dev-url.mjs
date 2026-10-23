@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * The stable local dev URL + report-first orphan sweep for the gauntlet
- * board (card C-081) — the single source for the ONE address sessions and
+ * The stable local dev URL + report-first orphan sweep for the capture
+ * harness — the single source for the ONE address sessions and
  * instruments use.
  *
  * Three incidents of one class (maintainer run log):
@@ -24,7 +24,7 @@
  *       the listener, prints exactly what it is about to kill (pid, port,
  *       start time, command line) and only then acts. Combine with
  *       --sweep to emit the full report in the same run. The pinned port
- *       is HARD-BLOCKED twice (C-088): on the literal port argument
+ *       is HARD-BLOCKED twice: on the literal port argument
  *       before any probe, AND after target resolution — a pid whose
  *       resolved listener owns the pinned port refuses identically
  *       (exit 2, nothing probed, nothing killed) naming the
@@ -32,17 +32,17 @@
  *       the target and acts — the orchestrator-directed-end path,
  *       nothing else.
  *
- * Ownership law (maintainer standing laws, PB-299): the shared
+ * Ownership rule: the shared
  * :3111 server is live session infrastructure — seats never kill it; the
  * sweep makes ownership visible (ports, start times, command lines),
  * never assumes. Killing a server another live session owns is its own
  * incident. The refusal above is the enforcement, not a warning: a
- * printed caution that falls through to the kill (the C-086 nit) is not
+ * printed caution that falls through to the kill is not
  * protection.
  *
  * Exit: 0 clean (or killed as asked), 1 kill target missing/still
  * listening, 2 usage error — including a pinned-port --kill without
- * --i-own-the-pinned-port, by port literal or by pid resolution (C-088).
+ * --i-own-the-pinned-port, by port literal or by pid resolution.
  */
 
 import { execFile } from 'node:child_process';
@@ -257,7 +257,7 @@ async function cmdKill(targetRaw, pinnedOverride) {
     console.error(`board-dev-url: --kill ${targetRaw}: ${note} — nothing killed`);
     return false;
   }
-  // C-088: the argument may be a PID whose resolved listener owns the
+  // The argument may be a PID whose resolved listener owns the
   // pinned port — the pre-probe literal guard in main() never sees it.
   // The pid→listener mapping is the same netstat data the sweep uses, so
   // the guard runs again HERE, on the resolved target: refuse when ANY
@@ -326,9 +326,9 @@ async function main() {
       process.exit(2);
     }
   }
-  // Hard block (C-086): the pinned port refuses --kill outright unless the
+  // Hard block: the pinned port refuses --kill outright unless the
   // explicit override is present. This fires on the ARGUMENT before any
-  // probe — a refusal touches nothing on the system. (C-088: this is the
+  // probe — a refusal touches nothing on the system. (This is the
   // FIRST of two guards — cmdKill repeats it on the RESOLVED target, so a
   // pid that maps onto the pinned port refuses identically.)
   if (killTarget !== null && !pinnedOverride && Number(String(killTarget).replace(/^:/, '')) === BOARD_DEV_PORT) {

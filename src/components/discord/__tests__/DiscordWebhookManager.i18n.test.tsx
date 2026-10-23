@@ -29,7 +29,7 @@ describe('integration managers — language', () => {
     expect(html).toContain('Social-Integrationen werden geladen …');
   });
 
-  it('labels the four draft-tool events in both languages (critique B12)', () => {
+  it('labels the four draft-tool events in both languages', () => {
     const draftEvents = ['draft_turn_started', 'draft_turn_reminder', 'draft_slot_blocked', 'draft_redraft_published'] as const;
     for (const evt of draftEvents) {
       expect(integrationsMessages.en.events[evt]).toBeTruthy();

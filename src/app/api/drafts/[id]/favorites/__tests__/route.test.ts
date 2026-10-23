@@ -1,5 +1,5 @@
 /**
- * GET/PUT /api/drafts/[id]/favorites (draft-backend §8.1 #16/#17; B-SNAP).
+ * GET/PUT /api/drafts/[id]/favorites.
  * The real query module runs against a small in-memory fake of the client.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';

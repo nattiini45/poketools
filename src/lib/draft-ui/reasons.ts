@@ -1,6 +1,6 @@
 /**
- * Draftability reasons → `draft/shared.reasons.<CODE>` (draft-frontend §5.2;
- * critique S5). `ReasonDTO`s are not API errors: they render through this
+ * Draftability reasons → `draft/shared.reasons.<CODE>`.
+ * `ReasonDTO`s are not API errors: they render through this
  * map because `LINE_TAKEN` shows the owner's name, which is mapped here from
  * `player_id` using the snapshot participants.
  *

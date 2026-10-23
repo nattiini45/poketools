@@ -159,7 +159,7 @@ describe('POST /api/account/link-email', () => {
     expect(signUp).not.toHaveBeenCalled();
   });
 
-  describe('reserved SUPERADMIN_EMAIL (CF-02)', () => {
+  describe('reserved SUPERADMIN_EMAIL', () => {
     const RESERVED_BODY = { email: 'boss@example.com', password: 'pikachu123' };
 
     beforeEach(() => {

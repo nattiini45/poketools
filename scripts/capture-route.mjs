@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Batch route-world capture harness for gauntlet evidence (card C-001).
+ * Batch route-world capture harness: stills, pose sidecars and evidence records.
  *
  * Usage:
  *   node scripts/capture-route.mjs --tag <tag> \
@@ -85,7 +85,7 @@
  * ONLY) stalls the first N figure-GLB responses to reproduce the walkerless
  * present window deterministically.
  *
- * S9 evidence arms (fidelity gauntlet, D13; logic in scripts/lib/capture-evidence.mjs,
+ * Evidence arms (logic in scripts/lib/capture-evidence.mjs,
  * veto analyzers in src/lib/route-world/evidence-probe.ts): `--frames N
  * [--interval ms]` samples N presents + figure/occlusion/camera bridges into
  * a -trace.json and a -strip.png after each station lands; `--occlusion on`
@@ -157,7 +157,7 @@
  * (sky-body disc, HUD band and DOM chrome excluded) plus a rendered-pixel
  * text-vs-ground contrast estimate on the active face; `--audit on` writes the
  * frame's draw calls and renderer.info.programs per station into the sidecar
- * and appends a row to gauntlet/fidelity/DRAW-LEDGER.md; every route still on
+ * and appends a row to the draw ledger (DRAW_LEDGER_PATH); every route still on
  * an evidence run records the docked panel's computed font-size and
  * in-viewport box, and the pass-through readers for __routeWorldBeats() /
  * __routeWorldAttacks() (absent = unmeasured, never pass); the station-settle
@@ -1021,7 +1021,7 @@ Options:
                           draw-call reads (median/min/max, the TelemetrySampler
                           keeps autoReset off so shadow + post passes count)
                           and renderer.info.programs into sidecar "drawAudit",
-                          and one row appended to gauntlet/fidelity/DRAW-LEDGER.md.
+                          and one row appended to the draw ledger.
                           Measure at --quality 0 (the budget law is rung 0).
   --reduced-motion       Emulate prefers-reduced-motion: reduce in the browser
                           context. Reduced motion is a hard Lite floor (D12);
@@ -1117,7 +1117,7 @@ Options:
                           --relax-deadline is refused. Recorded as
                           invocation.prodAttach (pids, chain, BUILD_ID mtime).
   --no-boot               R40: attach to the dev server already on --port and
-                          NEVER kill or boot one (scripts/gauntlet/run-queue.sh
+                          NEVER kill or boot one (a capture queue
                           passes it by default). Probes it up to 3 x 30 s; an
                           unresponsive or absent server fails the run with a
                           clear message. Recorded as invocation.noBoot.
@@ -4130,7 +4130,7 @@ async function writePoseProbe(
   const water = await readWater(page);
   if (water !== null) probe.water = water;
   // R40 (K5 / R8): every water body's surface rect on screen at this pose, for
-  // scripts/gauntlet/analysis/stills.mjs --mask-water.
+  // a stills analysis that masks the water.
   if (water !== null && Array.isArray(water.bodies)) {
     const cam = await page.evaluate(readRenderCameraInPage).catch(() => null);
     probe.waterRects = waterScreenRects(water.bodies, cam);

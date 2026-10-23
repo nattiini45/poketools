@@ -12,7 +12,7 @@ interface RouteParams {
 }
 
 /**
- * POST /api/drafts/[id]/end — abort a draft (draft-backend §8.1 #5, §6.3). No slot
+ * POST /api/drafts/[id]/end — abort a draft. No slot
  * is ever forfeited (the pool always stays completable, so a draft only ends by
  * completing or by an abort):
  *   - a redraft still in its submission phase is cancelled;

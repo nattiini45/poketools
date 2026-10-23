@@ -172,7 +172,7 @@ describe('RedraftPage: client boundary', () => {
     expectNoPrivatePlayerData(props);
   });
 
-  it('seeds the snapshot without a tick (critique B9)', async () => {
+  it('seeds the snapshot without a tick', async () => {
     await render();
     expect(mocks.getDraftSnapshot).toHaveBeenCalledTimes(1);
     expect(mocks.getDraftSnapshot).toHaveBeenCalledWith(REDRAFT_ID, { playerId: 'p1', isPoolAdmin: false }, { tick: false });

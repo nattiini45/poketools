@@ -1,5 +1,5 @@
 /**
- * Redraft secrecy — no-leak tests (draft-backend §14.1 "No-leak tests"; B-RED).
+ * Redraft secrecy — no-leak tests.
  *
  * Before publish only the owner and the pool admins may read a submission.
  * The submission reads run the REAL `drafts-redraft.ts` over a fake Supabase

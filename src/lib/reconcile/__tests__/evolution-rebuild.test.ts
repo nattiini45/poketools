@@ -935,7 +935,7 @@ describe('repairSeasonEvolution — grouped insert preserves matchday', () => {
     expect(result.eventsRewritten).toBe(computed.computedEvents.length);
     expect(result.evolutionPoints.points_awarded).toBeGreaterThan(0);
 
-    // CF-07: the per-game credit markers and ledgers follow the rebuilt real
+    // The per-game credit markers and ledgers follow the rebuilt real
     // kills: the replayed matches' games are marked with their credits, every
     // other game of the season is not; fenced on the epoch read before.
     expect(computed.creditedMatchIds).toEqual(['m1', 'm2']);
@@ -976,7 +976,7 @@ describe('repairSeasonEvolution — grouped insert preserves matchday', () => {
   });
 });
 
-// ── Kill-credit ledger + season fence (PR #12 review, CF-07) ──────────────
+// ── Kill-credit ledger + season fence ─────────────────────────────────────
 
 describe('computeEvolutionStateCore — per-game credit ledger', () => {
   it('records, per game, the real kills each tracker got from it (sorted, zero rows dropped)', () => {

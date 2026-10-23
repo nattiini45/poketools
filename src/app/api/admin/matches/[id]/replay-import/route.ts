@@ -26,8 +26,7 @@ interface RouteParams {
  *
  * The organizer chooses only the side assignment. The route fetches the replay
  * again and records the winner and stats parsed from it, with its hash, through
- * the same bound-replay path as /api/parse-replay (audit lead F1, owner decision
- * 2026-10-20); corrections afterwards go through the admin game editor. The
+ * the same bound-replay path as /api/parse-replay; corrections afterwards go through the admin game editor. The
  * body carries the preview's `replay_hash`: a replay that hashes differently now
  * is refused with 409 `replay_changed_since_preview` before anything is written.
  */

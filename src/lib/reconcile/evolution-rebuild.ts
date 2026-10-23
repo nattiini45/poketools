@@ -33,7 +33,7 @@
  *
  *   total_kos = real_kills + transferred_evo_progress + draft_tokens + kill_tokens + cosmo_points
  *
- * (five terms since migration M4, draft-backend §12.1). `transferred_evo_progress`
+ * (five terms since migration M4). `transferred_evo_progress`
  * (real kills carried over from a redraft slot or a trade) is a preserved non-match
  * source like the token columns: it counts for evolution, never as kills.
  *
@@ -1104,7 +1104,7 @@ export async function applyComputedEvolutionState(
 
   // LAST write: the trackers now hold the real kills of exactly the replayed
   // (completed) matches, so align the per-game credit markers and ledgers with
-  // that (CF-07). A pending or disputed match's games lose theirs (their kills,
+  // that. A pending or disputed match's games lose theirs (their kills,
   // credited at submission before 2026-10-20, were just dropped), so its
   // completion credits them. Fenced: a credit or debit that committed after
   // this rebuild read the season (the counter moved), or a credited match that

@@ -23,7 +23,7 @@
  *   node scripts/world-assets/props.mjs --prop <name> --tier fallback   cheap re-probe
  *   node scripts/world-assets/props.mjs --force     re-download even if cached
  *
- * Credit discipline (card C-030): every finished task is logged — prop,
+ * Credit discipline: every finished task is logged — prop,
  * phase, task id, ai_model, consumed_credits — to .cache/props/credits.json
  * and stdout. The batch aborts before any call whose estimate would push the
  * projected total past BATCH_CREDIT_STOP. FAILED tasks are refunded by Meshy
@@ -77,7 +77,7 @@ const TIERS = {
   fallback: { key: 'fallback', aiModel: 'meshy-5', previewCredits: 5, refineCredits: 5 },
 };
 
-/** Hard batch trajectory stop (card C-030; the account held 896 at brief time). */
+/** Hard batch trajectory stop (the account held 896 at brief time). */
 const BATCH_CREDIT_STOP = 200;
 
 const POLL_INTERVAL_MS = 5000;

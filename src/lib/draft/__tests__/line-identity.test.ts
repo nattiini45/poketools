@@ -37,7 +37,7 @@ describe('line identity', () => {
   });
 });
 
-// ── Stable line ids (draft-backend §2.1, critique S6) ──────────────────────────
+// ── Stable line ids ────────────────────────────────────────────────────────────
 
 describe('foldId / toLineId', () => {
   it('is the PKMN toID (one fold for the app)', () => {

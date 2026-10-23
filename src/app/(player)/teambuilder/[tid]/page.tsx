@@ -23,7 +23,7 @@ export default async function TournamentTeambuilderPage({ params }: PageProps) {
 
   // Load the tournament's season (if any) so the resolver can use the
   // league name + season.ruleset_id for the custom-over-base precedence
-  // (e.g. resolves the actual 'Type Triangle League' ruleset instead of
+  // (e.g. resolves the league's own custom ruleset instead of
   // the base 'Gen 9 RU' ruleset when the tournament's ruleset_id is wrong).
   const season = tournament.season_id ? await getSeasonById(tournament.season_id) : null;
 

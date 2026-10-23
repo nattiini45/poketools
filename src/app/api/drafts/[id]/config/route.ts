@@ -60,8 +60,7 @@ async function seatsFromOrder(pool: DraftPool, order: readonly string[]) {
 }
 
 /**
- * PATCH /api/drafts/[id]/config — change a queue pool's settings or seat order
- * (draft-backend §8.1 #3, §6.3).
+ * PATCH /api/drafts/[id]/config — change a queue pool's settings or seat order.
  *
  * Body: `DraftConfigInput` (every key optional, strict). The stored config is
  * merged with the request and checked as a whole (`INVALID_CONFIG {field}`),

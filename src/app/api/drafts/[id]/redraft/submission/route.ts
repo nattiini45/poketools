@@ -27,7 +27,7 @@ async function getRedraftPool(id: string): Promise<DraftPool> {
 
 /**
  * GET /api/drafts/[id]/redraft/submission[?player_id=] — the SECRET drop list
- * of ONE player (draft-backend §8.1 #18, §10.4).
+ * of ONE player.
  *
  * Without `player_id` (or with the viewer's own id) the viewer reads their own
  * list. Another player's list needs the pool admin guard (403 otherwise):
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /**
  * PUT /api/drafts/[id]/redraft/submission — replace the viewer's own SECRET
- * drop list (draft-backend §8.1 #19, §6.8). Withdraw = `line_ids: []`.
+ * drop list. Withdraw = `line_ids: []`.
  *
  * Own list only: the body has no `player_id`, and admins cannot submit for
  * others (`redraft_set_submission` also refuses `ACTOR_NOT_ALLOWED`). The RPC

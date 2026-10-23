@@ -14,7 +14,7 @@ import type { PointBuyListEntry } from '@/types/point-buy';
 export type { LineThresholds };
 
 /**
- * Season thresholds of one line. `line_id` (draft-backend §2.2) lives on
+ * Season thresholds of one line. `line_id` lives on
  * `LineThresholds` itself; it is null for legacy evolution-tier leagues,
  * which have no list. Kept as an alias for existing importers.
  */

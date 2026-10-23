@@ -1,5 +1,5 @@
 /**
- * Draft utility categories (draft-backend §2.6, critique S9). Client-safe, ids only.
+ * Draft utility categories. Client-safe, ids only.
  *
  * League configuration, not Pokémon data: each category is a whitelist of `@pkmn` move/ability
  * ids from the active format pack (`epb.utility`, `@/lib/format-pack`), usually derived from the
@@ -16,7 +16,7 @@ import { epbPack } from '@/lib/format-pack';
 import { toID } from '@/lib/pkmn/i18n/id';
 
 /**
- * The single declaration of UtilityKey; `src/types/draft-queue.ts` re-exports it (critique S8).
+ * The single declaration of UtilityKey; `src/types/draft-queue.ts` re-exports it.
  * A key of the active pack's `epb.utility.order`.
  */
 export type UtilityKey = string;

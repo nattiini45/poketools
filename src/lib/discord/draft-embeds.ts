@@ -1,5 +1,5 @@
 /**
- * Discord embeds of the draft tool (B-CRON, draft-backend §11.3).
+ * Discord embeds of the draft tool.
  *
  * Payloads are language-neutral; `lang` is the webhook's language, resolved by
  * `emitAsync` (i18n-core §6.2). Copy comes from `draft/discord` (chrome of the

@@ -158,7 +158,7 @@ describe('buildTeam (live usage, mocked pokepaste)', () => {
     mockPokepasteOnly();
     vi.mocked(getRulesetById).mockResolvedValue(
       makeRuleset({
-        id: 'rs-core', name: 'Type Triangle League',
+        id: 'rs-core', name: 'Sample Custom League',
         team_constraints: {
           type_quotas: { source: 'player_core', min_per_type: 1, allow_multi_count: true },
         },

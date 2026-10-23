@@ -1,5 +1,5 @@
 /**
- * League time helpers (draft-backend §7.7, BR-15; critique S10). Client-safe
+ * League time helpers. Client-safe
  * and pure: the server default (redraft config route) and the FE admin
  * prefill both call `defaultRedraftDeadline`, so the deadline default exists
  * once.

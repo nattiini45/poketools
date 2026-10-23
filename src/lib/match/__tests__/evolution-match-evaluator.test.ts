@@ -8,7 +8,7 @@
  * (evolutions, evolution-events, epb-thresholds). The query modules are
  * vi.mocked so we feed controlled tracker/threshold data and assert the
  * coordination: real KOs parsed into per-tracker credits, each game credited
- * through the marker RPC once (CF-07: at match completion, never twice),
+ * through the marker RPC once (at match completion, never twice),
  * stage transitions resolved and recorded as events, the edit debit fenced on
  * the marker.
  * The pure helpers are left REAL so the stage-resolution behavior is

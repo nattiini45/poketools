@@ -11,7 +11,7 @@ import {
 } from './import-graph';
 
 /**
- * Client boundary of the Pokémon localization layer (design pkmn-l10n.md §3.6, §7; critique P3, P11).
+ * Client boundary of the Pokémon localization layer.
  * No `'use client'` module may reach the server-only descriptions, their 44 KB maps, or any `@pkmn/*` package;
  * the client-safe runtime files carry no `@pkmn/` import; each per-kind name module imports exactly one map.
  */

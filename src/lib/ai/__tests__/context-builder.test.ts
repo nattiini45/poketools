@@ -191,7 +191,7 @@ describe('buildRulesetSection', () => {
 
   it('renders team composition constraints (type quota + tera)', () => {
     const ruleset: Ruleset = {
-      id: 'rs-1', name: 'Type Triangle League', base_format: 'gen9ou', is_doubles: false,
+      id: 'rs-1', name: 'Sample Custom League', base_format: 'gen9ou', is_doubles: false,
       clauses: [], bans: { pokemon: [], moves: [], items: [], abilities: [] },
       additions: { pokemon: [] }, custom_rules_string: '', min_shared_type_pct: 0,
       team_constraints: {
@@ -331,7 +331,7 @@ describe('buildMatchAnalysisPrompt', () => {
       name: 'Test Cup', best_of_default: 3, description: null, is_doubles: false,
     } as never);
     vi.mocked(getSeasonById).mockResolvedValueOnce({
-      id: 'season-1', name: 'Type Triangle League', description: 'Core Liga',
+      id: 'season-1', name: 'Sample Custom League', description: 'Core Liga',
       format_type: 'round_robin',
     } as never);
     vi.mocked(getSeasonParticipants).mockResolvedValueOnce([
@@ -517,7 +517,7 @@ describe('buildMatchPrepPrompt', () => {
       name: 'Test Cup', best_of_default: 3, description: null, is_doubles: false,
     } as never);
     vi.mocked(getSeasonById).mockResolvedValueOnce({
-      id: 'season-1', name: 'Type Triangle League', description: null, format_type: 'round_robin',
+      id: 'season-1', name: 'Sample Custom League', description: null, format_type: 'round_robin',
     } as never);
     vi.mocked(getSeasonParticipants).mockResolvedValueOnce([
       { id: 'p1', name: 'Alice', gym_type: null, core_types: ['Fire', 'Grass', 'Water'] },

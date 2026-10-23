@@ -5,7 +5,7 @@
  * - Token names (Draft Kill Token, Comeback Token, participation token) and the
  *   progress terms come from `glossary`; this namespace never drops the
  *   "Draft" from the Draft Kill Token (SPEC:869-874).
- * - `reason` is keyed by DC-0's `TokenRefusalCode` verbatim (critique S4, B7);
+ * - `reason` is keyed by the `TokenRefusalCode` verbatim;
  *   its params come from the `TokenOverviewDTO`.
  * - API error texts live in `errors/draft`.
  * - Sentence case in storage; ALL-CAPS only through CSS.

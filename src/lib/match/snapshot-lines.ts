@@ -1,6 +1,6 @@
 /**
  * Which point-buy line a match evolution snapshot belongs to, keyed by the
- * stable draft line id (draft-backend §16, critique C17).
+ * stable draft line id.
  *
  * The list is keyed by `line_id`, never by `base_pokemon`: two lines can share
  * a base (Oshawott → Samurott and Oshawott → Samurott-Hisui), and a base-keyed

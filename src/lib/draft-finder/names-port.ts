@@ -1,5 +1,5 @@
 /**
- * The finder's port to the Pokémon name layer (draft-frontend §4.2, critique S7). Client-safe.
+ * The finder's port to the Pokémon name layer. Client-safe.
  *
  * The only file of `src/lib/draft-finder` that imports the name dictionaries (`@/lib/pkmn/i18n/names`);
  * `client-safe-imports.test.ts` enforces it. Every input is a canonical English name (never an id), so

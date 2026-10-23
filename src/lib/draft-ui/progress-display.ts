@@ -1,5 +1,5 @@
 /**
- * Progress display helpers (draft-frontend §6.3; critique S9). Thin wrappers
+ * Progress display helpers. Thin wrappers
  * over DC-0's `src/lib/draft/progress-sources.ts`, which stays the only
  * mapping of tracker columns to the spec's sources. Pure and client-safe.
  *

@@ -468,7 +468,7 @@ export function buildEmbed(
       };
     }
 
-    // Draft-tool events (B-CRON, draft-backend §11.3).
+    // Draft-tool events.
     case 'draft_turn':
       return buildDraftEmbed(payload, opts, lang);
     case 'draft_turn_reminder':

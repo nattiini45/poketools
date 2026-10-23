@@ -35,7 +35,7 @@ export interface ImportReport {
   total_raw?: number;
   unique?: number;
   by_category?: Record<string, number>;
-  /** The point-buy reconciliation report (draft-backend §2.5, Prompt 0 §8); point-buy import only. */
+  /** The point-buy reconciliation report; point-buy import only. */
   reconciliation?: ReconciliationReport | null;
 }
 

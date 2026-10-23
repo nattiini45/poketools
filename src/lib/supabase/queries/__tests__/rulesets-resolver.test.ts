@@ -56,14 +56,14 @@ const BASE_GEN9RU = makeRuleset({
   base_format: 'gen9ru',
 });
 
-// Type Triangle League — actual production fixture shape:
+// Sample Custom League — the shape of a real custom league ruleset:
 // `type_quotas.source === 'player_core'` (DYNAMIC per participant's
 // assigned core triple in season_participants.core_types), NFE phase,
 // Eviolite cap, custom bans/items. NO fixed_types — the types come from
 // each player's core assignment.
-const TYPE_TRIANGLE_LEAGUE = makeRuleset({
-  id: '6b78fb01-cc29-4b05-9fb6-125647b00058',
-  name: 'Type Triangle League',
+const SAMPLE_CUSTOM_LEAGUE = makeRuleset({
+  id: '00000000-0000-4000-8000-0000000000c1',
+  name: 'Sample Custom League',
   base_format: 'gen9ru',
   clauses: [
     'Species Clause',
@@ -123,7 +123,7 @@ describe('isCustomLeagueRuleset', () => {
   });
 
   it('returns true when team_constraints is set (player_core source)', () => {
-    expect(isCustomLeagueRuleset(TYPE_TRIANGLE_LEAGUE)).toBe(true);
+    expect(isCustomLeagueRuleset(SAMPLE_CUSTOM_LEAGUE)).toBe(true);
   });
 
   it('returns true when custom_rules_string is non-empty', () => {
@@ -150,36 +150,36 @@ describe('resolveEffectiveRuleset', () => {
   });
 
   it('uses the tournament ruleset directly when it is custom', async () => {
-    queueMaybeSingleResults([TYPE_TRIANGLE_LEAGUE]);
+    queueMaybeSingleResults([SAMPLE_CUSTOM_LEAGUE]);
     const result = await resolveEffectiveRuleset({
-      tournamentRulesetId: TYPE_TRIANGLE_LEAGUE.id,
+      tournamentRulesetId: SAMPLE_CUSTOM_LEAGUE.id,
     });
-    expect(result?.ruleset.id).toBe(TYPE_TRIANGLE_LEAGUE.id);
+    expect(result?.ruleset.id).toBe(SAMPLE_CUSTOM_LEAGUE.id);
     expect(result?.source).toBe('tournament');
     expect(result?.fellBack).toBe(false);
   });
 
-  // ── Type Triangle League regression ──────────────────────────────────
-  it('resolves the Type Triangle League custom ruleset for a round_robin group-phase tournament that incorrectly references base Gen 9 RU', async () => {
+  // ── Sample Custom League regression ──────────────────────────────────
+  it('resolves the Sample Custom League custom ruleset for a round_robin group-phase tournament that incorrectly references base Gen 9 RU', async () => {
     // Tournament.ruleset_id = base Gen 9 RU (the data error we fix).
     // Season.ruleset_id     = base Gen 9 RU.
-    // A separate custom "Type Triangle League" ruleset exists.
+    // A separate custom "Sample Custom League" ruleset exists.
     queueMaybeSingleResults([BASE_GEN9RU, BASE_GEN9RU]);
-    queueThenResults([[TYPE_TRIANGLE_LEAGUE]]);
+    queueThenResults([[SAMPLE_CUSTOM_LEAGUE]]);
 
     const result = await resolveEffectiveRuleset({
       tournamentRulesetId: BASE_GEN9RU.id,
       tournamentBracketType: 'round_robin', // group phase
       season: {
         id: 'season-ttl',
-        name: 'Type Triangle League',
+        name: 'Sample Custom League',
         rulesetId: BASE_GEN9RU.id,
       },
     });
 
     expect(result).not.toBeNull();
-    expect(result!.ruleset.id).toBe(TYPE_TRIANGLE_LEAGUE.id);
-    expect(result!.ruleset.name).toBe('Type Triangle League');
+    expect(result!.ruleset.id).toBe(SAMPLE_CUSTOM_LEAGUE.id);
+    expect(result!.ruleset.name).toBe('Sample Custom League');
     expect(result!.ruleset.team_constraints).not.toBeNull();
     expect(result!.ruleset.team_constraints!.type_quotas?.source).toBe('player_core');
     expect(result!.ruleset.team_constraints!.evolution_stage?.mode).toBe(
@@ -197,14 +197,14 @@ describe('resolveEffectiveRuleset', () => {
     // intentionally points to base Gen 9 RU. We MUST NOT silently
     // override it with the group's NFE ruleset via name-match.
     queueMaybeSingleResults([BASE_GEN9RU, BASE_GEN9RU, BASE_GEN9RU]);
-    queueThenResults([[TYPE_TRIANGLE_LEAGUE]]); // exists but must be ignored
+    queueThenResults([[SAMPLE_CUSTOM_LEAGUE]]); // exists but must be ignored
 
     const result = await resolveEffectiveRuleset({
       tournamentRulesetId: BASE_GEN9RU.id,
       tournamentBracketType: 'single_elim', // playoffs
       season: {
         id: 'season-ttl',
-        name: 'Type Triangle League',
+        name: 'Sample Custom League',
         rulesetId: BASE_GEN9RU.id,
       },
     });
@@ -221,14 +221,14 @@ describe('resolveEffectiveRuleset', () => {
 
   it('does NOT apply name-match for double_elim brackets either', async () => {
     queueMaybeSingleResults([BASE_GEN9RU, BASE_GEN9RU, BASE_GEN9RU]);
-    queueThenResults([[TYPE_TRIANGLE_LEAGUE]]);
+    queueThenResults([[SAMPLE_CUSTOM_LEAGUE]]);
 
     const result = await resolveEffectiveRuleset({
       tournamentRulesetId: BASE_GEN9RU.id,
       tournamentBracketType: 'double_elim',
       season: {
         id: 'season-ttl',
-        name: 'Type Triangle League',
+        name: 'Sample Custom League',
         rulesetId: BASE_GEN9RU.id,
       },
     });
@@ -331,7 +331,7 @@ describe('resolveEffectiveRuleset', () => {
       resolveEffectiveRuleset({
         tournamentRulesetId: BASE_GEN9RU.id,
         tournamentBracketType: 'round_robin',
-        season: { id: 's', name: 'Type Triangle League', rulesetId: BASE_GEN9RU.id },
+        season: { id: 's', name: 'Sample Custom League', rulesetId: BASE_GEN9RU.id },
       }),
     ).rejects.toMatchObject({ message: 'connection reset' });
   });

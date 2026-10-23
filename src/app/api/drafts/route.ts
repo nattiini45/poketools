@@ -210,7 +210,7 @@ async function createQueuePool(
 }
 
 /**
- * POST /api/drafts — create a draft pool (season admin only; draft-backend §8.1 #1).
+ * POST /api/drafts — create a draft pool (season admin only).
  *
  * EPB seasons create a queue-engine pool: body `{ season_id, kind: 'initial' | 'redraft', config?, force? }`
  * → `201 { pool_id }`. A body in the legacy shape (`draft_type`, `budget`) for

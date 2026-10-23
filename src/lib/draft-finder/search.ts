@@ -1,5 +1,5 @@
 /**
- * Bilingual text search of the finder (draft-frontend §4.3, critique S7). Client-safe, pure.
+ * Bilingual text search of the finder. Client-safe, pure.
  *
  * Folding is the pkmn layer's (`foldForSearch`, `transliterateGerman`); this module only adds the draft's
  * word-prefix semantics on top of `SearchKeys`:

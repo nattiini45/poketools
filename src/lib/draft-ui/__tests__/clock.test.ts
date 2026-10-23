@@ -169,7 +169,7 @@ describe('formatDuration (ladder labels)', () => {
 });
 
 describe('LEAGUE_TIME_ZONE', () => {
-  it('is the re-export of the i18n config zone (critique S10)', () => {
+  it('is the re-export of the i18n config zone', () => {
     expect(LEAGUE_TIME_ZONE).toBe(CONFIG_ZONE);
   });
 });

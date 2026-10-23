@@ -1,6 +1,5 @@
 /**
- * Pure helpers of `PickSelector` (draft-frontend §8.5; draft-backend §13.2,
- * critique B18). Client-safe: no React, no `@pkmn/*`.
+ * Pure helpers of `PickSelector`. Client-safe: no React, no `@pkmn/*`.
  */
 import type { SearchKeys } from '@/lib/pkmn/i18n/search';
 import { speciesSearchKeys } from '@/lib/pkmn/i18n/names/species';

@@ -1,8 +1,7 @@
 /**
  * Redraft helpers for Evolution Point Buy format.
  *
- * The redraft itself is the secret-drop draft (redraft pool, `redraft_*` RPCs,
- * draft-backend §6.8). The free swap and the consented trades are retired
+ * The redraft itself is the secret-drop draft (redraft pool, `redraft_*` RPCs). The free swap and the consented trades are retired
  * (`POST /api/seasons/[id]/redraft` answers 410); only the eligibility read stays.
  */
 

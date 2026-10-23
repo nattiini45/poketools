@@ -2,8 +2,8 @@
  * Broadcast draft overlays (draft-frontend §3.5, §8.4, DF9).
  *
  * - The overlay language comes from `resolveOverlayLocale`: `?lang=` beats the
- *   league language and the viewer cookie is never read (critique S12).
- * - Line labels go through `localizeLineLabel` (critique S13).
+ *   league language and the viewer cookie is never read.
+ * - Line labels go through `localizeLineLabel`.
  * - Polling uses chained timeouts (`createVisiblePoller`), never a bare `setInterval`.
  */
 import { readFileSync } from 'node:fs';

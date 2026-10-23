@@ -16,14 +16,14 @@ interface RouteParams {
 }
 
 /**
- * GET /api/drafts/[id]/my-turn — the hidden-tab turn watch (draft-backend §8.1 #8, §11.1).
+ * GET /api/drafts/[id]/my-turn — the hidden-tab turn watch.
  *
  * The only draft endpoint polled while the tab is hidden (every 60 s, AGENTS.md
  * D37 exception): one guard read and one `draft_my_turn` RPC per quiet tick.
  * The RPC itself refuses an unknown pool (`POOL_NOT_FOUND`) and a legacy pool
  * (`POOL_ENGINE_LEGACY`), so no pool read precedes it. The RPC ticks, so it can
  * publish a redraft: only then is the pool read, for its season, and the draft
- * reads expired (critique B8). A publish or a resolved timeout (a new slot may
+ * reads expired. A publish or a resolved timeout (a new slot may
  * be active) schedules the Discord notification claim after the response; a
  * plain poll never does (Supabase quota). `published_now` /
  * `timeouts_resolved` never reach the response.

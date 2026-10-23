@@ -1,5 +1,5 @@
 /**
- * Draft contracts (draft-backend §7.1, §10; critique S8). Client-safe: types
+ * Draft contracts. Client-safe: types
  * and constants only. This is the one import point for every draft DTO and
  * union; `src/lib/draft-ui/snapshot-types.ts` re-exports from here and
  * declares nothing.
@@ -105,7 +105,7 @@ export interface DraftConfig {
   token_purchase_closes_at: string | null;
 }
 
-/** Request body of POST /api/drafts `config` and PATCH /api/drafts/[id]/config (all optional; critique B6). */
+/** Request body of POST /api/drafts `config` and PATCH /api/drafts/[id]/config (all optional). */
 export interface DraftConfigInput {
   mode?: DraftMode;
   roster_size?: number;
@@ -357,7 +357,7 @@ export interface MyTurnDTO {
 
 // ── §10.3 tokens ───────────────────────────────────────────────────────────
 
-/** Refusal reasons of a Draft Kill Token purchase; each is an `errors/draft` code (critique B7). */
+/** Refusal reasons of a Draft Kill Token purchase; each is an `errors/draft` code. */
 export type TokenRefusalCode =
   | 'TOKEN_WINDOW_CLOSED'
   | 'TOKEN_PLAYER_LIMIT'

@@ -1,6 +1,5 @@
 /**
- * Which completed matches count toward player ratings (owner decision
- * 2026-10-19): every completed match EXCEPT one whose tournament belongs to a
+ * Which completed matches count toward player ratings: every completed match EXCEPT one whose tournament belongs to a
  * test league (`seasons.is_test_season`). Standalone tournaments (no season)
  * and normal leagues count. Test ACCOUNTS are not part of this rule (the
  * leaderboard leaves them out on read, see `getLeaderboard`).

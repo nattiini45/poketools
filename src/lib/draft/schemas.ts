@@ -1,6 +1,5 @@
 /**
- * Request schemas of the queue-engine draft, redraft and token routes
- * (draft-backend §8.1–§8.2; critique B6). Client-safe zod: the admin forms may
+ * Request schemas of the queue-engine draft, redraft and token routes. Client-safe zod: the admin forms may
  * pre-validate with the same schemas. Every body object is `.strict()`; a zod
  * failure answers `400 validation_failed {issues}` (`errors/common`, via
  * `draftErrorResponse`). Query schemas strip unknown keys instead.
@@ -180,7 +179,7 @@ export const extensionSchema = z.object({ kind: z.enum(['plus120', 'plus60']), s
  */
 export const voidPickSchema = z.object({ reason: reasonSchema, requeue: z.literal(true) }).strict();
 
-/** #12 `POST /api/drafts/[id]/picks/[pickId]/correct` (`client_request_id` required, critique B6). */
+/** #12 `POST /api/drafts/[id]/picks/[pickId]/correct` (`client_request_id` required). */
 export const correctPickSchema = z
   .object({
     line_id: lineIdSchema,

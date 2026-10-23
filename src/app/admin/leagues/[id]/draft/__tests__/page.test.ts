@@ -268,7 +268,7 @@ describe('/admin/leagues/[id]/draft', () => {
     expect(findByType(tree, Link).map((l) => l.props.href)).not.toContain(`/admin/leagues/${SEASON_ID}`);
   });
 
-  it('seeds every pool snapshot without ticking (critique B9) as a pool admin', async () => {
+  it('seeds every pool snapshot without ticking as a pool admin', async () => {
     const props = findByType(await render(), DraftControlPanel)[0].props;
     expect(mocks.getDraftSnapshot).toHaveBeenCalledTimes(2);
     for (const call of mocks.getDraftSnapshot.mock.calls) {

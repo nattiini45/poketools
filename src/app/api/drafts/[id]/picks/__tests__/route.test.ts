@@ -505,7 +505,7 @@ describe('POST /api/drafts/[id]/picks', () => {
   });
 });
 
-// ─── Evolution Point Buy: branched bases (draft-backend §13.1, B-HOT) ───
+// ─── Evolution Point Buy: branched bases ────────────────────────────────
 
 /**
  * A legacy-engine pool of a point-buy (EPB) season takes no pick at all: EPB seasons draft only

@@ -1,5 +1,5 @@
 /**
- * Redraft routes (draft-backend §8.1 #18–#23; B-RED): guards, zod 400
+ * Redraft routes: guards, zod 400
  * `validation_failed`, RPC argument mapping, tag expiry, rule-error mapping,
  * and the submission DTO (`own_lines`, `droppable`, `locked`, `max`,
  * `leftover_budget`). No DB: the query layer and `callDraftRpc` are mocked.

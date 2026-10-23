@@ -1,5 +1,5 @@
 /**
- * PickSelector (draft-frontend §8.5, draft-backend §13.2, critique B18).
+ * PickSelector.
  * Tests run in node with static markup, so the Radix dialogs are replaced by
  * inline stand-ins: `Modal` renders its children, and `ArmedConfirmDialog`
  * records the props PickSelector hands it.
@@ -62,7 +62,7 @@ beforeEach(() => {
   confirmProps.length = 0;
 });
 
-describe('PickSelector confirmation (draft-backend §13.2)', () => {
+describe('PickSelector confirmation', () => {
   it('never commits from the list: the pick goes through the armed confirm dialog, closed at first', () => {
     const html = renderToStaticMarkup(picker());
     expect(html).toContain('data-armed-confirm="closed"');

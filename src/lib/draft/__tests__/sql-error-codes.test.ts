@@ -1,6 +1,5 @@
 /**
- * The SQL error contract of the draft RPCs (draft-backend §6, §9; package
- * B-RPC). No DB: reads the M5–M7 migration text and the later RPC replacements (20261018140000_epb_comeback_rules.sql).
+ * The SQL error contract of the draft RPCs. No DB: reads the draft RPC migration text and the later RPC replacements (20261018140000_epb_comeback_rules.sql).
  *
  * - Every `RAISE EXCEPTION '<CODE>'` in M5–M7 is a key of `errors/draft` or an
  *   SQL-internal invariant (`INTERNAL_DRAFT_CODES`, surfaced as a logged 500).

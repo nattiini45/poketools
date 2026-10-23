@@ -38,7 +38,7 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonParticipants: vi.fn(async () => []),
 }));
 
-// Queue-engine creation (EPB seasons, draft-backend §8.1 #1).
+// Queue-engine creation (EPB seasons).
 vi.mock('@/lib/revalidation', () => ({ expireDraftReads: vi.fn() }));
 vi.mock('@/lib/season/epb-phase', () => ({ getEpbPhaseStatus: vi.fn() }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getCompletedMatchRecords: vi.fn(async () => []) }));

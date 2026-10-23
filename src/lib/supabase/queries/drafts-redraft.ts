@@ -1,5 +1,5 @@
 /**
- * Redraft secret-drop reads (draft-backend §8.1 #18–#21, §10.4; package B-RED).
+ * Redraft secret-drop reads.
  *
  * SECRECY: `redraft_submissions` holds every player's SECRET drop list until the
  * redraft is published. Nothing here is a cached public read, and the only two

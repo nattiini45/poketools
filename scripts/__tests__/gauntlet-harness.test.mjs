@@ -1,5 +1,5 @@
 /**
- * R40 (desktop CAPTURE) harness additions: --no-boot, the water-body screen
+ * Desktop CAPTURE harness additions: --no-boot, the water-body screen
  * rects, the per-frame beats / core-actor / draw records and the new
  * pass-through bridges. capture-route.mjs runs the harness at import time, so
  * its wiring is checked on the source text (the bucket-guard precedent).

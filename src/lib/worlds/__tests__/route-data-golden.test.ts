@@ -86,7 +86,7 @@ type RosterLineWire = Record<string, unknown> & {
 
 /**
  * Point-buy roster lines gained two additive fields after the golden was
- * captured (draft-backend B-LINE): `line_id` and `overrides`. They are checked
+ * captured: `line_id` and `overrides`. They are checked
  * on their own below; this strips them so everything else still compares
  * against the old capture.
  */

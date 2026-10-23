@@ -1976,14 +1976,14 @@ describe('editGame: EPB evolution recheck failure is reported, never an empty su
   });
 });
 
-// ─── CF-07: EPB real kills wait for the confirmed result ──────────────
+// ─── EPB real kills wait for the confirmed result ─────────────────────
 
 const EPB_TOURNAMENT = {
   id: 'tourney-1', season_id: 'season-epb', ruleset_id: null,
   name: 'EvoLiga', best_of_default: 3, season_format_type: 'evolution_point_buy',
 } as unknown as Awaited<ReturnType<typeof getTournamentById>>;
 
-describe('recordGameResult: EPB progress waits for the confirmed result (CF-07)', () => {
+describe('recordGameResult: EPB progress waits for the confirmed result', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -2012,7 +2012,7 @@ describe('recordGameResult: EPB progress waits for the confirmed result (CF-07)'
   });
 });
 
-describe('editGame: EPB real-kill debit and credit (CF-07)', () => {
+describe('editGame: EPB real-kill debit and credit', () => {
   const credited = {
     id: 'game-1', match_id: 'match-1', game_number: 1, winner_id: 'player-1',
     replay_url: '', source: 'manual', parsed: true, stats_locked: false,

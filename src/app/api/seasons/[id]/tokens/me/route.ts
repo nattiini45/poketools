@@ -13,7 +13,7 @@ interface RouteParams {
 
 /**
  * GET /api/seasons/[id]/tokens/me[?player_id=] — one player's Draft Kill Token, Comeback Token
- * and Participation Token overview (draft-backend §8.1 #25, §10.3).
+ * and Participation Token overview.
  *
  * Players read their own overview; `?player_id=` naming another player needs season admin
  * rights (unspent points and token plans are strategic information).

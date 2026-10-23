@@ -1,4 +1,4 @@
-/** POST /api/drafts/[id]/start, /end, /pause (draft-backend §8.1 #4–#6; B-ADM). */
+/** POST /api/drafts/[id]/start, /end, /pause. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/helpers', () => ({

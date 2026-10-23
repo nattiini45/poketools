@@ -82,7 +82,7 @@ export type DiscordEventType =
   | 'round_completed'
   | 'round_recap_published'
   | 'round_forecast_published'
-  // Draft-tool events (draft-backend §11.3). T17 adds the names so the
+  // Draft-tool events. T17 adds the names so the
   // manager UIs can offer them as filters; B-CRON appends their data shapes
   // to `DiscordEventData` and their `case` lines to `buildEmbed`.
   | 'draft_turn_started'
@@ -208,8 +208,8 @@ export interface DraftPickData {
   /** Discord user ID of the next picker (for @mention pings) */
   next_picker_discord_id?: string;
   /**
-   * Queue-engine picks: the picked line as canonical English names (B-CRON,
-   * draft-backend §11.3). When set, the embed shows the localized line label
+   * Queue-engine picks: the picked line as canonical English names. When
+   * set, the embed shows the localized line label
    * (`buildDraftEmbed`) instead of `pokemon_name`.
    */
   line?: { base: string; stage3: string | null };
@@ -299,7 +299,7 @@ export interface RoundCompletedData {
   }>;
 }
 
-// ── Draft-tool event data (B-CRON, draft-backend §11.3) ───────────
+// ── Draft-tool event data ─────────────────────────────────────────
 // Language-neutral: no locale, no pre-rendered labels. Pokémon names travel as
 // canonical English; `buildDraftEmbed` localizes them per webhook.
 

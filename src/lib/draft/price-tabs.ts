@@ -1,5 +1,5 @@
 /**
- * Draft finder price tabs (draft-backend §2.8, critique S9/B5). Client-safe, pure.
+ * Draft finder price tabs. Client-safe, pure.
  *
  * The tabs are presentation groups from the active format pack (`epb.priceTabs`,
  * `@/lib/format-pack`), NOT the workbook's `price_group` (`src/types/point-buy.ts`):

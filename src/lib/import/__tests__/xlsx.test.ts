@@ -102,7 +102,7 @@ describe('readXlsxBuffer', () => {
     expect(sheets[0].rows[2][2]).toBe(true);
   });
 
-  describe('sheet grid bounds (CF-04)', () => {
+  describe('sheet grid bounds', () => {
     it.each([
       ['a huge row index', '<row r="1"><c r="A4294967295"><v>1</v></c></row>'],
       ['a column past XFD', '<row r="1"><c r="ZZZZ1"><v>1</v></c></row>'],
@@ -131,7 +131,7 @@ describe('readXlsxBuffer', () => {
     });
   });
 
-  describe('archive decompression budget (CF-05)', () => {
+  describe('archive decompression budget', () => {
     it('rejects aliased central-directory records past the aggregate budget', () => {
       const padded = Buffer.from(sheetXml('') + ' '.repeat(2 * 1024 * 1024), 'utf8');
       const zip = buildZip([

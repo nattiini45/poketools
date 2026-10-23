@@ -1,5 +1,5 @@
 /**
- * EPB list reconciliation report (draft-backend §2.5, SPEC:172-182): a repeatable
+ * EPB list reconciliation report: a repeatable
  * artifact built on every import (admin route, `scripts/import-point-buy.ts`) and by
  * the CLI `scripts/draft/reconcile-point-buy.ts`. Server only (reads `@pkmn/dex`).
  * No database access: the input is the parsed workbook.

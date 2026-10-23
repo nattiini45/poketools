@@ -233,7 +233,7 @@ export default function PickSelector({
     remainingBudget,
     typedPoints: pointsSpent,
   });
-  // What the picker has left once this pick is made (draft-backend §13.2).
+  // What the picker has left once this pick is made.
   const budgetAfterPick = remainingAfterPick(remainingBudget, selectedPointCost);
 
   const selectedLabel = selected
@@ -429,7 +429,7 @@ export default function PickSelector({
         </div>
       </div>
 
-      {/* The pick itself: Cancel has focus and Draft stays disabled for CONFIRM_ARM_MS (draft-backend §13.2). */}
+      {/* The pick itself: Cancel has focus and Draft stays disabled for CONFIRM_ARM_MS. */}
       <ArmedConfirmDialog
         open={confirmOpen && !pickBlocked}
         title={t('picker.confirmTitle', { name: selectedLabel })}

@@ -1148,7 +1148,7 @@ function compileSlots(
     else if (!kit) {
       // Ground bays the grammar routes to shopfronts get the authored
       // procedural twin of the `bay-shopfront` kit module (defensive path —
-      // the kit may be absent from the manifest; card C-029).
+      // the kit may be absent from the manifest).
       const floor = floorOfVolume(volume);
       if (floor === 0 && isShopfrontBay(plan, bayOfX(plan, volume.x))) {
         emitShopfront(writer, volume, frontZ);
