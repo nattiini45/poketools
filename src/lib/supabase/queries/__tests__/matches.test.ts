@@ -34,7 +34,6 @@ vi.mock('@/lib/utils/uuid', () => ({
 
 import {
   listAllMatches,
-  listAllMatchesWithTournament,
   getMatchesByRound,
   getMatchesByTournament,
   getH2HBetweenPlayers,
@@ -160,22 +159,6 @@ describe('listAllMatches (exercises toMatch + toMatchWithPlayers)', () => {
     mockBuilder.limit.mockReturnValue({ data: null, error: new Error('db error') });
 
     await expect(listAllMatches()).rejects.toThrow('db error');
-  });
-});
-
-describe('listAllMatchesWithTournament', () => {
-  it('maps tournament_name from joined tournaments', async () => {
-    mockBuilder.limit.mockReturnValue({ data: [MATCH_WITH_TOURNAMENT_ROW], error: null });
-
-    const result = await listAllMatchesWithTournament();
-    expect(result).toHaveLength(1);
-    expect(result[0].tournament_name).toBe('Weekly #1');
-    expect(result[0].player_1_name).toBe('Alice');
-  });
-
-  it('throws on error', async () => {
-    mockBuilder.limit.mockReturnValue({ data: null, error: new Error('fail') });
-    await expect(listAllMatchesWithTournament()).rejects.toThrow('fail');
   });
 });
 

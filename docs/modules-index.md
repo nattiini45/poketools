@@ -53,7 +53,7 @@ This is the central documentation index for all major PokéTools modules.
 
 ### Admin & Operations
 
-- **Admin** — Admin console (`/admin/*`) and the `/api/admin/*` route namespace. See [Admin](./admin.md).
+- **Admin** — Admin console (`/admin/*`) and the `/api/admin/*` route namespace, for site admins and (scoped to their own leagues and tournaments) resource admins. See [Admin](./admin.md).
 - **Import** — XLSX point-buy/team-roles import, sample-set/usage/stats import pipelines. See [Import](./import.md) and [Data Import Guide](./DATA_IMPORT_GUIDE.md).
 - **Reconcile** — Match/season delete → derived-data rebuild (aggregates, ratings, evolution state). See [Reconcile](./reconcile.md).
 - **Audit** — Audit logging (`src/lib/audit`) + `/api/admin/audit-log`. See [Audit](./audit.md).
@@ -96,6 +96,7 @@ Test suites live in `__tests__/` directories adjacent to the modules they cover.
 | Broadcast Tracker | `src/lib/broadcast/__tests__/tracker-reducer.test.ts` | Reducer actions, undo, game submit/reset, payload builder |
 | Team Visibility | `src/lib/team/__tests__/visibility.test.ts` | `canViewTeamPokemon`, `filterTeamVisibility` (Spec §7) |
 | Auth Helpers | `src/lib/auth/__tests__/helpers.test.ts` | `requireAuth`, `requireAdmin`, `requireCreator`, sync checks |
+| Admin scope and page gates | `src/lib/auth/__tests__/admin-scope.test.ts`, `resource-gate.test.ts` | `getAdminScope`, `gateResourceAdmin` |
 | Tournament Engine | `src/lib/tournament/__tests__/*.test.ts` | Match state, standings, Swiss/RR/SE/DE pairing, bracket-structure, serpentine |
 | League phases API | `src/app/api/seasons/[id]/phases/__tests__/route.test.ts` | Phase CRUD/list guards |
 | Substitute | `src/lib/season/__tests__/substitute.test.ts`, `src/app/api/seasons/[id]/participants/substitute/__tests__/route.test.ts` | Substitute planner + API |

@@ -8,7 +8,7 @@ import {
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
-import { getRoundsByTournament, createRound } from '@/lib/supabase/queries/rounds';
+import { getRoundsByTournament, createRound, updateRoundByePlayers } from '@/lib/supabase/queries/rounds';
 import {
   createMatchBatch,
   getCompletedMatchRecords,
@@ -23,6 +23,7 @@ import {
   roundsAwaitingMatches,
 } from '@/lib/tournament/group-rounds';
 import { generateRound } from '@/lib/tournament';
+import { byeRecordsFromRounds } from '@/lib/tournament/byes';
 import {
   countUpperBracketStarters,
   startingBracketsFromParticipants,
@@ -151,7 +152,16 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Byes stored on the earlier rounds: a Swiss player who already had one is
+    // skipped for the next (a bye creates no match, so the match history alone
+    // cannot tell).
+    // A round being regenerated (an interrupted call left it empty) is not history for itself.
+    const byeHistory = byeRecordsFromRounds(
+      existingRounds.filter((round) => round.round_number < nextRoundNumber)
+    );
+
     let allPairings: Pairing[] = [];
+    let allByePlayerIds: string[] = [];
     let roundName: string;
     // Grouped phase: the week's round an interrupted call wrote without its matches is filled, not duplicated.
     let emptyRound: Round | undefined;
@@ -198,9 +208,13 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
           groupNames,
           groupMatches,
           nextRoundNumber,
-          { startingBrackets }
+          {
+            startingBrackets,
+            byeHistory: byeHistory.filter((b) => groupPlayerIds.includes(b.player_id)),
+          }
         );
         allPairings.push(...generated.pairings);
+        allByePlayerIds.push(...generated.bye_player_ids);
       }
     } else {
       // No groups — generate pairings across all participants
@@ -210,9 +224,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         participantNames,
         matchHistory,
         nextRoundNumber,
-        { startingBrackets }
+        { startingBrackets, byeHistory }
       );
       allPairings = generated.pairings;
+      allByePlayerIds = generated.bye_player_ids;
       roundName = generated.round_name;
     }
 
@@ -241,14 +256,29 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
 
     // 6. Create round record (use bo_overrides if round name matches, else default)
     const roundBestOf = tournament.bo_overrides[roundName] ?? tournament.best_of_default;
-    const round =
-      emptyRound ??
-      (await createRound({
+    // Swiss and round robin byes are stored on the round; an elimination bye is
+    // structural (the bracket engine owns it) and stays out of the column.
+    const storesByes =
+      tournament.bracket_type === 'swiss' || tournament.bracket_type === 'round_robin';
+    let round: Round;
+    if (emptyRound) {
+      // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so a round
+      // reused by a retry carries them exactly like a freshly inserted one.
+      const storedByes = emptyRound.bye_player_ids ?? [];
+      const byesChanged =
+        storesByes &&
+        (storedByes.length !== allByePlayerIds.length ||
+          storedByes.some((id) => !allByePlayerIds.includes(id)));
+      round = byesChanged ? await updateRoundByePlayers(emptyRound.id, allByePlayerIds) : emptyRound;
+    } else {
+      round = await createRound({
         tournament_id: tid,
         name: roundName,
         round_number: roundNumber,
         best_of: roundBestOf,
-      }));
+        ...(storesByes ? { bye_player_ids: allByePlayerIds } : {}),
+      });
+    }
 
     // 7. Create match stubs
     if (allPairings.length > 0) {

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Player, PlayerRegistration, PlayerStatus } from '@/types/player';
-import type { ApiResult } from '@/types/api';
+import type { ApiResponse, ApiResult } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import GuestBadge from '@/components/shared/GuestBadge';
@@ -16,6 +16,15 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { errorsAdmin, errorsPlayers } from '@/i18n/messages/errors';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
+import { LocalTime } from '@/i18n/LocalTime';
+import type { TablePageSize } from '@/lib/ui/table-params';
+import {
+  DEFAULT_ROSTER_PAGE_SIZE,
+  lastPage,
+  localDateTimeToIso,
+  openDialog,
+  rosterQuery,
+} from './roster-helpers';
 
 interface PlayerRosterProps {
   canManageCreators: boolean;
@@ -37,12 +46,30 @@ function apiError(json: unknown): RosterError {
   return { api: toApiErrorLike(json) };
 }
 
+/** `GET /api/players`: one page of the directory plus the exact number of matching players. */
+type PlayersPage = ApiResponse<Player[]> & { total?: number };
+
+/** Wait this long after the last keystroke before the search hits the server. */
+const SEARCH_DEBOUNCE_MS = 300;
+/** The guest-link picker lists at most this many accounts per search. */
+const LINK_PICKER_LIMIT = 50;
+
 export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   const [players, setPlayers] = useState<Player[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<TablePageSize>(DEFAULT_ROSTER_PAGE_SIZE);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  // `loaded` flips once the first request settles; later requests keep the table mounted.
+  const [loaded, setLoaded] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const latestRequest = useRef(0);
   const t = useT(adminCoreMessages);
   const errorText = useApiErrorText(errorsPlayers, errorsAdmin);
   const [error, setError] = useState<RosterError | null>(null);
+  // A failure from inside an open dialog; shown in the dialog, not behind it.
+  const [dialogError, setDialogError] = useState<RosterError | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', discord_id: '', ps_username: '' });
@@ -56,28 +83,86 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
 
   const [linkGuest, setLinkGuest] = useState<Player | null>(null);
   const [linkSourceId, setLinkSourceId] = useState('');
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkResults, setLinkResults] = useState<Player[]>([]);
   const [linking, setLinking] = useState(false);
 
   const fetchPlayers = useCallback(async () => {
-    setLoading(true);
+    // Only the newest request may write state: a slow answer to an older
+    // search or page must not overwrite a newer one.
+    const requestId = ++latestRequest.current;
+    setFetching(true);
     try {
-      const res = await fetch('/api/players');
-      const json = (await res.json()) as ApiResult<Player[]>;
+      const res = await fetch(`/api/players?${rosterQuery({ page, perPage, search })}`);
+      const json = (await res.json()) as ApiResult<Player[]> | PlayersPage;
+      if (requestId !== latestRequest.current) return;
       if (json.success) {
+        const count = 'total' in json && typeof json.total === 'number' ? json.total : json.data.length;
+        if (json.data.length === 0 && count > 0 && page > 1) {
+          // The last row of the last page went away: step back to the new last page.
+          setPage(lastPage(count, perPage));
+          return;
+        }
+        setError(null);
         setPlayers(json.data);
+        setTotal(count);
       } else {
         setError(apiError(json));
       }
     } catch {
-      setError({ local: 'loadFailed' });
+      if (requestId === latestRequest.current) setError({ local: 'loadFailed' });
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) {
+        setFetching(false);
+        setLoaded(true);
+      }
     }
-  }, []);
+  }, [page, perPage, search]);
 
   useEffect(() => {
     fetchPlayers();
   }, [fetchPlayers]);
+
+  // Typing filters the whole directory on the server, after a short pause.
+  useEffect(() => {
+    const next = searchInput.trim();
+    if (next === search) return;
+    const handle = setTimeout(() => {
+      setSearch(next);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [searchInput, search]);
+
+  // The guest-link picker searches the directory itself: the roster page only
+  // holds one page of players, so the account to merge may not be on it.
+  useEffect(() => {
+    if (!linkGuest) return;
+    let cancelled = false;
+    const handle = setTimeout(
+      async () => {
+        try {
+          const query = rosterQuery({ page: 1, perPage: LINK_PICKER_LIMIT, search: linkSearch });
+          const res = await fetch(`/api/players?${query}`);
+          const json = (await res.json()) as ApiResult<Player[]>;
+          if (cancelled) return;
+          if (json.success) {
+            setDialogError(null);
+            setLinkResults(json.data);
+          } else {
+            setDialogError(apiError(json));
+          }
+        } catch {
+          if (!cancelled) setDialogError({ local: 'loadFailed' });
+        }
+      },
+      linkSearch ? SEARCH_DEBOUNCE_MS : 0,
+    );
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [linkGuest, linkSearch]);
 
   const handleAdd = async (data: PlayerRegistration) => {
     const res = await fetch('/api/players', {
@@ -134,6 +219,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   }, [fetchPlayers, t]);
 
   const openSuspendDialog = useCallback((player: Player) => {
+    setDialogError(null);
     setSuspendTarget(player);
     setSuspendUntil('');
     setBanReason('');
@@ -141,6 +227,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   }, []);
 
   const openBanDialog = useCallback((player: Player) => {
+    setDialogError(null);
     setSuspendTarget(player);
     setSuspendUntil('');
     setBanReason('');
@@ -148,29 +235,33 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   }, []);
 
   const closeDialog = () => {
+    setDialogError(null);
     setSuspendTarget(null);
     setSuspendUntil('');
     setBanReason('');
   };
 
   const handleSuspend = async () => {
-    if (!suspendTarget) return;
+    // The picker holds wall-clock time in this browser's zone; send the instant it means.
+    const suspendedUntilIso = localDateTimeToIso(suspendUntil);
+    if (!suspendTarget || !suspendedUntilIso) return;
     setActionLoading(true);
+    setDialogError(null);
     try {
       const res = await fetch(`/api/admin/players/${suspendTarget.id}/suspend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'suspend', suspended_until: suspendUntil }),
+        body: JSON.stringify({ type: 'suspend', suspended_until: suspendedUntilIso }),
       });
       const json = (await res.json()) as ApiResult<Player>;
       if (json.success) {
         closeDialog();
         fetchPlayers();
       } else {
-        setError(apiError(json));
+        setDialogError(apiError(json));
       }
     } catch {
-      setError({ local: 'suspendFailed' });
+      setDialogError({ local: 'suspendFailed' });
     } finally {
       setActionLoading(false);
     }
@@ -179,6 +270,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   const handleBan = async () => {
     if (!suspendTarget || !banReason.trim()) return;
     setActionLoading(true);
+    setDialogError(null);
     try {
       const res = await fetch(`/api/admin/players/${suspendTarget.id}/suspend`, {
         method: 'POST',
@@ -190,10 +282,10 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         closeDialog();
         fetchPlayers();
       } else {
-        setError(apiError(json));
+        setDialogError(apiError(json));
       }
     } catch {
-      setError({ local: 'banFailed' });
+      setDialogError({ local: 'banFailed' });
     } finally {
       setActionLoading(false);
     }
@@ -212,7 +304,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     }
   }, [fetchPlayers, t]);
 
-  const linkCandidates = players.filter(
+  const linkCandidates = linkResults.filter(
     (p) =>
       !p.is_guest &&
       p.id !== linkGuest?.id &&
@@ -224,6 +316,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   const handleLinkAccount = async () => {
     if (!linkGuest || !linkSourceId) return;
     setLinking(true);
+    setDialogError(null);
     try {
       const res = await fetch(`/api/players/${linkGuest.id}/claim`, {
         method: 'POST',
@@ -236,10 +329,10 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         setLinkSourceId('');
         fetchPlayers();
       } else {
-        setError(apiError(json));
+        setDialogError(apiError(json));
       }
     } catch {
-      setError({ local: 'linkFailed' });
+      setDialogError({ local: 'linkFailed' });
     } finally {
       setLinking(false);
     }
@@ -280,8 +373,6 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     {
       key: 'name',
       header: t('players.columns.name'),
-      sortable: true,
-      sortValue: (p) => p.name,
       render: (player) =>
         editingId === player.id ? (
           <input
@@ -299,8 +390,6 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     {
       key: 'discord',
       header: t('players.columns.discordId'),
-      sortable: true,
-      sortValue: (p) => p.discord_id ?? '',
       render: (player) =>
         editingId === player.id ? (
           <input
@@ -315,8 +404,6 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     {
       key: 'ps',
       header: t('players.columns.psUsername'),
-      sortable: true,
-      sortValue: (p) => p.ps_username ?? '',
       render: (player) =>
         editingId === player.id ? (
           <input
@@ -331,12 +418,18 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     {
       key: 'status',
       header: t('players.columns.status'),
-      sortable: true,
-      sortValue: (p) => p.status,
       render: (player) => (
-        <Badge variant={statusVariant(player.status)}>
-          {t(`players.status.${player.status}`)}
-        </Badge>
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <Badge variant={statusVariant(player.status)}>
+            {t(`players.status.${player.status}`)}
+          </Badge>
+          {player.status === 'suspended' && player.suspended_until && (
+            <span className="text-xs text-poke-text-muted">
+              {t('players.until')}{' '}
+              <LocalTime value={player.suspended_until} preset="dateTimeYear" />
+            </span>
+          )}
+        </span>
       ),
     },
     {
@@ -397,8 +490,11 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
               <button
                 type="button"
                 onClick={() => {
+                  setDialogError(null);
                   setLinkGuest(player);
                   setLinkSourceId('');
+                  setLinkSearch('');
+                  setLinkResults([]);
                 }}
                 className="text-poke-blue text-sm hover:underline"
               >
@@ -440,15 +536,19 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     t,
   ]);
 
-  if (loading) return <p className="text-poke-text-muted">{t('players.loading')}</p>;
-  if (error) {
-    return (
-      <Alert variant="error">{'api' in error ? errorText(error.api) : t(`players.${error.local}`)}</Alert>
-    );
-  }
+  if (!loaded) return <p className="text-poke-text-muted">{t('players.loading')}</p>;
+
+  const dialog = openDialog(suspendTarget, suspendAction);
+  const errorMessage = (e: RosterError) => ('api' in e ? errorText(e.api) : t(`players.${e.local}`));
 
   return (
     <div>
+      {error && (
+        <Alert variant="error" className="mb-4">
+          {errorMessage(error)}
+        </Alert>
+      )}
+
       <Button
         variant="primary"
         size="sm"
@@ -460,12 +560,34 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
 
       {showForm && <AddPlayerForm onSubmit={handleAdd} />}
 
-      <Table
-        columns={rosterColumns}
-        data={players}
-        keyExtractor={(player) => player.id}
-        emptyMessage={t('players.empty')}
-      />
+      <div className="mb-4 max-w-sm">
+        <Input
+          label={t('players.search.label')}
+          type="search"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder={t('players.search.placeholder')}
+          maxLength={100}
+        />
+      </div>
+
+      <div aria-busy={fetching} className={fetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+        <Table
+          columns={rosterColumns}
+          data={players}
+          keyExtractor={(player) => player.id}
+          emptyMessage={search ? t('players.noMatches') : t('players.empty')}
+          clientEngine={false}
+          page={page}
+          perPage={perPage}
+          totalItems={total}
+          onPageChange={setPage}
+          onPerPageChange={(size) => {
+            setPerPage(size);
+            setPage(1);
+          }}
+        />
+      </div>
 
       {/* Link guest account */}
       {linkGuest && (
@@ -476,6 +598,21 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         >
           <div className="space-y-4">
             <p className="text-sm text-poke-text-secondary">{t('players.link.body')}</p>
+            {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
+            <Input
+              label={t('players.link.searchLabel')}
+              type="search"
+              value={linkSearch}
+              onChange={(e) => {
+                setLinkSearch(e.target.value);
+                setLinkSourceId('');
+              }}
+              placeholder={t('players.link.searchPlaceholder')}
+              maxLength={100}
+            />
+            {linkSearch && linkCandidates.length === 0 && (
+              <p className="text-sm text-poke-text-muted">{t('players.link.noMatches')}</p>
+            )}
             <select
               value={linkSourceId}
               onChange={(e) => setLinkSourceId(e.target.value)}
@@ -506,7 +643,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
       )}
 
       {/* Suspend Dialog */}
-      {suspendTarget && (
+      {suspendTarget && dialog === 'suspend' && (
         <Modal
           open={true}
           onClose={closeDialog}
@@ -514,6 +651,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         >
           <div className="space-y-4">
             <p className="text-sm text-poke-text-secondary">{t('players.suspend.body')}</p>
+            {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
             <Input
               label={t('players.suspend.untilLabel')}
               type="datetime-local"
@@ -526,7 +664,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
               <Button
                 variant="secondary"
                 onClick={handleSuspend}
-                disabled={!suspendUntil || actionLoading}
+                disabled={!localDateTimeToIso(suspendUntil) || actionLoading}
               >
                 {actionLoading ? t('players.suspend.submitting') : t('players.suspend.submit')}
               </Button>
@@ -536,7 +674,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
       )}
 
       {/* Ban Dialog */}
-      {suspendTarget && suspendAction === 'ban' && (
+      {suspendTarget && dialog === 'ban' && (
         <Modal
           open={true}
           onClose={closeDialog}
@@ -544,6 +682,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         >
           <div className="space-y-4">
             <p className="text-sm text-poke-text-secondary">{t('players.ban.body')}</p>
+            {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
             <Input
               label={t('players.ban.reasonLabel')}
               value={banReason}

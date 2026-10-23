@@ -37,6 +37,15 @@ export interface GeneratedRound {
   bye_player_ids: string[];
 }
 
+/**
+ * A stored bye: `player_id` sat out `round_number` (`rounds.bye_player_ids`).
+ * It has no opponent and no match, so it never appears in a MatchRecord list.
+ */
+export interface ByeRecord {
+  player_id: string;
+  round_number: number;
+}
+
 export interface MatchRecord {
   player_1_id: string;
   player_2_id: string;

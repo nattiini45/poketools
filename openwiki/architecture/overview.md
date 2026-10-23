@@ -34,7 +34,7 @@ scripts/                CI guard scripts (safe-error-response enforcement)
 | `(public)` | None required | Homepage, browse tournaments/leagues, Insights, Wiki, Replays, player directory |
 | `(player)` | `requirePlayer()` | Dashboard, result submission, teambuilder, match prep |
 | `(broadcast)` | None (public overlays) | Stream overlays for match, league, draft, player, wiki, solo |
-| `admin/` | `requireAdmin()` | Tournament/player/achievement management, audit logs |
+| `admin/` | `requireAdmin()` (scoped dashboard, matches and player search: `requireAnyAdmin()` + `getAdminScope()`) | Tournament/player/achievement management, audit logs |
 | `creator/` | `requireCreator()` | Cast Studio, overlay management, wiki editing |
 | `api/` | Varies per route | 130+ API routes — see module docs |
 
@@ -111,6 +111,7 @@ Browser ──── realtime-client.ts ──── Supabase Realtime (anon key
 ### Auth Hierarchy
 ```
 requireAuth() → requirePlayer() → requireAdmin()
+                                → requireAnyAdmin()  (site admin or resource admin; scope with getAdminScope())
                                 → requireCreator()
                                 → requireResourceAdmin(type, id)
                                 → requireDraftAdmin(poolId)

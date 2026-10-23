@@ -60,10 +60,17 @@ describe('generateRound', () => {
   it('dispatches swiss bracket to generateSwissRound', () => {
     generateRound('swiss' as BracketType, participantIds, participantNames, matchHistory, 2);
 
-    expect(mockSwiss).toHaveBeenCalledWith(participantIds, participantNames, matchHistory, 2);
+    expect(mockSwiss).toHaveBeenCalledWith(participantIds, participantNames, matchHistory, 2, undefined);
     expect(mockRoundRobin).not.toHaveBeenCalled();
     expect(mockSingleElimR1).not.toHaveBeenCalled();
     expect(mockDoubleElim).not.toHaveBeenCalled();
+  });
+
+  it('hands the stored byes of earlier rounds to the swiss engine', () => {
+    const byeHistory = [{ player_id: 'p4', round_number: 1 }];
+    generateRound('swiss' as BracketType, participantIds, participantNames, matchHistory, 2, { byeHistory });
+
+    expect(mockSwiss).toHaveBeenCalledWith(participantIds, participantNames, matchHistory, 2, byeHistory);
   });
 
   it('dispatches round_robin bracket to generateRoundRobinRound', () => {

@@ -53,8 +53,15 @@ interface AsyncComboboxProps extends ComboboxBaseProps {
   mode: 'async';
   /** URL template — `{q}` is replaced with the encoded query */
   fetchUrl: string;
-  /** Transform raw API JSON → ComboboxOption[] */
+  /** Transform raw API JSON → ComboboxOption[] (also called with the JSON body of a refusal) */
   transformResults: (json: unknown) => ComboboxOption[];
+  /**
+   * Called when a search gets no JSON answer at all (network failure, an HTML
+   * 502). Without it such a failure only shows as "no results".
+   */
+  onFetchError?: (error: unknown) => void;
+  /** Characters typed before the first search (default 2). */
+  minQueryLength?: number;
   staticOptions?: never;
 }
 
@@ -64,6 +71,8 @@ interface StaticComboboxProps extends ComboboxBaseProps {
   staticOptions: ComboboxOption[];
   fetchUrl?: never;
   transformResults?: never;
+  onFetchError?: never;
+  minQueryLength?: never;
 }
 
 export type ComboboxProps = AsyncComboboxProps | StaticComboboxProps;
@@ -95,6 +104,8 @@ export default function Combobox(props: ComboboxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** The in-flight search; a newer query aborts it so a slow answer never overwrites a newer one. */
+  const requestRef = useRef<AbortController | null>(null);
   const listId = useRef(`cb-list-${Math.random().toString(36).slice(2, 8)}`).current;
 
   /* ── Async fetch ──────────────────────────────────────────────────── */
@@ -103,27 +114,45 @@ export default function Combobox(props: ComboboxProps) {
     (q: string) => {
       if (mode !== 'async') return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (q.length < 2) {
+      requestRef.current?.abort();
+      requestRef.current = null;
+      if (q.length < (props.minQueryLength ?? 2)) {
         setOptions([]);
         setLoading(false);
         return;
       }
       setLoading(true);
       debounceRef.current = setTimeout(async () => {
+        const controller = new AbortController();
+        requestRef.current = controller;
         try {
           const url = props.fetchUrl.replace('{q}', encodeURIComponent(q));
-          const res = await fetch(url);
-          const json = await res.json();
-          const transformed = props.transformResults(json);
-          setOptions(transformed);
-        } catch {
+          const res = await fetch(url, { signal: controller.signal });
+          const json: unknown = await res.json();
+          if (controller.signal.aborted) return;
+          setOptions(props.transformResults(json));
+        } catch (err) {
+          if (controller.signal.aborted) return;
           setOptions([]);
+          props.onFetchError?.(err);
         } finally {
-          setLoading(false);
+          if (requestRef.current === controller) {
+            requestRef.current = null;
+            setLoading(false);
+          }
         }
       }, 200);
     },
     [mode, props],
+  );
+
+  // Unmount: drop a pending debounce and abort an in-flight search.
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      requestRef.current?.abort();
+    },
+    [],
   );
 
   /* ── Static filter ────────────────────────────────────────────────── */

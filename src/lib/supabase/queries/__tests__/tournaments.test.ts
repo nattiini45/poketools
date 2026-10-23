@@ -248,6 +248,45 @@ describe('listTournamentsByIds', () => {
     expect(result).toHaveLength(1);
   });
 
+  it('does not filter by archived or season unless asked', async () => {
+    mockBuilder.order.mockReturnValue({ data: [TOURNAMENT_WITH_DETAILS_ROW], error: null });
+
+    await listTournamentsByIds(['t1']);
+
+    expect(mockBuilder.eq).not.toHaveBeenCalledWith('archived', expect.anything());
+    expect(mockBuilder.is).not.toHaveBeenCalled();
+  });
+
+  it('archived: false keeps archived tournaments out of the active admin list', async () => {
+    mockBuilder.order.mockReturnValue({ data: [], error: null });
+
+    await listTournamentsByIds(['t1'], { archived: false });
+
+    expect(mockBuilder.eq).toHaveBeenCalledWith('archived', false);
+  });
+
+  it('archived: true lists only archived tournaments of the given ids', async () => {
+    mockBuilder.order.mockReturnValue({ data: [], error: null });
+
+    await listTournamentsByIds(['t1'], { archived: true });
+
+    expect(mockBuilder.in).toHaveBeenCalledWith('id', ['t1']);
+    expect(mockBuilder.eq).toHaveBeenCalledWith('archived', true);
+  });
+
+  it('standaloneOnly drops league stages like the site admin list', async () => {
+    mockBuilder.order.mockReturnValue({ data: [], error: null });
+
+    await listTournamentsByIds(['t1'], { archived: false, standaloneOnly: true });
+
+    expect(mockBuilder.is).toHaveBeenCalledWith('season_id', null);
+  });
+
+  it('returns empty for empty ids even with filters, without a read', async () => {
+    expect(await listTournamentsByIds([], { archived: true, standaloneOnly: true })).toEqual([]);
+    expect(mockBuilder.from).not.toHaveBeenCalled();
+  });
+
   it('throws on error', async () => {
     mockBuilder.order.mockReturnValue({ data: null, error: new Error('ids err') });
     await expect(listTournamentsByIds(['t1'])).rejects.toThrow('ids err');

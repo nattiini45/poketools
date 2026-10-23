@@ -214,11 +214,23 @@ describe('queries/players', () => {
       expect(result.total).toBe(1);
     });
 
-    it('applies search filter', async () => {
-      mockBuilder.ilike.mockReturnValue({ data: [], error: null, count: 0 });
+    it('applies a contains search over name and ps_username', async () => {
+      mockBuilder.or.mockReturnValue({ data: [], error: null, count: 0 });
       const result = await listPlayers({ search: 'Ash' });
       expect(result.data).toHaveLength(0);
-      expect(mockBuilder.ilike).toHaveBeenCalledWith('name', 'Ash%');
+      expect(mockBuilder.or).toHaveBeenCalledWith('name.ilike."%Ash%",ps_username.ilike."%Ash%"');
+    });
+
+    it('keeps only active non-guest players with a login when registeredOnly is set, ANDed with the search', async () => {
+      mockBuilder.or
+        .mockReturnValueOnce(mockBuilder)
+        .mockReturnValueOnce({ data: [], error: null, count: 0 });
+      await listPlayers({ search: 'Ash', registeredOnly: true });
+      expect(mockBuilder.eq).toHaveBeenCalledWith('is_guest', false);
+      // A banned or suspended account is no link target: claim_guest_player refuses it (SOURCE_NOT_ACTIVE).
+      expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'active');
+      expect(mockBuilder.or).toHaveBeenNthCalledWith(1, 'name.ilike."%Ash%",ps_username.ilike."%Ash%"');
+      expect(mockBuilder.or).toHaveBeenNthCalledWith(2, 'discord_id.not.is.null,auth_user_id.not.is.null');
     });
 
     it('clamps limit to 200', async () => {

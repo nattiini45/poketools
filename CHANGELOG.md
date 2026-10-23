@@ -8,6 +8,49 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Apply migration `20261023145151_rounds_bye_player_ids.sql` BEFORE deploying the code.** It adds
+  `rounds.bye_player_ids` (`uuid[] not null default '{}'`). The new code writes that column whenever it generates a
+  round, so a round with a bye fails to insert until the column exists. Old code keeps working after the migration.
+- **New cron `/api/cron/expire-suspensions`.** It is declared in `vercel.json`, so Vercel needs nothing more. On
+  another host, call it every 15 minutes with `Authorization: Bearer <CRON_SECRET>`, like the other cron routes. There
+  is no new environment variable.
+
+### Added
+
+- **Resource-admin scoping.** League and tournament admins now see only their own competitions in the admin area. The
+  dashboard and the matches list are scoped to their leagues and tournaments (no site-wide counts and no activity
+  feed for them), the pages of one league, phase or tournament refuse another league's admin with a "no access"
+  notice, and the site-admin-only pages and the archived lists are closed to them.
+- **Matches filters.** `/admin/matches` filters by status, league (with phase), tournament and a text search on the
+  server, pages through the full result with an exact total, and keeps the filters in the URL. Rows show their league
+  and phase. The filter choices come from the new `GET /api/admin/matches/filter-options`.
+- **Player search in the pickers.** The roster, substitute, link, enrolment and league-admin player pickers search the
+  server as you type (`GET /api/admin/player-search`, public fields only), so they no longer cut off at the first
+  page of players. The admin Players page searches and pages on the server too.
+- **Round deadlines.** The round manager can set, change and clear a round's deadline; the change is audited, and an
+  overdue round shows a badge.
+- **Swiss byes are stored and scored.** A round remembers who had a bye, a later round never gives a second bye while
+  another player has none, and a Swiss bye counts as a win in a single tournament's standings. Round-robin byes score
+  nothing.
+- **Timed suspensions end on time.** A cron lifts a suspension once its end has passed and writes one audit event per
+  player.
+- **Doubles phases.** The phase form has a doubles checkbox.
+
+### Changed
+
+- The player ban and suspend actions share one Ban dialog, and a suspension's end is sent as an exact time (an ISO
+  date-time with offset; a value without one is refused).
+- The admin link in the decision-match (tie-break) panel opens the tournament's rounds page instead of a page
+  that does not exist.
+
+### Fixed
+
+- Player pickers no longer miss players beyond the first page of results.
+- A Swiss round could give the same player a bye twice while others had none, because byes were not remembered.
+- A suspension past its end stayed active until an admin lifted it by hand.
+
 ### Security
 
 - **Dependencies (dev only):**

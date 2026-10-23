@@ -15,6 +15,9 @@ export default {
     ruleset: 'Ruleset',
     selectRuleset: 'Select a ruleset...',
     bestOf: 'Best of (default)',
+    isDoubles: 'Doubles phase',
+    isDoublesHint:
+      'A new phase follows the selected ruleset until you change this. Shown as a Doubles badge and used for Bring/Lead/Win tracking.',
     teamVisibility: 'Team Visibility',
     advancement: 'Advancement into next phase',
     advancementPlayers: 'players',

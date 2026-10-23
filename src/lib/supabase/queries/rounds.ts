@@ -16,6 +16,7 @@ function toRound(row: RoundRow): Round {
     pairings_generated: row.pairings_generated,
     deadline: row.deadline,
     bracket_side: (row.bracket_side as Round['bracket_side']) ?? null,
+    bye_player_ids: row.bye_player_ids ?? [],
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -58,6 +59,8 @@ export async function createRound(input: {
   round_number: number;
   best_of: number;
   bracket_side?: string | null;
+  /** Players the pairing result gave a bye (Swiss / round robin); omitted for elimination. */
+  bye_player_ids?: string[];
 }): Promise<Round> {
   const { data, error } = await supabase
     .from('rounds')
@@ -67,6 +70,10 @@ export async function createRound(input: {
       round_number: input.round_number,
       best_of: input.best_of,
       bracket_side: input.bracket_side ?? null,
+      // Written only when there is a bye, so a round without one inserts exactly what it did before.
+      ...(input.bye_player_ids && input.bye_player_ids.length > 0
+        ? { bye_player_ids: input.bye_player_ids }
+        : {}),
       pairings_generated: true,
     })
     .select()
@@ -107,6 +114,42 @@ export async function updateRoundBestOf(
   const { data, error } = await supabase
     .from('rounds')
     .update({ best_of: bestOf })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return toRound(data);
+}
+
+/**
+ * Replace the byes stored on a round. Used when generation reuses an existing empty round (a retry after an
+ * interrupted call) instead of inserting one, so the reused round carries this call's byes like a fresh insert does.
+ * An UPDATE never fires the rounds insert guard (`trg_rounds_league_groups_guard` is BEFORE INSERT only).
+ */
+export async function updateRoundByePlayers(
+  id: string,
+  byePlayerIds: string[]
+): Promise<Round> {
+  const { data, error } = await supabase
+    .from('rounds')
+    .update({ bye_player_ids: byePlayerIds })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return toRound(data);
+}
+
+/** Set the round's deadline (an ISO 8601 instant), or clear it with `null`. */
+export async function updateRoundDeadline(
+  id: string,
+  deadline: string | null
+): Promise<Round> {
+  const { data, error } = await supabase
+    .from('rounds')
+    .update({ deadline })
     .eq('id', id)
     .select()
     .single();

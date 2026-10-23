@@ -7,6 +7,7 @@ import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
 import { decideMatchRosterVisibility, type TeamViewer } from '@/lib/team/visibility';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { byesThroughRound, loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { aggregateTeamFromStats, computePokemonScore, computeQuickStats } from '@/lib/match/aggregation';
 import { buildRulesetSection, parseGenFromFormat } from './context-builder';
 import { renderCoreAssignments } from './league-context';
@@ -184,16 +185,18 @@ export async function buildRoundRecapPrompt(
     buildParticipantLookups(participants, seasonData);
 
   const standingsOpts = { pointsPerWin: 3, pointsPerDraw: 1 };
+  // A Swiss stage scores its stored byes as wins; "through round N" keeps the byes of those rounds.
+  const byes = await loadScoringByes(tournament);
   const currentStandings = await computeStandingsForSeason(
     tournament.season_id,
     participantIds, participantNames, throughRoundRecords,
-    participantAvatars, standingsOpts, gymTypes
+    participantAvatars, { ...standingsOpts, byes: byesThroughRound(byes, round.round_number) }, gymTypes
   );
   const previousStandings = prevRoundRecords.length > 0
     ? await computeStandingsForSeason(
         tournament.season_id,
         participantIds, participantNames, prevRoundRecords,
-        participantAvatars, standingsOpts, gymTypes
+        participantAvatars, { ...standingsOpts, byes: byesThroughRound(byes, round.round_number - 1) }, gymTypes
       )
     : null;
 
@@ -251,7 +254,9 @@ export async function buildRoundForecastPrompt(
     ? await computeStandingsForSeason(
         tournament.season_id,
         participantIds, participantNames, allMatchRecords,
-        participantAvatars, { pointsPerWin: 3, pointsPerDraw: 1 }, gymTypes
+        participantAvatars,
+        { pointsPerWin: 3, pointsPerDraw: 1, byes: await loadScoringByes(tournament) },
+        gymTypes
       )
     : [];
 

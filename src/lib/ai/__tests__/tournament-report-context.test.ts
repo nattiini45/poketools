@@ -28,6 +28,7 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundById: vi.fn(async () => ({
     id: 'round-1', name: 'Round 1', round_number: 1, best_of: 3,
   })),
+  getRoundsByTournament: vi.fn(async () => []),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -78,7 +79,7 @@ import {
   buildRoundForecastPrompt,
 } from '../tournament-report-context';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { getRoundById } from '@/lib/supabase/queries/rounds';
+import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getMatchesByRound, getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
@@ -193,6 +194,37 @@ describe('buildRoundRecapPrompt', () => {
     const result = await buildRoundRecapPrompt('tourney-1', 'round-1');
     expect(result.userPrompt).toContain('STANDINGS');
     expect(result.userPrompt).toContain('Alice');
+  });
+
+  it('scores a Swiss tournament byes through the recapped round, and one round fewer for the previous table', async () => {
+    vi.mocked(getTournamentById).mockResolvedValueOnce({
+      id: 'tourney-1', season_id: null, ruleset_id: null, name: 'Swiss Cup', best_of_default: 3,
+      bracket_type: 'swiss', description: null, is_doubles: false, status: 'active',
+    } as unknown as Awaited<ReturnType<typeof getTournamentById>>);
+    vi.mocked(getRoundById).mockResolvedValueOnce({
+      id: 'round-2', name: 'Round 2', round_number: 2, best_of: 3,
+    } as Awaited<ReturnType<typeof getRoundById>>);
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce([
+      { round_number: 1, bye_player_ids: ['p2'] },
+      { round_number: 2, bye_player_ids: ['p1'] },
+      { round_number: 3, bye_player_ids: ['p2'] },
+    ] as Awaited<ReturnType<typeof getRoundsByTournament>>);
+    vi.mocked(getCompletedMatchRecords).mockResolvedValueOnce([
+      { player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1', round_number: 1 },
+    ] as Awaited<ReturnType<typeof getCompletedMatchRecords>>);
+
+    await buildRoundRecapPrompt('tourney-1', 'round-2');
+
+    const calls = vi.mocked(computeStandingsForSeason).mock.calls;
+    expect(calls).toHaveLength(2);
+    // (seasonId, ids, names, records, avatars, options, gymTypes)
+    expect(calls[0][5]).toMatchObject({
+      byes: [
+        { player_id: 'p2', round_number: 1 },
+        { player_id: 'p1', round_number: 2 },
+      ],
+    });
+    expect(calls[1][5]).toMatchObject({ byes: [{ player_id: 'p2', round_number: 1 }] });
   });
 
   it('builds pokemonTypes lookup from match details', async () => {

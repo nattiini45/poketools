@@ -86,6 +86,7 @@ src/lib/tournament/
 ### Bracket Engines (legacy per-round)
 - **Files**: `single-elim.ts`, `double-elim.ts`, `round-robin.ts`, `swiss.ts`
 - **Purpose**: Bracket-specific pairing algorithms for sequential round generation
+- **Byes (Swiss / round robin)**: a generated round stores its byes in `rounds.bye_player_ids` (generate, generate-all and manual rounds). Swiss pairing reads them back through `buildPairingHistory`, so nobody gets a second bye while another player has had none. In Swiss standings a stored bye is a win worth `pointsPerWin`, with no games, kills or Buchholz contribution (`StandingsOptions.byes`, `scoringByeRecords` in `byes.ts`, loader `scoring-byes.ts`). Round-robin byes score nothing. Phases with groups follow the week plan and store no bye. EPB standings never read byes. Season-wide merged tables (league schedule, standings preview) do not score Swiss stage byes yet.
 - **Double elim LB start (legacy per-round only)**: participants with `starting_bracket = 'losers'` are excluded from Winners R1 and carry one nominal loss in `computeBracketState()`. New brackets use engine v2 (above); do not wire `double-elim.ts` into v2 generate/propagate.
 
 ### Seeding

@@ -8,6 +8,7 @@ import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getPlayerSignaturesBatch } from '@/lib/supabase/queries/signatures';
 import { getAggregates } from '@/lib/supabase/queries/aggregates';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { siteSpriteUrl } from '@/lib/pkmn/sprite-styles';
 import type { ApiResult } from '@/types/api';
 import type { SeasonLeaders } from '@/types/broadcast';
@@ -106,13 +107,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       round_number: 0,
     }));
 
-    // Format-aware: EPB seasons use the evolution-points tiebreaker chain
+    // Format-aware: EPB seasons use the evolution-points tiebreaker chain.
+    // A Swiss primary stage scores its stored byes as wins.
     const baseStandings = await computeStandingsForSeason(
       sid,
       participantIds,
       participantNames,
       matchRecords,
       participantAvatars,
+      { byes: await loadScoringByes(primaryTournament) },
     );
 
     // Enrich each player with rating + top signature (batch — 2 queries instead of 2N)

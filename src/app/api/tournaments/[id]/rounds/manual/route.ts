@@ -185,6 +185,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // The single unpaired participant sits out: a Swiss / round robin bye,
+    // stored on the round exactly as the generators store theirs. Elimination
+    // byes are structural and are not recorded here.
+    const byePlayerIds =
+      tournament.bracket_type === 'swiss' || tournament.bracket_type === 'round_robin'
+        ? participants.filter((p) => !usedPlayerIds.has(p.id)).map((p) => p.id)
+        : [];
+
     // 6. Create round (a table phase of a grouped league mirrors the league groups first, see above)
     if (tournament.season_id) {
       await ensurePhaseGroupsFromLeague(tournament.season_id, tournament);
@@ -199,6 +207,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       name: roundName,
       round_number: nextRoundNumber,
       best_of: roundBestOf,
+      bye_player_ids: byePlayerIds,
     });
 
     // 7. Create match stubs

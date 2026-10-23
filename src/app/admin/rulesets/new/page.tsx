@@ -1,4 +1,4 @@
-import AdminGuard from '@/components/shared/AdminGuard';
+import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import RulesetBuilder from '@/components/ruleset/RulesetBuilder';
 import { getT } from '@/i18n/server';
@@ -9,10 +9,10 @@ export const dynamic = 'force-dynamic';
 export default async function NewRulesetPage() {
   const t = await getT(adminToolsMessages);
   return (
-    <AdminGuard>
+    <SiteAdminGuard>
       <PageContainer title={t('rulesets.createTitle')} maxWidth="md">
         <RulesetBuilder />
       </PageContainer>
-    </AdminGuard>
+    </SiteAdminGuard>
   );
 }

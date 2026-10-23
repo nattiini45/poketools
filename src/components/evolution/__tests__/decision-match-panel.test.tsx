@@ -30,7 +30,8 @@ describe('DecisionMatchPanel', () => {
     );
     expect(html).toContain(`href="/admin/leagues/s-1?tab=phases"`);
     expect(html).toContain(`>${label}</a>`);
-    expect(html).toContain('href="/admin/tournaments/t-1"');
+    expect(html).toContain('href="/admin/tournaments/t-1/rounds"');
+    expect(html).not.toContain('href="/admin/tournaments/t-1"');
   });
 
   it('shows no admin links to a viewer who is not an admin', () => {

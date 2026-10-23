@@ -64,6 +64,8 @@ export default defineDe<typeof en>()({
     none: 'Keine Ressourcen-Admins zugewiesen.',
     remove: 'Entfernen',
     selectPlayer: 'Spieler auswählen …',
+    searchPlaceholder: 'Registrierten Spieler suchen …',
+    alreadyAdmin: 'schon Admin',
     add: 'Admin hinzufügen',
   },
   archive: {

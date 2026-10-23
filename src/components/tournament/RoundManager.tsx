@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Round, RoundStatus, RoundWithMatches } from '@/types/round';
 import type { PublicMatch } from '@/lib/match/public-match';
@@ -13,7 +13,8 @@ import Alert from '@/components/ui/Alert';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import ManualRoundForm from './ManualRoundForm';
 import { isLegacyElimBracketData } from '@/components/bracket/legacy';
-import { useLocale, useT } from '@/i18n/client';
+import { useLocale, useRequestTime, useT } from '@/i18n/client';
+import { LocalTime } from '@/i18n/LocalTime';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { enumLabel } from '@/i18n/content/enum-label';
@@ -23,6 +24,7 @@ import { contentMessages } from '@/i18n/messages/content';
 import { enumMessages } from '@/i18n/messages/enums';
 import { errorsAdmin, errorsMatches, errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
+import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
 import { apiFailure, type UiError } from './ui-error';
 
 const BEST_OF_OPTIONS = [1, 3, 5, 7] as const;
@@ -127,6 +129,150 @@ export function RoundMatchesPanel({ loading, error, errorCode, matches, onRetry 
   );
 }
 
+/**
+ * The tournament's participants as an id → name map
+ * (`GET /api/tournaments/[id]/participants`, public). `null` when the request
+ * fails, so a bye is never shown under a wrong or missing name.
+ */
+export async function fetchParticipantNames(
+  tournamentId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Record<string, string> | null> {
+  try {
+    const res = await fetchImpl(`/api/tournaments/${tournamentId}/participants`);
+    const result = (await res.json()) as ApiResult<{ id: string; name: string }[]>;
+    if (!result.success) return null;
+    const names: Record<string, string> = {};
+    for (const participant of result.data) names[participant.id] = participant.name;
+    return names;
+  } catch {
+    return null;
+  }
+}
+
+interface RoundByeNoticeProps {
+  playerIds: readonly string[];
+  /** id → name; `null` while the participants load or when they could not be loaded. */
+  names: Record<string, string> | null | undefined;
+  /** True once the participant request has finished (an unnamed bye then shows a placeholder). */
+  settled: boolean;
+}
+
+/** "Bye: <name>" for a round that gave one or more byes; nothing otherwise. */
+export function RoundByeNotice({ playerIds, names, settled }: RoundByeNoticeProps) {
+  const t = useT(tournamentsAdminMessages);
+  if (playerIds.length === 0 || !settled) return null;
+  const label = playerIds
+    .map((id) => names?.[id] ?? t('rounds.byeUnknownPlayer'))
+    .join(', ');
+  return <p className="text-xs text-poke-text-secondary">{t('rounds.bye', { names: label })}</p>;
+}
+
+/** A round is overdue when its deadline has passed and it is not completed. */
+export function isRoundOverdue(round: Pick<Round, 'deadline' | 'status'>, now: number): boolean {
+  if (!round.deadline || round.status === 'completed') return false;
+  const due = Date.parse(round.deadline);
+  return !Number.isNaN(due) && due < now;
+}
+
+/**
+ * Set (an ISO 8601 instant) or clear (`null`) a round's deadline through the
+ * round update endpoint. The caller shows a thrown (offline) failure.
+ */
+export async function saveRoundDeadline(
+  tournamentId: string,
+  roundId: string,
+  deadline: string | null,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ApiResult<Round>> {
+  const res = await fetchImpl(`/api/tournaments/${tournamentId}/rounds/${roundId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deadline }),
+  });
+  return (await res.json()) as ApiResult<Round>;
+}
+
+interface RoundDeadlineRowProps {
+  round: Pick<Round, 'deadline' | 'status'>;
+  /** Epoch ms the overdue check compares against. */
+  now: number;
+  editing: boolean;
+  /** The `datetime-local` input's value while editing. */
+  draft: string;
+  saving: boolean;
+  onEdit: () => void;
+  onDraftChange: (value: string) => void;
+  onSave: () => void;
+  onClear: () => void;
+  onCancel: () => void;
+}
+
+/** One round's deadline: the instant in the viewer's zone, an overdue badge, and an inline editor. */
+export function RoundDeadlineRow({
+  round,
+  now,
+  editing,
+  draft,
+  saving,
+  onEdit,
+  onDraftChange,
+  onSave,
+  onClear,
+  onCancel,
+}: RoundDeadlineRowProps) {
+  const t = useT(tournamentsAdminMessages);
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <input
+          type="datetime-local"
+          aria-label={t('rounds.deadline.inputLabel')}
+          value={draft}
+          disabled={saving}
+          onChange={(e) => onDraftChange(e.target.value)}
+          className="border border-poke-border rounded-poke-md px-2 py-1 text-xs bg-poke-surface text-poke-text-primary"
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onSave}
+          disabled={saving || localInputToIso(draft) === null}
+          loading={saving}
+        >
+          {t('rounds.deadline.save')}
+        </Button>
+        {round.deadline && (
+          <Button variant="ghost" size="sm" onClick={onClear} disabled={saving}>
+            {t('rounds.deadline.clear')}
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
+          {t('rounds.deadline.cancel')}
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 flex-wrap text-xs text-poke-text-secondary">
+      <span>{t('rounds.deadline.label')}:</span>
+      {round.deadline ? (
+        <LocalTime value={round.deadline} preset="dateTimeYear" className="text-poke-text-primary" />
+      ) : (
+        <span className="text-poke-text-muted">{t('rounds.deadline.none')}</span>
+      )}
+      {isRoundOverdue(round, now) && (
+        <Badge variant="red" size="sm">
+          {t('rounds.deadline.overdue')}
+        </Badge>
+      )}
+      <Button variant="ghost" size="sm" onClick={onEdit}>
+        {round.deadline ? t('rounds.deadline.edit') : t('rounds.deadline.set')}
+      </Button>
+    </div>
+  );
+}
+
 export default function RoundManager({
   tournament,
   initialRounds,
@@ -166,6 +312,28 @@ export default function RoundManager({
   );
   const [savingResetToggle, setSavingResetToggle] = useState(false);
   const [resetToggleInfo, setResetToggleInfo] = useState<'enabled' | 'disabled' | null>(null);
+  const [deadlineEditId, setDeadlineEditId] = useState<string | null>(null);
+  const [deadlineDraft, setDeadlineDraft] = useState('');
+  const [savingDeadlineId, setSavingDeadlineId] = useState<string | null>(null);
+  // Bye names: the participants are fetched once, and only when a round has a bye.
+  const [participantNames, setParticipantNames] = useState<Record<string, string> | null>(null);
+  const [participantNamesSettled, setParticipantNamesSettled] = useState(false);
+  // The request's time, so the server and the first client render agree (rule T4).
+  const now = useRequestTime();
+
+  const hasByes = rounds.some((r) => (r.bye_player_ids ?? []).length > 0);
+  useEffect(() => {
+    if (!hasByes || participantNamesSettled) return;
+    let cancelled = false;
+    void fetchParticipantNames(tournament.id).then((names) => {
+      if (cancelled) return;
+      setParticipantNames(names);
+      setParticipantNamesSettled(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasByes, participantNamesSettled, tournament.id]);
 
   const isRoundRobin = tournament.bracket_type === 'round_robin';
   const isElimination =
@@ -392,6 +560,28 @@ export default function RoundManager({
       );
     } catch {
       setError({ key: 'rounds.errors.updateBestOf' });
+    }
+  }
+
+  async function updateRoundDeadline(roundId: string, deadline: string | null) {
+    setError(null);
+    setSavingDeadlineId(roundId);
+    try {
+      const result = await saveRoundDeadline(tournament.id, roundId, deadline);
+
+      if (!result.success) {
+        setError(apiFailure(result));
+        return;
+      }
+
+      setRounds((prev) =>
+        prev.map((r) => (r.id === roundId ? result.data : r))
+      );
+      setDeadlineEditId(null);
+    } catch {
+      setError({ key: 'rounds.errors.updateDeadline' });
+    } finally {
+      setSavingDeadlineId(null);
     }
   }
 
@@ -698,6 +888,29 @@ export default function RoundManager({
                       </Button>
                     )}
                   </div>
+                </div>
+
+                <div className="px-3 pb-2 space-y-1">
+                  <RoundByeNotice
+                    playerIds={round.bye_player_ids ?? []}
+                    names={participantNames}
+                    settled={participantNamesSettled}
+                  />
+                  <RoundDeadlineRow
+                    round={round}
+                    now={now}
+                    editing={deadlineEditId === round.id}
+                    draft={deadlineDraft}
+                    saving={savingDeadlineId === round.id}
+                    onEdit={() => {
+                      setDeadlineDraft(isoToLocalInput(round.deadline));
+                      setDeadlineEditId(round.id);
+                    }}
+                    onDraftChange={setDeadlineDraft}
+                    onSave={() => void updateRoundDeadline(round.id, localInputToIso(deadlineDraft))}
+                    onClear={() => void updateRoundDeadline(round.id, null)}
+                    onCancel={() => setDeadlineEditId(null)}
+                  />
                 </div>
 
                 {isExpanded && (

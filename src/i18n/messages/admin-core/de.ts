@@ -21,6 +21,8 @@ export default defineDe<typeof en>()({
     attention: {
       title: 'Handlungsbedarf',
       count: { one: '{count} Spiel', other: '{count} Spiele' },
+      countOfTotal: '{count} von {total} Spielen',
+      leaguePhase: '{league} · {phase}',
       empty: 'Gerade braucht kein Spiel deine Aufmerksamkeit. Alles erledigt!',
       needsConfirm: 'Bestätigung fehlt',
       disputed: 'Strittig',
@@ -41,6 +43,7 @@ export default defineDe<typeof en>()({
     player__ban: 'Spieler gebannt',
     player__suspend: 'Spieler gesperrt',
     player__unsuspend: 'Spieler entsperrt',
+    player__suspension_expired: 'Sperre abgelaufen',
     player__role__assign: 'Rolle vergeben',
     player__role__revoke: 'Rolle entzogen',
     player__claim: 'Gastkonto übernommen',
@@ -240,6 +243,9 @@ export default defineDe<typeof en>()({
     confirmDelete: 'Diesen Spieler löschen?',
     confirmReinstate: '{name} entsperren?',
     empty: 'Noch keine Spieler registriert',
+    noMatches: 'Keine Spieler passen zur Suche',
+    search: { label: 'Spieler suchen', placeholder: 'Name oder Showdown-Benutzername' },
+    until: 'bis',
     status: { active: 'Aktiv', suspended: 'Gesperrt', banned: 'Gebannt' },
     columns: {
       name: 'Name',
@@ -266,6 +272,9 @@ export default defineDe<typeof en>()({
     link: {
       title: 'Konto für {name} verknüpfen',
       body: 'Wähle das neu registrierte Konto, das mit diesem Gast zusammengeführt werden soll. Das Quellkonto darf keine Teilnahmen, Spiele oder Teams haben.',
+      searchLabel: 'Registriertes Konto suchen',
+      searchPlaceholder: 'Name oder Showdown-Benutzername',
+      noMatches: 'Keine registrierten Konten passen zur Suche',
       selectPlaceholder: 'Registriertes Konto auswählen …',
       linking: 'Wird verknüpft …',
       submit: 'Konto verknüpfen',

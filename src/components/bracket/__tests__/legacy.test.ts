@@ -14,6 +14,7 @@ function round(overrides: Partial<Round> = {}): Round {
     pairings_generated: true,
     deadline: null,
     bracket_side: null,
+    bye_player_ids: [],
     created_at: '',
     updated_at: '',
     ...overrides,

@@ -11,6 +11,7 @@ import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { getBaseStats } from '@/lib/pkmn/dex';
 import { getItemSpriteUrl } from '@/lib/pkmn/sprites';
 import { siteSpriteUrl } from '@/lib/pkmn/sprite-styles';
@@ -243,8 +244,10 @@ export async function fetchCasterData(
     const ids = Array.from(participantIds);
     if (ids.length > 0) {
       // Format-aware: EPB seasons use the evolution-points tiebreaker chain
+      // A Swiss stage scores its stored byes as wins, as the tournament page does.
+      const byes = tournament ? await loadScoringByes(tournament) : [];
       const computed = await computeStandingsForSeason(
-        tournament?.season_id ?? null, ids, participantNames, matchRecords
+        tournament?.season_id ?? null, ids, participantNames, matchRecords, {}, { byes }
       );
       standings = computed.slice(0, 12).map((s, i) => ({
         playerId: s.player_id,

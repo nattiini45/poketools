@@ -1,4 +1,4 @@
-import AdminGuard from '@/components/shared/AdminGuard';
+import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import DiscordWebhookManager from '@/components/discord/DiscordWebhookManager';
 import SocialIntegrationManager from '@/components/social/SocialIntegrationManager';
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminSocialPage() {
   const t = await getT(adminToolsMessages);
   return (
-    <AdminGuard>
+    <SiteAdminGuard>
       <PageContainer title={t('social.title')} maxWidth="lg">
         <p className="text-sm text-poke-text-secondary mb-6">
           {t('social.intro')}
@@ -42,6 +42,6 @@ export default async function AdminSocialPage() {
           </section>
         </div>
       </PageContainer>
-    </AdminGuard>
+    </SiteAdminGuard>
   );
 }

@@ -5,6 +5,7 @@ import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import type { ReportDefinition } from '../registry';
 import type { PromptTask, PipelineMode, ValidationResult, ReportParams } from '../types';
 import type { PlayerProfileContent } from '@/types/tournament-report';
@@ -77,7 +78,9 @@ async function buildFactPack(params: ReportParams): Promise<PlayerProfileFactPac
   const standings = await computeStandingsForSeason(
     tournament.season_id,
     participantIds, participantNames, allMatchRecords,
-    participantAvatars, { pointsPerWin: 3, pointsPerDraw: 1 }, gymTypes
+    participantAvatars,
+    { pointsPerWin: 3, pointsPerDraw: 1, byes: await loadScoringByes(tournament) },
+    gymTypes
   );
 
   const playerStanding = standings.find((s) => s.player_id === params.playerId);

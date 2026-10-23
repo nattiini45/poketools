@@ -1,6 +1,7 @@
 import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
 import { getCompletedMatchRecords, getCompletedMatchRecordsBatch } from '@/lib/supabase/queries/matches';
-import { getParticipants } from '@/lib/supabase/queries/tournaments';
+import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { getSeasonParticipants, getSeasonStageIds } from '@/lib/supabase/queries/seasons';
 import type { StandingsRow } from '@/types/game';
 
@@ -49,10 +50,13 @@ export async function getStandingsPreview(
   limit = 3,
 ): Promise<StandingsPreviewRow[]> {
   if (kind === 'tournament') {
-    const [parts, records] = await Promise.all([
+    const [parts, records, tournament] = await Promise.all([
       getParticipants(id),
       getCompletedMatchRecords(id),
+      getTournamentById(id),
     ]);
+    // A Swiss tournament's table scores the byes stored on its rounds.
+    const byes = tournament ? await loadScoringByes(tournament) : [];
     const standings = buildStandingsRowsFromMatchRecords(
       parts.map((p) => ({
         id: p.id,
@@ -61,6 +65,7 @@ export async function getStandingsPreview(
         gym_type: null,
       })),
       records,
+      byes,
     );
     return toPreviewRows(standings, limit);
   }

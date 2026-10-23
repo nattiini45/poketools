@@ -783,12 +783,15 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
       [
         ...tablesRead(bare.queries),
         'battle_stats',
+        // The Swiss stage's rounds: its table scores the byes stored on them.
+        'rounds',
         'tournament_groups',
         'tournament_groups',
         'tournament_participants',
         'tournament_participants',
       ].sort(),
     );
+    expect(eqValuesRead('rounds')).toEqual([SWISS_STAGE]);
     expect(eqValuesRead('tournament_participants')).toEqual(SAKURA_STAGES);
     expect(eqValuesRead('tournament_groups')).toEqual(SAKURA_STAGES);
     expect(eqValuesRead('battle_stats', 'games.matches.tournament_id')).toEqual(['s-stage-1']);

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { publicReads } from '@/lib/cache/public-reads';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
+import { scoringByeRecords } from '@/lib/tournament/byes';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import {
   resolveViewerWorld,
@@ -129,7 +130,7 @@ export default async function TournamentPage({ params, searchParams }: PageProps
   }
 
   const standings = !isRoundRobin
-    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, {}, participantGymTypes, { evolutionPoints })
+    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, { byes: scoringByeRecords(tournament.bracket_type, rounds) }, participantGymTypes, { evolutionPoints })
     : [];
 
   const totalRounds = rounds.length > 0

@@ -55,6 +55,7 @@ const ROUNDS: Round[] = STRUCTURE.rounds.map((r) => ({
   pairings_generated: true,
   deadline: null,
   bracket_side: r.bracket_side,
+  bye_player_ids: [],
   created_at: STAMP,
   updated_at: STAMP,
 }));

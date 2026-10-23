@@ -128,6 +128,53 @@ describe('GET /api/players', () => {
     expect(vi.mocked(listPlayers)).toHaveBeenCalledWith({ limit: 10, offset: 5, search: 'ash' });
   });
 
+  it('rejects an over-long search term with validation_failed', async () => {
+    vi.mocked(requireAdmin).mockResolvedValue({
+      playerId: 'admin-1',
+      name: 'Admin',
+      isAdmin: true,
+      isResourceAdmin: false,
+      isCreator: false,
+      psUsername: '',
+      championsUsername: '',
+      avatarUrl: null,
+      status: 'active' as const,
+    });
+
+    const url = new URL(`http://localhost:3000/api/players?search=${'a'.repeat(101)}`);
+    const request = { url: url.toString() } as unknown as NextRequest;
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('validation_failed');
+    expect(vi.mocked(listPlayers)).not.toHaveBeenCalled();
+  });
+
+  it('returns the exact total so the caller can page past the first window', async () => {
+    vi.mocked(requireAdmin).mockResolvedValue({
+      playerId: 'admin-1',
+      name: 'Admin',
+      isAdmin: true,
+      isResourceAdmin: false,
+      isCreator: false,
+      psUsername: '',
+      championsUsername: '',
+      avatarUrl: null,
+      status: 'active' as const,
+    });
+    vi.mocked(listPlayers).mockResolvedValue({ data: [mockPlayer], total: 137 });
+
+    const url = new URL('http://localhost:3000/api/players?limit=50&offset=100');
+    const request = { url: url.toString() } as unknown as NextRequest;
+
+    const body = await (await GET(request)).json();
+
+    expect(body.total).toBe(137);
+    expect(vi.mocked(listPlayers)).toHaveBeenCalledWith({ limit: 50, offset: 100, search: undefined });
+  });
+
   it('returns 500 on unexpected error', async () => {
     vi.mocked(requireAdmin).mockResolvedValue({
       playerId: 'admin-1',

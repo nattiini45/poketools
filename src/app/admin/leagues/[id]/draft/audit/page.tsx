@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
+import ResourceForbidden from '@/components/shared/ResourceForbidden';
 import PageContainer from '@/components/ui/PageContainer';
 import DraftAuditViewer from '@/components/draft-admin/DraftAuditViewer';
 import { getLocale, getT } from '@/i18n/server';
@@ -41,7 +42,7 @@ export default async function AdminDraftAuditPage({ params, searchParams }: Page
   if (gate.kind === 'forbidden') {
     return (
       <AdminGuard>
-        <p className="p-8 text-center text-poke-text-secondary">{t('page.forbidden')}</p>
+        <ResourceForbidden>{t('page.forbidden')}</ResourceForbidden>
       </AdminGuard>
     );
   }

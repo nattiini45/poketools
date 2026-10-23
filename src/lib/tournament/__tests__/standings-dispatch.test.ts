@@ -70,3 +70,31 @@ describe('computeStandingsForFormat (dispatcher)', () => {
     }
   });
 });
+
+describe('stored byes in the dispatcher', () => {
+  const byes = [{ player_id: 'c', round_number: 1 }];
+
+  it('leaves evolution_point_buy standings byte-identical: EPB ignores byes', () => {
+    const run = (options: Parameters<typeof computeStandingsForFormat>[5]) =>
+      computeStandingsForFormat(
+        'evolution_point_buy',
+        ['a', 'b', 'c'],
+        names,
+        roundRobinTie,
+        {},
+        options,
+        {},
+        { evolutionPoints: { a: 0, b: 3, c: 1 } },
+      );
+
+    const baseline = run({});
+    expect(JSON.stringify(run({ byes }))).toBe(JSON.stringify(baseline));
+    expect(JSON.stringify(run({ byes, pointsPerWin: 5 }))).toBe(JSON.stringify(run({ pointsPerWin: 5 })));
+  });
+
+  it('scores the bye in every other format that is handed the byes', () => {
+    const standings = computeStandingsForFormat('singles', ['a', 'b', 'c'], names, [], {}, { byes });
+    expect(standings[0].player_id).toBe('c');
+    expect(standings[0].points).toBe(1);
+  });
+});

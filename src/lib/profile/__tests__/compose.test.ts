@@ -73,7 +73,12 @@ vi.mock('@/lib/tournament/season-standings', () => ({
   ]),
 }));
 
+vi.mock('@/lib/tournament/scoring-byes', () => ({
+  loadScoringByes: vi.fn(async () => []),
+}));
+
 import { composePlayerProfile } from '../compose';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { getPlayerById, getPlayerParticipations } from '@/lib/supabase/queries/players';
 import { getMatchesByPlayerWithTournament } from '@/lib/supabase/queries/matches';
 import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
@@ -437,6 +442,21 @@ describe('composePlayerProfile', () => {
     expect(loadSeasonStandingsContexts).toHaveBeenCalledWith(['season-a', 'season-a', null]);
     const contexts = vi.mocked(computeStandingsFromContext).mock.calls.map((call) => call[0]);
     expect(contexts).toEqual([epbContext, epbContext, { formatType: null }]);
+  });
+
+  it('scores the stored byes of a Swiss tournament in the profile standing', async () => {
+    const { computeStandingsFromContext } = await import('@/lib/tournament/season-standings');
+    const byes = [{ player_id: 'player-1', round_number: 1 }];
+    vi.mocked(loadScoringByes).mockResolvedValueOnce(byes);
+    vi.mocked(listTournamentsByIds).mockResolvedValueOnce([
+      { id: 't-swiss', name: 'Swiss Cup', status: 'active', bracket_type: 'swiss', season_id: null },
+    ] as Awaited<ReturnType<typeof listTournamentsByIds>>);
+
+    await composePlayerProfile('player-1');
+
+    expect(loadScoringByes).toHaveBeenCalledWith(expect.objectContaining({ id: 't-swiss', bracket_type: 'swiss' }));
+    const options = vi.mocked(computeStandingsFromContext).mock.calls[0][5];
+    expect(options).toEqual({ byes });
   });
 
   it('a failed season-context read costs only the season-bound standings (logged), never the profile', async () => {

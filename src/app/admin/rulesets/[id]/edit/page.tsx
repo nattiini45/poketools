@@ -1,7 +1,9 @@
-import AdminGuard from '@/components/shared/AdminGuard';
+import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
+import { getLiveAccess } from '@/lib/auth/helpers';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { notFound } from 'next/navigation';
+import { isValidUuid } from '@/lib/utils/uuid';
 import RulesetBuilder from '@/components/ruleset/RulesetBuilder';
 import type { RulesetFormData } from '@/types/ruleset';
 import { getT } from '@/i18n/server';
@@ -15,6 +17,12 @@ interface Props {
 
 export default async function EditRulesetPage({ params }: Props) {
   const { id } = await params;
+  // Site-admin page: no ruleset read (and no 404 that reveals an id) for a viewer who is not one.
+  const access = await getLiveAccess();
+  if (!access?.isSiteAdmin) return <SiteAdminGuard>{null}</SiteAdminGuard>;
+
+  if (!isValidUuid(id)) notFound();
+
   const [ruleset, t] = await Promise.all([getRulesetById(id), getT(adminToolsMessages)]);
 
   if (!ruleset) {
@@ -37,10 +45,10 @@ export default async function EditRulesetPage({ params }: Props) {
   };
 
   return (
-    <AdminGuard>
+    <SiteAdminGuard>
       <PageContainer title={t('rulesets.editTitle', { name: ruleset.name })} maxWidth="md">
         <RulesetBuilder initialData={initialData} rulesetId={ruleset.id} />
       </PageContainer>
-    </AdminGuard>
+    </SiteAdminGuard>
   );
 }

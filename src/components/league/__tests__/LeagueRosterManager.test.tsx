@@ -7,15 +7,14 @@ import { describe, expect, it } from 'vitest';
 import { isSubstitutionClosed, rosterLoadPaths } from '../LeagueRosterManager';
 
 describe('rosterLoadPaths', () => {
-  it('loads roster, players and phases only, never the league row', () => {
+  it('loads roster and phases only: no league row, no preloaded player directory', () => {
     const paths = rosterLoadPaths('season-1');
 
-    expect(paths).toEqual([
-      '/api/seasons/season-1/participants',
-      '/api/players',
-      '/api/seasons/season-1/phases',
-    ]);
+    expect(paths).toEqual(['/api/seasons/season-1/participants', '/api/seasons/season-1/phases']);
     expect(paths).not.toContain('/api/seasons/season-1');
+    // GET /api/players is site-admin only and returns one page: the pickers search instead
+    // (see src/lib/players/__tests__/player-search.test.ts).
+    expect(paths).not.toContain('/api/players');
   });
 });
 

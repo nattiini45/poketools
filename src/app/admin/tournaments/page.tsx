@@ -4,7 +4,7 @@ import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { getButtonClasses } from '@/components/ui/buttonStyles';
-import { getSession, isAdmin } from '@/lib/auth/helpers';
+import { getLiveAccess } from '@/lib/auth/helpers';
 import { listTournaments, listTournamentsByIds } from '@/lib/supabase/queries/tournaments';
 import { getAdminTournamentIds } from '@/lib/supabase/queries/resource-admins';
 import { getT } from '@/i18n/server';
@@ -18,15 +18,18 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 export default async function AdminTournamentsPage() {
-  const session = await getSession();
-  const isSiteAdmin = isAdmin(session);
-  const playerId = session?.player?.playerId;
+  // Live roles (not the session copy), and no data read before we know the viewer is an admin.
+  const access = await getLiveAccess();
+  if (!access?.isAnyAdmin || !access.player) return <AdminGuard>{null}</AdminGuard>;
 
-  const tournaments = isSiteAdmin
+  // Site admin: every active standalone tournament. Resource admin: only their own, standalone
+  // like the site admin list (league stages open from their league), and not the archived ones.
+  const tournaments = access.isSiteAdmin
     ? await listTournaments()
-    : playerId
-      ? await listTournamentsByIds(await getAdminTournamentIds(playerId))
-      : [];
+    : await listTournamentsByIds(await getAdminTournamentIds(access.player.playerId), {
+        archived: false,
+        standaloneOnly: true,
+      });
   const [t, tc, te] = await Promise.all([
     getT(tournamentsAdminMessages),
     getT(commonMessages),

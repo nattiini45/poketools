@@ -144,6 +144,7 @@ function round(id: string, roundNumber: number, overrides: Partial<Round> = {}):
     pairings_generated: true,
     deadline: null,
     bracket_side: null,
+    bye_player_ids: [],
     created_at: T0,
     updated_at: T0,
     ...overrides,

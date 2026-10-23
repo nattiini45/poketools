@@ -10,10 +10,7 @@ import 'server-only';
  * only as `toPublicPlayerRef` (`{ id, name }`, AGENTS.md "never pass raw
  * players rows to client components").
  */
-import { notFound } from 'next/navigation';
-import { getLiveAccess } from '@/lib/auth/helpers';
-import { isValidUuid } from '@/lib/utils/uuid';
-import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
+import { gateResourceAdmin } from '@/lib/auth/resource-gate';
 import { getSeasonParticipants, getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
 import { getDraftPoolsBySeasonWithGroups } from '@/lib/supabase/queries/drafts';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
@@ -41,12 +38,8 @@ export type DraftAdminGate =
  * A route id that is not a uuid is a 404 before any auth or admin read.
  */
 export async function gateDraftAdmin(seasonId: string): Promise<DraftAdminGate> {
-  if (!isValidUuid(seasonId)) notFound();
-  const access = await getLiveAccess();
-  if (!access?.isAnyAdmin || !access.player) return { kind: 'guard' };
-  if (access.isSiteAdmin) return { kind: 'ok', playerId: access.player.playerId };
-  const allowed = await isResourceAdminFor(access.player.playerId, 'season', seasonId);
-  return allowed ? { kind: 'ok', playerId: access.player.playerId } : { kind: 'forbidden' };
+  const gate = await gateResourceAdmin('season', seasonId);
+  return gate.kind === 'ok' ? { kind: 'ok', playerId: gate.playerId } : gate;
 }
 
 export type AdminDraftData =

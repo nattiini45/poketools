@@ -1,4 +1,5 @@
-import type { Standing, MatchRecord } from './types';
+import type { Standing, MatchRecord, ByeRecord } from './types';
+import { BYE_PLAYER_ID } from './types';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import { computeEvolutionPointBuyStandings } from './evolution-standings';
 import { epbPack } from '@/lib/format-pack';
@@ -14,6 +15,16 @@ export interface StandingsOptions {
   gamesByMatch?: Record<string, string[]>;
   /** Only include matches up to this round number */
   maxRound?: number;
+  /**
+   * Stored Swiss byes (`rounds.bye_player_ids`, gated by `scoringByeRecords`).
+   * Each counts as a win worth `pointsPerWin`: one win, no games, no kills and
+   * no opponent, so it adds nothing to the player's own or anyone's Buchholz
+   * (a bye has no opponent whose points could be summed, and inventing a
+   * virtual opponent would shift every existing tiebreak). Omit for round
+   * robin and for any caller that does not score byes. Ignored by the
+   * evolution_point_buy standings, which keep their own scoring unchanged.
+   */
+  byes?: ByeRecord[];
 }
 
 /**
@@ -38,6 +49,7 @@ export function computeStandings(
     battleStats,
     gamesByMatch,
     maxRound,
+    byes,
   } = options;
 
   // Filter by round if requested
@@ -91,6 +103,18 @@ export function computeStandings(
       s1.points += pointsPerDraw;
       s2.draws++;
       s2.points += pointsPerDraw;
+    }
+  }
+
+  // A stored Swiss bye is a win with no opponent: it scores for the player
+  // only, and is skipped by the Buchholz pass below (it is not a match).
+  if (byes) {
+    for (const bye of byes) {
+      if (maxRound && bye.round_number > maxRound) continue;
+      const standing = standingMap.get(bye.player_id);
+      if (!standing) continue;
+      standing.wins++;
+      standing.points += pointsPerWin;
     }
   }
 
@@ -148,6 +172,10 @@ export function computeStandings(
  * caller passes points. Every other
  * format keeps the generic computeStandings behavior unchanged.
  *
+ * `options.byes` (stored Swiss byes) is read by computeStandings only. The EPB
+ * branch builds its own options and never forwards it, so EPB standings are
+ * unchanged by byes.
+ *
  * Server callers should use computeStandingsForSeason (season-standings.ts),
  * which loads the format and evolution-points map; client components pass
  * them down as props.
@@ -189,14 +217,21 @@ export function computeStandingsForFormat(
 /**
  * Build a set of all previous opponent pairings for no-repeat checking.
  * Returns a Set of "playerA::playerB" keys (sorted to be order-independent).
+ * A stored bye is recorded as a pairing against BYE_PLAYER_ID, so
+ * `havePlayed(history, player, BYE_PLAYER_ID)` says whether the player has
+ * already had one (a bye creates no match, so it is not in `matches`).
  */
 export function buildPairingHistory(
-  matches: MatchRecord[]
+  matches: MatchRecord[],
+  byes: ByeRecord[] = [],
 ): Set<string> {
   const history = new Set<string>();
   for (const match of matches) {
     const key = [match.player_1_id, match.player_2_id].sort().join('::');
     history.add(key);
+  }
+  for (const bye of byes) {
+    history.add([bye.player_id, BYE_PLAYER_ID].sort().join('::'));
   }
   return history;
 }

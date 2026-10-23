@@ -18,6 +18,7 @@ import {
 } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
+import { scoringByeRecords } from '@/lib/tournament/byes';
 import { getT } from '@/i18n/server';
 import { insightsMessages } from '@/i18n/messages/insights';
 
@@ -62,6 +63,8 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
       publicReads.tournamentMatchRecords(scope.id),
       publicReads.tournamentBattleStats(scope.id),
     ]);
+    // A Swiss tournament's table scores the byes stored on its rounds.
+    const byes = scoringByeRecords(tournament.bracket_type, await publicReads.tournamentRounds(scope.id));
     return {
       title: tournament.name,
       isDoubles: tournament.is_doubles,
@@ -76,6 +79,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
           gym_type: null,
         })),
         records,
+        byes,
       ),
     };
   }

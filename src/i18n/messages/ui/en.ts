@@ -72,6 +72,8 @@ export default {
     none: 'No resource admins assigned.',
     remove: 'Remove',
     selectPlayer: 'Select a player...',
+    searchPlaceholder: 'Search a registered player...',
+    alreadyAdmin: 'already an admin',
     add: 'Add Admin',
   },
   archive: {

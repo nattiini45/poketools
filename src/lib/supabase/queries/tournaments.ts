@@ -122,10 +122,20 @@ export async function listArchivedTournaments(): Promise<TournamentWithDetails[]
   }));
 }
 
-export async function listTournamentsByIds(ids: string[]): Promise<TournamentWithDetails[]> {
+/**
+ * Tournaments by id. `archived` narrows by the archived flag (`false` = active
+ * only, `true` = archived only, omitted = both). `standaloneOnly` drops league
+ * stages (rows with a season_id), like the site admin's `listTournaments`: a
+ * season admin's assignments cascade to the league's stages, which belong to
+ * the league pages, not to the tournament list.
+ */
+export async function listTournamentsByIds(
+  ids: string[],
+  opts: { archived?: boolean; standaloneOnly?: boolean } = {},
+): Promise<TournamentWithDetails[]> {
   if (ids.length === 0) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('tournaments')
     .select(`
       *,
@@ -133,8 +143,11 @@ export async function listTournamentsByIds(ids: string[]): Promise<TournamentWit
       seasons ( name ),
       tournament_participants ( count )
     `)
-    .in('id', ids)
-    .order('created_at', { ascending: false });
+    .in('id', ids);
+  if (opts.archived !== undefined) query = query.eq('archived', opts.archived);
+  if (opts.standaloneOnly) query = query.is('season_id', null);
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) throw error;
 

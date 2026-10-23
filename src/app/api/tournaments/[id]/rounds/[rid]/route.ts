@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { getRoundById, updateRoundStatus, updateRoundBestOf } from '@/lib/supabase/queries/rounds';
+import {
+  getRoundById,
+  updateRoundStatus,
+  updateRoundBestOf,
+  updateRoundDeadline,
+} from '@/lib/supabase/queries/rounds';
 import { getMatchesByRound, getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { BYE_PLAYER_ID } from '@/lib/tournament/types';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { triggerTournamentReport } from '@/lib/ai/trigger';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
 import { toPublicMatches } from '@/lib/match/public-match';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import type { ApiResult } from '@/types/api';
@@ -19,6 +26,12 @@ import { roundUpdateSchema, formatZodErrors } from '@/lib/validation';
 
 interface RouteParams {
   params: Promise<{ id: string; rid: string }>;
+}
+
+/** Two stored timestamps name the same instant (Postgres and the API spell one instant differently). */
+function sameInstant(a: string | null, b: string | null): boolean {
+  if (a === null || b === null) return a === b;
+  return new Date(a).getTime() === new Date(b).getTime();
 }
 
 // Public: no auth required — round detail with matches (public match shape only)
@@ -62,11 +75,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// Admin — update round status and/or best_of
+// Admin — update round status, best_of and/or deadline
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { id, rid } = await params;
-    await requireResourceAdmin('tournament', id);
+    const admin = await requireResourceAdmin('tournament', id);
     const invalidRound = rejectInvalidPathId(rid, 'INVALID_ROUND_ID');
     if (invalidRound) return invalidRound;
 
@@ -95,6 +108,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const deadlineBefore = round.deadline;
+
     // Read before any write: its league (if any) is expired after the write,
     // and the round_completed event below reuses it.
     const tournament = await getTournamentById(id);
@@ -113,7 +128,26 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body.status) {
       round = await updateRoundStatus(rid, body.status);
     }
+
+    // `undefined` leaves the deadline alone; `null` clears it.
+    if (body.deadline !== undefined) {
+      round = await updateRoundDeadline(rid, body.deadline);
+    }
+    // The public match page shows the deadline, so its reads expire too.
     expireTournamentReads(id, tournament?.season_id);
+
+    if (body.deadline !== undefined && !sameInstant(deadlineBefore, round.deadline)) {
+      logAuditEvent({
+        actor_id: admin.playerId,
+        actor_name: admin.name,
+        action: 'tournament.update',
+        resource_type: 'round',
+        resource_id: rid,
+        resource_name: round.name,
+        changes: { deadline: { before: deadlineBefore, after: round.deadline } },
+        metadata: { tournament_id: id, field: 'deadline' },
+      });
+    }
 
     // Emit round_completed Discord event when round is marked completed
     if (body.status === 'completed') {
@@ -133,8 +167,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
           // Current standings (all completed matches including this round)
           // Format-aware: EPB seasons use the evolution-points tiebreakers
+          // A Swiss stage scores its stored byes as wins (maxRound trims them below).
+          const byes = await loadScoringByes(tournament);
           const currentStandings = await computeStandingsForSeason(
-            tournament.season_id, participantIds, participantNames, allMatchRecords
+            tournament.season_id, participantIds, participantNames, allMatchRecords, {}, { byes }
           );
 
           // Previous standings (up to round before this one) for position diff
@@ -146,7 +182,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
               participantNames,
               allMatchRecords,
               {},
-              { maxRound: round.round_number - 1 },
+              { maxRound: round.round_number - 1, byes },
             );
             previousPositions = new Map(prevStandings.map((s, i) => [s.player_id, i + 1]));
           }

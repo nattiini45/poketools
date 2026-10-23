@@ -165,6 +165,8 @@ A **phase** is stored as a `tournaments` row with `season_id` set. League admin 
 | status | Select | pending / active / completed |
 | pairings_generated | Checkbox | |
 | bracket_side | Text | nullable — `winners` / `losers` / `grand_finals` for elimination bracket columns |
+| deadline | Timestamptz | nullable; set and cleared by admins in RoundManager (`PATCH /api/tournaments/[id]/rounds/[rid]`, audited, expires the tournament's read tags) |
+| bye_player_ids | UUID[] | not null, default `{}` (migration `20261023145151_rounds_bye_player_ids.sql`). Players with a bye in this Swiss or round-robin round, written at generation (generate, generate-all, manual). Swiss: a stored bye is a win worth the stage's win points, adds no games, kills or Buchholz, and blocks a second bye. Round-robin byes score nothing; phases with groups follow the week plan and store no bye; elimination byes are structural and not stored. |
 
 ### 4.5 Matches
 | Field | Type | Notes |
@@ -682,6 +684,8 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin/tournaments/[id]/rounds Standalone tournament rounds (season-linked → redirect to phase page)
 /admin/rulesets/new            Ruleset builder
 /admin/rulesets/[id]/edit      Edit existing ruleset
+/admin/matches                 Match list (server-side status / league / tournament / search filters in the
+                               URL, paged with an exact total; League and Phase on each row)
 /admin/matches/[id]            Override / dispute match result
 /admin/players                 Player roster management (guest creation + Link account)
 ```
@@ -696,6 +700,15 @@ render only for full `isAdmin`; the Kale console only for `isSuperadmin`.
 Below `lg` the same config renders as grouped chip rows. The admin overview
 page no longer duplicates this IA as a card grid — it shows the live
 dashboard (attention queue, recent audit) only.
+
+**Admin tiers.** A site admin (`isAdmin`) sees every page. A resource admin
+(a league or tournament admin in `resource_admins`) sees the competition pages
+of the leagues and tournaments they administer: every page is wrapped in
+`AdminGuard`; pages for one league, phase or tournament also call
+`gateResourceAdmin` (`src/lib/auth/resource-gate.ts`) before any read and render
+`ResourceForbidden` for anyone else; `siteAdminOnly` pages use `SiteAdminGuard`.
+The scoped API routes below call `requireAnyAdmin` and narrow their reads with
+`getAdminScope` (`src/lib/auth/admin-scope.ts`). Details: `docs/admin.md`.
 
 ### API routes
 ```
@@ -717,6 +730,14 @@ POST /api/generate-round/[tid]  Admin: generate next round pairings (Swiss/RR; l
 POST /api/tournaments/[id]/generate-bracket   Admin: full SE/DE bracket (all rounds + R1 matches)
 POST /api/tournaments/[id]/regenerate-bracket Admin: wipe and rebuild SE/DE bracket from current seeds
 POST /api/tournaments/[id]/repair-bracket     Admin: re-run bye resolution + slot materialization
+GET  /api/admin/dashboard               Any admin: counts, attention queue, recent audit (a resource admin gets only
+                                            their own leagues and tournaments, no site-wide counts or activity)
+GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, q, page, page_size;
+                                            returns an exact total
+GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, and standalone tournaments
+GET  /api/admin/player-search              Any admin (a resource admin names a season_id or tournament_id they
+                                            administer): public player refs only; `registered=1` keeps accounts
+                                            with a login
 DELETE /api/admin/rounds/[id]               Admin: delete latest round or zero-game round
                                             (400 STRUCTURE_ELIM_ROUND_DELETE for v2 elim)
 
@@ -782,6 +803,8 @@ GET  /api/cron/auto-confirm     Cron (15 min): confirms due pending_confirmation
                                 500 auto_confirm_partial_failure when any match failed
 GET  /api/cron/process-aggregates  Cron (10 min): claims and applies queued aggregate jobs; 500 on a
                                 failed claim or queue write, or when jobs are stranded
+GET  /api/cron/expire-suspensions  Cron (15 min): lifts timed suspensions whose end has passed (one
+                                audit event per player)
 GET  /api/cron/refresh-usage-stats  Cron (monthly): re-imports Smogon usage stats and current-gen sample sets
 ```
 

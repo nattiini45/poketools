@@ -6,7 +6,7 @@ import {
   getParticipants,
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
-import { getRoundsByTournament, createRound } from '@/lib/supabase/queries/rounds';
+import { getRoundsByTournament, createRound, updateRoundByePlayers } from '@/lib/supabase/queries/rounds';
 import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { generateRoundRobinRound, getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
@@ -89,8 +89,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       ? await ensurePhaseGroupsFromLeague(tournament.season_id, tournament)
       : await getGroupsByTournament(id);
 
-    // Every week to write with its pairings, computed in full before the first write.
-    const weeksToWrite: { roundNumber: number; pairings: Pairing[] }[] = [];
+    // Every week to write with its pairings, computed in full before the first write. `byePlayerIds` lists the
+    // trainers the circle method seats out (a phase without groups); a grouped week has none: a trainer without an
+    // in-group match is paired across groups or rests, and the week plan records no bye for it.
+    const weeksToWrite: { roundNumber: number; pairings: Pairing[]; byePlayerIds: string[] }[] = [];
     // Written rounds an interrupted write left without matches, keyed by round number; they are filled, not skipped.
     let emptyRounds = new Map<number, Round>();
 
@@ -106,7 +108,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         batch.push(week.week);
       }
       const { resolved } = await resolveWeekPairings(tournament.season_id, context, batch);
-      for (const { week, pairings } of resolved) weeksToWrite.push({ roundNumber: week.week, pairings });
+      for (const { week, pairings } of resolved) weeksToWrite.push({ roundNumber: week.week, pairings, byePlayerIds: [] });
     } else {
       // Every round of the circle method that has no round yet, or whose round an interrupted call wrote without
       // its matches (a round robin round of two or more trainers always has a pairing): filled, never skipped.
@@ -117,7 +119,8 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         const written = existingRounds.filter((round) => round.round_number === r);
         if (written.length > 0 && written.some((round) => withMatches.has(round.id))) continue;
         if (written.length > 0) emptyRounds.set(r, written[0]);
-        weeksToWrite.push({ roundNumber: r, pairings: generateRoundRobinRound(participantIds, r).pairings });
+        const generated = generateRoundRobinRound(participantIds, r);
+        weeksToWrite.push({ roundNumber: r, pairings: generated.pairings, byePlayerIds: generated.bye_player_ids });
       }
     }
 
@@ -130,19 +133,30 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
 
     const createdRounds: Round[] = [];
 
-    for (const { roundNumber, pairings: allPairings } of weeksToWrite) {
+    for (const { roundNumber, pairings: allPairings, byePlayerIds } of weeksToWrite) {
       const roundName = `Round ${roundNumber}`;
       const roundBestOf =
         tournament.bo_overrides[roundName] ?? tournament.best_of_default;
 
-      const round =
-        emptyRounds.get(roundNumber) ??
-        (await createRound({
+      // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so it carries
+      // them exactly like a freshly inserted one.
+      const reused = emptyRounds.get(roundNumber);
+      let round: Round;
+      if (reused) {
+        const storedByes = reused.bye_player_ids ?? [];
+        const byesChanged =
+          storedByes.length !== byePlayerIds.length || storedByes.some((pid) => !byePlayerIds.includes(pid));
+        round = byesChanged ? await updateRoundByePlayers(reused.id, byePlayerIds) : reused;
+      } else {
+        round = await createRound({
           tournament_id: id,
           name: roundName,
           round_number: roundNumber,
           best_of: roundBestOf,
-        }));
+          // Round robin byes are stored for display; they earn nothing in standings.
+          bye_player_ids: byePlayerIds,
+        });
+      }
 
       if (allPairings.length > 0) {
         const matchInputs = allPairings.map((pairing) => ({

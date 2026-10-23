@@ -9,7 +9,7 @@
  * `playerId` / `scopeId` always come from the validated tool input, never from
  * session or cookies (the executors are transport-agnostic per PRD §5).
  */
-import { getParticipants } from '@/lib/supabase/queries/tournaments';
+import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getAggregates } from '@/lib/supabase/queries/aggregates';
 import {
   getMatchesByPlayer,
@@ -18,6 +18,7 @@ import {
   getUpcomingMatches as getUpcomingMatchesQuery,
 } from '@/lib/supabase/queries/matches';
 import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import type { MatchWithPlayers } from '@/types/match';
 import type {
   QueryLeagueDataInput,
@@ -142,10 +143,16 @@ export async function queryLeagueData(
   }
 
   // infoType === 'standings'
-  const records = await getCompletedMatchRecords(scope.id);
+  const [records, tournament] = await Promise.all([
+    getCompletedMatchRecords(scope.id),
+    getTournamentById(scope.id),
+  ]);
+  // A Swiss tournament's table scores the byes stored on its rounds.
+  const byes = tournament ? await loadScoringByes(tournament) : [];
   const rows = buildStandingsRowsFromMatchRecords(
     participants.map((p) => ({ id: p.id, name: p.name, avatar_url: p.avatar_url })),
     records,
+    byes,
   );
   const standings: StandingEntry[] = rows.map((r) => ({
     player_id: r.player_id,

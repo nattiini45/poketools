@@ -154,14 +154,25 @@ export async function listArchivedSeasons(): Promise<SeasonWithDetails[]> {
   }));
 }
 
-export async function listSeasonsByIds(ids: string[]): Promise<SeasonWithDetails[]> {
+/**
+ * Seasons by id. `archived` narrows by the archived flag: `false` = active
+ * only, `true` = archived only, omitted = both (profile and filter callers).
+ * The admin lists pass it so an active list never shows an archived league and
+ * the archived list shows only the admin's own.
+ */
+export async function listSeasonsByIds(
+  ids: string[],
+  opts: { archived?: boolean } = {},
+): Promise<SeasonWithDetails[]> {
   if (ids.length === 0) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('seasons')
     .select(SEASON_DETAILS_SELECT)
-    .in('id', ids)
-    .order('created_at', { ascending: false });
+    .in('id', ids);
+  if (opts.archived !== undefined) query = query.eq('archived', opts.archived);
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) throw error;
 

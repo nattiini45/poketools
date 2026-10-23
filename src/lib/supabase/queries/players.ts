@@ -254,7 +254,18 @@ export async function getPlayersByDiscordIds(discordIds: string[]): Promise<Map<
 }
 
 export async function listPlayers(
-  options?: { limit?: number; offset?: number; search?: string }
+  options?: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    /**
+     * Only active, non-guest players with a Discord or email login: an account a guest can
+     * be linked to or a resource admin named from. A banned or suspended account is left out
+     * because `claim_guest_player` refuses it as a source (SOURCE_NOT_ACTIVE) and the live
+     * auth guards reject it, so offering it would only end in a refusal.
+     */
+    registeredOnly?: boolean;
+  }
 ): Promise<{ data: Player[]; total: number }> {
   const limit = Math.min(options?.limit ?? 50, 200);
   const offset = options?.offset ?? 0;
@@ -266,13 +277,59 @@ export async function listPlayers(
     .range(offset, offset + limit - 1);
 
   if (options?.search) {
-    query = query.ilike('name', `${options.search}%`);
+    query = query.or(playerSearchFilter(options.search));
+  }
+  if (options?.registeredOnly) {
+    // A second or() is ANDed with the search filter by PostgREST.
+    query = query
+      .eq('is_guest', false)
+      .eq('status', 'active')
+      .or('discord_id.not.is.null,auth_user_id.not.is.null');
   }
 
   const { data, error, count } = await query;
 
   if (error) throw error;
   return { data: data.map(toPlayer), total: count ?? 0 };
+}
+
+/**
+ * PostgREST `or()` filter for a case-insensitive "contains" search over a
+ * player's name and Showdown username. LIKE wildcards in the term are escaped
+ * (so `50%` matches the text "50%", not everything), and the pattern is
+ * double-quoted so a comma, parenthesis or colon in the term cannot end the
+ * filter early or add a condition of its own.
+ */
+export function playerSearchFilter(search: string): string {
+  const likeEscaped = search.replace(/[\\%_]/g, (char) => `\\${char}`);
+  const quoted = `%${likeEscaped}%`.replace(/[\\"]/g, (char) => `\\${char}`);
+  return `name.ilike."${quoted}",ps_username.ilike."${quoted}"`;
+}
+
+/**
+ * Lift every suspension whose `suspended_until` has passed: status back to
+ * `active`, `suspended_until` cleared. One conditional UPDATE, so a suspension
+ * renewed or lifted by an admin between a read and this write is never
+ * touched, and a banned player (whose `suspended_until` is null) is never
+ * reinstated. Returns the players that were lifted, for the audit trail.
+ *
+ * The live auth guards reject `status !== 'active'`; this is the only thing
+ * that turns a timed suspension back into `active`. `suspended_until` is a
+ * moderation column and stays out of `SESSION_PLAYER_COLUMNS`.
+ */
+export async function clearExpiredSuspensions(
+  nowIso: string,
+): Promise<Array<{ id: string; name: string }>> {
+  const { data, error } = await supabase
+    .from('players')
+    .update({ status: 'active', suspended_until: null })
+    .eq('status', 'suspended')
+    .not('suspended_until', 'is', null)
+    .lte('suspended_until', nowIso)
+    .select('id, name');
+
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ id: row.id, name: row.name }));
 }
 
 export async function createPlayer(input: PlayerRegistration): Promise<Player> {

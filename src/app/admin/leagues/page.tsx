@@ -4,7 +4,7 @@ import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { getButtonClasses } from '@/components/ui/buttonStyles';
-import { getSession, isAdmin } from '@/lib/auth/helpers';
+import { getLiveAccess } from '@/lib/auth/helpers';
 import { listSeasons, listSeasonsByIds } from '@/lib/supabase/queries/seasons';
 import { getAdminSeasonIds } from '@/lib/supabase/queries/resource-admins';
 import { getT } from '@/i18n/server';
@@ -18,9 +18,9 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 export default async function AdminLeaguesPage() {
-  const session = await getSession();
-  const isSiteAdmin = isAdmin(session);
-  const playerId = session?.player?.playerId;
+  // Live roles (not the session copy), and no data read before we know the viewer is an admin.
+  const access = await getLiveAccess();
+  if (!access?.isAnyAdmin || !access.player) return <AdminGuard>{null}</AdminGuard>;
 
   const [t, tEnum, tCommon] = await Promise.all([
     getT(leagueAdminMessages),
@@ -28,11 +28,10 @@ export default async function AdminLeaguesPage() {
     getT(commonMessages),
   ]);
 
-  const leagues = isSiteAdmin
+  // Site admin: every active league. Resource admin: only their own, and not the archived ones.
+  const leagues = access.isSiteAdmin
     ? await listSeasons({ includeTestSeasons: true })
-    : playerId
-      ? await listSeasonsByIds(await getAdminSeasonIds(playerId))
-      : [];
+    : await listSeasonsByIds(await getAdminSeasonIds(access.player.playerId), { archived: false });
 
   return (
     <AdminGuard>

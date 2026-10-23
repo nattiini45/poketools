@@ -15,7 +15,8 @@ import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups'
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { splitGroupTables } from '@/lib/tournament/group-standings';
-import type { MatchRecord } from '@/lib/tournament/types';
+import { scoringByeRecords } from '@/lib/tournament/byes';
+import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 
 export interface SyncStandingsOptions {
   source_phase_id?: string;
@@ -83,7 +84,8 @@ async function advanceTopNFromStandings(
   participantIds: string[],
   participantNames: Record<string, string>,
   matchRecords: MatchRecord[],
-  groups?: TournamentGroupWithMembers[]
+  groups?: TournamentGroupWithMembers[],
+  byes: ByeRecord[] = []
 ): Promise<string[]> {
   if (rule.type !== 'top_n') {
     throw new Error(`Unsupported advancement type: ${rule.type}`);
@@ -96,7 +98,8 @@ async function advanceTopNFromStandings(
   if (rule.per_group && groups && groups.length > 0 && groups.every((group) => Boolean(group.season_group_id))) {
     const ordered = [...groups].sort((a, b) => a.group_number - b.group_number);
     const memberIds = ordered.flatMap((group) => group.members.map((m) => m.player_id));
-    const table = await computeStandingsForSeason(seasonId, memberIds, participantNames, matchRecords);
+    // A Swiss bye scores for its player only, so the one table over every member stays group-scoped after the split.
+    const table = await computeStandingsForSeason(seasonId, memberIds, participantNames, matchRecords, {}, { byes });
     for (const { standings } of splitGroupTables(
       table,
       ordered.map((group) => ({ id: group.id, name: group.name, playerIds: group.members.map((m) => m.player_id) })),
@@ -118,7 +121,9 @@ async function advanceTopNFromStandings(
         seasonId,
         groupPlayerIds,
         participantNames,
-        groupMatches
+        groupMatches,
+        {},
+        { byes }
       );
       advancing.push(...standings.slice(0, rule.count).map((s) => s.player_id));
     }
@@ -129,7 +134,9 @@ async function advanceTopNFromStandings(
     seasonId,
     participantIds,
     participantNames,
-    matchRecords
+    matchRecords,
+    {},
+    { byes }
   );
   return standings.slice(0, rule.count).map((s) => s.player_id);
 }
@@ -141,7 +148,8 @@ async function resolveAdvancingPlayerIds(
   participantNames: Record<string, string>,
   matchRecords: MatchRecord[],
   groups: TournamentGroupWithMembers[],
-  options: SyncStandingsOptions
+  options: SyncStandingsOptions,
+  byes: ByeRecord[]
 ): Promise<string[]> {
   if (targetPhase.advancement_rule && !options.top_n) {
     return advanceTopNFromStandings(
@@ -150,7 +158,8 @@ async function resolveAdvancingPlayerIds(
       participantIds,
       participantNames,
       matchRecords,
-      groups.length > 0 ? groups : undefined
+      groups.length > 0 ? groups : undefined,
+      byes
     );
   }
 
@@ -166,7 +175,8 @@ async function resolveAdvancingPlayerIds(
       participantIds,
       participantNames,
       matchRecords,
-      options.per_group ? groups : undefined
+      options.per_group ? groups : undefined,
+      byes
     );
   }
 
@@ -174,7 +184,9 @@ async function resolveAdvancingPlayerIds(
     seasonId,
     participantIds,
     participantNames,
-    matchRecords
+    matchRecords,
+    {},
+    { byes }
   );
   return standings.map((s) => s.player_id);
 }
@@ -219,6 +231,11 @@ export async function syncStandingsEnrollment(
     }
     const matchRecords = await getCompletedMatchRecords(sourcePhase.id);
     const groups = await getGroupsByTournament(sourcePhase.id);
+    // A Swiss source phase scores its stored byes as wins, as its own standings do.
+    const byes = scoringByeRecords(
+      sourcePhase.bracket_type,
+      await getRoundsByTournament(sourcePhase.id)
+    );
 
     playerIds = await resolveAdvancingPlayerIds(
       seasonId,
@@ -227,7 +244,8 @@ export async function syncStandingsEnrollment(
       participantNames,
       matchRecords,
       groups,
-      options
+      options,
+      byes
     );
   } else {
     const roster = await getSeasonParticipants(seasonId);

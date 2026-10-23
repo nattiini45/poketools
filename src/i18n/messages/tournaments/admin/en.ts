@@ -89,6 +89,8 @@ export default {
     matchesError: "Could not load this round's matches: {error}",
     retry: 'Retry',
     noMatches: 'No matches in this round.',
+    bye: 'Bye: {names}',
+    byeUnknownPlayer: 'Unknown player',
     versus: 'vs',
     generateBracket: 'Generate Bracket',
     regenerateBracket: 'Regenerate Bracket',
@@ -104,6 +106,17 @@ export default {
     complete: 'Complete',
     reset: 'Reset',
     delete: 'Delete',
+    deadline: {
+      label: 'Deadline',
+      none: 'No deadline',
+      overdue: 'Overdue',
+      edit: 'Edit',
+      set: 'Set deadline',
+      inputLabel: 'Round deadline',
+      save: 'Save',
+      clear: 'Clear',
+      cancel: 'Cancel',
+    },
     repaired: {
       zero: 'Bracket repair complete. No additional matches were materialized.',
       one: 'Bracket repair complete. {count} match materialized.',
@@ -122,6 +135,7 @@ export default {
       generateAll: 'Failed to generate all rounds',
       updateBestOf: 'Failed to update round best-of',
       updateStatus: 'Failed to update round status',
+      updateDeadline: 'Failed to update round deadline',
       resetRound: 'Failed to reset round',
     },
     regenerateDialog: {
@@ -155,6 +169,10 @@ export default {
   participants: {
     loading: 'Loading...',
     loadFailed: 'Failed to load data',
+    addFailed: 'Failed to add player',
+    searchPlaceholder: 'Type a name to search…',
+    alreadyEnrolled: 'Already enrolled',
+    searchTruncated: 'Showing {shown} of {total} matches. Keep typing to narrow it down.',
   },
   seeding: {
     frozen: 'Manually adjusted',

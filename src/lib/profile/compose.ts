@@ -5,6 +5,7 @@ import { getCompletedMatchRecordsBatch } from '@/lib/supabase/queries/matches';
 import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
 import { getGlobalKillRankForPokemon, getAllTimePlayerAggregates } from '@/lib/supabase/queries/aggregates';
 import { listTournamentsByIds, getParticipantsBatch } from '@/lib/supabase/queries/tournaments';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
@@ -218,7 +219,16 @@ async function loadParticipationStandings(
       for (const p of participants) participantNames[p.id] = p.name;
 
       const context = (t.season_id ? seasonContexts?.get(t.season_id) : undefined) ?? NO_SEASON_CONTEXT;
-      const standings = computeStandingsFromContext(context, participantIds, participantNames, matchRecords);
+      // A Swiss tournament's table scores the byes stored on its rounds.
+      const byes = await loadScoringByes(t);
+      const standings = computeStandingsFromContext(
+        context,
+        participantIds,
+        participantNames,
+        matchRecords,
+        {},
+        { byes },
+      );
       const playerIdx = standings.findIndex((s) => s.player_id === playerId);
       if (playerIdx !== -1) {
         standingsMap.set(t.id, {

@@ -385,6 +385,7 @@ function makeRound(overrides: Partial<Round> & Pick<Round, 'id' | 'tournament_id
     pairings_generated: true,
     deadline: null,
     bracket_side: null,
+    bye_player_ids: [],
     created_at: STAMP,
     updated_at: STAMP,
     ...overrides,
