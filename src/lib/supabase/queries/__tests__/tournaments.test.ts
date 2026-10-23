@@ -287,6 +287,19 @@ describe('listTournamentsByIds', () => {
     expect(mockBuilder.from).not.toHaveBeenCalled();
   });
 
+  it("joins the season's format so the byes gate can read it", async () => {
+    const epbRow = { ...TOURNAMENT_WITH_DETAILS_ROW, season_id: 's1', seasons: { name: 'Season 1', format_type: 'evolution_point_buy' } };
+    mockBuilder.order.mockReturnValue({ data: [epbRow, TOURNAMENT_WITH_DETAILS_ROW], error: null });
+
+    const result = await listTournamentsByIds(['t1']);
+
+    const [select] = mockBuilder.select.mock.calls[0] as [string];
+    expect(select).toContain('seasons ( name, format_type )');
+    expect(result[0].season_name).toBe('Season 1');
+    expect(result[0].season_format_type).toBe('evolution_point_buy');
+    expect(result[1].season_format_type).toBeNull();
+  });
+
   it('throws on error', async () => {
     mockBuilder.order.mockReturnValue({ data: null, error: new Error('ids err') });
     await expect(listTournamentsByIds(['t1'])).rejects.toThrow('ids err');

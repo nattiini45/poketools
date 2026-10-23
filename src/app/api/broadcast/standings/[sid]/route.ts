@@ -115,7 +115,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       participantNames,
       matchRecords,
       participantAvatars,
-      { byes: await loadScoringByes(primaryTournament) },
+      // The stage rows carry no league format, so the season's is passed for the bye gate.
+      { byes: await loadScoringByes({ ...primaryTournament, season_format_type: season.format_type }) },
     );
 
     // Enrich each player with rating + top signature (batch — 2 queries instead of 2N)

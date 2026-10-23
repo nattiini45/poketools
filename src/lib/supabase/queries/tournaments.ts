@@ -140,7 +140,7 @@ export async function listTournamentsByIds(
     .select(`
       *,
       rulesets ( name ),
-      seasons ( name ),
+      seasons ( name, format_type ),
       tournament_participants ( count )
     `)
     .in('id', ids);
@@ -151,12 +151,16 @@ export async function listTournamentsByIds(
 
   if (error) throw error;
 
-  return data.map((row) => ({
-    ...toTournament(row),
-    ruleset_name: (row.rulesets as { name: string } | null)?.name ?? '',
-    season_name: (row.seasons as { name: string } | null)?.name ?? null,
-    participant_count: embeddedCount(row.tournament_participants),
-  }));
+  return data.map((row) => {
+    const season = row.seasons as { name: string; format_type: SeasonFormatType } | null;
+    return {
+      ...toTournament(row),
+      ruleset_name: (row.rulesets as { name: string } | null)?.name ?? '',
+      season_name: season?.name ?? null,
+      season_format_type: season?.format_type ?? null,
+      participant_count: embeddedCount(row.tournament_participants),
+    };
+  });
 }
 
 export async function getTournamentById(id: string): Promise<Tournament | null> {

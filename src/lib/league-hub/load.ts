@@ -5,7 +5,7 @@ import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { sumEvolutionPoints, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
-import { scoringByeRecords } from '@/lib/tournament/byes';
+import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import type { LeagueGroupStandings, LeagueStanding } from '@/lib/supabase/queries/league-standings';
 import type { CombinedRanking } from '@/lib/tournament/group-standings';
@@ -213,7 +213,11 @@ export async function loadLeagueHubPanel(
     case 'groups': {
       const tables = tableStages(stages);
       const roundRobin = roundRobinStages(tables);
-      const swiss = tables.filter((stage) => stage.bracket_type === 'swiss');
+      // Only the Swiss tables of a league that scores byes: an Evolution Point Buy league scores none, so its
+      // rounds are not read for them.
+      const swiss = formatScoresByes(league.format_type)
+        ? tables.filter((stage) => stage.bracket_type === 'swiss')
+        : [];
       const [data, reads] = await Promise.all([
         ctx.routeData,
         tabRead(

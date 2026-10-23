@@ -50,8 +50,8 @@ export interface Tournament {
   created_at: string;
   updated_at: string;
   /**
-   * Format of the bound season (joined by getTournamentById); null for
-   * standalone tournaments. Optional: list queries do not populate it.
+   * Format of the bound season (joined by getTournamentById, getTournamentWithDetails and listTournamentsByIds); null
+   * for standalone tournaments. Optional: the other list queries do not populate it.
    */
   season_format_type?: SeasonFormatType | null;
 }

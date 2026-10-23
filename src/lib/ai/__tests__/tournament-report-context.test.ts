@@ -262,9 +262,6 @@ describe('buildRoundRecapPrompt', () => {
     vi.mocked(getRoundById).mockResolvedValueOnce({
       id: 'round-2', name: 'Round 2', round_number: 2, best_of: 3,
     } as Awaited<ReturnType<typeof getRoundById>>);
-    vi.mocked(getRoundsByTournament).mockResolvedValueOnce([
-      { round_number: 1, bye_player_ids: ['p1'] },
-    ] as Awaited<ReturnType<typeof getRoundsByTournament>>);
 
     const result = await buildRoundRecapPrompt('tourney-1', 'round-2');
 
@@ -273,7 +270,6 @@ describe('buildRoundRecapPrompt', () => {
     expect(result.userPrompt).not.toContain('bye win');
     expect(vi.mocked(computeStandingsForSeason).mock.calls[0][5]).toMatchObject({ byes: [] });
     expect(getRoundsByTournament).not.toHaveBeenCalled();
-    vi.mocked(getRoundsByTournament).mockReset();
   });
 
   it('writes the plain record when no bye is stored', async () => {
@@ -376,9 +372,6 @@ describe('buildRoundForecastPrompt', () => {
     vi.mocked(getSeasonById).mockResolvedValueOnce({
       id: 'season-1', name: 'The League', description: null, format_type: 'evolution_point_buy',
     } as never);
-    vi.mocked(getRoundsByTournament).mockResolvedValueOnce([
-      { round_number: 1, bye_player_ids: ['p1'] },
-    ] as Awaited<ReturnType<typeof getRoundsByTournament>>);
     vi.mocked(getCompletedMatchRecords).mockResolvedValueOnce([
       { player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1', round_number: 1 },
     ] as Awaited<ReturnType<typeof getCompletedMatchRecords>>);
@@ -388,7 +381,6 @@ describe('buildRoundForecastPrompt', () => {
     expect(result.userPrompt).toContain('Alice: 3pts (1W-0L)');
     expect(result.userPrompt).not.toContain('bye win');
     expect(getRoundsByTournament).not.toHaveBeenCalled();
-    vi.mocked(getRoundsByTournament).mockReset();
   });
 
   it('skips standings when no records exist', async () => {

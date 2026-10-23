@@ -45,6 +45,10 @@ vi.mock('@/lib/tournament/season-standings', () => ({
   computeStandingsForSeason: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/rounds', () => ({
+  getRoundsByTournament: vi.fn(),
+}));
+
 vi.mock('@/lib/pkmn/sprite-styles', () => ({
   siteSpriteUrl: vi.fn((name: string) => `https://sprites/${name}.png`),
 }));
@@ -56,6 +60,7 @@ import {
   getParticipants,
 } from '@/lib/supabase/queries/tournaments';
 import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getPlayerSignaturesBatch } from '@/lib/supabase/queries/signatures';
 import { getAggregates } from '@/lib/supabase/queries/aggregates';
@@ -163,6 +168,46 @@ describe('GET /api/broadcast/standings/[sid]', () => {
     expect(body.data.standings[1].signature_pokemon).toBeNull();
     expect(body.data.recent_results).toHaveLength(1);
     expect(body.data.leaders).toBeDefined();
+  });
+
+  describe('a Swiss primary stage', () => {
+    const swissStage = { ...mockTournament, bracket_type: 'swiss' };
+
+    function arrange(formatType: string) {
+      vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, format_type: formatType } as never);
+      vi.mocked(getStagesBySeasonId).mockResolvedValue([swissStage as never]);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([mockMatch as never]);
+      vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
+      vi.mocked(computeStandingsForSeason).mockResolvedValue(mockStandings as never);
+      vi.mocked(getPlayerRatingsBatch).mockResolvedValue(new Map() as never);
+      vi.mocked(getPlayerSignaturesBatch).mockResolvedValue(new Map() as never);
+      vi.mocked(getAggregates).mockResolvedValue([]);
+    }
+
+    it('scores its stored byes', async () => {
+      arrange('singles');
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { round_number: 1, bye_player_ids: ['p2'] },
+      ] as never);
+
+      const res = await GET({} as NextRequest, routeContext);
+
+      expect((await res.json()).success).toBe(true);
+      expect(getRoundsByTournament).toHaveBeenCalledWith('tourn-1');
+      expect(vi.mocked(computeStandingsForSeason).mock.calls[0][5]).toEqual({
+        byes: [{ player_id: 'p2', round_number: 1 }],
+      });
+    });
+
+    it('reads no rounds in an Evolution Point Buy league, which scores no byes', async () => {
+      arrange('evolution_point_buy');
+
+      const res = await GET({} as NextRequest, routeContext);
+
+      expect((await res.json()).success).toBe(true);
+      expect(getRoundsByTournament).not.toHaveBeenCalled();
+      expect(vi.mocked(computeStandingsForSeason).mock.calls[0][5]).toEqual({ byes: [] });
+    });
   });
 
   it('returns 404 when season not found', async () => {
