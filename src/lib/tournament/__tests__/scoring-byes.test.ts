@@ -95,4 +95,39 @@ describe('loadScoringByes', () => {
     expect(await loadScoringByes({ id: 'rr-1', bracket_type: 'round_robin' })).toEqual([]);
     expect(h.getRoundsByTournament).not.toHaveBeenCalled();
   });
+
+  it('reads no round and scores no bye for a Swiss stage of an Evolution Point Buy league', async () => {
+    const byes = await loadScoringByes({
+      id: 'swiss-1',
+      bracket_type: 'swiss',
+      season_format_type: 'evolution_point_buy',
+    });
+
+    expect(byes).toEqual([]);
+    expect(h.getRoundsByTournament).not.toHaveBeenCalled();
+  });
+
+  it('scores the Swiss byes of a standalone tournament and of another league format', async () => {
+    h.getRoundsByTournament.mockResolvedValue([byeRound('r1', 'swiss-1', 2, ['p1'])]);
+
+    for (const season_format_type of [null, undefined, 'standard']) {
+      const byes = await loadScoringByes({ id: 'swiss-1', bracket_type: 'swiss', season_format_type });
+      expect(byes).toEqual([{ player_id: 'p1', round_number: 2 }]);
+    }
+  });
+});
+
+describe('loadScoringByesBatch with Evolution Point Buy stages', () => {
+  it('leaves an Evolution Point Buy stage out of the rounds read and gives it an empty entry', async () => {
+    h.getByeRoundsByTournamentIds.mockResolvedValue(new Map([['swiss-1', [byeRound('r1', 'swiss-1', 1, ['p1'])]]]));
+
+    const byes = await loadScoringByesBatch([
+      { id: 'swiss-1', bracket_type: 'swiss', season_format_type: 'standard' },
+      { id: 'swiss-epb', bracket_type: 'swiss', season_format_type: 'evolution_point_buy' },
+    ]);
+
+    expect(h.getByeRoundsByTournamentIds).toHaveBeenCalledWith(['swiss-1']);
+    expect(byes.get('swiss-1')).toEqual([{ player_id: 'p1', round_number: 1 }]);
+    expect(byes.get('swiss-epb')).toEqual([]);
+  });
 });

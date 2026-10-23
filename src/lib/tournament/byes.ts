@@ -1,4 +1,5 @@
 import type { BracketType } from '@/types/tournament';
+import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import type { ByeRecord } from './types';
 
 /** The fields of a stored round that carry its bye. */
@@ -19,6 +20,15 @@ export function byeRecordsFromRounds(rounds: readonly RoundByeSource[]): ByeReco
     }
   }
   return records;
+}
+
+/**
+ * Whether a league format scores Swiss byes at all. Evolution Point Buy never does, whatever its stages are: its
+ * tables, previews, insights and generated text carry no bye. `null` (a standalone tournament) and an unknown
+ * format score them. The one gate every surface that reads byes asks, so none disagrees with another.
+ */
+export function formatScoresByes(formatType: string | null | undefined): boolean {
+  return !formatType || !isEvolutionPointBuy(formatType);
 }
 
 /**

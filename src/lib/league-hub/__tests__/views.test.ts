@@ -1296,6 +1296,23 @@ describe('buildTableStage — Evolution Point Buy', () => {
     ]);
   });
 
+  it('a Swiss stage scores no bye, where the same stage of another format scores it as a win', () => {
+    const swiss = stage('stage-swiss', { bracket_type: 'swiss' });
+    const byes = [{ player_id: 'brock', round_number: 1 }];
+    const input = {
+      stage: swiss,
+      participants,
+      matches: [played('m-1', 'ash', 'misty', 'ash')],
+      byes,
+    };
+
+    const epb = buildTableStage(tableInput({ ...input, context: epbContext }));
+    const standard = buildTableStage(tableInput({ ...input, context: { formatType: 'standard' } }));
+
+    expect(row(epb.tables[0], 'brock')).toMatchObject({ wins: 0, points: 0 });
+    expect(row(standard.tables[0], 'brock')).toMatchObject({ wins: 1 });
+  });
+
   it('a non-EPB season keeps the generic rows', () => {
     const result = buildTableStage(
       tableInput({ stage: rr, participants, context: { formatType: 'singles' } }),

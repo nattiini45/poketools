@@ -50,6 +50,9 @@ function storeOf(): Store {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(START);
+  // The store caches the time between ticks. A subscribe/unsubscribe pair re-reads it, so no case depends on the
+  // clock state an earlier one left behind.
+  storeOf().subscribe(() => {})();
 });
 afterEach(() => {
   vi.useRealTimers();

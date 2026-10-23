@@ -126,7 +126,8 @@ async function buildFactPack(params: ReportParams): Promise<PlayerProfileFactPac
       final_rank,
       kd: playerStanding?.kill_differential ?? 0,
     },
-    seasonByeWins: countByesByPlayer(byes)[params.playerId] ?? 0,
+    // The standings row that holds the record also holds the byes: a player without one has none to annotate.
+    seasonByeWins: playerStanding ? (countByesByPlayer(byes)[params.playerId] ?? 0) : 0,
     signaturePokemon,
     notableWins,
     totalMatches: allMatchRecords.filter(

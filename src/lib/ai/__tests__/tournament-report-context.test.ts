@@ -250,6 +250,32 @@ describe('buildRoundRecapPrompt', () => {
     expect(bob).not.toContain('bye');
   });
 
+  it('writes no bye annotation for a Swiss stage of an Evolution Point Buy league, and reads no rounds', async () => {
+    vi.mocked(getTournamentById).mockResolvedValueOnce({
+      id: 'tourney-1', season_id: 'season-1', season_format_type: 'evolution_point_buy', ruleset_id: null,
+      name: 'Swiss Cup', best_of_default: 3, bracket_type: 'swiss', description: null, is_doubles: false,
+      status: 'active',
+    } as unknown as Awaited<ReturnType<typeof getTournamentById>>);
+    vi.mocked(getSeasonById).mockResolvedValueOnce({
+      id: 'season-1', name: 'The League', description: null, format_type: 'evolution_point_buy',
+    } as never);
+    vi.mocked(getRoundById).mockResolvedValueOnce({
+      id: 'round-2', name: 'Round 2', round_number: 2, best_of: 3,
+    } as Awaited<ReturnType<typeof getRoundById>>);
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce([
+      { round_number: 1, bye_player_ids: ['p1'] },
+    ] as Awaited<ReturnType<typeof getRoundsByTournament>>);
+
+    const result = await buildRoundRecapPrompt('tourney-1', 'round-2');
+
+    const alice = result.userPrompt.split('\n').find((line) => line.includes('Alice') && line.includes('pts'));
+    expect(alice).toContain('(1W-0L)');
+    expect(result.userPrompt).not.toContain('bye win');
+    expect(vi.mocked(computeStandingsForSeason).mock.calls[0][5]).toMatchObject({ byes: [] });
+    expect(getRoundsByTournament).not.toHaveBeenCalled();
+    vi.mocked(getRoundsByTournament).mockReset();
+  });
+
   it('writes the plain record when no bye is stored', async () => {
     const result = await buildRoundRecapPrompt('tourney-1', 'round-1');
 
@@ -339,6 +365,30 @@ describe('buildRoundForecastPrompt', () => {
 
     expect(result.userPrompt).toContain('Alice: 3pts (1W-0L, incl. 1 bye win without a match)');
     expect(result.userPrompt).toContain('Bob: 0pts (0W-1L)');
+  });
+
+  it('writes no bye annotation for a Swiss stage of an Evolution Point Buy league', async () => {
+    vi.mocked(getTournamentById).mockResolvedValueOnce({
+      id: 'tourney-1', season_id: 'season-1', season_format_type: 'evolution_point_buy', ruleset_id: null,
+      name: 'Swiss Cup', best_of_default: 3, bracket_type: 'swiss', description: null, is_doubles: false,
+      status: 'active',
+    } as unknown as Awaited<ReturnType<typeof getTournamentById>>);
+    vi.mocked(getSeasonById).mockResolvedValueOnce({
+      id: 'season-1', name: 'The League', description: null, format_type: 'evolution_point_buy',
+    } as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce([
+      { round_number: 1, bye_player_ids: ['p1'] },
+    ] as Awaited<ReturnType<typeof getRoundsByTournament>>);
+    vi.mocked(getCompletedMatchRecords).mockResolvedValueOnce([
+      { player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1', round_number: 1 },
+    ] as Awaited<ReturnType<typeof getCompletedMatchRecords>>);
+
+    const result = await buildRoundForecastPrompt('tourney-1', 'round-1');
+
+    expect(result.userPrompt).toContain('Alice: 3pts (1W-0L)');
+    expect(result.userPrompt).not.toContain('bye win');
+    expect(getRoundsByTournament).not.toHaveBeenCalled();
+    vi.mocked(getRoundsByTournament).mockReset();
   });
 
   it('skips standings when no records exist', async () => {

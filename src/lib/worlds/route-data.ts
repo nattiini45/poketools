@@ -28,6 +28,7 @@ import {
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import type { CombinedRanking } from '@/lib/tournament/group-standings';
 import { getMatchesByTournamentIds } from '@/lib/supabase/queries/matches';
+import { formatScoresByes } from '@/lib/tournament/byes';
 import { loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { listSeasonTeamLeadsWithFacts, type TeamLead } from '@/lib/supabase/queries/teams';
@@ -325,8 +326,7 @@ export async function buildWorldRouteData(
 
   // The season table scores a Swiss stage's stored byes as its stage table does. The read joins the wave only for
   // a league with a Swiss stage; Evolution Point Buy standings never read byes, so they skip it too.
-  const readsByes =
-    stages.some((stage) => stage.bracket_type === 'swiss') && !isEvolutionPointBuy(league.format_type);
+  const readsByes = stages.some((stage) => stage.bracket_type === 'swiss') && formatScoresByes(league.format_type);
 
   const [
     pointBuyEntries,

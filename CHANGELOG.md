@@ -39,8 +39,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Swiss byes are stored and scored.** A round remembers who had a bye, a later round never gives a second bye while
   another player has none, and a Swiss bye counts as a win from the moment its round is generated: in the
   tournament's table, the league's season standings, the standings preview and Insights. Round-robin byes score
-  nothing, and Evolution Point Buy standings never count byes. AI recaps, forecasts and Kale reports say when a
-  record includes a bye win.
+  nothing, and an Evolution Point Buy league scores no bye on any surface, whatever its stages are (tables, previews,
+  Insights in any scope, AI text). AI recaps, forecasts and Kale reports say when a record includes a bye win.
 - **Timed suspensions end on time.** A cron lifts a suspension once its end has passed and writes one audit event per
   player.
 - **Doubles phases.** The phase form has a doubles checkbox.

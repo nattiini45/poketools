@@ -15,20 +15,23 @@ import {
   getSwissByeRoundsBySeason,
   type ByeRound,
 } from '@/lib/supabase/queries/rounds';
-import { groupRoundsByStage, scoringByeRecords } from './byes';
+import { formatScoresByes, groupRoundsByStage, scoringByeRecords } from './byes';
 import type { ByeRecord } from './types';
 
 /**
  * The byes of `tournament` that count in its standings: its stored Swiss byes
- * as win records, nothing for any other bracket type. Anything but a Swiss
- * tournament returns before a round is read, so callers pay no query for the
- * round robin, league and elimination standings that never score a bye.
+ * as win records, nothing for any other bracket type and nothing for a stage of
+ * an Evolution Point Buy league (`season_format_type`, as `getTournamentById`
+ * joins it). Anything but a scoring Swiss tournament returns before a round is
+ * read, so callers pay no query for the round robin, league, elimination and
+ * Evolution Point Buy standings that never score a bye.
  */
 export async function loadScoringByes(tournament: {
   id: string;
   bracket_type: BracketType | null | undefined;
+  season_format_type?: string | null;
 }): Promise<ByeRecord[]> {
-  if (tournament.bracket_type !== 'swiss') return [];
+  if (tournament.bracket_type !== 'swiss' || !formatScoresByes(tournament.season_format_type)) return [];
   return scoringByeRecords(tournament.bracket_type, await getRoundsByTournament(tournament.id));
 }
 
@@ -46,9 +49,11 @@ export async function loadSeasonSwissByeRounds(seasonId: string): Promise<Map<st
  * result without a fallback.
  */
 export async function loadScoringByesBatch(
-  tournaments: readonly { id: string; bracket_type?: BracketType | null }[],
+  tournaments: readonly { id: string; bracket_type?: BracketType | null; season_format_type?: string | null }[],
 ): Promise<Map<string, ByeRecord[]>> {
-  const swissIds = tournaments.filter((t) => t.bracket_type === 'swiss').map((t) => t.id);
+  const swissIds = tournaments
+    .filter((t) => t.bracket_type === 'swiss' && formatScoresByes(t.season_format_type))
+    .map((t) => t.id);
   const roundsByTournament = swissIds.length > 0 ? await getByeRoundsByTournamentIds(swissIds) : new Map<string, ByeRound[]>();
   return new Map(
     tournaments.map((t) => [t.id, scoringByeRecords(t.bracket_type, roundsByTournament.get(t.id) ?? [])] as const),

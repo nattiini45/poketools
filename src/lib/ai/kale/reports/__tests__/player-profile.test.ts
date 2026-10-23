@@ -143,6 +143,19 @@ describe('playerProfileDefinition', () => {
       expect(mockComputeStandings.mock.calls[0][5]).toMatchObject({ byes });
     });
 
+    it('annotates no bye for a player the standings do not hold', async () => {
+      mockLoadByes.mockResolvedValue([{ player_id: PLAYER_ID, round_number: 1 }]);
+      mockComputeStandings.mockResolvedValue([
+        { player_id: 'player-2', player_name: 'Gary', wins: 1, losses: 0, draws: 0, points: 3, kill_differential: 0 },
+      ] as never);
+
+      const fp = await playerProfileDefinition.buildFactPack({
+        tournamentId: TOURNAMENT_ID, roundId: ROUND_ID, playerId: PLAYER_ID,
+      });
+
+      expect((fp as Record<string, unknown>).seasonByeWins).toBe(0);
+    });
+
     it('has no bye wins when the standings hold no byes', async () => {
       const fp = await playerProfileDefinition.buildFactPack({
         tournamentId: TOURNAMENT_ID, roundId: ROUND_ID, playerId: PLAYER_ID,

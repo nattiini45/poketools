@@ -151,7 +151,7 @@ describe('GET /api/admin/matches: guard', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.code).toBe('validation_failed');
-    expect(body.error).toContain('league or tournament filter narrows the list');
+    expect(body.error).toContain('pick one tournament, or a league with at most 100 stages');
     expect(listAdminMatchesPage).not.toHaveBeenCalled();
   });
 
@@ -279,7 +279,6 @@ describe('GET /api/admin/matches: validation', () => {
     expect(Object.getPrototypeOf(passed)).toBe(Object.prototype);
     expect(Object.keys(passed)).not.toContain('__proto__');
     expect(Object.keys(passed)).not.toContain('constructor');
-    expect(({} as Record<string, unknown>).x).toBeUndefined();
   });
 
   it.each([

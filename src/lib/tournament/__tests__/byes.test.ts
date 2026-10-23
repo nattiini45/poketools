@@ -3,6 +3,7 @@ import {
   byeRecordsFromRounds,
   countByesByPlayer,
   formatRecord,
+  formatScoresByes,
   groupRoundsByStage,
   scoringByeRecords,
   scoringByeRecordsForStages,
@@ -68,6 +69,18 @@ describe('bye timing (a bye scores from the moment its round is generated)', () 
     const eve = standings.find((s) => s.player_id === 'e')!;
     expect(eve.wins).toBe(1);
     expect(eve.points).toBe(1);
+  });
+});
+
+describe('formatScoresByes (the one gate every surface asks)', () => {
+  it('scores no bye for Evolution Point Buy, whatever its stages are', () => {
+    expect(formatScoresByes('evolution_point_buy')).toBe(false);
+  });
+
+  it('scores byes for every other format and for a standalone tournament', () => {
+    for (const format of ['standard', 'singles', 'doubles', 'draft', 'gym_league', null, undefined, '']) {
+      expect(formatScoresByes(format)).toBe(true);
+    }
   });
 });
 

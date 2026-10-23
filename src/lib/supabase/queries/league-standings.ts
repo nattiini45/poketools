@@ -9,8 +9,7 @@ import {
   type SeasonStandingsContext,
 } from '@/lib/tournament/season-standings';
 import { loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
-import { scoringByeRecordsForStages } from '@/lib/tournament/byes';
-import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { formatScoresByes, scoringByeRecordsForStages } from '@/lib/tournament/byes';
 import type { Standing, MatchRecord, ByeRecord } from '@/lib/tournament/types';
 import { rankCombinedTable, splitGroupTables, type CombinedRanking } from '@/lib/tournament/group-standings';
 import type { MatchWithPlayers } from '@/types/match';
@@ -112,6 +111,8 @@ export interface LeagueSchedule {
 /** One matchday's (round's) completed matches, with the order the season played them in. */
 export interface CompletedMatchday {
   roundId: string;
+  /** The stage the round belongs to. */
+  stageId: string;
   /** Earliest kickoff among the round's completed matches — orders the matchdays. */
   firstKickoff: string;
   records: MatchRecord[];
@@ -154,7 +155,7 @@ export function completedMatchdays(fixtures: LeagueFixture[]): CompletedMatchday
         (earliest, fixture) => (playedAt(fixture).localeCompare(earliest) < 0 ? playedAt(fixture) : earliest),
         playedAt(group[0]),
       );
-      return { roundId: group[0].match.round_id, firstKickoff, records: group.map(toMatchRecord) };
+      return { roundId: group[0].match.round_id, stageId: group[0].stageId, firstKickoff, records: group.map(toMatchRecord) };
     })
     .sort((a, b) => a.firstKickoff.localeCompare(b.firstKickoff));
 }
@@ -246,9 +247,7 @@ export async function getLeagueSchedule(
 
   // One rounds read for every Swiss stage. A league without a Swiss stage has no bye to score, and Evolution Point
   // Buy standings never read byes, so neither reads the rounds.
-  const readsByes =
-    stages.some((stage) => stage.bracket_type === 'swiss') &&
-    (context.formatType === null || !isEvolutionPointBuy(context.formatType));
+  const readsByes = stages.some((stage) => stage.bracket_type === 'swiss') && formatScoresByes(context.formatType);
   const [matchesByStage, byeRoundsByStage] = await Promise.all([
     getMatchesByTournamentIds(stages.map((stage) => stage.id)),
     readsByes ? loadSeasonSwissByeRounds(seasonId) : undefined,
@@ -262,7 +261,8 @@ export async function getLeagueSchedule(
  * latest matchday. A bye is part of the table the moment its round is generated. A round with results stands where
  * its matchday does (matchdays are ordered by kickoff, so a delayed lower-numbered round can be the latest one);
  * a round nobody has played yet was generated after the latest matchday when it follows that matchday's round in
- * its stage. Pure.
+ * its stage, or belongs to a later stage (stages run one after another, whatever the latest matchday's bracket
+ * type). Pure.
  */
 function seasonByes(
   stages: readonly LeagueScheduleStage[],
@@ -270,24 +270,22 @@ function seasonByes(
   matchdays: readonly CompletedMatchday[],
 ): { current: ByeRecord[]; previous: ByeRecord[] } {
   // No previous table before a second matchday: every bye stands.
-  const latestMatchdayRoundId = matchdays.length > 1 ? matchdays[matchdays.length - 1].roundId : null;
+  const latest = matchdays.length > 1 ? matchdays[matchdays.length - 1] : null;
   const playedBefore = new Set(matchdays.slice(0, -1).map((day) => day.roundId));
   const played = new Set(matchdays.map((day) => day.roundId));
-  let latestRound: ByeRound | undefined;
-  if (latestMatchdayRoundId) {
-    for (const rounds of byeRoundsByStage.values()) {
-      latestRound = rounds.find((round) => round.id === latestMatchdayRoundId) ?? latestRound;
-    }
-  }
+  const stageOrder = new Map(stages.map((stage, index) => [stage.id, index] as const));
+  const latestRound = latest
+    ? byeRoundsByStage.get(latest.stageId)?.find((round) => round.id === latest.roundId)
+    : undefined;
 
   const standsBeforeLatest = (round: ByeRound) => {
-    if (latestMatchdayRoundId === null) return true;
+    if (!latest) return true;
     if (played.has(round.id)) return playedBefore.has(round.id);
-    return !(
-      latestRound &&
-      round.tournament_id === latestRound.tournament_id &&
-      round.round_number > latestRound.round_number
-    );
+    if (round.tournament_id === latest.stageId) {
+      return !(latestRound && round.round_number > latestRound.round_number);
+    }
+    // An unknown stage stands, as before.
+    return !((stageOrder.get(round.tournament_id) ?? -1) > (stageOrder.get(latest.stageId) ?? Infinity));
   };
   const earlier = new Map(
     [...byeRoundsByStage].map(([stageId, rounds]) => [stageId, rounds.filter(standsBeforeLatest)] as const),

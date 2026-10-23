@@ -29,7 +29,7 @@ vi.mock('react', async (importOriginal) => {
   return { ...actual, default: { ...actual, useState }, useState };
 });
 
-const { default: Combobox, asyncSearchTerm, nextEnabledIndex, pickOption, splitHighlight } = await import('../Combobox');
+const { default: Combobox, arrowUpIndex, asyncSearchTerm, nextEnabledIndex, pickOption, splitHighlight } = await import('../Combobox');
 
 function render(props: { minQueryLength?: number; label?: string; placeholder?: string }, locale: 'en' | 'de' = 'en') {
   seed.falseSeen = 0;
@@ -151,6 +151,24 @@ describe('nextEnabledIndex', () => {
     expect(nextEnabledIndex(options, 3, 1)).toBe(3);
     expect(nextEnabledIndex(options, 1, -1)).toBe(1);
     expect(nextEnabledIndex([{ label: 'a', value: 'a', disabled: true }], -1, 1)).toBe(-1);
+  });
+});
+
+describe('arrowUpIndex', () => {
+  const options = [{ label: 'a', value: 'a' }, { label: 'b', value: 'b', disabled: true }, { label: 'c', value: 'c' }, { label: 'd', value: 'd', disabled: true }];
+
+  it('goes to the last pickable option when nothing is highlighted', () => {
+    expect(arrowUpIndex(options, -1)).toBe(2);
+  });
+
+  it('steps to the previous pickable option and stays on the first', () => {
+    expect(arrowUpIndex(options, 2)).toBe(0);
+    expect(arrowUpIndex(options, 0)).toBe(0);
+  });
+
+  it('highlights nothing when no option is pickable', () => {
+    expect(arrowUpIndex([{ label: 'a', value: 'a', disabled: true }], -1)).toBe(-1);
+    expect(arrowUpIndex([], -1)).toBe(-1);
   });
 });
 

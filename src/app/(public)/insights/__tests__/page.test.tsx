@@ -101,6 +101,40 @@ describe('Insights standings', () => {
     expect(eve(league)).toMatchObject({ wins: 1, losses: 0 });
   });
 
+  it('tournament scope scores no bye for a Swiss stage of an Evolution Point Buy league, agreeing with the league scope', async () => {
+    h.publicReads.season.mockResolvedValue({ id: 'season-1', name: 'League', format_type: 'evolution_point_buy' });
+    h.publicReads.tournament.mockResolvedValue({
+      id: 'swiss-1',
+      name: 'Swiss',
+      bracket_type: 'swiss',
+      is_doubles: false,
+      season_id: 'season-1',
+      season_format_type: 'evolution_point_buy',
+    });
+
+    const league = await renderStandings({ scope: 'league', id: 'season-1' });
+    const tournament = await renderStandings({ scope: 'tournament', id: 'swiss-1' });
+
+    expect(eve(league)).toMatchObject({ wins: 0, losses: 0 });
+    expect(eve(tournament)).toMatchObject({ wins: 0, losses: 0 });
+    expect(h.publicReads.tournamentRounds).not.toHaveBeenCalled();
+  });
+
+  it('tournament scope still scores the bye of a Swiss stage of another league format', async () => {
+    h.publicReads.tournament.mockResolvedValue({
+      id: 'swiss-1',
+      name: 'Swiss',
+      bracket_type: 'swiss',
+      is_doubles: false,
+      season_id: 'season-1',
+      season_format_type: 'standard',
+    });
+
+    const tournament = await renderStandings({ scope: 'tournament', id: 'swiss-1' });
+
+    expect(eve(tournament)).toMatchObject({ wins: 1, losses: 0 });
+  });
+
   it('league scope reads the Swiss stages bye rounds in ONE batched read, not one per stage', async () => {
     h.publicReads.seasonStages.mockResolvedValue([
       { id: 'swiss-1', bracket_type: 'swiss' },

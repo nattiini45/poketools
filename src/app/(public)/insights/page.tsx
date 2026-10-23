@@ -18,8 +18,12 @@ import {
 } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
-import { groupRoundsByStage, scoringByeRecords, scoringByeRecordsForStages } from '@/lib/tournament/byes';
-import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import {
+  formatScoresByes,
+  groupRoundsByStage,
+  scoringByeRecords,
+  scoringByeRecordsForStages,
+} from '@/lib/tournament/byes';
 import { getT } from '@/i18n/server';
 import { insightsMessages } from '@/i18n/messages/insights';
 
@@ -64,8 +68,12 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
       publicReads.tournamentMatchRecords(scope.id),
       publicReads.tournamentBattleStats(scope.id),
     ]);
-    // A Swiss tournament's table scores the byes stored on its rounds.
-    const byes = scoringByeRecords(tournament.bracket_type, await publicReads.tournamentRounds(scope.id));
+    // A Swiss tournament's table scores the byes stored on its rounds, except a stage of an Evolution Point Buy
+    // league (its tables never score a bye, here or in the league scope): that one reads no rounds.
+    const byes =
+      tournament.bracket_type === 'swiss' && formatScoresByes(tournament.season_format_type)
+        ? scoringByeRecords(tournament.bracket_type, await publicReads.tournamentRounds(scope.id))
+        : [];
     return {
       title: tournament.name,
       isDoubles: tournament.is_doubles,
@@ -100,7 +108,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
     // agrees with the tournament scope. The stages come from the entry the league page shares; the byes are ONE
     // batched read for all Swiss stages, and a league with no Swiss stage, or an Evolution Point Buy one (its
     // tables never read byes), reads none.
-    const readsByes = !isEvolutionPointBuy(season.format_type) && stages.some((stage) => stage.bracket_type === 'swiss');
+    const readsByes = formatScoresByes(season.format_type) && stages.some((stage) => stage.bracket_type === 'swiss');
     const byeRounds = readsByes ? await publicReads.seasonByeRounds(scope.id) : [];
     const byes = scoringByeRecordsForStages(stages, groupRoundsByStage(byeRounds));
     return {

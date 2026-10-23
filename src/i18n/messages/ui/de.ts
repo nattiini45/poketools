@@ -15,7 +15,6 @@ export default defineDe<typeof en>()({
   combobox: {
     clear: 'Leeren',
     searching: 'Suche läuft …',
-    noResults: 'Keine Ergebnisse',
     noResultsFor: 'Keine Ergebnisse für „{query}“',
   },
   modal: {

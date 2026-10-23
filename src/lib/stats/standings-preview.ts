@@ -2,8 +2,7 @@ import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
 import { getCompletedMatchRecords, getCompletedMatchRecordsBatch } from '@/lib/supabase/queries/matches';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { loadScoringByes, loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
-import { scoringByeRecords } from '@/lib/tournament/byes';
-import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
 import { getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
 import type { StandingsRow } from '@/types/game';
 
@@ -33,7 +32,7 @@ async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
   // The Swiss stages' stored byes score in the season table as in each stage's own table: one rounds read for all
   // stages. A league without a Swiss stage has none, and Evolution Point Buy tables never read byes, so neither
   // pays the read.
-  const readsByes = hasSwissStage && (formatType === null || !isEvolutionPointBuy(formatType));
+  const readsByes = hasSwissStage && formatScoresByes(formatType);
   const [recordsMap, byeRoundsByStage] = await Promise.all([
     getCompletedMatchRecordsBatch(stageIds),
     readsByes ? loadSeasonSwissByeRounds(seasonId) : undefined,
@@ -67,7 +66,8 @@ export async function getStandingsPreview(
       getCompletedMatchRecords(id),
       getTournamentById(id),
     ]);
-    // A Swiss tournament's table scores the byes stored on its rounds.
+    // A Swiss tournament's table scores the byes stored on its rounds, except a stage of an Evolution Point Buy
+    // league (`loadScoringByes` returns none for it).
     const byes = tournament ? await loadScoringByes(tournament) : [];
     const standings = buildStandingsRowsFromMatchRecords(
       parts.map((p) => ({

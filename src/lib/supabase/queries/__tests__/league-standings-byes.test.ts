@@ -223,6 +223,67 @@ describe('the previous table follows the matchday order, not the round number', 
   });
 });
 
+describe('the previous table with several stages', () => {
+  const roundRobinStage: LeagueScheduleStage = { id: 'rr-1', name: 'RR', bracket_type: 'round_robin' };
+
+  it('holds out the bye of a Swiss round generated after a round robin matchday', () => {
+    const schedule = assembleLeagueSchedule({
+      stages: [roundRobinStage, swissStage],
+      participants,
+      matchesByStage: new Map([
+        [
+          'rr-1',
+          [
+            match('rr-r1', 'a', 'b', 'a', '2026-09-01T18:00:00Z'),
+            match('rr-r2', 'a', 'b', 'a', '2026-09-08T18:00:00Z'),
+          ],
+        ],
+      ]),
+      context,
+      byeRoundsByStage: new Map([['swiss-1', [byeRound('s1', 1, ['e'])]]]),
+    });
+
+    expect(schedule.standings.map((s) => s.player_id)).toEqual(['a', 'e', 'b']);
+    expect(row(schedule, 'e').rank_change).toBe(1);
+    expect(row(schedule, 'b').rank_change).toBe(-1);
+  });
+
+  it('holds out the bye of a later Swiss stage whose round nobody has played yet', () => {
+    const schedule = assembleLeagueSchedule({
+      stages: [swissStage, { id: 'swiss-2', name: 'Swiss 2', bracket_type: 'swiss' }],
+      participants,
+      matchesByStage: new Map([['swiss-1', [...round1Matches, ...round2Matches]]]),
+      context,
+      byeRoundsByStage: new Map([
+        ['swiss-1', [byeRound('r1', 1, []), byeRound('r2', 2, [])]],
+        ['swiss-2', [byeRound('s2r1', 1, ['e'], 'swiss-2')]],
+      ]),
+    });
+
+    expect(row(schedule, 'e').rank_change).toBe(1);
+  });
+
+  it('keeps the bye of an unplayed Swiss round of an earlier stage in the previous table', () => {
+    const schedule = assembleLeagueSchedule({
+      stages: [swissStage, roundRobinStage],
+      participants,
+      matchesByStage: new Map([
+        [
+          'rr-1',
+          [
+            match('rr-r1', 'a', 'b', 'a', '2026-09-01T18:00:00Z'),
+            match('rr-r2', 'a', 'b', 'a', '2026-09-08T18:00:00Z'),
+          ],
+        ],
+      ]),
+      context,
+      byeRoundsByStage: new Map([['swiss-1', [byeRound('s1', 1, ['e'])]]]),
+    });
+
+    expect(row(schedule, 'e').rank_change).toBe(0);
+  });
+});
+
 describe('getLeagueSchedule', () => {
   beforeEach(() => {
     h.getMatchesByTournamentIds.mockReset().mockResolvedValue(new Map([['swiss-1', round1Matches]]));

@@ -774,4 +774,46 @@ describe('standing records with Swiss byes', () => {
       '0W-1L, incl. 1 bye win without a match',
     ]);
   });
+
+  function useSwissStageOfLeague(formatType: string) {
+    useSwissTournament([{ round_number: 1, bye_player_ids: ['p1'] }]);
+    vi.mocked(getTournamentById).mockResolvedValue({
+      id: 'tourney-1',
+      name: 'Swiss Cup',
+      best_of_default: 3,
+      ruleset_id: 'ruleset-1',
+      season_id: 'season-1',
+      season_format_type: formatType,
+      bracket_type: 'swiss',
+    } as unknown as Awaited<ReturnType<typeof getTournamentById>>);
+    vi.mocked(getSeasonById).mockResolvedValue({
+      id: 'season-1',
+      name: 'League',
+      description: null,
+      format_type: formatType,
+    } as never);
+    vi.mocked(getSeasonParticipants).mockResolvedValue([] as never);
+  }
+
+  it('recap and forecast: an Evolution Point Buy league scores no bye, so no record carries bye text', async () => {
+    setupRecapMocks();
+    useSwissStageOfLeague('evolution_point_buy');
+
+    const recap = await buildRecapFactPack('tourney-1', 'round-1');
+    expect(recap.currentStandings[0].recordString).toBe('1W-0L');
+    expect(vi.mocked(computeStandingsForSeason).mock.calls[0][5]).toMatchObject({ byes: [] });
+
+    const forecast = await buildForecastFactPack('tourney-1', 'round-1');
+    expect(forecast.currentStandings.map((s) => s.recordString)).toEqual(['1W-0L', '0W-1L']);
+    expect(getRoundsByTournament).not.toHaveBeenCalled();
+  });
+
+  it('recap: a league of another format with a Swiss stage still annotates its bye wins', async () => {
+    setupRecapMocks();
+    useSwissStageOfLeague('singles');
+
+    const recap = await buildRecapFactPack('tourney-1', 'round-1');
+
+    expect(recap.currentStandings[0].recordString).toBe('1W-0L, incl. 1 bye win without a match');
+  });
 });

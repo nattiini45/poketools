@@ -47,6 +47,13 @@ export function nextEnabledIndex(options: readonly ComboboxOption[], from: numbe
   return from;
 }
 
+/** Where ArrowUp goes: the previous pickable option, or the last pickable one when nothing is highlighted (-1 if none). */
+export function arrowUpIndex(options: readonly ComboboxOption[], from: number): number {
+  if (from >= 0) return nextEnabledIndex(options, from, -1);
+  const last = nextEnabledIndex(options, options.length, -1);
+  return last === options.length ? -1 : last;
+}
+
 /**
  * Picks `option`: calls `onChange` with its value and returns `true`. A disabled option is not
  * pickable, so nothing is called and `false` comes back (the caller then leaves the dropdown open).
@@ -274,7 +281,7 @@ export default function Combobox(props: ComboboxProps) {
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setHighlightIdx((prev) => (prev < 0 ? nextEnabledIndex(options, -1, 1) : nextEnabledIndex(options, prev, -1)));
+        setHighlightIdx((prev) => arrowUpIndex(options, prev));
         break;
       case 'Enter':
         e.preventDefault();
@@ -434,9 +441,6 @@ export default function Combobox(props: ComboboxProps) {
               <span className="inline-block w-3.5 h-3.5 border-2 border-poke-text-muted border-t-transparent rounded-full animate-spin" />
               {t('combobox.searching')}
             </li>
-          )}
-          {!loading && options.length === 0 && searchedQuery.length >= minQueryLength && (
-            <li className="px-3 py-2 text-sm text-poke-text-muted">{t('combobox.noResults')}</li>
           )}
           {!loading &&
             options.map((opt, i) => (

@@ -19,7 +19,6 @@ export default {
   combobox: {
     clear: 'Clear',
     searching: 'Searching…',
-    noResults: 'No results',
     noResultsFor: 'No results for “{query}”',
   },
   modal: {
