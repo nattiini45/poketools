@@ -9,6 +9,7 @@ import { canAdministerMatch, MatchAccessDenied, viewerIsSiteAdmin } from './matc
 import { isValidUuid } from '@/lib/utils/uuid';
 import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
+import { matchListBackHref, matchPageBackSuffix } from '@/lib/admin/match-list';
 import { getT } from '@/i18n/server';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { enumMessages } from '@/i18n/messages/enums';
@@ -18,9 +19,11 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  /** `back` carries the Matches list query the viewer came from (see `matchListBackHref`). */
+  searchParams?: Promise<{ back?: string | string[] }>;
 }
 
-export default async function AdminMatchPage({ params }: PageProps) {
+export default async function AdminMatchPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   if (!isValidUuid(id)) notFound();
   const match = await getMatchById(id);
@@ -37,11 +40,17 @@ export default async function AdminMatchPage({ params }: PageProps) {
     );
   }
 
-  const [t, tEnums, isSiteAdmin] = await Promise.all([
+  const [t, tEnums, isSiteAdmin, query] = await Promise.all([
     getT(adminCoreMessages),
     getT(enumMessages),
     viewerIsSiteAdmin(),
+    searchParams,
   ]);
+  // Never the raw value: the list query is re-parsed and re-serialised, so the
+  // href is always a same-origin /admin/matches path with validated keys only.
+  const backHref = matchListBackHref(query?.back);
+  // The replay import and the game edit return here; they carry the same list query along.
+  const backSuffix = matchPageBackSuffix(query?.back);
 
   return (
     <AdminGuard>
@@ -93,7 +102,7 @@ export default async function AdminMatchPage({ params }: PageProps) {
         {/* Import a replay whose Showdown names don't match the registered players */}
         {(match.status === 'scheduled' || match.status === 'in_progress') && (
           <Link
-            href={`/admin/matches/${id}/import-replay`}
+            href={`/admin/matches/${id}/import-replay${backSuffix}`}
             className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
           >
             {t('matches.detail.importReplay')}
@@ -110,13 +119,14 @@ export default async function AdminMatchPage({ params }: PageProps) {
           games={match.games}
           tournamentId={match.tournament_id}
           isSiteAdmin={isSiteAdmin}
+          backSuffix={backSuffix}
         />
 
         <Link
-          href="/admin"
+          href={backHref}
           className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
         >
-          <span aria-hidden="true">&larr;</span> {t('matches.detail.backToAdmin')}
+          <span aria-hidden="true">&larr;</span> {t('matches.detail.backToMatches')}
         </Link>
       </PageContainer>
     </AdminGuard>

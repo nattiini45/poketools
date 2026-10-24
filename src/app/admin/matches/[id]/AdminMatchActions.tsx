@@ -29,6 +29,8 @@ interface AdminMatchActionsProps {
   tournamentId: string;
   /** The viewer is a site admin (the admin data tools are site-admin only). */
   isSiteAdmin: boolean;
+  /** `?back=...` (or ''), appended to the game edit link so its way back keeps the list query. */
+  backSuffix?: string;
 }
 
 type LocalError = 'selectWinner' | 'updateFailed' | 'resetFailed' | 'deleteFailed';
@@ -50,6 +52,7 @@ export default function AdminMatchActions({
   currentWinnerId,
   games,
   isSiteAdmin,
+  backSuffix = '',
 }: AdminMatchActionsProps) {
   const router = useRouter();
   const t = useT(adminCoreMessages);
@@ -260,7 +263,7 @@ export default function AdminMatchActions({
                       </div>
                       <div className="flex gap-2">
                         <a
-                          href={`/admin/matches/${matchId}/games/${game.id}/edit`}
+                          href={`/admin/matches/${matchId}/games/${game.id}/edit${backSuffix}`}
                           className="text-xs text-poke-blue hover:underline font-heading"
                         >
                           {t('actions.edit')}

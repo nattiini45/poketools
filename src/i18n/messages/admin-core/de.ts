@@ -124,7 +124,7 @@ export default defineDe<typeof en>()({
       winner: 'Sieger:',
       notes: 'Notizen:',
       importReplay: '+ Replay importieren (manuelle Zuordnung)',
-      backToAdmin: 'Zurück zum Adminbereich',
+      backToMatches: 'Zurück zu den Spielen',
     },
     importReplay: {
       title: 'Replay importieren',

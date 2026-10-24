@@ -8,6 +8,29 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Added
+
+- **Matches filters, part 2.** `/admin/matches` gains a Round select (per phase), a date filter (scheduled, played,
+  created or updated, with from/to and the presets today, next 7 days, last 7 days and no date set), format filters
+  (league format, bracket type, best-of, ruleset), a player filter with an optional head-to-head opponent, content
+  filters (has replay, no replay, hand-edited stats, admin notes, no games recorded), quick filters (awaiting
+  confirmation, auto-confirms within 24 hours, stale in progress for 3 days, overdue) and a sort (newest first by
+  default, needs attention first, scheduled time, round deadline, last updated). Active filters show as removable
+  chips with a Clear all button, the less common ones sit behind a collapsed "More filters" disclosure, everything
+  lives in the URL, and league and tournament admins only ever filter within their own competitions.
+- `GET /api/admin/matches/filter-options/rounds?tournament_id=` lists the rounds of one phase (scoped like the other
+  matches routes). `GET /api/admin/matches/filter-options` now also lists the rulesets in scope, and the list
+  response carries `players` with the names of the player filter.
+
+### Changed
+
+- `/admin/matches` hides the matches of test leagues and of archived leagues and tournaments by default. Two toggles
+  show them, and picking a league or phase, or pasting a match id, shows its matches anyway.
+- The whole match row opens the admin match page; the public page is a secondary link and the "Override" button is
+  gone. The admin match page's back link returns to the Matches list with its filters, also after a replay import or a game edit.
+- `GET /api/admin/matches` accepts the new filter and sort parameters (unknown parameters are still refused with a
+  400), and its rows carry the round name, round number, best-of, round deadline and test/archived flags.
+
 ## [0.3.0] - 2026-10-23
 
 ### Upgrade notes

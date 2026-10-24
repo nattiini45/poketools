@@ -27,7 +27,7 @@ function game(n: number, winner: string | null): GameSummary {
   };
 }
 
-function ui(status: 'in_progress' | 'completed') {
+function ui(status: 'in_progress' | 'completed', backSuffix?: string) {
   return (
     <AdminMatchActions
       matchId="m1"
@@ -38,6 +38,7 @@ function ui(status: 'in_progress' | 'completed') {
       games={[game(1, 'p1'), game(2, null)]}
       tournamentId="t1"
       isSiteAdmin
+      backSuffix={backSuffix}
     />
   );
 }
@@ -68,5 +69,11 @@ describe('AdminMatchActions i18n', () => {
     expect(html).toContain('Admin-Aktionen');
     expect(html).toContain('Dieses Spiel ist abgeschlossen.');
     expect(html).not.toContain('Sieger festlegen');
+  });
+
+  it('keeps the list query on the game edit links', () => {
+    const suffix = `?back=${encodeURIComponent('status=disputed')}`;
+    expect(renderToStaticMarkup(ui('in_progress', suffix))).toContain(`href="/admin/matches/m1/games/g1/edit${suffix}"`);
+    expect(renderToStaticMarkup(ui('in_progress'))).toContain('href="/admin/matches/m1/games/g1/edit"');
   });
 });

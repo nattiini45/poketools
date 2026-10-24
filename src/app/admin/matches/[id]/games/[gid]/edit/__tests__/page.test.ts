@@ -120,6 +120,27 @@ describe('EditGamePage: optimistic concurrency', () => {
   });
 });
 
+describe('EditGamePage: the way back keeps the list query', () => {
+  const returnHref = async (back?: string) => {
+    const tree = await EditGamePage({
+      params: Promise.resolve({ id: MATCH_ID, gid: GAME_ID }),
+      ...(back === undefined ? {} : { searchParams: Promise.resolve({ back }) }),
+    });
+    return findElement(tree, EditGameForm)?.props.returnHref;
+  };
+
+  it('hands the form the match page with the canonical back query', async () => {
+    expect(await returnHref('page=2&status=disputed')).toBe(
+      `/admin/matches/${MATCH_ID}?back=${encodeURIComponent('status=disputed&page=2')}`,
+    );
+  });
+
+  it('drops an invalid or missing back value', async () => {
+    expect(await returnHref('//evil.example')).toBe(`/admin/matches/${MATCH_ID}`);
+    expect(await returnHref()).toBe(`/admin/matches/${MATCH_ID}`);
+  });
+});
+
 describe('EditGamePage: game must belong to the URL match', () => {
   it('renders the form for a game of the URL match to its resource admin', async () => {
     const rendered = await renderPage();

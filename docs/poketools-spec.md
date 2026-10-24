@@ -684,9 +684,10 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin/tournaments/[id]/rounds Standalone tournament rounds (season-linked → redirect to phase page)
 /admin/rulesets/new            Ruleset builder
 /admin/rulesets/[id]/edit      Edit existing ruleset
-/admin/matches                 Match list (server-side status / league / tournament / search filters in the
-                               URL, paged with an exact total; League and Phase on each row)
-/admin/matches/[id]            Override / dispute match result
+/admin/matches                 Match list (server-side status / league / phase / round / date / format / player /
+                               content filters, quick filters and sort, all in the URL, paged with an exact
+                               total; test and archived leagues hidden by default; the row opens the match page)
+/admin/matches/[id]            Override / dispute match result (its back link restores the list query via ?back=)
 /admin/players                 Player roster management (guest creation + Link account)
 ```
 
@@ -732,9 +733,13 @@ POST /api/tournaments/[id]/regenerate-bracket Admin: wipe and rebuild SE/DE brac
 POST /api/tournaments/[id]/repair-bracket     Admin: re-run bye resolution + slot materialization
 GET  /api/admin/dashboard               Any admin: counts, attention queue, recent audit (a resource admin gets only
                                             their own leagues and tournaments, no site-wide counts or activity)
-GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, q, page (1-1000), page_size;
-                                            returns an exact total
-GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, and standalone tournaments
+GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, round_id, q, format_type,
+                                            bracket_type, best_of, ruleset_id, date_field + date_from / date_to /
+                                            date_none, player_id, player2_id, replay, hand_edited, has_notes, no_games,
+                                            preset, include_test, include_archived, sort, page (1-1000), page_size;
+                                            returns an exact total and `players` (names behind the player filter)
+GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, standalone tournaments, rulesets
+GET  /api/admin/matches/filter-options/rounds  Any admin, scoped: the rounds of one tournament_id (403 outside scope)
 GET  /api/admin/player-search              Any admin (a resource admin names a season_id or tournament_id they
                                             administer; the scope is a guard, not a filter): public player refs
                                             only; a resource admin sees only active, non-test accounts (what the
