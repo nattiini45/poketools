@@ -222,6 +222,42 @@ describe('AdminMatchFilters: the More filters panel', () => {
   });
 });
 
+describe('AdminMatchFilters: the standalone league option', () => {
+  const STANDALONE_OPTION = 'No league (standalone)';
+  const withTournaments: AdminMatchFilterOptions = {
+    ...OPTIONS,
+    tournaments: [
+      { id: '66666666-6666-4666-8666-666666666666', name: 'Open Cup', status: 'active', archived: false, ruleset_id: RULESET },
+    ],
+  };
+
+  it('is offered while the options load and when the scope has a standalone tournament', () => {
+    expect(render(state(), { options: null })).toContain(STANDALONE_OPTION);
+    expect(render(state(), { options: withTournaments })).toContain(STANDALONE_OPTION);
+  });
+
+  it('is not offered when no standalone tournament is in scope', () => {
+    expect(render(state())).not.toContain(STANDALONE_OPTION);
+  });
+
+  it('stays while it is the selected league', () => {
+    expect(render(state({ league: 'standalone' }))).toContain(STANDALONE_OPTION);
+  });
+});
+
+describe('AdminMatchFilters: the date inputs', () => {
+  it('give the full date room: an auto-fit grid and a narrow side padding', () => {
+    const html = render(state({ from: '2026-10-20', to: '2026-10-31' }));
+    expect(html).toContain('grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]');
+    const inputs = [...html.matchAll(/<input[^>]*type="date"[^>]*>/g)].map((m) => m[0]);
+    expect(inputs).toHaveLength(2);
+    for (const input of inputs) {
+      expect(input).toContain('px-2');
+      expect(input).not.toContain('px-3');
+    }
+  });
+});
+
 describe('AdminMatchFilters: active filter chips', () => {
   const FULL = state({
     status: 'disputed',
@@ -292,6 +328,27 @@ describe('AdminMatchFilters: active filter chips', () => {
     expect(removeLabels(render(state({ league: LEAGUE }), { options: null, optionsFailed: true }))).toEqual([
       `Remove filter: League: ${LEAGUE}`,
     ]);
+  });
+
+  it('never shows the id of a phase the options do not contain', () => {
+    const other = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const url = state({ league: LEAGUE, phase: other });
+    expect(removeLabels(render(url, { options: null }))).toEqual([
+      'Remove filter: League: Loading...',
+      'Remove filter: Phase: Loading...',
+    ]);
+    for (const overrides of [{}, { options: null, optionsFailed: true }]) {
+      const html = render(url, overrides);
+      expect(html).not.toMatch(new RegExp(`>[^<]*${other}`));
+      expect(removeLabels(html).at(-1)).toBe('Remove filter: Phase: Unavailable');
+    }
+    expect(removeLabels(render(url, {}, 'de')).at(-1)).toBe('Filter entfernen: Phase: Nicht verfügbar');
+  });
+
+  it('labels a league the loaded options do not contain as unavailable, not by its id', () => {
+    const html = render(state({ league: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' }));
+    expect(removeLabels(html)).toEqual(['Remove filter: League: Unavailable']);
+    expect(html).not.toMatch(/>[^<]*eeeeeeee-eeee/);
   });
 
   it('renders no chips and no Clear all when nothing is active (the sort and page are not filters)', () => {

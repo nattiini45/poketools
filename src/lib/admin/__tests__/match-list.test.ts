@@ -20,8 +20,10 @@ import {
   matchPageBackSuffix,
   parseMatchListBack,
   parseMatchListUrl,
+  reconcileMatchListScope,
   type MatchListUrlState,
 } from '../match-list';
+import type { AdminMatchFilterOptions } from '@/lib/supabase/queries/matches';
 
 const UUID_A = '11111111-1111-4111-8111-111111111111';
 const UUID_B = '22222222-2222-4222-8222-222222222222';
@@ -394,6 +396,55 @@ describe('match list URL state', () => {
         expect(adminMatchListQuerySchema.safeParse(raw).success).toBe(true);
       }
     });
+  });
+});
+
+describe('reconcileMatchListScope', () => {
+  const league = (id: string, phases: string[]): AdminMatchFilterOptions['leagues'][number] => ({
+    id,
+    name: id,
+    status: 'active',
+    archived: false,
+    is_test_season: false,
+    phases: phases.map((phase, i) => ({ id: phase, name: phase, stage_order: i, archived: false, ruleset_id: UUID_C })),
+  });
+  const options: AdminMatchFilterOptions = {
+    leagues: [league(UUID_A, [UUID_B])],
+    tournaments: [{ id: UUID_C, name: 'Cup', status: 'active', archived: false, ruleset_id: UUID_C }],
+    rulesets: [],
+  };
+  const base = (patch: Partial<MatchListUrlState>): MatchListUrlState => ({ ...EMPTY_MATCH_LIST_STATE, ...patch });
+  const OTHER_LEAGUE = '44444444-4444-4444-8444-444444444444';
+  const OTHER_PHASE = '55555555-5555-4555-8555-555555555555';
+
+  it('returns the state itself without options, without a phase, or when league and phase agree', () => {
+    const agreeing = base({ league: UUID_A, phase: UUID_B });
+    expect(reconcileMatchListScope(agreeing, null)).toBe(agreeing);
+    expect(reconcileMatchListScope(agreeing, options)).toBe(agreeing);
+    const none = base({ league: OTHER_LEAGUE });
+    expect(reconcileMatchListScope(none, options)).toBe(none);
+  });
+
+  it('derives the league from a phase that belongs to another league, so the list and the bar agree', () => {
+    const state = base({ league: OTHER_LEAGUE, phase: UUID_B, round: UUID_C });
+    const reconciled = reconcileMatchListScope(state, options);
+    expect(reconciled).toMatchObject({ league: UUID_A, phase: UUID_B, round: UUID_C });
+    expect(buildMatchListApiQuery(reconciled)).toBe(`tournament_id=${UUID_B}&round_id=${UUID_C}`);
+  });
+
+  it('derives the league from a phase given without one', () => {
+    expect(reconcileMatchListScope(base({ phase: UUID_B }), options).league).toBe(UUID_A);
+  });
+
+  it('derives the standalone league from a standalone tournament and drops the league format', () => {
+    const reconciled = reconcileMatchListScope(base({ league: UUID_A, phase: UUID_C, format: 'singles' }), options);
+    expect(reconciled).toMatchObject({ league: STANDALONE_LEAGUE, phase: UUID_C, format: '' });
+  });
+
+  it('drops a phase the options do not contain, with its round', () => {
+    const reconciled = reconcileMatchListScope(base({ league: UUID_A, phase: OTHER_PHASE, round: UUID_C }), options);
+    expect(reconciled).toMatchObject({ league: UUID_A, phase: '', round: '' });
+    expect(buildMatchListApiQuery(reconciled)).toBe(`season_id=${UUID_A}`);
   });
 });
 

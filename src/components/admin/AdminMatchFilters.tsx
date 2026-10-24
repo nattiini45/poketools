@@ -38,7 +38,7 @@ import {
   type PlayerSearchHit,
   type PlayerSearchScope,
 } from '@/lib/players/player-search';
-import { matchPlayerSearchScope, rulesetChoices } from '@/components/admin/match-list-view';
+import { matchPlayerSearchScope, offersStandaloneLeague, rulesetChoices } from '@/components/admin/match-list-view';
 import Alert from '@/components/ui/Alert';
 import Combobox, { type ComboboxOption } from '@/components/ui/Combobox';
 import { useFormatter, useLocale, useT } from '@/i18n/client';
@@ -74,6 +74,8 @@ const PANEL_FILTER_KEYS: readonly MatchListFilterKey[] = [
 
 const SELECT_CLASSES =
   'border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full';
+/** A native date input needs room for the full date next to its calendar icon, so it gets less side padding than a select. */
+const DATE_INPUT_CLASSES = SELECT_CLASSES.replace('px-3', 'px-2');
 const FIELD_LABEL_CLASSES = 'block text-xs font-heading font-semibold text-poke-text-secondary mb-1';
 const FIELDSET_CLASSES = 'min-w-0 space-y-3 rounded-poke-md border border-poke-border p-3';
 const LEGEND_CLASSES = 'px-1 text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted';
@@ -261,6 +263,10 @@ export default function AdminMatchFilters({
   // failed to load or really lack it.
   const optionsPending = options === null && !optionsFailed;
   const unknownOptionLabel = (id: string) => (optionsPending ? t('admin.matches.loadingOption') : id);
+  // A phase the options lack never shows its id: the list drops such a phase once the options are known.
+  const unknownLeagueLabel = (id: string) =>
+    optionsPending || optionsFailed ? unknownOptionLabel(id) : t('admin.matches.unknownOption');
+  const unknownPhaseLabel = () => t(optionsPending ? 'admin.matches.loadingOption' : 'admin.matches.unknownOption');
   const unknownRoundLabel = (id: string) => (roundsPending ? t('admin.matches.loadingOption') : id);
 
   const roundLabel = (round: Pick<AdminMatchRoundOption, 'name' | 'round_number'>) =>
@@ -321,10 +327,10 @@ export default function AdminMatchFilters({
             ? t('admin.matches.noLeague')
             : selectedLeague
               ? selectedLeague.name
-              : unknownOptionLabel(url.league),
+              : unknownLeagueLabel(url.league),
         );
       case 'phase':
-        return labeled(phaseLabel, selectedPhase ? selectedPhase.name : unknownOptionLabel(url.phase));
+        return labeled(phaseLabel, selectedPhase ? selectedPhase.name : unknownPhaseLabel());
       case 'round': {
         const round = rounds?.find((r) => r.id === url.round);
         return labeled(t('admin.matches.round'), round ? roundLabel(round) : unknownRoundLabel(url.round));
@@ -416,8 +422,10 @@ export default function AdminMatchFilters({
             className={SELECT_CLASSES}
           >
             <option value="">{t('admin.matches.allLeagues')}</option>
-            <option value={STANDALONE_LEAGUE}>{t('admin.matches.noLeague')}</option>
-            {!leagueKnown && <option value={url.league}>{unknownOptionLabel(url.league)}</option>}
+            {offersStandaloneLeague(options, isStandalone) && (
+              <option value={STANDALONE_LEAGUE}>{t('admin.matches.noLeague')}</option>
+            )}
+            {!leagueKnown && <option value={url.league}>{unknownLeagueLabel(url.league)}</option>}
             {options?.leagues.map((league) => (
               <option key={league.id} value={league.id}>
                 {optionLabel(league.name, { archived: league.archived, test: league.is_test_season })}
@@ -432,7 +440,7 @@ export default function AdminMatchFilters({
             className={SELECT_CLASSES}
           >
             <option value="">{phaseAll}</option>
-            {!phaseKnown && <option value={url.phase}>{unknownOptionLabel(url.phase)}</option>}
+            {!phaseKnown && <option value={url.phase}>{unknownPhaseLabel()}</option>}
             {phaseChoices.map((phase) => (
               <option key={phase.id} value={phase.id}>
                 {optionLabel(phase.name, { archived: phase.archived })}
@@ -550,7 +558,7 @@ export default function AdminMatchFilters({
               ))}
             </select>
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2">
             <label className="block">
               <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.date.from')}</span>
               <input
@@ -558,7 +566,7 @@ export default function AdminMatchFilters({
                 value={url.from}
                 max={url.to || undefined}
                 onChange={(e) => changeDay('from', e.target.value)}
-                className={SELECT_CLASSES}
+                className={DATE_INPUT_CLASSES}
               />
             </label>
             <label className="block">
@@ -568,7 +576,7 @@ export default function AdminMatchFilters({
                 value={url.to}
                 min={url.from || undefined}
                 onChange={(e) => changeDay('to', e.target.value)}
-                className={SELECT_CLASSES}
+                className={DATE_INPUT_CLASSES}
               />
             </label>
           </div>

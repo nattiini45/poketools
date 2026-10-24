@@ -6,6 +6,7 @@
 import { computeMatchGamesWon } from '@/lib/match/aggregation';
 import { STANDALONE_LEAGUE, activeMatchListFilters, type MatchListUrlState } from '@/lib/admin/match-list';
 import type { PlayerSearchScope } from '@/lib/players/player-search';
+import type { ApiErrorLike } from '@/i18n/api-errors';
 import type { GameSummary } from '@/types/match';
 import type {
   AdminMatchFilterOptions,
@@ -55,6 +56,32 @@ export function autoConfirmCountdown(
 export function matchListEmptyKey(url: MatchListUrlState): 'noFilterResults' | 'noSearchResults' | 'none' {
   if (activeMatchListFilters(url).some((key) => key !== 'q')) return 'noFilterResults';
   return url.q ? 'noSearchResults' : 'none';
+}
+
+/** `ApiErrorLike.code`s that a second attempt cannot change: the caller's access or the request itself is the problem. */
+const PERMANENT_ERROR_CODES: ReadonlySet<string> = new Set([
+  'forbidden',
+  'unauthenticated',
+  'account_banned',
+  'account_suspended',
+  'validation_failed',
+  'invalid_json',
+  'not_found_generic',
+]);
+
+/**
+ * Whether a failed load is worth a Retry button: a network or parse failure and a server-side error are, a refusal
+ * (403, 401) or a rejected request is not (the same request gets the same answer).
+ */
+export function isRetryableLoadError(error: { kind: 'loadFailed' } | { kind: 'api'; error: ApiErrorLike }): boolean {
+  if (error.kind === 'loadFailed') return true;
+  const code = error.error.code;
+  return !code || !PERMANENT_ERROR_CODES.has(code);
+}
+
+/** Whether the "No league (standalone)" option is worth offering: while the options load, when the caller has a standalone tournament, or when it is already selected. */
+export function offersStandaloneLeague(options: AdminMatchFilterOptions | null, selected: boolean): boolean {
+  return selected || options === null || options.tournaments.length > 0;
 }
 
 /**

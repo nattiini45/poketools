@@ -10,12 +10,13 @@ import {
   buildMatchListApiQuery,
   buildMatchListSearch,
   parseMatchListUrl,
+  reconcileMatchListScope,
   type AdminMatchListResponse,
   type MatchListUrlState,
 } from '@/lib/admin/match-list';
 import AdminMatchFilters from '@/components/admin/AdminMatchFilters';
 import { MatchListRow } from '@/components/admin/AdminMatchRowCard';
-import { matchListEmptyKey } from '@/components/admin/match-list-view';
+import { isRetryableLoadError, matchListEmptyKey } from '@/components/admin/match-list-view';
 import Alert from '@/components/ui/Alert';
 import Skeleton from '@/components/ui/Skeleton';
 import { getButtonClasses } from '@/components/ui/Button';
@@ -140,8 +141,30 @@ export default function AdminMatchList() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // The URL is the source of truth for every filter, the sort and the page.
-  const url = useMemo(() => parseMatchListUrl(searchParams), [searchParams]);
+  // ── Filter options (leagues with phases, standalone tournaments, rulesets) ──
+  const [options, setOptions] = useState<AdminMatchFilterOptions | null>(null);
+  const [optionsError, setOptionsError] = useState<LoadError | null>(null);
+  const [optionsKey, setOptionsKey] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    void getJson<AdminMatchFilterOptions>('/api/admin/matches/filter-options', controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      if (result.ok) {
+        setOptions(result.data);
+        setOptionsError(null);
+      } else {
+        setOptionsError(result.error);
+      }
+    });
+    return () => controller.abort();
+  }, [optionsKey]);
+
+  // The URL is the source of truth for every filter, the sort and the page. A phase is checked against the filter
+  // options (its league is derived from it, an unknown one dropped), so the bar, the rounds and the list request all
+  // work from the same scope. A phase deep link therefore waits for the options before anything is requested.
+  const parsedUrl = useMemo(() => parseMatchListUrl(searchParams), [searchParams]);
+  const url = useMemo(() => reconcileMatchListScope(parsedUrl, options), [parsedUrl, options]);
+  const scopePending = parsedUrl.phase !== '' && options === null && optionsError === null;
   const replaceSearch = useCallback(
     (search: string) => router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false }),
     [router, pathname],
@@ -183,24 +206,6 @@ export default function AdminMatchList() {
     return () => clearTimeout(timer);
   }, [searchInput, sentQ, updateUrl]);
 
-  // ── Filter options (leagues with phases, standalone tournaments, rulesets) ──
-  const [options, setOptions] = useState<AdminMatchFilterOptions | null>(null);
-  const [optionsError, setOptionsError] = useState<LoadError | null>(null);
-  const [optionsKey, setOptionsKey] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    void getJson<AdminMatchFilterOptions>('/api/admin/matches/filter-options', controller.signal).then((result) => {
-      if (controller.signal.aborted) return;
-      if (result.ok) {
-        setOptions(result.data);
-        setOptionsError(null);
-      } else {
-        setOptionsError(result.error);
-      }
-    });
-    return () => controller.abort();
-  }, [optionsKey]);
-
   // ── Rounds of the selected phase (loaded lazily; the Round select is keyed by round id) ──
   const [roundsKey, setRoundsKey] = useState(0);
   const [roundsResult, setRoundsResult] = useState<{
@@ -209,7 +214,7 @@ export default function AdminMatchList() {
     error: LoadError | null;
   } | null>(null);
   useEffect(() => {
-    if (!url.phase) return;
+    if (!url.phase || scopePending) return;
     const phase = url.phase;
     const controller = new AbortController();
     void getJson<AdminMatchRoundOption[]>(
@@ -222,7 +227,7 @@ export default function AdminMatchList() {
       );
     });
     return () => controller.abort();
-  }, [url.phase, roundsKey]);
+  }, [url.phase, roundsKey, scopePending]);
   // Rounds belong to the phase they were loaded for; with another (or no) phase there are none.
   const roundsSettled = url.phase !== '' && roundsResult?.phase === url.phase;
   const rounds = roundsSettled ? roundsResult.rounds : null;
@@ -245,6 +250,7 @@ export default function AdminMatchList() {
   const data = settled?.key === requestKey ? settled.data : null;
   const error = settled?.key === requestKey ? settled.error : null;
   useEffect(() => {
+    if (scopePending) return;
     // One request per filter state; a newer state aborts the older one, so a slow
     // earlier response can never replace the rows of the current filters.
     const controller = new AbortController();
@@ -263,7 +269,7 @@ export default function AdminMatchList() {
       );
     });
     return () => controller.abort();
-  }, [apiQuery, requestKey]);
+  }, [apiQuery, requestKey, scopePending]);
 
   const total = data?.total ?? 0;
   const pageSize = data?.pageSize ?? 50;
@@ -289,13 +295,15 @@ export default function AdminMatchList() {
             {t('admin.matches.filtersFailed')}
             {optionsError.kind === 'api' ? `: ${errorText(optionsError.error)}` : ''}
           </span>
-          <button
-            type="button"
-            onClick={() => setOptionsKey((key) => key + 1)}
-            className={getButtonClasses('secondary', 'sm')}
-          >
-            {t('admin.matches.retry')}
-          </button>
+          {isRetryableLoadError(optionsError) && (
+            <button
+              type="button"
+              onClick={() => setOptionsKey((key) => key + 1)}
+              className={getButtonClasses('secondary', 'sm')}
+            >
+              {t('admin.matches.retry')}
+            </button>
+          )}
         </Alert>
       )}
       {roundsError && (
@@ -304,13 +312,15 @@ export default function AdminMatchList() {
             {t('admin.matches.roundsFailed')}
             {roundsError.kind === 'api' ? `: ${errorText(roundsError.error)}` : ''}
           </span>
-          <button
-            type="button"
-            onClick={() => setRoundsKey((key) => key + 1)}
-            className={getButtonClasses('secondary', 'sm')}
-          >
-            {t('admin.matches.retry')}
-          </button>
+          {isRetryableLoadError(roundsError) && (
+            <button
+              type="button"
+              onClick={() => setRoundsKey((key) => key + 1)}
+              className={getButtonClasses('secondary', 'sm')}
+            >
+              {t('admin.matches.retry')}
+            </button>
+          )}
         </Alert>
       )}
     </>
@@ -335,16 +345,18 @@ export default function AdminMatchList() {
       {error && (
         <Alert variant="error" className="flex items-center justify-between gap-3">
           <span>{error.kind === 'loadFailed' ? t('admin.matches.loadFailed') : errorText(error.error)}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setAnchorMs(Date.now());
-              setReloadKey((key) => key + 1);
-            }}
-            className={getButtonClasses('secondary', 'sm')}
-          >
-            {t('admin.matches.retry')}
-          </button>
+          {isRetryableLoadError(error) && (
+            <button
+              type="button"
+              onClick={() => {
+                setAnchorMs(Date.now());
+                setReloadKey((key) => key + 1);
+              }}
+              className={getButtonClasses('secondary', 'sm')}
+            >
+              {t('admin.matches.retry')}
+            </button>
+          )}
         </Alert>
       )}
 

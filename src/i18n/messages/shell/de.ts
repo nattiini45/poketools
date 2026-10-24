@@ -80,6 +80,8 @@ export default defineDe<typeof en>()({
       testOption: '{name} (Test)',
       /** The select label of a deep-linked league or phase while the filter choices load. */
       loadingOption: 'Wird geladen …',
+      /** The select label of a deep-linked league or phase that the filter choices do not contain. */
+      unknownOption: 'Nicht verfügbar',
       leaguePhase: '{league} / {phase}',
       searchTruncated: 'Deine Suche passt auf viele Spieler. Nur die ersten {count} sind enthalten; gib mehr vom Namen ein, um einzugrenzen.',
       filtersFailed: 'Die Liga- und Phasenfilter konnten nicht geladen werden.',

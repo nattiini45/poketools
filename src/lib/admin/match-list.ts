@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import type { Enums } from '@/types/database';
 import type { MatchStatus } from '@/types/match';
-import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
+import type { AdminMatchFilterOptions, AdminMatchRow } from '@/lib/supabase/queries/matches';
 import { resolveMatchListDateWindow, type MatchListClock } from '@/lib/admin/match-list-dates';
 
 /** The `match_status` enum, in tab order. */
@@ -427,6 +427,27 @@ export function parseMatchListUrl(params: { get(name: string): string | null }):
     showArchived: get('archived') === '1',
     sort: oneOf(ADMIN_MATCH_SORTS, get('sort')) || ADMIN_MATCH_DEFAULT_SORT,
   };
+}
+
+/**
+ * Makes the league / phase of a parsed URL agree with the filter options, which the pure parser cannot see. A phase
+ * wins over the league (the API filters by the phase alone), so the league is derived from the phase it belongs to
+ * (a standalone tournament selects `STANDALONE_LEAGUE`): a deep link whose league and phase disagree, or a phase
+ * without a league, then renders the scope it actually lists. A phase the options do not contain (another league's,
+ * or one that does not exist) is dropped together with its round. Without options, or without a phase, the state is
+ * returned unchanged.
+ */
+export function reconcileMatchListScope(
+  state: MatchListUrlState,
+  options: AdminMatchFilterOptions | null,
+): MatchListUrlState {
+  if (!options || !state.phase) return state;
+  const owner = options.leagues.find((league) => league.phases.some((phase) => phase.id === state.phase));
+  const standalone = !owner && options.tournaments.some((tournament) => tournament.id === state.phase);
+  if (!owner && !standalone) return { ...state, phase: '', round: '' };
+  const league = owner ? owner.id : STANDALONE_LEAGUE;
+  if (league === state.league) return state;
+  return { ...state, league, format: standalone ? '' : state.format };
 }
 
 /** The query string (without `?`) for a page state; defaults are omitted, the key order is fixed. */

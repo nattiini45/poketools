@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   autoConfirmCountdown,
+  isRetryableLoadError,
   matchListEmptyKey,
   matchPlayerSearchScope,
   matchScore,
+  offersStandaloneLeague,
   replayCount,
   rulesetChoices,
 } from '../match-list-view';
@@ -181,6 +183,40 @@ describe('rulesetChoices', () => {
   it('keeps every ruleset for a league the options do not know yet, and is empty without options', () => {
     expect(names('30000000-0000-4000-8000-0000000000ee')).toEqual(['Alpha', 'Beta', 'Gamma']);
     expect(rulesetChoices(null, { league: '', phase: '' })).toEqual([]);
+  });
+});
+
+describe('isRetryableLoadError', () => {
+  it('retries a load or network failure and a server error', () => {
+    expect(isRetryableLoadError({ kind: 'loadFailed' })).toBe(true);
+    expect(isRetryableLoadError({ kind: 'api', error: { code: 'network_error' } })).toBe(true);
+    expect(isRetryableLoadError({ kind: 'api', error: { code: 'upstream_timeout' } })).toBe(true);
+    expect(isRetryableLoadError({ kind: 'api', error: { error: 'Failed to list matches' } })).toBe(true);
+  });
+
+  it('does not retry a refusal or a rejected request', () => {
+    for (const code of ['forbidden', 'unauthenticated', 'account_banned', 'account_suspended', 'validation_failed']) {
+      expect(isRetryableLoadError({ kind: 'api', error: { code } })).toBe(false);
+    }
+  });
+});
+
+describe('offersStandaloneLeague', () => {
+  const options = (tournaments: AdminMatchFilterOptions['tournaments']): AdminMatchFilterOptions => ({
+    leagues: [],
+    tournaments,
+    rulesets: [],
+  });
+  const tournament = { id: 't1', name: 'Open Cup', status: 'active', archived: false, ruleset_id: 'r1' };
+
+  it('offers it while the options load, with a standalone tournament, or when selected', () => {
+    expect(offersStandaloneLeague(null, false)).toBe(true);
+    expect(offersStandaloneLeague(options([tournament]), false)).toBe(true);
+    expect(offersStandaloneLeague(options([]), true)).toBe(true);
+  });
+
+  it('hides it when the caller has no standalone tournament', () => {
+    expect(offersStandaloneLeague(options([]), false)).toBe(false);
   });
 });
 
