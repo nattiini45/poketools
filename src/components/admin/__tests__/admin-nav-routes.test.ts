@@ -71,7 +71,11 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-describe('admin routes', () => {
+// Walks and reads the admin sources: under a loaded full suite or a cold clone the walk can pass the
+// 5 s default (client-boundary.test.ts uses the same bound).
+const FILE_WALK_TIMEOUT_MS = 30_000;
+
+describe('admin routes', { timeout: FILE_WALK_TIMEOUT_MS }, () => {
   it('finds the admin pages to resolve against', () => {
     expect(PATTERNS.length).toBeGreaterThan(10);
     expect(resolves('/admin')).toBe(true);
