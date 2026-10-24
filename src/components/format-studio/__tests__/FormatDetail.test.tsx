@@ -89,11 +89,13 @@ describe('FormatDetail: a preset', () => {
   });
 
   it('shows the example label and the read-only note only for an example', () => {
-    expect(render(presetView(), 'en', { example: true })).toContain('Example. Change anything.');
+    expect(render(presetView(), 'en', { example: true })).toContain('>Example<');
     expect(render(presetView(), 'en', { example: true })).toContain('read-only for now');
-    expect(render(presetView(), 'en')).not.toContain('Example. Change anything.');
-    expect(render(presetView(), 'de', { example: true })).toContain('Beispiel. Ändere alles.');
-    expect(render(presetView(), 'de')).not.toContain('Beispiel. Ändere alles.');
+    expect(render(presetView(), 'en', { example: true })).not.toContain('Change anything');
+    expect(render(presetView(), 'en')).not.toContain('>Example<');
+    expect(render(presetView(), 'de', { example: true })).toContain('>Beispiel<');
+    expect(render(presetView(), 'de', { example: true })).not.toContain('Ändere alles');
+    expect(render(presetView(), 'de')).not.toContain('>Beispiel<');
   });
 
   it('says plainly that there are no problems when the format is clean', () => {

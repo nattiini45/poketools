@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
@@ -18,6 +19,12 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+/** A fixed title: the league's name is only read once the gate has passed, and metadata runs outside it. */
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(formatStudioAdminMessages);
+  return { title: t('meta.leagueTitle') };
 }
 
 const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0';

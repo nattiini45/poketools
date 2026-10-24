@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
@@ -13,6 +14,16 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ presetId: string }>;
+}
+
+/** The preset's own name; an unknown preset id falls back to the generic title (the page itself is a 404). */
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { presetId } = await params;
+  const [t, locale] = await Promise.all([getT(formatStudioAdminMessages), getLocale()]);
+  const preset = PRESETS.find((p) => p.id === presetId);
+  if (!preset) return { title: t('meta.galleryTitle') };
+  const name = resolveLText(preset.definition.identity.name, { viewer: locale })?.value ?? preset.id;
+  return { title: t('meta.exampleTitle', { name }) };
 }
 
 /**

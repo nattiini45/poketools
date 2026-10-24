@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import AdminGuard from '@/components/shared/AdminGuard';
 import FormatCard from '@/components/format-studio/FormatCard';
 import Badge from '@/components/ui/Badge';
@@ -13,6 +14,11 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { formatStudioAdminMessages } from '@/i18n/messages/format-studio/admin';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(formatStudioAdminMessages);
+  return { title: t('meta.galleryTitle') };
+}
 
 /** The most leagues the list shows (`listSeasons` caps at the same number). */
 const LEAGUE_LIMIT = 100;

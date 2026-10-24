@@ -19,7 +19,7 @@ interface FormatDetailProps {
   view: FormatView;
   /** `page`: a route of its own (the page supplies the title); `tab`: inside the league admin's Format tab. */
   variant: 'page' | 'tab';
-  /** An example format: shows the "Example. Change anything." label and the read-only note. */
+  /** An example format: shows the "Example" label and the read-only note. */
   example?: boolean;
   /** Where each legacy module's settings are edited; the links come from the loader, per available tab. */
   editorLinks?: Partial<Record<Adapter, string>>;

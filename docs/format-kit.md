@@ -373,7 +373,7 @@ The Studio is read-only. It reads a league, describes it and shows the result. N
 
 | Route | Who | What |
 |---|---|---|
-| `/admin/formats` | any admin (the **Formats** entry in the competitions group of the admin sidebar) | **Examples**: one card per preset, marked "Example. Change anything." and read-only for now. **Your leagues**: one card per league with stage count, pairing words, error and warning badges (text, not only colour) and the coverage line. Site admins see every league (up to 100, with a note when the cap is hit); league admins see their own non-archived leagues. Tournament-only admins see the examples and an empty leagues list. Standalone tournaments are not listed |
+| `/admin/formats` | any admin (the **Formats** entry in the competitions group of the admin sidebar) | **Examples**: one card per preset, marked "Example" and read-only for now. **Your leagues**: one card per league with stage count, pairing words, error and warning badges (text, not only colour) and the coverage line. Site admins see every league (up to 100, with a note when the cap is hit); league admins see their own non-archived leagues. Tournament-only admins see the examples and an empty leagues list. Standalone tournaments are not listed |
 | `/admin/formats/example/[presetId]` | any admin | one preset in full; an unknown id is a 404; no data read |
 | `/admin/formats/league/[id]` | site admins and admins of that league | one league in full; gated by `gateResourceAdmin('season', id)` before any read (a non-uuid is a 404, another league's admin sees the forbidden notice); a league without phases shows an empty state that links to its Phases tab |
 

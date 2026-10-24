@@ -10,10 +10,15 @@
 export default {
   title: 'Formats',
   subtitle: 'How leagues and example formats are set up, written out in plain words. Read-only for now.',
+  meta: {
+    galleryTitle: 'Formats | PokéTools',
+    leagueTitle: 'League format | PokéTools',
+    exampleTitle: '{name} | PokéTools',
+  },
   gallery: {
     heading: 'Examples',
     intro: 'Three example formats show what the Studio can describe. Open one to read its stages, rules and checks.',
-    exampleBadge: 'Example. Change anything.',
+    exampleBadge: 'Example',
     readOnlyNote: 'Examples are read-only for now. You can read them, but not edit or save them yet.',
     open: 'Open',
   },

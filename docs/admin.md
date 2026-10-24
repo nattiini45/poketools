@@ -118,7 +118,7 @@ The Studio shows the format of a league as a generated outline and rules text, w
 
 | Route | Gate | Content |
 |---|---|---|
-| `/admin/formats` | `AdminGuard`; the live access read comes before any data read | **Examples** (the three kit presets, marked "Example. Change anything.", read-only for now) and **Your leagues** (one card per league: stage count, pairing words, error and warning badges, coverage line). Site admins: `listSeasons({ includeTestSeasons: true })`; resource admins: `listSeasonsByIds` of their own league ids, not archived. At most 100 leagues, with a note when the cap is hit. Tournament-only admins see the examples and an empty leagues state. Standalone tournaments are not listed |
+| `/admin/formats` | `AdminGuard`; the live access read comes before any data read | **Examples** (the three kit presets, marked "Example", read-only for now) and **Your leagues** (one card per league: stage count, pairing words, error and warning badges, coverage line). Site admins: `listSeasons({ includeTestSeasons: true })`; resource admins: `listSeasonsByIds` of their own league ids, not archived. At most 100 leagues, with a note when the cap is hit. Tournament-only admins see the examples and an empty leagues state. Standalone tournaments are not listed |
 | `/admin/formats/example/[presetId]` | `AdminGuard`; a preset id that is not one of the three is a 404 | one preset in full; no data read |
 | `/admin/formats/league/[id]` | `gateResourceAdmin('season', id)` before any read: a non-uuid is a 404, another league's admin gets `ResourceForbidden`; unknown league 404 | one league in full; a league without phases shows an empty state that links to its Phases tab |
 

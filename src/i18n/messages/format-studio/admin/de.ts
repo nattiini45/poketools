@@ -5,10 +5,15 @@ import type en from './en';
 export default defineDe<typeof en>()({
   title: 'Formate',
   subtitle: 'So sind Ligen und Beispielformate aufgebaut, in einfachen Worten aufgeschrieben. Vorerst nur zum Lesen.',
+  meta: {
+    galleryTitle: 'Formate | PokéTools',
+    leagueTitle: 'Liga-Format | PokéTools',
+    exampleTitle: '{name} | PokéTools',
+  },
   gallery: {
     heading: 'Beispiele',
     intro: 'Drei Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Phasen, Regeln und Prüfungen zu lesen.',
-    exampleBadge: 'Beispiel. Ändere alles.',
+    exampleBadge: 'Beispiel',
     readOnlyNote: 'Beispiele sind vorerst schreibgeschützt. Du kannst sie lesen, aber noch nicht bearbeiten oder speichern.',
     open: 'Öffnen',
   },

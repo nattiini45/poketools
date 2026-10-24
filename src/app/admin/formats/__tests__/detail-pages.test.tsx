@@ -56,8 +56,8 @@ vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/shared/ResourceForbidden', () => stub('ResourceForbidden'));
 vi.mock('@/components/format-studio/FormatDetail', () => stub('FormatDetail'));
 
-import LeaguePage from '../league/[id]/page';
-import ExamplePage from '../example/[presetId]/page';
+import LeaguePage, { generateMetadata as leagueMetadata } from '../league/[id]/page';
+import ExamplePage, { generateMetadata as exampleMetadata } from '../example/[presetId]/page';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
 import FormatDetail from '@/components/format-studio/FormatDetail';
@@ -233,5 +233,28 @@ describe('example format page', () => {
     expect(out).toContain((resolveLText(classic.definition.identity.name, { viewer: 'de' })?.value ?? '').replace(/'/g, '&#x27;'));
     expect(out).toContain('href="/admin/formats"');
     expect(out).toContain('Zurück zu den Formaten');
+  });
+});
+
+describe('detail page titles', () => {
+  it('the league page has a fixed title and reads no league data for it', async () => {
+    expect(await leagueMetadata()).toEqual({ title: 'League format | PokéTools' });
+    mocks.locale = 'de';
+    expect(await leagueMetadata()).toEqual({ title: 'Liga-Format | PokéTools' });
+    for (const read of leagueReads()) expect(read).not.toHaveBeenCalled();
+  });
+
+  it('the example page is titled with the example name in the viewer language', async () => {
+    const { PRESETS, resolveLText } = await import('@/lib/format-kit/client');
+    const cup = PRESETS.find((p) => p.id === 'cup')!;
+    for (const locale of ['en', 'de'] as const) {
+      mocks.locale = locale;
+      const name = resolveLText(cup.definition.identity.name, { viewer: locale })?.value;
+      expect(await exampleMetadata(exampleParams('cup'))).toEqual({ title: `${name} | PokéTools` });
+    }
+  });
+
+  it('an unknown example id falls back to the gallery title', async () => {
+    expect(await exampleMetadata(exampleParams('nope'))).toEqual({ title: 'Formats | PokéTools' });
   });
 });

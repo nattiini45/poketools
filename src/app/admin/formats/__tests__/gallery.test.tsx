@@ -53,7 +53,7 @@ vi.mock('@/lib/format-studio/loader', async () => {
 });
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 
-import FormatsGalleryPage from '../page';
+import FormatsGalleryPage, { generateMetadata } from '../page';
 import AdminGuard from '@/components/shared/AdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 
@@ -171,15 +171,16 @@ describe('format gallery: who sees which leagues', () => {
     mocks.listSeasonsByIds.mockResolvedValue([]);
     mocks.loadLeagueFormatSummaries.mockResolvedValue([]);
     const out = html(await FormatsGalleryPage());
-    expect(out).toContain('Example. Change anything.');
+    expect(out).toContain('>Example<');
+    expect(out).not.toContain('Change anything');
     expect(out).toContain('No leagues to show yet.');
   });
 });
 
 describe('format gallery: examples', () => {
   it.each([
-    ['en', 'Example. Change anything.', 'Examples'],
-    ['de', 'Beispiel. Ändere alles.', 'Beispiele'],
+    ['en', '>Example<', 'Examples'],
+    ['de', '>Beispiel<', 'Beispiele'],
   ] as const)('shows the three examples with the example label in %s', async (locale, label, heading) => {
     mocks.locale = locale;
     mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
@@ -284,5 +285,15 @@ describe('format gallery: the cap', () => {
     const out = html(await FormatsGalleryPage());
     expect(mocks.loadLeagueFormatSummaries.mock.calls[0][0]).toHaveLength(100);
     expect(out).toContain('Showing the first 100 leagues only.');
+  });
+});
+
+describe('format gallery: metadata', () => {
+  it.each([
+    ['en', 'Formats | PokéTools'],
+    ['de', 'Formate | PokéTools'],
+  ] as const)('has a page title in %s', async (locale, title) => {
+    mocks.locale = locale;
+    expect(await generateMetadata()).toEqual({ title });
   });
 });
