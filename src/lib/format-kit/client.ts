@@ -1,11 +1,12 @@
 /**
  * Client-safe barrel of the format kit: types, limits, keys, JSON and patch helpers, localized text, the
  * expression language (without its zod schema), the registry (manifest and descriptions, not the zod twin),
- * the browser validator, the browser compile entry, diagnostic rendering and the presets.
+ * the browser validator, the browser compile entry, diagnostic rendering, the whole-definition renderer and the presets.
  *
  * Nothing here imports zod, `server-only`, `@pkmn`, `next` or React; `__tests__/client-boundary.test.ts`
- * walks the import closure of this file and fails on any of them. Nothing in the app imports it yet: the first
- * consumer decides whether a bundler alias for `validate.browser.ts` is needed (as `format-pack` has).
+ * walks the import closure of this file and fails on any of them. Client code imports this file and never the
+ * server barrel, so no bundler alias is needed: the entry file is the boundary (the Studio client-boundary test
+ * enforces it for the Studio components and pages).
  */
 export * from './types';
 export * from './limits';
@@ -26,4 +27,5 @@ export type { StageGraph, StageNode } from './engine/graph';
 export type { CountRange, StagePlan } from './engine/plan';
 export { deriveCapabilities } from './engine/capabilities';
 export { renderDiagnostic, renderFix, renderSeverity } from './engine/render';
+export * from './engine/describe-definition';
 export * from './presets';

@@ -258,6 +258,61 @@ export async function getStagesBySeasonId(seasonId: string): Promise<TournamentW
   }));
 }
 
+/**
+ * Ids per `.in('season_id', …)` filter of the batched stage read, so the request URL stays short for any
+ * number of leagues.
+ */
+const STAGE_BATCH_IDS = 50;
+
+/** The PostgREST `max_rows` ceiling (`supabase/config.toml`): a full page may have been truncated server-side. */
+const STAGE_PAGE_SIZE = 1000;
+
+/**
+ * The phases of several leagues in one batched read: the same select and mapping as `getStagesBySeasonId`,
+ * grouped by league id. Ids are read in chunks of 50 and every chunk is paged with `.range()` until a short page,
+ * so neither the URL nor `max_rows` can drop a phase silently. A league without phases maps to an empty list.
+ * Each league's phases come in `stage_order`, then creation order. No filter is built from user input: the ids
+ * are database ids or `isValidUuid`-checked route params.
+ */
+export async function getStagesBySeasonIds(seasonIds: string[]): Promise<Map<string, TournamentWithDetails[]>> {
+  const unique = [...new Set(seasonIds)];
+  const grouped = new Map<string, TournamentWithDetails[]>(unique.map((id) => [id, []]));
+
+  for (let i = 0; i < unique.length; i += STAGE_BATCH_IDS) {
+    const chunk = unique.slice(i, i + STAGE_BATCH_IDS);
+    for (let from = 0; ; from += STAGE_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select(`
+          *,
+          rulesets ( name ),
+          seasons ( name ),
+          tournament_participants ( count )
+        `)
+        .in('season_id', chunk)
+        .order('season_id')
+        .order('stage_order')
+        .order('created_at')
+        .order('id')
+        .range(from, from + STAGE_PAGE_SIZE - 1);
+
+      if (error) throw error;
+      for (const row of data) {
+        const stage: TournamentWithDetails = {
+          ...toTournament(row),
+          ruleset_name: (row.rulesets as { name: string } | null)?.name ?? '',
+          season_name: (row.seasons as { name: string } | null)?.name ?? null,
+          participant_count: embeddedCount(row.tournament_participants),
+        };
+        if (stage.season_id !== null) grouped.get(stage.season_id)?.push(stage);
+      }
+      if (data.length < STAGE_PAGE_SIZE) break;
+    }
+  }
+
+  return grouped;
+}
+
 export async function updateTournament(
   id: string,
   input: Partial<TournamentFormData> & {

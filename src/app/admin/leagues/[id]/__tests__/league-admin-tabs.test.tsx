@@ -32,6 +32,7 @@ const LABELS: Record<LeagueAdminTab, string> = {
   draft: 'Draft',
   phases: 'Phases',
   rules: 'Rules',
+  format: 'Format',
   settings: 'Settings',
   danger: 'Danger zone',
 };
@@ -53,7 +54,8 @@ describe('LeagueAdminTabs', () => {
   it('is a named nav landmark with one link per tab', () => {
     const out = html('overview');
     expect(out).toMatch(/^<nav aria-label="League admin sections"/);
-    expect(out.match(/<a /g)).toHaveLength(7);
+    expect(out.match(/<a /g)).toHaveLength(LEAGUE_ADMIN_TABS.length);
+    expect(out).toContain('href="/admin/leagues/s1?tab=format"');
     expect(out).toContain('href="/admin/leagues/s1"');
     expect(out).toContain('href="/admin/leagues/s1?tab=danger"');
   });
@@ -72,12 +74,13 @@ describe('LeagueAdminTabs', () => {
     expect(out).toContain('data-unsaved-guard="league-admin-panel"');
     expect(out).toContain('data-message="This tab has unsaved changes. Switch tabs and lose them?"');
     // Every tab link carries the hook the guard's click listener looks for.
-    expect(out.match(/<a [^>]*data-admin-tab="/g)).toHaveLength(7);
+    expect(out.match(/<a [^>]*data-admin-tab="/g)).toHaveLength(LEAGUE_ADMIN_TABS.length);
   });
 
   it('renders only the tabs it is given', () => {
     const out = html('overview', ['overview', 'participants', 'phases', 'settings', 'danger']);
     expect(out).not.toContain('?tab=draft');
+    expect(out).not.toContain('?tab=format');
     expect(out).not.toContain('?tab=rules');
   });
 

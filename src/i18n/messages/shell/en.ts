@@ -51,6 +51,7 @@ export default {
       archivedTournaments: 'Archived tournaments',
       matches: 'Matches',
       rulesets: 'Rulesets',
+      formats: 'Formats',
       players: 'Player roster',
       achievements: 'Achievements',
       wiki: 'Wiki moderation',

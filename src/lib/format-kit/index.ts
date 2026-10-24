@@ -1,7 +1,7 @@
 /**
  * Server barrel of the format kit: everything in `client.ts` with the zod validator and compile entry in place
  * of the browser ones, plus the zod schemas and the server registry. Server code imports this file; client
- * code imports `client.ts`. Nothing in the app imports either yet.
+ * code imports `client.ts`. Only server code (the Studio loader) imports this file.
  */
 export * from './types';
 export * from './limits';
@@ -25,4 +25,5 @@ export type { StageGraph, StageNode } from './engine/graph';
 export type { CountRange, StagePlan } from './engine/plan';
 export { deriveCapabilities } from './engine/capabilities';
 export { renderDiagnostic, renderFix, renderSeverity } from './engine/render';
+export * from './engine/describe-definition';
 export * from './presets';

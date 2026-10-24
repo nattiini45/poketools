@@ -1,0 +1,55 @@
+import { defineDe } from '@/i18n/define';
+import type en from './en';
+
+/** German for `format-studio/admin`. Casual du; stages are "Phasen". */
+export default defineDe<typeof en>()({
+  title: 'Formate',
+  subtitle: 'So sind Ligen und Beispielformate aufgebaut, in einfachen Worten aufgeschrieben. Vorerst nur zum Lesen.',
+  gallery: {
+    heading: 'Beispiele',
+    intro: 'Drei Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Phasen, Regeln und Prüfungen zu lesen.',
+    exampleBadge: 'Beispiel. Ändere alles.',
+    readOnlyNote: 'Beispiele sind vorerst schreibgeschützt. Du kannst sie lesen, aber noch nicht bearbeiten oder speichern.',
+    open: 'Öffnen',
+  },
+  leagues: {
+    heading: 'Deine Ligen',
+    intro: 'Das Format jeder Liga, erzeugt aus ihren Phasen und Einstellungen.',
+    empty: 'Noch keine Ligen vorhanden.',
+    capNote: 'Es werden nur die ersten {count} Ligen angezeigt.',
+    testBadge: 'Testliga',
+    noPhases: 'Noch keine Phasen',
+    stages: { one: '{count} Phase', other: '{count} Phasen' },
+    noProblems: 'Keine Probleme gefunden',
+    errors: { one: '{count} Fehler', other: '{count} Fehler' },
+    warnings: { one: '{count} Warnung', other: '{count} Warnungen' },
+    notes: { one: '{count} Hinweis', other: '{count} Hinweise' },
+  },
+  detail: {
+    back: 'Zurück zu den Formaten',
+    backToLeague: 'Zurück zur Liga',
+    outline: 'Phasen',
+    rules: 'Regeltext',
+    rulesLanguage: 'Sprache des Regeltexts',
+    languageEn: 'English',
+    languageDe: 'Deutsch',
+    rulesShownEn: 'Regeltext wird auf Englisch angezeigt.',
+    rulesShownDe: 'Regeltext wird auf Deutsch angezeigt.',
+    diagnostics: 'Prüfungen',
+    diagnosticsNone: 'Keine Probleme gefunden.',
+    coverage: 'Abdeckung',
+    modules: 'Aus der Liga gelesene Einstellungen',
+    factLabel: 'Einstellung',
+    factValue: 'Wert',
+    legacyNote: 'Diese Einstellungen werden aus der Liga gelesen. Ändere sie im Liga-Admin.',
+    editIn: 'Im Liga-Admin öffnen',
+    invalid: 'Dieses Format konnte nicht angezeigt werden. Die Prüfungen unten nennen den Grund.',
+    noPhases: 'Diese Liga hat noch keine Phasen. Lege sie im Tab <link>Phasen</link> an, dann erscheint das Format hier.',
+    forbidden: 'Nur Admins dieser Liga können ihr Format öffnen.',
+  },
+  tab: {
+    title: 'Format',
+    subtitle: 'Die erzeugte Übersicht, der Regeltext und die Prüfungen dieser Liga. Nur zum Lesen: Einstellungen änderst du in den anderen Tabs.',
+    openStudio: 'Im Format-Studio öffnen',
+  },
+});

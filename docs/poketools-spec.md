@@ -668,8 +668,9 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin                         Admin overview
 /admin/leagues/new             Create league
 /admin/leagues/[id]            League admin page in URL tabs (?tab=): Overview, Participants, Draft,
-                               Phases (PhaseTimeline; the old ?tab=schedule opens it), Rules, Settings,
-                               Danger zone; which tabs a format shows and what each holds: docs/admin.md
+                               Phases (PhaseTimeline; the old ?tab=schedule opens it), Rules, Format
+                               (read-only generated outline and rules text), Settings, Danger zone;
+                               which tabs a format shows and what each holds: docs/admin.md
                                (League admin page)
 /admin/leagues/[id]/phases/[phaseId]  Phase workspace: PhaseForm, SeedingTable, PhaseGroupsPanel, RoundManager
 /admin/leagues/[id]/draft      Draft control panel: pools, config, start/abort, pause/resume, void
@@ -684,6 +685,10 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin/tournaments/[id]/rounds Standalone tournament rounds (season-linked → redirect to phase page)
 /admin/rulesets/new            Ruleset builder
 /admin/rulesets/[id]/edit      Edit existing ruleset
+/admin/formats                 Format Studio (read-only): three example formats and "Your leagues"
+                               with a generated descriptor each (site admins: all leagues; league admins: their own)
+/admin/formats/example/[presetId]  One example format: stage outline, rules text (EN/DE), diagnostics, coverage
+/admin/formats/league/[id]     One league's format, same view; per-league live gate (docs/admin.md, Format Studio)
 /admin/matches                 Match list (server-side status / league / tournament / search filters in the
                                URL, paged with an exact total; League and Phase on each row)
 /admin/matches/[id]            Override / dispute match result
