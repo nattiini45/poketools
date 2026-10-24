@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
 import type { Round, RoundStatus, RoundWithMatches } from '@/types/round';
 import type { PublicMatch } from '@/lib/match/public-match';
@@ -25,7 +25,11 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { errorsAdmin, errorsMatches, errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
+import { buildStartupChecklist, nextRoundToStart } from '@/lib/tournament/startup-checklist';
 import { apiFailure, type UiError } from './ui-error';
+import type { ParticipantsSummary } from './participants-events';
+import { StartupChecklistView, STARTUP_CHECKLIST_REGION_ID_PREFIX, type StartupChecklistLinks } from './StartupChecklist';
+import { useParticipantsSummary } from './useParticipantsSummary';
 
 const BEST_OF_OPTIONS = [1, 3, 5, 7] as const;
 
@@ -34,6 +38,29 @@ type RoundErrorKey = `rounds.errors.${keyof typeof tournamentsAdminMessages.en.r
 interface RoundManagerProps {
   tournament: Tournament;
   initialRounds: Round[];
+  /** The ruleset's name, for the start-up checklist. */
+  rulesetName?: string | null;
+  /** The phase pairs by league group (or its own groups), so the round-robin length is the server's call. */
+  groupsInUse?: boolean;
+  /** Player id → league group id for a phase that mirrors league groups; `null` otherwise. */
+  leagueGroupOf?: Readonly<Record<string, string>> | null;
+  /** Where the checklist's links point (anchors on the page or routes). */
+  checklistLinks?: StartupChecklistLinks;
+  /** Tests and server rendering only: the participant summary the checklist starts from. */
+  initialParticipants?: ParticipantsSummary | null;
+}
+
+/**
+ * The request init of a Generate call. Without "start right away" it is `undefined` (the caller sends a plain
+ * body-less POST, exactly as before); with it, the optional `start_round` body the generate routes accept.
+ */
+export function generateRequestInit(startNow: boolean): RequestInit | undefined {
+  if (!startNow) return undefined;
+  return {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ start_round: true }),
+  };
 }
 
 export type RoundMatchesLoad =
@@ -276,10 +303,22 @@ export function RoundDeadlineRow({
 export default function RoundManager({
   tournament,
   initialRounds,
+  rulesetName = null,
+  groupsInUse = false,
+  leagueGroupOf = null,
+  checklistLinks = {},
+  initialParticipants = null,
 }: RoundManagerProps) {
   const [rounds, setRounds] = useState<Round[]>(initialRounds);
   const [generating, setGenerating] = useState(false);
   const [generatingAll, setGeneratingAll] = useState(false);
+  // "Start the new round right away" on Generate. Off on every visit: starting is a deliberate step.
+  const [startNow, setStartNow] = useState(false);
+  const [startingRoundId, setStartingRoundId] = useState<string | null>(null);
+  // Set when the server answered `rounds_all_generated` for this many rounds (grouped phases, unknown count).
+  const [allGeneratedAtCount, setAllGeneratedAtCount] = useState<number | null>(null);
+  const startNowHintId = useId();
+  const participants = useParticipantsSummary(tournament.id, initialParticipants);
   const t = useT(tournamentsAdminMessages);
   const tCommon = useT(commonMessages);
   const tContent = useT(contentMessages);
@@ -347,9 +386,10 @@ export default function RoundManager({
     setGeneratingBracket(true);
     setError(null);
     try {
-      const res = await fetch(`/api/tournaments/${tournament.id}/generate-bracket`, {
-        method: 'POST',
-      });
+      const res = await fetch(
+        `/api/tournaments/${tournament.id}/generate-bracket`,
+        generateRequestInit(startNow) ?? { method: 'POST' },
+      );
       const result = await res.json();
       if (!result.success) {
         setError(apiFailure(result));
@@ -491,12 +531,17 @@ export default function RoundManager({
     setError(null);
 
     try {
-      const res = await fetch(`/api/generate-round/${tournament.id}`, {
-        method: 'POST',
-      });
+      const res = await fetch(
+        `/api/generate-round/${tournament.id}`,
+        generateRequestInit(startNow) ?? { method: 'POST' },
+      );
       const result: ApiResult<Round> = await res.json();
 
       if (!result.success) {
+        if (isRoundRobin && result.code === 'rounds_all_generated') {
+          setAllGeneratedAtCount(rounds.length);
+          return;
+        }
         setError(apiFailure(result));
         return;
       }
@@ -516,11 +561,15 @@ export default function RoundManager({
     try {
       const res = await fetch(
         `/api/tournaments/${tournament.id}/generate-all-rounds`,
-        { method: 'POST' }
+        generateRequestInit(startNow) ?? { method: 'POST' },
       );
       const result: ApiResult<Round[]> = await res.json();
 
       if (!result.success) {
+        if (isRoundRobin && result.code === 'rounds_all_generated') {
+          setAllGeneratedAtCount(rounds.length);
+          return;
+        }
         setError(apiFailure(result));
         return;
       }
@@ -612,6 +661,16 @@ export default function RoundManager({
     }
   }
 
+  /** Start a pending round: the card's Start button and the pending-round banner share it. */
+  async function startRound(roundId: string) {
+    setStartingRoundId(roundId);
+    try {
+      await updateRoundStatus(roundId, 'active');
+    } finally {
+      setStartingRoundId(null);
+    }
+  }
+
   async function toggleRoundMatches(roundId: string) {
     if (expandedRound === roundId) {
       setExpandedRound(null);
@@ -699,9 +758,46 @@ export default function RoundManager({
     generating || generatingAll || generatingBracket || regeneratingBracket || repairingBracket;
   const isStructureElim = isElimination && !isLegacyElim;
 
+  const checklist = buildStartupChecklist({
+    bracketType: tournament.bracket_type,
+    tournamentStatus: tournament.status,
+    rulesetSet: Boolean(tournament.ruleset_id),
+    rulesetName,
+    bestOfDefault: tournament.best_of_default,
+    participants: participants.summary,
+    rounds,
+    groupsInUse,
+    leagueGroupOf,
+  });
+  const regionId = `${STARTUP_CHECKLIST_REGION_ID_PREFIX}${tournament.id}`;
+
+  // Round robin: every round exists. Known from the participant count, or from the server's refusal when the
+  // count is unknown or the phase follows a league week plan; deleting a round clears the latch.
+  const roundRobin = isRoundRobin ? checklist.roundRobin : null;
+  const allGeneratedCount = roundRobin?.allGenerated
+    ? roundRobin.total
+    : isRoundRobin && allGeneratedAtCount !== null && allGeneratedAtCount === rounds.length
+      ? rounds.length
+      : null;
+  const hideGenerate = allGeneratedCount !== null;
+  // The muted line below says it, so the checklist does not repeat it.
+  const checklistItems = checklist.items.filter(
+    (item) => !(item.id === 'roundsRemaining' && item.state === 'blocked'),
+  );
+  const shownChecklist = { items: checklistItems, blocked: checklistItems.some((item) => item.state === 'blocked') };
+  const showChecklist = checklistItems.length > 0;
+  // Only a blocking item disables Generate, and the checklist is what explains why.
+  const generateBlocked = checklist.blocked;
+  const checklistDescribes = showChecklist && (generateBlocked || Boolean(roundRobin?.pastLast)) ? regionId : undefined;
+
+  const showsGenerateBracket = isElimination && !isLegacyElim && rounds.length === 0;
+  const showsGenerateNext = (!isElimination || isLegacyElim) && !hideGenerate;
+  const showsGenerateAll = isRoundRobin && !hideGenerate;
+  const nextToStart = tournament.status === 'completed' ? null : nextRoundToStart(rounds);
+
   return (
     <div className="space-y-4">
-      {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
+      {error &&<Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
       {repairInfo !== null && <Alert variant="success">{t('rounds.repaired', { count: repairInfo })}</Alert>}
       {resetToggleInfo && (
         <Alert variant="success">
@@ -709,13 +805,24 @@ export default function RoundManager({
         </Alert>
       )}
 
+      {showChecklist && (
+        <StartupChecklistView
+          id={regionId}
+          checklist={shownChecklist}
+          links={checklistLinks}
+          status={participants.status}
+          onRetry={participants.reload}
+        />
+      )}
+
       <div className="flex items-center gap-4 flex-wrap">
-        {isElimination && !isLegacyElim && rounds.length === 0 && (
+        {showsGenerateBracket && (
           <Button
             variant="secondary"
             size="sm"
             onClick={generateBracket}
-            disabled={showManualForm || isBusy}
+            disabled={showManualForm || isBusy || generateBlocked}
+            aria-describedby={generateBlocked ? checklistDescribes : undefined}
             loading={generatingBracket}
           >
             {t('rounds.generateBracket')}
@@ -747,27 +854,34 @@ export default function RoundManager({
             </Button>
           </>
         )}
-        {(!isElimination || isLegacyElim) && (
+        {showsGenerateNext && (
           <Button
             variant="secondary"
             size="sm"
             onClick={generateNextRound}
-            disabled={!canGenerate || showManualForm || isBusy}
+            disabled={!canGenerate || showManualForm || isBusy || generateBlocked || Boolean(roundRobin?.pastLast)}
+            aria-describedby={checklistDescribes}
             loading={generating}
           >
             {t('rounds.generateNext')}
           </Button>
         )}
-        {isRoundRobin && (
+        {showsGenerateAll && (
           <Button
             variant="secondary"
             size="sm"
             onClick={generateAllRounds}
-            disabled={!canGenerate || showManualForm || isBusy}
+            disabled={!canGenerate || showManualForm || isBusy || generateBlocked}
+            aria-describedby={generateBlocked ? checklistDescribes : undefined}
             loading={generatingAll}
           >
             {t('rounds.generateAll')}
           </Button>
+        )}
+        {allGeneratedCount !== null && (
+          <span className="text-sm text-poke-text-muted">
+            {t('rounds.allGenerated', { count: allGeneratedCount })}
+          </span>
         )}
         <Button
           variant="ghost"
@@ -796,6 +910,26 @@ export default function RoundManager({
         )}
       </div>
 
+      {(showsGenerateBracket || showsGenerateNext || showsGenerateAll) && (
+        <div className="space-y-0.5">
+          <label className="flex items-center gap-2 text-sm text-poke-text-primary">
+            <input
+              type="checkbox"
+              checked={startNow}
+              disabled={isBusy}
+              onChange={(e) => setStartNow(e.target.checked)}
+              aria-describedby={startNowHintId}
+              className="rounded accent-poke-accent"
+            />
+            {t('rounds.startNow.label')}
+          </label>
+          <p id={startNowHintId} className="pl-6 text-xs text-poke-text-muted">
+            {t('rounds.startNow.hint')}
+            {showsGenerateAll && ` ${t('rounds.startNow.hintAll')}`}
+          </p>
+        </div>
+      )}
+
       {showManualForm && (
         <ManualRoundForm
           tournamentId={tournament.id}
@@ -803,6 +937,26 @@ export default function RoundManager({
           onRoundCreated={handleManualRoundCreated}
           onCancel={() => setShowManualForm(false)}
         />
+      )}
+
+      {nextToStart && (
+        <Alert variant="info" role="status" className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold">
+              {t('rounds.pending.title', { round: translateEngineLabel('round', nextToStart.name, locale) })}
+            </p>
+            <p>{t('rounds.pending.body')}</p>
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => void startRound(nextToStart.id)}
+            loading={startingRoundId === nextToStart.id}
+            disabled={startingRoundId !== null}
+          >
+            {t('rounds.pending.start', { round: translateEngineLabel('round', nextToStart.name, locale) })}
+          </Button>
+        </Alert>
       )}
 
       {rounds.length === 0 ? (
@@ -852,7 +1006,8 @@ export default function RoundManager({
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => updateRoundStatus(round.id, 'active')}
+                        onClick={() => void startRound(round.id)}
+                        loading={startingRoundId === round.id}
                       >
                         {t('rounds.start')}
                       </Button>

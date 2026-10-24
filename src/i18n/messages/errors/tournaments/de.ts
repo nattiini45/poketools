@@ -70,6 +70,7 @@ export default defineDe<typeof en>()({
 
   // Elimination brackets
   bracket_generate_elim_only: 'Den kompletten Turnierbaum gibt es nur im K.-o.-System und im Doppel-K.-o.',
+  bracket_already_generated: 'Der Turnierbaum wurde bereits erstellt.',
   bracket_regenerate_elim_only:
     'Den Turnierbaum neu erstellen geht nur im K.-o.-System und im Doppel-K.-o.',
   bracket_repair_elim_only: 'Den Turnierbaum reparieren geht nur im K.-o.-System und im Doppel-K.-o.',

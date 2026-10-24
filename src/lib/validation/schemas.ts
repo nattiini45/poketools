@@ -1169,6 +1169,14 @@ export const roundUpdateSchema = z.object({
   { message: 'Provide status, best_of and/or deadline to update' },
 );
 
+/**
+ * Optional JSON body of the three generate routes (generate-round, generate-all-rounds, generate-bracket).
+ * `start_round` starts the lowest-numbered round that call created; omitted or false leaves it pending.
+ */
+export const generateRoundOptionsSchema = z.object({
+  start_round: z.boolean().optional(),
+}).strict();
+
 export const broadcastMomentSchema = z.object({
   match_id: uuid,
   // The DB CHECK's set (broadcast_moments_moment_type_check), shared with the manual-result moments.
@@ -1305,6 +1313,7 @@ export type DraftPoolEntryUpdateInput = z.infer<typeof draftPoolEntryUpdateSchem
 export type EvolutionCreateInput = z.infer<typeof evolutionCreateSchema>;
 export type EvolutionUpdateInput = z.infer<typeof evolutionUpdateSchema>;
 export type RoundUpdateInput = z.infer<typeof roundUpdateSchema>;
+export type GenerateRoundOptionsInput = z.infer<typeof generateRoundOptionsSchema>;
 export type BroadcastMomentInput = z.infer<typeof broadcastMomentSchema>;
 export type BroadcastPresetCreateInput = z.infer<typeof broadcastPresetCreateSchema>;
 export type BroadcastPresetUpdateInput = z.infer<typeof broadcastPresetUpdateSchema>;

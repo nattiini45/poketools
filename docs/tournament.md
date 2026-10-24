@@ -12,6 +12,7 @@ src/lib/tournament/
 ├── bracket-generate.ts      # Generate / regenerate all elimination rounds
 ├── bracket-propagation.ts   # Materialize + un-materialize feeder slots
 ├── enrollment-sync.ts       # Standings → phase enrollment sync/freeze
+├── generate-options.ts      # Optional `{ start_round }` body of the three generate routes
 ├── league-phase.ts          # Phase editability guardrails
 ├── serpentine.ts            # Serpentine group assignment from seeds
 ├── double-elim.ts           # Legacy per-round DE pairings + bracket state
@@ -19,17 +20,20 @@ src/lib/tournament/
 ├── round-robin.ts           # Round-robin pairings
 ├── single-elim.ts           # Traditional seeding + legacy SE pairings
 ├── standings.ts             # Standings computation
+├── startup-checklist.ts     # Pure start-up checklist of the round manager (what blocks Generate)
 ├── swiss.ts                 # Swiss pairings
 ├── types.ts                 # Shared tournament engine types
 └── __tests__/
     ├── bracket-propagation.test.ts
     ├── bracket-structure.test.ts
+    ├── generate-options.test.ts
     ├── serpentine.test.ts
     ├── double-elim.test.ts
     ├── match-state.test.ts
     ├── round-robin.test.ts
     ├── single-elim.test.ts
     ├── standings.test.ts
+    ├── startup-checklist.test.ts
     └── swiss.test.ts
 ```
 
@@ -91,7 +95,15 @@ src/lib/tournament/
 
 ### Seeding
 - **UI**: `SeedingTable` (via `ParticipantManager`) is the only seeding surface. Double-elim phases expose a per-player “start in losers” toggle while `status = 'upcoming'` (locked once rounds exist).
-- **Persistence**: `PATCH /api/tournaments/[id]/participants` accepts `{ player_id, seed, starting_bracket? }`. The `starting_bracket` column is the data model; the PR #54 board modules were deleted.
+- **Persistence**: `PATCH /api/tournaments/[id]/participants` accepts `{ seeds: [{ player_id, seed, starting_bracket? }] }` (`seed` is a positive integer or `null`; duplicate non-null seeds are refused with **400** `tournament_seed_duplicate`). The `starting_bracket` column is the data model; the PR #54 board modules were deleted. A successful save is audited as `tournament.seeds.update` (participant and seeded counts); a refused or partly failed save writes no event.
+- **The visible order is authoritative**: what the table shows is what Save writes. Dragging, moving up or down, shuffling and auto-seeding renumber every row 1..n by position (a previously unseeded row that is dragged becomes seeded at its position); typing a seed number re-sorts the list when the input is committed (blur or Enter), so list order and numbers never disagree. Duplicates a typed number creates are still reported on Save, never silently renumbered. Clear sends `null` for every row.
+
+### Start-up checklist
+- **Module**: `src/lib/tournament/startup-checklist.ts` (pure, client-safe). `buildStartupChecklist()` turns the participant summary, the rounds and the tournament's settings into the items shown above Generate in the round manager (standalone tournaments and league phases); the UI is `StartupChecklist` plus `useParticipantsSummary`, which reads the live participant count (the roster can change in another section or tab).
+- **Setup items** (no round yet): participants (blocked below 2), ruleset, default best-of, league groups (only for a phase that mirrors league groups: blocked while a participant has no group) and seeding (attention only: unseeded participants are ordered by name). **Next-round items** (rounds exist; Swiss, round robin, legacy elimination): previous round (blocked until the last round is completed; not for round robin, which can be generated ahead) and, for a round robin without groups, the rounds remaining (blocked once every circle-method round exists, attention when a gap sits below the last round number).
+- **What blocks Generate**: only items in the `blocked` state disable Generate Bracket, Generate Next Round and Generate All Rounds; an unknown participant list never does. A roster that fails to load is unknown, not empty: `ParticipantManager` announces only a roster it read (`loadParticipants` returns `participants: null` otherwise), so a failed read cannot block Generate. The server stays the authority and enforces the same rules (`tournament_participants_too_few`, `tournament_current_round_incomplete`, `rounds_all_generated`). Manual round creation is not gated. An elimination bracket the bracket engine already built, and a completed tournament, have no items.
+- **Pending rounds**: `nextRoundToStart()` returns the lowest-numbered pending round whose earlier rounds are all completed; the round manager shows a banner with a one-click Start for it, since a generated round stays pending (players cannot report) until it is started. Generate also offers a default-off "Start the new round right away" option (the optional `start_round` body below).
+- **Round robin size**: `roundRobinProgress()` gives the round count (n - 1 for an even field, n for an odd one), how many exist and the first missing one; with groups the week plan decides and the UI relies on the `rounds_all_generated` answer.
 
 ## Data Flows
 - **Input**: Participants, match history, bracket type, round number (or full seed list for v2)
@@ -111,7 +123,7 @@ src/lib/tournament/
 
 ## API Routes
 - `/api/tournaments` — standalone tournaments only (`season_id` rejected on POST)
-- `/api/tournaments/[id]/generate-bracket` — full SE/DE bracket generation
+- `/api/tournaments/[id]/generate-bracket` — full SE/DE bracket generation. Optional body `{ "start_round": true }` also marks the first round active (best effort; the result then carries `started_round_id`, otherwise the result is exactly `{ rounds_created, matches_materialized }`). **400** `tournament_participants_too_few` below 2 participants, **409** `bracket_already_generated` once rounds exist. Audited as `bracket.generate`
 - `/api/tournaments/[id]/regenerate-bracket` — destructive rebuild (cascade-resets played matches first; **409** `REGENERATE_PLAYED` without `cascade: true`)
 - `POST /api/tournaments/[id]/repair-bracket` — re-run bye resolution + slot materialization after failed propagation (RoundManager "Repair bracket")
 - `/api/seasons/[id]/phases` — phase list/create (`insert_at` guarded: **400** `PHASE_INSERT_LOCKED` when inserting before a started phase)
@@ -123,7 +135,8 @@ src/lib/tournament/
 - `/api/tournaments/[id]/groups` (GET — public list)
 - `/api/tournaments/[id]/rounds` and nested round/match routes
 - `GET /api/tournaments/[id]/rounds/[rid]` — public round detail; matches leave as `PublicMatch`. **404** `Round not found` with `code: 'INVALID_ROUND_ID'` for a malformed (non-UUID) tournament or round id (checked before any query; PATCH checks the round id after its auth guard), plain **404** `Round not found` for an unknown round, **404** `Round does not belong to this tournament` when the round is another tournament's
-- `/api/generate-round/[tid]` — Swiss/RR (and legacy per-round elim); **400** `BRACKET_V2_MANAGED` for structure brackets
+- `/api/generate-round/[tid]` — Swiss/RR (and legacy per-round elim); **400** `BRACKET_V2_MANAGED` for structure brackets; **400** `rounds_all_generated` for a round robin past its last circle-method round (nothing is written). Optional body `{ "start_round": true }` also starts the new round (`pending` → `active`); the start is best effort, so if it fails the round comes back `pending` with **201** and the round manager's banner offers Start. No body, or `false`, leaves the round pending as before. Anything else in the body is a **400** `validation_failed`. Audited as `round.generate`
+- `/api/tournaments/[id]/generate-all-rounds` — every missing round robin round (grouped phases follow their week plan); **400** `rounds_all_generated` when none is missing. The same optional `{ "start_round": true }` starts only the lowest-numbered round this call created, the others stay pending. Audited once per call as `round.generate`
 - `POST /api/admin/matches/[id]/reset` — cascade un-propagates downstream; **409** `DOWNSTREAM_PLAYED` without `cascade: true`
 - `POST /api/admin/rounds/[id]/reset` — same cascade semantics as match reset
 - `DELETE /api/admin/rounds/[id]` — round delete; **400** `STRUCTURE_ELIM_ROUND_DELETE` for v2 elim rounds (use regenerate-bracket); runs `rebuildAggregatesForScope` after delete

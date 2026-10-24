@@ -14,7 +14,6 @@ import {
 import type { Tournament } from '@/types/tournament';
 import type { EnrollmentSource } from '@/types/season';
 import type { ApiResult } from '@/types/api';
-import type { RatingLeaderboardEntry } from '@/types/rating';
 import Alert from '@/components/ui/Alert';
 import Combobox, { type ComboboxOption } from '@/components/ui/Combobox';
 import GuestBadge from '@/components/shared/GuestBadge';
@@ -25,6 +24,8 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { apiFailure, type UiError } from './ui-error';
+import { announceParticipantsChanged, summarizeParticipants } from './participants-events';
+import { loadParticipants } from './load-participants';
 
 interface ParticipantManagerProps {
   tournamentId: string;
@@ -49,6 +50,8 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
   const [sourcePhaseName, setSourcePhaseName] = useState<string | null>(null);
   const [ratings, setRatings] = useState<Record<string, number | null>>({});
   const [loading, setLoading] = useState(true);
+  /** True once the roster was read successfully; until then `participants` is only a placeholder. */
+  const [rosterLoaded, setRosterLoaded] = useState(false);
   const t = useT(tournamentsAdminMessages);
   const errorText = useApiErrorText(errorsTournaments);
   const [error, setError] = useState<UiError<'participants.loadFailed' | 'participants.addFailed'> | null>(null);
@@ -59,74 +62,37 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
   const seenHits = useRef(new Map<string, PlayerSearchHit>());
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [tournamentRes, partRes] = await Promise.all([
-          fetch(`/api/tournaments/${tournamentId}`),
-          fetch(`/api/tournaments/${tournamentId}/participants`),
-        ]);
-
-        const tournamentJson: ApiResult<Tournament> = await tournamentRes.json();
-        const partJson: ApiResult<AdminTournamentParticipant[]> = await partRes.json();
-
-        if (!tournamentJson.success) {
-          setError(apiFailure(tournamentJson));
-          return;
-        }
-
-        const t = tournamentJson.data;
-        setTournament(t);
-        setEnrollmentSource(t.enrollment_source);
-        setSourcePhaseName(null);
-
-        // A roster that fails to load is an error, not an empty tournament.
-        if (!partJson.success) setError(apiFailure(partJson));
-        let currentParticipants = partJson.success ? partJson.data : [];
-
-        if (t.season_id) {
-          const hasRounds = t.current_round > 0;
-          const shouldSync = !t.enrollment_source?.frozen && !hasRounds;
-
-          if (shouldSync) {
-            const syncRes = await fetch(
-              `/api/seasons/${t.season_id}/phases/${tournamentId}/participants/sync-standings`,
-              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
-            );
-            const syncJson: ApiResult<{
-              enrollment_source: EnrollmentSource;
-              source_phase_name: string | null;
-            }> = await syncRes.json();
-            if (syncJson.success) {
-              setEnrollmentSource(syncJson.data.enrollment_source);
-              setSourcePhaseName(syncJson.data.source_phase_name);
-              const refreshed = await fetch(`/api/tournaments/${tournamentId}/participants`);
-              const refreshedJson: ApiResult<AdminTournamentParticipant[]> = await refreshed.json();
-              if (refreshedJson.success) currentParticipants = refreshedJson.data;
-            }
-          }
-        }
-
-        setParticipants(currentParticipants);
-
-        const ratingsRes = await fetch('/api/ratings');
-        const ratingsJson: ApiResult<RatingLeaderboardEntry[]> = await ratingsRes.json();
-        if (ratingsJson.success) {
-          const map: Record<string, number | null> = {};
-          for (const entry of ratingsJson.data) {
-            map[entry.player_id] = entry.rating;
-          }
-          setRatings(map);
-        }
-
-      } catch {
-        setError({ key: 'participants.loadFailed' });
-      } finally {
-        setLoading(false);
+    let cancelled = false;
+    void loadParticipants(tournamentId).then((loaded) => {
+      if (cancelled) return;
+      if (loaded.tournament) {
+        setTournament(loaded.tournament);
+        setEnrollmentSource(loaded.enrollmentSource);
+        setSourcePhaseName(loaded.sourcePhaseName);
       }
-    }
-
-    load();
+      setError(loaded.error);
+      if (loaded.participants) {
+        setParticipants(loaded.participants);
+        setRosterLoaded(true);
+      }
+      setRatings(loaded.ratings);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [tournamentId]);
+
+  // Tell the rest of the page (the round manager's start-up checklist) about the
+  // roster once it has loaded and after every change: the league-phase sync on
+  // mount, add, remove, seed save, re-import and seed-by-rating. A roster that
+  // never loaded stays unannounced (the checklist keeps what it has or shows
+  // its own error), because announcing the empty placeholder would read as an
+  // empty tournament and block Generate.
+  useEffect(() => {
+    if (loading || !rosterLoaded) return;
+    announceParticipantsChanged(tournamentId, summarizeParticipants(participants));
+  }, [participants, loading, rosterLoaded, tournamentId]);
 
   /** Enrol the player the picker returned for `playerId` (the server decides: duplicates, locked brackets). */
   async function addPlayer(playerId: string) {

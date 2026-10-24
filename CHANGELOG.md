@@ -8,6 +8,40 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Added
+
+- **Start-up checklist in the round manager.** Standalone tournaments and league phases show what is still missing
+  before Generate can work (participants, ruleset, best-of, league groups, seeding, the previous round, the rounds a
+  round robin still has to generate). Generate is disabled while an item is blocking and says why; manual round
+  creation is not affected.
+- **Pending rounds are no longer silent.** A generated round stays pending (players cannot report) until it is
+  started. The round manager now shows a notice with a one-click Start for the next pending round.
+- **"Start the new round right away".** An option next to Generate, off by default. The API accepts an optional
+  `start_round` in the JSON body of `POST /api/generate-round/[tid]`, `POST /api/tournaments/[id]/generate-all-rounds`
+  (starts only the first new round) and `POST /api/tournaments/[id]/generate-bracket` (starts the first round and
+  returns `started_round_id`). Without the body nothing changes. If the start itself fails, the rounds are still
+  created and stay pending.
+- **"All N rounds generated" for round robin.** Once every round exists the round manager hides Generate and says so.
+- **Audit events** `round.generate`, `bracket.generate` and `tournament.seeds.update`, with English and German labels.
+
+### Changed
+
+- **Save in the seeding table persists the visible order.** Dragging, moving and shuffling renumber every row, and
+  typing a seed number re-sorts the list when the input is committed, so the list and the saved seeds always agree.
+- The participants section opens by default while a tournament or phase has fewer than 2 participants.
+
+### Fixed
+
+- Generating a bracket with fewer than 2 participants, or a second time, now answers a translated **400**
+  `tournament_participants_too_few` or **409** `bracket_already_generated` instead of a generic 500.
+- Generate Next Round on a round robin that is past its last round answers **400** `rounds_all_generated` instead of a
+  generic 500, and writes nothing.
+- A participant list that fails to load is no longer shown to the start-up checklist as an empty roster, which
+  blocked Generate with "0 participants". The participant manager now announces only a roster it actually read;
+  the checklist keeps its last list, or shows its own error, until the next successful read.
+
+No migration.
+
 ## [0.3.0] - 2026-10-23
 
 ### Upgrade notes

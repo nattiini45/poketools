@@ -103,6 +103,20 @@ export default {
     grandFinalsReset: 'Grand Finals reset',
     empty: 'No rounds yet. Generate the first round to get started.',
     start: 'Start',
+    startNow: {
+      label: 'Start the new round right away',
+      hint: 'Players can report results as soon as a round is started. Leave this off to check the pairings first.',
+      hintAll: 'With Generate All Rounds, only the first new round is started.',
+    },
+    pending: {
+      title: '{round} has not been started',
+      body: 'Players can report once you start this round.',
+      start: 'Start {round}',
+    },
+    allGenerated: {
+      one: 'The only round has been generated',
+      other: 'All {count} rounds generated',
+    },
     complete: 'Complete',
     reset: 'Reset',
     delete: 'Delete',
@@ -166,6 +180,61 @@ export default {
       cascadeConfirm: 'Reset Including Downstream',
     },
   },
+  /** Start-up checklist above Generate in the round manager (standalone tournaments and league phases). */
+  checklist: {
+    title: 'Before you generate',
+    optional: 'Optional',
+    blockedNote: 'Generating is disabled until the open items are done.',
+    checking: 'Checking participants…',
+    loadFailed: 'Could not check the participants. You can still try to generate.',
+    participants: {
+      done: {
+        one: '{count} participant enrolled (minimum {min})',
+        other: '{count} participants enrolled (minimum {min})',
+      },
+      blocked: {
+        one: 'Only {count} participant enrolled. Add at least {min} participants.',
+        other: '{count} participants enrolled. Add at least {min} participants.',
+      },
+      action: 'Add participants',
+    },
+    ruleset: {
+      done: 'Ruleset: {name}',
+      doneUnnamed: 'Ruleset set',
+      blocked: 'No ruleset set. Choose one in the overview.',
+      action: 'Change ruleset',
+    },
+    bestOf: {
+      done: 'Best of {count} by default',
+      blocked: 'No default best-of set.',
+      action: 'Change best-of',
+    },
+    groups: {
+      done: 'Every participant is in a league group',
+      blocked: {
+        one: '{count} participant is not in a league group. Place them first.',
+        other: '{count} participants are not in a league group. Place them first.',
+      },
+      action: 'Open league groups',
+    },
+    seeding: {
+      done: 'All participants are seeded',
+      attention: {
+        one: '{count} participant has no seed and is ordered by name.',
+        other: '{count} participants have no seed and are ordered by name.',
+      },
+      action: 'Set seeds',
+    },
+    previousRound: {
+      done: 'Previous round completed',
+      blocked: '{round} is not completed yet. Complete it before generating the next round.',
+      action: 'Go to rounds',
+    },
+    rounds: {
+      done: '{generated} of {total} rounds generated',
+      gap: 'Round {round} is missing. Generate All Rounds fills the gap.',
+    },
+  },
   participants: {
     loading: 'Loading...',
     loadFailed: 'Failed to load data',
@@ -179,6 +248,10 @@ export default {
     synced: 'Synced with league table',
     source: 'Source: {name}',
     lastSync: 'Last sync {time}',
+    orderHint: {
+      one: 'Saving seeds {count} player in the order shown.',
+      other: 'Saving seeds all {count} players in the order shown.',
+    },
     seedsPositive: 'Seeds must be positive numbers',
     seedsDuplicate: 'Duplicate seed values are not allowed',
     saveFailed: 'Failed to save seeds',

@@ -16,6 +16,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { apiFailure, type UiError } from './ui-error';
+import { buildSeedPayload, reorderIds, seedsFromOrder, sortBySeedEdits } from './seeding-order';
 
 type SeedingErrorKey =
   | 'seeding.seedsPositive'
@@ -99,6 +100,8 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
   const [error, setError] = useState<UiError<SeedingErrorKey> | null>(null);
   const [savingSeeds, setSavingSeeds] = useState(false);
   const [seedsDirty, setSeedsDirty] = useState(false);
+  /** The list was reordered (or renumbered by position) since the last save or re-read. */
+  const [orderTouched, setOrderTouched] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [seedingRating, setSeedingRating] = useState(false);
   const dragIndex = useRef<number | null>(null);
@@ -146,14 +149,22 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
       : null;
 
   function reorder(from: number, to: number) {
-    if (from === to || from < 0 || to < 0 || from >= orderedIds.length || to >= orderedIds.length) {
-      return;
-    }
-    const next = [...orderedIds];
-    const [item] = next.splice(from, 1);
-    next.splice(to, 0, item);
+    const next = reorderIds(orderedIds, from, to);
+    if (next === orderedIds) return;
+    // The visible order is authoritative: every row is renumbered by position,
+    // so what Save writes is what the admin sees.
     setOrderedIds(next);
+    setSeedEdits(seedsFromOrder(next));
     setSeedsDirty(true);
+    setOrderTouched(true);
+  }
+
+  /** Re-sorts the list to match the typed numbers (on blur and Enter, not per keystroke). */
+  function commitSeedEdits() {
+    setOrderedIds((prev) => {
+      const next = sortBySeedEdits(prev, seedEdits);
+      return next.every((id, i) => id === prev[i]) ? prev : next;
+    });
   }
 
   function handleSeedChange(playerId: string, value: string) {
@@ -162,12 +173,9 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
   }
 
   function autoSeed() {
-    const edits: Record<string, string> = {};
-    orderedIds.forEach((id, i) => {
-      edits[id] = String(i + 1);
-    });
-    setSeedEdits(edits);
+    setSeedEdits(seedsFromOrder(orderedIds));
     setSeedsDirty(true);
+    setOrderTouched(true);
   }
 
   function clearSeeds() {
@@ -175,6 +183,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
     for (const id of orderedIds) edits[id] = '';
     setSeedEdits(edits);
     setSeedsDirty(true);
+    setOrderTouched(false);
   }
 
   function shuffleSeeds() {
@@ -184,32 +193,21 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     setOrderedIds(shuffled);
-    const edits: Record<string, string> = {};
-    shuffled.forEach((id, index) => {
-      edits[id] = String(index + 1);
-    });
-    setSeedEdits(edits);
+    setSeedEdits(seedsFromOrder(shuffled));
     setSeedsDirty(true);
+    setOrderTouched(true);
   }
 
   async function saveSeeds() {
     setError(null);
     setSavingSeeds(true);
 
-    const seeds = orderedParticipants.map((p) => {
-      const player_id = p.id;
-      const raw = seedEdits[player_id]?.trim();
-      const seed = raw ? parseInt(raw, 10) : null;
-      const entry: {
-        player_id: string;
-        seed: number | null;
-        starting_bracket?: 'winners' | 'losers';
-      } = { player_id, seed };
-      if (bracketType === 'double_elim') {
-        entry.starting_bracket = startingBracketOf(player_id);
-      }
-      return entry;
-    });
+    const seeds = buildSeedPayload(
+      orderedParticipants.map((p) => p.id),
+      seedEdits,
+      startingBrackets,
+      bracketType
+    );
 
     for (const entry of seeds) {
       if (entry.seed !== null && (Number.isNaN(entry.seed) || entry.seed < 1)) {
@@ -250,6 +248,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         onEnrollmentChange({ ...enrollmentSource, frozen: true });
       }
       setSeedsDirty(false);
+      setOrderTouched(false);
     } catch {
       setError({ key: 'seeding.saveFailed' });
     } finally {
@@ -303,6 +302,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         }
         setSeedEdits(edits);
         setStartingBrackets(brackets);
+        setOrderTouched(false);
         onEnrollmentChange(result.data.enrollment_source);
       }
     } catch {
@@ -345,6 +345,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         setSeedEdits(edits);
         setStartingBrackets(brackets);
         setSeedsDirty(false);
+        setOrderTouched(false);
         if (enrollmentSource) {
           onEnrollmentChange({ ...enrollmentSource, frozen: true });
         }
@@ -442,6 +443,12 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         </div>
       </div>
 
+      {orderTouched && seedsDirty && editable && (
+        <p className="text-xs text-poke-text-muted">
+          {t('seeding.orderHint', { count: orderedParticipants.length })}
+        </p>
+      )}
+
       {orderedParticipants.length === 0 ? (
         <p className="text-sm text-poke-text-muted">{t('seeding.empty')}</p>
       ) : (
@@ -486,6 +493,10 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
                   placeholder="#"
                   value={seedEdits[p.id] ?? ''}
                   onChange={(e) => handleSeedChange(p.id, e.target.value)}
+                  onBlur={commitSeedEdits}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitSeedEdits();
+                  }}
                   disabled={!editable}
                   className="w-12 px-1.5 py-0.5 text-center text-xs border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary disabled:opacity-60"
                 />

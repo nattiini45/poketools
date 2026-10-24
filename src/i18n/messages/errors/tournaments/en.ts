@@ -82,6 +82,7 @@ export default {
 
   // Elimination brackets
   bracket_generate_elim_only: 'Full bracket generation only applies to elimination formats',
+  bracket_already_generated: 'Bracket already generated',
   bracket_regenerate_elim_only: 'Bracket regeneration only applies to elimination formats',
   bracket_repair_elim_only: 'Bracket repair only applies to elimination formats',
 

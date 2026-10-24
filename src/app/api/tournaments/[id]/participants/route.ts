@@ -22,6 +22,7 @@ import {
 } from '@/lib/players/public-player';
 import { canViewAdminRoster } from '@/lib/players/roster-access';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import type { BracketType } from '@/types/tournament';
 
@@ -169,7 +170,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireResourceAdmin('tournament', id);
+    const admin = await requireResourceAdmin('tournament', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_TOURNAMENT_ID');
     if (invalidId) return invalidId;
     const rawBody = await request.json();
@@ -243,6 +244,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       throw err;
     }
     expireTournamentReads(id, tournament.season_id);
+    logAuditEvent({
+      actor_id: admin.playerId,
+      actor_name: admin.name,
+      action: 'tournament.seeds.update',
+      resource_type: 'tournament',
+      resource_id: id,
+      resource_name: tournament.name,
+      metadata: { participants: body.seeds.length, seeded: nonNullSeeds.length },
+    });
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update seeds');
