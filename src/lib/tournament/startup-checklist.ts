@@ -123,6 +123,26 @@ function isElimination(bracketType: BracketType): boolean {
   return bracketType === 'single_elim' || bracketType === 'double_elim';
 }
 
+/**
+ * Whether a league phase's participants section starts open. The section's manager syncs the roster from the
+ * standings of the previous phase on load, so a phase fed by a previous phase (an advancement rule, a standings
+ * source or a later stage) stays collapsed unless it is a new phase that already has participants: merely
+ * viewing the page must not enrol players. Anywhere else it opens while there are too few participants to pair.
+ */
+export function participantsSectionOpen(phase: {
+  isNewPhase: boolean;
+  participantCount: number;
+  advancementRule?: unknown;
+  enrollmentSourceType?: string | null;
+  stageOrder?: number | null;
+}): boolean {
+  if (phase.isNewPhase) return true;
+  const fedByPreviousPhase =
+    phase.advancementRule != null || phase.enrollmentSourceType === 'standings' || (phase.stageOrder ?? 1) > 1;
+  if (fedByPreviousPhase) return false;
+  return phase.participantCount < MIN_PARTICIPANTS;
+}
+
 export function buildStartupChecklist(input: StartupChecklistInput): StartupChecklist {
   const { bracketType, rounds, participants } = input;
   const isRoundRobin = bracketType === 'round_robin';
@@ -202,7 +222,8 @@ export function buildStartupChecklist(input: StartupChecklistInput): StartupChec
       });
     }
 
-    if (roundRobin) {
+    // No participants means no fixed round count yet: "0 of 0 rounds generated" says nothing.
+    if (roundRobin && roundRobin.total > 0) {
       const state: StartupItemState = roundRobin.allGenerated
         ? 'blocked'
         : roundRobin.pastLast && roundRobin.firstMissing !== null

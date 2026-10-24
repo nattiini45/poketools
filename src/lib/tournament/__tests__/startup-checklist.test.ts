@@ -3,6 +3,7 @@ import {
   MIN_PARTICIPANTS,
   buildStartupChecklist,
   nextRoundToStart,
+  participantsSectionOpen,
   roundRobinProgress,
   type StartupChecklistInput,
   type StartupItem,
@@ -292,11 +293,44 @@ describe('buildStartupChecklist — round robin', () => {
     expect(checklist.blocked).toBe(false);
   });
 
+  it('hides the rounds-remaining row while there are no participants yet', () => {
+    const checklist = rr([round(1, 'pending')], { participants: field(0) });
+
+    expect(item(checklist.items, 'roundsRemaining')).toBeUndefined();
+    expect(checklist.blocked).toBe(false);
+  });
+
   it('has no progress while the participants are unknown', () => {
     const checklist = rr([round(1)], { participants: null });
 
     expect(checklist.roundRobin).toBeNull();
     expect(checklist.items).toEqual([]);
+  });
+});
+
+describe('participantsSectionOpen', () => {
+  const base = { isNewPhase: false, participantCount: 0 };
+
+  it('opens while there are too few participants to pair', () => {
+    expect(participantsSectionOpen({ ...base, participantCount: 0 })).toBe(true);
+    expect(participantsSectionOpen({ ...base, participantCount: 1 })).toBe(true);
+    expect(participantsSectionOpen({ ...base, participantCount: 2 })).toBe(false);
+  });
+
+  it('opens for a new phase with participants', () => {
+    expect(participantsSectionOpen({ isNewPhase: true, participantCount: 8 })).toBe(true);
+  });
+
+  it('stays collapsed for a phase fed by a previous phase, whatever its participant count', () => {
+    const rule = { type: 'top_n', count: 2, per_group: true };
+    expect(participantsSectionOpen({ ...base, advancementRule: rule })).toBe(false);
+    expect(participantsSectionOpen({ ...base, enrollmentSourceType: 'standings' })).toBe(false);
+    expect(participantsSectionOpen({ ...base, stageOrder: 2 })).toBe(false);
+    expect(participantsSectionOpen({ ...base, participantCount: 1, advancementRule: rule })).toBe(false);
+  });
+
+  it('opens for a first stage or a roster-fed phase with too few participants', () => {
+    expect(participantsSectionOpen({ ...base, stageOrder: 1, advancementRule: null, enrollmentSourceType: 'roster' })).toBe(true);
   });
 });
 

@@ -971,11 +971,11 @@ export default function RoundManager({
 
             return (
               <Card key={round.id} variant="outlined" padding="none">
-                <div className="p-3 flex items-center justify-between">
+                <div className="p-3 flex flex-wrap items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => toggleRoundMatches(round.id)}
-                    className="text-left flex-1"
+                    className="text-left flex-1 min-w-0"
                   >
                     <h4 className="font-heading font-medium text-sm text-poke-text-primary">
                       <span className="mr-1.5 text-poke-text-muted">{isExpanded ? '▾' : '▸'}</span>
@@ -988,7 +988,7 @@ export default function RoundManager({
                       {enumLabel(tEnum, 'roundStatus', round.status)}
                     </Badge>
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {round.status === 'pending' && (
                       <select
                         value={round.best_of}

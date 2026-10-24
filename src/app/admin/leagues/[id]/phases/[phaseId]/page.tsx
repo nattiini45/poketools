@@ -14,6 +14,7 @@ import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups'
 import { listRulesets } from '@/lib/supabase/queries/rulesets';
 import { buildLeaguePhase } from '@/lib/tournament/league-phase';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
+import { participantsSectionOpen } from '@/lib/tournament/startup-checklist';
 import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import PhaseGroupsPanel from '@/components/league/PhaseGroupsPanel';
@@ -75,8 +76,15 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
 
   const phase = buildLeaguePhase(tournament, rounds);
   const isNewPhase = phase.participant_count > 0 && phase.rounds_total === 0;
-  // Too few participants to pair: the start-up checklist sends the admin to the participants section.
-  const participantsOpen = isNewPhase || phase.participant_count < 2;
+  // Too few participants to pair: the start-up checklist sends the admin to the participants section. A phase
+  // fed by a previous phase stays collapsed, because opening the section syncs its roster.
+  const participantsOpen = participantsSectionOpen({
+    isNewPhase,
+    participantCount: phase.participant_count,
+    advancementRule: phase.advancement_rule,
+    enrollmentSourceType: phase.enrollment_source?.type,
+    stageOrder: phase.stage_order,
+  });
   // A phase with its own groups, or one mirroring league groups, follows a server week plan.
   const groupsInUse = phaseGroups.length > 0 || leagueHasGroups;
   // Swiss and round-robin phases of a league with groups pair within those groups; ids only.

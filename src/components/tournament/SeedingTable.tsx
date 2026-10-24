@@ -100,6 +100,8 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
   const [error, setError] = useState<UiError<SeedingErrorKey> | null>(null);
   const [savingSeeds, setSavingSeeds] = useState(false);
   const [seedsDirty, setSeedsDirty] = useState(false);
+  // Set by a successful save; any later edit sets `seedsDirty` again, which hides the notice.
+  const [seedsSaved, setSeedsSaved] = useState(false);
   /** The list was reordered (or renumbered by position) since the last save or re-read. */
   const [orderTouched, setOrderTouched] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -200,6 +202,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
 
   async function saveSeeds() {
     setError(null);
+    setSeedsSaved(false);
     setSavingSeeds(true);
 
     const seeds = buildSeedPayload(
@@ -249,6 +252,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
       }
       setSeedsDirty(false);
       setOrderTouched(false);
+      setSeedsSaved(true);
     } catch {
       setError({ key: 'seeding.saveFailed' });
     } finally {
@@ -260,6 +264,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
     if (!seasonId) return;
     setSyncing(true);
     setError(null);
+    setSeedsSaved(false);
     try {
       const res = await fetch(
         `/api/seasons/${seasonId}/phases/${tournamentId}/participants/sync-standings`,
@@ -316,6 +321,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
     if (!seasonId) return;
     setSeedingRating(true);
     setError(null);
+    setSeedsSaved(false);
     try {
       const res = await fetch(
         `/api/seasons/${seasonId}/phases/${tournamentId}/participants/seed-by-rating`,
@@ -442,6 +448,11 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
           )}
         </div>
       </div>
+
+      {/* A live region that is always rendered, so the screen reader announces the text when it appears. */}
+      <p role="status" className="text-xs text-poke-green">
+        {seedsSaved && !seedsDirty ? t('seeding.saved') : null}
+      </p>
 
       {orderTouched && seedsDirty && editable && (
         <p className="text-xs text-poke-text-muted">

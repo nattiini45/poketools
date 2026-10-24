@@ -322,6 +322,31 @@ describe('admin league phase page: start-up checklist inputs', () => {
       expect(section.props.collapsible).toBe(false);
     });
 
+    it('stays collapsed on a phase fed by a previous phase, so viewing it does not sync the roster', async () => {
+      const rule = { type: 'top_n', count: 2, per_group: true };
+      for (const fed of [
+        { advancement_rule: rule },
+        { enrollment_source: { type: 'standings', synced_at: '2026-10-24T10:00:00Z', frozen: false } },
+        { stage_order: 2 },
+      ]) {
+        mocks.getTournamentWithDetails.mockResolvedValue({ ...phase(0), ...fed });
+        const section = sectionById(await render(), 'tournament-participants');
+        expect(section.props.defaultCollapsed).toBe(true);
+        expect(section.props.collapsible).toBe(true);
+      }
+    });
+
+    it('is still open for a new phase fed by a previous phase (it has participants and no rounds)', async () => {
+      mocks.getTournamentWithDetails.mockResolvedValue({
+        ...phase(4),
+        stage_order: 2,
+        advancement_rule: { type: 'top_n', count: 2, per_group: true },
+      });
+      const section = sectionById(await render(), 'tournament-participants');
+      expect(section.props.defaultCollapsed).toBe(false);
+      expect(section.props.collapsible).toBe(false);
+    });
+
     it('is collapsed on a started phase with enough participants', async () => {
       mocks.getTournamentWithDetails.mockResolvedValue(phase(8));
       mocks.getRoundsByTournament.mockResolvedValue(STARTED);

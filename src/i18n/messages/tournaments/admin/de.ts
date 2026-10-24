@@ -251,6 +251,7 @@ export default defineDe<typeof en>()({
     seedsPositive: 'Setzplätze müssen positive Zahlen sein.',
     seedsDuplicate: 'Jeder Setzplatz darf nur einmal vergeben werden.',
     saveFailed: 'Die Setzliste konnte nicht gespeichert werden.',
+    saved: 'Die Setzliste wurde gespeichert.',
     reimportConfirm: 'Der Neuimport überschreibt die aktuelle Teilnehmerliste und die Setzplätze. Fortfahren?',
     reimportFailed: 'Die Tabelle konnte nicht neu importiert werden.',
     seedByRatingFailed: 'Das Setzen nach Rating ist fehlgeschlagen.',

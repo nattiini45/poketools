@@ -340,3 +340,22 @@ describe('fetchParticipantsSummary', () => {
     expect(await fetchParticipantsSummary('t-1', offline)).toBeNull();
   });
 });
+
+describe('RoundManager round rows', () => {
+  it('lets the row and its action buttons wrap, so Delete is not clipped on a narrow screen', () => {
+    const html = render({ rounds: [roundN(1, 'pending')], participants: summary(8) });
+    expect(html).toMatch(/class="p-3 flex flex-wrap items-center justify-between gap-2"/);
+    expect(html).toMatch(/<div class="flex flex-wrap items-center gap-2"><select/);
+  });
+});
+
+describe('RoundManager round-robin progress', () => {
+  it('shows no "0 of 0 rounds generated" row while nobody is enrolled', () => {
+    const html = render({
+      tournament: makeTournament({ bracket_type: 'round_robin' }),
+      rounds: [roundN(1, 'pending')],
+      participants: summary(0),
+    });
+    expect(textOf(html)).not.toContain('0 of 0');
+  });
+});

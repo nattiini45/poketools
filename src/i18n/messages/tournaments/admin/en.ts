@@ -255,6 +255,7 @@ export default {
     seedsPositive: 'Seeds must be positive numbers',
     seedsDuplicate: 'Duplicate seed values are not allowed',
     saveFailed: 'Failed to save seeds',
+    saved: 'Seeds saved.',
     reimportConfirm: 'Re-importing will overwrite the current participant list and seeds. Continue?',
     reimportFailed: 'Failed to re-import standings',
     seedByRatingFailed: 'Failed to seed by rating',
