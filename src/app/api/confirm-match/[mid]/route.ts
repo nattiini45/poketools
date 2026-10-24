@@ -99,9 +99,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const previousStatus = match.status;
-    // The original reporter stays the submitter whoever acts now (admin
-    // override, confirm or dispute); the actor only fills an empty slot.
-    const submitterId = match.submitter_id ?? player.playerId;
+    // The original reporter stays the submitter whoever acts now. Only a
+    // reported or confirmed result fills an empty slot: a dispute (by a
+    // participant or an admin) never sets the submitter, so a match with no
+    // result keeps showing no reporter.
+    const submitterId = targetStatus === 'completed'
+      ? match.submitter_id ?? player.playerId
+      : match.submitter_id ?? undefined;
     const updated = await updateMatchStatus(
       mid,
       targetStatus,

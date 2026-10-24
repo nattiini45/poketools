@@ -561,7 +561,7 @@ describe('POST /api/confirm-match/[mid]', () => {
     expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'disputed', undefined, 'reporter-1', undefined, 'pending_confirmation');
   });
 
-  it('records the actor as submitter only when the match has none', async () => {
+  it('never sets the submitter on a dispute, even when the match has none', async () => {
     vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
     vi.mocked(getMatchById).mockResolvedValue({ ...pendingMatch, submitter_id: null, status: 'in_progress' } as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
@@ -570,7 +570,36 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
 
-    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'disputed', undefined, 'admin-1', undefined, 'in_progress');
+    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'disputed', undefined, undefined, undefined, 'in_progress');
+  });
+
+  it('never sets the submitter when a participant disputes a match with none', async () => {
+    vi.mocked(getMatchById).mockResolvedValue({ ...pendingMatch, submitter_id: null, status: 'in_progress' } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
+
+    await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+
+    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'disputed', undefined, undefined, undefined, 'in_progress');
+  });
+
+  it('records the confirming admin as submitter when a completion has none', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
+    vi.mocked(getMatchById).mockResolvedValue({
+      ...pendingMatch,
+      player_1_id: overridePlayerOneId,
+      player_2_id: overridePlayerTwoId,
+      winner_id: overridePlayerOneId,
+      submitter_id: null,
+      status: 'in_progress',
+    } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'completed' } as never);
+
+    await POST(makeRequest({ action: 'confirm' }), routeParams(MID));
+
+    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'completed', overridePlayerOneId, 'admin-1', undefined, 'in_progress');
   });
 
   it('audits an admin dispute as match.dispute, with or without notes', async () => {
