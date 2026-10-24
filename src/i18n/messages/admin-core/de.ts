@@ -77,6 +77,7 @@ export default defineDe<typeof en>()({
     discord_webhook__create: 'Discord-Webhook angelegt',
     discord_webhook__update: 'Discord-Webhook bearbeitet',
     discord_webhook__delete: 'Discord-Webhook gelöscht',
+    discord_webhook__test: 'Discord-Webhook getestet',
     admin__achievement__create: 'Erfolg angelegt',
     admin__achievement__update: 'Erfolg bearbeitet',
     admin__achievement__delete: 'Erfolg gelöscht',

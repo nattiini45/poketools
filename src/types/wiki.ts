@@ -40,7 +40,7 @@ export interface WikiNoteReport {
   status: WikiNoteReportStatus;
   created_at: string;
   updated_at: string;
-  note?: Pick<WikiNote, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id'>;
+  note?: Pick<WikiNote, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id' | 'approved'>;
 }
 
 export interface WikiMoveEntry {

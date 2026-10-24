@@ -62,6 +62,7 @@ const auditActions = {
   discord_webhook__create: 'Discord webhook created',
   discord_webhook__update: 'Discord webhook updated',
   discord_webhook__delete: 'Discord webhook deleted',
+  discord_webhook__test: 'Discord webhook tested',
   admin__achievement__create: 'Achievement created',
   admin__achievement__update: 'Achievement updated',
   admin__achievement__delete: 'Achievement deleted',

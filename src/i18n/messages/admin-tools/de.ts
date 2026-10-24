@@ -120,6 +120,10 @@ export default defineDe<typeof en>()({
       failed: 'Export fehlgeschlagen',
       remaining: { one: 'Heute noch {count} Export möglich', other: 'Heute noch {count} Exporte möglich' },
       ready: 'Export fertig',
+      summary: 'Exportiert: {count} von {total} Zeilen',
+      summaryLimited:
+        'Exportiert: {count} von {total} Zeilen. Das Limit wurde erreicht; erhöhe es (bis 10.000), um mehr zu exportieren.',
+      summaryMaxed: 'Exportiert: {count} von {total} Zeilen. Ein Export enthält höchstens 10.000 Zeilen.',
     },
   },
 
@@ -161,7 +165,8 @@ export default defineDe<typeof en>()({
       actorPlaceholder: 'Name des Admins',
       resourceType: 'Ressourcentyp',
       resourceId: 'Ressourcen-ID',
-      resourceIdPlaceholder: 'UUID oder Ressourcen-ID',
+      resourceIdPlaceholder: 'UUID',
+      resourceIdInvalid: 'Gib eine gültige UUID ein, zum Beispiel 123e4567-e89b-12d3-a456-426614174000.',
       from: 'Von',
       to: 'Bis',
       apply: 'Anwenden',
@@ -255,6 +260,9 @@ export default defineDe<typeof en>()({
     noReports: 'Keine offenen Meldungen.',
     reviewed: 'Geprüft',
     dismiss: 'Verwerfen',
+    unpublish: 'Notiz zurückziehen',
+    noteLive: 'Diese Notiz ist öffentlich',
+    noteHidden: 'Diese Notiz ist nicht öffentlich',
     loadFailed: 'Die Moderationswarteschlange konnte nicht geladen werden',
     actionFailed: 'Die Moderationsaktion ist fehlgeschlagen',
     reportReasons: {

@@ -54,6 +54,7 @@ export type AuditAction =
   | 'discord_webhook.create'
   | 'discord_webhook.update'
   | 'discord_webhook.delete'
+  | 'discord_webhook.test'
   | 'admin.achievement.create'
   | 'admin.achievement.update'
   | 'admin.achievement.delete'

@@ -8,6 +8,26 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Changed
+
+- The webhook endpoints (`/api/discord-webhooks`) answer with `webhook_url_hint` instead of `webhook_url`.
+- The export endpoint adds `X-Export-Count` and `X-Export-Total` response headers.
+
+### Fixed
+
+- Wiki: an author's edit to an approved note no longer goes live unreviewed. The edit puts the note back in the
+  moderation queue (and re-runs the automated scan); only edits by site admins keep the note's status.
+- Wiki moderation: a reported, approved note can be unpublished from the report card ("Unpublish note", audited); the
+  report is closed as reviewed in the same step, and the full note text is shown.
+- Admin exports return the full number of rows asked for (up to 10,000) instead of silently stopping at 1,000, in a
+  stable order, and the page says "Exported N of M rows" and when the limit was reached.
+- Discord webhooks: the Test button now sends from the server, with a rate limit and an audit entry. The full webhook
+  URL is no longer sent to the browser after it is saved; the list shows only the last four characters. Creating a
+  global webhook is now recorded in the audit log (the entry was silently dropped before).
+- Test Players: "Remove from season" acts on the player in its row instead of always the first one.
+- Audit log: filtering by a resource id that is not a UUID answers with a clear validation error (and an inline
+  message) instead of a server error.
+
 ## [0.3.0] - 2026-10-23
 
 ### Upgrade notes

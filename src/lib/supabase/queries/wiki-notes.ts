@@ -38,7 +38,7 @@ type WikiNoteReportRow = {
   created_at: string;
   updated_at: string;
   players?: { name: string } | null;
-  wiki_notes?: Pick<WikiNoteRow, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id'> | null;
+  wiki_notes?: Pick<WikiNoteRow, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id' | 'approved'> | null;
 };
 
 interface WikiModerationFilters {
@@ -93,6 +93,7 @@ function toWikiReport(row: WikiNoteReportRow): WikiNoteReport {
           entity_name: row.wiki_notes.entity_name,
           content: row.wiki_notes.content,
           author_id: row.wiki_notes.author_id,
+          approved: row.wiki_notes.approved,
         }
       : undefined,
   };
@@ -175,10 +176,36 @@ export async function createNote(
   return toWikiNote(data as unknown as WikiNoteRow);
 }
 
-export async function updateNote(id: string, content: string): Promise<void> {
+/**
+ * Edits a note's text and re-runs the automated scan, in one UPDATE.
+ *
+ * `'author'` also puts the note back in the pending queue (approval and rejection fields cleared in the same
+ * statement), so edited text is never public before a moderator has seen it. `'moderator'` (a site admin editing)
+ * keeps the note's status.
+ */
+export async function updateNote(
+  id: string,
+  content: string,
+  editor: 'author' | 'moderator',
+): Promise<void> {
+  const requeue = editor === 'author'
+    ? {
+        approved: false,
+        approved_by: null,
+        approved_at: null,
+        rejected_by: null,
+        rejected_at: null,
+        rejection_reason: null,
+      }
+    : {};
   const { error } = await supabase
     .from('wiki_notes')
-    .update({ content, updated_at: new Date().toISOString() })
+    .update({
+      content,
+      moderation_flags: scanWikiNoteContent(content),
+      ...requeue,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', id);
 
   if (error) throw error;
@@ -260,7 +287,7 @@ export async function createNoteReport(
       status: 'open',
       updated_at: new Date().toISOString(),
     }, { onConflict: 'note_id,reporter_id' })
-    .select('*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey(id, entity_type, entity_name, content, author_id)')
+    .select('*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey(id, entity_type, entity_name, content, author_id, approved)')
     .single();
 
   if (error) throw error;
@@ -272,7 +299,7 @@ export async function listNoteReports(filters: WikiReportFilters = {}): Promise<
   const offset = filters.offset ?? 0;
   let query = supabase
     .from('wiki_note_reports')
-    .select('*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey(id, entity_type, entity_name, content, author_id)')
+    .select('*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey(id, entity_type, entity_name, content, author_id, approved)')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 

@@ -19,6 +19,108 @@ interface EnsureResponse {
   players: Player[];
 }
 
+/** The `remove_from_league` request body for one player and the season UUID typed in the console. */
+export function removeFromSeasonPayload(
+  player: Pick<Player, 'id'>,
+  seasonId: string,
+): { action: 'remove_from_league'; player_id: string; season_id: string } {
+  return { action: 'remove_from_league', player_id: player.id, season_id: seasonId.trim() };
+}
+
+interface PlayerColumnDeps {
+  busyAction: string | null;
+  seasonId: string;
+  onPlayerAction: (player: Player, action: string, label: string) => void;
+  onRemoveFromSeason: (player: Player) => void;
+}
+
+/** The table columns; every row action acts on its own row's player. */
+export function buildPlayerColumns(deps: PlayerColumnDeps): Column<Player>[] {
+  return [
+    {
+      key: 'name',
+      header: 'Name',
+      sortable: true,
+      sortValue: (row) => row.name.toLowerCase(),
+      render: (player) => (
+        <>
+          <span className="font-heading font-semibold text-poke-text-primary">{player.name}</span>
+          <span className="ml-2 inline-flex items-center rounded-poke-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-poke-amber-ink">
+            Test
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'ps_username',
+      header: 'PS Username',
+      sortable: true,
+      sortValue: (row) => row.ps_username?.toLowerCase() ?? '',
+      render: (player) => (
+        <span className="font-mono text-xs">{player.ps_username || '—'}</span>
+      ),
+    },
+    {
+      key: 'login',
+      header: 'Login',
+      render: (player) => (
+        <span className="text-xs">
+          {player.auth_user_id ? (
+            <span className="text-emerald-600">enabled</span>
+          ) : (
+            <span className="text-poke-text-muted">disabled</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (player) => (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={deps.busyAction === `reset:${player.id}`}
+            onClick={() => deps.onPlayerAction(player, 'reset', 'Reset data')}
+          >
+            Reset Data
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={deps.busyAction === `mint_login:${player.id}`}
+            onClick={() => deps.onPlayerAction(player, 'mint_login', 'Mint login')}
+          >
+            {player.auth_user_id ? 'Reset Login' : 'Mint Login'}
+          </Button>
+          {player.auth_user_id && (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={deps.busyAction === `clear_login:${player.id}`}
+              onClick={() => deps.onPlayerAction(player, 'clear_login', 'Clear login')}
+            >
+              Clear Login
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={deps.busyAction === `remove_from_league:${player.id}`}
+            disabled={!deps.seasonId.trim()}
+            aria-label={`Remove from Season: ${player.name}`}
+            title={deps.seasonId.trim() ? undefined : 'Enter a season UUID below to enable this'}
+            onClick={() => deps.onRemoveFromSeason(player)}
+          >
+            Remove from Season
+          </Button>
+        </div>
+      ),
+    },
+  ];
+}
+
 export default function TestPlayersConsole() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,30 +204,24 @@ export default function TestPlayersConsole() {
     setBusyAction(null);
   }, [loadPlayers, postAction]);
 
-  async function handleRemoveFromLeague() {
-    if (!seasonId.trim()) {
+  const handleRemoveFromSeason = useCallback(async (player: Player) => {
+    const season = seasonId.trim();
+    if (!season) {
       setActionError('Enter a season UUID to remove the selected player from');
       return;
     }
-    // Removes the first selected test player from the given season.
-    const player = players[0];
-    if (!player) {
-      setActionError('No test players available');
+    if (!window.confirm(`Remove ${player.name} from season ${season}? This drops their participation and season progression.`)) {
       return;
     }
-    setBusyAction('remove_from_league');
-    const json = await postAction({
-      action: 'remove_from_league',
-      player_id: player.id,
-      season_id: seasonId.trim(),
-    });
+    setBusyAction(`remove_from_league:${player.id}`);
+    const json = await postAction(removeFromSeasonPayload(player, seasonId));
     if (json?.success) {
-      setActionMessage(`Removed ${player.name} from season ${seasonId.trim()}.`);
+      setActionMessage(`Removed ${player.name} from season ${season}.`);
     } else if (json) {
       setActionError((json as ApiError).error ?? 'Remove from league failed');
     }
     setBusyAction(null);
-  }
+  }, [postAction, seasonId]);
 
   async function handleDeleteTestMatches() {
     if (!seasonId.trim()) {
@@ -143,78 +239,10 @@ export default function TestPlayersConsole() {
     setBusyAction(null);
   }
 
-  const playerColumns = useMemo((): Column<Player>[] => [
-      {
-        key: 'name',
-        header: 'Name',
-        sortable: true,
-        sortValue: (row) => row.name.toLowerCase(),
-        render: (player) => (
-          <>
-            <span className="font-heading font-semibold text-poke-text-primary">{player.name}</span>
-            <span className="ml-2 inline-flex items-center rounded-poke-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-poke-amber-ink">
-              Test
-            </span>
-          </>
-        ),
-      },
-      {
-        key: 'ps_username',
-        header: 'PS Username',
-        sortable: true,
-        sortValue: (row) => row.ps_username?.toLowerCase() ?? '',
-        render: (player) => (
-          <span className="font-mono text-xs">{player.ps_username || '—'}</span>
-        ),
-      },
-      {
-        key: 'login',
-        header: 'Login',
-        render: (player) => (
-          <span className="text-xs">
-            {player.auth_user_id ? (
-              <span className="text-emerald-600">enabled</span>
-            ) : (
-              <span className="text-poke-text-muted">disabled</span>
-            )}
-          </span>
-        ),
-      },
-      {
-        key: 'actions',
-        header: 'Actions',
-        render: (player) => (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={busyAction === `reset:${player.id}`}
-              onClick={() => void handlePlayerAction(player, 'reset', 'Reset data')}
-            >
-              Reset Data
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={busyAction === `mint_login:${player.id}`}
-              onClick={() => void handlePlayerAction(player, 'mint_login', 'Mint login')}
-            >
-              {player.auth_user_id ? 'Reset Login' : 'Mint Login'}
-            </Button>
-            {player.auth_user_id && (
-              <Button
-                size="sm"
-                variant="secondary"
-                loading={busyAction === `clear_login:${player.id}`}
-                onClick={() => void handlePlayerAction(player, 'clear_login', 'Clear login')}
-              >
-                Clear Login
-              </Button>
-            )}
-          </div>
-        ),
-      },
-  ], [busyAction, handlePlayerAction]);
+  const playerColumns = useMemo(
+    () => buildPlayerColumns({ busyAction, seasonId, onPlayerAction: handlePlayerAction, onRemoveFromSeason: handleRemoveFromSeason }),
+    [busyAction, seasonId, handlePlayerAction, handleRemoveFromSeason],
+  );
 
   return (
     <div className="space-y-6">
@@ -266,24 +294,17 @@ export default function TestPlayersConsole() {
 
       <Section title="Season-Level Test Data">
         <p className="text-sm text-poke-text-muted mb-4">
-          Remove a test player from a season (drops their participation + season progression), or delete
-          every match in a season whose <strong>both</strong> participants are test accounts.
+          Enter a season UUID, then use <strong>Remove from Season</strong> on a player row above (drops
+          that player&apos;s participation + season progression), or delete every match in the season whose{' '}
+          <strong>both</strong> participants are test accounts.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
           <Input
             label="Season UUID"
             value={seasonId}
             onChange={(event) => setSeasonId(event.target.value)}
             placeholder="00000000-0000-0000-0000-000000000000"
           />
-          <Button
-            variant="secondary"
-            loading={busyAction === 'remove_from_league'}
-            disabled={!seasonId.trim() || players.length === 0}
-            onClick={handleRemoveFromLeague}
-          >
-            Remove {players[0]?.name ?? 'Player'} From Season
-          </Button>
           <Button
             variant="secondary"
             loading={busyAction === 'delete_test_matches'}

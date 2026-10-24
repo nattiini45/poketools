@@ -50,6 +50,27 @@ export function reportReasonKey(reason: string): string {
   return reason === 'other' ? 'otherReason' : reason;
 }
 
+/** Only an approved note is live, so only a report on one can be answered by unpublishing the note. */
+export function canUnpublishReportedNote(report: WikiNoteReport): boolean {
+  return report.note?.approved === true;
+}
+
+/**
+ * The request that takes a note out of public view: the admin reject PATCH (audited as `wiki.note.reject`).
+ * An empty reason is omitted: the route stores null (no reason). No UI shows the stored reason today; one that
+ * does labels null in the viewer's language (legacy English defaults map via engine-labels).
+ */
+export function noteRejectRequest(noteId: string, reason?: string): { url: string; init: RequestInit } {
+  const trimmed = reason?.trim();
+  return {
+    url: `/api/wiki/notes/${noteId}`,
+    init: {
+      method: 'PATCH',
+      body: JSON.stringify(trimmed ? { rejected: true, rejection_reason: trimmed } : { rejected: true }),
+    },
+  };
+}
+
 function toPanelError(e: unknown, fallback: PanelErrorKey): PanelError {
   if (e instanceof ModerationRequestError) return { api: e.apiError, fallback };
   if (e instanceof TypeError) return { api: toApiErrorLike(e), fallback };
@@ -88,15 +109,20 @@ export default function WikiModerationPanel() {
     void load();
   }, [load]);
 
-  /** Runs one moderation write, then reloads; a failure is shown instead of escaping as an unhandled rejection. */
-  async function moderate(url: string, init: RequestInit) {
+  /** Runs one moderation write; a failure is shown instead of escaping as an unhandled rejection. */
+  async function write(url: string, init: RequestInit): Promise<boolean> {
     try {
       await writeApi(url, init);
+      return true;
     } catch (err) {
       setError(toPanelError(err, 'wiki.actionFailed'));
-      return;
+      return false;
     }
-    await load();
+  }
+
+  /** Runs one moderation write, then reloads. */
+  async function moderate(url: string, init: RequestInit) {
+    if (await write(url, init)) await load();
   }
 
   async function approveNote(noteId: string) {
@@ -107,13 +133,30 @@ export default function WikiModerationPanel() {
   }
 
   async function rejectNote(noteId: string) {
-    // An empty reason is omitted: the route stores null (no reason). No UI shows the stored reason today; one that
-    // does labels null in the viewer's language (legacy English defaults map via engine-labels).
-    const reason = rejecting[noteId]?.trim();
-    await moderate(`/api/wiki/notes/${noteId}`, {
+    const { url, init } = noteRejectRequest(noteId, rejecting[noteId]);
+    await moderate(url, init);
+  }
+
+  /**
+   * Unpublishes a reported, approved note and closes the report as reviewed. The report is closed only after the
+   * note write succeeded; if closing fails, the note stays unpublished and the report stays open.
+   */
+  async function unpublishReportedNote(report: WikiNoteReport) {
+    if (!report.note) return;
+    const noteId = report.note.id;
+    const { url, init } = noteRejectRequest(noteId, rejecting[noteId]);
+    if (!(await write(url, init))) return;
+    const closed = await write(`/api/admin/wiki/reports/${report.id}`, {
       method: 'PATCH',
-      body: JSON.stringify(reason ? { rejected: true, rejection_reason: reason } : { rejected: true }),
+      body: JSON.stringify({ status: 'reviewed' }),
     });
+    if (closed) {
+      await load();
+      return;
+    }
+    setReports((current) =>
+      current.map((r) => (r.note?.id === noteId && r.note ? { ...r, note: { ...r.note, approved: false } } : r)),
+    );
   }
 
   async function deleteNote(noteId: string) {
@@ -194,9 +237,32 @@ export default function WikiModerationPanel() {
               </p>
               {report.details && <p className="mt-1 text-sm text-poke-text-secondary">{report.details}</p>}
               {report.note?.content && (
-                <p className="mt-3 max-h-20 overflow-hidden text-xs text-poke-text-secondary">{report.note.content}</p>
+                <p className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-poke-text-secondary">{report.note.content}</p>
+              )}
+              {report.note && (
+                <p className="mt-2 text-xs font-medium text-poke-text-secondary">
+                  {report.note.approved ? t('wiki.noteLive') : t('wiki.noteHidden')}
+                </p>
+              )}
+              {report.note && canUnpublishReportedNote(report) && (
+                <textarea
+                  value={rejecting[report.note.id] ?? ''}
+                  onChange={(event) => {
+                    const noteId = report.note?.id;
+                    if (noteId) setRejecting((current) => ({ ...current, [noteId]: event.target.value }));
+                  }}
+                  placeholder={t('wiki.rejectionReason')}
+                  rows={2}
+                  maxLength={500}
+                  className="mt-3 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-none focus:ring-2 focus:ring-poke-accent"
+                />
               )}
               <div className="mt-3 flex flex-wrap gap-2">
+                {canUnpublishReportedNote(report) && (
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void unpublishReportedNote(report)}>
+                    {t('wiki.unpublish')}
+                  </Button>
+                )}
                 <Button type="button" size="sm" variant="secondary" onClick={() => void closeReport(report.id, 'reviewed')}>
                   {t('wiki.reviewed')}
                 </Button>

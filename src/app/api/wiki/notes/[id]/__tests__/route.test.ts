@@ -116,7 +116,7 @@ describe('PATCH /api/wiki/notes/[id]', () => {
     expect(vi.mocked(rejectNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'admin1', null);
     expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({
       action: 'wiki.note.reject',
-      metadata: { reason: null },
+      metadata: { reason: null, was_approved: true },
     }));
   });
 
@@ -201,7 +201,21 @@ describe('PATCH /api/wiki/notes/[id]', () => {
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.data.updated).toBe(true);
-    expect(vi.mocked(updateNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'Updated content');
+    expect(vi.mocked(updateNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'Updated content', 'author');
+  });
+
+  it('re-queues an approved note when its author edits it', async () => {
+    vi.mocked(getNoteById).mockResolvedValue(fakeNote as never); // approved: true, author p1
+    vi.mocked(updateNote).mockResolvedValue(undefined as never);
+
+    const res = await PATCH(makeRequest({ content: 'Edited after approval' }), makeParams('c3a68c4f-2629-4673-845a-8984a71168c1'));
+    const body = await res.json();
+    expect(body).toEqual({ success: true, data: { updated: true, requeued: true } });
+    expect(vi.mocked(updateNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'Edited after approval', 'author');
+    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'wiki.note.update',
+      metadata: { requeued: true, was_approved: true },
+    }));
   });
 
   it('allows admin to update any note', async () => {
@@ -211,7 +225,12 @@ describe('PATCH /api/wiki/notes/[id]', () => {
 
     const res = await PATCH(makeRequest({ content: 'Admin edit' }), makeParams('c3a68c4f-2629-4673-845a-8984a71168c1'));
     const body = await res.json();
-    expect(body.success).toBe(true);
+    expect(body).toEqual({ success: true, data: { updated: true, requeued: false } });
+    expect(vi.mocked(updateNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'Admin edit', 'moderator');
+    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'wiki.note.update',
+      metadata: { requeued: false, was_approved: true },
+    }));
   });
 });
 

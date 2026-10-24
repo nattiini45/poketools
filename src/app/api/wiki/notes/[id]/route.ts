@@ -83,7 +83,7 @@ export async function PATCH(
         resource_type: 'wiki_note',
         resource_id: id,
         resource_name: `${note.entity_type}:${note.entity_name}`,
-        metadata: { reason },
+        metadata: { reason, was_approved: note.approved },
       });
       return NextResponse.json<ApiResult<{ updated: true }>>(
         { success: true, data: { updated: true } },
@@ -114,7 +114,9 @@ export async function PATCH(
       );
     }
 
-    await updateNote(id, body.content);
+    // An author's edit puts the note back in the pending queue; a site admin's edit keeps its status.
+    const editor = player.isAdmin ? 'moderator' : 'author';
+    await updateNote(id, body.content, editor);
     logAuditEvent({
       actor_id: player.playerId,
       actor_name: player.name,
@@ -122,9 +124,10 @@ export async function PATCH(
       resource_type: 'wiki_note',
       resource_id: id,
       resource_name: `${note.entity_type}:${note.entity_name}`,
+      metadata: { requeued: editor === 'author', was_approved: note.approved },
     });
-    return NextResponse.json<ApiResult<{ updated: true }>>(
-      { success: true, data: { updated: true } },
+    return NextResponse.json<ApiResult<{ updated: true; requeued: boolean }>>(
+      { success: true, data: { updated: true, requeued: editor === 'author' } },
     );
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update note');

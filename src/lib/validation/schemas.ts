@@ -251,7 +251,8 @@ export const auditLogQuerySchema = z.object({
   actor_id: uuid.optional(),
   actor: z.string().trim().min(1).max(120).optional(),
   resource_type: z.string().trim().min(1).max(120).optional(),
-  resource_id: z.string().trim().min(1).max(120).optional(),
+  // The audit `resource_id` column is a uuid: a free-text value would raise a Postgres type error.
+  resource_id: z.string().trim().pipe(uuid).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),

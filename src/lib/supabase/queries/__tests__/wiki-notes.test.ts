@@ -16,8 +16,11 @@ vi.mock('@/lib/supabase/client', () => ({
 import {
   approveNote,
   createNote,
+  createNoteReport,
   getApprovedNotes,
+  listNoteReports,
   listNotesForModeration,
+  updateNote,
 } from '../wiki-notes';
 
 const noteRow = {
@@ -88,6 +91,87 @@ describe('wiki note moderation queries', () => {
       rejected_at: null,
     }));
     expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'note-1');
+  });
+
+  describe('updateNote', () => {
+    const noteId = 'note-1';
+
+    it('puts the note back in the pending queue in one UPDATE when its author edits it', async () => {
+      mockBuilder.eq.mockReturnValue({ error: null });
+
+      await updateNote(noteId, 'https://a.test https://b.test https://c.test https://d.test', 'author');
+
+      expect(mockBuilder.update).toHaveBeenCalledTimes(1);
+      expect(mockBuilder.update).toHaveBeenCalledWith(expect.objectContaining({
+        content: 'https://a.test https://b.test https://c.test https://d.test',
+        moderation_flags: ['too_many_links'],
+        approved: false,
+        approved_by: null,
+        approved_at: null,
+        rejected_by: null,
+        rejected_at: null,
+        rejection_reason: null,
+      }));
+      expect(mockBuilder.eq).toHaveBeenCalledWith('id', noteId);
+    });
+
+    it('keeps the status when a moderator edits the note', async () => {
+      mockBuilder.eq.mockReturnValue({ error: null });
+
+      await updateNote(noteId, 'Fixed typo', 'moderator');
+
+      expect(mockBuilder.update).toHaveBeenCalledTimes(1);
+      const payload = mockBuilder.update.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload).toMatchObject({ content: 'Fixed typo', moderation_flags: [] });
+      for (const key of ['approved', 'approved_by', 'approved_at', 'rejected_by', 'rejected_at', 'rejection_reason']) {
+        expect(payload).not.toHaveProperty(key);
+      }
+    });
+
+    it('rethrows a Supabase error', async () => {
+      mockBuilder.eq.mockReturnValue({ error: { message: 'boom' } });
+
+      await expect(updateNote(noteId, 'x', 'author')).rejects.toEqual({ message: 'boom' });
+    });
+  });
+
+  describe('note reports', () => {
+    const reportRow = {
+      id: 'report-1',
+      note_id: 'note-1',
+      reporter_id: 'player-2',
+      reason: 'spam',
+      details: null,
+      status: 'open',
+      created_at: '2026-04-16T00:00:00.000Z',
+      updated_at: '2026-04-16T00:00:00.000Z',
+      wiki_notes: {
+        id: 'note-1',
+        entity_type: 'pokemon',
+        entity_name: 'Pikachu',
+        content: 'Useful on rain teams.',
+        author_id: 'player-1',
+        approved: true,
+      },
+    };
+
+    it('selects and exposes whether the reported note is public', async () => {
+      mockBuilder.range.mockReturnValue({ data: [reportRow], error: null });
+
+      const reports = await listNoteReports();
+
+      expect(mockBuilder.select.mock.calls[0][0]).toContain('author_id, approved)');
+      expect(reports[0].note?.approved).toBe(true);
+    });
+
+    it('selects the approved flag when a report is created', async () => {
+      mockBuilder.single.mockResolvedValue({ data: reportRow, error: null });
+
+      const report = await createNoteReport('player-2', 'note-1', 'spam');
+
+      expect(mockBuilder.select.mock.calls[0][0]).toContain('author_id, approved)');
+      expect(report.note?.approved).toBe(true);
+    });
   });
 
   it('public reads request only approved notes', async () => {

@@ -1719,12 +1719,12 @@ describe('queries/wiki-notes', () => {
   describe('updateNote', () => {
     it('updates without error', async () => {
       mockBuilder.eq.mockReturnValue({ error: null });
-      await expect(updateNote('wn1', 'updated content')).resolves.toBeUndefined();
+      await expect(updateNote('wn1', 'updated content', 'author')).resolves.toBeUndefined();
     });
 
     it('throws on error', async () => {
       mockBuilder.eq.mockReturnValue({ error: { message: 'err' } });
-      await expect(updateNote('wn1', 'x')).rejects.toEqual({ message: 'err' });
+      await expect(updateNote('wn1', 'x', 'moderator')).rejects.toEqual({ message: 'err' });
     });
   });
 

@@ -15,7 +15,7 @@ src/app/api/wiki/
 ├── abilities/[name]/route.ts                  # GET: ability details + approved notes
 ├── search/route.ts                            # GET: cross-entity search
 ├── notes/route.ts                             # POST: submit community note
-├── notes/[id]/route.ts                        # PATCH/DELETE: edit/approve/reject/delete note
+├── notes/[id]/route.ts                        # PATCH/DELETE: edit (re-queues for authors)/approve/reject (also unpublishes)/delete note
 └── notes/[id]/report/route.ts                 # POST: report approved note
 src/app/api/admin/wiki/
 ├── notes/route.ts                             # GET: moderation queue
@@ -87,6 +87,13 @@ wiki_note_reports (
 3. Approval sets `approved=true`, records moderator metadata, and makes the note visible through `getApprovedNotes()` and direct public RLS.
 4. Rejection records moderator metadata and keeps the note non-public.
 5. Approved notes can be reported through `/api/wiki/notes/[id]/report`; reports are reviewed from the admin queue.
+6. An author's edit (`PATCH /api/wiki/notes/[id]` with `content`) puts the note back in the pending queue: `updateNote(id, content, 'author')` sets `approved=false`, clears the approval and rejection fields and re-runs the automated scan in one atomic UPDATE, so edited text is never public before a moderator has seen it. A site admin's edit (`'moderator'`) re-scans the text but keeps the note's status. The audit entry `wiki.note.update` records `requeued` and `was_approved`.
+7. A reported note that is still approved can be unpublished from its report card in `/admin/wiki` ("Unpublish note"). It uses the existing admin reject action (`PATCH /api/wiki/notes/[id]` with `rejected: true` and an optional reason, audited as `wiki.note.reject` with `was_approved`) and then closes that report as reviewed. Other open reports on the same note stay open and show that the note is no longer public.
+
+### Moderation guarantees
+- Public reads only return `approved = true` rows (`getApprovedNotes()` filters on it), so a pending, rejected or re-queued note is never shown.
+- The update path takes the editor mode as a required argument, so no caller can edit note text without choosing whether the edit re-queues the note.
+- A rejected note edited by its author is re-queued as well; that is the resubmit path.
 
 ## Content Architecture
 Wiki content components are **layout-agnostic** — they accept data props and render content without any page-level wrapper. This allows the same component to be used in:
