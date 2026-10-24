@@ -6,11 +6,7 @@ import Badge from '@/components/ui/Badge';
 import { FOCUS_RING } from '@/components/ui/panel';
 import { useT } from '@/i18n/client';
 import { shellMessages } from '@/i18n/messages/shell';
-import { visibleAdminNav, type AdminNavExtraItem, type AdminRoles, type VisibleAdminNavItem } from './adminNav';
-
-function isActive(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
+import { activeAdminNavHref, visibleAdminNav, type AdminNavExtraItem, type AdminRoles, type VisibleAdminNavItem } from './adminNav';
 
 /**
  * Admin workflow rail: grouped, role-filtered navigation with an accent
@@ -29,6 +25,11 @@ export default function AdminSidebar({
   const pathname = usePathname();
   const t = useT(shellMessages);
   const groups = visibleAdminNav(roles, extraItems);
+  // One highlighted item: the most specific href the page sits under, extension items included.
+  const activeHref = activeAdminNavHref(
+    pathname,
+    groups.flatMap((group) => group.items.map((item) => item.href)),
+  );
   const labelOf = (item: VisibleAdminNavItem): string =>
     item.labelKey === undefined ? item.label : t(`admin.items.${item.labelKey}`);
 
@@ -46,7 +47,7 @@ export default function AdminSidebar({
             </h2>
             <ul className="mt-2 space-y-0.5 border-l border-poke-border">
               {group.items.map((item) => {
-                const active = isActive(pathname, item.href);
+                const active = item.href === activeHref;
                 return (
                   <li key={item.href}>
                     <Link
@@ -86,7 +87,7 @@ export default function AdminSidebar({
             </h2>
             <div className="flex gap-1.5 overflow-x-auto pb-1">
               {group.items.map((item) => {
-                const active = isActive(pathname, item.href);
+                const active = item.href === activeHref;
                 return (
                   <Link
                     key={item.href}

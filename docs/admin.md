@@ -14,7 +14,7 @@ The Admin module is a Next.js App Router surface (route group `/admin` and `/api
 src/app/admin/
 ├── layout.tsx          # NavBar + AdminGuard + AdminSidebar + PageTransitionWrapper shell
 ├── page.tsx            # Dashboard (AdminDashboardContent) + management links
-├── AdminDashboardContent.tsx
+├── AdminDashboardContent.tsx  # counter cards, attention list, audit feed
 ├── leagues/            # list, new, [id], archived
 ├── tournaments/        # list, new (TournamentCreator), [id]/rounds, archived
 ├── rulesets/           # list, new, [id]/edit
@@ -31,8 +31,10 @@ src/app/admin/
 
 src/app/api/admin/      # guarded route handlers (see API Routes)
 src/lib/admin/
+├── dashboard.ts          # dashboard API contract + See all / counter links (client-safe)
 ├── export-rate-limit.ts  # daily export quota via Supabase RPC
-└── match-list.ts         # matches list query contract and URL state
+├── match-list.ts         # matches list query contract and URL state
+└── match-row-actions.ts  # which buttons a matches-list row shows to the viewer
 ```
 
 ## Core Functions/Classes
@@ -41,8 +43,8 @@ src/lib/admin/
 - **Admin scope** — `getAdminScope()` in `src/lib/auth/admin-scope.ts`: from the live read, returns whether the caller is a site admin or the ids of the leagues and tournaments (with their phases) a resource admin may see. The dashboard, matches, filter-options and player-search routes and the archived lists narrow their reads with it.
 - **Page gates** — `gateResourceAdmin()` in `src/lib/auth/resource-gate.ts` decides one league, phase or tournament page before it reads anything; `ResourceForbidden` is the "no access" notice. `SiteAdminGuard` wraps the pages that are site-admin only (the `siteAdminOnly` items of `adminNav.ts`).
 - **Export rate limit** — `checkAndRecordAdminExport()` in `src/lib/admin/export-rate-limit.ts`: enforces `ADMIN_EXPORT_DAILY_LIMIT = 20` via the `check_and_record_admin_export` Supabase RPC, returning `{ allowed, remaining, reset_at }`.
-- **Dashboard content** — `AdminDashboardContent.tsx`: live counts, attention-required matches, and recent audit activity fed by `/api/admin/dashboard`. A resource admin sees only the attention queue and counts of their own competitions; the site-wide counts and the activity feed are for site admins.
-- **Matches list** — `/admin/matches` filters by status, league (with phase), tournament and a text search on the server (`status`, `season_id`, `tournament_id`, `q`), pages with `.range()` and an exact total, and keeps the filters in the URL. Each row shows its League and Phase. The League and Phase choices come from `/api/admin/matches/filter-options`.
+- **Dashboard content** — `AdminDashboardContent.tsx`: live counts, the attention list and recent audit activity fed by `/api/admin/dashboard` (contract in `src/lib/admin/dashboard.ts`). The attention list shows the matches that have waited longest first, each with League and Phase (or the tournament for a standalone one), the waiting time and, for a disputed match, its note. The header reads "N of M" when more matches need attention than are listed, and the footer has one See all link per non-zero status into `/admin/matches?status=…`. The counter cards link to their lists (players, tournaments, active matches, leagues; games has no list). Counts and the list leave out test leagues and archived competitions; the players total also leaves out test accounts. A resource admin sees only the attention queue and counts of their own competitions; the site-wide counts and the activity feed are for site admins.
+- **Matches list** — `/admin/matches` filters by status, league (with phase), tournament and a text search on the server (`status`, `season_id`, `tournament_id`, `q`), pages with `.range()` and an exact total, and keeps the filters in the URL. Each row shows its League and Phase. The League and Phase choices come from `/api/admin/matches/filter-options`. Submit Result and View Prep show only to those who can use them (`matchRowActions`): a player in the match, or a site admin for Submit Result and the superadmin for View Prep; Override is always there.
 - **Player pickers** — the roster, substitute, link, enrolment and league-admin pickers use the server-search `Combobox` (aborts a superseded request, shows a fetch error, waits for a minimum query length) over `/api/admin/player-search`; the Players page searches, pages and sorts on the server (`roster-helpers.ts`; `GET /api/players` takes `sort` = `name` | `discord_id` | `ps_username` | `status` and `dir` = `asc` | `desc`, default name ascending, and answers anything else with `400`).
 - **Round deadlines** — `RoundManager` edits a round's deadline through `PATCH /api/tournaments/[id]/rounds/[rid]` (audited, expires the tournament's read tags) and flags an overdue round.
 - **Aggregate maintenance** — `GET`/`POST /api/admin/aggregates`: query aggregate-job queue stats, or `drain` pending jobs / `rebuild` a scope (`tournament`, `league`, `all_time`) from `battle_stats`.
@@ -50,7 +52,7 @@ src/lib/admin/
 - **Data export** — `POST /api/admin/export`: zod-validated CSV/JSON export of `players`, `tournaments`, `matches`, `seasons`, `games`, `battle_stats`, rate-limited and audit-logged.
 
 ## Layout and navigation
-- **Sidebar** — `src/components/admin/AdminSidebar.tsx` renders the role-filtered groups from `adminNav.ts` (`visibleAdminNav`). At `lg` (1024 px) and up it is a sticky 224 px side rail beside the content column. Below `lg` it renders one horizontally scrolling chip row per group instead.
+- **Sidebar** — `src/components/admin/AdminSidebar.tsx` renders the role-filtered groups from `adminNav.ts` (`visibleAdminNav`). At `lg` (1024 px) and up it is a sticky 224 px side rail beside the content column. Below `lg` it renders one horizontally scrolling chip row per group instead. The first item is Overview (`/admin`, the dashboard). Exactly one item is active, the one with the longest matching href (`activeAdminNavHref`), on the rail and on the chips alike, so Archived leagues does not light up Leagues too.
 - **Responsive shell** — `src/app/admin/layout.tsx` lays out the sidebar and the content column as a column below `lg` (`flex flex-col`), so the chip rows sit above the content, and as a top-aligned row from `lg` (`lg:flex-row lg:items-start lg:gap-8`). The mobile nav is capped at the column width (`min-w-0 w-full`) and each chip row scrolls inside it, so the page never scrolls sideways at phone or tablet widths. The content column keeps `min-w-0` (and `lg:flex-1` beside the rail), so its flex minimum is never its content's intrinsic width; wide content (tables) still needs its own `overflow-x-auto` wrapper on the page. Before the PR #65 test-pass fix the chip nav sat beside the content below `lg`: at 390 px the content column got zero width, the page widened to 1331 px and dialogs (Substitute) centred off-screen. Regression test: `src/components/admin/__tests__/admin-layout-responsive.test.tsx`.
 
 ## League admin page (`/admin/leagues/[id]`)
@@ -126,7 +128,7 @@ A league may split its trainers into groups (design: one round robin, one table 
 ## API Routes
 All routes call `requireAdmin()` unless noted below (the scoped dashboard, matches, filter-options and player-search routes call `requireAnyAdmin()`), and return `ApiResult` envelopes; errors go through `safeErrorResponse`.
 
-- **Dashboard & audit**: `/api/admin/dashboard` (counts + attention + activity; scoped to the caller's leagues and tournaments for resource admins, who get no site-wide counts and no activity feed), `/api/admin/audit-log`.
+- **Dashboard & audit**: `/api/admin/dashboard` (counts + attention list oldest first with `attention_by_status` + activity; test leagues and archived competitions excluded; scoped to the caller's leagues and tournaments for resource admins, who get no site-wide counts and no activity feed), `/api/admin/audit-log`.
 - **Player search**: `/api/admin/player-search` (any admin; a resource admin must name a `season_id` or `tournament_id` they administer, which is a guard and not a filter: the search covers the whole directory, but a resource admin sees only what the public player directory shows, so banned, suspended and test accounts stay hidden, while a site admin sees every account; returns public refs only; `registered=1` keeps only accounts with a login). Used by the roster, substitute, link, enrolment and league-admin pickers (`src/lib/players/player-search.ts`).
 - **Data export/import**: `/api/admin/export`, `/api/admin/players/import`, `/api/admin/import-sets`, `/api/admin/import-sample-sets`, `/api/admin/import-stats`, `/api/admin/import-usage-stats`, `/api/admin/import/point-buy`, `/api/admin/import/team-roles`.
 - **Match/game operations**: `/api/admin/matches` (any admin, scoped; server-side `status`, `season_id`, `tournament_id`, `q`, `page` (1 to 1000), `page_size` with an exact total), `/api/admin/matches/filter-options` (scoped leagues with phases, and standalone tournaments), `/api/admin/matches/[id]/reset`, `/api/admin/matches/[id]/replay-import`, `/api/admin/matches/[id]/replay-preview`, `/api/admin/games/[id]`.

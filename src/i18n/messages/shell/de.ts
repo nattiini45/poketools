@@ -42,6 +42,7 @@ export default defineDe<typeof en>()({
       system: 'System',
     },
     items: {
+      overview: 'Übersicht',
       leagues: 'Ligen',
       archivedLeagues: 'Archivierte Ligen',
       tournaments: 'Turniere',

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type {
+  AdminMatchRow,
   AdminMatchFilterOptions,
   AdminMatchLeagueOption,
   AdminMatchPhaseOption,
@@ -22,6 +23,7 @@ import {
   type AdminMatchListResponse,
   type MatchListUrlState,
 } from '@/lib/admin/match-list';
+import { matchRowActions, type AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
@@ -146,7 +148,57 @@ export function MatchListPager({
   );
 }
 
-export default function AdminMatchList() {
+/**
+ * One row of the list. Override (the admin page of the match) is on every row; Submit Result and
+ * View Prep open player-dashboard pages, so they show only where those pages admit the viewer.
+ */
+export function AdminMatchListRow({ match: m, viewer }: { match: AdminMatchRow; viewer: AdminMatchViewer | null }) {
+  const t = useT(shellMessages);
+  const actions = matchRowActions(m, viewer);
+  return (
+    <Link href={`/tournaments/${m.tournament_id}/matches/${m.id}`} className="block group">
+      <Card variant="outlined" padding="sm" className="transition-colors group-hover:border-poke-border-focus">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-heading font-medium text-sm text-poke-text-primary truncate group-hover:text-poke-accent transition-colors">
+              {t('admin.matches.versus', { player1: m.player_1_name, player2: m.player_2_name })}
+            </span>
+            {m.winner_name && (
+              <span className="text-xs text-poke-green shrink-0">
+                {t('admin.matches.winner', { name: m.winner_name })}
+              </span>
+            )}
+          </div>
+          <MatchStatusBadge status={m.status} />
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-poke-text-muted truncate">
+            {m.season_name
+              ? t('admin.matches.leaguePhase', { league: m.season_name, phase: m.tournament_name })
+              : m.tournament_name}
+          </span>
+          <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <Link href={`/admin/matches/${m.id}`} className={getButtonClasses('ghost', 'sm')}>
+              {t('admin.matches.override')}
+            </Link>
+            {actions.submitResult && (
+              <Link href={`/dashboard/submit/${m.id}`} className={getButtonClasses('secondary', 'sm')}>
+                {t('admin.matches.submitResult')}
+              </Link>
+            )}
+            {actions.viewPrep && (
+              <Link href={`/dashboard/match-prep/${m.id}`} className={getButtonClasses('ghost', 'sm')}>
+                {t('admin.matches.viewPrep')}
+              </Link>
+            )}
+          </div>
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
+export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchViewer | null }) {
   const t = useT(shellMessages);
   const errorText = useApiErrorText(errorsAdmin);
   const router = useRouter();
@@ -395,53 +447,11 @@ export default function AdminMatchList() {
       ) : (
         <>
           <AnimatedList className="space-y-2">
-            {data.rows.map((m) => {
-              const canSubmit = m.status === 'scheduled' || m.status === 'in_progress';
-              const matchHref = `/tournaments/${m.tournament_id}/matches/${m.id}`;
-              return (
-                <AnimatedListItem key={m.id}>
-                  <Link href={matchHref} className="block group">
-                    <Card variant="outlined" padding="sm" className="transition-colors group-hover:border-poke-border-focus">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-heading font-medium text-sm text-poke-text-primary truncate group-hover:text-poke-accent transition-colors">
-                            {t('admin.matches.versus', { player1: m.player_1_name, player2: m.player_2_name })}
-                          </span>
-                          {m.winner_name && (
-                            <span className="text-xs text-poke-green shrink-0">
-                              {t('admin.matches.winner', { name: m.winner_name })}
-                            </span>
-                          )}
-                        </div>
-                        <MatchStatusBadge status={m.status} />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-poke-text-muted truncate">
-                          {m.season_name
-                            ? t('admin.matches.leaguePhase', { league: m.season_name, phase: m.tournament_name })
-                            : m.tournament_name}
-                        </span>
-                        <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <Link href={`/admin/matches/${m.id}`} className={getButtonClasses('ghost', 'sm')}>
-                            {t('admin.matches.override')}
-                          </Link>
-                          {canSubmit && (
-                            <Link href={`/dashboard/submit/${m.id}`} className={getButtonClasses('secondary', 'sm')}>
-                              {t('admin.matches.submitResult')}
-                            </Link>
-                          )}
-                          {canSubmit && (
-                            <Link href={`/dashboard/match-prep/${m.id}`} className={getButtonClasses('ghost', 'sm')}>
-                              {t('admin.matches.viewPrep')}
-                            </Link>
-                          )}
-                        </div>
-                      </div>
-                    </Card>
-                  </Link>
-                </AnimatedListItem>
-              );
-            })}
+            {data.rows.map((m) => (
+              <AnimatedListItem key={m.id}>
+                <AdminMatchListRow match={m} viewer={viewer} />
+              </AnimatedListItem>
+            ))}
           </AnimatedList>
 
           <MatchListPager

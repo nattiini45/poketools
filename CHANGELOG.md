@@ -8,6 +8,28 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Added
+
+- **Sidebar Overview item.** The admin sidebar (and the mobile chips) starts with an Overview item that opens the
+  dashboard.
+- **Dashboard attention list.** Each match shows its league, phase and how long it has been waiting, with the dispute
+  note for a disputed match, oldest first. Per-status "See all" links open the Matches list filtered to disputed or
+  awaiting-confirmation matches.
+- **Dashboard counters link to their lists.** The players, tournaments, active matches and leagues cards open the
+  matching admin list.
+
+### Changed
+
+- The dashboard counts and the attention list leave out test leagues and archived competitions; the players total also leaves out test accounts.
+- "Seasons" is now "Leagues" on the dashboard.
+- The sidebar highlights only the most specific item, for example Archived leagues and not Leagues as well.
+
+### Fixed
+
+- Submit Result and View Prep in the matches list no longer send an admin to the player dashboard. They show only to
+  people who can use them (a player in the match, or a site admin for Submit Result); Override stays for every admin.
+- Abort draft is no longer offered before the draft has started. A hint explains there is nothing to abort yet.
+
 ## [0.3.0] - 2026-10-23
 
 ### Upgrade notes

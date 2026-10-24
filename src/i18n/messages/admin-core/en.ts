@@ -103,7 +103,7 @@ export default {
       players: 'Players',
       tournaments: 'Tournaments',
       activeMatches: 'Active Matches',
-      seasons: 'Seasons',
+      leagues: 'Leagues',
       games: 'Games',
     },
     attention: {
@@ -114,7 +114,11 @@ export default {
       empty: 'No matches need attention. All caught up!',
       needsConfirm: 'Needs Confirm',
       disputed: 'Disputed',
-      view: 'View',
+      waiting: 'Waiting · {when}',
+      unknown: 'Unknown',
+      publicPage: 'Public page',
+      seeAllDisputed: 'See all disputed ({count})',
+      seeAllPending: 'See all awaiting confirmation ({count})',
       tournament: 'Tournament',
     },
     activity: {

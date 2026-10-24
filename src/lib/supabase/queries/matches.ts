@@ -295,7 +295,7 @@ type PageResult<T> = PromiseLike<{ data: T[] | null; error: { message: string } 
 const ID_CHUNK = 100;
 
 /** Every row of a query, in `max_rows` chunks until a short page (PostgREST truncates silently). */
-async function readAllRows<T>(page: (from: number, to: number) => PageResult<T>): Promise<T[]> {
+export async function readAllRows<T>(page: (from: number, to: number) => PageResult<T>): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0; ; from += POSTGREST_MAX_ROWS) {
     const { data, error } = await page(from, from + POSTGREST_MAX_ROWS - 1);
@@ -307,7 +307,7 @@ async function readAllRows<T>(page: (from: number, to: number) => PageResult<T>)
 }
 
 /** Rows whose id is in `ids`, read in chunks of `ID_CHUNK`. */
-async function readRowsByIds<T>(
+export async function readRowsByIds<T>(
   ids: readonly string[],
   read: (chunk: string[]) => PageResult<T>
 ): Promise<T[]> {

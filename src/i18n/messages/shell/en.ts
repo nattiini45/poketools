@@ -45,6 +45,7 @@ export default {
       system: 'System',
     },
     items: {
+      overview: 'Overview',
       leagues: 'Leagues',
       archivedLeagues: 'Archived leagues',
       tournaments: 'Tournaments',
