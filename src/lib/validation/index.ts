@@ -68,6 +68,7 @@ export {
   auditLogQuerySchema,
   adminMatchRepairSchema,
   matchProposalCreateSchema,
+  bestOfSchema,
   tournamentCreateSchema,
   tournamentUpdateSchema,
   phaseCreateSchema,

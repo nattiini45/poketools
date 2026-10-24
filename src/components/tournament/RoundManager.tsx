@@ -25,9 +25,8 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { errorsAdmin, errorsMatches, errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
+import { bestOfChoices } from '@/lib/tournament/best-of';
 import { apiFailure, type UiError } from './ui-error';
-
-const BEST_OF_OPTIONS = [1, 3, 5, 7] as const;
 
 type RoundErrorKey = `rounds.errors.${keyof typeof tournamentsAdminMessages.en.rounds.errors}`;
 
@@ -841,7 +840,7 @@ export default function RoundManager({
                         onChange={(e) => updateRoundBo(round.id, Number(e.target.value))}
                         className="border border-poke-border rounded-poke-md px-2 py-1 text-xs bg-poke-surface text-poke-text-primary"
                       >
-                        {BEST_OF_OPTIONS.map((bo) => (
+                        {bestOfChoices(round.best_of).map((bo) => (
                           <option key={bo} value={bo}>
                             {tCommon('bestOf', { count: bo })}
                           </option>

@@ -12,6 +12,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
+import Select from '@/components/ui/Select';
 import { getButtonClasses } from '@/components/ui/Button';
 import { deleteRebuildWarning } from '@/components/shared/DeleteResourceButton';
 import { useT } from '@/i18n/client';
@@ -23,6 +24,11 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
+import {
+  phaseAnchorOptions,
+  resolveInsertAt,
+  type PhaseInsertMode,
+} from '@/lib/league-admin/phase-controls';
 
 interface PhaseTimelineProps {
   seasonId: string;
@@ -78,6 +84,9 @@ export default function PhaseTimeline({
   const [error, setError] = useState<TimelineError | null>(null);
   const [deleteWarning, setDeleteWarning] = useState<DeleteWarning | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  /** Where the new phase goes: the end of the league, or next to the phase `insertAnchor`. */
+  const [insertMode, setInsertMode] = useState<PhaseInsertMode>('end');
+  const [insertAnchor, setInsertAnchor] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
 
@@ -101,17 +110,31 @@ export default function PhaseTimeline({
     void fetchPhases();
   }, [fetchPhases]);
 
+  function resetPosition() {
+    setInsertMode('end');
+    setInsertAnchor(null);
+  }
+
+  function changeInsertMode(mode: PhaseInsertMode) {
+    setInsertMode(mode);
+    // Preselect the first position the API accepts, so "before" and "after" never silently append.
+    const first = mode === 'end' ? undefined : phaseAnchorOptions(mode, phases).find((o) => !o.disabled);
+    setInsertAnchor(first?.phaseId ?? null);
+  }
+
   async function handleCreate(data: PhaseFormData) {
+    const insertAt = resolveInsertAt(insertMode, insertAnchor, phases);
     const res = await fetch(`/api/seasons/${seasonId}/phases`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify(insertAt === undefined ? data : { ...data, insert_at: insertAt }),
     });
     const result: ApiResult<LeaguePhase> = await res.json();
     if (!result.success) {
       throw new PhaseSaveError(toApiErrorLike(result));
     }
     setShowCreate(false);
+    resetPosition();
     router.push(`/admin/leagues/${seasonId}/phases/${result.data.id}`);
   }
 
@@ -207,7 +230,10 @@ export default function PhaseTimeline({
         <h3 className="text-sm font-heading font-semibold text-poke-text-primary">
           {t('timeline.heading', { count: phases.length })}
         </h3>
-        <Button variant="secondary" size="sm" onClick={() => setShowCreate(!showCreate)}>
+        <Button variant="secondary" size="sm" onClick={() => {
+            setShowCreate(!showCreate);
+            resetPosition();
+          }}>
           {showCreate ? t('timeline.cancel') : t('timeline.create')}
         </Button>
       </div>
@@ -304,6 +330,45 @@ export default function PhaseTimeline({
           <p className="text-xs text-poke-text-muted mb-4">
             {t('timeline.newPhaseHint')}
           </p>
+          {phases.length > 0 && (
+            <div className="space-y-3 mb-4 max-w-lg">
+              <Select
+                label={t('timeline.position.label')}
+                value={insertMode}
+                onChange={(e) => changeInsertMode(e.target.value as PhaseInsertMode)}
+              >
+                <option value="end">{t('timeline.position.end')}</option>
+                <option value="before" disabled={!phaseAnchorOptions('before', phases).some((o) => !o.disabled)}>
+                  {t('timeline.position.before')}
+                </option>
+                <option value="after">{t('timeline.position.after')}</option>
+              </Select>
+              {insertMode !== 'end' && (
+                <div className="space-y-1.5">
+                  <Select
+                    label={t('timeline.position.phase')}
+                    value={insertAnchor ?? ''}
+                    onChange={(e) => setInsertAnchor(e.target.value || null)}
+                    aria-describedby="phase-position-hint"
+                  >
+                    {phaseAnchorOptions(insertMode, phases).map((option) => {
+                      const phase = phases.find((p) => p.id === option.phaseId);
+                      if (!phase) return null;
+                      const params = { order: phase.stage_order, name: phase.name };
+                      return (
+                        <option key={phase.id} value={phase.id} disabled={option.disabled}>
+                          {t(option.disabled ? 'timeline.position.optionLocked' : 'timeline.position.option', params)}
+                        </option>
+                      );
+                    })}
+                  </Select>
+                  <p id="phase-position-hint" className="text-xs text-poke-text-muted">
+                    {t('timeline.position.hint')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           <PhaseForm
             rulesets={rulesets}
             defaultRulesetId={defaultRulesetId}

@@ -156,6 +156,89 @@ describe('POST /api/seasons/[id]/phases', () => {
     expect(createTournament).not.toHaveBeenCalled();
   });
 
+  it('refuses a name another phase already has (any case or spacing) with 409 PHASE_NAME_TAKEN, before any shift', async () => {
+    vi.mocked(getStagesBySeasonId).mockResolvedValue([
+      { id: 'phase-1', name: 'Hinrunde', status: 'upcoming', stage_order: 1 },
+      { id: 'phase-2', name: 'Playoffs', status: 'upcoming', stage_order: 2 },
+    ] as never);
+
+    const request = makeRequest({
+      name: '  hinRUNDE ',
+      bracket_type: 'single_elim',
+      ruleset_id: '00000000-0000-4000-8000-000000000002',
+      insert_at: 1,
+    }) as NextRequest;
+
+    const response = await POST(request, { params: makeParams({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }) });
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload.code).toBe('PHASE_NAME_TAKEN');
+    expect(shiftStageOrders).not.toHaveBeenCalled();
+    expect(createTournament).not.toHaveBeenCalled();
+  });
+
+  describe('positions after a deleted middle phase (stage orders 1 and 3)', () => {
+    const body = {
+      name: 'Finale',
+      bracket_type: 'single_elim',
+      ruleset_id: '00000000-0000-4000-8000-000000000002',
+    };
+    const post = (extra: Record<string, unknown> = {}) =>
+      POST(makeRequest({ ...body, ...extra }) as NextRequest, {
+        params: makeParams({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }),
+      });
+
+    beforeEach(() => {
+      vi.mocked(getStagesBySeasonId).mockResolvedValue([
+        { id: 'phase-1', name: 'Hinrunde', status: 'completed', stage_order: 1 },
+        { id: 'phase-3', name: 'Playoffs', status: 'upcoming', stage_order: 3 },
+      ] as never);
+    });
+
+    it('appends after the highest stage order (4), not into the gap or onto the phase count', async () => {
+      const response = await post();
+
+      expect(response.status).toBe(201);
+      expect(shiftStageOrders).not.toHaveBeenCalled();
+      expect(createTournament).toHaveBeenCalledWith(expect.objectContaining({ stage_order: 4 }));
+    });
+
+    it('accepts insert_at 2 in the gap and shifts from there', async () => {
+      const response = await post({ insert_at: 2 });
+
+      expect(response.status).toBe(201);
+      expect(shiftStageOrders).toHaveBeenCalledWith('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 2, 1);
+      expect(createTournament).toHaveBeenCalledWith(expect.objectContaining({ stage_order: 2 }));
+    });
+
+    it('accepts insert_at 4 (max + 1) without shifting', async () => {
+      const response = await post({ insert_at: 4 });
+
+      expect(response.status).toBe(201);
+      expect(shiftStageOrders).not.toHaveBeenCalled();
+      expect(createTournament).toHaveBeenCalledWith(expect.objectContaining({ stage_order: 4 }));
+    });
+
+    it('refuses insert_at beyond max + 1 with PHASE_INSERT_INVALID', async () => {
+      const response = await post({ insert_at: 5 });
+      const payload = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(payload.code).toBe('PHASE_INSERT_INVALID');
+      expect(shiftStageOrders).not.toHaveBeenCalled();
+      expect(createTournament).not.toHaveBeenCalled();
+    });
+
+    it('still refuses an insert in front of a started phase (PHASE_INSERT_LOCKED)', async () => {
+      const response = await post({ insert_at: 1 });
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).code).toBe('PHASE_INSERT_LOCKED');
+      expect(shiftStageOrders).not.toHaveBeenCalled();
+    });
+  });
+
   it('answers an unknown league with 404 SEASON_NOT_FOUND', async () => {
     vi.mocked(getSeasonById).mockResolvedValue(null);
 
