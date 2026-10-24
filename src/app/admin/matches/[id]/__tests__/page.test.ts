@@ -6,7 +6,7 @@
  * live role read. The page runs as a plain async function (vitest 'node'
  * env) and its element tree is walked without rendering the children.
  */
-import { isValidElement, type ReactNode } from 'react';
+import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LiveAccess } from '@/lib/auth/helpers';
 import { fullMatchRow, PRIVATE_MATCH_SENTINELS } from '@/lib/match/__tests__/private-match-fields';
@@ -14,6 +14,7 @@ import { fullMatchRow, PRIVATE_MATCH_SENTINELS } from '@/lib/match/__tests__/pri
 const mocks = vi.hoisted(() => ({
   cookies: new Map<string, { value: string }>(),
   getMatchById: vi.fn(),
+  getRoundById: vi.fn(),
   getLiveAccess: vi.fn<() => Promise<LiveAccess | null>>(),
   isResourceAdminFor: vi.fn(),
 }));
@@ -29,6 +30,7 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({ get: (name: string) => mocks.cookies.get(name) }),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: mocks.getMatchById }));
+vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundById: mocks.getRoundById }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: mocks.isResourceAdminFor }));
 vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
 vi.mock('@/components/shared/AdminGuard', () => ({
@@ -57,13 +59,17 @@ function access(flags: Partial<Omit<LiveAccess, 'player'>>, playerId: string | n
 }
 
 /** Every string and element type anywhere in an element tree (props.children / props.action). */
-function walk(node: ReactNode, out: { texts: string[]; types: unknown[] } = { texts: [], types: [] }) {
+function walk(
+  node: ReactNode,
+  out: { texts: string[]; types: unknown[]; elements: ReactElement[] } = { texts: [], types: [], elements: [] },
+) {
   if (Array.isArray(node)) {
     node.forEach((n) => walk(n, out));
   } else if (typeof node === 'string' || typeof node === 'number') {
     out.texts.push(String(node));
   } else if (isValidElement<{ children?: ReactNode; action?: ReactNode }>(node)) {
     out.types.push(node.type);
+    out.elements.push(node);
     walk(node.props.children, out);
     walk(node.props.action, out);
   }
@@ -78,6 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.cookies.clear();
   mocks.getMatchById.mockResolvedValue(fullMatchRow({ id: MATCH_ID, tournament_id: TOURNAMENT_ID }));
+  mocks.getRoundById.mockResolvedValue({ id: 'round-1', best_of: 5 });
   mocks.getLiveAccess.mockResolvedValue(null);
   mocks.isResourceAdminFor.mockResolvedValue(false);
 });
@@ -142,6 +149,38 @@ describe('AdminMatchPage: per-match access', () => {
   it('404s a malformed match id without querying', async () => {
     await expect(renderPage('abc')).rejects.toThrow('NEXT_NOT_FOUND');
     expect(mocks.getMatchById).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminMatchPage: series length', () => {
+  function actionsProps(elements: ReactElement[]) {
+    const el = elements.find((e) => e.type === AdminMatchActions);
+    return el?.props as { bestOf: number | null } | undefined;
+  }
+
+  it('passes the best-of of the match round to the controls', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    const { elements } = await renderPage();
+
+    expect(mocks.getRoundById).toHaveBeenCalledWith(fullMatchRow({ id: MATCH_ID }).round_id);
+    expect(actionsProps(elements)?.bestOf).toBe(5);
+  });
+
+  it('passes null when the round is missing', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    mocks.getRoundById.mockResolvedValue(null);
+    const { elements } = await renderPage();
+
+    expect(actionsProps(elements)?.bestOf).toBeNull();
+  });
+
+  it('still renders the controls, with null, when the round read fails', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    mocks.getRoundById.mockRejectedValue(new Error('db down'));
+    const { elements } = await renderPage();
+
+    expect(actionsProps(elements)).toBeDefined();
+    expect(actionsProps(elements)?.bestOf).toBeNull();
   });
 });
 

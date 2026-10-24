@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import type { BaseFormat } from '@/types/ruleset';
 import { GENERATIONS, getTiersForGen, getFormatSummary } from '@/lib/pkmn/format-catalog';
 import { useT } from '@/i18n/client';
@@ -18,40 +17,42 @@ function genFromFormatId(formatId: string): number {
   return match ? parseInt(match[1], 10) : 9;
 }
 
-/** Generation and tier names are Showdown format names and stay English. */
+/**
+ * The format a click on generation `gen` selects, or `null` when the click
+ * would not change the selection (the generation is already selected).
+ * Generation 0 is the custom (blank) format; otherwise the generation's first tier.
+ */
+export function nextFormatForGen(value: string, gen: number): string | null {
+  if (genFromFormatId(value) === gen) return null;
+  if (gen === 0) return 'blank';
+  const tiers = getTiersForGen(gen);
+  return tiers.length > 0 ? tiers[0].formatId : null;
+}
+
+/** The format a click on a tier selects, or `null` when that tier is already selected. */
+export function nextFormatForTier(value: string, formatId: string): string | null {
+  return value === formatId ? null : formatId;
+}
+
+/**
+ * Fully controlled by `value`: the generation and tier highlight are derived
+ * from it, so a parent that declines a change (a confirmation that is
+ * cancelled) leaves the highlight where it was.
+ * Generation and tier names are Showdown format names and stay English.
+ */
 export default function FormatSelector({ value, onChange }: FormatSelectorProps) {
   const t = useT(rulesetMessages);
-  const isCustom = value === 'blank';
-  const [selectedGen, setSelectedGen] = useState<number>(isCustom ? 0 : genFromFormatId(value));
-
-  // When value changes externally (e.g. editing an existing ruleset), sync gen
-  useEffect(() => {
-    if (value === 'blank') {
-      setSelectedGen(0);
-    } else {
-      const gen = genFromFormatId(value);
-      if (gen !== selectedGen && gen > 0) setSelectedGen(gen);
-    }
-    // Only run when value changes, not selectedGen
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
+  const selectedGen = genFromFormatId(value);
   const tiers = selectedGen > 0 ? getTiersForGen(selectedGen) : [];
 
   const handleGenChange = (gen: number) => {
-    setSelectedGen(gen);
-    if (gen === 0) {
-      onChange('blank');
-    } else {
-      const firstTier = getTiersForGen(gen);
-      if (firstTier.length > 0) {
-        onChange(firstTier[0].formatId);
-      }
-    }
+    const next = nextFormatForGen(value, gen);
+    if (next !== null) onChange(next);
   };
 
   const handleTierChange = (formatId: string) => {
-    onChange(formatId);
+    const next = nextFormatForTier(value, formatId);
+    if (next !== null) onChange(next);
   };
 
   const currentFormat = getFormatSummary(value);

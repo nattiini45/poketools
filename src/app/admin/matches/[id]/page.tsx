@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { getRoundById } from '@/lib/supabase/queries/rounds';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import GameList from '@/components/match/GameList';
 import AdminMatchActions from './AdminMatchActions';
@@ -37,10 +38,12 @@ export default async function AdminMatchPage({ params }: PageProps) {
     );
   }
 
-  const [t, tEnums, isSiteAdmin] = await Promise.all([
+  const [t, tEnums, isSiteAdmin, round] = await Promise.all([
     getT(adminCoreMessages),
     getT(enumMessages),
     viewerIsSiteAdmin(),
+    // The best-of only refines the completion warning; a failed read must not hide the actions.
+    getRoundById(match.round_id).catch(() => null),
   ]);
 
   return (
@@ -109,6 +112,7 @@ export default async function AdminMatchPage({ params }: PageProps) {
           currentWinnerId={match.winner_id}
           games={match.games}
           tournamentId={match.tournament_id}
+          bestOf={round?.best_of ?? null}
           isSiteAdmin={isSiteAdmin}
         />
 

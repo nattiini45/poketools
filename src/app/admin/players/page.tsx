@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
+import Skeleton from '@/components/ui/Skeleton';
 import PlayerRoster from './PlayerRoster';
 import { getSession, isSuperadmin } from '@/lib/auth/helpers';
 import { getT } from '@/i18n/server';
@@ -14,7 +16,10 @@ export default async function AdminPlayersPage() {
   return (
     <SiteAdminGuard>
       <PageContainer title={t('players.title')}>
-        <PlayerRoster canManageCreators={canManageCreators} />
+        {/* The roster keeps its search, sort and page in the query string (useSearchParams). */}
+        <Suspense fallback={<Skeleton height="72px" rounded="lg" />}>
+          <PlayerRoster canManageCreators={canManageCreators} />
+        </Suspense>
       </PageContainer>
     </SiteAdminGuard>
   );

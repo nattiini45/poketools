@@ -1175,6 +1175,14 @@ interface TeamConstraints {
 }
 ```
 
+An empty block carries no rule, so the ruleset builder and `createRuleset` store
+it as `null` (`normalizeTeamConstraints` in `src/lib/pkmn/team-constraints.ts`)
+instead of `{}`. `isCustomLeagueRuleset` is unchanged: a ruleset whose stored
+`team_constraints` is already an empty object still counts as a custom league
+ruleset and resolves as before. `updateRuleset` writes the value it is given, and
+the builder keeps an untouched stored empty object as it is; only a new ruleset,
+or turning the toggle off, yields `null`.
+
 The constraint engine is implemented in `src/lib/pkmn/validation.ts`
 (`validateTeam(team, ruleset, ctx)`), with `ctx.playerCore` populated from
 `season_participants.core_types` when validating a team for a Core Liga

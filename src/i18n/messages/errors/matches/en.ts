@@ -41,6 +41,8 @@ export default {
   match_status_override_admin_only: 'Only admins can complete or dispute a match that is still in progress',
   match_dispute_resolve_admin_only: 'Only admins can resolve disputed matches',
   match_complete_no_winner: 'Cannot complete a match without a winner',
+  // confirm-match: the guarded status update missed and the match is now in a different state (409, nothing written)
+  match_state_changed: 'The match changed to {status} while you were editing it. Review it and try again.',
   match_confirm_participants_only: 'Only match participants or admins can confirm results',
   match_dispute_participants_only: 'Only match participants or admins can dispute results',
 

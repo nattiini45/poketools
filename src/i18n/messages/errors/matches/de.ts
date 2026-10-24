@@ -28,6 +28,7 @@ export default defineDe<typeof en>()({
   match_status_override_admin_only: 'Nur Admins können ein laufendes Spiel direkt abschließen oder als strittig markieren.',
   match_dispute_resolve_admin_only: 'Nur Admins können strittige Spiele entscheiden.',
   match_complete_no_winner: 'Ein Spiel ohne Sieger kann nicht abgeschlossen werden.',
+  match_state_changed: 'Das Spiel wurde auf {status} geändert, während du es bearbeitet hast. Prüfe es und versuche es erneut.',
   match_confirm_participants_only: 'Nur die Spieler dieses Spiels oder Admins können Ergebnisse bestätigen.',
   match_dispute_participants_only: 'Nur die Spieler dieses Spiels oder Admins können Ergebnisse anfechten.',
 

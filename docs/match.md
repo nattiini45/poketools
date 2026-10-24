@@ -88,13 +88,20 @@ src/lib/match/
 - `/api/matches/me` (the player's own matches: full rows)
 - `/api/matches/[id]/social-image` (site admins: POST uploads, DELETE removes; 404 `INVALID_MATCH_ID` for a malformed id; see Social Images)
 - `/api/manual-result`
-- `/api/confirm-match/[mid]` (participants and admins: full `Match`; only admins write `notes`)
+- `/api/confirm-match/[mid]` (participants and admins: full `Match`; only admins write `notes`; see Confirm and dispute below)
 - `/api/cron/auto-confirm` (`?limit=` 1..100, default 25; anything else answers 400 `validation_failed`)
 - `/api/matches/[mid]/proposals`
 - `/api/match-proposals/[id]/accept` (the responding participant: full row)
 - `/api/match-proposals/[id]/reject`
 - `/api/match-prep`
 - `/api/admin/**` match routes (admins: full rows)
+
+## Confirm and dispute (`/api/confirm-match/[mid]`)
+- **Guarded update.** The status change is a compare-and-set on the status the route read. When it misses, the route re-reads the match: a missing match answers 404 `match_not_found`; a match that is already in the requested state (same status and, for a completion, the same winner, with no admin notes that would be discarded) answers 200 with the current match, as a repeated click should; any other state answers `409 match_state_changed` with `params.status` (the current status) and writes nothing: no revalidation, no finalize, no Discord event. Before, a lost race (for example a dispute landing between a Complete click and the request) answered success.
+- **Submitter is kept.** `matches.submitter_id` is set only when it is empty, for admin and participant confirms and disputes alike, so a confirmation or an admin override no longer overwrites the player who reported the result. A participant dispute therefore does not record the disputer in that column; only the Discord event names them. A participant's confirm or dispute writes no audit event, and participants cannot send notes (only admins write `notes`).
+- **Audit.** An admin dispute always writes a `match.dispute` audit event (status change and notes). An admin confirm writes `match.override` when it sets a winner or notes or resolves a disputed match.
+- **`date_played`** stays the completion stamp: it is only ever set when a match completes, so there is no earlier play date to overwrite.
+- The admin match page asks for confirmation before Complete and Dispute and shows the recorded series tally with warnings; see [Admin](./admin.md).
 
 ## Scheduling and Auto-Confirm
 - Match scheduling uses `rounds.deadline`, `matches.scheduled_at`, and `match_proposals`.

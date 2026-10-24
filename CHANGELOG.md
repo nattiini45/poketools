@@ -8,6 +8,40 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Added
+
+- **Completion confirmation with a series check.** Completing or disputing a match on the admin match page asks first.
+  The page shows the recorded series (`2 – 1 from 3 games`, with the best-of from the round; if that read fails the
+  page still opens without it) and tags the player the games favour. Completing warns when the result contradicts the recorded games (no games, games without a winner,
+  fewer wins than the best-of needs, a different winner) and then needs a ticked acknowledgement. The reset dialog
+  for downstream matches shows how many matches it resets.
+- **Format-change confirmation in the ruleset builder.** Switching the base format keeps the form until the new
+  defaults are loaded and asks before replacing lists you changed, naming what would be lost. **Keep my lists** only
+  changes the format label. A new ruleset starts from its format's defaults.
+- **Empty-ruleset notice.** A ruleset with a real base format but no clause, ban or addition says that it enforces
+  nothing beyond the generation, with a button to load the format's defaults. An empty team-constraints block says it
+  is saved as no constraints.
+- **Dismissible roster errors.** A failed action on the admin Players page shows a dismissible alert, scrolled into view, and keeps
+  the table; a failed first load shows the error with **Retry**.
+- **Role-change and delete confirmations** on the Players page name the player: make or remove admin, make or remove
+  creator, delete and reinstate.
+- **Ban reason** under the status of a banned player.
+- **Roster URL state.** The Players page keeps its search, sort, page and page size in the URL.
+
+### Fixed
+
+- **Complete/Dispute race.** The confirm-match route reported success when the match had changed state in the
+  meantime (for example a dispute landing just before a completion). It now answers `409 match_state_changed` and
+  writes nothing, and the page reloads. Admin and participant confirms no longer overwrite the original submitter.
+- **Admin disputes are audited.** Marking a match disputed as an admin now writes a `match.dispute` audit event
+  (shown as "Match disputed by an admin"); before, it left an event only when the request carried notes.
+- **Failed loads can no longer overwrite stored data.** The draft tier limits editor and the point-buy list manager
+  disable saving and binding after a failed read until a read succeeds, so pack defaults cannot be saved over the
+  stored limits or list binding.
+- **Empty team constraints are no longer stored.** A new ruleset with an empty team-constraints block stores none
+  instead of an empty object (which made it count as a custom league ruleset). Rulesets already stored with an empty
+  object resolve as before.
+
 ## [0.3.0] - 2026-10-23
 
 ### Upgrade notes
