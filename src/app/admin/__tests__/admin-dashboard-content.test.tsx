@@ -194,6 +194,27 @@ describe('DashboardView', () => {
     expect(html).toContain('20 of 57 matches');
   });
 
+  it('wraps the match line and the league line instead of truncating them', () => {
+    const html = renderWithI18n(<DashboardView data={SITE_DATA} />);
+    const link = anchorTo(html, '/admin/matches/m-1') ?? '';
+    expect(link).toContain('Mara vs Nora');
+    expect(link).toContain('break-words');
+    expect(link).not.toContain('truncate');
+    const league = html.match(/<p[^>]*>Summer League[^<]*<\/p>/)?.[0] ?? '';
+    expect(league).toContain('break-words');
+    expect(league).not.toContain('truncate');
+  });
+
+  it('does not hide attention rows behind an inner scroll', () => {
+    const rows = Array.from({ length: 5 }, (_, i) => ({ ...MATCH, id: `m-${i}` }));
+    const html = renderWithI18n(
+      <DashboardView data={{ ...SITE_DATA, attention_required: rows, attention_total: 5 }} />,
+    );
+    const start = html.indexOf('Attention Required');
+    const end = html.indexOf('Recent Activity');
+    expect(html.slice(start, end)).not.toContain('overflow-y-auto');
+  });
+
   it('shows the plain count when nothing is truncated', () => {
     const html = renderWithI18n(<DashboardView data={SITE_DATA} />);
     expect(html).toContain('1 match');

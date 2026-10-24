@@ -65,20 +65,20 @@ function AttentionRow({ match: m }: { match: AttentionMatch }) {
 
   return (
     <Card variant="outlined" padding="sm" hover>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <Link
           href={`/admin/matches/${m.id}`}
-          className="text-sm font-heading font-semibold text-poke-text-primary hover:text-poke-accent transition-colors truncate"
+          className="min-w-0 break-words text-sm font-heading font-semibold text-poke-text-primary hover:text-poke-accent transition-colors"
         >
           {t('versus', { player1: m.player_1_name ?? unknown, player2: m.player_2_name ?? unknown })}
         </Link>
-        <Badge variant={m.status === 'disputed' ? 'red' : 'yellow'} size="sm">
+        <Badge variant={m.status === 'disputed' ? 'red' : 'yellow'} size="sm" className="shrink-0">
           {m.status === 'pending_confirmation'
             ? t('dashboard.attention.needsConfirm')
             : t('dashboard.attention.disputed')}
         </Badge>
       </div>
-      <p className="text-xs text-poke-text-muted mt-1 truncate">
+      <p className="text-xs text-poke-text-muted mt-1 break-words">
         {m.season_name
           ? t('dashboard.attention.leaguePhase', { league: m.season_name, phase: tournamentName })
           : tournamentName}
@@ -223,7 +223,7 @@ export function DashboardView({
           {attention_required.length === 0 ? (
             <p className="text-sm text-poke-text-muted py-2">{t('dashboard.attention.empty')}</p>
           ) : (
-            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+            <div className="space-y-3">
               {attention_required.map((m) => (
                 <AttentionRow key={m.id} match={m} />
               ))}

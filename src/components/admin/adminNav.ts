@@ -144,3 +144,23 @@ export function activeAdminNavHref(pathname: string | null, hrefs: readonly stri
   }
   return best;
 }
+
+/**
+ * The `scrollLeft` that centres a chip in its scrolling row, clamped to the row's range. All
+ * measures are in px: `chipLeft` is the chip's left edge within the row's scrollable content.
+ * A chip that already sits inside the row keeps the row where it is (returns `currentScrollLeft`).
+ */
+export function chipScrollLeft(m: {
+  rowWidth: number;
+  rowScrollWidth: number;
+  currentScrollLeft: number;
+  chipLeft: number;
+  chipWidth: number;
+}): number {
+  const { rowWidth, rowScrollWidth, currentScrollLeft, chipLeft, chipWidth } = m;
+  const visible = chipLeft >= currentScrollLeft && chipLeft + chipWidth <= currentScrollLeft + rowWidth;
+  if (visible) return currentScrollLeft;
+  const max = Math.max(0, rowScrollWidth - rowWidth);
+  const centred = chipLeft - (rowWidth - chipWidth) / 2;
+  return Math.min(max, Math.max(0, centred));
+}

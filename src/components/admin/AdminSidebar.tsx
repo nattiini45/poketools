@@ -1,12 +1,41 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Badge from '@/components/ui/Badge';
 import { FOCUS_RING } from '@/components/ui/panel';
 import { useT } from '@/i18n/client';
 import { shellMessages } from '@/i18n/messages/shell';
-import { activeAdminNavHref, visibleAdminNav, type AdminNavExtraItem, type AdminRoles, type VisibleAdminNavItem } from './adminNav';
+import { activeAdminNavHref, chipScrollLeft, visibleAdminNav, type AdminNavExtraItem, type AdminRoles, type VisibleAdminNavItem } from './adminNav';
+
+/**
+ * One mobile chip row. It scrolls the highlighted chip into view when the page (or the active
+ * item) changes, so the current section is visible without swiping. Only the row's own
+ * `scrollLeft` moves; the page never scrolls.
+ */
+function ChipRow({ activeHref, children }: { activeHref: string | null; children: React.ReactNode }) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = rowRef.current;
+    const chip = row?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!row || !chip) return;
+    const rowBox = row.getBoundingClientRect();
+    const chipBox = chip.getBoundingClientRect();
+    row.scrollLeft = chipScrollLeft({
+      rowWidth: row.clientWidth,
+      rowScrollWidth: row.scrollWidth,
+      currentScrollLeft: row.scrollLeft,
+      chipLeft: chipBox.left - rowBox.left + row.scrollLeft,
+      chipWidth: chipBox.width,
+    });
+  }, [activeHref]);
+  return (
+    <div ref={rowRef} className="flex gap-1.5 overflow-x-auto pb-1">
+      {children}
+    </div>
+  );
+}
 
 /**
  * Admin workflow rail: grouped, role-filtered navigation with an accent
@@ -85,7 +114,7 @@ export default function AdminSidebar({
             <h2 className="text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted mb-1">
               {t(`admin.groups.${group.id}`)}
             </h2>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
+            <ChipRow activeHref={activeHref}>
               {group.items.map((item) => {
                 const active = item.href === activeHref;
                 return (
@@ -103,7 +132,7 @@ export default function AdminSidebar({
                   </Link>
                 );
               })}
-            </div>
+            </ChipRow>
           </div>
         ))}
       </nav>

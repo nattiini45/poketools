@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
-import { ADMIN_NAV, activeAdminNavHref, type AdminNavExtraItem } from '../adminNav';
+import { ADMIN_NAV, activeAdminNavHref, chipScrollLeft, type AdminNavExtraItem } from '../adminNav';
 
 const nav = vi.hoisted(() => ({ pathname: '/admin' as string | null }));
 
@@ -60,6 +60,33 @@ describe('activeAdminNavHref', () => {
     expect(activeAdminNavHref('/dashboard', HREFS)).toBeNull();
     expect(activeAdminNavHref(null, HREFS)).toBeNull();
     expect(activeAdminNavHref('/admin', [])).toBeNull();
+  });
+});
+
+describe('chipScrollLeft', () => {
+  const row = { rowWidth: 375, rowScrollWidth: 1000, currentScrollLeft: 0 };
+
+  it('leaves the row alone when the chip is already visible', () => {
+    expect(chipScrollLeft({ ...row, chipLeft: 20, chipWidth: 80 })).toBe(0);
+    expect(chipScrollLeft({ ...row, currentScrollLeft: 100, chipLeft: 150, chipWidth: 80 })).toBe(100);
+  });
+
+  it('centres a chip that lies past the right edge', () => {
+    // Matches chip at x=630..711 in a 375px row: centred, so its middle sits at the row's middle.
+    expect(chipScrollLeft({ ...row, chipLeft: 630, chipWidth: 81 })).toBe(630 - (375 - 81) / 2);
+  });
+
+  it('brings back a chip that lies before the left edge', () => {
+    expect(chipScrollLeft({ ...row, currentScrollLeft: 500, chipLeft: 40, chipWidth: 80 })).toBe(0);
+  });
+
+  it('clamps to the end of the row', () => {
+    expect(chipScrollLeft({ ...row, chipLeft: 900, chipWidth: 90 })).toBe(1000 - 375);
+  });
+
+  it('is zero for a row that does not overflow (hidden or fitting)', () => {
+    expect(chipScrollLeft({ rowWidth: 0, rowScrollWidth: 0, currentScrollLeft: 0, chipLeft: 0, chipWidth: 0 })).toBe(0);
+    expect(chipScrollLeft({ rowWidth: 400, rowScrollWidth: 400, currentScrollLeft: 0, chipLeft: 390, chipWidth: 30 })).toBe(0);
   });
 });
 
