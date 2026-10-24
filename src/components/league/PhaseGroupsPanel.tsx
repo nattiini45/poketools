@@ -49,6 +49,16 @@ export function GroupCountSelect({ value, onChange }: { value: number; onChange:
   );
 }
 
+/**
+ * The note for a phase without groups. It tells the admin to seed and serpentine-assign, so a league-managed phase
+ * (whose controls are hidden and whose groups come from the league) shows none: its info note says where they come from.
+ */
+export function EmptyGroupsNote({ leagueManaged }: { leagueManaged: boolean }) {
+  const t = useT(leaguePhasesMessages);
+  if (leagueManaged) return null;
+  return <p className="text-sm text-poke-text-muted">{t('groups.empty')}</p>;
+}
+
 /** An API refusal (shown by its code), or a request that got no answer. */
 type GroupsError =
   | { api: ApiErrorLike }
@@ -237,9 +247,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
       />
 
       {groups.length === 0 ? (
-        <p className="text-sm text-poke-text-muted">
-          {t('groups.empty')}
-        </p>
+        <EmptyGroupsNote leagueManaged={leagueManaged} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {groups.map((group) => (

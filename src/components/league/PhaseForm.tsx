@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import type { TournamentFormData, BracketType, TeamVisibility, BoOverrides } from '@/types/tournament';
 import type { AdvancementRule } from '@/types/season';
 import type { Ruleset } from '@/types/ruleset';
@@ -54,6 +54,55 @@ export class PhaseSaveError extends Error {
     super(api.error ?? api.code ?? 'Phase save failed');
     this.name = 'PhaseSaveError';
   }
+}
+
+/** The API code for a phase name another phase of the league already has (shown next to the name field). */
+const NAME_TAKEN_CODE = 'PHASE_NAME_TAKEN';
+
+/** Whether the refusal is the duplicate-name one, which belongs to the name field instead of the form alert. */
+export function isNameTakenError(error: ApiErrorLike | true | null): error is ApiErrorLike {
+  return error !== null && error !== true && error.code === NAME_TAKEN_CODE;
+}
+
+/**
+ * The phase name input. A duplicate-name refusal shows next to it: the input is marked invalid and
+ * points at the message, so the answer to a submit at the bottom of the long form is not off screen.
+ */
+export function PhaseNameField({
+  value,
+  onChange,
+  errorText,
+  inputRef,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  /** The duplicate-name message; absent while the name is fine. */
+  errorText?: string | null;
+  inputRef?: Ref<HTMLInputElement>;
+}) {
+  const t = useT(leaguePhasesMessages);
+  const errorId = useId();
+  return (
+    <div className="space-y-1.5">
+      <Input
+        ref={inputRef}
+        label={t('form.name')}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
+        placeholder={t('form.namePlaceholder')}
+        aria-invalid={errorText ? true : undefined}
+        aria-describedby={errorText ? errorId : undefined}
+        className={errorText ? 'border-poke-danger' : undefined}
+      />
+      {errorText && (
+        <p id={errorId} className="text-sm text-poke-danger">
+          {errorText}
+        </p>
+      )}
+    </div>
+  );
 }
 
 const BRACKET_TYPES: readonly BracketType[] = ['single_elim', 'double_elim', 'round_robin', 'swiss'];
@@ -131,6 +180,12 @@ export default function PhaseForm({
   const dirty = phaseFormDirty(savedValues, values) || savedIsDoubles !== isDoubles;
   /** The API's refusal, or `true` for a failure without an answer (shown as "Failed to save"). */
   const [error, setError] = useState<ApiErrorLike | true | null>(null);
+  const nameTaken = isNameTakenError(error);
+  const nameRef = useRef<HTMLInputElement>(null);
+  // The refusal belongs to the name field: bring the admin back to it (it scrolls into view).
+  useEffect(() => {
+    if (nameTaken) nameRef.current?.focus();
+  }, [nameTaken]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -170,16 +225,20 @@ export default function PhaseForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-lg" {...unsavedMarker(dirty)}>
-      {error && <Alert variant="error">{error === true ? t('form.saveFailed') : errorText(error)}</Alert>}
+      {error && !nameTaken && (
+        <Alert variant="error">{error === true ? t('form.saveFailed') : errorText(error)}</Alert>
+      )}
 
       <fieldset disabled={locked} className="min-w-0 space-y-4">
-        <Input
-          label={t('form.name')}
-          type="text"
+        <PhaseNameField
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          placeholder={t('form.namePlaceholder')}
+          onChange={(value) => {
+            setName(value);
+            // A new name answers the refusal.
+            if (nameTaken) setError(null);
+          }}
+          errorText={isNameTakenError(error) ? errorText(error) : null}
+          inputRef={nameRef}
         />
 
         <div className="space-y-1.5">
@@ -245,7 +304,9 @@ export default function PhaseForm({
             />
             {t('form.isDoubles')}
           </label>
-          <p className="text-xs text-poke-text-muted">{t('form.isDoublesHint')}</p>
+          <p className="text-xs text-poke-text-muted">
+            {t(initialData?.is_doubles !== undefined ? 'form.isDoublesHintEdit' : 'form.isDoublesHint')}
+          </p>
         </div>
 
         <Select

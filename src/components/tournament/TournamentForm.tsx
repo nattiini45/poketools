@@ -27,6 +27,8 @@ interface TournamentFormProps {
   submitLabel?: string;
   /** Controls frozen once the tournament has started; each shows a short reason. */
   lockedFields?: { bracketType?: boolean; ruleset?: boolean; doubles?: boolean };
+  /** Why the locked controls are frozen; picks the wording of their hint (default: the tournament has started). */
+  lockedReason?: 'started' | 'rounds';
 }
 
 const BRACKET_TYPES = ['single_elim', 'double_elim', 'round_robin', 'swiss'] as const satisfies readonly BracketType[];
@@ -48,6 +50,7 @@ export default function TournamentForm({
   mode = 'create',
   submitLabel,
   lockedFields,
+  lockedReason = 'started',
 }: TournamentFormProps) {
   const [name, setName] = useState(initialData?.name ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
@@ -69,6 +72,7 @@ export default function TournamentForm({
   const tCommon = useT(commonMessages);
   const errorText = useApiErrorText(errorsTournaments);
   const [error, setError] = useState<UiError<'form.saveFailed'> | null>(null);
+  const lockedText = lockedReason === 'rounds' ? t('form.lockedRounds') : t('form.lockedStarted');
   const bracketTypeOptions = BRACKET_TYPES.map((value) => ({ value, label: t(`form.bracketTypes.${value}`) }));
   const visibilityOptions = VISIBILITY_OPTIONS.map((value) => ({ value, label: t(`form.visibility.${value}`) }));
   const isEdit = mode === 'edit';
@@ -143,7 +147,7 @@ export default function TournamentForm({
         disabled={lockedFields?.bracketType}
         aria-describedby={lockedFields?.bracketType ? 'bracket-type-locked' : undefined}
       />
-      {lockedFields?.bracketType && <LockedHint id="bracket-type-locked">{t('form.lockedStarted')}</LockedHint>}
+      {lockedFields?.bracketType && <LockedHint id="bracket-type-locked">{lockedText}</LockedHint>}
 
       <Select
         label={t('form.ruleset')}
@@ -160,7 +164,7 @@ export default function TournamentForm({
           </option>
         ))}
       </Select>
-      {lockedFields?.ruleset && <LockedHint id="ruleset-locked">{t('form.lockedStarted')}</LockedHint>}
+      {lockedFields?.ruleset && <LockedHint id="ruleset-locked">{lockedText}</LockedHint>}
 
       <Select
         label={t('form.bestOfDefault')}
@@ -190,7 +194,7 @@ export default function TournamentForm({
           {t('form.doubles')}
         </label>
       </div>
-      {lockedFields?.doubles && <LockedHint id="doubles-locked">{t('form.lockedStarted')}</LockedHint>}
+      {lockedFields?.doubles && <LockedHint id="doubles-locked">{lockedText}</LockedHint>}
 
       {bracketType === 'double_elim' && (
         <div className="flex items-center gap-2">

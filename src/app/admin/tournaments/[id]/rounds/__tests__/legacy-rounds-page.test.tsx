@@ -143,6 +143,19 @@ describe('LegacyRoundsPage settings section', () => {
     expect(editor.props.started).toBe(true);
   });
 
+  it('names the reason for the lock: the tournament started, or its rounds were generated', async () => {
+    const [open] = findByType(await render(), TournamentSettingsEditor);
+    expect(open.props.lockReason).toBeNull();
+
+    mocks.getRoundsByTournament.mockResolvedValue([{ id: 'r1' }]);
+    const [withRound] = findByType(await render(), TournamentSettingsEditor);
+    expect(withRound.props.lockReason).toBe('rounds');
+
+    mocks.getTournamentById.mockResolvedValue(tournament({ status: 'active' }));
+    const [active] = findByType(await render(), TournamentSettingsEditor);
+    expect(active.props.lockReason).toBe('started');
+  });
+
   it('keeps the other sections after the settings', async () => {
     const titles = findByType(await render(), Section).map((s) => s.props.title);
     expect(titles).toEqual(['Settings', 'Description', 'Participants', 'Rounds', 'Tournament Admins']);

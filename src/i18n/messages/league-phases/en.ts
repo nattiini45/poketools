@@ -18,6 +18,8 @@ export default {
     isDoubles: 'Doubles phase',
     isDoublesHint:
       'A new phase follows the selected ruleset until you change this. Shown as a Doubles badge and used for Bring/Lead/Win tracking.',
+    /** The edit form of an existing phase: its flag is stored, so nothing follows the ruleset any more. */
+    isDoublesHintEdit: 'Shown as a Doubles badge and used for Bring/Lead/Win tracking.',
     teamVisibility: 'Team Visibility',
     advancement: 'Advancement into next phase',
     advancementPlayers: 'players',

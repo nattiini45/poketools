@@ -5,6 +5,7 @@ import {
   PHASE_GROUP_COUNT_MIN,
   PHASE_GROUP_COUNTS,
   phaseAnchorOptions,
+  phaseNumbers,
   redrawNeedsConfirm,
   resolveInsertAt,
   type PhasePositionPhase,
@@ -88,5 +89,25 @@ describe('phaseAnchorOptions', () => {
 
   it('offers every position while no phase started', () => {
     expect(phaseAnchorOptions('before', THREE).every((o) => !o.disabled)).toBe(true);
+  });
+});
+
+describe('phaseNumbers', () => {
+  it('counts phases from 1 in stage order, even when the stored order starts at 0', () => {
+    const numbers = phaseNumbers([
+      { id: 'playoffs', stage_order: 1 },
+      { id: 'groups', stage_order: 0 },
+    ]);
+    expect(numbers.get('groups')).toBe(1);
+    expect(numbers.get('playoffs')).toBe(2);
+  });
+
+  it('does not show gaps left by a deleted phase', () => {
+    const numbers = phaseNumbers([
+      { id: 'a', stage_order: 1 },
+      { id: 'c', stage_order: 3 },
+      { id: 'd', stage_order: 4 },
+    ]);
+    expect([numbers.get('a'), numbers.get('c'), numbers.get('d')]).toEqual([1, 2, 3]);
   });
 });

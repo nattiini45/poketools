@@ -89,6 +89,15 @@ describe('TournamentSettingsEditor render', () => {
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(true);
     expect(html.match(/Locked: the tournament has started\./g)).toHaveLength(3);
   });
+
+  it('explains the lock of an upcoming tournament that has a generated round', () => {
+    const html = renderToStaticMarkup(
+      <TournamentSettingsEditor tournament={tournament} rulesets={rulesets} started lockReason="rounds" />,
+    );
+    expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(true);
+    expect(html.match(/Locked: rounds have been generated\./g)).toHaveLength(3);
+    expect(html).not.toContain('the tournament has started');
+  });
 });
 
 describe('saveTournamentSettings', () => {

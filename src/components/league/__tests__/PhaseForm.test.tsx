@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
 import type { Ruleset } from '@/types/ruleset';
-import PhaseForm, { resolveIsDoubles } from '../PhaseForm';
+import PhaseForm, { PhaseNameField, isNameTakenError, resolveIsDoubles } from '../PhaseForm';
 
 function ruleset(id: string, name: string, isDoubles = false): Ruleset {
   return {
@@ -255,5 +255,66 @@ describe('PhaseForm submit and locked state', () => {
 
     expect(html).toMatch(/<fieldset disabled=""/);
     expect(submitButton(html)).toContain(' disabled=""');
+  });
+});
+
+describe('duplicate phase name error', () => {
+  it('recognises only the name-taken refusal as the name field error', () => {
+    expect(isNameTakenError({ code: 'PHASE_NAME_TAKEN' })).toBe(true);
+    expect(isNameTakenError({ code: 'PHASE_INSERT_LOCKED' })).toBe(false);
+    expect(isNameTakenError({ error: 'Failed' })).toBe(false);
+    expect(isNameTakenError(true)).toBe(false);
+    expect(isNameTakenError(null)).toBe(false);
+  });
+
+  it('marks the name input invalid and points it at the message next to it', () => {
+    const html = renderWithI18n(
+      <PhaseNameField value="Playoffs" onChange={() => {}} errorText="Another phase of this league already has this name." />,
+    );
+    const input = html.match(/<input[^>]*>/)?.[0] ?? '';
+    const describedBy = input.match(/aria-describedby="([^"]+)"/)?.[1];
+
+    expect(input).toContain('aria-invalid="true"');
+    expect(describedBy).toBeTruthy();
+    expect(html).toContain(`<p id="${describedBy}" class="text-sm text-poke-danger">Another phase of this league already has this name.</p>`);
+  });
+
+  it('leaves the name input plain while the name is fine', () => {
+    const html = renderWithI18n(<PhaseNameField value="Playoffs" onChange={() => {}} />);
+
+    expect(html).not.toContain('aria-invalid');
+    expect(html).not.toContain('aria-describedby');
+    expect(html).not.toContain('text-poke-danger');
+  });
+});
+
+describe('doubles hint wording', () => {
+  it('a new phase is told it follows the ruleset', () => {
+    const html = renderWithI18n(<PhaseForm rulesets={[SINGLES]} onSubmit={noopSubmit} />);
+
+    expect(html).toContain('A new phase follows the selected ruleset');
+  });
+
+  it('an existing phase is not told it is new', () => {
+    const html = renderWithI18n(
+      <PhaseForm
+        rulesets={[SINGLES]}
+        onSubmit={noopSubmit}
+        initialData={{ name: 'Groups', ruleset_id: 'rs-singles', is_doubles: false }}
+      />,
+    );
+    const de = renderWithI18n(
+      <PhaseForm
+        rulesets={[SINGLES]}
+        onSubmit={noopSubmit}
+        initialData={{ name: 'Groups', ruleset_id: 'rs-singles', is_doubles: false }}
+      />,
+      { locale: 'de' },
+    );
+
+    expect(html).not.toContain('A new phase');
+    expect(html).toContain('Shown as a Doubles badge');
+    expect(de).not.toContain('Eine neue Phase');
+    expect(de).toContain('Wird als Doppel-Badge angezeigt');
   });
 });

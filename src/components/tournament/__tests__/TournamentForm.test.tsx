@@ -161,3 +161,16 @@ describe('TournamentForm edit mode', () => {
     expect(html).not.toMatch(/\u00c3|\u00e2\u20ac/);
   });
 });
+
+describe('TournamentForm bracket type labels', () => {
+  it('uses the same names as the phase form and the rest of the site', () => {
+    const en = renderToStaticMarkup(<TournamentForm rulesets={rulesets} onSubmit={noopSubmit} />);
+    expect(en).toMatch(/<option value="swiss"[^>]*>Swiss<\/option>/);
+    expect(en).toMatch(/<option value="single_elim"[^>]*>Single elimination<\/option>/);
+    expect(en).not.toContain('Monrad');
+
+    const de = renderWithI18n(<TournamentForm rulesets={rulesets} onSubmit={noopSubmit} />, { locale: 'de' });
+    expect(de).toMatch(/<option value="swiss"[^>]*>Schweizer System<\/option>/);
+    expect(de).not.toContain('Monrad');
+  });
+});

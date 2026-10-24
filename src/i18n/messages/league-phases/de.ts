@@ -13,6 +13,7 @@ export default defineDe<typeof en>()({
     isDoubles: 'Doppel-Phase',
     isDoublesHint:
       'Eine neue Phase übernimmt die Einstellung des gewählten Regelwerks, bis du sie änderst. Wird als Doppel-Badge angezeigt und für die Bring-/Lead-/Siegerfassung genutzt.',
+    isDoublesHintEdit: 'Wird als Doppel-Badge angezeigt und für die Bring-/Lead-/Siegerfassung genutzt.',
     teamVisibility: 'Sichtbarkeit der Teams',
     advancement: 'Weiterkommen in die nächste Phase',
     advancementPlayers: 'Spieler',
