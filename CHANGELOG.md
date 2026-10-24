@@ -55,6 +55,14 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - The admin link in the decision-match (tie-break) panel opens the tournament's rounds page instead of a page
   that does not exist.
 
+### Removed
+
+- **Private-project references are scrubbed from the public tree.** Comments, docs and test fixtures no longer cite
+  internal audit or review ids, private design-spec sections, the maintainer's deferred-work register or capture-board
+  cards, and fixtures use neutral league names. The raw 2026-10-20 audit batch is no longer published; the
+  fixes it led to are listed under 0.2.2 and 0.2.3. A docs-and-source guard in `scripts/__tests__/public-docs.test.mjs`
+  keeps the id patterns out. No runtime change.
+
 ### Fixed
 
 - Player pickers no longer miss players beyond the first page of results.
@@ -81,14 +89,6 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   - The weekly recap pins its locale to a known value before picking a translator.
   - The avatar randomiser draws from Web Crypto instead of `Math.random()`.
   - Maintainer scripts create temp files with `mkdtemp` and avoid check-then-use file races.
-
-### Removed
-
-- **Private-project references are scrubbed from the public tree.** Comments, docs and test fixtures no longer cite
-  internal audit or review ids, private design-spec sections, the maintainer's deferred-work register or capture-board
-  cards, and fixtures use neutral league names. The raw 2026-10-20 audit batch is no longer published; the
-  fixes it led to are listed under 0.2.2 and 0.2.3. A docs-and-source guard in `scripts/__tests__/public-docs.test.mjs`
-  keeps the id patterns out. No runtime change.
 
 ## [0.2.3] - 2026-10-20
 
