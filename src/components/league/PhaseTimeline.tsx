@@ -61,6 +61,12 @@ function isSuccessBody(body: unknown): boolean {
   return typeof body === 'object' && body !== null && (body as { success?: unknown }).success === true;
 }
 
+/**
+ * The phase card's action row (status, reorder arrows, Manage, Delete). It wraps and may shrink,
+ * so on a narrow screen the buttons drop to a second line inside the card instead of poking out.
+ */
+export const PHASE_ACTIONS_CLASS = 'flex items-center gap-2 flex-wrap min-w-0 max-w-full';
+
 function statusVariant(status: string): 'green' | 'accent' | 'gray' {
   if (status === 'active') return 'green';
   if (status === 'upcoming') return 'accent';
@@ -277,7 +283,7 @@ export default function PhaseTimeline({
                     {t('timeline.rounds', { done: phase.rounds_completed, total: phase.rounds_total })}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className={PHASE_ACTIONS_CLASS}>
                   <Badge variant={statusVariant(phase.status)}>
                     {enumLabel(tEnum, 'tournamentStatus', phase.status)}
                   </Badge>
