@@ -185,7 +185,6 @@ interface RoundByeNoticeProps {
   settled: boolean;
 }
 
-/** "Bye: <name>" for a round that gave one or more byes; nothing otherwise. */
 /**
  * Round row header layout. On a phone the title takes its own full-width line
  * (basis-full) so the name and Bo label stay readable and the controls wrap
@@ -196,6 +195,7 @@ export const ROUND_ROW_TITLE_CLASS = 'text-left min-w-0 basis-full sm:basis-0 sm
 export const ROUND_ROW_HEADING_CLASS = 'font-heading font-medium text-sm text-poke-text-primary break-words';
 export const ROUND_ROW_ACTIONS_CLASS = 'flex flex-wrap items-center gap-2 min-w-0 max-w-full';
 
+/** "Bye: <name>" for a round that gave one or more byes; nothing otherwise. */
 export function RoundByeNotice({ playerIds, names, settled }: RoundByeNoticeProps) {
   const t = useT(tournamentsAdminMessages);
   if (playerIds.length === 0 || !settled) return null;
