@@ -1,8 +1,8 @@
 /**
  * PageContainer: the title row wraps so a wide action group (New League, the
  * lifecycle trio) drops below the title on a phone instead of widening the
- * page. Static markup, node env. The round manager is too stateful to render
- * here, so its round header row is checked at source level.
+ * page. Static markup, node env. The match page action group is checked at
+ * source level.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -92,23 +92,6 @@ describe('PageContainer title row', () => {
     expect(wide).toContain('max-w-7xl');
     expect(narrow).toContain('max-w-4xl');
     expect(narrow).not.toContain('max-w-7xl');
-  });
-});
-
-describe('RoundManager round header', () => {
-  const source = readFileSync(
-    join(__dirname, '..', '..', 'tournament', 'RoundManager.tsx'),
-    'utf8',
-  );
-
-  it('wraps the round header row so the buttons drop under the title', () => {
-    expect(source).toContain('className="p-3 flex flex-wrap items-center justify-between gap-2"');
-  });
-
-  it('wraps the round actions group so Delete is never clipped', () => {
-    const idx = source.indexOf('className="text-left flex-1 min-w-0"');
-    expect(idx).toBeGreaterThan(-1);
-    expect(source.slice(idx)).toContain('<div className="flex flex-wrap items-center gap-2">');
   });
 });
 
