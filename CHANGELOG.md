@@ -42,6 +42,9 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - Test Players: "Remove from season" acts on the player in its row instead of always the first one.
 - Audit log: filtering by a resource id that is not a UUID answers with a clear validation error (and an inline
   message) instead of a server error.
+- The site header fits every screen width: the menu button now replaces the link row below 1280 px, the display name is shortened with an ellipsis (full name on hover), Sign Out stays on one line, and the dark-mode toggle no longer sits outside the viewport at 1280 px.
+- Page header buttons (for example New League, or Mark Completed, Archive and Delete on a phase) now wrap below the title on phones instead of widening the page, and the round rows of the round manager wrap their buttons so Delete is no longer cut off.
+- The admin Test Players page is translated: headings, buttons, table headers and status messages follow the site language.
 
 ## [0.3.0] - 2026-10-23
 

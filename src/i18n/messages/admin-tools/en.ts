@@ -1,7 +1,7 @@
 /**
  * Namespace `admin-tools` (owner T09, i18n-core §11.3): `/admin/{data,
- * meta-data,audit,achievements,wiki,rulesets,social}/**`. Kale and
- * test-players stay English and do not use it (design decision).
+ * meta-data,audit,achievements,wiki,rulesets,social}/**`. Kale stays English
+ * and does not use it (design decision).
  *
  * English values are the pre-i18n literals verbatim, except that the
  * "(s)" / "(es)" pseudo-plurals became plural objects and sentences that
