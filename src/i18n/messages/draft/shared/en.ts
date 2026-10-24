@@ -2,7 +2,7 @@
  * `draft/shared` (draft-frontend §10.1, owner DF0): texts every draft surface
  * shares — draftability reasons, progress-source chips, slow-draft countdowns.
  *
- * - `reasons` is keyed by the DC-0 `ReasonCode` values verbatim (critique S4);
+ * - `reasons` is keyed by the `ReasonCode` values verbatim;
  *   `*_PLAIN` variants render a reason whose params are missing.
  *   `src/lib/draft-ui/reasons.ts` maps the params (player id → name).
  * - League terms (token names, utility categories, "on the clock") live in

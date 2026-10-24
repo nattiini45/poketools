@@ -141,7 +141,7 @@ function groupTrackersWithTiers(
 /**
  * GET /api/drafts/[id]/state — the draft state the draft room polls.
  *
- * Queue-engine pools (draft-backend §8.1 #7): one `draft_snapshot` RPC that
+ * Queue-engine pools: one `draft_snapshot` RPC that
  * ticks (timeouts, redraft auto-publish) and answers a `DraftSnapshotDTO`, or
  * `{ unchanged, state_version, server_now }` when `?since=` equals the current
  * `state_version`. A publish in this request expires the draft reads; a

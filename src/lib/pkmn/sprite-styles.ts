@@ -39,7 +39,7 @@ export type SpriteStyle = (typeof SPRITE_STYLES)[number];
 export const SPRITE_STYLE_PREFERENCES = ['site', ...SPRITE_STYLES] as const;
 export type SpriteStylePreference = (typeof SPRITE_STYLE_PREFERENCES)[number];
 
-/** The deployment default (owner decision 2026-10-18: broadcast renders wherever possible). */
+/** The deployment default: broadcast renders wherever possible. */
 export const SITE_DEFAULT_SPRITE_STYLE: SpriteStyle = 'broadcast';
 /** Column default of `players.sprite_style` and the value for a missing or invalid cookie. */
 export const DEFAULT_SPRITE_STYLE_PREFERENCE: SpriteStylePreference = 'site';

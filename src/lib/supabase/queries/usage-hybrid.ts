@@ -23,8 +23,8 @@ function matchesNamePrefix(search: string, pokemonName: string): boolean {
 const MAX_NAME_CANDIDATES = 200;
 
 /**
- * English species names a non-English query stands for, resolved server-side from the pkmn name maps
- * (design pkmn-l10n.md §4.2, critique L1): every species of the format's generation whose English or German
+ * English species names a non-English query stands for, resolved server-side from the pkmn name maps:
+ * every species of the format's generation whose English or German
  * name (or one of their words) the query prefix-matches. Returns null when the English `ilike 'q%'` already
  * reaches every candidate, or when there are too many, so the caller keeps the English DB path; otherwise the
  * full candidate list (English matches included) for an exact `in` filter.

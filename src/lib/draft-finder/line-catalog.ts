@@ -4,7 +4,7 @@
  *
  * Narrow on purpose: no rationale, historical data, sources or ratings (SPEC:378-379). Stage names are the
  * list's canonical English names (the list is authoritative, never dex prevo/evos). `specialRules` is
- * localized for the UI locale on the server (`specialRulesTextFor`, critique S14).
+ * localized for the UI locale on the server (`specialRulesTextFor`).
  */
 import type { Locale } from '@/i18n/config';
 import type { LineId } from '@/types/draft-queue';
@@ -25,7 +25,7 @@ export interface DraftLineCatalogEntry {
   /** As stored/overridden (non-cumulative), for display; `cumulative` is the running total after league overrides. */
   thresholds: { toStage2: number; additionalToStage3: number | null; cumulative: [number, number | null] };
   flags: { cosmog: boolean; noRedraft: boolean; scatterbugCocoon: boolean };
-  /** specialRulesTextFor(entry, uiLocale) (B-LINE, critique S14); null when the line has no text. */
+  /** specialRulesTextFor(entry, uiLocale); null when the line has no text. */
   specialRules: { text: string; lang: Locale } | null;
   /** groupKey = base species id; count > 1 => show the branch marker. */
   branch: { groupKey: string; count: number };
@@ -109,7 +109,7 @@ export function buildLineCatalog(
 }
 
 /**
- * The search-index cache buster (draft-backend §3.2 rule 3, critique F6): FNV-1a 32-bit (8 hex) over, per
+ * The search-index cache buster: FNV-1a 32-bit (8 hex) over, per
  * entry in `line_number` order, `line_id|price|base|stage2|stage3|species_ids.base|species_ids.stage2|species_ids.stage3`
  * joined by `\n`. The page builds the index URL with it and the route keys its memo by it, so an edit of an
  * upcoming season's list version changes the URL.

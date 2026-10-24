@@ -84,7 +84,7 @@ describe('validateTeam', () => {
 });
 
 const teraCoreRuleset: Ruleset = {
-  id: 'rs-core', name: 'Type Triangle League', base_format: 'gen9ou', is_doubles: false,
+  id: 'rs-core', name: 'Sample Custom League', base_format: 'gen9ou', is_doubles: false,
   clauses: ['Species Clause'],
   bans: { pokemon: [], moves: [], items: [], abilities: [] },
   additions: { pokemon: [] }, custom_rules_string: '', min_shared_type_pct: 0,

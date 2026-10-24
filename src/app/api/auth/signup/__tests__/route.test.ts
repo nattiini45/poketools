@@ -238,7 +238,7 @@ describe('POST /api/auth/signup rate limit (H8)', () => {
   });
 });
 
-describe('POST /api/auth/signup - reserved superadmin address (CF-02)', () => {
+describe('POST /api/auth/signup - reserved superadmin address', () => {
   const RESERVED = 'boss@example.com';
 
   beforeEach(() => {

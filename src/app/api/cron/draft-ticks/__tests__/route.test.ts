@@ -1,5 +1,5 @@
 /**
- * GET/POST /api/cron/draft-ticks (B-CRON, draft-backend §8.1 #32, §11.2).
+ * GET/POST /api/cron/draft-ticks.
  * The RPC layer is mocked at `callDraftRpc`; `dispatchDraftNotifications` runs
  * for real against mocked reads, so the test sees the Discord calls.
  */

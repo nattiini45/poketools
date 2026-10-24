@@ -180,15 +180,15 @@ comes from the pack's messages.
 
 ## Match Lifecycle Wiring
 
-**Evolution progress waits for the confirmed result** (owner decision
-2026-10-20 on audit lead CF-07). Game submission (`recordGameResult`) records
+**Evolution progress waits for the confirmed result** (since 0.2.3).
+Game submission (`recordGameResult`) records
 the game, its `battle_stats` and its aggregate job, and credits **no** real
 kills: a result that is still `pending_confirmation`, or `disputed`, moves no
 tracker. The kills come from the game's `battle_stats` rows, which hold at
 most one row per Pokémon per player per game (request schemas, plus the
 unique index of `20261020100100_battle_stats_unique_pokemon.sql`, keyed on
-JavaScript's trim set since `20261021100200_battle_stats_pokemon_key_js_trim.sql`;
-audit lead CF-06). A replay game's rows are the parsed stats of its replay, and one
+JavaScript's trim set since `20261021100200_battle_stats_pokemon_key_js_trim.sql`).
+A replay game's rows are the parsed stats of its replay, and one
 battle can be recorded for only one game (`games.replay_hash`, see
 [Match](./match.md#replay-binding)), so the same battle cannot add real kills
 twice either.

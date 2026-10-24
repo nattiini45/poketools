@@ -43,7 +43,7 @@ export interface DraftPool {
   status: DraftPoolStatus;
   created_at: string;
   updated_at: string;
-  // ── Queue engine (migration M2, draft-backend §4.2) ──
+  // ── Queue engine ──
   // Legacy pools carry the column defaults (engine 'legacy', kind 'initial', mode 'live', phase 'setup').
   /** 'legacy' = pre-queue pools (client-ordered picks); 'queue' = persisted queue engine. */
   engine: DraftEngine;

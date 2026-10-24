@@ -140,14 +140,14 @@ beforeEach(() => {
   });
   h.getSeasonById.mockResolvedValue({
     id: 'S1',
-    name: 'Type Triangle League',
+    name: 'Sample Custom League',
     description: 'Mostly NFE; only 1 fully-evolved from ZU.',
     ruleset_id: 'BASE',
   });
   h.resolveEffectiveRuleset.mockResolvedValue({
     ruleset: {
       id: 'CUSTOM',
-      name: 'Type Triangle League',
+      name: 'Sample Custom League',
       base_format: 'gen9ru',
       clauses: [],
       bans: { pokemon: [], moves: [], items: [], abilities: [] },
@@ -328,7 +328,7 @@ describe('renderContextPack', () => {
     // The effective ruleset id is surfaced so the assistant can pass it to buildTeam.
     expect(md).toContain('Ruleset id (pass this exact id as ruleset_id to buildTeam): rs-monotype');
     // The rendering is data-driven — never pinned to a specific league name.
-    expect(md).not.toContain('Type Triangle');
+    expect(md).not.toContain('Sample Custom League');
   });
 });
 

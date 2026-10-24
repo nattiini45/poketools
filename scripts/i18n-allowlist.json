@@ -1,8 +1,8 @@
 {
   "files": [
     { "glob": "src/app/(public)/route-preview/**", "reason": "dev-only fixtures (page.tsx:114 notFound in prod)" },
-    { "glob": "src/app/(public)/draft-preview/fixtures.ts", "reason": "dev-only draft-preview fixture player names and data (critique F16)" },
-    { "glob": "src/app/(public)/draft-preview/fake-source.ts", "reason": "dev-only in-memory draft data source (critique F16)" },
+    { "glob": "src/app/(public)/draft-preview/fixtures.ts", "reason": "dev-only draft-preview fixture player names and data" },
+    { "glob": "src/app/(public)/draft-preview/fake-source.ts", "reason": "dev-only in-memory draft data source" },
     { "glob": "src/components/world/route/RouteDebugOverlay.tsx", "reason": "debug overlay" },
     { "glob": "src/app/admin/kale/**", "reason": "Kale is soft-deprecated, English-only by lead ruling" },
     { "glob": "src/app/admin/test-players/**", "reason": "dev tooling, English-only by lead ruling" },

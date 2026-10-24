@@ -1,5 +1,5 @@
 /**
- * Draft notification dispatch (B-CRON, draft-backend §6.7, §7.9, §11.3):
+ * Draft notification dispatch:
  * claims → language-neutral Discord payloads, each fired once with `void`.
  * The Supabase client is a chainable fake; no database is reached.
  */

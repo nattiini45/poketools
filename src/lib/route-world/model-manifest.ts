@@ -94,7 +94,7 @@ export interface EnvironmentEntry {
 }
 
 /**
- * Hero prop (card C-030): a Meshy text-to-3D generation. Meshy normalizes the
+ * Hero prop: a Meshy text-to-3D generation. Meshy normalizes the
  * GLB to its own box (~1.9 units on the longest axis), so placement scales
  * from the recorded `bounds`, not from 1 m = 1 unit.
  */

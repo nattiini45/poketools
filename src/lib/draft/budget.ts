@@ -1,5 +1,5 @@
 /**
- * Draft budget rules (draft-backend §7.3; SPEC Prompt 3 §3, Prompt 6 §7–8).
+ * Draft budget rules (Prompt 6 §7–8).
  * Client-safe and pure: no `@pkmn/*`, no Supabase, no `next/*`.
  *
  * Picker level: a pick is legal only if, after it, the player can still fill every

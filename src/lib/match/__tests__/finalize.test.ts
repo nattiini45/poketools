@@ -240,7 +240,7 @@ describe('finalizeMatchCompletion', () => {
     expect(creditMatchRealKills).not.toHaveBeenCalled();
   });
 
-  it('credits the real kills of every game at completion (CF-07), before the matchday hooks', async () => {
+  it('credits the real kills of every game at completion, before the matchday hooks', async () => {
     vi.mocked(getTournamentById).mockResolvedValue({
       id: 'tournament-1',
       name: 'EvoLiga',

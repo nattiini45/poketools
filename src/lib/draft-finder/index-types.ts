@@ -1,8 +1,7 @@
 /**
- * Draft search index payload (draft-backend §3.1, critique S7). Client-safe: types and one constant.
+ * Draft search index payload. Client-safe: types and one constant.
  *
- * The shape is owned by draft-backend; this file declares it verbatim. A shape change is made in the
- * backend design first. The index carries no German strings: display names come from `src/lib/pkmn/i18n`
+ * The shape is owned by the server-side index builder; this file declares it verbatim. The index carries no German strings: display names come from `src/lib/pkmn/i18n`
  * at render time, fed with the canonical English `moveNames` / `abilityNames`.
  */
 
@@ -35,7 +34,7 @@ export interface DraftSearchIndex {
   listVersionId: string;
   /** @pkmn move ids, sorted ascending; lines reference them by index. */
   moves: string[];
-  /** Canonical English move names, moveNames[i] is the name of moves[i] (critique S7). */
+  /** Canonical English move names, moveNames[i] is the name of moves[i]. */
   moveNames: string[];
   /** @pkmn ability ids, sorted ascending. */
   abilities: string[];

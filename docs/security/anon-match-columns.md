@@ -102,12 +102,12 @@ The investigation read the repo, the migrations, `node_modules/@supabase/realtim
 | Triggers, foreign-key checks and cascades | table owner | No. EXECUTE on a trigger function is checked at `CREATE TRIGGER`, not when it fires |
 | SECURITY DEFINER functions (`check_and_record_admin_export`, `rls_auto_enable`) | already revoked from anon, authenticated and PUBLIC (`advisor_fixes.sql:118-124`) | No. Neither function touches `matches` |
 | OBS overlays, broadcast pages, Vercel crons | the app's own `/api/*` routes | No |
-| Maintainer deferred-work check D-003 (anon probe of `/rest/v1/seasons`) | anon | Reads `seasons`, not `matches`. It is unaffected by A and B. Under C it gets 42501 instead of data, still prints "reachable" and exits 0, so its meaning degrades |
+| A maintainer-side anon probe of `/rest/v1/seasons` | anon | Reads `seasons`, not `matches`. It is unaffected by A and B. Under C it gets 42501 instead of data, still prints "reachable" and exits 0, so its meaning degrades |
 | Supabase dashboard, MCP, type generation | postgres | No |
 
 **For `matches`:** nothing breaks if `anon` and `authenticated` lose every privilege on it. As a side effect, an anon call to `rpc/get_total_games_in_scope`, which reads `matches` and runs as the caller, now fails with 42501. Only the service role calls it.
 
-**For every table, sequence and function in `public`:** nothing in the repo breaks either. The only side effects are the D-003 probe above and doc lines that describe the current design (section 7).
+**For every table, sequence and function in `public`:** nothing in the repo breaks either. The only side effects are the anon probe above and doc lines that describe the current design (section 7).
 
 **Unknowns** (no evidence either way in the repo):
 
@@ -273,7 +273,7 @@ The rule, for every option: any restore into a new project or a local stack, and
 | Extra allowlist to maintain | SQL column list | none | none |
 | "Public read matches" policy | required | inert | all public-read policies inert |
 | Closes `players` and `match_evolution_snapshots` | no | no | yes |
-| Breaks anything in the repo | no | no | no (D-003 probe degrades) |
+| Breaks anything in the repo | no | no | no (the anon probe degrades) |
 | Policies created or dropped | none | none | none |
 
 ## 4. Recommendation
@@ -603,7 +603,7 @@ A squash is checked by the same replay. A new baseline (a dump) that does not en
 
 ## 7. Code and docs that would change
 
-> **Applied** in the Option C variants (7.8), and worded for the applied state: AGENTS.md, `docs/security-patterns.md`, `docs/supabase.md`, `docs/match.md`, both mapper headers, the maintainers' deferred-work row D-003 and the post-restore step (re-run both migration files, D7).
+> **Applied** in the Option C variants (7.8), and worded for the applied state: AGENTS.md, `docs/security-patterns.md`, `docs/supabase.md`, `docs/match.md`, both mapper headers, the maintainer-side anon probe note and the post-restore step (re-run both migration files, D7).
 
 `<ts>` is the migration's final timestamp. The wording below is for Option B. Section 7.8 gives the Option C variants.
 
@@ -668,7 +668,7 @@ Insert after the paragraph that ends "… receives `PublicMatch`.":
 - AGENTS.md:38: replace "every table except `match_evolution_snapshots` has RLS (…)" with "all tables have RLS", because C step 1 enables it. Replace "`anon` and `authenticated` hold no privilege on `public.matches` (`…`), so the browser anon key reads no match column" with "`anon` and `authenticated` hold no privilege on any table, sequence or function in `public`, now or created later (`supabase/migrations/<ts>_close_public_api_roles.sql`), so the public SELECT policies left from the baseline have no effect and the browser anon key reads nothing from `public`. Every table has RLS on; a new table's migration enables it."
 - The AGENTS.md Never-Do bullet in 7.2 becomes: "Grant any privilege in schema `public` to `anon`, `authenticated` or `PUBLIC` (table, column, sequence, function or default privilege), or create a table without `ENABLE ROW LEVEL SECURITY`."
 - `docs/supabase.md`: the `wiki_notes` line ("public RLS reads are limited to `approved = true`") becomes "`wiki_notes` is read only through service-role API routes; its baseline policy (`approved = true`) has no effect, because `anon` holds no privilege."
-- The maintainers' deferred-work row D-003 (closed): its probe would get 42501 instead of data. Leave it closed. If it is re-run, read 42501 as "table reachable, privileges closed".
+- The maintainer-side anon probe of `seasons`: it would get 42501 instead of data. If it is re-run, read 42501 as "table reachable, privileges closed".
 - `src/lib/players/public-player.ts` header: the same paragraph as 7.7, about `public.players`.
 
 ### Not changed

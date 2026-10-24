@@ -329,7 +329,7 @@ def build_ground():
     return bay.finish()
 
 
-# --- shopfront / Poké Center corner ground module (card C-029) -------------------
+# --- shopfront / Poké Center corner ground module --------------------------------
 # Mirrors emitShopfront in HaussmannBlock.tsx: same bay, pier, stall-riser and
 # fascia dimensions so the procedural fallback and the GLB are interchangeable.
 PIER_W = 0.5
@@ -381,12 +381,12 @@ def build_shopfront():
     # PROUD of the glazing front face (2 cm clear), not behind it: the runtime
     # rebinds the pane slot to an opaque lamp/glass material, so a pane behind
     # the opaque glass sheet can never read — lit interiors were invisible and
-    # only the proud fascia strip pane showed (PB-180, card C-050). Rays from
+    # only the proud fascia strip pane showed (PB-180). Rays from
     # the plaza now first-hit the pane, the glass bordering it behind.
     glass_y = SHOP_RECESS - 0.09
     bay.box("glass", (SHOP_GLASS_W - 0.1, 0.012, glass_h - 0.1), (0, glass_y, glass_cz))
     bay.box("pane", (SHOP_GLASS_W - 0.16, 0.02, glass_h - 0.16), (0, glass_y - 0.02, glass_cz))
-    # Front-glazing pane (card C-062): a dark-glass display pane across the
+    # Front-glazing pane: a dark-glass display pane across the
     # opening's west half, PROUD of the interior lamp pane (whose C-050 lit
     # read-through keeps the east slot east of FRONT_SPLIT). The runtime glass
     # material is opaque, so this pane is the surface rays from the plaza

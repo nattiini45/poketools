@@ -1,5 +1,5 @@
 /**
- * Draft-tool Discord embeds (B-CRON, draft-backend §11.3): every event in `en`
+ * Draft-tool Discord embeds: every event in `en`
  * and `de`, the ping rule, the Discord timestamp tokens, and the delegation
  * from `buildEmbed`.
  */

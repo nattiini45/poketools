@@ -174,8 +174,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
     const entries = season?.point_buy_list_id
       ? await getListEntries(season.point_buy_list_id)
       : [];
-    // Keyed by line id, never by base: two lines can share a base
-    // (draft-backend §16, critique C17).
+    // Keyed by line id, never by base: two lines can share a base.
     const entryBySnapshot = resolveSnapshotEntries(epbSnapshots, entries);
 
     for (const snapshot of epbSnapshots) {

@@ -1,6 +1,6 @@
 /**
  * The Sakura Park theme ("sakura") — the first new route world on the
- * generalized engine (card C-093).
+ * generalized engine.
  *
  * A cherry-blossom lakeside park ring. Five stations orbit
  * the same section ids as every world manifest (pulse/roster/teams/schedule/

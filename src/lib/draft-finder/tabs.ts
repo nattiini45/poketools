@@ -1,7 +1,7 @@
 /**
  * Price tab counts of the finder (draft-frontend §4.6). Client-safe, pure.
  *
- * `PRICE_TABS` and `tabOf` live in `@/lib/draft/price-tabs` (B-LINE, critique S9); this module adds only
+ * `PRICE_TABS` and `tabOf` live in `@/lib/draft/price-tabs`; this module adds only
  * the finder's count, which reports (once, outside production) a price that falls outside every tab.
  * Counts are always derived from data; no count is hard-coded (SPEC:47).
  */

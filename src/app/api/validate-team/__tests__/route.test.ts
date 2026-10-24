@@ -266,7 +266,7 @@ describe('POST /api/validate-team', () => {
   it('resolves the effective ruleset and passes playerCore when tournament_id is provided', async () => {
     const TOURNAMENT_ID = '00000000-0000-4000-8000-000000000020';
     const SEASON_FOR_TOURNEY = '00000000-0000-4000-8000-000000000021';
-    const CUSTOM_RULESET = { ...RULESET, id: '00000000-0000-4000-8000-000000000099', name: 'Type Triangle League' };
+    const CUSTOM_RULESET = { ...RULESET, id: '00000000-0000-4000-8000-000000000099', name: 'Sample Custom League' };
 
     vi.mocked(getTournamentById).mockResolvedValue({
       id: TOURNAMENT_ID,
@@ -276,7 +276,7 @@ describe('POST /api/validate-team', () => {
     } as never);
     vi.mocked(getSeasonById).mockResolvedValue({
       id: SEASON_FOR_TOURNEY,
-      name: 'Type Triangle League',
+      name: 'Sample Custom League',
       ruleset_id: RULESET_ID,
     } as never);
     vi.mocked(resolveEffectiveRuleset).mockResolvedValue({

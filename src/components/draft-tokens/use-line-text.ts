@@ -2,7 +2,7 @@
 
 /**
  * Localized line labels and form names for the token centre, through the
- * pkmn name layer (`localizeLineLabel` is the only line label, critique S13).
+ * pkmn name layer (`localizeLineLabel` is the only line label).
  * Pokémon names follow the data locale ("keep Pokémon terms in English").
  * An unknown line renders its id.
  */

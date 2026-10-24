@@ -14,8 +14,7 @@ interface RouteParams {
 }
 
 /**
- * POST /api/drafts/[id]/picks/[pickId]/void — void a pick (draft-backend §8.1
- * #11, BR-8). The draft must be paused (or complete).
+ * POST /api/drafts/[id]/picks/[pickId]/void — void a pick. The draft must be paused (or complete).
  *
  * Body: `{ reason, requeue: true }`. A void always requeues: the player gets a
  * fresh pick directly before the current one (there is no forfeit; `requeue:

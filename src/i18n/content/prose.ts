@@ -1,9 +1,8 @@
 /**
- * German league prose from the EPB workbook (`rationale`, `historical_data`;
- * i18n-core §5.4, critique S14). It is never translated into stored English:
+ * German league prose from the EPB workbook (`rationale`, `historical_data`). It is never translated into stored English:
  * English mode shows the German text verbatim, and the caller marks its
  * element with the returned `lang` (`<p lang={lang}>{text}</p>`).
- * Special-rule text uses draft-backend's `specialRulesTextFor` instead.
+ * Special-rule text uses `specialRulesTextFor` (`src/lib/draft/special-rules-text.ts`) instead.
  */
 
 /** League prose stored in German (EPB rationale / historical data). Always German; the caller sets lang. */

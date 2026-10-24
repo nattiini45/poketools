@@ -1,4 +1,4 @@
-/** POST /api/drafts/[id]/extensions (draft-backend §8.1 #10; B-SNAP). */
+/** POST /api/drafts/[id]/extensions. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/helpers', () => ({

@@ -1,6 +1,5 @@
 /**
- * Query budget of POST /api/drafts/[id]/picks on a queue-engine pool
- * (draft-backend §8.5; B-SNAP): before the response, `draft_pools`,
+ * Query budget of POST /api/drafts/[id]/picks on a queue-engine pool: before the response, `draft_pools`,
  * [`point_buy_list_entries` in a redraft], `rpc:draft_confirm_pick`,
  * `rpc:draft_snapshot` — at most 4. The `after()` notification work is
  * excluded: `after` only collects its callbacks here.

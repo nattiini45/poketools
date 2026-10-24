@@ -1,5 +1,5 @@
 /**
- * Token overview of the EvoLiga token routes (draft-backend §8.1 #25–#27, §10.3; SPEC Prompt 7).
+ * Token overview of the EvoLiga token routes.
  * Server only.
  *
  * Three separate token kinds, never one generic "kill token":

@@ -1,9 +1,8 @@
 /**
- * Error catalog `errors/draft` (owner DC-0 after the G0-ERR seed; i18n-core
- * §4.1, draft-backend §9). Keys are the UPPER_SNAKE draft codes; the English
+ * Error catalog `errors/draft`. Keys are the UPPER_SNAKE draft codes; the English
  * text here is the only English source (`draftErrorMessage`,
  * `src/lib/draft/errors.ts`). Placeholders are the response `params`; machine
- * data that is never rendered travels in `detail` (draft-backend BR-17).
+ * data that is never rendered travels in `detail`.
  *
  * The first block is G0-ERR's seed (codes the legacy engine
  * `src/lib/draft/engine.ts` returns; B-HOT's temporary `BRANCH_PAIR_UNSUPPORTED`

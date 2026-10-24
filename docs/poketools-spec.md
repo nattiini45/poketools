@@ -198,7 +198,7 @@ Games are unique per `(match_id, game_number)`: a concurrent submission of the s
 | parsed | Checkbox | whether stats have been extracted |
 | evolution_applied_at | Timestamp | nullable; EPB only: when the game's real kills were credited to the evolution trackers, which happens once, when its match reaches `completed` (finalize step `epb_real_kills`, `epb_credit_game_kills`), never at submission. NULL while not credited. Games that existed on 2026-10-20 were credited at submission and carry the backfill time. Written only by `epb_credit_game_kills` / `epb_uncredit_game_kills` / `epb_sync_game_kill_credit`, in the same transaction as the tracker writes. Migration `20261020100200_games_evolution_credit.sql`; rules in `docs/evolution-point-buy.md` ("Match Lifecycle Wiring") |
 
-A game recorded from a replay takes its winner and its battle stats from that same hashed replay, never from a client-supplied value (owner decision 2026-10-20, audit lead F1). A battle already bound to any game is refused with 409 `replay_already_recorded`; see `docs/match.md` ("Replay Binding").
+A game recorded from a replay takes its winner and its battle stats from that same hashed replay, never from a client-supplied value. A battle already bound to any game is refused with 409 `replay_already_recorded`; see `docs/match.md` ("Replay Binding").
 
 ### 4.7 Rulesets
 | Field | Type | Notes |
@@ -251,7 +251,7 @@ A game recorded from a replay takes its winner and its battle stats from that sa
 | turns_active | Number | |
 | match_won | Checkbox | did player win this game |
 
-One row per Pokémon per player per game: unique index `battle_stats_game_player_pokemon_key` on `(game_id, player_id, lower(regexp_replace(pokemon_name, '^[set]+|[set]+$', '', 'g')))` with `[set]` exactly JavaScript's trim set (migration `20261021100200_battle_stats_pokemon_key_js_trim.sql`, which replaced the `lower(btrim(pokemon_name))` key of `20261020100100_battle_stats_unique_pokemon.sql`; audit lead CF-06), the database twin of the request schemas' rule; a violation is 409 `battle_stats_duplicate_pokemon`.
+One row per Pokémon per player per game: unique index `battle_stats_game_player_pokemon_key` on `(game_id, player_id, lower(regexp_replace(pokemon_name, '^[set]+|[set]+$', '', 'g')))` with `[set]` exactly JavaScript's trim set (migration `20261021100200_battle_stats_pokemon_key_js_trim.sql`, which replaced the `lower(btrim(pokemon_name))` key of `20261020100100_battle_stats_unique_pokemon.sql`), the database twin of the request schemas' rule; a violation is 409 `battle_stats_duplicate_pokemon`.
 
 ### 4.10 Aggregates (pre-computed, written on every replay parse)
 | Field | Type | Notes |
@@ -958,7 +958,7 @@ as before: no phase group mirrors anything, no cross-group week exists and every
   table holds every trainer and ranks by points per match while match counts differ, else by points. Per-group advancement
   (`advancement_rule.per_group`) uses the same group tables. These tables, the placement week and the per-group Redraft order rank
   without kill difference (no battle stats are read for them, like the season table); the hub's Group stage tab ranks round-robin
-  phase groups with kill difference, so on a points tie the two can differ (owner decision pending). The league hub's standings tab and the world payload
+  phase groups with kill difference, so on a points tie the two can differ (not yet unified). The league hub's standings tab and the world payload
   (`WorldRouteData.groupStandings`, `standingsRanking`; absent without groups) show the group tables first and the combined table below.
 - **Hinrunde per group** (for the per-group redraft order): `getGroupFirstHalfTables(seasonId)` (`src/lib/tournament/group-first-half.ts`)
   returns each league group's table over the primary phase's weeks `1..floor(weeks / 2)` from the phase's plan, not from the rounds written
@@ -1052,7 +1052,7 @@ pending_confirmation  (Bo threshold reached, winner determined)
            completed  (admin manual override)
 ```
 
-**Evolution progress follows the confirmed result** (EPB seasons; owner decision 2026-10-20, audit lead CF-07). A game's real kills reach the evolution trackers only when its match enters `completed` (opponent confirm, auto-confirm timeout, admin dispute resolution), in the finalize step `epb_real_kills` that runs before the EPB matchday hooks; `pending_confirmation` and `disputed` results move no tracker. Each game is credited exactly once (`games.evolution_applied_at`, §4.6), so the finalize heal and a re-confirm never count it twice. A game edit that moves a completed match back debits its credited kills (the next completion credits the edited stats); a game delete, match reset or season reconcile rebuilds the season from its completed matches and re-syncs the markers. Aggregates are unaffected: they are still counted at submission.
+**Evolution progress follows the confirmed result** (EPB seasons). A game's real kills reach the evolution trackers only when its match enters `completed` (opponent confirm, auto-confirm timeout, admin dispute resolution), in the finalize step `epb_real_kills` that runs before the EPB matchday hooks; `pending_confirmation` and `disputed` results move no tracker. Each game is credited exactly once (`games.evolution_applied_at`, §4.6), so the finalize heal and a re-confirm never count it twice. A game edit that moves a completed match back debits its credited kills (the next completion credits the edited stats); a game delete, match reset or season reconcile rebuilds the season from its completed matches and re-syncs the markers. Aggregates are unaffected: they are still counted at submission.
 
 ---
 

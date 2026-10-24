@@ -14,7 +14,7 @@ interface RouteParams {
 
 /**
  * PATCH /api/drafts/[id]/redraft — move the submission deadline, change the
- * max drops or the redraft order before publish (draft-backend §8.1 #21). The
+ * max drops or the redraft order before publish. The
  * submission phase has no clock to pause; moving the deadline is its "pause"
  * (BR-16). There is no `open` field (CRIT B6).
  *

@@ -19,7 +19,7 @@ import {
 } from '../index-rows.server';
 
 /**
- * The wiki's heavy `@pkmn/data` builds are memoized locale-free (i18n-core §3, critique C14): the same
+ * The wiki's heavy `@pkmn/data` builds are memoized locale-free: the same
  * instance on every call, and nothing German in any value (translation happens after the lookup).
  */
 

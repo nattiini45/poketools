@@ -11,7 +11,7 @@ interface RouteParams {
 
 /**
  * POST /api/drafts/[id]/extensions — use the +120 s or +60 s extension on the
- * viewer's own active pick (draft-backend §8.1 #10; live drafts only).
+ * viewer's own active pick (live drafts only).
  *
  * Body: `{ kind: 'plus120' | 'plus60', slot_id }`. The RPC re-checks turn,
  * pause, slot and the once-per-draft rule under the pool lock. No public read

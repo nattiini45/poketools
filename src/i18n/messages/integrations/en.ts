@@ -4,7 +4,7 @@
  * integrations (`components/social/SocialIntegrationManager.tsx`).
  *
  * `events` holds one label per `DiscordEventType`, including the four
- * draft-tool events (critique B12). The embed text itself lives in
+ * draft-tool events. The embed text itself lives in
  * `outbound/discord`.
  */
 export default {

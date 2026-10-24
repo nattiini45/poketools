@@ -11,7 +11,7 @@
  *  - `--audit on`  per station: the frame's draw calls (renderer.info.render
  *                  with the debug TelemetrySampler's autoReset off, so shadow
  *                  and post passes are included) and renderer.info.programs,
- *                  into the sidecar and one row of gauntlet/fidelity/DRAW-LEDGER.md.
+ *                  into the sidecar and one row of the draw ledger.
  *  - the docked panel's computed font-size and in-viewport box;
  *  - pass-through readers for `__routeWorldBeats()` / `__routeWorldAttacks()`
  *    (absent = `unmeasured`, never a pass);

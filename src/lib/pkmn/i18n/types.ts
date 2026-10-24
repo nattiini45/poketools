@@ -1,7 +1,7 @@
 /**
  * Types of the Pokémon data localization layer (design pkmn-l10n.md §3.2). Type-only: no runtime code.
  *
- * The data locale is CORE's `Locale` (critique S1): this layer declares no cookie, provider or toggle; it reads
+ * The data locale is CORE's `Locale`: this layer declares no cookie, provider or toggle; it reads
  * the locale through `useDataLocale()` (`@/i18n/client`) or `getDataLocale()` / `getRequestDataLocale()`
  * (`@/i18n/server`).
  */

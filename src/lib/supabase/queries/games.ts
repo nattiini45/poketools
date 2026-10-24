@@ -97,7 +97,7 @@ export const GAMES_REPLAY_HASH_KEY = 'games_replay_hash_key';
 
 /**
  * The battle behind this replay is already bound to a recorded game, in this
- * match or any other (owner decision 2026-10-20, audit lead F1). Thrown by the
+ * match or any other. Thrown by the
  * pipeline's pre-check and, race-safe, by `createGame` when the unique index
  * refuses the insert; nothing is written. HTTP 409, code
  * `replay_already_recorded`. The pipeline deletes a game again when its stats

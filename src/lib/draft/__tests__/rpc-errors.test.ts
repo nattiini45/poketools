@@ -1,5 +1,5 @@
 /**
- * `toDraftRuleError` / `callDraftRpc` (draft-backend §7.8, §14.1; B-SNAP). No DB:
+ * `toDraftRuleError` / `callDraftRpc`. No DB:
  * the Supabase client is a stub whose `rpc` answers what each test sets.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';

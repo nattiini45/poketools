@@ -1,5 +1,5 @@
 /**
- * Print the EPB list reconciliation report (draft-backend §2.5) for a workbook.
+ * Print the EPB list reconciliation report for a workbook.
  * Parses the xlsx files only: no database access, no network.
  *
  * Usage:

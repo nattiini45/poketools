@@ -3,8 +3,7 @@
  * Owns real-kill credit and stage resolution for the evolution_point_buy
  * format.
  *
- * Real kills wait for the confirmed result (owner decision 2026-10-20 on audit
- * lead CF-07): match finalize (`src/lib/match/finalize.ts`, step
+ * Real kills wait for the confirmed result: match finalize (`src/lib/match/finalize.ts`, step
  * `epb_real_kills`) credits each game of a COMPLETED match exactly once,
  * marked per game by `games.evolution_applied_at` with what was credited in
  * `games.evolution_credits` (`creditMatchRealKills`). Game submission credits

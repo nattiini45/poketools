@@ -11,7 +11,7 @@ interface RouteParams {
 }
 
 /**
- * Favourite lines of the signed-in player (draft-backend §8.1 #16/#17).
+ * Favourite lines of the signed-in player.
  * Favourites belong to the player, not to the pool (one list across the
  * initial draft and the redraft); the route only ever reads or writes the
  * viewer's own list, so it needs no pool read.

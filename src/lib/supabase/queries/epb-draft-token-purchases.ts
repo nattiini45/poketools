@@ -1,5 +1,5 @@
 /**
- * Draft Kill Token purchases (EvoLiga Prompt 6/7; draft-backend BR-4, §6.9).
+ * Draft Kill Token purchases.
  * One token per request through `epb_purchase_draft_token` (M7), which
  * re-checks every rule under the season lock; the ledger
  * `epb_draft_token_purchases` is append-only and its points never come back.

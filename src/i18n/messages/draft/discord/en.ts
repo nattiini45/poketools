@@ -1,5 +1,5 @@
 /**
- * Namespace `draft/discord` (owner B-CRON, draft-backend §11.3): the text of the
+ * Namespace `draft/discord`: the text of the
  * draft-tool Discord embeds (turn start, turn reminders, admin alerts, redraft
  * reveal, and the line-aware pick announcement). A live draft's turn start
  * names the pick time (`pickTime`), a slow draft's the deadline (`deadline`). Viewerless: `buildDraftEmbed`

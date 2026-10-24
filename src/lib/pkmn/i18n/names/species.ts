@@ -47,7 +47,7 @@ export function localizeSpecies(name: string, l: DataLocale): string {
 }
 
 /**
- * The only display line label (critique S13). `finalStage` null (or empty) → the localized base alone;
+ * The only display line label. `finalStage` null (or empty) → the localized base alone;
  * else "<base> → <finalStage>", the same shape as `formatLineLabel` (`src/lib/draft/line-identity.ts`).
  * The draft UIs choose which stage to pass.
  */

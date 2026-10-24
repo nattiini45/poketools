@@ -1,6 +1,6 @@
 import 'server-only';
 /**
- * Locale-neutral wiki data, memoized per server instance (i18n-core §3, critique C14).
+ * Locale-neutral wiki data, memoized per server instance.
  *
  * The wiki pages render per request (the root layout reads the language cookie), so the heavy `@pkmn/data`
  * walks (every species/move/item/ability across gens 1–9, and the per-entry detail assembly) are built once

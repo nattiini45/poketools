@@ -81,7 +81,7 @@ export function pkmnSearchKeys(kind: PkmnKind, englishName: string): SearchKeys 
 
 /**
  * The folded name variants, one string per language form, deduped: fold(en), fold(de), transliterateGerman(de).
- * For callers with their own matching rules (the draft finder's word-prefix search, critique S7).
+ * For callers with their own matching rules (the draft finder's word-prefix search).
  */
 export function pkmnSearchVariants(kind: PkmnKind, englishName: string): readonly string[] {
   return searchVariantsOf([englishName, GERMAN[kind](englishName)]);

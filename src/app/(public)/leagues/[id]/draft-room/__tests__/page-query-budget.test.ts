@@ -1,7 +1,7 @@
 /**
  * Draft-room query budget (draft-frontend §3.1 step 7): a cold render makes at
  * most 7 Supabase calls, and the snapshot seed runs the `draft_snapshot` RPC
- * without a tick (critique B9). The 7th is the live player read of a
+ * without a tick. The 7th is the live player read of a
  * signed-in viewer (`getLiveAccess`, W3: the pool-admin flag and the admin
  * links must not come from the up-to-5-minutes-stale session copy); a
  * spectator still stays within 6. The admin sheet adds no server read.

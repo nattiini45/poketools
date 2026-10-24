@@ -90,7 +90,7 @@ export const contentLanguageSchema = z.enum(LOCALES);
 export const webhookLanguageSchema = z.enum(['league', ...LOCALES] as const);
 
 /**
- * Draft-tool Discord events (draft-backend §11.3): slow-draft turn pings, the
+ * Draft-tool Discord events: slow-draft turn pings, the
  * blocked-slot admin alert, and the redraft publish notice. Spread into
  * `discordEventTypeSchema` below; each name is also a member of the
  * `DiscordEventType` union (src/types/discord.ts), which the webhook and social
@@ -548,8 +548,7 @@ export const replayPreviewSchema = z.object({
  * Admin replay-import: record a game from a replay whose sides an organizer
  * assigns by hand (the username gate is skipped). `match_id` comes from the
  * route param. There is no winner or stats field: the route fetches the replay
- * again and records the winner and stats parsed from it (audit lead F1, owner
- * decision 2026-10-20). `side_player_ids` are the players of replay side p1
+ * again and records the winner and stats parsed from it. `side_player_ids` are the players of replay side p1
  * and p2; `replay_hash` is the preview's hash, so a replay that changed since
  * the organizer reviewed it is refused (409 `replay_changed_since_preview`).
  */
@@ -917,7 +916,7 @@ export const validateTeamSchema = z.object({
   // EFFECTIVE ruleset for that tournament (custom league ruleset takes
   // precedence over the base tier ruleset referenced by tournament.ruleset_id).
   // This prevents the base 'Gen 9 RU' ruleset from being used for tournaments
-  // such as 'Type Triangle League' that have a dedicated custom ruleset.
+  // of a league that has a dedicated custom ruleset.
   tournament_id: uuid.optional(),
 });
 

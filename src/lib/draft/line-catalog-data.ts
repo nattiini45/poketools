@@ -1,5 +1,5 @@
 /**
- * Line catalog data for the draft (draft-backend §7.9, B-LINE).
+ * Line catalog data for the draft.
  *
  * `effectiveThresholds` gives the cumulative KO thresholds the draft RPCs and
  * the stage resolution use, with the league overrides applied (format pack `epb.lineOverrides`).

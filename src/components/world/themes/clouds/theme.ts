@@ -1,5 +1,5 @@
 /**
- * The Skyisle theme ("clouds") — the sky-island route world (card C-095),
+ * The Skyisle theme ("clouds") — the sky-island route world,
  * the third new world on the generalized engine.
  *
  * A sky-island chain adrift above a shader-driven cloud sea:

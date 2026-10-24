@@ -24,7 +24,7 @@ async function optionalJsonBody(request: Request): Promise<unknown> {
 }
 
 /**
- * POST /api/drafts/[id]/start — start an initial queue-engine draft (draft-backend §8.1 #4).
+ * POST /api/drafts/[id]/start — start an initial queue-engine draft.
  *
  * Body: `{}`. `draft_start` generates the snake queue, activates the first
  * slot and logs `draft_started` in `draft_action_log` (actor + new state).

@@ -1,6 +1,6 @@
 /**
- * The Mountain Pass theme ("mountain") — the alpine valley route world
- * (card C-094), the second new world on the generalized engine.
+ * The Mountain Pass theme ("mountain") — the alpine valley route world,
+ * the second new world on the generalized engine.
  *
  * An alpine valley: five stations orbit the same section ids
  * as every world manifest (pulse/roster/teams/schedule/rules — the capture

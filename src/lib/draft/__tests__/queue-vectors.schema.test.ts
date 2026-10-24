@@ -1,6 +1,6 @@
 /**
- * Shape of the queue vectors (draft-backend §5.7, package B-RPC). No DB: the
- * queue algorithm lives only in SQL (M5, critique B16); these vectors are
+ * Shape of the queue vectors. No DB: the
+ * queue algorithm lives only in SQL; these vectors are
  * replayed against a local stack by the maintainer-only draft RPC parity suite
  * (private companion overlay, `DRAFT_RPC_LIVE_DB=1`). This test keeps the
  * data file honest (zod shape, unique ids, Q1–Q12 present, labels that parse)

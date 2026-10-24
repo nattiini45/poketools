@@ -555,7 +555,7 @@ describe('loadSessionPlayer', () => {
   });
 });
 
-// ── signIn callback: Discord link intent (CF-01 / F4) ───────────────
+// ── signIn callback: Discord link intent ────────────────────────────
 
 describe('signIn callback link intent', () => {
   type SignInParams = Parameters<NonNullable<Callbacks['signIn']>>[0];

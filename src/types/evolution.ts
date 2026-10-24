@@ -83,7 +83,7 @@ export interface EvolutionTracker {
   evolution_points_awarded: number;
   /** Fixed final evolution for branched lines (e.g. Kirlia → Gardevoir/Gallade); null when unbranched */
   locked_stage3_pokemon: string | null;
-  // ── Draft line identity and redraft transfer (migrations M1/M3, draft-backend §12.2) ──
+  // ── Draft line identity and redraft transfer ──
   /** Draft line id (`point_buy_list_entries.line_id`); one tracker per line per season. Null for legacy evolution-tier leagues. */
   line_id: string | null;
   /** Spec `transferred_evo_progress`: real kills transferred from a redraft slot. Counts toward `total_kos` (evolution), never shown as kills. */

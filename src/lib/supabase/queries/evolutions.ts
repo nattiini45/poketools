@@ -529,7 +529,7 @@ function toGameKillCreditOutcome(raw: string): GameKillCreditOutcome {
  * season's kill-credit fence (`epb_kill_credit_epochs`, bumped on every write)
  * and the game row lock (`epb_credit_game_kills`,
  * supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql). Only
- * for a completed match (owner decision on audit lead CF-07): progress waits
+ * for a completed match: progress waits
  * for the confirmed result.
  *   - 'applied': credited now (each entry through `epb_apply_progress`, logged
  *     as 'real_kill' on the match's matchday).

@@ -351,7 +351,7 @@ describe('GET /api/drafts/[id]/state — query budget (P = 12, EPB)', () => {
   });
 });
 
-// ─── Queue-engine pools (draft-backend §8.5; B-SNAP) ───────────────
+// ─── Queue-engine pools ────────────────────────────────────────────
 
 /** A raw `draft_snapshot` answer whose participant row (wrongly) carries private player columns. */
 function rawQueueSnapshot(publishedNow = false): Record<string, unknown> {

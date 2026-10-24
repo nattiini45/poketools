@@ -73,7 +73,7 @@ export function prefetchFacadeKit(manifest: WorldManifest): void {
  * true. The kit is all-or-nothing by design: a manifest that predates
  * `bay-shopfront` (or any module) makes `kitBayUrls` return `null`, and the
  * blocks fall back to the procedural writer — which carries its own authored
- * shopfront — instead of half-rendering a street (card C-029).
+ * shopfront — instead of half-rendering a street.
  */
 export function useFacadeKit(): KitModels {
   const manifest = useWorldManifest();

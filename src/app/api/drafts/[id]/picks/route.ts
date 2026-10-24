@@ -62,7 +62,7 @@ interface PickOutcome {
   expireSeasonId: string | null;
 }
 
-/** Success body of a queue-engine pick (draft-backend §8.1 #9). */
+/** Success body of a queue-engine pick. */
 interface QueuePickResponse {
   pick: { pick_id: string; line_id: LineId; pick_number: number; player_id: string; price: number };
   replay: boolean;
@@ -187,7 +187,7 @@ async function notifyQueuePick(
 }
 
 /**
- * Queue-engine pick (draft-backend §8.3): one `draft_confirm_pick` RPC that
+ * Queue-engine pick: one `draft_confirm_pick` RPC that
  * re-validates everything under the season lock, then the fresh snapshot. A
  * rule error answers with its code and the current snapshot; a replayed
  * `client_request_id` answers 200 with the first result.
@@ -612,7 +612,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
 /**
  * POST /api/drafts/[id]/picks — make a draft pick
  *
- * Queue-engine pools (draft-backend §8.1 #9): `{ slot_id, line_id,
+ * Queue-engine pools: `{ slot_id, line_id,
  * client_request_id, redraft_slot_id?, on_behalf_of?, override_reason? }`;
  * picking for another player needs the draft admin guard and a reason.
  *

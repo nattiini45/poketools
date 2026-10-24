@@ -26,14 +26,22 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   - The avatar randomiser draws from Web Crypto instead of `Math.random()`.
   - Maintainer scripts create temp files with `mkdtemp` and avoid check-then-use file races.
 
+### Removed
+
+- **Private-project references are scrubbed from the public tree.** Comments, docs and test fixtures no longer cite
+  internal audit or review ids, private design-spec sections, the maintainer's deferred-work register or capture-board
+  cards, and fixtures use neutral league names. The raw 2026-10-20 audit batch is no longer published; the
+  fixes it led to are listed under 0.2.2 and 0.2.3. A docs-and-source guard in `scripts/__tests__/public-docs.test.mjs`
+  keeps the id patterns out. No runtime change.
+
 ## [0.2.3] - 2026-10-20
 
-Owner decisions on the 2026-10-20 audit: replays are bound to one game by hash, duplicate stats rows are refused by the database, and EvoLiga evolution progress waits for the confirmed result. **Three migrations; see each entry for the deploy order.**
+Follow-ups to the 2026-10-20 security audit: replays are bound to one game by hash, duplicate stats rows are refused by the database, and EvoLiga evolution progress waits for the confirmed result. **Three migrations; see each entry for the deploy order.**
 
 ### Security
 
-- **One Showdown battle can be recorded for one game only, and a replay result comes from that replay.** Owner
-  decision on audit lead F1: every game recorded from a replay stores the SHA-256 of the replay's canonical battle log
+- **One Showdown battle can be recorded for one game only, and a replay result comes from that replay.** Every
+  game recorded from a replay stores the SHA-256 of the replay's canonical battle log
   in the new `games.replay_hash` (unique where set) in the same insert, and its winner and stats are parsed from that
   same fetched log, never taken from the client. Submitting a battle already recorded for any game, in any match and
   through any URL form, answers 409 `replay_already_recorded` (race-safe through the unique index). The admin replay
@@ -41,12 +49,12 @@ Owner decisions on the 2026-10-20 audit: replays are bound to one game by hash, 
   changed); its form shows the replay's winner and stats read-only, and corrections go through the game editor.
   **Upgrade:** apply `supabase/migrations/20261020100000_games_replay_hash.sql` before deploying, then run
   `npx tsx --env-file=.env.local scripts/backfill-replay-hashes.ts` (dry run; add `--write` to fill older games).
-- **`battle_stats` holds one row per Pokémon per player per game** (audit lead CF-06): a unique index on
+- **`battle_stats` holds one row per Pokémon per player per game**: a unique index on
   `(game_id, player_id, lower(btrim(pokemon_name)))` (`20261020100100_battle_stats_unique_pokemon.sql`) backs the
   request schemas, a violation answers 409 `battle_stats_duplicate_pokemon`, and the admin game edit refuses a repeated
   Pokémon with 400 `validation_failed` before it replaces any row. Both replay sides on one player is now 400
   `replay_sides_not_distinct`.
-- **EvoLiga evolution progress waits for the confirmed result** (owner decision on audit lead CF-07). A game's real
+- **EvoLiga evolution progress waits for the confirmed result.** A game's real
   kills are no longer credited at submission: the new finalize step `epb_real_kills` credits them when the match
   reaches `completed` (opponent confirm, auto-confirm, admin dispute resolution), so a pending or disputed result moves
   no tracker. Each game is credited exactly once through the new `games.evolution_applied_at` marker
@@ -60,7 +68,7 @@ Owner decisions on the 2026-10-20 audit: replays are bound to one game by hash, 
   `supabase/migrations/20261020100200_games_evolution_credit.sql`, deploy right after, then mark the games submitted
   between the two (`UPDATE games SET evolution_applied_at = created_at WHERE evolution_applied_at IS NULL AND
   created_at < '<deploy time>'`, see the migration header).
-- **The reserved superadmin address can no longer be signed up** (audit lead CF-02): `POST /api/auth/signup` never
+- **The reserved superadmin address can no longer be signed up**: `POST /api/auth/signup` never
   creates an account for `SUPERADMIN_EMAIL` and answers with the same generic success as any signup, after the same
   rate limit and delay. The operator creates that email login by linking it from the `SUPERADMIN_DISCORD_ID` account.
 - **EvoLiga kill credits are recorded per game and fenced per season** (review of this release): `games.evolution_credits`
@@ -87,9 +95,9 @@ Security fixes from the 2026-10-20 dual-harness audit.
 
 ### Security
 
-- **Audit batch 2026-10-20 dispositioned.** All 24 leads in `docs/security/audit-2026-10-20/` now carry a disposition;
-  the fixes below close every valid one. Owner decisions are listed in that README (replay-to-match binding, the
-  reserved superadmin address in public signup, an optional `battle_stats` unique index).
+- **Audit batch 2026-10-20 dispositioned.** All 24 leads now carry a disposition; the fixes below close every valid
+  one. Three needed a design decision (replay-to-match binding, the reserved superadmin address in public signup, an
+  optional `battle_stats` unique index); 0.2.3 settles them.
 - **Discord linking is bound to the signed-in session.** A pending link intent links only when the live session
   belongs to the player that started it, and the cookie is `__Host-` prefixed in production.
 - **Linking `SUPERADMIN_EMAIL` as an email login** is refused unless the caller is the `SUPERADMIN_DISCORD_ID` account.

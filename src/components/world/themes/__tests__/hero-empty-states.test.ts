@@ -110,7 +110,7 @@ function row(name: string, points: number, rankChange: number | null): BoardTabl
 
 function content(table: BoardTableRow[], participants = 12): BoardContent {
   return {
-    league: 'Type Triangle League',
+    league: 'Sample Custom League',
     stage: 'Second Half',
     round: 2,
     participants,

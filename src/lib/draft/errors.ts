@@ -1,5 +1,5 @@
 /**
- * Draft error contract (draft-backend §7.8, §9; critique S5). Client-safe: no
+ * Draft error contract. Client-safe: no
  * `@pkmn/*`, no Supabase, no `next/*`, no `server-only`.
  *
  * - Codes are the keys of the `errors/draft` catalog; its `en` text is the one

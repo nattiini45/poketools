@@ -1,5 +1,5 @@
 /**
- * Per-line special-rule prose in two languages (draft-backend §3.3, critique S14).
+ * Per-line special-rule prose in two languages.
  * Client-safe, pure, no crypto.
  *
  * German is the workbook prose (`special_rules_text`, stored verbatim). English is

@@ -18,7 +18,7 @@ interface ComebackOpenResult {
 
 /**
  * POST /api/seasons/[id]/comeback-tokens/open — season admins open (or close) Comeback Token
- * spending for a league without a completed redraft (draft-backend §8.1 #28, §6.9; tokens are earned in the first half only).
+ * spending for a league without a completed redraft (tokens are earned in the first half only).
  *
  * Body `{ open: boolean }`. `epb_set_comeback_spend_open` writes `format_rules.comeback_spend_open`
  * and logs the change; a league without format rules answers `INVALID_CONFIG {field}`.

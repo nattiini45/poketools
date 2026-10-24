@@ -1,5 +1,5 @@
 /**
- * Answers of the retired token and redraft (free-swap / trade) endpoints (draft-backend §8.1 #29–#31). Server only.
+ * Answers of the retired token and redraft (free-swap / trade) endpoints. Server only.
  * The body is the draft error contract: the English catalog text plus its `errors/draft` code.
  */
 import 'server-only';

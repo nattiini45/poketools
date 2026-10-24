@@ -11,7 +11,7 @@ const row = (
 
 const leagues: TeamsUsedLeague[] = [
   { id: 'old-league', name: 'Example Gym Leader League', status: 'completed', created_at: '2026-01-01T00:00:00Z' },
-  { id: 'new-league', name: 'Type Triangle League', status: 'completed', created_at: '2026-06-01T00:00:00Z' },
+  { id: 'new-league', name: 'Sample Custom League', status: 'completed', created_at: '2026-06-01T00:00:00Z' },
 ];
 
 const tournaments: TeamsUsedTournament[] = [
@@ -31,7 +31,7 @@ describe('buildTeamsUsed', () => {
       tournaments,
     );
     expect(teams.map((t) => [t.kind, t.id, t.name])).toEqual([
-      ['league', 'new-league', 'Type Triangle League'],
+      ['league', 'new-league', 'Sample Custom League'],
       ['tournament', 'cup', 'Winter Cup'],
       ['league', 'old-league', 'Example Gym Leader League'],
     ]);

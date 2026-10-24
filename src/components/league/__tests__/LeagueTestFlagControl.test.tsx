@@ -19,7 +19,7 @@ import LeagueTestFlagControl, {
   saveTestFlag,
 } from '../LeagueTestFlagControl';
 
-// Test leagues stay out of ratings (owner decision 2026-10-19): the copy says so, in both languages.
+// Test leagues stay out of ratings: the copy says so, in both languages.
 const RATINGS_EXCLUSION_CLAIM =
   /(out of|excluded from|kept out of)( the)? ratings|do not count toward player ratings|(nicht|ohne) (in )?(den )?(Wertungen|Ratings)|zählen nicht für die Spieler-Ratings/i;
 // The superseded copy that said their games still move ratings.

@@ -58,22 +58,22 @@ const EXEMPT: Record<string, string> = {
     'appends a draft replay event for the replay viewer; no cached public read includes replay events',
   'seasons/[id]/redraft/route.ts#POST':
     'retired endpoint answering 410 (free swaps and trades both retired); writes nothing',
-  // B-SNAP (draft-backend §8.4)
+  // pick-screen routes
   'drafts/[id]/extensions/route.ts#POST':
     'extends the active pick deadline; deadlines are read only from the uncached state poll',
   'drafts/[id]/favorites/route.ts#PUT':
     'stores a per-viewer favourite line; no cached public read includes favourites',
-  // B-ADM (draft-backend §8.4)
+  // admin routes
   'drafts/[id]/pause/route.ts#POST':
     'pauses or resumes the pick clock; the pause state is read only from the uncached state poll',
   'drafts/[id]/participants/[playerId]/penalty/route.ts#POST':
     'changes a slow-draft penalty stage; only the uncached state poll shows it',
-  // B-RED (draft-backend §8.4)
+  // redraft routes
   'drafts/[id]/redraft/submission/route.ts#PUT':
     'stores a SECRET redraft submission; nothing public changes until publish, and secrecy forbids touching public reads',
   'drafts/[id]/redraft/route.ts#PATCH':
     'edits the redraft deadline/order before publish; read only from the uncached state poll',
-  // B-TOK (draft-backend §8.4)
+  // token routes
   'seasons/[id]/draft-tokens/route.ts#POST': 'retired endpoint answering 410; writes nothing',
   'seasons/[id]/kill-tokens/route.ts#POST': 'retired endpoint answering 410; writes nothing',
 };
@@ -115,16 +115,16 @@ const REQUIRED = [
   'drafts/[id]/picks/route.ts#POST',
   'drafts/[id]/undo/route.ts#POST',
   'drafts/[id]/route.ts#PATCH',
-  // B-ADM (draft-backend §8.4)
+  // admin routes
   'drafts/[id]/config/route.ts#PATCH',
   'drafts/[id]/start/route.ts#POST',
   'drafts/[id]/end/route.ts#POST',
   'drafts/[id]/picks/[pickId]/void/route.ts#POST',
   'drafts/[id]/picks/[pickId]/correct/route.ts#POST',
-  // B-RED (draft-backend §8.4)
+  // redraft routes
   'drafts/[id]/redraft/publish/route.ts#POST',
   'drafts/[id]/redraft/slots/[redraftSlotId]/restore/route.ts#POST',
-  // B-TOK (draft-backend §8.4)
+  // token routes
   'seasons/[id]/draft-kill-tokens/route.ts#POST',
   'seasons/[id]/comeback-tokens/spend/route.ts#POST',
   'seasons/[id]/comeback-tokens/open/route.ts#POST',

@@ -1,6 +1,5 @@
 /**
- * `getDraftSnapshot` / `toDraftSnapshotDTO` / `toMyTurnDTO` (draft-backend §7.9,
- * §10.1, §14.1; B-SNAP). No DB: `callDraftRpc` is mocked.
+ * `getDraftSnapshot` / `toDraftSnapshotDTO` / `toMyTurnDTO`. No DB: `callDraftRpc` is mocked.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

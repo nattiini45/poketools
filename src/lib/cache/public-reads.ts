@@ -413,7 +413,7 @@ function leagueSchedule(seasonId: string, preload: LeagueSchedulePreload) {
   );
 }
 
-// `-v2`: entries now carry `line_id` and the league overrides (draft-backend §2.2); the new name keeps
+// `-v2`: entries now carry `line_id` and the league overrides; the new name keeps
 // Data Cache entries written before that deploy (no line id, no override) from ever being served again.
 const pointBuyEntries = cache((versionId: string) =>
   cachedRead(

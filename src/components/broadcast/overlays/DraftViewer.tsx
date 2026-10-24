@@ -25,7 +25,7 @@ import { useClock } from '@/components/draft-tool/hooks/use-clock';
  * English stage names of one list line, `[base, finalStage]`: the final stage is
  * stage 3, or stage 2 on a two-stage line (`stage3 ?? stage2`, the same stage the
  * line id names). Built on the server from the bound point-buy list; the overlay
- * localizes it with `localizeLineLabel` (critique S13). A null final stage (a
+ * localizes it with `localizeLineLabel`. A null final stage (a
  * single-stage line) labels the line by its base alone.
  */
 export type OverlayLineRef = readonly [base: string, finalStage: string | null];

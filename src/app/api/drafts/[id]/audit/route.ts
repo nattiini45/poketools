@@ -12,8 +12,7 @@ interface RouteParams {
 
 /**
  * GET /api/drafts/[id]/audit?action=&player=&cursor=&limit= — the pool's audit
- * trail for pool admins, newest first, including non-public rows
- * (draft-backend §8.1 #15, §10.4).
+ * trail for pool admins, newest first, including non-public rows.
  *
  * `action` is repeatable (`DRAFT_AUDIT_ACTIONS`), `limit` 1..200 (default 50),
  * `cursor` = the previous page's `next_cursor`.

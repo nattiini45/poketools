@@ -58,7 +58,7 @@ describe('planThemeFigures — roster-driven source', () => {
 
   it('falls back to the base species when the current form has no file', () => {
     const plan: ThemeFigurePlan = {
-      roster: [{ id: 'player-2', label: 'Jonas', species: 'Zoroark', baseSpecies: 'Charmander' }],
+      roster: [{ id: 'player-2', label: 'Rowan', species: 'Zoroark', baseSpecies: 'Charmander' }],
     };
     const [figure] = planThemeFigures(INDEX, plan);
     expect(figure?.entry?.species).toBe('Charmander');

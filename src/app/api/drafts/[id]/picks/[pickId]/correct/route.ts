@@ -18,11 +18,11 @@ interface RouteParams {
 
 /**
  * POST /api/drafts/[id]/picks/[pickId]/correct — replace a pick with another
- * line (draft-backend §8.1 #12): void + requeue + an immediate admin pick in
+ * line: void + requeue + an immediate admin pick in
  * one RPC transaction. The draft must be paused (or complete).
  *
  * Body: `{ line_id, reason, client_request_id, redraft_slot_id? }`;
- * `client_request_id` is required (critique B6), so a retried correction
+ * `client_request_id` is required, so a retried correction
  * replays instead of picking twice. The RPC logs `pick_voided` and
  * `pick_corrected` (admin actor, before/after, reason). The replacement fills
  * the voided pick's own redraft slot: a `redraft_slot_id` in the body is

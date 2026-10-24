@@ -158,9 +158,9 @@ function BollardRing() {
   );
 }
 
-// --- C-107 probe (additive): Blender-first prop gallery ----------------------
+// --- Prop probe (additive): Blender-first prop gallery -----------------------
 //
-// Card C-107's criterion-4 surface: every new manifest prop mounted through
+// Every new manifest prop mounted through
 // the shared prop pipeline (useFigureGLTF over propUrl), named
 // `probe-prop-<slug>` so the theme's declared `probe-` family prefix covers
 // StaticBatcher merging. With `?propFocus=<slug>` in the URL the gallery is

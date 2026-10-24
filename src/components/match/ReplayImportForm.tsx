@@ -52,7 +52,7 @@ interface PreviewState {
  * Admin replay import with manual side assignment (the username gate is skipped).
  *
  * The organizer only assigns the two replay sides to the two match participants. The winner and
- * the stats are the replay's own (audit lead F1, owner decision 2026-10-20): the route fetches the
+ * the stats are the replay's own: the route fetches the
  * replay again, refuses it when it no longer hashes like this preview, and records what it parsed.
  * Corrections afterwards go through the game editor.
  */

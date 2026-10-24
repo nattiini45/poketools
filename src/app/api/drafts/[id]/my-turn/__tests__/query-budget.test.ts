@@ -1,6 +1,6 @@
 /**
- * Query budget and behaviour of GET /api/drafts/[id]/my-turn (draft-backend
- * §8.1 #8, §8.5, §11.1; critique B8). It is the only draft endpoint polled
+ * Query budget and behaviour of GET /api/drafts/[id]/my-turn.
+ * It is the only draft endpoint polled
  * while the tab is hidden, so a quiet tick costs exactly one RPC (no pool
  * read; Kilo 4245127444): the pool is read only when the tick published a
  * redraft, for the season whose draft reads it expires.

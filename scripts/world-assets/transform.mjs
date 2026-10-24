@@ -9,7 +9,7 @@
  *   KTX-Software `toktx` binary is available, WebP otherwise,
  * - quantizes normals / texcoords (positions untouched so skins stay exact).
  *
- * Hero props (.cache/props → out/props, card C-030): same texture and clip
+ * Hero props (.cache/props → out/props): same texture and clip
  * treatment plus position quantization (props are static — no skins), and a
  * per-prop triangle ceiling of 40 k that is reported (not enforced — the
  * Meshy remesh target in props.mjs is what keeps meshes under it).
@@ -61,7 +61,7 @@ const FIGURE_CEILING_KB = 1500;
 // Keep in sync with props.mjs and bake-manifest.mjs (lib.mjs stays figure-only).
 const PROPS_RAW_DIR = join(CACHE_DIR, 'props');
 const OUT_PROPS_DIR = join(OUT_DIR, 'props');
-/** Post-transform bar (card C-030): ≤ 40 k triangles per prop. */
+/** Post-transform bar: ≤ 40 k triangles per prop. */
 const PROP_TRI_CEILING = 40000;
 
 async function makeIO() {

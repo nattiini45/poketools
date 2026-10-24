@@ -40,7 +40,7 @@ function EmptyState({ children }: { children: ReactNode }) {
  * `/leagues/[id]/redraft` — the player's redraft page (draft-frontend §3.2).
  *
  * Public page. The latest redraft pool's snapshot seeds the client (no tick
- * during render, critique B9). The viewer's own drop submission is secret
+ * during render). The viewer's own drop submission is secret
  * until the deadline: it is fetched client-side from the owner-guarded route
  * (BE #18) and never read or rendered here. Participants cross into the
  * client only inside the snapshot DTO (allowlist mapper); no `players` row

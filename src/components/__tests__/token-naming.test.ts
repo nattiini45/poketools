@@ -1,5 +1,5 @@
 /**
- * Token-naming guard (draft-frontend §8.3, critique F11).
+ * Token-naming guard.
  *
  * The spec names are Draft Kill Token, Comeback Token and Cosmo Token; the
  * bare "Kill Token", "Killtoken", "Cosmo-Punkte"/"Cosmo Points" and the "CP:"
@@ -98,7 +98,6 @@ describe('token naming pattern', () => {
   });
 });
 
-// Enabled by the sweep S (critique F11, i18n-core §12.2 #3).
 describe('code identifier exemption', () => {
   it('masks identifiers and import lines but never text', () => {
     for (const code of [

@@ -11,7 +11,7 @@ import { toLineId } from '@/lib/draft/line-identity';
 
 export interface LineThresholds {
   /**
-   * Stable draft line id (`point_buy_list_entries.line_id`, draft-backend §2.2); null/absent for
+   * Stable draft line id (`point_buy_list_entries.line_id`); null/absent for
    * legacy evolution-tier leagues. Branched bases (Oshawott → Samurott / Samurott-Hisui) have one
    * line each, so every line lookup goes through `lineLookup`, never a base-keyed map.
    */

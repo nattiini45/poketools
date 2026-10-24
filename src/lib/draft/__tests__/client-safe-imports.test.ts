@@ -1,5 +1,5 @@
 /**
- * The client-safe draft modules (draft-backend §7) may import only:
+ * The client-safe draft modules may import only:
  * `@/types/*`, `@/i18n/{config,core}`, `@/i18n/messages/**`,
  * `@/lib/api/user-facing-error`, `@/lib/pkmn/i18n/id` (pure, dictionary-free),
  * `zod`, and each other. Everything they reach transitively must stay free of

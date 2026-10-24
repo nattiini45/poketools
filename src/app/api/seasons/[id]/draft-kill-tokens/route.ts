@@ -16,7 +16,7 @@ interface RouteParams {
 
 /**
  * POST /api/seasons/[id]/draft-kill-tokens — buy ONE Draft Kill Token for one of the player's
- * own lines (draft-backend §8.1 #26, §6.9, BR-4).
+ * own lines.
  *
  * Body `{ line_id, client_request_id }`. A Draft Kill Token costs `draft_token_ratio` unspent
  * points and adds +1 progress; at most `draft_token_max` per player and `draft_token_max_per_line`

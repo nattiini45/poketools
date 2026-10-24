@@ -1,5 +1,5 @@
 /**
- * Draft route responses (draft-backend §7.8, §9; critique S5). Server only.
+ * Draft route responses. Server only.
  *
  * Every draft route's catch block returns `draftErrorResponse(err, '<fallback>')`:
  * - `DraftRuleError` → its status with `{ success:false, error, code, params, detail?, snapshot? }`

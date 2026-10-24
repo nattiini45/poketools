@@ -1,5 +1,5 @@
 /**
- * Redraft seat order (draft-backend §7.9; SPEC Prompt 6 §5). Client-safe and pure.
+ * Redraft seat order. Client-safe and pure.
  *
  * The worst first-half standing picks first, then ascending toward the best
  * (snake order is generated from the seats by the SQL queue). The route

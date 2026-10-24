@@ -12,8 +12,8 @@ interface RouteParams {
 }
 
 /**
- * POST /api/drafts/[id]/pause — pause or resume the pick clock (draft-backend
- * §8.1 #6; every mode, BR-16; the redraft submission phase has no clock).
+ * POST /api/drafts/[id]/pause — pause or resume the pick clock (every
+ * mode; the redraft submission phase has no clock).
  *
  * Body: `{ paused, reason? }`. `draft_set_paused` logs `paused` / `resumed`
  * with the remaining time. No cached public read shows the pause state

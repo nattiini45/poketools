@@ -19,7 +19,7 @@ import type { ApiResult } from '@/types/api';
  * authenticated, unlike the public signup route.
  *
  * SUPERADMIN_EMAIL is reserved: only the SUPERADMIN_DISCORD_ID player may
- * link it (CF-02). Anyone else gets the generic create-failed 400, so the
+ * link it. Anyone else gets the generic create-failed 400, so the
  * route does not reveal which address is reserved.
  */
 const CREATE_FAILED_BODY: ApiResult<never> = {
