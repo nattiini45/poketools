@@ -256,7 +256,7 @@ export function DashboardView({
             {recent_activity.length === 0 ? (
               <p className="text-sm text-poke-text-muted py-2">{t('dashboard.activity.empty')}</p>
             ) : (
-              <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              <div className="space-y-2">
                 {recent_activity.map((entry) => (
                   <div
                     key={entry.id}

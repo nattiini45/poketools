@@ -292,6 +292,24 @@ describe('DashboardView', () => {
     expect(html).toContain('Handlungsbedarf');
   });
 
+  it('lists every recent event without a hidden inner scroll', () => {
+    const entries = Array.from({ length: 20 }, (_, i) => ({
+      id: `a-${i}`,
+      actor_name: `Actor ${i}`,
+      action: 'player.suspend',
+      resource_type: 'player',
+      resource_id: `p-${i}`,
+      resource_name: `Target ${i}`,
+      created_at: '2026-01-01T00:00:00Z',
+    }));
+    const html = renderWithI18n(<DashboardView data={{ ...SITE_DATA, recent_activity: entries }} />);
+    for (let i = 0; i < 20; i++) {
+      expect(html).toContain(`Actor ${i}`);
+    }
+    expect(html).not.toContain('overflow-y-auto');
+    expect(html).not.toMatch(/max-h-\[/);
+  });
+
   it('shows the empty state for a resource admin without resources', () => {
     const data: DashboardData = {
       counts: { players: null, tournaments: 0, active_matches: 0, leagues: 0, games: null },
