@@ -8,6 +8,7 @@ export default defineDe<typeof en>()({
     phase: 'Phase',
     round: 'Runde',
     roundValue: 'Runde {number} · {name}',
+    roundNumberOnly: 'Runde {number}',
     bestOf: 'Format',
     scheduled: 'Angesetzt für',
     notScheduled: 'Nicht angesetzt',

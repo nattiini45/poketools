@@ -75,6 +75,17 @@ describe('AdminMatchActions i18n', () => {
     expect(html).toContain('Dieses Spiel ist abgeschlossen.');
     expect(html).not.toContain('Sieger festlegen');
   });
+
+  it('offers one reset button: in the Admin Actions card for a completed match, in the games card otherwise', () => {
+    const count = (html: string) => html.split('Reset Match').length - 1;
+    const completed = renderToStaticMarkup(ui('completed'));
+    expect(count(completed)).toBe(1);
+    // The games card keeps the per-game actions, the single reset sits under the Admin Actions heading.
+    expect(completed).toContain('Reset / Manage Games');
+    expect(completed).toContain('href="/admin/matches/m1/games/g1/edit"');
+    expect(completed.indexOf('Reset Match')).toBeGreaterThan(completed.indexOf('Admin Actions'));
+    expect(count(renderToStaticMarkup(ui('in_progress')))).toBe(1);
+  });
 });
 
 describe('deleteGameImpact', () => {

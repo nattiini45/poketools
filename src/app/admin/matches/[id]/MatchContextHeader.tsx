@@ -27,6 +27,15 @@ interface MatchContextHeaderProps {
   now: number;
 }
 
+/**
+ * True when the round has no name of its own: it is empty or just repeats the number ("Round 2" for round 2), so
+ * the header shows the number alone instead of "Round 2 · Round 2".
+ */
+export function isDefaultRoundName(roundNumber: number, roundName: string | null | undefined): boolean {
+  const name = (roundName ?? '').trim();
+  return name === '' || name.toLowerCase().replace(/\s+/g, ' ') === `round ${roundNumber}`;
+}
+
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
@@ -63,7 +72,9 @@ export default function MatchContextHeader({
         <Row label={t('header.league')}>{context.league_name ?? t('header.standalone')}</Row>
         <Row label={t('header.phase')}>{context.phase_name}</Row>
         <Row label={t('header.round')}>
-          {t('header.roundValue', { number: context.round_number, name: context.round_name })}
+          {isDefaultRoundName(context.round_number, context.round_name)
+            ? t('header.roundNumberOnly', { number: context.round_number })
+            : t('header.roundValue', { number: context.round_number, name: context.round_name })}
         </Row>
         <Row label={t('header.bestOf')}>{tCommon('bestOf', { count: context.best_of })}</Row>
         <Row label={t('header.players')}>

@@ -11,6 +11,7 @@ export default {
     phase: 'Phase',
     round: 'Round',
     roundValue: 'Round {number} · {name}',
+    roundNumberOnly: 'Round {number}',
     bestOf: 'Format',
     scheduled: 'Scheduled for',
     notScheduled: 'Not scheduled',

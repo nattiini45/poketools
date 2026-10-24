@@ -60,7 +60,10 @@ export default function MatchDisputePanel({ dispute, reportedWinnerName, reporte
           </div>
         )}
         <Row label={t('dispute.reportedWinner')}>{reportedWinnerName ?? t('dispute.noWinner')}</Row>
-        <Row label={t('dispute.reportedBy')}>{reporterName ?? t('header.noSubmitter')}</Row>
+        {/* Without a reported winner no result was reported: the match's submitter is then whoever disputed it. */}
+        <Row label={t('dispute.reportedBy')}>
+          {reportedWinnerName === null ? t('header.noSubmitter') : (reporterName ?? t('header.noSubmitter'))}
+        </Row>
       </dl>
     </Card>
   );

@@ -8,7 +8,7 @@ import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import type { AdminMatchContext, MatchHistoryEntry, MatchHistoryPage } from '@/lib/admin/match-detail';
-import MatchContextHeader from '../MatchContextHeader';
+import MatchContextHeader, { isDefaultRoundName } from '../MatchContextHeader';
 import MatchDisputePanel from '../MatchDisputePanel';
 import MatchHistoryPanel, { appendHistoryEntries, canLoadMoreHistory } from '../MatchHistoryPanel';
 import MatchReopenSection, { reopenFailureKind } from '../MatchReopenSection';
@@ -98,6 +98,25 @@ describe('MatchContextHeader', () => {
     expect(manual).toContain('No auto-confirm: manual review');
 
     expect(renderWithI18n(header({ status: 'in_progress', autoConfirmAt: FUTURE }))).not.toContain('Auto-confirms');
+  });
+
+  it('shows the round number alone when the round name only repeats it', () => {
+    const plain = { ...CONTEXT, round_name: 'Round 2' };
+    const html = renderWithI18n(header({ context: plain }));
+    expect(html).toContain('Round 2');
+    expect(html).not.toContain('Round 2 · Round 2');
+    const de = renderWithI18n(header({ context: plain }), { locale: 'de' });
+    expect(de).toContain('Runde 2');
+    expect(de).not.toContain('Round 2');
+  });
+
+  it('tells a default round name from a custom one', () => {
+    expect(isDefaultRoundName(2, 'Round 2')).toBe(true);
+    expect(isDefaultRoundName(2, ' round  2 ')).toBe(true);
+    expect(isDefaultRoundName(2, '')).toBe(true);
+    expect(isDefaultRoundName(2, null)).toBe(true);
+    expect(isDefaultRoundName(2, 'Round 3')).toBe(false);
+    expect(isDefaultRoundName(2, 'Quarterfinals')).toBe(false);
   });
 
   it('renders German', () => {
@@ -203,6 +222,20 @@ describe('MatchDisputePanel', () => {
     expect(html).toContain('No reason given');
     expect(html).toContain('No winner reported');
     expect(html).toContain('No result reported yet');
+  });
+
+  it('does not name a reporter when no result was reported, even if the dispute set a submitter', () => {
+    const html = renderWithI18n(
+      <MatchDisputePanel
+        dispute={{ ...dispute, actor_name: 'Site Admin', by_admin: true }}
+        reportedWinnerName={null}
+        reporterName="Site Admin"
+      />,
+    );
+    expect(html).toContain('Site Admin');
+    expect(html).toContain('No winner reported');
+    expect(html).toContain('No result reported yet');
+    expect(html.match(/Site Admin/g)).toHaveLength(1);
   });
 
   it('explains a dispute without recorded details', () => {

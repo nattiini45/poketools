@@ -369,7 +369,7 @@ export default function AdminMatchActions({
   return (
     <>
       {/* Reset Match Controls — shown for non-scheduled matches */}
-      {!isScheduled && (
+      {!isScheduled && !(isTerminal && games.length === 0) && (
         <Section title={t('actions.resetSection')}>
           <div className="space-y-4">
             {/* Per-game actions */}
@@ -415,15 +415,17 @@ export default function AdminMatchActions({
               </div>
             )}
 
-            {/* Reset entire match */}
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={openResetDialog}
-              disabled={loading}
-            >
-              {t('actions.resetMatch')}
-            </Button>
+            {/* Reset entire match. A completed match has its reset in the Admin Actions card below. */}
+            {!isTerminal && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={openResetDialog}
+                disabled={loading}
+              >
+                {t('actions.resetMatch')}
+              </Button>
+            )}
           </div>
         </Section>
       )}
