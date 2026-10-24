@@ -16,7 +16,7 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
-import { isTournamentStarted } from '@/lib/tournament/standalone-lock';
+import { isTournamentStarted, tournamentLockReason } from '@/lib/tournament/standalone-lock';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +37,8 @@ export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRounds
     getT(commonMessages),
     getT(enumMessages),
   ]);
-  const started = isTournamentStarted({ status: tournament.status, rounds_total: rounds.length });
+  const startSignals = { status: tournament.status, rounds_total: rounds.length };
+  const started = isTournamentStarted(startSignals);
   const subtitle = [
     enumLabel(te, 'bracketType', tournament.bracket_type),
     tc('bestOf', { count: tournament.best_of_default }),
@@ -76,6 +77,7 @@ export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRounds
             }}
             rulesets={rulesets}
             started={started}
+            lockReason={tournamentLockReason(startSignals)}
           />
         </Section>
 

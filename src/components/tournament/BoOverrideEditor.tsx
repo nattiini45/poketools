@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import type { BracketType, BoOverrides } from '@/types/tournament';
 import Card from '@/components/ui/Card';
 import { useLocale, useT } from '@/i18n/client';
@@ -37,6 +38,7 @@ export default function BoOverrideEditor({
   const locale = useLocale();
   const t = useT(tournamentsAdminMessages);
   const tCommon = useT(commonMessages);
+  const idPrefix = useId();
   const roundNames = getRoundNames(bracketType);
 
   if (roundNames.length === 0) return null;
@@ -60,10 +62,13 @@ export default function BoOverrideEditor({
         {t('boOverrides.hint', { bo: defaultBo })}
       </p>
       <div className="space-y-1.5 mt-2">
-        {roundNames.map((name) => (
+        {roundNames.map((name, index) => (
           <div key={name} className="flex items-center gap-3">
-            <span className="text-sm text-poke-text-primary w-28">{translateEngineLabel('round', name, locale)}</span>
+            <label htmlFor={`${idPrefix}-${index}`} className="text-sm text-poke-text-primary w-28">
+              {translateEngineLabel('round', name, locale)}
+            </label>
             <select
+              id={`${idPrefix}-${index}`}
               value={overrides[name] ?? 0}
               onChange={(e) => handleChange(name, Number(e.target.value))}
               className="border border-poke-border rounded-poke-md px-2 py-1 text-sm bg-poke-surface text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"

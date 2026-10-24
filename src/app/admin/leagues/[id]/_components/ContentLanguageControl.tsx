@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Select from '@/components/ui/Select';
 import { useT } from '@/i18n/client';
@@ -23,7 +23,8 @@ interface ContentLanguageControlProps {
 /**
  * Post-create content-language picker for league admins (lead addition to DF7b).
  * Saves through `patchContentLanguage` (PATCH `{ language }` only). Optimistic select with revert on failure and an
- * inline error, like `LeagueThemeControl`. A successful save refreshes the route;
+ * inline error, like `LeagueThemeControl`. The section subtitle on the Settings tab explains the language, so the
+ * select carries no second hint. A successful save refreshes the route;
  * the select follows `currentLanguage` whenever no save is in flight.
  */
 export default function ContentLanguageControl({ seasonId, currentLanguage }: ContentLanguageControlProps) {
@@ -32,7 +33,6 @@ export default function ContentLanguageControl({ seasonId, currentLanguage }: Co
   const tLang = useT(languageMessages);
   const errorText = useApiErrorText(errorsSeasons);
   const router = useRouter();
-  const hintId = useId();
   const [saving, setSaving] = useState(false);
   const [language, setLanguage] = useServerSyncedState<Locale>(currentLanguage, saving);
   const [saved, setSaved] = useState(false);
@@ -71,11 +71,7 @@ export default function ContentLanguageControl({ seasonId, currentLanguage }: Co
         onChange={(e) => void handleChange(e.target.value)}
         options={options}
         disabled={saving}
-        aria-describedby={hintId}
       />
-      <p id={hintId} className="text-xs text-poke-text-muted">
-        {tForm('form.contentLanguageHint')}
-      </p>
       <p className="text-xs text-poke-text-muted" role="status" aria-live="polite">
         {saving ? t('language.saving') : saved ? t('language.saved') : null}
       </p>

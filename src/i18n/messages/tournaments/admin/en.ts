@@ -50,10 +50,10 @@ export default {
   },
   form: {
     bracketTypes: {
-      single_elim: 'Single Elimination',
-      double_elim: 'Double Elimination',
-      round_robin: 'Round Robin',
-      swiss: 'Swiss (Monrad)',
+      single_elim: 'Single elimination',
+      double_elim: 'Double elimination',
+      round_robin: 'Round robin',
+      swiss: 'Swiss',
     },
     visibility: {
       hidden_until_match: 'Hidden until match',
@@ -74,6 +74,7 @@ export default {
     saveChanges: 'Save changes',
     saved: 'Tournament settings saved.',
     lockedStarted: 'Locked: the tournament has started.',
+    lockedRounds: 'Locked: rounds have been generated.',
     saveFailed: 'Failed to save',
   },
   boOverrides: {
@@ -119,6 +120,9 @@ export default {
     grandFinalsReset: 'Grand Finals reset',
     empty: 'No rounds yet. Generate the first round to get started.',
     start: 'Start',
+    bestOfLabel: 'Best of for {name}',
+    bestOfSaving: 'Saving…',
+    bestOfSaved: 'Saved.',
     complete: 'Complete',
     reset: 'Reset',
     delete: 'Delete',

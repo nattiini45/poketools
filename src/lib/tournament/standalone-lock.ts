@@ -19,6 +19,15 @@ export function isTournamentStarted(signals: TournamentStartSignals): boolean {
   return signals.status !== 'upcoming' || signals.rounds_total > 0;
 }
 
+/** Why a tournament's structure is frozen: it left `upcoming`, or an upcoming one already has a generated round. */
+export type TournamentLockReason = 'started' | 'rounds';
+
+/** The reason the locked fields cannot change, or `null` while they can. */
+export function tournamentLockReason(signals: TournamentStartSignals): TournamentLockReason | null {
+  if (signals.status !== 'upcoming') return 'started';
+  return signals.rounds_total > 0 ? 'rounds' : null;
+}
+
 /** The fields that lock once a standalone tournament has started. */
 export const STANDALONE_LOCKED_FIELDS = ['bracket_type', 'ruleset_id', 'is_doubles'] as const;
 

@@ -51,7 +51,7 @@ export default defineDe<typeof en>()({
       single_elim: 'K.-o.-System',
       double_elim: 'Doppel-K.-o.',
       round_robin: 'Jeder gegen jeden',
-      swiss: 'Schweizer System (Monrad)',
+      swiss: 'Schweizer System',
     },
     visibility: {
       hidden_until_match: 'Bis zum Spiel verborgen',
@@ -72,6 +72,7 @@ export default defineDe<typeof en>()({
     saveChanges: 'Änderungen speichern',
     saved: 'Turnier-Einstellungen gespeichert.',
     lockedStarted: 'Gesperrt: Das Turnier ist gestartet.',
+    lockedRounds: 'Gesperrt: Es wurden bereits Runden erzeugt.',
     saveFailed: 'Speichern fehlgeschlagen.',
   },
   boOverrides: {
@@ -116,6 +117,9 @@ export default defineDe<typeof en>()({
     grandFinalsReset: 'Reset im Großen Finale',
     empty: 'Noch keine Runden. Erstelle die erste Runde, um loszulegen.',
     start: 'Starten',
+    bestOfLabel: 'Best-of für {name}',
+    bestOfSaving: 'Wird gespeichert …',
+    bestOfSaved: 'Gespeichert.',
     complete: 'Abschließen',
     reset: 'Zurücksetzen',
     delete: 'Löschen',

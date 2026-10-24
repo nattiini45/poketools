@@ -8,6 +8,7 @@ import type { Ruleset } from '@/types/ruleset';
 import type { ApiResult } from '@/types/api';
 import { useT } from '@/i18n/client';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
+import type { TournamentLockReason } from '@/lib/tournament/standalone-lock';
 import {
   buildTournamentPatch,
   type TournamentSettingsLocks,
@@ -21,6 +22,8 @@ interface TournamentSettingsEditorProps {
   rulesets: Ruleset[];
   /** The tournament has started (not upcoming, or it has rounds): bracket type, ruleset and doubles are frozen. */
   started: boolean;
+  /** Why it is frozen, for the hint under the locked controls; defaults to "the tournament has started". */
+  lockReason?: TournamentLockReason | null;
 }
 
 const LOCKED: TournamentSettingsLocks = { bracketType: true, ruleset: true, doubles: true };
@@ -57,7 +60,12 @@ export async function saveTournamentSettings(
   return true;
 }
 
-export default function TournamentSettingsEditor({ tournament, rulesets, started }: TournamentSettingsEditorProps) {
+export default function TournamentSettingsEditor({
+  tournament,
+  rulesets,
+  started,
+  lockReason,
+}: TournamentSettingsEditorProps) {
   const router = useRouter();
   const t = useT(tournamentsAdminMessages);
   const [saved, setSaved] = useState(false);
@@ -90,6 +98,7 @@ export default function TournamentSettingsEditor({ tournament, rulesets, started
         }}
         submitLabel={t('form.saveChanges')}
         lockedFields={{ bracketType: locks.bracketType, ruleset: locks.ruleset, doubles: locks.doubles }}
+        lockedReason={lockReason ?? 'started'}
         onSubmit={handleSubmit}
       />
       {saved && (

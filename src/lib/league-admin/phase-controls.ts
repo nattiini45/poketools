@@ -26,6 +26,16 @@ export function redrawNeedsConfirm(existingGroupCount: number): boolean {
   return existingGroupCount > 0;
 }
 
+/**
+ * The position of each phase as people count it: 1 for the first phase, in stage order. The stored
+ * `stage_order` is not shown, because it need not start at 1 (a phase created before positions were
+ * assigned holds 0) and can have gaps after a delete.
+ */
+export function phaseNumbers(phases: readonly { id: string; stage_order: number }[]): Map<string, number> {
+  const ordered = [...phases].sort((a, b) => a.stage_order - b.stage_order);
+  return new Map(ordered.map((phase, index) => [phase.id, index + 1]));
+}
+
 /** Where a new phase goes: the end of the league, or next to an existing phase. */
 export type PhaseInsertMode = 'end' | 'before' | 'after';
 

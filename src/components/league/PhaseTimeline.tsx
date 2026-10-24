@@ -26,6 +26,7 @@ import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
 import {
   phaseAnchorOptions,
+  phaseNumbers,
   resolveInsertAt,
   type PhaseInsertMode,
 } from '@/lib/league-admin/phase-controls';
@@ -204,6 +205,9 @@ export default function PhaseTimeline({
     }
   }
 
+  const numbers = phaseNumbers(phases);
+  const numberOf = (phaseId: string) => numbers.get(phaseId) ?? 0;
+
   if (loading) return <p className="text-sm text-poke-text-muted">{t('timeline.loading')}</p>;
 
   return (
@@ -263,7 +267,7 @@ export default function PhaseTimeline({
               <div className="flex items-center justify-between gap-2 text-sm flex-wrap">
                 <div className="min-w-0">
                   <span className="font-heading font-medium text-poke-text-primary">
-                    {phase.stage_order}. {phase.name}
+                    {numberOf(phase.id)}. {phase.name}
                   </span>
                   <span className="ml-2 text-xs text-poke-text-secondary">
                     {enumLabel(tEnum, 'bracketType', phase.bracket_type)}
@@ -354,7 +358,7 @@ export default function PhaseTimeline({
                     {phaseAnchorOptions(insertMode, phases).map((option) => {
                       const phase = phases.find((p) => p.id === option.phaseId);
                       if (!phase) return null;
-                      const params = { order: phase.stage_order, name: phase.name };
+                      const params = { order: numberOf(phase.id), name: phase.name };
                       return (
                         <option key={phase.id} value={phase.id} disabled={option.disabled}>
                           {t(option.disabled ? 'timeline.position.optionLocked' : 'timeline.position.option', params)}

@@ -5,6 +5,7 @@ import {
   assertStandaloneSettingsEditable,
   changesStandaloneLockedField,
   isTournamentStarted,
+  tournamentLockReason,
 } from '../standalone-lock';
 
 const before = {
@@ -86,5 +87,27 @@ describe('assertStandaloneSettingsEditable', () => {
     expect(() =>
       assertStandaloneSettingsEditable(before, { name: 'Renamed', best_of_default: 5 } as never, true)
     ).not.toThrow();
+  });
+});
+
+describe('tournamentLockReason', () => {
+  it('is "started" once the tournament left upcoming, with or without rounds', () => {
+    expect(tournamentLockReason({ status: 'active', rounds_total: 0 })).toBe('started');
+    expect(tournamentLockReason({ status: 'active', rounds_total: 3 })).toBe('started');
+    expect(tournamentLockReason({ status: 'completed', rounds_total: 3 })).toBe('started');
+  });
+
+  it('is "rounds" for an upcoming tournament that already has a generated round', () => {
+    expect(tournamentLockReason({ status: 'upcoming', rounds_total: 1 })).toBe('rounds');
+  });
+
+  it('is null while nothing is frozen, and agrees with isTournamentStarted', () => {
+    expect(tournamentLockReason({ status: 'upcoming', rounds_total: 0 })).toBeNull();
+    for (const status of ['upcoming', 'active', 'completed'] as const) {
+      for (const rounds_total of [0, 2]) {
+        const signals = { status, rounds_total };
+        expect(tournamentLockReason(signals) !== null).toBe(isTournamentStarted(signals));
+      }
+    }
   });
 });

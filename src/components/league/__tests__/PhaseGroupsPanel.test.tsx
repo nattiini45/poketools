@@ -16,7 +16,7 @@ import { redrawNeedsConfirm } from '@/lib/league-admin/phase-controls';
 
 vi.mock('next/link', () => ({ default: ({ children }: { children?: unknown }) => children ?? null }));
 
-const { default: PhaseGroupsPanel, GroupCountSelect } = await import('../PhaseGroupsPanel');
+const { default: PhaseGroupsPanel, GroupCountSelect, EmptyGroupsNote } = await import('../PhaseGroupsPanel');
 
 function optionValues(html: string): string[] {
   return [...html.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]);
@@ -48,6 +48,19 @@ describe('GroupCountSelect', () => {
 
     expect(html).toContain('Anzahl der Gruppen');
     expect(html).toContain('26 Gruppen');
+  });
+});
+
+describe('EmptyGroupsNote', () => {
+  it('tells an admin who can draw groups to seed and serpentine-assign', () => {
+    const html = renderWithI18n(<EmptyGroupsNote leagueManaged={false} />);
+
+    expect(html).toContain('No groups yet. Seed participants, then serpentine-assign');
+  });
+
+  it('says nothing about drawing on a league-managed phase, which has no draw controls', () => {
+    expect(renderWithI18n(<EmptyGroupsNote leagueManaged />)).toBe('');
+    expect(renderWithI18n(<EmptyGroupsNote leagueManaged />, { locale: 'de' })).toBe('');
   });
 });
 
