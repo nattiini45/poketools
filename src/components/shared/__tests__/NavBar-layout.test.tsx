@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
@@ -40,7 +41,7 @@ vi.mock('../PlayerAvatar', () => ({
   default: ({ className }: { className?: string }) => <span data-stub="avatar" className={className} />,
 }));
 
-import NavBar, { NavLink } from '../NavBar';
+import NavBar, { NavLink, PROFILE_TEXT_VISIBILITY } from '../NavBar';
 
 /** Class list of the first element whose opening tag matches `pattern`. */
 function classesOf(html: string, pattern: RegExp): string[] {
@@ -113,6 +114,43 @@ describe('NavBar layout (fits every width)', () => {
     const name = classesOf(de, /<span[^>]*>(?=Fixture League Admin<\/span>)/);
     expect(name).toContain('truncate');
     expect(name).toContain('max-w-[10rem]');
+  });
+});
+
+describe('NavBar profile caption at desktop widths', () => {
+  const html = renderWithI18n(<NavBar />);
+  const column = classesOf(html, /<div[^>]*>(?=<span[^>]*>Fixture League Admin<\/span>)/);
+
+  it('shows the name text at 768-1279 and from 1536, and only the avatar at 1280-1535', () => {
+    // 1024 (md..xl): visible; 1280, 1366, 1440 (xl..2xl): collapsed; 1536 (2xl): visible again.
+    expect(PROFILE_TEXT_VISIBILITY.split(' ')).toEqual(['sr-only', 'md:not-sr-only', 'xl:sr-only', '2xl:not-sr-only']);
+    for (const cls of PROFILE_TEXT_VISIBILITY.split(' ')) expect(column).toContain(cls);
+    // Wide screens: the bar widens so the name has room and cannot be squeezed.
+    expect(column).toContain('2xl:shrink-0');
+    expect(html).toContain('2xl:max-w-[96rem]');
+  });
+
+  it('keeps the full name reachable when the text is collapsed', () => {
+    const profile = html.match(/<a[^>]*href="\/players\/p1"[^>]*>/)?.[0] ?? '';
+    expect(profile).toContain('title="Fixture League Admin"');
+    // The text stays in the DOM (sr-only), so the accessible name is still the full name.
+    expect(html).toContain('Fixture League Admin</span>');
+  });
+});
+
+describe('NavBar drawer (source contract; the closed drawer is not server-rendered)', () => {
+  const src = readFileSync(new URL('../NavBar.tsx', import.meta.url), 'utf8');
+
+  it('is a labelled modal dialog', () => {
+    expect(src).toMatch(/role="dialog"/);
+    expect(src).toMatch(/aria-modal="true"/);
+    expect(src).toContain("aria-label={t('menuLabel')}");
+  });
+
+  it('closes on Escape and returns focus to the menu button', () => {
+    expect(src).toMatch(/event\.key === 'Escape'\) setMobileOpen\(false\)/);
+    expect(src).toContain('closeButtonRef.current?.focus()');
+    expect(src).toContain('menuButtonRef.current?.focus()');
   });
 });
 

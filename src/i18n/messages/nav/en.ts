@@ -14,4 +14,5 @@ export default {
   viewPublicProfile: 'View public profile',
   toggleMenu: 'Toggle menu',
   closeMenu: 'Close menu',
+  menuLabel: 'Site menu',
 } as const;

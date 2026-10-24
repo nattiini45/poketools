@@ -451,9 +451,9 @@ export default function DiscordWebhookManager() {
         <div className="space-y-3">
           {webhooks.map((webhook) => (
             <Card key={webhook.id}>
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <h3 className="font-heading font-semibold text-poke-text-primary truncate">
                       {webhook.label}
                     </h3>
@@ -508,7 +508,7 @@ export default function DiscordWebhookManager() {
                   </div>
                 </div>
 
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex flex-wrap gap-1.5 md:shrink-0">
                   <Button
                     variant="ghost"
                     size="sm"
