@@ -90,7 +90,7 @@ describe('FormatDetail: a preset', () => {
 
   it('shows the example label and the read-only note only for an example', () => {
     expect(render(presetView(), 'en', { example: true })).toContain('>Example<');
-    expect(render(presetView(), 'en', { example: true })).toContain('read-only for now');
+    expect(render(presetView(), 'en', { example: true })).toContain('Examples are read-only.');
     expect(render(presetView(), 'en', { example: true })).not.toContain('Change anything');
     expect(render(presetView(), 'en')).not.toContain('>Example<');
     expect(render(presetView(), 'de', { example: true })).toContain('>Beispiel<');

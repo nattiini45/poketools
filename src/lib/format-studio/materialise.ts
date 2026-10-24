@@ -17,10 +17,15 @@ import {
   type Stage,
   type StagePlan,
 } from '@/lib/format-kit/client';
-import { FIELD_LIMITS } from '@/lib/validation/schemas';
 import type { BracketType } from '@/types/tournament';
 import type { AttachStageRow } from '@/lib/supabase/queries/season-formats';
 import type { EngineGap, EngineGapCode, StageSpecSnapshot } from './library-types';
+
+/**
+ * The longest stage name a phase keeps (the documented cut). It equals `FIELD_LIMITS.TITLE`; the constant lives here
+ * because that object sits in the zod-based validation module and this file runs in the browser (attach preview).
+ */
+export const STAGE_NAME_MAX_CHARS = 200;
 
 export interface PlanStagesInput {
   definition: FormatDefinition;
@@ -115,7 +120,7 @@ function mappedBracketOf(stage: Stage, plan: StagePlan | undefined): BracketType
 
 function stageName(stage: Stage, language: Locale, order: number): string {
   const resolved = resolveLText(stage.name, { seasonLanguage: language });
-  const trimmed = (resolved?.value ?? '').trim().slice(0, FIELD_LIMITS.TITLE).trim();
+  const trimmed = (resolved?.value ?? '').trim().slice(0, STAGE_NAME_MAX_CHARS).trim();
   return trimmed === '' ? `Stage ${order}` : trimmed;
 }
 

@@ -1,17 +1,25 @@
 import Link from 'next/link';
 import Section from '@/components/ui/Section';
 import EditableDescription from '@/components/shared/EditableDescription';
+import ReadinessCard from '@/components/format-studio/attach/ReadinessCard';
 import { getFormatter, getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
+import { loadLeagueFormatState } from '@/lib/format-studio/readiness-loader';
 import type { LeagueAdminPanelContext } from './context';
 
 /**
  * Overview tab (the default): the league at a glance and its description.
- * Renders from the league row alone, no read of its own.
+ * Renders from the league row alone, with one exception: a custom league also reads its attached format and the
+ * start signals in one wave, and shows the readiness checklist ("Ready to start?") until it has started. Every
+ * other league type makes no read of its own.
  */
 export async function overviewPanel({ id, league, t }: LeagueAdminPanelContext) {
-  const [tEnum, formatter] = await Promise.all([getT(enumMessages), getFormatter()]);
+  const [tEnum, formatter, formatState] = await Promise.all([
+    getT(enumMessages),
+    getFormatter(),
+    league.format_type === 'custom' ? loadLeagueFormatState(league) : Promise.resolve(null),
+  ]);
   // Calendar days (Postgres `date`): zone-free, so the server may format them.
   const start = league.start_date ? formatter.calendarDate(league.start_date) : null;
   const end = league.end_date ? formatter.calendarDate(league.end_date) : null;
@@ -45,6 +53,8 @@ export async function overviewPanel({ id, league, t }: LeagueAdminPanelContext) 
 
   return (
     <>
+      {formatState !== null && !formatState.started && <ReadinessCard result={formatState.readiness} seasonId={id} />}
+
       <Section title={t('overview.title')}>
         <div className="space-y-4">
           <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2" data-admin-overview-facts>

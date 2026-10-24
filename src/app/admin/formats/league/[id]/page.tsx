@@ -4,13 +4,15 @@ import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
 import FormatDetail from '@/components/format-studio/FormatDetail';
+import CopyLeagueStructureButton from '@/components/format-studio/starts/CopyLeagueStructureButton';
 import Badge from '@/components/ui/Badge';
 import PageContainer from '@/components/ui/PageContainer';
 import { gateResourceAdmin } from '@/lib/auth/resource-gate';
+import { leagueStructureDocument } from '@/lib/format-studio/editor/starts';
 import { loadLeagueFormat } from '@/lib/format-studio/loader';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
 import { getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
-import { getT } from '@/i18n/server';
+import { getLocale, getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
 import { formatStudioAdminMessages } from '@/i18n/messages/format-studio/admin';
@@ -33,7 +35,9 @@ const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-poke-bl
  * `/admin/formats/league/[id]`: the read-only format of one league. The gate is the league admin page's
  * (`gateResourceAdmin('season', id)`): a malformed id is a 404 before any read, a non-admin gets `AdminGuard`,
  * an admin of another league (or a tournament-only admin) the forbidden notice, and no league data is read
- * before the gate passes. A league without phases shows an empty state with a link to its Phases tab.
+ * before the gate passes. A league without phases shows an empty state with a link to its Phases tab. A league
+ * with phases offers "Copy as a new format": the structure document is built here, on the server, for an admin
+ * who has just passed the league gate.
  */
 export default async function FormatLeaguePage({ params }: PageProps) {
   const { id } = await params;
@@ -48,10 +52,16 @@ export default async function FormatLeaguePage({ params }: PageProps) {
     );
   }
 
-  const [league, t, tEnum] = await Promise.all([getSeasonWithDetails(id), getT(formatStudioAdminMessages), getT(enumMessages)]);
+  const [league, t, tEnum, locale] = await Promise.all([
+    getSeasonWithDetails(id),
+    getT(formatStudioAdminMessages),
+    getT(enumMessages),
+    getLocale(),
+  ]);
   if (!league) notFound();
 
   const result = await loadLeagueFormat(league);
+  const copyable = result.kind === 'ok' && result.view.definition !== null ? leagueStructureDocument(result.view.definition, locale) : null;
 
   return (
     <AdminGuard>
@@ -78,7 +88,10 @@ export default async function FormatLeaguePage({ params }: PageProps) {
                 })}
           </p>
         ) : (
-          <FormatDetail view={result.view} variant="page" editorLinks={result.editorLinks} />
+          <>
+            {copyable !== null && <CopyLeagueStructureButton definition={copyable} />}
+            <FormatDetail view={result.view} variant="page" editorLinks={result.editorLinks} />
+          </>
         )}
       </PageContainer>
     </AdminGuard>

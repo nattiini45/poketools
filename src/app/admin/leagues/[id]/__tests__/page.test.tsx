@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   loadPublishRefusals: vi.fn(),
   getSeasonPhaseStartSignals: vi.fn(),
   loadLeagueFormat: vi.fn(),
+  loadLeagueFormatState: vi.fn(),
+  loadAttachCandidates: vi.fn(),
+  getSeasonFormatSummary: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -69,6 +72,11 @@ vi.mock('@/lib/supabase/queries/drafts', () => ({
 vi.mock('@/lib/supabase/queries/season-groups', () => ({ getSeasonGroups: mocks.getSeasonGroups }));
 vi.mock('@/lib/supabase/queries/point-buy-lists', () => ({ getListEntries: mocks.getListEntries }));
 vi.mock('@/lib/format-studio/loader', () => ({ loadLeagueFormat: mocks.loadLeagueFormat }));
+vi.mock('@/lib/format-studio/readiness-loader', () => ({ loadLeagueFormatState: mocks.loadLeagueFormatState }));
+vi.mock('@/lib/format-studio/attach-candidates', () => ({ loadAttachCandidates: mocks.loadAttachCandidates }));
+vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonFormatSummary: mocks.getSeasonFormatSummary }));
+vi.mock('@/components/format-studio/attach/FormatAttachPanel', () => stub('FormatAttachPanel'));
+vi.mock('@/components/format-studio/attach/ReadinessCard', () => stub('ReadinessCard'));
 vi.mock('@/components/format-studio/FormatDetail', () => stub('FormatDetail'));
 vi.mock('../draft/_lib/load', () => ({ loadPublishRefusals: mocks.loadPublishRefusals }));
 vi.mock('@/components/league/groups/LeagueGroupsEditor', () => stub('LeagueGroupsEditor'));
@@ -125,6 +133,9 @@ import DeleteResourceButton from '@/components/shared/DeleteResourceButton';
 import PhaseTimeline from '@/components/league/PhaseTimeline';
 import EpbDraftRoomCreate from '../_components/EpbDraftRoomCreate';
 import LeagueAdminTabs from '../_components/LeagueAdminTabs';
+import ReadinessCard from '@/components/format-studio/attach/ReadinessCard';
+import { createTranslator } from '@/i18n/core';
+import { formatStudioAttachMessages } from '@/i18n/messages/format-studio/attach';
 
 /** The league id: a uuid, since the page answers 404 for any other `[id]`. */
 const S1 = '5e150000-0000-4000-8000-000000000001';
@@ -236,6 +247,8 @@ const TAB_READS = [
   'getListEntries',
   'getSeasonPhaseStartSignals',
   'loadLeagueFormat',
+  'loadLeagueFormatState',
+  'loadAttachCandidates',
 ] as const;
 
 /** The tab-specific reads this render made (the league row and the live access read are shared). */
@@ -273,6 +286,15 @@ beforeEach(() => {
   mocks.getSeasonPhaseStartSignals.mockResolvedValue([]);
   // The Format tab loads its descriptor through one call; a league without phases is the cheapest result.
   mocks.loadLeagueFormat.mockResolvedValue({ kind: 'no_phases' });
+  // A custom league: nothing attached, no hand-made phase, not started; no format to pick from.
+  mocks.loadLeagueFormatState.mockResolvedValue({
+    readiness: { applicable: true, ready: false, blockedReason: 'format_not_attached', items: [] },
+    attached: null,
+    manualPhaseCount: 0,
+    started: false,
+  });
+  mocks.loadAttachCandidates.mockResolvedValue({ items: [], capped: false });
+  mocks.getSeasonFormatSummary.mockResolvedValue(null);
 });
 
 // ─── Tabs ───────────────────────────────────────────────────────────
@@ -354,6 +376,9 @@ describe('admin league page tabs (?tab=)', () => {
     ['draft', 'draft', ['getSeasonGroups', 'getDraftPoolBySeason'], ['Draft Pool Pokémon', 'Draft Room']],
     ['draft', 'rules', ['getSeasonParticipants'], ['Evolution Tiers', 'Draft Settings']],
     ['singles', 'phases', ['listRulesets'], ['Phases']],
+    // A custom league: the overview adds its readiness checklist, the Format tab its checklist and the attach panel.
+    ['custom', 'overview', ['loadLeagueFormatState'], ['At a glance', 'Description']],
+    ['custom', 'format', ['loadLeagueFormat', 'loadLeagueFormatState', 'loadAttachCandidates'], ['Format']],
   ])('%s ?tab=%s renders only its panel and makes only its reads', async (format, tab, reads, titles) => {
     mocks.getSeasonWithDetails.mockResolvedValue(
       season({ format_type: format, point_buy_list_id: format === 'evolution_point_buy' ? 'list-1' : null }),
@@ -1028,5 +1053,95 @@ describe('league groups (Participants editor, per-group Draft tab)', () => {
     expect(findByType(tree, DraftPoolManager)).toHaveLength(0);
     expect(plainText(tree)).toContain('Groups draft separately, which only Evolution Point Buy leagues support.');
     expect(mocks.getDraftPoolBySeason).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Custom league: readiness and the status reason ─────────────────
+
+function statusControlOf(tree: ReactNode): El {
+  const [control] = findByType(tree, LeagueStatusControl);
+  expect(control).toBeDefined();
+  return control;
+}
+
+describe('custom league: readiness checklist and the disabled Active status', () => {
+  const custom = (overrides: Record<string, unknown> = {}) =>
+    season({ format_type: 'custom', status: 'upcoming', ruleset_id: null, ruleset_name: null, point_buy_list_id: null, ...overrides });
+
+  it.each([
+    ['en', 'Attach a format first. A custom league cannot start without one.'],
+    ['de', 'Hänge zuerst ein Format an. Eine eigene Liga kann ohne Format nicht starten.'],
+  ] as const)('no format attached: Active is blocked with its reason on every tab (%s)', async (locale, reason) => {
+    mocks.locale = locale;
+    mocks.getSeasonWithDetails.mockResolvedValue(custom());
+    for (const tab of ['overview', 'format', 'settings']) {
+      expect(statusControlOf(await render(tab)).props.blocked, tab).toEqual({ active: reason });
+    }
+    expect(mocks.getSeasonFormatSummary).toHaveBeenCalledWith(S1);
+    expect(reason).toBe(createTranslator(formatStudioAttachMessages, locale)('status.blockedNoFormat'));
+  });
+
+  it('a format is attached: the control gets no blocked prop at all', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(custom());
+    mocks.getSeasonFormatSummary.mockResolvedValue({ season_id: S1, version_no: 1 });
+    const control = statusControlOf(await render('settings'));
+    expect(Object.keys(control.props)).toEqual(['seasonId', 'currentStatus']);
+  });
+
+  it('an active custom league is never blocked and the attached format is not read for it', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(custom({ status: 'active' }));
+    const control = statusControlOf(await render('settings'));
+    expect(Object.keys(control.props)).toEqual(['seasonId', 'currentStatus']);
+    expect(mocks.getSeasonFormatSummary).not.toHaveBeenCalled();
+  });
+
+  it.each(['singles', 'doubles', 'draft', 'evolution_point_buy'])(
+    '%s: no extra read, no blocked prop, no readiness card on any tab',
+    async (format) => {
+      mocks.getSeasonWithDetails.mockResolvedValue(
+        season({ format_type: format, status: 'upcoming', point_buy_list_id: format === 'evolution_point_buy' ? 'list-1' : null }),
+      );
+      for (const tab of ['overview', 'format', 'settings']) {
+        const tree = await render(tab);
+        expect(Object.keys(statusControlOf(tree).props), `${format} ${tab}`).toEqual(['seasonId', 'currentStatus']);
+        expect(findByType(tree, ReadinessCard), `${format} ${tab}`).toHaveLength(0);
+      }
+      expect(mocks.getSeasonFormatSummary).not.toHaveBeenCalled();
+      expect(mocks.loadLeagueFormatState).not.toHaveBeenCalled();
+      expect(mocks.loadAttachCandidates).not.toHaveBeenCalled();
+    },
+  );
+
+  it('the overview shows the readiness card above the facts, from one read', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(custom());
+    const tree = await render('overview');
+    const [card] = findByType(tree, ReadinessCard);
+    expect(card).toBeDefined();
+    expect(card.props.seasonId).toBe(S1);
+    expect((card.props.result as { blockedReason: string }).blockedReason).toBe('format_not_attached');
+    expect(mocks.loadLeagueFormatState).toHaveBeenCalledTimes(1);
+    expect(mocks.loadLeagueFormatState).toHaveBeenCalledWith(expect.objectContaining({ id: S1, format_type: 'custom' }));
+    expect(mocks.loadAttachCandidates).not.toHaveBeenCalled();
+  });
+
+  it('the overview of a league that has started shows no readiness card', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(custom());
+    mocks.loadLeagueFormatState.mockResolvedValue({
+      readiness: { applicable: true, ready: true, blockedReason: null, items: [] },
+      attached: null,
+      manualPhaseCount: 0,
+      started: true,
+    });
+    const tree = await render('overview');
+    expect(findByType(tree, ReadinessCard)).toHaveLength(0);
+    expect(mocks.loadLeagueFormatState).toHaveBeenCalledTimes(1);
+  });
+
+  it('the malformed-id and forbidden paths read nothing new', async () => {
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    mocks.isResourceAdminFor.mockResolvedValue(false);
+    await render('format');
+    expect(mocks.getSeasonFormatSummary).not.toHaveBeenCalled();
+    expect(mocks.loadLeagueFormatState).not.toHaveBeenCalled();
   });
 });

@@ -21,15 +21,22 @@ const STATUS_OPTIONS: { value: SeasonStatus; variant: 'gray' | 'green' | 'blue' 
 interface LeagueStatusControlProps {
   seasonId: string;
   currentStatus: SeasonStatus;
+  /**
+   * Statuses that cannot be chosen now, each mapped to the reason (already translated). A blocked status is shown
+   * disabled and its reason is printed under the control; the API refuses the change as well. The current status is
+   * never blocked. Absent: the control renders exactly as before.
+   */
+  blocked?: Partial<Record<SeasonStatus, string>>;
 }
 
-export default function LeagueStatusControl({ seasonId, currentStatus }: LeagueStatusControlProps) {
+export default function LeagueStatusControl({ seasonId, currentStatus, blocked }: LeagueStatusControlProps) {
   const router = useRouter();
   const t = useT(leagueAdminMessages);
   const tEnum = useT(enumMessages);
   const errorText = useApiErrorText(errorsSeasons);
   const [loading, setLoading] = useState(false);
   const labelId = useId();
+  const reasonIdBase = useId();
 
   /** The route's own message (by code in the viewer's language), else the generic fallback. */
   function failureText(e: ApiErrorLike): string {
@@ -59,6 +66,13 @@ export default function LeagueStatusControl({ seasonId, currentStatus }: LeagueS
     }
   }
 
+  /** The reason a status is blocked, or null; the current status is never blocked. */
+  function reasonFor(status: SeasonStatus): string | null {
+    const reason = blocked?.[status];
+    return status !== currentStatus && reason ? reason : null;
+  }
+  const reasonId = (status: SeasonStatus) => `${reasonIdBase}-${status}`;
+
   return (
     <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby={labelId}>
       <span id={labelId} className="text-xs text-poke-text-muted font-heading">{t('status.label')}</span>
@@ -68,8 +82,9 @@ export default function LeagueStatusControl({ seasonId, currentStatus }: LeagueS
             key={option.value}
             type="button"
             onClick={() => handleChange(option.value)}
-            disabled={loading}
+            disabled={loading || reasonFor(option.value) !== null}
             aria-pressed={option.value === currentStatus}
+            aria-describedby={reasonFor(option.value) !== null ? reasonId(option.value) : undefined}
             // 44 px touch target on phones; the badge keeps its compact look inside it.
             className="inline-flex min-h-11 items-center rounded-poke-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50 motion-safe:transition-opacity sm:min-h-0"
           >
@@ -86,6 +101,14 @@ export default function LeagueStatusControl({ seasonId, currentStatus }: LeagueS
           </button>
         ))}
       </div>
+      {STATUS_OPTIONS.map((option) => {
+        const reason = reasonFor(option.value);
+        return reason === null ? null : (
+          <p key={option.value} id={reasonId(option.value)} className="basis-full text-xs text-poke-text-muted">
+            {reason}
+          </p>
+        );
+      })}
     </div>
   );
 }

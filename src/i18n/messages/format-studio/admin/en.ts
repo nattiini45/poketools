@@ -1,5 +1,5 @@
 /**
- * Namespace `format-studio/admin`: the chrome of the read-only Format Studio (`/admin/formats`, the three routes)
+ * Namespace `format-studio/admin`: the chrome of the Format Studio pages (`/admin/formats` and its read-only routes)
  * and of the league admin's Format tab. The generated rules text itself comes from `format-studio/describe`,
  * the diagnostic sentences from `format-studio`.
  *
@@ -10,7 +10,7 @@
  */
 export default {
   title: 'Formats',
-  subtitle: 'How leagues and example formats are set up, written out in plain words. Read-only for now.',
+  subtitle: 'Build leagues and tournaments from formats, or read how existing ones are set up.',
   meta: {
     galleryTitle: 'Formats | PokéTools',
     leagueTitle: 'League format | PokéTools',
@@ -18,9 +18,9 @@ export default {
   },
   gallery: {
     heading: 'Examples',
-    intro: 'Three example formats show what the Studio can describe. Open one to read its stages, rules and checks.',
+    intro: 'Three example formats show what the Studio can describe. Open one to read its stages, rules and checks, or use it as a starting point.',
     exampleBadge: 'Example',
-    readOnlyNote: 'Examples are read-only for now. You can read them, but not edit or save them yet.',
+    readOnlyNote: 'Examples are read-only. Use one as a starting point to get a private copy you can change.',
     open: 'Open',
   },
   leagues: {

@@ -15,6 +15,7 @@ import type { Season } from '@/types/season';
 import type { Ruleset } from '@/types/ruleset';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorLike } from '@/i18n/api-errors';
+import { leagueCreatedHref } from '@/lib/league-admin/tabs';
 
 interface LeagueCreatorProps {
   rulesets: Ruleset[];
@@ -59,7 +60,7 @@ export default function LeagueCreator({ rulesets, sources, isSiteAdmin }: League
       return result;
     }
 
-    router.push(`/admin/leagues/${result.data.id}`);
+    router.push(leagueCreatedHref(result.data.id, data.format_type));
     return null;
   }
 
