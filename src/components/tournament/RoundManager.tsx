@@ -186,6 +186,16 @@ interface RoundByeNoticeProps {
 }
 
 /** "Bye: <name>" for a round that gave one or more byes; nothing otherwise. */
+/**
+ * Round row header layout. On a phone the title takes its own full-width line
+ * (basis-full) so the name and Bo label stay readable and the controls wrap
+ * below it; from sm up the title shares the line with the controls again.
+ */
+export const ROUND_ROW_HEADER_CLASS = 'p-3 flex flex-wrap items-center justify-between gap-2';
+export const ROUND_ROW_TITLE_CLASS = 'text-left min-w-0 basis-full sm:basis-0 sm:flex-1';
+export const ROUND_ROW_HEADING_CLASS = 'font-heading font-medium text-sm text-poke-text-primary break-words';
+export const ROUND_ROW_ACTIONS_CLASS = 'flex flex-wrap items-center gap-2 min-w-0 max-w-full';
+
 export function RoundByeNotice({ playerIds, names, settled }: RoundByeNoticeProps) {
   const t = useT(tournamentsAdminMessages);
   if (playerIds.length === 0 || !settled) return null;
@@ -971,13 +981,13 @@ export default function RoundManager({
 
             return (
               <Card key={round.id} variant="outlined" padding="none">
-                <div className="p-3 flex flex-wrap items-center justify-between gap-2">
+                <div className={ROUND_ROW_HEADER_CLASS}>
                   <button
                     type="button"
                     onClick={() => toggleRoundMatches(round.id)}
-                    className="text-left flex-1 min-w-0"
+                    className={ROUND_ROW_TITLE_CLASS}
                   >
-                    <h4 className="font-heading font-medium text-sm text-poke-text-primary">
+                    <h4 className={ROUND_ROW_HEADING_CLASS}>
                       <span className="mr-1.5 text-poke-text-muted">{isExpanded ? '▾' : '▸'}</span>
                       {translateEngineLabel('round', round.name, locale)}
                       <span className="ml-2 text-xs text-poke-text-muted font-normal">
@@ -988,7 +998,7 @@ export default function RoundManager({
                       {enumLabel(tEnum, 'roundStatus', round.status)}
                     </Badge>
                   </button>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className={ROUND_ROW_ACTIONS_CLASS}>
                     {round.status === 'pending' && (
                       <select
                         value={round.best_of}
