@@ -46,6 +46,7 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   from the phase being enrolled, the phase timeline shows it on the phase before). It changes nothing, is not loaded
   until requested, and reads at most 10,000 rows per list. `GET /api/admin/format-drift`.
 - **`season.clone` and `season.clone_failed` audit events** for a league started from another league.
+- **Format kit library.** `src/lib/format-kit` now holds the document schema with bilingual text, a safe expression language, a primitive registry, a compiler that reports diagnostics with fixes, and three preset definitions (classic league, cup, Swiss with top cut). It is not used by the app yet: there is no database, route or UI change, and no upgrade steps. See `docs/format-kit.md`.
 
 ### Changed
 

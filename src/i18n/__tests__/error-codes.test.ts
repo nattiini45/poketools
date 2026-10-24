@@ -38,6 +38,13 @@ const KEY = /^[A-Za-z0-9_]+$/;
  *   body); they belong to the report's own namespace, not to `errors/*`.
  */
 const NOT_API_ERROR_FILES = new Set(['lib/draft/reconciliation-report.ts']);
+/**
+ * Directories whose `code: '<x>'` literals are not API error codes, relative to src/.
+ * - `lib/format-kit/`: schema, expression and compile issue codes of the pure
+ *   format kit. They are data returned by validators, rendered from the
+ *   `format-studio` namespaces, and never reach an HTTP error body.
+ */
+const NOT_API_ERROR_DIRS = ['lib/format-kit/'];
 
 /** zod's issue codes (v3 `ZodIssueCode` and v4): the only codes `ctx.addIssue` takes. */
 const ZOD_ISSUE_CODES: ReadonlySet<string> = new Set([
@@ -195,6 +202,7 @@ describe('error catalogs', { timeout: FILE_WALK_TIMEOUT_MS }, () => {
       for (const file of sourceFiles(root)) {
         const rel = relToSrc(file);
         if (NOT_API_ERROR_FILES.has(rel)) continue;
+        if (NOT_API_ERROR_DIRS.some((dir) => rel.startsWith(dir))) continue;
         const text = fs.readFileSync(file, 'utf8');
         const spans = addIssueSpans(text);
         for (const match of text.matchAll(CODE_LITERAL)) {
@@ -213,6 +221,7 @@ describe('error catalogs', { timeout: FILE_WALK_TIMEOUT_MS }, () => {
 
   it('skips only files that exist, so a stale exclusion cannot hide anything', () => {
     for (const rel of NOT_API_ERROR_FILES) expect(fs.existsSync(path.join(SRC, rel))).toBe(true);
+    for (const rel of NOT_API_ERROR_DIRS) expect(fs.statSync(path.join(SRC, rel)).isDirectory()).toBe(true);
   });
 
   it('the scan pattern matches the shapes routes use, and nothing else', () => {
