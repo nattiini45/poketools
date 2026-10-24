@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { AdminMatchFilterOptions, AdminMatchRoundOption } from '@/lib/supabase/queries/matches';
+import type { AdminMatchFilterOptions, AdminMatchRoundOption, AdminMatchRow } from '@/lib/supabase/queries/matches';
 import type { ApiResult } from '@/types/api';
 import {
   ADMIN_MATCH_SEARCH_PLAYER_CAP,
@@ -15,12 +15,17 @@ import {
   type AdminMatchListResponse,
   type MatchListUrlState,
 } from '@/lib/admin/match-list';
+import { ADMIN_MATCH_BULK_MAX, type AdminMatchBulkAction, type BulkItemResult } from '@/lib/admin/match-bulk';
+import AdminMatchBulkBar from '@/components/admin/AdminMatchBulkBar';
+import AdminMatchBulkDialog, { useBulkSummaryText } from '@/components/admin/AdminMatchBulkDialog';
 import AdminMatchFilters from '@/components/admin/AdminMatchFilters';
 import { MatchListRow } from '@/components/admin/AdminMatchRowCard';
+import { downloadMatchExport, type MatchExportInfo } from '@/components/admin/match-bulk-client';
 import { isRetryableLoadError, matchListEmptyKey } from '@/components/admin/match-list-view';
+import { useMatchSelection } from '@/components/admin/useMatchSelection';
 import Alert from '@/components/ui/Alert';
 import Skeleton from '@/components/ui/Skeleton';
-import { getButtonClasses } from '@/components/ui/Button';
+import Button, { getButtonClasses } from '@/components/ui/Button';
 import { AnimatedList, AnimatedListItem } from '@/components/shared/AnimatedList';
 import { useFormatter, useT, useTimeZone } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -130,6 +135,101 @@ export function MatchListPager({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** The state of the CSV export button area. */
+export type MatchExportState =
+  | { kind: 'working' }
+  | { kind: 'done'; info: Pick<MatchExportInfo, 'count' | 'total' | 'truncated' | 'searchTruncated'> }
+  | { kind: 'failed'; error: ApiErrorLike };
+
+/**
+ * The strip above the rows: the page checkbox (indeterminate while only some rows are selected) next to the shown
+ * range, the Export CSV button with its result line, and the hint on what a selection covers. Presentational, so
+ * it renders without fetches.
+ */
+export function MatchListSelectionHeader({
+  pageState,
+  pageCount,
+  from,
+  to,
+  total,
+  onTogglePage,
+  exportState,
+  onExport,
+}: {
+  pageState: 'none' | 'some' | 'all';
+  /** Rows on the page. */
+  pageCount: number;
+  from: number;
+  to: number;
+  total: number;
+  onTogglePage: () => void;
+  exportState: MatchExportState | null;
+  onExport: () => void;
+}) {
+  const t = useT(shellMessages);
+  const f = useFormatter();
+  const errorText = useApiErrorText(errorsAdmin);
+  const exporting = exportState?.kind === 'working';
+
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <label className="flex min-h-[32px] cursor-pointer items-center gap-2 text-xs text-poke-text-muted">
+          <input
+            type="checkbox"
+            checked={pageState === 'all'}
+            ref={(element) => {
+              if (element) element.indeterminate = pageState === 'some';
+            }}
+            onChange={onTogglePage}
+            data-state={pageState}
+            aria-label={t('admin.matches.bulk.selectPage', { count: pageCount })}
+            className="h-4 w-4 cursor-pointer accent-poke-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+          />
+          <span>{t('admin.matches.range', { from: f.number(from), to: f.number(to), total: f.number(total) })}</span>
+        </label>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onExport}
+          disabled={exporting || total === 0}
+          className="min-h-[36px]"
+        >
+          {exporting ? t('admin.matches.export.working') : t('admin.matches.export.button', { count: total, number: f.number(total) })}
+        </Button>
+      </div>
+      {/* Mounted before it has text, so the working and done lines are announced when they appear. */}
+      <div role="status" className={exportState?.kind === 'done' ? 'space-y-0.5 text-xs text-poke-text-secondary' : 'sr-only'}>
+        {exporting && <p>{t('admin.matches.export.working')}</p>}
+        {exportState?.kind === 'done' && (
+          <>
+            <p>
+              {exportState.info.truncated
+                ? t('admin.matches.export.doneTruncated', {
+                    exported: f.number(exportState.info.count),
+                    total: f.number(exportState.info.total),
+                  })
+                : t('admin.matches.export.done', { count: exportState.info.count, number: f.number(exportState.info.count) })}
+            </p>
+            {exportState.info.searchTruncated && (
+              <p className="text-poke-yellow-ink">
+                {t('admin.matches.export.searchTruncated', { count: ADMIN_MATCH_SEARCH_PLAYER_CAP })}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+      {exportState?.kind === 'failed' && (
+        <p role="alert" className="text-xs text-poke-danger">
+          {t('admin.matches.export.failed')}: {errorText(exportState.error)}
+        </p>
+      )}
+      <p className="text-xs text-poke-text-muted">{t('admin.matches.bulk.hint', { max: ADMIN_MATCH_BULK_MAX })}</p>
     </div>
   );
 }
@@ -293,6 +393,69 @@ export default function AdminMatchList() {
   const firstShown = total === 0 || !data ? 0 : (data.page - 1) * data.pageSize + 1;
   const lastShown = data ? firstShown + data.rows.length - 1 : 0;
 
+  // ── Row selection and the bulk actions ──
+  const pageRows = data?.rows;
+  const pageIds = useMemo(() => pageRows?.map((row) => row.id) ?? [], [pageRows]);
+  // The request key carries every filter, the sort and the page, so any of them changing drops the selection.
+  const selection = useMatchSelection({ selectionKey: apiQuery, pageIds });
+  const selectedRows = useMemo(() => {
+    const byId = new Map((pageRows ?? []).map((row) => [row.id, row]));
+    return selection.selected.flatMap((id) => byId.get(id) ?? []);
+  }, [pageRows, selection.selected]);
+  // The selection as it was when the dialog opened: the list reloads behind the report.
+  const [dialog, setDialog] = useState<{ kind: AdminMatchBulkAction; rows: AdminMatchRow[] } | null>(null);
+  // What the screen-reader live region says after an action; the next change to the selection replaces it.
+  const [announcement, setAnnouncement] = useState('');
+  const summaryText = useBulkSummaryText();
+  const { keepOnly } = selection;
+  const handleBulkDone = useCallback(
+    (results: BulkItemResult[]) => {
+      // Whatever did not finish stays selected for a retry; the rest is deselected and the page reloads.
+      keepOnly(results.filter((result) => !result.ok).map((result) => result.id));
+      setReloadKey((key) => key + 1);
+      setAnnouncement(summaryText(results));
+    },
+    [keepOnly, summaryText],
+  );
+  const toggleRow = (id: string) => {
+    setAnnouncement('');
+    selection.toggle(id);
+  };
+  const togglePage = () => {
+    setAnnouncement('');
+    selection.togglePage();
+  };
+  const clearSelection = () => {
+    setAnnouncement('');
+    selection.clear();
+  };
+
+  // ── CSV export of the whole filtered set (not only this page) ──
+  const [exportResult, setExportResult] = useState<{ key: string; state: MatchExportState } | null>(null);
+  const exportState = exportResult?.key === apiQuery ? exportResult.state : null;
+  const exportController = useRef<AbortController | null>(null);
+  useEffect(() => () => exportController.current?.abort(), []);
+  const runExport = () => {
+    if (exportState?.kind === 'working') return;
+    exportController.current?.abort();
+    const controller = new AbortController();
+    exportController.current = controller;
+    // Page 1 with the list's own clock: the file holds what the filters on screen select.
+    const query = buildMatchListApiQuery({ ...url, page: 1 }, { timeZone, nowMs: anchorMs });
+    const key = apiQuery;
+    setExportResult({ key, state: { kind: 'working' } });
+    void downloadMatchExport(query, controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      setExportResult({
+        key,
+        state: result.ok ? { kind: 'done', info: result.info } : { kind: 'failed', error: result.error },
+      });
+    });
+  };
+
+  const liveText =
+    announcement || (selection.count > 0 ? t('admin.matches.bulk.liveSelected', { count: selection.count }) : '');
+
   const emptyText = t(`admin.matches.${matchListEmptyKey(url)}`);
   const backQuery = buildMatchListSearch(url);
 
@@ -383,13 +546,37 @@ export default function AdminMatchList() {
         !error && <p className="text-sm text-poke-text-muted">{emptyText}</p>
       ) : (
         <>
+          <MatchListSelectionHeader
+            pageState={selection.pageState}
+            pageCount={data.rows.length}
+            from={firstShown}
+            to={lastShown}
+            total={total}
+            onTogglePage={togglePage}
+            exportState={exportState}
+            onExport={runExport}
+          />
+
           <AnimatedList className="space-y-2">
             {data.rows.map((row) => (
               <AnimatedListItem key={row.id}>
-                <MatchListRow row={row} backQuery={backQuery} />
+                <MatchListRow
+                  row={row}
+                  backQuery={backQuery}
+                  selection={{ checked: selection.isSelected(row.id), onChange: () => toggleRow(row.id) }}
+                />
               </AnimatedListItem>
             ))}
           </AnimatedList>
+
+          <AdminMatchBulkBar
+            count={selection.count}
+            onClear={clearSelection}
+            onAction={(kind) => {
+              setAnnouncement('');
+              setDialog({ kind, rows: selectedRows });
+            }}
+          />
 
           <MatchListPager
             page={url.page}
@@ -401,6 +588,20 @@ export default function AdminMatchList() {
             onPageChange={(page) => update({ page })}
           />
         </>
+      )}
+
+      <div role="status" aria-live="polite" className="sr-only">
+        {liveText}
+      </div>
+
+      {dialog && (
+        <AdminMatchBulkDialog
+          kind={dialog.kind}
+          rows={dialog.rows}
+          timeZone={timeZone}
+          onClose={() => setDialog(null)}
+          onDone={handleBulkDone}
+        />
       )}
     </div>
   );

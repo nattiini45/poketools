@@ -17,9 +17,18 @@ import { shellMessages } from '@/i18n/messages/shell';
  * One row of the admin match list. The title link carries a stretched hit area
  * (`after:inset-0` on the `relative` card), so the whole row opens the admin match page; the
  * secondary links sit above it (`relative z-10`) as siblings, never inside the primary anchor.
- * `backQuery` is the list's canonical query string: the match page returns to it.
+ * `backQuery` is the list's canonical query string: the match page returns to it. With `selection` the row
+ * starts with a checkbox (a sibling of the title link, above its stretched hit area) and a selected row is outlined.
  */
-export function MatchListRow({ row, backQuery }: { row: AdminMatchRow; backQuery: string }) {
+export function MatchListRow({
+  row,
+  backQuery,
+  selection,
+}: {
+  row: AdminMatchRow;
+  backQuery: string;
+  selection?: { checked: boolean; onChange: (checked: boolean) => void };
+}) {
   const t = useT(shellMessages);
   const locale = useLocale();
   const now = useMinuteClock();
@@ -67,10 +76,23 @@ export function MatchListRow({ row, backQuery }: { row: AdminMatchRow; backQuery
     <Card
       variant="outlined"
       padding="sm"
-      className="group relative transition-colors hover:border-poke-border-focus focus-within:border-poke-border-focus"
+      className={`group relative transition-colors hover:border-poke-border-focus focus-within:border-poke-border-focus${
+        selection?.checked ? ' border-poke-border-focus ring-1 ring-poke-border-focus' : ''
+      }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 max-w-full">
+          {selection && (
+            <label className="relative z-10 -my-1 -ml-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center">
+              <input
+                type="checkbox"
+                checked={selection.checked}
+                onChange={(event) => selection.onChange(event.target.checked)}
+                aria-label={t('admin.matches.bulk.selectRow', { player1: row.player_1_name, player2: row.player_2_name })}
+                className="relative z-10 h-4 w-4 cursor-pointer rounded-poke-sm border-poke-border accent-poke-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+              />
+            </label>
+          )}
           <Link
             href={href}
             className="font-heading font-medium text-sm text-poke-text-primary max-w-full truncate group-hover:text-poke-accent transition-colors focus-visible:outline-none after:absolute after:inset-0 after:rounded-poke-lg focus-visible:after:ring-2 focus-visible:after:ring-poke-border-focus"
