@@ -183,3 +183,77 @@ describe('PhaseForm doubles checkbox', () => {
     expect(html).not.toContain('Doubles phase');
   });
 });
+
+/** The best-of `<select>` (labelled "Best of (default)"), as HTML. */
+function bestOfSelect(html: string): string {
+  const match = html.match(/<select[^>]*id="best-of-\(default\)"[^>]*>.*?<\/select>/s);
+  expect(match).not.toBeNull();
+  return match ? match[0] : '';
+}
+
+/** The values of the `<option>`s of a select. */
+function optionValues(select: string): string[] {
+  return [...select.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]);
+}
+
+/** The submit button's opening tag. */
+function submitButton(html: string): string {
+  const match = html.match(/<button[^>]*type="submit"[^>]*>/);
+  expect(match).not.toBeNull();
+  return match ? match[0] : '';
+}
+
+describe('PhaseForm best-of', () => {
+  it('offers the odd values 1 to 15', () => {
+    const html = renderToStaticMarkup(<PhaseForm rulesets={[OTHER]} onSubmit={noopSubmit} />);
+
+    expect(optionValues(bestOfSelect(html))).toEqual(['1', '3', '5', '7', '9', '11', '13', '15']);
+    expect(bestOfSelect(html)).toMatch(/<option value="3" selected="">/);
+  });
+
+  it('lists a stored legacy even value in place and keeps it selected', () => {
+    const html = renderToStaticMarkup(
+      <PhaseForm
+        rulesets={[OTHER]}
+        onSubmit={noopSubmit}
+        initialData={{ name: 'Groups', ruleset_id: OTHER.id, best_of_default: 4 }}
+      />,
+    );
+
+    expect(optionValues(bestOfSelect(html))).toEqual(['1', '3', '4', '5', '7', '9', '11', '13', '15']);
+    expect(bestOfSelect(html)).toMatch(/<option value="4" selected="">/);
+  });
+});
+
+describe('PhaseForm submit and locked state', () => {
+  it('enables submit for a named phase with a ruleset', () => {
+    const html = renderToStaticMarkup(
+      <PhaseForm rulesets={[OTHER]} onSubmit={noopSubmit} initialData={{ name: 'Groups', ruleset_id: OTHER.id }} />,
+    );
+
+    expect(submitButton(html)).not.toContain(' disabled=""');
+    expect(html).not.toContain('<fieldset disabled');
+  });
+
+  it('keeps submit disabled for a whitespace-only name', () => {
+    const html = renderToStaticMarkup(
+      <PhaseForm rulesets={[OTHER]} onSubmit={noopSubmit} initialData={{ name: '   ', ruleset_id: OTHER.id }} />,
+    );
+
+    expect(submitButton(html)).toContain(' disabled=""');
+  });
+
+  it('disables the fieldset and the submit button while locked', () => {
+    const html = renderToStaticMarkup(
+      <PhaseForm
+        rulesets={[OTHER]}
+        onSubmit={noopSubmit}
+        initialData={{ name: 'Groups', ruleset_id: OTHER.id }}
+        locked
+      />,
+    );
+
+    expect(html).toMatch(/<fieldset disabled=""/);
+    expect(submitButton(html)).toContain(' disabled=""');
+  });
+});

@@ -25,6 +25,9 @@ export default defineDe<typeof en>()({
     participants: 'Teilnehmer',
     rounds: 'Runden',
     admins: 'Turnier-Admins',
+    settings: 'Einstellungen',
+    settingsHint:
+      'Name, Regelwerk, Best-of, Doppel, Turniermodus und Sichtbarkeit. Turniermodus, Regelwerk und Doppel sind gesperrt, sobald das Turnier gestartet ist.',
   },
   lifecycle: {
     markCompleted: 'Als abgeschlossen markieren',
@@ -32,6 +35,16 @@ export default defineDe<typeof en>()({
     confirmPhase: 'Phase „{name}“ als abgeschlossen markieren?',
     failedTournament: 'Das Turnier konnte nicht abgeschlossen werden.',
     failedPhase: 'Die Phase konnte nicht abgeschlossen werden.',
+    reopen: 'Wieder öffnen',
+    reopenTitlePhase: 'Phase „{name}“ wieder öffnen?',
+    reopenTitleTournament: 'Turnier „{name}“ wieder öffnen?',
+    reopenConsequencePhase:
+      'Die Phase wird wieder aktiv: Einstellungen, Teilnehmer und Runden lassen sich dann wieder ändern. Spiele, Ergebnisse und Tabellen bleiben unverändert. Wenn du sie erneut abschließt, wird der Abschluss erneut auf Discord und in den sozialen Kanälen angekündigt. Spieler, die bereits in die nächste Phase übernommen wurden, bleiben dort.',
+    reopenConsequenceTournament:
+      'Das Turnier wird wieder aktiv: Einstellungen, Teilnehmer und Runden lassen sich dann wieder ändern. Spiele, Ergebnisse und Tabellen bleiben unverändert. Wenn du es erneut abschließt, wird der Abschluss erneut auf Discord und in den sozialen Kanälen angekündigt.',
+    reopenConfirm: 'Wieder öffnen',
+    reopenFailedPhase: 'Die Phase konnte nicht wieder geöffnet werden.',
+    reopenFailedTournament: 'Das Turnier konnte nicht wieder geöffnet werden.',
   },
   form: {
     bracketTypes: {
@@ -56,6 +69,9 @@ export default defineDe<typeof en>()({
     bracketReset: 'Bracket-Reset im Großen Finale (zweites Set „falls nötig“)',
     teamVisibility: 'Sichtbarkeit der Teams',
     submit: 'Turnier erstellen',
+    saveChanges: 'Änderungen speichern',
+    saved: 'Turnier-Einstellungen gespeichert.',
+    lockedStarted: 'Gesperrt: Das Turnier ist gestartet.',
     saveFailed: 'Speichern fehlgeschlagen.',
   },
   boOverrides: {

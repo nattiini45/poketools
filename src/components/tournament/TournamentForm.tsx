@@ -14,24 +14,40 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { commonMessages } from '@/i18n/messages/common';
 import { errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
+import { bestOfChoices } from '@/lib/tournament/best-of';
 import type { UiError } from './ui-error';
 
 interface TournamentFormProps {
   rulesets: Ruleset[];
   onSubmit: (data: TournamentFormData) => Promise<void>;
   initialData?: Partial<TournamentFormData>;
+  /** `edit` hides the description (the page has its own editor) and is used with `initialData`. */
+  mode?: 'create' | 'edit';
+  /** Overrides the submit button label (default: the create label). */
+  submitLabel?: string;
+  /** Controls frozen once the tournament has started; each shows a short reason. */
+  lockedFields?: { bracketType?: boolean; ruleset?: boolean; doubles?: boolean };
 }
 
 const BRACKET_TYPES = ['single_elim', 'double_elim', 'round_robin', 'swiss'] as const satisfies readonly BracketType[];
 
 const VISIBILITY_OPTIONS = ['hidden_until_match', 'always_public'] as const satisfies readonly TeamVisibility[];
 
-const BO_OPTIONS = [1, 3, 5, 7] as const;
+function LockedHint({ id, children }: { id: string; children: React.ReactNode }) {
+  return (
+    <p id={id} className="-mt-2 text-xs text-poke-text-muted">
+      {children}
+    </p>
+  );
+}
 
 export default function TournamentForm({
   rulesets,
   onSubmit,
   initialData,
+  mode = 'create',
+  submitLabel,
+  lockedFields,
 }: TournamentFormProps) {
   const [name, setName] = useState(initialData?.name ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
@@ -55,7 +71,8 @@ export default function TournamentForm({
   const [error, setError] = useState<UiError<'form.saveFailed'> | null>(null);
   const bracketTypeOptions = BRACKET_TYPES.map((value) => ({ value, label: t(`form.bracketTypes.${value}`) }));
   const visibilityOptions = VISIBILITY_OPTIONS.map((value) => ({ value, label: t(`form.visibility.${value}`) }));
-  const bestOfOptions = BO_OPTIONS.map((bo) => ({ value: String(bo), label: tCommon('bestOf', { count: bo }) }));
+  const isEdit = mode === 'edit';
+  const bestOfOptions = bestOfChoices(initialData?.best_of_default).map((bo) => ({ value: String(bo), label: tCommon('bestOf', { count: bo }) }));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -99,35 +116,42 @@ export default function TournamentForm({
         placeholder={t('form.namePlaceholder')}
       />
 
-      <div className="space-y-1.5">
-        <label
-          htmlFor="description"
-          className="block text-sm font-heading font-semibold text-poke-text-primary"
-        >
-          {t('form.description')}
-        </label>
-        <textarea
-          id="description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder={t('form.descriptionPlaceholder')}
-          rows={2}
-          className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:border-poke-focus focus:ring-1 focus:ring-poke-focus outline-none text-sm resize-y"
-        />
-      </div>
+      {!isEdit && (
+        <div className="space-y-1.5">
+          <label
+            htmlFor="description"
+            className="block text-sm font-heading font-semibold text-poke-text-primary"
+          >
+            {t('form.description')}
+          </label>
+          <textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={t('form.descriptionPlaceholder')}
+            rows={2}
+            className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:border-poke-focus focus:ring-1 focus:ring-poke-focus outline-none text-sm resize-y"
+          />
+        </div>
+      )}
 
       <Select
         label={t('form.bracketType')}
         value={bracketType}
         onChange={(e) => setBracketType(e.target.value as BracketType)}
         options={bracketTypeOptions}
+        disabled={lockedFields?.bracketType}
+        aria-describedby={lockedFields?.bracketType ? 'bracket-type-locked' : undefined}
       />
+      {lockedFields?.bracketType && <LockedHint id="bracket-type-locked">{t('form.lockedStarted')}</LockedHint>}
 
       <Select
         label={t('form.ruleset')}
         value={rulesetId}
         onChange={(e) => setRulesetId(e.target.value)}
         required
+        disabled={lockedFields?.ruleset}
+        aria-describedby={lockedFields?.ruleset ? 'ruleset-locked' : undefined}
       >
         <option value="">{t('form.selectRuleset')}</option>
         {rulesets.map((r) => (
@@ -136,6 +160,7 @@ export default function TournamentForm({
           </option>
         ))}
       </Select>
+      {lockedFields?.ruleset && <LockedHint id="ruleset-locked">{t('form.lockedStarted')}</LockedHint>}
 
       <Select
         label={t('form.bestOfDefault')}
@@ -157,12 +182,15 @@ export default function TournamentForm({
           id="isDoubles"
           checked={isDoubles}
           onChange={(e) => setIsDoubles(e.target.checked)}
+          disabled={lockedFields?.doubles}
+          aria-describedby={lockedFields?.doubles ? 'doubles-locked' : undefined}
           className="rounded accent-poke-accent"
         />
         <label htmlFor="isDoubles" className="text-sm text-poke-text-primary">
           {t('form.doubles')}
         </label>
       </div>
+      {lockedFields?.doubles && <LockedHint id="doubles-locked">{t('form.lockedStarted')}</LockedHint>}
 
       {bracketType === 'double_elim' && (
         <div className="flex items-center gap-2">
@@ -190,9 +218,9 @@ export default function TournamentForm({
         type="submit"
         variant="secondary"
         loading={submitting}
-        disabled={!name || !rulesetId}
+        disabled={!name.trim() || !rulesetId}
       >
-        {t('form.submit')}
+        {submitLabel ?? t('form.submit')}
       </Button>
     </form>
   );

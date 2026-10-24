@@ -9,6 +9,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { initializeEpbFormatRules } from '@/lib/season/format-rules-defaults';
 import { ensurePointBuyBattleRuleset } from '@/lib/season/point-buy-battle-ruleset';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { assertSeasonDateRange } from '@/lib/season/settings-guards';
 import { expireSeasonReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { SeasonWithDetails } from '@/types/season';
@@ -59,6 +60,10 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // The schema checks each date alone; the order of the two is checked here
+    // (a refine on the schema would stop PATCH from extending it).
+    assertSeasonDateRange(zodResult.data.start_date, zodResult.data.end_date);
 
     const isPointBuy = isEvolutionPointBuy(zodResult.data.format_type);
 

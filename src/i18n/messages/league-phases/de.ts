@@ -24,6 +24,7 @@ export default defineDe<typeof en>()({
   overview: {
     saved: 'Phaseneinstellungen gespeichert.',
     saveChanges: 'Änderungen speichern',
+    lockedCompleted: 'Diese Phase ist abgeschlossen, daher sind ihre Einstellungen gesperrt. Öffne sie wieder, um sie zu ändern.',
   },
   timeline: {
     loading: 'Phasen werden geladen …',
@@ -45,6 +46,16 @@ export default defineDe<typeof en>()({
     newPhaseTitle: 'Neue Phase – Schritt 1: Einstellungen',
     newPhaseHint: 'Nach dem Erstellen werden die Teilnehmer automatisch aus der Ligatabelle eingetragen.',
     createSubmit: 'Erstellen und Teilnehmer eintragen',
+    position: {
+      label: 'Position',
+      end: 'Am Ende der Liga',
+      before: 'Vor einer Phase',
+      after: 'Nach einer Phase',
+      phase: 'Phase',
+      option: '{order}. {name}',
+      optionLocked: '{order}. {name} (bereits gestartet)',
+      hint: 'Eine Phase lässt sich nur vor Phasen einfügen, die noch nicht gestartet sind.',
+    },
     errors: {
       loadFailed: 'Phasen konnten nicht geladen werden',
       deleteFailed: 'Phase konnte nicht gelöscht werden',
@@ -60,6 +71,13 @@ export default defineDe<typeof en>()({
     serpentine: 'Nach Setzplätzen im Snake-System verteilen',
     clear: 'Gruppen leeren',
     confirmClear: 'Alle Gruppen und Gruppenzuteilungen entfernen?',
+    redrawTitle: 'Aktuelle Gruppen ersetzen?',
+    redrawConfirm: {
+      one: 'Damit wird die aktuelle Gruppe ({count}) gelöscht und neu nach Setzliste ausgelost. Manuelle Verschiebungen gehen verloren. Bereits erzeugte Runden bleiben unverändert.',
+      other:
+        'Damit werden die {count} aktuellen Gruppen gelöscht und neu nach Setzliste ausgelost. Manuelle Verschiebungen gehen verloren. Bereits erzeugte Runden bleiben unverändert.',
+    },
+    redrawConfirmLabel: 'Neu auslosen',
     empty: 'Noch keine Gruppen. Setze zuerst die Teilnehmer und verteile sie dann im Snake-System (1→A, 2→B, 3→B, 4→A …).',
     noMembers: 'Keine Mitglieder',
     moveAria: '{name} verschieben',

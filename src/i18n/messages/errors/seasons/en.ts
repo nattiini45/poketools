@@ -20,6 +20,7 @@ export default {
   PHASE_INSERT_INVALID: 'insert_at is out of range',
   PHASE_INSERT_LOCKED: 'Cannot insert a phase before stages that have already started',
   PHASE_COMPLETED_LOCKED: 'Completed phases are locked. Reopen to active first.',
+  PHASE_NAME_TAKEN: 'Another phase of this league already has this name.',
   PHASE_DELETE_CONFIRM_REQUIRED: 'Deleting a phase with rounds requires confirm: true',
   PHASE_STAGE_ORDER_LOCKED: 'Stage order cannot be changed once the phase has started',
   PHASE_BRACKET_LOCKED: 'Bracket type cannot be changed once the phase has started',
@@ -64,6 +65,11 @@ export default {
   // League DELETE refused by a row that still points at the league without ON DELETE (SQLSTATE 23503; 409)
   SEASON_HAS_DEPENDENTS:
     'This league still has phases, draft pools, teams or storylines that point to it, so nothing was deleted. Delete those first, then delete the league.',
+  // League settings (PATCH /api/seasons/[id], POST /api/seasons)
+  SEASON_FORMAT_LOCKED: 'The league type cannot be changed once the league has started.',
+  SEASON_FORMAT_POINT_BUY_LOCKED:
+    'A point-buy league keeps its league type, and other leagues cannot be switched to it.',
+  SEASON_DATES_INVALID: 'The end date must not be before the start date.',
   season_test_flag_site_admin_only: 'Only site admins can change the test-league flag',
   participant_update_empty: 'Provide gym_type and/or core_types to update',
   format_mismatch: 'This season does not use the Evolution Point Buy format',

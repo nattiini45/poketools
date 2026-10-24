@@ -18,6 +18,7 @@ import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { unsavedMarker } from '@/lib/league-admin/unsaved';
+import { bestOfChoices } from '@/lib/tournament/best-of';
 import { phaseFormDirty, type PhaseFormValues } from '@/lib/league-admin/form-dirty';
 
 export interface PhaseFormData extends TournamentFormData {
@@ -31,6 +32,11 @@ interface PhaseFormProps {
   initialData?: Partial<PhaseFormData>;
   submitLabel?: string;
   lockBracketType?: boolean;
+  /**
+   * Every field and the submit button are disabled (a completed phase: reopen it to change its
+   * settings).
+   */
+  locked?: boolean;
   /**
    * The league's default ruleset (`seasons.ruleset_id`), preselected for a new phase when
    * `initialData` names none and the id is one of `rulesets` (a point-buy league gets the
@@ -54,8 +60,6 @@ const BRACKET_TYPES: readonly BracketType[] = ['single_elim', 'double_elim', 'ro
 
 const VISIBILITY_OPTIONS: readonly TeamVisibility[] = ['hidden_until_match', 'always_public'];
 
-const BEST_OF_VALUES: readonly number[] = [1, 3, 5, 7];
-
 /**
  * The doubles flag the form shows and sends. An admin's own choice (or the
  * stored value of a phase being edited) always wins; before that, a new phase
@@ -77,6 +81,7 @@ export default function PhaseForm({
   initialData,
   submitLabel,
   lockBracketType = false,
+  locked = false,
   defaultRulesetId = null,
 }: PhaseFormProps) {
   const t = useT(leaguePhasesMessages);
@@ -148,7 +153,8 @@ export default function PhaseForm({
         bracket_type: bracketType,
         ruleset_id: rulesetId,
         best_of_default: bestOf,
-        bo_overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
+        // Always sent, an empty object when none: clearing every override has to persist.
+        bo_overrides: overrides,
         is_doubles: isDoubles,
         team_visibility: teamVisibility,
         advancement_rule,
@@ -166,122 +172,124 @@ export default function PhaseForm({
     <form onSubmit={handleSubmit} className="space-y-4 max-w-lg" {...unsavedMarker(dirty)}>
       {error && <Alert variant="error">{error === true ? t('form.saveFailed') : errorText(error)}</Alert>}
 
-      <Input
-        label={t('form.name')}
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-        placeholder={t('form.namePlaceholder')}
-      />
-
-      <div className="space-y-1.5">
-        <label
-          htmlFor="phase-description"
-          className="block text-sm font-heading font-semibold text-poke-text-primary"
-        >
-          {t('form.description')}
-        </label>
-        <textarea
-          id="phase-description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={2}
-          className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm resize-y"
+      <fieldset disabled={locked} className="min-w-0 space-y-4">
+        <Input
+          label={t('form.name')}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          placeholder={t('form.namePlaceholder')}
         />
-      </div>
 
-      <Select
-        label={t('form.bracketType')}
-        value={bracketType}
-        onChange={(e) => setBracketType(e.target.value as BracketType)}
-        options={BRACKET_TYPES.map((value) => ({ value, label: enumLabel(tEnum, 'bracketType', value) }))}
-        disabled={lockBracketType}
-      />
-
-      <Select
-        label={t('form.ruleset')}
-        value={rulesetId}
-        onChange={(e) => setRulesetId(e.target.value)}
-        required
-      >
-        <option value="">{t('form.selectRuleset')}</option>
-        {rulesets.map((r) => (
-          <option key={r.id} value={r.id}>{r.name}</option>
-        ))}
-      </Select>
-
-      <Select
-        label={t('form.bestOf')}
-        value={String(bestOf)}
-        onChange={(e) => setBestOf(Number(e.target.value))}
-        options={BEST_OF_VALUES.map((count) => ({ value: String(count), label: tCommon('bestOf', { count }) }))}
-      />
-
-      <BoOverrideEditor
-        bracketType={bracketType}
-        defaultBo={bestOf}
-        overrides={boOverrides}
-        onChange={setBoOverrides}
-      />
-
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-sm text-poke-text-primary">
-          <input
-            type="checkbox"
-            checked={isDoubles}
-            onChange={(e) => {
-              setDoublesChoice(e.target.checked);
-              setDoublesPinned(true);
-            }}
-            className="rounded accent-poke-accent"
+        <div className="space-y-1.5">
+          <label
+            htmlFor="phase-description"
+            className="block text-sm font-heading font-semibold text-poke-text-primary"
+          >
+            {t('form.description')}
+          </label>
+          <textarea
+            id="phase-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm resize-y"
           />
-          {t('form.isDoubles')}
-        </label>
-        <p className="text-xs text-poke-text-muted">{t('form.isDoublesHint')}</p>
-      </div>
+        </div>
 
-      <Select
-        label={t('form.teamVisibility')}
-        value={teamVisibility}
-        onChange={(e) => setTeamVisibility(e.target.value as TeamVisibility)}
-        options={VISIBILITY_OPTIONS.map((value) => ({ value, label: enumLabel(tEnum, 'teamVisibility', value) }))}
-      />
+        <Select
+          label={t('form.bracketType')}
+          value={bracketType}
+          onChange={(e) => setBracketType(e.target.value as BracketType)}
+          options={BRACKET_TYPES.map((value) => ({ value, label: enumLabel(tEnum, 'bracketType', value) }))}
+          disabled={lockBracketType}
+        />
 
-      <div className="border-t border-poke-border pt-3">
-        <label className="block text-sm font-heading font-semibold text-poke-text-primary mb-1.5">
-          {t('form.advancement')}
-        </label>
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            min={0}
-            value={advCount}
-            onChange={(e) => setAdvCount(Number(e.target.value))}
-            className="w-20 border border-poke-border bg-poke-surface rounded-poke-md px-3 py-1.5 text-sm"
-            placeholder="0"
-          />
-          <span className="text-xs text-poke-text-secondary">{t('form.advancementPlayers')}</span>
-          <label className="flex items-center gap-1 text-xs text-poke-text-primary">
+        <Select
+          label={t('form.ruleset')}
+          value={rulesetId}
+          onChange={(e) => setRulesetId(e.target.value)}
+          required
+        >
+          <option value="">{t('form.selectRuleset')}</option>
+          {rulesets.map((r) => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </Select>
+
+        <Select
+          label={t('form.bestOf')}
+          value={String(bestOf)}
+          onChange={(e) => setBestOf(Number(e.target.value))}
+          options={bestOfChoices(initialData?.best_of_default ?? bestOf).map((count) => ({ value: String(count), label: tCommon('bestOf', { count }) }))}
+        />
+
+        <BoOverrideEditor
+          bracketType={bracketType}
+          defaultBo={bestOf}
+          overrides={boOverrides}
+          onChange={setBoOverrides}
+        />
+
+        <div className="space-y-1">
+          <label className="flex items-center gap-2 text-sm text-poke-text-primary">
             <input
               type="checkbox"
-              checked={advPerGroup}
-              onChange={(e) => setAdvPerGroup(e.target.checked)}
+              checked={isDoubles}
+              onChange={(e) => {
+                setDoublesChoice(e.target.checked);
+                setDoublesPinned(true);
+              }}
               className="rounded accent-poke-accent"
             />
-            {t('form.perGroup')}
+            {t('form.isDoubles')}
           </label>
+          <p className="text-xs text-poke-text-muted">{t('form.isDoublesHint')}</p>
         </div>
-        <p className="text-xs text-poke-text-muted mt-1">
-          {t('form.advancementHint')}
-        </p>
-      </div>
+
+        <Select
+          label={t('form.teamVisibility')}
+          value={teamVisibility}
+          onChange={(e) => setTeamVisibility(e.target.value as TeamVisibility)}
+          options={VISIBILITY_OPTIONS.map((value) => ({ value, label: enumLabel(tEnum, 'teamVisibility', value) }))}
+        />
+
+        <div className="border-t border-poke-border pt-3">
+          <label className="block text-sm font-heading font-semibold text-poke-text-primary mb-1.5">
+            {t('form.advancement')}
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              min={0}
+              value={advCount}
+              onChange={(e) => setAdvCount(Number(e.target.value))}
+              className="w-20 border border-poke-border bg-poke-surface rounded-poke-md px-3 py-1.5 text-sm"
+              placeholder="0"
+            />
+            <span className="text-xs text-poke-text-secondary">{t('form.advancementPlayers')}</span>
+            <label className="flex items-center gap-1 text-xs text-poke-text-primary">
+              <input
+                type="checkbox"
+                checked={advPerGroup}
+                onChange={(e) => setAdvPerGroup(e.target.checked)}
+                className="rounded accent-poke-accent"
+              />
+              {t('form.perGroup')}
+            </label>
+          </div>
+          <p className="text-xs text-poke-text-muted mt-1">
+            {t('form.advancementHint')}
+          </p>
+        </div>
+      </fieldset>
 
       <Button
         type="submit"
         variant="secondary"
         loading={submitting}
-        disabled={!name || !rulesetId}
+        disabled={locked || !name.trim() || !rulesetId}
       >
         {submitLabel ?? t('form.submit')}
       </Button>

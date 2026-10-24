@@ -27,6 +27,9 @@ export default {
     participants: 'Participants',
     rounds: 'Rounds',
     admins: 'Tournament Admins',
+    settings: 'Settings',
+    settingsHint:
+      'Name, ruleset, best-of, doubles, bracket type and visibility. Bracket type, ruleset and doubles lock once the tournament has started.',
   },
   lifecycle: {
     markCompleted: 'Mark Completed',
@@ -34,6 +37,16 @@ export default {
     confirmPhase: 'Mark phase "{name}" as completed?',
     failedTournament: 'Failed to complete tournament',
     failedPhase: 'Failed to complete phase',
+    reopen: 'Reopen',
+    reopenTitlePhase: 'Reopen phase "{name}"?',
+    reopenTitleTournament: 'Reopen tournament "{name}"?',
+    reopenConsequencePhase:
+      'The phase becomes active again, so its settings, participants and rounds can be changed. Matches, results and standings stay exactly as they are. Completing it again announces the completion on Discord and social channels again. Players who were already advanced into the next phase stay there.',
+    reopenConsequenceTournament:
+      'The tournament becomes active again, so its settings, participants and rounds can be changed. Matches, results and standings stay exactly as they are. Completing it again announces the completion on Discord and social channels again.',
+    reopenConfirm: 'Reopen',
+    reopenFailedPhase: 'Failed to reopen phase',
+    reopenFailedTournament: 'Failed to reopen tournament',
   },
   form: {
     bracketTypes: {
@@ -58,6 +71,9 @@ export default {
     bracketReset: 'Grand Finals bracket reset (“if necessary” second set)',
     teamVisibility: 'Team Visibility',
     submit: 'Create Tournament',
+    saveChanges: 'Save changes',
+    saved: 'Tournament settings saved.',
+    lockedStarted: 'Locked: the tournament has started.',
     saveFailed: 'Failed to save',
   },
   boOverrides: {

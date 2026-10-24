@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { SeasonFormData, SeasonFormatType, RouteThemeId } from '@/types/season';
 import type { Ruleset } from '@/types/ruleset';
 import Input from '@/components/ui/Input';
+import { LeagueDateFields, LeagueRulesetField, LeagueTypeField } from '@/components/league/league-form-fields';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -170,21 +171,14 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Select
-          id="league-type"
-          label={t('form.leagueType')}
-          value={formatType}
-          onChange={(e) => setFormatType(e.target.value as SeasonFormatType)}
-          options={formatOptions}
-          aria-describedby={isPointBuy ? 'league-battle-format' : undefined}
-        />
-        {isPointBuy && (
-          <p id="league-battle-format" className="text-xs text-poke-text-muted">
-            {t('form.battleFormatFixed')}
-          </p>
-        )}
-      </div>
+      <LeagueTypeField
+        id="league-type"
+        label={t('form.leagueType')}
+        value={formatType}
+        onChange={setFormatType}
+        options={formatOptions}
+        note={isPointBuy ? { id: 'league-battle-format', text: t('form.battleFormatFixed') } : null}
+      />
 
       <Select
         label={t('form.worldTheme')}
@@ -210,48 +204,15 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
         </p>
       </div>
 
-      {isPointBuy ? (
-        <div className="space-y-1.5" data-testid="league-auto-ruleset">
-          <p className="text-sm font-heading font-semibold text-poke-text-primary">
-            {t('form.autoRuleset', { ruleset: t('form.autoRulesetName') })}
-          </p>
-          <p className="text-xs text-poke-text-muted">{t('form.autoRulesetHint')}</p>
-        </div>
-      ) : (
-        <Select
-          label={t('form.ruleset')}
-          value={rulesetId ?? ''}
-          onChange={(e) => setRulesetId(e.target.value)}
-        >
-          <option value="">{t('form.noRuleset')}</option>
-          {rulesets.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </Select>
-      )}
+      <LeagueRulesetField isPointBuy={isPointBuy} rulesets={rulesets} value={rulesetId} onChange={setRulesetId} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label={t('form.startDate')}
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-        <Input
-          label={t('form.endDate')}
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
-      </div>
+      <LeagueDateFields start={startDate} end={endDate} onStart={setStartDate} onEnd={setEndDate} />
 
       <Button
         type="submit"
         variant="secondary"
         loading={submitting}
-        disabled={!name}
+        disabled={!name.trim()}
       >
         {t('form.submit')}
       </Button>
