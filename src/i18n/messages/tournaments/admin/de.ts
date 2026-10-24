@@ -87,6 +87,8 @@ export default defineDe<typeof en>()({
     matchesError: 'Die Spiele dieser Runde konnten nicht geladen werden: {error}',
     retry: 'Erneut versuchen',
     noMatches: 'Keine Spiele in dieser Runde.',
+    bye: 'Freilos: {names}',
+    byeUnknownPlayer: 'Unbekannter Spieler',
     versus: 'vs.',
     generateBracket: 'Turnierbaum erstellen',
     regenerateBracket: 'Turnierbaum neu erstellen',
@@ -101,6 +103,17 @@ export default defineDe<typeof en>()({
     complete: 'Abschließen',
     reset: 'Zurücksetzen',
     delete: 'Löschen',
+    deadline: {
+      label: 'Frist',
+      none: 'Keine Frist',
+      overdue: 'Überfällig',
+      edit: 'Ändern',
+      set: 'Frist setzen',
+      inputLabel: 'Frist der Runde',
+      save: 'Speichern',
+      clear: 'Entfernen',
+      cancel: 'Abbrechen',
+    },
     repaired: {
       zero: 'Turnierbaum repariert. Es mussten keine weiteren Spiele angelegt werden.',
       one: 'Turnierbaum repariert. {count} Spiel wurde angelegt.',
@@ -119,6 +132,7 @@ export default defineDe<typeof en>()({
       generateAll: 'Die Runden konnten nicht erstellt werden.',
       updateBestOf: 'Das Best-of der Runde konnte nicht geändert werden.',
       updateStatus: 'Der Rundenstatus konnte nicht geändert werden.',
+      updateDeadline: 'Die Frist der Runde konnte nicht geändert werden.',
       resetRound: 'Die Runde konnte nicht zurückgesetzt werden.',
     },
     regenerateDialog: {
@@ -152,6 +166,10 @@ export default defineDe<typeof en>()({
   participants: {
     loading: 'Wird geladen …',
     loadFailed: 'Die Daten konnten nicht geladen werden.',
+    addFailed: 'Der Spieler konnte nicht hinzugefügt werden.',
+    searchPlaceholder: 'Namen eingeben, um zu suchen …',
+    alreadyEnrolled: 'Bereits eingetragen',
+    searchTruncated: '{shown} von {total} Treffern werden angezeigt. Tippe weiter, um die Suche einzugrenzen.',
   },
   seeding: {
     frozen: 'Manuell angepasst',

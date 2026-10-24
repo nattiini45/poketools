@@ -57,6 +57,7 @@ function round(id: string, name: string, roundNumber: number, side: BracketSide 
     pairings_generated: true,
     deadline: null,
     bracket_side: side,
+    bye_player_ids: [],
     created_at: STAMP,
     updated_at: STAMP,
   };

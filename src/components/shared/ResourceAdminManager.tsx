@@ -1,14 +1,77 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ResourceAdminWithPlayer, AdminResourceType } from '@/types/resource-admin';
-import type { Player } from '@/types/player';
 import { useT } from '@/i18n/client';
+import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
+import { useApiErrorText } from '@/i18n/use-api-error';
 import { uiMessages } from '@/i18n/messages/ui';
+import Alert from '@/components/ui/Alert';
+import Combobox, { type ComboboxOption } from '@/components/ui/Combobox';
+import {
+  PLAYER_SEARCH_MIN_QUERY,
+  PLAYER_SEARCH_NETWORK_ERROR,
+  parsePlayerSearch,
+  playerSearchUrl,
+  type PlayerSearchHit,
+} from '@/lib/players/player-search';
 
 interface ResourceAdminManagerProps {
   resourceType: AdminResourceType;
   resourceId: string;
+}
+
+/** A refused or failed grant / revoke: which one, and why (translated at render). */
+type WriteFailure = { action: 'add' | 'remove'; error: ApiErrorLike };
+
+/**
+ * Sends one grant (POST) or revoke (DELETE). Resolves to `null` when the server accepted it,
+ * else to the failure to show: the refusal's code (forbidden, a server error), or a network
+ * error when the request never got an answer. A body that is not JSON is an unknown error.
+ */
+export async function changeResourceAdmin(
+  method: 'POST' | 'DELETE',
+  body: { player_id: string; resource_type: AdminResourceType; resource_id: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<ApiErrorLike | null> {
+  try {
+    const res = await fetchImpl('/api/resource-admins', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return null;
+    const json: unknown = await res.json().catch(() => null);
+    return toApiErrorLike(json);
+  } catch (err) {
+    return toApiErrorLike(err);
+  }
+}
+
+/** The admins of a resource, or why they could not be loaded. */
+export type LoadResourceAdminsOutcome =
+  | { ok: true; admins: ResourceAdminWithPlayer[] }
+  | { ok: false; error: ApiErrorLike };
+
+/**
+ * Reads the admins of a resource. A refusal, a server error, a body that is not JSON or a lost
+ * connection resolves to the error to show, never to an empty list: an empty list means "no admins".
+ */
+export async function loadResourceAdmins(
+  resourceType: AdminResourceType,
+  resourceId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<LoadResourceAdminsOutcome> {
+  try {
+    const res = await fetchImpl(`/api/resource-admins?resource_type=${resourceType}&resource_id=${resourceId}`);
+    const json = (await res.json().catch(() => null)) as { success?: boolean; data?: unknown } | null;
+    if (res.ok && json?.success === true && Array.isArray(json.data)) {
+      return { ok: true, admins: json.data as ResourceAdminWithPlayer[] };
+    }
+    return { ok: false, error: toApiErrorLike(json) };
+  } catch (err) {
+    return { ok: false, error: toApiErrorLike(err) };
+  }
 }
 
 export default function ResourceAdminManager({
@@ -16,87 +79,87 @@ export default function ResourceAdminManager({
   resourceId,
 }: ResourceAdminManagerProps) {
   const t = useT(uiMessages);
+  const errorText = useApiErrorText();
   const [admins, setAdmins] = useState<ResourceAdminWithPlayer[]>([]);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [selectedPlayerId, setSelectedPlayerId] = useState('');
+  const [selected, setSelected] = useState<PlayerSearchHit | null>(null);
+  const [searchError, setSearchError] = useState<ApiErrorLike | null>(null);
+  const [writeFailure, setWriteFailure] = useState<WriteFailure | null>(null);
+  const [loadFailure, setLoadFailure] = useState<ApiErrorLike | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  /** Hits seen in the picker, to turn a picked id back into a name. */
+  const seenHits = useRef(new Map<string, PlayerSearchHit>());
 
   const fetchAdmins = useCallback(async () => {
-    try {
-      const res = await fetch(
-        `/api/resource-admins?resource_type=${resourceType}&resource_id=${resourceId}`
-      );
-      const json = await res.json();
-      if (json.success) setAdmins(json.data);
-    } catch {
-      // silently fail
+    const outcome = await loadResourceAdmins(resourceType, resourceId);
+    if (outcome.ok) {
+      setAdmins(outcome.admins);
+      setLoadFailure(null);
+    } else {
+      // The list on screen stays as it was; the alert says it may be out of date.
+      setLoadFailure(outcome.error);
     }
   }, [resourceType, resourceId]);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
-      await Promise.all([
-        fetchAdmins(),
-        fetch('/api/players')
-          .then((r) => r.json())
-          .then((json) => {
-            if (json.success) setPlayers(json.data);
-          })
-          .catch(() => {}),
-      ]);
+      await fetchAdmins();
       setLoading(false);
     }
     load();
   }, [fetchAdmins]);
 
   const adminPlayerIds = new Set(admins.map((a) => a.player_id));
-  const availablePlayers = players.filter(
-    (p) => !adminPlayerIds.has(p.id) && !p.is_admin
-  );
+
+  // The picker searches the server (registered accounts only: an admin must be
+  // able to sign in) instead of preloading a first page of players, which used
+  // to hide everyone past the first 50 names.
+  const transformSearch = (json: unknown): ComboboxOption[] => {
+    const outcome = parsePlayerSearch(json);
+    if (!outcome.ok) {
+      setSearchError(outcome.error);
+      return [];
+    }
+    setSearchError(null);
+    for (const hit of outcome.hits) seenHits.current.set(hit.id, hit);
+    return outcome.hits.map((hit) => ({
+      label: hit.name,
+      value: hit.id,
+      disabled: adminPlayerIds.has(hit.id),
+      meta: { alreadyAdmin: adminPlayerIds.has(hit.id) },
+    }));
+  };
 
   async function handleAdd() {
-    if (!selectedPlayerId) return;
+    if (!selected) return;
     setSaving(true);
-    try {
-      const res = await fetch('/api/resource-admins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_id: selectedPlayerId,
-          resource_type: resourceType,
-          resource_id: resourceId,
-        }),
-      });
-      if (res.ok) {
-        setSelectedPlayerId('');
-        await fetchAdmins();
-      }
-    } catch {
-      // silently fail
+    setWriteFailure(null);
+    const error = await changeResourceAdmin('POST', {
+      player_id: selected.id,
+      resource_type: resourceType,
+      resource_id: resourceId,
+    });
+    if (error) {
+      // The pick stays, so the admin can retry.
+      setWriteFailure({ action: 'add', error });
+    } else {
+      setSelected(null);
+      await fetchAdmins();
     }
     setSaving(false);
   }
 
   async function handleRemove(playerId: string) {
     setSaving(true);
-    try {
-      const res = await fetch('/api/resource-admins', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_id: playerId,
-          resource_type: resourceType,
-          resource_id: resourceId,
-        }),
-      });
-      if (res.ok) {
-        await fetchAdmins();
-      }
-    } catch {
-      // silently fail
-    }
+    setWriteFailure(null);
+    const error = await changeResourceAdmin('DELETE', {
+      player_id: playerId,
+      resource_type: resourceType,
+      resource_id: resourceId,
+    });
+    if (error) setWriteFailure({ action: 'remove', error });
+    else await fetchAdmins();
     setSaving(false);
   }
 
@@ -104,10 +167,13 @@ export default function ResourceAdminManager({
     return <p className="text-sm text-poke-text-secondary">{t('resourceAdmins.loading')}</p>;
   }
 
+  const scope = resourceType === 'season' ? { seasonId: resourceId } : { tournamentId: resourceId };
+
   return (
     <div className="space-y-3">
       {admins.length === 0 ? (
-        <p className="text-sm text-poke-text-secondary">{t('resourceAdmins.none')}</p>
+        // A failed load is not "no admins": the alert below says why the list is missing.
+        loadFailure ? null : <p className="text-sm text-poke-text-secondary">{t('resourceAdmins.none')}</p>
       ) : (
         <ul className="space-y-2">
           {admins.map((admin) => (
@@ -128,28 +194,45 @@ export default function ResourceAdminManager({
         </ul>
       )}
 
-      {availablePlayers.length > 0 && (
-        <div className="flex gap-2">
-          <select
-            value={selectedPlayerId}
-            onChange={(e) => setSelectedPlayerId(e.target.value)}
-            className="flex-1 px-3 py-1.5 bg-poke-elevated border border-poke-border rounded text-sm text-poke-text-primary"
-          >
-            <option value="">{t('resourceAdmins.selectPlayer')}</option>
-            {availablePlayers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={handleAdd}
-            disabled={!selectedPlayerId || saving}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
-          >
-            {t('resourceAdmins.add')}
-          </button>
-        </div>
+      <div className="flex gap-2">
+        <Combobox
+          mode="async"
+          className="flex-1"
+          value={selected?.name ?? ''}
+          onChange={(id) => {
+            const hit = id ? seenHits.current.get(id) ?? null : null;
+            setSelected(hit && !adminPlayerIds.has(hit.id) ? hit : null);
+          }}
+          placeholder={t('resourceAdmins.searchPlaceholder')}
+          fetchUrl={playerSearchUrl(scope, { registeredOnly: true })}
+          transformResults={transformSearch}
+          onFetchError={() => setSearchError(PLAYER_SEARCH_NETWORK_ERROR)}
+          minQueryLength={PLAYER_SEARCH_MIN_QUERY}
+          renderOption={(option) => (
+            <span className={option.meta?.alreadyAdmin ? 'flex items-center gap-2 text-poke-text-muted opacity-60' : 'flex items-center gap-2'}>
+              <span>{option.label}</span>
+              {option.meta?.alreadyAdmin ? <span className="text-xs">{t('resourceAdmins.alreadyAdmin')}</span> : null}
+            </span>
+          )}
+        />
+        <button
+          onClick={handleAdd}
+          disabled={!selected || saving}
+          className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+        >
+          {t('resourceAdmins.add')}
+        </button>
+      </div>
+      {loadFailure && (
+        <Alert variant="error">{t('resourceAdmins.loadFailed', { reason: errorText(loadFailure) })}</Alert>
+      )}
+      {searchError && <Alert variant="error">{errorText(searchError)}</Alert>}
+      {writeFailure && (
+        <Alert variant="error">
+          {t(writeFailure.action === 'add' ? 'resourceAdmins.addFailed' : 'resourceAdmins.removeFailed', {
+            reason: errorText(writeFailure.error),
+          })}
+        </Alert>
       )}
     </div>
   );

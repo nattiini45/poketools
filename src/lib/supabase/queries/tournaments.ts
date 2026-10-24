@@ -122,28 +122,45 @@ export async function listArchivedTournaments(): Promise<TournamentWithDetails[]
   }));
 }
 
-export async function listTournamentsByIds(ids: string[]): Promise<TournamentWithDetails[]> {
+/**
+ * Tournaments by id. `archived` narrows by the archived flag (`false` = active
+ * only, `true` = archived only, omitted = both). `standaloneOnly` drops league
+ * stages (rows with a season_id), like the site admin's `listTournaments`: a
+ * season admin's assignments cascade to the league's stages, which belong to
+ * the league pages, not to the tournament list.
+ */
+export async function listTournamentsByIds(
+  ids: string[],
+  opts: { archived?: boolean; standaloneOnly?: boolean } = {},
+): Promise<TournamentWithDetails[]> {
   if (ids.length === 0) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('tournaments')
     .select(`
       *,
       rulesets ( name ),
-      seasons ( name ),
+      seasons ( name, format_type ),
       tournament_participants ( count )
     `)
-    .in('id', ids)
-    .order('created_at', { ascending: false });
+    .in('id', ids);
+  if (opts.archived !== undefined) query = query.eq('archived', opts.archived);
+  if (opts.standaloneOnly) query = query.is('season_id', null);
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) throw error;
 
-  return data.map((row) => ({
-    ...toTournament(row),
-    ruleset_name: (row.rulesets as { name: string } | null)?.name ?? '',
-    season_name: (row.seasons as { name: string } | null)?.name ?? null,
-    participant_count: embeddedCount(row.tournament_participants),
-  }));
+  return data.map((row) => {
+    const season = row.seasons as { name: string; format_type: SeasonFormatType } | null;
+    return {
+      ...toTournament(row),
+      ruleset_name: (row.rulesets as { name: string } | null)?.name ?? '',
+      season_name: season?.name ?? null,
+      season_format_type: season?.format_type ?? null,
+      participant_count: embeddedCount(row.tournament_participants),
+    };
+  });
 }
 
 export async function getTournamentById(id: string): Promise<Tournament | null> {

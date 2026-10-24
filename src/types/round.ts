@@ -13,6 +13,11 @@ export interface Round {
   pairings_generated: boolean;
   deadline: string | null;
   bracket_side: BracketSide | null;
+  /**
+   * Players who sat this round out with a bye (Swiss / round robin). Empty for
+   * a round without one and for every round created before the column existed.
+   */
+  bye_player_ids: string[];
   created_at: string;
   updated_at: string;
 }

@@ -362,6 +362,59 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
   });
 
+  describe('bye storage', () => {
+    const P5 = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a05';
+    const oddRoster = [{ id: P1 }, { id: P2 }, { id: P3 }, { id: P4 }, { id: P5 }];
+    const pairings = [
+      { player_1_id: P1, player_2_id: P2 },
+      { player_1_id: P3, player_2_id: P4 },
+    ];
+
+    async function post(bracketType: string, roster: Array<{ id: string }>) {
+      vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(getTournamentById).mockResolvedValue({
+        ...mockTournament,
+        bracket_type: bracketType,
+      } as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { round_number: 1, status: 'completed' },
+      ] as never);
+      vi.mocked(getParticipants).mockResolvedValue(roster as never);
+      vi.mocked(createRound).mockResolvedValue({ id: 'round-2', round_number: 2, name: 'Round 2' } as never);
+      return POST(makeRequest({ pairings }), routeParams);
+    }
+
+    it('stores the single unpaired participant as the bye of a Swiss round', async () => {
+      const res = await post('swiss', oddRoster);
+
+      expect(res.status).toBe(201);
+      expect(createRound).toHaveBeenCalledWith(
+        expect.objectContaining({ bye_player_ids: [P5] }),
+      );
+      expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
+    });
+
+    it('stores the bye of an odd round robin round too', async () => {
+      await post('round_robin', oddRoster);
+
+      expect(createRound).toHaveBeenCalledWith(
+        expect.objectContaining({ bye_player_ids: [P5] }),
+      );
+    });
+
+    it('stores no bye when the roster is even', async () => {
+      await post('swiss', mockParticipants);
+
+      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: [] }));
+    });
+
+    it('stores no bye for an elimination bracket', async () => {
+      await post('single_elim', oddRoster);
+
+      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: [] }));
+    });
+  });
+
   it('activates upcoming tournament when creating first round', async () => {
     vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
     vi.mocked(getTournamentById).mockResolvedValue({

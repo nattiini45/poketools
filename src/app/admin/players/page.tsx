@@ -1,4 +1,4 @@
-import AdminGuard from '@/components/shared/AdminGuard';
+import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import PlayerRoster from './PlayerRoster';
 import { getSession, isSuperadmin } from '@/lib/auth/helpers';
@@ -12,10 +12,10 @@ export default async function AdminPlayersPage() {
   const canManageCreators = isSuperadmin(session);
 
   return (
-    <AdminGuard>
+    <SiteAdminGuard>
       <PageContainer title={t('players.title')}>
         <PlayerRoster canManageCreators={canManageCreators} />
       </PageContainer>
-    </AdminGuard>
+    </SiteAdminGuard>
   );
 }

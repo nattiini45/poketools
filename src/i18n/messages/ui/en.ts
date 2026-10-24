@@ -19,7 +19,6 @@ export default {
   combobox: {
     clear: 'Clear',
     searching: 'Searching…',
-    noResults: 'No results',
     noResultsFor: 'No results for “{query}”',
   },
   modal: {
@@ -71,8 +70,13 @@ export default {
     loading: 'Loading admins...',
     none: 'No resource admins assigned.',
     remove: 'Remove',
-    selectPlayer: 'Select a player...',
+    searchPlaceholder: 'Search a registered player...',
+    alreadyAdmin: 'already an admin',
     add: 'Add Admin',
+    /** `{reason}` is the API's refusal, in the viewer's language. */
+    addFailed: 'Could not add the admin: {reason}',
+    removeFailed: 'Could not remove the admin: {reason}',
+    loadFailed: 'Could not load the admins: {reason}',
   },
   archive: {
     archive: 'Archive',

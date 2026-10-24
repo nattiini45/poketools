@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import AdminGuard from '@/components/shared/AdminGuard';
+import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { getButtonClasses } from '@/components/ui/buttonStyles';
+import { getLiveAccess } from '@/lib/auth/helpers';
 import { listRulesets } from '@/lib/supabase/queries/rulesets';
 import { getT } from '@/i18n/server';
 import { adminToolsMessages } from '@/i18n/messages/admin-tools';
@@ -13,10 +14,14 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 export default async function AdminRulesetsPage() {
+  // Site-admin page: no ruleset read for a viewer who is not one (the guard renders the denial).
+  const access = await getLiveAccess();
+  if (!access?.isSiteAdmin) return <SiteAdminGuard>{null}</SiteAdminGuard>;
+
   const [rulesets, t] = await Promise.all([listRulesets(), getT(adminToolsMessages)]);
 
   return (
-    <AdminGuard>
+    <SiteAdminGuard>
       <PageContainer
         title={t('rulesets.title')}
         maxWidth="md"
@@ -50,6 +55,6 @@ export default async function AdminRulesetsPage() {
           </div>
         )}
       </PageContainer>
-    </AdminGuard>
+    </SiteAdminGuard>
   );
 }

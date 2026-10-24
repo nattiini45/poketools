@@ -267,6 +267,7 @@ describe('resetMatch cascade', () => {
     pairings_generated: true,
     deadline: null,
     bracket_side: r.bracket_side,
+    bye_player_ids: [],
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   }));

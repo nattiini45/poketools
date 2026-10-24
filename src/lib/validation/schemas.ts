@@ -228,9 +228,10 @@ export const adminPlayerImportSchema = z.union([
 export const adminPlayerDisciplineSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('suspend'),
-    suspended_until: z.string().trim().min(1).refine((value) => {
-      const date = new Date(value);
-      return !Number.isNaN(date.getTime()) && date > new Date();
+    // ISO 8601 with an explicit offset (`Z` or `+02:00`): a timezone-less
+    // string would be read in the server's zone, not the admin's.
+    suspended_until: z.string().trim().datetime({ offset: true }).refine((value) => {
+      return new Date(value) > new Date();
     }, 'suspended_until must be a future date'),
   }),
   z.object({
@@ -1160,9 +1161,13 @@ export const evolutionUpdateSchema = z.object({
 export const roundUpdateSchema = z.object({
   status: roundStatusSchema.optional(),
   best_of: z.number().int().min(1).max(15).optional(),
-}).refine((data) => data.status !== undefined || data.best_of !== undefined, {
-  message: 'Provide status and/or best_of to update',
-});
+  // ISO 8601 with an explicit offset (`Z` or `+02:00`): a timezone-less string
+  // would be read in the server's zone, not the admin's. `null` clears it.
+  deadline: z.string().trim().datetime({ offset: true }).nullable().optional(),
+}).refine(
+  (data) => data.status !== undefined || data.best_of !== undefined || data.deadline !== undefined,
+  { message: 'Provide status, best_of and/or deadline to update' },
+);
 
 export const broadcastMomentSchema = z.object({
   match_id: uuid,

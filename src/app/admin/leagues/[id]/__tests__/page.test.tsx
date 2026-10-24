@@ -68,6 +68,7 @@ vi.mock('@/components/league/groups/LeagueGroupsEditor', () => stub('LeagueGroup
 vi.mock('@/i18n/LocalTime', () => ({ LocalTime: stub('LocalTime').default }));
 vi.mock('@/lib/supabase/queries/format-rules', () => ({ getFormatRules: mocks.getFormatRules }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
+vi.mock('@/components/shared/ResourceForbidden', () => stub('ResourceForbidden'));
 vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
 vi.mock('@/components/ui/Section', () => stub('Section'));
 vi.mock('@/components/ui/Badge', () => stub('Badge'));
@@ -174,7 +175,7 @@ const plainText = (node: ReactNode) => visibleText(node, '');
 function season(overrides: Record<string, unknown> = {}) {
   return {
     id: S1,
-    name: 'EvoLiga S3',
+    name: 'Summer League S3',
     format_type: 'evolution_point_buy',
     ruleset_name: 'Reg H',
     ruleset_id: 'rs-1',
@@ -464,7 +465,7 @@ describe('site-admin parts follow the live access check', () => {
     expect(del.props).toEqual({
       resourceType: 'season',
       resourceId: S1,
-      resourceName: 'EvoLiga S3',
+      resourceName: 'Summer League S3',
       redirectTo: '/admin/leagues',
     });
   });
@@ -750,6 +751,14 @@ describe('page header and i18n', () => {
     expect(container.props.subtitle).toBe('Evolution Point Buy · Archiviert');
     expect(visibleText(tree)).toContain('Hin- und Rückrunde');
     expect(visibleText(await render('danger'))).toContain('Gefahrenzone');
+  });
+
+  it('a failed per-league read fails closed (the page throws, no league or tab data is read)', async () => {
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    mocks.isResourceAdminFor.mockRejectedValue(new Error('db down'));
+    await expect(render('participants')).rejects.toThrow('db down');
+    expect(mocks.getSeasonWithDetails).not.toHaveBeenCalled();
+    expect(tabReads()).toEqual([]);
   });
 
   it('missing league → notFound', async () => {

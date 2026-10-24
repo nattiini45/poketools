@@ -12,6 +12,8 @@ import type { PlayerStatus } from '@/types/player';
 import type { AvatarConfig } from '@/types/avatar';
 import type { AuthProvider, SessionPlayer } from '@/types/auth';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { ilikeAnyOf } from '@/lib/supabase/postgrest-filter';
+import { DEFAULT_PLAYER_SORT, type PlayerSort } from '@/lib/players/player-sort';
 
 type PlayerRow = Tables<'players'>;
 
@@ -254,25 +256,95 @@ export async function getPlayersByDiscordIds(discordIds: string[]): Promise<Map<
 }
 
 export async function listPlayers(
-  options?: { limit?: number; offset?: number; search?: string }
+  options?: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    /**
+     * Only active, non-guest players with a Discord or email login: an account a guest can
+     * be linked to or a resource admin named from. A banned or suspended account is left out
+     * because `claim_guest_player` refuses it as a source (SOURCE_NOT_ACTIVE) and the live
+     * auth guards reject it, so offering it would only end in a refusal.
+     */
+    registeredOnly?: boolean;
+    /**
+     * Only what the public player directory shows: active, non-test accounts. For callers
+     * that are not site admins; a banned, suspended or test account stays out of their view.
+     */
+    visibleOnly?: boolean;
+    /** Order of the page (default: name, ascending). Ties fall back to name, then id, so paging is stable. */
+    sort?: PlayerSort;
+  }
 ): Promise<{ data: Player[]; total: number }> {
   const limit = Math.min(options?.limit ?? 50, 200);
   const offset = options?.offset ?? 0;
+  const sort = options?.sort ?? DEFAULT_PLAYER_SORT;
 
-  let query = supabase
-    .from('players')
-    .select('*', { count: 'exact' })
-    .order('name')
-    .range(offset, offset + limit - 1);
+  let query = supabase.from('players').select('*', { count: 'exact' });
+  // `discord_id` is nullable: blank rows go last in both directions, so they never fill the first page.
+  query = query.order(sort.column, {
+    ascending: sort.direction === 'asc',
+    ...(sort.column === 'discord_id' ? { nullsFirst: false } : {}),
+  });
+  if (sort.column !== 'name') query = query.order('name');
+  query = query.order('id').range(offset, offset + limit - 1);
+
+  if (options?.visibleOnly) {
+    query = query.eq('status', 'active').eq('is_test_account', false);
+  }
 
   if (options?.search) {
-    query = query.ilike('name', `${options.search}%`);
+    query = query.or(playerSearchFilter(options.search));
+  }
+  if (options?.registeredOnly) {
+    // A second or() is ANDed with the search filter by PostgREST.
+    query = query
+      .eq('is_guest', false)
+      .eq('status', 'active')
+      .or('discord_id.not.is.null,auth_user_id.not.is.null');
   }
 
   const { data, error, count } = await query;
 
   if (error) throw error;
   return { data: data.map(toPlayer), total: count ?? 0 };
+}
+
+/**
+ * PostgREST `or()` filter for a case-insensitive "contains" search over a
+ * player's name and Showdown username. LIKE wildcards in the term are escaped
+ * (so `50%` matches the text "50%", not everything), and the pattern is
+ * double-quoted so a comma, parenthesis or colon in the term cannot end the
+ * filter early or add a condition of its own.
+ */
+export function playerSearchFilter(search: string): string {
+  return ilikeAnyOf(['name', 'ps_username'], search);
+}
+
+/**
+ * Lift every suspension whose `suspended_until` has passed: status back to
+ * `active`, `suspended_until` cleared. One conditional UPDATE, so a suspension
+ * renewed or lifted by an admin between a read and this write is never
+ * touched, and a banned player (whose `suspended_until` is null) is never
+ * reinstated. Returns the players that were lifted, for the audit trail.
+ *
+ * The live auth guards reject `status !== 'active'`; this is the only thing
+ * that turns a timed suspension back into `active`. `suspended_until` is a
+ * moderation column and stays out of `SESSION_PLAYER_COLUMNS`.
+ */
+export async function clearExpiredSuspensions(
+  nowIso: string,
+): Promise<Array<{ id: string; name: string }>> {
+  const { data, error } = await supabase
+    .from('players')
+    .update({ status: 'active', suspended_until: null })
+    .eq('status', 'suspended')
+    .not('suspended_until', 'is', null)
+    .lte('suspended_until', nowIso)
+    .select('id, name');
+
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ id: row.id, name: row.name }));
 }
 
 export async function createPlayer(input: PlayerRegistration): Promise<Player> {

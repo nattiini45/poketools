@@ -28,6 +28,7 @@ const auditActions = {
   player__ban: 'Player banned',
   player__suspend: 'Player suspended',
   player__unsuspend: 'Player reinstated',
+  player__suspension_expired: 'Suspension expired',
   player__role__assign: 'Role assigned',
   player__role__revoke: 'Role revoked',
   player__claim: 'Guest account claimed',
@@ -108,6 +109,8 @@ export default {
     attention: {
       title: 'Attention Required',
       count: { one: '{count} match', other: '{count} matches' },
+      countOfTotal: '{count} of {total} matches',
+      leaguePhase: '{league} · {phase}',
       empty: 'No matches need attention. All caught up!',
       needsConfirm: 'Needs Confirm',
       disputed: 'Disputed',
@@ -259,6 +262,9 @@ export default {
     confirmDelete: 'Delete this player?',
     confirmReinstate: 'Reinstate {name}?',
     empty: 'No players registered yet',
+    noMatches: 'No players match your search',
+    search: { label: 'Search players', placeholder: 'Name or Showdown username' },
+    until: 'until',
     status: { active: 'Active', suspended: 'Suspended', banned: 'Banned' },
     columns: {
       name: 'Name',
@@ -285,6 +291,9 @@ export default {
     link: {
       title: 'Link account for {name}',
       body: 'Choose the freshly registered account to merge into this guest. The source account must have no participations, matches, or teams.',
+      searchLabel: 'Find the registered account',
+      searchPlaceholder: 'Name or Showdown username',
+      noMatches: 'No registered accounts match your search',
       selectPlaceholder: 'Select registered account…',
       linking: 'Linking…',
       submit: 'Link account',

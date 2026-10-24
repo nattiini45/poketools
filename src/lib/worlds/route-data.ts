@@ -28,6 +28,8 @@ import {
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import type { CombinedRanking } from '@/lib/tournament/group-standings';
 import { getMatchesByTournamentIds } from '@/lib/supabase/queries/matches';
+import { formatScoresByes } from '@/lib/tournament/byes';
+import { loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { listSeasonTeamLeadsWithFacts, type TeamLead } from '@/lib/supabase/queries/teams';
 import { selectAnonymousVisibleLeads } from '@/lib/team/visibility';
@@ -301,10 +303,11 @@ export interface WorldRouteDataPreload {
  * season does not exist (caller decides `notFound()`). Server-only — imports
  * service-role query modules.
  *
- * Query budget after the preload: ONE wave of at most seven reads — the
+ * Query budget after the preload: ONE wave of at most eight reads — the
  * point-buy list (only with a bound list), format rules, trackers, every
  * stage's matches in one `.in()` read, the draft pools, the team leads and
- * the league groups (group tables; none in a league without groups).
+ * the league groups (group tables; none in a league without groups) and, only in a
+ * non-EPB league with a Swiss stage, the Swiss stages' bye rounds.
  * The standings are computed in memory from those rows: the season format
  * comes from the league row and, for EPB, the evolution points are summed
  * from the trackers already loaded (the reduction `getSeasonEvolutionPoints`
@@ -321,7 +324,20 @@ export async function buildWorldRouteData(
     ? [preloaded.stages, preloaded.participants]
     : await Promise.all([getStagesBySeasonId(seasonId), getPublicSeasonParticipants(seasonId)]);
 
-  const [pointBuyEntries, formatRules, evolutionTrackers, matchesByStage, draftPools, teamLeads, leagueGroups] =
+  // The season table scores a Swiss stage's stored byes as its stage table does. The read joins the wave only for
+  // a league with a Swiss stage; Evolution Point Buy standings never read byes, so they skip it too.
+  const readsByes = stages.some((stage) => stage.bracket_type === 'swiss') && formatScoresByes(league.format_type);
+
+  const [
+    pointBuyEntries,
+    formatRules,
+    evolutionTrackers,
+    matchesByStage,
+    draftPools,
+    teamLeads,
+    leagueGroups,
+    byeRoundsByStage,
+  ] =
     await Promise.all([
       league.point_buy_list_id ? getListEntries(league.point_buy_list_id) : Promise.resolve([]),
       // No fallback (lead ruling round 5, AGENTS.md rule 5): a failed read fails the payload like the other core
@@ -349,6 +365,7 @@ export async function buildWorldRouteData(
       ).then(selectAnonymousVisibleLeads),
       // The group tables are the standings themselves: a failed read fails the world, as the matches do.
       getSeasonGroups(seasonId),
+      readsByes ? loadSeasonSwissByeRounds(seasonId) : Promise.resolve(undefined),
     ]);
 
   const schedule = assembleLeagueSchedule({
@@ -359,6 +376,7 @@ export async function buildWorldRouteData(
       ? { formatType: league.format_type, evolutionPoints: sumEvolutionPoints(evolutionTrackers) }
       : { formatType: league.format_type },
     groups: toLeagueScheduleGroups(leagueGroups),
+    byeRoundsByStage,
   });
 
   return assembleWorldRouteData({

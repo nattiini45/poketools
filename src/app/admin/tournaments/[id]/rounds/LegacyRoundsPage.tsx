@@ -1,7 +1,6 @@
 import AdminGuard from '@/components/shared/AdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
-import { getSession, isAdmin } from '@/lib/auth/helpers';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import RoundManager from '@/components/tournament/RoundManager';
@@ -20,13 +19,12 @@ export const dynamic = 'force-dynamic';
 
 interface LegacyRoundsPageProps {
   id: string;
+  /** Live site-admin flag from the page's resource gate (not the session copy). */
+  isSiteAdmin: boolean;
 }
 
-export default async function LegacyRoundsPage({ id }: LegacyRoundsPageProps) {
-  const [tournament, session] = await Promise.all([
-    getTournamentById(id),
-    getSession(),
-  ]);
+export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRoundsPageProps) {
+  const tournament = await getTournamentById(id);
   if (!tournament) notFound();
 
   const [rounds, t, tc, te] = await Promise.all([
@@ -35,7 +33,6 @@ export default async function LegacyRoundsPage({ id }: LegacyRoundsPageProps) {
     getT(commonMessages),
     getT(enumMessages),
   ]);
-  const isSiteAdmin = isAdmin(session);
   const subtitle = [
     enumLabel(te, 'bracketType', tournament.bracket_type),
     tc('bestOf', { count: tournament.best_of_default }),

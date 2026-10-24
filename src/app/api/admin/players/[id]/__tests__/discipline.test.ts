@@ -97,6 +97,29 @@ describe('admin player discipline routes', () => {
     expect(suspendPlayer).not.toHaveBeenCalled();
   });
 
+  it('accepts a future ISO datetime with a non-UTC offset', async () => {
+    const future = new Date(Date.now() + 86_400_000);
+    const withOffset = future.toISOString().replace('Z', '+02:00');
+
+    const res = await suspendPost(request({ type: 'suspend', suspended_until: withOffset }), params);
+
+    expect(res.status).toBe(200);
+    expect(suspendPlayer).toHaveBeenCalledWith('51541de2-cef5-42ee-8563-d412cf4563a2', withOffset);
+  });
+
+  it.each([
+    ['a datetime-local string without an offset', '2099-01-01T12:00'],
+    ['a date-only string', '2099-01-01'],
+    ['free text', 'next friday'],
+  ])('rejects %s as suspended_until', async (_label, value) => {
+    const res = await suspendPost(request({ type: 'suspend', suspended_until: value }), params);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.code).toBe('validation_failed');
+    expect(suspendPlayer).not.toHaveBeenCalled();
+  });
+
   it('unsuspends a player and writes audit log', async () => {
     const res = await unsuspendPost({} as NextRequest, params);
     const body = await res.json();

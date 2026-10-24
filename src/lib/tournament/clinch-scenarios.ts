@@ -1,4 +1,4 @@
-import type { MatchRecord } from './types';
+import type { ByeRecord, MatchRecord } from './types';
 import { computeStandings } from './standings';
 
 export interface ClinchStatus {
@@ -19,9 +19,10 @@ export function computeClinchScenarios(
   participantNames: Record<string, string>,
   completedMatches: MatchRecord[],
   remainingMatches: Array<{ player_1_id: string; player_2_id: string }>,
-  playoffSlots: number
+  playoffSlots: number,
+  byes: ByeRecord[] = []
 ): ClinchStatus[] {
-  const current = computeStandings(participantIds, participantNames, completedMatches);
+  const current = computeStandings(participantIds, participantNames, completedMatches, {}, { byes });
 
   // If too many remaining matches, skip brute force
   if (remainingMatches.length > 20) {
@@ -62,7 +63,7 @@ export function computeClinchScenarios(
       });
     }
 
-    const standings = computeStandings(participantIds, participantNames, simulated);
+    const standings = computeStandings(participantIds, participantNames, simulated, {}, { byes });
     for (let rank = 0; rank < standings.length; rank++) {
       const id = standings[rank].player_id;
       const r = rank + 1;

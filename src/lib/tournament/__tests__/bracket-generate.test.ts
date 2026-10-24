@@ -154,6 +154,7 @@ const existingRounds: Round[] = [
     pairings_generated: true,
     deadline: null,
     bracket_side: 'winners',
+    bye_player_ids: [],
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },

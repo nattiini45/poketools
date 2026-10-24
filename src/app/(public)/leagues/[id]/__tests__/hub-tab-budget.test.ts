@@ -641,13 +641,16 @@ describe('league hub — the default tab keeps the bare league budget', () => {
     }
   });
 
-  it('sakura: a bare URL keeps its 10-query budget and the hub speaks English', async () => {
+  it('sakura: a bare URL stays within the world budget and the hub speaks English', async () => {
     const page = await renderPage(SAKURA_SEASON_ID);
 
     // 8 route-world reads + the stage-row team-lead read behind the public
     // world aces (each lead read embeds its spec §7 facts) + the league-groups
-    // read (group tables).
-    expect(fake.current!.queries).toHaveLength(10);
+    // read (group tables) + the one rounds read of the Swiss stage's byes (this
+    // league has a Swiss stage and is not Evolution Point Buy; a league without
+    // one keeps 10 reads, see page-query-budget.test.ts).
+    expect(fake.current!.queries).toHaveLength(11);
+    expect(tablesRead().filter((table) => table === 'rounds')).toHaveLength(1);
     expectNoStatsReads();
     expect(componentName(worldOf(page))).toBe('SakuraWorld');
     const hub = hubOf(page);
@@ -783,12 +786,15 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
       [
         ...tablesRead(bare.queries),
         'battle_stats',
+        // The Swiss stage's rounds: its table scores the byes stored on them.
+        'rounds',
         'tournament_groups',
         'tournament_groups',
         'tournament_participants',
         'tournament_participants',
       ].sort(),
     );
+    expect(eqValuesRead('rounds')).toEqual([SWISS_STAGE]);
     expect(eqValuesRead('tournament_participants')).toEqual(SAKURA_STAGES);
     expect(eqValuesRead('tournament_groups')).toEqual(SAKURA_STAGES);
     expect(eqValuesRead('battle_stats', 'games.matches.tournament_id')).toEqual(['s-stage-1']);
@@ -1079,8 +1085,9 @@ describe('league hub — an unknown or unavailable tab falls back to the default
     const playoffs = await coldRender(SAKURA_SEASON_ID, { tab: 'playoffs' });
 
     expect(readShapes(playoffs.queries)).toEqual(readShapes(bare.queries));
-    // The bare sakura budget, incl. the stage-row team-lead read (spec §7 facts embedded) and the league-groups read.
-    expect(playoffs.queries).toHaveLength(10);
+    // The bare sakura budget, incl. the stage-row team-lead read (spec §7 facts embedded), the league-groups read
+    // and the Swiss stage's bye rounds.
+    expect(playoffs.queries).toHaveLength(11);
     expectNoStatsReads();
 
     const hub = hubOf(playoffs.page);

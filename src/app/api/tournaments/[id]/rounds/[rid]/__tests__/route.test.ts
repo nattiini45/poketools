@@ -21,8 +21,14 @@ vi.mock('@/lib/auth/helpers', () => ({
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundById: vi.fn(),
+  getRoundsByTournament: vi.fn(),
   updateRoundStatus: vi.fn(),
   updateRoundBestOf: vi.fn(),
+  updateRoundDeadline: vi.fn(),
+}));
+
+vi.mock('@/lib/audit/log', () => ({
+  logAuditEvent: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -53,7 +59,14 @@ vi.mock('@/lib/ai/trigger', () => ({
 
 import { GET, PATCH } from '@/app/api/tournaments/[id]/rounds/[rid]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
-import { getRoundById, updateRoundStatus, updateRoundBestOf } from '@/lib/supabase/queries/rounds';
+import {
+  getRoundById,
+  getRoundsByTournament,
+  updateRoundStatus,
+  updateRoundBestOf,
+  updateRoundDeadline,
+} from '@/lib/supabase/queries/rounds';
+import { logAuditEvent } from '@/lib/audit/log';
 import { getMatchesByRound, getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
@@ -79,6 +92,7 @@ function makeRound(overrides: Partial<Round> = {}): Round {
     pairings_generated: true,
     deadline: null,
     bracket_side: null,
+    bye_player_ids: [],
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -217,6 +231,11 @@ describe('GET /api/tournaments/[id]/rounds/[rid]', () => {
 describe('PATCH /api/tournaments/[id]/rounds/[rid]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(requireResourceAdmin).mockResolvedValue({
+      playerId: 'admin-1',
+      name: 'Admin One',
+      isAdmin: false,
+    } as never);
   });
 
   it('rejects round updates when rid is not under authorized tournament id', async () => {
@@ -458,6 +477,56 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]', () => {
     expect(vi.mocked(computeStandingsForSeason)).toHaveBeenCalledTimes(1);
   });
 
+  describe('Swiss byes in the round_completed standings', () => {
+    async function completeRound(bracketType: string) {
+      const round = makeRound({ status: 'active', round_number: 2 });
+      vi.mocked(getRoundById).mockResolvedValue(round);
+      vi.mocked(updateRoundStatus).mockResolvedValue(makeRound({ status: 'completed', round_number: 2 }));
+      vi.mocked(getTournamentById).mockResolvedValue({
+        id: T_ID,
+        name: 'Harbor Cup Spring',
+        season_id: 'season-1',
+        bracket_type: bracketType,
+      } as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        makeRound({ round_number: 1, bye_player_ids: ['p3'] }),
+        makeRound({ round_number: 2, bye_player_ids: ['p4'] }),
+      ]);
+      vi.mocked(getMatchesByRound).mockResolvedValue([] as never);
+      vi.mocked(getCompletedMatchRecords).mockResolvedValue([] as never);
+      vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1', name: 'Player 1' }] as never);
+      vi.mocked(computeStandingsForSeason).mockResolvedValue([] as never);
+
+      const request = {
+        json: vi.fn().mockResolvedValue({ status: 'completed' }),
+      } as unknown as NextRequest;
+      await PATCH(request, { params: Promise.resolve({ id: T_ID, rid: R_ID }) });
+    }
+
+    it('passes a Swiss tournament byes to the current and the previous table', async () => {
+      await completeRound('swiss');
+
+      const calls = vi.mocked(computeStandingsForSeason).mock.calls;
+      expect(calls).toHaveLength(2);
+      const expectedByes = [
+        { player_id: 'p3', round_number: 1 },
+        { player_id: 'p4', round_number: 2 },
+      ];
+      // (seasonId, ids, names, matches, avatars, options)
+      expect(calls[0][5]).toEqual({ byes: expectedByes });
+      expect(calls[1][5]).toEqual({ maxRound: 1, byes: expectedByes });
+    });
+
+    it('passes no byes for a round robin tournament and reads no rounds for them', async () => {
+      await completeRound('round_robin');
+
+      for (const call of vi.mocked(computeStandingsForSeason).mock.calls) {
+        expect(call[5]).toEqual(expect.objectContaining({ byes: [] }));
+      }
+      expect(getRoundsByTournament).not.toHaveBeenCalled();
+    });
+  });
+
   it('does not break when Discord event assembly throws', async () => {
     const round = makeRound({ status: 'active' });
     const completedRound = makeRound({ status: 'completed' });
@@ -525,6 +594,168 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]', () => {
     const matchResults = data.match_results as Array<Record<string, string>>;
     expect(matchResults).toHaveLength(1);
     expect(matchResults[0].player_2_name).toBe('Player 2');
+  });
+
+  describe('deadline', () => {
+    const DEADLINE = '2026-11-01T18:00:00.000Z';
+
+    function patch(body: unknown) {
+      const request = { json: vi.fn().mockResolvedValue(body) } as unknown as NextRequest;
+      return PATCH(request, { params: Promise.resolve({ id: T_ID, rid: R_ID }) });
+    }
+
+    it('sets the deadline, expires the tournament and league reads, and audits the change', async () => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound());
+      vi.mocked(getTournamentById).mockResolvedValueOnce({ id: T_ID, season_id: 'season-1' } as never);
+      vi.mocked(updateRoundDeadline).mockResolvedValue(makeRound({ deadline: DEADLINE }));
+
+      const response = await patch({ deadline: DEADLINE });
+      const payload = await response.json() as { success: boolean; data: Round };
+
+      expect(response.status).toBe(200);
+      expect(payload.data.deadline).toBe(DEADLINE);
+      expect(vi.mocked(updateRoundDeadline)).toHaveBeenCalledWith(R_ID, DEADLINE);
+      expect(vi.mocked(updateRoundStatus)).not.toHaveBeenCalled();
+      expect(vi.mocked(updateRoundBestOf)).not.toHaveBeenCalled();
+
+      const tags = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
+      expect(tags).toEqual(expect.arrayContaining([`tournament:${T_ID}`, 'season:season-1']));
+      expect(vi.mocked(updateRoundDeadline).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(revalidateTag).mock.invocationCallOrder[0],
+      );
+
+      expect(vi.mocked(logAuditEvent)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actor_id: 'admin-1',
+          actor_name: 'Admin One',
+          resource_type: 'round',
+          resource_id: R_ID,
+          changes: { deadline: { before: null, after: DEADLINE } },
+          metadata: { tournament_id: T_ID, field: 'deadline' },
+        }),
+      );
+    });
+
+    it('accepts an offset deadline', async () => {
+      const offset = '2026-11-01T19:00:00+01:00';
+      vi.mocked(getRoundById).mockResolvedValue(makeRound());
+      vi.mocked(updateRoundDeadline).mockResolvedValue(makeRound({ deadline: DEADLINE }));
+
+      const response = await patch({ deadline: offset });
+
+      expect(response.status).toBe(200);
+      expect(vi.mocked(updateRoundDeadline)).toHaveBeenCalledWith(R_ID, offset);
+    });
+
+    it('clears the deadline with null and audits the change', async () => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound({ deadline: DEADLINE }));
+      vi.mocked(updateRoundDeadline).mockResolvedValue(makeRound({ deadline: null }));
+
+      const response = await patch({ deadline: null });
+      const payload = await response.json() as { success: boolean; data: Round };
+
+      expect(response.status).toBe(200);
+      expect(payload.data.deadline).toBeNull();
+      expect(vi.mocked(updateRoundDeadline)).toHaveBeenCalledWith(R_ID, null);
+      expect(vi.mocked(revalidateTag)).toHaveBeenCalled();
+      expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
+        expect.objectContaining({ changes: { deadline: { before: DEADLINE, after: null } } }),
+      );
+    });
+
+    it('does not audit a deadline that names the same instant', async () => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound({ deadline: '2026-11-01T18:00:00+00:00' }));
+      vi.mocked(updateRoundDeadline).mockResolvedValue(makeRound({ deadline: '2026-11-01T18:00:00+00:00' }));
+
+      const response = await patch({ deadline: DEADLINE });
+
+      expect(response.status).toBe(200);
+      expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalled();
+    });
+
+    it('leaves the deadline alone when the body does not name it', async () => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound({ deadline: DEADLINE }));
+      vi.mocked(updateRoundStatus).mockResolvedValue(makeRound({ status: 'active', deadline: DEADLINE }));
+
+      const response = await patch({ status: 'active' });
+
+      expect(response.status).toBe(200);
+      expect(vi.mocked(updateRoundDeadline)).not.toHaveBeenCalled();
+      expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalled();
+    });
+
+    it('sets the deadline together with a status change', async () => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound());
+      vi.mocked(updateRoundStatus).mockResolvedValue(makeRound({ status: 'active' }));
+      vi.mocked(updateRoundDeadline).mockResolvedValue(makeRound({ status: 'active', deadline: DEADLINE }));
+
+      const response = await patch({ status: 'active', deadline: DEADLINE });
+      const payload = await response.json() as { success: boolean; data: Round };
+
+      expect(response.status).toBe(200);
+      expect(payload.data).toMatchObject({ status: 'active', deadline: DEADLINE });
+      expect(vi.mocked(updateRoundStatus)).toHaveBeenCalledWith(R_ID, 'active');
+      expect(vi.mocked(updateRoundDeadline)).toHaveBeenCalledWith(R_ID, DEADLINE);
+    });
+
+    it.each([
+      ['a date without a time', '2026-11-01'],
+      ['a time without an offset', '2026-11-01T18:00:00'],
+      ['free text', 'next friday'],
+      ['an empty string', ''],
+      ['a number', 1_792_000_000_000],
+    ])('rejects %s with validation_failed and writes nothing', async (_label, deadline) => {
+      const response = await patch({ deadline });
+      const payload = await response.json() as { success: boolean; code?: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.code).toBe('validation_failed');
+      expect(vi.mocked(getRoundById)).not.toHaveBeenCalled();
+      expect(vi.mocked(updateRoundDeadline)).not.toHaveBeenCalled();
+      expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalled();
+      expect(vi.mocked(revalidateTag)).not.toHaveBeenCalled();
+    });
+
+    it('runs the auth guard first: a denied admin writes and audits nothing', async () => {
+      const { AuthError } = await import('@/lib/auth/helpers');
+      vi.mocked(requireResourceAdmin).mockRejectedValueOnce(
+        new (AuthError as unknown as new (m: string, s: number) => Error)('Forbidden', 403),
+      );
+
+      const response = await patch({ deadline: DEADLINE });
+
+      expect(response.status).toBe(403);
+      expect(vi.mocked(requireResourceAdmin)).toHaveBeenCalledWith('tournament', T_ID);
+      expect(vi.mocked(getRoundById)).not.toHaveBeenCalled();
+      expect(vi.mocked(updateRoundDeadline)).not.toHaveBeenCalled();
+      expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalled();
+    });
+
+    it('rejects a round of another tournament before writing the deadline', async () => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound({ tournament_id: 'tournament-2' }));
+
+      const response = await patch({ deadline: DEADLINE });
+      const payload = await response.json() as { code?: string };
+
+      expect(response.status).toBe(404);
+      expect(payload.code).toBe('round_wrong_tournament');
+      expect(vi.mocked(updateRoundDeadline)).not.toHaveBeenCalled();
+    });
+
+    it('answers a failed write with a safe 500 and no expiry or audit', async () => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound());
+      vi.mocked(updateRoundDeadline).mockRejectedValue(new Error('db password leaked'));
+
+      const response = await patch({ deadline: DEADLINE });
+      const payload = await response.json() as { success: boolean; error?: string };
+
+      expect(response.status).toBe(500);
+      expect(payload.error).toBe('Failed to update round');
+      expect(JSON.stringify(payload)).not.toContain('leaked');
+      expect(vi.mocked(revalidateTag)).not.toHaveBeenCalled();
+      expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalled();
+    });
   });
 
   it('returns safeErrorResponse on auth failure', async () => {

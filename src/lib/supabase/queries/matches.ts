@@ -1,10 +1,11 @@
 import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
-import { postgrestQuoted } from '@/lib/supabase/postgrest-filter';
+import { ilikeAnyOf, postgrestQuoted } from '@/lib/supabase/postgrest-filter';
 import { releaseTeamsFromMatches } from './teams';
 import type { Tables } from '@/types/database';
 import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
 import type { MatchRecord } from '@/lib/tournament/types';
+import { ADMIN_MATCH_SEARCH_PLAYER_CAP } from '@/lib/admin/match-list';
 
 type MatchRow = Tables<'matches'>;
 
@@ -120,40 +121,284 @@ export async function listAllMatches(filters?: {
   return data.map((row: MatchWithPlayersRow) => toMatchWithPlayers(row));
 }
 
-/** List all matches with tournament name context (admin use) */
-export async function listAllMatchesWithTournament(filters?: {
-  tournament_id?: string;
-  status?: MatchStatus;
-}): Promise<MatchWithTournament[]> {
-  const selectWithTournament = `
-    *,
-    player_1:players!matches_player_1_id_fkey ( name, avatar_url ),
-    player_2:players!matches_player_2_id_fkey ( name, avatar_url ),
-    winner:players!matches_winner_id_fkey ( name ),
-    games ( id, game_number, winner_id, replay_url, source, stats_locked ),
-    round:rounds!matches_round_id_fkey ( status ),
-    tournaments!inner ( name )
-  `;
+// ── Admin match list (paged, filtered on the server) ────────────────
 
-  let query = supabase
-    .from('matches')
-    .select(selectWithTournament)
+/** A match row of the admin list: the tournament (phase) and, for a league phase, its league. */
+export interface AdminMatchRow extends MatchWithTournament {
+  /** The league (season) the tournament is a phase of; null for a standalone tournament. */
+  season_id: string | null;
+  season_name: string | null;
+}
+
+export interface AdminMatchPage {
+  rows: AdminMatchRow[];
+  /** Matches that satisfy the filters, across all pages. */
+  total: number;
+}
+
+export interface AdminMatchListParams {
+  /** Tournaments the caller may see; null = every tournament (site admin). An empty list yields an empty page. */
+  tournamentIds: string[] | null;
+  /** Only tournaments that belong to no league. */
+  standaloneOnly?: boolean;
+  statuses?: MatchStatus[];
+  /** Matches where either seat is one of these players. Callers return early on an empty search result. */
+  playerIds?: string[];
+  /** One match, by id. */
+  matchId?: string;
+  /** 1-based. */
+  page: number;
+  pageSize: number;
+}
+
+const ADMIN_MATCH_SELECT = `
+  *,
+  player_1:players!matches_player_1_id_fkey ( name, avatar_url ),
+  player_2:players!matches_player_2_id_fkey ( name, avatar_url ),
+  winner:players!matches_winner_id_fkey ( name ),
+  games ( id, game_number, winner_id, replay_url, source, stats_locked ),
+  round:rounds!matches_round_id_fkey ( status ),
+  tournaments!inner ( name, season_id, seasons ( name ) )
+`;
+
+type AdminMatchRowRaw = MatchWithPlayersRow & {
+  tournaments: { name: string; season_id: string | null; seasons: { name: string } | null };
+};
+
+/** PostgREST answers an offset past the last row with this code when a count is requested. */
+const RANGE_NOT_SATISFIABLE = 'PGRST103';
+
+/**
+ * One page of matches for the admin list, filtered and counted by the
+ * database: newest first (`created_at`, then `id`, so a page never repeats or
+ * skips a row), `.range()` paging with an exact count, so the 200-row slice
+ * and the `max_rows` ceiling no longer hide older matches.
+ *
+ * The caller decides which tournaments the viewer may see (`tournamentIds`);
+ * this function only applies them. Players are embedded in the narrow shape
+ * (`name`, `avatar_url`): no private `players` column is selected.
+ */
+export async function listAdminMatchesPage(params: AdminMatchListParams): Promise<AdminMatchPage> {
+  if (params.tournamentIds !== null && params.tournamentIds.length === 0) return { rows: [], total: 0 };
+
+  const build = (head: boolean) => {
+    let query = supabase.from('matches').select(ADMIN_MATCH_SELECT, { count: 'exact', head });
+    if (params.tournamentIds !== null) query = query.in('tournament_id', params.tournamentIds);
+    if (params.standaloneOnly) query = query.is('tournaments.season_id', null);
+    if (params.statuses && params.statuses.length > 0) query = query.in('status', params.statuses);
+    if (params.matchId) {
+      assertValidUuid(params.matchId, 'matchId');
+      query = query.eq('id', params.matchId);
+    }
+    if (params.playerIds && params.playerIds.length > 0) {
+      for (const id of params.playerIds) assertValidUuid(id, 'playerId');
+      const list = params.playerIds.join(',');
+      query = query.or(`player_1_id.in.(${list}),player_2_id.in.(${list})`);
+    }
+    return query;
+  };
+
+  const from = (params.page - 1) * params.pageSize;
+  const { data, error, count } = await build(false)
     .order('created_at', { ascending: false })
-    .limit(200);
+    .order('id', { ascending: false })
+    .range(from, from + params.pageSize - 1);
 
-  if (filters?.tournament_id) {
-    query = query.eq('tournament_id', filters.tournament_id);
-  }
-  if (filters?.status) {
-    query = query.eq('status', filters.status);
+  if (error) {
+    if (error.code !== RANGE_NOT_SATISFIABLE) throw error;
+    // The page is past the last row: report the real total so the caller can step back.
+    const { count: total, error: countError } = await build(true);
+    if (countError) throw countError;
+    return { rows: [], total: total ?? 0 };
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return data.map((row: MatchWithTournamentRow) => ({
+  const rows = (data as AdminMatchRowRaw[]).map((row): AdminMatchRow => ({
     ...toMatchWithPlayers(row),
     tournament_name: row.tournaments.name,
+    season_id: row.tournaments.season_id,
+    season_name: row.tournaments.seasons?.name ?? null,
   }));
+  return { rows, total: count ?? rows.length };
+}
+
+/**
+ * Ids of the players whose name or Showdown username contains `search`
+ * (bounded by `ADMIN_MATCH_SEARCH_PLAYER_CAP`; `truncated` says more match).
+ * Only the id column is read. Wildcards in the term are escaped and the
+ * pattern is double-quoted, so `50%`, a comma or a parenthesis match literally.
+ */
+export async function findPlayerIdsForMatchSearch(
+  search: string
+): Promise<{ ids: string[]; truncated: boolean }> {
+  const { data, error } = await supabase
+    .from('players')
+    .select('id')
+    .or(ilikeAnyOf(['name', 'ps_username'], search))
+    .order('name')
+    .order('id')
+    .limit(ADMIN_MATCH_SEARCH_PLAYER_CAP + 1);
+  if (error) throw error;
+  const ids = (data as { id: string }[]).map((row) => row.id);
+  return {
+    ids: ids.slice(0, ADMIN_MATCH_SEARCH_PLAYER_CAP),
+    truncated: ids.length > ADMIN_MATCH_SEARCH_PLAYER_CAP,
+  };
+}
+
+/** Ids of every tournament (phase) of a league. A league has a handful; no paging needed. */
+export async function listTournamentIdsBySeason(seasonId: string): Promise<string[]> {
+  assertValidUuid(seasonId, 'seasonId');
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select('id')
+    .eq('season_id', seasonId)
+    .order('id')
+    .limit(POSTGREST_MAX_ROWS);
+  if (error) throw error;
+  return (data as { id: string }[]).map((row) => row.id);
+}
+
+// ── Admin match filter options ──────────────────────────────────────
+
+export interface AdminMatchPhaseOption {
+  id: string;
+  name: string;
+  stage_order: number;
+  archived: boolean;
+}
+
+export interface AdminMatchLeagueOption {
+  id: string;
+  name: string;
+  status: string;
+  archived: boolean;
+  is_test_season: boolean;
+  phases: AdminMatchPhaseOption[];
+}
+
+export interface AdminMatchStandaloneOption {
+  id: string;
+  name: string;
+  status: string;
+  archived: boolean;
+}
+
+export interface AdminMatchFilterOptions {
+  leagues: AdminMatchLeagueOption[];
+  /** Standalone tournaments (no league). */
+  tournaments: AdminMatchStandaloneOption[];
+}
+
+type PageResult<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+
+/** Ids per `.in()` request, small enough for the request URL. */
+const ID_CHUNK = 100;
+
+/** Every row of a query, in `max_rows` chunks until a short page (PostgREST truncates silently). */
+async function readAllRows<T>(page: (from: number, to: number) => PageResult<T>): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += POSTGREST_MAX_ROWS) {
+    const { data, error } = await page(from, from + POSTGREST_MAX_ROWS - 1);
+    if (error) throw error;
+    const chunk = data ?? [];
+    rows.push(...chunk);
+    if (chunk.length < POSTGREST_MAX_ROWS) return rows;
+  }
+}
+
+/** Rows whose id is in `ids`, read in chunks of `ID_CHUNK`. */
+async function readRowsByIds<T>(
+  ids: readonly string[],
+  read: (chunk: string[]) => PageResult<T>
+): Promise<T[]> {
+  const unique = [...new Set(ids)];
+  const rows: T[] = [];
+  for (let i = 0; i < unique.length; i += ID_CHUNK) {
+    const { data, error } = await read(unique.slice(i, i + ID_CHUNK));
+    if (error) throw error;
+    rows.push(...(data ?? []));
+  }
+  return rows;
+}
+
+type TournamentOptionRow = {
+  id: string;
+  name: string;
+  status: string;
+  archived: boolean;
+  season_id: string | null;
+  stage_order: number;
+};
+type SeasonOptionRow = {
+  id: string;
+  name: string;
+  status: string;
+  archived: boolean;
+  is_test_season: boolean;
+};
+
+const TOURNAMENT_OPTION_COLUMNS = 'id, name, status, archived, season_id, stage_order';
+const SEASON_OPTION_COLUMNS = 'id, name, status, archived, is_test_season';
+
+/**
+ * The Matches page's league -> phase selects, plus the standalone
+ * tournaments. Archived rows are included (flagged) so old matches stay
+ * reachable. `null` = unrestricted (site admin); lists restrict to a resource
+ * admin's tournaments, and to the leagues those belong to or that the admin is
+ * assigned to. Both reads page past the `max_rows` ceiling.
+ */
+export async function listAdminMatchFilterOptions(scope: {
+  tournamentIds: string[] | null;
+  seasonIds: string[] | null;
+}): Promise<AdminMatchFilterOptions> {
+  const tournamentRows =
+    scope.tournamentIds === null
+      ? await readAllRows<TournamentOptionRow>((from, to) =>
+          supabase.from('tournaments').select(TOURNAMENT_OPTION_COLUMNS).order('id').range(from, to)
+        )
+      : await readRowsByIds<TournamentOptionRow>(scope.tournamentIds, (chunk) =>
+          supabase.from('tournaments').select(TOURNAMENT_OPTION_COLUMNS).in('id', chunk).order('id')
+        );
+
+  const seasonRows =
+    scope.seasonIds === null
+      ? await readAllRows<SeasonOptionRow>((from, to) =>
+          supabase.from('seasons').select(SEASON_OPTION_COLUMNS).order('id').range(from, to)
+        )
+      : await readRowsByIds<SeasonOptionRow>(
+          [...scope.seasonIds, ...tournamentRows.flatMap((row) => (row.season_id ? [row.season_id] : []))],
+          (chunk) => supabase.from('seasons').select(SEASON_OPTION_COLUMNS).in('id', chunk).order('id')
+        );
+
+  const phasesBySeason = new Map<string, AdminMatchPhaseOption[]>();
+  const tournaments: AdminMatchStandaloneOption[] = [];
+  for (const row of tournamentRows) {
+    if (row.season_id === null) {
+      tournaments.push({ id: row.id, name: row.name, status: row.status, archived: row.archived });
+      continue;
+    }
+    const phases = phasesBySeason.get(row.season_id) ?? [];
+    phases.push({ id: row.id, name: row.name, stage_order: row.stage_order, archived: row.archived });
+    phasesBySeason.set(row.season_id, phases);
+  }
+
+  const byArchivedThenName = (a: { archived: boolean; name: string }, b: { archived: boolean; name: string }) =>
+    Number(a.archived) - Number(b.archived) || a.name.localeCompare(b.name);
+
+  const leagues = seasonRows
+    .map((season): AdminMatchLeagueOption => ({
+      id: season.id,
+      name: season.name,
+      status: season.status,
+      archived: season.archived,
+      is_test_season: season.is_test_season,
+      phases: (phasesBySeason.get(season.id) ?? []).sort(
+        (a, b) => a.stage_order - b.stage_order || a.name.localeCompare(b.name)
+      ),
+    }))
+    .sort(byArchivedThenName);
+
+  return { leagues, tournaments: tournaments.sort(byArchivedThenName) };
 }
 
 export async function getMatchesByRound(roundId: string): Promise<MatchWithPlayers[]> {

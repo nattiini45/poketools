@@ -5,6 +5,7 @@ import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { sumEvolutionPoints, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
+import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import type { LeagueGroupStandings, LeagueStanding } from '@/lib/supabase/queries/league-standings';
 import type { CombinedRanking } from '@/lib/tournament/group-standings';
@@ -212,6 +213,11 @@ export async function loadLeagueHubPanel(
     case 'groups': {
       const tables = tableStages(stages);
       const roundRobin = roundRobinStages(tables);
+      // Only the Swiss tables of a league that scores byes: an Evolution Point Buy league scores none, so its
+      // rounds are not read for them.
+      const swiss = formatScoresByes(league.format_type)
+        ? tables.filter((stage) => stage.bracket_type === 'swiss')
+        : [];
       const [data, reads] = await Promise.all([
         ctx.routeData,
         tabRead(
@@ -220,12 +226,14 @@ export async function loadLeagueHubPanel(
             perStage(tables, (id) => publicReads.tournamentParticipants(id)),
             perStage(tables, (id) => publicReads.tournamentGroups(id)),
             perStage(roundRobin, (id) => publicReads.tournamentBattleStats(id)),
+            // A Swiss table scores the byes stored on its rounds.
+            perStage(swiss, (id) => publicReads.tournamentRounds(id)),
           ]),
         ),
       ]);
       if (!data) return null;
       if (reads === READ_FAILED) return unavailable;
-      const [participants, groups, battleStats] = reads;
+      const [participants, groups, battleStats, swissRounds] = reads;
       // One season context for every table on the page (AGENTS.md: never one
       // standings lookup per table).
       const context: SeasonStandingsContext = {
@@ -244,6 +252,7 @@ export async function loadLeagueHubPanel(
             groups: groups[stage.id] ?? [],
             battleStats: battleStats[stage.id] ?? [],
             roundNumbers: {},
+            byes: scoringByeRecords(stage.bracket_type, swissRounds[stage.id] ?? []),
             context,
             gymTypes,
             showAdvancement: showsAdvancement(stages, stage.id),

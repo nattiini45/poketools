@@ -4,7 +4,9 @@ import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { getButtonClasses } from '@/components/ui/buttonStyles';
-import { listArchivedSeasons } from '@/lib/supabase/queries/seasons';
+import { getLiveAccess } from '@/lib/auth/helpers';
+import { listArchivedSeasons, listSeasonsByIds } from '@/lib/supabase/queries/seasons';
+import { getAdminSeasonIds } from '@/lib/supabase/queries/resource-admins';
 import { getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
@@ -16,8 +18,15 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 export default async function ArchivedLeaguesPage() {
+  // Live roles, and no data read before we know the viewer is an admin.
+  const access = await getLiveAccess();
+  if (!access?.isAnyAdmin || !access.player) return <AdminGuard>{null}</AdminGuard>;
+
+  // Site admin: every archived league. Resource admin: only their own archived leagues.
   const [leagues, t, tEnum, tCommon] = await Promise.all([
-    listArchivedSeasons(),
+    access.isSiteAdmin
+      ? listArchivedSeasons()
+      : getAdminSeasonIds(access.player.playerId).then((ids) => listSeasonsByIds(ids, { archived: true })),
     getT(leagueAdminMessages),
     getT(enumMessages),
     getT(commonMessages),

@@ -32,6 +32,7 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
   createRound: vi.fn(),
+  updateRoundByePlayers: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -82,7 +83,7 @@ import {
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
-import { getRoundsByTournament, createRound } from '@/lib/supabase/queries/rounds';
+import { getRoundsByTournament, createRound, updateRoundByePlayers } from '@/lib/supabase/queries/rounds';
 import {
   createMatchBatch,
   getCompletedMatchRecords,
@@ -126,7 +127,7 @@ describe('POST /api/generate-round/[tid]', () => {
     // Happy-path defaults
     vi.mocked(getTournamentById).mockResolvedValue(baseTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
-      { round_number: 1, status: 'completed' },
+      { round_number: 1, status: 'completed', bye_player_ids: [] },
     ] as never);
     vi.mocked(getParticipants).mockResolvedValue(participants as never);
     vi.mocked(getCompletedMatchRecords).mockResolvedValue([] as never);
@@ -140,6 +141,7 @@ describe('POST /api/generate-round/[tid]', () => {
         { player_1_id: 'p3', player_2_id: 'p4' },
       ],
       round_name: 'Round 2',
+      bye_player_ids: [],
     } as never);
     vi.mocked(createRound).mockResolvedValue({
       id: 'r-2',
@@ -195,7 +197,7 @@ describe('POST /api/generate-round/[tid]', () => {
 
   it('returns 400 when current round is not completed (non-round-robin)', async () => {
     vi.mocked(getRoundsByTournament).mockResolvedValue([
-      { round_number: 1, status: 'active' },
+      { round_number: 1, status: 'active', bye_player_ids: [] },
     ] as never);
 
     const request = {} as NextRequest;
@@ -213,7 +215,7 @@ describe('POST /api/generate-round/[tid]', () => {
       bracket_type: 'round_robin',
     } as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
-      { round_number: 1, status: 'active' },
+      { round_number: 1, status: 'active', bye_player_ids: [] },
     ] as never);
 
     const request = {} as NextRequest;
@@ -355,6 +357,7 @@ describe('POST /api/generate-round/[tid]', () => {
     vi.mocked(generateRound).mockReturnValue({
       pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
       round_name: 'Round 2',
+      bye_player_ids: [],
     } as never);
 
     const request = {} as NextRequest;
@@ -391,7 +394,7 @@ describe('POST /api/generate-round/[tid]', () => {
 
     /** Weeks 1..n written, each with a (completed) match; `openFirst`: week 1's match still open. */
     function written(weeks: number, openFirst = false) {
-      const rounds = Array.from({ length: weeks }, (_, i) => ({ id: `r-${i + 1}`, round_number: i + 1, status: 'completed' }));
+      const rounds = Array.from({ length: weeks }, (_, i) => ({ id: `r-${i + 1}`, round_number: i + 1, status: 'completed', bye_player_ids: [] }));
       vi.mocked(getRoundsByTournament).mockResolvedValue(rounds as never);
       vi.mocked(getMatchesByTournament).mockResolvedValue(
         rounds.map((round, i) => ({
@@ -441,8 +444,8 @@ describe('POST /api/generate-round/[tid]', () => {
       } as never);
       const week1 = plan.weeks[0];
       vi.mocked(getRoundsByTournament).mockResolvedValue([
-        { id: 'r-1', round_number: 1, status: 'completed' },
-        { id: 'r-2', round_number: 2, status: 'active' },
+        { id: 'r-1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2', round_number: 2, status: 'active', bye_player_ids: [] },
       ] as never);
       vi.mocked(getMatchesByTournament).mockResolvedValue(
         [...week1.groupPairings, ...week1.crossPairings].map((p, i) => ({
@@ -531,8 +534,8 @@ describe('POST /api/generate-round/[tid]', () => {
     it('fills the round the interrupted call wrote without matches instead of writing a second round 2', async () => {
       vi.mocked(getTournamentById).mockResolvedValue({ ...baseTournament, bracket_type: 'round_robin' } as never);
       vi.mocked(getRoundsByTournament).mockResolvedValue([
-        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed' },
-        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'pending' },
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: [] },
       ] as never);
       vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
 
@@ -551,8 +554,8 @@ describe('POST /api/generate-round/[tid]', () => {
 
     it('refuses (409, nothing written) when the round at that number already has its matches', async () => {
       vi.mocked(getRoundsByTournament).mockResolvedValue([
-        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed' },
-        { id: 'r-2', name: 'Round 2', round_number: 2, status: 'pending' },
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: [] },
       ] as never);
       vi.mocked(getMatchesByTournament).mockResolvedValue([
         { id: 'm-1', round_id: 'r-1' },
@@ -577,7 +580,7 @@ describe('POST /api/generate-round/[tid]', () => {
       bracket_type: 'single_elim',
     } as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
-      { round_number: 1, status: 'completed', bracket_side: 'winners' },
+      { round_number: 1, status: 'completed', bracket_side: 'winners', bye_player_ids: [] },
     ] as never);
 
     const request = {} as NextRequest;
@@ -596,11 +599,12 @@ describe('POST /api/generate-round/[tid]', () => {
       bracket_type: 'single_elim',
     } as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
-      { round_number: 1, status: 'completed', bracket_side: null },
+      { round_number: 1, status: 'completed', bracket_side: null, bye_player_ids: [] },
     ] as never);
     vi.mocked(generateRound).mockReturnValue({
       pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
       round_name: 'Semifinals',
+      bye_player_ids: [],
     } as never);
 
     const request = {} as NextRequest;
@@ -610,6 +614,182 @@ describe('POST /api/generate-round/[tid]', () => {
     expect(response.status).toBe(201);
     expect(payload.success).toBe(true);
     expect(generateRound).toHaveBeenCalled();
+  });
+
+  // ---- byes ----
+
+  describe('byes', () => {
+    const fiveParticipants = [...participants, { id: 'p5', name: 'Erin' }];
+
+    it('stores the bye of a Swiss round on the round', async () => {
+      vi.mocked(getParticipants).mockResolvedValue(fiveParticipants as never);
+      vi.mocked(generateRound).mockReturnValue({
+        pairings: [
+          { player_1_id: 'p1', player_2_id: 'p2' },
+          { player_1_id: 'p3', player_2_id: 'p4' },
+        ],
+        round_name: 'Round 2',
+        bye_player_ids: ['p5'],
+      } as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
+      expect(createRound).toHaveBeenCalledWith(
+        expect.objectContaining({ round_number: 2, bye_player_ids: ['p5'] })
+      );
+      // The round (and its bye) shows on the next public view.
+      expect(revalidateTag).toHaveBeenCalledWith(`tournament:${baseTournament.id}`, { expire: 0 });
+    });
+
+    it('hands the byes stored on earlier rounds to the pairing engine', async () => {
+      vi.mocked(getParticipants).mockResolvedValue(fiveParticipants as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { round_number: 1, status: 'completed', bye_player_ids: ['p5'] },
+      ] as never);
+
+      await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(generateRound).toHaveBeenCalledWith(
+        'swiss',
+        expect.any(Array),
+        expect.any(Object),
+        expect.any(Array),
+        2,
+        expect.objectContaining({ byeHistory: [{ player_id: 'p5', round_number: 1 }] })
+      );
+    });
+
+    it('stores a round robin bye too', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({
+        ...baseTournament,
+        bracket_type: 'round_robin',
+      } as never);
+      vi.mocked(generateRound).mockReturnValue({
+        pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
+        round_name: 'Round 2',
+        bye_player_ids: ['p3'],
+      } as never);
+
+      await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: ['p3'] }));
+    });
+
+    it('does not store an elimination bye (it is structural)', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({
+        ...baseTournament,
+        bracket_type: 'single_elim',
+      } as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { round_number: 1, status: 'completed', bracket_side: null, bye_player_ids: [] },
+      ] as never);
+      vi.mocked(generateRound).mockReturnValue({
+        pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
+        round_name: 'Semifinals',
+        bye_player_ids: ['p3'],
+      } as never);
+
+      await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      const input = vi.mocked(createRound).mock.calls[0][0];
+      expect('bye_player_ids' in input).toBe(false);
+    });
+
+    it('writes the bye onto a round it reuses and keeps that round out of its own bye history', async () => {
+      // Round 2 was written by an interrupted call (a stale bye for p4, no matches): the retry reuses it, stores
+      // this call's bye, and does not count the stale bye as history of the round it is regenerating.
+      vi.mocked(getParticipants).mockResolvedValue(fiveParticipants as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: ['p5'] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: ['p4'] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+      vi.mocked(generateRound).mockReturnValue({
+        pairings: [
+          { player_1_id: 'p1', player_2_id: 'p2' },
+          { player_1_id: 'p3', player_2_id: 'p4' },
+        ],
+        round_name: 'Round 2',
+        bye_player_ids: ['p1'],
+      } as never);
+      vi.mocked(updateRoundByePlayers).mockResolvedValue({
+        id: 'r-2-empty',
+        name: 'Round 2',
+        round_number: 2,
+        bye_player_ids: ['p1'],
+      } as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
+      expect(createRound).not.toHaveBeenCalled();
+      expect(updateRoundByePlayers).toHaveBeenCalledWith('r-2-empty', ['p1']);
+      expect(vi.mocked(generateRound).mock.calls[0][5]).toEqual(
+        expect.objectContaining({ byeHistory: [{ player_id: 'p5', round_number: 1 }] })
+      );
+      expect(createMatchBatch).toHaveBeenCalledWith([
+        expect.objectContaining({ round_id: 'r-2-empty', player_1_id: 'p1', player_2_id: 'p2' }),
+        expect.objectContaining({ round_id: 'r-2-empty', player_1_id: 'p3', player_2_id: 'p4' }),
+      ]);
+    });
+
+    it('does not rewrite a reused round whose stored byes already match', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: [] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
+      expect(updateRoundByePlayers).not.toHaveBeenCalled();
+    });
+
+    it('collects the byes of every group and scopes the bye history to each group', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { round_number: 1, status: 'completed', bye_player_ids: ['p1', 'p3'] },
+      ] as never);
+      vi.mocked(getGroupsByTournament).mockResolvedValue([
+        {
+          id: 'g-1',
+          name: 'Group A',
+          members: [
+            { player_id: 'p1', player_name: 'Alice' },
+            { player_id: 'p2', player_name: 'Bob' },
+          ],
+        },
+        {
+          id: 'g-2',
+          name: 'Group B',
+          members: [
+            { player_id: 'p3', player_name: 'Carol' },
+            { player_id: 'p4', player_name: 'Dave' },
+          ],
+        },
+      ] as never);
+      vi.mocked(generateRound)
+        .mockReturnValueOnce({
+          pairings: [],
+          round_name: 'Round 2',
+          bye_player_ids: ['p2'],
+        } as never)
+        .mockReturnValueOnce({
+          pairings: [],
+          round_name: 'Round 2',
+          bye_player_ids: ['p4'],
+        } as never);
+
+      await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      const optionsOf = (call: number) => vi.mocked(generateRound).mock.calls[call][5];
+      expect(optionsOf(0)?.byeHistory).toEqual([{ player_id: 'p1', round_number: 1 }]);
+      expect(optionsOf(1)?.byeHistory).toEqual([{ player_id: 'p3', round_number: 1 }]);
+      expect(createRound).toHaveBeenCalledWith(
+        expect.objectContaining({ bye_player_ids: ['p2', 'p4'] })
+      );
+    });
   });
 
   // ---- error handling ----

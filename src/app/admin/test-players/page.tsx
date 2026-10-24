@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import AdminGuard from '@/components/shared/AdminGuard';
+import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import Button from '@/components/ui/Button';
 import TestPlayersConsole from './TestPlayersConsole';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export default function AdminTestPlayersPage() {
   return (
-    <AdminGuard>
+    <SiteAdminGuard>
       <PageContainer
         title="Test Players"
         subtitle="14 isolated dummy accounts for development & admin testing (excluded from all public/global data)"
@@ -21,6 +21,6 @@ export default function AdminTestPlayersPage() {
       >
         <TestPlayersConsole />
       </PageContainer>
-    </AdminGuard>
+    </SiteAdminGuard>
   );
 }

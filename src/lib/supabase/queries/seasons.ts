@@ -154,14 +154,25 @@ export async function listArchivedSeasons(): Promise<SeasonWithDetails[]> {
   }));
 }
 
-export async function listSeasonsByIds(ids: string[]): Promise<SeasonWithDetails[]> {
+/**
+ * Seasons by id. `archived` narrows by the archived flag: `false` = active
+ * only, `true` = archived only, omitted = both (profile and filter callers).
+ * The admin lists pass it so an active list never shows an archived league and
+ * the archived list shows only the admin's own.
+ */
+export async function listSeasonsByIds(
+  ids: string[],
+  opts: { archived?: boolean } = {},
+): Promise<SeasonWithDetails[]> {
   if (ids.length === 0) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('seasons')
     .select(SEASON_DETAILS_SELECT)
-    .in('id', ids)
-    .order('created_at', { ascending: false });
+    .in('id', ids);
+  if (opts.archived !== undefined) query = query.eq('archived', opts.archived);
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) throw error;
 
@@ -214,6 +225,34 @@ export async function getSeasonStageIds(seasonId: string): Promise<string[]> {
 
   if (error) throw error;
   return (data ?? []).map((row) => row.id as string);
+}
+
+/** The stage ids of a season with the two facts that decide whether its table scores Swiss byes. */
+export interface SeasonStageBrackets {
+  stageIds: string[];
+  hasSwissStage: boolean;
+  /** The season's format, read through the stage rows; null for a season without a stage. */
+  formatType: SeasonFormatType | null;
+}
+
+/**
+ * `getSeasonStageIds` that also tells whether a stage is Swiss and which format the season has, in the SAME
+ * query (the season rides on the stage rows as an embed). A caller that reads the Swiss stages' rounds only for a
+ * league that has one decides from this alone, so a league without a Swiss stage pays no extra read.
+ */
+export async function getSeasonStageBrackets(seasonId: string): Promise<SeasonStageBrackets> {
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select('id, bracket_type, seasons ( format_type )')
+    .eq('season_id', seasonId);
+
+  if (error) throw error;
+  const rows = data ?? [];
+  return {
+    stageIds: rows.map((row) => row.id as string),
+    hasSwissStage: rows.some((row) => row.bracket_type === 'swiss'),
+    formatType: (rows[0]?.seasons as { format_type: SeasonFormatType } | null | undefined)?.format_type ?? null,
+  };
 }
 
 /**

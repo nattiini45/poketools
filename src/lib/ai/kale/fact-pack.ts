@@ -7,6 +7,8 @@ import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
 import { decideMatchRosterVisibility } from '@/lib/team/visibility';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { byesThroughRound, loadScoringByes } from '@/lib/tournament/scoring-byes';
+import { countByesByPlayer, formatRecord } from '@/lib/tournament/byes';
 import { aggregateTeamFromStats, computePokemonScore, computeQuickStats } from '@/lib/match/aggregation';
 import { parseGenFromFormat } from '../context-builder';
 import { getSpecies } from '@/lib/pkmn/dex';
@@ -76,23 +78,31 @@ export async function buildRecapFactPack(
     (m) => m.round_number < round.round_number
   );
 
+  // A Swiss stage scores its stored byes as wins; "through round N" keeps the byes of those rounds.
+  const byes = await loadScoringByes(tournament);
   const currentStandings = await computeStandingsForSeason(
     tournament.season_id,
     participantIds, participantNames, throughRoundRecords,
-    participantAvatars, standingsOpts, gymTypes
+    participantAvatars, { ...standingsOpts, byes: byesThroughRound(byes, round.round_number) }, gymTypes
   );
   const previousStandings = prevRoundRecords.length > 0
     ? await computeStandingsForSeason(
         tournament.season_id,
         participantIds, participantNames, prevRoundRecords,
-        participantAvatars, standingsOpts, gymTypes
+        participantAvatars, { ...standingsOpts, byes: byesThroughRound(byes, round.round_number - 1) }, gymTypes
       )
     : null;
 
   // Build fact objects
   const matchFacts = matchDetails.map((d) => buildMatchFact(d, gen));
-  const currentStandingFacts = buildStandingFacts(currentStandings, previousStandings);
-  const previousStandingFacts = previousStandings ? buildStandingFacts(previousStandings, null) : null;
+  const currentStandingFacts = buildStandingFacts(
+    currentStandings,
+    previousStandings,
+    countByesByPlayer(byesThroughRound(byes, round.round_number)),
+  );
+  const previousStandingFacts = previousStandings
+    ? buildStandingFacts(previousStandings, null, countByesByPlayer(byesThroughRound(byes, round.round_number - 1)))
+    : null;
 
   // Server-computed UI data (pass through to output)
   const matchData = buildMatchData(matchDetails, participantAvatars);
@@ -178,18 +188,21 @@ export async function buildForecastFactPack(
     }
   }
 
+  const byes = await loadScoringByes(tournament);
   const currentStandings = allMatchRecords.length > 0
     ? await computeStandingsForSeason(
         tournament.season_id,
         participantIds, participantNames, allMatchRecords,
-        participantAvatars, { pointsPerWin: 3, pointsPerDraw: 1 }, gymTypes
+        participantAvatars,
+        { pointsPerWin: 3, pointsPerDraw: 1, byes },
+        gymTypes
       )
     : [];
 
   const playerTeams = await fetchMatchupTeams(roundMatches, tournament.team_visibility ?? null);
 
   // Build matchup facts
-  const standingFacts = buildStandingFacts(currentStandings, null);
+  const standingFacts = buildStandingFacts(currentStandings, null, countByesByPlayer(byes));
   const rankMap: Record<string, number> = {};
   const recordMap: Record<string, string> = {};
   for (const s of standingFacts) {
@@ -371,7 +384,8 @@ function buildPreWrittenOneLiner(
 
 function buildStandingFacts(
   current: Standing[],
-  previous: Standing[] | null
+  previous: Standing[] | null,
+  byeCounts: Readonly<Record<string, number>> = {}
 ): StandingFact[] {
   const prevRankMap: Record<string, number> = {};
   if (previous) {
@@ -395,7 +409,8 @@ function buildStandingFacts(
       rankChange = `down ${rank - prevRank} from #${prevRank} to #${rank}`;
     }
 
-    const recordString = `${s.wins}W-${s.losses}L${s.draws > 0 ? `-${s.draws}D` : ''}`;
+    // A bye is a win without a match; the record says so, so a summary reconciles with the match list.
+    const recordString = formatRecord(s.wins, s.losses, s.draws, byeCounts[s.player_id] ?? 0);
     const kdString = s.kill_differential > 0
       ? `+${s.kill_differential}`
       : `${s.kill_differential}`;

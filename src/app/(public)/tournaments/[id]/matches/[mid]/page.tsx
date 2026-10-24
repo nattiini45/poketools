@@ -9,6 +9,7 @@ import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { getMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
@@ -92,8 +93,10 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const participantIds = participants.map((p) => p.id);
   const participantNames: Record<string, string> = {};
   for (const p of participants) participantNames[p.id] = p.name;
+  // A Swiss stage scores its stored byes as wins, as the tournament page does.
+  const byes = tournament ? await loadScoringByes(tournament) : [];
   const standings = await computeStandingsForSeason(
-    tournament?.season_id ?? null, participantIds, participantNames, matchRecords
+    tournament?.season_id ?? null, participantIds, participantNames, matchRecords, {}, { byes }
   );
 
   function extractStanding(playerId: string): PlayerStanding | null {

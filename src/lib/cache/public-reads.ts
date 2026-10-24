@@ -19,7 +19,7 @@ import { getUsageByFormat } from '@/lib/supabase/queries/meta-usage';
 import { getPlayersByIds, getPublicPlayers } from '@/lib/supabase/queries/players';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { getLeaderboardEntries, getRatingHistory } from '@/lib/supabase/queries/ratings';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getRoundsByTournament, getSwissByeRoundsBySeason } from '@/lib/supabase/queries/rounds';
 import {
   getPublicSeasonParticipants,
   getSeasonById,
@@ -250,11 +250,14 @@ const teamRoles = cache(() =>
   ),
 );
 
-/** Top-N standings of a league or tournament (home page featured card). */
+/**
+ * Top-N standings of a league or tournament (home page featured card). `-v2`: the table now scores Swiss byes; the
+ * new name keeps Data Cache entries written before that deploy from ever being served again.
+ */
 const standingsPreview = cache((kind: 'league' | 'tournament', id: string, limit: number) =>
   cachedRead(
     {
-      name: 'standings-preview',
+      name: 'standings-preview-v2',
       key: [kind, id, limit],
       tags: [
         kind === 'league' ? publicTags.season(id) : publicTags.tournament(id),
@@ -376,6 +379,15 @@ const seasonBattleStats = cache((seasonId: string) =>
   cachedRead(seasonSpec('season-battle-stats', seasonId), () => getBattleStatsForSeason(seasonId)),
 );
 
+/**
+ * The bye rounds of every Swiss stage of a league, flat, in ONE query (the stage filter runs in the database), for
+ * the season-wide tables that score a Swiss bye as a win. Tagged with the league like its other reads: a round
+ * write (`expireTournamentReads(stageId, seasonId)`) and a league write expire it with the stage's own rounds.
+ */
+const seasonByeRounds = cache((seasonId: string) =>
+  cachedRead(seasonSpec('season-bye-rounds', seasonId), () => getSwissByeRoundsBySeason(seasonId)),
+);
+
 /** Completed match records of every stage of a league, flattened. */
 const seasonMatchRecords = cache((seasonId: string) =>
   cachedRead(seasonSpec('season-match-records', seasonId), async (): Promise<MatchRecord[]> => {
@@ -391,12 +403,13 @@ const seasonMatchRecords = cache((seasonId: string) =>
  * season id alone. It embeds the bound point-buy list's entries (roster
  * lines), so it also carries that version's tag. The `-v2` name retired
  * entries cached before roster lines carried their `line_id` (B-LINE); `-v3`
- * retires entries cached before the standings carried league group tables.
+ * retires entries cached before the standings carried league group tables; `-v4`
+ * retires entries cached before the standings scored Swiss byes.
  */
 function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
   const listId = preload.league.point_buy_list_id;
   const extraTags = [publicTags.players, ...(listId ? [publicTags.pointBuyList(listId)] : [])];
-  return cachedRead(seasonSpec('world-route-data-public-v3', seasonId, extraTags), () =>
+  return cachedRead(seasonSpec('world-route-data-public-v4', seasonId, extraTags), () =>
     buildWorldRouteData(seasonId, preload),
   );
 }
@@ -405,10 +418,11 @@ function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
  * The league schedule (standings and fixtures). `preload` must be the rows the
  * caller read for the same season; the entry is keyed by the season id alone.
  * The `-v2` name retires entries cached before league group tables
- * (`groupStandings`, `standingsRanking`).
+ * (`groupStandings`, `standingsRanking`); `-v3` retires entries cached before
+ * the standings scored Swiss byes.
  */
 function leagueSchedule(seasonId: string, preload: LeagueSchedulePreload) {
-  return cachedRead(seasonSpec('league-schedule-public-v2', seasonId, [publicTags.players]), () =>
+  return cachedRead(seasonSpec('league-schedule-public-v3', seasonId, [publicTags.players]), () =>
     getLeagueSchedule(seasonId, preload),
   );
 }
@@ -442,8 +456,10 @@ const tournament = cache((tournamentId: string) =>
   cachedRead(tournamentSpec('tournament', tournamentId), () => getTournamentWithDetails(tournamentId)),
 );
 
+// `-v2`: rounds now carry `bye_player_ids`; the new name keeps Data Cache entries written before that deploy
+// (no bye list) from ever being served again.
 const tournamentRounds = cache((tournamentId: string) =>
-  cachedRead(tournamentSpec('tournament-rounds', tournamentId), () => getRoundsByTournament(tournamentId)),
+  cachedRead(tournamentSpec('tournament-rounds-v2', tournamentId), () => getRoundsByTournament(tournamentId)),
 );
 
 /** A tournament's (or league stage's) matches, narrowed to `PublicMatch` before they are cached. */
@@ -522,12 +538,13 @@ const tournamentGroups = cache((tournamentId: string) =>
  * (matches, streaks) are part of the entry: they are the same for every
  * signed-in viewer, and the page decides whether to render them. Each earned
  * achievement embeds its definition (name, icon, tier), hence the
- * `achievements` tag.
+ * `achievements` tag. `-v2`: the participation standings now score Swiss byes; the new name keeps Data Cache
+ * entries written before that deploy from ever being served again.
  */
 const playerProfile = cache((playerId: string) =>
   cachedRead(
     {
-      name: 'player-profile',
+      name: 'player-profile-v2',
       key: [playerId],
       tags: [
         publicTags.player(playerId),
@@ -584,6 +601,7 @@ export const publicReads = {
   seasonTrackers,
   seasonFormatRules,
   seasonBattleStats,
+  seasonByeRounds,
   seasonMatchRecords,
   worldRouteData,
   leagueSchedule,

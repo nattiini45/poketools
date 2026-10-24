@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import AdminGuard from '@/components/shared/AdminGuard';
+import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import Button from '@/components/ui/Button';
 import AuditLogBrowser from './AuditLogBrowser';
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminAuditPage() {
   const [t, extensionActionLabels] = await Promise.all([getT(adminToolsMessages), extensionAuditActionLabels()]);
   return (
-    <AdminGuard>
+    <SiteAdminGuard>
       <PageContainer
         title={t('audit.title')}
         subtitle={t('audit.subtitle')}
@@ -25,6 +25,6 @@ export default async function AdminAuditPage() {
       >
         <AuditLogBrowser extensionActionLabels={extensionActionLabels} />
       </PageContainer>
-    </AdminGuard>
+    </SiteAdminGuard>
   );
 }

@@ -4,6 +4,7 @@ import { getMomentsByMatch } from '@/lib/supabase/queries/broadcast-moments';
 import { getAggregates } from '@/lib/supabase/queries/aggregates';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import {
   computePokemonScore,
   aggregateTeamFromStats,
@@ -320,6 +321,10 @@ async function computeStandingsMovement(
       participantAvatars[p.id] = p.avatar_url ?? null;
     }
 
+    // A Swiss stage scores its stored byes as wins. Both tables below read the
+    // same match records, so they read the same byes.
+    const byes = tournament ? await loadScoringByes(tournament) : [];
+
     // Current standings (all rounds up to current)
     const currentStandings = await computeStandingsForSeason(
       tournament?.season_id ?? null,
@@ -327,6 +332,7 @@ async function computeStandingsMovement(
       participantNames,
       matchRecords,
       participantAvatars,
+      { byes },
     );
 
     // Previous standings (exclude current round's matches)
@@ -347,6 +353,7 @@ async function computeStandingsMovement(
       participantNames,
       previousMatches,
       participantAvatars,
+      { byes },
     );
 
     // Build rank maps

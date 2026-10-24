@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   cookies: new Map<string, { value: string }>(),
   listRulesets: vi.fn(),
   getRulesetById: vi.fn(),
+  getLiveAccess: vi.fn(),
 }));
 
 vi.mock('next/headers', () => ({
@@ -27,8 +28,10 @@ vi.mock('@/lib/supabase/queries/rulesets', () => ({
   listRulesets: mocks.listRulesets,
   getRulesetById: mocks.getRulesetById,
 }));
-vi.mock('@/components/shared/AdminGuard', () => ({
-  default: ({ children }: { children: ReactNode }) => children,
+vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
+// The guard renders its denial or its children; a marker lets the tests tell the two apart.
+vi.mock('@/components/shared/SiteAdminGuard', () => ({
+  default: ({ children }: { children: ReactNode }) => (children ? children : <p data-guard="denied">denied</p>),
 }));
 vi.mock('@/components/ui/PageContainer', () => ({
   default: ({
@@ -72,7 +75,7 @@ import AdminSocialPage from '../../social/page';
 function ruleset(overrides: Partial<Ruleset> = {}): Ruleset {
   return {
     id: 'rs-1',
-    name: 'EvoLiga Regeln',
+    name: 'Example Rules',
     base_format: 'gen9natdex',
     is_doubles: true,
     clauses: ['Species Clause', 'Sleep Clause Mod', 'OHKO Clause'],
@@ -94,9 +97,13 @@ function useLanguage(locale: 'en' | 'de' | null) {
   if (locale) mocks.cookies.set('plc_locale', { value: locale });
 }
 
+const RULESET_ID = '0b9f1c2e-5d4a-4c3b-9a8e-7f6d5c4b3a21';
+
 beforeEach(() => {
   mocks.listRulesets.mockReset();
   mocks.getRulesetById.mockReset();
+  mocks.getLiveAccess.mockReset();
+  mocks.getLiveAccess.mockResolvedValue({ player: null, isSiteAdmin: true, isAnyAdmin: true, isCreator: true });
 });
 
 describe('admin rulesets pages', () => {
@@ -126,9 +133,35 @@ describe('admin rulesets pages', () => {
     expect(await html(NewRulesetPage())).toContain('Regelwerk erstellen');
 
     mocks.getRulesetById.mockResolvedValue(ruleset());
-    expect(await html(EditRulesetPage({ params: Promise.resolve({ id: 'rs-1' }) }))).toContain(
-      'Regelwerk bearbeiten: EvoLiga Regeln',
+    expect(await html(EditRulesetPage({ params: Promise.resolve({ id: RULESET_ID }) }))).toContain(
+      'Regelwerk bearbeiten: Example Rules',
     );
+  });
+});
+
+describe('ruleset pages that read data gate before the read', () => {
+  it.each([
+    ['a resource admin', { player: null, isSiteAdmin: false, isAnyAdmin: true, isCreator: false }],
+    ['a signed-out visitor', null],
+  ])('%s: no ruleset is read, the site-admin guard decides', async (_who, access) => {
+    mocks.getLiveAccess.mockResolvedValue(access);
+
+    const list = await html(AdminRulesetsPage());
+    const edit = await html(EditRulesetPage({ params: Promise.resolve({ id: RULESET_ID }) }));
+
+    expect(list).toContain('data-guard="denied"');
+    expect(edit).toContain('data-guard="denied"');
+    expect(mocks.listRulesets).not.toHaveBeenCalled();
+    expect(mocks.getRulesetById).not.toHaveBeenCalled();
+  });
+
+  it('a site admin gets the edit page, and a non-uuid id is a 404 before the read', async () => {
+    mocks.getRulesetById.mockResolvedValue(ruleset());
+    expect(await html(EditRulesetPage({ params: Promise.resolve({ id: RULESET_ID }) }))).toContain('Example Rules');
+
+    mocks.getRulesetById.mockClear();
+    await expect(EditRulesetPage({ params: Promise.resolve({ id: 'rs-1' }) })).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(mocks.getRulesetById).not.toHaveBeenCalled();
   });
 });
 

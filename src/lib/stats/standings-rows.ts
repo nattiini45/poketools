@@ -1,9 +1,10 @@
 import { computeStandings } from '@/lib/tournament/standings';
-import type { MatchRecord } from '@/lib/tournament/types';
+import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import type { StandingsRow } from '@/types/game';
 
 /**
  * Build standings table rows from completed match records and participants.
+ * `byes` are a Swiss stage's scoring byes (`scoringByeRecords`); each counts as a win.
  */
 export function buildStandingsRowsFromMatchRecords(
   participants: {
@@ -13,6 +14,7 @@ export function buildStandingsRowsFromMatchRecords(
     gym_type?: string | null;
   }[],
   matchRecords: MatchRecord[],
+  byes: readonly ByeRecord[] = [],
 ): StandingsRow[] {
   const participantIds = participants.map((p) => p.id);
   const names: Record<string, string> = {};
@@ -30,7 +32,7 @@ export function buildStandingsRowsFromMatchRecords(
     names,
     matchRecords,
     avatars,
-    {},
+    { byes: [...byes] },
     gymTypes,
   );
 

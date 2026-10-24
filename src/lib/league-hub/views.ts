@@ -1,5 +1,5 @@
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
-import type { MatchRecord, Standing } from '@/lib/tournament/types';
+import type { ByeRecord, MatchRecord, Standing } from '@/lib/tournament/types';
 import type { SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import type { LeagueFixture } from '@/lib/supabase/queries/league-standings';
@@ -370,6 +370,8 @@ export interface TableStageInput {
   roundNumbers: Readonly<Record<string, number>>;
   context: SeasonStandingsContext;
   gymTypes: Readonly<Record<string, string | null>>;
+  /** The phase's scoring byes (`scoringByeRecords`); a Swiss table counts each as a win. */
+  byes?: readonly ByeRecord[];
   /** Whether the phase's advancement rule is shown (`showsAdvancement`); default true. */
   showAdvancement?: boolean;
 }
@@ -555,7 +557,7 @@ export function buildTableStage(input: TableStageInput): HubTableStage {
               ]),
             ),
           }
-        : {};
+        : { byes: [...(input.byes ?? [])] };
     // Gym bands from the season participants where the format's standings
     // leave them blank (Evolution Point Buy computes no gym band).
     const standings = computeStandingsForFormat(

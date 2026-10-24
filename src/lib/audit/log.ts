@@ -20,6 +20,7 @@ export type AuditAction =
   | 'player.ban'
   | 'player.suspend'
   | 'player.unsuspend'
+  | 'player.suspension_expired'
   | 'player.role.assign'
   | 'player.role.revoke'
   | 'player.claim'

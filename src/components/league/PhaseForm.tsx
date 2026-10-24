@@ -56,6 +56,21 @@ const VISIBILITY_OPTIONS: readonly TeamVisibility[] = ['hidden_until_match', 'al
 
 const BEST_OF_VALUES: readonly number[] = [1, 3, 5, 7];
 
+/**
+ * The doubles flag the form shows and sends. An admin's own choice (or the
+ * stored value of a phase being edited) always wins; before that, a new phase
+ * follows the selected ruleset, so a doubles ruleset gives a doubles phase.
+ */
+export function resolveIsDoubles(
+  pinned: boolean,
+  choice: boolean,
+  rulesetId: string,
+  rulesets: readonly Pick<Ruleset, 'id' | 'is_doubles'>[]
+): boolean {
+  if (pinned) return choice;
+  return rulesets.find((r) => r.id === rulesetId)?.is_doubles ?? false;
+}
+
 export default function PhaseForm({
   rulesets,
   onSubmit,
@@ -80,7 +95,11 @@ export default function PhaseForm({
   });
   const [bestOf, setBestOf] = useState(initialData?.best_of_default ?? 3);
   const [boOverrides, setBoOverrides] = useState<BoOverrides>(initialData?.bo_overrides ?? {});
-  const [isDoubles] = useState(initialData?.is_doubles ?? false);
+  // Edit mode (a stored value) is pinned from the start; a new phase follows
+  // the ruleset until the admin touches the checkbox.
+  const [doublesChoice, setDoublesChoice] = useState(initialData?.is_doubles ?? false);
+  const [doublesPinned, setDoublesPinned] = useState(initialData?.is_doubles !== undefined);
+  const isDoubles = resolveIsDoubles(doublesPinned, doublesChoice, rulesetId, rulesets);
   const [teamVisibility, setTeamVisibility] = useState<TeamVisibility>(
     initialData?.team_visibility ?? 'hidden_until_match'
   );
@@ -102,7 +121,9 @@ export default function PhaseForm({
   };
   /** The values last loaded (on mount) or saved: input that differs is unsaved (league admin tab guard). */
   const [savedValues, setSavedValues] = useState<PhaseFormValues>(values);
-  const dirty = phaseFormDirty(savedValues, values);
+  // The doubles flag is not part of `PhaseFormValues` (src/lib/league-admin/form-dirty.ts), so it is tracked here.
+  const [savedIsDoubles, setSavedIsDoubles] = useState(isDoubles);
+  const dirty = phaseFormDirty(savedValues, values) || savedIsDoubles !== isDoubles;
   /** The API's refusal, or `true` for a failure without an answer (shown as "Failed to save"). */
   const [error, setError] = useState<ApiErrorLike | true | null>(null);
 
@@ -133,6 +154,7 @@ export default function PhaseForm({
         advancement_rule,
       });
       setSavedValues(submitted);
+      setSavedIsDoubles(isDoubles);
     } catch (err) {
       setError(err instanceof PhaseSaveError ? err.api : true);
     } finally {
@@ -202,6 +224,22 @@ export default function PhaseForm({
         overrides={boOverrides}
         onChange={setBoOverrides}
       />
+
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm text-poke-text-primary">
+          <input
+            type="checkbox"
+            checked={isDoubles}
+            onChange={(e) => {
+              setDoublesChoice(e.target.checked);
+              setDoublesPinned(true);
+            }}
+            className="rounded accent-poke-accent"
+          />
+          {t('form.isDoubles')}
+        </label>
+        <p className="text-xs text-poke-text-muted">{t('form.isDoublesHint')}</p>
+      </div>
 
       <Select
         label={t('form.teamVisibility')}

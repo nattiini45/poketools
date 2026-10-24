@@ -3564,6 +3564,7 @@ export type Database = {
         Row: {
           best_of: number
           bracket_side: string | null
+          bye_player_ids: string[]
           created_at: string
           deadline: string | null
           id: string
@@ -3577,6 +3578,7 @@ export type Database = {
         Insert: {
           best_of: number
           bracket_side?: string | null
+          bye_player_ids?: string[]
           created_at?: string
           deadline?: string | null
           id?: string
@@ -3590,6 +3592,7 @@ export type Database = {
         Update: {
           best_of?: number
           bracket_side?: string | null
+          bye_player_ids?: string[]
           created_at?: string
           deadline?: string | null
           id?: string

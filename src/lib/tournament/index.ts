@@ -1,5 +1,5 @@
 import type { BracketType } from '@/types/tournament';
-import type { GeneratedRound, MatchRecord } from './types';
+import type { ByeRecord, GeneratedRound, MatchRecord } from './types';
 import { generateSwissRound } from './swiss';
 import { generateRoundRobinRound } from './round-robin';
 import {
@@ -14,6 +14,8 @@ import {
 export interface GenerateRoundOptions {
   /** LB-start map for double elimination (ignored by other bracket types). */
   startingBrackets?: StartingBrackets;
+  /** Byes stored on the tournament's earlier rounds (Swiss only; others ignore it). */
+  byeHistory?: ByeRecord[];
 }
 
 /**
@@ -34,7 +36,8 @@ export function generateRound(
         participantIds,
         participantNames,
         matchHistory,
-        roundNumber
+        roundNumber,
+        options?.byeHistory
       );
 
     case 'round_robin':

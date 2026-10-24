@@ -100,6 +100,7 @@ function round(id: string, roundNumber: number, status: Round['status'], side: B
     pairings_generated: true,
     deadline: null,
     bracket_side: side,
+    bye_player_ids: [],
     created_at: T0,
     updated_at: T0,
   };
@@ -474,5 +475,38 @@ describe('buildTableStage — gym bands', () => {
       ['p1', 'Fire'],
       ['p2', null],
     ]);
+  });
+});
+
+describe('buildTableStage — stored Swiss byes', () => {
+  const ids = ['p1', 'p2', 'p3'];
+  const participants = ids.map((id) => ({ id, name: id, avatar_url: null }));
+  const byes = [{ player_id: 'p3', round_number: 1 }];
+  const rowOf = (table: ReturnType<typeof buildTableStage>, id: string) =>
+    table.tables[0].standings.find((s) => s.player_id === id)!;
+
+  it('a Swiss table counts a bye as a win', () => {
+    const swiss = stage('swiss', { bracket_type: 'swiss' });
+    const table = buildTableStage(tableInput({ stage: swiss, participants, byes }));
+
+    expect(rowOf(table, 'p3').wins).toBe(1);
+    expect(rowOf(table, 'p3').points).toBe(1);
+    expect(table.tables[0].standings[0].player_id).toBe('p3');
+  });
+
+  it('a round robin table ignores byes', () => {
+    const rr = stage('rr', { bracket_type: 'round_robin' });
+    const table = buildTableStage(tableInput({ stage: rr, participants, byes }));
+
+    expect(rowOf(table, 'p3').wins).toBe(0);
+    expect(rowOf(table, 'p3').points).toBe(0);
+  });
+
+  it('a Swiss table without byes is unchanged', () => {
+    const swiss = stage('swiss', { bracket_type: 'swiss' });
+
+    expect(buildTableStage(tableInput({ stage: swiss, participants })).tables[0].standings).toEqual(
+      buildTableStage(tableInput({ stage: swiss, participants, byes: [] })).tables[0].standings,
+    );
   });
 });

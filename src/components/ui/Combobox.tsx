@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useId,
   useState,
   useRef,
   useCallback,
@@ -22,6 +23,57 @@ export interface ComboboxOption {
   value: string;
   /** Arbitrary payload rendered via `renderOption` */
   meta?: Record<string, unknown>;
+  /**
+   * Shown but not pickable (e.g. "already on the roster"): `aria-disabled`, skipped by the arrow
+   * keys, and a click or Enter leaves the dropdown open. The caller's `renderOption` shows why.
+   */
+  disabled?: boolean;
+}
+
+/**
+ * The term an async picker searches for: the query without surrounding whitespace, or `null` while it
+ * is shorter than `minQueryLength` (a blank query is no query: the API refuses it).
+ */
+export function asyncSearchTerm(query: string, minQueryLength: number): string | null {
+  const term = query.trim();
+  return term.length < minQueryLength ? null : term;
+}
+
+/** The next pickable option from `from` in direction `dir` (1 / -1); `from` itself when there is none. */
+export function nextEnabledIndex(options: readonly ComboboxOption[], from: number, dir: 1 | -1): number {
+  for (let i = from + dir; i >= 0 && i < options.length; i += dir) {
+    if (!options[i].disabled) return i;
+  }
+  return from;
+}
+
+/** Where ArrowUp goes: the previous pickable option, or the last pickable one when nothing is highlighted (-1 if none). */
+export function arrowUpIndex(options: readonly ComboboxOption[], from: number): number {
+  if (from >= 0) return nextEnabledIndex(options, from, -1);
+  const last = nextEnabledIndex(options, options.length, -1);
+  return last === options.length ? -1 : last;
+}
+
+/**
+ * Picks `option`: calls `onChange` with its value and returns `true`. A disabled option is not
+ * pickable, so nothing is called and `false` comes back (the caller then leaves the dropdown open).
+ * Click and Enter both pick through here.
+ */
+export function pickOption(option: ComboboxOption, onChange: (value: string) => void): boolean {
+  if (option.disabled) return false;
+  onChange(option.value);
+  return true;
+}
+
+/**
+ * Splits `text` around the first case-insensitive occurrence of `term` for highlighting, or `null`
+ * when there is no term or no match. An async picker passes the trimmed term it searched for.
+ */
+export function splitHighlight(text: string, term: string): { before: string; match: string; after: string } | null {
+  if (!term) return null;
+  const idx = text.toLowerCase().indexOf(term.toLowerCase());
+  if (idx < 0) return null;
+  return { before: text.slice(0, idx), match: text.slice(idx, idx + term.length), after: text.slice(idx + term.length) };
 }
 
 interface ComboboxBaseProps {
@@ -53,8 +105,15 @@ interface AsyncComboboxProps extends ComboboxBaseProps {
   mode: 'async';
   /** URL template — `{q}` is replaced with the encoded query */
   fetchUrl: string;
-  /** Transform raw API JSON → ComboboxOption[] */
+  /** Transform raw API JSON → ComboboxOption[] (also called with the JSON body of a refusal) */
   transformResults: (json: unknown) => ComboboxOption[];
+  /**
+   * Called when a search gets no JSON answer at all (network failure, an HTML
+   * 502). Without it such a failure only shows as "no results".
+   */
+  onFetchError?: (error: unknown) => void;
+  /** Characters typed before the first search (default 2). */
+  minQueryLength?: number;
   staticOptions?: never;
 }
 
@@ -64,6 +123,8 @@ interface StaticComboboxProps extends ComboboxBaseProps {
   staticOptions: ComboboxOption[];
   fetchUrl?: never;
   transformResults?: never;
+  onFetchError?: never;
+  minQueryLength?: never;
 }
 
 export type ComboboxProps = AsyncComboboxProps | StaticComboboxProps;
@@ -84,6 +145,8 @@ export default function Combobox(props: ComboboxProps) {
     mode,
   } = props;
   const t = useT(uiMessages);
+  /** Characters typed before a search runs, and before an empty result is reported. */
+  const minQueryLength = props.minQueryLength ?? 2;
 
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<ComboboxOption[]>([]);
@@ -95,7 +158,11 @@ export default function Combobox(props: ComboboxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const listId = useRef(`cb-list-${Math.random().toString(36).slice(2, 8)}`).current;
+  /** The in-flight search; a newer query aborts it so a slow answer never overwrites a newer one. */
+  const requestRef = useRef<AbortController | null>(null);
+  const uid = useId();
+  const listId = `${uid}-list`;
+  const inputId = `${uid}-input`;
 
   /* ── Async fetch ──────────────────────────────────────────────────── */
 
@@ -103,27 +170,46 @@ export default function Combobox(props: ComboboxProps) {
     (q: string) => {
       if (mode !== 'async') return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (q.length < 2) {
+      requestRef.current?.abort();
+      requestRef.current = null;
+      const term = asyncSearchTerm(q, minQueryLength);
+      if (term === null) {
         setOptions([]);
         setLoading(false);
         return;
       }
       setLoading(true);
       debounceRef.current = setTimeout(async () => {
+        const controller = new AbortController();
+        requestRef.current = controller;
         try {
-          const url = props.fetchUrl.replace('{q}', encodeURIComponent(q));
-          const res = await fetch(url);
-          const json = await res.json();
-          const transformed = props.transformResults(json);
-          setOptions(transformed);
-        } catch {
+          const url = props.fetchUrl.replace('{q}', encodeURIComponent(term));
+          const res = await fetch(url, { signal: controller.signal });
+          const json: unknown = await res.json();
+          if (controller.signal.aborted) return;
+          setOptions(props.transformResults(json));
+        } catch (err) {
+          if (controller.signal.aborted) return;
           setOptions([]);
+          props.onFetchError?.(err);
         } finally {
-          setLoading(false);
+          if (requestRef.current === controller) {
+            requestRef.current = null;
+            setLoading(false);
+          }
         }
       }, 200);
     },
-    [mode, props],
+    [mode, props, minQueryLength],
+  );
+
+  // Unmount: drop a pending debounce and abort an in-flight search.
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      requestRef.current?.abort();
+    },
+    [],
   );
 
   /* ── Static filter ────────────────────────────────────────────────── */
@@ -162,7 +248,7 @@ export default function Combobox(props: ComboboxProps) {
   /* ── Selection ────────────────────────────────────────────────────── */
 
   function selectOption(opt: ComboboxOption) {
-    onChange(opt.value);
+    if (!pickOption(opt, onChange)) return;
     setQuery('');
     setOptions([]);
     setOpen(false);
@@ -191,11 +277,11 @@ export default function Combobox(props: ComboboxProps) {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setHighlightIdx((prev) => Math.min(prev + 1, options.length - 1));
+        setHighlightIdx((prev) => nextEnabledIndex(options, prev, 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setHighlightIdx((prev) => Math.max(prev - 1, 0));
+        setHighlightIdx((prev) => arrowUpIndex(options, prev));
         break;
       case 'Enter':
         e.preventDefault();
@@ -244,18 +330,19 @@ export default function Combobox(props: ComboboxProps) {
   /* ── Display value ────────────────────────────────────────────────── */
 
   const displayValue = open ? query : value;
+  /** What an async search was (or would be) run for; the empty-state hints key off it. */
+  const searchedQuery = mode === 'async' ? query.trim() : query;
 
   /* ── Highlight matching text ──────────────────────────────────────── */
 
   function highlightMatch(text: string) {
-    if (!query) return text;
-    const idx = text.toLowerCase().indexOf(query.toLowerCase());
-    if (idx < 0) return text;
+    const parts = splitHighlight(text, searchedQuery);
+    if (!parts) return text;
     return (
       <>
-        {text.slice(0, idx)}
-        <span className="font-bold text-poke-blue">{text.slice(idx, idx + query.length)}</span>
-        {text.slice(idx + query.length)}
+        {parts.before}
+        <span className="font-bold text-poke-blue">{parts.match}</span>
+        {parts.after}
       </>
     );
   }
@@ -275,7 +362,7 @@ export default function Combobox(props: ComboboxProps) {
   return (
     <div ref={wrapperRef} className={cn('relative', className)}>
       {label && (
-        <label className="block text-xs font-heading font-semibold text-poke-text-secondary mb-1">
+        <label htmlFor={inputId} className="block text-xs font-heading font-semibold text-poke-text-secondary mb-1">
           {label}
         </label>
       )}
@@ -298,6 +385,7 @@ export default function Combobox(props: ComboboxProps) {
 
         <input
           ref={inputRef}
+          id={inputId}
           type="text"
           role="combobox"
           aria-expanded={open}
@@ -306,6 +394,7 @@ export default function Combobox(props: ComboboxProps) {
           aria-activedescendant={
             highlightIdx >= 0 ? `${listId}-opt-${highlightIdx}` : undefined
           }
+          aria-label={label ? undefined : placeholder || undefined}
           autoComplete="off"
           disabled={disabled}
           value={displayValue}
@@ -353,9 +442,6 @@ export default function Combobox(props: ComboboxProps) {
               {t('combobox.searching')}
             </li>
           )}
-          {!loading && options.length === 0 && query.length >= 2 && (
-            <li className="px-3 py-2 text-sm text-poke-text-muted">{t('combobox.noResults')}</li>
-          )}
           {!loading &&
             options.map((opt, i) => (
               <li
@@ -363,14 +449,18 @@ export default function Combobox(props: ComboboxProps) {
                 id={`${listId}-opt-${i}`}
                 role="option"
                 aria-selected={i === highlightIdx}
+                aria-disabled={opt.disabled ? true : undefined}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   selectOption(opt);
                 }}
-                onMouseEnter={() => setHighlightIdx(i)}
+                onMouseEnter={() => {
+                  if (!opt.disabled) setHighlightIdx(i);
+                }}
                 className={`
-                  px-3 py-1.5 text-sm cursor-pointer transition-colors
-                  ${i === highlightIdx ? 'bg-poke-elevated text-poke-text-primary' : 'hover:bg-poke-elevated/50'}
+                  px-3 py-1.5 text-sm transition-colors
+                  ${opt.disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+                  ${i === highlightIdx ? 'bg-poke-elevated text-poke-text-primary' : opt.disabled ? '' : 'hover:bg-poke-elevated/50'}
                 `}
               >
                 {(renderOption ?? defaultRenderOption)(opt, i === highlightIdx)}
@@ -380,9 +470,9 @@ export default function Combobox(props: ComboboxProps) {
       )}
 
       {/* No results hint for open + empty */}
-      {open && !loading && options.length === 0 && query.length >= 2 && mode === 'async' && (
+      {open && !loading && options.length === 0 && searchedQuery.length >= minQueryLength && mode === 'async' && (
         <div className="absolute z-20 w-full mt-1 bg-poke-surface border border-poke-border rounded-poke-md shadow-poke-lg px-3 py-2 text-sm text-poke-text-muted">
-          {t('combobox.noResultsFor', { query })}
+          {t('combobox.noResultsFor', { query: searchedQuery })}
         </div>
       )}
     </div>

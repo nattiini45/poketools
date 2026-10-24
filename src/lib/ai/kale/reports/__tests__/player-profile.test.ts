@@ -25,6 +25,9 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 vi.mock('@/lib/tournament/season-standings', () => ({
   computeStandingsForSeason: vi.fn(),
 }));
+vi.mock('@/lib/tournament/scoring-byes', () => ({
+  loadScoringByes: vi.fn(),
+}));
 
 // ─── Import after mocks ────────────────────────────────────────────
 
@@ -36,6 +39,7 @@ import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 
 const mockGetPlayerById = vi.mocked(getPlayerById);
 const mockGetBattleStats = vi.mocked(getPlayerBattleStats);
@@ -45,6 +49,7 @@ const mockGetTournament = vi.mocked(getTournamentById);
 const mockGetParticipants = vi.mocked(getParticipants);
 const mockGetSeasonParticipants = vi.mocked(getSeasonParticipants);
 const mockComputeStandings = vi.mocked(computeStandingsForSeason);
+const mockLoadByes = vi.mocked(loadScoringByes);
 
 // ─── Fixtures ──────────────────────────────────────────────────────
 
@@ -73,6 +78,7 @@ function setupMocks() {
   mockGetSeasonParticipants.mockResolvedValue([
     { id: PLAYER_ID, name: 'Ash', gym_type: 'Electric' },
   ] as never);
+  mockLoadByes.mockResolvedValue([]);
   mockComputeStandings.mockResolvedValue([
     { player_id: PLAYER_ID, player_name: 'Ash', wins: 1, losses: 1, draws: 0, points: 3, kill_differential: 2 },
     { player_id: 'player-2', player_name: 'Gary', wins: 1, losses: 1, draws: 0, points: 3, kill_differential: -2 },
@@ -125,6 +131,39 @@ describe('playerProfileDefinition', () => {
       expect((factPack.validPlayerNames as Array<unknown>)).toContain('Ash');
     });
 
+    it('counts the byes of the standings as bye wins of the player and scores them in the standings', async () => {
+      const byes = [{ player_id: PLAYER_ID, round_number: 1 }, { player_id: 'player-2', round_number: 2 }];
+      mockLoadByes.mockResolvedValue(byes);
+
+      const fp = await playerProfileDefinition.buildFactPack({
+        tournamentId: TOURNAMENT_ID, roundId: ROUND_ID, playerId: PLAYER_ID,
+      });
+
+      expect((fp as Record<string, unknown>).seasonByeWins).toBe(1);
+      expect(mockComputeStandings.mock.calls[0][5]).toMatchObject({ byes });
+    });
+
+    it('annotates no bye for a player the standings do not hold', async () => {
+      mockLoadByes.mockResolvedValue([{ player_id: PLAYER_ID, round_number: 1 }]);
+      mockComputeStandings.mockResolvedValue([
+        { player_id: 'player-2', player_name: 'Gary', wins: 1, losses: 0, draws: 0, points: 3, kill_differential: 0 },
+      ] as never);
+
+      const fp = await playerProfileDefinition.buildFactPack({
+        tournamentId: TOURNAMENT_ID, roundId: ROUND_ID, playerId: PLAYER_ID,
+      });
+
+      expect((fp as Record<string, unknown>).seasonByeWins).toBe(0);
+    });
+
+    it('has no bye wins when the standings hold no byes', async () => {
+      const fp = await playerProfileDefinition.buildFactPack({
+        tournamentId: TOURNAMENT_ID, roundId: ROUND_ID, playerId: PLAYER_ID,
+      });
+
+      expect((fp as Record<string, unknown>).seasonByeWins).toBe(0);
+    });
+
     it('handles tournament without season_id', async () => {
       mockGetTournament.mockResolvedValue({
         id: TOURNAMENT_ID, name: 'Kanto League', season_id: null,
@@ -170,6 +209,33 @@ describe('playerProfileDefinition', () => {
       // Stage 1 and 2 tasks
       expect(tasks.filter((t) => t.stage === 1)).toHaveLength(3);
       expect(tasks.filter((t) => t.stage === 2)).toHaveLength(1);
+    });
+
+    it('says that bye wins are wins without a match', () => {
+      const factPack = {
+        playerName: 'Ash', gymType: null, tournamentName: 'Swiss Open',
+        seasonRecord: { wins: 3, losses: 1, draws: 0, points: 9, final_rank: 2, kd: 3 },
+        seasonByeWins: 1,
+        signaturePokemon: [], notableWins: [], totalMatches: 3,
+      };
+
+      for (const mode of ['single', 'decomposed'] as const) {
+        const prompts = playerProfileDefinition.getPromptTasks(factPack, mode).map((t) => t.userPrompt).join('\n');
+        expect(prompts).toContain('3W-1L, incl. 1 bye win without a match');
+      }
+    });
+
+    it('leaves the record unannotated without byes', () => {
+      const factPack = {
+        playerName: 'Ash', gymType: null, tournamentName: 'Kanto',
+        seasonRecord: { wins: 3, losses: 1, draws: 0, points: 9, final_rank: 2, kd: 3 },
+        seasonByeWins: 0,
+        signaturePokemon: [], notableWins: [], totalMatches: 4,
+      };
+
+      const prompts = playerProfileDefinition.getPromptTasks(factPack, 'single').map((t) => t.userPrompt).join('\n');
+      expect(prompts).toContain('3W-1L, 9pts');
+      expect(prompts).not.toContain('bye');
     });
 
     it('includes draw in record string when draws > 0', () => {

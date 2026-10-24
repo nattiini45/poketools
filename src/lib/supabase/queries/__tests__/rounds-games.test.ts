@@ -131,6 +131,19 @@ describe('queries/rounds', () => {
       expect(mockBuilder.order).toHaveBeenCalledWith('round_number');
     });
 
+    it('maps the stored byes onto the round; a legacy row without them has none', async () => {
+      mockBuilder.order.mockReturnValue({
+        data: [
+          { ...roundRow, bye_player_ids: ['p-1', 'p-2'] },
+          { ...roundRow, id: 'rd-2', bye_player_ids: [] },
+          { ...roundRow, id: 'rd-3' },
+        ],
+        error: null,
+      });
+      const result = await getRoundsByTournament('t-1');
+      expect(result.map((r) => r.bye_player_ids)).toEqual([['p-1', 'p-2'], [], []]);
+    });
+
     it('returns empty array when none', async () => {
       mockBuilder.order.mockReturnValue({ data: [], error: null });
       expect(await getRoundsByTournament('t-99')).toEqual([]);
@@ -179,6 +192,37 @@ describe('queries/rounds', () => {
           pairings_generated: true,
         }),
       );
+    });
+
+    it('stores the byes of a Swiss / round robin round', async () => {
+      mockBuilder.single.mockResolvedValue({ data: { ...roundRow, bye_player_ids: ['p-9'] }, error: null });
+      const result = await createRound({
+        tournament_id: 't-1',
+        name: 'Round 2',
+        round_number: 2,
+        best_of: 3,
+        bye_player_ids: ['p-9'],
+      });
+      expect(mockBuilder.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ bye_player_ids: ['p-9'] }),
+      );
+      expect(result.bye_player_ids).toEqual(['p-9']);
+    });
+
+    it('does not send the column for a round without a bye (elimination, even pairings)', async () => {
+      mockBuilder.single.mockResolvedValue({ data: roundRow, error: null });
+      await createRound({ tournament_id: 't-1', name: 'Round 1', round_number: 1, best_of: 3 });
+      await createRound({
+        tournament_id: 't-1',
+        name: 'Round 1',
+        round_number: 1,
+        best_of: 3,
+        bye_player_ids: [],
+      });
+      expect(mockBuilder.insert).toHaveBeenCalledTimes(2);
+      for (const [row] of mockBuilder.insert.mock.calls) {
+        expect('bye_player_ids' in row).toBe(false);
+      }
     });
 
     it('throws on error', async () => {

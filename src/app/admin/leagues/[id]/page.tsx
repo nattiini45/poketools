@@ -2,13 +2,12 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
+import ResourceForbidden from '@/components/shared/ResourceForbidden';
 import PageContainer from '@/components/ui/PageContainer';
 import Badge from '@/components/ui/Badge';
 import LeagueStatusControl from '@/components/league/LeagueStatusControl';
-import { getLiveAccess } from '@/lib/auth/helpers';
-import { isValidUuid } from '@/lib/utils/uuid';
+import { gateResourceAdmin } from '@/lib/auth/resource-gate';
 import { getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
-import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import {
   LEAGUE_ADMIN_TAB_PARAM,
@@ -55,39 +54,40 @@ const PANELS: Record<LeagueAdminTab, (ctx: LeagueAdminPanelContext) => Promise<R
  * phases, rules, settings, danger. The format decides which tabs exist
  * (`getFormatCapabilities`); an unknown or unavailable `?tab=` opens the
  * overview, the former `?tab=schedule` opens phases. The server renders, and reads for, the selected tab only: every
- * tab shares the league row and the live access read, the overview needs
+ * tab shares the live gate and the league row, the overview needs
  * nothing else.
  *
  * A malformed `[id]` (not a uuid) is a 404 before any read. A resource admin of another
  * league gets a forbidden notice and no tab data: only site admins and this league's admins pass.
  *
  * Site-admin-only parts (test-league flag, league admins, phase delete, league
- * delete) are decided from `getLiveAccess()` (one memoised read shared with the
- * admin layout and `AdminGuard`), never from the session copy.
+ * delete) are decided from the live gate (`gateResourceAdmin`, built on `getLiveAccess()`, one
+ * memoised read shared with the admin layout and `AdminGuard`), never from the session copy.
  */
 export default async function AdminLeagueDetailPage({ params, searchParams }: PageProps) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  // A route id that is not a uuid names no league: 404 before any read (it would reach Postgres and 500).
-  if (!isValidUuid(id)) notFound();
-  const [league, access, t, tEnum] = await Promise.all([
+  // Per-league live gate before any read (shared with the draft control panel's `gateDraftAdmin` and
+  // the write APIs' `requireResourceAdmin('season', id)`): a route id that is not a uuid is a 404 inside
+  // the gate, a non-admin gets `AdminGuard`'s denial or redirect, an admin of another league the notice.
+  const gate = await gateResourceAdmin('season', id);
+  if (gate.kind === 'guard') return <AdminGuard>{null}</AdminGuard>;
+  if (gate.kind === 'forbidden') {
+    const tForbidden = await getT(leagueAdminSeasonPageMessages);
+    return (
+      <AdminGuard>
+        <ResourceForbidden>{tForbidden('forbidden')}</ResourceForbidden>
+      </AdminGuard>
+    );
+  }
+  const { isSiteAdmin } = gate;
+
+  const [league, t, tEnum] = await Promise.all([
     getSeasonWithDetails(id),
-    getLiveAccess(),
     getT(leagueAdminSeasonPageMessages),
     getT(enumMessages),
   ]);
 
   if (!league) notFound();
-  // Not an admin (or signed out): AdminGuard renders the denial or redirects; no tab data is read.
-  if (!access?.isAnyAdmin) return <AdminGuard>{null}</AdminGuard>;
-  // An admin, but of another league: the same per-league check as the draft control panel
-  // (`gateDraftAdmin`) and the write APIs (`requireResourceAdmin('season', id)`), before any tab read.
-  if (!access.isSiteAdmin && !(access.player && (await isResourceAdminFor(access.player.playerId, 'season', id)))) {
-    return (
-      <AdminGuard>
-        <p className="p-8 text-center text-poke-text-secondary">{t('forbidden')}</p>
-      </AdminGuard>
-    );
-  }
 
   const tabs = availableLeagueAdminTabs(league.format_type);
   const activeTab = parseLeagueAdminTab(query[LEAGUE_ADMIN_TAB_PARAM], tabs);
@@ -100,7 +100,7 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
     id,
     league,
     caps: getFormatCapabilities(league.format_type),
-    isSiteAdmin: access.isSiteAdmin,
+    isSiteAdmin,
     t,
     tabLink,
   };

@@ -18,6 +18,12 @@ import {
 } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
+import {
+  formatScoresByes,
+  groupRoundsByStage,
+  scoringByeRecords,
+  scoringByeRecordsForStages,
+} from '@/lib/tournament/byes';
 import { getT } from '@/i18n/server';
 import { insightsMessages } from '@/i18n/messages/insights';
 
@@ -62,6 +68,12 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
       publicReads.tournamentMatchRecords(scope.id),
       publicReads.tournamentBattleStats(scope.id),
     ]);
+    // A Swiss tournament's table scores the byes stored on its rounds, except a stage of an Evolution Point Buy
+    // league (its tables never score a bye, here or in the league scope): that one reads no rounds.
+    const byes =
+      tournament.bracket_type === 'swiss' && formatScoresByes(tournament.season_format_type)
+        ? scoringByeRecords(tournament.bracket_type, await publicReads.tournamentRounds(scope.id))
+        : [];
     return {
       title: tournament.name,
       isDoubles: tournament.is_doubles,
@@ -76,20 +88,29 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
           gym_type: null,
         })),
         records,
+        byes,
       ),
     };
   }
 
   if (scope.type === 'league') {
-    const [season, parts, battleStats, matchRecords] = await Promise.all([
+    const [season, parts, battleStats, matchRecords, stages] = await Promise.all([
       publicReads.season(scope.id),
       publicReads.seasonParticipants(scope.id),
       publicReads.seasonBattleStats(scope.id),
       publicReads.seasonMatchRecords(scope.id),
+      publicReads.seasonStages(scope.id),
     ]);
     if (!season) {
       return null;
     }
+    // The season table scores the Swiss stages' stored byes like each stage's own table, so the league scope
+    // agrees with the tournament scope. The stages come from the entry the league page shares; the byes are ONE
+    // batched read for all Swiss stages, and a league with no Swiss stage, or an Evolution Point Buy one (its
+    // tables never read byes), reads none.
+    const readsByes = formatScoresByes(season.format_type) && stages.some((stage) => stage.bracket_type === 'swiss');
+    const byeRounds = readsByes ? await publicReads.seasonByeRounds(scope.id) : [];
+    const byes = scoringByeRecordsForStages(stages, groupRoundsByStage(byeRounds));
     return {
       title: season.name,
       isDoubles: season.format_type === 'doubles',
@@ -104,6 +125,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
           gym_type: p.gym_type,
         })),
         matchRecords,
+        byes,
       ),
     };
   }

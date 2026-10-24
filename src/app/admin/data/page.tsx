@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import AdminGuard from '@/components/shared/AdminGuard';
+import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import Button from '@/components/ui/Button';
 import AdminDataTools from './AdminDataTools';
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminDataPage() {
   const t = await getT(adminToolsMessages);
   return (
-    <AdminGuard>
+    <SiteAdminGuard>
       <PageContainer
         title={t('data.title')}
         subtitle={t('data.subtitle')}
@@ -24,6 +24,6 @@ export default async function AdminDataPage() {
       >
         <AdminDataTools />
       </PageContainer>
-    </AdminGuard>
+    </SiteAdminGuard>
   );
 }

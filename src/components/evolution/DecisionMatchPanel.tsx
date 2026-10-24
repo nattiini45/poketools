@@ -57,7 +57,7 @@ export default function DecisionMatchPanel({
           {isAdmin && (
             <div className="flex flex-wrap gap-2 pt-1">
               <Link
-                href={`/admin/tournaments/${tournamentId}`}
+                href={`/admin/tournaments/${tournamentId}/rounds`}
                 className="rounded-lg border border-amber-600/50 bg-amber-900/30 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-900/50"
               >
                 {t('decision.enter')}

@@ -8,6 +8,68 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-23
+
+### Upgrade notes
+
+- **Apply migration `20261023145151_rounds_bye_player_ids.sql` BEFORE deploying the code.** It adds
+  `rounds.bye_player_ids` (`uuid[] not null default '{}'`). The new code writes that column whenever it generates a
+  round, so a round with a bye fails to insert until the column exists. Old code keeps working after the migration.
+- **New cron `/api/cron/expire-suspensions`.** It is declared in `vercel.json`, so Vercel needs nothing more. On
+  another host, call it every 15 minutes with `Authorization: Bearer <CRON_SECRET>`, like the other cron routes. There
+  is no new environment variable.
+
+### Added
+
+- **Resource-admin scoping.** League and tournament admins now see only their own competitions in the admin area. The
+  dashboard and the matches list are scoped to their leagues and tournaments (no site-wide counts and no activity
+  feed for them), the pages of one league, phase or tournament refuse another league's admin with a "no access"
+  notice, the site-admin-only pages are closed to them, and the archived lists show only their own competitions.
+- **Matches filters.** `/admin/matches` filters by status, league (with phase), tournament and a text search on the
+  server, pages through the full result (up to page 1,000) with an exact total, and keeps the filters in the URL. Rows
+  show their league and phase. The filter choices come from the new `GET /api/admin/matches/filter-options`.
+- **Player search in the pickers.** The roster, substitute, link, enrolment and league-admin player pickers search the
+  server as you type (`GET /api/admin/player-search`, public fields only), so they no longer cut off at the first
+  page of players. League and tournament admins find the accounts the public player list shows (active, not test
+  accounts); site admins find every account. Players the picker cannot take (a player already on the roster, for
+  example) are shown greyed out with the reason and cannot be picked. The admin Players page searches, sorts
+  (name, Discord ID, Showdown username, status) and pages on the server too.
+- **Round deadlines.** The round manager can set, change and clear a round's deadline; the change is audited, and an
+  overdue round shows a badge, also when the deadline passes while the page is open.
+- **Swiss byes are stored and scored.** A round remembers who had a bye, a later round never gives a second bye while
+  another player has none, and a Swiss bye counts as a win from the moment its round is generated: in the
+  tournament's table, the league's season standings, the standings preview and Insights. Round-robin byes score
+  nothing, and an Evolution Point Buy league scores no bye on any surface, whatever its stages are (tables, previews,
+  Insights in any scope, AI text). AI recaps, forecasts and Kale reports say when a record includes a bye win.
+- **Timed suspensions end on time.** A cron lifts a suspension once its end has passed and writes one audit event per
+  player.
+- **Doubles phases.** The phase form has a doubles checkbox.
+
+### Changed
+
+- **`GET /api/admin/matches` answers a page, not a list.** The response is now `{ rows, total, page, pageSize,
+  searchTruncated }` instead of an array capped at 200 rows, and unknown query parameters or a bad `status` are
+  refused with a 400. A script reading the old array must read `rows` and page through the result.
+- The player ban and suspend actions share one Ban dialog, and a suspension's end is sent as an exact time (an ISO
+  date-time with offset; a value without one is refused).
+- The admin link in the decision-match (tie-break) panel opens the tournament's rounds page instead of a page
+  that does not exist.
+
+### Removed
+
+- **Private-project references are scrubbed from the public tree.** Comments, docs and test fixtures no longer cite
+  internal audit or review ids, private design-spec sections, the maintainer's deferred-work register or capture-board
+  cards, and fixtures use neutral league names. The raw 2026-10-20 audit batch is no longer published; the
+  fixes it led to are listed under 0.2.2 and 0.2.3. A docs-and-source guard in `scripts/__tests__/public-docs.test.mjs`
+  keeps the id patterns out. No runtime change.
+
+### Fixed
+
+- Player pickers no longer miss players beyond the first page of results.
+- A Swiss round could give the same player a bye twice while others had none, because byes were not remembered.
+- A suspension past its end stayed active until an admin lifted it by hand.
+- Adding or removing a league or tournament admin failed silently; the admin manager now shows the error.
+
 ### Security
 
 - **Dependencies (dev only):**
@@ -16,6 +78,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Dependencies:**
   - `next` moves to `^16.4.2`, which fixes a critical remote-code-execution advisory in the image optimizer when SVG files are used ([GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw)) and a Server Actions denial of service ([GHSA-p3m5-59mp-jv5r](https://github.com/advisories/GHSA-p3m5-59mp-jv5r)). `sharp` follows to `^0.35.5`, the minimum `next` 16.4.2 declares.
   - `postcss` moves to `^8.5.30`, the minimum `vite` 8.3.5 declares. The root override applies it to `next` and `tailwindcss` too.
+  - `zod` moves to `^4.6.7`, which fixes memory exhaustion while validating oversized constrained collections ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)).
+  - The lockfile takes the patched transitive releases `undici` 6.29.1 ([GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c)), `body-parser` 2.4.0 ([GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828)) and `fast-uri` 3.1.9 ([GHSA-w74x-v6f9-j3xg](https://github.com/advisories/GHSA-w74x-v6f9-j3xg) and three related advisories).
 - **Code scanning:** the open CodeQL findings are worked through:
   - The replay link check in the submit form matches the anchored `https://replay.pokemonshowdown.com/` prefix the server strips, instead of a substring.
   - Overlay URLs encode entity ids (a lone surrogate becomes U+FFFD).
@@ -25,14 +89,6 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   - The weekly recap pins its locale to a known value before picking a translator.
   - The avatar randomiser draws from Web Crypto instead of `Math.random()`.
   - Maintainer scripts create temp files with `mkdtemp` and avoid check-then-use file races.
-
-### Removed
-
-- **Private-project references are scrubbed from the public tree.** Comments, docs and test fixtures no longer cite
-  internal audit or review ids, private design-spec sections, the maintainer's deferred-work register or capture-board
-  cards, and fixtures use neutral league names. The raw 2026-10-20 audit batch is no longer published; the
-  fixes it led to are listed under 0.2.2 and 0.2.3. A docs-and-source guard in `scripts/__tests__/public-docs.test.mjs`
-  keeps the id patterns out. No runtime change.
 
 ## [0.2.3] - 2026-10-20
 

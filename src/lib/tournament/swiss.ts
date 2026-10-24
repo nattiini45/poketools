@@ -1,24 +1,32 @@
-import type { Pairing, GeneratedRound, MatchRecord } from './types';
+import type { Pairing, GeneratedRound, MatchRecord, ByeRecord } from './types';
 import { BYE_PLAYER_ID } from './types';
 import { computeStandings, buildPairingHistory, havePlayed } from './standings';
 
 /**
  * Swiss/Monrad pairing algorithm.
  *
- * 1. Compute standings from completed matches
+ * 1. Compute standings from completed matches (and stored byes, which score as wins)
  * 2. Sort players by points (desc), then buchholz
  * 3. Pair top-vs-next within score groups
  * 4. Enforce no-repeat constraint (slide down if already played)
- * 5. Handle bye for odd player count
+ * 5. Handle bye for odd player count: the lowest-ranked player who has not had
+ *    one (`byeHistory` lists the byes stored on earlier rounds)
  */
 export function generateSwissRound(
   participantIds: string[],
   participantNames: Record<string, string>,
   matchHistory: MatchRecord[],
-  roundNumber: number
+  roundNumber: number,
+  byeHistory: ByeRecord[] = []
 ): GeneratedRound {
-  const standings = computeStandings(participantIds, participantNames, matchHistory);
-  const history = buildPairingHistory(matchHistory);
+  const standings = computeStandings(
+    participantIds,
+    participantNames,
+    matchHistory,
+    {},
+    { byes: byeHistory },
+  );
+  const history = buildPairingHistory(matchHistory, byeHistory);
   const pairings: Pairing[] = [];
   const byePlayerIds: string[] = [];
 
@@ -26,7 +34,7 @@ export function generateSwissRound(
   const available = standings.map((s) => s.player_id);
 
   // Handle bye for odd player count: lowest-ranked player gets the bye
-  // Prefer a player who hasn't had a bye yet (tracked by looking for BYE in history)
+  // Prefer a player who hasn't had a bye yet (a stored bye is a BYE pairing in the history)
   if (available.length % 2 !== 0) {
     let byeIdx = available.length - 1;
     // Try to give bye to lowest-ranked player who hasn't had one

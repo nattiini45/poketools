@@ -30,24 +30,30 @@ interface AttentionMatch {
   id: string;
   tournament_id: string;
   tournament_name: string;
+  /** The league the tournament is a phase of; null for a standalone tournament. */
+  season_name: string | null;
   player_1_name: string;
   player_2_name: string;
   status: MatchStatus;
   created_at: string;
 }
 
+/** `null` = not available for the viewer's role (a resource admin has no site-wide totals). */
 interface DashboardCounts {
-  players: number;
+  players: number | null;
   tournaments: number;
   active_matches: number;
   seasons: number;
-  games: number;
+  games: number | null;
 }
 
-interface DashboardData {
+export interface DashboardData {
   counts: DashboardCounts;
   attention_required: AttentionMatch[];
-  recent_activity: AuditLogEntry[];
+  /** Every match needing attention; larger than `attention_required` when truncated. */
+  attention_total: number;
+  /** null = not available for the viewer's role. */
+  recent_activity: AuditLogEntry[] | null;
 }
 
 // Re-exported for existing importers; new code imports from `@/i18n/content/audit-actions`.
@@ -131,33 +137,56 @@ export default function AdminDashboardContent({
 
   if (!data) return null;
 
-  const { counts, attention_required, recent_activity } = data;
+  return <DashboardView data={data} extensionActionLabels={extensionActionLabels} />;
+}
 
-  const statItems = [
+/** The loaded dashboard. Exported for tests; `null` figures are hidden (not available for the role). */
+export function DashboardView({
+  data,
+  extensionActionLabels = {},
+}: {
+  data: DashboardData;
+  extensionActionLabels?: ExtensionAuditActionLabels;
+}) {
+  const t = useT(adminCoreMessages);
+  const { counts, attention_required, attention_total, recent_activity } = data;
+
+  const allStatItems = [
     { key: 'players', value: counts.players },
     { key: 'tournaments', value: counts.tournaments },
     { key: 'activeMatches', value: counts.active_matches },
     { key: 'seasons', value: counts.seasons },
     { key: 'games', value: counts.games },
   ] as const;
+  // A null figure is not available for this role: hide the card rather than show a zero.
+  const statItems = allStatItems.filter(
+    (s): s is (typeof allStatItems)[number] & { value: number } => s.value !== null,
+  );
+  const attentionTruncated = attention_total > attention_required.length;
 
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div
+        className={`grid grid-cols-2 md:grid-cols-3 gap-4 ${statItems.length === 5 ? 'lg:grid-cols-5' : ''}`}
+      >
         {statItems.map((s) => (
           <StatCard key={s.key} label={t(`dashboard.stats.${s.key}`)} value={s.value} />
         ))}
       </div>
 
       {/* Attention Required + Recent Activity: side by side on lg */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div
+        className={`grid grid-cols-1 gap-6 items-start ${Array.isArray(recent_activity) ? 'lg:grid-cols-2' : ''}`}
+      >
         {/* Attention Required */}
         <Section
           title={t('dashboard.attention.title')}
           subtitle={
             attention_required.length > 0
-              ? t('dashboard.attention.count', { count: attention_required.length })
+              ? attentionTruncated
+                ? t('dashboard.attention.countOfTotal', { count: attention_required.length, total: attention_total })
+                : t('dashboard.attention.count', { count: attention_required.length })
               : undefined
           }
         >
@@ -183,7 +212,10 @@ export default function AdminDashboardContent({
                         : t('dashboard.attention.disputed')}
                     </Badge>
                   </div>
-                  <p className="text-xs text-poke-text-muted mt-1 truncate">{m.tournament_name}</p>
+                  <p className="text-xs text-poke-text-muted mt-1 truncate">{m.season_name
+                      ? t('dashboard.attention.leaguePhase', { league: m.season_name, phase: m.tournament_name })
+                      : m.tournament_name}
+                  </p>
                   <div className="flex items-center gap-2 mt-2">
                     <Link href={`/admin/matches/${m.id}`}>
                       <Button variant="secondary" size="sm">{t('dashboard.attention.view')}</Button>
@@ -198,42 +230,44 @@ export default function AdminDashboardContent({
           )}
         </Section>
 
-        {/* Recent Activity */}
-        <Section
-          title={t('dashboard.activity.title')}
-          subtitle={t('dashboard.activity.count', { count: recent_activity.length })}
-          action={(
-            <Link href="/admin/audit">
-              <Button variant="secondary" size="sm">{t('dashboard.activity.viewAll')}</Button>
-            </Link>
-          )}
-        >
-          {recent_activity.length === 0 ? (
-            <p className="text-sm text-poke-text-muted py-2">{t('dashboard.activity.empty')}</p>
-          ) : (
-            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-              {recent_activity.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-start gap-3 p-2 rounded-poke-md hover:bg-poke-elevated transition-colors text-sm"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-poke-text-primary font-heading font-medium truncate">
-                      {entry.actor_name}
-                    </p>
-                    <p className="text-xs text-poke-text-muted truncate">
-                      {auditActionLabel(t, entry.action, extensionActionLabels)}
-                      {entry.resource_name && (
-                        <span className="text-poke-text-secondary"> — {entry.resource_name}</span>
-                      )}
-                    </p>
+        {/* Recent Activity: site admins only (the audit trail is not scoped) */}
+        {Array.isArray(recent_activity) && (
+          <Section
+            title={t('dashboard.activity.title')}
+            subtitle={t('dashboard.activity.count', { count: recent_activity.length })}
+            action={(
+              <Link href="/admin/audit">
+                <Button variant="secondary" size="sm">{t('dashboard.activity.viewAll')}</Button>
+              </Link>
+            )}
+          >
+            {recent_activity.length === 0 ? (
+              <p className="text-sm text-poke-text-muted py-2">{t('dashboard.activity.empty')}</p>
+            ) : (
+              <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                {recent_activity.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-start gap-3 p-2 rounded-poke-md hover:bg-poke-elevated transition-colors text-sm"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-poke-text-primary font-heading font-medium truncate">
+                        {entry.actor_name}
+                      </p>
+                      <p className="text-xs text-poke-text-muted truncate">
+                        {auditActionLabel(t, entry.action, extensionActionLabels)}
+                        {entry.resource_name && (
+                          <span className="text-poke-text-secondary"> — {entry.resource_name}</span>
+                        )}
+                      </p>
+                    </div>
+                    <RelativeTime value={entry.created_at} className="text-xs text-poke-text-muted shrink-0" />
                   </div>
-                  <RelativeTime value={entry.created_at} className="text-xs text-poke-text-muted shrink-0" />
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
       </div>
     </div>
   );

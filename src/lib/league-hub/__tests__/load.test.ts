@@ -274,6 +274,28 @@ describe('groups tab', () => {
   });
 });
 
+describe('groups tab byes', () => {
+  const swissStage = stage('swiss', { bracket_type: 'swiss', stage_order: 1 });
+
+  it('reads the rounds of a Swiss table, which scores its stored byes', async () => {
+    const panel = await loadLeagueHubPanel('groups', { ...context(), stages: [swissStage] });
+    if (panel?.tab !== 'groups') throw new Error('expected the groups panel');
+    expect(reads.tournamentRounds).toHaveBeenCalledWith('swiss');
+  });
+
+  it('reads no rounds for the Swiss table of an Evolution Point Buy league, which scores no byes', async () => {
+    const base = context();
+    const panel = await loadLeagueHubPanel('groups', {
+      ...base,
+      league: { ...base.league, format_type: 'evolution_point_buy' } as SeasonWithDetails,
+      stages: [swissStage],
+    });
+    if (panel?.tab !== 'groups') throw new Error('expected the groups panel');
+    expect(panel.stages.map((s) => s.stage.id)).toEqual(['swiss']);
+    expect(reads.tournamentRounds).not.toHaveBeenCalled();
+  });
+});
+
 describe('playoffs tab', () => {
   it('shows the elimination phase with its displayed status', async () => {
     const panel = await loadLeagueHubPanel('playoffs', context());

@@ -6,16 +6,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   results: {} as Record<string, { data: unknown; error: unknown }>,
+  tablesRead: [] as string[],
   getCompletedMatchRecordsBatch: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
-    from: (table: string) => ({
-      select: () => ({
-        eq: () => Promise.resolve(h.results[table] ?? { data: [], error: null }),
-      }),
-    }),
+    from: (table: string) => {
+      h.tablesRead.push(table);
+      return {
+        select: () => ({
+          eq: () => Promise.resolve(h.results[table] ?? { data: [], error: null }),
+        }),
+      };
+    },
   },
 }));
 
@@ -37,6 +41,7 @@ const participantRow = {
 describe('getStandingsPreview (league)', () => {
   beforeEach(() => {
     h.results = { season_participants: { data: [participantRow], error: null } };
+    h.tablesRead = [];
     h.getCompletedMatchRecordsBatch.mockReset();
   });
 
@@ -56,5 +61,20 @@ describe('getStandingsPreview (league)', () => {
 
     expect(h.getCompletedMatchRecordsBatch).toHaveBeenCalledWith(['t1', 't2']);
     expect(rows).toEqual([{ rank: 1, player_id: 'p1', player_name: 'Ash', wins: 0, losses: 0 }]);
+  });
+
+  it('a league without a Swiss stage costs no rounds query and no separate season read', async () => {
+    h.results.tournaments = {
+      data: [
+        { id: 't1', bracket_type: 'round_robin', seasons: { format_type: 'singles' } },
+        { id: 't2', bracket_type: 'single_elim', seasons: { format_type: 'singles' } },
+      ],
+      error: null,
+    };
+    h.getCompletedMatchRecordsBatch.mockResolvedValue(new Map());
+
+    await getStandingsPreview('league', 'season-1', 3);
+
+    expect(h.tablesRead).toEqual(['season_participants', 'tournaments']);
   });
 });

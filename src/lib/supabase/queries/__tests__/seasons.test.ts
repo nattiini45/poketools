@@ -241,6 +241,36 @@ describe('seasons', () => {
       expect(result).toHaveLength(1);
     });
 
+    it('does not filter by archived unless asked (profile and filter callers want both)', async () => {
+      mockBuilder.order.mockReturnValue({ data: [seasonWithJoins], error: null });
+
+      await listSeasonsByIds(['s1']);
+
+      expect(mockBuilder.eq).not.toHaveBeenCalledWith('archived', expect.anything());
+    });
+
+    it('archived: false keeps archived leagues out of the active admin list', async () => {
+      mockBuilder.order.mockReturnValue({ data: [seasonWithJoins], error: null });
+
+      await listSeasonsByIds(['s1', 's2'], { archived: false });
+
+      expect(mockBuilder.in).toHaveBeenCalledWith('id', ['s1', 's2']);
+      expect(mockBuilder.eq).toHaveBeenCalledWith('archived', false);
+    });
+
+    it('archived: true lists only archived leagues of the given ids', async () => {
+      mockBuilder.order.mockReturnValue({ data: [{ ...seasonWithJoins, archived: true }], error: null });
+
+      await listSeasonsByIds(['s1'], { archived: true });
+
+      expect(mockBuilder.eq).toHaveBeenCalledWith('archived', true);
+    });
+
+    it('returns empty for empty ids even with an archived filter, without a read', async () => {
+      expect(await listSeasonsByIds([], { archived: true })).toEqual([]);
+      expect(mockBuilder.from).not.toHaveBeenCalled();
+    });
+
     it('throws on database error', async () => {
       mockBuilder.order.mockReturnValue({ data: null, error: dbError });
       await expect(listSeasonsByIds(['s1'])).rejects.toEqual(dbError);

@@ -15,7 +15,6 @@ export default defineDe<typeof en>()({
   combobox: {
     clear: 'Leeren',
     searching: 'Suche läuft …',
-    noResults: 'Keine Ergebnisse',
     noResultsFor: 'Keine Ergebnisse für „{query}“',
   },
   modal: {
@@ -63,8 +62,12 @@ export default defineDe<typeof en>()({
     loading: 'Admins werden geladen …',
     none: 'Keine Ressourcen-Admins zugewiesen.',
     remove: 'Entfernen',
-    selectPlayer: 'Spieler auswählen …',
+    searchPlaceholder: 'Registrierten Spieler suchen …',
+    alreadyAdmin: 'schon Admin',
     add: 'Admin hinzufügen',
+    addFailed: 'Der Admin konnte nicht hinzugefügt werden: {reason}',
+    removeFailed: 'Der Admin konnte nicht entfernt werden: {reason}',
+    loadFailed: 'Die Admins konnten nicht geladen werden: {reason}',
   },
   archive: {
     archive: 'Archivieren',

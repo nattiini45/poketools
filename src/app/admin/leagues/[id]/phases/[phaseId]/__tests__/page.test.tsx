@@ -120,7 +120,7 @@ beforeEach(() => {
   mocks.locale = 'en';
   mocks.getLiveAccess.mockResolvedValue(liveAccess());
   mocks.isResourceAdminFor.mockResolvedValue(true);
-  mocks.getSeasonById.mockResolvedValue({ id: S1, name: 'EvoLiga S3' });
+  mocks.getSeasonById.mockResolvedValue({ id: S1, name: 'Summer League S3' });
   mocks.getTournamentWithDetails.mockResolvedValue({
     id: T1,
     season_id: S1,
@@ -195,6 +195,13 @@ describe('admin league phase page: per-league access', () => {
       await expect(render(id, phaseId)).rejects.toThrow('NEXT_NOT_FOUND');
     }
     expect(mocks.getLiveAccess).not.toHaveBeenCalled();
+    expect(phaseReads()).toEqual([]);
+  });
+
+  it('a failed per-league read fails closed (the page throws, no phase is read)', async () => {
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    mocks.isResourceAdminFor.mockRejectedValue(new Error('db down'));
+    await expect(render()).rejects.toThrow('db down');
     expect(phaseReads()).toEqual([]);
   });
 

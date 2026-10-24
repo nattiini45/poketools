@@ -1,15 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SeasonParticipant, SeasonWithDetails } from '@/types/season';
 import type { LeaguePhase } from '@/types/season';
 import type { PublicTournamentParticipant } from '@/lib/players/public-player';
+import {
+  PLAYER_SEARCH_MIN_QUERY,
+  PLAYER_SEARCH_NETWORK_ERROR,
+  parsePlayerSearch,
+  playerSearchUrl,
+  searchTruncation,
+  unavailableForAdd,
+  unavailableForLink,
+  unavailableForSubstitute,
+  type PlayerSearchHit,
+  type RosterUnavailable,
+} from '@/lib/players/player-search';
 import { POKEMON_TYPES } from '@/types/season';
 import type { Player } from '@/types/player';
 import type { ApiResult } from '@/types/api';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
-import Combobox from '@/components/ui/Combobox';
+import Combobox, { type ComboboxOption } from '@/components/ui/Combobox';
 import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
@@ -122,11 +134,112 @@ export function phaseOnlyPlayers(
 
 /**
  * The reads the roster manager makes on load (before the per-phase enrollment
- * reads): roster, player directory and phases. The league row is not among
- * them; it arrives as the `leagueState` prop.
+ * reads): roster and phases. The league row is not among them; it arrives as
+ * the `leagueState` prop. There is no player directory read: the pickers
+ * search the server as the admin types (`playerSearchUrl`), because a preloaded
+ * page of players misses everyone past it and is site-admin only.
  */
-export function rosterLoadPaths(seasonId: string): [string, string, string] {
-  return [`/api/seasons/${seasonId}/participants`, '/api/players', `/api/seasons/${seasonId}/phases`];
+export function rosterLoadPaths(seasonId: string): [string, string] {
+  return [`/api/seasons/${seasonId}/participants`, `/api/seasons/${seasonId}/phases`];
+}
+
+const UNAVAILABLE_KEY = {
+  onRoster: 'roster.alreadyOnRoster',
+  selected: 'roster.alreadySelected',
+  inPhase: 'substitute.alreadyInPhase',
+  outgoing: 'substitute.isOutgoing',
+  guest: 'link.notRegistered',
+} as const satisfies Record<RosterUnavailable, string>;
+
+/**
+ * Server-side player search for one picker. Hands `Combobox` its `fetchUrl`
+ * and `transformResults`, keeps the hits it has seen (to turn a picked id back
+ * into a name) and surfaces what `Combobox` cannot: an API refusal, and a
+ * truncated result page. A request that gets no JSON answer at all (network
+ * failure, an HTML 502) reaches it through `onFetchError` and shows as a
+ * network error, not as "no results". A hit the picker cannot take
+ * (`unavailable`) stays in the list, greyed out with the reason, so the admin
+ * sees why a player cannot be chosen instead of finding them missing.
+ */
+export function usePlayerSearch(
+  seasonId: string,
+  unavailable: (hit: PlayerSearchHit) => RosterUnavailable | null,
+  options?: { registeredOnly?: boolean },
+) {
+  const [error, setError] = useState<ApiErrorLike | null>(null);
+  const [more, setMore] = useState<{ shown: number; total: number } | null>(null);
+  const seen = useRef(new Map<string, PlayerSearchHit>());
+
+  const transformResults = useCallback(
+    (json: unknown): ComboboxOption[] => {
+      const outcome = parsePlayerSearch(json);
+      if (!outcome.ok) {
+        setError(outcome.error);
+        setMore(null);
+        return [];
+      }
+      setError(null);
+      setMore(searchTruncation(outcome));
+      for (const hit of outcome.hits) seen.current.set(hit.id, hit);
+      return outcome.hits.map((hit) => {
+        const reason = unavailable(hit);
+        return { label: hit.name, value: hit.id, disabled: reason !== null, meta: { is_guest: hit.is_guest, unavailable: reason } };
+      });
+    },
+    [unavailable],
+  );
+
+  const onFetchError = useCallback(() => {
+    setError(PLAYER_SEARCH_NETWORK_ERROR);
+    setMore(null);
+  }, []);
+
+  /** The hit for a picked id, only while the picker would still accept it. */
+  const pick = (id: string): PlayerSearchHit | null => {
+    const hit = seen.current.get(id);
+    return hit && unavailable(hit) === null ? hit : null;
+  };
+
+  return {
+    fetchUrl: playerSearchUrl({ seasonId }, options),
+    transformResults,
+    onFetchError,
+    minQueryLength: PLAYER_SEARCH_MIN_QUERY,
+    error,
+    more,
+    pick,
+    /**
+     * The selection a single-pick input holds after a change: a cleared input or a
+     * refused hit selects nobody, so the input and the action it enables agree.
+     */
+    select: (id: string): PlayerSearchHit | null => (id ? pick(id) : null),
+    reset: () => {
+      setError(null);
+      setMore(null);
+    },
+  };
+}
+
+/** The search's refusal (shown by its code) and the "more matches than shown" hint, under a picker. */
+function PlayerSearchNotes({
+  search,
+  errorText,
+  t,
+}: {
+  search: { error: ApiErrorLike | null; more: { shown: number; total: number } | null };
+  errorText: (error: ApiErrorLike) => string;
+  t: LeagueRosterT;
+}) {
+  return (
+    <>
+      {search.error && <Alert variant="error">{errorText(search.error)}</Alert>}
+      {search.more && (
+        <p className="text-xs text-poke-text-muted">
+          {t('roster.searchTruncated', { shown: search.more.shown, total: search.more.total })}
+        </p>
+      )}
+    </>
+  );
 }
 
 export default function LeagueRosterManager({
@@ -140,13 +253,11 @@ export default function LeagueRosterManager({
   // SEASON_GROUP_LOCKED, SEASON_GROUP_TOO_SMALL) and of a substitution mid-draft (SEASON_GROUP_SUBSTITUTION_LOCKED).
   const errorText = useApiErrorText(errorsSeasons, errorsPlayers, errorsDraft);
   const [participants, setParticipants] = useState<SeasonParticipant[]>([]);
-  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [phases, setPhases] = useState<LeaguePhase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<RosterError | null>(null);
 
-  const [pendingIds, setPendingIds] = useState<string[]>([]);
-  const [comboboxValue, setComboboxValue] = useState('');
+  const [pending, setPending] = useState<PlayerSearchHit[]>([]);
   const [bulkAdding, setBulkAdding] = useState(false);
 
   const [guestName, setGuestName] = useState('');
@@ -155,28 +266,26 @@ export default function LeagueRosterManager({
 
   const [phaseEnrollment, setPhaseEnrollment] = useState<PhaseEnrollment>({});
   const [substituteOut, setSubstituteOut] = useState<SubstituteOutPlayer | null>(null);
-  const [substituteInId, setSubstituteInId] = useState('');
+  const [substituteIn, setSubstituteIn] = useState<PlayerSearchHit | null>(null);
   const [substituteScope, setSubstituteScope] = useState<'league' | string>('league');
   const [substituteOpen, setSubstituteOpen] = useState(false);
 
   const [linkGuest, setLinkGuest] = useState<SeasonParticipant | null>(null);
-  const [linkSourceId, setLinkSourceId] = useState('');
+  const [linkSource, setLinkSource] = useState<PlayerSearchHit | null>(null);
   const [linking, setLinking] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [partRes, playerRes, phaseRes] = await Promise.all(
+      const [partRes, phaseRes] = await Promise.all(
         rosterLoadPaths(seasonId).map((path) => fetch(path).then((r) => r.json())),
       );
 
       const partResult = partRes as ApiResult<SeasonParticipant[]>;
-      const playerResult = playerRes as ApiResult<Player[]>;
       const phaseResult = phaseRes as ApiResult<LeaguePhase[]>;
 
       if (partResult.success) setParticipants(partResult.data);
-      if (playerResult.success) setAllPlayers(playerResult.data);
       if (phaseResult.success) setPhases(phaseResult.data);
 
       // Who is enrolled in each active phase: the substitution scopes a
@@ -218,21 +327,6 @@ export default function LeagueRosterManager({
     [participants],
   );
 
-  const availablePlayers = useMemo(
-    () => allPlayers.filter((p) => !participantIds.has(p.id) && !pendingIds.includes(p.id)),
-    [allPlayers, participantIds, pendingIds],
-  );
-
-  const comboboxOptions = useMemo(
-    () =>
-      availablePlayers.map((p) => ({
-        label: p.name,
-        value: p.id,
-        meta: { is_guest: p.is_guest },
-      })),
-    [availablePlayers],
-  );
-
   const activePhases = useMemo(
     () => phases.filter((p) => p.status === 'upcoming' || p.status === 'active'),
     [phases],
@@ -250,38 +344,50 @@ export default function LeagueRosterManager({
     [substituteOut, activePhases, phaseEnrollment, t],
   );
 
+  const pendingIds = useMemo(() => pending.map((p) => p.id), [pending]);
+  const pendingIdSet = useMemo(() => new Set(pendingIds), [pendingIds]);
+
+  // Add picker: anyone not already on the roster or staged.
+  const addSearch = usePlayerSearch(seasonId, (hit) => unavailableForAdd(hit, participantIds, pendingIdSet));
+
   // Replacements come from outside the roster; for one phase, not from
   // players already enrolled there.
-  const substituteCandidates = useMemo(() => {
-    const enrolledInScope = new Set(
-      (substituteScope === 'league' ? [] : phaseEnrollment[substituteScope] ?? []).map((p) => p.id),
-    );
-    return allPlayers.filter(
-      (p) => !participantIds.has(p.id) && !enrolledInScope.has(p.id) && p.id !== substituteOut?.id,
-    );
-  }, [allPlayers, participantIds, phaseEnrollment, substituteScope, substituteOut]);
-
-  const linkCandidates = useMemo(
-    () =>
-      allPlayers.filter(
-        (p) =>
-          !p.is_guest &&
-          p.id !== linkGuest?.id &&
-          (p.discord_id || p.auth_user_id) &&
-          // The claim refuses a banned or suspended source (SOURCE_NOT_ACTIVE): do not offer one.
-          p.status === 'active',
-      ),
-    [allPlayers, linkGuest],
+  const enrolledInScope = useMemo(
+    () => new Set((substituteScope === 'league' ? [] : phaseEnrollment[substituteScope] ?? []).map((p) => p.id)),
+    [phaseEnrollment, substituteScope],
+  );
+  const substituteSearch = usePlayerSearch(seasonId, (hit) =>
+    unavailableForSubstitute(hit, substituteOut?.id, participantIds, enrolledInScope),
   );
 
-  function stagePlayer(playerId: string) {
-    if (!playerId || participantIds.has(playerId) || pendingIds.includes(playerId)) return;
-    setPendingIds((prev) => [...prev, playerId]);
-    setComboboxValue('');
+  // Link candidates: a registered (non-guest, with a Discord or email login),
+  // active account other than the guest itself. The server filters on the login
+  // and status columns (`registered=1`), which never reach the client: the claim
+  // refuses a banned or suspended source (SOURCE_NOT_ACTIVE), so such an account
+  // is not offered. The claim route still checks that the account is fresh and
+  // empty (SOURCE_HAS_ACTIVITY).
+  const linkSearch = usePlayerSearch(seasonId, (hit) => unavailableForLink(hit, linkGuest?.id), {
+    registeredOnly: true,
+  });
+
+  function renderPlayerOption(option: ComboboxOption) {
+    const reason = option.meta?.unavailable as RosterUnavailable | null | undefined;
+    return (
+      <span className={reason ? 'flex items-center gap-2 text-poke-text-muted opacity-60' : 'flex items-center gap-2'}>
+        <span>{option.label}</span>
+        {option.meta?.is_guest ? <GuestBadge /> : null}
+        {reason ? <span className="text-xs">{t(UNAVAILABLE_KEY[reason])}</span> : null}
+      </span>
+    );
+  }
+
+  function stagePlayer(hit: PlayerSearchHit) {
+    if (participantIds.has(hit.id) || pendingIdSet.has(hit.id)) return;
+    setPending((prev) => [...prev, hit]);
   }
 
   function unstagePlayer(playerId: string) {
-    setPendingIds((prev) => prev.filter((id) => id !== playerId));
+    setPending((prev) => prev.filter((p) => p.id !== playerId));
   }
 
   async function bulkAddPlayers() {
@@ -299,7 +405,7 @@ export default function LeagueRosterManager({
         setError({ api: toApiErrorLike(json) });
         return;
       }
-      setPendingIds([]);
+      setPending([]);
       await loadData();
     } catch {
       setError({ key: 'addFailed' });
@@ -326,8 +432,7 @@ export default function LeagueRosterManager({
       }
       setGuestName('');
       setShowGuestForm(false);
-      setAllPlayers((prev) => [...prev, json.data].sort((a, b) => a.name.localeCompare(b.name)));
-      stagePlayer(json.data.id);
+      stagePlayer({ id: json.data.id, name: json.data.name, is_guest: true });
     } catch {
       setError({ key: 'guestFailed' });
     } finally {
@@ -378,20 +483,21 @@ export default function LeagueRosterManager({
 
   function openSubstitute(player: SubstituteOutPlayer) {
     setSubstituteOut(player);
-    setSubstituteInId('');
+    setSubstituteIn(null);
+    substituteSearch.reset();
     setSubstituteScope(substituteScopeOptions(player, activePhases, phaseEnrollment, t)[0]?.value ?? 'league');
     setSubstituteOpen(false);
   }
 
   async function linkAccount() {
-    if (!linkGuest || !linkSourceId) return;
+    if (!linkGuest || !linkSource) return;
     setLinking(true);
     setError(null);
     try {
       const res = await fetch(`/api/players/${linkGuest.id}/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_player_id: linkSourceId }),
+        body: JSON.stringify({ source_player_id: linkSource.id }),
       });
       const json: ApiResult<Player> = await res.json();
       if (!json.success) {
@@ -399,7 +505,7 @@ export default function LeagueRosterManager({
         return;
       }
       setLinkGuest(null);
-      setLinkSourceId('');
+      setLinkSource(null);
       await loadData();
     } catch {
       setError({ key: 'linkFailed' });
@@ -408,7 +514,9 @@ export default function LeagueRosterManager({
     }
   }
 
-  const substituteInPlayer = substituteCandidates.find((p) => p.id === substituteInId);
+  // The scope decides who is already enrolled: a replacement picked under one
+  // scope is dropped when the scope changes and the pick is no longer valid.
+  const substituteInPlayer = substituteIn && substituteSearch.pick(substituteIn.id) ? substituteIn : null;
 
   if (loading) return <p className="text-sm text-poke-text-muted">{t('roster.loading')}</p>;
 
@@ -472,7 +580,8 @@ export default function LeagueRosterManager({
                       type="button"
                       onClick={() => {
                         setLinkGuest(p);
-                        setLinkSourceId('');
+                        setLinkSource(null);
+                        linkSearch.reset();
                       }}
                       className="text-xs text-poke-blue hover:underline"
                     >
@@ -536,47 +645,42 @@ export default function LeagueRosterManager({
       <div className="space-y-3 border-t border-poke-border pt-4">
         <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('roster.addHeading')}</h3>
         <Combobox
-          mode="static"
+          mode="async"
           label={t('roster.searchLabel')}
-          value={comboboxValue}
-          onChange={(value) => {
-            if (value) stagePlayer(value);
+          value=""
+          onChange={(id) => {
+            const hit = addSearch.pick(id);
+            if (hit) stagePlayer(hit);
           }}
           placeholder={t('roster.searchPlaceholder')}
-          staticOptions={comboboxOptions}
-          renderOption={(opt) => (
-            <span className="flex items-center gap-2">
-              <span>{opt.label}</span>
-              {opt.meta?.is_guest ? <GuestBadge /> : null}
-            </span>
-          )}
+          fetchUrl={addSearch.fetchUrl}
+          transformResults={addSearch.transformResults}
+          onFetchError={addSearch.onFetchError}
+          minQueryLength={addSearch.minQueryLength}
+          renderOption={renderPlayerOption}
         />
+        <PlayerSearchNotes search={addSearch} errorText={errorText} t={t} />
 
-        {pendingIds.length > 0 && (
+        {pending.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs text-poke-text-muted">{t('roster.selected', { count: pendingIds.length })}</p>
+            <p className="text-xs text-poke-text-muted">{t('roster.selected', { count: pending.length })}</p>
             <div className="flex flex-wrap gap-2">
-              {pendingIds.map((id) => {
-                const player = allPlayers.find((p) => p.id === id);
-                return (
-                  <span
-                    key={id}
-                    className="inline-flex items-center gap-1 rounded-poke-md border border-poke-border bg-poke-surface px-2 py-1 text-xs"
+              {pending.map((player) => (
+                <span
+                  key={player.id}
+                  className="inline-flex items-center gap-1 rounded-poke-md border border-poke-border bg-poke-surface px-2 py-1 text-xs"
+                >
+                  {player.name}
+                  <button
+                    type="button"
+                    onClick={() => unstagePlayer(player.id)}
+                    className="text-poke-text-muted hover:text-poke-text-primary"
+                    aria-label={t('roster.removeAria', { name: player.name })}
                   >
-                    {player?.name ?? id}
-                    <button
-                      type="button"
-                      onClick={() => unstagePlayer(id)}
-                      className="text-poke-text-muted hover:text-poke-text-primary"
-                      aria-label={
-                        player ? t('roster.removeAria', { name: player.name }) : t('roster.removeAriaFallback')
-                      }
-                    >
-                      ×
-                    </button>
-                  </span>
-                );
-              })}
+                    ×
+                  </button>
+                </span>
+              ))}
             </div>
             <Button
               variant="primary"
@@ -584,7 +688,7 @@ export default function LeagueRosterManager({
               onClick={bulkAddPlayers}
               disabled={bulkAdding}
             >
-              {bulkAdding ? t('roster.adding') : t('roster.addCount', { count: pendingIds.length })}
+              {bulkAdding ? t('roster.adding') : t('roster.addCount', { count: pending.length })}
             </Button>
           </div>
         )}
@@ -627,22 +731,20 @@ export default function LeagueRosterManager({
           size="md"
         >
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-heading font-semibold text-poke-text-secondary mb-1">
-                {t('substitute.replacement')}
-              </label>
-              <select
-                value={substituteInId}
-                onChange={(e) => setSubstituteInId(e.target.value)}
-                className="w-full text-sm bg-poke-surface border border-poke-border rounded-poke-md px-2 py-2"
-              >
-                <option value="">{t('substitute.selectPlayer')}</option>
-                {substituteCandidates.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.is_guest ? t('substitute.guestOption', { name: p.name }) : p.name}
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-1">
+              <Combobox
+                mode="async"
+                label={t('substitute.replacement')}
+                value={substituteIn?.name ?? ''}
+                onChange={(id) => setSubstituteIn(substituteSearch.select(id))}
+                placeholder={t('substitute.selectPlayer')}
+                fetchUrl={substituteSearch.fetchUrl}
+                transformResults={substituteSearch.transformResults}
+                onFetchError={substituteSearch.onFetchError}
+                minQueryLength={substituteSearch.minQueryLength}
+                renderOption={renderPlayerOption}
+              />
+              <PlayerSearchNotes search={substituteSearch} errorText={errorText} t={t} />
             </div>
 
             <div>
@@ -651,7 +753,10 @@ export default function LeagueRosterManager({
               </label>
               <select
                 value={substituteScope}
-                onChange={(e) => setSubstituteScope(e.target.value)}
+                onChange={(e) => {
+                  setSubstituteScope(e.target.value);
+                  setSubstituteIn(null);
+                }}
                 className="w-full text-sm bg-poke-surface border border-poke-border rounded-poke-md px-2 py-2"
               >
                 {scopeOptions.map((option) => (
@@ -714,18 +819,20 @@ export default function LeagueRosterManager({
         >
           <div className="space-y-4">
             <p className="text-sm text-poke-text-secondary">{t('link.hint')}</p>
-            <select
-              value={linkSourceId}
-              onChange={(e) => setLinkSourceId(e.target.value)}
-              className="w-full text-sm bg-poke-surface border border-poke-border rounded-poke-md px-2 py-2"
-            >
-              <option value="">{t('link.selectAccount')}</option>
-              {linkCandidates.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1">
+              <Combobox
+                mode="async"
+                value={linkSource?.name ?? ''}
+                onChange={(id) => setLinkSource(linkSearch.select(id))}
+                placeholder={t('link.selectAccount')}
+                fetchUrl={linkSearch.fetchUrl}
+                transformResults={linkSearch.transformResults}
+                onFetchError={linkSearch.onFetchError}
+                minQueryLength={linkSearch.minQueryLength}
+                renderOption={renderPlayerOption}
+              />
+              <PlayerSearchNotes search={linkSearch} errorText={errorText} t={t} />
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setLinkGuest(null)}>
                 {t('roster.cancel')}
@@ -733,7 +840,7 @@ export default function LeagueRosterManager({
               <Button
                 variant="primary"
                 size="sm"
-                disabled={!linkSourceId || linking}
+                disabled={!linkSource || linking}
                 onClick={linkAccount}
               >
                 {linking ? t('link.linking') : t('link.submit')}

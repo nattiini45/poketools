@@ -1,5 +1,5 @@
 import type { AdvancementRule } from '@/types/season';
-import type { MatchRecord } from './types';
+import type { ByeRecord, MatchRecord } from './types';
 import { computeStandings } from './standings';
 import type { TournamentGroupWithMembers } from '@/types/season';
 
@@ -19,17 +19,20 @@ export interface AdvancementResult {
  * @param participantNames Map of player ID → name
  * @param matchRecords Completed match records
  * @param groups Optional group structure (for per_group advancement)
+ * @param byes Stored Swiss byes of the source stage (see `scoringByeRecords`); each
+ *   counts as a win, exactly as in the stage's own standings table
  */
 export function computeAdvancement(
   rule: AdvancementRule,
   participantIds: string[],
   participantNames: Record<string, string>,
   matchRecords: MatchRecord[],
-  groups?: TournamentGroupWithMembers[]
+  groups?: TournamentGroupWithMembers[],
+  byes: ByeRecord[] = []
 ): AdvancementResult {
   switch (rule.type) {
     case 'top_n':
-      return computeTopN(rule, participantIds, participantNames, matchRecords, groups);
+      return computeTopN(rule, participantIds, participantNames, matchRecords, groups, byes);
     default: {
       const _exhaustive: never = rule.type;
       throw new Error(`Unknown advancement type: ${_exhaustive}`);
@@ -42,7 +45,8 @@ function computeTopN(
   participantIds: string[],
   participantNames: Record<string, string>,
   matchRecords: MatchRecord[],
-  groups?: TournamentGroupWithMembers[]
+  groups?: TournamentGroupWithMembers[],
+  byes: ByeRecord[] = []
 ): AdvancementResult {
   const advancing: string[] = [];
 
@@ -56,7 +60,7 @@ function computeTopN(
           groupPlayerIds.includes(m.player_2_id)
       );
 
-      const standings = computeStandings(groupPlayerIds, participantNames, groupMatches);
+      const standings = computeStandings(groupPlayerIds, participantNames, groupMatches, {}, { byes });
       const topN = standings.slice(0, rule.count);
       advancing.push(...topN.map((s) => s.player_id));
     }
@@ -67,7 +71,7 @@ function computeTopN(
     };
   } else {
     // Take top N overall
-    const standings = computeStandings(participantIds, participantNames, matchRecords);
+    const standings = computeStandings(participantIds, participantNames, matchRecords, {}, { byes });
     const topN = standings.slice(0, rule.count);
     advancing.push(...topN.map((s) => s.player_id));
 
