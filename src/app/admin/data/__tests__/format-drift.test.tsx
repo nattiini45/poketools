@@ -62,8 +62,8 @@ function report(overrides: Partial<FormatDriftData> = {}): FormatDriftData {
           archived: false,
           isTest: true,
           kind: 'source_only',
-          source: { id: 'ph-1', name: 'Groups', stageOrder: 1, status: 'completed', rule: rule(4) },
-          target: { id: 'ph-2', name: 'Playoffs', stageOrder: 2, status: 'upcoming', rule: null },
+          source: { id: 'ph-1', name: 'Groups', stageOrder: 0, status: 'completed', rule: rule(4) },
+          target: { id: 'ph-2', name: 'Playoffs', stageOrder: 1, status: 'upcoming', rule: null },
         },
         {
           seasonId: L2,
@@ -71,8 +71,8 @@ function report(overrides: Partial<FormatDriftData> = {}): FormatDriftData {
           archived: false,
           isTest: true,
           kind: 'both_differ',
-          source: { id: 'ph-2', name: 'Playoffs', stageOrder: 2, status: 'upcoming', rule: rule(2, true) },
-          target: { id: 'ph-3', name: 'Finals', stageOrder: 3, status: 'upcoming', rule: rule(1) },
+          source: { id: 'ph-2', name: 'Playoffs', stageOrder: 1, status: 'upcoming', rule: rule(2, true) },
+          target: { id: 'ph-3', name: 'Finals', stageOrder: 2, status: 'upcoming', rule: rule(1) },
         },
       ],
     },
@@ -129,6 +129,15 @@ describe('FormatDriftReportView', () => {
     expect(html).toContain('Autumn Open');
     expect(html).toContain('Archived');
     expect(html).toContain('Test');
+  });
+
+  it('loaded: numbers phases from 1 although stage_order is stored from 0', () => {
+    const html = view({ status: 'loaded' }, report());
+
+    expect(html).toMatch(/>1\. Groups</);
+    expect(html).toMatch(/>2\. Playoffs</);
+    expect(html).toMatch(/>3\. Finals</);
+    expect(html).not.toMatch(/>0\. /);
   });
 
   it('loaded: shows rules as top N, top N per group or none', () => {

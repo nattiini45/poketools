@@ -117,7 +117,7 @@ function PhaseLine({ seasonId, label, phase }: { seasonId: string; label: string
       <p className="text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted">{label}</p>
       <p className="text-poke-text-primary">
         <Link href={`/admin/leagues/${seasonId}/phases/${phase.id}`} className="font-medium text-poke-blue hover:underline">
-          {phase.stageOrder}. {phase.name}
+          {phase.stageOrder + 1}. {phase.name}
         </Link>
         <span className="text-poke-text-secondary">
           {' · '}
