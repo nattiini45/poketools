@@ -17,6 +17,7 @@ import {
   buildMatchListSearch,
   clearMatchListFilters,
   matchListBackHref,
+  matchListScopeCorrection,
   matchPageBackSuffix,
   parseMatchListBack,
   parseMatchListUrl,
@@ -445,6 +446,29 @@ describe('reconcileMatchListScope', () => {
     const reconciled = reconcileMatchListScope(base({ league: UUID_A, phase: OTHER_PHASE, round: UUID_C }), options);
     expect(reconciled).toMatchObject({ league: UUID_A, phase: '', round: '' });
     expect(buildMatchListApiQuery(reconciled)).toBe(`season_id=${UUID_A}`);
+  });
+
+  describe('matchListScopeCorrection', () => {
+    const correction = (state: MatchListUrlState) => matchListScopeCorrection(state, reconcileMatchListScope(state, options));
+
+    it('is the corrected query when the phase won over a mismatched league', () => {
+      expect(correction(base({ league: OTHER_LEAGUE, phase: UUID_B }))).toBe(`league=${UUID_A}&phase=${UUID_B}`);
+    });
+
+    it('is the query without the phase when an unknown phase was dropped', () => {
+      expect(correction(base({ status: 'disputed', league: UUID_A, phase: OTHER_PHASE, round: UUID_C }))).toBe(
+        `status=disputed&league=${UUID_A}`,
+      );
+    });
+
+    it('is null while the options are missing or when the address already agrees, so no replace loops', () => {
+      const mismatched = base({ league: OTHER_LEAGUE, phase: UUID_B });
+      expect(matchListScopeCorrection(mismatched, reconcileMatchListScope(mismatched, null))).toBeNull();
+      expect(correction(base({ league: UUID_A, phase: UUID_B }))).toBeNull();
+      expect(correction(base({ league: OTHER_LEAGUE }))).toBeNull();
+      const corrected = parseMatchListUrl(new URLSearchParams(correction(mismatched) ?? ''));
+      expect(correction(corrected)).toBeNull();
+    });
   });
 });
 

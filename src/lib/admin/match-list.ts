@@ -450,6 +450,17 @@ export function reconcileMatchListScope(
   return { ...state, league, format: standalone ? '' : state.format };
 }
 
+/**
+ * The query string a deep link should be rewritten to once `reconcileMatchListScope` has corrected its scope (the phase
+ * won over a mismatched league, or an unknown phase was dropped), or `null` when the address already says what the list
+ * shows. Compared as query strings, so a correction that only touches state the URL does not carry needs no replace.
+ */
+export function matchListScopeCorrection(parsed: MatchListUrlState, reconciled: MatchListUrlState): string | null {
+  if (parsed === reconciled) return null;
+  const corrected = buildMatchListSearch(reconciled);
+  return corrected === buildMatchListSearch(parsed) ? null : corrected;
+}
+
 /** The query string (without `?`) for a page state; defaults are omitted, the key order is fixed. */
 export function buildMatchListSearch(state: MatchListUrlState): string {
   const params = new URLSearchParams();

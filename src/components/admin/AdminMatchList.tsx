@@ -10,6 +10,7 @@ import {
   buildMatchListApiQuery,
   buildMatchListSearch,
   parseMatchListUrl,
+  matchListScopeCorrection,
   reconcileMatchListScope,
   type AdminMatchListResponse,
   type MatchListUrlState,
@@ -170,6 +171,14 @@ export default function AdminMatchList() {
     [router, pathname],
   );
   const updateUrl = useMatchListUpdate(url, replaceSearch);
+
+  // A deep link whose scope was corrected (the phase won over a mismatched league, an unknown phase dropped) has its
+  // address rewritten to the scope it lists, once the options are in. `replace` adds no history entry, and the
+  // rewritten URL parses to the reconciled state itself, so the correction is empty the second time (no loop).
+  const scopeCorrection = matchListScopeCorrection(parsedUrl, url);
+  useEffect(() => {
+    if (scopeCorrection !== null) replaceSearch(scopeCorrection);
+  }, [scopeCorrection, replaceSearch]);
 
   // The "now" the relative date ranges (today, next 7 days) are resolved against. It moves only when the user
   // changes a date control and on Retry, never on a timer or during render, so the request key stays stable.
