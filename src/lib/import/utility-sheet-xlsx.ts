@@ -1,5 +1,5 @@
 /**
- * Utility sheet parser and its label normalisation (draft-backend §2.3, §2.5). Used ONLY by the
+ * Utility sheet parser and its label normalisation. Used ONLY by the
  * reconciliation report: the draft's utility categories live in the format pack (`epb.utility`,
  * read through `src/lib/draft/utility-categories.ts`), and line availability always comes from
  * the Gen 9 learnsets, never from this sheet's species column.

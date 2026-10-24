@@ -1,4 +1,4 @@
-// The one Pokémon id fold for the whole app (design pkmn-l10n.md §1.4, critique S6).
+// The one Pokémon id fold for the whole app.
 // This file has no imports by contract: src/lib/pkmn/i18n/__tests__/id.test.ts asserts it, so draft line identity
 // (src/lib/draft/line-identity.ts) can use it without pulling any dictionary or @pkmn module.
 // The body is duplicated in scripts/pkmn-i18n/build.mjs; the id test pins the two to the same output.

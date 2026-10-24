@@ -1,5 +1,5 @@
 /**
- * Comeback Token spends (draft-backend BR-5, §6.9).
+ * Comeback Token spends.
  * Balance = earned (computed in TS from completed matches) − Σ spends (in tokens; no legacy
  * grant stock: no carried-over comeback stock); the `epb_spend_comeback_tokens` RPC (latest definition in
  * 20261018140000_epb_comeback_rules.sql) re-checks the balance under the season lock and

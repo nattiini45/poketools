@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { SRC_ROOT, isUseClientFile, reachableFiles } from '@/lib/pkmn/i18n/__tests__/import-graph';
 
 /**
- * Bundle budget of the shared Pokémon-data chokepoints (design pkmn-l10n.md §3.1, §7; critique P3).
+ * Bundle budget of the shared Pokémon-data chokepoints.
  * Each chokepoint imports only the per-kind name module it needs (`names/<kind>`), never the barrel, so a page
  * that renders a type badge does not pay for the species, move, item and ability maps.
  */

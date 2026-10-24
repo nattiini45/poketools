@@ -1,4 +1,4 @@
-/** PATCH /api/drafts/[id]/config (draft-backend §8.1 #3; B-ADM). */
+/** PATCH /api/drafts/[id]/config. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/helpers', () => ({

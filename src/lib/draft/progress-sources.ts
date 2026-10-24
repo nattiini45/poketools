@@ -1,6 +1,5 @@
 /**
- * Evolution progress sources (draft-backend §7.6, §12.1; critique S9; SPEC
- * Prompt 6 §10–12 and Prompt 7). Client-safe and pure.
+ * Evolution progress sources. Client-safe and pure.
  *
  * DB columns keep their names (BR-14); the spec names live here:
  *

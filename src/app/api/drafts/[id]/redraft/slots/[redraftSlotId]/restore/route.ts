@@ -15,8 +15,7 @@ interface RouteParams {
 
 /**
  * POST /api/drafts/[id]/redraft/slots/[redraftSlotId]/restore — undo one
- * published drop while the redraft draft is paused (draft-backend §8.1 #23,
- * §6.8).
+ * published drop while the redraft draft is paused.
  *
  * Body: `{ reason }`. `redraft_admin_restore_drop` brings the tracker back
  * from its snapshot, removes the slot and its refund, shrinks the player's

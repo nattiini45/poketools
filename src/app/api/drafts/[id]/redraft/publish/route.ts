@@ -19,7 +19,7 @@ interface PublishResult {
 
 /**
  * POST /api/drafts/[id]/redraft/publish — reveal every secret drop at once
- * and start the redraft queue (draft-backend §8.1 #22, §6.8; BR-9).
+ * and start the redraft queue.
  *
  * Body: `{ force?, reason? }`. Before the deadline only `force: true` with a
  * reason publishes (`SUBMISSIONS_NOT_DUE` / `OVERRIDE_REASON_REQUIRED`); at the

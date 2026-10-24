@@ -63,7 +63,7 @@ const standings: LeagueStandingSnapshot[] = [
   },
   {
     leagueId: 'l2',
-    leagueName: 'Type Triangle League',
+    leagueName: 'Sample Custom League',
     status: 'completed',
     formatType: 'draft',
     participantCount: 12,
@@ -92,7 +92,7 @@ const teamsUsed: TeamUsed[] = [
   {
     kind: 'league',
     id: 'l2',
-    name: 'Type Triangle League',
+    name: 'Sample Custom League',
     status: 'completed',
     pokemon: [
       { name: 'Great Tusk', brought: 5 },
@@ -154,14 +154,14 @@ describe('DashboardContent', () => {
     const tournamentsHtml = section(html, 'My Tournaments', 'History');
 
     expect(leagues).toContain('EvoLiga');
-    expect(leagues).toContain('Type Triangle League');
+    expect(leagues).toContain('Sample Custom League');
     expect(leagues).toContain('Completed');
     expect(leagues).toContain('No final standing recorded.');
     expect(leagues).not.toContain('Stats coming soon');
 
     expect(tournamentsHtml).toContain('1 tournament');
     expect(tournamentsHtml).toContain('Winter Cup');
-    expect(tournamentsHtml).not.toContain('Type Triangle League');
+    expect(tournamentsHtml).not.toContain('Sample Custom League');
     expect(tournamentsHtml).not.toContain('EvoLiga');
   });
 
@@ -174,7 +174,7 @@ describe('DashboardContent', () => {
     // One badge, on the test league's card (after the real leagues).
     expect(leagues.split('Test league')).toHaveLength(2);
     expect(leagues.indexOf('Test league')).toBeGreaterThan(leagues.indexOf('Community Test Run'));
-    expect(leagues.indexOf('Community Test Run')).toBeGreaterThan(leagues.indexOf('Type Triangle League'));
+    expect(leagues.indexOf('Community Test Run')).toBeGreaterThan(leagues.indexOf('Sample Custom League'));
     expect(section(renderDashboard('en'), 'My Leagues', 'My Tournaments')).not.toContain('Test league');
   });
 

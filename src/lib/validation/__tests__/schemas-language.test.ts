@@ -10,7 +10,7 @@ import {
   webhookUpdateSchema,
 } from '../schemas';
 
-const SEASON_BASE = { name: 'EvoLiga S3', format_type: 'evolution_point_buy' } as const;
+const SEASON_BASE = { name: 'Example League S1', format_type: 'evolution_point_buy' } as const;
 const WEBHOOK_BASE = {
   scope_type: 'season',
   scope_id: '00000000-0000-4000-8000-000000000001',
@@ -79,7 +79,7 @@ describe('webhook format_options.language', () => {
   });
 });
 
-describe('draft Discord events (draft-backend §11.3)', () => {
+describe('draft Discord events', () => {
   // The enum spreads DRAFT_DISCORD_EVENT_TYPES; `DiscordEventType`
   // (src/types/discord.ts) carries the same four names.
   const DRAFT_EVENTS = [

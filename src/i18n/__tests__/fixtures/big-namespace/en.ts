@@ -1,4 +1,4 @@
-/** 250-key fixture namespace for the tsc cost budget (critique C13). Not a real namespace. */
+/** 250-key fixture namespace for the tsc cost budget. Not a real namespace. */
 export default {
   group0: {
     key0: { one: '{count} item in group 0', other: '{count} items in group 0' },

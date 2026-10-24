@@ -4,7 +4,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { BattleStatInsert, ParsedBattleStats } from '@/types/game';
 
 /**
- * A replay bound to its battle (owner decision 2026-10-20, audit lead F1): one fetched Showdown
+ * A replay bound to its battle: one fetched Showdown
  * log, its hash (`computeReplayHash`, docs in `replay-identity.ts`) and the stats parsed from that
  * same log. A game recorded from a replay takes its winner and its stats from here and stores the
  * hash on its `games` row in the same insert, so a recorded result can never come from a

@@ -18,7 +18,7 @@ import type { ApiResult } from '@/types/api';
 // Anti-enumeration: an already-registered email returns the same generic
 // success message as a fresh signup.
 //
-// Reserved address (audit lead CF-02): the SUPERADMIN_EMAIL address is never
+// Reserved address: the SUPERADMIN_EMAIL address is never
 // signed up here. An email/password session on that address is superadmin
 // (`isSuperadmin`), so a self-service account on it would be a takeover once
 // confirmed. The request gets the same rate limit, the same constant delay and
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     // Constant delay to blunt brute-force/enumeration timing
     await new Promise((r) => setTimeout(r, 500));
 
-    // CF-02: no account for the reserved superadmin address, and no tell.
+    // No account for the reserved superadmin address, and no tell.
     if (isReservedSuperadminEmail(email)) return genericSuccessResponse();
 
     const client = createAuthClient();

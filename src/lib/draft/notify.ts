@@ -1,5 +1,5 @@
 /**
- * Draft-tool Discord notifications (B-CRON, draft-backend §6.7, §7.9, §11).
+ * Draft-tool Discord notifications.
  * Server only.
  *
  * `draft_claim_notifications` claims every due event in SQL (claim markers on
@@ -11,7 +11,7 @@
  * drafts; the 8h/4h/1h reminders are slow-only. This module turns the
  * claims into language-neutral payloads (§11.3: no locale, canonical English
  * Pokémon names) and fires each with `void emitDiscordEvent(...)`; the
- * language is chosen per webhook inside `emitAsync` (critique S11).
+ * language is chosen per webhook inside `emitAsync`.
  *
  * The narrow reads it needs live in the query modules: `listTickablePools`
  * (`drafts-queue`, re-exported for the cron route) and `getPublishedDrops`

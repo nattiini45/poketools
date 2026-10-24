@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     // ruleset for that tournament, applying the custom-over-base precedence.
     // This prevents a base tier ruleset (e.g. standard 'Gen 9 RU') from
     // silently overriding a tournament's dedicated custom league ruleset
-    // (e.g. 'Type Triangle League') when the UI somehow sends a stale id.
+    // when the UI somehow sends a stale id.
     //
     // Without tournament context we trust the ruleset_id supplied by the
     // caller (legacy path used by ad-hoc format validation).

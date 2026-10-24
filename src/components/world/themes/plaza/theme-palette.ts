@@ -239,7 +239,7 @@ export interface PlazaPaletteExt {
    * Pictorial LED advert (east + south-west façades). The painted type-colour
    * field is static from here — the silhouetted Pokémon's primary type would
    * need a server-side `@pkmn/data` hop that the client-side texture paint
-   * cannot make, so the palette owns the identity instead (card C-029).
+   * cannot make, so the palette owns the identity instead.
    */
   pictorialLedField: string;
   /** Warm end of the advert's gradient field (ember / arena accent family). */

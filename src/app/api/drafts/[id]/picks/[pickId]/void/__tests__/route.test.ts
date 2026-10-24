@@ -1,5 +1,5 @@
 /**
- * Admin corrections (draft-backend §8.1 #11, #12, #14; B-ADM): void (requeue only), correct, penalty stage.
+ * Admin corrections (#12, #14): void (requeue only), correct, penalty stage.
  * The blocked-slot resolve route (#13) is retired: the pool always stays completable, so no slot is ever blocked.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -173,7 +173,7 @@ describe('POST /api/drafts/[id]/picks/[pickId]/correct', () => {
     expect(callDraftRpc).not.toHaveBeenCalled();
   });
 
-  it('requires client_request_id (critique B6)', async () => {
+  it('requires client_request_id', async () => {
     const res = await call({ line_id: 'ralts--gallade', reason: 'Meant Gallade' });
     expect(res.status).toBe(400);
     expect(callDraftRpc).not.toHaveBeenCalled();

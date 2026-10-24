@@ -280,7 +280,7 @@ export function isAdmin(session: Session | null): boolean {
 /**
  * True when `email` is the configured SUPERADMIN_EMAIL (trimmed,
  * case-insensitive). False when SUPERADMIN_EMAIL is unset or blank. Used to
- * stop anyone but the Discord superadmin from linking that address (CF-02).
+ * stop anyone but the Discord superadmin from linking that address.
  */
 export function isReservedSuperadminEmail(email: string | null | undefined): boolean {
   const reserved = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();

@@ -202,7 +202,7 @@ function isElimTournament(tournament: Tournament): boolean {
 }
 
 /**
- * EPB real kills (owner decision 2026-10-20 on audit lead CF-07): evolution
+ * EPB real kills: evolution
  * progress waits for the confirmed result, so the real kills of the match's
  * games are credited here, at completion, never at submission. Each game is
  * credited at most once (`games.evolution_applied_at`, set in the credit's own

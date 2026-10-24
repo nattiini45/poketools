@@ -1,5 +1,5 @@
 /**
- * Draft audit trail reads (draft-backend §8.1 #15, §10.4; package B-ADM).
+ * Draft audit trail reads.
  *
  * `draft_action_log` is append-only and written by the draft RPCs inside the
  * same transaction as the change they record (BR-12), with the actor, the

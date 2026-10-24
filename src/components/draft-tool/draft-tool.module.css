@@ -94,7 +94,7 @@
   /* The CTA keeps the spec hexes in both themes. */
 }
 
-/* Banners, the CTA and "Draft paused": stored in sentence case (critique S4). */
+/* Banners, the CTA and "Draft paused": stored in sentence case. */
 .caps {
   text-transform: uppercase;
   letter-spacing: 0.04em;

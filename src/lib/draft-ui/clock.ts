@@ -1,7 +1,7 @@
 /**
  * Draft clock math (draft-frontend §5.7). Pure and client-safe; display only
  * (the server owns deadlines). Absolute deadlines render through
- * `<LocalTime zone="both">`, never through a helper here (critique S10).
+ * `<LocalTime zone="both">`, never through a helper here.
  *
  * Draft quiet hours: with a pool window the remaining time is the running
  * (unheld) time until the deadline, from the same mirror the server's SQL is
@@ -15,7 +15,7 @@ import type { Formatter } from '@/i18n/format';
 import type { DraftSharedEn } from '@/i18n/messages/draft/shared';
 import type { DraftActiveSlot, DraftMode, QuietHours } from './snapshot-types';
 
-/** The only declaration lives in `@/i18n/config` (critique S10). */
+/** The only declaration lives in `@/i18n/config`. */
 export { LEAGUE_TIME_ZONE };
 
 export type ClockBand = 'ok' | 'warn' | 'low';

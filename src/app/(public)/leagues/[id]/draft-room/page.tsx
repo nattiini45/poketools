@@ -159,7 +159,7 @@ export default async function DraftRoomPage({ params, searchParams }: PageProps)
 
   const viewer: ViewerContext | null = player ? { playerId: player.playerId, isPoolAdmin } : null;
   const [snapshot, entries, formatRules] = await Promise.all([
-    // The same read as the state route, without the tick (critique B9), so the
+    // The same read as the state route, without the tick, so the
     // first paint equals the first poll. A failed read seeds null: the client
     // shows "loading" and polls.
     getDraftSnapshot(pool.id, viewer, { tick: false }).then(

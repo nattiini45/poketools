@@ -1,13 +1,12 @@
 /**
- * Desktop CAPTURE harness additions (maintainer Pokémon core plan
- * R40), used by scripts/capture-route.mjs:
+ * Desktop CAPTURE harness additions, used by scripts/capture-route.mjs:
  *
- *  - `--no-boot` (`attachNoBoot`): attach to the running board server and
+ *  - `--no-boot` (`attachNoBoot`): attach to the running dev server and
  *    never kill or boot one; an unresponsive server fails the run;
  *  - water-body screen rects for the still sidecars (`waterScreenRects`):
  *    each body's surface ellipse (from `__routeWorldWater().bodies[].params`)
- *    projected through the live render camera, so `stills.mjs --mask-water`
- *    can mask the water (R8, K5);
+ *    projected through the live render camera, so a stills analysis can
+ *    mask the water;
  *  - compact per-frame records for `--frames` traces: the beat bus
  *    (`compactBeats`), the core probe actors (`compactCoreActors`) and the
  *    warm-stats per-frame draw calls (`frameDraws`), so K1/K3 can see the
@@ -59,7 +58,7 @@ export async function attachNoBoot(probeFn, url, { port = '?', attempts = NO_BOO
         ? `port ${port} accepted the connection but sent no HTTP response within ${timeoutMs / 1000} s, ${attempts} times (a wedged or still-compiling server)`
         : `the probe of ${url} failed (${kinds.join(', ')})`;
   throw new Error(
-    `--no-boot: ${why}. The harness never kills or boots a server under --no-boot: start the board server (preview_start board-local) or wait for it, warm it (scripts/gauntlet/wait-compile.sh), and re-run this line. Probes: ${kinds.join(', ')}`,
+    `--no-boot: ${why}. The harness never kills or boots a server under --no-boot: start the dev server (node scripts/board-dev-url.mjs prints its address) or wait for it, warm it by loading one page, and re-run this line. Probes: ${kinds.join(', ')}`,
   );
 }
 

@@ -68,7 +68,7 @@ describe('getHybridUsageList search (bilingual prefix)', () => {
   });
 });
 
-describe('getHybridUsageList search: meta-only rows (critique L1)', () => {
+describe('getHybridUsageList search: meta-only rows', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getAggregates).mockResolvedValue([]);

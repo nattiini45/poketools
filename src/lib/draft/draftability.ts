@@ -1,5 +1,5 @@
 /**
- * Viewer draftability (draft-backend §7.4). Client-safe and pure; the server
+ * Viewer draftability. Client-safe and pure; the server
  * builds `viewer.line_status` / `viewer.pick_block` of the snapshot with it,
  * and the draft room can re-evaluate locally between polls.
  *

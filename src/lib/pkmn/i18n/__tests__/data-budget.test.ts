@@ -1,4 +1,4 @@
-// Client bundle budget for the five German name maps (design pkmn-l10n.md §2 "Client budget", critique P3).
+// Client bundle budget for the five German name maps.
 // They are imported statically by the per-kind names/* modules, so every byte ships to browsers.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

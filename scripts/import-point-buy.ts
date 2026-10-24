@@ -64,7 +64,7 @@ function printReport(report: PointBuyImportReport) {
   }
 }
 
-/** The reconciliation artifact (draft-backend §2.5), printed before anything is written. */
+/** The reconciliation artifact, printed before anything is written. */
 function printReconciliation(report: PointBuyImportReport) {
   if (!report.reconciliation) return;
   console.log('');

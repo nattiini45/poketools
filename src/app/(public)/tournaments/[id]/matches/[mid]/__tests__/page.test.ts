@@ -337,7 +337,7 @@ describe('MatchDetailPage: language', () => {
   });
 });
 
-// ─── EPB line keying (draft-backend §16) ────────────────────────────
+// ─── EPB line keying ────────────────────────────────────────────────
 
 describe('MatchDetailPage: EPB rows are keyed by line id', () => {
   const entry = (stage3: string, price: number) => ({

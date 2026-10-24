@@ -13,7 +13,7 @@ interface RouteParams {
 
 /**
  * POST /api/drafts/[id]/participants/[playerId]/penalty — set a slow-draft
- * penalty stage (draft-backend §8.1 #14, §6.5).
+ * penalty stage.
  *
  * Body: `{ stage: 0..5, reason }`; the RPC narrows `stage` to the pool's
  * ladder (`INVALID_CONFIG {field:'stage'}`) and logs `penalty_changed` with the

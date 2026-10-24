@@ -1,5 +1,5 @@
 /**
- * Stage-specific utility matches of a draft line (draft-backend §2.6). Server only:
+ * Stage-specific utility matches of a draft line. Server only:
  * reads Gen 9 learnsets and abilities from `@pkmn/data` (the `'Paldea'`
  * restriction of `src/lib/pkmn/dex.ts`). The client finder derives the same
  * result from the search index; this module exists so the server can report

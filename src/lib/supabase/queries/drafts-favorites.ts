@@ -1,6 +1,6 @@
 /**
- * Per-player favourite draft lines (`draft_line_favorites`, M2; draft-backend
- * §8.1 routes #16/#17; package B-SNAP). Favourites belong to the player, not
+ * Per-player favourite draft lines (`draft_line_favorites`).
+ * Favourites belong to the player, not
  * to a pool, so they survive from the initial draft into the redraft. Private
  * to the player: no cached public read includes them.
  */

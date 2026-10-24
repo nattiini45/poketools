@@ -5,7 +5,7 @@ import { resolveContentLocale, type ContentRef } from '@/i18n/content-locale';
 import type { OverlayConfig } from '@/types/broadcast';
 
 /**
- * The language of an OBS overlay (i18n-core §6.5, critique S12).
+ * The language of an OBS overlay.
  *
  * Overlays are viewerless: a browser source in OBS has no meaningful language
  * cookie, so this never reads it. Order:

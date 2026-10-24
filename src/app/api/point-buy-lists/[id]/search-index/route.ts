@@ -19,7 +19,7 @@ const HASH_PATTERN = /^[0-9a-f]{8}$/;
 const PUBLIC_IMMUTABLE = 'public, max-age=31536000, immutable';
 const PRIVATE_NO_STORE = 'private, no-store';
 
-/** In-process memo of built indexes, keyed `${versionId}:${catalogHash}` (draft-backend §3.2 rule 3). */
+/** In-process memo of built indexes, keyed `${versionId}:${catalogHash}`. */
 const MEMO_LIMIT = 8;
 const memo = new Map<string, Promise<DraftSearchIndex>>();
 
@@ -53,7 +53,7 @@ function listNotFound(): NextResponse<ApiResult<never>> {
 
 /**
  * GET /api/point-buy-lists/[id]/search-index?v=<INDEX_SCHEMA_VERSION>&h=<catalogHash>
- * The draft finder's search index of one list version (draft-frontend §4.1, draft-backend §3).
+ * The draft finder's search index of one list version.
  *
  * Public: no auth required, for list versions bound to at least one season (list data is already public on
  * league pages). A version bound to no season answers 404 unless the live caller is an admin, who gets it

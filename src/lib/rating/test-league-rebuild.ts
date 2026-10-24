@@ -1,6 +1,6 @@
 /**
- * Rating rebuild after a league's test-league flag is set (owner decision
- * 2026-10-19: test leagues stay out of ratings, see rating-scope.ts). The
+ * Rating rebuild after a league's test-league flag is set (test leagues stay
+ * out of ratings, see rating-scope.ts). The
  * seasons PATCH route runs it for every request that sends the flag, changed
  * or not, so sending it again finishes a rebuild that was cut off.
  *

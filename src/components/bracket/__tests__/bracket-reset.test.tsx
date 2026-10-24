@@ -5,7 +5,7 @@
  * The reset slot is only played when the losers-bracket entrant wins the
  * Grand Final. Once the winners-bracket entrant has won it, the slot never
  * fills, so the bracket drops its skeleton instead of showing it under a
- * finished bracket (the PR #65 test pass found it on Type Triangle).
+ * finished bracket (found in a manual test pass on a finished league).
  *
  * The reset is a per-tournament setting (`tournaments.bracket_reset_enabled`,
  * default on); switched off, an empty reset slot is not drawn, but a reset

@@ -1,5 +1,5 @@
 /**
- * Builds the draft search index (draft-frontend §4.1, draft-backend §3.2). Server only: reads Gen 9 data
+ * Builds the draft search index. Server only: reads Gen 9 data
  * from `@pkmn/data` (`new Generations(Dex)` singleton of `src/lib/pkmn/dex.ts`).
  *
  * - Entries come only from `getListEntries` (line ids + league overrides); the list is authoritative for

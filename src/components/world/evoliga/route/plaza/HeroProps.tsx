@@ -542,7 +542,7 @@ function HeroLamps() {
 
 /**
  * The four Meshy hero props from the world manifest as standalone plaza
- * furniture (card C-043): a plinth pair flanking the gate walkway, a
+ * furniture: a plinth pair flanking the gate walkway, a
  * lamp-post pair in the gate forecourt, an LED wayfinding kiosk beside the
  * east board and a crest cartouche above the gate — placements live in
  * `HERO_PROPS` (`src/lib/route-world/layout.ts`). The outer boundary only

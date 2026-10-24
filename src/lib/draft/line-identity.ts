@@ -1,5 +1,5 @@
 /**
- * Evolution Point Buy draft line identity (draft-backend §2.1, critique S6).
+ * Evolution Point Buy draft line identity.
  *
  * A line's stable id is `toID(base) + '--' + toID(final stage)`, e.g.
  * `teddiursa--ursalunabloodmoon`, `flabebe--florges`, `oshawott--samurotthisui`.
@@ -12,7 +12,7 @@
 
 import { toID } from '@/lib/pkmn/i18n/id';
 
-/** The single declaration of LineId; `src/types/draft-queue.ts` re-exports it (critique S8). */
+/** The single declaration of LineId; `src/types/draft-queue.ts` re-exports it. */
 export type LineId = string;
 
 /** Shape of every line id: two folded ids joined by `--`. */
@@ -70,7 +70,7 @@ export function getLineIdentity(basePokemon: string, stage3Pokemon: string | nul
 
 /**
  * English "Base → Stage3" label for logs and audit text only. Every display
- * label goes through `localizeLineLabel` from `src/lib/pkmn/i18n` (critique S13).
+ * label goes through `localizeLineLabel` from `src/lib/pkmn/i18n`.
  */
 export function formatLineLabel(basePokemon: string, stage3Pokemon: string | null): string {
   return stage3Pokemon ? `${basePokemon} → ${stage3Pokemon}` : basePokemon;

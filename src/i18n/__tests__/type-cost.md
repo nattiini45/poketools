@@ -1,4 +1,4 @@
-# i18n type-machinery cost (critique C13)
+# i18n type-machinery cost
 
 Budget: the `Leaves<T>` / `CheckDe` machinery may add at most **+20 %** to
 `tsc --noEmit` wall time. Over budget → simplify before any package starts

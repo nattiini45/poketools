@@ -42,7 +42,7 @@ const OUT_PROPS_DIR = join(OUT_DIR, 'props');
 const MIRROR_DIR = join(ROOT, 'public', 'models', 'world');
 const MIRROR_MANIFEST = join(MIRROR_DIR, 'manifest.json');
 
-/** Post-transform bar (card C-030): ≤ 40 k triangles and ≤ 1.5 MB per prop. */
+/** Post-transform bar: ≤ 40 k triangles and ≤ 1.5 MB per prop. */
 const PROP_TRI_CEILING = 40000;
 const PROP_KB_CEILING = 1500;
 

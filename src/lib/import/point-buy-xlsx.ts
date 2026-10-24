@@ -8,7 +8,7 @@
  *
  * Counts are always derived from the parsed entries (SPEC:47): the overview
  * sheet's totals are compared and reported as warnings, never enforced. Every run
- * also builds the reconciliation report (draft-backend §2.5), which lists the
+ * also builds the reconciliation report, which lists the
  * league overrides (`epb.lineOverrides`) against the sheet values.
  */
 import { getGeneration } from '@/lib/pkmn/dex';
@@ -49,7 +49,7 @@ export interface PointBuyImportReport {
   /** Notes that need no action (e.g. special-rule prose without a machine flag). */
   info: string[];
   version_id: string | null;
-  /** The repeatable validation artifact (draft-backend §2.5); null only when the workbook could not be parsed. */
+  /** The repeatable validation artifact; null only when the workbook could not be parsed. */
   reconciliation: ReconciliationReport | null;
 }
 

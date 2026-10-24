@@ -32,7 +32,7 @@ function EmptyState({ children }: { children: ReactNode }) {
  * page renders only the league name and the line catalog (names, prices,
  * thresholds): the player's token overview is loaded client-side from the
  * guarded route (BE #25), never server-rendered, and no snapshot is read (so
- * nothing can tick, critique B9). No `players` row crosses into the client.
+ * nothing can tick). No `players` row crosses into the client.
  */
 export default async function TokensPage({ params }: PageProps) {
   const { id } = await params;

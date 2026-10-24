@@ -17,7 +17,7 @@ interface TokenOverviews {
 
 /**
  * GET /api/seasons/[id]/tokens — every participant's token overview for season admins
- * (draft-backend §8.1 #25b; FE `TokenAdminSummary`). One set of season reads serves all
+ * (FE `TokenAdminSummary`). One set of season reads serves all
  * participants. Participant rows are reduced to their ids here: no player row leaves the route.
  */
 export async function GET(_request: Request, { params }: RouteParams) {

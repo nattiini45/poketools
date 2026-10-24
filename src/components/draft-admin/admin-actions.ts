@@ -1,7 +1,6 @@
 /**
- * The admin panel's write port (draft-frontend §7.1): one function per admin
- * route of draft-backend §8.1 (#1, #3–#6, #11, #12, #14, #20–#23, #28; #13 is retired) plus the
- * audit read (#15). The only module of `draft-admin` that knows these URLs.
+ * The admin panel's write port: one function per admin draft route plus the
+ * audit read. The only module of `draft-admin` that knows these URLs.
  *
  * Client-safe (plain `fetch`, no React). Failures are values: every API
  * error becomes an `ApiErrorLike` (a network failure becomes

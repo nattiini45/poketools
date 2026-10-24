@@ -1,5 +1,5 @@
 /**
- * Token routes (draft-backend §8.1 #25–#28, §14.1): guards (own-only for players, season admin for
+ * Token routes: guards (own-only for players, season admin for
  * other players and the admin routes), zod 400 `validation_failed`, RPC argument mapping, the season
  * read expiry on success only, and RPC refusals → `errors/draft` code + status + params/detail.
  */

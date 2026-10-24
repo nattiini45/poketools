@@ -113,7 +113,7 @@ describe('DraftToolScreen', () => {
     expect(html).toContain('Select a line on the wall to see it here.');
   });
 
-  it('renders in English without an i18n provider (critique C1)', () => {
+  it('renders in English without an i18n provider', () => {
     const html = renderToStaticMarkup(<DraftToolScreen {...props(snapshot())} />);
     expect(capsTexts(html)).toContain('You are on the clock');
     expect(html).toContain('Already drafted by Misty.');

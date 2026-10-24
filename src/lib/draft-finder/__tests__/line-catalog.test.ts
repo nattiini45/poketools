@@ -71,7 +71,7 @@ describe('buildLineCatalog (draft-frontend §4.8)', () => {
   });
 });
 
-describe('hashCatalog (draft-backend §3.2 rule 3)', () => {
+describe('hashCatalog', () => {
   const base = hashCatalog(ENTRIES);
 
   it('is 8 lowercase hex digits and independent of input order', () => {

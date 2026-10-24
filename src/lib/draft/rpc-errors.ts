@@ -1,5 +1,5 @@
 /**
- * Draft RPC glue (draft-backend §7.8; critique S5). Server only.
+ * Draft RPC glue. Server only.
  *
  * Every queue-engine mutation and read is one plpgsql function (M5–M7). A rule
  * violation is a `RAISE EXCEPTION '<CODE>' USING ERRCODE = 'P0001', DETAIL =

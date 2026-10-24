@@ -1,6 +1,5 @@
 /**
- * League-level threshold overrides on top of the imported point-buy list
- * (draft-backend §2.2, BR-2, critique B19). Client-safe. The overrides are the
+ * League-level threshold overrides on top of the imported point-buy list. Client-safe. The overrides are the
  * active format pack's `epb.lineOverrides` (`@/lib/format-pack`).
  *
  * The list rows stay exactly as imported; `getListEntries` and the other read

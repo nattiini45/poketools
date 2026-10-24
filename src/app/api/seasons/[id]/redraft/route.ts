@@ -90,7 +90,7 @@ export async function GET(
  * Evolution Point Buy (migration 20261018140300_epb_retire_trades cancelled
  * pending requests and dropped the execute RPC; `redraft_trade_requests` stays
  * as a read-only archive), and the former free swap was replaced by the
- * secret-drop redraft (`/api/drafts/[id]/redraft/**`, draft-backend §8.1 #31).
+ * secret-drop redraft (`/api/drafts/[id]/redraft/**`).
  *
  * The body is never read or parsed, so an empty or malformed body cannot turn
  * the retired answer into a 500. Authentication still comes first, so an

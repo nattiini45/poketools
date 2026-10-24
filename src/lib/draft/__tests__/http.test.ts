@@ -1,4 +1,4 @@
-/** `draftErrorResponse` (draft-backend §7.8, §9; B-SNAP). */
+/** `draftErrorResponse`. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { draftErrorResponse } from '@/lib/draft/http';

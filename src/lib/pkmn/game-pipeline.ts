@@ -74,7 +74,7 @@ export interface EnteredGameInput extends GamePipelineBase {
 }
 
 /**
- * A result read from a Showdown replay (owner decision 2026-10-20, audit lead F1). There is no
+ * A result read from a Showdown replay. There is no
  * winner or stats field: both come from `replay`, the same fetched log its hash was computed
  * from, and the hash is stored on the game row in the insert that records the result. The caller
  * only says which registered player played each side.
@@ -231,15 +231,14 @@ async function discardUnfinishedGame(gameId: string): Promise<void> {
  * Used by POST /api/parse-replay, POST /api/admin/matches/[id]/replay-import
  * (both `ReplayGameInput`) and POST /api/manual-result (`EnteredGameInput`).
  *
- * Replay binding (audit lead F1, owner decision 2026-10-20): a replay result's
+ * Replay binding: a replay result's
  * winner and stats come from its `BoundReplay`, and the game row stores that
  * replay's hash in the same insert. A battle already bound to any game, in any
  * match, is refused with 409 `replay_already_recorded` (pre-check here, then
  * the unique index on `games.replay_hash` at the insert, race-safe); the
  * per-match URL check (`duplicate_replay`) stays in front of it.
  *
- * Evolution Point Buy progress is NOT applied here (owner decision 2026-10-20 on
- * audit lead CF-07): a game's real kills are credited when its match reaches
+ * Evolution Point Buy progress is NOT applied here: a game's real kills are credited when its match reaches
  * `completed`, once per game (`games.evolution_applied_at`), by the finalize
  * step `epb_real_kills` (src/lib/match/finalize.ts). Aggregates stay here.
  *
@@ -370,7 +369,7 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
 
   // 3b. Evolutions. EPB: nothing here; the game's real kills are credited
   // when the match is completed (finalize step `epb_real_kills`), never for a
-  // result that is still pending confirmation or disputed (CF-07). Do NOT run
+  // result that is still pending confirmation or disputed. Do NOT run
   // checkPlayerEvolutions for EPB: it re-derives total_kos from battle_stats
   // alone and would erase token/cosmo contributions. Legacy evo-leagues keep
   // their battle_stats re-sum here.
@@ -716,8 +715,8 @@ async function recheckEvolutions(
 
 /**
  * EPB evolution after an admin game edit (`editGame` step 7). Real kills are
- * credited per game only while its match is completed (CF-07,
- * `games.evolution_applied_at`), and an edit moves a completed match out of
+ * credited per game only while its match is completed
+ * (`games.evolution_applied_at`), and an edit moves a completed match out of
  * `completed` (`reevaluateMatchStatus`, step 6), so:
  *   1. a credited game (marker set in `game`, the read made before the edit's
  *      writes) is debited by its credit ledger (`games.evolution_credits`;

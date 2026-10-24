@@ -14,7 +14,7 @@ import {
   type DraftErrorCode,
 } from '../errors';
 
-/** Every code of draft-backend §9.1 and §9.2, plus the G0-ERR seed. */
+/** Every draft error code, plus the shared seed codes. */
 const DESIGN_CODES = [
   // G0-ERR seed
   'POOL_NOT_ACTIVE', 'DRAFT_COMPLETE', 'NOT_YOUR_TURN', 'POKEMON_TAKEN', 'INSUFFICIENT_BUDGET', 'LINE_TAKEN',

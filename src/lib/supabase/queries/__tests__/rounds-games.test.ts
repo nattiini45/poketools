@@ -423,7 +423,7 @@ describe('queries/games', () => {
       expect(mockBuilder.insert).toHaveBeenLastCalledWith(expect.objectContaining({ replay_hash: null }));
     });
 
-    it('maps a unique violation of games_replay_hash_key to a 409 replay_already_recorded (race-safe F1)', async () => {
+    it('maps a unique violation of games_replay_hash_key to a 409 replay_already_recorded (race-safe)', async () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const pgError = {
         code: '23505',
@@ -622,7 +622,7 @@ describe('queries/games', () => {
       ).rejects.toThrow('ins fail');
     });
 
-    it('maps the one-row-per-Pokémon unique index to a 409 battle_stats_duplicate_pokemon (CF-06)', async () => {
+    it('maps the one-row-per-Pokémon unique index to a 409 battle_stats_duplicate_pokemon', async () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const pgError = {
         code: '23505',

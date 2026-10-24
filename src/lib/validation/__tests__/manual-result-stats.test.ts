@@ -65,7 +65,7 @@ describe('manualResultSchema pokemon_stats', () => {
   });
 });
 
-describe('replayImportSchema (side assignment only, F1)', () => {
+describe('replayImportSchema (side assignment only)', () => {
   const HASH = 'ab'.repeat(32);
   const importBody = (overrides: Record<string, unknown> = {}) => ({
     replay_url: 'https://replay.pokemonshowdown.com/gen9-1',
@@ -94,7 +94,7 @@ describe('replayImportSchema (side assignment only, F1)', () => {
   });
 });
 
-describe('adminGameEditSchema battle_stats (CF-06)', () => {
+describe('adminGameEditSchema battle_stats', () => {
   const row = (player_id: string, pokemon_name: string) => ({ player_id, pokemon_name, kos_dealt: 1 });
 
   it('accepts one row per Pokémon per player, mirrors included', () => {

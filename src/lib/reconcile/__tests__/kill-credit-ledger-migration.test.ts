@@ -1,6 +1,6 @@
 /**
  * Pins the shape of supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql
- * (PR #12 review on CF-07). The functions run only in Postgres; their behaviour was
+ * (the per-game kill-credit ledger). The functions run only in Postgres; their behaviour was
  * exercised against the local stack in a rolled-back transaction (credit → ledger,
  * ledger debit to the tracker that got the credit, retired tracker skipped, legacy
  * p_debits path, stale fence, match_changed, validation refusals, grants). These

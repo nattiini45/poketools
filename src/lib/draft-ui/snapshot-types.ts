@@ -1,5 +1,5 @@
 /**
- * Draft DTOs and unions for the draft UI (draft-frontend §2.4; critique S8).
+ * Draft DTOs and unions for the draft UI.
  * Re-exports only: `src/types/draft-queue.ts` (owner DC-0) is the single
  * declaration. Nothing is declared here.
  */

@@ -42,7 +42,7 @@ async function deleteUndoneTracker(
  * POST /api/drafts/[id]/undo — undo the last pick (admin only; legacy pools).
  *
  * Queue-engine pools answer `409 USE_VOID_PICK`: they correct picks with the
- * audited void/correct routes (draft-backend §8.1 #24). Legacy failures carry
+ * audited void/correct routes. Legacy failures carry
  * an `errors/draft` code next to their unchanged English text (§9.2).
  */
 export async function POST(_request: NextRequest, { params }: RouteParams) {

@@ -13,7 +13,7 @@ export type OverlaySearchParams = Record<string, string | string[] | undefined>;
 
 export interface DraftOverlayContext {
   config: OverlayConfig;
-  /** `resolveOverlayLocale`: `?lang=` first, then the pool's league language, never the cookie (critique S12). */
+  /** `resolveOverlayLocale`: `?lang=` first, then the pool's league language, never the cookie. */
   locale: Locale;
   /** Line id → English `[base, final stage]` (stage 3, else stage 2) of the bound list; `{}` for non-EPB pools. */
   lines: OverlayLines;

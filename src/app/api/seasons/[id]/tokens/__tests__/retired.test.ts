@@ -1,5 +1,5 @@
 /**
- * Retired endpoints (draft-backend §8.1 #29, #30): `draft-tokens` and `kill-tokens` answer
+ * Retired endpoints (#30): `draft-tokens` and `kill-tokens` answer
  * `410 ENDPOINT_REPLACED` for every caller and touch no data.
  */
 import { describe, expect, it, vi } from 'vitest';

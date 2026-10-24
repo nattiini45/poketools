@@ -1,5 +1,5 @@
 /**
- * Token rules (draft-backend §7.5, §6.9, §10.3; SPEC Prompt 7 B–C; BR-4, BR-5).
+ * Token rules.
  * Client-safe and pure. The SQL twin of the Draft Kill Token rules is
  * `epb_purchase_draft_token` (M7); `draftKillLineRefusal` checks in its order.
  *
@@ -40,7 +40,7 @@ export type DraftKillWindow = 'before' | 'open' | 'closed';
 /**
  * Purchase window: open iff the initial draft is complete AND (an explicit `closesAt`
  * is still in the future, or — without one — no league match result is confirmed yet;
- * the default cutoff is the first confirmed result). SQL twin: §6.9 (critique B10).
+ * the default cutoff is the first confirmed result). SQL twin: §6.9.
  * An unparsable `closesAt` counts as closed.
  */
 export function draftKillTokenWindow(i: {

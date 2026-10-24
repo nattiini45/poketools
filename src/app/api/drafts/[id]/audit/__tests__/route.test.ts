@@ -1,5 +1,5 @@
 /**
- * GET /api/drafts/[id]/audit (draft-backend §8.1 #15, §10.4; B-ADM) with the
+ * GET /api/drafts/[id]/audit with the
  * real `listDraftAudit` over a fake Supabase client (no DB).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';

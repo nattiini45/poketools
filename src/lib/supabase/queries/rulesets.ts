@@ -212,7 +212,7 @@ function isPlayoffBracketType(bracketType: string | null | undefined): boolean {
  *
  * The explicit precedence prevents a base tier ruleset (e.g. standard
  * 'Gen 9 RU') from silently overriding a tournament's dedicated custom
- * league ruleset (e.g. 'Type Triangle League'), while still respecting
+ * league ruleset, while still respecting
  * intentional per-stage ruleset differences (group vs playoffs).
  *
  * If `season` is omitted we fall straight through to (1) and (4).
@@ -251,7 +251,7 @@ export async function resolveEffectiveRuleset(
   // 3. Name-based fallback: a ruleset whose `name` matches the season name
   //    AND carries custom constraints. This catches the data shape where the
   //    season/tournament both reference a base tier ruleset but a separate
-  //    custom ruleset exists with the league's name (Type Triangle League).
+  //    custom ruleset exists with the league's name.
   //
   //    Skipped for playoff brackets (single_elim / double_elim / swiss) so a
   //    season's playoffs can keep its own base-tier ruleset (e.g. "fully RU"

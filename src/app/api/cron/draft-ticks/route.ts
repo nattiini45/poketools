@@ -8,7 +8,7 @@ import { secretsEqual } from '@/lib/utils/crypto';
 import { formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
 
-/** Response of one cron run (draft-backend §8.1 #32). */
+/** Response of one cron run. */
 interface DraftTicksResult {
   /** Queue pools ticked. */
   pools: number;
@@ -50,7 +50,7 @@ function tickCounts(raw: unknown): {
 }
 
 /**
- * Draft ticker (draft-backend §11.2): resolves overdue pick clocks and passed
+ * Draft ticker: resolves overdue pick clocks and passed
  * redraft submission deadlines in every open queue pool, then sends the
  * claimed Discord events (each exactly once, claim markers in SQL). Protected
  * like the other cron routes: `Authorization: Bearer $CRON_SECRET`.
