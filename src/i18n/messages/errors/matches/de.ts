@@ -46,6 +46,17 @@ export default defineDe<typeof en>()({
     one: 'Das Ergebnis wurde bestätigt, aber {count} Folgeschritt ist fehlgeschlagen. Der Fehler wurde für die Admins protokolliert; sichere Schritte werden automatisch wiederholt.',
     other: 'Das Ergebnis wurde bestätigt, aber {count} Folgeschritte sind fehlgeschlagen. Der Fehler wurde für die Admins protokolliert; sichere Schritte werden automatisch wiederholt.',
   },
+  match_state_changed:
+    'Das Spiel hat sich geändert, während du es bearbeitet hast; deine Änderung wurde nicht übernommen. Lade die Seite neu und prüfe das Spiel.',
+  match_schedule_completed: 'Ein abgeschlossenes Spiel lässt sich nicht neu ansetzen. Öffne es zuerst wieder.',
+  match_reopen_downstream_played: {
+    one: 'Dieses Spiel lässt sich nicht wieder öffnen: {count} späteres Spiel im Turnierbaum wurde schon gespielt. Setze dieses Spiel zuerst zurück.',
+    other: 'Dieses Spiel lässt sich nicht wieder öffnen: {count} spätere Spiele im Turnierbaum wurden schon gespielt. Setze diese Spiele zuerst zurück.',
+  },
+  match_reopen_incomplete: {
+    one: 'Das Spiel wurde wieder geöffnet, aber {count} Folgeschritt ist fehlgeschlagen. Der Fehler wurde protokolliert; ein Site-Admin kann die Daten mit dem Datenabgleich in den Admin-Datenwerkzeugen reparieren.',
+    other: 'Das Spiel wurde wieder geöffnet, aber {count} Folgeschritte sind fehlgeschlagen. Der Fehler wurde protokolliert; ein Site-Admin kann die Daten mit dem Datenabgleich in den Admin-Datenwerkzeugen reparieren.',
+  },
   manual_result_moments_not_saved: {
     one: 'Die Partie wurde eingetragen, aber {count} markierter Moment konnte nicht gespeichert werden. Der Fehler wurde protokolliert.',
     other: 'Die Partie wurde eingetragen, aber {count} markierte Momente konnten nicht gespeichert werden. Der Fehler wurde protokolliert.',

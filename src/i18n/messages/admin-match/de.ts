@@ -1,0 +1,146 @@
+import { defineDe } from '@/i18n/define';
+import type en from './en';
+
+export default defineDe<typeof en>()({
+  header: {
+    league: 'Liga',
+    standalone: 'Eigenständiges Turnier',
+    phase: 'Phase',
+    round: 'Runde',
+    roundValue: 'Runde {number} · {name}',
+    bestOf: 'Format',
+    scheduled: 'Angesetzt für',
+    notScheduled: 'Nicht angesetzt',
+    deadline: 'Rundenfrist',
+    noDeadline: 'Keine Frist gesetzt',
+    overdue: 'Überfällig',
+    status: 'Status',
+    submitter: 'Gemeldet von',
+    noSubmitter: 'Noch kein Ergebnis gemeldet',
+    autoConfirm: 'Automatische Bestätigung',
+    noAutoConfirm: 'Keine automatische Bestätigung: manuelle Prüfung',
+    players: 'Spieler',
+    publicPage: 'Öffentliche Spielseite',
+    matchesList: 'Zurück zu den Spielen',
+    timeZoneHint: 'Zeiten werden in deiner Zeitzone angezeigt ({zone}).',
+  },
+  schedule: {
+    title: 'Termin',
+    hint: 'Lege den Termin dieses Spiels fest, ändere ihn oder entferne ihn.',
+    inputLabel: 'Termin',
+    instantLabel: 'Ergibt die Zeit',
+    browserZoneHint: 'Das Feld nutzt die Zeitzone deines Browsers.',
+    save: 'Termin speichern',
+    clear: 'Termin entfernen',
+    current: 'Aktueller Termin',
+    completedNote: 'Dieses Spiel ist abgeschlossen, daher lässt sich der Termin nicht mehr ändern. Öffne es zuerst wieder.',
+    pendingProposals: {
+      one: '{count} offener Terminvorschlag der Spieler wird beim Speichern abgebrochen.',
+      other: '{count} offene Terminvorschläge der Spieler werden beim Speichern abgebrochen.',
+    },
+    afterDeadline: 'Dieser Termin liegt nach der Rundenfrist.',
+    proposalsNotCancelled:
+      'Der Termin wurde gespeichert, aber die offenen Terminvorschläge der Spieler konnten nicht abgebrochen werden. Ein Spieler kann noch einen annehmen und das Spiel verschieben.',
+    saved: 'Der Termin des Spiels wurde gespeichert.',
+    cleared: 'Der Termin des Spiels wurde entfernt.',
+    unchanged: 'Das Spiel hat bereits diesen Termin. Es wurde nichts geändert.',
+    failed: 'Der Termin des Spiels konnte nicht gespeichert werden.',
+  },
+  dispute: {
+    title: 'Einspruch',
+    disputedBy: 'Beanstandet von',
+    byAdmin: 'Admin',
+    disputedAt: 'Beanstandet',
+    details: 'Details zum Einspruch',
+    reason: 'Begründung',
+    noReason: 'Keine Begründung angegeben',
+    notRecorded:
+      'Die Details dieses Einspruchs wurden nicht erfasst. Einsprüche aus der Zeit vor der Erfassung von Begründungen haben keine.',
+    reportedWinner: 'Gemeldeter Sieger',
+    noWinner: 'Kein Sieger gemeldet',
+    reportedBy: 'Ergebnis gemeldet von',
+    unknownActor: 'Unbekannt',
+  },
+  history: {
+    title: 'Verlauf',
+    empty: 'Für dieses Spiel wurde noch nichts aufgezeichnet.',
+    loadMore: 'Mehr laden',
+    loading: 'Wird geladen …',
+    loadFailed: 'Der Verlauf konnte nicht geladen werden.',
+    retry: 'Erneut versuchen',
+    showing: '{shown} von {total} angezeigt',
+    unknownActor: 'Unbekannt',
+    reason: 'Begründung',
+    change: {
+      status: 'Status',
+      winner: 'Sieger',
+      scheduled: 'Termin',
+      notes: 'Notizen',
+      cleared: 'keine Angabe',
+    },
+  },
+  reopen: {
+    title: 'Spiel wieder öffnen',
+    intro:
+      'Beim Wiederöffnen wird das Ergebnis zurückgenommen und das Spiel geht zurück auf „Läuft“, ohne zurückgesetzt zu werden.',
+    button: 'Spiel wieder öffnen',
+    dialogTitle: 'Dieses Spiel wieder öffnen?',
+    dialogMessage: 'Das Spiel geht zurück auf „Läuft“.',
+    keepsGames: 'Alle Partien und ihre Statistiken bleiben erhalten. Sieger und Timer für die automatische Bestätigung werden gelöscht.',
+    effects: {
+      completed:
+        'Ratings, Serien und Signaturen beider Spieler sowie ihr Entwicklungsfortschritt werden neu berechnet. Leere Plätze im Turnierbaum, die dieses Ergebnis angelegt hat, werden entfernt.',
+      pending: 'Das Ergebnis ist noch nicht bestätigt, daher ändert sich sonst nichts.',
+      disputed: 'Der Einspruch wird zurückgenommen, sonst ändert sich nichts.',
+    },
+    notUndone: 'Bereits vergebene Erfolge bleiben bestehen, und ein bereits gesendeter Discord-Beitrag bleibt stehen.',
+    finishHint: 'Um das Spiel wieder abzuschließen, nutze das Formular „Admin-Eingriff“ oder bearbeite eine Partie.',
+    reasonLabel: 'Grund für das Wiederöffnen',
+    reasonPlaceholder: 'Warum wird dieses Spiel wieder geöffnet?',
+    confirm: 'Spiel wieder öffnen',
+    success: 'Das Spiel wurde wieder geöffnet.',
+    failed: 'Das Spiel konnte nicht wieder geöffnet werden.',
+  },
+  reason: {
+    counter: '{count} / {max}',
+    required: 'Ein Grund ist erforderlich.',
+  },
+  impact: {
+    loading: 'Es wird geprüft, was sich ändert …',
+    loadFailed:
+      'Was das Zurücksetzen ändert, konnte nicht geprüft werden. Du kannst das Spiel trotzdem zurücksetzen; hängen spätere Spiele daran, wirst du als Nächstes dazu gefragt.',
+    gamesToDelete: {
+      one: '{count} Partie und ihre Statistiken werden gelöscht.',
+      other: '{count} Partien und ihre Statistiken werden gelöscht.',
+    },
+    ratingsRebuilt: 'Ratings, Serien und Signaturen beider Spieler werden neu berechnet.',
+    downstreamHeading: 'Spätere Spiele im Turnierbaum mit Ergebnissen, die ebenfalls zurückgesetzt werden:',
+    downstreamItem: '{player1} vs {player2} ({round}, {status})',
+    resetAlsoLater: {
+      one: '{count} späteres Spiel ebenfalls zurücksetzen',
+      other: '{count} spätere Spiele ebenfalls zurücksetzen',
+    },
+    afterDelete: {
+      scheduled: 'Es bleiben keine Partien übrig, daher geht das Spiel zurück auf „Angesetzt“.',
+      in_progress: 'Das Spiel läuft weiter.',
+      pending_confirmation:
+        'Die übrigen Partien entscheiden das Spiel weiterhin, daher geht es auf „Wartet auf Bestätigung“.',
+    },
+    deleteRatingsRebuilt: 'Ratings, Serien und Signaturen beider Spieler werden neu berechnet.',
+    deleteGameLine: {
+      one: 'Danach bleibt {count} Partie übrig.',
+      other: 'Danach bleiben {count} Partien übrig.',
+    },
+  },
+  actions: {
+    resetReasonLabel: 'Grund für das Zurücksetzen',
+    resetReasonPlaceholder: 'Warum wird dieses Spiel zurückgesetzt?',
+    deleteReasonLabel: 'Grund für das Löschen der Partie',
+    deleteReasonPlaceholder: 'Warum wird diese Partie gelöscht?',
+    cascadeMessage: {
+      one: '{count} späteres Spiel im Turnierbaum hat Ergebnisse oder läuft bereits. Beim Zurücksetzen wird es samt Ergebnissen, Ratings und Aggregaten ebenfalls zurückgesetzt. Das lässt sich nicht rückgängig machen.',
+      other:
+        '{count} spätere Spiele im Turnierbaum haben Ergebnisse oder laufen bereits. Beim Zurücksetzen werden sie samt Ergebnissen, Ratings und Aggregaten ebenfalls zurückgesetzt. Das lässt sich nicht rückgängig machen.',
+    },
+  },
+});

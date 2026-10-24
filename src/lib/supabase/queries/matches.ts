@@ -1049,6 +1049,30 @@ export async function updateMatchSchedule(
 }
 
 /**
+ * Admin schedule change: set or clear `scheduled_at` while the match is not
+ * completed. Returns null when the match is completed or gone, so a race with
+ * a completion writes nothing. `updateMatchSchedule` stays unguarded for the
+ * proposal accept flow.
+ */
+export async function updateOpenMatchSchedule(
+  id: string,
+  scheduledAt: string | null
+): Promise<MatchWithPlayers | null> {
+  assertValidUuid(id, 'match id');
+
+  const { data, error } = await supabase
+    .from('matches')
+    .update({ scheduled_at: scheduledAt })
+    .eq('id', id)
+    .neq('status', 'completed')
+    .select(MATCH_WITH_PLAYERS_SELECT)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? toMatchWithPlayers(data as MatchWithPlayersRow) : null;
+}
+
+/**
  * A non-completing status change and its confirmation timing, written as one
  * row update. `undefined` leaves a field as stored; `null` clears it.
  * Completion goes through `updateMatchStatus` (it stamps date_played /
@@ -1062,6 +1086,7 @@ export interface MatchStatusTransition {
   submitterId?: string | null;
   autoConfirmAt?: string | null;
   confirmedAt?: string | null;
+  datePlayed?: string | null;
 }
 
 /**
@@ -1082,6 +1107,7 @@ export async function transitionMatchStatus(
   if (transition.submitterId !== undefined) updates.submitter_id = transition.submitterId;
   if (transition.autoConfirmAt !== undefined) updates.auto_confirm_at = transition.autoConfirmAt;
   if (transition.confirmedAt !== undefined) updates.confirmed_at = transition.confirmedAt;
+  if (transition.datePlayed !== undefined) updates.date_played = transition.datePlayed;
 
   const { data, error } = await supabase
     .from('matches')

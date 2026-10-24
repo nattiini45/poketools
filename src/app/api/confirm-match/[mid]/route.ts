@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    const { action, winner_id: requestedWinnerId, notes } = parsedBody.data;
+    const { action, winner_id: requestedWinnerId, notes, reason } = parsedBody.data;
 
     const match = await getMatchById(mid);
 
@@ -103,20 +103,60 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       mid,
       targetStatus,
       targetStatus === 'completed' ? winnerId : undefined,
-      player.playerId,
+      // A dispute keeps the original reporter; the disputer is recorded in the
+      // match.dispute audit event instead.
+      targetStatus === 'completed' ? player.playerId : undefined,
       notes,
       previousStatus
     );
 
     if (!updated) {
       const current = await getMatchById(mid);
+      if (hasAdminAccess) {
+        // An admin acts on what the page showed; if the match moved on, say so
+        // instead of reporting a success that wrote nothing.
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: 'The match changed while you were editing it; your change was not applied. Reload and review it.',
+            code: 'match_state_changed',
+          },
+          { status: 409 }
+        );
+      }
       return NextResponse.json<ApiResult<Match>>({
         success: true,
         data: current ?? match,
       });
     }
 
-    if (hasAdminAccess && (requestedWinnerId || notes || match.status === 'disputed')) {
+    if (targetStatus === 'disputed') {
+      // The dispute reason is audit data, never match.notes. A player gives it
+      // as `reason`; an admin may give it as `reason` or as the notes text.
+      const disputeReason = reason ?? (hasAdminAccess ? notes || undefined : undefined);
+      logAuditEvent({
+        actor_id: player.playerId,
+        actor_name: player.name,
+        action: 'match.dispute',
+        resource_type: 'match',
+        resource_id: mid,
+        resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+        changes: {
+          status: { before: previousStatus, after: 'disputed' },
+        },
+        metadata: {
+          tournament_id: match.tournament_id,
+          ...(disputeReason ? { reason: disputeReason } : {}),
+          by_admin: hasAdminAccess,
+        },
+      });
+    }
+
+    if (
+      targetStatus === 'completed' &&
+      hasAdminAccess &&
+      (requestedWinnerId || notes || match.status === 'disputed')
+    ) {
       logAuditEvent({
         actor_id: player.playerId,
         actor_name: player.name,

@@ -1,0 +1,147 @@
+/**
+ * Namespace `admin-match`: the context, schedule, dispute, history and reopen
+ * sections of `/admin/matches/[id]`, and the reason and impact text of its
+ * reset and delete-game dialogs. The page's existing chrome (status, winner,
+ * override form, recalculation summary) stays in `admin-core`.
+ */
+export default {
+  header: {
+    league: 'League',
+    standalone: 'Standalone tournament',
+    phase: 'Phase',
+    round: 'Round',
+    roundValue: 'Round {number} · {name}',
+    bestOf: 'Format',
+    scheduled: 'Scheduled for',
+    notScheduled: 'Not scheduled',
+    deadline: 'Round deadline',
+    noDeadline: 'No deadline set',
+    overdue: 'Overdue',
+    status: 'Status',
+    submitter: 'Reported by',
+    noSubmitter: 'No result reported yet',
+    autoConfirm: 'Auto-confirms',
+    noAutoConfirm: 'No auto-confirm: manual review',
+    players: 'Players',
+    publicPage: 'Public match page',
+    matchesList: 'Back to matches',
+    timeZoneHint: 'Times are shown in your time zone ({zone}).',
+  },
+  schedule: {
+    title: 'Schedule',
+    hint: 'Set, change or clear the time this match is scheduled for.',
+    inputLabel: 'Scheduled time',
+    instantLabel: 'Resulting time',
+    browserZoneHint: 'The field uses your browser time zone.',
+    save: 'Save time',
+    clear: 'Clear time',
+    current: 'Current time',
+    completedNote: 'This match is completed, so its time cannot be changed. Reopen it first.',
+    pendingProposals: {
+      one: '{count} open time proposal from the players will be cancelled when you save.',
+      other: '{count} open time proposals from the players will be cancelled when you save.',
+    },
+    afterDeadline: 'This time is after the round deadline.',
+    proposalsNotCancelled:
+      'The time was saved, but the open time proposals from the players could not be cancelled. A player can still accept one and move the match.',
+    saved: 'The match time was saved.',
+    cleared: 'The match time was cleared.',
+    unchanged: 'The match already has this time. Nothing was changed.',
+    failed: 'The match time could not be saved.',
+  },
+  dispute: {
+    title: 'Dispute',
+    disputedBy: 'Disputed by',
+    byAdmin: 'Admin',
+    disputedAt: 'Disputed',
+    details: 'Dispute details',
+    reason: 'Reason',
+    noReason: 'No reason given',
+    notRecorded:
+      'The details of this dispute were not recorded. Disputes raised before reasons were tracked have none.',
+    reportedWinner: 'Reported winner',
+    noWinner: 'No winner reported',
+    reportedBy: 'Result reported by',
+    unknownActor: 'Unknown',
+  },
+  history: {
+    title: 'History',
+    empty: 'Nothing has been recorded for this match yet.',
+    loadMore: 'Load more',
+    loading: 'Loading …',
+    loadFailed: 'The history could not be loaded.',
+    retry: 'Retry',
+    showing: 'Showing {shown} of {total}',
+    unknownActor: 'Unknown',
+    reason: 'Reason',
+    change: {
+      status: 'Status',
+      winner: 'Winner',
+      scheduled: 'Scheduled time',
+      notes: 'Notes',
+      cleared: 'none',
+    },
+  },
+  reopen: {
+    title: 'Reopen match',
+    intro: 'Reopening withdraws the result and puts the match back to in progress, without resetting it.',
+    button: 'Reopen match',
+    dialogTitle: 'Reopen this match?',
+    dialogMessage: 'The match goes back to in progress.',
+    keepsGames: 'All games and their stats are kept. The winner and the auto-confirm timer are cleared.',
+    effects: {
+      completed:
+        'Ratings, streaks and signatures of both players and their evolution progress are rebuilt, and empty bracket slots that this result created are removed.',
+      pending: 'The result has not been confirmed yet, so nothing else changes.',
+      disputed: 'The dispute is withdrawn and nothing else changes.',
+    },
+    notUndone: 'Achievements already granted are kept, and a Discord post that was already sent stays.',
+    finishHint: 'To finish the match again, use the Admin Override form or edit a game.',
+    reasonLabel: 'Reason for reopening',
+    reasonPlaceholder: 'Why is this match being reopened?',
+    confirm: 'Reopen match',
+    success: 'The match was reopened.',
+    failed: 'The match could not be reopened.',
+  },
+  reason: {
+    counter: '{count} / {max}',
+    required: 'A reason is required.',
+  },
+  impact: {
+    loading: 'Checking what this will change …',
+    loadFailed:
+      'What this reset will change could not be checked. You can still reset the match; if later matches depend on it, you will be asked about them next.',
+    gamesToDelete: {
+      one: '{count} game and its stats will be deleted.',
+      other: '{count} games and their stats will be deleted.',
+    },
+    ratingsRebuilt: 'Ratings, streaks and signatures of both players are rebuilt.',
+    downstreamHeading: 'Later bracket matches with results that will be reset as well:',
+    downstreamItem: '{player1} vs {player2} ({round}, {status})',
+    resetAlsoLater: {
+      one: 'Reset {count} later match too',
+      other: 'Reset {count} later matches too',
+    },
+    afterDelete: {
+      scheduled: 'No games remain, so the match goes back to scheduled.',
+      in_progress: 'The match stays in progress.',
+      pending_confirmation: 'The remaining games still decide the match, so it goes to awaiting confirmation.',
+    },
+    deleteRatingsRebuilt: 'Ratings, streaks and signatures of both players are rebuilt.',
+    deleteGameLine: {
+      one: '{count} game remains afterwards.',
+      other: '{count} games remain afterwards.',
+    },
+  },
+  actions: {
+    resetReasonLabel: 'Reason for the reset',
+    resetReasonPlaceholder: 'Why is this match being reset?',
+    deleteReasonLabel: 'Reason for deleting the game',
+    deleteReasonPlaceholder: 'Why is this game being deleted?',
+    cascadeMessage: {
+      one: '{count} later bracket match has results or is in progress. Resetting this match also resets it, together with its results, ratings and aggregates. This cannot be undone.',
+      other:
+        '{count} later bracket matches have results or are in progress. Resetting this match also resets them, together with their results, ratings and aggregates. This cannot be undone.',
+    },
+  },
+} as const;

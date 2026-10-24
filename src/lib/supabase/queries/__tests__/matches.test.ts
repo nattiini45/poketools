@@ -45,6 +45,7 @@ import {
   createMatchBatch,
   updateMatchStatus,
   transitionMatchStatus,
+  updateOpenMatchSchedule,
   listMatchesNeedingFinalize,
   markMatchFinalized,
   updateMatchPlayers,
@@ -505,6 +506,22 @@ describe('transitionMatchStatus (M3: one row update)', () => {
     expect('auto_confirm_at' in updateArg).toBe(false);
   });
 
+  it('writes date_played only when datePlayed is given (null clears it)', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { ...MATCH_ROW, status: 'in_progress' }, error: null });
+
+    await transitionMatchStatus('m1', { expectedStatus: 'completed', status: 'in_progress', datePlayed: null });
+    expect(mockBuilder.update.mock.calls[0][0]).toEqual({
+      status: 'in_progress',
+      finalized_at: null,
+      date_played: null,
+    });
+
+    mockBuilder.update.mockClear();
+    await transitionMatchStatus('m1', { expectedStatus: 'completed', status: 'in_progress' });
+    const arg = mockBuilder.update.mock.calls[0][0] as Record<string, unknown>;
+    expect('date_played' in arg).toBe(false);
+  });
+
   it('returns null and writes nothing else when the compare-and-set misses', async () => {
     mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
 
@@ -535,6 +552,38 @@ describe('transitionMatchStatus (M3: one row update)', () => {
       transitionMatchStatus('nope', { expectedStatus: 'in_progress', status: 'pending_confirmation' })
     ).rejects.toThrow('Invalid match id');
     expect(mockBuilder.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateOpenMatchSchedule', () => {
+  it('updates scheduled_at only for a match that is not completed', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({
+      data: { ...MATCH_WITH_PLAYERS_ROW, status: 'scheduled', scheduled_at: '2026-10-24T10:00:00+02:00' },
+      error: null,
+    });
+
+    const result = await updateOpenMatchSchedule('m1', '2026-10-24T10:00:00+02:00');
+
+    expect(mockBuilder.update).toHaveBeenCalledWith({ scheduled_at: '2026-10-24T10:00:00+02:00' });
+    expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'm1');
+    expect(mockBuilder.neq).toHaveBeenCalledWith('status', 'completed');
+    expect(result?.player_1_name).toBe('Alice');
+  });
+
+  it('clears the time with null', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { ...MATCH_WITH_PLAYERS_ROW, status: 'scheduled' }, error: null });
+    await updateOpenMatchSchedule('m1', null);
+    expect(mockBuilder.update).toHaveBeenCalledWith({ scheduled_at: null });
+  });
+
+  it('returns null when no row matched (completed or gone)', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+    await expect(updateOpenMatchSchedule('m1', null)).resolves.toBeNull();
+  });
+
+  it('throws on a write error', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: new Error('schedule err') });
+    await expect(updateOpenMatchSchedule('m1', null)).rejects.toThrow('schedule err');
   });
 });
 
