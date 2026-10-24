@@ -8,6 +8,14 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Fixed
+
+- **Completed-match reads past 1,000 rows.** The completed-match reads behind standings, pairing history, head-to-head
+  and insights inputs, profile standings, and the set of players with completed matches now page through the full
+  result in 1,000-row steps instead of stopping at the first 1,000 rows. The participants batch used by profiles and the point-buy list entries page the same way. A
+  read that reaches its hard bound (20,000 rows) logs a warning. Results of 1,000 rows or fewer are unchanged. A new
+  test rejects query reads that ask for more than 1,000 rows with `.limit`.
+
 ## [0.3.0] - 2026-10-23
 
 ### Upgrade notes
