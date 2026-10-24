@@ -70,6 +70,12 @@ export default {
   SEASON_FORMAT_POINT_BUY_LOCKED:
     'A point-buy league keeps its league type, and other leagues cannot be switched to it.',
   SEASON_DATES_INVALID: 'The end date must not be before the start date.',
+  // Starting a league from another one (POST /api/seasons with clone_from)
+  SEASON_CLONE_FORBIDDEN: 'You can only start a league from a league you administer.',
+  SEASON_CLONE_ADMINS_FORBIDDEN: 'Only site admins can copy the league admins.',
+  SEASON_CLONE_FAILED: 'The league could not be created from the source. Nothing was kept.',
+  SEASON_CLONE_CLEANUP_FAILED:
+    'The league could not be created from the source, and it could not be removed again: league {league_id} remains with {phases} phases and {participants} roster entries. A site admin can delete it.',
   season_test_flag_site_admin_only: 'Only site admins can change the test-league flag',
   participant_update_empty: 'Provide gym_type and/or core_types to update',
   format_mismatch: 'This season does not use the Evolution Point Buy format',

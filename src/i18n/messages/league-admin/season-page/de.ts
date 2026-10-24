@@ -122,7 +122,8 @@ export default defineDe<typeof en>()({
   },
   formatRules: {
     title: 'Formatregeln',
-    subtitle: 'Bans, Tera-Regeln, Tiebreaker-Reihenfolge und {token}-Einstellungen für dieses Format.',
+    subtitle:
+      'Bearbeite Draft-Budget, Picks, {token}-Limits, Bans und die gespeicherte Tiebreaker-Reihenfolge. Die Tera-Regeln kommen aus dem Formatpaket und lassen sich hier nicht ändern.',
   },
   draftRoom: {
     title: 'Draft-Raum',

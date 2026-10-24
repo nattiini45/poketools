@@ -100,6 +100,8 @@ export default defineDe<typeof en>()({
     season__auto_create_battle_ruleset: 'Battle-Regelwerk automatisch angelegt',
     season__clear_battle_ruleset_bans: 'Bans aus dem automatischen Battle-Regelwerk entfernt',
     season__update: 'Liga-Einstellungen geändert',
+    season__clone: 'Liga aus einer anderen Liga erstellt',
+    season__clone_failed: 'Liga-Kopie fehlgeschlagen',
     season__set_test_flag: 'Testmarkierung geändert',
     season__delete: 'Saison gelöscht',
     point_buy_list__create: 'Point-Buy-Liste angelegt',

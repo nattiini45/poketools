@@ -109,6 +109,7 @@ import Section from '@/components/ui/Section';
 import DraftPoolManager from '@/components/draft/DraftPoolManager';
 import TokenAdminSummary from '@/components/draft-admin/TokenAdminSummary';
 import EvolutionTierEditor from '@/components/league/EvolutionTierEditor';
+import FormatRulesEditor from '@/components/league/FormatRulesEditor';
 import ContentLanguageControl from '../_components/ContentLanguageControl';
 import LeagueThemeControl from '@/components/league/LeagueThemeControl';
 import LeagueSettingsForm from '@/components/league/LeagueSettingsForm';
@@ -333,7 +334,7 @@ describe('admin league page tabs (?tab=)', () => {
       ['Draft Room', 'Redraft', 'Tokens'],
     ],
     ['evolution_point_buy', 'phases', ['listRulesets'], ['Phases', 'Evolution Points']],
-    ['evolution_point_buy', 'rules', [], ['Point-Buy List', 'Format Rules', 'Data Import']],
+    ['evolution_point_buy', 'rules', ['getSeasonPhaseStartSignals'], ['Point-Buy List', 'Format Rules', 'Data Import']],
     [
       'evolution_point_buy',
       'settings',
@@ -585,8 +586,8 @@ describe('settings tab', () => {
     expect(form.props.formatLock).toBe(lock);
   });
 
-  it('reads the rulesets and phase signals for the settings tab only', async () => {
-    for (const tab of LEAGUE_ADMIN_TABS.filter((t) => t !== 'settings')) {
+  it('reads the phase signals for the settings tab and the point-buy rules tab only', async () => {
+    for (const tab of LEAGUE_ADMIN_TABS.filter((t) => t !== 'settings' && t !== 'rules')) {
       vi.clearAllMocks();
       mocks.getLiveAccess.mockResolvedValue(liveAccess());
       mocks.getSeasonWithDetails.mockResolvedValue(season());
@@ -602,12 +603,63 @@ describe('settings tab', () => {
       await render(tab);
       expect(mocks.getSeasonPhaseStartSignals, tab).not.toHaveBeenCalled();
     }
+    await render('rules');
+    expect(mocks.getSeasonPhaseStartSignals).toHaveBeenCalledWith(S1);
+  });
+
+  it('the classic draft rules tab makes no phase signals read (it has no format rules section)', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'draft', point_buy_list_id: null }));
+    const tree = await render('rules');
+    expect(mocks.getSeasonPhaseStartSignals).not.toHaveBeenCalled();
+    expect(findByType(tree, FormatRulesEditor)).toHaveLength(0);
   });
 
   it('falls back to the default content language when the row has none', async () => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ language: undefined }));
     const [control] = findByType(await render('settings'), ContentLanguageControl);
     expect(control.props.currentLanguage).toBe('de');
+  });
+});
+
+// ─── Rules tab: format rules editor ─────────────────────────────────
+
+describe('rules tab: format rules editor', () => {
+  it.each<[string, Record<string, unknown>, unknown[], boolean]>([
+    ['an active league', { status: 'active' }, [], true],
+    ['a completed league', { status: 'completed' }, [], true],
+    ['an upcoming league with a phase that has rounds', { status: 'upcoming' }, [{ status: 'upcoming', rounds_total: 2 }], true],
+    ['an upcoming league with an active phase', { status: 'upcoming' }, [{ status: 'active', rounds_total: 0 }], true],
+    ['an upcoming league with no phases', { status: 'upcoming' }, [], false],
+    [
+      'an upcoming league whose phases never started',
+      { status: 'upcoming' },
+      [{ status: 'upcoming', rounds_total: 0 }],
+      false,
+    ],
+  ])('passes seasonStarted for %s', async (_label, overrides, phases, started) => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season(overrides));
+    mocks.getSeasonPhaseStartSignals.mockResolvedValue(phases);
+    const [editor] = findByType(await render('rules'), FormatRulesEditor);
+    expect(editor.props).toEqual({ seasonId: S1, seasonStarted: started });
+  });
+
+  it('mounts the editor inside the Format Rules section, with the truthful subtitle (en + de)', async () => {
+    const en = await render('rules');
+    const section = sectionTitled(en, 'Format Rules');
+    expect(findByType(section as El, FormatRulesEditor)).toHaveLength(1);
+    expect(section?.props.subtitle).toContain('Edit the draft budget, picks');
+    expect(section?.props.subtitle).toContain('Tera rules come from the format pack and cannot be edited here.');
+    expect(section?.props.subtitle).not.toContain('Configure');
+
+    mocks.locale = 'de';
+    const de = sectionTitled(await render('rules'), 'Formatregeln');
+    expect(de?.props.subtitle).toContain('Bearbeite Draft-Budget, Picks');
+    expect(de?.props.subtitle).toContain('Tera-Regeln kommen aus dem Formatpaket');
+  });
+
+  it('a failed phase signals read fails the tab instead of guessing "not started"', async () => {
+    mocks.getSeasonPhaseStartSignals.mockRejectedValue(new Error('db down'));
+    await expect(render('rules')).rejects.toThrow('db down');
   });
 });
 

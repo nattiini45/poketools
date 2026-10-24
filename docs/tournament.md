@@ -7,7 +7,6 @@ The Tournament module provides pairing generation, standings/advancement logic, 
 ```
 src/lib/tournament/
 ├── index.ts                 # Pairing dispatcher (Swiss/RR/legacy per-round SE/DE)
-├── advancement.ts           # Advancement computation
 ├── bracket-structure.ts     # Full SE/DE slot graph (Bracket Engine v2)
 ├── bracket-generate.ts      # Generate / regenerate all elimination rounds
 ├── bracket-propagation.ts   # Materialize + un-materialize feeder slots
@@ -73,10 +72,8 @@ src/lib/tournament/
 - **Purpose**: Enforce legal status transitions
 - **Key Methods**: `isValidTransition()`, `validateTransition()`, `hasReachedBoThreshold()`
 
-### Advancement Logic
-- **File**: `advancement.ts`
-- **Purpose**: Compute qualifying players for next stage
-- **Key Methods**: `computeAdvancement()`
+### Advancement
+League phases advance through `syncStandingsEnrollment()` in `enrollment-sync.ts`: it ranks the source phase and enrolls the top N of the target phase's `advancement_rule` (overall, or per group). There is no separate advancement module.
 
 ### Standings
 - **File**: `standings.ts`

@@ -21,7 +21,6 @@ The tournament module provides pairing generation, standings computation, advanc
 | `src/lib/tournament/index.ts` | Pairing dispatcher — `generateRound()` routes to the correct engine |
 | `src/lib/tournament/match-state.ts` | Match transition validation state machine |
 | `src/lib/tournament/standings.ts` | Standings computation: `computeStandings()`, `buildPairingHistory()` |
-| `src/lib/tournament/advancement.ts` | Advancement logic: `computeAdvancement()` |
 | `src/lib/tournament/types.ts` | Shared tournament engine types |
 
 ### Match State Machine
@@ -38,7 +37,7 @@ The tournament module provides pairing generation, standings computation, advanc
 2. `generateRound()` produces pairings for the current round
 3. Players submit results → `validateTransition()` checks legality
 4. Game writes enqueue an aggregate job; `apply_aggregate_job` (cron `process-aggregates`) adds the game's stats to the pre-computed aggregates
-5. `computeStandings()` ranks players; `computeAdvancement()` determines who moves forward
+5. `computeStandings()` ranks players; `syncStandingsEnrollment()` (`enrollment-sync.ts`) determines who moves forward
 
 ## Match Lifecycle
 
