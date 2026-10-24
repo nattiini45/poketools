@@ -103,4 +103,24 @@ export default {
   IN_ALREADY_IN_PHASE: 'Incoming player is already enrolled in {phase}',
   SUBSTITUTE_LEAGUE_GROUP_MISMATCH:
     'The incoming player is not in league group {group}, which {phase} follows; substitute across the whole league instead',
+
+  // Custom format (Format Studio): attach, detach and readiness (api/seasons/[id]/format, src/lib/format-studio/errors.ts)
+  format_season_not_custom: 'This league does not use a custom format.',
+  format_season_started: 'The league has already started, so its format can no longer be changed.',
+  format_attach_forbidden: 'You can only attach formats that you own or that are shared with all admins.',
+  format_attach_invalid: 'This version has errors and cannot be attached ({first}).',
+  format_attach_ruleset_required: {
+    one: "{count} stage uses the league's default ruleset, but the league has none. Set a default ruleset first.",
+    other: "{count} stages use the league's default ruleset, but the league has none. Set a default ruleset first.",
+  },
+  format_attach_manual_phases: {
+    one: 'This league already has {count} phase that was not created from a format. Delete it first.',
+    other: 'This league already has {count} phases that were not created from a format. Delete them first.',
+  },
+  format_not_attached:
+    'This league uses a custom format, but none is attached yet. Attach a format before the league starts.',
+  format_nothing_attached: 'No format is attached to this league.',
+  format_detach_blocked: 'Teams still point to a phase of this format, so it cannot be detached.',
+  season_format_type_locked:
+    'The league type cannot be switched to or from a custom format while a format is attached or after the league has started.',
 } as const;

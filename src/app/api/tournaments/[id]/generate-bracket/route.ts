@@ -10,6 +10,7 @@ import { generateEliminationBracket } from '@/lib/tournament/bracket-generate';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -34,6 +35,12 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         { success: false, error: 'Tournament not found', code: 'tournament_not_found' },
         { status: 404 }
       );
+    }
+
+    // A custom league without an attached format cannot start: refuse before the bracket is written. The season
+    // type is already joined onto the tournament, so every other league type takes no extra read.
+    if (tournament.season_format_type === 'custom' && tournament.season_id) {
+      await assertSeasonFormatAttached(tournament.season_id);
     }
 
     if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {

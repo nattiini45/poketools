@@ -34,6 +34,7 @@ export default defineDe<typeof en>()({
       doubles: 'Klassisch: Doppel',
       draft: 'Draft',
       evolution_point_buy: P.form.leagueTypeLabel,
+      custom: 'Eigenes Format (Format Studio)',
     },
     battleFormatFixed: 'Kampfformat: Einzel (fest)',
     worldTheme: '3D-Welt-Thema',

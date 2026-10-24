@@ -18,7 +18,14 @@ export async function formatPanel({ id, league, tabLink }: LeagueAdminPanelConte
   const [result, tStudio] = await Promise.all([loadLeagueFormat(league), getT(formatStudioAdminMessages)]);
 
   if (result.kind === 'no_phases') {
-    return <p className="text-sm text-poke-text-muted">{tStudio.rich('detail.noPhases', { link: tabLink('phases') })}</p>;
+    // A custom league gets its phases from the attached format; a hand-made phase would block the attach.
+    return (
+      <p className="text-sm text-poke-text-muted">
+        {league.format_type === 'custom'
+          ? tStudio('detail.noPhasesCustom')
+          : tStudio.rich('detail.noPhases', { link: tabLink('phases') })}
+      </p>
+    );
   }
 
   return (

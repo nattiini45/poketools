@@ -83,4 +83,32 @@ export default {
 
   // Data export (api/admin/export)
   admin_export_rate_limited: 'Export rate limit reached. Try again after {resetAt}.',
+
+  // Format library (api/formats/**, src/lib/format-studio/{errors,library}.ts). Statuses: src/lib/format-studio/errors.ts.
+  format_not_found: 'Format not found',
+  format_preset_not_found: 'Example format not found',
+  format_stale_revision: 'This format was changed in the meantime. Reload it and apply your edit again.',
+  format_slug_taken: 'This format address is already in use.',
+  format_document_not_json: 'The format document is not valid JSON.',
+  format_document_not_object: 'The format document must be a JSON object.',
+  format_document_too_deep: 'The format document is nested too deeply.',
+  format_document_too_many_nodes: 'The format document has too many entries.',
+  format_document_too_large: 'The format document is too large (limit 256 KB).',
+  format_document_too_large_to_store: 'The format document is too large to store.',
+  format_document_name_required: 'The format document needs a valid name under identity.',
+  format_publish_invalid: {
+    one: 'This format has {count} error and cannot be published. Fix it first.',
+    other: 'This format has {count} errors and cannot be published. Fix them first.',
+  },
+  format_nothing_to_publish: 'There are no changes since the latest published version.',
+  format_not_published: 'This format has no published version yet.',
+  format_published_locked: 'A format in the gallery can only be published by site admins.',
+  format_visibility_forbidden: 'Only site admins can put a format in the gallery or change a gallery format.',
+  format_preset_locked: 'Example formats can only be changed by site admins.',
+  format_attached: {
+    one: 'This format is attached to {count} league and cannot be deleted.',
+    other: 'This format is attached to {count} leagues and cannot be deleted.',
+  },
+  format_has_versions: 'This format has published versions, so it cannot be deleted.',
+  format_version_immutable: 'A published version cannot be changed.',
 } as const;

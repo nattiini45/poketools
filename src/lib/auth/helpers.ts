@@ -14,8 +14,9 @@
  *    scope, so there each call still runs auth(), which reads no DB within the TTL.
  *
  * 2. Guards are live. They are requireAuth, requirePlayer, requireAdmin,
- *    requireAnyAdmin, requireCreator, requireResourceAdmin and
- *    requireDraftAdmin. Each one takes only the identity (provider + id) from
+ *    requireAnyAdmin, requireCreator, requireResourceAdmin,
+ *    requireDraftAdmin, requireFormatOwner and requireFormatViewer. Each one
+ *    takes only the identity (provider + id) from
  *    the token and then re-reads that identity's player with one narrow select
  *    (status, is_admin, is_creator, name fields and an embedded resource_admins
  *    count). It decides from that row and never from the token's copy. So:
@@ -46,6 +47,10 @@ import type { SessionPlayer } from '@/types/auth';
 import type { AdminResourceType } from '@/types/resource-admin';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getDraftPoolById } from '@/lib/supabase/queries/drafts';
+import { getFormatDefinitionMeta } from '@/lib/supabase/queries/format-definitions';
+import { canEditDraft, canViewDefinition, type FormatActor } from '@/lib/format-studio/access';
+import { FormatStudioError } from '@/lib/format-studio/errors';
+import type { FormatDefinitionMeta } from '@/lib/format-studio/library-types';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isValidUuid } from '@/lib/utils/uuid';
 
@@ -270,6 +275,49 @@ export async function requireDraftAdmin(draftPoolId: string): Promise<SessionPla
     throw new AuthError('Admin access required for this draft', 403, 'forbidden');
   }
   return player;
+}
+
+/** A stored format definition and the live player who may use it. */
+export interface FormatAccess {
+  player: SessionPlayer;
+  definition: FormatDefinitionMeta;
+}
+
+async function loadFormatAccess(
+  definitionId: string,
+  allowed: (actor: FormatActor, definition: FormatDefinitionMeta) => boolean,
+  forbiddenMessage: string
+): Promise<FormatAccess> {
+  const player = await requireAnyAdmin();
+
+  // A malformed id names no definition, for site admins too (it would fail the uuid filter as a 500 otherwise).
+  if (!isValidUuid(definitionId)) throw new FormatStudioError('format_not_found');
+
+  const definition = await getFormatDefinitionMeta(definitionId);
+  if (!definition) throw new FormatStudioError('format_not_found');
+
+  if (!allowed({ playerId: player.playerId, isAdmin: player.isAdmin }, definition)) {
+    throw new AuthError(forbiddenMessage, 403, 'forbidden');
+  }
+  return { player, definition };
+}
+
+/**
+ * Requires any admin tier AND the right to edit the format definition (live): its owner, or a site admin. A
+ * `preset` row is site admin only. League and tournament admins only ever reach their own definitions. The
+ * definition is read from the database on every call (metadata only, never the draft body), so a stale token or a
+ * concurrent owner change cannot widen access. Unknown or malformed ids are `404 format_not_found`.
+ */
+export async function requireFormatOwner(definitionId: string): Promise<FormatAccess> {
+  return loadFormatAccess(definitionId, canEditDraft, 'Format owner access required');
+}
+
+/**
+ * Like `requireFormatOwner`, for reading: also lets any admin see a definition shared with all admins
+ * (`league` or `gallery` visibility). Another admin's private definition is `403`.
+ */
+export async function requireFormatViewer(definitionId: string): Promise<FormatAccess> {
+  return loadFormatAccess(definitionId, canViewDefinition, 'Format access required');
 }
 
 /** Token-based (read paths only; may be up to 5 minutes stale). */

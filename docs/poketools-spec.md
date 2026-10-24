@@ -43,6 +43,7 @@ A private web application for managing competitive Pokémon leagues and tourname
 - VGC / doubles (Bring/Lead/Win stats enabled for these formats only)
 - Custom / homebrew rulesets (via ruleset builder)
 - Draft leagues (data model included; UI in Phase 2)
+- **Custom format** (`custom`, Format Studio) — a league whose phases come from an attached, published format document ([format-kit.md](./format-kit.md#database-and-api)); the engine of those phases is still the classic one. No editor UI yet.
 - **Evolution Point Buy** (`evolution_point_buy`) — versioned point-buy list, budget/pick-capped draft with branched-line identity `(base, stage3)`, surviving-Pokémon Comeback Tokens, Participation Tokens and per-line rulings. The league's tuning (budget, picks, token tables, line rulings, price groups, workbook layout, draft-clock quiet hours, Comeback Token earn window and exchange ratio) comes from the active format pack (`docs/format-packs.md`). Canonical module doc: `docs/evolution-point-buy.md`.
 
 **Mechanics public, tuning in the pack.** Every mechanic (draft engines, quiet hours, pool completability, token rules, scoring and tiebreaks) is public code under neutral names; a league's numbers and wording live in its format pack. A pack may also fill the optional, server-only **pack-extension seam** (`src/lib/pack-extensions/`: supplementary records shown beside the live statistics and never added to them, extra profile and settings sections, extra admin and site links). The example pack fills nothing, so a public build has no pack-specific code, schema or data. Contract and rules: `docs/format-packs.md` ("Pack extensions").
@@ -105,7 +106,7 @@ Admin — `is_admin: true` in Players DB
 | Field | Type | Notes |
 |---|---|---|
 | name | Title | |
-| format_type | Select | singles / doubles / draft / evolution_point_buy |
+| format_type | Select | singles / doubles / draft / evolution_point_buy / custom (*Custom format (Format Studio)*: phases come from a format attached through `POST /api/seasons/[id]/format`; a custom league without an attached format cannot become active, a database trigger and the generate routes refuse it; the type cannot be switched to or from `custom` once a format is attached or the league has started) |
 | ruleset | Relation → Rulesets | |
 | start_date | Date | |
 | end_date | Date | |
@@ -125,7 +126,7 @@ Admin — `is_admin: true` in Players DB
 | core_types | Text[] | Three Pokémon types assigned by Core Liga draw; null when unused |
 | core_assigned_at | Timestamp | Audit timestamp for `core_types` assignment |
 
-**Season worlds.** League/season presentation is keyed off `seasons.format_type` via a world registry. `evolution_point_buy` resolves to the **evoliga** world (the EvoLiga 3D-capable scrollworld, §5, plaza theme). Since the auto-map flip, all other formats (`singles`, `doubles`, `draft`) resolve to the **sakura** world — the cherry-blossom park scrollworld (anchored sections `#pulse #roster #teams #schedule #rules` → Pulse / Roster / Teams / Schedule / Rules, replacing the former default-world manifest `#pulse #phases #reports #stats #rules`); standalone tournaments (no season row) get the same park outcome. On `/leagues/[id]` every route world's `#pulse` section carries the **league hub** — a server-rendered tab panel (`?tab=`: standings, matches, group stage, playoffs, phases, insights, rules; Kale reports behind `ENABLE_KALE_CABBAGE`) that keeps standings, brackets, group tables and insights inside the world and reads only the selected tab's data (§5). Resolution precedence, highest first: the viewer's session override (`?world=` URL parameter, then the localStorage preference — beats everything for that session), the league admin's `seasons.route_theme` pin (any registered theme; an unregistered pin falls back to a DOM-only default world with a console warning, never a crash), then the format auto-map. The full picker/auto-map contract is in the multi-theme route-worlds spec (maintainer-only; not in this repo); `docs/worlds.md` summarises it. Whether the 3D route tier renders at all is a separate, per-viewer choice: `players.world_experience` (`auto` | `on` | `off`; default `off` since 2026-10-06, the 3D world is opt-in), edited on `/dashboard/settings` and written through `PATCH /api/account/world-experience`; `off` pins the viewer to the simple DOM (Lite) version, `on` skips only the advisory heuristics (data-saver, low-memory, low-cores) while the hard floors — no WebGL, `prefers-reduced-motion` — always win, and `auto` keeps capability detection deciding. Signed-out visitors get the default `off`. Precedence and the full tier ladder: `docs/worlds.md`. A future world (e.g. a Core Liga or draft world) is an additive registry entry, not a fork of an existing page. Tournament pages render inside a world shell in **sections layout** (anchored sections replace the legacy tab bar): the parent season's world when the season is world-registered, otherwise the sakura outcome, with continuity navigation back to the season page.
+**Season worlds.** League/season presentation is keyed off `seasons.format_type` via a world registry. `evolution_point_buy` resolves to the **evoliga** world (the EvoLiga 3D-capable scrollworld, §5, plaza theme). Since the auto-map flip, all other formats (`singles`, `doubles`, `draft`, and `custom`) resolve to the **sakura** world — the cherry-blossom park scrollworld (anchored sections `#pulse #roster #teams #schedule #rules` → Pulse / Roster / Teams / Schedule / Rules, replacing the former default-world manifest `#pulse #phases #reports #stats #rules`); standalone tournaments (no season row) get the same park outcome. On `/leagues/[id]` every route world's `#pulse` section carries the **league hub** — a server-rendered tab panel (`?tab=`: standings, matches, group stage, playoffs, phases, insights, rules; Kale reports behind `ENABLE_KALE_CABBAGE`) that keeps standings, brackets, group tables and insights inside the world and reads only the selected tab's data (§5). Resolution precedence, highest first: the viewer's session override (`?world=` URL parameter, then the localStorage preference — beats everything for that session), the league admin's `seasons.route_theme` pin (any registered theme; an unregistered pin falls back to a DOM-only default world with a console warning, never a crash), then the format auto-map. The full picker/auto-map contract is in the multi-theme route-worlds spec (maintainer-only; not in this repo); `docs/worlds.md` summarises it. Whether the 3D route tier renders at all is a separate, per-viewer choice: `players.world_experience` (`auto` | `on` | `off`; default `off` since 2026-10-06, the 3D world is opt-in), edited on `/dashboard/settings` and written through `PATCH /api/account/world-experience`; `off` pins the viewer to the simple DOM (Lite) version, `on` skips only the advisory heuristics (data-saver, low-memory, low-cores) while the hard floors — no WebGL, `prefers-reduced-motion` — always win, and `auto` keeps capability detection deciding. Signed-out visitors get the default `off`. Precedence and the full tier ladder: `docs/worlds.md`. A future world (e.g. a Core Liga or draft world) is an additive registry entry, not a fork of an existing page. Tournament pages render inside a world shell in **sections layout** (anchored sections replace the legacy tab bar): the parent season's world when the season is world-registered, otherwise the sakura outcome, with continuity navigation back to the season page.
 
 ### 4.3 Tournaments / League Phases
 A **phase** is stored as a `tournaments` row with `season_id` set. League admin treats phases as first-class entities (`LeaguePhase` type); standalone tournaments keep `season_id = null`. Phase creation uses `POST /api/seasons/[id]/phases` — `POST /api/tournaments` rejects `season_id` payloads.
@@ -137,6 +138,8 @@ A **phase** is stored as a `tournaments` row with `season_id` set. League admin 
 | stage_order | Number | Order within the league (reorderable while `upcoming`) |
 | advancement_rule | JSONB | `{ type: 'top_n', count, per_group }` — who advances into the *next* phase |
 | enrollment_source | JSONB | Auto-enrollment sync: `{ type: 'standings' \| 'roster', source_phase_id, synced_at, frozen }`. Unfrozen phases silently re-sync from the source table until the first manual seed/participant edit or bracket generation. Re-sync and `POST /api/seasons/[id]/advance` refuse when frozen or rounds exist unless `{ force: true }` (`ENROLLMENT_FROZEN`, `ENROLLMENT_ROUNDS_EXIST`). Standings use EPB-aware `computeStandingsForSeason`. |
+| format_stage_key | Text | nullable; the format stage a phase was created from when a Format Studio format is attached to a custom league (`^[a-z][a-z0-9_]{0,31}$`, unique per league, CHECK needs `season_id`); null for hand-made phases. Not mapped into `Tournament` objects |
+| stage_spec | JSONB | nullable; frozen copy of that stage (`{ v: 1, spec_hash, stage, mapped_bracket_type }`, an object up to 262,144 bytes of jsonb text). Not mapped into `Tournament` objects. A later engine change reads it |
 | bracket_type | Select | single_elim / double_elim / round_robin / swiss |
 | ruleset | Relation → Rulesets | |
 | best_of_default | Number | Default Bo per round |
@@ -388,6 +391,7 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `season_storylines` | Caster-maintained season storylines |
 | `season_groups` | League groups: one row per group of a league; groups persist across its phases and draft their own pools (`season_groups_replace` is the editor's atomic write) |
 | `season_group_members` | League group membership: one group per trainer per league, the trainer must be a league participant |
+| `season_formats` | The Format Studio format attached to a custom league: a frozen copy of the spec with its hash, the seed (server only), tunables and amendments (both empty today) and the engine (`kit`). One row per league (`season_id` is the key); gone with the league |
 | `tournaments` | Standalone tournaments and league phases (4.3) |
 | `tournament_participants` | Phase or tournament enrollment and seeds (4.3) |
 | `tournament_groups` | Groups of a group-stage phase (`season_group_id` links one to the league group it mirrors) |
@@ -398,6 +402,8 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `games` | Games of a match (4.6) |
 | `rulesets` | Rulesets (4.7, 9) |
 | `legacy_standings` | Baseline table; the public app neither reads nor writes it |
+| `format_definitions` | Format Studio library: one row per format with slug, bilingual name, owner, visibility (`private`, `league`, `gallery`), the draft being edited and its revision, and the latest published version |
+| `format_definition_versions` | Immutable published versions of a format: parsed spec, canonical SHA-256 `content_hash`, changelog. A trigger refuses any change of a published row |
 
 **Stats, ratings and achievements**
 
@@ -768,6 +774,23 @@ POST .../groups/repair                      Hand group rows left by pre-handover
                                             an apply names the reviewed `moves`, 409 PLAN_CHANGED if they differ)
 POST /api/seasons/[id]/participants/substitute  League (`scope: 'league'`) or phase (`scope: <phaseId>`) substitute
 POST /api/seasons/[id]/advance              Advance to next phase (optional `force`; same guards as sync)
+GET/POST/DELETE /api/seasons/[id]/format    Custom format league: state (`not_custom` | `unattached` | `attached`,
+                                            `can_start`, `started`, `?include=spec`) / attach a published format version
+                                            (`definition_id`, optional `version_no`; 201 first attach, 200 re-attach; creates
+                                            one phase per format stage, answers the stages and the engine gaps) / detach.
+                                            League admin of that league; format-attach 30 per hour
+GET/POST /api/formats                       Format library: list (`scope` all | mine | shared | gallery, `visibility`, `kind`,
+                                            `limit` max 100, `offset`) / create (`document` or `name` + `base_locale`).
+                                            Any admin tier; a league admin sees own and shared formats; format-create 20 per hour
+GET/PATCH/DELETE /api/formats/[id]          Detail (draft, versions and check for owner and site admins) / visibility
+                                            (private <-> league for the owner, gallery for site admins) / delete (never published,
+                                            unattached only)
+PUT /api/formats/[id]/draft                 Save the draft: `draft_rev` compare-and-set (409 format_stale_revision), bounded body;
+                                            a draft may be invalid. format-draft 300 per 10 minutes
+POST /api/formats/[id]/publish              Publish the draft as the next immutable version (422 format_publish_invalid on any
+                                            error diagnostic). format-publish 30 per hour
+POST /api/formats/[id]/fork                 Copy the latest published spec into a private format of the caller
+POST /api/formats/presets/[presetId]/fork   Copy a shipped example into a private format of the caller
 GET  /api/players (admin)                    Player directory page: `limit`, `offset`, `search`, `sort` (name | discord_id |
                                             ps_username | status), `dir` (asc | desc); default name ascending; exact total
 POST /api/players (admin)                   Create registered or guest (`is_guest: true`) players

@@ -32,6 +32,7 @@ import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { triggerTournamentReport } from '@/lib/ai/trigger';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
 import type { ApiResult } from '@/types/api';
 import type { Round } from '@/types/round';
@@ -66,6 +67,12 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         { success: false, error: 'Tournament not found', code: 'tournament_not_found' },
         { status: 404 }
       );
+    }
+
+    // A custom league without an attached format cannot start: refuse before any round is written. The season
+    // type is already joined onto the tournament, so every other league type takes no extra read.
+    if (tournament.season_format_type === 'custom' && tournament.season_id) {
+      await assertSeasonFormatAttached(tournament.season_id);
     }
 
     if (tournament.status === 'completed') {

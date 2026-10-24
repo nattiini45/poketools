@@ -139,8 +139,13 @@ const WORLDS: readonly SeasonWorld[] = [evoligaWorld, sakuraWorld, mountainWorld
  * lowest-precedence layer: a league's explicit `route_theme` pin
  * (`resolveWorld`) and the viewer's session override
  * (`WorldStateProvider`) both win over it.
+ *
+ * The Format Studio `custom` league type resolves to the sakura park by name (the classic draft experience), so it
+ * never reaches the default-world safety net. It is not added to the sakura world's `matchesFormats`: that list
+ * is part of the world payload the route data ships, which stays byte-identical for every existing league.
  */
 export function getSeasonWorld(format: SeasonFormatType): SeasonWorld {
+  if (format === 'custom') return sakuraWorld;
   return WORLDS.find((world) => world.matchesFormats.includes(format)) ?? defaultWorld;
 }
 

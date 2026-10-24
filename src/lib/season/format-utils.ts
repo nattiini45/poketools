@@ -36,6 +36,19 @@ export function leagueDraftHref(leagueId: string, format: SeasonFormatType | str
 }
 
 /**
+ * Whether a league's matches are doubles. The classic league types carry it on the type itself (`doubles`); a
+ * custom league (Format Studio) mixes stages, so it is doubles only when it has stages and every one of them is.
+ * Callers pass the stages they already hold: no read happens here.
+ */
+export function isLeagueDoubles(
+  format: SeasonFormatType | string,
+  stages: ReadonlyArray<{ is_doubles: boolean }>,
+): boolean {
+  if (format === 'custom') return stages.length > 0 && stages.every((stage) => stage.is_doubles);
+  return format === 'doubles';
+}
+
+/**
  * Format gate for EPB-only API routes. Throws a UserFacingError (passed
  * through by safeErrorResponse) when the season is missing or does not use
  * the evolution_point_buy format — EPB services must never touch other

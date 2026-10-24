@@ -5,7 +5,7 @@ import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
-import { isDraftLike } from '@/lib/season/format-utils';
+import { isDraftLike, isLeagueDoubles } from '@/lib/season/format-utils';
 import { getSessionPlayer } from '@/lib/auth/helpers';
 import { getPlayerWorldExperience } from '@/lib/supabase/queries/players';
 import { DEFAULT_WORLD_EXPERIENCE, type WorldExperience } from '@/types/player';
@@ -214,7 +214,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
   const usageRows = aggregatesToUsageRows(aggregates, totalGamesInScope);
   const killRanking = buildKillRanking(seasonBattleStats);
   const allReports = reportsPerStage.flat();
-  const isDoubles = league.format_type === 'doubles';
+  const isDoubles = isLeagueDoubles(league.format_type, stages);
 
   // Build gym type lookup: player_id → gym_type
   const gymTypeMap = new Map(participants.map((p) => [p.id, p.gym_type]));

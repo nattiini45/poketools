@@ -46,6 +46,7 @@ export default {
       doubles: 'Classic: Doubles',
       draft: 'Draft',
       evolution_point_buy: P.form.leagueTypeLabel,
+      custom: 'Custom format (Format Studio)',
     },
     battleFormatFixed: 'Battle format: Singles (fixed)',
     worldTheme: '3D World Theme',

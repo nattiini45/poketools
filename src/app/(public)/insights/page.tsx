@@ -25,7 +25,7 @@ import {
   scoringByeRecordsForStages,
 } from '@/lib/tournament/byes';
 import { epbStandingsContext, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
-import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { isEvolutionPointBuy, isLeagueDoubles } from '@/lib/season/format-utils';
 import { getT } from '@/i18n/server';
 import { insightsMessages } from '@/i18n/messages/insights';
 
@@ -135,7 +135,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
     const byes = scoringByeRecordsForStages(stages, groupRoundsByStage(byeRounds));
     return {
       title: season.name,
-      isDoubles: season.format_type === 'doubles',
+      isDoubles: isLeagueDoubles(season.format_type, stages),
       participants: parts.map((p) => ({ id: p.id, name: p.name })),
       tournamentId: null,
       killRanking: buildKillRanking(battleStats),

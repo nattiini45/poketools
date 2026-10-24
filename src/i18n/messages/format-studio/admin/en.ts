@@ -5,7 +5,8 @@
  *
  * - `gallery.*`: the examples section of the gallery; `leagues.*`: the "Your leagues" cards.
  * - `detail.*`: the detail view shared by both routes and the tab; `tab.*`: the Format tab's own header.
- * - `detail.noPhases` is a rich message: `<link>` wraps the link to the league's Phases tab.
+ * - `detail.noPhases` is a rich message: `<link>` wraps the link to the league's Phases tab. A custom league gets
+ *   `detail.noPhasesCustom` instead, with no link: its phases come from the attached format.
  */
 export default {
   title: 'Formats',
@@ -55,6 +56,7 @@ export default {
     editIn: 'Open in the league admin',
     invalid: 'This format could not be shown. The checks below say why.',
     noPhases: 'This league has no phases yet. Add them on the <link>Phases</link> tab and the format shows up here.',
+    noPhasesCustom: 'This league has no phases yet. A custom league gets its phases when a format is attached to it, not by adding them by hand.',
     forbidden: 'Only admins of this league can open its format.',
   },
   tab: {

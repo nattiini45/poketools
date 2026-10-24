@@ -36,9 +36,10 @@ interface LeagueFormProps {
 
 /**
  * The league type (`seasons.format_type`). Point-buy leagues battle in singles under the active
- * format pack's battle ruleset, which the server sets as the league default on creation.
+ * format pack's battle ruleset, which the server sets as the league default on creation. A custom
+ * league gets its phases from a format attached in the Format Studio after creation.
  */
-const FORMAT_TYPES: readonly SeasonFormatType[] = ['singles', 'doubles', 'draft', 'evolution_point_buy'];
+const FORMAT_TYPES: readonly SeasonFormatType[] = ['singles', 'doubles', 'draft', 'evolution_point_buy', 'custom'];
 
 /**
  * 3D World Theme options: Auto + every REGISTERED route theme — shared with

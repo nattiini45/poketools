@@ -39,11 +39,22 @@ describe('availableLeagueAdminTabs (from getFormatCapabilities)', () => {
     expect(LEAGUE_ADMIN_TABS).toHaveLength(8);
   });
 
+  it('a custom league gets the singles-like set: no draft, no rules', () => {
+    expect(availableLeagueAdminTabs('custom')).toEqual([
+      'overview',
+      'participants',
+      'phases',
+      'format',
+      'settings',
+      'danger',
+    ]);
+  });
+
   it('the format tab sits between rules and settings and every format has it', () => {
     const order = [...LEAGUE_ADMIN_TABS];
     expect(order.indexOf('format')).toBe(order.indexOf('rules') + 1);
     expect(order.indexOf('settings')).toBe(order.indexOf('format') + 1);
-    for (const format of ['singles', 'doubles', 'draft', 'evolution_point_buy'] as const) {
+    for (const format of ['singles', 'doubles', 'draft', 'evolution_point_buy', 'custom'] as const) {
       expect(availableLeagueAdminTabs(format), format).toContain('format');
     }
   });

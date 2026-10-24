@@ -10,7 +10,7 @@ import {
   type SeasonStandingsContext,
 } from '@/lib/tournament/season-standings';
 import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
-import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { isEvolutionPointBuy, isLeagueDoubles } from '@/lib/season/format-utils';
 import type { LeagueGroupStandings, LeagueStanding } from '@/lib/supabase/queries/league-standings';
 import type { CombinedRanking } from '@/lib/tournament/group-standings';
 import type { PublicSeasonParticipant, PublicTournamentParticipant } from '@/lib/players/public-player';
@@ -341,7 +341,7 @@ export async function loadLeagueHubPanel(
         tab,
         usageRows: aggregatesToUsageRows(aggregates, totalGames),
         killRanking: buildKillRanking(battleStats),
-        isDoubles: league.format_type === 'doubles',
+        isDoubles: isLeagueDoubles(league.format_type, stages),
       };
     }
 

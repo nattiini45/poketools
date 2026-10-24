@@ -84,4 +84,26 @@ export default defineDe<typeof en>()({
   IN_ALREADY_IN_PHASE: 'Der Ersatzspieler ist bereits in der Phase „{phase}“ eingetragen.',
   SUBSTITUTE_LEAGUE_GROUP_MISMATCH:
     'Der Ersatzspieler ist nicht in der Ligagruppe „{group}“, der die Phase „{phase}“ folgt; ersetze stattdessen in der ganzen Liga.',
+
+  format_season_not_custom: 'Diese Liga nutzt kein eigenes Format.',
+  format_season_started: 'Die Liga hat bereits begonnen, deshalb lässt sich ihr Format nicht mehr ändern.',
+  format_attach_forbidden:
+    'Du kannst nur Formate anhängen, die dir gehören oder für alle Admins freigegeben sind.',
+  format_attach_invalid: 'Diese Version hat Fehler und kann nicht angehängt werden ({first}).',
+  format_attach_ruleset_required: {
+    one: '{count} Phase nutzt das Standard-Regelwerk der Liga, die Liga hat aber keines. Lege zuerst ein Standard-Regelwerk fest.',
+    other:
+      '{count} Phasen nutzen das Standard-Regelwerk der Liga, die Liga hat aber keines. Lege zuerst ein Standard-Regelwerk fest.',
+  },
+  format_attach_manual_phases: {
+    one: 'Diese Liga hat bereits {count} Phase, die nicht aus einem Format entstanden ist. Lösche sie zuerst.',
+    other: 'Diese Liga hat bereits {count} Phasen, die nicht aus einem Format entstanden sind. Lösche sie zuerst.',
+  },
+  format_not_attached:
+    'Diese Liga nutzt ein eigenes Format, es ist aber noch keines angehängt. Hänge vor dem Start ein Format an.',
+  format_nothing_attached: 'An diese Liga ist kein Format angehängt.',
+  format_detach_blocked:
+    'Teams verweisen noch auf eine Phase dieses Formats, deshalb lässt es sich nicht abhängen.',
+  season_format_type_locked:
+    'Der Ligatyp lässt sich nicht auf oder von einem eigenen Format umstellen, solange ein Format angehängt ist oder nachdem die Liga begonnen hat.',
 });

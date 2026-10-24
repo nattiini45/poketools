@@ -28,13 +28,20 @@ vi.mock('@/lib/tournament/bracket-generate', () => ({
   generateEliminationBracket: vi.fn(),
 }));
 
+vi.mock('@/lib/format-studio/attach', () => ({
+  assertSeasonFormatAttached: vi.fn(),
+}));
+
 vi.mock('@/lib/discord/notify', () => ({ emitDiscordEvent: vi.fn() }));
 vi.mock('@/lib/social/notify', () => ({ emitSocialEvent: vi.fn() }));
 
 import { POST } from '@/app/api/tournaments/[id]/generate-bracket/route';
 import { requireResourceAdmin, AuthError } from '@/lib/auth/helpers';
-import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
+import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
 import { generateEliminationBracket } from '@/lib/tournament/bracket-generate';
+import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
+import { FormatStudioError } from '@/lib/format-studio/errors';
 
 const tournamentId = '00000000-0000-4000-8000-000000000001';
 const params = { params: Promise.resolve({ id: tournamentId }) };
@@ -99,5 +106,71 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
     expect(payload.error).toBe('Tournament is already completed');
     expect(payload.code).toBe('tournament_already_completed');
     expect(generateEliminationBracket).not.toHaveBeenCalled();
+  });
+
+  describe('league type and the format check', () => {
+    const seasonId = '00000000-0000-4000-8000-0000000000aa';
+    const tournamentOf = (seasonFormatType: string | undefined) =>
+      ({
+        id: tournamentId,
+        bracket_type: 'single_elim',
+        status: 'upcoming',
+        season_id: seasonId,
+        season_format_type: seasonFormatType,
+      }) as never;
+
+    it('refuses a custom league without an attached format with 409 format_not_attached, before any write', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(tournamentOf('custom'));
+      vi.mocked(assertSeasonFormatAttached).mockRejectedValue(new FormatStudioError('format_not_attached'));
+
+      const response = await POST(request(), params);
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('format_not_attached');
+      expect(assertSeasonFormatAttached).toHaveBeenCalledWith(seasonId);
+      expect(getParticipants).not.toHaveBeenCalled();
+      expect(generateEliminationBracket).not.toHaveBeenCalled();
+      expect(updateSeason).not.toHaveBeenCalled();
+    });
+
+    it('generates the bracket of a custom league whose format is attached', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(tournamentOf('custom'));
+      vi.mocked(assertSeasonFormatAttached).mockResolvedValue(undefined);
+      vi.mocked(getParticipants).mockResolvedValue([] as never);
+      vi.mocked(generateEliminationBracket).mockResolvedValue({ rounds: 3 } as never);
+      vi.mocked(getSeasonById).mockResolvedValue({ id: seasonId, status: 'active' } as never);
+
+      const response = await POST(request(), params);
+
+      expect(response.status).toBe(201);
+      expect(generateEliminationBracket).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['singles', 'doubles', 'draft', 'evolution_point_buy', undefined])(
+      'does not look at the format of a %s league',
+      async (formatType) => {
+        vi.mocked(getTournamentById).mockResolvedValue(tournamentOf(formatType));
+        vi.mocked(getParticipants).mockResolvedValue([] as never);
+        vi.mocked(generateEliminationBracket).mockResolvedValue({ rounds: 3 } as never);
+        vi.mocked(getSeasonById).mockResolvedValue({ id: seasonId, status: 'active' } as never);
+
+        const response = await POST(request(), params);
+
+        expect(response.status).toBe(201);
+        expect(assertSeasonFormatAttached).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not check a stand-alone tournament', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({ id: tournamentId, bracket_type: 'single_elim', status: 'upcoming', season_id: null } as never);
+      vi.mocked(getParticipants).mockResolvedValue([] as never);
+      vi.mocked(generateEliminationBracket).mockResolvedValue({ rounds: 3 } as never);
+
+      const response = await POST(request(), params);
+
+      expect(response.status).toBe(201);
+      expect(assertSeasonFormatAttached).not.toHaveBeenCalled();
+    });
   });
 });

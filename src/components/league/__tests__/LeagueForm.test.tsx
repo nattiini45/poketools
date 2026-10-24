@@ -223,3 +223,67 @@ describe('LeagueForm identity callback', () => {
     ).not.toThrow();
   });
 });
+
+describe('LeagueForm league type options', () => {
+  /** The `<option value>` list of the league-type select, in order. */
+  function optionValues(html: string): string[] {
+    return [...leagueTypeSelect(html).matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]);
+  }
+
+  it('lists the classic league types first, in order, and the custom type last', () => {
+    const html = renderToStaticMarkup(<LeagueForm rulesets={[ruleset]} onSubmit={noopSubmit} />);
+    expect(optionValues(html)).toEqual(['singles', 'doubles', 'draft', 'evolution_point_buy', 'custom']);
+  });
+
+  it('labels the custom type in English and German', () => {
+    const en = renderWithI18n(<LeagueForm rulesets={[ruleset]} onSubmit={noopSubmit} />);
+    const de = renderWithI18n(<LeagueForm rulesets={[ruleset]} onSubmit={noopSubmit} />, { locale: 'de' });
+    expect(leagueTypeSelect(en)).toMatch(/<option value="custom">Custom format \(Format Studio\)<\/option>/);
+    expect(leagueTypeSelect(de)).toMatch(/<option value="custom">Eigenes Format \(Format Studio\)<\/option>/);
+    // The classic labels did not move.
+    expect(leagueTypeSelect(en)).toMatch(/<option value="singles" selected="">Classic: Singles<\/option>/);
+    expect(leagueTypeSelect(de)).toMatch(/<option value="doubles">Klassisch: Doppel<\/option>/);
+  });
+
+  it('shows the normal battle ruleset select for a custom league, like a classic one', () => {
+    const html = renderToStaticMarkup(
+      <LeagueForm rulesets={[ruleset]} onSubmit={noopSubmit} initialData={{ format_type: 'custom' }} />,
+    );
+    expect(leagueTypeSelect(html)).toMatch(/<option value="custom" selected="">/);
+    expect(html).toContain('Battle ruleset (optional)');
+    expect(html).toContain('Gen 9 RU');
+    expect(html).not.toContain('Battle format: Singles (fixed)');
+    expect(html).not.toContain('data-testid="league-auto-ruleset"');
+  });
+});
+
+describe('buildLeagueFormPayload (every league type)', () => {
+  const values: LeagueFormValues = {
+    name: 'League',
+    description: 'About',
+    formatType: 'singles',
+    rulesetId: 'rs-picked',
+    startDate: '2026-11-01',
+    endDate: '',
+    routeTheme: 'auto',
+    language: 'en',
+  };
+
+  it.each(['singles', 'doubles', 'draft', 'custom'] as const)('%s sends the picked ruleset', (formatType) => {
+    expect(buildLeagueFormPayload({ ...values, formatType })).toEqual({
+      name: 'League',
+      description: 'About',
+      format_type: formatType,
+      ruleset_id: 'rs-picked',
+      start_date: '2026-11-01',
+      end_date: null,
+      route_theme: 'auto',
+      language: 'en',
+    });
+  });
+
+  it('only point buy drops the ruleset', () => {
+    expect(buildLeagueFormPayload({ ...values, formatType: 'evolution_point_buy' }).ruleset_id).toBeNull();
+  });
+});
+

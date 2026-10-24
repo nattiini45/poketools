@@ -30,7 +30,7 @@ export type SeasonDeleteUnlink = (typeof SEASON_DELETE_UNLINK_GROUPS)[number];
 export const SEASON_DELETE_CASCADES: Readonly<Record<SeasonDeleteGroup, readonly string[]>> = {
   participants: ['season_participants'],
   groups: ['season_groups', 'season_group_members'],
-  rules: ['format_rules', 'evolution_tiers', 'draft_tier_limits', 'draft_pool_entries'],
+  rules: ['format_rules', 'season_formats', 'evolution_tiers', 'draft_tier_limits', 'draft_pool_entries'],
   evolution: ['evolution_tracker', 'evolution_events', 'evo_progress_log'],
   tokens: ['epb_token_grants', 'epb_draft_token_purchases', 'epb_comeback_token_spends'],
   redraft: ['redraft_slots', 'redraft_submissions', 'redraft_history', 'redraft_trade_requests'],

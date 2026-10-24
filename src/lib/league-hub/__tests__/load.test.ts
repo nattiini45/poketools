@@ -196,6 +196,39 @@ describe('a failed tab read', () => {
   });
 });
 
+describe('insights tab doubles flag', () => {
+  async function insights(
+    formatType: string,
+    stages: Partial<TournamentWithDetails>[] = [],
+  ): Promise<Extract<LeagueHubPanelData, { tab: 'insights' }>> {
+    const base = context();
+    const panel = await loadLeagueHubPanel('insights', {
+      ...base,
+      league: { ...base.league, format_type: formatType } as SeasonWithDetails,
+      stages: stages.map((s, i) => stage(`s${i}`, s)),
+    });
+    expect(panel?.tab).toBe('insights');
+    return panel as Extract<LeagueHubPanelData, { tab: 'insights' }>;
+  }
+
+  it.each([
+    ['singles', false],
+    ['draft', false],
+    ['evolution_point_buy', false],
+    ['doubles', true],
+  ])('%s: follows the league type', async (formatType, expected) => {
+    expect((await insights(formatType)).isDoubles).toBe(expected);
+    expect((await insights(formatType, [{ is_doubles: !expected }])).isDoubles).toBe(expected);
+  });
+
+  it('a custom league is doubles when it has stages and every stage is doubles', async () => {
+    expect((await insights('custom')).isDoubles).toBe(false);
+    expect((await insights('custom', [{ is_doubles: false }])).isDoubles).toBe(false);
+    expect((await insights('custom', [{ is_doubles: true }, { is_doubles: false }])).isDoubles).toBe(false);
+    expect((await insights('custom', [{ is_doubles: true }, { is_doubles: true }])).isDoubles).toBe(true);
+  });
+});
+
 describe('standings tab', () => {
   it('a league without groups: the season table, no group tables, ranked by points', async () => {
     const panel = await loadLeagueHubPanel('standings', context());

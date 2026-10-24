@@ -4,7 +4,7 @@
 
 The format kit is a pure TypeScript library in `src/lib/format-kit/` that describes a league or tournament format as **data**: a versioned JSON document (the *format definition*) with stages, edges between them, rank chains, series lengths, scoring, rule cards and bilingual text. The library validates such a document, type-checks its expressions, computes what it implies (how many players reach each stage, how many rounds it plays, how big a bracket is) and reports what is wrong with it as **diagnostics**: a code, a severity, a JSON pointer and flat params, often with a one-click fix expressed as a JSON patch.
 
-The Format Studio now consumes the kit **read-only**: a descriptor turns a live league into a definition (`describeLegacy`), the compiler checks it, and the admin pages (`/admin/formats`, and a Format tab on the league admin page) show a stage outline, the rules text in English and German, diagnostics in plain words and a coverage line. There is still **no database table, no write route and no builder**: nothing is edited, saved or published, the tournament engine does not run kit definitions, and standings, pairing, advancement and the public pages are untouched. The preset definitions the kit ships compile without errors, but that says the *document* is consistent, not that the engine can already run it (the engine has no round-robin legs, wildcard, threshold or bottom-N selection yet).
+The Format Studio now consumes the kit **read-only**: a descriptor turns a live league into a definition (`describeLegacy`), the compiler checks it, and the admin pages (`/admin/formats`, and a Format tab on the league admin page) show a stage outline, the rules text in English and German, diagnostics in plain words and a coverage line. Behind the pages there is now a **storage and server layer** (see Database and API): format definitions with drafts and immutable published versions, routes to create, save, publish, fork, share and delete them, and routes that attach a published version to a league of the type **Custom format** and create one phase per format stage. There is still **no builder**: nothing in the UI edits, saves or publishes a format, the tournament engine does not run kit definitions (attaching only creates the phases; pairing, standings and advancement of those phases are the legacy engine's), and the public pages are untouched. The preset definitions the kit ships compile without errors, but that says the *document* is consistent, not that the engine can already run it (the engine has no round-robin legs, wildcard, threshold or bottom-N selection yet).
 
 What it gives a caller:
 
@@ -70,7 +70,21 @@ src/lib/format-studio/                       the read-only Studio (not part of t
 ├── view.ts            FormatView, toFormatView, legacyCompileEnv (client-safe)
 ├── legacy-input.ts    rows of a league to LegacyInput (pure)
 ├── loader.ts          loadLeagueFormat, loadLeagueFormatSummaries, presetViews (server only)
-└── __tests__/         fixtures/leagues.ts, describe-legacy, golden (with __snapshots__), view, legacy-input, loader
+├── library-types.ts   the stored library's row and answer types (client-safe)
+├── errors.ts          FORMAT_ERROR_CODES, FORMAT_ERROR_STATUS, FormatStudioError, mapFormatDbError
+├── access.ts          who may view, edit, publish, share, delete and attach a definition (pure)
+├── slug.ts            slugFromName, withSlugSuffix (pure)
+├── document-guard.ts  assertDocument: the bounded pre-check of a posted document
+├── api-body.ts        readBoundedJson, readBoundedJsonOrEmpty, assertEnvelopeDocument
+├── api-schemas.ts     the strict zod envelopes of the format routes, validationFailedResponse
+├── identity.ts        extractIdentity, hasSummary, skeletonDocument
+├── library.ts         create, fork, save a draft, publish, change visibility, delete, detail (server only)
+├── materialise.ts     planStages, mapSeriesOverrides: kit stages to phase rows (pure)
+├── attach.ts          attachFormatToSeason, detachFormatFromSeason and the readiness and type-change guards (server only)
+└── __tests__/         fixtures/leagues.ts, describe-legacy, golden (with __snapshots__), view, legacy-input, loader, and the library tests (see Testing)
+
+src/app/api/formats/                         the definitions API (list, create, read, visibility, delete, draft, publish, fork, example fork)
+src/app/api/seasons/[id]/format/             attach, read and detach for a league
 
 src/components/format-studio/                the client display components (FormatDetail and its parts)
 src/app/admin/formats/                       the gallery and the two detail routes
@@ -377,7 +391,7 @@ The Studio is read-only. It reads a league, describes it and shows the result. N
 |---|---|---|
 | `/admin/formats` | any admin (the **Formats** entry in the competitions group of the admin sidebar) | **Examples**: one card per preset, marked "Example" and read-only for now. **Your leagues**: one card per league with stage count, pairing words, error and warning badges (text, not only colour) and the coverage line. Site admins see every league (up to 100, with a note when the cap is hit); league admins see their own non-archived leagues. Tournament-only admins see the examples and an empty leagues list. Standalone tournaments are not listed |
 | `/admin/formats/example/[presetId]` | any admin | one preset in full; an unknown id is a 404; no data read |
-| `/admin/formats/league/[id]` | site admins and admins of that league | one league in full; gated by `gateResourceAdmin('season', id)` before any read (a non-uuid is a 404, another league's admin sees the forbidden notice); a league without phases shows an empty state that links to its Phases tab |
+| `/admin/formats/league/[id]` | site admins and admins of that league | one league in full; gated by `gateResourceAdmin('season', id)` before any read (a non-uuid is a 404, another league's admin sees the forbidden notice); a league without phases shows an empty state that links to its Phases tab (a custom league's empty state has no link: its phases come from the attached format, and a hand-made phase would block the attach) |
 
 The league admin page shows the same content as a **Format** tab (`?tab=format`, every format, variant `tab`) with a link to the detail page.
 
@@ -388,6 +402,85 @@ The league admin page shows the same content as a **Format** tab (`?tab=format`,
 **Client component.** `FormatDetail` is the one `use client` entry: title and summary, a counts badge, the stage outline, the rules text with an EN/DE toggle (it starts in the viewer's language; the state is the language key, never translated text; `aria-pressed` on the buttons), the diagnostics in plain words (errors first; no one-click fixes because nothing is editable), the coverage line and the module facts with the editor links. It renders with `describeDefinition` and `renderDiagnostic` in the browser, so both languages of the kit catalogs ship on these admin routes only.
 
 **Golden master.** `src/lib/format-studio/__tests__/golden.test.ts` snapshots, for five generic fixture leagues (`fixtures/leagues.ts`: groups and playoffs, doubles, draft with double elimination, Evolution Point Buy, Core Liga style): the JSON of `describeLegacy`; the server compile result (`ok`, hash, diagnostic codes with severity and pointer, coverage, capabilities); and the plain text of the rules in English and German. Every fixture must compile with `ok` and no error. Later phases must keep these snapshots unchanged. Changed copy (a fact label, a sentence) is updated on purpose: run `npx vitest run src/lib/format-studio -u` and review the diff before committing.
+
+### Database and API
+
+Three migrations add the storage layer. Apply them in this order, before the code is deployed (the first must commit on its own, because a new enum value cannot be used in the transaction that adds it):
+
+1. `20261024100000_season_format_type_custom.sql`: adds the value `custom` to the enum `season_format_type`. Irreversible.
+2. `20261024100100_format_definitions.sql`: `format_definitions`, `format_definition_versions`, the immutability trigger and the function `format_publish_version`.
+3. `20261024100200_season_formats_and_stage_columns.sql`: `season_formats`, the two `tournaments` columns, the functions `format_season_started`, `format_attach_season` and `format_detach_season`, and the trigger that keeps a custom league without a format from becoming active.
+
+Every new table has row level security on, no policy, and grants to `service_role` only; every new function revokes execute from `PUBLIC`, `anon` and `authenticated` and grants it to `service_role`. The browser never reads these tables; every access is an API route or a server read.
+
+**Tables**
+
+| Table | Holds |
+|---|---|
+| `format_definitions` | One row per format: `slug` (unique, `^[a-z0-9][a-z0-9-]{0,62}$`), `name` and `description` (localized text objects; while the format is `private` they follow the draft's `identity` on every save, once it is shared with `league` or `gallery` a draft save leaves them alone, so other admins never see unpublished text, and the only write that changes them then is a publish: `format_publish_version` sets them from the published spec's `identity.name` and `identity.summary` in the same transaction that writes the version, clearing `description` when the spec has no summary), `kind` (`preset` or `custom`; every row the routes create is `custom`), `owner_id` (set null when the owner is deleted), `visibility` (`private`, `league`, `gallery`), `forked_from`, `current_draft` (jsonb, the document being edited, any JSON object up to 262,144 bytes of jsonb text), `draft_rev` (integer, starts at 1, +1 per save) and `current_version_id` |
+| `format_definition_versions` | Published versions: `version_no` (1, 2, ... per definition), `schema_version`, `spec` (the PARSED definition, defaults applied), `content_hash` (SHA-256 of the canonical JSON of `spec`), `status`, `changelog` (localized text) and `created_by`. Immutable: a trigger refuses any change of `spec`, `content_hash`, `schema_version`, `version_no`, `definition_id` or `status` of a published row |
+| `season_formats` | One row per league with an attached format: `definition_id` (set null if the definition is deleted), `version_no`, a frozen COPY of the `spec`, its `spec_hash`, `tunables` (`{}`), `engine` (`kit`), `seed` (random, 16 bytes as hex, never sent to a client), `frozen_at`, `amendments` (`[]`) |
+| `tournaments` (two new columns) | `format_stage_key` (the kit stage a phase was created from, null for hand-made phases) and `stage_spec` (a frozen copy of that stage, `{ v, spec_hash, stage, mapped_bracket_type }`). A partial unique index on `(season_id, format_stage_key)` makes the attach an upsert. The `Tournament` mapper does not read either column, so neither reaches a client or a public cache entry |
+
+Named constraints carry the size and uniqueness rules (`format_definitions_slug_key`, `format_definitions_draft_size`, `format_definition_versions_spec_size`, `season_formats_spec_size`); the error mapper turns a violation into a typed error by the constraint name. The size check measures the jsonb TEXT form, which is a few percent larger than the canonical JSON the kit measures, so a document just under 256 KB can pass the kit and fail the table: that answers 413 `format_document_too_large_to_store`, never a 500.
+
+**Versioning and hash rule.** A draft is any JSON object; publishing compiles it with the kit and stores the parsed definition. `content_hash` is `contentHash(spec)` of that stored JSON. Attach recomputes the hash from the stored `spec`, never by parsing it again, so a later kit change cannot break an old version; a mismatch is a data fault (logged with ids, a generic 500, no detail to the client). Publishing a draft whose hash equals the latest version's is refused (`format_nothing_to_publish`). `format_publish_version` locks the definition row, compares `draft_rev`, numbers the version, sets `current_version_id` and refreshes the listed `name` and `description` from the published spec's identity in one transaction (the publish route then expires the `format-library` shelf, and the answer carries the refreshed row).
+
+**Visibility and authorization.** Site admins can do everything; league and tournament admins (the "owner" tier) only ever see and change their own formats and the ones shared with all admins. The pure rules live in `access.ts`; the routes check them on the LIVE player and the definition row read from the database (`requireFormatViewer`), never on the token.
+
+| | View | Edit draft, delete | Publish a version | Change visibility | Attach to a league |
+|---|---|---|---|---|---|
+| Site admin | any | any | any | any | any |
+| Owner of a `custom` row | own | own | own, unless `gallery` | `private` <-> `league`, never from or to `gallery` | own |
+| Another admin | `league` and `gallery` rows (summary and latest published spec only) | no | no | no | `league` and `gallery` rows |
+| `preset` row (any non-site admin, owner included) | as shared | no (`format_preset_locked`) | no | no | as shared |
+
+Sharing (`league`, `gallery`) needs a published version. A `gallery` format belongs to the site: its owner cannot publish a new version of it (`format_published_locked`) nor move it. Delete is limited to a format that was never published and is attached nowhere (`format_has_versions`, `format_attached`); an archive state comes later.
+
+**Routes**
+
+| Route | Guard and limit | Body | Success |
+|---|---|---|---|
+| `GET /api/formats` | any admin tier | query `scope` (`all`, `mine`, `shared`, `gallery`), `visibility`, `kind`, `limit` (default 50, max 100), `offset` | `{ items, total, limit, offset }` (an offset past the last row answers an empty `items` with the real `total`); `scope=gallery` answers `{ items }` from the cached shelf (60 s, tag `format-library`), which holds no owner and no draft |
+| `POST /api/formats` | any admin tier, `format-create` 20 per hour | `{ document, slug? }` or `{ name, base_locale, slug? }` (a name holding a NUL character or a lone surrogate is a 400 `validation_failed`) | 201 `{ definition, check }` (a private custom format owned by the caller) |
+| `GET /api/formats/[id]` | viewer | none | `{ definition, draft, published, versions, check }`; the draft, the version list (newest 100) and the check are for the owner and site admins |
+| `PATCH /api/formats/[id]` | viewer, `format-write` 60 per hour | `{ visibility }` | `{ definition }` |
+| `DELETE /api/formats/[id]` | owner or site admin, `format-write` | none | `{ deleted: true }` |
+| `PUT /api/formats/[id]/draft` | owner or site admin, `format-draft` 300 per 10 minutes | `{ draft_rev, document }` | `{ draft_rev, updated_at, name, check }`; a compare-and-set, a stale revision is 409 with the current revision in `params.draft_rev` |
+| `POST /api/formats/[id]/publish` | owner or site admin, `format-publish` 30 per hour | `{ draft_rev, changelog? }` | 201 `{ version, definition }` |
+| `POST /api/formats/[id]/fork` | viewer, `format-create` | `{ slug? }` (optional body) | 201 `{ definition, check }`: a private copy of the latest PUBLISHED spec (the draft for the owner and site admins when nothing is published), `identity.based_on` = source slug, `forked_from` = source id |
+| `POST /api/formats/presets/[presetId]/fork` | any admin tier, `format-create` | `{ slug? }` (optional body) | 201 `{ definition, check }`: a copy of a shipped example (a code constant); `based_on` = example id, no `forked_from` |
+| `GET /api/seasons/[id]/format` | league admin of that league, or site admin | `?include=spec` | `{ status: 'not_custom' \| 'unattached' \| 'attached', can_start, started, season_format, spec? }` (no seed) |
+| `POST /api/seasons/[id]/format` | league admin, `format-attach` 30 per hour | `{ definition_id, version_no? }` | 201 on a first attach, 200 when it replaced one: `{ season_format, stages, warnings }` |
+| `DELETE /api/seasons/[id]/format` | league admin, `format-attach` | none | `{ removed_stage_ids }` |
+
+Every write route reads its body in this order: guard, rate limit, bounded body (`readBoundedJson`: a 1 MiB raw cap, the `content-length` header checked before the body is read), the kit's `assertDocument` on the `document` member (plain JSON object, depth 64, 150,000 nodes, 262,144 canonical bytes), the strict zod envelope, and only then the database. The raw cap is above the canonical limit on purpose, so a client may send indented JSON. A draft may be an invalid format (the editor saves half-built ones); only publish and attach need a compile without an error diagnostic. Responses never contain a `players` row: an owner is `{ id, name }`. Every library write calls `expireFormatLibraryReads()`; attach and detach call `expireSeasonReads` with the created, updated and removed phase ids. Audit events (fire-and-forget): `format.create`, `format.fork`, `format.publish`, `format.visibility`, `format.delete`, `season.format.attach`, `season.format.detach`; draft saves are not audited.
+
+**Attach.** `attachFormatToSeason` checks in this order, with bounded reads, and calls no database function when any step refuses: the league exists and is `custom` (`format_season_not_custom`); it has not started (`isSeasonStarted`: status `active` or `completed`, any phase that left `upcoming`, any phase with a round; `format_season_started`); the caller may attach the definition (`format_attach_forbidden`) and the version is published (`format_not_published`); the stored spec still hashes to the stored hash; the spec compiles without an error against the rulesets that exist and WITHOUT a roster size (`format_attach_invalid`, param `first` = the first error code; size-dependent problems belong to the readiness checklist of the editor); every `season_default` stage has a league ruleset (`format_attach_ruleset_required`); the league has no hand-made phase (`format_attach_manual_phases`). Then `format_attach_season` runs in one transaction that locks the league, repeats the started and manual-phase checks, writes `season_formats`, deletes the stages that left the spec (it proved them upcoming and round-free) and upserts the others by `(season_id, format_stage_key)`, so a re-attach keeps the id of every stage it still has. Detach (`format_detach_season`) removes the row and its stages; a team that points at a stage blocks it (`format_detach_blocked`).
+
+**Stage materialisation** (`materialise.ts`, pure). One `tournaments` row per kit stage, in the compiled graph order (`stage_order` counts from 1):
+
+| `tournaments` column | From the stage |
+|---|---|
+| `format_stage_key` | `key` |
+| `name` | the stage name resolved in the league language, cut to 200 characters, `Stage <n>` when empty |
+| `bracket_type` | the compiled plan's mapped bracket type: round robin and manual to `round_robin`, `swiss`, `single_elim`, `double_elim` |
+| `ruleset_id` | the named ruleset, else the league's ruleset |
+| `best_of_default` | `series.best_of` |
+| `bo_overrides` | the series overrides under the English round names the generators write (below) |
+| `is_doubles` | `doubles` |
+| `bracket_reset_enabled` | the double elimination's `bracket_reset`, else `true` |
+| `stage_spec` | the frozen stage snapshot |
+
+Series overrides map to `bo_overrides` names by bracket type: round robin and Swiss count from the start (`Round N`); from the end they need an exact round count. Single elimination names the last three rounds `Finals`, `Semifinals`, `Quarterfinals` (usable without a total) and the others `Round N`. Double elimination names depend on the bracket structure, so nothing maps. When two overrides land on one name the first wins. Overrides that cannot be named are returned as warnings, not dropped silently.
+
+**Engine gaps.** The legacy engine runs the phases, but not everything the kit can say. Attach returns what it does not run as `warnings`, codes with params and no text (the next PR words them): `override_unmapped` (`stage`, `round`, `from`, `best_of`), `rr_legs_not_run` (`legs`), `third_place_not_run`, `edge_select_not_run` (`edge`, `kind`: wildcard, threshold, bottom_n) and `groups_not_created` (`stage`, `count`, `method`). Group creation, enrolment, advancement and pairing from the kit are Phase 2b.
+
+**Readiness.** A custom league without an attached format cannot start. The database trigger `trg_seasons_require_attached_format` refuses a status change to `active` (`format_not_attached`, mapped by `updateSeason`) and is the backstop for every path; `POST /api/generate-round/[tid]` and `POST /api/tournaments/[id]/generate-bracket` check it first, before any round exists, and only for a custom league (the season type is already joined onto the tournament, so every other league type takes no extra read). `PATCH /api/seasons/[id]` refuses a change of `format_type` to or from `custom` while a format is attached or after the league started (`season_format_type_locked`); a change between the legacy types is untouched.
+
+**Error codes.** `format_not_found`, `format_preset_not_found`, `format_stale_revision`, `format_slug_taken`, `format_document_not_json`, `format_document_not_object`, `format_document_too_deep`, `format_document_too_many_nodes`, `format_document_too_large`, `format_document_too_large_to_store`, `format_document_name_required`, `format_publish_invalid`, `format_nothing_to_publish`, `format_not_published`, `format_published_locked`, `format_visibility_forbidden`, `format_preset_locked`, `format_attached`, `format_has_versions`, `format_version_immutable` (catalog `errors/admin`); `format_season_not_custom`, `format_season_started`, `format_attach_forbidden`, `format_attach_invalid`, `format_attach_ruleset_required`, `format_attach_manual_phases`, `format_not_attached`, `format_nothing_attached`, `format_detach_blocked`, `season_format_type_locked` (catalog `errors/seasons`). The status of each code is in `FORMAT_ERROR_STATUS`; the database signals map in `mapFormatDbError`.
+
+**Known limits.** The publish, attach and detach functions are single transactions, but `generate-round` takes no league lock: a round generated in the milliseconds between the attach's started check and its stage delete needs two admins acting at once, and the function only deletes stages it proved upcoming and round-free. Draft autosave is limited to 300 saves per 10 minutes per player.
 
 ### i18n
 
@@ -411,7 +504,8 @@ Five namespaces, discovered on disk (no registry to edit): `format-studio` (the 
   - `source-safety.test.ts`: a scan of every kit source file for dynamic code, clocks, random sources, pattern construction from input, network calls, environment reads, `z.record` and `z.any` in schemas, and `any`.
   - `describe-definition.test.ts`: presets and fixtures render in both languages without leftover braces, empty strings or `undefined`, pinned coverage numbers, plan sentences, stage order, malformed input, plural forms and a deterministic plain text.
 - **Studio tests:** `src/lib/format-studio/__tests__/` (`describe-legacy`, `golden`, `view`, `legacy-input`, `loader`), `src/components/format-studio/__tests__/` (the display component and the client-boundary test), `src/app/admin/formats/__tests__/` (gallery and detail pages), `src/app/admin/leagues/[id]/__tests__/format-panel.test.tsx` (the Format tab) and `src/lib/supabase/queries/__tests__/format-studio.test.ts`.
-- **Running Tests:** `npx vitest run src/lib/format-kit src/lib/format-studio src/components/format-studio src/app/admin/formats`.
+- **Library tests:** `src/lib/format-studio/__tests__/` (`api-body`, `api-schemas`, `identity`, `library`, `materialise`, `attach`, and for the pure helpers `access`, `errors`, `slug`, `document-guard`), `src/app/api/formats/__tests__/` (`list-create`, `item`, `draft`, `publish`, `fork` and the `cross-owner` matrix, which runs the real guards), `src/app/api/seasons/[id]/format/__tests__/route.test.ts`, the guard cases in `src/app/api/seasons/[id]/__tests__/route.test.ts`, `src/app/api/generate-round/[tid]/__tests__/route.test.ts` and `src/app/api/tournaments/[id]/generate-bracket/__tests__/route.test.ts` (a custom league without a format is refused before any write; every legacy type is unchanged), and `src/lib/__tests__/write-route-tags.test.ts`, which walks the `formats` route tree and fails when a write handler does not expire the `format-library` tag. Route tests check, for every route: 401, 403, success, 400 validation, 429 with `Retry-After` and no write, a malformed id, no private player data in the body and the cache expiry.
+- **Running Tests:** `npx vitest run src/lib/format-kit src/lib/format-studio src/components/format-studio src/app/admin/formats src/app/api/formats 'src/app/api/seasons/[id]'`.
 
 ### Related Modules
 
@@ -419,11 +513,14 @@ Five namespaces, discovered on disk (no registry to edit): `format-studio` (the 
 - [i18n](./i18n.md): the translator and catalogs the renderers use.
 - [Tournament](./tournament.md): the pairing generators and standings whose behaviour the plan mirrors.
 - [Admin](./admin.md): the Formats pages and the league admin Format tab.
-- [Season](./season.md): the league fields and phases that `describeLegacy` reads.
+- [Season](./season.md): the league fields and phases that `describeLegacy` reads, and the Custom format league type with its attached format.
+- [Supabase](./supabase.md): the three tables of the format library.
 
 ### Not yet covered
 
-- No database tables, write routes or builder: formats cannot be edited, saved, published, attached to a league, cloned, exported or imported yet. The Studio is read-only.
+- No builder: the editor forms, the previews, the readiness checklist and the gallery are not built; the API is the only way to create, save, publish, fork and attach a format today. The Studio pages are read-only. Cloning a league, exporting and importing `.json` files, comparing versions and searching the list are not built.
+- The engine does not run an attached format yet: attaching creates the phases, but pairing, standings, advancement, enrolment and group creation still follow the legacy engine, and attach reports the gap as warnings (see Engine gaps). `season_formats.tunables`, `amendments` and the `legacy` and `shadow` engine values stay at their defaults.
+- The shipped examples are code constants, not rows: they can be forked into a stored format, but there are no `kind = 'preset'` rows yet.
 - No generated public rules page; public pages are unchanged.
 - The descriptor does not check itself against live standings, and standalone tournaments have no descriptor (tournament-only admins see the examples only).
 - The engine does not yet run everything the document can say: round-robin legs and mirror, wildcard, threshold and bottom-N selection, bye scoring values and cross-stage views are described and validated only.

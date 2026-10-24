@@ -54,7 +54,7 @@ export const bracketTypeSchema = z.enum(['single_elim', 'double_elim', 'round_ro
 export const tournamentStatusSchema = z.enum(['upcoming', 'active', 'completed']);
 export const matchStatusSchema = z.enum(['scheduled', 'in_progress', 'pending_confirmation', 'completed', 'disputed']);
 export const roundStatusSchema = z.enum(['pending', 'active', 'completed']);
-export const seasonFormatTypeSchema = z.enum(['singles', 'doubles', 'draft', 'evolution_point_buy']);
+export const seasonFormatTypeSchema = z.enum(['singles', 'doubles', 'draft', 'evolution_point_buy', 'custom']);
 export const seasonStatusSchema = z.enum(['upcoming', 'active', 'completed']);
 /** 3D world theme pick for a league season (`seasons.route_theme`). */
 export const routeThemeSchema = z.enum(['auto', 'plaza', 'sakura', 'mountain', 'clouds']);
