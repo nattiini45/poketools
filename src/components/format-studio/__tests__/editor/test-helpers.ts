@@ -33,7 +33,7 @@ export function expectLabelledControls(html: string): void {
 }
 
 /**
- * The text of some markup: `<style>` blocks and tags removed, each tag replaced by `separator`. Repeats until
+ * The text of some markup: each `<style>` block replaced by a space, each tag by `separator`. Repeats until
  * nothing is left to strip (the loop is the shape CodeQL expects for multi-character stripping).
  */
 export function stripMarkup(html: string, separator = ''): string {
@@ -41,7 +41,7 @@ export function stripMarkup(html: string, separator = ''): string {
   let previous: string;
   do {
     previous = text;
-    text = text.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, separator);
+    text = text.replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<[^>]+>/g, separator);
   } while (text !== previous);
   return text;
 }
