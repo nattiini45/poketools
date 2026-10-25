@@ -170,7 +170,7 @@ describe('stage blocks', () => {
     const stage = describeStage(classicLeague, 'playoffs', 'de');
     expect(stage?.name).toBe('Playoffs');
     expect(stage?.pairing).toBe('K.-o.-System mit einfacher Ausscheidung.');
-    expect(stage?.participants).toBe('Die Teilnehmer kommen aus den früheren Phasen, in der Reihenfolge des Weiterkommens.');
+    expect(stage?.participants).toBe('Die Teilnehmer kommen aus den früheren Stages, in der Reihenfolge des Weiterkommens.');
     expect(stage?.rankChain).toBeNull();
   });
 
@@ -314,7 +314,7 @@ describe('rule cards, views, modules and sections', () => {
     const def = clone(classicLeague);
     def.views.push({ key: 'total', label: ltext('en', 'Total', 'Gesamt'), stages: ['league', 'playoffs'], metric: 'points', combine: 'sum' });
     expect(describeDefinition(def, 'en').views).toEqual(['Combined table Total: points added up over 2 stages.']);
-    expect(describeDefinition(def, 'de').views).toEqual(['Gesamttabelle Gesamt: Punkte aufsummiert über 2 Phasen.']);
+    expect(describeDefinition(def, 'de').views).toEqual(['Gesamttabelle Gesamt: Punkte aufsummiert über 2 Stages.']);
   });
 
   it('describes a module with readable fact values', () => {
@@ -441,6 +441,6 @@ describe('definitionToPlainText', () => {
 
   it('uses the German headings', () => {
     const lines = definitionToPlainText(describeDefinition(classicLeague, 'de')).split('\n');
-    expect(lines).toEqual(expect.arrayContaining(['Phasen', 'Weiterkommen', 'Regeln', 'Hinweise', 'Abdeckung']));
+    expect(lines).toEqual(expect.arrayContaining(['Stages', 'Weiterkommen', 'Regeln', 'Hinweise', 'Abdeckung']));
   });
 });

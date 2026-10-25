@@ -109,7 +109,7 @@ describe('FormatDetail: a preset', () => {
     const en = render(presetView(), 'en');
     for (const heading of ['Stages', 'Rules text', 'Checks', 'Coverage']) expect(en).toContain(`>${heading}<`);
     const de = render(presetView(), 'de');
-    for (const heading of ['Phasen', 'Regeltext', 'Prüfungen', 'Abdeckung']) expect(de).toContain(`>${heading}<`);
+    for (const heading of ['Stages', 'Regeltext', 'Prüfungen', 'Abdeckung']) expect(de).toContain(`>${heading}<`);
   });
 
   it('puts the advancement sentences between the stage cards', () => {

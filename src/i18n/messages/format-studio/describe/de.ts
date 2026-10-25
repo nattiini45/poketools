@@ -3,15 +3,15 @@ import type en from './en';
 
 /**
  * German for `format-studio/describe`. New copy without a native review: neutral statements, the glossary of
- * `docs/i18n.md` (Phase, Tabelle, Freilos, K.-o.-System); the plural objects follow the English ones.
+ * `docs/i18n.md` (Stage, Phase, Tabelle, Freilos, K.-o.-System); the plural objects follow the English ones.
  */
 export default defineDe<typeof en>()({
   overview: {
     stages: {
-      one: 'Eine Phase: {list}.',
-      other: '{count} Phasen: {list}.',
+      one: 'Eine Stage: {list}.',
+      other: '{count} Stages: {list}.',
     },
-    none: 'Dieses Format hat noch keine Phasen.',
+    none: 'Dieses Format hat noch keine Stages.',
     untitled: 'Format ohne Titel',
   },
   participants: {
@@ -23,10 +23,10 @@ export default defineDe<typeof en>()({
       one: 'Erwartet wird ein Teilnehmer.',
       other: 'Erwartet werden {count} Teilnehmer.',
     },
-    edges_edge_order: 'Die Teilnehmer kommen aus den früheren Phasen, in der Reihenfolge des Weiterkommens.',
-    edges_rating: 'Die Teilnehmer kommen aus den früheren Phasen, gesetzt nach Rating.',
-    edges_random: 'Die Teilnehmer kommen aus den früheren Phasen, gesetzt nach Zufall.',
-    edges_manual: 'Die Teilnehmer kommen aus den früheren Phasen, von Hand gesetzt.',
+    edges_edge_order: 'Die Teilnehmer kommen aus den früheren Stages, in der Reihenfolge des Weiterkommens.',
+    edges_rating: 'Die Teilnehmer kommen aus den früheren Stages, gesetzt nach Rating.',
+    edges_random: 'Die Teilnehmer kommen aus den früheren Stages, gesetzt nach Zufall.',
+    edges_manual: 'Die Teilnehmer kommen aus den früheren Stages, von Hand gesetzt.',
   },
   stage: {
     doubles: 'Wird als Doppel gespielt.',
@@ -100,7 +100,7 @@ export default defineDe<typeof en>()({
     first_half: 'erste Saisonhälfte',
   },
   heading: {
-    stages: 'Phasen',
+    stages: 'Stages',
     views: 'Gesamttabellen',
     advancement: 'Weiterkommen',
     rules: 'Regeln',

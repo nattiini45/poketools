@@ -1,7 +1,7 @@
 import { defineDe } from '@/i18n/define';
 import type en from './en';
 
-/** German for `format-studio/admin`. Casual du; stages are "Phasen". */
+/** German for `format-studio/admin`. Casual du; a format's stages are "Stages", a league's phases are "Phasen". */
 export default defineDe<typeof en>()({
   title: 'Formate',
   subtitle: 'So sind Ligen und Beispielformate aufgebaut, in einfachen Worten aufgeschrieben. Vorerst nur zum Lesen.',
@@ -12,7 +12,7 @@ export default defineDe<typeof en>()({
   },
   gallery: {
     heading: 'Beispiele',
-    intro: 'Drei Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Phasen, Regeln und Prüfungen zu lesen.',
+    intro: 'Drei Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Stages, Regeln und Prüfungen zu lesen.',
     exampleBadge: 'Beispiel',
     readOnlyNote: 'Beispiele sind vorerst schreibgeschützt. Du kannst sie lesen, aber noch nicht bearbeiten oder speichern.',
     open: 'Öffnen',
@@ -24,7 +24,7 @@ export default defineDe<typeof en>()({
     capNote: 'Es werden nur die ersten {count} Ligen angezeigt.',
     testBadge: 'Testliga',
     noPhases: 'Noch keine Phasen',
-    stages: { one: '{count} Phase', other: '{count} Phasen' },
+    stages: { one: '{count} Stage', other: '{count} Stages' },
     noProblems: 'Keine Probleme gefunden',
     errors: { one: '{count} Fehler', other: '{count} Fehler' },
     warnings: { one: '{count} Warnung', other: '{count} Warnungen' },
@@ -33,7 +33,7 @@ export default defineDe<typeof en>()({
   detail: {
     back: 'Zurück zu den Formaten',
     backToLeague: 'Zurück zur Liga',
-    outline: 'Phasen',
+    outline: 'Stages',
     rules: 'Regeltext',
     rulesLanguage: 'Sprache des Regeltexts',
     languageEn: 'English',
