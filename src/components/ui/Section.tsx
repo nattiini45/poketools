@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils/cn";
 import CollapsibleSection from "./CollapsibleSection";
 
 interface SectionProps {
+  /** Anchor id on the outer <section>, so a link can jump to it. */
+  id?: string;
   title?: string;
   subtitle?: string;
   action?: ReactNode;
@@ -15,6 +17,7 @@ interface SectionProps {
 }
 
 export default function Section({
+  id,
   title,
   subtitle,
   action,
@@ -27,6 +30,7 @@ export default function Section({
   if (collapsible) {
     return (
       <CollapsibleSection
+        id={id}
         title={title}
         subtitle={subtitle}
         action={action}
@@ -41,8 +45,10 @@ export default function Section({
 
   return (
     <section
+      id={id}
       className={cn(
         "self-start w-full bg-poke-surface border border-poke-border rounded-poke-lg shadow-poke-card overflow-hidden",
+        id && "scroll-mt-4",
         className
       )}
     >
