@@ -56,6 +56,9 @@ export default {
   wiki_note_delete_forbidden: 'Not authorized to delete this note',
   wiki_note_approve_reject_conflict: 'A note cannot be approved and rejected in the same request',
   wiki_note_content_required: 'content is required',
+  wiki_note_resubmission_blocked: 'A moderator closed this note for resubmission',
+  wiki_note_block_superadmin_only: 'Only the superadmin can block a note from resubmitting',
+  wiki_note_block_not_rejected: 'Only a rejected note can be blocked from resubmitting',
 
   // Damage calc per-item errors (`api/calc/**` result `error`, AI calc tool;
   // `unknown_species` above is shared). `{type}` is the English Tera type name.

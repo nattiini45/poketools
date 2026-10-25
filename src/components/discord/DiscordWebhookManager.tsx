@@ -7,7 +7,7 @@ import Select from '@/components/ui/Select';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import type {
-  DiscordWebhook,
+  DiscordWebhookView,
   WebhookScopeType,
   DiscordEventType,
   WebhookFormatOptions,
@@ -15,12 +15,12 @@ import type {
 } from '@/types/discord';
 import { DEFAULT_FORMAT_OPTIONS } from '@/types/discord';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
-import { useLocale, useT } from '@/i18n/client';
-import { createTranslator } from '@/i18n/core';
+import { useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsBroadcast } from '@/i18n/messages/errors/broadcast';
 import { integrationsMessages } from '@/i18n/messages/integrations';
+import { requestWebhookTest } from './webhook-test-client';
 
 const ALL_EVENT_TYPES: readonly DiscordEventType[] = [
   'match_result_submitted',
@@ -74,10 +74,9 @@ interface ErrorState {
 
 export default function DiscordWebhookManager() {
   const t = useT(integrationsMessages);
-  const locale = useLocale();
   const errorText = useApiErrorText(errorsBroadcast);
 
-  const [webhooks, setWebhooks] = useState<DiscordWebhook[]>([]);
+  const [webhooks, setWebhooks] = useState<DiscordWebhookView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorState | null>(null);
 
@@ -172,7 +171,7 @@ export default function DiscordWebhookManager() {
     }
   };
 
-  const handleToggle = async (webhook: DiscordWebhook) => {
+  const handleToggle = async (webhook: DiscordWebhookView) => {
     try {
       const res = await fetch(`/api/discord-webhooks/${webhook.id}`, {
         method: 'PATCH',
@@ -205,26 +204,12 @@ export default function DiscordWebhookManager() {
     }
   };
 
-  const handleTest = async (webhook: DiscordWebhook) => {
-    // The test embed uses the webhook's forced language; one that follows the
-    // league is tested in the admin's own language (the league's is not known here).
-    const forced = webhook.format_options.language;
-    const testT = createTranslator(integrationsMessages, forced === 'de' || forced === 'en' ? forced : locale);
+  const handleTest = async (webhook: DiscordWebhookView) => {
+    // The server posts the test embed: the URL is never in the browser.
     try {
-      const res = await fetch(webhook.webhook_url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          embeds: [{
-            title: testT('discord.testEmbed.title'),
-            description: testT('discord.testEmbed.description', { label: webhook.label }),
-            color: 0x5865f2,
-            timestamp: new Date().toISOString(),
-          }],
-        }),
-      });
-      if (!res.ok) {
-        fail(t('discord.testStatus', { status: String(res.status) }), t('discord.errors.test'));
+      const json = await requestWebhookTest(webhook.id);
+      if (!json.success) {
+        fail(json, t('discord.errors.test'));
         return;
       }
       alert(t('discord.testSent'));
@@ -233,7 +218,7 @@ export default function DiscordWebhookManager() {
     }
   };
 
-  const startEditing = (webhook: DiscordWebhook) => {
+  const startEditing = (webhook: DiscordWebhookView) => {
     setEditingId(webhook.id);
     setEditEventFilter([...webhook.event_filter]);
     setEditFormatOptions({ ...webhook.format_options });
@@ -466,9 +451,9 @@ export default function DiscordWebhookManager() {
         <div className="space-y-3">
           {webhooks.map((webhook) => (
             <Card key={webhook.id}>
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <h3 className="font-heading font-semibold text-poke-text-primary truncate">
                       {webhook.label}
                     </h3>
@@ -489,7 +474,7 @@ export default function DiscordWebhookManager() {
                     </Badge>
                   </div>
                   <p className="text-xs text-poke-text-muted truncate">
-                    {webhook.webhook_url.replace(/\/api\/webhooks\/\d+\/(.{8}).+/, '/api/webhooks/***/$1...')}
+                    {t('discord.webhookUrlSaved', { hint: webhook.webhook_url_hint })}
                   </p>
 
                   {/* Event filter tags */}
@@ -523,7 +508,7 @@ export default function DiscordWebhookManager() {
                   </div>
                 </div>
 
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex flex-wrap gap-1.5 md:shrink-0">
                   <Button
                     variant="ghost"
                     size="sm"

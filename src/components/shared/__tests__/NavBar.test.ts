@@ -69,3 +69,26 @@ describe('NavBar site palette wiring', () => {
     expect(source).not.toMatch(/<nav className="[^"]*overflow-y-auto/);
   });
 });
+
+describe('NavBar responsive structure', () => {
+  const source = readFileSync(path.resolve(__dirname, '../NavBar.tsx'), 'utf8');
+  const count = (needle: string) => source.split(needle).length - 1;
+
+  it('switches links and menu button at one breakpoint (xl), never md', () => {
+    expect(count('md:hidden')).toBe(0);
+    expect(count('hidden xl:flex')).toBe(1);
+    // Hamburger, drawer backdrop and drawer panel.
+    expect(count('xl:hidden')).toBe(3);
+  });
+
+  it('keeps the drawer attributes and the nav id the route chrome relies on', () => {
+    expect(count('data-navbar-drawer=""')).toBe(2);
+    expect(count('id="site-nav"')).toBe(1);
+  });
+
+  it('renders every desktop link dense', () => {
+    const row = source.slice(source.indexOf('hidden xl:flex'), source.indexOf('{/* Right side'));
+    expect(row).toContain('<NavLink');
+    expect(row).toMatch(/<NavLink[^>]*\bdense\b/s);
+  });
+});

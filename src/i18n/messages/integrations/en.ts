@@ -73,7 +73,7 @@ export default {
     empty: 'No webhooks configured yet. Click “Add Webhook” to get started.',
     deleteConfirm: 'Delete this webhook? Discord notifications will stop for this channel.',
     testSent: 'Test message sent! Check your Discord channel.',
-    testStatus: 'Discord returned {status}',
+    webhookUrlSaved: 'Webhook URL saved (ends in {hint})',
     formatOptions: {
       spoiler_results: {
         label: 'Spoiler tags on results',
