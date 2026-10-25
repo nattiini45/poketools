@@ -64,6 +64,16 @@ export default {
     endDate: 'End Date',
     submit: 'Create League',
     saveFailed: 'Failed to save',
+    // The league details form on the Settings tab (LeagueSettingsForm)
+    saveChanges: 'Save changes',
+    saved: 'League settings saved.',
+    datesInvalid: 'The end date must not be before the start date.',
+    leagueTypeLockedStarted:
+      'The league type can no longer be changed: the league has started (it is active or completed, or a phase has rounds).',
+    leagueTypeLockedPointBuy:
+      'A point-buy league keeps its league type, and other leagues cannot become one: its setup (format rules, point-buy list, battle ruleset) is created together with the league.',
+    rulesetEditHint:
+      'The default for new phases and for team validation where a phase has no custom ruleset of its own. Existing phases keep theirs.',
   },
   theme: {
     label: 'Theme',

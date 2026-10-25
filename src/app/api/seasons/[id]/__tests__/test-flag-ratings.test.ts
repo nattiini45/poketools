@@ -36,6 +36,9 @@ vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
 
 vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
+  diffField: (changes: Record<string, { before: unknown; after: unknown }>, field: string, before: unknown, after: unknown) => {
+    if (before !== after) changes[field] = { before, after };
+  },
 }));
 
 vi.mock('@/lib/rating/test-league-rebuild', () => ({
@@ -107,6 +110,8 @@ let errorSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireResourceAdmin).mockResolvedValue(siteAdmin);
+  // The route reads the stored league once, before any guard or write.
+  vi.mocked(getSeasonById).mockResolvedValue(season);
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   return () => errorSpy.mockRestore();
 });
@@ -172,12 +177,13 @@ describe('PATCH /api/seasons/[id] — test-league flag and ratings', () => {
     );
   });
 
-  it('neither reads the flag nor rebuilds for a PATCH without it', async () => {
+  it('does not rebuild for a PATCH without the flag', async () => {
     vi.mocked(updateSeason).mockResolvedValue({ ...season, name: 'Renamed' });
 
     const body = await (await patch({ name: 'Renamed' })).json();
 
-    expect(getSeasonById).not.toHaveBeenCalled();
+    // Only the one stored-league read the guards share, not a flag read of its own.
+    expect(getSeasonById).toHaveBeenCalledTimes(1);
     expect(rebuildRatingsAfterTestFlagChange).not.toHaveBeenCalled();
     expect(body.data.rating_rebuild).toBeNull();
   });

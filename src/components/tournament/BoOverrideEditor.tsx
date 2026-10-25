@@ -1,11 +1,13 @@
 'use client';
 
+import { useId } from 'react';
 import type { BracketType, BoOverrides } from '@/types/tournament';
 import Card from '@/components/ui/Card';
 import { useLocale, useT } from '@/i18n/client';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import { commonMessages } from '@/i18n/messages/common';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
+import { bestOfChoices } from '@/lib/tournament/best-of';
 
 interface BoOverrideEditorProps {
   bracketType: BracketType;
@@ -13,8 +15,6 @@ interface BoOverrideEditorProps {
   overrides: BoOverrides;
   onChange: (overrides: BoOverrides) => void;
 }
-
-const BO_OPTIONS = [1, 3, 5, 7];
 
 /** Round names that can have Bo overrides, by bracket type: the engine's stored English names (the override keys). */
 function getRoundNames(bracketType: BracketType): string[] {
@@ -38,6 +38,7 @@ export default function BoOverrideEditor({
   const locale = useLocale();
   const t = useT(tournamentsAdminMessages);
   const tCommon = useT(commonMessages);
+  const idPrefix = useId();
   const roundNames = getRoundNames(bracketType);
 
   if (roundNames.length === 0) return null;
@@ -61,16 +62,19 @@ export default function BoOverrideEditor({
         {t('boOverrides.hint', { bo: defaultBo })}
       </p>
       <div className="space-y-1.5 mt-2">
-        {roundNames.map((name) => (
+        {roundNames.map((name, index) => (
           <div key={name} className="flex items-center gap-3">
-            <span className="text-sm text-poke-text-primary w-28">{translateEngineLabel('round', name, locale)}</span>
+            <label htmlFor={`${idPrefix}-${index}`} className="text-sm text-poke-text-primary w-28">
+              {translateEngineLabel('round', name, locale)}
+            </label>
             <select
+              id={`${idPrefix}-${index}`}
               value={overrides[name] ?? 0}
               onChange={(e) => handleChange(name, Number(e.target.value))}
               className="border border-poke-border rounded-poke-md px-2 py-1 text-sm bg-poke-surface text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
             >
               <option value={0}>{t('boOverrides.defaultOption', { bo: defaultBo })}</option>
-              {BO_OPTIONS.filter((v) => v !== defaultBo).map((v) => (
+              {bestOfChoices(overrides[name]).filter((v) => v !== defaultBo).map((v) => (
                 <option key={v} value={v}>
                   {tCommon('bestOf', { count: v })}
                 </option>
