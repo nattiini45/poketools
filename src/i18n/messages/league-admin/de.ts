@@ -111,7 +111,7 @@ export default defineDe<typeof en>()({
     bannedItems: 'Gebannte Items',
     teraRules: 'Tera-Regeln',
     teraRule: '{stage}: {rule}',
-    teraPinned: 'Die Tera-Regeln kommen aus dem Formatpaket und lassen sich hier nicht ändern.',
+    teraPinned: 'Die Tera-Regeln kommen aus dem Format Pack und lassen sich hier nicht ändern.',
     redraftPhase: {
       label: 'Redraft-Phase',
       open: 'Offen',
@@ -120,7 +120,7 @@ export default defineDe<typeof en>()({
     },
     tiebreakerOrder: 'Tiebreaker-Reihenfolge',
     tiebreakerHint:
-      'Diese Reihenfolge wird gespeichert und auf der Regelseite der Liga angezeigt. Die Tabelle nutzt derzeit die Tiebreaker-Kette des Formatpakets, egal was hier steht.',
+      'Diese Reihenfolge wird gespeichert und auf der Regelseite der Liga angezeigt. Die Tabelle nutzt derzeit die Tiebreaker-Kette des Format Packs, egal was hier steht.',
     tiebreakerMoveUp: '{step} nach oben',
     tiebreakerMoveDown: '{step} nach unten',
     tiebreakerRemove: '{step} entfernen',

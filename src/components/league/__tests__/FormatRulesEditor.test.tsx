@@ -382,7 +382,7 @@ describe('FormatRulesEditor German', () => {
       'Entscheidungsspiel',
       'Spielpunkte nach unten',
       'Tera-Regeln',
-      'Die Tera-Regeln kommen aus dem Formatpaket',
+      'Die Tera-Regeln kommen aus dem Format Pack',
       'Redraft-Phase',
       'Geschlossen',
       'Darf höchstens 999 sein.',
@@ -391,7 +391,7 @@ describe('FormatRulesEditor German', () => {
       'Du hast ungespeicherte Änderungen.',
       'Regeln einer laufenden Liga ändern?',
       'werden nicht neu berechnet',
-      'Die Tabelle nutzt derzeit die Tiebreaker-Kette des Formatpakets',
+      'Die Tabelle nutzt derzeit die Tiebreaker-Kette des Format Packs',
       'Budget und Picks gelten für Draft-Pools',
     ]) {
       expect(html, text).toContain(text);

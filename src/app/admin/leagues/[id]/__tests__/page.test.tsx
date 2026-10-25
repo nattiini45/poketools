@@ -654,7 +654,7 @@ describe('rules tab: format rules editor', () => {
     mocks.locale = 'de';
     const de = sectionTitled(await render('rules'), 'Formatregeln');
     expect(de?.props.subtitle).toContain('Bearbeite Draft-Budget, Picks');
-    expect(de?.props.subtitle).toContain('Tera-Regeln kommen aus dem Formatpaket');
+    expect(de?.props.subtitle).toContain('Tera-Regeln kommen aus dem Format Pack');
   });
 
   it('a failed phase signals read fails the tab instead of guessing "not started"', async () => {
