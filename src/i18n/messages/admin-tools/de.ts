@@ -125,6 +125,61 @@ export default defineDe<typeof en>()({
         'Exportiert: {count} von {total} Zeilen. Das Limit wurde erreicht; erhöhe es (bis 10.000), um mehr zu exportieren.',
       summaryMaxed: 'Exportiert: {count} von {total} Zeilen. Ein Export enthält höchstens 10.000 Zeilen.',
     },
+    formatDrift: {
+      title: 'Format-Drift-Bericht',
+      subtitle: 'Vergleicht, was Ligen gespeichert haben, mit dem, was die Engine tatsächlich verwendet.',
+      run: 'Bericht erstellen',
+      running: 'Wird erstellt…',
+      retry: 'Erneut versuchen',
+      failed: 'Der Format-Drift-Bericht konnte nicht erstellt werden',
+      readOnlyNote:
+        'Dieser Bericht liest nur und ändert nichts. Die Tabellen nutzen die Tiebreaker-Kette des Format Packs, und beim Einschreiben einer Phase wird die Weiterkommen-Regel der einzuschreibenden Phase (der Zielphase) gelesen.',
+      truncated: 'Der Bericht ist unvollständig: Ein Lesevorgang hat bei {max} Zeilen aufgehört, deshalb fehlen einige Ligen oder Phasen.',
+      generatedAt: 'Erstellt {time}',
+      archivedBadge: 'Archiviert',
+      testBadge: 'Test',
+      summary: {
+        leaguesChecked: { one: '{count} Liga mit Formatregeln geprüft', other: '{count} Ligen mit Formatregeln geprüft' },
+        tiebreakerMismatches: { one: '{count} weicht von der Kette des Format Packs ab', other: '{count} weichen von der Kette des Format Packs ab' },
+        pairsChecked: { one: '{count} Phasenpaar mit Regel geprüft', other: '{count} Phasenpaare mit Regel geprüft' },
+        pairsConsistent: { one: '{count} stimmig', other: '{count} stimmig' },
+        pairsMismatching: { one: '{count} widersprüchlich', other: '{count} widersprüchlich' },
+      },
+      tiebreaker: {
+        title: 'Tiebreaker-Reihenfolge',
+        intro:
+          'Die gespeicherte Reihenfolge einer Liga steht auf ihrer Regelseite, die Tabellen nutzen aber immer die Kette des Format Packs. Diese Ligen haben eine andere Reihenfolge gespeichert.',
+        stored: 'Gespeichert',
+        pack: 'Kette des Format Packs',
+        empty: 'Keine Abweichungen gefunden: Jede gespeicherte Reihenfolge entspricht der Kette des Format Packs.',
+      },
+      advancement: {
+        title: 'Weiterkommen-Regeln',
+        intro:
+          'Eine Regel, die an der einen Phase eines aufeinanderfolgenden Paars gespeichert ist, wird an der anderen angewendet oder angezeigt. Bei diesen Paaren passt das nicht zusammen.',
+        empty: 'Keine Abweichungen gefunden: Keine Weiterkommen-Regel hängt an der falschen Seite eines Phasenpaars.',
+        source: 'Quellphase',
+        target: 'Zielphase',
+        ruleNone: 'keine',
+        ruleTop: 'Top {count}',
+        ruleTopPerGroup: 'Top {count} je Gruppe',
+        kindLabel: {
+          source_only: 'Regel nur an der Quellphase',
+          target_only: 'Regel nur an der Zielphase',
+          both_differ: 'Regeln unterscheiden sich',
+          orphan: 'Ungenutzte Regel',
+        },
+        kind: {
+          source_only:
+            'Die Zeitleiste zeigt diese Regel zwischen den beiden Phasen, aber beim Einschreiben der Zielphase wird deren eigene Regel gelesen, es wird also nichts abgeschnitten.',
+          target_only:
+            'Beim Einschreiben der Zielphase wird diese Regel angewendet, die Zeitleiste zeigt sie aber nicht zwischen den beiden Phasen an.',
+          both_differ:
+            'Beim Einschreiben der Zielphase gilt deren Regel, die Zeitleiste zeigt aber die Regel der Quellphase.',
+          orphan: 'Das ist die einzige Phase der Liga, und niemand liest ihre Regel.',
+        },
+      },
+    },
   },
 
   metaData: {

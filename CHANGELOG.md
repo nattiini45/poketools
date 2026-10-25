@@ -28,6 +28,28 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   in front of a started phase are disabled.
 - **`season.update` audit event.** A general league edit (name, league type, ruleset, dates, status, archive, theme,
   language) is now audited with the changed fields. The description text is never stored in the row.
+- **Editable format rules.** The Format Rules section of a point-buy league's Rules tab is now an editor for the draft
+  budget, picks, Draft Kill Token ratio and limits (total and per line), banned moves and items, and the stored
+  tiebreaker order, with the schema's limits on every control and the errors under the field. Save sends the full set
+  of rules to the existing endpoint; Tera rules stay on the format pack (shown read-only) and the redraft phase is
+  shown, not edited. If the rules cannot be loaded the editor shows the error with **Retry** and disables
+  **Initialize** and Save, so an unreadable row is never overwritten with defaults. On a started league Save asks
+  first: the change applies from now on, and past results, standings and existing draft pools are not recomputed.
+  The tiebreaker order is stored and shown on the rules page, but standings still use the format pack's chain.
+- **Start from an existing league.** `/admin/leagues/new` has a **Start from** picker. A chosen league prefills the
+  league type, battle ruleset, theme, language and description, and its phases are copied (name, bracket type,
+  ruleset, best-of, doubles, visibility, grand-final reset, advancement rule and order). Optionally the roster is
+  copied, and site admins can also copy the league admins; league admins can only start from their own leagues.
+  Picking or changing the league keeps the name and dates already typed.
+  Rounds, matches, results, phase participants, groups, point-buy lists, tokens, draft data and format rules are
+  never copied. If a step fails the new league is removed again; if that cleanup fails too, the error names what
+  remains. The API takes an optional `clone_from` on `POST /api/seasons`.
+- **Format drift report** on the admin Data page (site admins). **Run report** lists, read-only, leagues whose stored
+  tiebreaker order differs from the format pack's chain (standings never read the stored order) and phase pairs
+  whose advancement rule sits on the source or the target phase or differs between them (enrollment reads the rule
+  from the phase being enrolled, the phase timeline shows it on the phase before). It changes nothing, is not loaded
+  until requested, and reads at most 10,000 rows per list. `GET /api/admin/format-drift`.
+- **`season.clone` and `season.clone_failed` audit events** for a league started from another league.
 
 
 - Wiki moderation: the superadmin can close a rejected note for resubmission ("Block from resubmitting", behind a
@@ -55,6 +77,15 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Confirm before a group re-draw.** Drawing groups again over existing ones asks first, since it deletes the phase's
   groups and recreates them from the seeds.
 - `PATCH /api/seasons/[id]` answers `404 SEASON_NOT_FOUND` for an unknown league.
+- The Format Rules section subtitle on the league admin Rules tab now describes the editor.
+- `POST /api/seasons` accepts an optional `clone_from` (`season_id`, `copy_roster`, `copy_admins`). Without it the
+  request behaves as before. New error codes: `SEASON_CLONE_FORBIDDEN`, `SEASON_CLONE_ADMINS_FORBIDDEN`,
+  `SEASON_CLONE_FAILED` and `SEASON_CLONE_CLEANUP_FAILED`.
+
+### Removed
+
+- The unused advancement helper (`src/lib/tournament/advancement.ts`). Internal only: league phases advance through
+  the enrollment sync, which is unchanged, and its behaviour is now covered by the enrollment sync tests.
 
 
 - Test Players: Reset Data, Reset Login (Mint Login for a player who already has a login), Clear Login, Remove from Season and Delete Test-Only Matches now ask first in a confirmation dialog that names the player and the season, in English and German. Create / Repair, Refresh and the first Mint Login stay one click.
@@ -77,6 +108,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
   new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
   the migration.
+- The Format Rules section no longer offers **Initialize** after a failed load. A failed read used to look like "no
+  rules yet" and let one click overwrite the stored rules with defaults.
 
 
 - Wiki: an author's edit to an approved note no longer goes live unreviewed. The edit puts the note back in the

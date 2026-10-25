@@ -6,7 +6,7 @@ The numbers a league plays with (budget, picks, token ratio and caps, the Comeba
 
 1. Create the season with format `evolution_point_buy`.
 2. Import / bind a point-buy list (admin league page → EPB Import panel, or CLI). Creating the season auto-binds the active list version when one exists.
-3. Confirm `format_rules` exist. They are initialized on create from the pack's `epb.defaults` (`initializeEpbFormatRules`); edit them on the league admin page.
+3. Confirm `format_rules` exist. They are initialized on create from the pack's `epb.defaults` (`initializeEpbFormatRules`); edit them on the league admin page's Rules tab (Format Rules: budget, picks, Draft Kill Token ratio and limits, bans, stored tiebreaker order). Tera rules come from the format pack and are shown read-only.
 4. Create the draft pool — EPB uses the bound list as the pool source.
 
 ## Import data

@@ -53,6 +53,11 @@ export default defineDe<typeof en>()({
   SEASON_FORMAT_POINT_BUY_LOCKED:
     'Eine Point-Buy-Liga behält ihren Liga-Typ, und andere Ligen lassen sich nicht darauf umstellen.',
   SEASON_DATES_INVALID: 'Das Enddatum darf nicht vor dem Startdatum liegen.',
+  SEASON_CLONE_FORBIDDEN: 'Du kannst nur aus einer Liga starten, die du selbst verwaltest.',
+  SEASON_CLONE_ADMINS_FORBIDDEN: 'Nur Site-Admins können die Liga-Admins übernehmen.',
+  SEASON_CLONE_FAILED: 'Die Liga konnte nicht aus der Vorlage erstellt werden. Es wurde nichts behalten.',
+  SEASON_CLONE_CLEANUP_FAILED:
+    'Die Liga konnte nicht aus der Vorlage erstellt und auch nicht wieder entfernt werden: Liga {league_id} besteht weiter, mit {phases} Phasen und {participants} Kadereinträgen. Ein Site-Admin kann sie löschen.',
   season_test_flag_site_admin_only: 'Nur Site-Admins können die Testliga-Markierung ändern.',
   participant_update_empty: 'Gib gym_type und/oder core_types an, um den Teilnehmer zu ändern.',
   format_mismatch: 'Diese Saison nutzt nicht das Format Evolution Point Buy.',

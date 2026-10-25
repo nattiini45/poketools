@@ -45,7 +45,7 @@ Format gates:
 |-------|---------|
 | `point_buy_list_versions` | Versioned list container (name + version, unique) |
 | `point_buy_list_entries` | The evolution lines of a version (prices, kill thresholds, ratings, `species_ids`, `special_rules` flags) |
-| `format_rules` | Per-season config: bans, tera rules, tiebreakers, budget, picks, token constraints (initialized from the pack's `epb.defaults`) |
+| `format_rules` | Per-season config: bans, tera rules, tiebreakers, budget, picks, token constraints (initialized from the pack's `epb.defaults`; edited in the league admin Rules tab, where Tera rules stay read-only and the tiebreaker order is stored but standings use the pack chain) |
 | `evolution_tracker` (extended) | Per-player line state: `line_id` (one tracker per line per season and league group; `season_group_id` is NULL in a league without groups, see docs/draft-room.md "League groups"), the five source columns, `suspended_until_matchday`, `evolution_points_awarded`, `locked_stage3_pokemon`, `redraft_slot_id` |
 | `evo_progress_log` | Progress audit log (one row per applied amount) |
 | `evolution_events` | Development-event log: every stage transition (old/new form + stage, matchday, auto vs. `is_manual`) |

@@ -133,6 +133,64 @@ export default {
         'Exported {count} of {total} rows. The limit was reached; raise it (up to 10,000) to export more.',
       summaryMaxed: 'Exported {count} of {total} rows. One export holds at most 10,000 rows.',
     },
+    /** Read-only report on `/admin/data`: stored league settings vs what the engine uses. */
+    formatDrift: {
+      title: 'Format drift report',
+      subtitle: 'Compare what leagues have stored with what the engine actually uses.',
+      run: 'Run report',
+      running: 'Running…',
+      retry: 'Retry',
+      failed: 'Failed to build the format drift report',
+      readOnlyNote:
+        'This report only reads and changes nothing. Standings use the format pack’s tiebreaker chain, and enrolling a phase reads the advancement rule from the phase being enrolled (the target phase).',
+      /** `{max}` = the row cap of one read. */
+      truncated: 'The report is partial: a read stopped at {max} rows, so some leagues or phases are missing.',
+      generatedAt: 'Generated {time}',
+      archivedBadge: 'Archived',
+      testBadge: 'Test',
+      summary: {
+        leaguesChecked: { one: '{count} league with format rules checked', other: '{count} leagues with format rules checked' },
+        tiebreakerMismatches: { one: '{count} differs from the pack chain', other: '{count} differ from the pack chain' },
+        pairsChecked: { one: '{count} phase pair with a rule checked', other: '{count} phase pairs with a rule checked' },
+        pairsConsistent: { one: '{count} consistent', other: '{count} consistent' },
+        pairsMismatching: { one: '{count} mismatching', other: '{count} mismatching' },
+      },
+      tiebreaker: {
+        title: 'Tiebreaker order',
+        intro:
+          'A league’s stored order is shown on its rules page, but standings always use the pack chain. These leagues store a different order.',
+        stored: 'Stored',
+        pack: 'Pack chain',
+        empty: 'No differences found: every stored order matches the pack chain.',
+      },
+      advancement: {
+        title: 'Advancement rules',
+        intro:
+          'A rule stored on one phase of a consecutive pair is applied or shown on the other. These pairs disagree.',
+        empty: 'No differences found: no advancement rule sits on the wrong side of a phase pair.',
+        source: 'Source phase',
+        target: 'Target phase',
+        ruleNone: 'none',
+        /** `{count}` = players that advance. */
+        ruleTop: 'top {count}',
+        ruleTopPerGroup: 'top {count} per group',
+        kindLabel: {
+          source_only: 'Rule on the source phase only',
+          target_only: 'Rule on the target phase only',
+          both_differ: 'Rules differ',
+          orphan: 'Unused rule',
+        },
+        kind: {
+          source_only:
+            'The timeline shows this rule between the two phases, but enrolling the target phase reads the target’s own rule, so no cut is applied.',
+          target_only:
+            'Enrolling the target phase applies this rule, but the timeline shows no label for it between the two phases.',
+          both_differ:
+            'Enrolling the target phase uses the target’s rule, while the timeline shows the source phase’s rule.',
+          orphan: 'This is the league’s only phase and nothing reads its rule.',
+        },
+      },
+    },
   },
 
   metaData: {

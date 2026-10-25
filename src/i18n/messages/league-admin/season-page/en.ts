@@ -137,7 +137,8 @@ export default {
   formatRules: {
     title: 'Format Rules',
     /** `{token}` = glossary `token.draftKill`. */
-    subtitle: 'Configure bans, Tera rules, tiebreaker order and {token} settings for this format.',
+    subtitle:
+      'Edit the draft budget, picks, {token} limits, bans and the stored tiebreaker order. Tera rules come from the format pack and cannot be edited here.',
   },
   draftRoom: {
     title: 'Draft Room',
