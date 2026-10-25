@@ -276,7 +276,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
       title={t('detail.title')}
       maxWidth="md"
       action={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {player?.isAdmin && (
             <CreateSocialImageButton
               targetId="match-highlight-card"

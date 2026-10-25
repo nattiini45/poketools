@@ -12,6 +12,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
+import Select from '@/components/ui/Select';
 import { getButtonClasses } from '@/components/ui/Button';
 import { deleteRebuildWarning } from '@/components/shared/DeleteResourceButton';
 import { useT } from '@/i18n/client';
@@ -23,6 +24,12 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
+import {
+  phaseAnchorOptions,
+  phaseNumbers,
+  resolveInsertAt,
+  type PhaseInsertMode,
+} from '@/lib/league-admin/phase-controls';
 
 interface PhaseTimelineProps {
   seasonId: string;
@@ -54,6 +61,12 @@ function isSuccessBody(body: unknown): boolean {
   return typeof body === 'object' && body !== null && (body as { success?: unknown }).success === true;
 }
 
+/**
+ * The phase card's action row (status, reorder arrows, Manage, Delete). It wraps and may shrink,
+ * so on a narrow screen the buttons drop to a second line inside the card instead of poking out.
+ */
+export const PHASE_ACTIONS_CLASS = 'flex items-center gap-2 flex-wrap min-w-0 max-w-full';
+
 function statusVariant(status: string): 'green' | 'accent' | 'gray' {
   if (status === 'active') return 'green';
   if (status === 'upcoming') return 'accent';
@@ -78,6 +91,9 @@ export default function PhaseTimeline({
   const [error, setError] = useState<TimelineError | null>(null);
   const [deleteWarning, setDeleteWarning] = useState<DeleteWarning | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  /** Where the new phase goes: the end of the league, or next to the phase `insertAnchor`. */
+  const [insertMode, setInsertMode] = useState<PhaseInsertMode>('end');
+  const [insertAnchor, setInsertAnchor] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
 
@@ -101,17 +117,31 @@ export default function PhaseTimeline({
     void fetchPhases();
   }, [fetchPhases]);
 
+  function resetPosition() {
+    setInsertMode('end');
+    setInsertAnchor(null);
+  }
+
+  function changeInsertMode(mode: PhaseInsertMode) {
+    setInsertMode(mode);
+    // Preselect the first position the API accepts, so "before" and "after" never silently append.
+    const first = mode === 'end' ? undefined : phaseAnchorOptions(mode, phases).find((o) => !o.disabled);
+    setInsertAnchor(first?.phaseId ?? null);
+  }
+
   async function handleCreate(data: PhaseFormData) {
+    const insertAt = resolveInsertAt(insertMode, insertAnchor, phases);
     const res = await fetch(`/api/seasons/${seasonId}/phases`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify(insertAt === undefined ? data : { ...data, insert_at: insertAt }),
     });
     const result: ApiResult<LeaguePhase> = await res.json();
     if (!result.success) {
       throw new PhaseSaveError(toApiErrorLike(result));
     }
     setShowCreate(false);
+    resetPosition();
     router.push(`/admin/leagues/${seasonId}/phases/${result.data.id}`);
   }
 
@@ -181,6 +211,9 @@ export default function PhaseTimeline({
     }
   }
 
+  const numbers = phaseNumbers(phases);
+  const numberOf = (phaseId: string) => numbers.get(phaseId) ?? 0;
+
   if (loading) return <p className="text-sm text-poke-text-muted">{t('timeline.loading')}</p>;
 
   return (
@@ -207,7 +240,10 @@ export default function PhaseTimeline({
         <h3 className="text-sm font-heading font-semibold text-poke-text-primary">
           {t('timeline.heading', { count: phases.length })}
         </h3>
-        <Button variant="secondary" size="sm" onClick={() => setShowCreate(!showCreate)}>
+        <Button variant="secondary" size="sm" onClick={() => {
+            setShowCreate(!showCreate);
+            resetPosition();
+          }}>
           {showCreate ? t('timeline.cancel') : t('timeline.create')}
         </Button>
       </div>
@@ -237,7 +273,7 @@ export default function PhaseTimeline({
               <div className="flex items-center justify-between gap-2 text-sm flex-wrap">
                 <div className="min-w-0">
                   <span className="font-heading font-medium text-poke-text-primary">
-                    {phase.stage_order}. {phase.name}
+                    {numberOf(phase.id)}. {phase.name}
                   </span>
                   <span className="ml-2 text-xs text-poke-text-secondary">
                     {enumLabel(tEnum, 'bracketType', phase.bracket_type)}
@@ -247,7 +283,7 @@ export default function PhaseTimeline({
                     {t('timeline.rounds', { done: phase.rounds_completed, total: phase.rounds_total })}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className={PHASE_ACTIONS_CLASS}>
                   <Badge variant={statusVariant(phase.status)}>
                     {enumLabel(tEnum, 'tournamentStatus', phase.status)}
                   </Badge>
@@ -304,6 +340,45 @@ export default function PhaseTimeline({
           <p className="text-xs text-poke-text-muted mb-4">
             {t('timeline.newPhaseHint')}
           </p>
+          {phases.length > 0 && (
+            <div className="space-y-3 mb-4 max-w-lg">
+              <Select
+                label={t('timeline.position.label')}
+                value={insertMode}
+                onChange={(e) => changeInsertMode(e.target.value as PhaseInsertMode)}
+              >
+                <option value="end">{t('timeline.position.end')}</option>
+                <option value="before" disabled={!phaseAnchorOptions('before', phases).some((o) => !o.disabled)}>
+                  {t('timeline.position.before')}
+                </option>
+                <option value="after">{t('timeline.position.after')}</option>
+              </Select>
+              {insertMode !== 'end' && (
+                <div className="space-y-1.5">
+                  <Select
+                    label={t('timeline.position.phase')}
+                    value={insertAnchor ?? ''}
+                    onChange={(e) => setInsertAnchor(e.target.value || null)}
+                    aria-describedby="phase-position-hint"
+                  >
+                    {phaseAnchorOptions(insertMode, phases).map((option) => {
+                      const phase = phases.find((p) => p.id === option.phaseId);
+                      if (!phase) return null;
+                      const params = { order: numberOf(phase.id), name: phase.name };
+                      return (
+                        <option key={phase.id} value={phase.id} disabled={option.disabled}>
+                          {t(option.disabled ? 'timeline.position.optionLocked' : 'timeline.position.option', params)}
+                        </option>
+                      );
+                    })}
+                  </Select>
+                  <p id="phase-position-hint" className="text-xs text-poke-text-muted">
+                    {t('timeline.position.hint')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           <PhaseForm
             rulesets={rulesets}
             defaultRulesetId={defaultRulesetId}

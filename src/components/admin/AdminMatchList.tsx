@@ -18,6 +18,7 @@ import {
 import AdminMatchFilters from '@/components/admin/AdminMatchFilters';
 import { MatchListRow } from '@/components/admin/AdminMatchRowCard';
 import { isRetryableLoadError, matchListEmptyKey } from '@/components/admin/match-list-view';
+import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import Alert from '@/components/ui/Alert';
 import Skeleton from '@/components/ui/Skeleton';
 import { getButtonClasses } from '@/components/ui/Button';
@@ -134,7 +135,7 @@ export function MatchListPager({
   );
 }
 
-export default function AdminMatchList() {
+export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchViewer | null }) {
   const t = useT(shellMessages);
   const errorText = useApiErrorText(errorsAdmin);
   const timeZone = useTimeZone();
@@ -386,7 +387,7 @@ export default function AdminMatchList() {
           <AnimatedList className="space-y-2">
             {data.rows.map((row) => (
               <AnimatedListItem key={row.id}>
-                <MatchListRow row={row} backQuery={backQuery} />
+                <MatchListRow row={row} backQuery={backQuery} viewer={viewer} />
               </AnimatedListItem>
             ))}
           </AnimatedList>

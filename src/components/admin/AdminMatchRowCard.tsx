@@ -3,6 +3,7 @@
 import { Fragment, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
+import { matchRowActions, type AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import { autoConfirmCountdown, matchScore, replayCount } from '@/components/admin/match-list-view';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import Badge from '@/components/ui/Badge';
@@ -18,13 +19,23 @@ import { shellMessages } from '@/i18n/messages/shell';
  * (`after:inset-0` on the `relative` card), so the whole row opens the admin match page; the
  * secondary links sit above it (`relative z-10`) as siblings, never inside the primary anchor.
  * `backQuery` is the list's canonical query string: the match page returns to it.
+ * Submit Result and View Prep open player-dashboard pages that admit only some viewers, so they show only where
+ * `matchRowActions` says the viewer can use them (none without a `viewer`).
  */
-export function MatchListRow({ row, backQuery }: { row: AdminMatchRow; backQuery: string }) {
+export function MatchListRow({
+  row,
+  backQuery,
+  viewer = null,
+}: {
+  row: AdminMatchRow;
+  backQuery: string;
+  viewer?: AdminMatchViewer | null;
+}) {
   const t = useT(shellMessages);
   const locale = useLocale();
   const now = useMinuteClock();
 
-  const canSubmit = row.status === 'scheduled' || row.status === 'in_progress';
+  const actions = matchRowActions(row, viewer);
   const href = `/admin/matches/${row.id}${backQuery ? `?back=${encodeURIComponent(backQuery)}` : ''}`;
   const publicHref = `/tournaments/${row.tournament_id}/matches/${row.id}`;
 
@@ -114,12 +125,12 @@ export function MatchListRow({ row, backQuery }: { row: AdminMatchRow; backQuery
           ))}
         </p>
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-          {canSubmit && (
+          {actions.submitResult && (
             <Link href={`/dashboard/submit/${row.id}`} className={`${getButtonClasses('secondary', 'sm')} relative z-10`}>
               {t('admin.matches.submitResult')}
             </Link>
           )}
-          {canSubmit && (
+          {actions.viewPrep && (
             <Link href={`/dashboard/match-prep/${row.id}`} className={`${getButtonClasses('ghost', 'sm')} relative z-10`}>
               {t('admin.matches.viewPrep')}
             </Link>

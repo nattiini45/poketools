@@ -7,11 +7,11 @@ The Tournament module provides pairing generation, standings/advancement logic, 
 ```
 src/lib/tournament/
 ├── index.ts                 # Pairing dispatcher (Swiss/RR/legacy per-round SE/DE)
-├── advancement.ts           # Advancement computation
 ├── bracket-structure.ts     # Full SE/DE slot graph (Bracket Engine v2)
 ├── bracket-generate.ts      # Generate / regenerate all elimination rounds
 ├── bracket-propagation.ts   # Materialize + un-materialize feeder slots
 ├── enrollment-sync.ts       # Standings → phase enrollment sync/freeze
+├── generate-options.ts      # Optional `{ start_round }` body of the three generate routes
 ├── league-phase.ts          # Phase editability guardrails
 ├── serpentine.ts            # Serpentine group assignment from seeds
 ├── double-elim.ts           # Legacy per-round DE pairings + bracket state
@@ -19,17 +19,20 @@ src/lib/tournament/
 ├── round-robin.ts           # Round-robin pairings
 ├── single-elim.ts           # Traditional seeding + legacy SE pairings
 ├── standings.ts             # Standings computation
+├── startup-checklist.ts     # Pure start-up checklist of the round manager (what blocks Generate)
 ├── swiss.ts                 # Swiss pairings
 ├── types.ts                 # Shared tournament engine types
 └── __tests__/
     ├── bracket-propagation.test.ts
     ├── bracket-structure.test.ts
+    ├── generate-options.test.ts
     ├── serpentine.test.ts
     ├── double-elim.test.ts
     ├── match-state.test.ts
     ├── round-robin.test.ts
     ├── single-elim.test.ts
     ├── standings.test.ts
+    ├── startup-checklist.test.ts
     └── swiss.test.ts
 ```
 
@@ -71,17 +74,27 @@ src/lib/tournament/
 ### Match State Validation
 - **File**: `match-state.ts`
 - **Purpose**: Enforce legal status transitions
-- **Key Methods**: `isValidTransition()`, `validateTransition()`, `hasReachedBoThreshold()`
+- **Key Methods**: `isValidTransition()`, `validateTransition()`, `hasReachedBoThreshold()`, `canReopenMatch()`
+- **Player transitions**: `scheduled -> in_progress`, `in_progress -> pending_confirmation`, `pending_confirmation -> completed | disputed`, `disputed -> completed`.
+- **Admin-only transitions** (`ADMIN_TRANSITIONS`, refused for non-admins with `match_reset_admin_only`):
 
-### Advancement Logic
-- **File**: `advancement.ts`
-- **Purpose**: Compute qualifying players for next stage
-- **Key Methods**: `computeAdvancement()`
+  | From | Admin may also go to |
+  |---|---|
+  | `in_progress` | `scheduled`, `completed`, `disputed` |
+  | `pending_confirmation` | `in_progress`, `scheduled` |
+  | `completed` | `scheduled`, `in_progress` |
+  | `disputed` | `scheduled`, `in_progress` |
+
+  The `in_progress` targets of `completed` and `disputed` are the reopen. `canReopenMatch(status)` is true for `completed`, `pending_confirmation` and `disputed` (`REOPENABLE_MATCH_STATUSES`); what a reopen reverses is in [Match](./match.md) ("Admin Match Page Verbs").
+
+### Advancement
+League phases advance through `syncStandingsEnrollment()` in `enrollment-sync.ts`: it ranks the source phase and enrolls the top N of the target phase's `advancement_rule` (overall, or per group). There is no separate advancement module.
 
 ### Standings
 - **File**: `standings.ts`
 - **Purpose**: Compute ranked standings and pairing history
 - **Key Methods**: `computeStandings()`, `buildPairingHistory()`, `havePlayed()`
+- **Evolution Point Buy tables**: `computeStandingsForFormat()` ranks them by the season's stored `format_rules.tiebreaker_order` (checked by `effectiveTiebreakerChain` in `standings-rules.ts`; a missing row or an unusable order falls back to the pack's `epb.tiebreakerChain`) and scores the pack's `epb.matchPoints` whatever points the caller passes (`effectiveMatchPoints`). Every other league type keeps its numbers: round robin 3 / 0 (`roundRobinMatchPoints`), Swiss and the generic default 1 / ½. A caller holding the season gets the stored order through `SeasonStandingsContext.tiebreakerOrder` (`loadSeasonStandingsContext`, the batched `loadSeasonStandingsContexts`, the world payload's format rules, or the cached `publicReads.seasonFormatRules`); saving format rules expires the league's and each phase's reads.
 
 ### Bracket Engines (legacy per-round)
 - **Files**: `single-elim.ts`, `double-elim.ts`, `round-robin.ts`, `swiss.ts`
@@ -91,7 +104,15 @@ src/lib/tournament/
 
 ### Seeding
 - **UI**: `SeedingTable` (via `ParticipantManager`) is the only seeding surface. Double-elim phases expose a per-player “start in losers” toggle while `status = 'upcoming'` (locked once rounds exist).
-- **Persistence**: `PATCH /api/tournaments/[id]/participants` accepts `{ player_id, seed, starting_bracket? }`. The `starting_bracket` column is the data model; the PR #54 board modules were deleted.
+- **Persistence**: `PATCH /api/tournaments/[id]/participants` accepts `{ seeds: [{ player_id, seed, starting_bracket? }] }` (`seed` is a positive integer or `null`; duplicate non-null seeds are refused with **400** `tournament_seed_duplicate`). The `starting_bracket` column is the data model; the PR #54 board modules were deleted. A successful save is audited as `tournament.seeds.update` (participant and seeded counts); a refused or partly failed save writes no event.
+- **The visible order is authoritative**: what the table shows is what Save writes. Dragging, moving up or down, shuffling and auto-seeding renumber every row 1..n by position (a previously unseeded row that is dragged becomes seeded at its position); typing a seed number re-sorts the list when the input is committed (blur or Enter), so list order and numbers never disagree. Duplicates a typed number creates are still reported on Save, never silently renumbered. Clear sends `null` for every row.
+
+### Start-up checklist
+- **Module**: `src/lib/tournament/startup-checklist.ts` (pure, client-safe). `buildStartupChecklist()` turns the participant summary, the rounds and the tournament's settings into the items shown above Generate in the round manager (standalone tournaments and league phases); the UI is `StartupChecklist` plus `useParticipantsSummary`, which reads the live participant count (the roster can change in another section or tab).
+- **Setup items** (no round yet): participants (blocked below 2), ruleset, default best-of, league groups (only for a phase that mirrors league groups: blocked while a participant has no group) and seeding (attention only: unseeded participants are ordered by name). **Next-round items** (rounds exist; Swiss, round robin, legacy elimination): previous round (blocked until the last round is completed; not for round robin, which can be generated ahead) and, for a round robin without groups, the rounds remaining (blocked once every circle-method round exists, attention when a gap sits below the last round number).
+- **What blocks Generate**: only items in the `blocked` state disable Generate Bracket, Generate Next Round and Generate All Rounds; an unknown participant list never does. A roster that fails to load is unknown, not empty: `ParticipantManager` announces only a roster it read (`loadParticipants` returns `participants: null` otherwise), so a failed read cannot block Generate. The server stays the authority and enforces the same rules (`tournament_participants_too_few`, `tournament_current_round_incomplete`, `rounds_all_generated`). Manual round creation is not gated. An elimination bracket the bracket engine already built, and a completed tournament, have no items.
+- **Pending rounds**: `nextRoundToStart()` returns the lowest-numbered pending round whose earlier rounds are all completed; the round manager shows a banner with a one-click Start for it, since a generated round stays pending (players cannot report) until it is started. Generate also offers a default-off "Start the new round right away" option (the optional `start_round` body below).
+- **Round robin size**: `roundRobinProgress()` gives the round count (n - 1 for an even field, n for an odd one), how many exist and the first missing one; with groups the week plan decides and the UI relies on the `rounds_all_generated` answer.
 
 ## Data Flows
 - **Input**: Participants, match history, bracket type, round number (or full seed list for v2)
@@ -111,11 +132,11 @@ src/lib/tournament/
 
 ## API Routes
 - `/api/tournaments` — standalone tournaments only (`season_id` rejected on POST)
-- `/api/tournaments/[id]/generate-bracket` — full SE/DE bracket generation
+- `/api/tournaments/[id]/generate-bracket` — full SE/DE bracket generation. Optional body `{ "start_round": true }` also marks the first round active (best effort; the result then carries `started_round_id`, otherwise the result is exactly `{ rounds_created, matches_materialized }`). **400** `tournament_participants_too_few` below 2 participants, **409** `bracket_already_generated` once rounds exist. Audited as `bracket.generate`
 - `/api/tournaments/[id]/regenerate-bracket` — destructive rebuild (cascade-resets played matches first; **409** `REGENERATE_PLAYED` without `cascade: true`)
 - `POST /api/tournaments/[id]/repair-bracket` — re-run bye resolution + slot materialization after failed propagation (RoundManager "Repair bracket")
-- `/api/seasons/[id]/phases` — phase list/create (`insert_at` guarded: **400** `PHASE_INSERT_LOCKED` when inserting before a started phase)
-- `/api/seasons/[id]/phases/[phaseId]` — phase update/delete (season-linked PATCH locked: `PHASE_BRACKET_LOCKED`, `PHASE_STAGE_ORDER_LOCKED`, `PHASE_COMPLETED_LOCKED`)
+- `/api/seasons/[id]/phases` — phase list/create (`insert_at` in `1..highest stage_order + 1`, **400** `PHASE_INSERT_INVALID` outside it and **400** `PHASE_INSERT_LOCKED` when inserting before a started phase; **409** `PHASE_NAME_TAKEN` for a name another phase of the league has)
+- `/api/seasons/[id]/phases/[phaseId]` — phase update/delete (season-linked PATCH locked: `PHASE_BRACKET_LOCKED`, `PHASE_STAGE_ORDER_LOCKED`, `PHASE_COMPLETED_LOCKED`; **409** `PHASE_NAME_TAKEN` on a rename; `{ status: 'active' }` on a completed phase reopens it)
 - `/api/seasons/[id]/phases/reorder`
 - `/api/seasons/[id]/phases/[phaseId]/participants` (+ `sync-standings` with optional `force`, `seed-by-rating`)
 - `/api/seasons/[id]/phases/[phaseId]/groups` (+ `members`, `repair`: group rows left by pre-handover substitutions, see [Season](./season.md))
@@ -123,10 +144,32 @@ src/lib/tournament/
 - `/api/tournaments/[id]/groups` (GET — public list)
 - `/api/tournaments/[id]/rounds` and nested round/match routes
 - `GET /api/tournaments/[id]/rounds/[rid]` — public round detail; matches leave as `PublicMatch`. **404** `Round not found` with `code: 'INVALID_ROUND_ID'` for a malformed (non-UUID) tournament or round id (checked before any query; PATCH checks the round id after its auth guard), plain **404** `Round not found` for an unknown round, **404** `Round does not belong to this tournament` when the round is another tournament's
-- `/api/generate-round/[tid]` — Swiss/RR (and legacy per-round elim); **400** `BRACKET_V2_MANAGED` for structure brackets
-- `POST /api/admin/matches/[id]/reset` — cascade un-propagates downstream; **409** `DOWNSTREAM_PLAYED` without `cascade: true`
+- `/api/generate-round/[tid]` — Swiss/RR (and legacy per-round elim); **400** `BRACKET_V2_MANAGED` for structure brackets; **400** `rounds_all_generated` for a round robin past its last circle-method round (nothing is written). Optional body `{ "start_round": true }` also starts the new round (`pending` → `active`); the start is best effort, so if it fails the round comes back `pending` with **201** and the round manager's banner offers Start. No body, or `false`, leaves the round pending as before. Anything else in the body is a **400** `validation_failed`. Audited as `round.generate`
+- `/api/tournaments/[id]/generate-all-rounds` — every missing round robin round (grouped phases follow their week plan); **400** `rounds_all_generated` when none is missing. The same optional `{ "start_round": true }` starts only the lowest-numbered round this call created, the others stay pending. Audited once per call as `round.generate`
+- `POST /api/admin/matches/[id]/reset` — cascade un-propagates downstream; **409** `DOWNSTREAM_PLAYED` without `cascade: true`; optional `reason` (audit metadata)
+- `GET /api/admin/matches/[id]/reset-preview` — read-only: games removed, whether ratings are rebuilt, the played later bracket matches a cascade also resets
+- `POST /api/admin/matches/[id]/reopen` — `completed`, `pending_confirmation` or `disputed` back to `in_progress` with games kept; `reason` required; **409** `match_reopen_downstream_played` when a later bracket match was played
+- `PATCH /api/admin/matches/[id]/schedule` — set, change or clear `scheduled_at`; **409** `match_schedule_completed` for a completed match; cancels pending time proposals
+- `GET /api/admin/matches/[id]/history` — paged audit history of the match and its games
 - `POST /api/admin/rounds/[id]/reset` — same cascade semantics as match reset
 - `DELETE /api/admin/rounds/[id]` — round delete; **400** `STRUCTURE_ELIM_ROUND_DELETE` for v2 elim rounds (use regenerate-bracket); runs `rebuildAggregatesForScope` after delete
+
+## Standalone tournament settings
+`PATCH /api/tournaments/[id]` (any tournament; resource admins of that tournament) edits name, ruleset, best-of and overrides, doubles, bracket type, team visibility, the grand-final reset and the status. League phases keep their own guards there (`PHASE_BRACKET_LOCKED`, `PHASE_STAGE_ORDER_LOCKED`, `PHASE_COMPLETED_LOCKED`) and additionally refuse a rename onto another phase's name (**409** `PHASE_NAME_TAKEN`). A **standalone** tournament (no `season_id`) locks three fields once it has **started** (`isTournamentStarted`, `src/lib/tournament/standalone-lock.ts`: status is not `upcoming`, or it has at least one round):
+
+| Field | Refusal when changed after the start |
+|---|---|
+| `bracket_type` | **400** `tournament_bracket_locked` |
+| `ruleset_id` | **400** `tournament_ruleset_locked` |
+| `is_doubles` | **400** `tournament_doubles_locked` |
+
+A value equal to the stored one passes (the settings form sends the whole object). The rounds are read (`getRoundsByTournament`) only when one of the three fields really changes. Name, `best_of_default`, `bo_overrides`, `team_visibility` and `bracket_reset_enabled` stay editable at any status, and a completed standalone tournament is not given the league phase's completed lock. The `tournament.update` audit diff records `name`, `status`, `archived`, `bracket_reset_enabled`, `bracket_type`, `ruleset_id`, `best_of_default`, `is_doubles`, `team_visibility` and `bo_overrides` (compared as key-sorted entries); the description is never logged.
+
+- **Best-of is odd, 1 to 15.** Every best-of in the API (`best_of_default`, the values of `bo_overrides`, a round's `best_of`, a manual round's `best_of`) goes through `bestOfSchema` (see [Validation](./validation.md)); even values are **400** `validation_failed`. The pickers offer `BEST_OF_VALUES` (`src/lib/tournament/best-of.ts`) and merge a stored legacy even value in (`bestOfChoices`), so editing an old record does not silently change it. A record that already holds an even value keeps it until someone saves a different best-of on it. The phase `PATCH` parses the best-of leniently (any integer 1 to 15) because the phase form sends the whole record back, then refuses an even `best_of_default` or `bo_overrides` value that is not the one the phase already holds (`newEvenBestOfIssues`): saving a rename on such a phase works, picking a different even value is **400** `validation_failed`.
+- **Group count is 2 to 26** (`phaseGroupsCreateSchema`, `MAX_SEASON_GROUPS`); the phase groups panel offers the same range.
+- **Reopen.** `PATCH` with `{ status: 'active' }` on a completed tournament or phase writes only the status column (the same call "Mark completed" uses the other way). Matches, results, standings and rounds are untouched, and players already advanced into the next phase stay there. Completing it again emits the completion Discord and social events again.
+
+Tests: `src/lib/tournament/__tests__/standalone-lock.test.ts`, `src/app/api/tournaments/[id]/__tests__/standalone-guards.test.ts`, `src/app/api/seasons/[id]/phases/[phaseId]/__tests__/patch.test.ts`.
 
 ## Match pages and admin round view
 - **Public match page** `/tournaments/[id]/matches/[mid]`: 404 (`notFound()`) for a malformed id and for a match whose `tournament_id` is not `[id]`, so a match never renders under, or links back to, another tournament. The admin notes render only for a live site admin (`getLiveAccess().isSiteAdmin`; the read runs only when the match has notes and a viewer is signed in). Tests: `src/app/(public)/tournaments/[id]/matches/[mid]/__tests__/page.test.ts`.

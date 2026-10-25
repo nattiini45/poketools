@@ -45,6 +45,7 @@ import {
   createMatchBatch,
   updateMatchStatus,
   transitionMatchStatus,
+  updateOpenMatchSchedule,
   listMatchesNeedingFinalize,
   markMatchFinalized,
   updateMatchPlayers,
@@ -505,6 +506,22 @@ describe('transitionMatchStatus (M3: one row update)', () => {
     expect('auto_confirm_at' in updateArg).toBe(false);
   });
 
+  it('writes date_played only when datePlayed is given (null clears it)', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { ...MATCH_ROW, status: 'in_progress' }, error: null });
+
+    await transitionMatchStatus('m1', { expectedStatus: 'completed', status: 'in_progress', datePlayed: null });
+    expect(mockBuilder.update.mock.calls[0][0]).toEqual({
+      status: 'in_progress',
+      finalized_at: null,
+      date_played: null,
+    });
+
+    mockBuilder.update.mockClear();
+    await transitionMatchStatus('m1', { expectedStatus: 'completed', status: 'in_progress' });
+    const arg = mockBuilder.update.mock.calls[0][0] as Record<string, unknown>;
+    expect('date_played' in arg).toBe(false);
+  });
+
   it('returns null and writes nothing else when the compare-and-set misses', async () => {
     mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
 
@@ -535,6 +552,38 @@ describe('transitionMatchStatus (M3: one row update)', () => {
       transitionMatchStatus('nope', { expectedStatus: 'in_progress', status: 'pending_confirmation' })
     ).rejects.toThrow('Invalid match id');
     expect(mockBuilder.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateOpenMatchSchedule', () => {
+  it('updates scheduled_at only for a match that is not completed', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({
+      data: { ...MATCH_WITH_PLAYERS_ROW, status: 'scheduled', scheduled_at: '2026-10-24T10:00:00+02:00' },
+      error: null,
+    });
+
+    const result = await updateOpenMatchSchedule('m1', '2026-10-24T10:00:00+02:00');
+
+    expect(mockBuilder.update).toHaveBeenCalledWith({ scheduled_at: '2026-10-24T10:00:00+02:00' });
+    expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'm1');
+    expect(mockBuilder.neq).toHaveBeenCalledWith('status', 'completed');
+    expect(result?.player_1_name).toBe('Alice');
+  });
+
+  it('clears the time with null', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { ...MATCH_WITH_PLAYERS_ROW, status: 'scheduled' }, error: null });
+    await updateOpenMatchSchedule('m1', null);
+    expect(mockBuilder.update).toHaveBeenCalledWith({ scheduled_at: null });
+  });
+
+  it('returns null when no row matched (completed or gone)', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+    await expect(updateOpenMatchSchedule('m1', null)).resolves.toBeNull();
+  });
+
+  it('throws on a write error', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: new Error('schedule err') });
+    await expect(updateOpenMatchSchedule('m1', null)).rejects.toThrow('schedule err');
   });
 });
 
@@ -753,12 +802,8 @@ describe('getCompletedMatchRecords', () => {
       winner_id: 'p1',
       rounds: { round_number: 3 },
     };
-    // Chain: .eq('tournament_id').eq('status').limit() — limit is terminal
-    mockBuilder.eq
-      .mockReturnValueOnce(mockBuilder)
-      .mockReturnValueOnce(mockBuilder);
-
-    mockBuilder.limit.mockReturnValue({ data: [row], error: null });
+    // Chain: .eq().eq().order().order().range() — range is terminal; a short page ends the read
+    mockBuilder.range.mockResolvedValueOnce({ data: [row], error: null });
 
     const result = await getCompletedMatchRecords('t1');
     expect(result).toHaveLength(1);
@@ -768,22 +813,19 @@ describe('getCompletedMatchRecords', () => {
       winner_id: 'p1',
       round_number: 3,
     });
+    expect(mockBuilder.range).toHaveBeenCalledTimes(1);
+    expect(mockBuilder.range).toHaveBeenCalledWith(0, 999);
+    expect(mockBuilder.limit).not.toHaveBeenCalled();
   });
 
   it('returns empty array when no completed matches', async () => {
-    mockBuilder.eq
-      .mockReturnValueOnce(mockBuilder)
-      .mockReturnValueOnce(mockBuilder);
-    mockBuilder.limit.mockReturnValue({ data: [], error: null });
+    mockBuilder.range.mockResolvedValueOnce({ data: [], error: null });
     const result = await getCompletedMatchRecords('t1');
     expect(result).toEqual([]);
   });
 
   it('throws on error', async () => {
-    mockBuilder.eq
-      .mockReturnValueOnce(mockBuilder)
-      .mockReturnValueOnce(mockBuilder);
-    mockBuilder.limit.mockReturnValue({ data: null, error: new Error('records err') });
+    mockBuilder.range.mockResolvedValueOnce({ data: null, error: new Error('records err') });
     await expect(getCompletedMatchRecords('t1')).rejects.toThrow('records err');
   });
 });
@@ -802,7 +844,7 @@ describe('getCompletedMatchRecordsBatch', () => {
       { tournament_id: 't2', player_1_id: 'p3', player_2_id: 'p4', winner_id: 'p4', rounds: { round_number: 1 } },
       { tournament_id: 't1', player_1_id: 'p1', player_2_id: 'p3', winner_id: 'p1', rounds: { round_number: 2 } },
     ];
-    mockBuilder.limit.mockReturnValue({ data: rows, error: null });
+    mockBuilder.range.mockResolvedValueOnce({ data: rows, error: null });
 
     const result = await getCompletedMatchRecordsBatch(['t1', 't2']);
     expect(result.get('t1')).toHaveLength(2);
@@ -810,7 +852,7 @@ describe('getCompletedMatchRecordsBatch', () => {
   });
 
   it('throws on error', async () => {
-    mockBuilder.limit.mockReturnValue({ data: null, error: new Error('batch err') });
+    mockBuilder.range.mockResolvedValueOnce({ data: null, error: new Error('batch err') });
     await expect(getCompletedMatchRecordsBatch(['t1'])).rejects.toThrow('batch err');
   });
 });
@@ -850,7 +892,7 @@ describe('getPlayerIdsWithCompletedMatches', () => {
       { player_1_id: 'p1', player_2_id: 'p2' },
       { player_1_id: 'p1', player_2_id: 'p3' },
     ];
-    mockBuilder.eq.mockReturnValue({ data: rows, error: null });
+    mockBuilder.range.mockResolvedValueOnce({ data: rows, error: null });
 
     const result = await getPlayerIdsWithCompletedMatches(['t1']);
     expect(result.size).toBe(3);
@@ -864,14 +906,14 @@ describe('getPlayerIdsWithCompletedMatches', () => {
       { player_1_id: 'p1', player_2_id: 'p2' },
       { player_1_id: 'p2', player_2_id: 'p1' },
     ];
-    mockBuilder.eq.mockReturnValue({ data: rows, error: null });
+    mockBuilder.range.mockResolvedValueOnce({ data: rows, error: null });
 
     const result = await getPlayerIdsWithCompletedMatches(['t1']);
     expect(result.size).toBe(2);
   });
 
   it('throws on error', async () => {
-    mockBuilder.eq.mockReturnValue({ data: null, error: new Error('ids err') });
+    mockBuilder.range.mockResolvedValueOnce({ data: null, error: new Error('ids err') });
     await expect(getPlayerIdsWithCompletedMatches(['t1'])).rejects.toThrow('ids err');
   });
 });

@@ -6,7 +6,7 @@ import {
   buildSlotResolutionsFromMatches,
   materializeReadySlots,
 } from './bracket-propagation';
-import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { createRound, getRoundsByTournament, updateRoundStatus } from '@/lib/supabase/queries/rounds';
 import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { freezeEnrollment, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
@@ -16,6 +16,13 @@ import { supabase } from '@/lib/supabase/client';
 export interface GenerateBracketResult {
   rounds_created: number;
   matches_materialized: number;
+  /** Present only when the first round was started (`startFirstRound`) and the start succeeded. */
+  started_round_id?: string;
+}
+
+export interface GenerateBracketOptions {
+  /** Also start the first round (best effort). Default false: every round stays pending. */
+  startFirstRound?: boolean;
 }
 
 /**
@@ -23,7 +30,8 @@ export interface GenerateBracketResult {
  */
 export async function generateEliminationBracket(
   tournament: Tournament,
-  participants: ParticipantWithSeed[]
+  participants: ParticipantWithSeed[],
+  options: GenerateBracketOptions = {}
 ): Promise<GenerateBracketResult> {
   if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
     throw new Error('Full bracket generation only applies to elimination formats');
@@ -31,7 +39,10 @@ export async function generateEliminationBracket(
 
   const existingRounds = await getRoundsByTournament(tournament.id);
   if (existingRounds.length > 0) {
-    throw new Error('Bracket already generated');
+    throw new UserFacingError('Bracket already generated', {
+      code: 'bracket_already_generated',
+      status: 409,
+    });
   }
 
   const structure = buildBracketStructureForParticipants(
@@ -40,7 +51,10 @@ export async function generateEliminationBracket(
     { bracketResetEnabled: tournament.bracket_reset_enabled ?? true }
   );
   if (!structure) {
-    throw new Error('Need at least 2 participants');
+    throw new UserFacingError('Need at least 2 participants', {
+      code: 'tournament_participants_too_few',
+      status: 400,
+    });
   }
 
   const roundIdByGlobalNumber = new Map<number, string>();
@@ -83,10 +97,24 @@ export async function generateEliminationBracket(
     current_round: firstRoundNumber,
   });
 
-  return {
+  const result: GenerateBracketResult = {
     rounds_created: structure.rounds.length,
     matches_materialized: created.length,
   };
+
+  // Start the first round when asked. Best effort: the bracket exists either way, and a round that is still
+  // pending shows the Start banner. Later rounds are started by the admin.
+  const firstRoundId = roundIdByGlobalNumber.get(firstRoundNumber);
+  if (options.startFirstRound && firstRoundId) {
+    try {
+      await updateRoundStatus(firstRoundId, 'active');
+      result.started_round_id = firstRoundId;
+    } catch (startErr) {
+      console.error('[generate-bracket] Failed to start the first round:', startErr);
+    }
+  }
+
+  return result;
 }
 
 export function isPlayedBracketMatch(
@@ -95,7 +123,7 @@ export function isPlayedBracketMatch(
   return match.status !== 'scheduled' || match.games.length > 0;
 }
 
-export interface RegenerateBracketOptions {
+export interface RegenerateBracketOptions extends GenerateBracketOptions {
   cascade?: boolean;
   adminId?: string;
 }
@@ -151,5 +179,7 @@ export async function regenerateEliminationBracket(
 
   await updateTournament(tournament.id, { current_round: 0 });
 
-  return generateEliminationBracket(tournament, participants);
+  return generateEliminationBracket(tournament, participants, {
+    startFirstRound: options.startFirstRound,
+  });
 }

@@ -8,7 +8,9 @@ import { z } from 'zod';
 import { getSeasonWithDetails, updateSeason, deleteSeason, getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { archiveTournamentsBySeason } from '@/lib/supabase/queries/tournaments';
 import { bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
-import { logAuditEvent } from '@/lib/audit/log';
+import { logAuditEvent, diffField } from '@/lib/audit/log';
+import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
+import { assertFormatChangeAllowed, assertSeasonDateRange } from '@/lib/season/settings-guards';
 import {
   rebuildAfterSeasonDelete,
   type EntityDeleteRebuildSummary,
@@ -105,8 +107,38 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         status: 403,
       });
     }
-    // The flag before the write, for the audit record's `changed`.
-    const flagBefore = body.is_test_season !== undefined ? (await getSeasonById(id))?.is_test_season ?? null : null;
+
+    // The league as stored, read once: the guards below compare the request
+    // against it, and the audit record diffs it against the saved league.
+    const before = await getSeasonById(id);
+    if (!before) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'League not found', code: 'SEASON_NOT_FOUND' },
+        { status: 404 }
+      );
+    }
+
+    // Date order is checked against the stored date when only one of the two
+    // is sent (null clears one). A request that sends neither is not held to
+    // a range a league already stored.
+    if (body.start_date !== undefined || body.end_date !== undefined) {
+      assertSeasonDateRange(
+        body.start_date !== undefined ? body.start_date : before.start_date,
+        body.end_date !== undefined ? body.end_date : before.end_date
+      );
+    }
+
+    // The league type is locked once the league started and across the
+    // point-buy boundary (src/lib/season/settings-guards.ts). Resending the
+    // stored type passes, so the start signals are only read for a real change.
+    // Nothing is written when a guard throws.
+    if (body.format_type !== undefined && body.format_type !== before.format_type) {
+      const phases = await getSeasonPhaseStartSignals(id);
+      assertFormatChangeAllowed(before.format_type, body.format_type, {
+        status: before.status,
+        phases,
+      });
+    }
 
     // Point-buy list binding goes through the guarded helper: only upcoming
     // seasons may switch versions (running seasons keep their snapshot), and
@@ -131,6 +163,37 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Expires the league's own reads and the season list, so a flipped
     // test flag shows (or hides the league) on the next public view.
     expireSeasonReads(id);
+
+    // General settings audit. The test flag and the point-buy list binding
+    // log their own events; the description is never copied into the row
+    // (only that it changed).
+    const changes: Record<string, { before: unknown; after: unknown }> = {};
+    for (const field of [
+      'name',
+      'format_type',
+      'ruleset_id',
+      'start_date',
+      'end_date',
+      'status',
+      'archived',
+      'route_theme',
+      'language',
+    ] as const) {
+      diffField(changes, field, before[field], season[field]);
+    }
+    const descriptionChanged = body.description !== undefined && body.description !== before.description;
+    if (Object.keys(changes).length > 0 || descriptionChanged) {
+      logAuditEvent({
+        actor_id: admin.playerId,
+        actor_name: admin.name,
+        action: 'season.update',
+        resource_type: 'season',
+        resource_id: id,
+        resource_name: season.name,
+        changes,
+        metadata: descriptionChanged ? { description_changed: true } : undefined,
+      });
+    }
 
     // Test leagues stay out of ratings, by the CURRENT flag: every request
     // that sends the flag rebuilds the league players' ratings for the stored
@@ -165,7 +228,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resource_name: season.name,
         metadata: {
           is_test_season: body.is_test_season,
-          changed: flagBefore !== null && flagBefore !== season.is_test_season,
+          changed: before.is_test_season !== season.is_test_season,
           // Counts only: the player lists of a large league do not belong in every audit row.
           rating_rebuild: ratingRebuild
             ? {

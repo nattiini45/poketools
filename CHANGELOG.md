@@ -8,7 +8,124 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- No migration and no new environment variable. API clients that send an even best-of value, or change the league type
+  of a started league, now receive `400` / `409`.
+
 ### Added
+
+- **League settings editor.** The Settings tab of the admin league page opens with **League details**: name, league
+  type, battle ruleset and the start and end date, saved with only the changed fields. The description, theme and
+  content language keep their own editors.
+- **Standalone tournament settings editor.** The admin tournament page opens with a **Settings** section (name, ruleset,
+  best-of and overrides, doubles, bracket type, team visibility, grand-final reset). Bracket type, ruleset and doubles
+  lock once the tournament has started.
+- **Reopen a completed phase or tournament.** A **Reopen** button, with a confirmation that states the consequences,
+  sets a completed phase or tournament back to active. Results and standings stay as they are; completing it again
+  announces the completion again.
+- **Insert position for new phases.** A new phase can be placed at the end, before or after an existing phase; options
+  in front of a started phase are disabled.
+- **`season.update` audit event.** A general league edit (name, league type, ruleset, dates, status, archive, theme,
+  language) is now audited with the changed fields. The description text is never stored in the row.
+- **Editable format rules.** The Format Rules section of a point-buy league's Rules tab is now an editor for the draft
+  budget, picks, Draft Kill Token ratio and limits (total and per line), banned moves and items, and the stored
+  tiebreaker order, with the schema's limits on every control and the errors under the field. Save sends the full set
+  of rules to the existing endpoint; Tera rules stay on the format pack (shown read-only) and the redraft phase is
+  shown, not edited. If the rules cannot be loaded the editor shows the error with **Retry** and disables
+  **Initialize** and Save, so an unreadable row is never overwritten with defaults. On a started league Save asks
+  first: the change applies from now on and existing draft pools are not recomputed. The tiebreaker order ranks the
+  standings (see Changed).
+- **Start from an existing league.** `/admin/leagues/new` has a **Start from** picker. A chosen league prefills the
+  league type, battle ruleset, theme, language and description, and its phases are copied (name, bracket type,
+  ruleset, best-of, doubles, visibility, grand-final reset, advancement rule and order). Optionally the roster is
+  copied, and site admins can also copy the league admins; league admins can only start from their own leagues.
+  Picking or changing the league keeps the name and dates already typed.
+  Rounds, matches, results, phase participants, groups, point-buy lists, tokens, draft data and format rules are
+  never copied. If a step fails the new league is removed again; if that cleanup fails too, the error names what
+  remains. The API takes an optional `clone_from` on `POST /api/seasons`.
+- **Format drift report** on the admin Data page (site admins). **Run report** lists, read-only, leagues whose stored
+  tiebreaker order differs from the format pack's default (information: the standings use the stored order; an order
+  the standings cannot use is marked, because the table then falls back to the pack default) and phase pairs
+  whose advancement rule sits on the source or the target phase or differs between them (enrollment reads the rule
+  from the phase being enrolled, the phase timeline shows it on the phase before). It changes nothing, is not loaded
+  until requested, and reads at most 10,000 rows per list. `GET /api/admin/format-drift`.
+- **`season.clone` and `season.clone_failed` audit events** for a league started from another league.
+
+
+- Wiki moderation: the superadmin can close a rejected note for resubmission ("Block from resubmitting", behind a
+  confirmation, undone with "Allow resubmitting"). `/admin/wiki` gains a "Rejected" view with a "Blocked" badge. The
+  author's edit of a blocked note is refused (`wiki_note_resubmission_blocked`, English and German) and re-queues
+  nothing. Site admins who are not the superadmin cannot block. Both actions are audited
+  (`wiki.note.block_resubmission`, `wiki.note.unblock_resubmission`).
+
+
+- **Start-up checklist in the round manager.** Standalone tournaments and league phases show what is still missing
+  before Generate can work (participants, ruleset, best-of, league groups, seeding, the previous round, the rounds a
+  round robin still has to generate). Generate is disabled while an item is blocking and says why; manual round
+  creation is not affected.
+- **Pending rounds are no longer silent.** A generated round stays pending (players cannot report) until it is
+  started. The round manager now shows a notice with a one-click Start for the next pending round.
+- **"Start the new round right away".** An option next to Generate, off by default. The API accepts an optional
+  `start_round` in the JSON body of `POST /api/generate-round/[tid]`, `POST /api/tournaments/[id]/generate-all-rounds`
+  (starts only the first new round) and `POST /api/tournaments/[id]/generate-bracket` (starts the first round and
+  returns `started_round_id`). Without the body nothing changes. If the start itself fails, the rounds are still
+  created and stay pending.
+- **"All N rounds generated" for round robin.** Once every round exists the round manager hides Generate and says so.
+- **Audit events** `round.generate`, `bracket.generate` and `tournament.seeds.update`, with English and German labels.
+
+
+- **Completion confirmation with a series check.** Completing or disputing a match on the admin match page asks first.
+  The page shows the recorded series (`2 – 1 from 3 games`, with the best-of from the round; if that read fails the
+  page still opens without it) and tags the player the games favour. Completing warns when the result contradicts the recorded games (no games, games without a winner,
+  fewer wins than the best-of needs, a different winner) and then needs a ticked acknowledgement. The reset dialog
+  for downstream matches shows how many matches it resets.
+- **Format-change confirmation in the ruleset builder.** Switching the base format keeps the form until the new
+  defaults are loaded and asks before replacing lists you changed, naming what would be lost. **Keep my lists** only
+  changes the format label. A new ruleset starts from its format's defaults.
+- **Empty-ruleset notice.** A ruleset with a real base format but no clause, ban or addition says that it enforces
+  nothing beyond the generation, with a button to load the format's defaults. An empty team-constraints block says it
+  is saved as no constraints.
+- **Dismissible roster errors.** A failed action on the admin Players page shows a dismissible alert, scrolled into view, and keeps
+  the table; a failed first load shows the error with **Retry**.
+- **Role-change and delete confirmations** on the Players page name the player: make or remove admin, make or remove
+  creator, delete and reinstate.
+- **Ban reason** under the status of a banned player.
+- **Roster URL state.** The Players page keeps its search, sort, page and page size in the URL.
+
+
+- **Schedule and reschedule from the admin match page.** A site admin or the resource admin of the match's league or
+  tournament can set, move or clear a match's time (`PATCH /api/admin/matches/[id]/schedule`). A completed match
+  cannot be rescheduled. A change cancels the match's open time proposals, so a stale proposal cannot move the match
+  later, and is audited (`match.schedule`).
+- **Reopen without a reset.** A completed, pending-confirmation or disputed match can be sent back to in progress
+  with its games kept (`POST /api/admin/matches/[id]/reopen`, reason required). For a completed match the round
+  status, ratings and rating history, streaks, signatures and Evolution Point Buy progress are rebuilt and empty
+  bracket slots the result had filled are removed. Achievements and an announcement already sent stay. It is refused
+  when a later bracket match was already played. Audited as `match.reopen`.
+- **Dispute reason and dispute panel.** A player can give an optional reason (up to 500 characters) when disputing a
+  result. The admin match page shows who disputed, when, why, and the reported winner. Disputes made before this
+  release have no recorded details. A dispute keeps the player who reported the result as the match's reporter (it no
+  longer replaces the reporter with the disputer). Player disputes are now audited (`match.dispute`); an admin dispute through the
+  Admin Override form is audited as `match.dispute` instead of `match.override`.
+- **Per-match History.** The admin match page lists the audit events of the match and its games, newest first, in
+  pages (`GET /api/admin/matches/[id]/history`). League and tournament admins read the history of their own matches.
+- **Match context header.** The admin match page opens with the league, phase, round and its deadline (with an
+  overdue badge), best of, scheduled time, who reported the result, the auto-confirm time, and links to the public
+  match page and back to the matches list. The notes keep their line breaks.
+- **Reasons and impact on reset and delete.** The match reset and delete-game dialogs ask for a reason (stored in the
+  audit event) and show what will happen first: games removed, ratings rebuilt, and the played later bracket matches
+  a cascading reset also resets (`GET /api/admin/matches/[id]/reset-preview`). The reason is optional on the API.
+
+
+- **Sidebar Overview item.** The admin sidebar (and the mobile chips) starts with an Overview item that opens the
+  dashboard.
+- **Dashboard attention list.** Each match shows its league, phase and how long it has been waiting, with the dispute
+  note for a disputed match, oldest first. Per-status "See all" links open the Matches list filtered to disputed or
+  awaiting-confirmation matches.
+- **Dashboard counters link to their lists.** The players, tournaments, active matches and leagues cards open the
+  matching admin list.
+
 
 - **Matches filters, part 2.** `/admin/matches` gains a Round select (per phase), a date filter (scheduled, played,
   created or updated, with from/to and the presets today, next 7 days, last 7 days and no date set), format filters
@@ -24,12 +141,131 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Changed
 
+- **Evolution Point Buy tables rank by the stored tiebreaker order and use the configured match points.** The
+  tiebreaker order saved on the league's Rules tab now decides every Evolution Point Buy table: the league's season
+  table, the group and phase tables, the tournament page, the home and dashboard standings, Insights, profiles, phase
+  enrollment and advancement, the broadcast standings and the AI and Kale texts. An order the standings cannot use
+  (empty, an unknown or repeated step, a decision match that is not last, or only a decision match) falls back to the
+  format pack's chain. The league page and its phases score the format pack's match points in round robin and Swiss
+  alike, instead of a fixed 3 and 0 in the round robin tables. Saving the rules expires the cached reads of the league
+  and of each phase. Other league types are unchanged. The tables of completed Evolution Point Buy leagues may
+  re-order. The Format Rules hint and the started-league confirmation say so. Cache entries of the home
+  standings preview, the league page payload, the league schedule and the player profile are renamed, so entries
+  written by the previous release are not served.
+- **Best-of is an odd number from 1 to 15** in every form and in the API (tournament, phase, round, manual round and
+  override values). Even values are refused with `400 validation_failed`. A stored even value stays listed in the
+  picker, so editing an old record does not change it, and saving a phase that holds an even value still works as long
+  as that value is left as it is.
+- **Group count is 2 to 26** in the phase groups panel, matching the API cap.
+- **League type is locked once the league has started** (active or completed, a phase that left upcoming, or any
+  round) and across the point-buy boundary: `PATCH /api/seasons/[id]` answers `409 SEASON_FORMAT_LOCKED` or
+  `409 SEASON_FORMAT_POINT_BUY_LOCKED`. Sending the stored type again is still fine.
+- **An end date before the start date** is refused with `400 SEASON_DATES_INVALID` when creating or editing a league.
+- **Phase names are unique per league** (case and spacing ignored): creating or renaming a phase onto another phase's
+  name answers `409 PHASE_NAME_TAKEN`. The rule is enforced in the API only; leagues that already hold duplicates
+  stay editable.
+- **Standalone tournaments lock bracket type, ruleset and doubles after the start:** `PATCH /api/tournaments/[id]`
+  answers `400 tournament_bracket_locked`, `tournament_ruleset_locked` or `tournament_doubles_locked` for a changed value.
+- **Confirm before a group re-draw.** Drawing groups again over existing ones asks first, since it deletes the phase's
+  groups and recreates them from the seeds.
+- `PATCH /api/seasons/[id]` answers `404 SEASON_NOT_FOUND` for an unknown league.
+- The Format Rules section subtitle on the league admin Rules tab now describes the editor.
+- `POST /api/seasons` accepts an optional `clone_from` (`season_id`, `copy_roster`, `copy_admins`). Without it the
+  request behaves as before. New error codes: `SEASON_CLONE_FORBIDDEN`, `SEASON_CLONE_ADMINS_FORBIDDEN`,
+  `SEASON_CLONE_FAILED` and `SEASON_CLONE_CLEANUP_FAILED`.
+
+
+- **Save in the seeding table persists the visible order.** Dragging, moving and shuffling renumber every row, and
+  typing a seed number re-sorts the list when the input is committed, so the list and the saved seeds always agree.
+- The participants section opens by default while a tournament or phase has fewer than 2 participants.
+
+
+- The dashboard counts and the attention list leave out test leagues and archived competitions; the players total also leaves out test accounts.
+- "Seasons" is now "Leagues" on the dashboard.
+- The sidebar highlights only the most specific item, for example Archived leagues and not Leagues as well.
+
+
 - `/admin/matches` hides the matches of test leagues and of archived leagues and tournaments by default. Two toggles
   show them, and picking a league or phase, or pasting a match id, shows its matches anyway.
 - The whole match row opens the admin match page; the public page is a secondary link and the "Override" button is
   gone. The admin match page's back link returns to the Matches list with its filters, also after a replay import or a game edit.
 - `GET /api/admin/matches` accepts the new filter and sort parameters (unknown parameters are still refused with a
   400), and its rows carry the round name, round number, best-of, round deadline and test/archived flags.
+
+### Removed
+
+- The unused advancement helper (`src/lib/tournament/advancement.ts`). Internal only: league phases advance through
+  the enrollment sync, which is unchanged, and its behaviour is now covered by the enrollment sync tests.
+
+
+- Test Players: Reset Data, Reset Login (Mint Login for a player who already has a login), Clear Login, Remove from Season and Delete Test-Only Matches now ask first in a confirmation dialog that names the player and the season, in English and German. Create / Repair, Refresh and the first Mint Login stay one click.
+- The webhook endpoints (`/api/discord-webhooks`) answer with `webhook_url_hint` instead of `webhook_url`.
+- The export endpoint adds `X-Export-Count` and `X-Export-Total` response headers.
+
+### Fixed
+
+- **Completed-match reads past 1,000 rows.** The completed-match reads behind standings, pairing history, head-to-head
+  and insights inputs, profile standings, and the set of players with completed matches now page through the full
+  result in 1,000-row steps instead of stopping at the first 1,000 rows. The participants batch used by profiles and the point-buy list entries page the same way. A
+  read that reaches its hard bound (20,000 rows) logs a warning. Results of 1,000 rows or fewer are unchanged. A new
+  test rejects query reads that ask for more than 1,000 rows with `.limit`.
+
+- A phase save error is shown once, not twice.
+- Clearing every best-of override of a phase now saves; before, the empty list was never sent.
+- Adding a phase after a middle phase was deleted no longer reuses another phase's stage order. New phases are placed
+  after the highest stage order.
+- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It adds
+  `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
+  new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
+  the migration.
+- The Format Rules section no longer offers **Initialize** after a failed load. A failed read used to look like "no
+  rules yet" and let one click overwrite the stored rules with defaults.
+
+
+- Wiki: an author's edit to an approved note no longer goes live unreviewed. The edit puts the note back in the
+  moderation queue (and re-runs the automated scan); only edits by site admins keep the note's status.
+- Wiki moderation: a reported, approved note can be unpublished from the report card ("Unpublish note", audited); the
+  report is closed as reviewed in the same step, and the full note text is shown.
+- Admin exports return the full number of rows asked for (up to 10,000) instead of silently stopping at 1,000, in a
+  stable order, and the page says "Exported N of M rows" and when the limit was reached.
+- Discord webhooks: the Test button now sends from the server, with a rate limit and an audit entry. The full webhook
+  URL is no longer sent to the browser after it is saved; the list shows only the last four characters. Creating a
+  global webhook is now recorded in the audit log (the entry was silently dropped before).
+- Test Players: "Remove from season" acts on the player in its row instead of always the first one.
+- Audit log: filtering by a resource id that is not a UUID answers with a clear validation error (and an inline
+  message) instead of a server error.
+- The site header fits every screen width: the menu button now replaces the link row below 1280 px, the display name is shortened with an ellipsis (full name on hover), Sign Out stays on one line, and the dark-mode toggle no longer sits outside the viewport at 1280 px.
+- Page header buttons (for example New League, or Mark Completed, Archive and Delete on a phase) now wrap below the title on phones instead of widening the page, so no button is cut off.
+- The admin Test Players page is translated: headings, buttons, table headers and status messages follow the site language.
+
+- Generating a bracket with fewer than 2 participants, or a second time, now answers a translated **400**
+  `tournament_participants_too_few` or **409** `bracket_already_generated` instead of a generic 500.
+- Generate Next Round on a round robin that is past its last round answers **400** `rounds_all_generated` instead of a
+  generic 500, and writes nothing.
+- A participant list that fails to load is no longer shown to the start-up checklist as an empty roster, which
+  blocked Generate with "0 participants". The participant manager now announces only a roster it actually read;
+  the checklist keeps its last list, or shows its own error, until the next successful read.
+
+No migration.
+
+- **Complete/Dispute race.** The confirm-match route reported success when the match had changed state in the
+  meantime (for example a dispute landing just before a completion). It now answers `409 match_state_changed` and
+  writes nothing, and the page reloads. Admin and participant confirms no longer overwrite the original submitter.
+- **Admin disputes are audited.** Marking a match disputed as an admin now writes a `match.dispute` audit event
+  (shown as "Match disputed by an admin"); before, it left an event only when the request carried notes.
+- **Failed loads can no longer overwrite stored data.** The draft tier limits editor and the point-buy list manager
+  disable saving and binding after a failed read until a read succeeds, so pack defaults cannot be saved over the
+  stored limits or list binding.
+- **Empty team constraints are no longer stored.** A new ruleset with an empty team-constraints block stores none
+  instead of an empty object (which made it count as a custom league ruleset). Rulesets already stored with an empty
+  object resolve as before.
+
+- The Admin Override form no longer reports success when the match changed state in the meantime. It answers 409
+  `match_state_changed` and the page reloads, so the admin reviews the current state.
+
+- Submit Result and View Prep in the matches list no longer send an admin to the player dashboard. They show only to
+  people who can use them (a player in the match, or a site admin for Submit Result); Override stays for every admin.
+- Abort draft is no longer offered before the draft has started. A hint explains there is nothing to abort yet.
 
 ## [0.3.0] - 2026-10-23
 

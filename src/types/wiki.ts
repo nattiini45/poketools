@@ -15,6 +15,9 @@ export interface WikiNote {
   rejected_by?: string | null;
   rejected_at?: string | null;
   rejection_reason?: string | null;
+  /** Set only on a blocked note (the superadmin closed it for resubmission); absent otherwise. */
+  resubmission_blocked_at?: string | null;
+  resubmission_blocked_by?: string | null;
   moderation_flags?: string[];
   created_at: string;
   updated_at: string;
@@ -40,7 +43,7 @@ export interface WikiNoteReport {
   status: WikiNoteReportStatus;
   created_at: string;
   updated_at: string;
-  note?: Pick<WikiNote, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id'>;
+  note?: Pick<WikiNote, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id' | 'approved'>;
 }
 
 export interface WikiMoveEntry {

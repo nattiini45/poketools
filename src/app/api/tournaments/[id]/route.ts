@@ -11,8 +11,15 @@ import {
   updateTournament,
   deleteTournament,
   getParticipants,
+  getStagesBySeasonId,
 } from '@/lib/supabase/queries/tournaments';
-import { PhaseGuardError } from '@/lib/tournament/league-phase';
+import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { PhaseGuardError, assertPhaseNameFree } from '@/lib/tournament/league-phase';
+import {
+  assertStandaloneSettingsEditable,
+  changesStandaloneLockedField,
+  isTournamentStarted,
+} from '@/lib/tournament/standalone-lock';
 import {
   syncBracketResetSetting,
   type BracketResetSyncResult,
@@ -83,6 +90,11 @@ function assertSeasonPhaseTournamentEditable(
   }
 }
 
+/** A comparable string of an override map (key-sorted entries): `diffField` compares with `!==`, which fails on objects. */
+function boOverridesKey(overrides: Record<string, number> | null | undefined): string {
+  return JSON.stringify(Object.entries(overrides ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+}
+
 // The DELETE handler rebuilds all derived data (aggregates, ratings, streaks,
 // EPB evolution) after the cascade — allow long-running rebuilds.
 export const maxDuration = 300;
@@ -143,6 +155,24 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     assertSeasonPhaseTournamentEditable(before, body);
 
+    if (before.season_id) {
+      // A league phase may not take another phase's name; saving its own
+      // name again passes, so a league that holds duplicates stays editable.
+      if (body.name !== undefined && body.name.toLowerCase() !== before.name.trim().toLowerCase()) {
+        assertPhaseNameFree(body.name, await getStagesBySeasonId(before.season_id), id);
+      }
+    } else if (changesStandaloneLockedField(before, body)) {
+      // A standalone tournament locks its bracket type, ruleset and doubles
+      // setting once it started. The rounds are only read when one of those
+      // fields really changes; everything else stays editable at any status.
+      const rounds = await getRoundsByTournament(id);
+      assertStandaloneSettingsEditable(
+        before,
+        body,
+        isTournamentStarted({ status: before.status, rounds_total: rounds.length })
+      );
+    }
+
     const archivedBefore = before.archived;
     const archivedAfter = body.archived !== undefined ? body.archived : archivedBefore;
 
@@ -185,6 +215,28 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         before.bracket_reset_enabled ?? true,
         body.bracket_reset_enabled
       );
+    }
+    // The description is never copied into the row.
+    diffField(changes, 'bracket_type', before.bracket_type, body.bracket_type ?? before.bracket_type);
+    diffField(changes, 'ruleset_id', before.ruleset_id, body.ruleset_id ?? before.ruleset_id);
+    diffField(
+      changes,
+      'best_of_default',
+      before.best_of_default,
+      body.best_of_default ?? before.best_of_default
+    );
+    diffField(changes, 'is_doubles', before.is_doubles, body.is_doubles ?? before.is_doubles);
+    diffField(
+      changes,
+      'team_visibility',
+      before.team_visibility,
+      body.team_visibility ?? before.team_visibility
+    );
+    if (
+      body.bo_overrides !== undefined &&
+      boOverridesKey(before.bo_overrides) !== boOverridesKey(body.bo_overrides)
+    ) {
+      changes.bo_overrides = { before: before.bo_overrides ?? {}, after: body.bo_overrides };
     }
     if (Object.keys(changes).length > 0) {
       logAuditEvent({

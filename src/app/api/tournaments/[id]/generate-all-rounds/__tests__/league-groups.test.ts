@@ -9,6 +9,7 @@ import type { NextRequest } from 'next/server';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock('@/lib/auth/helpers', () => ({ requireResourceAdmin: vi.fn() }));
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentById: vi.fn(),
   getParticipants: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
   createRound: vi.fn(),
+  updateRoundStatus: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
   createMatchBatch: vi.fn(),
@@ -37,9 +39,11 @@ vi.mock('@/lib/tournament/season-standings', async (importOriginal) => {
   return { ...actual, loadSeasonStandingsContext: vi.fn(async () => ({ formatType: 'singles' })) };
 });
 
+import { requireResourceAdmin } from '@/lib/auth/helpers';
+import { logAuditEvent } from '@/lib/audit/log';
 import { POST } from '@/app/api/tournaments/[id]/generate-all-rounds/route';
 import { getParticipants, getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
-import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { createRound, getRoundsByTournament, updateRoundStatus } from '@/lib/supabase/queries/rounds';
 import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import {
   addGroupMembersBatch,
@@ -84,8 +88,10 @@ let roundSeq = 0;
 beforeEach(() => {
   vi.clearAllMocks();
   roundSeq = 0;
+  vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
   vi.mocked(getTournamentById).mockResolvedValue({
     id: PHASE_ID,
+    name: 'Season stage',
     season_id: 'season-1',
     bracket_type: 'round_robin',
     status: 'upcoming',
@@ -246,5 +252,36 @@ describe('generate-all-rounds — league groups', () => {
     expect(vi.mocked(createRound).mock.calls.map(([input]) => input.round_number)).toEqual(
       Array.from({ length: placement - 1 }, (_, i) => i + 1),
     );
+  });
+
+  it('start_round starts only week 1 of the grouped phase; the other weeks stay pending', async () => {
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getGroupsByTournament).mockResolvedValue(mirrored);
+    vi.mocked(updateRoundStatus).mockImplementation(async (id, status) => ({ id, status, round_number: 1 }) as never);
+
+    const res = await POST(
+      { json: () => Promise.resolve({ start_round: true }) } as unknown as NextRequest,
+      params,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(vi.mocked(createRound).mock.calls.length).toBeGreaterThan(1);
+    expect(updateRoundStatus).toHaveBeenCalledTimes(1);
+    expect(updateRoundStatus).toHaveBeenCalledWith('new-1', 'active');
+    expect(json.data[0].status).toBe('active');
+    expect(json.data.slice(1).every((round: { status?: string }) => round.status === undefined)).toBe(true);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ started_round_number: 1 });
+  });
+
+  it('without a body no round is started', async () => {
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getGroupsByTournament).mockResolvedValue(mirrored);
+
+    const res = await POST({} as NextRequest, params);
+
+    expect(res.status).toBe(201);
+    expect(updateRoundStatus).not.toHaveBeenCalled();
   });
 });

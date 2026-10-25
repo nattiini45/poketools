@@ -740,6 +740,8 @@ GET  /api/admin/matches                    Any admin, scoped: status, season_id,
                                             returns an exact total and `players` (names behind the player filter)
 GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, standalone tournaments, rulesets
 GET  /api/admin/matches/filter-options/rounds  Any admin, scoped: the rounds of one tournament_id (403 outside scope)
+GET  /api/admin/format-drift               Site admin: read-only drift report (stored tiebreaker order vs the pack default, info only;
+                                            advancement rule on the source vs the target phase); on demand, no writes
 GET  /api/admin/player-search              Any admin (a resource admin names a season_id or tournament_id they
                                             administer; the scope is a guard, not a filter): public player refs
                                             only; a resource admin sees only active, non-test accounts (what the
@@ -748,6 +750,11 @@ GET  /api/admin/player-search              Any admin (a resource admin names a s
 DELETE /api/admin/rounds/[id]               Admin: delete latest round or zero-game round
                                             (400 STRUCTURE_ELIM_ROUND_DELETE for v2 elim)
 
+POST /api/seasons                           Create a league (any admin). Optional `clone_from` { season_id, copy_roster,
+                                            copy_admins } copies the source league's phases (and, on request, its roster and,
+                                            for site admins, its league admins) after the create; 403 SEASON_CLONE_FORBIDDEN /
+                                            SEASON_CLONE_ADMINS_FORBIDDEN, 404 SEASON_NOT_FOUND; a failed copy is rolled back
+                                            (500 SEASON_CLONE_FAILED, or SEASON_CLONE_CLEANUP_FAILED if the cleanup failed too)
 GET/POST /api/seasons/[id]/phases           List/create league phases
 PATCH/DELETE /api/seasons/[id]/phases/[phaseId]  Phase config + destructive delete
 POST /api/seasons/[id]/phases/reorder       Reorder upcoming phases (stage_order)
@@ -1179,6 +1186,14 @@ interface TeamConstraints {
   eviolite_tier_cap?: TierKey;
 }
 ```
+
+An empty block carries no rule, so the ruleset builder and `createRuleset` store
+it as `null` (`normalizeTeamConstraints` in `src/lib/pkmn/team-constraints.ts`)
+instead of `{}`. `isCustomLeagueRuleset` is unchanged: a ruleset whose stored
+`team_constraints` is already an empty object still counts as a custom league
+ruleset and resolves as before. `updateRuleset` writes the value it is given, and
+the builder keeps an untouched stored empty object as it is; only a new ruleset,
+or turning the toggle off, yields `null`.
 
 The constraint engine is implemented in `src/lib/pkmn/validation.ts`
 (`validateTeam(team, ruleset, ctx)`), with `ctx.playerCore` populated from

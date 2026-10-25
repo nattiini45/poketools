@@ -2,12 +2,12 @@ import type { Standing, MatchRecord, ByeRecord } from './types';
 import { BYE_PLAYER_ID } from './types';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import { computeEvolutionPointBuyStandings } from './evolution-standings';
-import { epbPack } from '@/lib/format-pack';
+import { effectiveMatchPoints } from './standings-rules';
 
 export interface StandingsOptions {
-  /** Points awarded per win (Swiss: 1, Round Robin: 3) */
+  /** Points awarded per win (Swiss: 1, Round Robin: 3). Ignored for evolution_point_buy: the format pack decides. */
   pointsPerWin?: number;
-  /** Points awarded per draw (Swiss: 0.5, Round Robin: 0) */
+  /** Points awarded per draw (Swiss: 0.5, Round Robin: 0). Ignored for evolution_point_buy. */
   pointsPerDraw?: number;
   /** Battle stats for computing kill differential and games played */
   battleStats?: TournamentBattleStat[];
@@ -167,18 +167,19 @@ export function computeStandings(
 /**
  * Format-aware standings dispatcher (pure, client-safe).
  *
- * evolution_point_buy seasons use the format pack's tiebreaker chain
- * (`epb.tiebreakerChain`) and match points (`epb.matchPoints`) unless the
- * caller passes points. Every other
- * format keeps the generic computeStandings behavior unchanged.
+ * evolution_point_buy seasons rank by the season's stored tiebreaker order
+ * (`epb.tiebreakerOrder`, the `format_rules.tiebreaker_order` as read) when it is a usable chain, else by the
+ * format pack's chain (`epb.tiebreakerChain`), and score the pack's match points (`epb.matchPoints`) whatever
+ * points the caller passes (`effectiveMatchPoints`): a caller's round robin 3/0 never reaches an Evolution Point
+ * Buy table. Every other format keeps the generic computeStandings behavior unchanged.
  *
  * `options.byes` (stored Swiss byes) is read by computeStandings only. The EPB
  * branch builds its own options and never forwards it, so EPB standings are
  * unchanged by byes.
  *
  * Server callers should use computeStandingsForSeason (season-standings.ts),
- * which loads the format and evolution-points map; client components pass
- * them down as props.
+ * which loads the format, the evolution-points map and the stored tiebreaker
+ * order; client components pass them down as props.
  */
 export function computeStandingsForFormat(
   formatType: string | null | undefined,
@@ -188,7 +189,7 @@ export function computeStandingsForFormat(
   participant_avatars: Record<string, string | null> = {},
   options: StandingsOptions = {},
   participant_gym_types: Record<string, string | null> = {},
-  epb?: { evolutionPoints?: Record<string, number> },
+  epb?: { evolutionPoints?: Record<string, number>; tiebreakerOrder?: unknown },
 ): Standing[] {
   if (formatType === 'evolution_point_buy') {
     return computeEvolutionPointBuyStandings(
@@ -198,9 +199,9 @@ export function computeStandingsForFormat(
       epb?.evolutionPoints ?? {},
       participant_avatars,
       {
-        pointsPerWin: options.pointsPerWin ?? epbPack.matchPoints.win,
-        pointsPerDraw: options.pointsPerDraw ?? epbPack.matchPoints.draw,
+        ...effectiveMatchPoints(formatType),
         battleStats: options.battleStats,
+        tiebreakerOrder: epb?.tiebreakerOrder,
       },
     );
   }

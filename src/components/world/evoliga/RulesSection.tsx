@@ -11,6 +11,7 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { glossaryMessages } from '@/i18n/messages/glossary';
 import { worldEvoligaMessages } from '@/i18n/messages/world/evoliga';
 import { epbPack, participationLineBase } from '@/lib/format-pack';
+import { effectiveTiebreakerChain } from '@/lib/tournament/standings-rules';
 import { localizeItem } from '@/lib/pkmn/i18n/names/items';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
@@ -96,7 +97,8 @@ export default function RulesSection({
   const tera: typeof epbPack.teraByStage = formatRules?.tera_rules ?? epbPack.teraByStage;
   const bannedMoves = formatRules?.banned_moves ?? defaults.bannedMoves;
   const bannedItems = formatRules?.banned_items ?? defaults.bannedItems;
-  const tiebreakers = formatRules?.tiebreaker_order ?? epbPack.tiebreakerChain;
+  // The chain the table ranks by (the stored order when usable, else the pack's).
+  const tiebreakers = effectiveTiebreakerChain(formatRules);
   const participationLine = participationLineBase();
   const nameList = (names: readonly string[]) => (names.length > 0 ? names.join(', ') : t('rules.none'));
 

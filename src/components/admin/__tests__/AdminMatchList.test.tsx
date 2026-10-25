@@ -25,6 +25,9 @@ vi.mock('next/link', () => ({
 }));
 
 import AdminMatchList, { MatchListPager, useMatchListUpdate } from '../AdminMatchList';
+import { MatchListRow } from '../AdminMatchRowCard';
+import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
+import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import { ADMIN_MATCH_MAX_PAGE, parseMatchListUrl } from '@/lib/admin/match-list';
 
 const LEAGUE = '11111111-1111-4111-8111-111111111111';
@@ -208,5 +211,85 @@ describe('MatchListPager', () => {
     expect(last).toContain('Page 1,000 of 1,000');
     expect(disabled(last, 'Next')).toBe(true);
     expect(disabled(last, 'Previous')).toBe(false);
+  });
+});
+
+describe('MatchListRow player shortcuts (Submit Result, View Prep)', () => {
+  const MATCH_ID = '33333333-3333-4333-8333-333333333333';
+  const row = (patch: Partial<AdminMatchRow> = {}) =>
+    ({
+      id: MATCH_ID,
+      tournament_id: PHASE,
+      season_id: LEAGUE,
+      season_name: 'Spring League',
+      tournament_name: 'Group stage',
+      player_1_id: 'player-1',
+      player_2_id: 'player-2',
+      player_1_name: 'Mara',
+      player_2_name: 'Jonas',
+      winner_name: null,
+      status: 'scheduled',
+      games: [],
+      round_name: null,
+      round_number: 1,
+      best_of: 3,
+      scheduled_at: null,
+      round_deadline: null,
+      auto_confirm_at: null,
+      season_is_test: false,
+      archived: false,
+      ...patch,
+    }) as AdminMatchRow;
+  const viewer = (patch: Partial<AdminMatchViewer>): AdminMatchViewer => ({
+    playerId: 'resource-admin',
+    isSiteAdmin: false,
+    isSuperadmin: false,
+    ...patch,
+  });
+  const render = (m: AdminMatchRow, v: AdminMatchViewer | null, locale: 'en' | 'de' = 'en') =>
+    renderWithI18n(<MatchListRow row={m} backQuery="" viewer={v} />, { locale });
+
+  it('shows neither Submit Result nor View Prep without a viewer, but keeps the link to the admin page', () => {
+    const html = render(row(), null);
+    expect(html).not.toContain('Submit Result');
+    expect(html).not.toContain('View Prep');
+    expect(html).not.toContain('/dashboard/');
+    expect(html).toContain(`href="/admin/matches/${MATCH_ID}"`);
+  });
+
+  it('links both buttons to the player pages for a participant', () => {
+    const html = render(row(), viewer({ playerId: 'player-2' }));
+    expect(html).toContain(`href="/dashboard/submit/${MATCH_ID}"`);
+    expect(html).toContain(`href="/dashboard/match-prep/${MATCH_ID}"`);
+    expect(html).toContain('>Submit Result<');
+    expect(html).toContain('>View Prep<');
+  });
+
+  it('shows neither for a resource admin who does not play, but keeps the link to the admin page', () => {
+    const html = render(row(), viewer({}));
+    expect(html).not.toContain('Submit Result');
+    expect(html).not.toContain('View Prep');
+  });
+
+  it('gives a site admin Submit Result and the superadmin View Prep', () => {
+    const siteAdmin = render(row(), viewer({ isSiteAdmin: true }));
+    expect(siteAdmin).toContain('Submit Result');
+    expect(siteAdmin).not.toContain('View Prep');
+    const superadmin = render(row(), viewer({ isSuperadmin: true }));
+    expect(superadmin).not.toContain('Submit Result');
+    expect(superadmin).toContain('View Prep');
+  });
+
+  it('shows neither once the match is no longer open', () => {
+    const html = render(row({ status: 'completed' }), viewer({ playerId: 'player-1', isSiteAdmin: true, isSuperadmin: true }));
+    expect(html).not.toContain('Submit Result');
+    expect(html).not.toContain('View Prep');
+  });
+
+  it('keeps the German labels', () => {
+    const html = render(row(), viewer({ playerId: 'player-1' }), 'de');
+    expect(html).toContain('>Ergebnis eintragen<');
+    expect(html).toContain('>Vorbereitung ansehen<');
+    expect(html).not.toContain('Korrigieren');
   });
 });
