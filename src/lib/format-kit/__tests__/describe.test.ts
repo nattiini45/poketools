@@ -46,8 +46,8 @@ describe('describePrimitive: a representative node of every available kind', () 
     const view = (stages: string[]) => ({ key: 'total', label: lt('Total', 'Gesamt'), metric: 'points', stages, combine: 'sum' });
     expect(describePrimitive('standings.view', view(['a']), 'en')).toBe('Combined table Total: points added up over 1 stage.');
     expect(describePrimitive('standings.view', view(['a', 'b']), 'en')).toBe('Combined table Total: points added up over 2 stages.');
-    expect(describePrimitive('standings.view', view(['a']), 'de')).toBe('Gesamttabelle Gesamt: Punkte aufsummiert über 1 Phase.');
-    expect(describePrimitive('standings.view', view(['a', 'b']), 'de')).toBe('Gesamttabelle Gesamt: Punkte aufsummiert über 2 Phasen.');
+    expect(describePrimitive('standings.view', view(['a']), 'de')).toBe('Gesamttabelle Gesamt: Punkte aufsummiert über 1 Stage.');
+    expect(describePrimitive('standings.view', view(['a', 'b']), 'de')).toBe('Gesamttabelle Gesamt: Punkte aufsummiert über 2 Stages.');
   });
 
   it('chooses the plural form by count: legs 1, 2 and 4', () => {

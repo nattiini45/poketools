@@ -48,9 +48,9 @@ describe('renderDiagnostic', () => {
   it('resolves stage keys to names in the viewer language when it has the definition', () => {
     const d = diag('stage_unreachable', '/stages/1', { stage: 'knockout' });
     expect(renderDiagnostic(d, 'en', cup)).toBe('Stage Knockout can never receive participants.');
-    expect(renderDiagnostic(d, 'de', cup)).toBe('Phase K.-o.-Runde kann nie Teilnehmer erhalten.');
+    expect(renderDiagnostic(d, 'de', cup)).toBe('Stage K.-o.-Runde kann nie Teilnehmer erhalten.');
     expect(renderDiagnostic(d, 'en')).toBe('Stage knockout can never receive participants.');
-    expect(renderDiagnostic(d, 'de')).toBe('Phase knockout kann nie Teilnehmer erhalten.');
+    expect(renderDiagnostic(d, 'de')).toBe('Stage knockout kann nie Teilnehmer erhalten.');
   });
 
   it('falls back through the text fallback order when a stage name lacks the viewer language', () => {

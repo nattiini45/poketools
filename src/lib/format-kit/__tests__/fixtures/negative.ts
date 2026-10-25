@@ -22,7 +22,7 @@ import type { AdvanceSelect, Edge, FormatDefinition, Stage } from '../../types';
 export function makeStage(key: string, over: Partial<Stage> = {}): Stage {
   return {
     key,
-    name: ltext('en', `Stage ${key}`, `Phase ${key}`),
+    name: ltext('en', `Stage ${key}`, `Stage ${key}`),
     participants: { from: 'edges', seeding: 'edge_order' },
     pairing: { kind: 'single_elim', third_place: false },
     series: { best_of: 1, allow_draw: false, overrides: [] },

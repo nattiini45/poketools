@@ -65,7 +65,7 @@ export default {
     stage_foreach_group: 'Stage per group',
   },
   summary: {
-    stage_define: 'One phase of the format with its own participants, pairing and scoring.',
+    stage_define: 'One stage of the format with its own participants, pairing and scoring.',
     group_form: 'Splits the field into groups.',
     pairing_round_robin: 'Everyone plays everyone, once or several times.',
     pairing_swiss: 'Players with similar results meet over a fixed number of rounds.',
