@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { normalizeTeamConstraints } from '@/lib/pkmn/team-constraints';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import type { Json, Tables } from '@/types/database';
 import type { Ruleset, RulesetFormData, BaseFormat, TeamConstraints } from '@/types/ruleset';
@@ -81,7 +82,8 @@ export async function createRuleset(
       added_pokemon: input.added_pokemon,
       custom_rules_string: input.custom_rules_string,
       min_shared_type_pct: input.min_shared_type_pct,
-      team_constraints: (input.team_constraints ?? null) as Json | null,
+      // A new ruleset never stores an empty object: it would count as a custom league ruleset.
+      team_constraints: normalizeTeamConstraints(input.team_constraints) as Json | null,
       created_by: createdBy,
     })
     .select()

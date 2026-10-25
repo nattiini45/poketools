@@ -695,9 +695,12 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
                                with a generated descriptor each (site admins: all leagues; league admins: their own)
 /admin/formats/example/[presetId]  One example format: stage outline, rules text (EN/DE), diagnostics, coverage
 /admin/formats/league/[id]     One league's format, same view; per-league live gate (docs/admin.md, Format Studio)
-/admin/matches                 Match list (server-side status / league / tournament / search filters in the
-                               URL, paged with an exact total; League and Phase on each row)
-/admin/matches/[id]            Override / dispute match result
+/admin/matches                 Match list (server-side status / league / phase / round / date / format / player /
+                               content filters, quick filters and sort, all in the URL, paged with an exact
+                               total; test and archived leagues hidden by default; the row opens the match page;
+                               row checkboxes + a sticky bulk bar: confirm as reported, set time, add note, up to
+                               100 matches of the page; Export CSV of the whole filtered set, up to 5,000 rows)
+/admin/matches/[id]            Override / dispute match result (its back link restores the list query via ?back=)
 /admin/players                 Player roster management (guest creation + Link account)
 ```
 
@@ -743,9 +746,18 @@ POST /api/tournaments/[id]/regenerate-bracket Admin: wipe and rebuild SE/DE brac
 POST /api/tournaments/[id]/repair-bracket     Admin: re-run bye resolution + slot materialization
 GET  /api/admin/dashboard               Any admin: counts, attention queue, recent audit (a resource admin gets only
                                             their own leagues and tournaments, no site-wide counts or activity)
-GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, q, page (1-1000), page_size;
-                                            returns an exact total
-GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, and standalone tournaments
+GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, round_id, q, format_type,
+                                            bracket_type, best_of, ruleset_id, date_field + date_from / date_to /
+                                            date_none, player_id, player2_id, replay, hand_edited, has_notes, no_games,
+                                            preset, include_test, include_archived, sort, page (1-1000), page_size;
+                                            returns an exact total and `players` (names behind the player filter)
+GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, standalone tournaments, rulesets
+GET  /api/admin/matches/filter-options/rounds  Any admin, scoped: the rounds of one tournament_id (403 outside scope)
+POST /api/admin/matches/batch              Any admin, scoped: action confirm | schedule | note over 1-100 match_ids;
+                                            one match out of scope = 403 for the whole request, per-item results,
+                                            30 requests/hour per admin
+GET  /api/admin/matches/export             Any admin, scoped: the list query as a CSV (UTF-8 with BOM, max 5,000
+                                            rows, X-Export-Count / -Total / -Truncated headers), 20 requests/hour
 GET  /api/admin/format-drift               Site admin: read-only drift report (stored tiebreaker order vs the pack default, info only;
                                             advancement rule on the source vs the target phase); on demand, no writes
 GET  /api/admin/player-search              Any admin (a resource admin names a season_id or tournament_id they
@@ -1210,6 +1222,14 @@ interface TeamConstraints {
   eviolite_tier_cap?: TierKey;
 }
 ```
+
+An empty block carries no rule, so the ruleset builder and `createRuleset` store
+it as `null` (`normalizeTeamConstraints` in `src/lib/pkmn/team-constraints.ts`)
+instead of `{}`. `isCustomLeagueRuleset` is unchanged: a ruleset whose stored
+`team_constraints` is already an empty object still counts as a custom league
+ruleset and resolves as before. `updateRuleset` writes the value it is given, and
+the builder keeps an untouched stored empty object as it is; only a new ruleset,
+or turning the toggle off, yields `null`.
 
 The constraint engine is implemented in `src/lib/pkmn/validation.ts`
 (`validateTeam(team, ruleset, ctx)`), with `ctx.playerCore` populated from

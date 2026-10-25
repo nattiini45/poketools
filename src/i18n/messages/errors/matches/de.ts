@@ -28,6 +28,7 @@ export default defineDe<typeof en>()({
   match_status_override_admin_only: 'Nur Admins können ein laufendes Spiel direkt abschließen oder als strittig markieren.',
   match_dispute_resolve_admin_only: 'Nur Admins können strittige Spiele entscheiden.',
   match_complete_no_winner: 'Ein Spiel ohne Sieger kann nicht abgeschlossen werden.',
+  match_state_changed: 'Das Spiel wurde auf {status} geändert, während du es bearbeitet hast. Prüfe es und versuche es erneut.',
   match_confirm_participants_only: 'Nur die Spieler dieses Spiels oder Admins können Ergebnisse bestätigen.',
   match_dispute_participants_only: 'Nur die Spieler dieses Spiels oder Admins können Ergebnisse anfechten.',
 
@@ -45,6 +46,15 @@ export default defineDe<typeof en>()({
   match_finalize_incomplete: {
     one: 'Das Ergebnis wurde bestätigt, aber {count} Folgeschritt ist fehlgeschlagen. Der Fehler wurde für die Admins protokolliert; sichere Schritte werden automatisch wiederholt.',
     other: 'Das Ergebnis wurde bestätigt, aber {count} Folgeschritte sind fehlgeschlagen. Der Fehler wurde für die Admins protokolliert; sichere Schritte werden automatisch wiederholt.',
+  },
+  match_schedule_completed: 'Ein abgeschlossenes Spiel lässt sich nicht neu ansetzen. Öffne es zuerst wieder.',
+  match_reopen_downstream_played: {
+    one: 'Dieses Spiel lässt sich nicht wieder öffnen: {count} späteres Spiel im Turnierbaum wurde schon gespielt. Setze dieses Spiel zuerst zurück.',
+    other: 'Dieses Spiel lässt sich nicht wieder öffnen: {count} spätere Spiele im Turnierbaum wurden schon gespielt. Setze diese Spiele zuerst zurück.',
+  },
+  match_reopen_incomplete: {
+    one: 'Das Spiel wurde wieder geöffnet, aber {count} Folgeschritt ist fehlgeschlagen. Der Fehler wurde protokolliert; ein Site-Admin kann die Daten mit dem Datenabgleich in den Admin-Datenwerkzeugen reparieren.',
+    other: 'Das Spiel wurde wieder geöffnet, aber {count} Folgeschritte sind fehlgeschlagen. Der Fehler wurde protokolliert; ein Site-Admin kann die Daten mit dem Datenabgleich in den Admin-Datenwerkzeugen reparieren.',
   },
   manual_result_moments_not_saved: {
     one: 'Die Partie wurde eingetragen, aber {count} markierter Moment konnte nicht gespeichert werden. Der Fehler wurde protokolliert.',

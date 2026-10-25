@@ -33,7 +33,7 @@ const OPTIONS = {
       status: 'active',
       archived: false,
       is_test_season: false,
-      phases: [{ id: 'phase-1', name: 'Group stage', stage_order: 0, archived: false }],
+      phases: [{ id: 'phase-1', name: 'Group stage', stage_order: 0, archived: false, ruleset_id: 'ruleset-1' }],
     },
     {
       id: 'season-0',
@@ -44,7 +44,11 @@ const OPTIONS = {
       phases: [],
     },
   ],
-  tournaments: [{ id: 't-1', name: 'Weekly #1', status: 'active', archived: false }],
+  tournaments: [{ id: 't-1', name: 'Weekly #1', status: 'active', archived: false, ruleset_id: 'ruleset-2' }],
+  rulesets: [
+    { id: 'ruleset-1', name: 'Gen 9 OU' },
+    { id: 'ruleset-2', name: 'Gen 9 Ubers' },
+  ],
 };
 
 beforeEach(() => {
@@ -66,6 +70,10 @@ describe('GET /api/admin/matches/filter-options', () => {
     expect(res.status).toBe(200);
     expect(body).toEqual({ success: true, data: OPTIONS });
     expect(body.data.leagues[1]).toMatchObject({ archived: true });
+    // Every phase and standalone tournament names its ruleset, and the rulesets in scope are listed.
+    expect(body.data.leagues[0].phases[0].ruleset_id).toBe('ruleset-1');
+    expect(body.data.tournaments[0].ruleset_id).toBe('ruleset-2');
+    expect(body.data.rulesets).toEqual(OPTIONS.rulesets);
     // `status` is the league / tournament status here, not a player's moderation status.
     expectNoPrivatePlayerData(body, { allowKeys: ['status'] });
   });

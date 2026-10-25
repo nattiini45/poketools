@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { logAuditEvent } from '@/lib/audit/log';
 import { checkAndRecordAdminExport } from '@/lib/admin/export-rate-limit';
 import { recordsToCsv } from '@/lib/utils/csv';
+import { readExportRows } from '@/lib/admin/export-rows';
 import type { ApiResult } from '@/types/api';
 
 type ExportResource = AdminExportInput['resource'];
@@ -53,12 +54,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from(TABLE_MAP[resource])
-      .select('*')
-      .limit(limit);
-
-    if (error) throw error;
+    // Paged under PostgREST `max_rows`, in a total order (`created_at`, then `id`) so pages neither
+    // overlap nor skip. All exportable tables carry both columns.
+    const result = await readExportRows(
+      (from, to, withCount) =>
+        supabase
+          .from(TABLE_MAP[resource])
+          .select('*', withCount ? { count: 'exact' } : undefined)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to),
+      limit,
+    );
+    const data = result.rows;
+    const countHeaders = {
+      'X-Export-Count': String(data.length),
+      'X-Export-Total': String(result.total),
+    };
 
     logAuditEvent({
       actor_id: admin.playerId,
@@ -66,15 +78,16 @@ export async function POST(request: NextRequest) {
       action: 'admin.export',
       resource_type: resource,
       resource_id: null,
-      metadata: { format, count: data?.length ?? 0, limit },
+      metadata: { format, count: data.length, total: result.total, limit, truncated: result.limited },
     });
 
     if (format === 'csv') {
-      const csv = recordsToCsv(data as Record<string, unknown>[]);
+      const csv = recordsToCsv(data);
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv',
           'Content-Disposition': `attachment; filename="${resource}_export.csv"`,
+          ...countHeaders,
           'X-RateLimit-Remaining': String(rateLimit.remaining),
           'X-RateLimit-Reset': rateLimit.reset_at,
         },
@@ -83,9 +96,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json<ApiResult<Record<string, unknown>[]>>({
       success: true,
-      data: data as Record<string, unknown>[],
+      data,
     }, {
       headers: {
+        ...countHeaders,
         'X-RateLimit-Remaining': String(rateLimit.remaining),
         'X-RateLimit-Reset': rateLimit.reset_at,
       },

@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { readBoundedPages } from '../read-bounded-pages';
 import type { Tables, TablesInsert, Json } from '@/types/database';
 import type { PlayerStatus } from '@/types/player';
 import type {
@@ -467,21 +468,28 @@ export async function getParticipantsBatch(
 ): Promise<Map<string, ParticipantWithSeed[]>> {
   if (tournamentIds.length === 0) return new Map();
 
-  const { data, error } = await supabase
-    .from('tournament_participants')
-    .select(`
+  // Paged: 20 stages of 64 players already pass the 1,000-row `max_rows`
+  // ceiling. (tournament_id, player_id) is the primary key, so the order is total.
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('tournament_participants')
+        .select(`
       tournament_id,
       player_id,
       seed,
       starting_bracket,
       players ( * )
     `)
-    .in('tournament_id', tournamentIds);
-
-  if (error) throw error;
+        .in('tournament_id', tournamentIds)
+        .order('tournament_id')
+        .order('player_id')
+        .range(from, to),
+    { label: 'getParticipantsBatch' }
+  );
 
   const result = new Map<string, ParticipantWithSeed[]>();
-  for (const row of data) {
+  for (const row of rows) {
     const participant = mapParticipantRow({
       seed: row.seed,
       starting_bracket: row.starting_bracket,

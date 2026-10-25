@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import type { Player, PlayerRegistration, PlayerStatus } from '@/types/player';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import type { Player, PlayerRegistration } from '@/types/player';
 import type { ApiResponse, ApiResult } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -9,42 +10,37 @@ import GuestBadge from '@/components/shared/GuestBadge';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Alert from '@/components/ui/Alert';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
 import Table, { type Column } from '@/components/ui/Table';
 import { useT } from '@/i18n/client';
-import { useApiErrorText } from '@/i18n/use-api-error';
-import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
-import { errorsAdmin, errorsPlayers } from '@/i18n/messages/errors';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
-import { LocalTime } from '@/i18n/LocalTime';
 import type { PlayerSortColumn } from '@/lib/players/player-sort';
-import { cycleColumnSort, type ColumnSortState, type TablePageSize } from '@/lib/ui/table-params';
+import { cycleColumnSort } from '@/lib/ui/table-params';
 import {
-  DEFAULT_ROSTER_PAGE_SIZE,
+  RosterActionAlert,
+  RosterLoadError,
+  apiError,
+  useRosterErrorText,
+  type RosterActionNotice,
+  type RosterError,
+} from './RosterNotices';
+import { RosterStatusCell } from './RosterStatusCell';
+import {
+  buildRosterSearch,
   lastPage,
   localDateTimeToIso,
   openDialog,
+  parseRosterUrl,
+  roleConfirmKind,
   rosterQuery,
+  rosterView,
+  type RosterConfirmKind,
+  type RosterUrlState,
 } from './roster-helpers';
 
 interface PlayerRosterProps {
   canManageCreators: boolean;
-}
-
-function statusVariant(status: PlayerStatus): 'green' | 'yellow' | 'red' {
-  switch (status) {
-    case 'active': return 'green';
-    case 'suspended': return 'yellow';
-    case 'banned': return 'red';
-  }
-}
-
-type LocalError = 'loadFailed' | 'suspendFailed' | 'banFailed' | 'linkFailed';
-/** An API failure (translated by its code) or a local message key; never translated text. */
-type RosterError = { api: ApiErrorLike } | { local: LocalError };
-
-function apiError(json: unknown): RosterError {
-  return { api: toApiErrorLike(json) };
 }
 
 /** `GET /api/players`: one page of the directory plus the exact number of matching players. */
@@ -55,27 +51,126 @@ const SEARCH_DEBOUNCE_MS = 300;
 /** The guest-link picker lists at most this many accounts per search. */
 const LINK_PICKER_LIMIT = 50;
 
+/** The confirm button colour: red where the click is hard to undo, plain where it only restores. */
+const CONFIRM_VARIANT: Record<RosterConfirmKind, 'danger' | 'primary'> = {
+  makeAdmin: 'danger',
+  removeAdmin: 'danger',
+  makeCreator: 'primary',
+  removeCreator: 'danger',
+  delete: 'danger',
+  reinstate: 'primary',
+};
+
+/** One JSON request to a players route; a network or parse failure throws. */
+async function requestJson(url: string, init?: RequestInit): Promise<ApiResult<unknown>> {
+  const res = await fetch(url, init);
+  return (await res.json()) as ApiResult<unknown>;
+}
+
+function patchPlayer(id: string, body: object): Promise<ApiResult<unknown>> {
+  return requestJson(`/api/players/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/** The request behind a confirmed dialog. */
+function confirmedRequest(kind: RosterConfirmKind, player: Player): Promise<ApiResult<unknown>> {
+  switch (kind) {
+    case 'makeAdmin':
+    case 'removeAdmin':
+      return patchPlayer(player.id, { is_admin: !player.is_admin });
+    case 'makeCreator':
+    case 'removeCreator':
+      return patchPlayer(player.id, { is_creator: !player.is_creator });
+    case 'delete':
+      return requestJson(`/api/players/${player.id}`, { method: 'DELETE' });
+    case 'reinstate':
+      return requestJson(`/api/admin/players/${player.id}/unsuspend`, { method: 'POST' });
+  }
+}
+
+/**
+ * `update(patch)` for the roster's URL state: merges the patch (or the function's result) into
+ * the state and hands the new query string to `replace`. It merges into a ref moved on every
+ * update, so two updates in one tick (a debounced search right after a sort click) compose
+ * instead of the second dropping the first.
+ */
+function useRosterUpdate(url: RosterUrlState, replace: (search: string) => void) {
+  const urlRef = useRef(url);
+  useEffect(() => {
+    urlRef.current = url;
+  }, [url]);
+
+  return useCallback(
+    (patch: Partial<RosterUrlState> | ((current: RosterUrlState) => Partial<RosterUrlState>)) => {
+      const next = { ...urlRef.current, ...(typeof patch === 'function' ? patch(urlRef.current) : patch) };
+      urlRef.current = next;
+      replace(buildRosterSearch(next));
+    },
+    [replace],
+  );
+}
+
 export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // The URL is the source of truth for the search, the sort, the page and the page size.
+  const url = useMemo(() => parseRosterUrl(searchParams ?? new URLSearchParams()), [searchParams]);
+  const replaceSearch = useCallback(
+    (search: string) => router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false }),
+    [router, pathname],
+  );
+  const update = useRosterUpdate(url, replaceSearch);
+  const { page, perPage } = url;
+  const search = url.q.trim();
+  // null = the directory's default order (name, ascending); the server applies the order.
+  const sortKey = url.sort?.key ?? null;
+  const sortDirection = url.sort?.direction ?? null;
+  const sort = useMemo(
+    () => (sortKey && sortDirection ? { key: sortKey, direction: sortDirection } : null),
+    [sortKey, sortDirection],
+  );
+
   const [players, setPlayers] = useState<Player[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState<TablePageSize>(DEFAULT_ROSTER_PAGE_SIZE);
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
-  // null = the directory's default order (name, ascending); the server applies the order.
-  const [sort, setSort] = useState<ColumnSortState | null>(null);
+  // The search box: local text, sent to the URL (and so the server) after a pause.
+  const [searchInput, setSearchInput] = useState(url.q);
+  // The q this box last put in the URL, and the URL q last seen: a URL q that this box did not
+  // send (back / forward, a link) replaces the text; the echo of our own send does not.
+  const [sentQ, setSentQ] = useState(url.q);
+  const [seenQ, setSeenQ] = useState(url.q);
+  if (url.q !== seenQ) {
+    setSeenQ(url.q);
+    if (url.q !== sentQ) {
+      setSentQ(url.q);
+      setSearchInput(url.q);
+    }
+  }
   // `loaded` flips once the first request settles; later requests keep the table mounted.
   const [loaded, setLoaded] = useState(false);
+  // Some request returned rows: a later failed refresh then keeps those rows on screen.
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [fetching, setFetching] = useState(false);
   const latestRequest = useRef(0);
   const t = useT(adminCoreMessages);
-  const errorText = useApiErrorText(errorsPlayers, errorsAdmin);
-  const [error, setError] = useState<RosterError | null>(null);
+  const errorMessage = useRosterErrorText();
+  // Why the directory could not be loaded; apart from `actionNotice`, which never touches the rows.
+  const [loadError, setLoadError] = useState<RosterError | null>(null);
+  // A failed row action or add; stays until dismissed or the next action.
+  const [actionNotice, setActionNotice] = useState<RosterActionNotice | null>(null);
   // A failure from inside an open dialog; shown in the dialog, not behind it.
   const [dialogError, setDialogError] = useState<RosterError | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', discord_id: '', ps_username: '' });
+
+  // Admin / creator / delete / reinstate confirmation
+  const [pendingConfirm, setPendingConfirm] = useState<{ kind: RosterConfirmKind; player: Player } | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   // Suspend dialog state
   const [suspendTarget, setSuspendTarget] = useState<Player | null>(null);
@@ -94,6 +189,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     // Only the newest request may write state: a slow answer to an older
     // search or page must not overwrite a newer one.
     const requestId = ++latestRequest.current;
+    let steppingBack = false;
     setFetching(true);
     try {
       const res = await fetch(`/api/players?${rosterQuery({ page, perPage, search, sort })}`);
@@ -102,25 +198,28 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
       if (json.success) {
         const count = 'total' in json && typeof json.total === 'number' ? json.total : json.data.length;
         if (json.data.length === 0 && count > 0 && page > 1) {
-          // The last row of the last page went away: step back to the new last page.
-          setPage(lastPage(count, perPage));
+          // The last row of the last page went away (or the link names a page past the end):
+          // step back to the new last page, which reloads.
+          steppingBack = true;
+          update({ page: lastPage(count, perPage) });
           return;
         }
-        setError(null);
+        setLoadError(null);
         setPlayers(json.data);
         setTotal(count);
+        setHasLoadedOnce(true);
       } else {
-        setError(apiError(json));
+        setLoadError(apiError(json));
       }
     } catch {
-      if (requestId === latestRequest.current) setError({ local: 'loadFailed' });
+      if (requestId === latestRequest.current) setLoadError({ local: 'loadFailed' });
     } finally {
       if (requestId === latestRequest.current) {
         setFetching(false);
-        setLoaded(true);
+        if (!steppingBack) setLoaded(true);
       }
     }
-  }, [page, perPage, search, sort]);
+  }, [page, perPage, search, sort, update]);
 
   useEffect(() => {
     fetchPlayers();
@@ -129,13 +228,13 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   // Typing filters the whole directory on the server, after a short pause.
   useEffect(() => {
     const next = searchInput.trim();
-    if (next === search) return;
+    if (next === sentQ.trim()) return;
     const handle = setTimeout(() => {
-      setSearch(next);
-      setPage(1);
+      setSentQ(next);
+      update({ q: next, page: 1 });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [searchInput, search]);
+  }, [searchInput, sentQ, update]);
 
   // The guest-link picker searches the directory itself: the roster page only
   // holds one page of players, so the account to merge may not be on it.
@@ -167,66 +266,66 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     };
   }, [linkGuest, linkSearch]);
 
+  const retryLoad = () => {
+    // Nothing was ever loaded: go back to the loading line instead of the stale failure.
+    if (!hasLoadedOnce) setLoaded(false);
+    void fetchPlayers();
+  };
+
   // Ordering is the server's job (the table only holds one page): a header click
   // cycles asc, desc, default and restarts at the first page.
-  const handleSort = useCallback((column: string) => {
-    setSort((current) => cycleColumnSort(current, column));
-    setPage(1);
-  }, []);
+  const handleSort = useCallback(
+    (column: string) => update((current) => ({ sort: cycleColumnSort(current.sort, column), page: 1 })),
+    [update],
+  );
+
+  /**
+   * Runs one row action. A failure (an API error or a thrown network error) becomes the action
+   * notice and never touches the roster itself; the previous notice is cleared first.
+   * Resolves true when the request succeeded.
+   */
+  const runAction = useCallback(
+    async (kind: RosterActionNotice['kind'], name: string, request: () => Promise<ApiResult<unknown>>) => {
+      setActionNotice(null);
+      try {
+        const json = await request();
+        if (json.success) return true;
+        setActionNotice({ kind, name, error: apiError(json) });
+      } catch {
+        setActionNotice({ kind, name, error: { local: 'actionFailed' } });
+      }
+      return false;
+    },
+    [],
+  );
 
   const handleAdd = async (data: PlayerRegistration) => {
-    const res = await fetch('/api/players', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const json = (await res.json()) as ApiResult<Player>;
-    if (json.success) {
+    const ok = await runAction('add', data.name, () =>
+      requestJson('/api/players', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    );
+    if (ok) {
       setShowForm(false);
       fetchPlayers();
-    } else {
-      setError(apiError(json));
     }
   };
 
-  const handleToggleAdmin = useCallback(async (player: Player) => {
-    const res = await fetch(`/api/players/${player.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_admin: !player.is_admin }),
-    });
-    const json = (await res.json()) as ApiResult<Player>;
-    if (json.success) {
-      fetchPlayers();
-    } else {
-      setError(apiError(json));
-    }
-  }, [fetchPlayers]);
+  const askConfirm = useCallback((kind: RosterConfirmKind, player: Player) => {
+    setPendingConfirm({ kind, player });
+  }, []);
 
-  const handleToggleCreator = useCallback(async (player: Player) => {
-    const res = await fetch(`/api/players/${player.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_creator: !player.is_creator }),
-    });
-    const json = (await res.json()) as ApiResult<Player>;
-    if (json.success) {
-      fetchPlayers();
-    } else {
-      setError(apiError(json));
-    }
-  }, [fetchPlayers]);
-
-  const handleDelete = useCallback(async (id: string) => {
-    if (!confirm(t('players.confirmDelete'))) return;
-    const res = await fetch(`/api/players/${id}`, { method: 'DELETE' });
-    const json = (await res.json()) as ApiResult<null>;
-    if (json.success) {
-      fetchPlayers();
-    } else {
-      setError(apiError(json));
-    }
-  }, [fetchPlayers, t]);
+  const handleConfirm = async () => {
+    if (!pendingConfirm || confirming) return;
+    const { kind, player } = pendingConfirm;
+    setConfirming(true);
+    const ok = await runAction('action', player.name, () => confirmedRequest(kind, player));
+    setConfirming(false);
+    setPendingConfirm(null);
+    if (ok) fetchPlayers();
+  };
 
   const openSuspendDialog = useCallback((player: Player) => {
     setDialogError(null);
@@ -256,6 +355,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     const suspendedUntilIso = localDateTimeToIso(suspendUntil);
     if (!suspendTarget || !suspendedUntilIso) return;
     setActionLoading(true);
+    setActionNotice(null);
     setDialogError(null);
     try {
       const res = await fetch(`/api/admin/players/${suspendTarget.id}/suspend`, {
@@ -280,6 +380,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   const handleBan = async () => {
     if (!suspendTarget || !banReason.trim()) return;
     setActionLoading(true);
+    setActionNotice(null);
     setDialogError(null);
     try {
       const res = await fetch(`/api/admin/players/${suspendTarget.id}/suspend`, {
@@ -301,19 +402,6 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     }
   };
 
-  const handleUnsuspend = useCallback(async (player: Player) => {
-    if (!confirm(t('players.confirmReinstate', { name: player.name }))) return;
-    const res = await fetch(`/api/admin/players/${player.id}/unsuspend`, {
-      method: 'POST',
-    });
-    const json = (await res.json()) as ApiResult<Player>;
-    if (json.success) {
-      fetchPlayers();
-    } else {
-      setError(apiError(json));
-    }
-  }, [fetchPlayers, t]);
-
   const linkCandidates = linkResults.filter(
     (p) =>
       !p.is_guest &&
@@ -326,6 +414,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   const handleLinkAccount = async () => {
     if (!linkGuest || !linkSourceId) return;
     setLinking(true);
+    setActionNotice(null);
     setDialogError(null);
     try {
       const res = await fetch(`/api/players/${linkGuest.id}/claim`, {
@@ -365,19 +454,13 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
       ...editForm,
       discord_id: editForm.discord_id.trim() || undefined,
     };
-    const res = await fetch(`/api/players/${editingId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const json = (await res.json()) as ApiResult<Player>;
-    if (json.success) {
+    const name = players.find((p) => p.id === editingId)?.name ?? editForm.name;
+    // A failed save keeps the row in edit mode with its input.
+    if (await runAction('action', name, () => patchPlayer(editingId, payload))) {
       setEditingId(null);
       fetchPlayers();
-    } else {
-      setError(apiError(json));
     }
-  }, [editForm, editingId, fetchPlayers]);
+  }, [editForm, editingId, fetchPlayers, players, runAction]);
 
   const rosterColumns = useMemo((): Column<Player>[] => [
     {
@@ -432,19 +515,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
       key: 'status' satisfies PlayerSortColumn,
       header: t('players.columns.status'),
       sortable: true,
-      render: (player) => (
-        <span className="inline-flex flex-wrap items-center gap-2">
-          <Badge variant={statusVariant(player.status)}>
-            {t(`players.status.${player.status}`)}
-          </Badge>
-          {player.status === 'suspended' && player.suspended_until && (
-            <span className="text-xs text-poke-text-muted">
-              {t('players.until')}{' '}
-              <LocalTime value={player.suspended_until} preset="dateTimeYear" />
-            </span>
-          )}
-        </span>
-      ),
+      render: (player) => <RosterStatusCell player={player} />,
     },
     {
       key: 'admin',
@@ -455,7 +526,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
             {player.is_admin ? t('players.roles.admin') : t('players.roles.player')}
           </Badge>
         ) : (
-          <button type="button" onClick={() => handleToggleAdmin(player)}>
+          <button type="button" onClick={() => askConfirm(roleConfirmKind(player, 'is_admin'), player)}>
             <Badge variant={player.is_admin ? 'green' : 'gray'}>
               {player.is_admin ? t('players.roles.admin') : t('players.roles.player')}
             </Badge>
@@ -471,7 +542,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
             {player.is_creator ? t('players.roles.creator') : '—'}
           </Badge>
         ) : canManageCreators ? (
-          <button type="button" onClick={() => handleToggleCreator(player)}>
+          <button type="button" onClick={() => askConfirm(roleConfirmKind(player, 'is_creator'), player)}>
             <Badge variant={player.is_creator ? 'purple' : 'gray'}>
               {player.is_creator ? t('players.roles.creator') : '—'}
             </Badge>
@@ -516,7 +587,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
               </button>
             )}
             {player.status !== 'active' ? (
-              <button type="button" onClick={() => handleUnsuspend(player)} className="text-poke-green text-sm hover:underline">
+              <button type="button" onClick={() => askConfirm('reinstate', player)} className="text-poke-green text-sm hover:underline">
                 {t('players.rowActions.reinstate')}
               </button>
             ) : (
@@ -529,40 +600,33 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
                 </button>
               </>
             )}
-            <button type="button" onClick={() => handleDelete(player.id)} className="text-poke-danger text-sm hover:underline">
+            <button type="button" onClick={() => askConfirm('delete', player)} className="text-poke-danger text-sm hover:underline">
               {t('players.rowActions.delete')}
             </button>
           </span>
         ),
     },
   ], [
+    askConfirm,
     canManageCreators,
     editForm,
     editingId,
-    handleDelete,
     handleSaveEdit,
-    handleToggleAdmin,
-    handleToggleCreator,
-    handleUnsuspend,
     openBanDialog,
     openSuspendDialog,
     startEditing,
     t,
   ]);
 
-  if (!loaded) return <p className="text-poke-text-muted">{t('players.loading')}</p>;
+  const view = rosterView({ loaded, hasLoadedOnce, hasLoadError: loadError !== null });
+  if (view === 'loading') return <p className="text-poke-text-muted">{t('players.loading')}</p>;
+  // The first load failed: no rows, and no telling an empty directory from an unreachable one.
+  if (view === 'blocked' && loadError) return <RosterLoadError error={loadError} onRetry={retryLoad} />;
 
   const dialog = openDialog(suspendTarget, suspendAction);
-  const errorMessage = (e: RosterError) => ('api' in e ? errorText(e.api) : t(`players.${e.local}`));
 
   return (
     <div>
-      {error && (
-        <Alert variant="error" className="mb-4">
-          {errorMessage(error)}
-        </Alert>
-      )}
-
       <Button
         variant="primary"
         size="sm"
@@ -585,6 +649,9 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
         />
       </div>
 
+      {actionNotice && <RosterActionAlert notice={actionNotice} onDismiss={() => setActionNotice(null)} />}
+      {loadError && <RosterLoadError error={loadError} onRetry={retryLoad} />}
+
       <div aria-busy={fetching} className={fetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
         <Table
           columns={rosterColumns}
@@ -597,13 +664,25 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
           page={page}
           perPage={perPage}
           totalItems={total}
-          onPageChange={setPage}
-          onPerPageChange={(size) => {
-            setPerPage(size);
-            setPage(1);
-          }}
+          onPageChange={(next) => update({ page: next })}
+          onPerPageChange={(size) => update({ perPage: size, page: 1 })}
         />
       </div>
+
+      {pendingConfirm && (
+        <ConfirmDialog
+          open
+          onClose={() => {
+            if (!confirming) setPendingConfirm(null);
+          }}
+          onConfirm={handleConfirm}
+          title={t(`players.confirm.${pendingConfirm.kind}.title`, { name: pendingConfirm.player.name })}
+          message={t(`players.confirm.${pendingConfirm.kind}.body`, { name: pendingConfirm.player.name })}
+          confirmLabel={t(`players.confirm.${pendingConfirm.kind}.confirm`)}
+          confirmVariant={CONFIRM_VARIANT[pendingConfirm.kind]}
+          loading={confirming}
+        />
+      )}
 
       {/* Link guest account */}
       {linkGuest && (

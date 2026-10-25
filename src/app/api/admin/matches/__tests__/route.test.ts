@@ -27,6 +27,7 @@ vi.mock('@/lib/auth/admin-scope', async (importOriginal) => ({
 vi.mock('@/lib/supabase/queries/matches', () => ({
   listAdminMatchesPage: vi.fn(),
   findPlayerIdsForMatchSearch: vi.fn(),
+  listMatchFilterPlayers: vi.fn(),
   listTournamentIdsBySeason: vi.fn(),
 }));
 
@@ -38,6 +39,7 @@ import type { AdminScope } from '@/lib/auth/admin-scope';
 import {
   findPlayerIdsForMatchSearch,
   listAdminMatchesPage,
+  listMatchFilterPlayers,
   listTournamentIdsBySeason,
 } from '@/lib/supabase/queries/matches';
 
@@ -50,6 +52,8 @@ const STANDALONE = '44444444-4444-4444-8444-444444444444';
 const PLAYER_ID_1 = '55555555-5555-4555-8555-555555555555';
 const PLAYER_ID_2 = '66666666-6666-4666-8666-666666666666';
 const MATCH_ID = '77777777-7777-4777-8777-777777777777';
+const ROUND_ID = '88888888-8888-4888-8888-888888888888';
+const RULESET_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-bbbbbbbbbbbb';
 
 const SITE_SCOPE: AdminScope = { playerId: 'p-admin', isSiteAdmin: true, seasonIds: null, tournamentIds: null };
 /** A season admin of SEASON (phases A and B) with no other assignment. */
@@ -102,6 +106,7 @@ beforeEach(() => {
   vi.mocked(listAdminMatchesPage).mockResolvedValue(pageOf());
   vi.mocked(listTournamentIdsBySeason).mockResolvedValue([PHASE_A, PHASE_B]);
   vi.mocked(findPlayerIdsForMatchSearch).mockResolvedValue({ ids: [PLAYER_ID_1], truncated: false });
+  vi.mocked(listMatchFilterPlayers).mockResolvedValue([]);
 });
 
 describe('GET /api/admin/matches: guard', () => {
@@ -118,6 +123,7 @@ describe('GET /api/admin/matches: guard', () => {
     expect(await res.json()).toEqual({ success: false, error: 'Admin access required', code: 'forbidden' });
     expect(getAdminScope).not.toHaveBeenCalled();
     expect(listAdminMatchesPage).not.toHaveBeenCalled();
+    expect(listMatchFilterPlayers).not.toHaveBeenCalled();
   });
 
   it('lets a resource admin in and restricts the query to their tournaments', async () => {
@@ -139,7 +145,7 @@ describe('GET /api/admin/matches: guard', () => {
     const body = await (await GET(req())).json();
     expect(body).toEqual({
       success: true,
-      data: { rows: [], total: 0, page: 1, pageSize: 50, searchTruncated: false },
+      data: { rows: [], total: 0, page: 1, pageSize: 50, searchTruncated: false, players: [] },
     });
     expect(listAdminMatchesPage).not.toHaveBeenCalled();
   });
@@ -300,6 +306,14 @@ describe('GET /api/admin/matches: validation', () => {
     ['constructor parameter', '?constructor=x'],
     ['repeated parameter', '?page=1&page=2'],
     ['standalone with season_id', `?standalone=true&season_id=${SEASON}`],
+    ['round_id without tournament_id', `?round_id=${ROUND_ID}`],
+    ['round_id with only a season_id', `?season_id=${SEASON}&round_id=${ROUND_ID}`],
+    ['player2_id without player_id', `?player2_id=${PLAYER_ID_2}`],
+    ['no_games with replay=has', '?no_games=true&replay=has'],
+    ['date_from after date_to', '?date_from=2026-10-26T00:00:00Z&date_to=2026-10-25T00:00:00Z'],
+    ['date_from without an offset', '?date_from=2026-10-25T00:00:00'],
+    ['best_of 16', '?best_of=16'],
+    ['unknown sort', '?sort=random'],
   ])('400s %s with the shared validation code', async (_label, search) => {
     const res = await GET(req(search));
     const body = await res.json();
@@ -326,10 +340,26 @@ describe('GET /api/admin/matches: paging and filters', () => {
       matchId: undefined,
       page: 1,
       pageSize: 50,
+      roundId: undefined,
+      formatType: undefined,
+      bracketType: undefined,
+      bestOf: undefined,
+      rulesetId: undefined,
+      date: undefined,
+      playerId: undefined,
+      player2Id: undefined,
+      replay: undefined,
+      handEdited: false,
+      hasNotes: false,
+      noGames: false,
+      preset: undefined,
+      includeTest: false,
+      includeArchived: false,
+      sort: undefined,
     });
     expect(body).toEqual({
       success: true,
-      data: { rows: [mockRow], total: 731, page: 1, pageSize: 50, searchTruncated: false },
+      data: { rows: [mockRow], total: 731, page: 1, pageSize: 50, searchTruncated: false, players: [] },
     });
   });
 
@@ -368,7 +398,7 @@ describe('GET /api/admin/matches: q', () => {
     const body = await (await GET(req('?q=nobody'))).json();
     expect(body).toEqual({
       success: true,
-      data: { rows: [], total: 0, page: 1, pageSize: 50, searchTruncated: false },
+      data: { rows: [], total: 0, page: 1, pageSize: 50, searchTruncated: false, players: [] },
     });
     expect(listAdminMatchesPage).not.toHaveBeenCalled();
   });
@@ -396,9 +426,212 @@ describe('GET /api/admin/matches: q', () => {
   });
 });
 
+describe('GET /api/admin/matches: filters', () => {
+  it('passes every new filter to the query', async () => {
+    await GET(
+      req(
+        `?tournament_id=${PHASE_A}&round_id=${ROUND_ID}&format_type=draft&bracket_type=swiss&best_of=3&ruleset_id=${RULESET_ID}` +
+          `&player_id=${PLAYER_ID_1}&player2_id=${PLAYER_ID_2}&replay=has&hand_edited=true&has_notes=true&preset=overdue&sort=status_priority`
+      )
+    );
+    expect(listAdminMatchesPage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tournamentIds: [PHASE_A],
+        roundId: ROUND_ID,
+        formatType: 'draft',
+        bracketType: 'swiss',
+        bestOf: 3,
+        rulesetId: RULESET_ID,
+        playerId: PLAYER_ID_1,
+        player2Id: PLAYER_ID_2,
+        replay: 'has',
+        handEdited: true,
+        hasNotes: true,
+        noGames: false,
+        preset: 'overdue',
+        sort: 'status_priority',
+      })
+    );
+  });
+
+  it('passes no_games and replay=none', async () => {
+    await GET(req('?no_games=true&replay=none'));
+    expect(listAdminMatchesPage).toHaveBeenCalledWith(expect.objectContaining({ noGames: true, replay: 'none' }));
+  });
+
+  it('maps a date window to the query, defaulting to the scheduled date', async () => {
+    await GET(req('?date_from=2026-10-24T22:00:00.000Z&date_to=2026-10-25T23:00:00.000Z'));
+    expect(listAdminMatchesPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        date: { field: 'scheduled', from: '2026-10-24T22:00:00.000Z', to: '2026-10-25T23:00:00.000Z', none: false },
+      })
+    );
+
+    await GET(req('?date_field=created&date_from=2026-10-24T22:00:00%2B00:00'));
+    expect(listAdminMatchesPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        date: { field: 'created', from: '2026-10-24T22:00:00+00:00', to: undefined, none: false },
+      })
+    );
+  });
+
+  it('maps "date not set" to the query', async () => {
+    await GET(req('?date_field=played&date_none=true'));
+    expect(listAdminMatchesPage).toHaveBeenCalledWith(
+      expect.objectContaining({ date: { field: 'played', from: undefined, to: undefined, none: true } })
+    );
+  });
+});
+
+describe('GET /api/admin/matches: rounds need their tournament', () => {
+  it('400s a round_id without tournament_id, before any read of matches', async () => {
+    const res = await GET(req(`?round_id=${ROUND_ID}`));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe('validation_failed');
+    expect(body.error).toContain('round_id requires tournament_id');
+    expect(listAdminMatchesPage).not.toHaveBeenCalled();
+  });
+
+  it('403s a round of a tournament outside the scope of a resource admin', async () => {
+    vi.mocked(getAdminScope).mockResolvedValue(SEASON_ADMIN_SCOPE);
+    const res = await GET(req(`?tournament_id=${STANDALONE}&round_id=${ROUND_ID}`));
+    expect(res.status).toBe(403);
+    expect(listAdminMatchesPage).not.toHaveBeenCalled();
+  });
+
+  it('lets a resource admin filter a round of their own tournament', async () => {
+    vi.mocked(getAdminScope).mockResolvedValue(SEASON_ADMIN_SCOPE);
+    const res = await GET(req(`?tournament_id=${PHASE_B}&round_id=${ROUND_ID}`));
+    expect(res.status).toBe(200);
+    expect(listAdminMatchesPage).toHaveBeenCalledWith(
+      expect.objectContaining({ tournamentIds: [PHASE_B], roundId: ROUND_ID })
+    );
+  });
+});
+
+describe('GET /api/admin/matches: hidden test leagues and archived matches', () => {
+  const flags = () => {
+    const call = vi.mocked(listAdminMatchesPage).mock.calls.at(-1)![0];
+    return [call.includeTest, call.includeArchived];
+  };
+
+  it('hides both by default', async () => {
+    await GET(req());
+    expect(flags()).toEqual([false, false]);
+    await GET(req('?status=disputed&q=mara'));
+    expect(flags()).toEqual([false, false]);
+    await GET(req('?standalone=true'));
+    expect(flags()).toEqual([false, false]);
+  });
+
+  it('shows each with its own toggle', async () => {
+    await GET(req('?include_test=true'));
+    expect(flags()).toEqual([true, false]);
+    await GET(req('?include_archived=true'));
+    expect(flags()).toEqual([false, true]);
+    await GET(req('?include_test=true&include_archived=true'));
+    expect(flags()).toEqual([true, true]);
+  });
+
+  it.each([
+    ['a league', `?season_id=${SEASON}`],
+    ['a phase', `?tournament_id=${PHASE_A}`],
+    ['a match id', `?q=${MATCH_ID}`],
+  ])('shows the matches of an explicit pick of %s without a toggle', async (_label, search) => {
+    await GET(req(search));
+    expect(flags()).toEqual([true, true]);
+  });
+
+  it('does not treat a player search or a player filter as an explicit pick', async () => {
+    await GET(req('?q=mara'));
+    expect(flags()).toEqual([false, false]);
+    await GET(req(`?player_id=${PLAYER_ID_1}`));
+    expect(flags()).toEqual([false, false]);
+  });
+});
+
+describe('GET /api/admin/matches: player filter and resolved names', () => {
+  it("keeps a resource admin's player filter inside their tournaments", async () => {
+    vi.mocked(getAdminScope).mockResolvedValue(SEASON_ADMIN_SCOPE);
+    const res = await GET(req(`?player_id=${PLAYER_ID_1}`));
+    expect(res.status).toBe(200);
+    expect(listAdminMatchesPage).toHaveBeenCalledWith(
+      expect.objectContaining({ tournamentIds: [PHASE_A, PHASE_B], playerId: PLAYER_ID_1 })
+    );
+  });
+
+  it('still 403s a tournament outside the scope when a player filter is given', async () => {
+    vi.mocked(getAdminScope).mockResolvedValue(SEASON_ADMIN_SCOPE);
+    const res = await GET(req(`?tournament_id=${STANDALONE}&player_id=${PLAYER_ID_1}`));
+    expect(res.status).toBe(403);
+    expect(listAdminMatchesPage).not.toHaveBeenCalled();
+    expect(listMatchFilterPlayers).not.toHaveBeenCalled();
+  });
+
+  it('returns the names of the filter players, resolved without the visibility limit for a site admin', async () => {
+    vi.mocked(listMatchFilterPlayers).mockResolvedValue([
+      { id: PLAYER_ID_1, name: 'Mara' },
+      { id: PLAYER_ID_2, name: 'Nora' },
+    ]);
+    const body = await (await GET(req(`?player_id=${PLAYER_ID_1}&player2_id=${PLAYER_ID_2}`))).json();
+    expect(listMatchFilterPlayers).toHaveBeenCalledWith([PLAYER_ID_1, PLAYER_ID_2], { visibleOnly: false });
+    expect(body.data.players).toEqual([
+      { id: PLAYER_ID_1, name: 'Mara' },
+      { id: PLAYER_ID_2, name: 'Nora' },
+    ]);
+  });
+
+  it('resolves the names with the public-directory limit for a resource admin', async () => {
+    vi.mocked(getAdminScope).mockResolvedValue(SEASON_ADMIN_SCOPE);
+    await GET(req(`?player_id=${PLAYER_ID_1}`));
+    expect(listMatchFilterPlayers).toHaveBeenCalledWith([PLAYER_ID_1], { visibleOnly: true });
+  });
+
+  it('returns an empty players list, without a lookup, when no player is filtered', async () => {
+    const body = await (await GET(req())).json();
+    expect(body.data.players).toEqual([]);
+    expect(listMatchFilterPlayers).not.toHaveBeenCalled();
+  });
+
+  it('returns the names on the empty-scope response too', async () => {
+    vi.mocked(getAdminScope).mockResolvedValue({ ...SEASON_ADMIN_SCOPE, seasonIds: [], tournamentIds: [] });
+    vi.mocked(listMatchFilterPlayers).mockResolvedValue([{ id: PLAYER_ID_1, name: 'Mara' }]);
+    const body = await (await GET(req(`?player_id=${PLAYER_ID_1}`))).json();
+    expect(body.data).toMatchObject({ rows: [], total: 0, players: [{ id: PLAYER_ID_1, name: 'Mara' }] });
+    expect(listAdminMatchesPage).not.toHaveBeenCalled();
+  });
+
+  it('returns the names on the empty-search response too', async () => {
+    vi.mocked(findPlayerIdsForMatchSearch).mockResolvedValue({ ids: [], truncated: false });
+    vi.mocked(listMatchFilterPlayers).mockResolvedValue([{ id: PLAYER_ID_1, name: 'Mara' }]);
+    const body = await (await GET(req(`?q=nobody&player_id=${PLAYER_ID_1}`))).json();
+    expect(body.data).toMatchObject({ rows: [], total: 0, players: [{ id: PLAYER_ID_1, name: 'Mara' }] });
+    expect(listAdminMatchesPage).not.toHaveBeenCalled();
+  });
+
+  it('returns the names alongside the rows', async () => {
+    vi.mocked(listMatchFilterPlayers).mockResolvedValue([{ id: PLAYER_ID_1, name: 'Mara' }]);
+    const body = await (await GET(req(`?player_id=${PLAYER_ID_1}`))).json();
+    expect(body.data.rows).toEqual([mockRow]);
+    expect(body.data.players).toEqual([{ id: PLAYER_ID_1, name: 'Mara' }]);
+  });
+
+  it('keeps a failed name lookup distinguishable in the log, with the same safe response', async () => {
+    vi.mocked(listMatchFilterPlayers).mockRejectedValue(new Error('players table unavailable'));
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await GET(req(`?player_id=${PLAYER_ID_1}`));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ success: false, error: 'Failed to list matches' });
+    expect(spy.mock.calls.flat().some((arg) => arg instanceof Error && arg.message === 'players table unavailable')).toBe(true);
+    spy.mockRestore();
+  });
+});
+
 describe('GET /api/admin/matches: no private player data', () => {
   it('serializes players in the narrow shape only', async () => {
-    const res = await GET(req());
+    vi.mocked(listMatchFilterPlayers).mockResolvedValue([{ id: PLAYER_ID_1, name: 'Mara' }]);
+    const res = await GET(req(`?player_id=${PLAYER_ID_1}`));
     // `status` is the match status here, not the player's moderation status; the sentinel check still applies.
     expectNoPrivatePlayerData(await res.json(), { allowKeys: ['status'] });
   });

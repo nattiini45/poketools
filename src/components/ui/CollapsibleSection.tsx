@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "@/components/shared/motion";
 import { cn } from "@/lib/utils/cn";
 
 interface CollapsibleSectionProps {
+  /** Anchor id on the outer <section>, so a link can jump to it. */
+  id?: string;
   title?: string;
   subtitle?: string;
   action?: ReactNode;
@@ -22,6 +24,7 @@ interface CollapsibleSectionProps {
 }
 
 export default function CollapsibleSection({
+  id,
   title,
   subtitle,
   action,
@@ -36,8 +39,10 @@ export default function CollapsibleSection({
 
   return (
     <section
+      id={id}
       className={cn(
         "self-start w-full bg-poke-surface border border-poke-border rounded-poke-lg shadow-poke-card overflow-hidden",
+        id && "scroll-mt-4",
         className
       )}
     >

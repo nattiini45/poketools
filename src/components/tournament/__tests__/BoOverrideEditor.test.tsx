@@ -45,7 +45,7 @@ describe('BoOverrideEditor labels', () => {
     const ids = [...html.matchAll(/<select[^>]*id="([^"]+)"/g)].map((m) => m[1]);
     expect(ids).toHaveLength(3);
     expect(new Set(ids).size).toBe(3);
-    const labelled = ids.map((id) => html.match(new RegExp(`<label[^>]*for="${id.replace(/:/g, '\:')}"[^>]*>([^<]*)</label>`))?.[1]);
+    const labelled = ids.map((id) => html.match(new RegExp(`<label[^>]*for="${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>([^<]*)</label>`))?.[1]);
     expect(labelled).toEqual(['Quarterfinals', 'Semifinals', 'Finals']);
   });
 });
