@@ -37,6 +37,7 @@ function ui(status: 'in_progress' | 'completed') {
       currentWinnerId={null}
       games={[game(1, 'p1'), game(2, null)]}
       tournamentId="t1"
+      bestOf={3}
       isSiteAdmin
     />
   );
@@ -61,6 +62,21 @@ describe('AdminMatchActions i18n', () => {
     expect(html).toContain('Admin-Eingriff');
     expect(html).toContain('Als strittig markieren');
     expect(html).not.toContain('Reset Match');
+  });
+
+  it('shows the recorded tally and tags the player the games favour', () => {
+    const html = renderToStaticMarkup(ui('in_progress'));
+    expect(html).toContain('Recorded games');
+    expect(html).toContain('Ash 1 – 0 Gary from 2 games');
+    expect(html).toContain('Best of 3: first to 2');
+    expect(html).toContain('leads on games');
+  });
+
+  it('shows the tally in German', () => {
+    const html = renderWithI18n(ui('in_progress'), { locale: 'de' });
+    expect(html).toContain('Eingetragene Partien');
+    expect(html).toContain('Ash 1 – 0 Gary aus 2 Partien');
+    expect(html).toContain('führt nach Partien');
   });
 
   it('completed matches show only the reset hint, in German', () => {

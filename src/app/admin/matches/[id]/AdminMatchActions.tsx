@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Section from '@/components/ui/Section';
@@ -12,7 +12,9 @@ import { useFormatter, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import GameChangeAlerts from '@/components/match/GameChangeAlerts';
-import { sendGameChange } from '@/lib/match/game-change-outcome';
+import { gameChangeFailureHints, sendGameChange } from '@/lib/match/game-change-outcome';
+import { computeSeriesTally } from '@/lib/match/series-tally';
+import ConfirmResultDialog, { SeriesTallyLine, type ConfirmResultKind } from './ConfirmResultDialog';
 
 interface PlayerInfo {
   id: string;
@@ -27,6 +29,8 @@ interface AdminMatchActionsProps {
   currentWinnerId: string | null;
   games: GameSummary[];
   tournamentId: string;
+  /** The round's best-of, or null when the round could not be read. */
+  bestOf: number | null;
   /** The viewer is a site admin (the admin data tools are site-admin only). */
   isSiteAdmin: boolean;
 }
@@ -49,6 +53,7 @@ export default function AdminMatchActions({
   player2,
   currentWinnerId,
   games,
+  bestOf,
   isSiteAdmin,
 }: AdminMatchActionsProps) {
   const router = useRouter();
@@ -68,6 +73,9 @@ export default function AdminMatchActions({
   const [downstreamWarning, setDownstreamWarning] = useState(false);
 
   // Confirm dialog state
+  const [confirmKind, setConfirmKind] = useState<ConfirmResultKind | null>(null);
+  /** Downstream matches the cascade reset would also reset, as the 409 reports them. */
+  const [cascadeCount, setCascadeCount] = useState(0);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [cascadeDialogOpen, setCascadeDialogOpen] = useState(false);
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
@@ -75,8 +83,14 @@ export default function AdminMatchActions({
 
   const isTerminal = currentStatus === 'completed';
   const isScheduled = currentStatus === 'scheduled';
+  const tally = useMemo(
+    () => computeSeriesTally(games, player1.id, player2.id, bestOf),
+    [games, player1.id, player2.id, bestOf],
+  );
+  const leader = tally.leaderId === player1.id ? player1 : tally.leaderId === player2.id ? player2 : null;
 
-  async function handleOverride(targetStatus: 'completed' | 'disputed') {
+  /** Ask first: Complete needs a winner, then both actions open the confirmation. */
+  function requestOverride(targetStatus: ConfirmResultKind) {
     setError(null);
     setSuccess(null);
     setWarnings([]);
@@ -85,6 +99,13 @@ export default function AdminMatchActions({
       setError({ local: 'selectWinner' });
       return;
     }
+    setConfirmKind(targetStatus);
+  }
+
+  async function handleOverride(targetStatus: ConfirmResultKind) {
+    setError(null);
+    setSuccess(null);
+    setWarnings([]);
 
     setLoading(true);
     try {
@@ -104,12 +125,16 @@ export default function AdminMatchActions({
         setSuccess({ kind: targetStatus });
         setTimeout(() => router.refresh(), 1500);
       } else {
-        setError({ api: toApiErrorLike(json) });
+        const apiError = toApiErrorLike(json);
+        setError({ api: apiError });
+        // The match moved on meanwhile: show its current state at once.
+        if (gameChangeFailureHints(apiError).reload) router.refresh();
       }
     } catch {
       setError({ local: 'updateFailed' });
     } finally {
       setLoading(false);
+      setConfirmKind(null);
     }
   }
 
@@ -119,6 +144,7 @@ export default function AdminMatchActions({
     setWarnings([]);
     setRecalculation(null);
     setDownstreamWarning(false);
+    setCascadeCount(0);
     setResetting(true);
     try {
       const result = await sendGameChange(`/api/admin/matches/${matchId}/reset`, {
@@ -141,6 +167,8 @@ export default function AdminMatchActions({
         setCascadeDialogOpen(false);
         setTimeout(() => router.refresh(), 2000);
       } else if (result.error.code === 'DOWNSTREAM_PLAYED' && !cascade) {
+        const count = result.error.params?.count;
+        setCascadeCount(typeof count === 'number' && Number.isFinite(count) ? count : 0);
         setResetDialogOpen(false);
         setCascadeDialogOpen(true);
       } else {
@@ -295,6 +323,19 @@ export default function AdminMatchActions({
       {/* Override Actions — for non-terminal, non-scheduled states */}
       {!isTerminal && !isScheduled && (
         <Section title={t('actions.overrideSection')}>
+          {/* Recorded games, so the result is picked with the series in view */}
+          <div className="mb-4 space-y-1 text-sm">
+            <p className="font-heading text-poke-text-muted">{t('actions.tally.label')}</p>
+            <p className="text-poke-text-primary">
+              <SeriesTallyLine tally={tally} player1={player1} player2={player2} />
+            </p>
+            {tally.bestOf !== null && tally.winsNeeded !== null && (
+              <p className="text-xs text-poke-text-muted">
+                {t('actions.tally.bestOf', { bestOf: tally.bestOf, needed: tally.winsNeeded })}
+              </p>
+            )}
+          </div>
+
           {/* Winner Selection */}
           <div>
             <label className="block text-sm font-heading text-poke-text-muted mb-2">{t('actions.setWinner')}</label>
@@ -311,6 +352,9 @@ export default function AdminMatchActions({
                   }`}
                 >
                   {p.name}
+                  {leader?.id === p.id && (
+                    <span className="ml-2 text-xs font-normal opacity-80">{t('actions.tally.byGames')}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -336,7 +380,7 @@ export default function AdminMatchActions({
             <Button
               variant="success"
               loading={loading}
-              onClick={() => handleOverride('completed')}
+              onClick={() => requestOverride('completed')}
             >
               {t('actions.completeMatch')}
             </Button>
@@ -345,7 +389,7 @@ export default function AdminMatchActions({
               <Button
                 variant="danger"
                 loading={loading}
-                onClick={() => handleOverride('disputed')}
+                onClick={() => requestOverride('disputed')}
               >
                 {t('actions.markDisputed')}
               </Button>
@@ -427,6 +471,21 @@ export default function AdminMatchActions({
         </Alert>
       )}
 
+      {confirmKind && (
+        <ConfirmResultDialog
+          open
+          onClose={() => setConfirmKind(null)}
+          onConfirm={() => handleOverride(confirmKind)}
+          kind={confirmKind}
+          player1={player1}
+          player2={player2}
+          winnerId={confirmKind === 'completed' ? winnerId : (currentWinnerId ?? '')}
+          tally={tally}
+          note={notes}
+          loading={loading}
+        />
+      )}
+
       {/* Confirm Reset Dialog */}
       <ConfirmDialog
         open={resetDialogOpen}
@@ -443,7 +502,11 @@ export default function AdminMatchActions({
         onClose={() => setCascadeDialogOpen(false)}
         onConfirm={() => handleResetMatch(true)}
         title={t('actions.dialogs.cascadeTitle')}
-        message={t('actions.dialogs.cascadeMessage')}
+        message={
+          cascadeCount > 0
+            ? `${t('actions.dialogs.cascadeCount', { count: cascadeCount })} ${t('actions.dialogs.cascadeMessage')}`
+            : t('actions.dialogs.cascadeMessage')
+        }
         confirmLabel={t('actions.dialogs.cascadeConfirm')}
         loading={resetting}
       />

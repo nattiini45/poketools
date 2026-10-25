@@ -61,6 +61,8 @@ export default defineDe<typeof en>()({
     unlimited: 'unbegrenzt',
     max: 'max. {count}',
     save: 'Grenzen speichern',
+    retry: 'Erneut versuchen',
+    blocked: 'Speichern ist aus, bis die Grenzen geladen sind, damit die gespeicherten Grenzen nicht überschrieben werden.',
     errors: {
       load: 'Die Tier-Grenzen konnten nicht geladen werden',
       save: 'Die Tier-Grenzen konnten nicht gespeichert werden',
@@ -77,6 +79,8 @@ export default defineDe<typeof en>()({
     bind: 'An Saison binden',
     empty: 'Es gibt noch keine Point-Buy-Listen. Lege eine über die API oder das Import-Skript an.',
     currentlyBound: 'Aktuell gebunden: {name}',
+    retry: 'Erneut versuchen',
+    blocked: 'Binden ist aus, bis die Listen geladen sind.',
     errors: {
       load: 'Die Point-Buy-Listen konnten nicht geladen werden',
       bind: 'Die Liste konnte nicht gebunden werden',

@@ -32,6 +32,7 @@ export type AuditAction =
   | 'game.import_replay'
   | 'match.reset'
   | 'match.override'
+  | 'match.dispute'
   | 'match.repair'
   | 'match.auto_confirm'
   | 'match.propagation_failed'

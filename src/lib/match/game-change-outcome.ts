@@ -18,7 +18,8 @@ import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
  *   - `admin_game_delete_recounted`: a concurrent edit counted the game again, so it was not deleted;
  *   - `admin_game_match_status_conflict`: the change IS saved, the match status moved concurrently;
  *   - `game_not_found`: the game was deleted meanwhile;
- *   - `admin_match_reset_partial`: a reset stopped part-way (some games removed, the match not reset).
+ *   - `admin_match_reset_partial`: a reset stopped part-way (some games removed, the match not reset);
+ *   - `match_state_changed`: a complete or dispute found the match already in another state (nothing saved).
  */
 const RELOAD_CODES: ReadonlySet<string> = new Set([
   'admin_game_edit_stale',
@@ -29,6 +30,7 @@ const RELOAD_CODES: ReadonlySet<string> = new Set([
   'game_not_found',
   // a match reset stopped part-way (some games removed, match fields not reset); resetting again finishes it
   'admin_match_reset_partial',
+  'match_state_changed',
 ]);
 
 /** Failure codes whose recovery is a tool on the admin data page (`/admin/data`). */

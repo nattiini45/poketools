@@ -40,6 +40,7 @@ const auditActions = {
   game__import_replay: 'Replay imported',
   match__reset: 'Match reset',
   match__override: 'Match overridden',
+  match__dispute: 'Match disputed by an admin',
   match__repair: 'Match repaired',
   match__auto_confirm: 'Match auto-confirmed',
   match__propagation_failed: 'Bracket propagation failed',
@@ -180,6 +181,45 @@ export default {
     markDisputed: 'Mark Disputed',
     adminActions: 'Admin Actions',
     completedHint: 'This match is completed. You can reset it to allow re-submission.',
+    // The recorded series result shown above the winner picker (P2)
+    tally: {
+      label: 'Recorded games',
+      line: {
+        one: '{player1} {score1} – {score2} {player2} from {count} game',
+        other: '{player1} {score1} – {score2} {player2} from {count} games',
+      },
+      none: 'No games recorded yet',
+      bestOf: 'Best of {bestOf}: first to {needed}',
+      byGames: 'leads on games',
+    },
+    // The confirmation dialog before Complete / Dispute
+    confirm: {
+      complete: {
+        title: 'Complete this match?',
+        result: '{winner} will be recorded as the winner.',
+        effects:
+          'This updates ratings and standings, runs achievements, advances the bracket and posts the result to Discord. Undoing it needs a full match reset, which deletes all games.',
+        confirm: 'Complete match',
+      },
+      dispute: {
+        title: 'Mark this match as disputed?',
+        winner: 'Reported winner: {winner}',
+        noWinner: 'No winner is recorded yet.',
+        effects: 'No result is counted until an admin completes the match, and a dispute notice is posted to Discord.',
+        confirm: 'Mark disputed',
+      },
+      note: 'Your note: {note}',
+      warnings: {
+        noGames: 'No games are recorded for this match.',
+        undecided: {
+          one: '{count} recorded game has no winner.',
+          other: '{count} recorded games have no winner.',
+        },
+        belowThreshold: 'Best of {bestOf} needs {needed} game wins, and the recorded games do not reach that yet.',
+        contradicts: 'The recorded games favour {leader}, but you are completing the match for {chosen}.',
+        acknowledge: 'I understand this does not match the recorded games.',
+      },
+    },
     errors: {
       selectWinner: 'Select a winner to complete the match',
       updateFailed: 'Failed to update match',
@@ -228,6 +268,10 @@ export default {
       cascadeMessage:
         'Downstream bracket matches have results or are in progress. Resetting this match will also reset those downstream results, ratings, and aggregates. This cannot be undone.',
       cascadeConfirm: 'Reset All Downstream',
+      cascadeCount: {
+        one: '{count} downstream match has results or is in progress and will be reset too.',
+        other: '{count} downstream matches have results or are in progress and will be reset too.',
+      },
       deleteTitle: 'Delete Game',
       deleteMessage: 'This will delete this game and its battle stats, and roll back aggregates. This cannot be undone.',
       deleteConfirm: 'Delete Game',
@@ -268,8 +312,44 @@ export default {
     suspendFailed: 'Failed to suspend player',
     banFailed: 'Failed to ban player',
     linkFailed: 'Failed to link guest account',
-    confirmDelete: 'Delete this player?',
-    confirmReinstate: 'Reinstate {name}?',
+    retry: 'Retry',
+    dismiss: 'Dismiss',
+    actionFailed: 'The action could not be completed',
+    actionError: 'Action failed for {name}: {message}',
+    addError: 'Could not add {name}: {message}',
+    banReason: 'Reason: {reason}',
+    confirm: {
+      makeAdmin: {
+        title: 'Make {name} an admin?',
+        body: 'Admins can manage every league, tournament, ruleset and player, including other admins. Only grant this to people you trust.',
+        confirm: 'Make admin',
+      },
+      removeAdmin: {
+        title: 'Remove admin rights from {name}?',
+        body: '{name} loses access to the admin area at once, and only another admin can restore it.',
+        confirm: 'Remove admin',
+      },
+      makeCreator: {
+        title: 'Make {name} a creator?',
+        body: 'Creators can use the Creator Hub content tools.',
+        confirm: 'Make creator',
+      },
+      removeCreator: {
+        title: 'Remove creator status from {name}?',
+        body: '{name} loses access to the Creator Hub at once.',
+        confirm: 'Remove creator',
+      },
+      delete: {
+        title: 'Delete {name}?',
+        body: 'This permanently deletes the player and the linked login. A player with match history cannot be deleted; suspend or ban them instead.',
+        confirm: 'Delete player',
+      },
+      reinstate: {
+        title: 'Reinstate {name}?',
+        body: 'The player regains access at once.',
+        confirm: 'Reinstate',
+      },
+    },
     empty: 'No players registered yet',
     noMatches: 'No players match your search',
     search: { label: 'Search players', placeholder: 'Name or Showdown username' },

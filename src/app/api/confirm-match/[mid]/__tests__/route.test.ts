@@ -98,6 +98,7 @@ import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { validateTransition } from '@/lib/tournament/match-state';
 import { revalidateMatchPages } from '@/lib/revalidation';
+import { emitDiscordEvent } from '@/lib/discord/notify';
 import { logAuditEvent } from '@/lib/audit/log';
 import { markMatchFinalized } from '@/lib/supabase/queries/matches';
 import { updateRatings } from '@/lib/rating/updateRatings';
@@ -312,7 +313,7 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
-    expect(updateMatchStatus).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', 'completed', overridePlayerTwoId, 'admin-1', 'Resolved by admin', 'disputed');
+    expect(updateMatchStatus).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', 'completed', overridePlayerTwoId, 'p1', 'Resolved by admin', 'disputed');
     expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
       action: 'match.override',
       changes: expect.objectContaining({
@@ -343,7 +344,7 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
-    expect(updateMatchStatus).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', 'completed', 'p1', 'p2', undefined, 'pending_confirmation');
+    expect(updateMatchStatus).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', 'completed', 'p1', 'p1', undefined, 'pending_confirmation');
     expect(revalidateMatchPages).toHaveBeenCalledWith('t-1', '642bef26-17c2-466f-8eca-61a394f687ca');
   });
 
@@ -366,7 +367,7 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
-    expect(updateMatchStatus).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', 'completed', 'p1', 'p2', undefined, 'pending_confirmation');
+    expect(updateMatchStatus).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', 'completed', 'p1', 'p1', undefined, 'pending_confirmation');
   });
 
   // ---- happy path: dispute ----
@@ -390,7 +391,7 @@ describe('POST /api/confirm-match/[mid]', () => {
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
     // dispute -> no winner_id passed
-    expect(updateMatchStatus).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', 'disputed', undefined, 'p2', undefined, 'pending_confirmation');
+    expect(updateMatchStatus).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', 'disputed', undefined, 'p1', undefined, 'pending_confirmation');
   });
 
   it('returns early without finalizing when compare-and-set misses', async () => {
@@ -408,6 +409,255 @@ describe('POST /api/confirm-match/[mid]', () => {
     expect(payload.success).toBe(true);
     expect(payload.data.status).toBe('completed');
     expect(revalidateMatchPages).not.toHaveBeenCalled();
+  });
+
+  // ---- compare-and-set misses ----
+
+  const MID = '642bef26-17c2-466f-8eca-61a394f687ca';
+
+  function arrangeMiss(current: Record<string, unknown> | null) {
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue(null as never);
+    vi.mocked(getMatchById)
+      .mockResolvedValueOnce(pendingMatch as never)
+      .mockResolvedValueOnce(current as never);
+  }
+
+  function expectNothingTriggered() {
+    expect(revalidateMatchPages).not.toHaveBeenCalled();
+    expect(markMatchFinalized).not.toHaveBeenCalled();
+    expect(emitDiscordEvent).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  }
+
+  it('answers 409 match_state_changed when the match moved to another status meanwhile', async () => {
+    arrangeMiss({ ...pendingMatch, status: 'disputed' });
+
+    const response = await POST(makeRequest({ action: 'confirm' }), routeParams(MID));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'The match changed to disputed while you were editing it. Review it and try again.',
+      code: 'match_state_changed',
+      params: { status: 'disputed' },
+    });
+    expectNothingTriggered();
+  });
+
+  it('answers 409 for a dispute that lost the race to a completion', async () => {
+    arrangeMiss({ ...pendingMatch, status: 'completed' });
+
+    const response = await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload.code).toBe('match_state_changed');
+    expect(payload.params).toEqual({ status: 'completed' });
+    expectNothingTriggered();
+  });
+
+  it('stays idempotent for a dispute when the match is disputed already', async () => {
+    arrangeMiss({ ...pendingMatch, status: 'disputed' });
+
+    const response = await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data.status).toBe('disputed');
+    expectNothingTriggered();
+  });
+
+  it('answers 409 when the match completed with another winner than the requested default', async () => {
+    arrangeMiss({ ...pendingMatch, status: 'completed', winner_id: 'p2' });
+
+    const response = await POST(makeRequest({ action: 'confirm' }), routeParams(MID));
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('match_state_changed');
+  });
+
+  it('answers 404 when the match is gone on the re-read', async () => {
+    arrangeMiss(null);
+
+    const response = await POST(makeRequest({ action: 'confirm' }), routeParams(MID));
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.code).toBe('match_not_found');
+    expectNothingTriggered();
+  });
+
+  describe('as an admin', () => {
+    const adminMatch = {
+      ...pendingMatch,
+      player_1_id: overridePlayerOneId,
+      player_2_id: overridePlayerTwoId,
+      winner_id: overridePlayerOneId,
+      status: 'disputed' as const,
+    };
+
+    beforeEach(() => {
+      vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
+      vi.mocked(validateTransition).mockReturnValue({ valid: true });
+      vi.mocked(updateMatchStatus).mockResolvedValue(null as never);
+    });
+
+    it('answers 409 when the match completed already but the admin note was discarded', async () => {
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(adminMatch as never)
+        .mockResolvedValueOnce({ ...adminMatch, status: 'completed' } as never);
+
+      const response = await POST(
+        makeRequest({ action: 'confirm', winner_id: overridePlayerOneId, notes: 'Checked the replays' }),
+        routeParams(MID)
+      );
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).params).toEqual({ status: 'completed' });
+      expectNothingTriggered();
+    });
+
+    it('answers 409 when the match completed with another winner than the one chosen', async () => {
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(adminMatch as never)
+        .mockResolvedValueOnce({ ...adminMatch, status: 'completed', winner_id: overridePlayerOneId } as never);
+
+      const response = await POST(
+        makeRequest({ action: 'confirm', winner_id: overridePlayerTwoId }),
+        routeParams(MID)
+      );
+
+      expect(response.status).toBe(409);
+      expectNothingTriggered();
+    });
+
+    it('stays idempotent when the match completed with the chosen winner and no note was sent', async () => {
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(adminMatch as never)
+        .mockResolvedValueOnce({ ...adminMatch, status: 'completed' } as never);
+
+      const response = await POST(
+        makeRequest({ action: 'confirm', winner_id: overridePlayerOneId }),
+        routeParams(MID)
+      );
+
+      expect(response.status).toBe(200);
+      expectNothingTriggered();
+    });
+  });
+
+  // ---- original submitter ----
+
+  it('keeps the original submitter when an admin overrides', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
+    vi.mocked(getMatchById).mockResolvedValue({ ...pendingMatch, submitter_id: 'reporter-1' } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
+
+    await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+
+    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'disputed', undefined, 'reporter-1', undefined, 'pending_confirmation');
+  });
+
+  it('never sets the submitter on a dispute, even when the match has none', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
+    vi.mocked(getMatchById).mockResolvedValue({ ...pendingMatch, submitter_id: null, status: 'in_progress' } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
+
+    await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+
+    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'disputed', undefined, undefined, undefined, 'in_progress');
+  });
+
+  it('never sets the submitter when a participant disputes a match with none', async () => {
+    vi.mocked(getMatchById).mockResolvedValue({ ...pendingMatch, submitter_id: null, status: 'in_progress' } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
+
+    await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+
+    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'disputed', undefined, undefined, undefined, 'in_progress');
+  });
+
+  it('records the confirming admin as submitter when a completion has none', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
+    vi.mocked(getMatchById).mockResolvedValue({
+      ...pendingMatch,
+      player_1_id: overridePlayerOneId,
+      player_2_id: overridePlayerTwoId,
+      winner_id: overridePlayerOneId,
+      submitter_id: null,
+      status: 'in_progress',
+    } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'completed' } as never);
+
+    await POST(makeRequest({ action: 'confirm' }), routeParams(MID));
+
+    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'completed', overridePlayerOneId, 'admin-1', undefined, 'in_progress');
+  });
+
+  it('audits an admin dispute as match.dispute, with or without notes', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
+    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
+
+    await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actor_id: 'admin-1',
+      action: 'match.dispute',
+      resource_type: 'match',
+      resource_id: MID,
+      changes: expect.objectContaining({
+        status: { before: 'pending_confirmation', after: 'disputed' },
+      }),
+    }));
+
+    vi.mocked(logAuditEvent).mockClear();
+    await POST(makeRequest({ action: 'dispute', notes: 'Replay missing' }), routeParams(MID));
+
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: 'match.dispute' }));
+  });
+
+  it('writes no audit event for a participant dispute', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
+
+    await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('keeps the original submitter when the opponent disputes', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
+
+    await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
+
+    expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'disputed', undefined, 'p1', undefined, 'pending_confirmation');
+  });
+
+  it('still blocks notes from non-admin players', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+
+    const response = await POST(makeRequest({ action: 'dispute', notes: 'Not fair' }), routeParams(MID));
+
+    expect(response.status).toBe(403);
+    expect(updateMatchStatus).not.toHaveBeenCalled();
   });
 
   it('passes an updated winner onto finalize for in_progress force-complete', async () => {

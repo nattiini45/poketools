@@ -67,6 +67,35 @@ export default defineDe<typeof en>()({
     serverError: 'Serverfehler ({status})',
     serverErrorText: 'Serverfehler ({status}): {statusText}',
     saveFailed: 'Regelwerk konnte nicht gespeichert werden',
+    defaultsFailed: 'Die Standardregeln für {format} konnten nicht geladen werden. Es wurde nichts geändert.',
+    defaultsRetry: 'Erneut versuchen',
+    emptyNotice: {
+      title: 'Dieses Regelwerk erzwingt noch nichts',
+      body: '{format} ist ausgewählt, aber es gibt keine Klauseln und keine Banns, daher sind über die Generation hinaus alle Pokémon, Attacken, Items und Fähigkeiten erlaubt.',
+      load: 'Standardwerte von {format} laden',
+    },
+    formatChange: {
+      title: 'Basisformat auf {format} ändern?',
+      intro:
+        'Beim Wechsel werden die Standard-Klauseln und -Banlists von {format} geladen. Deine Änderungen daran gehen verloren, wenn du sie ersetzt:',
+      diff: '{label}: +{added} / −{removed} gegenüber dem aktuellen Format',
+      total: { one: '{label}: {count} Eintrag', other: '{label}: {count} Einträge' },
+      unknownBaseline:
+        'Die Standardwerte des aktuellen Formats konnten nicht geladen werden, daher gilt jede nicht leere Liste als angepasst.',
+      doubles: 'Das Doppel-Kennzeichen weicht vom aktuellen Format ab',
+      keepHint: 'Nur das Format ändert sich. Klauseln und Banlists bleiben, wie sie sind.',
+      keep: 'Meine Listen behalten',
+      replace: 'Durch Standardwerte von {format} ersetzen',
+      cancel: 'Abbrechen',
+      categories: {
+        clauses: 'Klauseln',
+        banned_pokemon: 'Gebannte Pokémon',
+        banned_moves: 'Gebannte Attacken',
+        banned_items: 'Gebannte Items',
+        banned_abilities: 'Gebannte Fähigkeiten',
+        added_pokemon: 'Zusätzlich erlaubte Pokémon',
+      },
+    },
   },
   review: {
     name: 'Name:',
@@ -99,6 +128,7 @@ export default defineDe<typeof en>()({
     enable: 'Team-Regeln aktivieren',
     enableHint:
       'Ergänzt das Basis-Regelwerk um Team-Regeln (Typ-Quoten, Tera-Vorgaben, NFE-Phase, {item}-Tier-Grenze). Wird von Formaten wie der Core Liga genutzt.',
+    emptyHint: 'Es ist noch keine Regel ausgewählt. Ein so gespeichertes Regelwerk hat keine Team-Regeln.',
     typeQuotas: 'Typ-Quoten',
     requirePerType: 'N Pokémon pro zugewiesenem Typ verlangen',
     typeSource: 'Typ-Quelle',

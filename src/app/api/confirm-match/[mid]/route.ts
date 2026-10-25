@@ -99,28 +99,59 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const previousStatus = match.status;
+    // The original reporter stays the submitter whoever acts now. Only a
+    // reported or confirmed result fills an empty slot: a dispute (by a
+    // participant or an admin) never sets the submitter, so a match with no
+    // result keeps showing no reporter.
+    const submitterId = targetStatus === 'completed'
+      ? match.submitter_id ?? player.playerId
+      : match.submitter_id ?? undefined;
     const updated = await updateMatchStatus(
       mid,
       targetStatus,
       targetStatus === 'completed' ? winnerId : undefined,
-      player.playerId,
+      submitterId,
       notes,
       previousStatus
     );
 
     if (!updated) {
+      // The compare-and-set missed: the match left `previousStatus` meanwhile.
       const current = await getMatchById(mid);
-      return NextResponse.json<ApiResult<Match>>({
-        success: true,
-        data: current ?? match,
-      });
+      if (!current) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Match not found', code: 'match_not_found' },
+          { status: 404 }
+        );
+      }
+      // Report success only when the match already is what this request asked
+      // for: same status, same winner (or a dispute), and no admin note lost.
+      const sameOutcome = current.status === targetStatus
+        && (targetStatus === 'disputed' || current.winner_id === winnerId)
+        && !(hasAdminAccess && notes);
+      if (sameOutcome) {
+        return NextResponse.json<ApiResult<Match>>({ success: true, data: current });
+      }
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: `The match changed to ${current.status} while you were editing it. Review it and try again.`,
+          code: 'match_state_changed',
+          params: { status: current.status },
+        },
+        { status: 409 }
+      );
     }
 
-    if (hasAdminAccess && (requestedWinnerId || notes || match.status === 'disputed')) {
+    // Every admin dispute is audited (`match.dispute`); an admin confirm is
+    // audited as `match.override` when it sets a winner or note or resolves a
+    // dispute. A participant's own confirm or dispute writes no audit event.
+    const auditAdminDispute = hasAdminAccess && targetStatus === 'disputed';
+    if (auditAdminDispute || (hasAdminAccess && (requestedWinnerId || notes || match.status === 'disputed'))) {
       logAuditEvent({
         actor_id: player.playerId,
         actor_name: player.name,
-        action: 'match.override',
+        action: auditAdminDispute ? 'match.dispute' : 'match.override',
         resource_type: 'match',
         resource_id: mid,
         resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
