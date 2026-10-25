@@ -6,6 +6,7 @@ import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import ReplayImportForm from '@/components/match/ReplayImportForm';
 import PageContainer from '@/components/ui/PageContainer';
 import Alert from '@/components/ui/Alert';
+import { matchPageBackSuffix } from '@/lib/admin/match-list';
 import { canAdministerMatch, MatchAccessDenied } from '../match-access';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { getT } from '@/i18n/server';
@@ -17,9 +18,11 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  /** `back` carries the Matches list query of the match page this import was opened from. */
+  searchParams?: Promise<{ back?: string | string[] }>;
 }
 
-export default async function ImportReplayPage({ params }: PageProps) {
+export default async function ImportReplayPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   if (!isValidUuid(id)) notFound();
   const match = await getMatchById(id);
@@ -37,7 +40,8 @@ export default async function ImportReplayPage({ params }: PageProps) {
 
   const canImport = match.status === 'scheduled' || match.status === 'in_progress';
 
-  const [t, tEnums] = await Promise.all([getT(adminCoreMessages), getT(enumMessages)]);
+  const [t, tEnums, query] = await Promise.all([getT(adminCoreMessages), getT(enumMessages), searchParams]);
+  const matchHref = `/admin/matches/${id}${matchPageBackSuffix(query?.back)}`;
 
   return (
     <AdminGuard>
@@ -64,12 +68,12 @@ export default async function ImportReplayPage({ params }: PageProps) {
               { id: match.player_1_id, name: match.player_1_name },
               { id: match.player_2_id, name: match.player_2_name },
             ]}
-              redirectTo={`/admin/matches/${id}`}
+            redirectTo={matchHref}
           />
         )}
 
         <Link
-          href={`/admin/matches/${id}`}
+          href={matchHref}
           className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
         >
           <span aria-hidden="true">&larr;</span> {t('matches.importReplay.backToMatch')}

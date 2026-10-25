@@ -87,6 +87,7 @@ const CASES: Case[] = [
   ['cast-sessions/[id]/populate', () => import('@/app/api/cast-sessions/[id]/populate/route'), ['POST'], 'id', {}, 'INVALID_SESSION_ID'],
   ['confirm-match/[mid]', () => import('@/app/api/confirm-match/[mid]/route'), ['POST'], 'mid', {}, 'INVALID_MATCH_ID'],
   ['discord-webhooks/[id]', () => import('@/app/api/discord-webhooks/[id]/route'), ['PATCH', 'DELETE'], 'id', {}, 'INVALID_WEBHOOK_ID'],
+  ['discord-webhooks/[id]/test', () => import('@/app/api/discord-webhooks/[id]/test/route'), ['POST'], 'id', {}, 'INVALID_WEBHOOK_ID'],
   ['draft-pool-entries/[id]', () => import('@/app/api/draft-pool-entries/[id]/route'), ['PATCH', 'DELETE'], 'id', {}, 'INVALID_POOL_ENTRY_ID'],
   ['draft-pool-templates/[id]', () => import('@/app/api/draft-pool-templates/[id]/route'), ['GET', 'DELETE'], 'id', {}, 'INVALID_POOL_TEMPLATE_ID'],
   ['drafts/[id]/picks/[pickId]/void', () => import('@/app/api/drafts/[id]/picks/[pickId]/void/route'), ['POST'], 'pickId', { id: VALID }, 'INVALID_PICK_ID'],

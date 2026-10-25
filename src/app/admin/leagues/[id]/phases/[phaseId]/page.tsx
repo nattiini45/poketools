@@ -9,11 +9,13 @@ import { isValidUuid } from '@/lib/utils/uuid';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getStagesBySeasonId, getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
+import { getSeasonGroupMembership, seasonHasGroups } from '@/lib/supabase/queries/season-groups';
+import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { listRulesets } from '@/lib/supabase/queries/rulesets';
 import { buildLeaguePhase } from '@/lib/tournament/league-phase';
 import { phaseNumbers } from '@/lib/league-admin/phase-controls';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
+import { participantsSectionOpen } from '@/lib/tournament/startup-checklist';
 import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import PhaseGroupsPanel from '@/components/league/PhaseGroupsPanel';
@@ -58,7 +60,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
   // Phase delete is site-admin only, decided from the live gate (never the session copy).
   const { isSiteAdmin } = gate;
 
-  const [league, tournament, stages, rounds, rulesets, leagueHasGroups, t, tEnum, tCommon] = await Promise.all([
+  const [league, tournament, stages, rounds, rulesets, leagueHasGroups, phaseGroups, t, tEnum, tCommon] = await Promise.all([
     getSeasonById(seasonId),
     getTournamentWithDetails(phaseId),
     // The league's phases, to count this one as a position (1, 2, ...) in the subtitle.
@@ -67,6 +69,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
     listRulesets(),
     // A league with groups owns its phases' groups (the panel shows them read-only).
     seasonHasGroups(seasonId),
+    getGroupsByTournament(phaseId),
     getT(leagueAdminMessages),
     getT(enumMessages),
     getT(commonMessages),
@@ -76,6 +79,22 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
 
   const phase = buildLeaguePhase(tournament, rounds);
   const isNewPhase = phase.participant_count > 0 && phase.rounds_total === 0;
+  // Too few participants to pair: the start-up checklist sends the admin to the participants section. A phase
+  // fed by a previous phase stays collapsed, because opening the section syncs its roster.
+  const participantsOpen = participantsSectionOpen({
+    isNewPhase,
+    participantCount: phase.participant_count,
+    advancementRule: phase.advancement_rule,
+    enrollmentSourceType: phase.enrollment_source?.type,
+    stageOrder: phase.stage_order,
+  });
+  // A phase with its own groups, or one mirroring league groups, follows a server week plan.
+  const groupsInUse = phaseGroups.length > 0 || leagueHasGroups;
+  // Swiss and round-robin phases of a league with groups pair within those groups; ids only.
+  const leagueGroupOf =
+    leagueHasGroups && (tournament.bracket_type === 'swiss' || tournament.bracket_type === 'round_robin')
+      ? await getSeasonGroupMembership(seasonId)
+      : null;
 
   return (
     <AdminGuard>
@@ -113,7 +132,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
           </Alert>
         )}
 
-        <Section title={t('phasePage.overview')} collapsible>
+        <Section id="tournament-overview" title={t('phasePage.overview')} collapsible>
           <PhaseOverviewEditor seasonId={seasonId} phase={phase} rulesets={rulesets} />
         </Section>
 
@@ -125,7 +144,12 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
           />
         </Section>
 
-        <Section title={t('phasePage.participants')} collapsible={!isNewPhase} defaultCollapsed={!isNewPhase}>
+        <Section
+          id="tournament-participants"
+          title={t('phasePage.participants')}
+          collapsible={!isNewPhase}
+          defaultCollapsed={!participantsOpen}
+        >
           <ParticipantManager tournamentId={phaseId} />
         </Section>
 
@@ -133,8 +157,20 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
           <PhaseGroupsPanel seasonId={seasonId} phaseId={phaseId} leagueManaged={leagueHasGroups} />
         </Section>
 
-        <Section title={t('phasePage.rounds')} collapsible>
-          <RoundManager tournament={tournament} initialRounds={rounds} />
+        <Section id="tournament-rounds" title={t('phasePage.rounds')} collapsible>
+          <RoundManager
+            tournament={tournament}
+            initialRounds={rounds}
+            rulesetName={tournament.ruleset_name}
+            groupsInUse={groupsInUse}
+            leagueGroupOf={leagueGroupOf}
+            checklistLinks={{
+              participants: '#tournament-participants',
+              overview: '#tournament-overview',
+              rounds: '#tournament-rounds',
+              leagueGroups: leagueAdminHref(seasonId, 'participants'),
+            }}
+          />
         </Section>
       </PageContainer>
     </AdminGuard>

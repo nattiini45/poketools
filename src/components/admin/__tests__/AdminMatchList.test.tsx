@@ -24,11 +24,15 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-import AdminMatchList, { MatchListPager, useMatchListUpdate } from '../AdminMatchList';
+import AdminMatchList, { MatchListPager, MatchListSelectionHeader, useMatchListUpdate } from '../AdminMatchList';
+import { MatchListRow } from '../AdminMatchRowCard';
+import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
+import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import { ADMIN_MATCH_MAX_PAGE, parseMatchListUrl } from '@/lib/admin/match-list';
 
 const LEAGUE = '11111111-1111-4111-8111-111111111111';
 const PHASE = '22222222-2222-4222-8222-222222222222';
+const ROUND = '33333333-3333-4333-8333-333333333333';
 
 beforeEach(() => {
   nav.search = '';
@@ -87,6 +91,37 @@ describe('AdminMatchList', () => {
     expect(html).toMatch(/aria-pressed="true"[^>]*>All<\/button>/);
   });
 
+  it('renders the new filters from the query string on the first paint (deep link)', () => {
+    nav.search = `league=${LEAGUE}&phase=${PHASE}&round=${ROUND}&preset=overdue&sort=status_priority&test=1`;
+    const html = renderWithI18n(<AdminMatchList />);
+    // The round stays selected under a neutral label while the rounds load, like league and phase.
+    expect(html).toContain(`<option value="${ROUND}" selected="">Loading...</option>`);
+    expect(html).not.toContain(`>${ROUND}</option>`);
+    expect(html.match(/aria-pressed="true"[^>]*>Overdue<\/button>/g)).toHaveLength(2);
+    expect(html).toContain('<option value="status_priority" selected="">Needs attention first</option>');
+    const checkbox = (label: string) => new RegExp(`(<input type="checkbox"[^>]*>)<span>${label}</span>`).exec(html)?.[1] ?? '';
+    expect(checkbox('Show test leagues')).toContain('checked=""');
+    expect(checkbox('Show archived leagues and tournaments')).toContain('<input');
+    expect(checkbox('Show archived leagues and tournaments')).not.toContain('checked=""');
+    // One chip per active filter, and the status tab "All" is still the pressed tab (the preset names its own status).
+    expect(html).toContain('aria-label="Remove filter: Overdue"');
+    expect(html).toContain('aria-label="Remove filter: Show test leagues"');
+    expect(html).toMatch(/aria-pressed="true"[^>]*>All<\/button>/);
+  });
+
+  it('collapses "More filters" and shows no chips on a plain visit', () => {
+    const html = renderWithI18n(<AdminMatchList />);
+    expect(html).toMatch(/aria-expanded="false"[^>]*>More filters/);
+    expect(html).not.toContain('Clear all');
+    expect(html).toContain('aria-label="Round"');
+  });
+
+  it('no longer offers the Override button (the whole row opens the admin page)', () => {
+    nav.search = 'status=disputed';
+    expect(renderWithI18n(<AdminMatchList />)).not.toContain('Override');
+    expect(renderWithI18n(<AdminMatchList />, { locale: 'de' })).not.toContain('Korrigieren');
+  });
+
   it('is translated to German', () => {
     const html = renderWithI18n(<AdminMatchList />, { locale: 'de' });
     expect(html).toContain('Alle Ligen');
@@ -94,6 +129,9 @@ describe('AdminMatchList', () => {
     expect(html).toContain('Alle Phasen');
     expect(html).toContain('Spieler oder Spiel-ID suchen');
     expect(html).toContain('>Strittig</button>');
+    expect(html).toContain('Weitere Filter');
+    expect(html).toContain('>Überfällig</button>');
+    expect(html).toContain('aria-label="Runde"');
   });
 });
 
@@ -173,5 +211,172 @@ describe('MatchListPager', () => {
     expect(last).toContain('Page 1,000 of 1,000');
     expect(disabled(last, 'Next')).toBe(true);
     expect(disabled(last, 'Previous')).toBe(false);
+  });
+});
+
+describe('MatchListRow player shortcuts (Submit Result, View Prep)', () => {
+  const MATCH_ID = '33333333-3333-4333-8333-333333333333';
+  const row = (patch: Partial<AdminMatchRow> = {}) =>
+    ({
+      id: MATCH_ID,
+      tournament_id: PHASE,
+      season_id: LEAGUE,
+      season_name: 'Spring League',
+      tournament_name: 'Group stage',
+      player_1_id: 'player-1',
+      player_2_id: 'player-2',
+      player_1_name: 'Mara',
+      player_2_name: 'Jonas',
+      winner_name: null,
+      status: 'scheduled',
+      games: [],
+      round_name: null,
+      round_number: 1,
+      best_of: 3,
+      scheduled_at: null,
+      round_deadline: null,
+      auto_confirm_at: null,
+      season_is_test: false,
+      archived: false,
+      ...patch,
+    }) as AdminMatchRow;
+  const viewer = (patch: Partial<AdminMatchViewer>): AdminMatchViewer => ({
+    playerId: 'resource-admin',
+    isSiteAdmin: false,
+    isSuperadmin: false,
+    ...patch,
+  });
+  const render = (m: AdminMatchRow, v: AdminMatchViewer | null, locale: 'en' | 'de' = 'en') =>
+    renderWithI18n(<MatchListRow row={m} backQuery="" viewer={v} />, { locale });
+
+  it('shows neither Submit Result nor View Prep without a viewer, but keeps the link to the admin page', () => {
+    const html = render(row(), null);
+    expect(html).not.toContain('Submit Result');
+    expect(html).not.toContain('View Prep');
+    expect(html).not.toContain('/dashboard/');
+    expect(html).toContain(`href="/admin/matches/${MATCH_ID}"`);
+  });
+
+  it('links both buttons to the player pages for a participant', () => {
+    const html = render(row(), viewer({ playerId: 'player-2' }));
+    expect(html).toContain(`href="/dashboard/submit/${MATCH_ID}"`);
+    expect(html).toContain(`href="/dashboard/match-prep/${MATCH_ID}"`);
+    expect(html).toContain('>Submit Result<');
+    expect(html).toContain('>View Prep<');
+  });
+
+  it('shows neither for a resource admin who does not play, but keeps the link to the admin page', () => {
+    const html = render(row(), viewer({}));
+    expect(html).not.toContain('Submit Result');
+    expect(html).not.toContain('View Prep');
+  });
+
+  it('gives a site admin Submit Result and the superadmin View Prep', () => {
+    const siteAdmin = render(row(), viewer({ isSiteAdmin: true }));
+    expect(siteAdmin).toContain('Submit Result');
+    expect(siteAdmin).not.toContain('View Prep');
+    const superadmin = render(row(), viewer({ isSuperadmin: true }));
+    expect(superadmin).not.toContain('Submit Result');
+    expect(superadmin).toContain('View Prep');
+  });
+
+  it('shows neither once the match is no longer open', () => {
+    const html = render(row({ status: 'completed' }), viewer({ playerId: 'player-1', isSiteAdmin: true, isSuperadmin: true }));
+    expect(html).not.toContain('Submit Result');
+    expect(html).not.toContain('View Prep');
+  });
+
+  it('keeps the German labels', () => {
+    const html = render(row(), viewer({ playerId: 'player-1' }), 'de');
+    expect(html).toContain('>Ergebnis eintragen<');
+    expect(html).toContain('>Vorbereitung ansehen<');
+    expect(html).not.toContain('Korrigieren');
+  });
+});
+
+describe('AdminMatchList live region', () => {
+  it('always renders a polite status region for the selection and the action results', () => {
+    const html = renderWithI18n(<AdminMatchList />);
+    expect(html).toMatch(/<div role="status" aria-live="polite" class="sr-only"><\/div>/);
+  });
+});
+
+describe('MatchListSelectionHeader', () => {
+  const render = (props: Partial<Parameters<typeof MatchListSelectionHeader>[0]> = {}, locale: 'en' | 'de' = 'en') =>
+    renderWithI18n(
+      <MatchListSelectionHeader
+        pageState="none"
+        pageCount={50}
+        from={1}
+        to={50}
+        total={312}
+        onTogglePage={() => {}}
+        exportState={null}
+        onExport={() => {}}
+        {...props}
+      />,
+      { locale },
+    );
+  const checkbox = (html: string) => /<input [^>]*type="checkbox"[^>]*>/.exec(html)?.[0] ?? '';
+
+  it('renders the page checkbox, the range, the Export button and the hint', () => {
+    const html = render();
+    expect(checkbox(html)).toContain('aria-label="Select all 50 matches on this page"');
+    expect(html).toContain('Showing 1–50 of 312');
+    expect(html).toContain('Export 312 matches (CSV)');
+    expect(html).toContain(
+      'The selection applies to this page and is cleared when the filters, the sort or the page change. Up to 100 matches per action.',
+    );
+  });
+
+  it('groups a four-digit total and uses the singular for one match', () => {
+    expect(render({ total: 3412 })).toContain('Export 3,412 matches (CSV)');
+    expect(render({ total: 1, pageCount: 1, to: 1 })).toContain('Export 1 match (CSV)');
+  });
+
+  it('is translated to German', () => {
+    const html = render({}, 'de');
+    expect(checkbox(html)).toContain('aria-label="Alle 50 Spiele auf dieser Seite auswählen"');
+    expect(html).toContain('312 Spiele exportieren (CSV)');
+    expect(html).toContain('Die Auswahl gilt für diese Seite und wird zurückgesetzt');
+    expect(html).toContain('Bis zu 100 Spiele pro Aktion.');
+  });
+
+  it('shows none, some and all on the checkbox', () => {
+    expect(checkbox(render({ pageState: 'none' }))).toContain('data-state="none"');
+    expect(checkbox(render({ pageState: 'none' }))).not.toContain('checked=""');
+    expect(checkbox(render({ pageState: 'some' }))).toContain('data-state="some"');
+    expect(checkbox(render({ pageState: 'some' }))).not.toContain('checked=""');
+    expect(checkbox(render({ pageState: 'all' }))).toContain('data-state="all"');
+    expect(checkbox(render({ pageState: 'all' }))).toContain('checked=""');
+  });
+
+  it('disables Export while it runs and for an empty set', () => {
+    const working = render({ exportState: { kind: 'working' } });
+    expect(working).toContain('Exporting...');
+    expect(working).toMatch(/<button[^>]*disabled=""[^>]*>Exporting\.\.\.<\/button>/);
+    // The status region is mounted for every state, so its text is announced when it appears.
+    expect(working).toMatch(/<div role="status" class="sr-only"><p>Exporting\.\.\.<\/p><\/div>/);
+    expect(render()).toContain('<div role="status" class="sr-only"></div>');
+    expect(render({ total: 0 })).toMatch(/<button[^>]*disabled=""[^>]*>Export 0 matches \(CSV\)<\/button>/);
+    expect(render()).not.toMatch(/<button[^>]*disabled=""/);
+  });
+
+  it('reports a finished export in a status line, with the limit when it was cut', () => {
+    const done = render({ exportState: { kind: 'done', info: { count: 312, total: 312, truncated: false, searchTruncated: false } } });
+    expect(done).toMatch(/<div role="status"[^>]*>.*Exported 312 matches/);
+    expect(done).not.toContain('(limit)');
+
+    const cut = render({ exportState: { kind: 'done', info: { count: 2500, total: 3412, truncated: true, searchTruncated: true } } });
+    expect(cut).toContain('Exported 2,500 of 3,412 matches (limit)');
+    expect(cut).toContain('The search matched many players, so only the first 40 are in the file.');
+    expect(render({ exportState: { kind: 'done', info: { count: 2500, total: 3412, truncated: true, searchTruncated: false } } }, 'de')).toContain(
+      '2.500 von 3.412 Spielen exportiert (Limit)',
+    );
+  });
+
+  it('shows a failed export as an alert with the translated reason', () => {
+    const html = render({ exportState: { kind: 'failed', error: { code: 'rate_limited', error: 'Rate limit exceeded' } } });
+    expect(html).toMatch(/<p role="alert"[^>]*>The export failed: Rate limit exceeded<\/p>/);
   });
 });

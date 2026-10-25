@@ -12,7 +12,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 import RulesetDetail, { DEFAULT_RULESET_DETAIL_LABELS, rulesetDetailLabels } from '../RulesetDetail';
 import BanlistEditor from '../BanlistEditor';
 import ClauseToggleGrid from '../ClauseToggleGrid';
-import FormatSelector from '../FormatSelector';
+import FormatSelector, { nextFormatForGen, nextFormatForTier } from '../FormatSelector';
 import RulesetBuilder from '../RulesetBuilder';
 import TeamConstraintsEditor from '../TeamConstraintsEditor';
 import { renderWithI18n } from '@/test/i18n';
@@ -165,5 +165,96 @@ describe('ruleset builder editors', () => {
     const en = textOf(renderToStaticMarkup(<TeamConstraintsEditor value={{}} onChange={() => {}} />));
     expect(en).toContain('Eviolite tier cap');
     expect(en).toContain('Enable team constraints');
+  });
+
+  it('hints that an empty block is saved as no team constraints', () => {
+    const hint = 'No rule is selected yet. A ruleset saved like this has no team constraints.';
+    expect(textOf(renderToStaticMarkup(<TeamConstraintsEditor value={{}} onChange={() => {}} />))).toContain(hint);
+    expect(
+      textOf(renderWithI18n(<TeamConstraintsEditor value={{}} onChange={() => {}} />, { locale: 'de' })),
+    ).toContain('Ein so gespeichertes Regelwerk hat keine Team-Regeln.');
+    // A block with a rule, and a disabled block, show no hint.
+    expect(
+      textOf(renderToStaticMarkup(<TeamConstraintsEditor value={{ tera_match: 'none' }} onChange={() => {}} />)),
+    ).not.toContain(hint);
+    expect(textOf(renderToStaticMarkup(<TeamConstraintsEditor value={null} onChange={() => {}} />))).not.toContain(hint);
+  });
+});
+
+describe('FormatSelector selection', () => {
+  it('returns null for the selected generation and tier', () => {
+    expect(nextFormatForGen('gen9ou', 9)).toBeNull();
+    expect(nextFormatForGen('blank', 0)).toBeNull();
+    expect(nextFormatForTier('gen9ou', 'gen9ou')).toBeNull();
+  });
+
+  it('returns the first tier of another generation, blank for generation 0', () => {
+    expect(nextFormatForGen('gen9ou', 8)).toBe('gen8ou');
+    expect(nextFormatForGen('gen9vgc', 3)).toBe('gen3ou');
+    expect(nextFormatForGen('gen9ou', 0)).toBe('blank');
+    expect(nextFormatForGen('blank', 9)).toBe('gen9ou');
+  });
+
+  it('returns the tier for another tier of the same generation', () => {
+    expect(nextFormatForTier('gen9ou', 'gen9vgc')).toBe('gen9vgc');
+  });
+
+  it('derives the highlighted generation and tier from value (gen9vgc keeps Gen 9 and VGC)', () => {
+    const html = renderToStaticMarkup(<FormatSelector value="gen9vgc" onChange={() => {}} />);
+    const selected = /<button[^>]*class="[^"]*bg-poke-accent[^"]*"[^>]*>(.*?)<\/button>/g;
+    const labels = [...html.matchAll(selected)].map((m) => textOf(m[1]));
+    expect(labels).toHaveLength(2);
+    expect(labels[0].startsWith('9')).toBe(true);
+    expect(labels[1]).toBe('VGC');
+  });
+
+  it('highlights Custom for the blank format', () => {
+    const html = renderWithI18n(<FormatSelector value="blank" onChange={() => {}} />, { locale: 'de' });
+    const selected = [...html.matchAll(/<button[^>]*class="[^"]*bg-poke-accent[^"]*"[^>]*>(.*?)<\/button>/g)];
+    expect(selected).toHaveLength(1);
+    expect(textOf(selected[0][1])).toBe('Eigenes');
+  });
+});
+
+describe('ruleset builder empty notice', () => {
+  // A stored ruleset with nothing in it: the notice is shown without waiting for any request.
+  const EMPTY = {
+    name: 'Empty',
+    base_format: 'gen9ou',
+    is_doubles: false,
+    clauses: [],
+    banned_pokemon: [],
+    banned_moves: [],
+    banned_items: [],
+    banned_abilities: [],
+    added_pokemon: [],
+    custom_rules_string: '',
+    min_shared_type_pct: 0,
+    team_constraints: null,
+  };
+
+  it('explains what an empty ruleset enforces, in English and German', () => {
+    const en = textOf(renderToStaticMarkup(<RulesetBuilder initialData={EMPTY} rulesetId="rs-1" />));
+    expect(en).toContain('This ruleset enforces nothing yet');
+    expect(en).toContain('there are no clauses and no bans');
+    expect(en).toContain('Load Gen 9 OU defaults');
+    const de = textOf(renderWithI18n(<RulesetBuilder initialData={EMPTY} rulesetId="rs-1" />, { locale: 'de' }));
+    expect(de).toContain('Dieses Regelwerk erzwingt noch nichts');
+    expect(de).toContain('Standardwerte von Gen 9 OU laden');
+  });
+
+  it('shows no notice when a list has an entry or the format is blank', () => {
+    const withClause = textOf(
+      renderToStaticMarkup(<RulesetBuilder initialData={{ ...EMPTY, clauses: ['Species Clause'] }} rulesetId="rs-1" />),
+    );
+    expect(withClause).not.toContain('enforces nothing yet');
+    const blank = textOf(
+      renderToStaticMarkup(<RulesetBuilder initialData={{ ...EMPTY, base_format: 'blank' }} rulesetId="rs-1" />),
+    );
+    expect(blank).not.toContain('enforces nothing yet');
+  });
+
+  it('waits for the defaults of a new ruleset instead of flashing the notice', () => {
+    expect(textOf(renderToStaticMarkup(<RulesetBuilder />))).not.toContain('enforces nothing yet');
   });
 });

@@ -129,6 +129,7 @@ export default defineDe<typeof en>()({
     resume: 'Fortsetzen',
     pauseReason: 'Grund (optional, steht im Protokoll)',
     end: 'Draft abbrechen',
+    endSetupHint: 'Es gibt noch nichts abzubrechen: Der Draft hat noch nicht begonnen.',
     endTitle: 'Draft abbrechen?',
     endBody:
       'Alle Picks werden annulliert und der Draft wird abgebrochen; danach lässt er sich löschen und neu anlegen. Ein Redraft in der Abgabephase wird abgebrochen; ein laufender Redraft lässt sich nicht abbrechen. Das lässt sich nicht rückgängig machen.',

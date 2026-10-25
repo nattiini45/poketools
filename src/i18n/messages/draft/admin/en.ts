@@ -144,6 +144,7 @@ export default {
     resume: 'Resume',
     pauseReason: 'Reason (optional, shown in the audit trail)',
     end: 'Abort draft',
+    endSetupHint: 'Nothing to abort yet: the draft has not started.',
     endTitle: 'Abort the draft?',
     endBody:
       'Every pick is voided and the draft is cancelled; it can then be deleted and set up again. A Redraft still collecting drops is cancelled; a running Redraft cannot be aborted. This cannot be undone.',
