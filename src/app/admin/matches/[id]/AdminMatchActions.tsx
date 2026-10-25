@@ -1,19 +1,25 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Section from '@/components/ui/Section';
 import Alert from '@/components/ui/Alert';
-import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import ReasonDialog from '@/components/admin/ReasonDialog';
 import type { MatchStatus, GameSummary } from '@/types/match';
 import type { MatchRecalculationSummary } from '@/types/game';
 import { useFormatter, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
+import { enumLabel } from '@/i18n/content/enum-label';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
+import { adminMatchMessages } from '@/i18n/messages/admin-match';
+import { enumMessages } from '@/i18n/messages/enums';
 import GameChangeAlerts from '@/components/match/GameChangeAlerts';
 import { gameChangeFailureHints, sendGameChange } from '@/lib/match/game-change-outcome';
 import { computeSeriesTally } from '@/lib/match/series-tally';
+import type { MatchResetPreview } from '@/lib/admin/match-detail';
+import { hasReachedBoThreshold } from '@/lib/tournament/match-state';
 import ConfirmResultDialog, { SeriesTallyLine, type ConfirmResultKind } from './ConfirmResultDialog';
 
 interface PlayerInfo {
@@ -29,7 +35,10 @@ interface AdminMatchActionsProps {
   currentWinnerId: string | null;
   games: GameSummary[];
   tournamentId: string;
-  /** The round's best-of, or null when the round could not be read. */
+  /**
+   * The round's best-of (null when the round could not be read): it drives the
+   * series tally and tells what a deleted game leaves behind.
+   */
   bestOf: number | null;
   /** The viewer is a site admin (the admin data tools are site-admin only). */
   isSiteAdmin: boolean;
@@ -42,8 +51,98 @@ type ActionSuccess =
   | { kind: 'completed' | 'disputed' }
   | { kind: 'reset' | 'gameDeleted'; count: number };
 
+/** The reset dialog's read of what a reset touches. */
+type ResetPreviewState =
+  | { status: 'loading' }
+  | { status: 'ready'; preview: MatchResetPreview }
+  | { status: 'failed' };
+
+/** The status a match lands in after one of its games is deleted. */
+export type StatusAfterDelete = 'scheduled' | 'in_progress' | 'pending_confirmation';
+
+export interface DeleteGameImpact {
+  remainingGames: number;
+  /** The status the remaining games put the match in; null when the best-of is unknown. */
+  nextStatus: StatusAfterDelete | null;
+}
+
+/**
+ * What deleting `gameId` leaves behind: the games that remain and the status
+ * they put the match in (none: scheduled; a best-of threshold reached:
+ * awaiting confirmation; else in progress). Without a known best-of the
+ * status is unknown (null) as soon as games remain.
+ */
+export function deleteGameImpact(
+  games: readonly GameSummary[],
+  gameId: string,
+  player1Id: string,
+  player2Id: string,
+  bestOf: number | null,
+): DeleteGameImpact {
+  const remaining = games.filter((game) => game.id !== gameId);
+  if (remaining.length === 0) return { remainingGames: 0, nextStatus: 'scheduled' };
+  if (bestOf === null) return { remainingGames: remaining.length, nextStatus: null };
+  const wins1 = remaining.filter((game) => game.winner_id === player1Id).length;
+  const wins2 = remaining.filter((game) => game.winner_id === player2Id).length;
+  const { reached } = hasReachedBoThreshold(bestOf, wins1, wins2);
+  return { remainingGames: remaining.length, nextStatus: reached ? 'pending_confirmation' : 'in_progress' };
+}
+
+/**
+ * Failure codes of the override and the reopen after which the page shows a
+ * match that is no longer current, so it reloads its data at once instead of
+ * waiting.
+ */
+export function errorNeedsRefresh(code: string | null | undefined): boolean {
+  return code === 'match_state_changed' || code === 'match_reopen_incomplete';
+}
+
 function toCount(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+/** What a reset will touch, from the reset preview (or the notice that it could not be read). */
+export function ResetImpact({ state }: { state: ResetPreviewState }) {
+  const tMatch = useT(adminMatchMessages);
+  const tEnums = useT(enumMessages);
+  if (state.status === 'loading') return <p>{tMatch('impact.loading')}</p>;
+  if (state.status === 'failed') return <Alert variant="warning">{tMatch('impact.loadFailed')}</Alert>;
+  const { preview } = state;
+  return (
+    <>
+      <p>{tMatch('impact.gamesToDelete', { count: preview.games_to_delete })}</p>
+      {preview.was_completed && <p>{tMatch('impact.ratingsRebuilt')}</p>}
+      {preview.downstream.length > 0 && (
+        <div>
+          <p className="font-semibold text-poke-text-primary">{tMatch('impact.downstreamHeading')}</p>
+          <ul className="mt-1 list-disc pl-5">
+            {preview.downstream.map((m) => (
+              <li key={m.id}>
+                {tMatch('impact.downstreamItem', {
+                  player1: m.player_1_name,
+                  player2: m.player_2_name,
+                  round: m.round_name,
+                  status: enumLabel(tEnums, 'matchStatus', m.status),
+                })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** What deleting a game leaves behind: the games that remain, the match status and, for a completed match, the rebuild. */
+export function DeleteGameImpactNotice({ impact, ratingsRebuilt }: { impact: DeleteGameImpact; ratingsRebuilt: boolean }) {
+  const tMatch = useT(adminMatchMessages);
+  return (
+    <>
+      <p>{tMatch('impact.deleteGameLine', { count: impact.remainingGames })}</p>
+      {impact.nextStatus && <p>{tMatch(`impact.afterDelete.${impact.nextStatus}`)}</p>}
+      {ratingsRebuilt && <p>{tMatch('impact.deleteRatingsRebuilt')}</p>}
+    </>
+  );
 }
 
 export default function AdminMatchActions({
@@ -58,6 +157,7 @@ export default function AdminMatchActions({
 }: AdminMatchActionsProps) {
   const router = useRouter();
   const t = useT(adminCoreMessages);
+  const tMatch = useT(adminMatchMessages);
   const formatter = useFormatter();
   const [winnerId, setWinnerId] = useState(currentWinnerId ?? '');
   const [notes, setNotes] = useState('');
@@ -74,10 +174,13 @@ export default function AdminMatchActions({
 
   // Confirm dialog state
   const [confirmKind, setConfirmKind] = useState<ConfirmResultKind | null>(null);
-  /** Downstream matches the cascade reset would also reset, as the 409 reports them. */
-  const [cascadeCount, setCascadeCount] = useState(0);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [cascadeDialogOpen, setCascadeDialogOpen] = useState(false);
+  /** Later matches the refused reset reported (`DOWNSTREAM_PLAYED` params), for the cascade dialog's text. */
+  const [cascadeCount, setCascadeCount] = useState<number | null>(null);
+  /** The reason typed in the reset dialog, offered again in the cascade dialog it can lead to. */
+  const [resetReason, setResetReason] = useState('');
+  const [resetPreview, setResetPreview] = useState<ResetPreviewState>({ status: 'loading' });
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
 
@@ -88,6 +191,31 @@ export default function AdminMatchActions({
     [games, player1.id, player2.id, bestOf],
   );
   const leader = tally.leaderId === player1.id ? player1 : tally.leaderId === player2.id ? player2 : null;
+
+  function openResetDialog() {
+    setResetPreview({ status: 'loading' });
+    setResetDialogOpen(true);
+  }
+
+  // Opening the reset dialog reads what the reset will touch. A failed read does not block the
+  // reset: the dialog then behaves as before and asks about later matches only if the API refuses.
+  useEffect(() => {
+    if (!resetDialogOpen) return;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/matches/${matchId}/reset-preview`, { signal: controller.signal });
+        const json = await res.json();
+        if (controller.signal.aborted) return;
+        setResetPreview(
+          json.success && json.data ? { status: 'ready', preview: json.data as MatchResetPreview } : { status: 'failed' },
+        );
+      } catch {
+        if (!controller.signal.aborted) setResetPreview({ status: 'failed' });
+      }
+    })();
+    return () => controller.abort();
+  }, [resetDialogOpen, matchId]);
 
   /** Ask first: Complete needs a winner, then both actions open the confirmation. */
   function requestOverride(targetStatus: ConfirmResultKind) {
@@ -127,7 +255,7 @@ export default function AdminMatchActions({
       } else {
         const apiError = toApiErrorLike(json);
         setError({ api: apiError });
-        // The match moved on meanwhile: show its current state at once.
+        // The match moved on meanwhile (`match_state_changed`): show its current state at once.
         if (gameChangeFailureHints(apiError).reload) router.refresh();
       }
     } catch {
@@ -138,19 +266,20 @@ export default function AdminMatchActions({
     }
   }
 
-  async function handleResetMatch(cascade = false) {
+  async function handleResetMatch(cascade: boolean, reason: string) {
+    setResetReason(reason);
     setError(null);
     setSuccess(null);
     setWarnings([]);
     setRecalculation(null);
     setDownstreamWarning(false);
-    setCascadeCount(0);
+    setCascadeCount(null);
     setResetting(true);
     try {
       const result = await sendGameChange(`/api/admin/matches/${matchId}/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cascade }),
+        body: JSON.stringify({ cascade, reason }),
       });
 
       if (result.ok) {
@@ -168,7 +297,7 @@ export default function AdminMatchActions({
         setTimeout(() => router.refresh(), 2000);
       } else if (result.error.code === 'DOWNSTREAM_PLAYED' && !cascade) {
         const count = result.error.params?.count;
-        setCascadeCount(typeof count === 'number' && Number.isFinite(count) ? count : 0);
+        setCascadeCount(typeof count === 'number' && Number.isFinite(count) ? count : null);
         setResetDialogOpen(false);
         setCascadeDialogOpen(true);
       } else {
@@ -185,7 +314,7 @@ export default function AdminMatchActions({
     }
   }
 
-  async function handleDeleteGame() {
+  async function handleDeleteGame(reason: string) {
     if (!deleteGameId) return;
     setError(null);
     setSuccess(null);
@@ -199,6 +328,8 @@ export default function AdminMatchActions({
     try {
       const result = await sendGameChange(`/api/admin/games/${deleteGameId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
       });
 
       if (result.ok) {
@@ -256,12 +387,15 @@ export default function AdminMatchActions({
     }
   }
 
+  const downstreamCount = resetPreview.status === 'ready' ? resetPreview.preview.downstream.length : 0;
+  const deleteImpact = deleteGameId ? deleteGameImpact(games, deleteGameId, player1.id, player2.id, bestOf) : null;
+
   const cleaned = recalculation?.childrenCleanup ? cleanupLine(recalculation.childrenCleanup) : null;
 
   return (
     <>
       {/* Reset Match Controls — shown for non-scheduled matches */}
-      {!isScheduled && (
+      {!isScheduled && !(isTerminal && games.length === 0) && (
         <Section title={t('actions.resetSection')}>
           <div className="space-y-4">
             {/* Per-game actions */}
@@ -287,12 +421,12 @@ export default function AdminMatchActions({
                         )}
                       </div>
                       <div className="flex gap-2">
-                        <a
+                        <Link
                           href={`/admin/matches/${matchId}/games/${game.id}/edit`}
                           className="text-xs text-poke-blue hover:underline font-heading"
                         >
                           {t('actions.edit')}
-                        </a>
+                        </Link>
                         <button
                           type="button"
                           onClick={() => setDeleteGameId(game.id)}
@@ -307,15 +441,17 @@ export default function AdminMatchActions({
               </div>
             )}
 
-            {/* Reset entire match */}
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => setResetDialogOpen(true)}
-              disabled={loading}
-            >
-              {t('actions.resetMatch')}
-            </Button>
+            {/* Reset entire match. A completed match has its reset in the Admin Actions card below. */}
+            {!isTerminal && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={openResetDialog}
+                disabled={loading}
+              >
+                {t('actions.resetMatch')}
+              </Button>
+            )}
           </div>
         </Section>
       )}
@@ -405,7 +541,7 @@ export default function AdminMatchActions({
           <Button
             variant="danger"
             size="sm"
-            onClick={() => setResetDialogOpen(true)}
+            onClick={openResetDialog}
           >
             {t('actions.resetMatch')}
           </Button>
@@ -486,33 +622,45 @@ export default function AdminMatchActions({
         />
       )}
 
-      {/* Confirm Reset Dialog */}
-      <ConfirmDialog
+      {/* Reset dialog: the impact comes from the reset preview; later played matches reset with it */}
+      <ReasonDialog
         open={resetDialogOpen}
         onClose={() => setResetDialogOpen(false)}
-        onConfirm={() => handleResetMatch(false)}
+        onConfirm={(reason) => handleResetMatch(downstreamCount > 0, reason)}
         title={t('actions.dialogs.resetTitle')}
         message={t('actions.dialogs.resetMessage', { count: games.length })}
-        confirmLabel={t('actions.dialogs.resetConfirm')}
+        confirmLabel={
+          downstreamCount > 0
+            ? tMatch('impact.resetAlsoLater', { count: downstreamCount })
+            : t('actions.dialogs.resetConfirm')
+        }
         loading={resetting}
-      />
+        confirmDisabled={resetPreview.status === 'loading'}
+        reasonLabel={tMatch('actions.resetReasonLabel')}
+        reasonPlaceholder={tMatch('actions.resetReasonPlaceholder')}
+      >
+        <ResetImpact state={resetPreview} />
+      </ReasonDialog>
 
-      <ConfirmDialog
+      <ReasonDialog
         open={cascadeDialogOpen}
         onClose={() => setCascadeDialogOpen(false)}
-        onConfirm={() => handleResetMatch(true)}
+        onConfirm={(reason) => handleResetMatch(true, reason)}
         title={t('actions.dialogs.cascadeTitle')}
         message={
-          cascadeCount > 0
-            ? `${t('actions.dialogs.cascadeCount', { count: cascadeCount })} ${t('actions.dialogs.cascadeMessage')}`
+          cascadeCount !== null
+            ? tMatch('actions.cascadeMessage', { count: cascadeCount })
             : t('actions.dialogs.cascadeMessage')
         }
         confirmLabel={t('actions.dialogs.cascadeConfirm')}
         loading={resetting}
+        reasonLabel={tMatch('actions.resetReasonLabel')}
+        reasonPlaceholder={tMatch('actions.resetReasonPlaceholder')}
+        initialReason={resetReason}
       />
 
-      {/* Confirm Delete Game Dialog */}
-      <ConfirmDialog
+      {/* Delete game dialog */}
+      <ReasonDialog
         open={deleteGameId !== null}
         onClose={() => setDeleteGameId(null)}
         onConfirm={handleDeleteGame}
@@ -520,7 +668,11 @@ export default function AdminMatchActions({
         message={t('actions.dialogs.deleteMessage')}
         confirmLabel={t('actions.dialogs.deleteConfirm')}
         loading={resetting}
-      />
+        reasonLabel={tMatch('actions.deleteReasonLabel')}
+        reasonPlaceholder={tMatch('actions.deleteReasonPlaceholder')}
+      >
+        {deleteImpact && <DeleteGameImpactNotice impact={deleteImpact} ratingsRebuilt={isTerminal} />}
+      </ReasonDialog>
     </>
   );
 }

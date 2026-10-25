@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { adminGameEditSchema, formatZodErrors } from '@/lib/validation';
+import { adminGameEditSchema, formatZodErrors, gameDeleteSchema } from '@/lib/validation';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getGameById } from '@/lib/supabase/queries/games';
 import { getMatchById } from '@/lib/supabase/queries/matches';
@@ -69,7 +69,7 @@ function isAuthError(resolved: { game: Game; match: MatchWithPlayers } | Resolve
 }
 
 /** DELETE /api/admin/games/[id] — delete a single game */
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const player = await requirePlayer();
     const { id } = await params;
@@ -81,6 +81,22 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: resolved.error, code: resolved.code },
         { status: resolved.status }
+      );
+    }
+
+    // Optional JSON body { reason }; an empty or invalid body is {} (older callers send none).
+    let rawBody: unknown = {};
+    try {
+      rawBody = await request.json();
+    } catch {
+      rawBody = {};
+    }
+    const parsedBody = gameDeleteSchema.safeParse(rawBody ?? {});
+    if (!parsedBody.success) {
+      const issues = formatZodErrors(parsedBody.error);
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: issues, code: 'validation_failed', params: { issues } },
+        { status: 400 }
       );
     }
 
@@ -102,6 +118,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
         match_id: resolved.match.id,
         tournament_id: resolved.match.tournament_id,
         games_remaining: result.games_remaining,
+        ...(parsedBody.data.reason ? { reason: parsedBody.data.reason } : {}),
         ...(result.match_status_conflict ? { match_status_conflict: true } : {}),
       },
     });

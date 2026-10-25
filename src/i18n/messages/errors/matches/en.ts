@@ -65,6 +65,17 @@ export default {
     one: 'The result was confirmed, but {count} follow-up step failed. The failure was logged for the admins; safe steps are retried automatically.',
     other: 'The result was confirmed, but {count} follow-up steps failed. The failure was logged for the admins; safe steps are retried automatically.',
   },
+  // admin schedule / reopen
+  match_schedule_completed: 'A completed match cannot be rescheduled. Reopen it first.',
+  match_reopen_downstream_played: {
+    one: 'This match cannot be reopened: {count} later bracket match was already played. Reset that match first.',
+    other: 'This match cannot be reopened: {count} later bracket matches were already played. Reset those matches first.',
+  },
+  // admin reopen: the match is reopened, but follow-up steps failed (details in the server log)
+  match_reopen_incomplete: {
+    one: 'The match was reopened, but {count} follow-up step failed. The failure was logged; a site admin should run the season reconcile.',
+    other: 'The match was reopened, but {count} follow-up steps failed. The failure was logged; a site admin should run the season reconcile.',
+  },
   // manual-result warning (sent with a 200): the game is recorded, its tracker moments were not saved (details in the server log)
   manual_result_moments_not_saved: {
     one: 'The game was recorded, but its {count} marked moment could not be saved. The failure was logged.',

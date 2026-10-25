@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    const { action, winner_id: requestedWinnerId, notes } = parsedBody.data;
+    const { action, winner_id: requestedWinnerId, notes, reason } = parsedBody.data;
 
     const match = await getMatchById(mid);
 
@@ -102,7 +102,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // The original reporter stays the submitter whoever acts now. Only a
     // reported or confirmed result fills an empty slot: a dispute (by a
     // participant or an admin) never sets the submitter, so a match with no
-    // result keeps showing no reporter.
+    // result keeps showing no reporter. The disputer is recorded in the
+    // match.dispute audit event instead.
     const submitterId = targetStatus === 'completed'
       ? match.submitter_id ?? player.playerId
       : match.submitter_id ?? undefined;
@@ -143,15 +144,40 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Every admin dispute is audited (`match.dispute`); an admin confirm is
-    // audited as `match.override` when it sets a winner or note or resolves a
-    // dispute. A participant's own confirm or dispute writes no audit event.
-    const auditAdminDispute = hasAdminAccess && targetStatus === 'disputed';
-    if (auditAdminDispute || (hasAdminAccess && (requestedWinnerId || notes || match.status === 'disputed'))) {
+    // Every dispute is audited (`match.dispute`), by a player or an admin. An
+    // admin confirm is audited as `match.override` when it sets a winner or
+    // note or resolves a dispute. A participant's own confirm writes no event.
+    if (targetStatus === 'disputed') {
+      // The dispute reason is audit data, never match.notes. A player gives it
+      // as `reason`; an admin may give it as `reason` or as the notes text.
+      const disputeReason = reason ?? (hasAdminAccess ? notes || undefined : undefined);
       logAuditEvent({
         actor_id: player.playerId,
         actor_name: player.name,
-        action: auditAdminDispute ? 'match.dispute' : 'match.override',
+        action: 'match.dispute',
+        resource_type: 'match',
+        resource_id: mid,
+        resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+        changes: {
+          status: { before: previousStatus, after: 'disputed' },
+        },
+        metadata: {
+          tournament_id: match.tournament_id,
+          ...(disputeReason ? { reason: disputeReason } : {}),
+          by_admin: hasAdminAccess,
+        },
+      });
+    }
+
+    if (
+      targetStatus === 'completed' &&
+      hasAdminAccess &&
+      (requestedWinnerId || notes || match.status === 'disputed')
+    ) {
+      logAuditEvent({
+        actor_id: player.playerId,
+        actor_name: player.name,
+        action: 'match.override',
         resource_type: 'match',
         resource_id: mid,
         resource_name: `${match.player_1_name} vs ${match.player_2_name}`,

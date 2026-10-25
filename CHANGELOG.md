@@ -93,6 +93,30 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Ban reason** under the status of a banned player.
 - **Roster URL state.** The Players page keeps its search, sort, page and page size in the URL.
 
+
+- **Schedule and reschedule from the admin match page.** A site admin or the resource admin of the match's league or
+  tournament can set, move or clear a match's time (`PATCH /api/admin/matches/[id]/schedule`). A completed match
+  cannot be rescheduled. A change cancels the match's open time proposals, so a stale proposal cannot move the match
+  later, and is audited (`match.schedule`).
+- **Reopen without a reset.** A completed, pending-confirmation or disputed match can be sent back to in progress
+  with its games kept (`POST /api/admin/matches/[id]/reopen`, reason required). For a completed match the round
+  status, ratings and rating history, streaks, signatures and Evolution Point Buy progress are rebuilt and empty
+  bracket slots the result had filled are removed. Achievements and an announcement already sent stay. It is refused
+  when a later bracket match was already played. Audited as `match.reopen`.
+- **Dispute reason and dispute panel.** A player can give an optional reason (up to 500 characters) when disputing a
+  result. The admin match page shows who disputed, when, why, and the reported winner. Disputes made before this
+  release have no recorded details. A dispute keeps the player who reported the result as the match's reporter (it no
+  longer replaces the reporter with the disputer). Player disputes are now audited (`match.dispute`); an admin dispute through the
+  Admin Override form is audited as `match.dispute` instead of `match.override`.
+- **Per-match History.** The admin match page lists the audit events of the match and its games, newest first, in
+  pages (`GET /api/admin/matches/[id]/history`). League and tournament admins read the history of their own matches.
+- **Match context header.** The admin match page opens with the league, phase, round and its deadline (with an
+  overdue badge), best of, scheduled time, who reported the result, the auto-confirm time, and links to the public
+  match page and back to the matches list. The notes keep their line breaks.
+- **Reasons and impact on reset and delete.** The match reset and delete-game dialogs ask for a reason (stored in the
+  audit event) and show what will happen first: games removed, ratings rebuilt, and the played later bracket matches
+  a cascading reset also resets (`GET /api/admin/matches/[id]/reset-preview`). The reason is optional on the API.
+
 ### Changed
 
 - **Evolution Point Buy tables rank by the stored tiebreaker order and use the configured match points.** The
@@ -200,6 +224,9 @@ No migration.
 - **Empty team constraints are no longer stored.** A new ruleset with an empty team-constraints block stores none
   instead of an empty object (which made it count as a custom league ruleset). Rulesets already stored with an empty
   object resolve as before.
+
+- The Admin Override form no longer reports success when the match changed state in the meantime. It answers 409
+  `match_state_changed` and the page reloads, so the admin reviews the current state.
 
 ## [0.3.0] - 2026-10-23
 

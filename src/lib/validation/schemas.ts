@@ -602,10 +602,54 @@ export const replayImportSchema = z.object({
   side_player_ids: z.tuple([uuid, uuid]),
 });
 
+/** Short free-text reason an admin or a player gives for an action on a match. */
+export const reasonSchema = z.string().trim().min(1).max(FIELD_LIMITS.DESCRIPTION);
+
 export const confirmMatchSchema = z.object({
   action: confirmActionSchema.default('confirm'),
   winner_id: uuid.optional(),
   notes: z.string().trim().max(FIELD_LIMITS.MEDIUM_TEXT).optional(),
+  /** Dispute reason; only valid together with action 'dispute'. */
+  reason: reasonSchema.optional(),
+}).refine((data) => data.reason === undefined || data.action === 'dispute', {
+  message: 'reason is only allowed when disputing a match',
+  path: ['reason'],
+});
+
+const MATCH_SCHEDULE_MIN_MS = Date.UTC(2000, 0, 1);
+const MATCH_SCHEDULE_MAX_MS = Date.UTC(2100, 0, 1);
+
+/** Admin schedule change: an ISO instant with an offset, or null to clear it. */
+export const matchScheduleSchema = z.object({
+  scheduled_at: z.iso.datetime({ offset: true }).nullable(),
+}).refine((data) => {
+  if (data.scheduled_at === null) return true;
+  const ms = Date.parse(data.scheduled_at);
+  return Number.isFinite(ms) && ms >= MATCH_SCHEDULE_MIN_MS && ms < MATCH_SCHEDULE_MAX_MS;
+}, {
+  message: 'scheduled_at must be between 2000-01-01 and 2100-01-01',
+  path: ['scheduled_at'],
+});
+
+/** Admin reopen of a match to in_progress; the reason is required. */
+export const matchReopenSchema = z.object({
+  reason: reasonSchema,
+});
+
+/** Match reset: cascade flag plus an optional reason (the admin UI requires it). */
+export const matchResetSchema = cascadeActionSchema.extend({
+  reason: reasonSchema.optional(),
+});
+
+/** Optional body of an admin game delete. */
+export const gameDeleteSchema = z.object({
+  reason: reasonSchema.optional(),
+});
+
+/** Paging of the per-match history; query-string values are coerced. */
+export const matchHistoryQuerySchema = z.object({
+  offset: z.coerce.number().int().min(0).max(1000).default(0),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
 // ─── Ruleset Schemas ─────────────────────────────────────────────────
@@ -1320,6 +1364,11 @@ export type SeasonCreateRequestInput = z.infer<typeof seasonCreateRequestSchema>
 export type ParseReplayInput = z.infer<typeof parseReplaySchema>;
 export type ManualResultInput = z.infer<typeof manualResultSchema>;
 export type ConfirmMatchInput = z.infer<typeof confirmMatchSchema>;
+export type MatchScheduleInput = z.infer<typeof matchScheduleSchema>;
+export type MatchReopenInput = z.infer<typeof matchReopenSchema>;
+export type MatchResetInput = z.infer<typeof matchResetSchema>;
+export type GameDeleteInput = z.infer<typeof gameDeleteSchema>;
+export type MatchHistoryQueryInput = z.infer<typeof matchHistoryQuerySchema>;
 export type RulesetCreateInput = z.infer<typeof rulesetCreateSchema>;
 export type RulesetUpdateInput = z.infer<typeof rulesetUpdateSchema>;
 export type AchievementCreateInput = z.infer<typeof achievementCreateSchema>;

@@ -74,7 +74,18 @@ src/lib/tournament/
 ### Match State Validation
 - **File**: `match-state.ts`
 - **Purpose**: Enforce legal status transitions
-- **Key Methods**: `isValidTransition()`, `validateTransition()`, `hasReachedBoThreshold()`
+- **Key Methods**: `isValidTransition()`, `validateTransition()`, `hasReachedBoThreshold()`, `canReopenMatch()`
+- **Player transitions**: `scheduled -> in_progress`, `in_progress -> pending_confirmation`, `pending_confirmation -> completed | disputed`, `disputed -> completed`.
+- **Admin-only transitions** (`ADMIN_TRANSITIONS`, refused for non-admins with `match_reset_admin_only`):
+
+  | From | Admin may also go to |
+  |---|---|
+  | `in_progress` | `scheduled`, `completed`, `disputed` |
+  | `pending_confirmation` | `in_progress`, `scheduled` |
+  | `completed` | `scheduled`, `in_progress` |
+  | `disputed` | `scheduled`, `in_progress` |
+
+  The `in_progress` targets of `completed` and `disputed` are the reopen. `canReopenMatch(status)` is true for `completed`, `pending_confirmation` and `disputed` (`REOPENABLE_MATCH_STATUSES`); what a reopen reverses is in [Match](./match.md) ("Admin Match Page Verbs").
 
 ### Advancement
 League phases advance through `syncStandingsEnrollment()` in `enrollment-sync.ts`: it ranks the source phase and enrolls the top N of the target phase's `advancement_rule` (overall, or per group). There is no separate advancement module.
@@ -135,7 +146,11 @@ League phases advance through `syncStandingsEnrollment()` in `enrollment-sync.ts
 - `GET /api/tournaments/[id]/rounds/[rid]` — public round detail; matches leave as `PublicMatch`. **404** `Round not found` with `code: 'INVALID_ROUND_ID'` for a malformed (non-UUID) tournament or round id (checked before any query; PATCH checks the round id after its auth guard), plain **404** `Round not found` for an unknown round, **404** `Round does not belong to this tournament` when the round is another tournament's
 - `/api/generate-round/[tid]` — Swiss/RR (and legacy per-round elim); **400** `BRACKET_V2_MANAGED` for structure brackets; **400** `rounds_all_generated` for a round robin past its last circle-method round (nothing is written). Optional body `{ "start_round": true }` also starts the new round (`pending` → `active`); the start is best effort, so if it fails the round comes back `pending` with **201** and the round manager's banner offers Start. No body, or `false`, leaves the round pending as before. Anything else in the body is a **400** `validation_failed`. Audited as `round.generate`
 - `/api/tournaments/[id]/generate-all-rounds` — every missing round robin round (grouped phases follow their week plan); **400** `rounds_all_generated` when none is missing. The same optional `{ "start_round": true }` starts only the lowest-numbered round this call created, the others stay pending. Audited once per call as `round.generate`
-- `POST /api/admin/matches/[id]/reset` — cascade un-propagates downstream; **409** `DOWNSTREAM_PLAYED` without `cascade: true`
+- `POST /api/admin/matches/[id]/reset` — cascade un-propagates downstream; **409** `DOWNSTREAM_PLAYED` without `cascade: true`; optional `reason` (audit metadata)
+- `GET /api/admin/matches/[id]/reset-preview` — read-only: games removed, whether ratings are rebuilt, the played later bracket matches a cascade also resets
+- `POST /api/admin/matches/[id]/reopen` — `completed`, `pending_confirmation` or `disputed` back to `in_progress` with games kept; `reason` required; **409** `match_reopen_downstream_played` when a later bracket match was played
+- `PATCH /api/admin/matches/[id]/schedule` — set, change or clear `scheduled_at`; **409** `match_schedule_completed` for a completed match; cancels pending time proposals
+- `GET /api/admin/matches/[id]/history` — paged audit history of the match and its games
 - `POST /api/admin/rounds/[id]/reset` — same cascade semantics as match reset
 - `DELETE /api/admin/rounds/[id]` — round delete; **400** `STRUCTURE_ELIM_ROUND_DELETE` for v2 elim rounds (use regenerate-bracket); runs `rebuildAggregatesForScope` after delete
 
