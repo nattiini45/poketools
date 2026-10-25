@@ -117,6 +117,15 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   audit event) and show what will happen first: games removed, ratings rebuilt, and the played later bracket matches
   a cascading reset also resets (`GET /api/admin/matches/[id]/reset-preview`). The reason is optional on the API.
 
+
+- **Sidebar Overview item.** The admin sidebar (and the mobile chips) starts with an Overview item that opens the
+  dashboard.
+- **Dashboard attention list.** Each match shows its league, phase and how long it has been waiting, with the dispute
+  note for a disputed match, oldest first. Per-status "See all" links open the Matches list filtered to disputed or
+  awaiting-confirmation matches.
+- **Dashboard counters link to their lists.** The players, tournaments, active matches and leagues cards open the
+  matching admin list.
+
 ### Changed
 
 - **Evolution Point Buy tables rank by the stored tiebreaker order and use the configured match points.** The
@@ -156,6 +165,11 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Save in the seeding table persists the visible order.** Dragging, moving and shuffling renumber every row, and
   typing a seed number re-sorts the list when the input is committed, so the list and the saved seeds always agree.
 - The participants section opens by default while a tournament or phase has fewer than 2 participants.
+
+
+- The dashboard counts and the attention list leave out test leagues and archived competitions; the players total also leaves out test accounts.
+- "Seasons" is now "Leagues" on the dashboard.
+- The sidebar highlights only the most specific item, for example Archived leagues and not Leagues as well.
 
 ### Removed
 
@@ -227,6 +241,10 @@ No migration.
 
 - The Admin Override form no longer reports success when the match changed state in the meantime. It answers 409
   `match_state_changed` and the page reloads, so the admin reviews the current state.
+
+- Submit Result and View Prep in the matches list no longer send an admin to the player dashboard. They show only to
+  people who can use them (a player in the match, or a site admin for Submit Result); Override stays for every admin.
+- Abort draft is no longer offered before the draft has started. A hint explains there is nothing to abort yet.
 
 ## [0.3.0] - 2026-10-23
 

@@ -15,7 +15,7 @@ export default defineDe<typeof en>()({
       players: 'Spieler',
       tournaments: 'Turniere',
       activeMatches: 'Laufende Spiele',
-      seasons: 'Saisons',
+      leagues: 'Ligen',
       games: 'Partien',
     },
     attention: {
@@ -26,7 +26,11 @@ export default defineDe<typeof en>()({
       empty: 'Gerade braucht kein Spiel deine Aufmerksamkeit. Alles erledigt!',
       needsConfirm: 'Bestätigung fehlt',
       disputed: 'Strittig',
-      view: 'Ansehen',
+      waiting: 'Wartet · {when}',
+      unknown: 'Unbekannt',
+      publicPage: 'Öffentliche Seite',
+      seeAllDisputed: 'Alle strittigen anzeigen ({count})',
+      seeAllPending: 'Alle mit fehlender Bestätigung anzeigen ({count})',
       tournament: 'Turnier',
     },
     activity: {
