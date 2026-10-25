@@ -1,10 +1,18 @@
 /**
  * Pure helpers of the admin match list view (`AdminMatchList` and its row and filter
- * siblings): the score of a row, its replay count and auto-confirm countdown, and the
- * choices the filter bar derives from the filter options. No React, no fetch.
+ * siblings): the score of a row, its replay count and auto-confirm countdown, the
+ * choices the filter bar derives from the filter options, and the previews and report of
+ * the bulk actions. No React, no fetch.
  */
 import { computeMatchGamesWon } from '@/lib/match/aggregation';
 import { STANDALONE_LEAGUE, activeMatchListFilters, type MatchListUrlState } from '@/lib/admin/match-list';
+import {
+  bulkConfirmCheck,
+  bulkScheduleCheck,
+  classifyBulkResult,
+  type BulkItemResult,
+  type BulkResultClass,
+} from '@/lib/admin/match-bulk';
 import type { PlayerSearchScope } from '@/lib/players/player-search';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import type { GameSummary } from '@/types/match';
@@ -132,4 +140,100 @@ export function rulesetChoices(
   const scoped = url.phase ? phases.filter((phase) => phase.id === url.phase) : phases;
   const ids = new Set(scoped.map((phase) => phase.ruleset_id));
   return options.rulesets.filter((ruleset) => ids.has(ruleset.id));
+}
+
+// ── Bulk actions ────────────────────────────────────────────────────
+
+/** `Name vs Name`, the fallback label of a pairing; the UI passes its translated `versus` format instead. */
+type MatchLabelFormat = (player1: string, player2: string) => string;
+
+const plainMatchLabel: MatchLabelFormat = (player1, player2) => `${player1} vs ${player2}`;
+
+type LabeledRow = Pick<AdminMatchRow, 'id' | 'player_1_name' | 'player_2_name'>;
+
+export interface BulkConfirmPreview {
+  /** Matches the action will confirm, with the result as reported. */
+  items: { id: string; label: string; winnerId: string; winnerName: string | null; score: { p1: number; p2: number } | null; bestOf: number }[];
+  /** Matches that do not qualify, with the reason the server would give. */
+  skipped: { id: string; label: string; code: 'match_bulk_not_pending' | 'match_complete_no_winner' | 'match_winner_not_participant' }[];
+}
+
+/**
+ * Splits the selected rows into those a bulk confirm accepts and those it skips, with the reason. It runs the same
+ * check as the server (`bulkConfirmCheck`) on the rows on screen; the server re-checks on fresh data.
+ */
+export function bulkConfirmPreview(
+  rows: readonly Pick<
+    AdminMatchRow,
+    'id' | 'player_1_name' | 'player_2_name' | 'status' | 'winner_id' | 'winner_name' | 'player_1_id' | 'player_2_id' | 'games' | 'best_of'
+  >[],
+  formatLabel: MatchLabelFormat = plainMatchLabel,
+): BulkConfirmPreview {
+  const preview: BulkConfirmPreview = { items: [], skipped: [] };
+  for (const row of rows) {
+    const label = formatLabel(row.player_1_name, row.player_2_name);
+    const check = bulkConfirmCheck(row);
+    if (check.eligible) {
+      preview.items.push({ id: row.id, label, winnerId: check.winnerId, winnerName: row.winner_name, score: matchScore(row), bestOf: row.best_of });
+    } else {
+      preview.skipped.push({ id: row.id, label, code: check.code });
+    }
+  }
+  return preview;
+}
+
+export interface BulkScheduleSplit {
+  eligibleIds: string[];
+  skipped: { id: string; label: string; code: 'match_bulk_schedule_completed' }[];
+}
+
+/** Splits the selected rows into those a bulk "set time" changes and the completed ones it skips. */
+export function bulkScheduleSplit(
+  rows: readonly (LabeledRow & Pick<AdminMatchRow, 'status'>)[],
+  formatLabel: MatchLabelFormat = plainMatchLabel,
+): BulkScheduleSplit {
+  const split: BulkScheduleSplit = { eligibleIds: [], skipped: [] };
+  for (const row of rows) {
+    const check = bulkScheduleCheck(row);
+    if (check.eligible) {
+      split.eligibleIds.push(row.id);
+    } else {
+      split.skipped.push({ id: row.id, label: formatLabel(row.player_1_name, row.player_2_name), code: check.code });
+    }
+  }
+  return split;
+}
+
+export interface BulkResultRow {
+  id: string;
+  label: string;
+  kind: Exclude<BulkResultClass, 'changed'>;
+  code: BulkItemResult['code'];
+  params?: BulkItemResult['params'];
+}
+
+/**
+ * The results the report lists: everything except a plain success, in the order of the request, each joined to the
+ * label of its match. A result whose match is no longer among `rows` is labelled with its id.
+ */
+export function bulkResultRows(
+  results: readonly BulkItemResult[],
+  rows: readonly LabeledRow[],
+  formatLabel: MatchLabelFormat = plainMatchLabel,
+): BulkResultRow[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const report: BulkResultRow[] = [];
+  for (const result of results) {
+    const kind = classifyBulkResult(result);
+    if (kind === 'changed') continue;
+    const row = byId.get(result.id);
+    report.push({
+      id: result.id,
+      label: row ? formatLabel(row.player_1_name, row.player_2_name) : result.id,
+      kind,
+      code: result.code,
+      ...(result.params ? { params: result.params } : {}),
+    });
+  }
+  return report;
 }

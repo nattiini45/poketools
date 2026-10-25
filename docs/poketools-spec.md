@@ -686,7 +686,9 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin/rulesets/[id]/edit      Edit existing ruleset
 /admin/matches                 Match list (server-side status / league / phase / round / date / format / player /
                                content filters, quick filters and sort, all in the URL, paged with an exact
-                               total; test and archived leagues hidden by default; the row opens the match page)
+                               total; test and archived leagues hidden by default; the row opens the match page;
+                               row checkboxes + a sticky bulk bar: confirm as reported, set time, add note, up to
+                               100 matches of the page; Export CSV of the whole filtered set, up to 5,000 rows)
 /admin/matches/[id]            Override / dispute match result (its back link restores the list query via ?back=)
 /admin/players                 Player roster management (guest creation + Link account)
 ```
@@ -740,6 +742,11 @@ GET  /api/admin/matches                    Any admin, scoped: status, season_id,
                                             returns an exact total and `players` (names behind the player filter)
 GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, standalone tournaments, rulesets
 GET  /api/admin/matches/filter-options/rounds  Any admin, scoped: the rounds of one tournament_id (403 outside scope)
+POST /api/admin/matches/batch              Any admin, scoped: action confirm | schedule | note over 1-100 match_ids;
+                                            one match out of scope = 403 for the whole request, per-item results,
+                                            30 requests/hour per admin
+GET  /api/admin/matches/export             Any admin, scoped: the list query as a CSV (UTF-8 with BOM, max 5,000
+                                            rows, X-Export-Count / -Total / -Truncated headers), 20 requests/hour
 GET  /api/admin/format-drift               Site admin: read-only drift report (stored tiebreaker order vs the pack default, info only;
                                             advancement rule on the source vs the target phase); on demand, no writes
 GET  /api/admin/player-search              Any admin (a resource admin names a season_id or tournament_id they

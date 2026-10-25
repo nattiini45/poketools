@@ -24,13 +24,17 @@ import type { ParticipantWithSeed } from '@/types/tournament';
 
 /**
  * The match left the status the admin saw (a player, the auto-confirm cron or
- * another admin moved it first), so nothing was written. HTTP 409.
+ * another admin moved it first), so nothing was written. HTTP 409. `status` is
+ * the status the match has now, when it could be read again; the message is
+ * the same one the confirm-match route gives.
  */
 export class MatchStateChangedError extends UserFacingError {
-  constructor() {
+  constructor(status?: string) {
     super(
-      'The match changed while you were editing it; your change was not applied. Reload and review it.',
-      { code: 'match_state_changed', status: 409 },
+      status
+        ? `The match changed to ${status} while you were editing it. Review it and try again.`
+        : 'The match changed while you were editing it; your change was not applied. Reload and review it.',
+      { code: 'match_state_changed', params: status ? { status } : undefined, status: 409 },
     );
     this.name = 'MatchStateChangedError';
   }
@@ -120,7 +124,10 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
     confirmedAt: null,
     datePlayed: null,
   });
-  if (!reopened) throw new MatchStateChangedError();
+  if (!reopened) {
+    const current = await getMatchById(matchId).catch(() => null);
+    throw new MatchStateChangedError(current?.status);
+  }
 
   const result: ReopenMatchResult = {
     from_status: fromStatus,

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   autoConfirmCountdown,
+  bulkConfirmPreview,
+  bulkResultRows,
+  bulkScheduleSplit,
   isRetryableLoadError,
   matchListEmptyKey,
   matchPlayerSearchScope,
@@ -15,7 +18,8 @@ import {
   buildMatchListApiQuery,
   type MatchListUrlState,
 } from '@/lib/admin/match-list';
-import type { AdminMatchFilterOptions } from '@/lib/supabase/queries/matches';
+import type { BulkItemResult } from '@/lib/admin/match-bulk';
+import type { AdminMatchFilterOptions, AdminMatchRow } from '@/lib/supabase/queries/matches';
 import type { GameSummary } from '@/types/match';
 
 const P1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -256,5 +260,101 @@ describe('the request key', () => {
   it('moves with the anchor once the local day changes', () => {
     const nextDay = { ...clock, nowMs: clock.nowMs + 24 * 3_600_000 };
     expect(buildMatchListApiQuery(state, nextDay)).not.toBe(buildMatchListApiQuery(state, clock));
+  });
+});
+
+describe('bulk helpers', () => {
+  const P1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const P2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const OTHER = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+  function row(n: number, overrides: Partial<AdminMatchRow> = {}): AdminMatchRow {
+    return {
+      id: ID(n),
+      player_1_id: P1,
+      player_2_id: P2,
+      player_1_name: `Mara${n}`,
+      player_2_name: `Joel${n}`,
+      winner_id: null,
+      winner_name: null,
+      status: 'pending_confirmation',
+      best_of: 3,
+      games: [],
+      ...overrides,
+    } as AdminMatchRow;
+  }
+
+  describe('bulkConfirmPreview', () => {
+    it('splits eligible and skipped rows, with winner, score and the reason', () => {
+      const rows = [
+        row(1, { winner_id: P1, winner_name: 'Mara1', games: [game(1, P1), game(2, P2), game(3, P1)] }),
+        row(2, { status: 'scheduled', winner_id: P1 }),
+        row(3),
+        row(4, { winner_id: OTHER, winner_name: 'Nobody' }),
+        row(5, { winner_id: P2, winner_name: 'Joel5' }),
+      ];
+
+      expect(bulkConfirmPreview(rows)).toEqual({
+        items: [
+          { id: ID(1), label: 'Mara1 vs Joel1', winnerId: P1, winnerName: 'Mara1', score: { p1: 2, p2: 1 }, bestOf: 3 },
+          { id: ID(5), label: 'Mara5 vs Joel5', winnerId: P2, winnerName: 'Joel5', score: null, bestOf: 3 },
+        ],
+        skipped: [
+          { id: ID(2), label: 'Mara2 vs Joel2', code: 'match_bulk_not_pending' },
+          { id: ID(3), label: 'Mara3 vs Joel3', code: 'match_complete_no_winner' },
+          { id: ID(4), label: 'Mara4 vs Joel4', code: 'match_winner_not_participant' },
+        ],
+      });
+    });
+
+    it('uses the given label format and is empty for no rows', () => {
+      const preview = bulkConfirmPreview([row(1, { winner_id: P1 })], (a, b) => `${a} / ${b}`);
+      expect(preview.items[0].label).toBe('Mara1 / Joel1');
+      expect(bulkConfirmPreview([])).toEqual({ items: [], skipped: [] });
+    });
+  });
+
+  describe('bulkScheduleSplit', () => {
+    it('skips only completed matches, a disputed one included in the eligible', () => {
+      const rows = [
+        row(1, { status: 'scheduled' }),
+        row(2, { status: 'completed' }),
+        row(3, { status: 'disputed' }),
+        row(4, { status: 'pending_confirmation' }),
+        row(5, { status: 'in_progress' }),
+      ];
+      expect(bulkScheduleSplit(rows)).toEqual({
+        eligibleIds: [ID(1), ID(3), ID(4), ID(5)],
+        skipped: [{ id: ID(2), label: 'Mara2 vs Joel2', code: 'match_bulk_schedule_completed' }],
+      });
+    });
+  });
+
+  describe('bulkResultRows', () => {
+    const rows = [row(1), row(2), row(3), row(4), row(5)];
+    const results: BulkItemResult[] = [
+      { id: ID(1), ok: true, code: 'ok' },
+      { id: ID(2), ok: true, code: 'match_finalize_incomplete', params: { count: 2 } },
+      { id: ID(3), ok: false, code: 'match_bulk_conflict' },
+      { id: ID(4), ok: false, code: 'match_bulk_not_pending' },
+      { id: ID(5), ok: false, code: 'match_not_found' },
+      { id: ID(9), ok: false, code: 'match_bulk_item_failed' },
+    ];
+
+    it('joins every result that is not a plain success to its match label, in request order', () => {
+      expect(bulkResultRows(results, rows)).toEqual([
+        { id: ID(2), label: 'Mara2 vs Joel2', kind: 'warning', code: 'match_finalize_incomplete', params: { count: 2 } },
+        { id: ID(3), label: 'Mara3 vs Joel3', kind: 'conflict', code: 'match_bulk_conflict' },
+        { id: ID(4), label: 'Mara4 vs Joel4', kind: 'skipped', code: 'match_bulk_not_pending' },
+        { id: ID(5), label: 'Mara5 vs Joel5', kind: 'failed', code: 'match_not_found' },
+        // A match that is no longer among the rows is named by its id.
+        { id: ID(9), label: ID(9), kind: 'failed', code: 'match_bulk_item_failed' },
+      ]);
+    });
+
+    it('is empty when everything was done', () => {
+      expect(bulkResultRows([{ id: ID(1), ok: true, code: 'ok' }], rows)).toEqual([]);
+    });
   });
 });

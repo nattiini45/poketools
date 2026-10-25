@@ -138,6 +138,21 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - `GET /api/admin/matches/filter-options/rounds?tournament_id=` lists the rounds of one phase (scoped like the other
   matches routes). `GET /api/admin/matches/filter-options` now also lists the rulesets in scope, and the list
   response carries `players` with the names of the player filter.
+- **Matches list bulk actions.** Rows on `/admin/matches` have checkboxes and a sticky bar appears once a row is
+  selected, with three actions for up to 100 matches of the page: confirm as reported (matches awaiting confirmation
+  with a reported winner, run through the same completion as a single confirm), set the scheduled time (completed
+  matches are skipped, pending time proposals are cancelled) and add an admin note (appended as a stamped line). Each
+  dialog previews what applies, and a report lists every match that was skipped, changed meanwhile or failed; those
+  stay selected for a retry. The selection is cleared when the filters, the sort or the page change. A confirm
+  finalizes the winner the dialog showed: the request carries it per match, and a match whose reported winner changed
+  since is reported as changed meanwhile and left untouched.
+- **CSV export of the filtered set.** An Export CSV button on `/admin/matches` downloads every match the current
+  filters select (not only the page), within the viewer's scope and in the list's sort order, up to 5,000 matches; a
+  larger set is cut and reported as "N of M" (only when more matches than the limit exist). Formula-looking cells are
+  neutralised. The download link is kept alive for a few seconds so slower browsers do not cancel the file.
+- `POST /api/admin/matches/batch` and `GET /api/admin/matches/export` (any admin, scoped to the caller's leagues and
+  tournaments; rate limited). New audit actions: `match.bulk_confirm`, `match.bulk_schedule`, `match.bulk_note` (one
+  per changed match) and `match.bulk_action` (one summary per request).
 
 ### Changed
 
@@ -191,6 +206,11 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   gone. The admin match page's back link returns to the Matches list with its filters, also after a replay import or a game edit.
 - `GET /api/admin/matches` accepts the new filter and sort parameters (unknown parameters are still refused with a
   400), and its rows carry the round name, round number, best-of, round deadline and test/archived flags.
+- Dialogs (`Modal`) never grow past the viewport: a dialog taller than a short window or a zoomed page keeps its
+  title bar and scrolls its body, so the buttons at the bottom stay reachable.
+- The outcome of a bulk action and the CSV export status are announced to screen readers: the bulk dialog and the
+  export status line each have a status region that is present before its text, and the report takes focus when it
+  appears.
 
 ### Removed
 

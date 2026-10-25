@@ -24,7 +24,7 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-import AdminMatchList, { MatchListPager, useMatchListUpdate } from '../AdminMatchList';
+import AdminMatchList, { MatchListPager, MatchListSelectionHeader, useMatchListUpdate } from '../AdminMatchList';
 import { MatchListRow } from '../AdminMatchRowCard';
 import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
 import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
@@ -291,5 +291,92 @@ describe('MatchListRow player shortcuts (Submit Result, View Prep)', () => {
     expect(html).toContain('>Ergebnis eintragen<');
     expect(html).toContain('>Vorbereitung ansehen<');
     expect(html).not.toContain('Korrigieren');
+  });
+});
+
+describe('AdminMatchList live region', () => {
+  it('always renders a polite status region for the selection and the action results', () => {
+    const html = renderWithI18n(<AdminMatchList />);
+    expect(html).toMatch(/<div role="status" aria-live="polite" class="sr-only"><\/div>/);
+  });
+});
+
+describe('MatchListSelectionHeader', () => {
+  const render = (props: Partial<Parameters<typeof MatchListSelectionHeader>[0]> = {}, locale: 'en' | 'de' = 'en') =>
+    renderWithI18n(
+      <MatchListSelectionHeader
+        pageState="none"
+        pageCount={50}
+        from={1}
+        to={50}
+        total={312}
+        onTogglePage={() => {}}
+        exportState={null}
+        onExport={() => {}}
+        {...props}
+      />,
+      { locale },
+    );
+  const checkbox = (html: string) => /<input [^>]*type="checkbox"[^>]*>/.exec(html)?.[0] ?? '';
+
+  it('renders the page checkbox, the range, the Export button and the hint', () => {
+    const html = render();
+    expect(checkbox(html)).toContain('aria-label="Select all 50 matches on this page"');
+    expect(html).toContain('Showing 1–50 of 312');
+    expect(html).toContain('Export 312 matches (CSV)');
+    expect(html).toContain(
+      'The selection applies to this page and is cleared when the filters, the sort or the page change. Up to 100 matches per action.',
+    );
+  });
+
+  it('groups a four-digit total and uses the singular for one match', () => {
+    expect(render({ total: 3412 })).toContain('Export 3,412 matches (CSV)');
+    expect(render({ total: 1, pageCount: 1, to: 1 })).toContain('Export 1 match (CSV)');
+  });
+
+  it('is translated to German', () => {
+    const html = render({}, 'de');
+    expect(checkbox(html)).toContain('aria-label="Alle 50 Spiele auf dieser Seite auswählen"');
+    expect(html).toContain('312 Spiele exportieren (CSV)');
+    expect(html).toContain('Die Auswahl gilt für diese Seite und wird zurückgesetzt');
+    expect(html).toContain('Bis zu 100 Spiele pro Aktion.');
+  });
+
+  it('shows none, some and all on the checkbox', () => {
+    expect(checkbox(render({ pageState: 'none' }))).toContain('data-state="none"');
+    expect(checkbox(render({ pageState: 'none' }))).not.toContain('checked=""');
+    expect(checkbox(render({ pageState: 'some' }))).toContain('data-state="some"');
+    expect(checkbox(render({ pageState: 'some' }))).not.toContain('checked=""');
+    expect(checkbox(render({ pageState: 'all' }))).toContain('data-state="all"');
+    expect(checkbox(render({ pageState: 'all' }))).toContain('checked=""');
+  });
+
+  it('disables Export while it runs and for an empty set', () => {
+    const working = render({ exportState: { kind: 'working' } });
+    expect(working).toContain('Exporting...');
+    expect(working).toMatch(/<button[^>]*disabled=""[^>]*>Exporting\.\.\.<\/button>/);
+    // The status region is mounted for every state, so its text is announced when it appears.
+    expect(working).toMatch(/<div role="status" class="sr-only"><p>Exporting\.\.\.<\/p><\/div>/);
+    expect(render()).toContain('<div role="status" class="sr-only"></div>');
+    expect(render({ total: 0 })).toMatch(/<button[^>]*disabled=""[^>]*>Export 0 matches \(CSV\)<\/button>/);
+    expect(render()).not.toMatch(/<button[^>]*disabled=""/);
+  });
+
+  it('reports a finished export in a status line, with the limit when it was cut', () => {
+    const done = render({ exportState: { kind: 'done', info: { count: 312, total: 312, truncated: false, searchTruncated: false } } });
+    expect(done).toMatch(/<div role="status"[^>]*>.*Exported 312 matches/);
+    expect(done).not.toContain('(limit)');
+
+    const cut = render({ exportState: { kind: 'done', info: { count: 2500, total: 3412, truncated: true, searchTruncated: true } } });
+    expect(cut).toContain('Exported 2,500 of 3,412 matches (limit)');
+    expect(cut).toContain('The search matched many players, so only the first 40 are in the file.');
+    expect(render({ exportState: { kind: 'done', info: { count: 2500, total: 3412, truncated: true, searchTruncated: false } } }, 'de')).toContain(
+      '2.500 von 3.412 Spielen exportiert (Limit)',
+    );
+  });
+
+  it('shows a failed export as an alert with the translated reason', () => {
+    const html = render({ exportState: { kind: 'failed', error: { code: 'rate_limited', error: 'Rate limit exceeded' } } });
+    expect(html).toMatch(/<p role="alert"[^>]*>The export failed: Rate limit exceeded<\/p>/);
   });
 });

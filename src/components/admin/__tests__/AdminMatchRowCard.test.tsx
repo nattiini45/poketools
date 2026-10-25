@@ -268,3 +268,52 @@ describe('AdminMatchRowCard links', () => {
     expect(html).toMatch(/<div class="[^"]*\brelative\b/);
   });
 });
+
+describe('AdminMatchRowCard selection checkbox', () => {
+  const select = (checked: boolean, r: AdminMatchRow = row(), locale: 'en' | 'de' = 'en') =>
+    renderWithI18n(<MatchListRow row={r} backQuery="" selection={{ checked, onChange: () => {} }} />, {
+      locale,
+      requestTime: NOW,
+    });
+  const checkboxes = (html: string) => html.match(/<input [^>]*type="checkbox"[^>]*>/g) ?? [];
+
+  it('renders no checkbox without the selection prop, and the row is unchanged', () => {
+    const plain = render(row());
+    expect(checkboxes(plain)).toHaveLength(0);
+    expect(plain).not.toContain('ring-1');
+  });
+
+  it('renders one checkbox named after the pairing, in English and German', () => {
+    const en = checkboxes(select(false));
+    expect(en).toHaveLength(1);
+    expect(en[0]).toContain('aria-label="Select Mara vs Joel"');
+    const de = checkboxes(select(false, row(), 'de'));
+    expect(de[0]).toContain('aria-label="Mara vs. Joel auswählen"');
+  });
+
+  it('follows the checked prop and outlines a selected row without a fixed dark background', () => {
+    expect(checkboxes(select(false))[0]).not.toContain('checked=""');
+    expect(checkboxes(select(true))[0]).toContain('checked=""');
+    const selected = select(true);
+    expect(selected).toContain('border-poke-border-focus ring-1 ring-poke-border-focus');
+    expect(select(false)).not.toContain('ring-1');
+    expect(selected).not.toMatch(/bg-(black|slate|gray|zinc|neutral)-/);
+  });
+
+  it('keeps the checkbox out of every anchor and above the stretched title link', () => {
+    const html = select(false, row({ status: 'in_progress' }));
+    let depth = 0;
+    let inputInsideAnchor = false;
+    for (const tag of html.matchAll(/<a[\s>]|<\/a>|<input /g)) {
+      if (tag[0] === '<input ') inputInsideAnchor ||= depth > 0;
+      else depth += tag[0] === '</a>' ? -1 : 1;
+    }
+    expect(inputInsideAnchor).toBe(false);
+    const input = checkboxes(html)[0];
+    expect(input).toContain('relative z-10');
+    // The hit area around the box is at least 32px.
+    expect(/<label class="([^"]*)"/.exec(html)?.[1]).toMatch(/\bh-8\b.*\bw-8\b|\bw-8\b.*\bh-8\b/);
+    // The checkbox comes before the title link.
+    expect(html.indexOf('type="checkbox"')).toBeLessThan(html.indexOf(`href="/admin/matches/${MATCH}"`));
+  });
+});

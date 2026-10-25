@@ -35,7 +35,11 @@ export type AuditAction =
   | 'match.dispute'
   | 'match.reopen'
   | 'match.override'
-  | 'match.dispute'
+  // Matches list bulk actions: one event per changed match, plus one `match.bulk_action` summary per batch.
+  | 'match.bulk_confirm'
+  | 'match.bulk_schedule'
+  | 'match.bulk_note'
+  | 'match.bulk_action'
   | 'match.repair'
   | 'match.auto_confirm'
   | 'match.propagation_failed'

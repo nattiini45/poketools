@@ -519,12 +519,16 @@ async function readIdsByStatusPriority(
   return { ids: pages.flat(), total };
 }
 
-/** The display rows of `ids`, in that order; an id that vanished since the id read is skipped. */
+/**
+ * The display rows of `ids`, in that order; an id that vanished since the id read is skipped. Read in chunks of
+ * `ID_CHUNK` ids, so an export of thousands of ids never puts them all in one request URL.
+ */
 async function hydrateAdminMatches(ids: string[]): Promise<AdminMatchRow[]> {
   if (ids.length === 0) return [];
-  const { data, error } = await supabase.from('matches').select(ADMIN_MATCH_HYDRATE_SELECT).in('id', ids);
-  if (error) throw error;
-  const byId = new Map((data as AdminMatchRowRaw[]).map((row) => [row.id, row]));
+  const data = await readRowsByIds<AdminMatchRowRaw>(ids, (chunk) =>
+    supabase.from('matches').select(ADMIN_MATCH_HYDRATE_SELECT).in('id', chunk)
+  );
+  const byId = new Map(data.map((row) => [row.id, row]));
   return ids.flatMap((id) => {
     const row = byId.get(id);
     return row ? [toAdminMatchRow(row)] : [];
@@ -561,6 +565,59 @@ export async function listAdminMatchesPage(params: AdminMatchListParams): Promis
       ? await readIdsByStatusPriority(params, ctx, statuses, from)
       : await readIdsOrdered(params, ctx, statuses, sort, from);
   return { rows: await hydrateAdminMatches(ids), total };
+}
+
+export interface AdminMatchExport {
+  rows: AdminMatchRow[];
+  /** Matches that satisfy the filters, however many `rows` were read. */
+  total: number;
+  /** More than `cap` matches satisfy the filters: the set was cut at the cap. */
+  truncated: boolean;
+}
+
+/**
+ * The whole filtered set of the admin list for the CSV export, up to `cap` rows. Filters, scope and sort are those of
+ * `listAdminMatchesPage` (the same lean query and id readers, here at the largest page the API serves), so the file
+ * holds exactly the rows the list pages through. The ids are paged with ONE `LeanContext`, so the presets see one
+ * clock for the whole export; an id that shifts between two pages (a write in between) is kept once. The display rows
+ * are then read in chunks of `ID_CHUNK` ids.
+ */
+export async function listAdminMatchesForExport(
+  params: Omit<AdminMatchListParams, 'page' | 'pageSize'>,
+  cap: number
+): Promise<AdminMatchExport> {
+  const empty: AdminMatchExport = { rows: [], total: 0, truncated: false };
+  if (params.tournamentIds !== null && params.tournamentIds.length === 0) return empty;
+  const paged: AdminMatchListParams = { ...params, page: 1, pageSize: POSTGREST_MAX_ROWS };
+  assertParamIds(paged);
+  if (contentFiltersContradict(paged)) return empty;
+  const statuses = effectiveStatuses(paged);
+  if (statuses !== null && statuses.length === 0) return empty;
+
+  const ctx: LeanContext = { now: params.now ?? new Date(), hiddenSeasonChunks: await listHiddenSeasonIdChunks(paged) };
+  const sort = params.sort ?? ADMIN_MATCH_DEFAULT_SORT;
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  let total = 0;
+  for (let from = 0; ; from += POSTGREST_MAX_ROWS) {
+    const page =
+      sort === 'status_priority'
+        ? await readIdsByStatusPriority(paged, ctx, statuses, from)
+        : await readIdsOrdered(paged, ctx, statuses, sort, from);
+    total = page.total;
+    for (const id of page.ids) {
+      if (ids.length >= cap) break;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+    }
+    // Done when enough ids were collected or the last (short or empty) page was read.
+    if (ids.length >= Math.min(total, cap) || page.ids.length < POSTGREST_MAX_ROWS) break;
+  }
+  const rows = await hydrateAdminMatches(ids);
+  // Cut only when matches beyond the cap exist. Comparing with `rows.length` would also fire for an id that vanished
+  // between the id read and the hydrate read, or a set that grew by a write meanwhile, with the cap not reached.
+  return { rows, total, truncated: total > cap };
 }
 
 /**
@@ -1042,6 +1099,23 @@ export async function getMatchById(id: string): Promise<MatchWithPlayers | null>
   return data ? toMatchWithPlayers(data as MatchWithPlayersRow) : null;
 }
 
+/**
+ * The matches with these ids (unique, each validated as a uuid), read in chunks of `ID_CHUNK` ids. An id
+ * with no match is absent from the result; the rest keep the order of `ids`.
+ */
+export async function getMatchesByIds(ids: string[]): Promise<MatchWithPlayers[]> {
+  const unique = [...new Set(ids)];
+  for (const id of unique) assertValidUuid(id, 'matchId');
+  const rows = await readRowsByIds<MatchWithPlayersRow>(unique, (chunk) =>
+    supabase.from('matches').select(MATCH_WITH_PLAYERS_SELECT).in('id', chunk)
+  );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return unique.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [toMatchWithPlayers(row)] : [];
+  });
+}
+
 export async function getMatchesByPlayer(
   playerId: string,
   tournamentId?: string
@@ -1490,6 +1564,38 @@ export async function updateOpenMatchSchedule(
 
   if (error) throw error;
   return data ? toMatchWithPlayers(data as MatchWithPlayersRow) : null;
+}
+
+/**
+ * Set a match's scheduled time while the match is not completed (the matches list bulk action): the same one
+ * conditional UPDATE as `updateOpenMatchSchedule` (id and status in the filter), so a completion that landed since the
+ * caller's read is not overwritten. Null when no row matched (completed meanwhile, or gone); the caller re-reads to
+ * tell the two apart.
+ */
+export async function setMatchScheduledAtIfOpen(id: string, scheduledAt: string): Promise<Match | null> {
+  return updateOpenMatchSchedule(id, scheduledAt);
+}
+
+/**
+ * Replace a match's notes only while the row is unchanged since it was read: a compare-and-set on `updated_at`
+ * (`trg_matches_updated` bumps it on every write, so any concurrent writer, the auto-confirm cron included, makes this
+ * return null). The notes text itself cannot be the filter: up to 10,000 characters would overflow the request URL.
+ */
+export async function updateMatchNotesIfUnchanged(
+  id: string,
+  expectedUpdatedAt: string,
+  notes: string
+): Promise<Match | null> {
+  assertValidUuid(id, 'match id');
+  const { data, error } = await supabase
+    .from('matches')
+    .update({ notes })
+    .eq('id', id)
+    .eq('updated_at', expectedUpdatedAt)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toMatch(data) : null;
 }
 
 /**
