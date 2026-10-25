@@ -56,6 +56,7 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
   {
     id: 'competitions',
     items: [
+      { href: '/admin', labelKey: 'overview' },
       { href: '/admin/leagues', labelKey: 'leagues' },
       { href: '/admin/leagues/archived', labelKey: 'archivedLeagues', sub: true },
       { href: '/admin/tournaments', labelKey: 'tournaments' },
@@ -126,4 +127,41 @@ export function visibleAdminNav(
         ),
     ],
   })).filter((group) => group.items.length > 0);
+}
+
+/**
+ * The one nav item the current page belongs to: the longest href that is the path itself or a
+ * parent of it (`/admin/leagues/archived` picks Archived leagues, not Leagues). `/admin` matches
+ * only the exact path, otherwise Overview would light up on every admin page. A trailing slash
+ * on the pathname is ignored. Null when no href matches.
+ */
+export function activeAdminNavHref(pathname: string | null, hrefs: readonly string[]): string | null {
+  if (pathname === null) return null;
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  let best: string | null = null;
+  for (const href of hrefs) {
+    const matches = href === '/admin' ? path === href : path === href || path.startsWith(`${href}/`);
+    if (matches && (best === null || href.length > best.length)) best = href;
+  }
+  return best;
+}
+
+/**
+ * The `scrollLeft` that centres a chip in its scrolling row, clamped to the row's range. All
+ * measures are in px: `chipLeft` is the chip's left edge within the row's scrollable content.
+ * A chip that already sits inside the row keeps the row where it is (returns `currentScrollLeft`).
+ */
+export function chipScrollLeft(m: {
+  rowWidth: number;
+  rowScrollWidth: number;
+  currentScrollLeft: number;
+  chipLeft: number;
+  chipWidth: number;
+}): number {
+  const { rowWidth, rowScrollWidth, currentScrollLeft, chipLeft, chipWidth } = m;
+  const visible = chipLeft >= currentScrollLeft && chipLeft + chipWidth <= currentScrollLeft + rowWidth;
+  if (visible) return currentScrollLeft;
+  const max = Math.max(0, rowScrollWidth - rowWidth);
+  const centred = chipLeft - (rowWidth - chipWidth) / 2;
+  return Math.min(max, Math.max(0, centred));
 }

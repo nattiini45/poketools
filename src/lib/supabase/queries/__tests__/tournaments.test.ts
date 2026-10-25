@@ -595,7 +595,7 @@ describe('getParticipantsBatch', () => {
       { tournament_id: 't1', player_id: 'p1', seed: 1, players: playerBase },
       { tournament_id: 't2', player_id: 'p2', seed: null, players: { ...playerBase, id: 'p2', name: 'Bob' } },
     ];
-    mockBuilder.in.mockReturnValue({ data: rows, error: null });
+    mockBuilder.range.mockResolvedValueOnce({ data: rows, error: null });
 
     const result = await getParticipantsBatch(['t1', 't2']);
     expect(result.get('t1')).toHaveLength(1);
@@ -603,7 +603,7 @@ describe('getParticipantsBatch', () => {
   });
 
   it('throws on error', async () => {
-    mockBuilder.in.mockReturnValue({ data: null, error: new Error('batch err') });
+    mockBuilder.range.mockResolvedValueOnce({ data: null, error: new Error('batch err') });
     await expect(getParticipantsBatch(['t1'])).rejects.toThrow('batch err');
   });
 });

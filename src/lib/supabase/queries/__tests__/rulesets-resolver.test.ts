@@ -126,6 +126,12 @@ describe('isCustomLeagueRuleset', () => {
     expect(isCustomLeagueRuleset(SAMPLE_CUSTOM_LEAGUE)).toBe(true);
   });
 
+  it('keeps an already stored empty team_constraints object custom, and null not custom', () => {
+    // The stored shape resolves as before; only newly created rulesets are normalised to null.
+    expect(isCustomLeagueRuleset(makeRuleset({ team_constraints: {} }))).toBe(true);
+    expect(isCustomLeagueRuleset(makeRuleset({ team_constraints: null }))).toBe(false);
+  });
+
   it('returns true when custom_rules_string is non-empty', () => {
     expect(
       isCustomLeagueRuleset(

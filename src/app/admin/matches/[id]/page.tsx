@@ -5,10 +5,21 @@ import { getMatchById } from '@/lib/supabase/queries/matches';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import GameList from '@/components/match/GameList';
 import AdminMatchActions from './AdminMatchActions';
+import MatchContextHeader from './MatchContextHeader';
+import MatchDisputePanel from './MatchDisputePanel';
+import MatchHistoryPanel from './MatchHistoryPanel';
+import MatchReopenSection from './MatchReopenSection';
+import MatchSchedulePanel from './MatchSchedulePanel';
 import { canAdministerMatch, MatchAccessDenied, viewerIsSiteAdmin } from './match-access';
 import { isValidUuid } from '@/lib/utils/uuid';
+import { loadAdminMatchContext } from '@/lib/admin/match-context';
+import { historyPanelKey, MATCH_HISTORY_PAGE_SIZE, type MatchHistoryPage } from '@/lib/admin/match-detail';
+import { readOptional } from '@/lib/admin/optional-read';
+import { getLatestMatchDispute, listMatchAuditEvents } from '@/lib/audit/queries';
+import { listMatchProposals } from '@/lib/supabase/queries/match-proposals';
 import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
+import { matchListBackHref, matchPageBackSuffix } from '@/lib/admin/match-list';
 import { getT } from '@/i18n/server';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { enumMessages } from '@/i18n/messages/enums';
@@ -16,11 +27,22 @@ import { enumLabel } from '@/i18n/content/enum-label';
 
 export const dynamic = 'force-dynamic';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
+/**
+ * The time of this request (the page is `force-dynamic`). It only decides the
+ * overdue flag and which time proposals are still open; times the viewer reads
+ * are formatted by client leaves.
+ */
+function requestTimeMs(): number {
+  return Date.now();
 }
 
-export default async function AdminMatchPage({ params }: PageProps) {
+interface PageProps {
+  params: Promise<{ id: string }>;
+  /** `back` carries the Matches list query the viewer came from (see `matchListBackHref`). */
+  searchParams?: Promise<{ back?: string | string[] }>;
+}
+
+export default async function AdminMatchPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   if (!isValidUuid(id)) notFound();
   const match = await getMatchById(id);
@@ -37,11 +59,41 @@ export default async function AdminMatchPage({ params }: PageProps) {
     );
   }
 
-  const [t, tEnums, isSiteAdmin] = await Promise.all([
+  const emptyHistory: MatchHistoryPage = { entries: [], total: 0, offset: 0, limit: MATCH_HISTORY_PAGE_SIZE };
+  // The match, its context and the viewer's role are needed for the controls;
+  // history, dispute details and proposals only add to the page, so a failed
+  // read degrades that section instead of failing the page.
+  const [t, tEnums, isSiteAdmin, query, context, historyRead, disputeRead, proposalsRead] = await Promise.all([
     getT(adminCoreMessages),
     getT(enumMessages),
     viewerIsSiteAdmin(),
+    searchParams,
+    loadAdminMatchContext(match),
+    readOptional(
+      'match history',
+      listMatchAuditEvents(id, { limit: MATCH_HISTORY_PAGE_SIZE, offset: 0 }),
+      emptyHistory,
+    ),
+    readOptional('dispute details', match.status === 'disputed' ? getLatestMatchDispute(id) : Promise.resolve(null), null),
+    readOptional('time proposals', listMatchProposals(id), []),
   ]);
+  const history = historyRead.value;
+  const dispute = disputeRead.value;
+  const proposals = proposalsRead.value;
+  const now = requestTimeMs();
+  const pendingProposals = proposals.filter(
+    (proposal) => proposal.status === 'pending' && Date.parse(proposal.expires_at) > now,
+  ).length;
+  const winnerName = match.winner_id
+    ? match.winner_id === match.player_1_id
+      ? match.player_1_name
+      : match.player_2_name
+    : null;
+  // Never the raw value: the list query is re-parsed and re-serialised, so the
+  // href is always a same-origin /admin/matches path with validated keys only.
+  const backHref = matchListBackHref(query?.back);
+  // The replay import and the game edit return here; they carry the same list query along.
+  const backSuffix = matchPageBackSuffix(query?.back);
 
   return (
     <AdminGuard>
@@ -51,6 +103,23 @@ export default async function AdminMatchPage({ params }: PageProps) {
         action={<MatchStatusBadge status={match.status} />}
         maxWidth="sm"
       >
+        <MatchContextHeader
+          matchId={id}
+          tournamentId={match.tournament_id}
+          status={match.status}
+          scheduledAt={match.scheduled_at}
+          autoConfirmAt={match.auto_confirm_at}
+          player1Name={match.player_1_name}
+          player2Name={match.player_2_name}
+          context={context}
+          now={now}
+          listHref={backSuffix ? backHref : undefined}
+        />
+
+        {match.status === 'disputed' && (
+          <MatchDisputePanel dispute={dispute} reportedWinnerName={winnerName} reporterName={context.submitter_name} />
+        )}
+
         {/* Current State */}
         <Card variant="muted" padding="md">
           <div className="space-y-2">
@@ -58,24 +127,28 @@ export default async function AdminMatchPage({ params }: PageProps) {
               <span className="text-poke-text-muted">{t('matches.detail.status')}</span>{' '}
               <span className="font-medium text-poke-text-primary">{enumLabel(tEnums, 'matchStatus', match.status)}</span>
             </div>
-            {match.winner_id && (
+            {winnerName && (
               <div className="text-sm">
                 <span className="text-poke-text-muted">{t('matches.detail.winner')}</span>{' '}
-                <span className="font-semibold text-poke-green">
-                  {match.winner_id === match.player_1_id
-                    ? match.player_1_name
-                    : match.player_2_name}
-                </span>
+                <span className="font-semibold text-poke-green">{winnerName}</span>
               </div>
             )}
             {match.notes && (
               <div className="text-sm">
                 <span className="text-poke-text-muted">{t('matches.detail.notes')}</span>{' '}
-                <span className="text-poke-text-primary">{match.notes}</span>
+                <span className="text-poke-text-primary whitespace-pre-line">{match.notes}</span>
               </div>
             )}
           </div>
         </Card>
+
+        <MatchSchedulePanel
+          matchId={id}
+          status={match.status}
+          scheduledAt={match.scheduled_at}
+          roundDeadline={context.round_deadline}
+          pendingProposals={pendingProposals}
+        />
 
         {/* Games */}
         {match.games.length > 0 && (
@@ -93,7 +166,7 @@ export default async function AdminMatchPage({ params }: PageProps) {
         {/* Import a replay whose Showdown names don't match the registered players */}
         {(match.status === 'scheduled' || match.status === 'in_progress') && (
           <Link
-            href={`/admin/matches/${id}/import-replay`}
+            href={`/admin/matches/${id}/import-replay${backSuffix}`}
             className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
           >
             {t('matches.detail.importReplay')}
@@ -109,14 +182,29 @@ export default async function AdminMatchPage({ params }: PageProps) {
           currentWinnerId={match.winner_id}
           games={match.games}
           tournamentId={match.tournament_id}
+          bestOf={context.best_of}
           isSiteAdmin={isSiteAdmin}
+          backSuffix={backSuffix}
+        />
+
+        <MatchReopenSection matchId={id} status={match.status} />
+
+        <MatchHistoryPanel
+          key={historyPanelKey(history, historyRead.failed)}
+          matchId={id}
+          initialPage={history}
+          loadFailed={historyRead.failed}
+          players={[
+            { id: match.player_1_id, name: match.player_1_name },
+            { id: match.player_2_id, name: match.player_2_name },
+          ]}
         />
 
         <Link
-          href="/admin"
+          href={backHref}
           className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
         >
-          <span aria-hidden="true">&larr;</span> {t('matches.detail.backToAdmin')}
+          <span aria-hidden="true">&larr;</span> {t('matches.detail.backToMatches')}
         </Link>
       </PageContainer>
     </AdminGuard>

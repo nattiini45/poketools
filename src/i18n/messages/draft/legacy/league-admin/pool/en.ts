@@ -64,6 +64,8 @@ export default {
     unlimited: 'unlimited',
     max: 'max {count}',
     save: 'Save Limits',
+    retry: 'Retry',
+    blocked: 'Saving is off until the limits load, so the stored limits cannot be overwritten.',
     errors: {
       load: 'Failed to load tier limits',
       save: 'Failed to save tier limits',
@@ -80,6 +82,8 @@ export default {
     bind: 'Bind to Season',
     empty: 'No point-buy lists exist yet. Create one via the API or import script.',
     currentlyBound: 'Currently bound: {name}',
+    retry: 'Retry',
+    blocked: 'Binding is off until the lists load.',
     errors: {
       load: 'Failed to load point-buy lists',
       bind: 'Failed to bind list',

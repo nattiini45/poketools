@@ -9,11 +9,13 @@ import {
 } from '@/lib/supabase/queries/discord-webhooks';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
-import type { DiscordWebhook } from '@/types/discord';
+import { toWebhookView } from '@/lib/discord/webhook-view';
+import type { DiscordWebhookView } from '@/types/discord';
 
 /**
  * GET /api/discord-webhooks?scope_type=season&scope_id=xxx
- * Admin: List webhooks for a given scope.
+ * Admin: List webhooks for a given scope. The webhook URL is write-only: each
+ * entry carries `webhook_url_hint` (its last four characters), never the URL.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -25,9 +27,9 @@ export async function GET(request: NextRequest) {
     // No scope_type = list all webhooks
     if (!scopeType) {
       const webhooks = await listAllWebhooks();
-      return NextResponse.json<ApiResult<DiscordWebhook[]>>({
+      return NextResponse.json<ApiResult<DiscordWebhookView[]>>({
         success: true,
-        data: webhooks,
+        data: webhooks.map(toWebhookView),
       });
     }
 
@@ -44,9 +46,9 @@ export async function GET(request: NextRequest) {
       scopeResult.data,
       searchParams.get('scope_id')
     );
-    return NextResponse.json<ApiResult<DiscordWebhook[]>>({
+    return NextResponse.json<ApiResult<DiscordWebhookView[]>>({
       success: true,
-      data: webhooks,
+      data: webhooks.map(toWebhookView),
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch webhooks');
@@ -78,13 +80,14 @@ export async function POST(request: NextRequest) {
       actor_id: admin.playerId,
       actor_name: admin.name,
       resource_type: zodResult.data.scope_type,
-      resource_id: zodResult.data.scope_id ?? '',
+      // A global webhook has no scope; '' would be rejected by the uuid column and the audit entry lost.
+      resource_id: zodResult.data.scope_id ?? null,
       metadata: {
         label: zodResult.data.label,
       },
     });
-    return NextResponse.json<ApiResult<DiscordWebhook>>(
-      { success: true, data: webhook },
+    return NextResponse.json<ApiResult<DiscordWebhookView>>(
+      { success: true, data: toWebhookView(webhook) },
       { status: 201 }
     );
   } catch (err) {

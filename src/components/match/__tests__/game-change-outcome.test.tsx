@@ -26,6 +26,7 @@ describe('gameChangeFailureHints', () => {
     'admin_game_match_status_conflict',
     'game_not_found',
     'admin_match_reset_partial',
+    'match_state_changed',
   ])('asks for a reload after %s', (code) => {
     expect(gameChangeFailureHints({ code })).toEqual({ reload: true, dataTools: false });
   });

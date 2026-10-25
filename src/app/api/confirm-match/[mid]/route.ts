@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    const { action, winner_id: requestedWinnerId, notes } = parsedBody.data;
+    const { action, winner_id: requestedWinnerId, notes, reason } = parsedBody.data;
 
     const match = await getMatchById(mid);
 
@@ -99,24 +99,81 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const previousStatus = match.status;
+    // The original reporter stays the submitter whoever acts now. Only a
+    // reported or confirmed result fills an empty slot: a dispute (by a
+    // participant or an admin) never sets the submitter, so a match with no
+    // result keeps showing no reporter. The disputer is recorded in the
+    // match.dispute audit event instead.
+    const submitterId = targetStatus === 'completed'
+      ? match.submitter_id ?? player.playerId
+      : match.submitter_id ?? undefined;
     const updated = await updateMatchStatus(
       mid,
       targetStatus,
       targetStatus === 'completed' ? winnerId : undefined,
-      player.playerId,
+      submitterId,
       notes,
       previousStatus
     );
 
     if (!updated) {
+      // The compare-and-set missed: the match left `previousStatus` meanwhile.
       const current = await getMatchById(mid);
-      return NextResponse.json<ApiResult<Match>>({
-        success: true,
-        data: current ?? match,
+      if (!current) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Match not found', code: 'match_not_found' },
+          { status: 404 }
+        );
+      }
+      // Report success only when the match already is what this request asked
+      // for: same status, same winner (or a dispute), and no admin note lost.
+      const sameOutcome = current.status === targetStatus
+        && (targetStatus === 'disputed' || current.winner_id === winnerId)
+        && !(hasAdminAccess && notes);
+      if (sameOutcome) {
+        return NextResponse.json<ApiResult<Match>>({ success: true, data: current });
+      }
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: `The match changed to ${current.status} while you were editing it. Review it and try again.`,
+          code: 'match_state_changed',
+          params: { status: current.status },
+        },
+        { status: 409 }
+      );
+    }
+
+    // Every dispute is audited (`match.dispute`), by a player or an admin. An
+    // admin confirm is audited as `match.override` when it sets a winner or
+    // note or resolves a dispute. A participant's own confirm writes no event.
+    if (targetStatus === 'disputed') {
+      // The dispute reason is audit data, never match.notes. A player gives it
+      // as `reason`; an admin may give it as `reason` or as the notes text.
+      const disputeReason = reason ?? (hasAdminAccess ? notes || undefined : undefined);
+      logAuditEvent({
+        actor_id: player.playerId,
+        actor_name: player.name,
+        action: 'match.dispute',
+        resource_type: 'match',
+        resource_id: mid,
+        resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+        changes: {
+          status: { before: previousStatus, after: 'disputed' },
+        },
+        metadata: {
+          tournament_id: match.tournament_id,
+          ...(disputeReason ? { reason: disputeReason } : {}),
+          by_admin: hasAdminAccess,
+        },
       });
     }
 
-    if (hasAdminAccess && (requestedWinnerId || notes || match.status === 'disputed')) {
+    if (
+      targetStatus === 'completed' &&
+      hasAdminAccess &&
+      (requestedWinnerId || notes || match.status === 'disputed')
+    ) {
       logAuditEvent({
         actor_id: player.playerId,
         actor_name: player.name,

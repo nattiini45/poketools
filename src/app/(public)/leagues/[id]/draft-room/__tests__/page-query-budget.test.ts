@@ -93,7 +93,7 @@ function builder(table: string) {
   let single = false;
   const self: Record<string, unknown> = {};
   const chain = () => self;
-  for (const m of ['select', 'eq', 'neq', 'in', 'is', 'order', 'limit', 'filter', 'match', 'or']) self[m] = chain;
+  for (const m of ['select', 'eq', 'neq', 'in', 'is', 'order', 'limit', 'range', 'filter', 'match', 'or']) self[m] = chain;
   self.maybeSingle = () => {
     single = true;
     return self;
