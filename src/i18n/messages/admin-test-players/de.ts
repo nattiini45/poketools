@@ -36,16 +36,51 @@ export default defineDe<typeof en>()({
     mintLogin: 'Login erzeugen',
     resetLogin: 'Login zurücksetzen',
     clearLogin: 'Login entfernen',
+    removeFromSeason: 'Aus Saison entfernen',
+    removeFromSeasonLabel: 'Aus Saison entfernen: {name}',
+    removeFromSeasonHint: 'Gib unten eine Saison-UUID ein, um dies zu aktivieren',
   },
 
   season: {
     title: 'Testdaten auf Saison-Ebene',
     intro:
-      'Entferne einen Testspieler aus einer Saison (löscht Teilnahme und Saisonfortschritt) oder lösche jedes Match einer Saison, bei dem <strong>beide</strong> Teilnehmer Testkonten sind.',
+      'Gib eine Saison-UUID ein und nutze dann <strong>Aus Saison entfernen</strong> in einer Spielerzeile oben (löscht Teilnahme und Saisonfortschritt dieses Spielers) oder lösche jedes Match der Saison, bei dem <strong>beide</strong> Teilnehmer Testkonten sind.',
     idLabel: 'Saison-UUID',
-    remove: '{name} aus Saison entfernen',
-    fallbackPlayer: 'Spieler',
     deleteMatches: 'Nur-Test-Matches löschen',
+  },
+
+  // Bestätigungsdialoge der zerstörenden Aktionen (gemeinsamer ConfirmDialog).
+  confirm: {
+    reset: {
+      title: 'Daten zurücksetzen?',
+      message:
+        'Dadurch werden Evolutionsfortschritt, Token-Vergaben und Match-Evolutions-Snapshots von {name} in allen Saisons gelöscht. Das Konto und seine Matches bleiben bestehen. Das lässt sich nicht rückgängig machen.',
+      confirm: 'Daten zurücksetzen',
+    },
+    replaceLogin: {
+      title: 'Login zurücksetzen?',
+      message:
+        '{name} hat bereits einen Login. Dadurch wird das Passwort durch ein neues ersetzt, und das alte funktioniert sofort nicht mehr. Die neuen Zugangsdaten werden einmalig angezeigt.',
+      confirm: 'Login zurücksetzen',
+    },
+    clearLogin: {
+      title: 'Login entfernen?',
+      message:
+        'Dadurch wird der Login von {name} gelöscht. Eine Anmeldung ist erst wieder möglich, wenn du einen neuen Login erzeugst.',
+      confirm: 'Login entfernen',
+    },
+    removeFromSeason: {
+      title: 'Aus Saison entfernen?',
+      message:
+        'Dadurch wird {name} aus Saison {season} entfernt: Teilnahme, Saisonfortschritt und Token-Vergaben in dieser Saison werden gelöscht. Historische Match-Snapshots bleiben erhalten. Das lässt sich nicht rückgängig machen.',
+      confirm: 'Aus Saison entfernen',
+    },
+    deleteMatches: {
+      title: 'Nur-Test-Matches löschen?',
+      message:
+        'Dadurch wird jedes Match in Saison {season} gelöscht, bei dem beide Teilnehmer Testkonten sind, samt Spielen, Kampfstatistiken und Analysen. Matches mit echten Spielern bleiben unberührt. Das lässt sich nicht rückgängig machen.',
+      confirm: 'Matches löschen',
+    },
   },
 
   notice: {

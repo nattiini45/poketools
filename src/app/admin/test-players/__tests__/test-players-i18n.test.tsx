@@ -82,7 +82,7 @@ describe('TestPlayersConsole', () => {
       'Loading test accounts…',
       'Season-Level Test Data',
       'Season UUID',
-      'Remove Player From Season',
+      'Remove from Season</strong> on a player row',
       'Delete Test-Only Matches',
     ]) {
       expect(html).toContain(text);
@@ -100,7 +100,7 @@ describe('TestPlayersConsole', () => {
       'Testkonten werden geladen …',
       'Testdaten auf Saison-Ebene',
       'Saison-UUID',
-      'Spieler aus Saison entfernen',
+      '<strong>Aus Saison entfernen</strong> in einer Spielerzeile',
       'Nur-Test-Matches löschen',
       '<strong>beide</strong>',
     ]) {
@@ -120,7 +120,7 @@ describe('TestPlayersTable', () => {
   ] as unknown as Player[];
 
   function render(locale: Locale): string {
-    return renderWithI18n(<TestPlayersTable players={players} busyAction={null} onAction={() => {}} />, { locale });
+    return renderWithI18n(<TestPlayersTable players={players} busyAction={null} seasonId="" onAction={() => {}} onRemoveFromSeason={() => {}} />, { locale });
   }
 
   it('renders headers, badge, login states and buttons in English', () => {
@@ -133,6 +133,7 @@ describe('TestPlayersTable', () => {
     expect(html).toContain('Reset Login');
     expect(html).toContain('Clear Login');
     expect(html).toContain('Mint Login');
+    expect(html).toContain('Remove from Season');
   });
 
   it('renders headers, badge, login states and buttons in German', () => {
@@ -145,12 +146,14 @@ describe('TestPlayersTable', () => {
     expect(html).toContain('Login zurücksetzen');
     expect(html).toContain('Login entfernen');
     expect(html).toContain('Login erzeugen');
+    expect(html).toContain('>Aus Saison entfernen<');
     expect(html).not.toContain('Mint Login');
+    expect(html).not.toContain('Remove from Season');
   });
 
   it('shows Clear Login only for a player with a login', () => {
     const one = renderWithI18n(
-      <TestPlayersTable players={[players[1]]} busyAction={null} onAction={() => {}} />,
+      <TestPlayersTable players={[players[1]]} busyAction={null} seasonId="" onAction={() => {}} onRemoveFromSeason={() => {}} />,
     );
     expect(one).toContain('Mint Login');
     expect(one).not.toContain('Clear Login');

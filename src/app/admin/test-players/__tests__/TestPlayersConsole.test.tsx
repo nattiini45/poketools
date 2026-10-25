@@ -2,6 +2,8 @@ import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import Button from '@/components/ui/Button';
+import { createTranslator } from '@/i18n/core';
+import { adminTestPlayersMessages } from '@/i18n/messages/admin-test-players';
 import type { Player } from '@/types/player';
 import { buildPlayerColumns, removeFromSeasonPayload } from '../TestPlayersConsole';
 
@@ -32,6 +34,7 @@ function actionsOf(columns: ReturnType<typeof buildPlayerColumns>, row: Player):
 
 function columnsWith(overrides: { seasonId?: string; onRemoveFromSeason?: (p: Player) => void } = {}) {
   return buildPlayerColumns({
+    t: createTranslator(adminTestPlayersMessages, 'en'),
     busyAction: null,
     seasonId: overrides.seasonId ?? 'season-1',
     onPlayerAction: vi.fn(),

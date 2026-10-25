@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Input from '@/components/ui/Input';
 import Section from '@/components/ui/Section';
 import Table, { type Column } from '@/components/ui/Table';
@@ -21,6 +22,7 @@ import {
   type ConsoleNotice,
   type PlayerActionKey,
 } from './test-players-text';
+import { confirmCopy, confirmationFor, type ConfirmCopy, type PendingConfirmation } from './test-players-confirm';
 
 type TestPlayersTranslator = Translator<typeof en>;
 
@@ -166,6 +168,27 @@ export function TestPlayersTable({ players, busyAction, seasonId, onAction, onRe
   );
 }
 
+interface TestPlayersConfirmDialogProps {
+  /** The dialog text of the pending action; null while nothing waits. */
+  copy: ConfirmCopy | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+/** The shared ConfirmDialog, opened while a destructive action waits for a yes. */
+export function TestPlayersConfirmDialog({ copy, onClose, onConfirm }: TestPlayersConfirmDialogProps) {
+  return (
+    <ConfirmDialog
+      open={copy !== null}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      title={copy?.title ?? ''}
+      message={copy?.message ?? ''}
+      confirmLabel={copy?.confirmLabel}
+    />
+  );
+}
+
 export default function TestPlayersConsole() {
   const t = useT(adminTestPlayersMessages);
   const apiErrorText = useApiErrorText(errorsAdmin);
@@ -178,6 +201,8 @@ export default function TestPlayersConsole() {
   const [actionError, setActionError] = useState<ConsoleError | null>(null);
   const [actionMessage, setActionMessage] = useState<ConsoleNotice | null>(null);
   const [minted, setMinted] = useState<MintedCredentials | null>(null);
+  /** The destructive action waiting for the admin's yes (shared ConfirmDialog). */
+  const [pending, setPending] = useState<PendingConfirmation | null>(null);
 
   const [seasonId, setSeasonId] = useState('');
 
@@ -234,7 +259,7 @@ export default function TestPlayersConsole() {
     setBusyAction(null);
   }
 
-  const handlePlayerAction = useCallback(async (player: Player, action: PlayerActionKey) => {
+  const runPlayerAction = useCallback(async (player: Player, action: PlayerActionKey) => {
     setBusyAction(`${action}:${player.id}`);
     const json = await postAction({ action, player_id: player.id });
     if (json?.success) {
@@ -251,40 +276,72 @@ export default function TestPlayersConsole() {
     setBusyAction(null);
   }, [loadPlayers, postAction]);
 
-  const handleRemoveFromSeason = useCallback(async (player: Player) => {
-    const season = seasonId.trim();
-    if (!season) {
-      setActionError({ local: 'error.seasonRequiredRemove' });
+  /** A row button: asks first when the action resets, removes or replaces something. */
+  const handlePlayerAction = useCallback((player: Player, action: PlayerActionKey) => {
+    const confirmation = confirmationFor(action, player);
+    if (confirmation) {
+      setPending(confirmation);
       return;
     }
-    if (!window.confirm(t('season.confirmRemove', { name: player.name, season }))) {
-      return;
-    }
+    void runPlayerAction(player, action);
+  }, [runPlayerAction]);
+
+  const runRemoveFromSeason = useCallback(async (player: Player, season: string) => {
     setBusyAction(`remove_from_league:${player.id}`);
-    const json = await postAction(removeFromSeasonPayload(player, seasonId));
+    const json = await postAction(removeFromSeasonPayload(player, season));
     if (json?.success) {
       setActionMessage({ kind: 'removed', name: player.name, season });
     } else if (json) {
       setActionError({ api: json as ApiError, fallback: 'error.removeFailed' });
     }
     setBusyAction(null);
-  }, [postAction, seasonId, t]);
+  }, [postAction]);
 
-  async function handleDeleteTestMatches() {
-    if (!seasonId.trim()) {
-      setActionError({ local: 'error.seasonRequiredDelete' });
+  const handleRemoveFromSeason = useCallback((player: Player) => {
+    const season = seasonId.trim();
+    if (!season) {
+      setActionError({ local: 'error.seasonRequiredRemove' });
       return;
     }
+    setPending({ kind: 'remove_from_league', player, season });
+  }, [seasonId]);
+
+  async function runDeleteTestMatches(season: string) {
     setBusyAction('delete_test_matches');
-    const json = await postAction({ action: 'delete_test_matches', season_id: seasonId.trim() });
+    const json = await postAction({ action: 'delete_test_matches', season_id: season });
     if (json?.success) {
       const data = json.data as { deleted: number };
-      setActionMessage({ kind: 'deleted', count: data.deleted, season: seasonId.trim() });
+      setActionMessage({ kind: 'deleted', count: data.deleted, season });
     } else if (json) {
       setActionError({ api: json as ApiError, fallback: 'error.deleteMatchesFailed' });
     }
     setBusyAction(null);
   }
+
+  function handleDeleteTestMatches() {
+    const season = seasonId.trim();
+    if (!season) {
+      setActionError({ local: 'error.seasonRequiredDelete' });
+      return;
+    }
+    setPending({ kind: 'delete_test_matches', season });
+  }
+
+  /** The admin said yes: close the dialog and run exactly the action it named. */
+  function handleConfirm() {
+    const confirmed = pending;
+    setPending(null);
+    if (!confirmed) return;
+    if (confirmed.kind === 'remove_from_league') {
+      void runRemoveFromSeason(confirmed.player, confirmed.season);
+    } else if (confirmed.kind === 'delete_test_matches') {
+      void runDeleteTestMatches(confirmed.season);
+    } else {
+      void runPlayerAction(confirmed.player, confirmed.kind);
+    }
+  }
+
+  const copy = pending ? confirmCopy(t, pending) : null;
 
   return (
     <div className="space-y-6">
@@ -357,6 +414,8 @@ export default function TestPlayersConsole() {
           </Button>
         </div>
       </Section>
+
+      <TestPlayersConfirmDialog copy={copy} onClose={() => setPending(null)} onConfirm={handleConfirm} />
     </div>
   );
 }

@@ -25,6 +25,7 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Changed
 
+- Test Players: Reset Data, Reset Login (Mint Login for a player who already has a login), Clear Login, Remove from Season and Delete Test-Only Matches now ask first in a confirmation dialog that names the player and the season, in English and German. Create / Repair, Refresh and the first Mint Login stay one click.
 - The webhook endpoints (`/api/discord-webhooks`) answer with `webhook_url_hint` instead of `webhook_url`.
 - The export endpoint adds `X-Export-Count` and `X-Export-Total` response headers.
 
