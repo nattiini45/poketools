@@ -31,6 +31,9 @@ export default defineDe<typeof en>()({
   INVALID_TOURNAMENT_ID: 'Turnier nicht gefunden.',
   INVALID_RULESET_ID: 'Regelwerk nicht gefunden.',
   tournament_already_completed: 'Das Turnier ist bereits abgeschlossen.',
+  tournament_bracket_locked: 'Der Turniermodus lässt sich nach dem Start des Turniers nicht mehr ändern.',
+  tournament_ruleset_locked: 'Das Regelwerk lässt sich nach dem Start des Turniers nicht mehr ändern.',
+  tournament_doubles_locked: 'Die Doppel-Einstellung lässt sich nach dem Start des Turniers nicht mehr ändern.',
   tournament_participants_too_few: 'Dafür sind mindestens 2 Teilnehmer nötig.',
   tournament_current_round_incomplete: 'Die aktuelle Runde ({round}) ist noch nicht abgeschlossen.',
 
@@ -70,6 +73,7 @@ export default defineDe<typeof en>()({
 
   // Elimination brackets
   bracket_generate_elim_only: 'Den kompletten Turnierbaum gibt es nur im K.-o.-System und im Doppel-K.-o.',
+  bracket_already_generated: 'Der Turnierbaum wurde bereits erstellt.',
   bracket_regenerate_elim_only:
     'Den Turnierbaum neu erstellen geht nur im K.-o.-System und im Doppel-K.-o.',
   bracket_repair_elim_only: 'Den Turnierbaum reparieren geht nur im K.-o.-System und im Doppel-K.-o.',

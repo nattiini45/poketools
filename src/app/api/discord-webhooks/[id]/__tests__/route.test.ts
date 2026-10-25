@@ -92,6 +92,35 @@ describe('PATCH /api/discord-webhooks/[id]', () => {
     expect(vi.mocked(updateWebhook)).toHaveBeenCalledWith('4f0d0098-b1cd-4760-83ba-7675b9ba8cf6', { enabled: false });
   });
 
+  it('answers webhook_url_hint and no webhook_url, even though the query returns the URL', async () => {
+    vi.mocked(getWebhookById).mockResolvedValue(fakeWebhook);
+    vi.mocked(updateWebhook).mockResolvedValue({
+      ...fakeWebhook,
+      webhook_url: 'https://discord.com/api/webhooks/123/abcdefgh1234',
+    });
+
+    const res = await PATCH(makePatchRequest({ enabled: true }), makeParams('4f0d0098-b1cd-4760-83ba-7675b9ba8cf6'));
+    const body = await res.json();
+
+    expect(body.data.webhook_url_hint).toBe('…1234');
+    expect('webhook_url' in body.data).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('abcdefgh');
+  });
+
+  it('still passes a new webhook_url to updateWebhook', async () => {
+    const newUrl = 'https://discord.com/api/webhooks/456/zyxwvuts9876';
+    vi.mocked(getWebhookById).mockResolvedValue(fakeWebhook);
+    vi.mocked(updateWebhook).mockResolvedValue({ ...fakeWebhook, webhook_url: newUrl });
+
+    const res = await PATCH(makePatchRequest({ webhook_url: newUrl }), makeParams('4f0d0098-b1cd-4760-83ba-7675b9ba8cf6'));
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(updateWebhook)).toHaveBeenCalledWith('4f0d0098-b1cd-4760-83ba-7675b9ba8cf6', { webhook_url: newUrl });
+    const body = await res.json();
+    expect(body.data.webhook_url_hint).toBe('…9876');
+    expect(JSON.stringify(body)).not.toContain('zyxwvuts');
+  });
+
   it('passes format_options.language through to the update', async () => {
     vi.mocked(getWebhookById).mockResolvedValue(fakeWebhook);
     vi.mocked(updateWebhook).mockResolvedValue(fakeWebhook);

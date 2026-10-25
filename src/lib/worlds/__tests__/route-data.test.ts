@@ -18,6 +18,7 @@ import type { PointBuyListEntry } from '@/types/point-buy';
 import { lineIdOfEntry } from '@/lib/draft/line-identity';
 import type { EvolutionTracker } from '@/types/evolution';
 import type { DraftPool } from '@/types/draft';
+import type { FormatRules } from '@/types/format-rules';
 import type { Team, PokemonSet } from '@/types/team';
 import type { LeagueStanding } from '@/lib/supabase/queries/league-standings';
 import type { WorldRouteDataInput } from '@/lib/worlds/route-data';
@@ -845,6 +846,37 @@ describe('buildWorldRouteData', () => {
       }),
     );
     expect(getMatchesByTournamentIds).toHaveBeenCalledWith(['stage-1']);
+  });
+
+  it('EPB standings rank by the stored tiebreaker order of the format rules already read', async () => {
+    mockHappyPath({});
+    vi.mocked(getFormatRules).mockResolvedValue({
+      tiebreaker_order: ['evolution_points', 'match_points'],
+    } as FormatRules);
+
+    await buildWorldRouteData('season-1');
+
+    expect(assembleLeagueSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          formatType: 'evolution_point_buy',
+          tiebreakerOrder: ['evolution_points', 'match_points'],
+        }),
+      }),
+    );
+    // The rules ride in the existing wave: still exactly one read of them.
+    expect(getFormatRules).toHaveBeenCalledTimes(1);
+  });
+
+  it('a non-EPB season never gets a tiebreaker order, even with a rules row', async () => {
+    mockHappyPath({ league: makeLeague({ format_type: 'singles', point_buy_list_id: null }) });
+    vi.mocked(getFormatRules).mockResolvedValue({ tiebreaker_order: ['evolution_points'] } as FormatRules);
+
+    await buildWorldRouteData('season-1');
+
+    expect(assembleLeagueSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({ context: { formatType: 'singles' } }),
+    );
   });
 
   it('a non-EPB season computes standings without evolution points', async () => {

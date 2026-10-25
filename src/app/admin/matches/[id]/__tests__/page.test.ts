@@ -315,6 +315,25 @@ describe('AdminMatchPage: per-match access', () => {
   });
 });
 
+describe('AdminMatchPage: series length', () => {
+  // The round is read once, by the match context: its best-of reaches the controls (series tally, delete impact).
+  it('passes the best-of of the match round, as the context reads it, to the controls', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    mocks.loadAdminMatchContext.mockResolvedValue({ ...CONTEXT, best_of: 5 });
+    const { props } = await renderPage();
+
+    expect(mocks.loadAdminMatchContext).toHaveBeenCalledTimes(1);
+    expect(props.get(AdminMatchActions)).toMatchObject({ bestOf: 5 });
+  });
+
+  it('does not render the controls without the round: an unreadable round fails the whole read', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    mocks.loadAdminMatchContext.mockRejectedValue(new Error('Round r-1 not found'));
+
+    await expect(renderPage()).rejects.toThrow('Round r-1 not found');
+  });
+});
+
 describe('AdminMatchPage: language (i18n-core §8.2)', () => {
   it('English by default: chrome and the labelled status', async () => {
     mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));

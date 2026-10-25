@@ -6,6 +6,7 @@ import { formatPack } from '@/lib/format-pack';
 import { useDataLocale, useT } from '@/i18n/client';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
 import { localizeItem } from '@/lib/pkmn/i18n/names/items';
+import { isEmptyTeamConstraints } from '@/lib/pkmn/team-constraints';
 import { localizeType } from '@/lib/pkmn/i18n/names/misc';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 
@@ -59,6 +60,10 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
           </p>
         </div>
       </label>
+
+      {enabled && isEmptyTeamConstraints(value) && (
+        <p className="text-xs text-poke-text-muted">{t('constraints.emptyHint')}</p>
+      )}
 
       {enabled && value && (
         <>

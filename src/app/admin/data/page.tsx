@@ -3,6 +3,7 @@ import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import Button from '@/components/ui/Button';
 import AdminDataTools from './AdminDataTools';
+import FormatDriftReport from './FormatDriftReport';
 import { getT } from '@/i18n/server';
 import { adminToolsMessages } from '@/i18n/messages/admin-tools';
 
@@ -22,7 +23,10 @@ export default async function AdminDataPage() {
         )}
         maxWidth="xl"
       >
-        <AdminDataTools />
+        <div className="space-y-6">
+          <AdminDataTools />
+          <FormatDriftReport />
+        </div>
       </PageContainer>
     </SiteAdminGuard>
   );

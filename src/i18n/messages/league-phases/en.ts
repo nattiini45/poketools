@@ -18,6 +18,8 @@ export default {
     isDoubles: 'Doubles phase',
     isDoublesHint:
       'A new phase follows the selected ruleset until you change this. Shown as a Doubles badge and used for Bring/Lead/Win tracking.',
+    /** The edit form of an existing phase: its flag is stored, so nothing follows the ruleset any more. */
+    isDoublesHintEdit: 'Shown as a Doubles badge and used for Bring/Lead/Win tracking.',
     teamVisibility: 'Team Visibility',
     advancement: 'Advancement into next phase',
     advancementPlayers: 'players',
@@ -29,6 +31,7 @@ export default {
   overview: {
     saved: 'Phase settings saved.',
     saveChanges: 'Save Changes',
+    lockedCompleted: 'This phase is completed, so its settings are locked. Reopen it to change them.',
   },
   timeline: {
     loading: 'Loading phases...',
@@ -49,6 +52,17 @@ export default {
     newPhaseTitle: 'New Phase — Step 1: Configuration',
     newPhaseHint: 'Participants are enrolled automatically from the league table after creation.',
     createSubmit: 'Create & Enroll Participants',
+    /** Where the new phase goes (`insert_at`); `{order}. {name}` names an existing phase. */
+    position: {
+      label: 'Position',
+      end: 'At the end of the league',
+      before: 'Before a phase',
+      after: 'After a phase',
+      phase: 'Phase',
+      option: '{order}. {name}',
+      optionLocked: '{order}. {name} (already started)',
+      hint: 'A phase can only be inserted in front of phases that have not started yet.',
+    },
     errors: {
       loadFailed: 'Failed to load phases',
       deleteFailed: 'Failed to delete phase',
@@ -65,6 +79,14 @@ export default {
     serpentine: 'Serpentine assign from seeds',
     clear: 'Clear groups',
     confirmClear: 'Remove all groups and member assignments?',
+    // A serpentine assign over existing groups deletes them (members and manual moves with them) and draws new ones
+    redrawTitle: 'Replace the current groups?',
+    redrawConfirm: {
+      one: 'This deletes the {count} current group and draws new groups from the seeds. Manual moves are lost. Rounds that were already generated are not changed.',
+      other:
+        'This deletes the {count} current groups and draws new groups from the seeds. Manual moves are lost. Rounds that were already generated are not changed.',
+    },
+    redrawConfirmLabel: 'Draw again',
     empty: 'No groups yet. Seed participants, then serpentine-assign (1→A, 2→B, 3→B, 4→A…).',
     noMembers: 'No members',
     moveAria: 'Move {name}',

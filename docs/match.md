@@ -88,7 +88,7 @@ src/lib/match/
 - `/api/matches/me` (the player's own matches: full rows)
 - `/api/matches/[id]/social-image` (site admins: POST uploads, DELETE removes; 404 `INVALID_MATCH_ID` for a malformed id; see Social Images)
 - `/api/manual-result`
-- `/api/confirm-match/[mid]` (participants and admins: full `Match`; only admins write `notes`; a dispute may carry an optional `reason`, see "Dispute details")
+- `/api/confirm-match/[mid]` (participants and admins: full `Match`; only admins write `notes`; a dispute may carry an optional `reason`, see "Dispute details" and "Confirm and dispute" below)
 - `/api/cron/auto-confirm` (`?limit=` 1..100, default 25; anything else answers 400 `validation_failed`)
 - `/api/matches/[mid]/proposals`
 - `/api/match-proposals/[id]/accept` (the responding participant: full row)
@@ -96,6 +96,13 @@ src/lib/match/
 - `/api/match-prep`
 - `/api/admin/**` match routes (admins: full rows)
 - Admin match page verbs (site admin, or resource admin of the match's tournament or league; see "Admin Match Page Verbs"): `PATCH /api/admin/matches/[id]/schedule`, `POST /api/admin/matches/[id]/reopen`, `GET /api/admin/matches/[id]/history`, `GET /api/admin/matches/[id]/reset-preview`, `POST /api/admin/matches/[id]/reset`, `DELETE /api/admin/games/[id]`
+
+## Confirm and dispute (`/api/confirm-match/[mid]`)
+- **Guarded update.** The status change is a compare-and-set on the status the route read. When it misses, the route re-reads the match: a missing match answers 404 `match_not_found`; a match that is already in the requested state (same status and, for a completion, the same winner, with no admin notes that would be discarded) answers 200 with the current match, as a repeated click should; any other state answers `409 match_state_changed` with `params.status` (the current status) and writes nothing: no revalidation, no finalize, no Discord event. Before, a lost race (for example a dispute landing between a Complete click and the request) answered success.
+- **Submitter is kept.** `matches.submitter_id` is set only when it is empty, for admin and participant confirms and disputes alike, so a confirmation or an admin override no longer overwrites the player who reported the result. A dispute therefore does not record the disputer in that column: the disputer is the actor of the `match.dispute` audit event and is named in the Discord event. Participants cannot send notes (only admins write `notes`).
+- **Audit.** Every dispute, by a player or an admin, writes one `match.dispute` audit event (status change, `metadata.reason`, `metadata.by_admin`; see "Dispute details"). An admin confirm writes `match.override` when it sets a winner or notes or resolves a disputed match. A participant's own confirm writes no audit event.
+- **`date_played`** stays the completion stamp: it is only ever set when a match completes, so there is no earlier play date to overwrite.
+- The admin match page asks for confirmation before Complete and Dispute and shows the recorded series tally with warnings; see [Admin](./admin.md).
 
 ## Scheduling and Auto-Confirm
 - Match scheduling uses `rounds.deadline`, `matches.scheduled_at`, and `match_proposals`.
@@ -120,7 +127,7 @@ src/lib/match/
 `POST /api/admin/matches/[id]/reopen` with `{ reason }` (required, 1 to 500 characters after trimming; rate limit 20 per hour and admin) moves a `completed`, `pending_confirmation` or `disputed` match back to `in_progress` (`reopenMatch`, `src/lib/match/reopen.ts`). The games are kept; the result is withdrawn.
 
 - **Transitions**: `ADMIN_TRANSITIONS` in `src/lib/tournament/match-state.ts` gained `completed -> in_progress` and `disputed -> in_progress` (`pending_confirmation -> in_progress` existed). `canReopenMatch(status)` is the pure check. This is safe because the table is admin-only (`validateTransition` still refuses a non-admin with `match_reset_admin_only`) and no code path outside the confirm-match route and the game pipeline reads it. A `scheduled` or `in_progress` match answers 400 `match_transition_invalid`. The `disputed` entry is a deliberate small extension: a disputed match never finalized, so there is nothing to reverse.
-- **Always reversed** (one compare-and-set write on the status the reopen read): status `in_progress`; `winner_id`, `auto_confirm_at`, `confirmed_at`, `date_played` and the finalize marker are cleared. `submitter_id` and the games stay. A lost compare-and-set answers 409 `match_state_changed` with nothing changed.
+- **Always reversed** (one compare-and-set write on the status the reopen read): status `in_progress`; `winner_id`, `auto_confirm_at`, `confirmed_at`, `date_played` and the finalize marker are cleared. `submitter_id` and the games stay. A lost compare-and-set answers 409 `match_state_changed` with nothing changed (with `params.status`, the status the match has now, when the re-read succeeds).
 - **Also reversed for a completed match** (isolated post-commit steps, each logged on failure): the round status when the round had completed (`revertRoundIfCompleted`); later empty bracket slots the winner had filled (`unpropagateBracketOnMatchReset`, deletes only empty scheduled matches); the match analysis, prep analyses, snapshots and social image; both players' ratings and rating history, streaks and signatures (`rebuildGamificationAfterUncomplete`); and the evolution progress (`repairSeasonEvolution` for an Evolution Point Buy season, a recheck otherwise). A `pending_confirmation` or `disputed` match needs only the status write.
 - **Not reversed**: achievements already granted (permanent, as for reset and game delete) and a Discord or social announcement already sent. The dialog says so.
 - **Refusals before any write** (completed match only): a later bracket match the winner advanced into that has results or is in progress answers 409 `match_reopen_downstream_played` (`{count}`): reset those later matches first. A rating history that cannot be rebuilt (`planRatingRebuild` refuses) answers 409 `rating_history_incomplete`.
@@ -131,7 +138,7 @@ src/lib/match/
 ### Dispute details
 
 - `POST /api/confirm-match/[mid]` accepts an optional `reason` (1 to 500 characters) with `action: 'dispute'`; with `confirm` it is a 400. The player form (`ConfirmMatchClient`) shows an optional textarea with a counter. An admin who disputes through the Admin Override form gives the notes text as the reason. The reason is never stored in `matches.notes` (that stays admin-only).
-- Every successful dispute, by a player or an admin, writes one `match.dispute` audit event (`changes.status`, `metadata.reason`, `metadata.by_admin`). Player disputes were not audited before. A dispute no longer writes `matches.submitter_id`, so the original reporter stays on the match and the disputer is the actor of the audit event. The admin override block now audits only the move to `completed`, so an admin dispute produces exactly one event.
+- Every successful dispute, by a player or an admin, writes one `match.dispute` audit event (`changes.status`, `metadata.reason`, `metadata.by_admin`). Player disputes were not audited before. A dispute keeps the original reporter in `matches.submitter_id` (see "Submitter is kept" above) and the disputer is the actor of the audit event. The `match.override` event covers only the move to `completed`, so an admin dispute produces exactly one event.
 - The admin match page shows a dispute panel for a disputed match: who disputed (with an admin marker), when, the reason, and the reported winner and reporter. It reads the newest `match.dispute` event (`getLatestMatchDispute`). A match disputed before this change has no event: the panel says the details were not recorded. The audit write is fire-and-forget, so a lost write shows the same state.
 
 ### Reset and delete-game reasons
@@ -147,7 +154,7 @@ src/lib/match/
 
 ### Admin override and a changed match
 
-The Admin Override form in `POST /api/confirm-match/[mid]` is a compare-and-set on the status the admin saw. When the match changed in between (`updateMatchStatus` finds no row to update), an admin now gets 409 `match_state_changed` instead of a success, and the page reloads. A non-admin keeps the idempotent success answer (a double click on Confirm).
+The Admin Override form in `POST /api/confirm-match/[mid]` is a compare-and-set on the status the admin saw (see "Guarded update" above). When the match changed in between (`updateMatchStatus` finds no row to update) and is not already what the admin asked for, the admin gets 409 `match_state_changed` instead of a success, and the page reloads. A repeated click on a request the match already satisfies (a double click on Confirm with the same winner and no admin note) keeps the idempotent success answer, for a participant and for an admin alike.
 
 ## Replay Binding
 

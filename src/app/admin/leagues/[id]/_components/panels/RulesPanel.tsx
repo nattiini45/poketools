@@ -6,20 +6,28 @@ import FormatRulesEditor from '@/components/league/FormatRulesEditor';
 import EpbImportPanel from '@/components/league/EpbImportPanel';
 import { getT } from '@/i18n/server';
 import { glossaryMessages } from '@/i18n/messages/glossary';
+import { isSeasonStarted } from '@/lib/season/settings-guards';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
+import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
 import { toPublicPlayerRef } from '@/lib/players/public-player';
 import type { LeagueAdminPanelContext } from './context';
 
 /**
  * Rules tab. Classic draft: the evolution tiers (with wildcards) and the tier
  * slot limits; reads the participants for the wildcard picker. Evolution Point
- * Buy: the point-buy list binding, the format rules and the xlsx data import;
- * no read of its own (the editors load their data on the client).
+ * Buy: the point-buy list binding, the format rules and the xlsx data import. The editors
+ * load their data on the client; the one read here is the phases' start signals, which tell the
+ * format rules editor whether the league has started (it then asks before saving).
  */
 export async function rulesPanel({ id, league, caps, t }: LeagueAdminPanelContext) {
   // Only `{ id, name }` crosses into client components (AGENTS.md: never raw players rows).
-  const playerRefs = caps.evolutionTiers ? (await getSeasonParticipants(id)).map(toPublicPlayerRef) : [];
-  const tGlossary = caps.pointBuyList ? await getT(glossaryMessages) : null;
+  const [participants, phases, tGlossary] = await Promise.all([
+    caps.evolutionTiers ? getSeasonParticipants(id) : [],
+    caps.pointBuyList ? getSeasonPhaseStartSignals(id) : null,
+    caps.pointBuyList ? getT(glossaryMessages) : null,
+  ]);
+  const playerRefs = participants.map(toPublicPlayerRef);
+  const seasonStarted = phases ? isSeasonStarted({ status: league.status, phases }) : false;
 
   return (
     <>
@@ -46,7 +54,7 @@ export async function rulesPanel({ id, league, caps, t }: LeagueAdminPanelContex
           title={t('formatRules.title')}
           subtitle={t('formatRules.subtitle', { token: tGlossary('token.draftKill') })}
         >
-          <FormatRulesEditor seasonId={id} />
+          <FormatRulesEditor seasonId={id} seasonStarted={seasonStarted} />
         </Section>
       )}
 

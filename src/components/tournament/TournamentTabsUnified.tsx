@@ -11,12 +11,14 @@ import DecisionMatchPanel from '@/components/evolution/DecisionMatchPanel';
 import ScopedInsightsView from '@/components/insights/ScopedInsightsView';
 import TournamentReportTab from './TournamentReportTab';
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
+import { roundRobinMatchPoints } from '@/lib/tournament/standings-rules';
 import type { MatchRecord } from '@/lib/tournament/types';
 import type { EvolutionStanding } from '@/lib/tournament/evolution-standings';
 import type { PublicMatch } from '@/lib/match/public-match';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import type { TournamentReport } from '@/types/tournament-report';
 import type { KillRankingRow, PokemonUsageRow } from '@/types/game';
+import type { TiebreakerStep } from '@/types/format-rules';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
 import { useLocale, useT } from '@/i18n/client';
 import type { Translator } from '@/i18n/core';
@@ -71,6 +73,8 @@ interface TournamentTabsUnifiedProps {
   seasonId?: string | null;
   /** Per-player evolution points (evolution_point_buy seasons only) */
   evolutionPoints?: Record<string, number>;
+  /** The season's stored tiebreaker order (evolution_point_buy seasons only); an unusable one falls back to the pack's */
+  tiebreakerOrder?: readonly TiebreakerStep[];
   /** 'tabs' (legacy single-panel) or 'sections' — anchored scrollworld. */
   layout?: 'tabs' | 'sections';
 }
@@ -160,6 +164,7 @@ export default function TournamentTabsUnified({
   seasonFormatType = null,
   seasonId = null,
   evolutionPoints,
+  tiebreakerOrder,
   layout = 'tabs',
 }: TournamentTabsUnifiedProps) {
   const { data: session } = useSession();
@@ -215,13 +220,13 @@ export default function TournamentTabsUnified({
   const rrStandings = useMemo(() => {
     if (bracketType !== 'round_robin') return [];
     return computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, {
-      pointsPerWin: 3,
-      pointsPerDraw: 0,
+      // 3 / 0 for every league type except Evolution Point Buy, which scores the format pack's match points.
+      ...roundRobinMatchPoints(seasonFormatType),
       battleStats,
       gamesByMatch,
       maxRound,
-    }, participantGymTypes, { evolutionPoints });
-  }, [bracketType, seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, battleStats, gamesByMatch, maxRound, participantGymTypes, evolutionPoints]);
+    }, participantGymTypes, { evolutionPoints, tiebreakerOrder });
+  }, [bracketType, seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, battleStats, gamesByMatch, maxRound, participantGymTypes, evolutionPoints, tiebreakerOrder]);
 
   const epbTiedPlayers = useMemo(() => {
     if (seasonFormatType !== 'evolution_point_buy') return [];

@@ -95,9 +95,12 @@ export default async function TournamentPage({ params, searchParams }: PageProps
   // Season format drives the standings tiebreaker chain (EPB uses
   // evolution points); evolution points feed the client tabs as props.
   const seasonFormatType = season?.format_type ?? null;
-  const evolutionPoints = season && isEvolutionPointBuy(season.format_type)
-    ? await publicReads.seasonEvolutionPoints(season.id)
-    : undefined;
+  // The same wave reads the season's format rules, whose stored tiebreaker order ranks the table (cached,
+  // season-tagged, expired by a format rules save).
+  const [evolutionPoints, formatRules] = season && isEvolutionPointBuy(season.format_type)
+    ? await Promise.all([publicReads.seasonEvolutionPoints(season.id), publicReads.seasonFormatRules(season.id)])
+    : [undefined, null];
+  const tiebreakerOrder = formatRules?.tiebreaker_order;
 
   // World-registered seasons wrap the tournament page in the season world
   // shell so world tokens carry over. B2: the viewer override is resolved
@@ -130,7 +133,7 @@ export default async function TournamentPage({ params, searchParams }: PageProps
   }
 
   const standings = !isRoundRobin
-    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, { byes: scoringByeRecords(tournament.bracket_type, rounds) }, participantGymTypes, { evolutionPoints })
+    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, { byes: scoringByeRecords(tournament.bracket_type, rounds) }, participantGymTypes, { evolutionPoints, tiebreakerOrder })
     : [];
 
   const totalRounds = rounds.length > 0
@@ -229,6 +232,7 @@ export default async function TournamentPage({ params, searchParams }: PageProps
         seasonFormatType={seasonFormatType}
         seasonId={tournament.season_id}
         evolutionPoints={evolutionPoints}
+        tiebreakerOrder={tiebreakerOrder}
         layout="sections"
       />
     </PageContainer>

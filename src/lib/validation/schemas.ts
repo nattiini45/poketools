@@ -251,7 +251,8 @@ export const auditLogQuerySchema = z.object({
   actor_id: uuid.optional(),
   actor: z.string().trim().min(1).max(120).optional(),
   resource_type: z.string().trim().min(1).max(120).optional(),
-  resource_id: z.string().trim().min(1).max(120).optional(),
+  // The audit `resource_id` column is a uuid: a free-text value would raise a Postgres type error.
+  resource_id: z.string().trim().pipe(uuid).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -279,14 +280,34 @@ export const matchProposalCreateSchema = z.object({
 
 // ─── Tournament Schemas ──────────────────────────────────────────────
 
+/**
+ * A best-of series length: an odd integer from 1 to 15 (a series needs a
+ * winner). The pickers offer the same list (`BEST_OF_VALUES`,
+ * src/lib/tournament/best-of.ts).
+ */
+export const bestOfSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(15)
+  .refine((value) => value % 2 === 1, { message: 'best of must be an odd number' });
+
+/**
+ * A best-of that may already be stored on a record: any integer from 1 to 15, even
+ * values included (earlier versions accepted them). Only for an update that sends the
+ * whole stored form back; the route then refuses an even value that is not the stored one
+ * (`newEvenBestOfIssues`, src/lib/tournament/best-of.ts).
+ */
+const storedBestOfSchema = z.number().int().min(1).max(15);
+
 export const tournamentCreateSchema = z.object({
   name: z.string().trim().min(1).max(FIELD_LIMITS.TITLE),
   description: z.string().max(FIELD_LIMITS.LONG_TEXT).optional(),
   season_id: uuid.optional().nullable(),
   bracket_type: bracketTypeSchema,
   ruleset_id: uuid,
-  best_of_default: z.number().int().min(1).max(15).default(1),
-  bo_overrides: z.record(z.string(), z.number().int().min(1).max(15)).optional(),
+  best_of_default: bestOfSchema.default(1),
+  bo_overrides: z.record(z.string(), bestOfSchema).optional(),
   is_doubles: z.boolean().default(false),
   team_visibility: teamVisibilitySchema.default('hidden_until_match'),
   stage_order: z.number().int().min(0).optional(),
@@ -298,8 +319,8 @@ export const tournamentUpdateSchema = z.object({
   description: z.string().max(FIELD_LIMITS.LONG_TEXT).optional(),
   bracket_type: bracketTypeSchema.optional(),
   ruleset_id: uuid.optional(),
-  best_of_default: z.number().int().min(1).max(15).optional(),
-  bo_overrides: z.record(z.string(), z.number().int().min(1).max(15)).optional(),
+  best_of_default: bestOfSchema.optional(),
+  bo_overrides: z.record(z.string(), bestOfSchema).optional(),
   is_doubles: z.boolean().optional(),
   team_visibility: teamVisibilitySchema.optional(),
   status: tournamentStatusSchema.optional(),
@@ -326,8 +347,10 @@ export const phaseUpdateSchema = z.object({
   description: z.string().max(FIELD_LIMITS.LONG_TEXT).optional(),
   bracket_type: bracketTypeSchema.optional(),
   ruleset_id: uuid.optional(),
-  best_of_default: z.number().int().min(1).max(15).optional(),
-  bo_overrides: z.record(z.string(), z.number().int().min(1).max(15)).optional(),
+  // The phase form sends the stored best-of back on every save; the route refuses an even
+  // value unless it is the stored one.
+  best_of_default: storedBestOfSchema.optional(),
+  bo_overrides: z.record(z.string(), storedBestOfSchema).optional(),
   is_doubles: z.boolean().optional(),
   team_visibility: teamVisibilitySchema.optional(),
   status: tournamentStatusSchema.optional(),
@@ -409,6 +432,26 @@ export const seasonCreateSchema = z.object({
   end_date: z.iso.date().optional().nullable(),
   route_theme: routeThemeSchema.optional(),
   language: contentLanguageSchema.optional(),
+});
+
+/**
+ * Optional "start from an existing league" block of `POST /api/seasons`: the
+ * source league and what to copy besides its phases. Both flags default to
+ * off, so a bare `{ season_id }` copies the phases only.
+ */
+export const seasonCloneOptionsSchema = z.object({
+  season_id: uuid,
+  copy_roster: z.boolean().default(false),
+  copy_admins: z.boolean().default(false),
+});
+
+/**
+ * The `POST /api/seasons` body: the create fields plus the optional clone
+ * block. `seasonCreateSchema` stays as it is (PATCH and other callers build
+ * on it); the extra key is stripped there.
+ */
+export const seasonCreateRequestSchema = seasonCreateSchema.extend({
+  clone_from: seasonCloneOptionsSchema.optional(),
 });
 
 export const seasonUpdateSchema = z.object({
@@ -819,6 +862,14 @@ export const wikiNotePatchSchema = z.object({
   rejection_reason: z.string().trim().min(1).max(FIELD_LIMITS.DESCRIPTION).optional(),
 });
 
+/**
+ * The superadmin's block / unblock request (`PATCH /api/wiki/notes/[id]`). Strict and alone: it cannot be combined
+ * with an edit, an approval or a rejection.
+ */
+export const wikiNoteBlockResubmissionSchema = z.object({
+  block_resubmission: z.boolean(),
+}).strict();
+
 export const wikiNoteReportSchema = z.object({
   reason: z.enum(['inaccurate', 'spam', 'abusive', 'off_topic', 'other']),
   details: z.string().trim().max(FIELD_LIMITS.DESCRIPTION).optional(),
@@ -1204,7 +1255,7 @@ export const evolutionUpdateSchema = z.object({
 
 export const roundUpdateSchema = z.object({
   status: roundStatusSchema.optional(),
-  best_of: z.number().int().min(1).max(15).optional(),
+  best_of: bestOfSchema.optional(),
   // ISO 8601 with an explicit offset (`Z` or `+02:00`): a timezone-less string
   // would be read in the server's zone, not the admin's. `null` clears it.
   deadline: z.string().trim().datetime({ offset: true }).nullable().optional(),
@@ -1212,6 +1263,14 @@ export const roundUpdateSchema = z.object({
   (data) => data.status !== undefined || data.best_of !== undefined || data.deadline !== undefined,
   { message: 'Provide status, best_of and/or deadline to update' },
 );
+
+/**
+ * Optional JSON body of the three generate routes (generate-round, generate-all-rounds, generate-bracket).
+ * `start_round` starts the lowest-numbered round that call created; omitted or false leaves it pending.
+ */
+export const generateRoundOptionsSchema = z.object({
+  start_round: z.boolean().optional(),
+}).strict();
 
 export const broadcastMomentSchema = z.object({
   match_id: uuid,
@@ -1300,6 +1359,8 @@ export type TournamentCreateInput = z.infer<typeof tournamentCreateSchema>;
 export type TournamentUpdateInput = z.infer<typeof tournamentUpdateSchema>;
 export type SeasonCreateInput = z.infer<typeof seasonCreateSchema>;
 export type SeasonUpdateInput = z.infer<typeof seasonUpdateSchema>;
+export type SeasonCloneOptionsInput = z.infer<typeof seasonCloneOptionsSchema>;
+export type SeasonCreateRequestInput = z.infer<typeof seasonCreateRequestSchema>;
 export type ParseReplayInput = z.infer<typeof parseReplaySchema>;
 export type ManualResultInput = z.infer<typeof manualResultSchema>;
 export type ConfirmMatchInput = z.infer<typeof confirmMatchSchema>;
@@ -1329,6 +1390,7 @@ export type DraftPickInput = z.infer<typeof draftPickSchema>;
 export type AdminGameEditInput = z.infer<typeof adminGameEditSchema>;
 export type PaginationQueryInput = z.infer<typeof paginationQuerySchema>;
 export type WikiNotePatchInput = z.infer<typeof wikiNotePatchSchema>;
+export type WikiNoteBlockResubmissionInput = z.infer<typeof wikiNoteBlockResubmissionSchema>;
 export type TournamentParticipantSeedsInput = z.infer<typeof tournamentParticipantSeedsSchema>;
 export type TypeAnalysisInput = z.infer<typeof typeAnalysisSchema>;
 export type ValidateSetInput = z.infer<typeof validateSetSchema>;
@@ -1354,6 +1416,7 @@ export type DraftPoolEntryUpdateInput = z.infer<typeof draftPoolEntryUpdateSchem
 export type EvolutionCreateInput = z.infer<typeof evolutionCreateSchema>;
 export type EvolutionUpdateInput = z.infer<typeof evolutionUpdateSchema>;
 export type RoundUpdateInput = z.infer<typeof roundUpdateSchema>;
+export type GenerateRoundOptionsInput = z.infer<typeof generateRoundOptionsSchema>;
 export type BroadcastMomentInput = z.infer<typeof broadcastMomentSchema>;
 export type BroadcastPresetCreateInput = z.infer<typeof broadcastPresetCreateSchema>;
 export type BroadcastPresetUpdateInput = z.infer<typeof broadcastPresetUpdateSchema>;
@@ -1451,7 +1514,7 @@ export const teamUpdateSchema = z.object({
 
 export const manualRoundSchema = z.object({
   name: z.string().trim().max(FIELD_LIMITS.NAME).optional(),
-  best_of: z.number().int().min(1).max(15).optional(),
+  best_of: bestOfSchema.optional(),
   pairings: z.array(z.object({
     player_1_id: uuid,
     player_2_id: uuid,

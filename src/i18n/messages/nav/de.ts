@@ -16,4 +16,5 @@ export default defineDe<typeof en>()({
   viewPublicProfile: 'Öffentliches Profil ansehen',
   toggleMenu: 'Menü umschalten',
   closeMenu: 'Menü schließen',
+  menuLabel: 'Seitenmenü',
 });

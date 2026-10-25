@@ -61,3 +61,37 @@ export function assertPhaseEditable(
     );
   }
 }
+
+/** The comparison key of a phase name: trimmed, NFC-normalised, case-folded. */
+function phaseNameKey(name: string): string {
+  return name.normalize('NFC').trim().toLowerCase();
+}
+
+/**
+ * Whether another phase of the league already uses `name` (case, surrounding
+ * whitespace and Unicode composition ignored). `exceptId` skips the phase being
+ * renamed. Names are unique per league in the API only: the database has no
+ * constraint, so leagues created earlier may already hold duplicates.
+ */
+export function findDuplicatePhaseName(
+  name: string,
+  phases: ReadonlyArray<{ id: string; name: string }>,
+  exceptId?: string
+): boolean {
+  const key = phaseNameKey(name);
+  return phases.some((phase) => phase.id !== exceptId && phaseNameKey(phase.name) === key);
+}
+
+/** Throws a 409 `PHASE_NAME_TAKEN` when another phase of the league already has this name. */
+export function assertPhaseNameFree(
+  name: string,
+  phases: ReadonlyArray<{ id: string; name: string }>,
+  exceptId?: string
+): void {
+  if (findDuplicatePhaseName(name, phases, exceptId)) {
+    throw new UserFacingError('Another phase of this league already has this name', {
+      code: 'PHASE_NAME_TAKEN',
+      status: 409,
+    });
+  }
+}

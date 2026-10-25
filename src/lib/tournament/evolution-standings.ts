@@ -1,10 +1,10 @@
 /**
  * Evolution Point Buy standings with format-specific tiebreaker chain.
  *
- * The tiebreaker order is the format pack's `epb.tiebreakerChain` (`@/lib/format-pack`):
- * match points, evolution points, kill difference and head-to-head in the pack's order;
- * `decision_match` (last when present) is a flag only — not auto-scheduled.
- * `format_rules.tiebreaker_order` is stored but not read here (follow-up).
+ * The tiebreaker order is the season's stored `format_rules.tiebreaker_order` when it is a usable chain, else the
+ * format pack's `epb.tiebreakerChain` (`effectiveTiebreakerChain`, `./standings-rules`): match points, evolution
+ * points, kill difference and head-to-head in that order; `decision_match` (last when present) is a flag only —
+ * not auto-scheduled.
  */
 
 import type { Standing, MatchRecord } from './types';
@@ -12,6 +12,7 @@ import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import type { TiebreakerStep } from '@/types/format-rules';
 import { epbPack } from '@/lib/format-pack';
 import { resolveHeadToHead } from './head-to-head';
+import { effectiveTiebreakerChain } from './standings-rules';
 
 export interface EvolutionStanding extends Standing {
   evolution_points: number;
@@ -26,6 +27,11 @@ export interface EvolutionStandingsOptions {
   pointsPerDraw?: number;
   /** Battle stats for computing kill differential */
   battleStats?: TournamentBattleStat[];
+  /**
+   * The season's stored `format_rules.tiebreaker_order`, as read (not yet checked). A usable chain ranks the table;
+   * anything else (absent, empty, unknown or repeated step) falls back to the pack's chain.
+   */
+  tiebreakerOrder?: unknown;
 }
 
 type RankingStep = Exclude<TiebreakerStep, 'decision_match'>;
@@ -52,7 +58,7 @@ function compareOnStep(
 
 /**
  * Compute standings for the Evolution Point Buy format.
- * Uses the format pack's tiebreaker chain (`epb.tiebreakerChain`).
+ * Ranks by the stored tiebreaker order when it is usable, else by the format pack's chain (`epb.tiebreakerChain`).
  */
 export function computeEvolutionPointBuyStandings(
   participantIds: string[],
@@ -66,8 +72,9 @@ export function computeEvolutionPointBuyStandings(
     pointsPerWin = epbPack.matchPoints.win,
     pointsPerDraw = epbPack.matchPoints.draw,
     battleStats,
+    tiebreakerOrder,
   } = options;
-  const chain = epbPack.tiebreakerChain;
+  const chain = effectiveTiebreakerChain({ tiebreaker_order: tiebreakerOrder });
   const rankingSteps = chain.filter((s): s is RankingStep => s !== 'decision_match');
   const flagsDecisionMatch = chain.includes('decision_match');
 
@@ -124,7 +131,7 @@ export function computeEvolutionPointBuyStandings(
     }
   }
 
-  // Sort with the pack's tiebreaker chain: the first non-zero step decides
+  // Sort with the effective tiebreaker chain: the first non-zero step decides
   const standings = Array.from(standingMap.values());
   standings.sort((a, b) => {
     for (const step of rankingSteps) {

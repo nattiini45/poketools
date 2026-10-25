@@ -98,3 +98,60 @@ describe('stored byes in the dispatcher', () => {
     expect(standings[0].points).toBe(1);
   });
 });
+
+describe('stored tiebreaker order in the dispatcher', () => {
+  // a beat b; c has played nobody but holds the most evolution points.
+  const aBeatsB: MatchRecord[] = [{ player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 }];
+  const evolutionPoints = { a: 0, b: 1, c: 10 };
+  const order = (tiebreakerOrder?: unknown) =>
+    computeStandingsForFormat('evolution_point_buy', ['a', 'b', 'c'], names, aBeatsB, {}, {}, {}, {
+      evolutionPoints,
+      tiebreakerOrder,
+    }).map((s) => s.player_id);
+
+  it('ranks an Evolution Point Buy season by the stored order, the pack chain without one', () => {
+    expect(order()).toEqual(['a', 'c', 'b']);
+    expect(order(['evolution_points', 'match_points'])).toEqual(['c', 'b', 'a']);
+  });
+
+  it('falls back to the pack chain for an order it cannot use', () => {
+    expect(order([])).toEqual(order());
+    expect(order(['nonsense'])).toEqual(order());
+  });
+
+  it('ignores a stored order for every other format', () => {
+    for (const format of ['singles', 'doubles', 'draft', null]) {
+      const ranked = (tiebreakerOrder?: unknown) =>
+        computeStandingsForFormat(format, ['a', 'b', 'c'], names, aBeatsB, {}, {}, {}, {
+          evolutionPoints,
+          tiebreakerOrder,
+        }).map((s) => s.player_id);
+      expect(ranked(['evolution_points'])).toEqual(ranked());
+    }
+  });
+});
+
+describe('match points in the dispatcher', () => {
+  const drawAndWin: MatchRecord[] = [
+    { player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 },
+    { player_1_id: 'b', player_2_id: 'c', winner_id: null, round_number: 2 },
+  ];
+  const points = (format: string, options: Parameters<typeof computeStandingsForFormat>[5]) =>
+    Object.fromEntries(
+      computeStandingsForFormat(format, ['a', 'b', 'c'], names, drawAndWin, {}, options).map((s) => [s.player_id, s.points]),
+    );
+
+  it('an Evolution Point Buy table scores the pack points whatever points the caller passes', () => {
+    const pack = { a: epbPack.matchPoints.win, b: epbPack.matchPoints.draw, c: epbPack.matchPoints.draw };
+    expect(points('evolution_point_buy', {})).toEqual(pack);
+    expect(points('evolution_point_buy', { pointsPerWin: 3, pointsPerDraw: 0 })).toEqual(pack);
+    expect(points('evolution_point_buy', { pointsPerWin: 50, pointsPerDraw: 40 })).toEqual(pack);
+  });
+
+  // Characterisation: every other league type scores exactly what its caller asks for.
+  it.each(['singles', 'doubles', 'draft'])('%s: round robin 3 / 0, Swiss and the generic default 1 / 0.5', (format) => {
+    expect(points(format, { pointsPerWin: 3, pointsPerDraw: 0 })).toEqual({ a: 3, b: 0, c: 0 });
+    expect(points(format, {})).toEqual({ a: 1, b: 0.5, c: 0.5 });
+  });
+});
+

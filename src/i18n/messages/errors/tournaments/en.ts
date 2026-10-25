@@ -44,6 +44,10 @@ export default {
   INVALID_TOURNAMENT_ID: 'Tournament not found',
   INVALID_RULESET_ID: 'Ruleset not found',
   tournament_already_completed: 'Tournament is already completed',
+  // Settings of a started standalone tournament (PATCH /api/tournaments/[id])
+  tournament_bracket_locked: 'The bracket type cannot be changed once the tournament has started.',
+  tournament_ruleset_locked: 'The ruleset cannot be changed once the tournament has started.',
+  tournament_doubles_locked: 'The doubles setting cannot be changed once the tournament has started.',
   tournament_participants_too_few: 'Need at least 2 participants',
   tournament_current_round_incomplete: 'Current round ({round}) is not yet completed',
 
@@ -82,6 +86,7 @@ export default {
 
   // Elimination brackets
   bracket_generate_elim_only: 'Full bracket generation only applies to elimination formats',
+  bracket_already_generated: 'Bracket already generated',
   bracket_regenerate_elim_only: 'Bracket regeneration only applies to elimination formats',
   bracket_repair_elim_only: 'Bracket repair only applies to elimination formats',
 

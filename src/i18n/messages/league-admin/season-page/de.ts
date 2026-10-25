@@ -71,6 +71,13 @@ export default defineDe<typeof en>()({
     title: 'Beschreibung',
     subtitle: 'Für Professor Linden sichtbar, als Kontext für die Spielanalyse.',
   },
+  settings: {
+    details: {
+      title: 'Liga-Daten',
+      subtitle:
+        'Name, Liga-Typ, Battle-Regelwerk und Saisondaten. Die Beschreibung steht im Tab Übersicht; Thema und Sprache folgen darunter.',
+    },
+  },
   theme: {
     title: '3D-Welt-Thema',
     subtitle: 'Leg das 3D-Welt-Thema der Liga fest oder lass es auf „Automatisch“, dann gilt der Standard des Formats.',
@@ -115,7 +122,8 @@ export default defineDe<typeof en>()({
   },
   formatRules: {
     title: 'Formatregeln',
-    subtitle: 'Bans, Tera-Regeln, Tiebreaker-Reihenfolge und {token}-Einstellungen für dieses Format.',
+    subtitle:
+      'Bearbeite Draft-Budget, Picks, {token}-Limits, Bans und die gespeicherte Tiebreaker-Reihenfolge. Die Tera-Regeln kommen aus dem Format Pack und lassen sich hier nicht ändern.',
   },
   draftRoom: {
     title: 'Draft-Raum',

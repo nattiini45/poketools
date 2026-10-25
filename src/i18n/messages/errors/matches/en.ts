@@ -41,6 +41,8 @@ export default {
   match_status_override_admin_only: 'Only admins can complete or dispute a match that is still in progress',
   match_dispute_resolve_admin_only: 'Only admins can resolve disputed matches',
   match_complete_no_winner: 'Cannot complete a match without a winner',
+  // confirm-match: the guarded status update missed and the match is now in a different state (409, nothing written)
+  match_state_changed: 'The match changed to {status} while you were editing it. Review it and try again.',
   match_confirm_participants_only: 'Only match participants or admins can confirm results',
   match_dispute_participants_only: 'Only match participants or admins can dispute results',
 
@@ -63,8 +65,7 @@ export default {
     one: 'The result was confirmed, but {count} follow-up step failed. The failure was logged for the admins; safe steps are retried automatically.',
     other: 'The result was confirmed, but {count} follow-up steps failed. The failure was logged for the admins; safe steps are retried automatically.',
   },
-  // admin override / reopen: the match changed state between loading the page and saving
-  match_state_changed: 'The match changed while you were editing it; your change was not applied. Reload and review it.',
+  // admin schedule / reopen
   match_schedule_completed: 'A completed match cannot be rescheduled. Reopen it first.',
   match_reopen_downstream_played: {
     one: 'This match cannot be reopened: {count} later bracket match was already played. Reset that match first.',

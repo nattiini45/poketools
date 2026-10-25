@@ -13,7 +13,7 @@ import {
 import { toPublicMatch } from '@/lib/match/public-match';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
-import { sumEvolutionPoints } from '@/lib/tournament/season-standings';
+import { epbStandingsContext, sumEvolutionPoints } from '@/lib/tournament/season-standings';
 import { getDraftPoolsBySeason } from '@/lib/supabase/queries/drafts';
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
@@ -372,8 +372,9 @@ export async function buildWorldRouteData(
     stages,
     participants,
     matchesByStage,
+    // The format rules of the wave above carry the stored tiebreaker order, so ranking by it costs no read.
     context: isEvolutionPointBuy(league.format_type)
-      ? { formatType: league.format_type, evolutionPoints: sumEvolutionPoints(evolutionTrackers) }
+      ? epbStandingsContext(league.format_type, sumEvolutionPoints(evolutionTrackers), formatRules?.tiebreaker_order)
       : { formatType: league.format_type },
     groups: toLeagueScheduleGroups(leagueGroups),
     byeRoundsByStage,
