@@ -1717,14 +1717,19 @@ describe('queries/wiki-notes', () => {
   });
 
   describe('updateNote', () => {
-    it('updates without error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: null });
-      await expect(updateNote('wn1', 'updated content')).resolves.toBeUndefined();
+    it('updates without error and reports that a row changed', async () => {
+      mockBuilder.select.mockResolvedValue({ data: [{ id: 'wn1' }], error: null });
+      await expect(updateNote('wn1', 'updated content', 'author')).resolves.toBe(true);
+    });
+
+    it('reports false when no row changed (a blocked or deleted note)', async () => {
+      mockBuilder.select.mockResolvedValue({ data: [], error: null });
+      await expect(updateNote('wn1', 'updated content', 'author')).resolves.toBe(false);
     });
 
     it('throws on error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: { message: 'err' } });
-      await expect(updateNote('wn1', 'x')).rejects.toEqual({ message: 'err' });
+      mockBuilder.select.mockResolvedValue({ data: null, error: { message: 'err' } });
+      await expect(updateNote('wn1', 'x', 'moderator')).rejects.toEqual({ message: 'err' });
     });
   });
 

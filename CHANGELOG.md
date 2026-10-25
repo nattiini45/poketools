@@ -29,6 +29,13 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **`season.update` audit event.** A general league edit (name, league type, ruleset, dates, status, archive, theme,
   language) is now audited with the changed fields. The description text is never stored in the row.
 
+
+- Wiki moderation: the superadmin can close a rejected note for resubmission ("Block from resubmitting", behind a
+  confirmation, undone with "Allow resubmitting"). `/admin/wiki` gains a "Rejected" view with a "Blocked" badge. The
+  author's edit of a blocked note is refused (`wiki_note_resubmission_blocked`, English and German) and re-queues
+  nothing. Site admins who are not the superadmin cannot block. Both actions are audited
+  (`wiki.note.block_resubmission`, `wiki.note.unblock_resubmission`).
+
 ### Changed
 
 - **Best-of is an odd number from 1 to 15** in every form and in the API (tournament, phase, round, manual round and
@@ -49,6 +56,10 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   groups and recreates them from the seeds.
 - `PATCH /api/seasons/[id]` answers `404 SEASON_NOT_FOUND` for an unknown league.
 
+
+- The webhook endpoints (`/api/discord-webhooks`) answer with `webhook_url_hint` instead of `webhook_url`.
+- The export endpoint adds `X-Export-Count` and `X-Export-Total` response headers.
+
 ### Fixed
 
 - **Completed-match reads past 1,000 rows.** The completed-match reads behind standings, pairing history, head-to-head
@@ -61,6 +72,24 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - Clearing every best-of override of a phase now saves; before, the empty list was never sent.
 - Adding a phase after a middle phase was deleted no longer reuses another phase's stage order. New phases are placed
   after the highest stage order.
+- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It adds
+  `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
+  new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
+  the migration.
+
+
+- Wiki: an author's edit to an approved note no longer goes live unreviewed. The edit puts the note back in the
+  moderation queue (and re-runs the automated scan); only edits by site admins keep the note's status.
+- Wiki moderation: a reported, approved note can be unpublished from the report card ("Unpublish note", audited); the
+  report is closed as reviewed in the same step, and the full note text is shown.
+- Admin exports return the full number of rows asked for (up to 10,000) instead of silently stopping at 1,000, in a
+  stable order, and the page says "Exported N of M rows" and when the limit was reached.
+- Discord webhooks: the Test button now sends from the server, with a rate limit and an audit entry. The full webhook
+  URL is no longer sent to the browser after it is saved; the list shows only the last four characters. Creating a
+  global webhook is now recorded in the audit log (the entry was silently dropped before).
+- Test Players: "Remove from season" acts on the player in its row instead of always the first one.
+- Audit log: filtering by a resource id that is not a UUID answers with a clear validation error (and an inline
+  message) instead of a server error.
 
 ## [0.3.0] - 2026-10-23
 

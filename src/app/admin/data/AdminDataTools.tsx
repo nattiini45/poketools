@@ -88,6 +88,13 @@ function remainingExports(header: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** An export count header as a non-negative integer, or `null` when it is missing or garbled. */
+function exportCountHeader(header: string | null): number | null {
+  if (header === null || header.trim() === '') return null;
+  const n = Number.parseInt(header, 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -283,6 +290,10 @@ export default function AdminDataTools() {
   const [exportError, setExportError] = useState<ToolError | null>(null);
   /** `undefined` = no export yet; `null` = ready without a rate-limit header; a number = exports left today. */
   const [exportRemaining, setExportRemaining] = useState<number | null | undefined>(undefined);
+  /** Rows in the file vs rows that matched; `limited` = the requested limit cut the export short. */
+  const [exportSummary, setExportSummary] = useState<
+    { count: number; total: number; limited: boolean; maxed: boolean } | null
+  >(null);
 
   const [jobStats, setJobStats] = useState<AggregateJobStats | null>(null);
   const [jobStatsError, setJobStatsError] = useState<ToolError | null>(null);
@@ -444,6 +455,7 @@ export default function AdminDataTools() {
     setExporting(true);
     setExportError(null);
     setExportRemaining(undefined);
+    setExportSummary(null);
     try {
       const res = await fetch('/api/admin/export', {
         method: 'POST',
@@ -473,6 +485,11 @@ export default function AdminDataTools() {
       }
 
       setExportRemaining(remainingExports(res.headers.get('X-RateLimit-Remaining')));
+      const count = exportCountHeader(res.headers.get('X-Export-Count'));
+      const total = exportCountHeader(res.headers.get('X-Export-Total'));
+      if (count !== null && total !== null) {
+        setExportSummary({ count, total, limited: total > count, maxed: limit >= 10000 });
+      }
     } catch {
       setExportError({ local: 'networkError' });
     } finally {
@@ -676,6 +693,18 @@ export default function AdminDataTools() {
             {exportRemaining === null
               ? t('data.export.ready')
               : t('data.export.remaining', { count: exportRemaining })}
+          </Alert>
+        )}
+        {exportSummary && (
+          <Alert variant={exportSummary.limited ? 'warning' : 'info'} className="mt-4">
+            {t(
+              !exportSummary.limited
+                ? 'data.export.summary'
+                : exportSummary.maxed
+                  ? 'data.export.summaryMaxed'
+                  : 'data.export.summaryLimited',
+              { count: exportSummary.count, total: exportSummary.total },
+            )}
           </Alert>
         )}
       </Section>

@@ -29,6 +29,7 @@ src/app/
 ### Queries
 - **File**: `src/lib/audit/queries.ts`
 - **`listAuditLogEntries(filters: AuditLogQueryInput): Promise<AuditLogListResult>`** — builds a filtered `audit_log` query (exact matches on `action`/`actor_id`/`resource_type`/`resource_id`, `ilike` on `actor_name`, `gte`/`lte` on `created_at`), orders by `created_at` descending, and paginates with `range()`.
+- **Filter types**: `actor_id` and `resource_id` must be UUIDs (the `audit_log.resource_id` column is `uuid`), enforced by `auditLogQuerySchema`; the route answers `400 validation_failed` before any query runs, and `AuditLogBrowser` shows an inline message (`isValidAuditResourceId`) and disables Apply. `action`, `resource_type` and the `actor` name search are free text.
 - **`AuditLogRecord`** / **`AuditLogListResult`** — row and paginated-result shapes (`entries`, `total`, `limit`, `offset`).
 
 ## Data Flows
