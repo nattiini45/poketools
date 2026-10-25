@@ -230,6 +230,18 @@ describe('reopenMatch of a completed match', () => {
     expect(rebuildGamificationAfterUncomplete).not.toHaveBeenCalled();
   });
 
+  it('names the status the match has now when the compare-and-set misses', async () => {
+    vi.mocked(transitionMatchStatus).mockResolvedValue(null);
+    vi.mocked(getMatchById)
+      .mockResolvedValueOnce(makeMatch('completed') as never)
+      .mockResolvedValueOnce(makeMatch('disputed') as never);
+
+    const error = await reopenMatch(MATCH_ID, 'admin-1').catch((err: unknown) => err);
+
+    expect((error as UserFacingError).code).toBe('match_state_changed');
+    expect((error as UserFacingError).params).toEqual({ status: 'disputed' });
+  });
+
   it('reports a failing step and still runs the others', async () => {
     vi.mocked(unpropagateBracketOnMatchReset).mockRejectedValue(new Error('bracket down'));
     vi.mocked(rebuildGamificationAfterUncomplete).mockRejectedValue(new Error('ratings down'));
