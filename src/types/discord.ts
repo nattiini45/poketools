@@ -65,6 +65,12 @@ export interface DiscordWebhook {
   updated_at: string;
 }
 
+/**
+ * A webhook as the admin API returns it: the secret URL is write-only, so the
+ * response carries a masked hint instead (`webhookUrlHint`).
+ */
+export type DiscordWebhookView = Omit<DiscordWebhook, 'webhook_url'> & { webhook_url_hint: string };
+
 export type DiscordEventType =
   | 'match_result_submitted'
   | 'match_confirmed'

@@ -28,7 +28,11 @@ vi.mock('@/lib/supabase/queries/rulesets', () => ({
   listRulesets: mocks.listRulesets,
   getRulesetById: mocks.getRulesetById,
 }));
-vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
+vi.mock('@/lib/auth/helpers', () => ({
+  getLiveAccess: mocks.getLiveAccess,
+  getSession: async () => null,
+  isSuperadmin: () => false,
+}));
 // The guard renders its denial or its children; a marker lets the tests tell the two apart.
 vi.mock('@/components/shared/SiteAdminGuard', () => ({
   default: ({ children }: { children: ReactNode }) => (children ? children : <p data-guard="denied">denied</p>),

@@ -39,7 +39,7 @@ export default async function AdminLeaguesPage() {
         title={t('list.title')}
         maxWidth="md"
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link href="/admin/leagues/archived" className={getButtonClasses('ghost', 'sm')}>
               {t('list.viewArchived')}
             </Link>

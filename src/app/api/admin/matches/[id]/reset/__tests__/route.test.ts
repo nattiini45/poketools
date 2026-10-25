@@ -186,6 +186,54 @@ describe('POST /api/admin/matches/[id]/reset', () => {
     });
   });
 
+  it('adds the reason to the match.reset audit metadata', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getMatchById).mockResolvedValue(mockMatch as never);
+    vi.mocked(resetMatch).mockResolvedValue({
+      games_deleted: 1,
+      has_downstream_matches: false,
+      evolution_events: [],
+    });
+    vi.mocked(revalidateMatchPages).mockResolvedValue(undefined);
+
+    const request = { json: async () => ({ cascade: true, reason: '  Wrong replay was submitted  ' }) } as NextRequest;
+    const res = await POST(request, routeParams);
+
+    expect(res.status).toBe(200);
+    expect(resetMatch).toHaveBeenCalledWith('daa274a2-59da-43fd-84a5-8cede96e15a4', 'player-1', true);
+    const entry = vi.mocked(logAuditEvent).mock.calls[0][0];
+    expect(entry.metadata).toMatchObject({ cascade: true, reason: 'Wrong replay was submitted' });
+  });
+
+  it('omits the reason key from the audit metadata when none is given', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getMatchById).mockResolvedValue(mockMatch as never);
+    vi.mocked(resetMatch).mockResolvedValue({
+      games_deleted: 1,
+      has_downstream_matches: false,
+      evolution_events: [],
+    });
+    vi.mocked(revalidateMatchPages).mockResolvedValue(undefined);
+
+    const res = await POST({ json: async () => ({}) } as NextRequest, routeParams);
+
+    expect(res.status).toBe(200);
+    const entry = vi.mocked(logAuditEvent).mock.calls[0][0];
+    expect(entry.metadata).not.toHaveProperty('reason');
+  });
+
+  it('rejects a blank reason with 400 before resetting anything', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getMatchById).mockResolvedValue(mockMatch as never);
+
+    const res = await POST({ json: async () => ({ reason: '   ' }) } as NextRequest, routeParams);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.code).toBe('validation_failed');
+    expect(resetMatch).not.toHaveBeenCalled();
+  });
+
   it('resets a match when user is resource admin', async () => {
     const nonAdmin = { playerId: 'player-2', isAdmin: false, isCreator: false };
     vi.mocked(requirePlayer).mockResolvedValue(nonAdmin as never);

@@ -10,6 +10,10 @@ import type { MatchStatus } from '@/types/match';
  * pending_confirmation → completed (opponent confirms OR 24hr timeout)
  * pending_confirmation → disputed (player flags)
  * disputed → completed (admin manual override)
+ *
+ * Admin-only backward moves (ADMIN_TRANSITIONS): any state back to scheduled
+ * (reset), and completed / pending_confirmation / disputed back to in_progress
+ * (reopen: games are kept, only the result is withdrawn).
  */
 
 const VALID_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
@@ -25,9 +29,21 @@ const ADMIN_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
   scheduled: [],
   in_progress: ['scheduled', 'completed', 'disputed'],
   pending_confirmation: ['in_progress', 'scheduled'],
-  completed: ['scheduled'],
-  disputed: ['scheduled'],
+  completed: ['scheduled', 'in_progress'],
+  disputed: ['scheduled', 'in_progress'],
 };
+
+/** Statuses an admin can reopen to in_progress without resetting the match. */
+export const REOPENABLE_MATCH_STATUSES: readonly MatchStatus[] = [
+  'completed',
+  'pending_confirmation',
+  'disputed',
+];
+
+/** Whether a match in `status` can be reopened to in_progress (admin only). */
+export function canReopenMatch(status: MatchStatus): boolean {
+  return REOPENABLE_MATCH_STATUSES.includes(status);
+}
 
 /**
  * Whether `value` is one of the five `match_status` enum labels. An own-key

@@ -81,6 +81,14 @@ export default {
   player_import_duplicate_discord_id: 'Duplicate discord_id in import payload',
   player_import_discord_id_exists: 'Player with discord_id already exists',
 
+  // Matches list bulk actions (POST /api/admin/matches/batch): per-item outcomes. A skip or a conflict wrote nothing for that match.
+  match_bulk_not_pending: 'Only matches awaiting confirmation can be confirmed in bulk.',
+  match_bulk_schedule_completed: 'The time of a completed match cannot be changed.',
+  match_bulk_conflict: 'The match changed while the action ran, so nothing was changed. Reload the list and try again.',
+  match_bulk_notes_full: 'The notes of this match are full, so the note was not added.',
+  match_bulk_not_processed: 'The action ran out of time before this match, so nothing was changed. Run it again for the matches that are left.',
+  match_bulk_item_failed: 'The action failed for this match. The failure was logged.',
+
   // Data export (api/admin/export)
   admin_export_rate_limited: 'Export rate limit reached. Try again after {resetAt}.',
 

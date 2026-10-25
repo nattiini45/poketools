@@ -73,6 +73,34 @@ export default {
     serverError: 'Server error ({status})',
     serverErrorText: 'Server error ({status}): {statusText}',
     saveFailed: 'Failed to save ruleset',
+    defaultsFailed: 'Could not load the default rules for {format}. Nothing was changed.',
+    defaultsRetry: 'Try again',
+    emptyNotice: {
+      title: 'This ruleset enforces nothing yet',
+      body: '{format} is selected, but there are no clauses and no bans, so every Pokémon, move, item and ability is allowed beyond the generation.',
+      load: 'Load {format} defaults',
+    },
+    formatChange: {
+      title: 'Change the base format to {format}?',
+      intro:
+        'Switching loads the default clauses and banlists of {format}. Your changes to these would be lost if you replace them:',
+      diff: '{label}: +{added} / −{removed} compared with the current format',
+      total: { one: '{label}: {count} entry', other: '{label}: {count} entries' },
+      unknownBaseline: 'The current format’s defaults could not be loaded, so every non-empty list counts as customised.',
+      doubles: 'Doubles flag differs from the current format',
+      keepHint: 'Only the format label changes. Clauses and banlists stay as they are.',
+      keep: 'Keep my lists',
+      replace: 'Replace with {format} defaults',
+      cancel: 'Cancel',
+      categories: {
+        clauses: 'Clauses',
+        banned_pokemon: 'Banned Pokémon',
+        banned_moves: 'Banned Moves',
+        banned_items: 'Banned Items',
+        banned_abilities: 'Banned Abilities',
+        added_pokemon: 'Added Pokémon',
+      },
+    },
   },
   review: {
     name: 'Name:',
@@ -105,6 +133,7 @@ export default {
     enable: 'Enable team constraints',
     enableHint:
       'Layer composition rules on top of the base ruleset (type quotas, tera matching, NFE-only phase, {item} tier cap). Used by formats like Core Liga.',
+    emptyHint: 'No rule is selected yet. A ruleset saved like this has no team constraints.',
     typeQuotas: 'Type quotas',
     requirePerType: 'Require N Pokémon per assigned type',
     typeSource: 'Type source',

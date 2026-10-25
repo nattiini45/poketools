@@ -102,6 +102,18 @@ describe('apiErrorText', () => {
     expect(apiErrorText(res, { locale: 'en', catalogs: [errorsMatches] })).toBe('Invalid transition: scheduled → completed');
   });
 
+  it('renders the status param of match_state_changed as an enum label', () => {
+    const res: ApiErrorLike = {
+      error: 'The match changed to completed while you were editing it. Review it and try again.',
+      code: 'match_state_changed',
+      params: { status: 'completed' },
+    };
+    expect(apiErrorText(res, { locale: 'de', catalogs: [errorsMatches] })).toBe(
+      'Das Spiel wurde auf Beendet geändert, während du es bearbeitet hast. Prüfe es und versuche es erneut.',
+    );
+    expect(apiErrorText(res, { locale: 'en', catalogs: [errorsMatches] })).toBe(res.error);
+  });
+
   it('renders the match status param of the AI status codes as an enum label (A7)', () => {
     const analysis: ApiErrorLike = {
       error: 'Match analysis is only available for completed matches (current: scheduled)',

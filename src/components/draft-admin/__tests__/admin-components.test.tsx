@@ -105,6 +105,10 @@ describe('admin draft strings (no blocked slot, no forfeit)', () => {
     expect(en('live.endBody')).not.toMatch(/stay empty|forfeit/i);
     expect(de('live.endBody')).not.toMatch(/bleiben leer|verfallen/i);
   });
+  it('the setup hint that replaces the abort button exists in both languages', () => {
+    expect(en('live.endSetupHint')).toBe('Nothing to abort yet: the draft has not started.');
+    expect(de('live.endSetupHint')).toBe('Es gibt noch nichts abzubrechen: Der Draft hat noch nicht begonnen.');
+  });
   it('the blocked-pick strings are gone in both languages', () => {
     for (const locale of ['en', 'de'] as const) {
       const messages = getMessages(draftAdminMessages, locale) as unknown as Record<string, unknown>;

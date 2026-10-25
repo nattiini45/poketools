@@ -65,6 +65,7 @@ export default function Modal({
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
+          {/* Scrolls on its own when the dialog is taller than the viewport, so the header and the page stay put. */}
           <div className={modalBodyLayout}>{children}</div>
         </Dialog.Content>
       </Dialog.Portal>

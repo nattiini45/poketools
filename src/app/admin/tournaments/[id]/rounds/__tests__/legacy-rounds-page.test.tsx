@@ -9,8 +9,9 @@ const ID = '0b9f1c2e-5d4a-4c3b-9a8e-7f6d5c4b3a21';
 const RULESET_ID = '11111111-1111-4111-8111-111111111111';
 
 const mocks = vi.hoisted(() => ({
-  getTournamentById: vi.fn(),
+  getTournamentWithDetails: vi.fn(),
   getRoundsByTournament: vi.fn(),
+  getGroupsByTournament: vi.fn(),
   listRulesets: vi.fn(),
 }));
 
@@ -32,8 +33,9 @@ vi.mock('@/i18n/server', async () => {
   const { createTranslator } = await import('@/i18n/core');
   return { getT: async (ns: Parameters<typeof createTranslator>[0]) => createTranslator(ns, 'en') };
 });
-vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: mocks.getTournamentById }));
+vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentWithDetails: mocks.getTournamentWithDetails }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: mocks.getRoundsByTournament }));
+vi.mock('@/lib/supabase/queries/tournament-groups', () => ({ getGroupsByTournament: mocks.getGroupsByTournament }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/shared/ResourceAdminManager', () => stub('ResourceAdminManager'));
@@ -82,6 +84,8 @@ function tournament(overrides: Record<string, unknown> = {}) {
     bracket_reset_enabled: true,
     status: 'upcoming',
     archived: false,
+    ruleset_name: 'Standard Rules',
+    participant_count: 4,
     ...overrides,
   };
 }
@@ -90,8 +94,9 @@ const render = () => LegacyRoundsPage({ id: ID, isSiteAdmin: true });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getTournamentById.mockResolvedValue(tournament());
+  mocks.getTournamentWithDetails.mockResolvedValue(tournament());
   mocks.getRoundsByTournament.mockResolvedValue([]);
+  mocks.getGroupsByTournament.mockResolvedValue([]);
   mocks.listRulesets.mockResolvedValue(rulesets);
 });
 
@@ -126,13 +131,13 @@ describe('LegacyRoundsPage settings section', () => {
   });
 
   it('is started for an active tournament', async () => {
-    mocks.getTournamentById.mockResolvedValue(tournament({ status: 'active' }));
+    mocks.getTournamentWithDetails.mockResolvedValue(tournament({ status: 'active' }));
     const [editor] = findByType(await render(), TournamentSettingsEditor);
     expect(editor.props.started).toBe(true);
   });
 
   it('is started for a completed tournament', async () => {
-    mocks.getTournamentById.mockResolvedValue(tournament({ status: 'completed' }));
+    mocks.getTournamentWithDetails.mockResolvedValue(tournament({ status: 'completed' }));
     const [editor] = findByType(await render(), TournamentSettingsEditor);
     expect(editor.props.started).toBe(true);
   });
@@ -151,7 +156,7 @@ describe('LegacyRoundsPage settings section', () => {
     const [withRound] = findByType(await render(), TournamentSettingsEditor);
     expect(withRound.props.lockReason).toBe('rounds');
 
-    mocks.getTournamentById.mockResolvedValue(tournament({ status: 'active' }));
+    mocks.getTournamentWithDetails.mockResolvedValue(tournament({ status: 'active' }));
     const [active] = findByType(await render(), TournamentSettingsEditor);
     expect(active.props.lockReason).toBe('started');
   });
@@ -165,7 +170,7 @@ describe('LegacyRoundsPage settings section', () => {
     await render();
     expect(mocks.listRulesets).toHaveBeenCalledTimes(1);
 
-    mocks.getTournamentById.mockResolvedValue(null);
+    mocks.getTournamentWithDetails.mockResolvedValue(null);
     mocks.listRulesets.mockClear();
     await expect(render()).rejects.toThrow('NEXT_NOT_FOUND');
     expect(mocks.listRulesets).not.toHaveBeenCalled();

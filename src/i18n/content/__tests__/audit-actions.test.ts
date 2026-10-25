@@ -13,6 +13,15 @@ describe('auditActionLabel (i18n/content)', () => {
     expect(auditActionLabel(de, 'player.role.assign')).toBe('Rolle vergeben');
   });
 
+  it('labels the round, bracket and seeding actions in both languages', () => {
+    expect(auditActionLabel(en, 'round.generate')).toBe('Round generated');
+    expect(auditActionLabel(de, 'round.generate')).toBe('Runde erstellt');
+    expect(auditActionLabel(en, 'bracket.generate')).toBe('Bracket generated');
+    expect(auditActionLabel(de, 'bracket.generate')).toBe('Turnierbaum erstellt');
+    expect(auditActionLabel(en, 'tournament.seeds.update')).toBe('Seeding saved');
+    expect(auditActionLabel(de, 'tournament.seeds.update')).toBe('Setzliste gespeichert');
+  });
+
   it("uses a pack extension's own label for its extension.* actions, and only for those", () => {
     const labels = { 'extension.archive.cache.refresh': 'Archiv-Zwischenspeicher erneuert', 'player.role.assign': 'hijacked' };
     expect(auditActionLabel(de, 'extension.archive.cache.refresh', labels)).toBe('Archiv-Zwischenspeicher erneuert');

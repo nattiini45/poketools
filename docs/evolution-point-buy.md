@@ -299,7 +299,7 @@ the marker equal to what the trackers hold:
   finalize still saw the old marker and credited nothing), the edited stats
   are credited at once. A lost marker race, or a credit that cannot be made, is
   reported as `evolution_recheck_failed` (the season reconcile repairs it).
-- **Game delete, match reset, season reconcile** rebuild the season
+- **Game delete, match reset, an admin reopen of a completed match, season reconcile** rebuild the season
   (`repairSeasonEvolution`), which recomputes `real_kills` from the completed
   matches only and then, as its last write, aligns the markers and ledgers
   (`epb_sync_game_kill_credit`): games of the matches it replayed are marked
@@ -313,7 +313,10 @@ the marker equal to what the trackers hold:
   fails and the reconcile is re-run). So a confirm that credits while a
   rebuild runs is never overwritten or unmarked. The Participation Token,
   stage-lock and Evolution Point writes of a concurrent matchday hook run are
-  not fenced (as before). A dispute itself changes
+  not fenced (as before). An admin reopen of a completed match
+  (`reopenMatch`, [Match](./match.md#admin-match-page-verbs)) rebuilds the season
+  the same way a game delete does, so the reopened match's games are unmarked
+  until it is completed again. A dispute itself changes
   nothing: a disputed match has nothing credited, and it is credited when an
   admin resolves it to `completed` (or nothing, when the admin resets it).
 - **Games recorded before 2026-10-20** were credited at submission. The

@@ -8,7 +8,12 @@ import {
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
-import { getRoundsByTournament, createRound, updateRoundByePlayers } from '@/lib/supabase/queries/rounds';
+import {
+  getRoundsByTournament,
+  createRound,
+  updateRoundByePlayers,
+  updateRoundStatus,
+} from '@/lib/supabase/queries/rounds';
 import {
   createMatchBatch,
   getCompletedMatchRecords,
@@ -23,6 +28,8 @@ import {
   roundsAwaitingMatches,
 } from '@/lib/tournament/group-rounds';
 import { generateRound } from '@/lib/tournament';
+import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
+import { parseGenerateOptions } from '@/lib/tournament/generate-options';
 import { byeRecordsFromRounds } from '@/lib/tournament/byes';
 import {
   countUpperBracketStarters,
@@ -32,6 +39,7 @@ import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { triggerTournamentReport } from '@/lib/ai/trigger';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
 import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
 import type { ApiResult } from '@/types/api';
@@ -47,18 +55,22 @@ interface RouteParams {
  * POST /api/generate-round/[tid]
  *
  * Admin: Generate the next round of pairings for a tournament.
+ * Optional JSON body `{ "start_round": true }` also starts the new round (best effort: if the start fails the
+ * round comes back pending and the admin starts it by hand).
  * Spec Section 6.4:
  *   1. Fetch completed match results
  *   2. Compute standings
  *   3. Run bracket/pairing algorithm
  *   4. Write Round + Match stubs
  */
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { tid } = await params;
-    await requireResourceAdmin('tournament', tid);
+    const admin = await requireResourceAdmin('tournament', tid);
     const invalidTid = rejectInvalidPathId(tid, 'INVALID_TOURNAMENT_ID');
     if (invalidTid) return invalidTid;
+    const options = await parseGenerateOptions(request);
+    if (!options.ok) return options.response;
 
     // 1. Validate tournament
     const tournament = await getTournamentById(tid);
@@ -224,6 +236,16 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         allByePlayerIds.push(...generated.bye_player_ids);
       }
     } else {
+      // A round robin has a fixed number of rounds (circle method): past the last one there is nothing to pair.
+      if (
+        tournament.bracket_type === 'round_robin' &&
+        nextRoundNumber > getRoundRobinTotalRounds(participantIds.length)
+      ) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'All rounds have already been generated', code: 'rounds_all_generated' },
+          { status: 400 }
+        );
+      }
       // No groups — generate pairings across all participants
       const generated = generateRound(
         tournament.bracket_type,
@@ -319,8 +341,36 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         current_round: currentRound,
       });
     }
+    // Start the round when asked, once the tournament itself has moved. Best effort: the round and its matches are written, so a failed start must not
+    // hide them; the round stays pending and the round manager offers Start.
+    let started = false;
+    if (options.startRound) {
+      try {
+        round = await updateRoundStatus(round.id, 'active');
+        started = true;
+      } catch (startErr) {
+        console.error('[generate-round] Failed to start the new round:', startErr);
+      }
+    }
+
     // The new pairings show on the next view of the public pages.
     expireTournamentReads(tid, tournament.season_id);
+
+    logAuditEvent({
+      actor_id: admin.playerId,
+      actor_name: admin.name,
+      action: 'round.generate',
+      resource_type: 'round',
+      resource_id: round.id,
+      resource_name: round.name,
+      metadata: {
+        tournament_id: tid,
+        round_number: roundNumber,
+        matches: allPairings.length,
+        byes: allByePlayerIds.length,
+        started,
+      },
+    });
 
     // Discord + social notification (fire-and-forget)
     const roundPayload = {

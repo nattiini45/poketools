@@ -1,9 +1,10 @@
 import AdminGuard from '@/components/shared/AdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
-import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { listRulesets } from '@/lib/supabase/queries/rulesets';
+import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import RoundManager from '@/components/tournament/RoundManager';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import ResourceAdminManager from '@/components/shared/ResourceAdminManager';
@@ -27,12 +28,13 @@ interface LegacyRoundsPageProps {
 }
 
 export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRoundsPageProps) {
-  const tournament = await getTournamentById(id);
+  const tournament = await getTournamentWithDetails(id);
   if (!tournament) notFound();
 
-  const [rounds, rulesets, t, tc, te] = await Promise.all([
+  const [rounds, rulesets, groups, t, tc, te] = await Promise.all([
     getRoundsByTournament(id),
     listRulesets(),
+    getGroupsByTournament(id),
     getT(tournamentsAdminMessages),
     getT(commonMessages),
     getT(enumMessages),
@@ -89,12 +91,24 @@ export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRounds
           />
         </Section>
 
-        <Section title={t('legacy.participants')} collapsible defaultCollapsed>
+        {/* Open while the tournament has too few participants to pair: the start-up checklist sends the admin here. */}
+        <Section
+          id="tournament-participants"
+          title={t('legacy.participants')}
+          collapsible
+          defaultCollapsed={tournament.participant_count >= 2}
+        >
           <ParticipantManager tournamentId={id} />
         </Section>
 
-        <Section title={t('legacy.rounds')} collapsible>
-          <RoundManager tournament={tournament} initialRounds={rounds} />
+        <Section id="tournament-rounds" title={t('legacy.rounds')} collapsible>
+          <RoundManager
+            tournament={tournament}
+            initialRounds={rounds}
+            rulesetName={tournament.ruleset_name}
+            groupsInUse={groups.length > 0}
+            checklistLinks={{ participants: '#tournament-participants', rounds: '#tournament-rounds' }}
+          />
         </Section>
 
         {isSiteAdmin && (

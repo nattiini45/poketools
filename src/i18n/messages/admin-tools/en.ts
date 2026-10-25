@@ -1,7 +1,7 @@
 /**
  * Namespace `admin-tools` (owner T09, i18n-core §11.3): `/admin/{data,
- * meta-data,audit,achievements,wiki,rulesets,social}/**`. Kale and
- * test-players stay English and do not use it (design decision).
+ * meta-data,audit,achievements,wiki,rulesets,social}/**`. Kale stays English
+ * and does not use it (design decision).
  *
  * English values are the pre-i18n literals verbatim, except that the
  * "(s)" / "(es)" pseudo-plurals became plural objects and sentences that
@@ -128,6 +128,10 @@ export default {
       failed: 'Export failed',
       remaining: { one: '{count} export remaining today', other: '{count} exports remaining today' },
       ready: 'Export ready',
+      summary: 'Exported {count} of {total} rows',
+      summaryLimited:
+        'Exported {count} of {total} rows. The limit was reached; raise it (up to 10,000) to export more.',
+      summaryMaxed: 'Exported {count} of {total} rows. One export holds at most 10,000 rows.',
     },
     /** Read-only report on `/admin/data`: stored league settings vs what the engine uses. */
     formatDrift: {
@@ -230,7 +234,8 @@ export default {
       actorPlaceholder: 'Admin name',
       resourceType: 'Resource Type',
       resourceId: 'Resource ID',
-      resourceIdPlaceholder: 'UUID or resource id',
+      resourceIdPlaceholder: 'UUID',
+      resourceIdInvalid: 'Enter a valid UUID, for example 123e4567-e89b-12d3-a456-426614174000.',
       from: 'From',
       to: 'To',
       apply: 'Apply',
@@ -324,8 +329,25 @@ export default {
     noReports: 'No open reports.',
     reviewed: 'Reviewed',
     dismiss: 'Dismiss',
+    unpublish: 'Unpublish note',
+    noteLive: 'This note is public',
+    noteHidden: 'This note is not public',
     loadFailed: 'Failed to load moderation queue',
     actionFailed: 'The moderation action failed',
+    rejectedNotes: 'Rejected Notes',
+    viewPending: 'Pending',
+    viewRejected: 'Rejected',
+    noRejected: 'No rejected notes.',
+    blocked: 'Blocked',
+    blockedHint: 'The author can no longer edit this note back into the queue.',
+    blockResubmission: 'Block from resubmitting',
+    allowResubmission: 'Allow resubmitting',
+    blockDialog: {
+      title: 'Block this note from resubmitting?',
+      message:
+        'This is final for the author: they can no longer edit this note to send it back for review. Only you can undo it.',
+      confirm: 'Block from resubmitting',
+    },
     /**
      * Keys = the report `reason` enum of `wikiNoteReportSchema` (src/lib/validation/schemas.ts),
      * except `other` -> `otherReason`: `other` is reserved for plural forms (i18n-core §1.3).

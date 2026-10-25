@@ -51,6 +51,15 @@ export default defineDe<typeof en>()({
   player_import_duplicate_discord_id: 'Diese discord_id kommt im Import mehrfach vor.',
   player_import_discord_id_exists: 'Es gibt schon einen Spieler mit dieser discord_id.',
 
+  match_bulk_not_pending: 'Nur Spiele, die auf Bestätigung warten, lassen sich gesammelt bestätigen.',
+  match_bulk_schedule_completed: 'Die Zeit eines abgeschlossenen Spiels lässt sich nicht ändern.',
+  match_bulk_conflict:
+    'Das Spiel hat sich während der Aktion geändert, daher wurde nichts geändert. Lade die Liste neu und versuche es noch einmal.',
+  match_bulk_notes_full: 'Die Notizen dieses Spiels sind voll, daher wurde die Notiz nicht hinzugefügt.',
+  match_bulk_not_processed:
+    'Der Aktion ging vor diesem Spiel die Zeit aus, daher wurde nichts geändert. Führe sie für die übrigen Spiele noch einmal aus.',
+  match_bulk_item_failed: 'Die Aktion ist für dieses Spiel fehlgeschlagen. Der Fehler wurde protokolliert.',
+
   admin_export_rate_limited: 'Export-Limit erreicht. Versuche es nach {resetAt} noch einmal.',
 
   format_not_found: 'Format nicht gefunden',

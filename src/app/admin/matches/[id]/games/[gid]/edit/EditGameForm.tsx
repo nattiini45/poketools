@@ -35,6 +35,8 @@ interface EditGameFormProps {
   battleStats: BattleStat[];
   /** The viewer is a site admin (the admin data tools are site-admin only). */
   isSiteAdmin: boolean;
+  /** Where Back and a finished save go (default: the match page); the match page's `?back=` rides along. */
+  returnHref?: string;
 }
 
 interface PokemonStatInput {
@@ -100,6 +102,7 @@ export default function EditGameForm({
   player2,
   battleStats,
   isSiteAdmin,
+  returnHref = `/admin/matches/${matchId}`,
 }: EditGameFormProps) {
   const router = useRouter();
   const t = useT(adminCoreMessages);
@@ -194,7 +197,7 @@ export default function EditGameForm({
         setWarnings(result.warnings);
         // With a warning the admin stays here to read it and leaves by "Back to match".
         if (result.warnings.length === 0) {
-          setTimeout(() => router.push(`/admin/matches/${matchId}`), 1500);
+          setTimeout(() => router.push(returnHref), 1500);
         }
       } else {
         setError({ api: result.error });
@@ -355,7 +358,7 @@ export default function EditGameForm({
         <Button
           type="button"
           variant="ghost"
-          onClick={() => router.push(`/admin/matches/${matchId}`)}
+          onClick={() => router.push(returnHref)}
           disabled={loading}
         >
           {success ? t('editGame.backToMatch') : t('editGame.cancel')}

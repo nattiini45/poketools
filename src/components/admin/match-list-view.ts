@@ -1,0 +1,239 @@
+/**
+ * Pure helpers of the admin match list view (`AdminMatchList` and its row and filter
+ * siblings): the score of a row, its replay count and auto-confirm countdown, the
+ * choices the filter bar derives from the filter options, and the previews and report of
+ * the bulk actions. No React, no fetch.
+ */
+import { computeMatchGamesWon } from '@/lib/match/aggregation';
+import { STANDALONE_LEAGUE, activeMatchListFilters, type MatchListUrlState } from '@/lib/admin/match-list';
+import {
+  bulkConfirmCheck,
+  bulkScheduleCheck,
+  classifyBulkResult,
+  type BulkItemResult,
+  type BulkResultClass,
+} from '@/lib/admin/match-bulk';
+import type { PlayerSearchScope } from '@/lib/players/player-search';
+import type { ApiErrorLike } from '@/i18n/api-errors';
+import type { GameSummary } from '@/types/match';
+import type {
+  AdminMatchFilterOptions,
+  AdminMatchRow,
+  AdminMatchRulesetOption,
+} from '@/lib/supabase/queries/matches';
+
+const HOUR_MS = 3_600_000;
+
+/** Games won by each seat, or `null` for a match without recorded games. */
+export function matchScore(
+  row: Pick<AdminMatchRow, 'games' | 'player_1_id' | 'player_2_id'>,
+): { p1: number; p2: number } | null {
+  if (row.games.length === 0) return null;
+  return computeMatchGamesWon(row.games, row.player_1_id, row.player_2_id);
+}
+
+/** Games that carry a replay link (manual games have an empty `replay_url`). */
+export function replayCount(games: readonly GameSummary[]): number {
+  return games.filter((game) => game.replay_url.trim() !== '').length;
+}
+
+export type AutoConfirmCountdown = { kind: 'hours'; hours: number } | { kind: 'underHour' } | { kind: 'due' };
+
+/**
+ * Time until a pending match confirms itself: whole hours (rounded up), under an hour, or
+ * due (the moment has passed and the confirmation job has not run yet). `null` for any other
+ * status and for a pending match without an auto-confirm moment.
+ */
+export function autoConfirmCountdown(
+  row: Pick<AdminMatchRow, 'status' | 'auto_confirm_at'>,
+  nowMs: number,
+): AutoConfirmCountdown | null {
+  if (row.status !== 'pending_confirmation' || !row.auto_confirm_at) return null;
+  const dueMs = Date.parse(row.auto_confirm_at);
+  if (Number.isNaN(dueMs)) return null;
+  const remaining = dueMs - nowMs;
+  if (remaining <= 0) return { kind: 'due' };
+  if (remaining < HOUR_MS) return { kind: 'underHour' };
+  return { kind: 'hours', hours: Math.ceil(remaining / HOUR_MS) };
+}
+
+/**
+ * Which empty-state text an empty page gets: a filter other than the search box is blamed
+ * first, then the search, else there is simply nothing.
+ */
+export function matchListEmptyKey(url: MatchListUrlState): 'noFilterResults' | 'noSearchResults' | 'none' {
+  if (activeMatchListFilters(url).some((key) => key !== 'q')) return 'noFilterResults';
+  return url.q ? 'noSearchResults' : 'none';
+}
+
+/** `ApiErrorLike.code`s that a second attempt cannot change: the caller's access or the request itself is the problem. */
+const PERMANENT_ERROR_CODES: ReadonlySet<string> = new Set([
+  'forbidden',
+  'unauthenticated',
+  'account_banned',
+  'account_suspended',
+  'validation_failed',
+  'invalid_json',
+  'not_found_generic',
+]);
+
+/**
+ * Whether a failed load is worth a Retry button: a network or parse failure and a server-side error are, a refusal
+ * (403, 401) or a rejected request is not (the same request gets the same answer).
+ */
+export function isRetryableLoadError(error: { kind: 'loadFailed' } | { kind: 'api'; error: ApiErrorLike }): boolean {
+  if (error.kind === 'loadFailed') return true;
+  const code = error.error.code;
+  return !code || !PERMANENT_ERROR_CODES.has(code);
+}
+
+/** Whether the "No league (standalone)" option is worth offering: while the options load, when the caller has a standalone tournament, or when it is already selected. */
+export function offersStandaloneLeague(options: AdminMatchFilterOptions | null, selected: boolean): boolean {
+  return selected || options === null || options.tournaments.length > 0;
+}
+
+/**
+ * The tournament or league the player picker is anchored to. `GET /api/admin/player-search` searches the
+ * whole directory but needs a scope the caller administers (it is only a guard), so the picker borrows one
+ * from the admin's own filter options: the selected phase, else the first phase of the selected league, else
+ * the first phase of any league, else the first standalone tournament, else a league without phases. A
+ * tournament id also passes for the admin of its league. `null` = nothing in scope to search from.
+ */
+export function matchPlayerSearchScope(
+  options: AdminMatchFilterOptions | null,
+  url: Pick<MatchListUrlState, 'league' | 'phase'>,
+): PlayerSearchScope | null {
+  if (!options) return null;
+  if (url.phase) {
+    const known =
+      options.tournaments.some((tournament) => tournament.id === url.phase) ||
+      options.leagues.some((league) => league.phases.some((phase) => phase.id === url.phase));
+    if (known) return { tournamentId: url.phase };
+  }
+  const selected = options.leagues.find((league) => league.id === url.league);
+  const selectedPhase = selected?.phases[0];
+  if (selectedPhase) return { tournamentId: selectedPhase.id };
+  for (const league of options.leagues) {
+    if (league.phases[0]) return { tournamentId: league.phases[0].id };
+  }
+  if (options.tournaments[0]) return { tournamentId: options.tournaments[0].id };
+  // Every league is phase-less here.
+  const phaseLess = selected ?? options.leagues[0];
+  return phaseLess ? { seasonId: phaseLess.id } : null;
+}
+
+/**
+ * The rulesets the Ruleset select offers: those of the selected phase, of the selected
+ * league's phases, or of the standalone tournaments; every ruleset in scope when no league
+ * is selected.
+ */
+export function rulesetChoices(
+  options: AdminMatchFilterOptions | null,
+  url: Pick<MatchListUrlState, 'league' | 'phase'>,
+): AdminMatchRulesetOption[] {
+  if (!options) return [];
+  const phases =
+    url.league === STANDALONE_LEAGUE
+      ? options.tournaments
+      : (options.leagues.find((league) => league.id === url.league)?.phases ?? null);
+  if (phases === null) return options.rulesets;
+  const scoped = url.phase ? phases.filter((phase) => phase.id === url.phase) : phases;
+  const ids = new Set(scoped.map((phase) => phase.ruleset_id));
+  return options.rulesets.filter((ruleset) => ids.has(ruleset.id));
+}
+
+// ── Bulk actions ────────────────────────────────────────────────────
+
+/** `Name vs Name`, the fallback label of a pairing; the UI passes its translated `versus` format instead. */
+type MatchLabelFormat = (player1: string, player2: string) => string;
+
+const plainMatchLabel: MatchLabelFormat = (player1, player2) => `${player1} vs ${player2}`;
+
+type LabeledRow = Pick<AdminMatchRow, 'id' | 'player_1_name' | 'player_2_name'>;
+
+export interface BulkConfirmPreview {
+  /** Matches the action will confirm, with the result as reported. */
+  items: { id: string; label: string; winnerId: string; winnerName: string | null; score: { p1: number; p2: number } | null; bestOf: number }[];
+  /** Matches that do not qualify, with the reason the server would give. */
+  skipped: { id: string; label: string; code: 'match_bulk_not_pending' | 'match_complete_no_winner' | 'match_winner_not_participant' }[];
+}
+
+/**
+ * Splits the selected rows into those a bulk confirm accepts and those it skips, with the reason. It runs the same
+ * check as the server (`bulkConfirmCheck`) on the rows on screen; the server re-checks on fresh data.
+ */
+export function bulkConfirmPreview(
+  rows: readonly Pick<
+    AdminMatchRow,
+    'id' | 'player_1_name' | 'player_2_name' | 'status' | 'winner_id' | 'winner_name' | 'player_1_id' | 'player_2_id' | 'games' | 'best_of'
+  >[],
+  formatLabel: MatchLabelFormat = plainMatchLabel,
+): BulkConfirmPreview {
+  const preview: BulkConfirmPreview = { items: [], skipped: [] };
+  for (const row of rows) {
+    const label = formatLabel(row.player_1_name, row.player_2_name);
+    const check = bulkConfirmCheck(row);
+    if (check.eligible) {
+      preview.items.push({ id: row.id, label, winnerId: check.winnerId, winnerName: row.winner_name, score: matchScore(row), bestOf: row.best_of });
+    } else {
+      preview.skipped.push({ id: row.id, label, code: check.code });
+    }
+  }
+  return preview;
+}
+
+export interface BulkScheduleSplit {
+  eligibleIds: string[];
+  skipped: { id: string; label: string; code: 'match_bulk_schedule_completed' }[];
+}
+
+/** Splits the selected rows into those a bulk "set time" changes and the completed ones it skips. */
+export function bulkScheduleSplit(
+  rows: readonly (LabeledRow & Pick<AdminMatchRow, 'status'>)[],
+  formatLabel: MatchLabelFormat = plainMatchLabel,
+): BulkScheduleSplit {
+  const split: BulkScheduleSplit = { eligibleIds: [], skipped: [] };
+  for (const row of rows) {
+    const check = bulkScheduleCheck(row);
+    if (check.eligible) {
+      split.eligibleIds.push(row.id);
+    } else {
+      split.skipped.push({ id: row.id, label: formatLabel(row.player_1_name, row.player_2_name), code: check.code });
+    }
+  }
+  return split;
+}
+
+export interface BulkResultRow {
+  id: string;
+  label: string;
+  kind: Exclude<BulkResultClass, 'changed'>;
+  code: BulkItemResult['code'];
+  params?: BulkItemResult['params'];
+}
+
+/**
+ * The results the report lists: everything except a plain success, in the order of the request, each joined to the
+ * label of its match. A result whose match is no longer among `rows` is labelled with its id.
+ */
+export function bulkResultRows(
+  results: readonly BulkItemResult[],
+  rows: readonly LabeledRow[],
+  formatLabel: MatchLabelFormat = plainMatchLabel,
+): BulkResultRow[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const report: BulkResultRow[] = [];
+  for (const result of results) {
+    const kind = classifyBulkResult(result);
+    if (kind === 'changed') continue;
+    const row = byId.get(result.id);
+    report.push({
+      id: result.id,
+      label: row ? formatLabel(row.player_1_name, row.player_2_name) : result.id,
+      kind,
+      code: result.code,
+      ...(result.params ? { params: result.params } : {}),
+    });
+  }
+  return report;
+}

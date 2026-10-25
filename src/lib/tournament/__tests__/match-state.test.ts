@@ -5,6 +5,8 @@ import {
   validateTransition,
   hasReachedBoThreshold,
   isMatchStatus,
+  canReopenMatch,
+  REOPENABLE_MATCH_STATUSES,
 } from '../match-state';
 import type { TransitionContext } from '../match-state';
 
@@ -44,6 +46,50 @@ describe('isValidTransition', () => {
   it('rejects skipping states (scheduled → completed)', () => {
     expect(isValidTransition('scheduled', 'completed')).toBe(false);
     expect(isValidTransition('scheduled', 'pending_confirmation')).toBe(false);
+  });
+});
+
+describe('admin reopen transitions', () => {
+  it.each(['completed', 'disputed', 'pending_confirmation'] as const)(
+    'allows an admin %s → in_progress and refuses a non-admin',
+    (from) => {
+      expect(isValidTransition(from, 'in_progress', true)).toBe(true);
+      expect(isValidTransition(from, 'in_progress', false)).toBe(false);
+      expect(isValidTransition(from, 'in_progress')).toBe(false);
+    }
+  );
+
+  it('lists in_progress among the admin next states of completed and disputed', () => {
+    expect(getValidNextStates('completed', true)).toEqual(['scheduled', 'in_progress']);
+    expect(getValidNextStates('disputed', true)).toEqual(['completed', 'scheduled', 'in_progress']);
+    expect(getValidNextStates('completed')).toEqual([]);
+  });
+
+  it.each(['completed', 'disputed'] as const)(
+    'answers match_reset_admin_only for a non-admin %s → in_progress',
+    (from) => {
+      expect(
+        validateTransition(from, 'in_progress', {
+          actor_id: 'p1',
+          is_admin: false,
+          player_1_id: 'p1',
+          player_2_id: 'p2',
+        })
+      ).toEqual({
+        valid: false,
+        error: 'Only admins can reset match state',
+        code: 'match_reset_admin_only',
+      });
+    }
+  );
+
+  it('canReopenMatch is true for completed, pending_confirmation and disputed only', () => {
+    expect(canReopenMatch('completed')).toBe(true);
+    expect(canReopenMatch('pending_confirmation')).toBe(true);
+    expect(canReopenMatch('disputed')).toBe(true);
+    expect(canReopenMatch('scheduled')).toBe(false);
+    expect(canReopenMatch('in_progress')).toBe(false);
+    expect(REOPENABLE_MATCH_STATUSES).toHaveLength(3);
   });
 });
 
@@ -195,7 +241,9 @@ describe('validateTransition', () => {
     ['pending_confirmation', 'in_progress'],
     ['pending_confirmation', 'scheduled'],
     ['completed', 'scheduled'],
+    ['completed', 'in_progress'],
     ['disputed', 'scheduled'],
+    ['disputed', 'in_progress'],
   ] as const)('rejects a non-admin reset %s → %s with match_reset_admin_only', (from, to) => {
     expect(validateTransition(from, to, baseCtx)).toEqual({
       valid: false,
@@ -219,7 +267,9 @@ describe('validateTransition', () => {
     ['in_progress', 'scheduled'],
     ['pending_confirmation', 'in_progress'],
     ['completed', 'scheduled'],
+    ['completed', 'in_progress'],
     ['disputed', 'scheduled'],
+    ['disputed', 'in_progress'],
     ['in_progress', 'disputed'],
   ] as const)('allows an admin %s → %s', (from, to) => {
     expect(validateTransition(from, to, { ...baseCtx, actor_id: 'admin-user', is_admin: true })).toEqual({ valid: true });
