@@ -86,7 +86,7 @@ describe('EdgesInspector', () => {
     expect(html).toContain('Advancement connects two stages. Add a second stage first.');
     expect(html).toMatch(ADD_DISABLED);
     const german = render(doc, 'de');
-    expect(german).toContain('Weiterkommen verbindet zwei Phasen.');
+    expect(german).toContain('Weiterkommen verbindet zwei Stages.');
   });
 
   it('with two stages and no rule it says so', () => {

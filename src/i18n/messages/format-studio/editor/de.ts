@@ -2,8 +2,8 @@ import { defineDe } from '@/i18n/define';
 import type en from './en';
 
 /**
- * German for `format-studio/editor`. Casual du; stages are "Phasen", as in the generated rules text. Buttons use
- * the infinitive. The plural objects follow the English ones.
+ * German for `format-studio/editor`. Casual du; a format's stages are "Stages" (as in the generated rules text), a league's
+ * phases stay "Phasen". Buttons use the infinitive. The plural objects follow the English ones.
  */
 export default defineDe<typeof en>()({
   toolbar: {
@@ -40,8 +40,8 @@ export default defineDe<typeof en>()({
     format: 'Format',
     identity: 'Name und Zusammenfassung',
     look: 'Aussehen',
-    stages: 'Phasen',
-    addStage: 'Phase hinzufügen',
+    stages: 'Stages',
+    addStage: 'Stage hinzufügen',
     moveUp: '{name} nach oben schieben',
     moveDown: '{name} nach unten schieben',
     duplicate: '{name} duplizieren',
@@ -51,14 +51,14 @@ export default defineDe<typeof en>()({
     advancement: 'Weiterkommen',
     honor: 'Ehrenregeln',
     rulesText: 'Regeltext',
-    limitStages: 'Ein Format kann höchstens {max} Phasen haben.',
-    untitled: 'Unbenannte Phase',
+    limitStages: 'Ein Format kann höchstens {max} Stages haben.',
+    untitled: 'Unbenannte Stage',
     copySuffix: ' (Kopie)',
     issues: { one: '{count} Problem', other: '{count} Probleme' },
     deleteTitle: '{name} löschen?',
     deleteBody:
-      'Regeln zum Weiterkommen, die diese Phase betreffen, werden entfernt. Ehrenregeln und Regeltext-Abschnitte, die auf sie zeigen, gelten danach für das ganze Format. Das lässt sich nicht rückgängig machen.',
-    deleteConfirm: 'Phase löschen',
+      'Regeln zum Weiterkommen, die diese Stage betreffen, werden entfernt. Ehrenregeln und Regeltext-Abschnitte, die auf sie zeigen, gelten danach für das ganze Format. Das lässt sich nicht rückgängig machen.',
+    deleteConfirm: 'Stage löschen',
   },
   inspector: {
     identity: {
@@ -74,7 +74,7 @@ export default defineDe<typeof en>()({
       themeHint: 'Ein Hinweis für das Aussehen der Ligawelt. Lass es auf automatisch, wenn du keine Welt am Schlüssel kennst.',
     },
     stage: {
-      noStage: 'Dieses Format hat keine Phasen. Füge in der Gliederung eine hinzu.',
+      noStage: 'Dieses Format hat keine Stages. Füge in der Gliederung eine hinzu.',
       name: 'Name',
       advanced: 'Erweitert',
       editKey: 'Schlüssel ändern',
@@ -82,7 +82,7 @@ export default defineDe<typeof en>()({
       cancelKey: 'Abbrechen',
       keyHelp:
         'Der Schlüssel erkennt die Phase wieder, wenn das Format an eine Liga angehängt wird. Wird er geändert, entfernt ein späteres erneutes Anhängen die Phase und legt sie neu an.',
-      keyTaken: 'Eine andere Phase benutzt diesen Schlüssel schon.',
+      keyTaken: 'Eine andere Stage benutzt diesen Schlüssel schon.',
       keyPattern: 'Beginne mit einem Kleinbuchstaben, danach Kleinbuchstaben, Ziffern oder Unterstriche (bis zu 32 Zeichen).',
       participants: 'Teilnehmer',
       expectedHelp: 'Leer lassen, um die Zahl der Spieler in der Liga zu verwenden.',
@@ -97,13 +97,13 @@ export default defineDe<typeof en>()({
       exceptionsNone: 'Jede Runde hat die Standardlänge.',
       addException: 'Ausnahme hinzufügen',
       removeException: 'Ausnahme {position} entfernen',
-      limitExceptions: 'Eine Phase kann höchstens {max} Rundenausnahmen haben.',
+      limitExceptions: 'Eine Stage kann höchstens {max} Rundenausnahmen haben.',
       fromWhere: 'Gezählt ab',
       rulesetDefault: 'Standard der Liga',
       rulesetUnknown: 'Unbekanntes Regelwerk',
       drawDisabled: 'Unentschieden sind noch nicht möglich: Ein Spiel braucht immer einen Sieger.',
       forfeitDisabled: 'Aufgaben sind noch nicht möglich.',
-      rankIgnored: 'Die Reihung wird in K.-o.-Phasen nicht verwendet.',
+      rankIgnored: 'Die Reihung wird in K.-o.-Stages nicht verwendet.',
       rankNone: 'Noch keine Schritte für die Reihung.',
       stepKind: 'Schritt {position}',
       addStepKind: 'Neuer Schritt',
@@ -116,9 +116,9 @@ export default defineDe<typeof en>()({
     },
     edges: {
       heading: 'Weiterkommen',
-      intro: 'Regeln zum Weiterkommen legen fest, wer von einer Phase in die nächste wechselt und wie.',
+      intro: 'Regeln zum Weiterkommen legen fest, wer von einer Stage in die nächste wechselt und wie.',
       none: 'Noch keine Regeln zum Weiterkommen.',
-      needTwoStages: 'Weiterkommen verbindet zwei Phasen. Füge zuerst eine zweite Phase hinzu.',
+      needTwoStages: 'Weiterkommen verbindet zwei Stages. Füge zuerst eine zweite Stage hinzu.',
       add: 'Regel zum Weiterkommen hinzufügen',
       remove: '{name} entfernen',
       moveUp: '{name} nach oben schieben',
@@ -211,7 +211,7 @@ export default defineDe<typeof en>()({
       tableLabel: 'Geschätzter Spielplan',
       caption: 'Geschätzter Spielplan für {players} Spieler',
       col: {
-        stage: 'Phase',
+        stage: 'Stage',
         players: 'Spieler',
         rounds: 'Runden',
         matches: 'Spiele',
@@ -223,9 +223,9 @@ export default defineDe<typeof en>()({
       range: '{min} bis {max}',
       unknown: 'Hängt vom Paarungssystem ab',
       groups: { one: '{count} Gruppe', other: '{count} Gruppen' },
-      sequentialNote: 'Die Phasen werden nacheinander gezählt.',
+      sequentialNote: 'Die Stages werden nacheinander gezählt.',
       bestOfNote: 'Eine Best-of-Serie zählt als ein Spiel.',
-      boundsNote: 'Bei K.-o.-Phasen sind die Zahlen pro Spieler und insgesamt Grenzen: Die tatsächliche Zahl hängt von den Ergebnissen ab.',
+      boundsNote: 'Bei K.-o.-Stages sind die Zahlen pro Spieler und insgesamt Grenzen: Die tatsächliche Zahl hängt von den Ergebnissen ab.',
       invalid: 'Behebe zuerst die Fehler. Der Tab „Probleme“ sagt, was nicht stimmt.',
       showIssues: 'Probleme anzeigen',
     },
@@ -298,7 +298,7 @@ export default defineDe<typeof en>()({
     startLegend: 'Wie möchtest du anfangen?',
     start: {
       blank: 'Leer',
-      blankHelp: 'Eine leere Phase zum Aufbauen.',
+      blankHelp: 'Eine leere Stage zum Aufbauen.',
       example: 'Aus einem Beispiel',
       exampleHelp: 'Eine Kopie eines mitgelieferten Beispiels oder eines Formats aus der Galerie.',
       league: 'Aus der Struktur einer Liga',

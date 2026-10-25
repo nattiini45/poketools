@@ -1,11 +1,11 @@
 import { defineDe } from '@/i18n/define';
 import type en from './en';
 
-/** German for `format-studio/attach`. Casual du; stages are "Phasen", as on the league admin pages. */
+/** German for `format-studio/attach`. Casual du; the phases a league gets stay "Phasen" (as on the league admin pages), the stages of a format are "Stages". */
 export default defineDe<typeof en>()({
   panel: {
     title: 'Format',
-    intro: 'Eine eigene Liga spielt die Phasen eines veröffentlichten Formats. Hänge eines an, und die Liga bekommt für jede Stufe eine Phase.',
+    intro: 'Eine eigene Liga spielt die Phasen eines veröffentlichten Formats. Hänge eines an, und die Liga bekommt für jede Stage eine Phase.',
     startedNotice: 'Diese Liga hat begonnen. Ihr Format ist gesperrt.',
     attachedHeading: 'Angehängtes Format',
     attachedName: 'Format',
@@ -95,9 +95,9 @@ export default defineDe<typeof en>()({
     reasonLoading: 'Die Phasen werden noch geladen.',
     reasonInvalid: 'Diese Version hat Fehler. Wähle eine andere oder behebe sie zuerst im Editor.',
     reasonRuleset: {
-      one: '{count} Stufe nutzt das Standard-Regelwerk der Liga, aber diese Liga hat keins. Wähle ein Format, das für jede Stufe ein Regelwerk nennt.',
+      one: '{count} Stage nutzt das Standard-Regelwerk der Liga, aber diese Liga hat keins. Wähle ein Format, das für jede Stage ein Regelwerk nennt.',
       other:
-        '{count} Stufen nutzen das Standard-Regelwerk der Liga, aber diese Liga hat keins. Wähle ein Format, das für jede Stufe ein Regelwerk nennt.',
+        '{count} Stages nutzen das Standard-Regelwerk der Liga, aber diese Liga hat keins. Wähle ein Format, das für jede Stage ein Regelwerk nennt.',
     },
     reasonManual: 'Entferne zuerst die von Hand angelegten Phasen im Tab „Phasen“.',
     manualNotice: {
@@ -138,9 +138,9 @@ export default defineDe<typeof en>()({
     rulesets: {
       met: 'Jede Phase hat ein Regelwerk.',
       unmet: {
-        one: '{count} Stufe nutzt das Standard-Regelwerk der Liga, aber diese Liga hat keins. Wähle ein Format, das für jede Stufe ein Regelwerk nennt.',
+        one: '{count} Stage nutzt das Standard-Regelwerk der Liga, aber diese Liga hat keins. Wähle ein Format, das für jede Stage ein Regelwerk nennt.',
         other:
-          '{count} Stufen nutzen das Standard-Regelwerk der Liga, aber diese Liga hat keins. Wähle ein Format, das für jede Stufe ein Regelwerk nennt.',
+          '{count} Stages nutzen das Standard-Regelwerk der Liga, aber diese Liga hat keins. Wähle ein Format, das für jede Stage ein Regelwerk nennt.',
       },
       waiting: 'Die Regelwerke werden geprüft, sobald ein Format angehängt ist.',
     },

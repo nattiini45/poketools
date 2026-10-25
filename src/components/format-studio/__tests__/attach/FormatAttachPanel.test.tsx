@@ -323,7 +323,7 @@ describe('AttachBlockedReason', () => {
     expect(one).toContain('Pick a format that names a ruleset for every stage.');
     expect(render(<AttachBlockedReason reason="ruleset_missing" rulesetCount={3} />)).toContain('3 stages use the league’s');
     expect(render(<AttachBlockedReason reason="ruleset_missing" rulesetCount={2} />, 'de')).toContain(
-      '2 Stufen nutzen das Standard-Regelwerk der Liga',
+      '2 Stages nutzen das Standard-Regelwerk der Liga',
     );
   });
 });
