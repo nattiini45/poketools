@@ -265,6 +265,20 @@ export default defineDe<typeof en>()({
     noteHidden: 'Diese Notiz ist nicht öffentlich',
     loadFailed: 'Die Moderationswarteschlange konnte nicht geladen werden',
     actionFailed: 'Die Moderationsaktion ist fehlgeschlagen',
+    rejectedNotes: 'Abgelehnte Notizen',
+    viewPending: 'Offen',
+    viewRejected: 'Abgelehnt',
+    noRejected: 'Keine abgelehnten Notizen.',
+    blocked: 'Gesperrt',
+    blockedHint: 'Der Autor kann diese Notiz nicht mehr bearbeiten, um sie erneut zur Prüfung einzureichen.',
+    blockResubmission: 'Erneutes Einreichen sperren',
+    allowResubmission: 'Erneutes Einreichen erlauben',
+    blockDialog: {
+      title: 'Erneutes Einreichen dieser Notiz sperren?',
+      message:
+        'Für den Autor ist das endgültig: Er kann diese Notiz nicht mehr bearbeiten, um sie erneut zur Prüfung einzureichen. Nur du kannst die Sperre wieder aufheben.',
+      confirm: 'Erneutes Einreichen sperren',
+    },
     reportReasons: {
       inaccurate: 'Ungenau',
       spam: 'Spam',

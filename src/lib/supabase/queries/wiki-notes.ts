@@ -22,6 +22,8 @@ type WikiNoteRow = {
   rejected_by: string | null;
   rejected_at: string | null;
   rejection_reason: string | null;
+  resubmission_blocked_at?: string | null;
+  resubmission_blocked_by?: string | null;
   moderation_flags: string[] | null;
   created_at: string;
   updated_at: string;
@@ -69,6 +71,13 @@ function toWikiNote(row: WikiNoteRow): WikiNote {
     rejected_by: row.rejected_by,
     rejected_at: row.rejected_at,
     rejection_reason: row.rejection_reason,
+    // Only a blocked note carries the fields, so the public note shape is unchanged (an approved note is never blocked).
+    ...(row.resubmission_blocked_at
+      ? {
+          resubmission_blocked_at: row.resubmission_blocked_at,
+          resubmission_blocked_by: row.resubmission_blocked_by ?? null,
+        }
+      : {}),
     moderation_flags: row.moderation_flags ?? [],
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -182,12 +191,16 @@ export async function createNote(
  * `'author'` also puts the note back in the pending queue (approval and rejection fields cleared in the same
  * statement), so edited text is never public before a moderator has seen it. `'moderator'` (a site admin editing)
  * keeps the note's status.
+ *
+ * An author's edit never touches a note the superadmin closed for resubmission: the UPDATE itself filters on
+ * `resubmission_blocked_at IS NULL`, so a block that lands between the route's check and this write still wins.
+ * Returns false when no row was updated (the note is blocked, or gone); the caller tells the two apart.
  */
 export async function updateNote(
   id: string,
   content: string,
   editor: 'author' | 'moderator',
-): Promise<void> {
+): Promise<boolean> {
   const requeue = editor === 'author'
     ? {
         approved: false,
@@ -198,7 +211,7 @@ export async function updateNote(
         rejection_reason: null,
       }
     : {};
-  const { error } = await supabase
+  let query = supabase
     .from('wiki_notes')
     .update({
       content,
@@ -207,8 +220,11 @@ export async function updateNote(
       updated_at: new Date().toISOString(),
     })
     .eq('id', id);
+  if (editor === 'author') query = query.is('resubmission_blocked_at', null);
 
+  const { data, error } = await query.select('id');
   if (error) throw error;
+  return (data?.length ?? 0) > 0;
 }
 
 export async function deleteNote(id: string): Promise<void> {
@@ -231,6 +247,9 @@ export async function approveNote(id: string, moderatorId?: string): Promise<voi
       rejected_by: null,
       rejected_at: null,
       rejection_reason: null,
+      // An approved note is not rejected, so it cannot stay closed for resubmission (the table CHECK says so too).
+      resubmission_blocked_at: null,
+      resubmission_blocked_by: null,
       updated_at: now,
     })
     .eq('id', id);
@@ -253,6 +272,28 @@ export async function rejectNote(id: string, moderatorId: string, reason: string
     .eq('id', id);
 
   if (error) throw error;
+}
+
+/**
+ * Closes a rejected note for resubmission (`blocked = true`) or reopens it (`false`). The block is final for the
+ * author: `updateNote(…, 'author')` no longer touches the note. Only a rejected note can be blocked, and the UPDATE
+ * itself filters on that, so a note re-queued or approved a moment earlier is not blocked by mistake. The note stays
+ * rejected. Returns false when no row matched.
+ */
+export async function setNoteResubmissionBlock(
+  id: string,
+  blocked: boolean,
+  moderatorId: string,
+): Promise<boolean> {
+  const fields = blocked
+    ? { resubmission_blocked_at: new Date().toISOString(), resubmission_blocked_by: moderatorId }
+    : { resubmission_blocked_at: null, resubmission_blocked_by: null };
+  let query = supabase.from('wiki_notes').update(fields).eq('id', id);
+  if (blocked) query = query.eq('approved', false).not('rejected_at', 'is', null);
+
+  const { data, error } = await query.select('id');
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
 }
 
 export async function getNoteById(id: string): Promise<WikiNote | null> {

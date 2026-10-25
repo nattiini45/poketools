@@ -69,6 +69,8 @@ export type AuditAction =
   | 'wiki.note.reject'
   | 'wiki.note.delete'
   | 'wiki.note.report'
+  | 'wiki.note.block_resubmission'
+  | 'wiki.note.unblock_resubmission'
   | 'wiki.report.update'
   | 'resource_admin.grant'
   | 'resource_admin.revoke'

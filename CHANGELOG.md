@@ -8,6 +8,21 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It adds
+  `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
+  new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
+  the migration.
+
+### Added
+
+- Wiki moderation: the superadmin can close a rejected note for resubmission ("Block from resubmitting", behind a
+  confirmation, undone with "Allow resubmitting"). `/admin/wiki` gains a "Rejected" view with a "Blocked" badge. The
+  author's edit of a blocked note is refused (`wiki_note_resubmission_blocked`, English and German) and re-queues
+  nothing. Site admins who are not the superadmin cannot block. Both actions are audited
+  (`wiki.note.block_resubmission`, `wiki.note.unblock_resubmission`).
+
 ### Changed
 
 - The webhook endpoints (`/api/discord-webhooks`) answer with `webhook_url_hint` instead of `webhook_url`.

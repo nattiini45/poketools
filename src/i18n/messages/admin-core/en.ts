@@ -77,6 +77,8 @@ const auditActions = {
   wiki__note__reject: 'Wiki note rejected',
   wiki__note__delete: 'Wiki note deleted',
   wiki__note__report: 'Wiki note reported',
+  wiki__note__block_resubmission: 'Wiki note closed for resubmission',
+  wiki__note__unblock_resubmission: 'Wiki note reopened for resubmission',
   wiki__report__update: 'Wiki report updated',
   resource_admin__grant: 'Resource admin granted',
   resource_admin__revoke: 'Resource admin revoked',

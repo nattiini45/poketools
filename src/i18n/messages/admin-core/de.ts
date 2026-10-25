@@ -92,6 +92,8 @@ export default defineDe<typeof en>()({
     wiki__note__reject: 'Wiki-Notiz abgelehnt',
     wiki__note__delete: 'Wiki-Notiz gelöscht',
     wiki__note__report: 'Wiki-Notiz gemeldet',
+    wiki__note__block_resubmission: 'Wiki-Notiz für erneutes Einreichen gesperrt',
+    wiki__note__unblock_resubmission: 'Wiki-Notiz für erneutes Einreichen wieder freigegeben',
     wiki__report__update: 'Wiki-Meldung bearbeitet',
     resource_admin__grant: 'Admin-Rechte vergeben',
     resource_admin__revoke: 'Admin-Rechte entzogen',

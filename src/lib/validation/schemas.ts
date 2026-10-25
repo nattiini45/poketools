@@ -776,6 +776,14 @@ export const wikiNotePatchSchema = z.object({
   rejection_reason: z.string().trim().min(1).max(FIELD_LIMITS.DESCRIPTION).optional(),
 });
 
+/**
+ * The superadmin's block / unblock request (`PATCH /api/wiki/notes/[id]`). Strict and alone: it cannot be combined
+ * with an edit, an approval or a rejection.
+ */
+export const wikiNoteBlockResubmissionSchema = z.object({
+  block_resubmission: z.boolean(),
+}).strict();
+
 export const wikiNoteReportSchema = z.object({
   reason: z.enum(['inaccurate', 'spam', 'abusive', 'off_topic', 'other']),
   details: z.string().trim().max(FIELD_LIMITS.DESCRIPTION).optional(),
@@ -1281,6 +1289,7 @@ export type DraftPickInput = z.infer<typeof draftPickSchema>;
 export type AdminGameEditInput = z.infer<typeof adminGameEditSchema>;
 export type PaginationQueryInput = z.infer<typeof paginationQuerySchema>;
 export type WikiNotePatchInput = z.infer<typeof wikiNotePatchSchema>;
+export type WikiNoteBlockResubmissionInput = z.infer<typeof wikiNoteBlockResubmissionSchema>;
 export type TournamentParticipantSeedsInput = z.infer<typeof tournamentParticipantSeedsSchema>;
 export type TypeAnalysisInput = z.infer<typeof typeAnalysisSchema>;
 export type ValidateSetInput = z.infer<typeof validateSetSchema>;

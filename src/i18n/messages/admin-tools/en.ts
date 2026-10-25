@@ -273,6 +273,20 @@ export default {
     noteHidden: 'This note is not public',
     loadFailed: 'Failed to load moderation queue',
     actionFailed: 'The moderation action failed',
+    rejectedNotes: 'Rejected Notes',
+    viewPending: 'Pending',
+    viewRejected: 'Rejected',
+    noRejected: 'No rejected notes.',
+    blocked: 'Blocked',
+    blockedHint: 'The author can no longer edit this note back into the queue.',
+    blockResubmission: 'Block from resubmitting',
+    allowResubmission: 'Allow resubmitting',
+    blockDialog: {
+      title: 'Block this note from resubmitting?',
+      message:
+        'This is final for the author: they can no longer edit this note to send it back for review. Only you can undo it.',
+      confirm: 'Block from resubmitting',
+    },
     /**
      * Keys = the report `reason` enum of `wikiNoteReportSchema` (src/lib/validation/schemas.ts),
      * except `other` -> `otherReason`: `other` is reserved for plural forms (i18n-core §1.3).
