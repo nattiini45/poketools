@@ -55,6 +55,8 @@ export default defineDe<typeof en>()({
   SEASON_DATES_INVALID: 'Das Enddatum darf nicht vor dem Startdatum liegen.',
   SEASON_CLONE_FORBIDDEN: 'Du kannst nur aus einer Liga starten, die du selbst verwaltest.',
   SEASON_CLONE_ADMINS_FORBIDDEN: 'Nur Site-Admins können die Liga-Admins übernehmen.',
+  SEASON_CLONE_CUSTOM_FORMAT:
+    'Eine Liga mit eigenem Format kann nicht als Vorlage dienen: Ihre Phasen kommen aus einem angehängten Format, und eine Kopie könnte keines anhängen.',
   SEASON_CLONE_FAILED: 'Die Liga konnte nicht aus der Vorlage erstellt werden. Es wurde nichts behalten.',
   SEASON_CLONE_CLEANUP_FAILED:
     'Die Liga konnte nicht aus der Vorlage erstellt und auch nicht wieder entfernt werden: Liga {league_id} besteht weiter, mit {phases} Phasen und {participants} Kadereinträgen. Ein Site-Admin kann sie löschen.',
@@ -91,9 +93,9 @@ export default defineDe<typeof en>()({
     'Du kannst nur Formate anhängen, die dir gehören oder für alle Admins freigegeben sind.',
   format_attach_invalid: 'Diese Version hat Fehler und kann nicht angehängt werden ({first}).',
   format_attach_ruleset_required: {
-    one: '{count} Phase nutzt das Standard-Regelwerk der Liga, die Liga hat aber keines. Lege zuerst ein Standard-Regelwerk fest.',
+    one: '{count} Stage nutzt das Standard-Regelwerk der Liga, die Liga hat aber keines. Lege zuerst ein Standard-Regelwerk fest.',
     other:
-      '{count} Phasen nutzen das Standard-Regelwerk der Liga, die Liga hat aber keines. Lege zuerst ein Standard-Regelwerk fest.',
+      '{count} Stages nutzen das Standard-Regelwerk der Liga, die Liga hat aber keines. Lege zuerst ein Standard-Regelwerk fest.',
   },
   format_attach_manual_phases: {
     one: 'Diese Liga hat bereits {count} Phase, die nicht aus einem Format entstanden ist. Lösche sie zuerst.',

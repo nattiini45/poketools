@@ -759,7 +759,8 @@ DELETE /api/admin/rounds/[id]               Admin: delete latest round or zero-g
 POST /api/seasons                           Create a league (any admin). Optional `clone_from` { season_id, copy_roster,
                                             copy_admins } copies the source league's phases (and, on request, its roster and,
                                             for site admins, its league admins) after the create; 403 SEASON_CLONE_FORBIDDEN /
-                                            SEASON_CLONE_ADMINS_FORBIDDEN, 404 SEASON_NOT_FOUND; a failed copy is rolled back
+                                            SEASON_CLONE_ADMINS_FORBIDDEN, 404 SEASON_NOT_FOUND, 409
+                                            SEASON_CLONE_CUSTOM_FORMAT (a custom-format source); a failed copy is rolled back
                                             (500 SEASON_CLONE_FAILED, or SEASON_CLONE_CLEANUP_FAILED if the cleanup failed too)
 GET/POST /api/seasons/[id]/phases           List/create league phases
 PATCH/DELETE /api/seasons/[id]/phases/[phaseId]  Phase config + destructive delete

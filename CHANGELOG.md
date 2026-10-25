@@ -56,7 +56,9 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   Picking or changing the league keeps the name and dates already typed.
   Rounds, matches, results, phase participants, groups, point-buy lists, tokens, draft data and format rules are
   never copied. If a step fails the new league is removed again; if that cleanup fails too, the error names what
-  remains. The API takes an optional `clone_from` on `POST /api/seasons`.
+  remains. A league with the custom type is not offered as a source and the server refuses it (the phases of a custom
+  league come from its attached format, so a copy could never start). The API takes an optional `clone_from` on
+  `POST /api/seasons`.
 - **Format drift report** on the admin Data page (site admins). **Run report** lists, read-only, leagues whose stored
   tiebreaker order differs from the format pack's default (information: the standings use the stored order; an order
   the standings cannot use is marked, because the table then falls back to the pack default) and phase pairs
@@ -123,7 +125,7 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - The Format Rules section subtitle on the league admin Rules tab now describes the editor.
 - `POST /api/seasons` accepts an optional `clone_from` (`season_id`, `copy_roster`, `copy_admins`). Without it the
   request behaves as before. New error codes: `SEASON_CLONE_FORBIDDEN`, `SEASON_CLONE_ADMINS_FORBIDDEN`,
-  `SEASON_CLONE_FAILED` and `SEASON_CLONE_CLEANUP_FAILED`.
+  `SEASON_CLONE_FAILED`, `SEASON_CLONE_CLEANUP_FAILED` and `SEASON_CLONE_CUSTOM_FORMAT` (409, a custom-type source).
 - **League types gain a fifth value, `custom`.** `PATCH /api/seasons/[id]` refuses a switch of the league type to or
   from `custom` (409 `season_format_type_locked`) while a format is attached or after the league has started. A
   change between the four classic league types takes no extra read and follows the league type lock above.

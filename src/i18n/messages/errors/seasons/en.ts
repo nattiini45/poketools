@@ -73,6 +73,8 @@ export default {
   // Starting a league from another one (POST /api/seasons with clone_from)
   SEASON_CLONE_FORBIDDEN: 'You can only start a league from a league you administer.',
   SEASON_CLONE_ADMINS_FORBIDDEN: 'Only site admins can copy the league admins.',
+  SEASON_CLONE_CUSTOM_FORMAT:
+    'A league with a custom format cannot be used as a source: its phases come from an attached format, and a copy could not attach one.',
   SEASON_CLONE_FAILED: 'The league could not be created from the source. Nothing was kept.',
   SEASON_CLONE_CLEANUP_FAILED:
     'The league could not be created from the source, and it could not be removed again: league {league_id} remains with {phases} phases and {participants} roster entries. A site admin can delete it.',

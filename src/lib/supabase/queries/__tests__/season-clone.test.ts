@@ -6,7 +6,7 @@ const h = vi.hoisted(() => {
   const calls: { method: string; args: unknown[] }[] = [];
   const results: { data: unknown; error: unknown }[] = [];
   const builder: Record<string, unknown> = {};
-  for (const method of ['from', 'select', 'in', 'eq', 'order', 'limit', 'range', 'insert']) {
+  for (const method of ['from', 'select', 'in', 'eq', 'neq', 'order', 'limit', 'range', 'insert']) {
     builder[method] = (...args: unknown[]) => {
       calls.push({ method, args });
       return builder;
@@ -70,6 +70,15 @@ describe('listCloneSourceOptions', () => {
       ['a', 3, 8],
       ['b', 3, 8],
     ]);
+  });
+
+  it('leaves custom-format leagues out in the query, so they do not use up a bounded row', async () => {
+    h.results.push({ data: [row('a')], error: null });
+
+    await listCloneSourceOptions(null);
+
+    expect(called('neq')).toHaveLength(1);
+    expect(called('neq')[0].args).toEqual(['format_type', 'custom']);
   });
 
   it('scopes to the given ids with .in(id, ids)', async () => {

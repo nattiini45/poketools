@@ -7,7 +7,7 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
 import { leagueCloneMessages } from '@/i18n/messages/league-clone';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
-import type { CloneSourceOption } from '@/lib/league-admin/clone-source';
+import { isCloneSourceFormat, type CloneSourceOption } from '@/lib/league-admin/clone-source';
 
 interface CloneSourcePickerProps {
   sources: CloneSourceOption[];
@@ -29,7 +29,7 @@ interface CloneSourcePickerProps {
  * resets the options when the source changes.
  */
 export default function CloneSourcePicker({
-  sources,
+  sources: allSources,
   isSiteAdmin,
   sourceId,
   copyRoster,
@@ -40,6 +40,9 @@ export default function CloneSourcePicker({
 }: CloneSourcePickerProps) {
   const t = useT(leagueCloneMessages);
   const tEnum = useT(enumMessages);
+  // A custom league gets its phases from an attached format, so it is never offered as a source
+  // (the server refuses it as well).
+  const sources = useMemo(() => allSources.filter((source) => isCloneSourceFormat(source.format_type)), [allSources]);
 
   const options = useMemo(
     () => [

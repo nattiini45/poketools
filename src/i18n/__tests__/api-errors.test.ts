@@ -167,3 +167,16 @@ describe('useApiErrorText', () => {
     expect(html).toBe('<p>Charmander has already been drafted|Charmander has already been drafted</p>');
   });
 });
+
+describe('apiErrorText for the clone refusal of a custom-format league', () => {
+  it('has an English and a German text', () => {
+    const res: ApiErrorLike = { error: 'A league with a custom format cannot be used as a source', code: 'SEASON_CLONE_CUSTOM_FORMAT' };
+    const en = apiErrorText(res, { locale: 'en', catalogs: [errorsSeasons] });
+    const de = apiErrorText(res, { locale: 'de', catalogs: [errorsSeasons] });
+
+    expect(en).toContain('custom format');
+    expect(de).toBe(
+      'Eine Liga mit eigenem Format kann nicht als Vorlage dienen: Ihre Phasen kommen aus einem angehängten Format, und eine Kopie könnte keines anhängen.',
+    );
+  });
+});

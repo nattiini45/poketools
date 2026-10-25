@@ -167,6 +167,28 @@ describe('assertCloneAllowed', () => {
     expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('radmin-1', 'season', 'src-1');
   });
 
+  it('409 SEASON_CLONE_CUSTOM_FORMAT for a custom-format source, for a site admin and a league admin alike', async () => {
+    const custom = { ...source, format_type: 'custom' } as unknown as Season;
+    mocks.getSeasonById.mockResolvedValue(custom);
+    mocks.isResourceAdminFor.mockResolvedValue(true);
+
+    for (const actor of [siteAdmin, resourceAdmin]) {
+      const err = await caught(assertCloneAllowed(actor, { sourceId: custom.id, copyAdmins: false }));
+
+      expect(err.code).toBe('SEASON_CLONE_CUSTOM_FORMAT');
+      expect(err.statusCode).toBe(409);
+    }
+  });
+
+  it('403 comes first: a caller who may not copy a custom league learns nothing about its type', async () => {
+    mocks.getSeasonById.mockResolvedValue({ ...source, format_type: 'custom' } as unknown as Season);
+    mocks.isResourceAdminFor.mockResolvedValue(false);
+
+    const err = await caught(assertCloneAllowed(resourceAdmin, { sourceId: source.id, copyAdmins: false }));
+
+    expect(err.code).toBe('SEASON_CLONE_FORBIDDEN');
+  });
+
   it('lets a resource admin of the source through', async () => {
     mocks.getSeasonById.mockResolvedValue(source);
     mocks.isResourceAdminFor.mockResolvedValue(true);
