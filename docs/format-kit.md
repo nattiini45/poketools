@@ -344,7 +344,9 @@ Overrides are sorted by round, then direction; at most 32 are kept; `best_of` is
 | round robin (not Evolution Point Buy) | 3 | 0 | 0 | points, KO differential, Buchholz, wins (all descending; the `computeStandings` order) |
 | Swiss (not Evolution Point Buy) | 1 | 0 | 1 (a Swiss bye scores as a win) | the same four steps |
 | single or double elimination | 1 | 0 | 0 | none |
-| table stage of an Evolution Point Buy league | the pack's match points for a win | 0 | 0 | the pack's tiebreaker chain, step by step (below) |
+| table stage of an Evolution Point Buy league (round robin and Swiss) | the pack's match points for a win | 0 | 0 | the league's stored tiebreaker order when it is usable, else the pack's tiebreaker chain, step by step (below) |
+
+The Evolution Point Buy rows use the helpers the standings use (`effectiveMatchPoints` and `effectiveTiebreakerChain` in `src/lib/tournament/standings-rules.ts`), so the description and the tables cannot drift apart. The stored order is `format_rules.tiebreaker_order`, edited on the league's Rules tab; an order the standings cannot use (empty, an unknown or repeated step, a decision match that is not last, or only a decision match) falls back to the pack's chain. A stored order without a decision match leaves ties open, and the compiler says so (`rank_open_ended`, a warning).
 
 `draw` and `forfeit` are never set. The chain steps map as: `match_points` to points descending, `kill_difference` to KO differential descending, `head_to_head` to head to head (pairwise), `decision_match` to the decision match. `evolution_points` has no kit metric and is **omitted from the rank**; its position is kept as an Evolution Point Buy module fact.
 
@@ -354,7 +356,7 @@ Overrides are sorted by round, then direction; at most 32 are kept; `best_of` is
 |---|---|---|
 | `core_liga` | the format is singles, doubles or draft **and** (the core pool is set, or any participant has a core, or any has a gym type) | core pool size, cores assigned and gym types assigned (the last two only when the counts were read), roster size |
 | `legacy_draft` | the format is draft | the limit of each tier that has one |
-| `epb` | the format is Evolution Point Buy | match points for a win; the 1-based position of each tiebreaker step; Tera by stage 1 to 3; draft budget, picks, token ratio, token maximum and token maximum per line (from the format rules row or, without one, the pack defaults); whether the redraft is open; counts of banned moves and banned items; stage lock (enabled, stage, by matchday, suspended matchdays); participation points per matchday and until which stage; the Comeback earn window |
+| `epb` | the format is Evolution Point Buy | match points for a win; the 1-based position of each tiebreaker step in the order the standings rank by; Tera by stage 1 to 3; draft budget, picks, token ratio, token maximum and token maximum per line (from the format rules row or, without one, the pack defaults); whether the redraft is open; counts of banned moves and banned items; stage lock (enabled, stage, by matchday, suspended matchdays); participation points per matchday and until which stage; the Comeback earn window |
 
 The capabilities derived from an Evolution Point Buy or draft descriptor equal `getFormatCapabilities` of that format; the `core_liga` descriptor's capabilities are a subset of the singles ones.
 
@@ -363,7 +365,7 @@ The capabilities derived from an Evolution Point Buy or draft descriptor equal `
 - **Evolution points tiebreak.** The step is not in the kit's metric table, so the rendered Evolution Point Buy rank chain lacks it. Its position is in the module facts, and the golden snapshot makes the gap explicit. Registering it as a metric would close the gap.
 - **Round-name overrides.** Only `Finals`, `Semifinals`, `Quarterfinals` and `Round N` map to round indexes. Double-elimination overrides are shown as text, not machine-readable.
 - **Advancement direction.** The descriptor follows the phase form (the stored rule is the edge out of the phase). The enrollment sync reads the rule from the target phase. The descriptor shows the stored rule either way, and a rule nobody consumes appears as a text section. Auditing the direction is separate work.
-- **Scoring split.** Round robin scores 3 per win, Swiss 1 per win with the bye scored as a win, an Evolution Point Buy round-robin table also scores 3 per win (the hub and the tournament tabs pass 3 to the shared standings code, whatever the pack stores) and an Evolution Point Buy Swiss table takes the pack's value; when the stored pack value is not 3 and the league has a round-robin phase, the module facts carry a note. The descriptor mirrors that split; a later single scoring specification must not change the golden snapshots silently.
+- **Scoring split.** Round robin scores 3 per win, Swiss 1 per win with the bye scored as a win, and an Evolution Point Buy round-robin or Swiss table scores the pack's match points for a win with no bye points. The descriptor mirrors that split; a later single scoring specification must not change the golden snapshots silently.
 - **Real leagues can compile with errors or warnings** (an even best of, a top N larger than the roster, per-group advancement before phase groups exist). They are shown in plain words, not hidden. `env.rosterSize` and the inherited league groups reduce the noise; only the fixtures must compile without errors.
 - **Stored references only.** The ruleset shown is the one stored on the league or phase; the name-match fallback of the effective-ruleset lookup is not applied, so no extra read happens.
 

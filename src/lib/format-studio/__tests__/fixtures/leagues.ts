@@ -1,7 +1,7 @@
 /**
  * Fixture leagues for the descriptor tests and the golden master: six generic leagues that cover every
  * bracket type, league groups, enrollment by standings and by the previous phase, doubles, an own ruleset, a draft
- * league with tier limits, an Evolution Point Buy league with a stored rules row, a league with a core pool and an Evolution Point Buy league whose stored pack points differ from the round-robin table.
+ * league with tier limits, an Evolution Point Buy league with a stored rules row, a league with a core pool and an Evolution Point Buy league whose pack points are not 3 (every table scores the pack value).
  * Names are generic; the pack values are literals (the descriptor never reads the format pack itself).
  */
 import type { FormatRules } from '@/types/format-rules';
@@ -203,7 +203,7 @@ export const FIXTURE_LEAGUES: Record<string, LegacyInput> = {
     ],
     facts: { typeAssignments: { gymTyped: 6, cored: 5 }, formatRules: null, draftTierLimits: null },
   }),
-  // The stored pack value (2) differs from what the round-robin table scores (3): the Swiss phase takes the pack value.
+  // The pack value (2) is what both the round robin and the Swiss table score.
   epb_pack_points_differ: makeInput({
     season: makeSeason({ id: uuid(6), name: 'Evolution Cup', formatType: 'evolution_point_buy' }),
     stages: [

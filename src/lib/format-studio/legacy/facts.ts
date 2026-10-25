@@ -9,6 +9,7 @@
 import { MAX_FACTS, ltext, type LegacyFact, type LegacyModule } from '@/lib/format-kit/client';
 import type { Translator } from '@/i18n/core';
 import type { formatStudioLegacyMessages } from '@/i18n/messages/format-studio/legacy';
+import { effectiveTiebreakerChain } from '@/lib/tournament/standings-rules';
 import type { LegacyInput } from './types';
 
 type LegacyT = Translator<(typeof formatStudioLegacyMessages)['en']>;
@@ -64,22 +65,17 @@ function legacyDraftModule(input: LegacyInput, tr: LegacyTexts): LegacyModule | 
   return { kind: 'module.legacy', adapter: 'legacy_draft', facts: compact(entries) };
 }
 
-/** What a round-robin table awards per win, whatever the pack stores (`pointsPerWin` of the hub and tournament tabs). */
-export const ROUND_ROBIN_POINTS_PER_WIN = 3;
-
 function epbModule(input: LegacyInput, tr: LegacyTexts): LegacyModule | null {
   if (input.season.formatType !== 'evolution_point_buy') return null;
   const epb = input.pack.epb;
   const rules = input.facts.formatRules;
   const tera = rules?.tera_rules ?? epb.teraByStage;
-  const roundRobinDiffers =
-    epb.matchPoints.win !== ROUND_ROBIN_POINTS_PER_WIN && (input.stages ?? []).some((stage) => stage.bracketType === 'round_robin');
 
-  // Standings read the pack's tiebreaker chain (`computeEvolutionStandings`), not the stored `tiebreaker_order`, so
-  // the positions come from the pack too.
+  // The positions come from the chain the standings rank by: the stored `tiebreaker_order` when it is usable, else
+  // the pack's chain (`effectiveTiebreakerChain`, shared with the standings).
   const seen = new Set<string>();
   const tiebreaks: (LegacyFact | null)[] = [];
-  epb.tiebreakerChain.forEach((step, index) => {
+  effectiveTiebreakerChain(rules, epb).forEach((step, index) => {
     if (seen.has(step)) return;
     seen.add(step);
     const key = `tiebreak_${step}`;
@@ -91,8 +87,6 @@ function epbModule(input: LegacyInput, tr: LegacyTexts): LegacyModule | null {
     adapter: 'epb',
     facts: compact([
       fact(tr, 'match_points_win', epb.matchPoints.win),
-      // Round-robin tables score a flat 3 per win (see `scoringOf`); say so when the stored pack value is another.
-      ...(roundRobinDiffers ? [fact(tr, 'match_points_win_round_robin', ROUND_ROBIN_POINTS_PER_WIN)] : []),
       ...tiebreaks,
       fact(tr, 'tera_stage1', tera.stage1),
       fact(tr, 'tera_stage2', tera.stage2),

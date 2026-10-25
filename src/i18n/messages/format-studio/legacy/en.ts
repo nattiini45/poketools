@@ -24,7 +24,6 @@ export default {
     tier_limit_b: 'Pick limit for tier B',
     tier_limit_c: 'Pick limit for tier C',
     match_points_win: 'Match points per win',
-    match_points_win_round_robin: 'Match points per win in round-robin tables (the stored value above differs)',
     tiebreak_match_points: 'Tiebreak position of match points',
     tiebreak_kill_difference: 'Tiebreak position of the KO difference',
     tiebreak_evolution_points: 'Tiebreak position of evolution points',

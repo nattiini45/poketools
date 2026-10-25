@@ -45,9 +45,10 @@ import {
   type Stage,
   type TextSection,
 } from '@/lib/format-kit/client';
-import { ROUND_ROBIN_POINTS_PER_WIN, buildModules, type LegacyTexts } from './facts';
+import { ROUND_ROBIN_MATCH_POINTS, effectiveMatchPoints, effectiveTiebreakerChain } from '@/lib/tournament/standings-rules';
+import { buildModules, type LegacyTexts } from './facts';
 import { mapOverrides } from './overrides';
-import type { LegacyInput, LegacyPack, LegacyStageInput } from './types';
+import type { LegacyFacts, LegacyInput, LegacyPack, LegacyStageInput } from './types';
 
 type StoredRule = NonNullable<LegacyStageInput['advancementRule']>;
 
@@ -102,31 +103,33 @@ const isTable = (stage: LegacyStageInput): boolean => stage.bracketType === 'rou
  *   `src/lib/tournament/byes.ts`);
  * - Swiss: 1 per win and a bye scores as a win (`computeStandings` default, `scoringByeRecords`);
  * - elimination stages: 1 per win, no table, no byes that score;
- * - Evolution Point Buy: the same dispatch (`computeStandingsForFormat`) takes the points per win from the caller
- *   when it passes one, else from the pack's match points. A round-robin table passes 3, so it scores 3 whatever
- *   the pack stores (the module facts add a note when the stored value differs); a Swiss table passes none and
- *   scores the pack value. Neither scores a bye (`formatScoresByes`).
+ * - Evolution Point Buy: the standings take the points per win from the pack (`effectiveMatchPoints`,
+ *   `src/lib/tournament/standings-rules.ts`) in round robin and Swiss alike, whatever the caller passes. Neither
+ *   scores a bye (`formatScoresByes`).
  * Draws and forfeits are never set: the match model has neither.
  */
 function scoringOf(stage: LegacyStageInput, evolutionPointBuy: boolean, pack: LegacyPack): Scoring {
   const table = isTable(stage);
-  if (table && evolutionPointBuy && stage.bracketType === 'swiss') {
-    const win = pack.epb.matchPoints.win;
-    return { win: Number.isFinite(win) ? Math.min(SCORE_ABS_MAX, Math.max(-SCORE_ABS_MAX, win)) : 1, loss: 0, bye: 0 };
+  if (table && evolutionPointBuy) {
+    const win = effectiveMatchPoints('evolution_point_buy', {}, pack.epb).pointsPerWin;
+    const fallback = stage.bracketType === 'swiss' ? 1 : ROUND_ROBIN_MATCH_POINTS.pointsPerWin;
+    const value = win !== undefined && Number.isFinite(win) ? win : fallback;
+    return { win: Math.min(SCORE_ABS_MAX, Math.max(-SCORE_ABS_MAX, value)), loss: 0, bye: 0 };
   }
-  if (stage.bracketType === 'round_robin') return { win: ROUND_ROBIN_POINTS_PER_WIN, loss: 0, bye: 0 };
+  if (stage.bracketType === 'round_robin') return { win: ROUND_ROBIN_MATCH_POINTS.pointsPerWin, loss: 0, bye: 0 };
   if (stage.bracketType === 'swiss') return { win: 1, loss: 0, bye: 1 };
   return { win: 1, loss: 0, bye: 0 };
 }
 
 /**
  * Today's tie-break order. Table stages outside Evolution Point Buy sort by points, KO differential, Buchholz and
- * wins (`computeStandings`, `src/lib/tournament/standings.ts`). Evolution Point Buy sorts by the pack's tiebreaker
- * chain (`computeEvolutionStandings`): match points, KO difference, head-to-head and the decision match map to kit
- * steps one by one; evolution points have no kit metric and are left out here (the module facts keep their
- * position). Elimination stages have no rank chain.
+ * wins (`computeStandings`, `src/lib/tournament/standings.ts`). Evolution Point Buy sorts by the league's stored
+ * tiebreaker order when it is a usable chain, else by the pack's chain (`effectiveTiebreakerChain`,
+ * `src/lib/tournament/standings-rules.ts`, the helper the standings use): match points, KO difference,
+ * head-to-head and the decision match map to kit steps one by one; evolution points have no kit metric and are left
+ * out here (the module facts keep their position). Elimination stages have no rank chain.
  */
-function rankOf(stage: LegacyStageInput, evolutionPointBuy: boolean, pack: LegacyPack): RankStep[] {
+function rankOf(stage: LegacyStageInput, evolutionPointBuy: boolean, pack: LegacyPack, rules: LegacyFacts['formatRules']): RankStep[] {
   if (!isTable(stage)) return [];
   if (!evolutionPointBuy) {
     return [
@@ -137,7 +140,7 @@ function rankOf(stage: LegacyStageInput, evolutionPointBuy: boolean, pack: Legac
     ];
   }
   const steps: RankStep[] = [];
-  for (const step of pack.epb.tiebreakerChain) {
+  for (const step of effectiveTiebreakerChain(rules, pack.epb)) {
     if (step === 'match_points') steps.push({ kind: 'metric', metric: 'points', direction: 'desc' });
     else if (step === 'kill_difference') steps.push({ kind: 'metric', metric: 'kill_differential', direction: 'desc' });
     else if (step === 'head_to_head') steps.push({ kind: 'head_to_head', scope: 'pairwise' });
@@ -281,7 +284,7 @@ export function describeLegacy(input: LegacyInput): FormatDefinition {
       doubles: stage.isDoubles === true || season.formatType === 'doubles',
       players_per_match: 2,
       scoring: scoringOf(stage, evolutionPointBuy, pack),
-      rank: rankOf(stage, evolutionPointBuy, pack),
+      rank: rankOf(stage, evolutionPointBuy, pack, input.facts.formatRules),
       columns: [],
     };
   });

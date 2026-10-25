@@ -307,7 +307,7 @@ describe('scoring and rank', () => {
     expect(stage.rank).toStrictEqual(rank);
   });
 
-  it('scores an Evolution Point Buy table with the pack and ranks by the pack chain', () => {
+  it('scores an Evolution Point Buy table with the pack and ranks by the pack chain when no order is stored', () => {
     const def = describeStages([{ bracketType: 'round_robin' }, { bracketType: 'swiss' }], { formatType: 'evolution_point_buy' });
     for (const stage of def.stages) {
       expect(stage.scoring).toStrictEqual({ win: 3, loss: 0, bye: 0 });
@@ -328,13 +328,82 @@ describe('scoring and rank', () => {
     expect(stageOf(def, 0).rank).toHaveLength(2);
   });
 
-  it('scores a round-robin table of an Evolution Point Buy league at 3 per win whatever the pack stores', () => {
-    // The league hub and the tournament tabs pass 3 to the shared standings code, which overrides the pack value.
+  it('scores the pack win points in a round-robin table and a Swiss table of an Evolution Point Buy league', () => {
+    // The standings take the points from the pack (`effectiveMatchPoints`), whatever a caller passes.
     for (const win of [1, 2, 5]) {
       const pack = { epb: { ...FIXTURE_PACK.epb, matchPoints: { win, draw: 1 } } };
-      const def = describeStages([{ bracketType: 'round_robin' }], { formatType: 'evolution_point_buy' }, { pack });
-      expect(stageOf(def, 0).scoring).toStrictEqual({ win: 3, loss: 0, bye: 0 });
+      const def = describeStages([{ bracketType: 'round_robin' }, { bracketType: 'swiss' }], { formatType: 'evolution_point_buy' }, { pack });
+      expect(def.stages.map((stage) => stage.scoring)).toStrictEqual([
+        { win, loss: 0, bye: 0 },
+        { win, loss: 0, bye: 0 },
+      ]);
     }
+  });
+
+  it('keeps 3 per win in a round-robin table outside Evolution Point Buy whatever the pack stores', () => {
+    const pack = { epb: { ...FIXTURE_PACK.epb, matchPoints: { win: 2, draw: 1 } } };
+    const def = describeStages([{ bracketType: 'round_robin' }, { bracketType: 'swiss' }], { formatType: 'singles' }, { pack });
+    expect(def.stages.map((stage) => stage.scoring)).toStrictEqual([
+      { win: 3, loss: 0, bye: 0 },
+      { win: 1, loss: 0, bye: 1 },
+    ]);
+  });
+
+  describe('the stored tiebreaker order', () => {
+    const rulesWith = (tiebreaker_order: unknown): LegacyInput['facts'] => ({
+      typeAssignments: null,
+      formatRules: { ...FIXTURE_LEAGUES.epb_two_stage.facts.formatRules!, tiebreaker_order: tiebreaker_order as never },
+      draftTierLimits: null,
+    });
+    const rankOfTable = (tiebreaker_order: unknown, formatType: 'evolution_point_buy' | 'singles' = 'evolution_point_buy') =>
+      stageOf(describeStages([{ bracketType: 'round_robin' }], { formatType }, { facts: rulesWith(tiebreaker_order) }), 0).rank;
+    const positions = (tiebreaker_order: unknown) =>
+      describeStages([{ bracketType: 'round_robin' }], { formatType: 'evolution_point_buy' }, { facts: rulesWith(tiebreaker_order) })
+        .modules[0].facts.filter((fact) => fact.key.startsWith('tiebreak_'))
+        .map((fact) => [fact.key, fact.value]);
+
+    it('ranks by a usable stored order, not by the pack chain', () => {
+      expect(rankOfTable(['head_to_head', 'match_points'])).toStrictEqual([
+        { kind: 'head_to_head', scope: 'pairwise' },
+        { kind: 'metric', metric: 'points', direction: 'desc' },
+      ]);
+      expect(positions(['head_to_head', 'match_points'])).toEqual([
+        ['tiebreak_head_to_head', 1],
+        ['tiebreak_match_points', 2],
+      ]);
+    });
+
+    it.each([
+      ['an empty order', []],
+      ['an unknown step', ['match_points', 'coin_flip']],
+      ['a repeated step', ['match_points', 'match_points']],
+      ['a decision match that is not last', ['decision_match', 'match_points']],
+      ['only a decision match', ['decision_match']],
+      ['something that is not a list', 'match_points'],
+    ])('falls back to the pack chain for %s', (_label, stored) => {
+      expect(rankOfTable(stored)).toStrictEqual([
+        { kind: 'metric', metric: 'points', direction: 'desc' },
+        { kind: 'metric', metric: 'kill_differential', direction: 'desc' },
+        { kind: 'head_to_head', scope: 'pairwise' },
+        { kind: 'decision_match' },
+      ]);
+      expect(positions(stored).map(([key]) => key)).toEqual([
+        'tiebreak_match_points',
+        'tiebreak_kill_difference',
+        'tiebreak_evolution_points',
+        'tiebreak_head_to_head',
+        'tiebreak_decision_match',
+      ]);
+    });
+
+    it('does not change the rank of a league outside Evolution Point Buy', () => {
+      expect(rankOfTable(['head_to_head', 'match_points'], 'singles')).toStrictEqual([
+        { kind: 'metric', metric: 'points', direction: 'desc' },
+        { kind: 'metric', metric: 'kill_differential', direction: 'desc' },
+        { kind: 'metric', metric: 'buchholz', direction: 'desc' },
+        { kind: 'metric', metric: 'wins', direction: 'desc' },
+      ]);
+    });
   });
 
   it('keeps elimination stages of an Evolution Point Buy league at one point and no rank', () => {
@@ -390,27 +459,14 @@ describe('modules', () => {
     expect(modules({ formatType: 'draft' })[0].facts).toEqual([]);
   });
 
-  describe('the stored match points differ from the round-robin table', () => {
+  it('states no round-robin special case: the stored match points are what every table scores', () => {
     const pack = { epb: { ...FIXTURE_PACK.epb, matchPoints: { win: 2, draw: 1 } } };
-    const epb = (stages: Parameters<typeof describeStages>[0]) =>
-      describeStages(stages, { formatType: 'evolution_point_buy' }, { pack }).modules.find((entry) => entry.adapter === 'epb')!;
-
-    it('keeps the stored value and adds a neutral note fact with what the table scores', () => {
-      const facts = epb([{ bracketType: 'round_robin' }, { bracketType: 'swiss' }]).facts;
-      const byKey = new Map(facts.map((f) => [f.key, f]));
-      expect(byKey.get('match_points_win')?.value).toBe(2);
-      const note = byKey.get('match_points_win_round_robin');
-      expect(note?.value).toBe(3);
-      expect(facts.indexOf(note!)).toBe(facts.indexOf(byKey.get('match_points_win')!) + 1);
-      expect(JSON.stringify(note?.label)).toContain('round-robin tables');
-      expect(JSON.stringify(note?.label)).toContain('Rundentabellen');
-    });
-
-    it('adds no note when the league has no round-robin phase', () => {
-      const keys = epb([{ bracketType: 'swiss' }, { bracketType: 'single_elim' }]).facts.map((f) => f.key);
-      expect(keys).toContain('match_points_win');
-      expect(keys).not.toContain('match_points_win_round_robin');
-    });
+    const entry = describeStages([{ bracketType: 'round_robin' }, { bracketType: 'swiss' }], { formatType: 'evolution_point_buy' }, { pack })
+      .modules.find((module) => module.adapter === 'epb')!;
+    const keys = entry.facts.map((f) => f.key);
+    expect(keys).toContain('match_points_win');
+    expect(keys.some((key) => key.includes('round_robin'))).toBe(false);
+    expect(entry.facts.find((f) => f.key === 'match_points_win')?.value).toBe(2);
   });
 
   it('puts Core Liga before the draft module and never both for the same adapter', () => {
@@ -422,8 +478,6 @@ describe('modules', () => {
     expect(adapters(list)).toEqual(['epb']);
     const facts = new Map(list[0].facts.map((f) => [f.key, f.value]));
     expect(facts.get('match_points_win')).toBe(3);
-    // The stored value is 3 here, so there is nothing to note.
-    expect(facts.has('match_points_win_round_robin')).toBe(false);
     expect([1, 2, 3, 4, 5]).toEqual(
       ['match_points', 'kill_difference', 'evolution_points', 'head_to_head', 'decision_match'].map((step) => facts.get(`tiebreak_${step}`)),
     );

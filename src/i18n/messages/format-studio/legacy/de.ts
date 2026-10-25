@@ -22,7 +22,6 @@ export default defineDe<typeof en>()({
     tier_limit_b: 'Pick-Limit für Tier B',
     tier_limit_c: 'Pick-Limit für Tier C',
     match_points_win: 'Matchpunkte pro Sieg',
-    match_points_win_round_robin: 'Matchpunkte pro Sieg in Rundentabellen (der gespeicherte Wert oben weicht ab)',
     tiebreak_match_points: 'Rang der Matchpunkte im Tiebreak',
     tiebreak_kill_difference: 'Rang der KO-Differenz im Tiebreak',
     tiebreak_evolution_points: 'Rang der Evolutionspunkte im Tiebreak',

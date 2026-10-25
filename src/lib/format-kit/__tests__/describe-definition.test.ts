@@ -323,7 +323,7 @@ describe('rule cards, views, modules and sections', () => {
     const en = describeDefinition(def, 'en').modules[0];
     expect(en.adapter).toBe('epb');
     expect(en.label).toBe('Evolution Point Buy');
-    expect(en.summary).toBe('Legacy module Evolution Point Buy with 24 facts.');
+    expect(en.summary).toBe('Legacy module Evolution Point Buy with 22 facts.');
     const facts = new Map(en.facts.map((f) => [f.key, f]));
     expect(facts.get('redraft_open')).toEqual({ key: 'redraft_open', label: 'Redraft phase open', value: 'yes' });
     expect(facts.get('tera_stage2')?.value).toBe('only Tera types the Pokémon already has');
