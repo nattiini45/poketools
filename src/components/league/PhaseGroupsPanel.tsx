@@ -7,6 +7,7 @@ import type { ApiResult } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Select from '@/components/ui/Select';
 import PhaseGroupRepair from '@/components/league/PhaseGroupRepair';
 import { useLocale, useT } from '@/i18n/client';
@@ -15,6 +16,7 @@ import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
+import { PHASE_GROUP_COUNTS, redrawNeedsConfirm } from '@/lib/league-admin/phase-controls';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
 
 interface PhaseGroupsPanelProps {
@@ -31,7 +33,31 @@ interface PhaseGroupsPanelProps {
 /** Selects and buttons reach 44px on phones (touch targets), the compact size from `sm` up. */
 const TOUCH = 'min-h-11 sm:min-h-0';
 
-const GROUP_COUNTS = [2, 3, 4, 6, 8] as const;
+/** The group count select: 2 to 26 groups (the API's range, `phaseGroupsCreateSchema`). */
+export function GroupCountSelect({ value, onChange }: { value: number; onChange: (count: number) => void }) {
+  const t = useT(leaguePhasesMessages);
+  return (
+    <Select
+      label={t('groups.groupCount')}
+      value={String(value)}
+      onChange={(e) => onChange(Number(e.target.value))}
+      options={PHASE_GROUP_COUNTS.map((n) => ({
+        value: String(n),
+        label: t('groups.groupCountOption', { count: n }),
+      }))}
+    />
+  );
+}
+
+/**
+ * The note for a phase without groups. It tells the admin to seed and serpentine-assign, so a league-managed phase
+ * (whose controls are hidden and whose groups come from the league) shows none: its info note says where they come from.
+ */
+export function EmptyGroupsNote({ leagueManaged }: { leagueManaged: boolean }) {
+  const t = useT(leaguePhasesMessages);
+  if (leagueManaged) return null;
+  return <p className="text-sm text-poke-text-muted">{t('groups.empty')}</p>;
+}
 
 /** An API refusal (shown by its code), or a request that got no answer. */
 type GroupsError =
@@ -52,6 +78,8 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
   const [moving, setMoving] = useState<string | null>(null);
+  /** The re-draw confirm is open (null = closed) and names the groups a serpentine assign would replace. */
+  const [redrawCount, setRedrawCount] = useState<number | null>(null);
   const [error, setError] = useState<GroupsError | null>(null);
   /** Bumped by this panel's own group edits: a repair plan checked before one is dropped. */
   const [editVersion, setEditVersion] = useState(0);
@@ -94,6 +122,17 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
     } finally {
       setAssigning(false);
     }
+  }
+
+  /** The serpentine button: asks first when the assign would replace existing groups. */
+  function requestAssign() {
+    if (redrawNeedsConfirm(groups.length)) setRedrawCount(groups.length);
+    else void handleSerpentineAssign();
+  }
+
+  async function confirmAssign() {
+    await handleSerpentineAssign();
+    setRedrawCount(null);
   }
 
   async function handleClearGroups() {
@@ -178,20 +217,12 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
         </>
       ) : (
       <div className="flex flex-wrap items-end gap-3">
-        <Select
-          label={t('groups.groupCount')}
-          value={String(groupCount)}
-          onChange={(e) => setGroupCount(Number(e.target.value))}
-          options={GROUP_COUNTS.map((n) => ({
-            value: String(n),
-            label: t('groups.groupCountOption', { count: n }),
-          }))}
-        />
+        <GroupCountSelect value={groupCount} onChange={setGroupCount} />
         <Button
           variant="secondary"
           size="sm"
           className={TOUCH}
-          onClick={handleSerpentineAssign}
+          onClick={requestAssign}
           loading={assigning}
         >
           {t('groups.serpentine')}
@@ -204,10 +235,19 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
       </div>
       )}
 
+      <ConfirmDialog
+        open={redrawCount !== null}
+        onClose={() => setRedrawCount(null)}
+        onConfirm={() => void confirmAssign()}
+        title={t('groups.redrawTitle')}
+        message={t('groups.redrawConfirm', { count: redrawCount ?? groups.length })}
+        confirmLabel={t('groups.redrawConfirmLabel')}
+        confirmVariant="danger"
+        loading={assigning}
+      />
+
       {groups.length === 0 ? (
-        <p className="text-sm text-poke-text-muted">
-          {t('groups.empty')}
-        </p>
+        <EmptyGroupsNote leagueManaged={leagueManaged} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {groups.map((group) => (

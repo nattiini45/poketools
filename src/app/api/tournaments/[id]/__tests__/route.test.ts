@@ -26,6 +26,12 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   updateTournament: vi.fn(),
   deleteTournament: vi.fn(),
   getParticipants: vi.fn(),
+  getStagesBySeasonId: vi.fn(),
+}));
+
+// A standalone tournament's start signal (standalone-guards.test.ts covers it).
+vi.mock('@/lib/supabase/queries/rounds', () => ({
+  getRoundsByTournament: vi.fn(),
 }));
 
 vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
@@ -55,6 +61,7 @@ import {
   updateTournament,
   deleteTournament,
   getParticipants,
+  getStagesBySeasonId,
 } from '@/lib/supabase/queries/tournaments';
 import { rebuildAfterTournamentDelete } from '@/lib/reconcile/entity-delete-rebuild';
 import { emitDiscordEvent } from '@/lib/discord/notify';
@@ -137,6 +144,8 @@ describe('PATCH /api/tournaments/[id]', () => {
     // Default: auth passes with a mock admin player
     vi.mocked(requireResourceAdmin).mockResolvedValue(mockAdmin as never);
     vi.mocked(getTournamentById).mockResolvedValue(baseTournament as never);
+    // The league's other phases, read when a phase is renamed.
+    vi.mocked(getStagesBySeasonId).mockResolvedValue([]);
   });
 
   it('returns auth error when not a resource admin', async () => {

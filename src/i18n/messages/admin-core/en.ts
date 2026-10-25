@@ -87,6 +87,7 @@ const auditActions = {
   season__auto_bind_point_buy_list: 'Point-buy list bound automatically',
   season__auto_create_battle_ruleset: 'Battle ruleset created automatically',
   season__clear_battle_ruleset_bans: 'Bans cleared from the automatic battle ruleset',
+  season__update: 'League settings changed',
   season__set_test_flag: 'Test flag changed',
   season__delete: 'Season deleted',
   point_buy_list__create: 'Point-buy list created',

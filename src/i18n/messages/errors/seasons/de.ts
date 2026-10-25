@@ -9,6 +9,7 @@ export default defineDe<typeof en>()({
   PHASE_INSERT_INVALID: 'insert_at liegt außerhalb des gültigen Bereichs.',
   PHASE_INSERT_LOCKED: 'Vor bereits gestarteten Phasen lässt sich keine Phase einfügen.',
   PHASE_COMPLETED_LOCKED: 'Abgeschlossene Phasen sind gesperrt. Setze die Phase zuerst wieder auf aktiv.',
+  PHASE_NAME_TAKEN: 'Eine andere Phase dieser Liga hat schon diesen Namen.',
   PHASE_DELETE_CONFIRM_REQUIRED: 'Eine Phase mit Runden lässt sich nur mit confirm: true löschen.',
   PHASE_STAGE_ORDER_LOCKED: 'Die Reihenfolge lässt sich nach dem Start der Phase nicht mehr ändern.',
   PHASE_BRACKET_LOCKED: 'Der Turniermodus lässt sich nach dem Start der Phase nicht mehr ändern.',
@@ -48,6 +49,10 @@ export default defineDe<typeof en>()({
   SEASON_NOT_FOUND: 'Liga nicht gefunden.',
   SEASON_HAS_DEPENDENTS:
     'Diese Liga hat noch Phasen, Draft-Pools, Teams oder Storylines, die auf sie verweisen, daher wurde nichts gelöscht. Lösche diese zuerst und danach die Liga.',
+  SEASON_FORMAT_LOCKED: 'Der Liga-Typ lässt sich nicht mehr ändern, sobald die Liga gestartet ist.',
+  SEASON_FORMAT_POINT_BUY_LOCKED:
+    'Eine Point-Buy-Liga behält ihren Liga-Typ, und andere Ligen lassen sich nicht darauf umstellen.',
+  SEASON_DATES_INVALID: 'Das Enddatum darf nicht vor dem Startdatum liegen.',
   season_test_flag_site_admin_only: 'Nur Site-Admins können die Testliga-Markierung ändern.',
   participant_update_empty: 'Gib gym_type und/oder core_types an, um den Teilnehmer zu ändern.',
   format_mismatch: 'Diese Saison nutzt nicht das Format Evolution Point Buy.',

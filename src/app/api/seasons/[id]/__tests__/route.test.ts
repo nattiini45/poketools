@@ -31,12 +31,20 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   archiveTournamentsBySeason: vi.fn(),
 }));
 
+// The league-type guard reads the phases' start signals (settings-guards.test.ts covers it).
+vi.mock('@/lib/supabase/queries/season-start', () => ({
+  getSeasonPhaseStartSignals: vi.fn(),
+}));
+
 vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
   rebuildAfterSeasonDelete: vi.fn(),
 }));
 
 vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
+  diffField: (changes: Record<string, { before: unknown; after: unknown }>, field: string, before: unknown, after: unknown) => {
+    if (before !== after) changes[field] = { before, after };
+  },
 }));
 
 // The rating rebuild after setting the test flag: test-flag-ratings.test.ts.
@@ -141,6 +149,7 @@ describe('GET /api/seasons/[id]', () => {
 describe('PATCH /api/seasons/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getSeasonById).mockResolvedValue(mockSeason);
   });
 
   it('returns 403 when not resource admin', async () => {
@@ -268,6 +277,7 @@ describe('PATCH /api/seasons/[id] — test-league flag', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getSeasonById).mockResolvedValue(mockSeason);
   });
 
   it('lets a site admin set the flag: one update, ratings rebuilt, audited, season reads expired', async () => {
@@ -348,7 +358,8 @@ describe('PATCH /api/seasons/[id] — test-league flag', () => {
 
     expect(response.status).toBe(200);
     expect(updateSeason).toHaveBeenCalledWith('cccccccc-cccc-4ccc-8ccc-cccccccccccc', { name: 'Renamed' });
-    expect(logAuditEvent).not.toHaveBeenCalled();
+    // The general edit is audited, the test flag is not touched.
+    expect(logAuditEvent).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'season.set_test_flag' }));
   });
 
   it('rejects a non-boolean flag with 400 before any write', async () => {

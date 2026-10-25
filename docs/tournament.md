@@ -114,8 +114,8 @@ src/lib/tournament/
 - `/api/tournaments/[id]/generate-bracket` — full SE/DE bracket generation
 - `/api/tournaments/[id]/regenerate-bracket` — destructive rebuild (cascade-resets played matches first; **409** `REGENERATE_PLAYED` without `cascade: true`)
 - `POST /api/tournaments/[id]/repair-bracket` — re-run bye resolution + slot materialization after failed propagation (RoundManager "Repair bracket")
-- `/api/seasons/[id]/phases` — phase list/create (`insert_at` guarded: **400** `PHASE_INSERT_LOCKED` when inserting before a started phase)
-- `/api/seasons/[id]/phases/[phaseId]` — phase update/delete (season-linked PATCH locked: `PHASE_BRACKET_LOCKED`, `PHASE_STAGE_ORDER_LOCKED`, `PHASE_COMPLETED_LOCKED`)
+- `/api/seasons/[id]/phases` — phase list/create (`insert_at` in `1..highest stage_order + 1`, **400** `PHASE_INSERT_INVALID` outside it and **400** `PHASE_INSERT_LOCKED` when inserting before a started phase; **409** `PHASE_NAME_TAKEN` for a name another phase of the league has)
+- `/api/seasons/[id]/phases/[phaseId]` — phase update/delete (season-linked PATCH locked: `PHASE_BRACKET_LOCKED`, `PHASE_STAGE_ORDER_LOCKED`, `PHASE_COMPLETED_LOCKED`; **409** `PHASE_NAME_TAKEN` on a rename; `{ status: 'active' }` on a completed phase reopens it)
 - `/api/seasons/[id]/phases/reorder`
 - `/api/seasons/[id]/phases/[phaseId]/participants` (+ `sync-standings` with optional `force`, `seed-by-rating`)
 - `/api/seasons/[id]/phases/[phaseId]/groups` (+ `members`, `repair`: group rows left by pre-handover substitutions, see [Season](./season.md))
@@ -127,6 +127,23 @@ src/lib/tournament/
 - `POST /api/admin/matches/[id]/reset` — cascade un-propagates downstream; **409** `DOWNSTREAM_PLAYED` without `cascade: true`
 - `POST /api/admin/rounds/[id]/reset` — same cascade semantics as match reset
 - `DELETE /api/admin/rounds/[id]` — round delete; **400** `STRUCTURE_ELIM_ROUND_DELETE` for v2 elim rounds (use regenerate-bracket); runs `rebuildAggregatesForScope` after delete
+
+## Standalone tournament settings
+`PATCH /api/tournaments/[id]` (any tournament; resource admins of that tournament) edits name, ruleset, best-of and overrides, doubles, bracket type, team visibility, the grand-final reset and the status. League phases keep their own guards there (`PHASE_BRACKET_LOCKED`, `PHASE_STAGE_ORDER_LOCKED`, `PHASE_COMPLETED_LOCKED`) and additionally refuse a rename onto another phase's name (**409** `PHASE_NAME_TAKEN`). A **standalone** tournament (no `season_id`) locks three fields once it has **started** (`isTournamentStarted`, `src/lib/tournament/standalone-lock.ts`: status is not `upcoming`, or it has at least one round):
+
+| Field | Refusal when changed after the start |
+|---|---|
+| `bracket_type` | **400** `tournament_bracket_locked` |
+| `ruleset_id` | **400** `tournament_ruleset_locked` |
+| `is_doubles` | **400** `tournament_doubles_locked` |
+
+A value equal to the stored one passes (the settings form sends the whole object). The rounds are read (`getRoundsByTournament`) only when one of the three fields really changes. Name, `best_of_default`, `bo_overrides`, `team_visibility` and `bracket_reset_enabled` stay editable at any status, and a completed standalone tournament is not given the league phase's completed lock. The `tournament.update` audit diff records `name`, `status`, `archived`, `bracket_reset_enabled`, `bracket_type`, `ruleset_id`, `best_of_default`, `is_doubles`, `team_visibility` and `bo_overrides` (compared as key-sorted entries); the description is never logged.
+
+- **Best-of is odd, 1 to 15.** Every best-of in the API (`best_of_default`, the values of `bo_overrides`, a round's `best_of`, a manual round's `best_of`) goes through `bestOfSchema` (see [Validation](./validation.md)); even values are **400** `validation_failed`. The pickers offer `BEST_OF_VALUES` (`src/lib/tournament/best-of.ts`) and merge a stored legacy even value in (`bestOfChoices`), so editing an old record does not silently change it. A record that already holds an even value keeps it until someone saves a different best-of on it. The phase `PATCH` parses the best-of leniently (any integer 1 to 15) because the phase form sends the whole record back, then refuses an even `best_of_default` or `bo_overrides` value that is not the one the phase already holds (`newEvenBestOfIssues`): saving a rename on such a phase works, picking a different even value is **400** `validation_failed`.
+- **Group count is 2 to 26** (`phaseGroupsCreateSchema`, `MAX_SEASON_GROUPS`); the phase groups panel offers the same range.
+- **Reopen.** `PATCH` with `{ status: 'active' }` on a completed tournament or phase writes only the status column (the same call "Mark completed" uses the other way). Matches, results, standings and rounds are untouched, and players already advanced into the next phase stay there. Completing it again emits the completion Discord and social events again.
+
+Tests: `src/lib/tournament/__tests__/standalone-lock.test.ts`, `src/app/api/tournaments/[id]/__tests__/standalone-guards.test.ts`, `src/app/api/seasons/[id]/phases/[phaseId]/__tests__/patch.test.ts`.
 
 ## Match pages and admin round view
 - **Public match page** `/tournaments/[id]/matches/[mid]`: 404 (`notFound()`) for a malformed id and for a match whose `tournament_id` is not `[id]`, so a match never renders under, or links back to, another tournament. The admin notes render only for a live site admin (`getLiveAccess().isSiteAdmin`; the read runs only when the match has notes and a viewer is signed in). Tests: `src/app/(public)/tournaments/[id]/matches/[mid]/__tests__/page.test.ts`.

@@ -7,11 +7,12 @@ import Section from '@/components/ui/Section';
 import { gateResourceAdmin } from '@/lib/auth/resource-gate';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
+import { getStagesBySeasonId, getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { listRulesets } from '@/lib/supabase/queries/rulesets';
 import { buildLeaguePhase } from '@/lib/tournament/league-phase';
+import { phaseNumbers } from '@/lib/league-admin/phase-controls';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
 import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
@@ -57,9 +58,11 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
   // Phase delete is site-admin only, decided from the live gate (never the session copy).
   const { isSiteAdmin } = gate;
 
-  const [league, tournament, rounds, rulesets, leagueHasGroups, t, tEnum, tCommon] = await Promise.all([
+  const [league, tournament, stages, rounds, rulesets, leagueHasGroups, t, tEnum, tCommon] = await Promise.all([
     getSeasonById(seasonId),
     getTournamentWithDetails(phaseId),
+    // The league's phases, to count this one as a position (1, 2, ...) in the subtitle.
+    getStagesBySeasonId(seasonId),
     getRoundsByTournament(phaseId),
     listRulesets(),
     // A league with groups owns its phases' groups (the panel shows them read-only).
@@ -80,7 +83,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
         title={phase.name}
         subtitle={t('phasePage.subtitle', {
           league: league.name,
-          order: phase.stage_order,
+          order: phaseNumbers(stages).get(phaseId) ?? 1,
           bracket: enumLabel(tEnum, 'bracketType', phase.bracket_type),
           bestOf: tCommon('bestOf', { count: phase.best_of_default }),
           status: enumLabel(tEnum, 'tournamentStatus', phase.status),

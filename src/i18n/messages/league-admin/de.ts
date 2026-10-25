@@ -50,6 +50,15 @@ export default defineDe<typeof en>()({
     endDate: 'Enddatum',
     submit: 'Liga erstellen',
     saveFailed: 'Speichern fehlgeschlagen',
+    saveChanges: 'Änderungen speichern',
+    saved: 'Liga-Einstellungen gespeichert.',
+    datesInvalid: 'Das Enddatum darf nicht vor dem Startdatum liegen.',
+    leagueTypeLockedStarted:
+      'Der Liga-Typ lässt sich nicht mehr ändern: Die Liga ist gestartet (sie ist aktiv oder abgeschlossen, oder eine Phase hat Runden).',
+    leagueTypeLockedPointBuy:
+      'Eine Point-Buy-Liga behält ihren Liga-Typ, und andere Ligen können keine werden: Ihre Einrichtung (Formatregeln, Point-Buy-Liste, Battle-Regelwerk) wird zusammen mit der Liga angelegt.',
+    rulesetEditHint:
+      'Der Standard für neue Phasen und für die Teamprüfung, wo eine Phase kein eigenes Custom-Regelwerk hat. Bestehende Phasen behalten ihres.',
   },
   theme: {
     label: 'Thema',

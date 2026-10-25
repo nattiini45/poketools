@@ -280,14 +280,34 @@ export const matchProposalCreateSchema = z.object({
 
 // ─── Tournament Schemas ──────────────────────────────────────────────
 
+/**
+ * A best-of series length: an odd integer from 1 to 15 (a series needs a
+ * winner). The pickers offer the same list (`BEST_OF_VALUES`,
+ * src/lib/tournament/best-of.ts).
+ */
+export const bestOfSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(15)
+  .refine((value) => value % 2 === 1, { message: 'best of must be an odd number' });
+
+/**
+ * A best-of that may already be stored on a record: any integer from 1 to 15, even
+ * values included (earlier versions accepted them). Only for an update that sends the
+ * whole stored form back; the route then refuses an even value that is not the stored one
+ * (`newEvenBestOfIssues`, src/lib/tournament/best-of.ts).
+ */
+const storedBestOfSchema = z.number().int().min(1).max(15);
+
 export const tournamentCreateSchema = z.object({
   name: z.string().trim().min(1).max(FIELD_LIMITS.TITLE),
   description: z.string().max(FIELD_LIMITS.LONG_TEXT).optional(),
   season_id: uuid.optional().nullable(),
   bracket_type: bracketTypeSchema,
   ruleset_id: uuid,
-  best_of_default: z.number().int().min(1).max(15).default(1),
-  bo_overrides: z.record(z.string(), z.number().int().min(1).max(15)).optional(),
+  best_of_default: bestOfSchema.default(1),
+  bo_overrides: z.record(z.string(), bestOfSchema).optional(),
   is_doubles: z.boolean().default(false),
   team_visibility: teamVisibilitySchema.default('hidden_until_match'),
   stage_order: z.number().int().min(0).optional(),
@@ -299,8 +319,8 @@ export const tournamentUpdateSchema = z.object({
   description: z.string().max(FIELD_LIMITS.LONG_TEXT).optional(),
   bracket_type: bracketTypeSchema.optional(),
   ruleset_id: uuid.optional(),
-  best_of_default: z.number().int().min(1).max(15).optional(),
-  bo_overrides: z.record(z.string(), z.number().int().min(1).max(15)).optional(),
+  best_of_default: bestOfSchema.optional(),
+  bo_overrides: z.record(z.string(), bestOfSchema).optional(),
   is_doubles: z.boolean().optional(),
   team_visibility: teamVisibilitySchema.optional(),
   status: tournamentStatusSchema.optional(),
@@ -327,8 +347,10 @@ export const phaseUpdateSchema = z.object({
   description: z.string().max(FIELD_LIMITS.LONG_TEXT).optional(),
   bracket_type: bracketTypeSchema.optional(),
   ruleset_id: uuid.optional(),
-  best_of_default: z.number().int().min(1).max(15).optional(),
-  bo_overrides: z.record(z.string(), z.number().int().min(1).max(15)).optional(),
+  // The phase form sends the stored best-of back on every save; the route refuses an even
+  // value unless it is the stored one.
+  best_of_default: storedBestOfSchema.optional(),
+  bo_overrides: z.record(z.string(), storedBestOfSchema).optional(),
   is_doubles: z.boolean().optional(),
   team_visibility: teamVisibilitySchema.optional(),
   status: tournamentStatusSchema.optional(),
@@ -1169,7 +1191,7 @@ export const evolutionUpdateSchema = z.object({
 
 export const roundUpdateSchema = z.object({
   status: roundStatusSchema.optional(),
-  best_of: z.number().int().min(1).max(15).optional(),
+  best_of: bestOfSchema.optional(),
   // ISO 8601 with an explicit offset (`Z` or `+02:00`): a timezone-less string
   // would be read in the server's zone, not the admin's. `null` clears it.
   deadline: z.string().trim().datetime({ offset: true }).nullable().optional(),
@@ -1412,7 +1434,7 @@ export const teamUpdateSchema = z.object({
 
 export const manualRoundSchema = z.object({
   name: z.string().trim().max(FIELD_LIMITS.NAME).optional(),
-  best_of: z.number().int().min(1).max(15).optional(),
+  best_of: bestOfSchema.optional(),
   pairings: z.array(z.object({
     player_1_id: uuid,
     player_2_id: uuid,

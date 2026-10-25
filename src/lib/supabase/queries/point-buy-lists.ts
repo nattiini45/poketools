@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { readBoundedPages } from '../read-bounded-pages';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { applyLeagueOverrides } from '@/lib/draft/league-overrides';
 import { lineIdOfEntry } from '@/lib/draft/line-identity';
@@ -140,14 +141,19 @@ export async function deactivateListVersion(id: string): Promise<void> {
 
 /** Get all entries for a list version, ordered by line number. */
 export async function getListEntries(versionId: string): Promise<PointBuyListEntry[]> {
-  const { data, error } = await supabase
-    .from('point_buy_list_entries')
-    .select('*')
-    .eq('list_version_id', versionId)
-    .order('line_number');
-
-  if (error) throw error;
-  return data.map(toEntry);
+  // Paged past the 1,000-row `max_rows` ceiling; `id` makes the order total.
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('point_buy_list_entries')
+        .select('*')
+        .eq('list_version_id', versionId)
+        .order('line_number')
+        .order('id')
+        .range(from, to),
+    { label: `getListEntries version ${versionId}` }
+  );
+  return rows.map(toEntry);
 }
 
 /** Get a single entry by its row id (any version). */
