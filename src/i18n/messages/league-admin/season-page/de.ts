@@ -71,6 +71,13 @@ export default defineDe<typeof en>()({
     title: 'Beschreibung',
     subtitle: 'Für Professor Linden sichtbar, als Kontext für die Spielanalyse.',
   },
+  settings: {
+    details: {
+      title: 'Liga-Daten',
+      subtitle:
+        'Name, Liga-Typ, Battle-Regelwerk und Saisondaten. Die Beschreibung steht im Tab Übersicht; Thema und Sprache folgen darunter.',
+    },
+  },
   theme: {
     title: '3D-Welt-Thema',
     subtitle: 'Leg das 3D-Welt-Thema der Liga fest oder lass es auf „Automatisch“, dann gilt der Standard des Formats.',
