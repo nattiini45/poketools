@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import type { Locale } from '@/i18n/config';
 import ScheduleTab from '../../editor/preview/ScheduleTab';
-import { esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, presetDoc } from './test-helpers';
+import { esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, presetDoc, stripMarkup } from './test-helpers';
 
 function render(props: { initialPlayers?: number; initialRoundDays?: number; doc?: ReturnType<typeof presetDoc> } = {}, locale: Locale = 'en') {
   return renderWithI18n(
@@ -18,7 +18,7 @@ function render(props: { initialPlayers?: number; initialRoundDays?: number; doc
 /** The cells of the row whose header is `name`. */
 function rowOf(html: string, name: string): string[] {
   const row = new RegExp(`<tr[^>]*><th[^>]*scope="row"[^>]*>${esc(name)}[\\s\\S]*?</tr>`).exec(html)?.[0] ?? '';
-  return [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
+  return [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => stripMarkup(m[1]).trim());
 }
 
 describe('ScheduleTab', () => {
@@ -52,7 +52,7 @@ describe('ScheduleTab', () => {
     const playoffs = rowOf(html, 'Playoffs');
     expect(playoffs.slice(0, 3)).toEqual(['4', '2', '3']);
     const total = /<tfoot>[\s\S]*<\/tfoot>/.exec(html)?.[0] ?? '';
-    expect([...total.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]+>/g, '').trim())).toEqual(['', '16', '59', '', '', '16']);
+    expect([...total.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => stripMarkup(m[1]).trim())).toEqual(['', '16', '59', '', '', '16']);
   });
 
   it('twelve players change the numbers', () => {
@@ -63,7 +63,7 @@ describe('ScheduleTab', () => {
   it('a slower cadence stretches the weeks, not the rounds', () => {
     const weekly = /<tfoot>[\s\S]*<\/tfoot>/.exec(render())?.[0] ?? '';
     const fortnightly = /<tfoot>[\s\S]*<\/tfoot>/.exec(render({ initialRoundDays: 14 }))?.[0] ?? '';
-    const cells = (foot: string) => [...foot.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
+    const cells = (foot: string) => [...foot.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => stripMarkup(m[1]).trim());
     expect(cells(weekly)[1]).toBe(cells(fortnightly)[1]);
     expect(cells(weekly)[5]).toBe('16');
     expect(cells(fortnightly)[5]).toBe('32');

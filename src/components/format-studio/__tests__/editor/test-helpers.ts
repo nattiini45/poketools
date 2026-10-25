@@ -32,10 +32,23 @@ export function expectLabelledControls(html: string): void {
   expect(problems).toEqual([]);
 }
 
+/**
+ * The text of some markup: `<style>` blocks and tags removed, each tag replaced by `separator`. Repeats until
+ * nothing is left to strip (the loop is the shape CodeQL expects for multi-character stripping).
+ */
+export function stripMarkup(html: string, separator = ''): string {
+  let text = html;
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, separator);
+  } while (text !== previous);
+  return text;
+}
+
 /** No `undefined`, no `[object Object]`, no `{placeholder}` of a template that was not filled. */
 export function expectNoLeftovers(html: string): void {
-  const text = html.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ');
-  expect(text).not.toMatch(/undefined|\[object|\{[a-z_]+\}/);
+  expect(stripMarkup(html, ' ')).not.toMatch(/undefined|\[object|\{[a-z_]+\}/);
 }
 
 /** Every element id in the markup is used once. */
