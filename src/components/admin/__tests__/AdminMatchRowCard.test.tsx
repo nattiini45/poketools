@@ -75,7 +75,14 @@ const render = (r: AdminMatchRow, backQuery = '', locale: 'en' | 'de' = 'en') =>
 function detailsOf(html: string): string {
   const match = /<p class="text-\[11px\][^>]*>(.*?)<\/p>/.exec(html);
   if (!match) throw new Error('line two not found');
-  return match[1].replace(/<span[^>]*aria-hidden="true"[^>]*>·<\/span>/g, ' · ').replace(/<[^>]+>/g, '');
+  let text = match[1].replace(/<span[^>]*aria-hidden="true"[^>]*>·<\/span>/g, ' · ');
+  // Repeat until no tag is left (the loop is the shape CodeQL expects for multi-character stripping).
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]+>/g, '');
+  } while (text !== previous);
+  return text;
 }
 
 describe('AdminMatchRowCard line one', () => {
