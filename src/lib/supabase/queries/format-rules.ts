@@ -38,6 +38,29 @@ export async function getFormatRules(seasonId: string): Promise<FormatRules | nu
   return data ? toFormatRules(data) : null;
 }
 
+/**
+ * The stored tiebreaker order of several seasons in ONE read (a profile page standings pass over many leagues).
+ * Seasons without a `format_rules` row are absent from the map. The order is returned as stored: the standings
+ * check it (`effectiveTiebreakerChain`). A failed read throws.
+ */
+export async function getTiebreakerOrdersBySeason(
+  seasonIds: readonly string[],
+): Promise<Map<string, TiebreakerStep[]>> {
+  const orders = new Map<string, TiebreakerStep[]>();
+  if (seasonIds.length === 0) return orders;
+
+  const { data, error } = await supabase
+    .from('format_rules')
+    .select('season_id, tiebreaker_order')
+    .in('season_id', [...seasonIds]);
+
+  if (error) throw error;
+  for (const row of data ?? []) {
+    orders.set(row.season_id, row.tiebreaker_order as TiebreakerStep[]);
+  }
+  return orders;
+}
+
 /** Create or update format rules for a season. */
 export async function upsertFormatRules(
   seasonId: string,

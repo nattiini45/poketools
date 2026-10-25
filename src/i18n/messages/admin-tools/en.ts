@@ -1,7 +1,7 @@
 /**
  * Namespace `admin-tools` (owner T09, i18n-core §11.3): `/admin/{data,
- * meta-data,audit,achievements,wiki,rulesets,social}/**`. Kale and
- * test-players stay English and do not use it (design decision).
+ * meta-data,audit,achievements,wiki,rulesets,social}/**`. Kale stays English
+ * and does not use it (design decision).
  *
  * English values are the pre-i18n literals verbatim, except that the
  * "(s)" / "(es)" pseudo-plurals became plural objects and sentences that
@@ -128,6 +128,71 @@ export default {
       failed: 'Export failed',
       remaining: { one: '{count} export remaining today', other: '{count} exports remaining today' },
       ready: 'Export ready',
+      summary: 'Exported {count} of {total} rows',
+      summaryLimited:
+        'Exported {count} of {total} rows. The limit was reached; raise it (up to 10,000) to export more.',
+      summaryMaxed: 'Exported {count} of {total} rows. One export holds at most 10,000 rows.',
+    },
+    /** Read-only report on `/admin/data`: stored league settings vs what the engine uses. */
+    formatDrift: {
+      title: 'Format drift report',
+      subtitle: 'Compare what leagues have stored with what the engine actually uses.',
+      run: 'Run report',
+      running: 'Running…',
+      retry: 'Retry',
+      failed: 'Failed to build the format drift report',
+      readOnlyNote:
+        'This report only reads and changes nothing. Standings use the tiebreaker order stored with each league, and enrolling a phase reads the advancement rule from the phase being enrolled (the target phase).',
+      /** `{max}` = the row cap of one read. */
+      truncated: 'The report is partial: a read stopped at {max} rows, so some leagues or phases are missing.',
+      generatedAt: 'Generated {time}',
+      archivedBadge: 'Archived',
+      testBadge: 'Test',
+      summary: {
+        leaguesChecked: { one: '{count} league with format rules checked', other: '{count} leagues with format rules checked' },
+        tiebreakerMismatches: { one: '{count} differs from the format pack default', other: '{count} differ from the format pack default' },
+        pairsChecked: { one: '{count} phase pair with a rule checked', other: '{count} phase pairs with a rule checked' },
+        pairsConsistent: { one: '{count} consistent', other: '{count} consistent' },
+        pairsMismatching: { one: '{count} mismatching', other: '{count} mismatching' },
+      },
+      tiebreaker: {
+        title: 'Tiebreaker order',
+        intro:
+          'A league’s standings use the tiebreaker order stored with it. These leagues store an order that differs from the format pack default.',
+        stored: 'Stored (used by the standings)',
+        pack: 'Format pack default',
+        /** Shown when the stored order cannot rank a table, so the standings fall back to the format pack default. */
+        unusable:
+          'The stored order cannot rank a table (it is empty, has an unknown or repeated step, has a decision match that is not last, or has nothing to rank by), so this league’s standings use the format pack default.',
+        empty: 'No differences found: every stored order matches the format pack default.',
+      },
+      advancement: {
+        title: 'Advancement rules',
+        intro:
+          'A rule stored on one phase of a consecutive pair is applied or shown on the other. These pairs disagree.',
+        empty: 'No differences found: no advancement rule sits on the wrong side of a phase pair.',
+        source: 'Source phase',
+        target: 'Target phase',
+        ruleNone: 'none',
+        /** `{count}` = players that advance. */
+        ruleTop: 'top {count}',
+        ruleTopPerGroup: 'top {count} per group',
+        kindLabel: {
+          source_only: 'Rule on the source phase only',
+          target_only: 'Rule on the target phase only',
+          both_differ: 'Rules differ',
+          orphan: 'Unused rule',
+        },
+        kind: {
+          source_only:
+            'The timeline shows this rule between the two phases, but enrolling the target phase reads the target’s own rule, so no cut is applied.',
+          target_only:
+            'Enrolling the target phase applies this rule, but the timeline shows no label for it between the two phases.',
+          both_differ:
+            'Enrolling the target phase uses the target’s rule, while the timeline shows the source phase’s rule.',
+          orphan: 'This is the league’s only phase and nothing reads its rule.',
+        },
+      },
     },
   },
 
@@ -169,7 +234,8 @@ export default {
       actorPlaceholder: 'Admin name',
       resourceType: 'Resource Type',
       resourceId: 'Resource ID',
-      resourceIdPlaceholder: 'UUID or resource id',
+      resourceIdPlaceholder: 'UUID',
+      resourceIdInvalid: 'Enter a valid UUID, for example 123e4567-e89b-12d3-a456-426614174000.',
       from: 'From',
       to: 'To',
       apply: 'Apply',
@@ -263,8 +329,25 @@ export default {
     noReports: 'No open reports.',
     reviewed: 'Reviewed',
     dismiss: 'Dismiss',
+    unpublish: 'Unpublish note',
+    noteLive: 'This note is public',
+    noteHidden: 'This note is not public',
     loadFailed: 'Failed to load moderation queue',
     actionFailed: 'The moderation action failed',
+    rejectedNotes: 'Rejected Notes',
+    viewPending: 'Pending',
+    viewRejected: 'Rejected',
+    noRejected: 'No rejected notes.',
+    blocked: 'Blocked',
+    blockedHint: 'The author can no longer edit this note back into the queue.',
+    blockResubmission: 'Block from resubmitting',
+    allowResubmission: 'Allow resubmitting',
+    blockDialog: {
+      title: 'Block this note from resubmitting?',
+      message:
+        'This is final for the author: they can no longer edit this note to send it back for review. Only you can undo it.',
+      confirm: 'Block from resubmitting',
+    },
     /**
      * Keys = the report `reason` enum of `wikiNoteReportSchema` (src/lib/validation/schemas.ts),
      * except `other` -> `otherReason`: `other` is reserved for plural forms (i18n-core §1.3).

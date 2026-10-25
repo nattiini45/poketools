@@ -37,7 +37,14 @@ Format gates:
   `src/lib/tournament/standings.ts`) and the server wrapper
   `computeStandingsForSeason` (`src/lib/tournament/season-standings.ts`)
   dispatch to `computeEvolutionPointBuyStandings` for EPB and to the generic
-  `computeStandings` for everything else.
+  `computeStandings` for everything else. An EPB table ranks by the season's
+  stored `format_rules.tiebreaker_order` and scores the pack's
+  `epb.matchPoints`, in round robin and Swiss alike
+  (`src/lib/tournament/standings-rules.ts`: `effectiveTiebreakerChain` falls
+  back to the pack's `epb.tiebreakerChain` for a missing row or an unusable
+  order; `effectiveMatchPoints`). `SeasonStandingsContext` carries the stored
+  order next to the evolution points, so the league hub, the tournament page,
+  the standings preview, Insights, profiles and the AI texts all rank alike.
 
 ## Tables
 
@@ -45,7 +52,7 @@ Format gates:
 |-------|---------|
 | `point_buy_list_versions` | Versioned list container (name + version, unique) |
 | `point_buy_list_entries` | The evolution lines of a version (prices, kill thresholds, ratings, `species_ids`, `special_rules` flags) |
-| `format_rules` | Per-season config: bans, tera rules, tiebreakers, budget, picks, token constraints (initialized from the pack's `epb.defaults`) |
+| `format_rules` | Per-season config: bans, tera rules, tiebreakers, budget, picks, token constraints (initialized from the pack's `epb.defaults`; edited in the league admin Rules tab, where Tera rules stay read-only; the tiebreaker order ranks the standings and falls back to the pack chain when unusable) |
 | `evolution_tracker` (extended) | Per-player line state: `line_id` (one tracker per line per season and league group; `season_group_id` is NULL in a league without groups, see docs/draft-room.md "League groups"), the five source columns, `suspended_until_matchday`, `evolution_points_awarded`, `locked_stage3_pokemon`, `redraft_slot_id` |
 | `evo_progress_log` | Progress audit log (one row per applied amount) |
 | `evolution_events` | Development-event log: every stage transition (old/new form + stage, matchday, auto vs. `is_manual`) |

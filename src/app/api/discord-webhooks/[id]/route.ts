@@ -8,7 +8,8 @@ import {
   deleteWebhook,
 } from '@/lib/supabase/queries/discord-webhooks';
 import type { ApiResult } from '@/types/api';
-import type { DiscordWebhook } from '@/types/discord';
+import { toWebhookView } from '@/lib/discord/webhook-view';
+import type { DiscordWebhookView } from '@/types/discord';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
 interface RouteParams {
@@ -18,6 +19,7 @@ interface RouteParams {
 /**
  * PATCH /api/discord-webhooks/[id]
  * Admin: Update a webhook (enable/disable, change filter, change URL/label).
+ * The response carries `webhook_url_hint`, never the URL.
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
@@ -45,9 +47,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const updated = await updateWebhook(id, zodResult.data);
-    return NextResponse.json<ApiResult<DiscordWebhook>>({
+    return NextResponse.json<ApiResult<DiscordWebhookView>>({
       success: true,
-      data: updated,
+      data: toWebhookView(updated),
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update webhook');

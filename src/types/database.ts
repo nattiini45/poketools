@@ -4534,6 +4534,8 @@ export type Database = {
           rejected_at: string | null
           rejected_by: string | null
           rejection_reason: string | null
+          resubmission_blocked_at: string | null
+          resubmission_blocked_by: string | null
           scope_id: string | null
           scope_type: string
           updated_at: string
@@ -4552,6 +4554,8 @@ export type Database = {
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
+          resubmission_blocked_at?: string | null
+          resubmission_blocked_by?: string | null
           scope_id?: string | null
           scope_type?: string
           updated_at?: string
@@ -4570,6 +4574,8 @@ export type Database = {
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
+          resubmission_blocked_at?: string | null
+          resubmission_blocked_by?: string | null
           scope_id?: string | null
           scope_type?: string
           updated_at?: string
@@ -4592,6 +4598,13 @@ export type Database = {
           {
             foreignKeyName: "wiki_notes_rejected_by_fkey"
             columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wiki_notes_resubmission_blocked_by_fkey"
+            columns: ["resubmission_blocked_by"]
             isOneToOne: false
             referencedRelation: "players"
             referencedColumns: ["id"]
