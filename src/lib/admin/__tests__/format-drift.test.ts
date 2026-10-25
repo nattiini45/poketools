@@ -73,6 +73,27 @@ describe('findTiebreakerDrift', () => {
     expect(result.cases[0]).toMatchObject({ seasonName: 'Spring', archived: true, isTest: true });
   });
 
+  it('marks a stored order the standings can use, and one they cannot', () => {
+    const usable: TiebreakerStep[] = ['evolution_points', 'match_points'];
+    const result = findTiebreakerDrift(
+      [
+        rulesRow('a', usable),
+        rulesRow('b', []),
+        rulesRow('c', ['match_points', 'match_points']),
+        rulesRow('d', ['decision_match', 'match_points']),
+        rulesRow('e', ['decision_match']),
+      ],
+      PACK,
+    );
+    expect(result.cases.map((c) => [c.seasonId, c.usable])).toEqual([
+      ['a', true],
+      ['b', false],
+      ['c', false],
+      ['d', false],
+      ['e', false],
+    ]);
+  });
+
   it('does not alias the pack chain or the stored array in a case', () => {
     const stored: TiebreakerStep[] = ['match_points'];
     const [one] = findTiebreakerDrift([rulesRow('a', stored)], PACK).cases;

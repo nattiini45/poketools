@@ -93,6 +93,9 @@ function TiebreakerCaseCard({ item, packChain }: { item: TiebreakerDriftCase; pa
           <TiebreakerChain label={t('data.formatDrift.tiebreaker.stored')} steps={item.stored} />
           <TiebreakerChain label={t('data.formatDrift.tiebreaker.pack')} steps={packChain} />
         </div>
+        {!item.usable && (
+          <p className="mt-2 text-sm text-poke-text-secondary">{t('data.formatDrift.tiebreaker.unusable')}</p>
+        )}
       </Card>
     </li>
   );

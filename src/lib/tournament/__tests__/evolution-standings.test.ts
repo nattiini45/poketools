@@ -121,4 +121,67 @@ describe('computeEvolutionPointBuyStandings', () => {
     // example pack: kill difference comes before evolution points
     expect(killFirst).toBe(true);
   });
+
+  describe('stored tiebreaker order', () => {
+    // A and B tie on match points (4 each: a win over C and a draw between them); A leads on evolution points
+    // (2 v 0), B on kill difference (+3 v 0).
+    const tieMatches = [makeMatch('A', 'C', 'A'), makeMatch('B', 'C', 'B', 2), makeMatch('A', 'B', null, 3)];
+    const battleStats = [{ player_id: 'B', kos_dealt: 3, was_koed: false }] as unknown as TournamentBattleStat[];
+    const ids = ['A', 'B', 'C'];
+    const evo = { A: 2, B: 0, C: 0 };
+    const rank = (tiebreakerOrder?: unknown) =>
+      computeEvolutionPointBuyStandings(ids, names, tieMatches, evo, {}, { battleStats, tiebreakerOrder }).map(
+        (r) => r.player_id,
+      );
+
+    it('ranks by the stored order: evolution points first puts A ahead, kill difference first puts B ahead', () => {
+      expect(rank(['match_points', 'evolution_points', 'kill_difference'])[0]).toBe('A');
+      expect(rank(['match_points', 'kill_difference', 'evolution_points'])[0]).toBe('B');
+    });
+
+    it('a stored order reverses the pack outcome (the example pack puts kill difference first)', () => {
+      expect(rank()[0]).toBe('B');
+      expect(rank(['match_points', 'evolution_points'])[0]).toBe('A');
+    });
+
+    it('a step the stored order leaves out is not compared', () => {
+      // No kill difference step: B's +3 never counts, and the A/B tie falls to the input order.
+      const withoutKills = rank(['match_points']);
+      expect(withoutKills.slice(0, 2)).toEqual(['A', 'B']);
+      expect(withoutKills[2]).toBe('C');
+    });
+
+    it('ranks by a stored order that starts below match points', () => {
+      // Evolution points alone: A (2) first, then B and C tied at 0 in input order.
+      expect(rank(['evolution_points'])).toEqual(['A', 'B', 'C']);
+    });
+
+    it.each([
+      ['empty', []],
+      ['an unknown step', ['match_points', 'coin_flip']],
+      ['a repeated step', ['match_points', 'match_points']],
+      ['a misplaced decision match', ['decision_match', 'match_points']],
+      ['not a list', 'match_points'],
+      ['null', null],
+    ])('falls back to the pack chain when the stored order is %s', (_label, stored) => {
+      expect(rank(stored)).toEqual(rank());
+    });
+
+    it('flags a decision match only when the effective chain ends in one', () => {
+      const tied = [makeMatch('A', 'B', 'A'), makeMatch('A', 'B', 'B', 2)];
+      const flagged = (order?: unknown) =>
+        computeEvolutionPointBuyStandings(['A', 'B'], names, tied, { A: 2, B: 2 }, {}, { tiebreakerOrder: order }).map(
+          (r) => r.needs_decision_match,
+        );
+      expect(flagged(['match_points', 'head_to_head', 'decision_match'])).toEqual([true, true]);
+      expect(flagged(['match_points', 'head_to_head'])).toEqual([false, false]);
+    });
+
+    it('scores the pack match points even when a caller passes its own', () => {
+      const wins = computeEvolutionPointBuyStandings(
+        ['A', 'B'], names, [makeMatch('A', 'B', 'A')], {}, {}, { tiebreakerOrder: ['match_points'] },
+      );
+      expect(wins[0].points).toBe(epbPack.matchPoints.win);
+    });
+  });
 });

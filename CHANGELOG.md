@@ -34,8 +34,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   of rules to the existing endpoint; Tera rules stay on the format pack (shown read-only) and the redraft phase is
   shown, not edited. If the rules cannot be loaded the editor shows the error with **Retry** and disables
   **Initialize** and Save, so an unreadable row is never overwritten with defaults. On a started league Save asks
-  first: the change applies from now on, and past results, standings and existing draft pools are not recomputed.
-  The tiebreaker order is stored and shown on the rules page, but standings still use the format pack's chain.
+  first: the change applies from now on and existing draft pools are not recomputed. The tiebreaker order ranks the
+  standings (see Changed).
 - **Start from an existing league.** `/admin/leagues/new` has a **Start from** picker. A chosen league prefills the
   league type, battle ruleset, theme, language and description, and its phases are copied (name, bracket type,
   ruleset, best-of, doubles, visibility, grand-final reset, advancement rule and order). Optionally the roster is
@@ -45,7 +45,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   never copied. If a step fails the new league is removed again; if that cleanup fails too, the error names what
   remains. The API takes an optional `clone_from` on `POST /api/seasons`.
 - **Format drift report** on the admin Data page (site admins). **Run report** lists, read-only, leagues whose stored
-  tiebreaker order differs from the format pack's chain (standings never read the stored order) and phase pairs
+  tiebreaker order differs from the format pack's default (information: the standings use the stored order; an order
+  the standings cannot use is marked, because the table then falls back to the pack default) and phase pairs
   whose advancement rule sits on the source or the target phase or differs between them (enrollment reads the rule
   from the phase being enrolled, the phase timeline shows it on the phase before). It changes nothing, is not loaded
   until requested, and reads at most 10,000 rows per list. `GET /api/admin/format-drift`.
@@ -60,6 +61,17 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Changed
 
+- **Evolution Point Buy tables rank by the stored tiebreaker order and use the configured match points.** The
+  tiebreaker order saved on the league's Rules tab now decides every Evolution Point Buy table: the league's season
+  table, the group and phase tables, the tournament page, the home and dashboard standings, Insights, profiles, phase
+  enrollment and advancement, the broadcast standings and the AI and Kale texts. An order the standings cannot use
+  (empty, an unknown or repeated step, a decision match that is not last, or only a decision match) falls back to the
+  format pack's chain. The league page and its phases score the format pack's match points in round robin and Swiss
+  alike, instead of a fixed 3 and 0 in the round robin tables. Saving the rules expires the cached reads of the league
+  and of each phase. Other league types are unchanged. The tables of completed Evolution Point Buy leagues may
+  re-order. The Format Rules hint and the started-league confirmation say so. Cache entries of the home
+  standings preview, the league page payload, the league schedule and the player profile are renamed, so entries
+  written by the previous release are not served.
 - **Best-of is an odd number from 1 to 15** in every form and in the API (tournament, phase, round, manual round and
   override values). Even values are refused with `400 validation_failed`. A stored even value stays listed in the
   picker, so editing an old record does not change it, and saving a phase that holds an even value still works as long

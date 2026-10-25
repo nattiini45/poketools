@@ -79,6 +79,7 @@ League phases advance through `syncStandingsEnrollment()` in `enrollment-sync.ts
 - **File**: `standings.ts`
 - **Purpose**: Compute ranked standings and pairing history
 - **Key Methods**: `computeStandings()`, `buildPairingHistory()`, `havePlayed()`
+- **Evolution Point Buy tables**: `computeStandingsForFormat()` ranks them by the season's stored `format_rules.tiebreaker_order` (checked by `effectiveTiebreakerChain` in `standings-rules.ts`; a missing row or an unusable order falls back to the pack's `epb.tiebreakerChain`) and scores the pack's `epb.matchPoints` whatever points the caller passes (`effectiveMatchPoints`). Every other league type keeps its numbers: round robin 3 / 0 (`roundRobinMatchPoints`), Swiss and the generic default 1 / ½. A caller holding the season gets the stored order through `SeasonStandingsContext.tiebreakerOrder` (`loadSeasonStandingsContext`, the batched `loadSeasonStandingsContexts`, the world payload's format rules, or the cached `publicReads.seasonFormatRules`); saving format rules expires the league's and each phase's reads.
 
 ### Bracket Engines (legacy per-round)
 - **Files**: `single-elim.ts`, `double-elim.ts`, `round-robin.ts`, `swiss.ts`

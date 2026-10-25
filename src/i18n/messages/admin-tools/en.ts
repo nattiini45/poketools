@@ -142,7 +142,7 @@ export default {
       retry: 'Retry',
       failed: 'Failed to build the format drift report',
       readOnlyNote:
-        'This report only reads and changes nothing. Standings use the format pack’s tiebreaker chain, and enrolling a phase reads the advancement rule from the phase being enrolled (the target phase).',
+        'This report only reads and changes nothing. Standings use the tiebreaker order stored with each league, and enrolling a phase reads the advancement rule from the phase being enrolled (the target phase).',
       /** `{max}` = the row cap of one read. */
       truncated: 'The report is partial: a read stopped at {max} rows, so some leagues or phases are missing.',
       generatedAt: 'Generated {time}',
@@ -150,7 +150,7 @@ export default {
       testBadge: 'Test',
       summary: {
         leaguesChecked: { one: '{count} league with format rules checked', other: '{count} leagues with format rules checked' },
-        tiebreakerMismatches: { one: '{count} differs from the pack chain', other: '{count} differ from the pack chain' },
+        tiebreakerMismatches: { one: '{count} differs from the format pack default', other: '{count} differ from the format pack default' },
         pairsChecked: { one: '{count} phase pair with a rule checked', other: '{count} phase pairs with a rule checked' },
         pairsConsistent: { one: '{count} consistent', other: '{count} consistent' },
         pairsMismatching: { one: '{count} mismatching', other: '{count} mismatching' },
@@ -158,10 +158,13 @@ export default {
       tiebreaker: {
         title: 'Tiebreaker order',
         intro:
-          'A league’s stored order is shown on its rules page, but standings always use the pack chain. These leagues store a different order.',
-        stored: 'Stored',
-        pack: 'Pack chain',
-        empty: 'No differences found: every stored order matches the pack chain.',
+          'A league’s standings use the tiebreaker order stored with it. These leagues store an order that differs from the format pack default.',
+        stored: 'Stored (used by the standings)',
+        pack: 'Format pack default',
+        /** Shown when the stored order cannot rank a table, so the standings fall back to the format pack default. */
+        unusable:
+          'The stored order cannot rank a table (it is empty, has an unknown or repeated step, has a decision match that is not last, or has nothing to rank by), so this league’s standings use the format pack default.',
+        empty: 'No differences found: every stored order matches the format pack default.',
       },
       advancement: {
         title: 'Advancement rules',

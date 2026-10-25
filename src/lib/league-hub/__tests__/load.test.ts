@@ -274,6 +274,33 @@ describe('groups tab', () => {
   });
 });
 
+describe('groups tab ranking of an Evolution Point Buy league', () => {
+  // `sub` beat `ash` in m-1; `ash` holds the evolution points.
+  const trackers = [{ player_id: 'ash', evolution_points_awarded: 10 }];
+  const rankedBy = async (formatRules: unknown) => {
+    const base = context();
+    const data = { ...routeDataOf(), trackers, formatRules } as unknown as WorldRouteData;
+    const panel = await loadLeagueHubPanel('groups', {
+      ...base,
+      league: { ...base.league, format_type: 'evolution_point_buy' } as SeasonWithDetails,
+      stages: [GROUPS],
+      routeData: Promise.resolve(data),
+    });
+    if (panel?.tab !== 'groups') throw new Error('expected the groups panel');
+    return panel.stages[0].tables.flatMap((table) => table.standings.map((row) => row.player_id));
+  };
+
+  it('ranks by the stored tiebreaker order from the world payload, with no extra read', async () => {
+    expect(await rankedBy({ tiebreaker_order: ['evolution_points', 'match_points'] })).toEqual(['ash', 'sub']);
+    // The mocked read cache has no format rules read: the tab would throw if it asked for one.
+  });
+
+  it('ranks by the format pack chain without a rules row or with an order it cannot use', async () => {
+    expect(await rankedBy(null)).toEqual(['sub', 'ash']);
+    expect(await rankedBy({ tiebreaker_order: [] })).toEqual(['sub', 'ash']);
+  });
+});
+
 describe('groups tab byes', () => {
   const swissStage = stage('swiss', { bracket_type: 'swiss', stage_order: 1 });
 

@@ -143,7 +143,7 @@ export default {
     },
     tiebreakerOrder: 'Tiebreaker Order',
     tiebreakerHint:
-      'This order is stored and shown on the league’s rules page. The standings currently use the format pack’s tiebreaker chain, whatever is set here.',
+      'The standings rank players by this order, first step first, and the league’s rules page shows it. A decision match, if listed, comes last and only flags players who are still tied.',
     /** The three buttons of a tiebreaker step; `{step}` = the step’s name. */
     tiebreakerMoveUp: 'Move {step} up',
     tiebreakerMoveDown: 'Move {step} down',
@@ -161,7 +161,7 @@ export default {
     confirmStarted: {
       title: 'Change the rules of a started league?',
       message:
-        'This league has already started. The new rules apply from now on; past results, standings and existing draft pools are not recomputed.',
+        'This league has already started. The new rules apply from now on. Past results are kept and existing draft pools are not recomputed, but the standings are ranked by the new tiebreaker order straight away.',
       confirm: 'Save rules',
     },
     error: {

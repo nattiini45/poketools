@@ -321,3 +321,39 @@ describe('getLeagueSchedule', () => {
     expect(h.loadSeasonSwissByeRounds).not.toHaveBeenCalled();
   });
 });
+
+describe('assembleLeagueSchedule ranking of an Evolution Point Buy league', () => {
+  // a beat b in both matchdays; e has played nobody but holds the most evolution points.
+  const matchesByStage = new Map([['swiss-1', [...round1Matches, ...round2Matches]]]);
+  const order = (context: Parameters<typeof assembleLeagueSchedule>[0]['context']) =>
+    assembleLeagueSchedule({ stages: [swissStage], participants, matchesByStage, context }).standings.map(
+      (s) => s.player_id,
+    );
+  const epb = { formatType: 'evolution_point_buy', evolutionPoints: { a: 0, b: 1, e: 10 } };
+
+  it('the season table ranks by the stored tiebreaker order, the pack chain without one', () => {
+    expect(order(epb)).toEqual(['a', 'e', 'b']);
+    expect(order({ ...epb, tiebreakerOrder: ['evolution_points', 'match_points'] })).toEqual(['e', 'b', 'a']);
+  });
+
+  it('the previous matchday snapshot uses the same order, so the rank movement agrees with the table', () => {
+    const schedule = assembleLeagueSchedule({
+      stages: [swissStage],
+      participants,
+      matchesByStage,
+      context: { ...epb, tiebreakerOrder: ['evolution_points', 'match_points'] },
+    });
+    // Both tables rank e first and a last: nobody moved.
+    expect(schedule.standings.map((s) => [s.player_id, s.rank_change])).toEqual([
+      ['e', 0],
+      ['b', 0],
+      ['a', 0],
+    ]);
+  });
+
+  it('a stored order has no effect on any other league format', () => {
+    const singles = { formatType: 'singles', tiebreakerOrder: ['evolution_points'] as const };
+    expect(order(singles)).toEqual(order({ formatType: 'singles' }));
+  });
+});
+

@@ -735,7 +735,7 @@ GET  /api/admin/dashboard               Any admin: counts, attention queue, rece
 GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, q, page (1-1000), page_size;
                                             returns an exact total
 GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, and standalone tournaments
-GET  /api/admin/format-drift               Site admin: read-only drift report (stored tiebreaker order vs the pack chain;
+GET  /api/admin/format-drift               Site admin: read-only drift report (stored tiebreaker order vs the pack default, info only;
                                             advancement rule on the source vs the target phase); on demand, no writes
 GET  /api/admin/player-search              Any admin (a resource admin names a season_id or tournament_id they
                                             administer; the scope is a guard, not a filter): public player refs

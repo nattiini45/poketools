@@ -24,6 +24,7 @@ import {
   type TableStageInput,
 } from '../views';
 import { NO_SEASON_CONTEXT } from '@/lib/tournament/season-standings';
+import { epbPack } from '@/lib/format-pack';
 import type { EvolutionStanding } from '@/lib/tournament/evolution-standings';
 import type { Standing } from '@/lib/tournament/types';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
@@ -1296,6 +1297,60 @@ describe('buildTableStage — Evolution Point Buy', () => {
     ]);
   });
 
+  it('ranks every table of the phase by the season stored tiebreaker order', () => {
+    // brock lost to ash but holds the most evolution points.
+    const evolutionPoints = { ash: 4, misty: 9, brock: 20 };
+    const matches = [played('m-1', 'ash', 'brock', 'ash'), played('m-2', 'misty', 'brock', 'misty')];
+    const order = (tiebreakerOrder?: readonly ('match_points' | 'evolution_points')[]) =>
+      buildTableStage(
+        tableInput({
+          stage: rr,
+          participants,
+          matches,
+          context: { formatType: 'evolution_point_buy', evolutionPoints, ...(tiebreakerOrder ? { tiebreakerOrder } : {}) },
+        }),
+      ).tables[0].standings.map((s) => s.player_id);
+
+    expect(order()).toEqual(['misty', 'ash', 'brock']);
+    expect(order(['evolution_points', 'match_points'])).toEqual(['brock', 'misty', 'ash']);
+
+    const grouped = buildTableStage(
+      tableInput({
+        stage: rr,
+        participants,
+        groups: [group('g-a', 1, ['ash', 'misty', 'brock'])],
+        matches,
+        context: { formatType: 'evolution_point_buy', evolutionPoints, tiebreakerOrder: ['evolution_points'] },
+      }),
+    );
+    expect(grouped.tables[0].standings.map((s) => s.player_id)).toEqual(['brock', 'misty', 'ash']);
+  });
+
+  it('an order the standings cannot use ranks by the format pack chain', () => {
+    const matches = [played('m-1', 'ash', 'brock', 'ash'), played('m-2', 'misty', 'brock', 'misty')];
+    const result = buildTableStage(
+      tableInput({
+        stage: rr,
+        participants,
+        matches,
+        context: { ...epbContext, tiebreakerOrder: [] },
+      }),
+    );
+    expect(result.tables[0].standings.map((s) => s.player_id)).toEqual(['misty', 'ash', 'brock']);
+  });
+
+  it('scores the pack match points in a round robin and a Swiss phase alike (a win is never a hard-coded 3)', () => {
+    const swiss = stage('stage-swiss-pts', { bracket_type: 'swiss' });
+    const roundRobin = buildTableStage(
+      tableInput({ stage: rr, participants, matches: [played('m-1', 'ash', 'misty', 'ash')], context: epbContext }),
+    );
+    const swissTable = buildTableStage(
+      tableInput({ stage: swiss, participants, matches: [played('m-1', 'ash', 'misty', 'ash')], context: epbContext }),
+    );
+    expect(row(roundRobin.tables[0], 'ash').points).toBe(epbPack.matchPoints.win);
+    expect(row(swissTable.tables[0], 'ash').points).toBe(epbPack.matchPoints.win);
+  });
+
   it('a Swiss stage scores no bye, where the same stage of another format scores it as a win', () => {
     const swiss = stage('stage-swiss', { bracket_type: 'swiss' });
     const byes = [{ player_id: 'brock', round_number: 1 }];
@@ -1320,6 +1375,40 @@ describe('buildTableStage — Evolution Point Buy', () => {
     for (const standing of result.tables[0].standings) {
       expect(standing).not.toHaveProperty('evolution_points');
     }
+  });
+});
+
+// Characterisation: the numbers of every league type except Evolution Point Buy stay what they were.
+describe.each(['singles', 'doubles', 'draft'])('buildTableStage — %s points (unchanged)', (formatType) => {
+  const participants = ['ash', 'misty', 'brock'].map(participant);
+  const matches = [played('m-1', 'ash', 'misty', 'ash'), played('m-2', 'misty', 'brock', null)];
+
+  it('round robin: 3 points a win, 0 a draw', () => {
+    const table = buildTableStage(
+      tableInput({ stage: stage('rr', { bracket_type: 'round_robin' }), participants, matches, context: { formatType } }),
+    ).tables[0];
+    expect(table.standings.map((s) => [s.player_id, s.points])).toEqual([
+      ['ash', 3],
+      ['misty', 0],
+      ['brock', 0],
+    ]);
+  });
+
+  it('Swiss: 1 point a win, a half for a draw, a bye is a win', () => {
+    const table = buildTableStage(
+      tableInput({
+        stage: stage('sw', { bracket_type: 'swiss' }),
+        participants,
+        matches,
+        byes: [{ player_id: 'brock', round_number: 1 }],
+        context: { formatType },
+      }),
+    ).tables[0];
+    expect(table.standings.map((s) => [s.player_id, s.points])).toEqual([
+      ['brock', 1.5],
+      ['ash', 1],
+      ['misty', 0.5],
+    ]);
   });
 });
 

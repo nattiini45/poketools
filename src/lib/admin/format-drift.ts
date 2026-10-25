@@ -2,16 +2,20 @@
  * Format drift report (`GET /api/admin/format-drift`, shown on `/admin/data`). Pure and client-safe: the route
  * reads the rows, this module compares them, the report component renders the result.
  *
- * It looks for two places where what an admin can store and what the engine uses have drifted apart. The report
- * only describes them; nothing here writes, and nothing is repaired automatically.
+ * It lists where what leagues store differs from the format pack or from what the engine reads. The report only
+ * describes them; nothing here writes, and nothing is repaired automatically.
  *
- * 1. Tiebreaker order. A league stores `format_rules.tiebreaker_order`, but standings always use the format pack's
- *    chain (`epbPack.tiebreakerChain`) and never read the stored order. A stored order that differs from the pack's
- *    is displayed on the rules page and has no effect on the table.
+ * 1. Tiebreaker order (information). A league stores `format_rules.tiebreaker_order` and its standings rank by it
+ *    (`effectiveTiebreakerChain`), so a stored order that differs from the format pack's default is not a defect:
+ *    the section lists the leagues that run a custom order. It stays because an admin can then see which leagues do
+ *    not follow the default, and because it still catches a real defect: a stored order the standings cannot use
+ *    (empty, an unknown or repeated step, a decision match that is not last) falls back to the pack's chain, so the
+ *    case is marked `usable: false`.
  * 2. Advancement rule direction. Enrollment sync reads `advancement_rule` from the TARGET phase (the phase being
  *    enrolled), while the phase timeline and the phase form hint treat it as the rule of the SOURCE phase (the one
  *    before). A rule stored on one side of a consecutive phase pair is therefore applied or displayed on the other.
  */
+import { isUsableTiebreakerChain } from '@/lib/tournament/standings-rules';
 import type { TiebreakerStep } from '@/types/format-rules';
 import type { AdvancementRule } from '@/types/season';
 
@@ -55,6 +59,8 @@ export interface TiebreakerDriftCase {
   isTest: boolean;
   stored: TiebreakerStep[];
   pack: TiebreakerStep[];
+  /** Whether the standings can rank by the stored order; when false they use the pack's chain instead. */
+  usable: boolean;
 }
 
 /**
@@ -111,7 +117,7 @@ function sameOrder(a: readonly TiebreakerStep[], b: readonly TiebreakerStep[]): 
   return a.length === b.length && a.every((step, i) => step === b[i]);
 }
 
-/** Leagues whose stored tiebreaker order differs from the pack chain by content or by order. */
+/** Leagues whose stored tiebreaker order differs from the pack chain by content or by order (information). */
 export function findTiebreakerDrift(
   rows: readonly FormatRulesOrderRow[],
   packChain: readonly TiebreakerStep[],
@@ -126,6 +132,7 @@ export function findTiebreakerDrift(
       isTest: row.is_test,
       stored: [...row.tiebreaker_order],
       pack: [...packChain],
+      usable: isUsableTiebreakerChain(row.tiebreaker_order),
     });
   }
   cases.sort(byLeague);

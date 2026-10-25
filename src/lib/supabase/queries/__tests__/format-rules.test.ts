@@ -7,7 +7,7 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 import { supabase } from '@/lib/supabase/client';
-import { setRedraftPhaseOpen, toFormatRules, upsertFormatRules } from '../format-rules';
+import { getTiebreakerOrdersBySeason, setRedraftPhaseOpen, toFormatRules, upsertFormatRules } from '../format-rules';
 import type { FormatRules } from '@/types/format-rules';
 import { epbPack } from '@/lib/format-pack';
 
@@ -231,5 +231,47 @@ describe('upsertFormatRules fallbacks (format pack)', () => {
     await upsertFormatRules(seasonId, { draft_budget: 200, tiebreaker_order: ['match_points'] });
     const row = (mock.upsert as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<string, unknown>;
     expect(row).toMatchObject({ draft_budget: 200, tiebreaker_order: ['match_points'] });
+  });
+});
+
+describe('getTiebreakerOrdersBySeason', () => {
+  beforeEach(() => {
+    mock.__reset();
+  });
+
+  it('reads the stored order of every given season in ONE query and omits seasons without a row', async () => {
+    const rows = [
+      { season_id: 'season-a', tiebreaker_order: ['evolution_points', 'match_points'] },
+      { season_id: 'season-b', tiebreaker_order: ['match_points'] },
+    ];
+    // `then` keeps the implementation an earlier test installed (reset only clears calls): set it explicitly.
+    (mock.then as ReturnType<typeof vi.fn>).mockImplementation((resolve: (v: unknown) => void) =>
+      resolve({ data: rows, error: null }),
+    );
+
+    const orders = await getTiebreakerOrdersBySeason(['season-a', 'season-b', 'season-none']);
+
+    expect(mock.from).toHaveBeenCalledTimes(1);
+    expect(mock.from).toHaveBeenCalledWith('format_rules');
+    expect(mock.select).toHaveBeenCalledWith('season_id, tiebreaker_order');
+    expect(mock.in).toHaveBeenCalledWith('season_id', ['season-a', 'season-b', 'season-none']);
+    expect(Object.fromEntries(orders)).toEqual({
+      'season-a': ['evolution_points', 'match_points'],
+      'season-b': ['match_points'],
+    });
+  });
+
+  it('reads nothing for no seasons', async () => {
+    expect((await getTiebreakerOrdersBySeason([])).size).toBe(0);
+    expect(mock.from).not.toHaveBeenCalled();
+  });
+
+  it('throws a failed read instead of ranking by the pack chain', async () => {
+    const failure = new Error('format_rules unavailable');
+    (mock.then as ReturnType<typeof vi.fn>).mockImplementation((resolve: (v: unknown) => void) =>
+      resolve({ data: null, error: failure }),
+    );
+
+    await expect(getTiebreakerOrdersBySeason(['season-a'])).rejects.toBe(failure);
   });
 });
