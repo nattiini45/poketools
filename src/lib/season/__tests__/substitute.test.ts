@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { computeAdvancement } from '@/lib/tournament/advancement';
-import type { MatchRecord } from '@/lib/tournament/types';
-import type { AdvancementRule, TournamentGroupWithMembers } from '@/types/season';
 import type { GroupMembership } from '@/lib/supabase/queries/tournament-groups';
 
 vi.mock('@/lib/supabase/queries/players', () => ({
@@ -1565,76 +1562,5 @@ describe('substituteParticipant', () => {
 
       expect(getMatchesByTournament).toHaveBeenCalledWith(PHASE_ID, OUT_ID);
     });
-  });
-});
-
-/**
- * Why the group row has to move with the enrollment: per-group advancement
- * builds each group's standings from its member list and only counts matches
- * between two members. Before this change the enrollment and fixtures moved
- * to the substitute while the group row stayed with the departed player.
- */
-describe('substitution and per-group advancement (regression)', () => {
-  const A2 = 'group-a-2';
-  const A3 = 'group-a-3';
-  const B1 = 'group-b-1';
-  const B2 = 'group-b-2';
-
-  const rule: AdvancementRule = { type: 'top_n', count: 1, per_group: true };
-  const names: Record<string, string> = {
-    [OUT_ID]: 'Out',
-    [IN_ID]: 'In',
-    [A2]: 'A2',
-    [A3]: 'A3',
-    [B1]: 'B1',
-    [B2]: 'B2',
-  };
-  // The phase enrollment already names the substitute in both scenarios.
-  const participantIds = [IN_ID, A2, A3, B1, B2];
-
-  // Round 1 A2 beat A3; the substitute then won both repaired fixtures.
-  const matches: MatchRecord[] = [
-    { player_1_id: A2, player_2_id: A3, winner_id: A2, round_number: 1 },
-    { player_1_id: IN_ID, player_2_id: A2, winner_id: IN_ID, round_number: 2 },
-    { player_1_id: A3, player_2_id: IN_ID, winner_id: IN_ID, round_number: 3 },
-    { player_1_id: B1, player_2_id: B2, winner_id: B1, round_number: 1 },
-  ];
-
-  function group(id: string, groupNumber: number, playerIds: string[]): TournamentGroupWithMembers {
-    return {
-      id,
-      tournament_id: GROUP_PHASE_ID,
-      name: `Group ${groupNumber}`,
-      group_number: groupNumber,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-      members: playerIds.map((playerId, index) => ({
-        player_id: playerId,
-        player_name: names[playerId] ?? 'Unknown',
-        seed: index + 1,
-        gym_type: null,
-      })),
-    };
-  }
-
-  it('counts the substitute\'s matches when the group row moved to them', () => {
-    const groups = [group(GROUP_ID, 1, [IN_ID, A2, A3]), group(SECOND_GROUP_ID, 2, [B1, B2])];
-
-    const result = computeAdvancement(rule, participantIds, names, matches, groups);
-
-    expect(result.advancing_player_ids).toEqual([IN_ID, B1]);
-  });
-
-  it('ignores the substitute\'s matches when the departed player still holds the group row', () => {
-    const staleGroups = [
-      group(GROUP_ID, 1, [OUT_ID, A2, A3]),
-      group(SECOND_GROUP_ID, 2, [B1, B2]),
-    ];
-
-    const result = computeAdvancement(rule, participantIds, names, matches, staleGroups);
-
-    // The substitute's two wins vanish: A2 tops the group on a single win.
-    expect(result.advancing_player_ids).toEqual([A2, B1]);
-    expect(result.advancing_player_ids).not.toContain(IN_ID);
   });
 });

@@ -85,6 +85,11 @@ Then it computes the **featured card**:
 > aggregates" rule, standings are derived from match records at read time only
 > for this small top-N preview; high-cardinality usage/standings reads go through
 > the pre-computed aggregates path (see [Insights](./insights.md)).
+>
+> An Evolution Point Buy league (or one of its phases) ranks the preview by its stored
+> tiebreaker order and evolution points, like its tables (`loadEpbStandingsContext`: two more
+> reads, only for such a league). The preview carries no battle stats, so a kill difference step
+> ties there, as in the season table. Other leagues keep the generic wins ranking.
 
 ### Featured card anatomy
 

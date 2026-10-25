@@ -735,6 +735,8 @@ GET  /api/admin/dashboard               Any admin: counts, attention queue, rece
 GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, q, page (1-1000), page_size;
                                             returns an exact total
 GET  /api/admin/matches/filter-options     Any admin, scoped: leagues with phases, and standalone tournaments
+GET  /api/admin/format-drift               Site admin: read-only drift report (stored tiebreaker order vs the pack default, info only;
+                                            advancement rule on the source vs the target phase); on demand, no writes
 GET  /api/admin/player-search              Any admin (a resource admin names a season_id or tournament_id they
                                             administer; the scope is a guard, not a filter): public player refs
                                             only; a resource admin sees only active, non-test accounts (what the
@@ -743,6 +745,11 @@ GET  /api/admin/player-search              Any admin (a resource admin names a s
 DELETE /api/admin/rounds/[id]               Admin: delete latest round or zero-game round
                                             (400 STRUCTURE_ELIM_ROUND_DELETE for v2 elim)
 
+POST /api/seasons                           Create a league (any admin). Optional `clone_from` { season_id, copy_roster,
+                                            copy_admins } copies the source league's phases (and, on request, its roster and,
+                                            for site admins, its league admins) after the create; 403 SEASON_CLONE_FORBIDDEN /
+                                            SEASON_CLONE_ADMINS_FORBIDDEN, 404 SEASON_NOT_FOUND; a failed copy is rolled back
+                                            (500 SEASON_CLONE_FAILED, or SEASON_CLONE_CLEANUP_FAILED if the cleanup failed too)
 GET/POST /api/seasons/[id]/phases           List/create league phases
 PATCH/DELETE /api/seasons/[id]/phases/[phaseId]  Phase config + destructive delete
 POST /api/seasons/[id]/phases/reorder       Reorder upcoming phases (stage_order)

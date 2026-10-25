@@ -25,13 +25,12 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { errorsAdmin, errorsMatches, errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
+import { bestOfChoices } from '@/lib/tournament/best-of';
 import { buildStartupChecklist, nextRoundToStart } from '@/lib/tournament/startup-checklist';
 import { apiFailure, type UiError } from './ui-error';
 import type { ParticipantsSummary } from './participants-events';
 import { StartupChecklistView, STARTUP_CHECKLIST_REGION_ID_PREFIX, type StartupChecklistLinks } from './StartupChecklist';
 import { useParticipantsSummary } from './useParticipantsSummary';
-
-const BEST_OF_OPTIONS = [1, 3, 5, 7] as const;
 
 type RoundErrorKey = `rounds.errors.${keyof typeof tournamentsAdminMessages.en.rounds.errors}`;
 
@@ -364,6 +363,8 @@ export default function RoundManager({
   const [deadlineEditId, setDeadlineEditId] = useState<string | null>(null);
   const [deadlineDraft, setDeadlineDraft] = useState('');
   const [savingDeadlineId, setSavingDeadlineId] = useState<string | null>(null);
+  /** The round whose best-of is being saved or was just saved (the select saves on change). */
+  const [boFeedback, setBoFeedback] = useState<{ roundId: string; state: 'saving' | 'saved' } | null>(null);
   // Bye names: the participants are fetched once, and only when a round has a bye.
   const [participantNames, setParticipantNames] = useState<Record<string, string> | null>(null);
   const [participantNamesSettled, setParticipantNamesSettled] = useState(false);
@@ -599,6 +600,7 @@ export default function RoundManager({
 
   async function updateRoundBo(roundId: string, bestOf: number) {
     setError(null);
+    setBoFeedback({ roundId, state: 'saving' });
     try {
       const res = await fetch(
         `/api/tournaments/${tournament.id}/rounds/${roundId}`,
@@ -611,6 +613,7 @@ export default function RoundManager({
       const result: ApiResult<Round> = await res.json();
 
       if (!result.success) {
+        setBoFeedback(null);
         setError(apiFailure(result));
         return;
       }
@@ -618,7 +621,9 @@ export default function RoundManager({
       setRounds((prev) =>
         prev.map((r) => (r.id === roundId ? result.data : r))
       );
+      setBoFeedback({ roundId, state: 'saved' });
     } catch {
+      setBoFeedback(null);
       setError({ key: 'rounds.errors.updateBestOf' });
     }
   }
@@ -1000,17 +1005,26 @@ export default function RoundManager({
                   </button>
                   <div className={ROUND_ROW_ACTIONS_CLASS}>
                     {round.status === 'pending' && (
-                      <select
-                        value={round.best_of}
-                        onChange={(e) => updateRoundBo(round.id, Number(e.target.value))}
-                        className="border border-poke-border rounded-poke-md px-2 py-1 text-xs bg-poke-surface text-poke-text-primary"
-                      >
-                        {BEST_OF_OPTIONS.map((bo) => (
-                          <option key={bo} value={bo}>
-                            {tCommon('bestOf', { count: bo })}
-                          </option>
-                        ))}
-                      </select>
+                      <>
+                        <select
+                          value={round.best_of}
+                          onChange={(e) => updateRoundBo(round.id, Number(e.target.value))}
+                          disabled={boFeedback?.roundId === round.id && boFeedback.state === 'saving'}
+                          aria-label={t('rounds.bestOfLabel', { name: translateEngineLabel('round', round.name, locale) })}
+                          className="border border-poke-border rounded-poke-md px-2 py-1 text-xs bg-poke-surface text-poke-text-primary"
+                        >
+                          {bestOfChoices(round.best_of).map((bo) => (
+                            <option key={bo} value={bo}>
+                              {tCommon('bestOf', { count: bo })}
+                            </option>
+                          ))}
+                        </select>
+                        <span role="status" aria-live="polite" className="text-xs text-poke-text-muted empty:hidden">
+                          {boFeedback?.roundId === round.id
+                            ? t(boFeedback.state === 'saving' ? 'rounds.bestOfSaving' : 'rounds.bestOfSaved')
+                            : null}
+                        </span>
+                      </>
                     )}
                     {round.status === 'pending' && (
                       <Button

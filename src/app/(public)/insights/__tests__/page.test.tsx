@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
     seasonStages: vi.fn(),
     seasonParticipants: vi.fn(),
     seasonBattleStats: vi.fn(),
+    seasonEvolutionPoints: vi.fn(),
+    seasonFormatRules: vi.fn(),
     seasonByeRounds: vi.fn(),
     seasonMatchRecords: vi.fn(),
     tournament: vi.fn(),
@@ -78,6 +80,8 @@ beforeEach(() => {
   reads.totalGames.mockResolvedValue(0);
   reads.seasonParticipants.mockResolvedValue(players);
   reads.seasonBattleStats.mockResolvedValue([]);
+  reads.seasonEvolutionPoints.mockResolvedValue({});
+  reads.seasonFormatRules.mockResolvedValue(null);
   reads.seasonMatchRecords.mockResolvedValue(aBeatsB);
   reads.tournamentParticipants.mockResolvedValue(players);
   reads.tournamentMatchRecords.mockResolvedValue(aBeatsB);
@@ -189,5 +193,69 @@ describe('Insights standings', () => {
 
     expect(h.publicReads.seasonByeRounds).not.toHaveBeenCalled();
     expect(eve(league)).toMatchObject({ wins: 0, losses: 0 });
+  });
+});
+
+describe('Insights standings of an Evolution Point Buy league', () => {
+  // a beat b; c has played nobody but holds the most evolution points.
+  const epbPlayers = ['a', 'b', 'c'].map((id) => ({ id, name: id, avatar_url: null, gym_type: null }));
+  const order = (rows: StandingsRowView[]) => rows.map((row) => row.player_id);
+
+  beforeEach(() => {
+    const reads = h.publicReads;
+    reads.season.mockResolvedValue({ id: 'season-1', name: 'League', format_type: 'evolution_point_buy' });
+    reads.seasonParticipants.mockResolvedValue(epbPlayers);
+    reads.tournamentParticipants.mockResolvedValue(epbPlayers);
+    reads.seasonEvolutionPoints.mockResolvedValue({ a: 0, b: 1, c: 10 });
+    reads.tournament.mockResolvedValue({
+      id: 'rr-1',
+      name: 'Round robin',
+      bracket_type: 'round_robin',
+      is_doubles: false,
+      season_id: 'season-1',
+      season_format_type: 'evolution_point_buy',
+    });
+  });
+
+  it('ranks the league scope by the stored tiebreaker order', async () => {
+    h.publicReads.seasonFormatRules.mockResolvedValue({
+      tiebreaker_order: ['evolution_points', 'match_points'],
+    });
+
+    expect(order(await renderStandings({ scope: 'league', id: 'season-1' }))).toEqual(['c', 'b', 'a']);
+  });
+
+  it('ranks the tournament scope of a stage by the stored tiebreaker order', async () => {
+    h.publicReads.seasonFormatRules.mockResolvedValue({
+      tiebreaker_order: ['evolution_points', 'match_points'],
+    });
+
+    expect(order(await renderStandings({ scope: 'tournament', id: 'rr-1' }))).toEqual(['c', 'b', 'a']);
+  });
+
+  it('ranks by the format pack chain without a rules row, and for an order the standings cannot use', async () => {
+    h.publicReads.seasonFormatRules.mockResolvedValue(null);
+    expect(order(await renderStandings({ scope: 'league', id: 'season-1' }))).toEqual(['a', 'c', 'b']);
+
+    h.publicReads.seasonFormatRules.mockResolvedValue({ tiebreaker_order: ['decision_match'] });
+    expect(order(await renderStandings({ scope: 'league', id: 'season-1' }))).toEqual(['a', 'c', 'b']);
+  });
+
+  it('reads the rules and evolution points of no other league format', async () => {
+    h.publicReads.season.mockResolvedValue({ id: 'season-1', name: 'League', format_type: 'singles' });
+    h.publicReads.tournament.mockResolvedValue({
+      id: 'rr-1',
+      name: 'Round robin',
+      bracket_type: 'round_robin',
+      is_doubles: false,
+      season_id: 'season-1',
+      season_format_type: 'singles',
+    });
+
+    await renderStandings({ scope: 'league', id: 'season-1' });
+    await renderStandings({ scope: 'tournament', id: 'rr-1' });
+
+    expect(h.publicReads.seasonFormatRules).not.toHaveBeenCalled();
+    expect(h.publicReads.seasonEvolutionPoints).not.toHaveBeenCalled();
   });
 });

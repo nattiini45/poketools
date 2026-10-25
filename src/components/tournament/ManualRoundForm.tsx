@@ -11,11 +11,10 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { commonMessages } from '@/i18n/messages/common';
 import { errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
+import { bestOfChoices } from '@/lib/tournament/best-of';
 import { apiFailure, type UiError } from './ui-error';
 
 type ManualRoundErrorKey = 'manualRound.loadFailed' | 'manualRound.createFailed';
-
-const BEST_OF_OPTIONS = [1, 3, 5, 7] as const;
 
 interface ManualRoundFormProps {
   tournamentId: string;
@@ -169,7 +168,7 @@ export default function ManualRoundForm({
             onChange={(e) => setBestOf(Number(e.target.value))}
             className="px-2 py-1.5 text-sm border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
           >
-            {BEST_OF_OPTIONS.map((bo) => (
+            {bestOfChoices(bestOfDefault).map((bo) => (
               <option key={bo} value={bo}>
                 {tCommon('bestOf', { count: bo })}
               </option>

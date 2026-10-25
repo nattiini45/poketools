@@ -3,11 +3,13 @@ import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
 import { getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { listRulesets } from '@/lib/supabase/queries/rulesets';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import RoundManager from '@/components/tournament/RoundManager';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import ResourceAdminManager from '@/components/shared/ResourceAdminManager';
 import TournamentLifecycleActions from '@/components/tournament/TournamentLifecycleActions';
+import TournamentSettingsEditor from '@/components/tournament/TournamentSettingsEditor';
 import EditableDescription from '@/components/shared/EditableDescription';
 import { notFound } from 'next/navigation';
 import { getT } from '@/i18n/server';
@@ -15,6 +17,7 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
+import { isTournamentStarted, tournamentLockReason } from '@/lib/tournament/standalone-lock';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,13 +31,16 @@ export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRounds
   const tournament = await getTournamentWithDetails(id);
   if (!tournament) notFound();
 
-  const [rounds, groups, t, tc, te] = await Promise.all([
+  const [rounds, rulesets, groups, t, tc, te] = await Promise.all([
     getRoundsByTournament(id),
+    listRulesets(),
     getGroupsByTournament(id),
     getT(tournamentsAdminMessages),
     getT(commonMessages),
     getT(enumMessages),
   ]);
+  const startSignals = { status: tournament.status, rounds_total: rounds.length };
+  const started = isTournamentStarted(startSignals);
   const subtitle = [
     enumLabel(te, 'bracketType', tournament.bracket_type),
     tc('bestOf', { count: tournament.best_of_default }),
@@ -58,6 +64,25 @@ export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRounds
           />
         }
       >
+        <Section title={t('legacy.settings')} subtitle={t('legacy.settingsHint')} collapsible={false}>
+          <TournamentSettingsEditor
+            tournament={{
+              id: tournament.id,
+              name: tournament.name,
+              bracket_type: tournament.bracket_type,
+              ruleset_id: tournament.ruleset_id,
+              best_of_default: tournament.best_of_default,
+              bo_overrides: tournament.bo_overrides,
+              is_doubles: tournament.is_doubles,
+              team_visibility: tournament.team_visibility,
+              bracket_reset_enabled: tournament.bracket_reset_enabled,
+            }}
+            rulesets={rulesets}
+            started={started}
+            lockReason={tournamentLockReason(startSignals)}
+          />
+        </Section>
+
         <Section title={t('legacy.description')} subtitle={t('legacy.descriptionHint')} collapsible defaultCollapsed>
           <EditableDescription
             resourceType="tournament"

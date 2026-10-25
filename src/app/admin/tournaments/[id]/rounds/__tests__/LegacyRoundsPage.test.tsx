@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getTournamentWithDetails: vi.fn(),
   getRoundsByTournament: vi.fn(),
   getGroupsByTournament: vi.fn(),
+  listRulesets: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -36,6 +37,7 @@ vi.mock('@/i18n/server', async () => {
 });
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentWithDetails: mocks.getTournamentWithDetails }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: mocks.getRoundsByTournament }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
 vi.mock('@/lib/supabase/queries/tournament-groups', () => ({ getGroupsByTournament: mocks.getGroupsByTournament }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
@@ -45,6 +47,7 @@ vi.mock('@/components/tournament/ParticipantManager', () => stub('ParticipantMan
 vi.mock('@/components/shared/ResourceAdminManager', () => stub('ResourceAdminManager'));
 vi.mock('@/components/tournament/TournamentLifecycleActions', () => stub('TournamentLifecycleActions'));
 vi.mock('@/components/shared/EditableDescription', () => stub('EditableDescription'));
+vi.mock('@/components/tournament/TournamentSettingsEditor', () => stub('TournamentSettingsEditor'));
 
 import LegacyRoundsPage from '../LegacyRoundsPage';
 import Section from '@/components/ui/Section';
@@ -94,6 +97,7 @@ beforeEach(() => {
   mocks.getTournamentWithDetails.mockResolvedValue(tournament(8));
   mocks.getRoundsByTournament.mockResolvedValue([]);
   mocks.getGroupsByTournament.mockResolvedValue([]);
+  mocks.listRulesets.mockResolvedValue([]);
 });
 
 describe('standalone tournament page: start-up checklist inputs', () => {

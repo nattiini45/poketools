@@ -87,6 +87,13 @@ export default {
     title: 'Description',
     subtitle: 'Visible to Professor Linden for match analysis context.',
   },
+  settings: {
+    details: {
+      title: 'League details',
+      subtitle:
+        'Name, league type, battle ruleset and season dates. The description is on the Overview tab; theme and language are below.',
+    },
+  },
   theme: {
     title: '3D World Theme',
     subtitle: 'Pin the league’s 3D world theme, or leave it on Auto to follow the format default.',
@@ -130,7 +137,8 @@ export default {
   formatRules: {
     title: 'Format Rules',
     /** `{token}` = glossary `token.draftKill`. */
-    subtitle: 'Configure bans, Tera rules, tiebreaker order and {token} settings for this format.',
+    subtitle:
+      'Edit the draft budget, picks, {token} limits, bans and the stored tiebreaker order. Tera rules come from the format pack and cannot be edited here.',
   },
   draftRoom: {
     title: 'Draft Room',

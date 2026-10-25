@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   isResourceAdminFor: vi.fn(),
   getSeasonById: vi.fn(),
   getTournamentWithDetails: vi.fn(),
+  getStagesBySeasonId: vi.fn(),
   getRoundsByTournament: vi.fn(),
   seasonHasGroups: vi.fn(),
   getSeasonGroupMembership: vi.fn(),
@@ -43,7 +44,10 @@ vi.mock('@/i18n/server', async () => {
 vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: mocks.isResourceAdminFor }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: mocks.getSeasonById }));
-vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentWithDetails: mocks.getTournamentWithDetails }));
+vi.mock('@/lib/supabase/queries/tournaments', () => ({
+  getTournamentWithDetails: mocks.getTournamentWithDetails,
+  getStagesBySeasonId: mocks.getStagesBySeasonId,
+}));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: mocks.getRoundsByTournament }));
 vi.mock('@/lib/supabase/queries/season-groups', () => ({
   seasonHasGroups: mocks.seasonHasGroups,
@@ -69,6 +73,7 @@ import ParticipantManager from '@/components/tournament/ParticipantManager';
 import RoundManager from '@/components/tournament/RoundManager';
 import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
 import TournamentLifecycleActions from '@/components/tournament/TournamentLifecycleActions';
+import PageContainer from '@/components/ui/PageContainer';
 
 const S1 = '5e150000-0000-4000-8000-000000000001';
 const T1 = '7a000000-0000-4000-8000-000000000001';
@@ -109,6 +114,7 @@ function liveAccess(overrides: Partial<{ isSiteAdmin: boolean; isAnyAdmin: boole
 const PHASE_READS = [
   'getSeasonById',
   'getTournamentWithDetails',
+  'getStagesBySeasonId',
   'getRoundsByTournament',
   'seasonHasGroups',
   'getGroupsByTournament',
@@ -128,6 +134,7 @@ beforeEach(() => {
   mocks.locale = 'en';
   mocks.getLiveAccess.mockResolvedValue(liveAccess());
   mocks.isResourceAdminFor.mockResolvedValue(true);
+  mocks.getStagesBySeasonId.mockResolvedValue([]);
   mocks.getSeasonById.mockResolvedValue({ id: S1, name: 'Summer League S3' });
   mocks.getTournamentWithDetails.mockResolvedValue({
     id: T1,
@@ -354,5 +361,21 @@ describe('admin league phase page: start-up checklist inputs', () => {
       expect(section.props.defaultCollapsed).toBe(true);
       expect(section.props.collapsible).toBe(true);
     });
+  });
+});
+
+describe('admin league phase page: subtitle position', () => {
+  it('counts the phase from 1 in stage order, whatever number it is stored under', async () => {
+    mocks.getStagesBySeasonId.mockResolvedValue([
+      { id: 'other', stage_order: 0 },
+      { id: T1, stage_order: 1 },
+    ]);
+    const [container] = findByType(await render(), PageContainer);
+    expect(container.props.subtitle).toContain('Phase 2');
+    expect(container.props.subtitle).not.toContain('Phase 1');
+
+    mocks.getStagesBySeasonId.mockResolvedValue([{ id: T1, stage_order: 0 }]);
+    const [first] = findByType(await render(), PageContainer);
+    expect(first.props.subtitle).toContain('Phase 1');
   });
 });

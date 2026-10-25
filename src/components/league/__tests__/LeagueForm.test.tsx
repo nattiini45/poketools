@@ -4,8 +4,10 @@
  * renders in both UI languages (react-dom/server, vitest 'node' env).
  */
 import { describe, expect, it, vi } from 'vitest';
+import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
+import { LeagueDateFields } from '../league-form-fields';
 import LeagueForm, { buildLeagueFormPayload, type LeagueFormValues } from '../LeagueForm';
 
 const noopSubmit = vi.fn(async () => null);
@@ -162,5 +164,62 @@ describe('buildLeagueFormPayload (FA-4)', () => {
 
   it('sends ruleset_id null for a classic league with no ruleset picked', () => {
     expect(buildLeagueFormPayload({ ...values, rulesetId: '' }).ruleset_id).toBeNull();
+  });
+});
+
+describe('LeagueForm identity callback', () => {
+  type El = ReactElement<Record<string, unknown>>;
+
+  function find(node: ReactNode, match: (el: El) => boolean): El | undefined {
+    if (Array.isArray(node)) {
+      for (const n of node) {
+        const hit = find(n as ReactNode, match);
+        if (hit) return hit;
+      }
+      return undefined;
+    }
+    if (!isValidElement<Record<string, unknown>>(node)) return undefined;
+    if (match(node)) return node;
+    return find(node.props.children as ReactNode, match);
+  }
+
+  /** Runs the form body inside a server render and returns the element tree it returned. */
+  function capture(props: Parameters<typeof LeagueForm>[0]): ReactNode {
+    let tree: ReactNode = null;
+    function Probe() {
+      tree = LeagueForm(props);
+      return tree;
+    }
+    renderToStaticMarkup(<Probe />);
+    return tree;
+  }
+
+  it('reports the name and dates after each edit, with the fields not edited as they were', () => {
+    const onIdentityChange = vi.fn();
+    const tree = capture({
+      rulesets: [],
+      onSubmit: noopSubmit,
+      onIdentityChange,
+      initialData: { name: 'Spring', start_date: '2027-03-01' },
+    });
+
+    const nameInput = find(tree, (el) => el.props.required === true);
+    (nameInput?.props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'Spring Cup' } });
+    expect(onIdentityChange).toHaveBeenLastCalledWith({ name: 'Spring Cup', start_date: '2027-03-01', end_date: '' });
+
+    const dates = find(tree, (el) => el.type === LeagueDateFields);
+    (dates?.props.onEnd as (value: string) => void)('2027-05-01');
+    expect(onIdentityChange).toHaveBeenLastCalledWith({ name: 'Spring', start_date: '2027-03-01', end_date: '2027-05-01' });
+
+    (dates?.props.onStart as (value: string) => void)('2027-04-01');
+    expect(onIdentityChange).toHaveBeenLastCalledWith({ name: 'Spring', start_date: '2027-04-01', end_date: '' });
+  });
+
+  it('works without the callback', () => {
+    const tree = capture({ rulesets: [], onSubmit: noopSubmit });
+    const nameInput = find(tree, (el) => el.props.required === true);
+    expect(() =>
+      (nameInput?.props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'x' } }),
+    ).not.toThrow();
   });
 });

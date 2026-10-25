@@ -25,6 +25,7 @@ vi.mock('@/lib/audit/log', () => ({
 
 import { GET, POST } from '@/app/api/discord-webhooks/route';
 import { requireAdmin, AuthError } from '@/lib/auth/helpers';
+import { logAuditEvent } from '@/lib/audit/log';
 import {
   listAllWebhooks,
   getWebhooksByScope,
@@ -69,6 +70,18 @@ const fakeWebhook = {
   updated_at: '2024-01-01T00:00:00Z',
 };
 
+const LONG_URL = 'https://discord.com/api/webhooks/123/abcdefgh1234';
+
+/** The view every webhook endpoint answers with: no URL, only the masked hint. */
+const { webhook_url: _storedUrl, ...fakeWebhookFields } = fakeWebhook;
+const fakeWebhookView = { ...fakeWebhookFields, webhook_url_hint: '…/abc' };
+
+function expectNoSecret(body: unknown) {
+  const text = JSON.stringify(body);
+  expect(text).not.toContain('webhook_url"');
+  expect(text).not.toContain('discord.com');
+}
+
 describe('GET /api/discord-webhooks', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -95,8 +108,28 @@ describe('GET /api/discord-webhooks', () => {
     const res = await GET(makeGetRequest());
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.data).toEqual([fakeWebhook]);
+    expect(body.data).toEqual([fakeWebhookView]);
     expect(vi.mocked(listAllWebhooks)).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers the list with webhook_url_hint and no webhook_url', async () => {
+    vi.mocked(listAllWebhooks).mockResolvedValue([{ ...fakeWebhook, webhook_url: LONG_URL }]);
+
+    const body = await (await GET(makeGetRequest())).json();
+
+    expect(body.data[0].webhook_url_hint).toBe('…1234');
+    expect('webhook_url' in body.data[0]).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('abcdefgh');
+  });
+
+  it('answers the scoped list with webhook_url_hint and no webhook_url', async () => {
+    vi.mocked(getWebhooksByScope).mockResolvedValue([{ ...fakeWebhook, webhook_url: LONG_URL }]);
+
+    const body = await (await GET(makeGetRequest({ scope_type: 'global' }))).json();
+
+    expect(body.data[0].webhook_url_hint).toBe('…1234');
+    expect('webhook_url' in body.data[0]).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('abcdefgh');
   });
 
   it('filters by scope when scope_type is provided', async () => {
@@ -105,6 +138,7 @@ describe('GET /api/discord-webhooks', () => {
     const res = await GET(makeGetRequest({ scope_type: 'season', scope_id: 's1' }));
     const body = await res.json();
     expect(body.success).toBe(true);
+    expectNoSecret(body);
     expect(vi.mocked(getWebhooksByScope)).toHaveBeenCalledWith('season', 's1');
   });
 
@@ -196,7 +230,37 @@ describe('POST /api/discord-webhooks', () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.data).toEqual(fakeWebhook);
+    expect(body.data).toEqual(fakeWebhookView);
+    expectNoSecret(body);
+  });
+
+  it('audits a global webhook with a null resource id, not an empty string', async () => {
+    vi.mocked(createWebhook).mockResolvedValue(fakeWebhook);
+
+    await POST(
+      makePostRequest({ scope_type: 'global' as const, label: 'Test Hook', webhook_url: 'https://discord.com/api/webhooks/123/abc' }),
+    );
+
+    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'discord_webhook.create', resource_id: null }),
+    );
+  });
+
+  it('answers the created webhook with webhook_url_hint and no webhook_url, but stores the URL', async () => {
+    vi.mocked(createWebhook).mockResolvedValue({ ...fakeWebhook, webhook_url: LONG_URL });
+
+    const res = await POST(
+      makePostRequest({ scope_type: 'global' as const, label: 'Test Hook', webhook_url: LONG_URL }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(vi.mocked(createWebhook)).toHaveBeenCalledWith(
+      expect.objectContaining({ webhook_url: LONG_URL }),
+    );
+    const body = await res.json();
+    expect(body.data.webhook_url_hint).toBe('…1234');
+    expect('webhook_url' in body.data).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('abcdefgh');
   });
 
   it.each(['league', 'de', 'en'] as const)('passes format_options.language %s through to createWebhook', async (language) => {

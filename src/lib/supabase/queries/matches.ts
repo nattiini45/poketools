@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import { ilikeAnyOf, postgrestQuoted } from '@/lib/supabase/postgrest-filter';
+import { readBoundedPages } from '@/lib/supabase/read-bounded-pages';
 import { releaseTeamsFromMatches } from './teams';
 import type { Tables } from '@/types/database';
 import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
@@ -1255,21 +1256,26 @@ export async function hasDownstreamMatches(
 
 /**
  * Get match records for standings computation.
- * Only returns completed matches with their winner.
+ * Only returns completed matches with their winner. Pages the full result (oldest first) past the
+ * PostgREST `max_rows` ceiling; a result of 1,000 rows or fewer is ONE query.
  */
 export async function getCompletedMatchRecords(
   tournamentId: string
 ): Promise<MatchRecord[]> {
-  const { data, error } = await supabase
-    .from('matches')
-    .select('player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
-    .eq('tournament_id', tournamentId)
-    .eq('status', 'completed')
-    .limit(2000);
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .eq('tournament_id', tournamentId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `getCompletedMatchRecords tournament ${tournamentId}` },
+  );
 
-  if (error) throw error;
-
-  return data.map((row) => ({
+  return rows.map((row) => ({
     player_1_id: row.player_1_id,
     player_2_id: row.player_2_id,
     winner_id: row.winner_id,
@@ -1278,7 +1284,7 @@ export async function getCompletedMatchRecords(
 }
 
 /**
- * Batch-fetch completed match records for multiple tournaments in a single query.
+ * Batch-fetch completed match records for multiple tournaments in one paged read.
  * Returns a Map keyed by tournament_id. Used by profile composition
  * to avoid N+1 queries when computing standings.
  */
@@ -1287,17 +1293,21 @@ export async function getCompletedMatchRecordsBatch(
 ): Promise<Map<string, MatchRecord[]>> {
   if (tournamentIds.length === 0) return new Map();
 
-  const { data, error } = await supabase
-    .from('matches')
-    .select('tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
-    .in('tournament_id', tournamentIds)
-    .eq('status', 'completed')
-    .limit(2000);
-
-  if (error) throw error;
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .in('tournament_id', tournamentIds)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `getCompletedMatchRecordsBatch ${tournamentIds.length} tournaments` },
+  );
 
   const result = new Map<string, MatchRecord[]>();
-  for (const row of data) {
+  for (const row of rows) {
     const record: MatchRecord = {
       player_1_id: row.player_1_id,
       player_2_id: row.player_2_id,
@@ -1333,16 +1343,20 @@ export async function getPlayerIdsWithCompletedMatches(
 ): Promise<Set<string>> {
   if (tournamentIds.length === 0) return new Set();
 
-  const { data, error } = await supabase
-    .from('matches')
-    .select('player_1_id, player_2_id')
-    .in('tournament_id', tournamentIds)
-    .eq('status', 'completed');
-
-  if (error) throw error;
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('player_1_id, player_2_id')
+        .in('tournament_id', tournamentIds)
+        .eq('status', 'completed')
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `getPlayerIdsWithCompletedMatches ${tournamentIds.length} tournaments` },
+  );
 
   const result = new Set<string>();
-  for (const row of data) {
+  for (const row of rows) {
     result.add(row.player_1_id);
     result.add(row.player_2_id);
   }

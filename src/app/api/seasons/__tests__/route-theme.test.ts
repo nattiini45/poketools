@@ -45,6 +45,9 @@ vi.mock('@/lib/supabase/queries/point-buy-lists', () => ({
 
 vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
+  diffField: (changes: Record<string, { before: unknown; after: unknown }>, field: string, before: unknown, after: unknown) => {
+    if (before !== after) changes[field] = { before, after };
+  },
 }));
 
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
@@ -58,7 +61,7 @@ vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
 import { POST } from '@/app/api/seasons/route';
 import { PATCH } from '@/app/api/seasons/[id]/route';
 import { requireAnyAdmin, requireResourceAdmin } from '@/lib/auth/helpers';
-import { createSeason, updateSeason } from '@/lib/supabase/queries/seasons';
+import { createSeason, getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
 
 const mockSeason: SeasonWithDetails = {
   id: '37cf71ba-cf9d-4d37-8438-1fd49beed938',
@@ -179,6 +182,8 @@ describe('PATCH /api/seasons/[id] — route_theme round-trip', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireResourceAdmin).mockResolvedValue(adminPlayer);
+    // The route reads the stored league once, before any guard or write.
+    vi.mocked(getSeasonById).mockResolvedValue(mockSeason);
   });
 
   it('round-trips a route_theme pick through updateSeason', async () => {

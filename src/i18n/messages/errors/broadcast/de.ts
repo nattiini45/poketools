@@ -19,6 +19,9 @@ export default defineDe<typeof en>()({
   cast_session_forbidden: 'Dazu bist du nicht berechtigt.',
 
   webhook_not_found: 'Webhook nicht gefunden.',
+  discord_webhook_test_rejected: 'Discord hat die Testnachricht abgelehnt (HTTP {status}).',
+  discord_webhook_test_unreachable: 'Discord ist nicht erreichbar.',
+  discord_webhook_url_invalid: 'Die gespeicherte Webhook-URL ist keine gültige Discord-Webhook-URL.',
 
   social_integration_not_found: 'Integration nicht gefunden.',
   social_credentials_conflict: 'Gib entweder neue Zugangsdaten an oder lösch die vorhandenen – nicht beides.',

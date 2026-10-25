@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { phaseFormDirty, poolEditorDirty, tierLimitsDirty, type PhaseFormValues } from '../form-dirty';
+import {
+  adoptStoredLeagueSettings,
+  leagueSettingsDirty,
+  phaseFormDirty,
+  poolEditorDirty,
+  tierLimitsDirty,
+  type PhaseFormValues,
+} from '../form-dirty';
+import type { LeagueSettingsValues } from '../settings-patch';
 
 const PHASE: PhaseFormValues = {
   name: 'Regular season',
@@ -78,5 +86,76 @@ describe('poolEditorDirty', () => {
 
   it('is dirty while a template name is typed', () => {
     expect(poolEditorDirty({ ...CLEAN, templateName: 'OU base' })).toBe(true);
+  });
+});
+
+describe('leagueSettingsDirty', () => {
+  const LEAGUE: LeagueSettingsValues = {
+    name: 'Spring League',
+    formatType: 'singles',
+    rulesetId: 'rs-1',
+    startDate: '2026-03-01',
+    endDate: '2026-06-01',
+  };
+
+  it('is clean while every field equals the baseline', () => {
+    expect(leagueSettingsDirty(LEAGUE, { ...LEAGUE })).toBe(false);
+  });
+
+  it('ignores whitespace around the name, which the save trims', () => {
+    expect(leagueSettingsDirty(LEAGUE, { ...LEAGUE, name: '  Spring League ' })).toBe(false);
+  });
+
+  it.each<[string, Partial<LeagueSettingsValues>]>([
+    ['name', { name: 'Autumn League' }],
+    ['league type', { formatType: 'doubles' }],
+    ['ruleset', { rulesetId: '' }],
+    ['start date', { startDate: '2026-03-02' }],
+    ['end date', { endDate: '' }],
+  ])('is dirty when the %s changes', (_label, change) => {
+    expect(leagueSettingsDirty(LEAGUE, { ...LEAGUE, ...change })).toBe(true);
+  });
+});
+
+describe('adoptStoredLeagueSettings', () => {
+  const STORED: LeagueSettingsValues = {
+    name: 'Spring League',
+    formatType: 'singles',
+    rulesetId: 'rs-1',
+    startDate: '2026-03-01',
+    endDate: '2026-06-01',
+  };
+  const state = (values: LeagueSettingsValues, baseline = STORED) => ({ seen: STORED, baseline, values });
+
+  it('returns the same state while the stored values are unchanged', () => {
+    const current = state({ ...STORED, name: 'Typed' });
+
+    expect(adoptStoredLeagueSettings(current, { ...STORED })).toBe(current);
+  });
+
+  it('takes new stored values over as baseline and input when nothing is unsaved', () => {
+    const next = { ...STORED, name: 'Autumn League' };
+
+    expect(adoptStoredLeagueSettings(state(STORED), next)).toEqual({ seen: next, baseline: next, values: next });
+  });
+
+  it('keeps input typed after a save (unsaved against the saved baseline) and moves the baseline', () => {
+    const saved = { ...STORED, name: 'Autumn League' };
+    const typed = { ...saved, endDate: '2026-07-01' };
+
+    const next = adoptStoredLeagueSettings({ seen: STORED, baseline: saved, values: typed }, saved);
+
+    expect(next.values).toBe(typed);
+    expect(next.baseline).toBe(saved);
+    expect(leagueSettingsDirty(next.baseline, next.values)).toBe(true);
+  });
+
+  it('adopts the trimmed stored name after a save without losing the clean state', () => {
+    const saved = { ...STORED, name: 'Autumn League' };
+    const submittedWithSpaces = { ...saved, name: ' Autumn League ' };
+
+    const next = adoptStoredLeagueSettings({ seen: STORED, baseline: saved, values: submittedWithSpaces }, saved);
+
+    expect(leagueSettingsDirty(next.baseline, next.values)).toBe(false);
   });
 });

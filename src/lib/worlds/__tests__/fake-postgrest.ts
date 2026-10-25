@@ -117,9 +117,15 @@ export interface FakeSupabase {
   reset: () => void;
 }
 
+export interface FakeSupabaseOptions {
+  /** Caps every list response after range and limit, like PostgREST `max_rows`. Unset = no cap. */
+  maxRows?: number;
+}
+
 export function createFakeSupabase(
   tables: FakeTables,
   rpcHandlers: Record<string, (args: Record<string, unknown>) => unknown> = {},
+  options: FakeSupabaseOptions = {},
 ): FakeSupabase {
   const queries: RecordedQuery[] = [];
 
@@ -149,6 +155,7 @@ export function createFakeSupabase(
     }
     if (q.range) rows = rows.slice(q.range.from, q.range.to + 1);
     if (q.limit !== null) rows = rows.slice(0, q.limit);
+    if (options.maxRows !== undefined && !q.single) rows = rows.slice(0, options.maxRows);
     const projected = rows.map((row) => project(row, q.select));
     if (q.single) {
       return { data: projected[0] ?? null, error: null };
