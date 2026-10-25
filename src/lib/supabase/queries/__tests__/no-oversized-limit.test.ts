@@ -80,7 +80,7 @@ function findOversizedLimits(source: string): Violation[] {
     if (/^\d[\d_]*$/.test(arg)) {
       value = Number(arg.replace(/_/g, ''));
     } else if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
-      const decl = new RegExp(`\\bconst\\s+${arg.replace(/\$/g, '\\$')}\\s*(?::\\s*number)?\\s*=\\s*(\\d[\\d_]*)\\s*;`).exec(src);
+      const decl = new RegExp(`\\bconst\\s+${arg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(?::\\s*number)?\\s*=\\s*(\\d[\\d_]*)\\s*;`).exec(src);
       if (decl) value = Number(decl[1].replace(/_/g, ''));
     }
     if (value !== null && value > MAX_ROWS) {
