@@ -2,12 +2,19 @@
  * `PlayerRoster` renders its first (pre-fetch) state from the `admin-core`
  * namespace: English verbatim, German in a de provider.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
 import Table, { type Column } from '@/components/ui/Table';
 import { PLAYER_SORT_COLUMNS } from '@/lib/players/player-sort';
 import PlayerRoster from '../PlayerRoster';
+
+// The roster keeps its search, sort and page in the URL, so it reads the router.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/admin/players',
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 describe('PlayerRoster i18n', () => {
   it('English loading state without a provider', () => {

@@ -4,6 +4,8 @@ import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tourn
 import { loadScoringByes, loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
 import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
 import { getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
+import { loadEpbStandingsContext } from '@/lib/tournament/season-standings';
+import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import type { StandingsRow } from '@/types/game';
 
 export interface StandingsPreviewRow {
@@ -33,9 +35,12 @@ async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
   // stages. A league without a Swiss stage has none, and Evolution Point Buy tables never read byes, so neither
   // pays the read.
   const readsByes = hasSwissStage && formatScoresByes(formatType);
-  const [recordsMap, byeRoundsByStage] = await Promise.all([
+  // An Evolution Point Buy table ranks by the season's stored tiebreaker order and its evolution points, like the
+  // league's own tables: two more reads, only for such a league.
+  const [recordsMap, byeRoundsByStage, ranking] = await Promise.all([
     getCompletedMatchRecordsBatch(stageIds),
     readsByes ? loadSeasonSwissByeRounds(seasonId) : undefined,
+    formatType && isEvolutionPointBuy(formatType) ? loadEpbStandingsContext(seasonId, formatType) : undefined,
   ]);
   const matchRecords = [...recordsMap.values()].flat();
   // The loader holds Swiss stages only.
@@ -49,6 +54,7 @@ async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
     })),
     matchRecords,
     byes,
+    ranking,
   );
 }
 
@@ -69,6 +75,12 @@ export async function getStandingsPreview(
     // A Swiss tournament's table scores the byes stored on its rounds, except a stage of an Evolution Point Buy
     // league (`loadScoringByes` returns none for it).
     const byes = tournament ? await loadScoringByes(tournament) : [];
+    // A stage of an Evolution Point Buy league ranks like the league's tables (stored tiebreaker order, evolution
+    // points); every other tournament keeps the generic ranking and reads nothing more.
+    const ranking =
+      tournament?.season_id && tournament.season_format_type && isEvolutionPointBuy(tournament.season_format_type)
+        ? await loadEpbStandingsContext(tournament.season_id, tournament.season_format_type)
+        : undefined;
     const standings = buildStandingsRowsFromMatchRecords(
       parts.map((p) => ({
         id: p.id,
@@ -78,6 +90,7 @@ export async function getStandingsPreview(
       })),
       records,
       byes,
+      ranking,
     );
     return toPreviewRows(standings, limit);
   }

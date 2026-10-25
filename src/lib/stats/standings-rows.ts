@@ -1,10 +1,17 @@
-import { computeStandings } from '@/lib/tournament/standings';
+import { computeStandings, computeStandingsForFormat } from '@/lib/tournament/standings';
+import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import type { SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import type { StandingsRow } from '@/types/game';
 
 /**
  * Build standings table rows from completed match records and participants.
  * `byes` are a Swiss stage's scoring byes (`scoringByeRecords`); each counts as a win.
+ *
+ * `ranking` is the season's standings context. An Evolution Point Buy season ranks by its own chain (the stored
+ * tiebreaker order, match points, evolution points), as its tables do; this list carries no battle stats, so a
+ * kill difference step ties here, as in the season-wide table. Without a context, or for any other format, the
+ * generic Swiss scoring ranks the rows exactly as it always did.
  */
 export function buildStandingsRowsFromMatchRecords(
   participants: {
@@ -15,6 +22,7 @@ export function buildStandingsRowsFromMatchRecords(
   }[],
   matchRecords: MatchRecord[],
   byes: readonly ByeRecord[] = [],
+  ranking?: SeasonStandingsContext,
 ): StandingsRow[] {
   const participantIds = participants.map((p) => p.id);
   const names: Record<string, string> = {};
@@ -27,14 +35,19 @@ export function buildStandingsRowsFromMatchRecords(
     gymTypes[p.id] = p.gym_type ?? null;
   }
 
-  const standings = computeStandings(
-    participantIds,
-    names,
-    matchRecords,
-    avatars,
-    { byes: [...byes] },
-    gymTypes,
-  );
+  const standings =
+    ranking?.formatType && isEvolutionPointBuy(ranking.formatType)
+      ? computeStandingsForFormat(
+          ranking.formatType,
+          participantIds,
+          names,
+          matchRecords,
+          avatars,
+          { byes: [...byes] },
+          gymTypes,
+          { evolutionPoints: ranking.evolutionPoints, tiebreakerOrder: ranking.tiebreakerOrder },
+        )
+      : computeStandings(participantIds, names, matchRecords, avatars, { byes: [...byes] }, gymTypes);
 
   return standings.map((s) => ({
     player_id: s.player_id,

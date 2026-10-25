@@ -28,6 +28,7 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
   createRound: vi.fn(),
   updateRoundByePlayers: vi.fn(),
+  updateRoundStatus: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -47,6 +48,8 @@ vi.mock('@/lib/supabase/queries/season-groups', () => ({
   seasonHasGroups: vi.fn(),
 }));
 
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
+
 vi.mock('@/lib/tournament/round-robin', () => ({
   generateRoundRobinRound: vi.fn(),
   getRoundRobinTotalRounds: vi.fn(),
@@ -61,10 +64,16 @@ import {
   getParticipants,
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
-import { getRoundsByTournament, createRound, updateRoundByePlayers } from '@/lib/supabase/queries/rounds';
+import {
+  getRoundsByTournament,
+  createRound,
+  updateRoundByePlayers,
+  updateRoundStatus,
+} from '@/lib/supabase/queries/rounds';
 import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { revalidateTag } from 'next/cache';
+import { logAuditEvent } from '@/lib/audit/log';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import {
   generateRoundRobinRound,
@@ -72,6 +81,8 @@ import {
 } from '@/lib/tournament/round-robin';
 
 // ─── Helpers ────────────────────────────────────────────────────────
+
+const ADMIN = { playerId: 'admin-1', name: 'Admin' };
 
 const routeParams = { params: Promise.resolve({ id: 'a5cb20ac-a127-482d-855d-d802e29185bc' }) };
 
@@ -104,7 +115,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it('returns 404 when tournament not found', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(null);
 
     const res = await POST({} as NextRequest, routeParams);
@@ -116,7 +127,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it('returns 400 for non-round_robin tournaments', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, bracket_type: 'single_elimination' } as never);
 
     const res = await POST({} as NextRequest, routeParams);
@@ -128,7 +139,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it('returns 400 for completed tournaments', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, status: 'completed' } as never);
 
     const res = await POST({} as NextRequest, routeParams);
@@ -140,7 +151,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it('returns 400 when fewer than 2 participants', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }] as never);
 
@@ -153,7 +164,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it('returns 400 when all rounds already generated', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }] as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
@@ -178,7 +189,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it('creates all missing rounds and returns 201', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, status: 'upcoming' } as never);
     vi.mocked(getParticipants).mockResolvedValue([
       { id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' },
@@ -211,7 +222,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   it('refills a round an interrupted call wrote without matches instead of skipping it', async () => {
     // Round 2 was written, its match batch failed, and current_round stayed at 1: the retry fills round 2 and
     // writes round 3, never leaving round 2 empty.
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, current_round: 1 } as never);
     vi.mocked(getParticipants).mockResolvedValue([
       { id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' },
@@ -251,7 +262,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it('refills the last round when only it was left without matches (no rounds_all_generated dead end)', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, current_round: 2 } as never);
     vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }] as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
@@ -286,7 +297,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     const actual = await vi.importActual<typeof import('@/lib/tournament/round-robin')>('@/lib/tournament/round-robin');
     vi.mocked(generateRoundRobinRound).mockImplementation(actual.generateRoundRobinRound);
     vi.mocked(getRoundRobinTotalRounds).mockImplementation(actual.getRoundRobinTotalRounds);
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, season_id: null } as never);
     vi.mocked(getParticipants).mockResolvedValue([
       { id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' },
@@ -312,7 +323,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it("stores each round's bye on the round", async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }] as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([]);
@@ -342,7 +353,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   it("writes the byes onto a round it reuses instead of inserting one", async () => {
     // Round 1 was written by an interrupted call (no byes stored, no matches): the retry reuses it and still stores
     // the bye, so the reused round matches a freshly inserted one.
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }] as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
@@ -370,7 +381,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
   });
 
   it('leaves a reused round alone when its stored byes already match', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }] as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
@@ -395,7 +406,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     const actual = await vi.importActual<typeof import('@/lib/tournament/round-robin')>('@/lib/tournament/round-robin');
     vi.mocked(generateRoundRobinRound).mockImplementation(actual.generateRoundRobinRound);
     vi.mocked(getRoundRobinTotalRounds).mockImplementation(actual.getRoundRobinTotalRounds);
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, season_id: null } as never);
     vi.mocked(getParticipants).mockResolvedValue([
       { id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' }, { id: 'p5' }, { id: 'p6' },
@@ -418,5 +429,144 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     for (const call of vi.mocked(createRound).mock.calls) {
       expect(call[0].bye_player_ids).toEqual([]);
     }
+  });
+});
+
+describe('POST /api/tournaments/[id]/generate-all-rounds — start_round and audit', () => {
+  const bodyRequest = (body: unknown) => ({ json: () => Promise.resolve(body) }) as unknown as NextRequest;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, name: 'Spring Open', status: 'upcoming' } as never);
+    vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' }] as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([]);
+    vi.mocked(getGroupsByTournament).mockResolvedValue([]);
+    vi.mocked(getRoundRobinTotalRounds).mockReturnValue(3);
+    vi.mocked(generateRoundRobinRound).mockReturnValue({
+      pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
+      bye_player_ids: [],
+    } as never);
+    vi.mocked(createRound).mockImplementation(async (input) => ({
+      id: `round-${input.round_number}`,
+      status: 'pending',
+      ...input,
+    }) as never);
+    vi.mocked(updateRoundStatus).mockImplementation(
+      async (id, status) => ({ id, status, round_number: Number(id.replace('round-', '')) }) as never,
+    );
+  });
+
+  it('starts only the lowest created round and swaps it into the response', async () => {
+    const res = await POST(bodyRequest({ start_round: true }), routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(updateRoundStatus).toHaveBeenCalledTimes(1);
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active');
+    expect(json.data).toHaveLength(3);
+    expect(json.data.map((round: { status: string }) => round.status)).toEqual(['active', 'pending', 'pending']);
+    // The start comes after every round and its matches are written.
+    expect(vi.mocked(createMatchBatch).mock.invocationCallOrder.at(-1)!).toBeLessThan(
+      vi.mocked(updateRoundStatus).mock.invocationCallOrder[0]
+    );
+  });
+
+  it('starts the lowest round this call created, not round 1 when that already exists', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, current_round: 1 } as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([
+      { id: 'r-1', round_number: 1, status: 'completed', bye_player_ids: [] },
+    ] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+
+    const res = await POST(bodyRequest({ start_round: true }), routeParams);
+
+    expect(res.status).toBe(201);
+    expect(updateRoundStatus).toHaveBeenCalledTimes(1);
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-2', 'active');
+  });
+
+  it('leaves every round pending without a body, with start_round false and with an unparsable body', async () => {
+    for (const request of [
+      {} as NextRequest,
+      bodyRequest({ start_round: false }),
+      { json: () => Promise.reject(new SyntaxError('bad json')) } as unknown as NextRequest,
+    ]) {
+      vi.clearAllMocks();
+      vi.mocked(createRound).mockImplementation(async (input) => ({ id: `round-${input.round_number}`, status: 'pending', ...input }) as never);
+      vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, status: 'upcoming' } as never);
+      vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' }] as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([]);
+      vi.mocked(getGroupsByTournament).mockResolvedValue([]);
+      vi.mocked(getRoundRobinTotalRounds).mockReturnValue(3);
+      vi.mocked(generateRoundRobinRound).mockReturnValue({ pairings: [], bye_player_ids: [] } as never);
+
+      const res = await POST(request, routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(updateRoundStatus).not.toHaveBeenCalled();
+      expect(json.data.every((round: { status: string }) => round.status === 'pending')).toBe(true);
+    }
+  });
+
+  it('keeps the rounds pending (201) when the start fails', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(updateRoundStatus).mockRejectedValue(new Error('db down'));
+
+    const res = await POST(bodyRequest({ start_round: true }), routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.data.map((round: { status: string }) => round.status)).toEqual(['pending', 'pending', 'pending']);
+    expect(logged).toHaveBeenCalled();
+    expect(updateTournament).toHaveBeenCalled();
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ started_round_number: null });
+    logged.mockRestore();
+  });
+
+  it('rejects a malformed body with 400 validation_failed before anything is read or written', async () => {
+    const res = await POST(bodyRequest({ start_round: 'yes' }), routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.code).toBe('validation_failed');
+    expect(getTournamentById).not.toHaveBeenCalled();
+    expect(createRound).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('records one round.generate event for the whole call', async () => {
+    const res = await POST(bodyRequest({ start_round: true }), routeParams);
+
+    expect(res.status).toBe(201);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledWith({
+      actor_id: 'admin-1',
+      actor_name: 'Admin',
+      action: 'round.generate',
+      resource_type: 'tournament',
+      resource_id: mockTournament.id,
+      resource_name: 'Spring Open',
+      metadata: { rounds_created: 3, round_numbers: [1, 2, 3], started_round_number: 1 },
+    });
+  });
+
+  it('records started_round_number null by default, and nothing when the call is refused', async () => {
+    await POST({} as NextRequest, routeParams);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toEqual({
+      rounds_created: 3,
+      round_numbers: [1, 2, 3],
+      started_round_number: null,
+    });
+
+    vi.mocked(logAuditEvent).mockClear();
+    vi.mocked(getRoundsByTournament).mockResolvedValue([1, 2, 3].map((n) => ({ id: `r-${n}`, round_number: n })) as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([1, 2, 3].map((n) => ({ id: `m-${n}`, round_id: `r-${n}` })) as never);
+    const refused = await POST({} as NextRequest, routeParams);
+    expect(refused.status).toBe(400);
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });

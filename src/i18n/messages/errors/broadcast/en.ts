@@ -37,6 +37,10 @@ export default {
 
   // Discord webhooks (`api/discord-webhooks/**`)
   webhook_not_found: 'Webhook not found',
+  // `status` is Discord's HTTP status for the test post.
+  discord_webhook_test_rejected: 'Discord rejected the test message (HTTP {status})',
+  discord_webhook_test_unreachable: 'Discord could not be reached',
+  discord_webhook_url_invalid: 'The stored webhook URL is not a valid Discord webhook URL',
 
   // Social integrations (`api/social-integrations/**`); `provider` is the
   // provider label from `src/lib/social/validation.ts` (X, Threads, Bluesky),

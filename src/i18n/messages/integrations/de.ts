@@ -66,7 +66,7 @@ export default defineDe<typeof en>()({
     empty: 'Noch keine Webhooks eingerichtet. Klick auf „Webhook hinzufügen“, um loszulegen.',
     deleteConfirm: 'Diesen Webhook löschen? Discord-Benachrichtigungen für diesen Kanal werden dann eingestellt.',
     testSent: 'Testnachricht gesendet! Schau in deinem Discord-Kanal nach.',
-    testStatus: 'Discord hat {status} zurückgegeben',
+    webhookUrlSaved: 'Webhook-URL gespeichert (endet auf {hint})',
     formatOptions: {
       spoiler_results: {
         label: 'Ergebnisse als Spoiler',

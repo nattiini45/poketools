@@ -133,9 +133,9 @@ The module is client-safe: a pack may import only `@/types/*`, `@/i18n/define`, 
 |---|---|
 | `id` | `'example'` or the pack's own id; also the build marker searched for in the verification above. |
 | `epb.defaults` | `format_rules` defaults and the fallbacks of a missing row: `draftBudget`, `draftPicks`, `tokenRatio`, `tokenMax`, `tokenMaxPerLine`, `redraftMaxLines`, `bannedMoves`, `bannedItems`. |
-| `epb.matchPoints` | Points for a win and a draw. |
+| `epb.matchPoints` | Points for a win and a draw. Every Evolution Point Buy table scores them (round robin and Swiss). |
 | `epb.teraByStage` | `any`, `stab_only` or `none` for stage 1, 2 and 3. |
-| `epb.tiebreakerChain` | Ordered steps; `decision_match`, if present, is last. |
+| `epb.tiebreakerChain` | Ordered steps; `decision_match`, if present, is last. The default order of a league's `format_rules.tiebreaker_order` and the fallback when a league's stored order is missing or unusable; the standings rank by the stored order. |
 | `epb.comeback.table` | Comeback Tokens of a shutout loss (loser 0 alive): the highest row whose `minWinnerSurvivors` the winner reaches. May be empty. |
 | `epb.comeback.earnWindow` | Which completed matches earn Comeback Tokens: `season` (every round) or `first_half` (rounds up to `floor(rounds / 2)` of the primary stage, the redraft-gate boundary). Required. Spending is not affected. Accessor `comebackEarnWindow()`. |
 | `epb.stageLock` | Reaching `stage` by matchday `byMatchday` suspends the line for `suspendMatchdays`. |

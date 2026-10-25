@@ -11,12 +11,14 @@ import { logAuditEvent, diffField } from '@/lib/audit/log';
 import {
   getTournamentById,
   getTournamentWithDetails,
+  getStagesBySeasonId,
   updateTournament,
   deleteTournament,
   getParticipants,
 } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { buildLeaguePhase, assertPhaseEditable } from '@/lib/tournament/league-phase';
+import { newEvenBestOfIssues } from '@/lib/tournament/best-of';
+import { buildLeaguePhase,assertPhaseEditable, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import {
   rebuildAfterTournamentDelete,
   type EntityDeleteRebuildSummary,
@@ -93,6 +95,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const body = parsed.data;
 
+    // The schema takes a legacy even best-of so the form can send the stored record back;
+    // only an even value the phase does not already hold is refused.
+    const evenIssues = newEvenBestOfIssues(body, before);
+    if (evenIssues.length > 0) {
+      const issues = evenIssues.join('; ');
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: issues, code: 'validation_failed', params: { issues } },
+        { status: 400 }
+      );
+    }
+
     if (body.bracket_type !== undefined && body.bracket_type !== before.bracket_type) {
       assertPhaseEditable(before, 'bracket_type');
     }
@@ -107,6 +120,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           );
         }
       }
+    }
+
+    // A rename may not take another phase's name. Saving the unchanged name
+    // passes, so a league that already holds duplicates stays editable.
+    if (body.name !== undefined && body.name.toLowerCase() !== before.name.trim().toLowerCase()) {
+      assertPhaseNameFree(body.name, await getStagesBySeasonId(id), phaseId);
     }
 
     const tournament = await updateTournament(phaseId, body);

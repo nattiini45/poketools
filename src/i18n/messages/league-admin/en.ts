@@ -64,6 +64,16 @@ export default {
     endDate: 'End Date',
     submit: 'Create League',
     saveFailed: 'Failed to save',
+    // The league details form on the Settings tab (LeagueSettingsForm)
+    saveChanges: 'Save changes',
+    saved: 'League settings saved.',
+    datesInvalid: 'The end date must not be before the start date.',
+    leagueTypeLockedStarted:
+      'The league type can no longer be changed: the league has started (it is active or completed, or a phase has rounds).',
+    leagueTypeLockedPointBuy:
+      'A point-buy league keeps its league type, and other leagues cannot become one: its setup (format rules, point-buy list, battle ruleset) is created together with the league.',
+    rulesetEditHint:
+      'The default for new phases and for team validation where a phase has no custom ruleset of its own. Existing phases keep theirs.',
   },
   theme: {
     label: 'Theme',
@@ -94,24 +104,78 @@ export default {
     initialize: 'Initialize Default Rules',
     initializing: 'Initializing...',
     initializeFailed: 'Failed to initialize format rules',
+    retry: 'Retry',
+    /** `{token}` = glossary `token.draftKill`; `{bans}` = number of default banned moves and items. */
+    initializeConfirm: {
+      title: 'Initialize default rules?',
+      message:
+        'This creates the default rules for this league: a budget of {budget}, {picks} picks, a {token} ratio of {ratio}:1, a {token} limit of {tokenMax} ({perLine} per line) and {bans} default bans. You can edit them afterwards.',
+      confirm: 'Initialize',
+    },
+    save: 'Save format rules',
+    saving: 'Saving...',
+    reset: 'Reset',
+    unsavedHint: 'You have unsaved changes.',
     saved: 'Format rules saved.',
+    saveFailed: 'Failed to save format rules',
     picks: 'Picks',
     /** `{token}` = glossary `token.draftKill`. */
     tokenRatio: '{token} ratio',
     /** `{token}` = glossary `token.draftKill`. */
     tokenMax: '{token} limit',
+    /** `{token}` = glossary `token.draftKill`. */
+    perLineLimit: '{token} limit per line',
+    /** The allowed range of a number field. */
+    range: '{min}–{max}',
     ratioValue: '{ratio}:1',
+    poolHint: 'Budget and picks apply to draft pools created after saving. Existing draft pools keep theirs.',
     bannedMoves: 'Banned Moves',
     bannedItems: 'Banned Items',
     teraRules: 'Tera Rules',
     /** `{stage}` = glossary roster stage, `{rule}` = enums `teraRule`. */
     teraRule: '{stage}: {rule}',
+    teraPinned: 'Tera rules come from the format pack and cannot be edited here.',
+    redraftPhase: {
+      label: 'Redraft phase',
+      open: 'Open',
+      closed: 'Closed',
+      hint: 'The Redraft phase is opened and closed in the Redraft section of the Draft tab, not here.',
+    },
     tiebreakerOrder: 'Tiebreaker Order',
+    tiebreakerHint:
+      'The standings rank players by this order, first step first, and the league’s rules page shows it. A decision match, if listed, comes last and only flags players who are still tied.',
+    /** The three buttons of a tiebreaker step; `{step}` = the step’s name. */
+    tiebreakerMoveUp: 'Move {step} up',
+    tiebreakerMoveDown: 'Move {step} down',
+    tiebreakerRemove: 'Remove {step}',
+    addStep: 'Add step',
+    addStepNone: 'Every tiebreaker step is already in the list.',
     tiebreaker: {
       match_points: 'Match points',
+      evolution_points: 'Evolution points',
       kill_difference: 'KO difference',
       head_to_head: 'Head to head',
       decision_match: 'Decision match',
+    },
+    /** Asked before saving into a league that has started. */
+    confirmStarted: {
+      title: 'Change the rules of a started league?',
+      message:
+        'This league has already started. The new rules apply from now on. Past results are kept and existing draft pools are not recomputed, but the standings are ranked by the new tiebreaker order straight away.',
+      confirm: 'Save rules',
+    },
+    error: {
+      required: 'Enter a value.',
+      notInteger: 'Enter a whole number.',
+      /** `{min}` = the smallest allowed value. */
+      tooSmall: 'Must be at least {min}.',
+      /** `{max}` = the largest allowed value. */
+      tooBig: 'Must be at most {max}.',
+      empty: 'This cannot be empty.',
+      duplicate: 'Each entry can appear only once.',
+      /** `{max}` = the longest allowed name. */
+      tooLong: 'Names can have at most {max} characters.',
+      decisionLast: 'A decision match can only be the last step.',
     },
   },
   phasePage: {

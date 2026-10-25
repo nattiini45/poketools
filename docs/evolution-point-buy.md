@@ -37,7 +37,14 @@ Format gates:
   `src/lib/tournament/standings.ts`) and the server wrapper
   `computeStandingsForSeason` (`src/lib/tournament/season-standings.ts`)
   dispatch to `computeEvolutionPointBuyStandings` for EPB and to the generic
-  `computeStandings` for everything else.
+  `computeStandings` for everything else. An EPB table ranks by the season's
+  stored `format_rules.tiebreaker_order` and scores the pack's
+  `epb.matchPoints`, in round robin and Swiss alike
+  (`src/lib/tournament/standings-rules.ts`: `effectiveTiebreakerChain` falls
+  back to the pack's `epb.tiebreakerChain` for a missing row or an unusable
+  order; `effectiveMatchPoints`). `SeasonStandingsContext` carries the stored
+  order next to the evolution points, so the league hub, the tournament page,
+  the standings preview, Insights, profiles and the AI texts all rank alike.
 
 ## Tables
 
@@ -45,7 +52,7 @@ Format gates:
 |-------|---------|
 | `point_buy_list_versions` | Versioned list container (name + version, unique) |
 | `point_buy_list_entries` | The evolution lines of a version (prices, kill thresholds, ratings, `species_ids`, `special_rules` flags) |
-| `format_rules` | Per-season config: bans, tera rules, tiebreakers, budget, picks, token constraints (initialized from the pack's `epb.defaults`) |
+| `format_rules` | Per-season config: bans, tera rules, tiebreakers, budget, picks, token constraints (initialized from the pack's `epb.defaults`; edited in the league admin Rules tab, where Tera rules stay read-only; the tiebreaker order ranks the standings and falls back to the pack chain when unusable) |
 | `evolution_tracker` (extended) | Per-player line state: `line_id` (one tracker per line per season and league group; `season_group_id` is NULL in a league without groups, see docs/draft-room.md "League groups"), the five source columns, `suspended_until_matchday`, `evolution_points_awarded`, `locked_stage3_pokemon`, `redraft_slot_id` |
 | `evo_progress_log` | Progress audit log (one row per applied amount) |
 | `evolution_events` | Development-event log: every stage transition (old/new form + stage, matchday, auto vs. `is_manual`) |
@@ -292,7 +299,7 @@ the marker equal to what the trackers hold:
   finalize still saw the old marker and credited nothing), the edited stats
   are credited at once. A lost marker race, or a credit that cannot be made, is
   reported as `evolution_recheck_failed` (the season reconcile repairs it).
-- **Game delete, match reset, season reconcile** rebuild the season
+- **Game delete, match reset, an admin reopen of a completed match, season reconcile** rebuild the season
   (`repairSeasonEvolution`), which recomputes `real_kills` from the completed
   matches only and then, as its last write, aligns the markers and ledgers
   (`epb_sync_game_kill_credit`): games of the matches it replayed are marked
@@ -306,7 +313,10 @@ the marker equal to what the trackers hold:
   fails and the reconcile is re-run). So a confirm that credits while a
   rebuild runs is never overwritten or unmarked. The Participation Token,
   stage-lock and Evolution Point writes of a concurrent matchday hook run are
-  not fenced (as before). A dispute itself changes
+  not fenced (as before). An admin reopen of a completed match
+  (`reopenMatch`, [Match](./match.md#admin-match-page-verbs)) rebuilds the season
+  the same way a game delete does, so the reopened match's games are unmarked
+  until it is completed again. A dispute itself changes
   nothing: a disputed match has nothing credited, and it is credited when an
   admin resolves it to `completed` (or nothing, when the admin resets it).
 - **Games recorded before 2026-10-20** were credited at submission. The

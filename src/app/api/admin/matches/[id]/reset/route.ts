@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { cascadeActionSchema, formatZodErrors } from '@/lib/validation';
+import { formatZodErrors, matchResetSchema } from '@/lib/validation';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     } catch {
       rawBody = {};
     }
-    const parsed = cascadeActionSchema.safeParse(rawBody ?? {});
+    const parsed = matchResetSchema.safeParse(rawBody ?? {});
     if (!parsed.success) {
       const issues = formatZodErrors(parsed.error);
       return NextResponse.json<ApiResult<never>>(
@@ -78,6 +78,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         games_deleted: result.games_deleted,
         has_downstream_matches: result.has_downstream_matches,
         cascade: parsed.data.cascade === true,
+        ...(parsed.data.reason ? { reason: parsed.data.reason } : {}),
         // Itemized recalculation summary (spec §24) — surfaces the derived
         // records that were recalculated so the audit log records what was
         // rebuilt, not just that a reset happened. All fields are best-effort:

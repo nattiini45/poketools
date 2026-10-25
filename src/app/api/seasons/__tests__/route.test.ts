@@ -45,6 +45,14 @@ vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
 }));
 
+// The clone path has its own suite (clone-route.test.ts); here it must stay unreached.
+vi.mock('@/lib/season/clone', () => ({
+  assertCloneAllowed: vi.fn(),
+  copyLeagueStructure: vi.fn(),
+  createCloneTracker: vi.fn(),
+  rollbackClonedLeague: vi.fn(),
+}));
+
 import { GET, POST } from '@/app/api/seasons/route';
 import { getLiveAccess, requireAnyAdmin, AuthError } from '@/lib/auth/helpers';
 import { listSeasons, listArchivedSeasons, createSeason } from '@/lib/supabase/queries/seasons';
@@ -53,6 +61,12 @@ import { initializeEpbFormatRules } from '@/lib/season/format-rules-defaults';
 import { ensurePointBuyBattleRuleset } from '@/lib/season/point-buy-battle-ruleset';
 import { getActiveListVersion, bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
 import { logAuditEvent } from '@/lib/audit/log';
+import {
+  assertCloneAllowed,
+  copyLeagueStructure,
+  createCloneTracker,
+  rollbackClonedLeague,
+} from '@/lib/season/clone';
 import { revalidateTag } from 'next/cache';
 
 const mockSeason: SeasonWithDetails = {
@@ -339,6 +353,47 @@ describe('POST /api/seasons', () => {
     expect(response.status).toBe(201);
     expect(body.success).toBe(true);
     expect(vi.mocked(addResourceAdmin)).toHaveBeenCalledWith('radmin-1', 'season', 'season-new');
+  });
+
+  it('never reaches the clone module without clone_from, and answers without a clone key', async () => {
+    const created = { ...mockSeason, id: 'season-new' };
+    vi.mocked(requireAnyAdmin).mockResolvedValue(resourceAdminPlayer);
+    vi.mocked(createSeason).mockResolvedValue(created);
+
+    const request = {
+      json: vi.fn().mockResolvedValue({ name: 'Season One', format_type: 'singles' }),
+    } as unknown as NextRequest;
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.data).toEqual(created);
+    expect(body.data).not.toHaveProperty('clone');
+    expect(assertCloneAllowed).not.toHaveBeenCalled();
+    expect(createCloneTracker).not.toHaveBeenCalled();
+    expect(copyLeagueStructure).not.toHaveBeenCalled();
+    expect(rollbackClonedLeague).not.toHaveBeenCalled();
+  });
+
+  it('passes a creation error through unchanged without clone_from (no rollback)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(requireAnyAdmin).mockResolvedValue(resourceAdminPlayer);
+    vi.mocked(createSeason).mockResolvedValue({ ...mockSeason, id: 'season-new' });
+    vi.mocked(addResourceAdmin).mockRejectedValue(new Error('grant failed'));
+
+    const request = {
+      json: vi.fn().mockResolvedValue({ name: 'Season One', format_type: 'singles' }),
+    } as unknown as NextRequest;
+
+    try {
+      const response = await POST(request);
+
+      expect(response.status).toBe(500);
+      expect(rollbackClonedLeague).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('returns 500 on unexpected error', async () => {

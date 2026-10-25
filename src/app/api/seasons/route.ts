@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAnyAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { seasonCreateSchema, formatZodErrors } from '@/lib/validation';
+import { seasonCreateRequestSchema, formatZodErrors } from '@/lib/validation';
 import { listSeasons, listArchivedSeasons, createSeason } from '@/lib/supabase/queries/seasons';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { getActiveListVersion, bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
@@ -9,7 +9,15 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { initializeEpbFormatRules } from '@/lib/season/format-rules-defaults';
 import { ensurePointBuyBattleRuleset } from '@/lib/season/point-buy-battle-ruleset';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { assertSeasonDateRange } from '@/lib/season/settings-guards';
 import { expireSeasonReads } from '@/lib/revalidation';
+import {
+  assertCloneAllowed,
+  copyLeagueStructure,
+  createCloneTracker,
+  rollbackClonedLeague,
+  type CloneReport,
+} from '@/lib/season/clone';
 import type { ApiResult } from '@/types/api';
 import type { SeasonWithDetails } from '@/types/season';
 
@@ -45,12 +53,20 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Admin — create league
+/**
+ * Admin — create league.
+ *
+ * `clone_from` starts the league from an existing one: after the normal
+ * creation below, the source's phases (and on request its roster and, for
+ * site admins, its league admins) are copied, and a failure removes the new
+ * league again (`src/lib/season/clone.ts`). The 201 body then carries
+ * `data.clone`, the copy report.
+ */
 export async function POST(request: NextRequest) {
   try {
     const player = await requireAnyAdmin();
     const rawBody = await request.json();
-    const zodResult = seasonCreateSchema.safeParse(rawBody);
+    const zodResult = seasonCreateRequestSchema.safeParse(rawBody);
 
     if (!zodResult.success) {
       const issues = formatZodErrors(zodResult.error);
@@ -60,7 +76,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const isPointBuy = isEvolutionPointBuy(zodResult.data.format_type);
+    const { clone_from: cloneFrom, ...seasonFields } = zodResult.data;
+
+    // The schema checks each date alone; the order of the two is checked here
+    // (a refine on the schema would stop PATCH from extending it).
+    assertSeasonDateRange(seasonFields.start_date, seasonFields.end_date);
+
+    // A refusal comes before any write: nothing is created for a source the
+    // caller may not copy (the ruleset ensure below is a write too).
+    const cloneSource = cloneFrom
+      ? (
+          await assertCloneAllowed(player, {
+            sourceId: cloneFrom.season_id,
+            copyAdmins: cloneFrom.copy_admins,
+          })
+        ).source
+      : null;
+
+    const isPointBuy = isEvolutionPointBuy(seasonFields.format_type);
 
     // A point-buy league battles in Gen 9 singles under its format_rules: without
     // an explicit ruleset, its default is the pack's battle ruleset (one shared,
@@ -68,7 +101,7 @@ export async function POST(request: NextRequest) {
     // manual ruleset (docs/evolution-point-buy.md). Any admin who may create a
     // league (requireAnyAdmin) thereby creates or repairs that shared row; its
     // content is fixed server-side, never taken from the request.
-    let seasonInput = zodResult.data;
+    let seasonInput = seasonFields;
     if (isPointBuy && !seasonInput.ruleset_id) {
       const ensured = await ensurePointBuyBattleRuleset(player.playerId);
       seasonInput = { ...seasonInput, ruleset_id: ensured.ruleset.id };
@@ -98,43 +131,72 @@ export async function POST(request: NextRequest) {
     // through with the rest; omitted, the column default ('de') applies.
     const season = await createSeason(seasonInput);
 
-    // Auto-initialize format rules for Evolution Point Buy seasons
-    if (isPointBuy) {
-      await initializeEpbFormatRules(season.id);
+    // From here on a clone undoes the new league if anything fails. Without
+    // `clone_from` there is no tracker and the error passes through unchanged.
+    const cloneTracker =
+      cloneFrom && cloneSource
+        ? createCloneTracker({
+            seasonId: season.id,
+            seasonName: season.name,
+            sourceId: cloneSource.id,
+            actor: player,
+          })
+        : null;
+    let cloneReport: CloneReport | null = null;
 
-      // Auto-bind the active point-buy list version (user request 2026-08-21):
-      // upload once, every EPB league created afterwards is draft-ready.
-      // Best-effort — a bind failure must not fail league creation.
-      const activeList = await getActiveListVersion();
-      if (activeList) {
-        try {
-          await bindSeasonToList(season.id, activeList.id);
-          logAuditEvent({
-            actor_id: player.playerId,
-            actor_name: player.name,
-            action: 'season.auto_bind_point_buy_list',
-            resource_type: 'season',
-            resource_id: season.id,
-            metadata: { point_buy_list_id: activeList.id },
-          });
-        } catch (bindErr) {
-          console.error(bindErr);
+    try {
+      // Auto-initialize format rules for Evolution Point Buy seasons
+      if (isPointBuy) {
+        await initializeEpbFormatRules(season.id);
+
+        // Auto-bind the active point-buy list version (user request 2026-08-21):
+        // upload once, every EPB league created afterwards is draft-ready.
+        // Best-effort — a bind failure must not fail league creation.
+        const activeList = await getActiveListVersion();
+        if (activeList) {
+          try {
+            await bindSeasonToList(season.id, activeList.id);
+            logAuditEvent({
+              actor_id: player.playerId,
+              actor_name: player.name,
+              action: 'season.auto_bind_point_buy_list',
+              resource_type: 'season',
+              resource_id: season.id,
+              metadata: { point_buy_list_id: activeList.id },
+            });
+          } catch (bindErr) {
+            console.error(bindErr);
+          }
+        } else {
+          console.warn('No active point-buy list version; EPB season created unbound:', season.id);
         }
-      } else {
-        console.warn('No active point-buy list version; EPB season created unbound:', season.id);
       }
-    }
 
-    // Auto-assign resource admin for non-site-admins
-    if (!player.isAdmin) {
-      await addResourceAdmin(player.playerId, 'season', season.id);
+      // Auto-assign resource admin for non-site-admins
+      if (!player.isAdmin) {
+        await addResourceAdmin(player.playerId, 'season', season.id);
+        if (cloneTracker) cloneTracker.creatorGrant = true;
+      }
+
+      if (cloneFrom && cloneSource && cloneTracker) {
+        cloneReport = await copyLeagueStructure(
+          season,
+          cloneSource,
+          player,
+          { copyRoster: cloneFrom.copy_roster, copyAdmins: cloneFrom.copy_admins },
+          cloneTracker,
+        );
+      }
+    } catch (err) {
+      if (!cloneTracker) throw err;
+      await rollbackClonedLeague(cloneTracker, err);
     }
 
     // The new league shows in the season list on the next view.
     expireSeasonReads(season.id);
 
-    return NextResponse.json<ApiResult<typeof season>>(
-      { success: true, data: season },
+    return NextResponse.json<ApiResult<typeof season & { clone?: CloneReport }>>(
+      { success: true, data: cloneReport ? { ...season, clone: cloneReport } : season },
       { status: 201 }
     );
   } catch (err) {

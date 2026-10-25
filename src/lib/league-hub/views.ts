@@ -1,4 +1,5 @@
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
+import { roundRobinMatchPoints } from '@/lib/tournament/standings-rules';
 import type { ByeRecord, MatchRecord, Standing } from '@/lib/tournament/types';
 import type { SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
@@ -503,7 +504,9 @@ export function resolveGroupMembers(
  * The standings tables of one table phase, scored exactly as the phase page
  * scores them: round robin 3 points a win, 0 a draw, kill difference and
  * games played from the phase's own games; Swiss the default 1 / ½ with
- * Buchholz. A grouped phase (round robin or Swiss: groups pair players for
+ * Buchholz. An Evolution Point Buy phase scores the format pack's match points
+ * in both and ranks by the season's stored tiebreaker order
+ * (`context.tiebreakerOrder`). A grouped phase (round robin or Swiss: groups pair players for
  * both) gets one table per group. Phase-only groups count only matches
  * between two members of that group (the advancement filter). Groups that
  * mirror league groups (`season_group_id` on every group) count every match
@@ -547,8 +550,7 @@ export function buildTableStage(input: TableStageInput): HubTableStage {
     const options =
       scoring === 'round_robin'
         ? {
-            pointsPerWin: 3,
-            pointsPerDraw: 0,
+            ...roundRobinMatchPoints(context.formatType),
             battleStats: battleStats.filter((stat) => tableGames.has(stat.game_id)),
             gamesByMatch: Object.fromEntries(
               tableCompleted.map((match) => [
@@ -568,7 +570,7 @@ export function buildTableStage(input: TableStageInput): HubTableStage {
       avatars,
       options,
       { ...gymTypes },
-      { evolutionPoints: context.evolutionPoints },
+      { evolutionPoints: context.evolutionPoints, tiebreakerOrder: context.tiebreakerOrder },
     ).map((row) => (row.gym_type ? row : { ...row, gym_type: gymTypes[row.player_id] ?? null }));
     return {
       key,
