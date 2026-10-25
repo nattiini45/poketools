@@ -20,7 +20,10 @@ import {
   isVersionBoundToAnySeason,
 } from '../point-buy-lists';
 
-type MockSupabase = ReturnType<typeof createMockSupabase>;
+type MockSupabase = ReturnType<typeof createMockSupabase> & {
+  range: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+};
 const mock = supabase as unknown as MockSupabase;
 
 /** The active format pack's first line override and its example-fixture entry (format-pack spec §F.2). */
@@ -102,6 +105,55 @@ describe('point-buy list reads apply the league overrides on every path', () => 
     const [entry] = await getListEntries('v1');
     expect(entry.line_id).toBe('flabebe--florges');
     expect(entry.overrides).toEqual([]);
+  });
+});
+
+describe('getListEntries paging', () => {
+  beforeEach(() => mock.__reset());
+
+  /** Rows `[from, to]` of a 2,345-line list, as the server would cut the page. */
+  function pageOf(from: number, to: number) {
+    return Array.from({ length: Math.min(to, 2344) - from + 1 }, (_, i) =>
+      row({ id: `entry-${from + i}`, line_number: from + i + 1, line_id: `line-${from + i}`, base_pokemon: `Mon ${from + i}` }),
+    );
+  }
+
+  it('reads a list past the 1,000-row ceiling page by page, in line_number order', async () => {
+    mock.range
+      .mockReturnValueOnce(Promise.resolve({ data: pageOf(0, 999), error: null }))
+      .mockReturnValueOnce(Promise.resolve({ data: pageOf(1000, 1999), error: null }))
+      .mockReturnValueOnce(Promise.resolve({ data: pageOf(2000, 2999), error: null }));
+
+    const entries = await getListEntries('v1');
+
+    expect(mock.range.mock.calls).toEqual([
+      [0, 999],
+      [1000, 1999],
+      [2000, 2999],
+    ]);
+    expect(entries).toHaveLength(2345);
+    expect(entries.map((e) => e.line_number)).toEqual(Array.from({ length: 2345 }, (_, i) => i + 1));
+    expect(mock.eq).toHaveBeenCalledWith('list_version_id', 'v1');
+    expect(mock.order.mock.calls).toEqual([['line_number'], ['id'], ['line_number'], ['id'], ['line_number'], ['id']]);
+  });
+
+  it('reads a short list with ONE range call and the same output', async () => {
+    mock.__setResult([row(), gastly]);
+
+    const entries = await getListEntries('v1');
+
+    expect(mock.range.mock.calls).toEqual([[0, 999]]);
+    expectOverridden(entries[0]);
+    expect(entries[1]).toMatchObject({ line_id: 'gastly--gengar', kills_to_stage2: 5, overrides: [] });
+  });
+
+  it('rethrows an error from a later page', async () => {
+    const boom = new Error('page 2 failed');
+    mock.range
+      .mockReturnValueOnce(Promise.resolve({ data: pageOf(0, 999), error: null }))
+      .mockReturnValueOnce(Promise.resolve({ data: null, error: boom }));
+
+    await expect(getListEntries('v1')).rejects.toBe(boom);
   });
 });
 

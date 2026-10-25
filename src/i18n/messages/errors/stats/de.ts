@@ -37,6 +37,9 @@ export default defineDe<typeof en>()({
   wiki_note_delete_forbidden: 'Du darfst diese Notiz nicht löschen.',
   wiki_note_approve_reject_conflict: 'Eine Notiz kann nicht gleichzeitig freigegeben und abgelehnt werden.',
   wiki_note_content_required: 'Der Inhalt darf nicht leer sein.',
+  wiki_note_resubmission_blocked: 'Ein Moderator hat diese Notiz für weitere Einreichungen gesperrt.',
+  wiki_note_block_superadmin_only: 'Nur der Superadmin kann eine Notiz für erneutes Einreichen sperren.',
+  wiki_note_block_not_rejected: 'Nur eine abgelehnte Notiz kann für erneutes Einreichen gesperrt werden.',
 
   unknown_move: 'Unbekannte Attacke: {move}.',
   unknown_item: 'Unbekanntes Item: {item}.',

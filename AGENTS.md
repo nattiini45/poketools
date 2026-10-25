@@ -88,6 +88,7 @@ Non-negotiable. Violations must be caught and corrected immediately.
   - Keep `force-dynamic` on `/leagues` and `/tournaments`: without it `next build` prerenders them against Supabase, and CI builds with a placeholder URL.
 - **Reads stay complete under `max_rows`** (D36 fixes 9, 10). PostgREST caps every response at 1000 rows and truncates silently.
   - Page a list with `.range()` plus `{ count: 'exact' }`, and count rows with `{ count: 'exact', head: true }` (`listReplayLibraryPage`, `getAggregateJobStats`). A read that truly needs every row pages in `.range()` chunks up to the exact count (`listReplayLibraryRows`).
+  - A read that needs every row and may pass 1,000 rows uses `readBoundedPages` (`src/lib/supabase/read-bounded-pages.ts`: a stable total order ending in a unique column, 1,000-row `.range()` pages, a short page ends the read, a hard bound that warns) or `readAllPages` (`src/lib/supabase/read-all-pages.ts`: no bound, one extra empty request on a short page). `src/lib/supabase/queries/__tests__/no-oversized-limit.test.ts` fails on `.limit(N)` above 1,000 in `src/lib/supabase/queries`.
   - An AI route serves its cached or in-flight result before `checkAndRecordAiGeneration`, so only a generation that actually starts spends a daily slot.
   - The `process-aggregates` cron runs every 10 minutes (D37). It is the safety net for jobs `after()` missed.
 - **Text goes through `src/i18n`** (English default, German; module doc `docs/i18n.md`).
