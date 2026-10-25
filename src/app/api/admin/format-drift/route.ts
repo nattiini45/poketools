@@ -7,8 +7,9 @@ import { listFormatRulesOrders, listLeaguePhasesForDrift } from '@/lib/supabase/
 import type { ApiResult } from '@/types/api';
 
 /**
- * GET /api/admin/format-drift — read-only report of where stored league settings and the engine disagree
- * (tiebreaker order vs the format pack chain; advancement rule on the source vs the target phase).
+ * GET /api/admin/format-drift — read-only report of where stored league settings differ from the format pack or
+ * from what the engine reads (tiebreaker order vs the format pack default, information only because the standings
+ * use the stored order; advancement rule on the source vs the target phase).
  * Site admins only: it spans every league. Reads names, ids and rules; writes nothing and logs no audit event.
  */
 export async function GET() {

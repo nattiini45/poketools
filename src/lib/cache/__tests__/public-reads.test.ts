@@ -663,8 +663,8 @@ describe('public read cache — no session data and no private player columns', 
     expect(names).toEqual({
       tournamentMatches: 'tournament-matches-public',
       tournamentHeadToHead: 'tournament-h2h-public',
-      worldRouteData: 'world-route-data-public-v4',
-      leagueSchedule: 'league-schedule-public-v3',
+      worldRouteData: 'world-route-data-public-v5',
+      leagueSchedule: 'league-schedule-public-v4',
     });
   });
 

@@ -129,14 +129,14 @@ export default defineDe<typeof en>()({
       retry: 'Erneut versuchen',
       failed: 'Der Format-Drift-Bericht konnte nicht erstellt werden',
       readOnlyNote:
-        'Dieser Bericht liest nur und ändert nichts. Die Tabellen nutzen die Tiebreaker-Kette des Format Packs, und beim Einschreiben einer Phase wird die Weiterkommen-Regel der einzuschreibenden Phase (der Zielphase) gelesen.',
+        'Dieser Bericht liest nur und ändert nichts. Die Tabellen nutzen die bei der jeweiligen Liga gespeicherte Tiebreaker-Reihenfolge, und beim Einschreiben einer Phase wird die Weiterkommen-Regel der einzuschreibenden Phase (der Zielphase) gelesen.',
       truncated: 'Der Bericht ist unvollständig: Ein Lesevorgang hat bei {max} Zeilen aufgehört, deshalb fehlen einige Ligen oder Phasen.',
       generatedAt: 'Erstellt {time}',
       archivedBadge: 'Archiviert',
       testBadge: 'Test',
       summary: {
         leaguesChecked: { one: '{count} Liga mit Formatregeln geprüft', other: '{count} Ligen mit Formatregeln geprüft' },
-        tiebreakerMismatches: { one: '{count} weicht von der Kette des Format Packs ab', other: '{count} weichen von der Kette des Format Packs ab' },
+        tiebreakerMismatches: { one: '{count} weicht vom Standard des Formatpakets ab', other: '{count} weichen vom Standard des Formatpakets ab' },
         pairsChecked: { one: '{count} Phasenpaar mit Regel geprüft', other: '{count} Phasenpaare mit Regel geprüft' },
         pairsConsistent: { one: '{count} stimmig', other: '{count} stimmig' },
         pairsMismatching: { one: '{count} widersprüchlich', other: '{count} widersprüchlich' },
@@ -144,10 +144,12 @@ export default defineDe<typeof en>()({
       tiebreaker: {
         title: 'Tiebreaker-Reihenfolge',
         intro:
-          'Die gespeicherte Reihenfolge einer Liga steht auf ihrer Regelseite, die Tabellen nutzen aber immer die Kette des Format Packs. Diese Ligen haben eine andere Reihenfolge gespeichert.',
-        stored: 'Gespeichert',
-        pack: 'Kette des Format Packs',
-        empty: 'Keine Abweichungen gefunden: Jede gespeicherte Reihenfolge entspricht der Kette des Format Packs.',
+          'Die Tabelle einer Liga nutzt die bei ihr gespeicherte Tiebreaker-Reihenfolge. Diese Ligen haben eine Reihenfolge gespeichert, die vom Standard des Formatpakets abweicht.',
+        stored: 'Gespeichert (gilt für die Tabelle)',
+        pack: 'Standard des Formatpakets',
+        unusable:
+          'Mit der gespeicherten Reihenfolge lässt sich keine Tabelle sortieren (sie ist leer, enthält einen unbekannten oder doppelten Schritt, ein Entscheidungsspiel, das nicht ganz am Ende steht, oder nichts zum Sortieren). Die Tabelle dieser Liga nutzt deshalb den Standard des Formatpakets.',
+        empty: 'Keine Abweichungen gefunden: Jede gespeicherte Reihenfolge entspricht dem Standard des Formatpakets.',
       },
       advancement: {
         title: 'Weiterkommen-Regeln',

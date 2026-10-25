@@ -228,10 +228,12 @@ describe('FormatRulesEditor ready form', () => {
     expect(select).not.toContain('value="match_points"');
   });
 
-  it('says the standings use the format pack chain, and that the order is stored', () => {
+  it('says the order decides the standings and is shown on the rules page', () => {
     const html = clean();
-    expect(html).toContain('The standings currently use the format pack’s tiebreaker chain');
-    expect(html).toContain('stored and shown on the league’s rules page');
+    expect(html).toContain('The standings rank players by this order, first step first');
+    expect(html).toContain('the league’s rules page shows it');
+    expect(html).not.toContain('currently use the format pack');
+    expect(html).not.toContain('whatever is set here');
   });
 
   it('shows the Tera rules read-only with the pack note, and the redraft phase as a status line', () => {
@@ -339,7 +341,8 @@ describe('FormatRulesEditor ready form', () => {
     expect(html).toContain('data-testid="confirm-dialog"');
     expect(html).toContain('Change the rules of a started league?');
     expect(html).toContain('The new rules apply from now on');
-    expect(html).toContain('past results, standings and existing draft pools are not recomputed');
+    expect(html).toContain('Past results are kept and existing draft pools are not recomputed');
+    expect(html).toContain('the standings are ranked by the new tiebreaker order straight away');
     expect(html).toContain('>Save rules<');
   });
 
@@ -391,7 +394,7 @@ describe('FormatRulesEditor German', () => {
       'Du hast ungespeicherte Änderungen.',
       'Regeln einer laufenden Liga ändern?',
       'werden nicht neu berechnet',
-      'Die Tabelle nutzt derzeit die Tiebreaker-Kette des Format Packs',
+      'Die Tabelle sortiert die Spieler nach dieser Reihenfolge',
       'Budget und Picks gelten für Draft-Pools',
     ]) {
       expect(html, text).toContain(text);

@@ -48,6 +48,7 @@ function report(overrides: Partial<FormatDriftData> = {}): FormatDriftData {
           isTest: false,
           stored: ['head_to_head', 'match_points'],
           pack: PACK,
+          usable: true,
         },
       ],
     },
@@ -150,8 +151,8 @@ describe('FormatDriftReportView', () => {
 
   it('loaded: shows the stored and pack chains with the rules-page step labels', () => {
     const html = view({ status: 'loaded' }, report());
-    expect(html).toContain('Stored');
-    expect(html).toContain('Pack chain');
+    expect(html).toContain('Stored (used by the standings)');
+    expect(html).toContain('Format pack default');
     expect(html).toContain('Head to head');
     expect(html).toContain('Match points');
     expect(html).toContain('Evolution points');
@@ -161,14 +162,27 @@ describe('FormatDriftReportView', () => {
   it('loaded: states that the report is read-only and what the engine really uses', () => {
     const html = view({ status: 'loaded' }, report());
     expect(html).toContain('changes nothing');
-    expect(html).toContain('tiebreaker chain');
+    expect(html).toContain('tiebreaker order stored with each league');
+    expect(html).not.toContain('format pack’s tiebreaker chain');
     expect(html).toContain('target phase');
+  });
+
+  it('loaded: a usable stored order is information only; one the standings cannot use says they fall back', () => {
+    const usable = view({ status: 'loaded' }, report());
+    expect(usable).toContain('These leagues store an order that differs from the format pack default.');
+    expect(usable).not.toContain('cannot rank a table');
+
+    const broken = report();
+    broken.tiebreaker.cases = [{ ...broken.tiebreaker.cases[0], stored: [], usable: false }];
+    const html = view({ status: 'loaded' }, broken);
+    expect(html).toContain('cannot rank a table');
+    expect(html).toContain('standings use the format pack default');
   });
 
   it('loaded: summary counts', () => {
     const html = view({ status: 'loaded' }, report());
     expect(html).toContain('3 leagues with format rules checked');
-    expect(html).toContain('1 differs from the pack chain');
+    expect(html).toContain('1 differs from the format pack default');
     expect(html).toContain('3 phase pairs with a rule checked');
     expect(html).toContain('1 consistent');
     expect(html).toContain('2 mismatching');
@@ -176,7 +190,7 @@ describe('FormatDriftReportView', () => {
 
   it('loaded: an all-empty report says no differences were found in both lists', () => {
     const html = view({ status: 'loaded' }, empty);
-    expect(html).toContain('every stored order matches the pack chain');
+    expect(html).toContain('every stored order matches the format pack default');
     expect(html).toContain('no advancement rule sits on the wrong side of a phase pair');
     expect(html).not.toContain('Spring Cup');
   });

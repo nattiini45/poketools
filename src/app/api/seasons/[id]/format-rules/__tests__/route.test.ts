@@ -24,14 +24,14 @@ vi.mock('@/lib/supabase/queries/format-rules', () => ({
   getFormatRules: vi.fn(),
   upsertFormatRules: vi.fn(),
 }));
-vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn(), getSeasonStageIds: vi.fn() }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn() }));
 
 import { GET, PUT } from '../route';
 import { AuthError, requirePlayer, requireResourceAdmin } from '@/lib/auth/helpers';
 import { getFormatRules, upsertFormatRules } from '@/lib/supabase/queries/format-rules';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getSeasonById, getSeasonStageIds } from '@/lib/supabase/queries/seasons';
 import { logAuditEvent } from '@/lib/audit/log';
 import { expireSeasonReads } from '@/lib/revalidation';
 
@@ -74,6 +74,7 @@ beforeEach(() => {
   vi.mocked(getSeasonById).mockResolvedValue({ id: SEASON_ID, format_type: 'evolution_point_buy' } as never);
   vi.mocked(upsertFormatRules).mockResolvedValue(STORED as never);
   vi.mocked(getFormatRules).mockResolvedValue(null);
+  vi.mocked(getSeasonStageIds).mockResolvedValue(['stage-1', 'stage-2']);
 });
 
 describe('PUT /api/seasons/[id]/format-rules', () => {
@@ -144,7 +145,8 @@ describe('PUT /api/seasons/[id]/format-rules', () => {
     expect(json).toEqual({ success: true, data: STORED });
     expect(upsertFormatRules).toHaveBeenCalledTimes(1);
     expect(upsertFormatRules).toHaveBeenCalledWith(SEASON_ID, FULL_BODY);
-    expect(expireSeasonReads).toHaveBeenCalledWith(SEASON_ID);
+    // The stored tiebreaker order ranks the league's and each phase's tables: both sets of reads expire.
+    expect(expireSeasonReads).toHaveBeenCalledWith(SEASON_ID, ['stage-1', 'stage-2']);
     expect(logAuditEvent).toHaveBeenCalledTimes(1);
     expect(logAuditEvent).toHaveBeenCalledWith({
       actor_id: ADMIN.playerId,
@@ -154,6 +156,18 @@ describe('PUT /api/seasons/[id]/format-rules', () => {
       resource_id: SEASON_ID,
       metadata: { format_rules: FULL_BODY },
     });
+  });
+
+  it('reads the phase ids before the write: a failed read saves nothing and expires nothing', async () => {
+    vi.mocked(getSeasonStageIds).mockRejectedValue(new Error('stages unavailable'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await PUT(putRequest(FULL_BODY), routeArgs);
+
+    expect(response.status).toBe(500);
+    expect(upsertFormatRules).not.toHaveBeenCalled();
+    expect(expireSeasonReads).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('a body without redraft_phase_open does not carry that key to the store', async () => {

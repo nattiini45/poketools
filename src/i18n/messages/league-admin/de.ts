@@ -120,7 +120,7 @@ export default defineDe<typeof en>()({
     },
     tiebreakerOrder: 'Tiebreaker-Reihenfolge',
     tiebreakerHint:
-      'Diese Reihenfolge wird gespeichert und auf der Regelseite der Liga angezeigt. Die Tabelle nutzt derzeit die Tiebreaker-Kette des Format Packs, egal was hier steht.',
+      'Die Tabelle sortiert die Spieler nach dieser Reihenfolge, der erste Schritt zuerst, und die Regelseite der Liga zeigt sie an. Ein Entscheidungsspiel steht, falls vorhanden, ganz am Ende und markiert nur Spieler, die dann noch gleichauf sind.',
     tiebreakerMoveUp: '{step} nach oben',
     tiebreakerMoveDown: '{step} nach unten',
     tiebreakerRemove: '{step} entfernen',
@@ -136,7 +136,7 @@ export default defineDe<typeof en>()({
     confirmStarted: {
       title: 'Regeln einer laufenden Liga ändern?',
       message:
-        'Diese Liga hat bereits begonnen. Die neuen Regeln gelten ab jetzt; bisherige Ergebnisse, Tabellen und bestehende Draft-Pools werden nicht neu berechnet.',
+        'Diese Liga hat bereits begonnen. Die neuen Regeln gelten ab jetzt. Bisherige Ergebnisse bleiben erhalten und bestehende Draft-Pools werden nicht neu berechnet, die Tabelle wird aber sofort nach der neuen Tiebreaker-Reihenfolge sortiert.',
       confirm: 'Regeln speichern',
     },
     error: {
