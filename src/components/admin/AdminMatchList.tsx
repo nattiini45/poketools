@@ -1,36 +1,29 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type {
-  AdminMatchRow,
-  AdminMatchFilterOptions,
-  AdminMatchLeagueOption,
-  AdminMatchPhaseOption,
-  AdminMatchStandaloneOption,
-} from '@/lib/supabase/queries/matches';
+import type { AdminMatchFilterOptions, AdminMatchRoundOption } from '@/lib/supabase/queries/matches';
 import type { ApiResult } from '@/types/api';
 import {
-  ADMIN_MATCH_SEARCH_MAX_LENGTH,
   ADMIN_MATCH_SEARCH_PLAYER_CAP,
-  ADMIN_MATCH_STATUSES,
-  STANDALONE_LEAGUE,
   adminMatchLastPage,
   buildMatchListApiQuery,
   buildMatchListSearch,
   parseMatchListUrl,
+  matchListScopeCorrection,
+  reconcileMatchListScope,
   type AdminMatchListResponse,
   type MatchListUrlState,
 } from '@/lib/admin/match-list';
-import { matchRowActions, type AdminMatchViewer } from '@/lib/admin/match-row-actions';
-import MatchStatusBadge from '@/components/match/MatchStatusBadge';
-import Card from '@/components/ui/Card';
+import AdminMatchFilters from '@/components/admin/AdminMatchFilters';
+import { MatchListRow } from '@/components/admin/AdminMatchRowCard';
+import { isRetryableLoadError, matchListEmptyKey } from '@/components/admin/match-list-view';
+import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import Alert from '@/components/ui/Alert';
 import Skeleton from '@/components/ui/Skeleton';
 import { getButtonClasses } from '@/components/ui/Button';
 import { AnimatedList, AnimatedListItem } from '@/components/shared/AnimatedList';
-import { useFormatter, useT } from '@/i18n/client';
+import { useFormatter, useT, useTimeZone } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { shellMessages } from '@/i18n/messages/shell';
@@ -38,12 +31,6 @@ import { errorsAdmin } from '@/i18n/messages/errors';
 
 /** How long typing pauses before the search is sent to the server. */
 const SEARCH_DEBOUNCE_MS = 300;
-
-/** Status tabs: '' = all, then each match status (its label is `admin.matches.status.<value>`). */
-const STATUS_TABS: readonly (MatchListUrlState['status'])[] = ['', ...ADMIN_MATCH_STATUSES];
-
-const SELECT_CLASSES =
-  'border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full';
 
 /** The API's error (or a load failure without one); translated at render. */
 type LoadError = { kind: 'api'; error: ApiErrorLike } | { kind: 'loadFailed' };
@@ -148,95 +135,15 @@ export function MatchListPager({
   );
 }
 
-/**
- * One row of the list. Override (the admin page of the match) is on every row; Submit Result and
- * View Prep open player-dashboard pages, so they show only where those pages admit the viewer.
- */
-export function AdminMatchListRow({ match: m, viewer }: { match: AdminMatchRow; viewer: AdminMatchViewer | null }) {
-  const t = useT(shellMessages);
-  const actions = matchRowActions(m, viewer);
-  return (
-    <Link href={`/tournaments/${m.tournament_id}/matches/${m.id}`} className="block group">
-      <Card variant="outlined" padding="sm" className="transition-colors group-hover:border-poke-border-focus">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-heading font-medium text-sm text-poke-text-primary truncate group-hover:text-poke-accent transition-colors">
-              {t('admin.matches.versus', { player1: m.player_1_name, player2: m.player_2_name })}
-            </span>
-            {m.winner_name && (
-              <span className="text-xs text-poke-green shrink-0">
-                {t('admin.matches.winner', { name: m.winner_name })}
-              </span>
-            )}
-          </div>
-          <MatchStatusBadge status={m.status} />
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-poke-text-muted truncate">
-            {m.season_name
-              ? t('admin.matches.leaguePhase', { league: m.season_name, phase: m.tournament_name })
-              : m.tournament_name}
-          </span>
-          <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <Link href={`/admin/matches/${m.id}`} className={getButtonClasses('ghost', 'sm')}>
-              {t('admin.matches.override')}
-            </Link>
-            {actions.submitResult && (
-              <Link href={`/dashboard/submit/${m.id}`} className={getButtonClasses('secondary', 'sm')}>
-                {t('admin.matches.submitResult')}
-              </Link>
-            )}
-            {actions.viewPrep && (
-              <Link href={`/dashboard/match-prep/${m.id}`} className={getButtonClasses('ghost', 'sm')}>
-                {t('admin.matches.viewPrep')}
-              </Link>
-            )}
-          </div>
-        </div>
-      </Card>
-    </Link>
-  );
-}
-
 export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchViewer | null }) {
   const t = useT(shellMessages);
   const errorText = useApiErrorText(errorsAdmin);
+  const timeZone = useTimeZone();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // The URL is the source of truth for status, league, phase, q and page.
-  const url = useMemo(() => parseMatchListUrl(searchParams), [searchParams]);
-  const replaceSearch = useCallback(
-    (search: string) => router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false }),
-    [router, pathname],
-  );
-  const update = useMatchListUpdate(url, replaceSearch);
-
-  // ── Search box: local text, sent to the URL (and so the server) after a pause ──
-  const [searchInput, setSearchInput] = useState(url.q);
-  // The q this box last put in the URL, and the URL q last seen: a URL q that this box did not
-  // send (back / forward, a link) replaces the text; the echo of our own send does not.
-  const [sentQ, setSentQ] = useState(url.q);
-  const [seenQ, setSeenQ] = useState(url.q);
-  if (url.q !== seenQ) {
-    setSeenQ(url.q);
-    if (url.q !== sentQ) {
-      setSentQ(url.q);
-      setSearchInput(url.q);
-    }
-  }
-  useEffect(() => {
-    const next = searchInput.trim();
-    if (next === sentQ.trim()) return;
-    const timer = setTimeout(() => {
-      setSentQ(next);
-      update({ q: next, page: 1 });
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [searchInput, sentQ, update]);
-
-  // ── Filter options (leagues with phases, standalone tournaments) ──
+  // ── Filter options (leagues with phases, standalone tournaments, rulesets) ──
   const [options, setOptions] = useState<AdminMatchFilterOptions | null>(null);
   const [optionsError, setOptionsError] = useState<LoadError | null>(null);
   const [optionsKey, setOptionsKey] = useState(0);
@@ -254,9 +161,92 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
     return () => controller.abort();
   }, [optionsKey]);
 
+  // The URL is the source of truth for every filter, the sort and the page. A phase is checked against the filter
+  // options (its league is derived from it, an unknown one dropped), so the bar, the rounds and the list request all
+  // work from the same scope. A phase deep link therefore waits for the options before anything is requested.
+  const parsedUrl = useMemo(() => parseMatchListUrl(searchParams), [searchParams]);
+  const url = useMemo(() => reconcileMatchListScope(parsedUrl, options), [parsedUrl, options]);
+  const scopePending = parsedUrl.phase !== '' && options === null && optionsError === null;
+  const replaceSearch = useCallback(
+    (search: string) => router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false }),
+    [router, pathname],
+  );
+  const updateUrl = useMatchListUpdate(url, replaceSearch);
+
+  // A deep link whose scope was corrected (the phase won over a mismatched league, an unknown phase dropped) has its
+  // address rewritten to the scope it lists, once the options are in. `replace` adds no history entry, and the
+  // rewritten URL parses to the reconciled state itself, so the correction is empty the second time (no loop).
+  const scopeCorrection = matchListScopeCorrection(parsedUrl, url);
+  useEffect(() => {
+    if (scopeCorrection !== null) replaceSearch(scopeCorrection);
+  }, [scopeCorrection, replaceSearch]);
+
+  // The "now" the relative date ranges (today, next 7 days) are resolved against. It moves only when the user
+  // changes a date control and on Retry, never on a timer or during render, so the request key stays stable.
+  // i18n-ignore: the seed only feeds the request URL, never the markup, so the server and client renders agree
+  const [anchorMs, setAnchorMs] = useState(() => Date.now());
+  const update = useCallback(
+    (patch: Partial<MatchListUrlState>) => {
+      if ('range' in patch || 'from' in patch || 'to' in patch || 'dateField' in patch) setAnchorMs(Date.now());
+      updateUrl(patch);
+    },
+    [updateUrl],
+  );
+
+  // ── Search box: local text, sent to the URL (and so the server) after a pause ──
+  const [searchInput, setSearchInput] = useState(url.q);
+  // The q this box last put in the URL, and the URL q last seen: a URL q that this box did not
+  // send (back / forward, a link, a removed chip) replaces the text; the echo of our own send does not.
+  const [sentQ, setSentQ] = useState(url.q);
+  const [seenQ, setSeenQ] = useState(url.q);
+  if (url.q !== seenQ) {
+    setSeenQ(url.q);
+    if (url.q !== sentQ) {
+      setSentQ(url.q);
+      setSearchInput(url.q);
+    }
+  }
+  useEffect(() => {
+    const next = searchInput.trim();
+    if (next === sentQ.trim()) return;
+    const timer = setTimeout(() => {
+      setSentQ(next);
+      updateUrl({ q: next, page: 1 });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, sentQ, updateUrl]);
+
+  // ── Rounds of the selected phase (loaded lazily; the Round select is keyed by round id) ──
+  const [roundsKey, setRoundsKey] = useState(0);
+  const [roundsResult, setRoundsResult] = useState<{
+    phase: string;
+    rounds: AdminMatchRoundOption[] | null;
+    error: LoadError | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!url.phase || scopePending) return;
+    const phase = url.phase;
+    const controller = new AbortController();
+    void getJson<AdminMatchRoundOption[]>(
+      `/api/admin/matches/filter-options/rounds?tournament_id=${encodeURIComponent(phase)}`,
+      controller.signal,
+    ).then((result) => {
+      if (controller.signal.aborted) return;
+      setRoundsResult(
+        result.ok ? { phase, rounds: result.data, error: null } : { phase, rounds: null, error: result.error },
+      );
+    });
+    return () => controller.abort();
+  }, [url.phase, roundsKey, scopePending]);
+  // Rounds belong to the phase they were loaded for; with another (or no) phase there are none.
+  const roundsSettled = url.phase !== '' && roundsResult?.phase === url.phase;
+  const rounds = roundsSettled ? roundsResult.rounds : null;
+  const roundsError = roundsSettled ? roundsResult.error : null;
+  const roundsPending = url.phase !== '' && !roundsSettled;
+
   // ── The page of matches ──
   const [reloadKey, setReloadKey] = useState(0);
-  const apiQuery = buildMatchListApiQuery(url);
+  const apiQuery = buildMatchListApiQuery(url, { timeZone, nowMs: anchorMs });
   const requestKey = `${reloadKey}|${apiQuery}`;
   // The last settled response and the request it answered; anything else is "loading".
   const [settled, setSettled] = useState<{
@@ -264,15 +254,24 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
     data: AdminMatchListResponse | null;
     error: LoadError | null;
   } | null>(null);
+  // Names of the players the responses resolved, kept across reloads so the player chips do not flicker.
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
   const loading = settled?.key !== requestKey;
   const data = settled?.key === requestKey ? settled.data : null;
   const error = settled?.key === requestKey ? settled.error : null;
   useEffect(() => {
+    if (scopePending) return;
     // One request per filter state; a newer state aborts the older one, so a slow
     // earlier response can never replace the rows of the current filters.
     const controller = new AbortController();
     void getJson<AdminMatchListResponse>(`/api/admin/matches?${apiQuery}`, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
+      if (result.ok) {
+        const players = result.data.players;
+        if (players.length > 0) {
+          setPlayerNames((prev) => ({ ...prev, ...Object.fromEntries(players.map((p) => [p.id, p.name])) }));
+        }
+      }
       setSettled(
         result.ok
           ? { key: requestKey, data: result.data, error: null }
@@ -280,7 +279,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
       );
     });
     return () => controller.abort();
-  }, [apiQuery, requestKey]);
+  }, [apiQuery, requestKey, scopePending]);
 
   const total = data?.total ?? 0;
   const pageSize = data?.pageSize ?? 50;
@@ -288,143 +287,86 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
   // A page past the last one (a stale link, or rows removed meanwhile): step back to the last page.
   useEffect(() => {
     if (data && data.rows.length === 0 && data.total > 0 && url.page > 1) {
-      update({ page: adminMatchLastPage(data.total, data.pageSize) });
+      updateUrl({ page: adminMatchLastPage(data.total, data.pageSize) });
     }
-  }, [data, url.page, update]);
-
-  // ── Cascading league -> phase selects ──
-  const optionLabel = useCallback(
-    (name: string, flags: { archived: boolean; test?: boolean }) => {
-      let label = name;
-      if (flags.test) label = t('admin.matches.testOption', { name: label });
-      if (flags.archived) label = t('admin.matches.archivedOption', { name: label });
-      return label;
-    },
-    [t],
-  );
-
-  const selectedLeague: AdminMatchLeagueOption | undefined = options?.leagues.find((l) => l.id === url.league);
-  const phaseChoices: readonly (AdminMatchPhaseOption | AdminMatchStandaloneOption)[] =
-    url.league === STANDALONE_LEAGUE ? (options?.tournaments ?? []) : (selectedLeague?.phases ?? []);
-  const isStandalone = url.league === STANDALONE_LEAGUE;
-  const phaseAll = isStandalone ? t('admin.matches.allTournaments') : t('admin.matches.allPhases');
-  const phaseLabel = isStandalone ? t('admin.matches.tournament') : t('admin.matches.phase');
-
-  const leagueKnown = url.league === '' || isStandalone || selectedLeague !== undefined;
-  const phaseKnown = url.phase === '' || phaseChoices.some((p) => p.id === url.phase);
-
-  // A deep-linked id the choices do not (yet) contain: a neutral label while they load, the id only once they
-  // failed to load or really lack it.
-  const optionsPending = options === null && optionsError === null;
-  const unknownOptionLabel = (id: string) => (optionsPending ? t('admin.matches.loadingOption') : id);
+  }, [data, url.page, updateUrl]);
 
   const firstShown = total === 0 || !data ? 0 : (data.page - 1) * data.pageSize + 1;
   const lastShown = data ? firstShown + data.rows.length - 1 : 0;
 
-  return (
-    <div className="space-y-4">
-      {/* Search + League / Phase filters */}
-      <div className="flex flex-col lg:flex-row gap-3">
-        <div className="relative flex-1">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poke-text-muted pointer-events-none"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-          </svg>
-          <input
-            type="text"
-            value={searchInput}
-            maxLength={ADMIN_MATCH_SEARCH_MAX_LENGTH}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder={t('admin.matches.searchPlaceholder')}
-            aria-label={t('admin.matches.searchLabel')}
-            className="w-full pl-9 pr-3 py-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
-          />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:w-[34rem]">
-          <select
-            value={url.league}
-            onChange={(e) => update({ league: e.target.value, phase: '', page: 1 })}
-            aria-label={t('admin.matches.league')}
-            className={SELECT_CLASSES}
-          >
-            <option value="">{t('admin.matches.allLeagues')}</option>
-            <option value={STANDALONE_LEAGUE}>{t('admin.matches.noLeague')}</option>
-            {!leagueKnown && <option value={url.league}>{unknownOptionLabel(url.league)}</option>}
-            {options?.leagues.map((league) => (
-              <option key={league.id} value={league.id}>
-                {optionLabel(league.name, { archived: league.archived, test: league.is_test_season })}
-              </option>
-            ))}
-          </select>
-          <select
-            value={url.phase}
-            onChange={(e) => update({ phase: e.target.value, page: 1 })}
-            disabled={url.league === ''}
-            aria-label={phaseLabel}
-            className={SELECT_CLASSES}
-          >
-            <option value="">{phaseAll}</option>
-            {!phaseKnown && <option value={url.phase}>{unknownOptionLabel(url.phase)}</option>}
-            {phaseChoices.map((phase) => (
-              <option key={phase.id} value={phase.id}>
-                {optionLabel(phase.name, { archived: phase.archived })}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+  const emptyText = t(`admin.matches.${matchListEmptyKey(url)}`);
+  const backQuery = buildMatchListSearch(url);
 
+  const alerts = (
+    <>
       {optionsError && (
         <Alert variant="error" className="flex items-center justify-between gap-3">
           <span>
             {t('admin.matches.filtersFailed')}
             {optionsError.kind === 'api' ? `: ${errorText(optionsError.error)}` : ''}
           </span>
-          <button
-            type="button"
-            onClick={() => setOptionsKey((key) => key + 1)}
-            className={getButtonClasses('secondary', 'sm')}
-          >
-            {t('admin.matches.retry')}
-          </button>
+          {isRetryableLoadError(optionsError) && (
+            <button
+              type="button"
+              onClick={() => setOptionsKey((key) => key + 1)}
+              className={getButtonClasses('secondary', 'sm')}
+            >
+              {t('admin.matches.retry')}
+            </button>
+          )}
         </Alert>
       )}
+      {roundsError && (
+        <Alert variant="error" className="flex items-center justify-between gap-3">
+          <span>
+            {t('admin.matches.roundsFailed')}
+            {roundsError.kind === 'api' ? `: ${errorText(roundsError.error)}` : ''}
+          </span>
+          {isRetryableLoadError(roundsError) && (
+            <button
+              type="button"
+              onClick={() => setRoundsKey((key) => key + 1)}
+              className={getButtonClasses('secondary', 'sm')}
+            >
+              {t('admin.matches.retry')}
+            </button>
+          )}
+        </Alert>
+      )}
+    </>
+  );
 
-      {/* Status tabs */}
-      <div className="flex gap-1 border-b border-poke-border overflow-x-auto">
-        {STATUS_TABS.map((status) => (
-          <button
-            key={status || 'all'}
-            type="button"
-            onClick={() => update({ status, page: 1 })}
-            aria-pressed={url.status === status}
-            className={`px-3 py-2 text-xs font-heading font-medium border-b-2 transition-colors whitespace-nowrap ${
-              url.status === status
-                ? 'border-poke-accent text-poke-accent'
-                : 'border-transparent text-poke-text-muted hover:text-poke-text-primary'
-            }`}
-          >
-            {t(`admin.matches.status.${status || 'all'}`)}
-          </button>
-        ))}
-      </div>
+  return (
+    <div className="space-y-4">
+      <AdminMatchFilters
+        url={url}
+        update={update}
+        searchInput={searchInput}
+        onSearchChange={setSearchInput}
+        options={options}
+        optionsFailed={optionsError !== null}
+        rounds={rounds}
+        roundsPending={roundsPending}
+        playerNames={playerNames}
+        playersPending={loading}
+        alerts={alerts}
+      />
 
       {error && (
         <Alert variant="error" className="flex items-center justify-between gap-3">
           <span>{error.kind === 'loadFailed' ? t('admin.matches.loadFailed') : errorText(error.error)}</span>
-          <button
-            type="button"
-            onClick={() => setReloadKey((key) => key + 1)}
-            className={getButtonClasses('secondary', 'sm')}
-          >
-            {t('admin.matches.retry')}
-          </button>
+          {isRetryableLoadError(error) && (
+            <button
+              type="button"
+              onClick={() => {
+                setAnchorMs(Date.now());
+                setReloadKey((key) => key + 1);
+              }}
+              className={getButtonClasses('secondary', 'sm')}
+            >
+              {t('admin.matches.retry')}
+            </button>
+          )}
         </Alert>
       )}
 
@@ -439,17 +381,13 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
           ))}
         </div>
       ) : !data || data.rows.length === 0 ? (
-        !error && (
-          <p className="text-sm text-poke-text-muted">
-            {url.q ? t('admin.matches.noSearchResults') : t('admin.matches.none')}
-          </p>
-        )
+        !error && <p className="text-sm text-poke-text-muted">{emptyText}</p>
       ) : (
         <>
           <AnimatedList className="space-y-2">
-            {data.rows.map((m) => (
-              <AnimatedListItem key={m.id}>
-                <AdminMatchListRow match={m} viewer={viewer} />
+            {data.rows.map((row) => (
+              <AnimatedListItem key={row.id}>
+                <MatchListRow row={row} backQuery={backQuery} viewer={viewer} />
               </AnimatedListItem>
             ))}
           </AnimatedList>

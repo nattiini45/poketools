@@ -11,7 +11,7 @@ import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { adminMatchMessages } from '@/i18n/messages/admin-match';
 import { commonMessages } from '@/i18n/messages/common';
 import { isOverdue, type AdminMatchContext } from '@/lib/admin/match-detail';
-import { buildMatchListSearch } from '@/lib/admin/match-list';
+import { buildMatchListSearch, EMPTY_MATCH_LIST_STATE } from '@/lib/admin/match-list';
 import type { MatchStatus } from '@/types/match';
 
 interface MatchContextHeaderProps {
@@ -25,6 +25,11 @@ interface MatchContextHeaderProps {
   context: AdminMatchContext;
   /** Epoch ms of the render, for the overdue check. */
   now: number;
+  /**
+   * The Matches list as the viewer left it (already validated, see `matchListBackHref`). Without it the link opens the
+   * list filtered to the match's league.
+   */
+  listHref?: string;
 }
 
 /**
@@ -56,6 +61,7 @@ export default function MatchContextHeader({
   player2Name,
   context,
   now,
+  listHref,
 }: MatchContextHeaderProps) {
   const t = useT(adminMatchMessages);
   const tCore = useT(adminCoreMessages);
@@ -63,7 +69,7 @@ export default function MatchContextHeader({
   const formatter = useFormatter();
   const overdue = isOverdue(context.round_deadline, now, status);
   const matchesSearch = context.league_id
-    ? buildMatchListSearch({ status: '', league: context.league_id, phase: '', q: '', page: 1 })
+    ? buildMatchListSearch({ ...EMPTY_MATCH_LIST_STATE, league: context.league_id })
     : '';
 
   return (
@@ -118,7 +124,7 @@ export default function MatchContextHeader({
           {t('header.publicPage')}
         </Link>
         <Link
-          href={matchesSearch ? `/admin/matches?${matchesSearch}` : '/admin/matches'}
+          href={listHref ?? (matchesSearch ? `/admin/matches?${matchesSearch}` : '/admin/matches')}
           className="text-poke-blue hover:underline"
         >
           {t('header.matchesList')}

@@ -10,6 +10,7 @@
  * denied viewer triggers none of them.
  */
 import { isValidElement, type ReactNode } from 'react';
+import Link from 'next/link';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LiveAccess } from '@/lib/auth/helpers';
 import { fullMatchRow, PRIVATE_MATCH_SENTINELS } from '@/lib/match/__tests__/private-match-fields';
@@ -121,6 +122,43 @@ function walk(node: ReactNode, out: Walked = { texts: [], types: [], props: new 
 
 async function renderPage(id = MATCH_ID) {
   return walk(await AdminMatchPage({ params: Promise.resolve({ id }) }));
+}
+
+/** Every `<Link>` href in an element tree (props.children / props.action). */
+function linkHrefs(node: ReactNode, out: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    node.forEach((n) => linkHrefs(n, out));
+  } else if (isValidElement<{ children?: ReactNode; action?: ReactNode; href?: string }>(node)) {
+    if (node.type === Link && typeof node.props.href === 'string') out.push(node.props.href);
+    linkHrefs(node.props.children, out);
+    linkHrefs(node.props.action, out);
+  }
+  return out;
+}
+
+/** The page's bottom link: the only one that is neither the replay import nor a game page. */
+async function backHref(back?: string | string[]): Promise<string> {
+  const tree = await AdminMatchPage({
+    params: Promise.resolve({ id: MATCH_ID }),
+    ...(back === undefined ? {} : { searchParams: Promise.resolve({ back }) }),
+  });
+  const hrefs = linkHrefs(tree).filter((h) => h.startsWith('/admin/matches') && !h.includes('/import-replay'));
+  expect(hrefs).toHaveLength(1);
+  return hrefs[0];
+}
+
+/** The props of the AdminMatchActions element in an element tree. */
+function findAction(node: ReactNode): { backSuffix?: string } | null {
+  if (Array.isArray(node)) {
+    for (const n of node) {
+      const found = findAction(n);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isValidElement<{ children?: ReactNode; backSuffix?: string }>(node)) return null;
+  if (node.type === AdminMatchActions) return node.props;
+  return findAction(node.props.children);
 }
 
 beforeEach(() => {
@@ -340,7 +378,7 @@ describe('AdminMatchPage: language (i18n-core §8.2)', () => {
 
     const { texts } = await renderPage();
 
-    expect(texts).toContain('Back to admin');
+    expect(texts).toContain('Back to matches');
     expect(texts).toContain('Completed');
   });
 
@@ -350,7 +388,7 @@ describe('AdminMatchPage: language (i18n-core §8.2)', () => {
 
     const { texts } = await renderPage();
 
-    expect(texts).toContain('Zurück zum Adminbereich');
+    expect(texts).toContain('Zurück zu den Spielen');
     expect(texts).toContain('Beendet');
     expect(texts).not.toContain('completed');
   });
@@ -359,5 +397,71 @@ describe('AdminMatchPage: language (i18n-core §8.2)', () => {
     mocks.cookies.set('plc_locale', { value: 'de' });
     const { texts } = walk(await MatchAccessDenied());
     expect(texts).toContain('Zugriff verweigert');
+  });
+});
+
+describe('AdminMatchPage: back link to the Matches list', () => {
+  const LEAGUE = '22222222-2222-4222-8222-222222222222';
+
+  beforeEach(() => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    // The replay import link only exists while the match can still take a result.
+    mocks.getMatchById.mockResolvedValue(fullMatchRow({ id: MATCH_ID, tournament_id: TOURNAMENT_ID, status: 'scheduled' }));
+  });
+
+  it('is the plain list without a back parameter', async () => {
+    expect(await backHref()).toBe('/admin/matches');
+  });
+
+  it('restores a real list query in canonical order', async () => {
+    expect(await backHref(`page=2&league=${LEAGUE}&status=disputed`)).toBe(
+      `/admin/matches?status=disputed&league=${LEAGUE}&page=2`,
+    );
+  });
+
+  it('accepts a leading question mark', async () => {
+    expect(await backHref('?status=disputed')).toBe('/admin/matches?status=disputed');
+  });
+
+  it('keeps only validated keys and values', async () => {
+    const href = await backHref(`status=disputed&evil=1&league=not-a-uuid&redirect=https://evil.example`);
+    expect(href).toBe('/admin/matches?status=disputed');
+  });
+
+  it.each(['//evil.example', 'https://evil.example/x', 'javascript:alert(1)', '/admin/../../etc'])(
+    'never lets %s leave the Matches list',
+    async (raw) => {
+      const href = await backHref(raw);
+      expect(href).toMatch(/^\/admin\/matches(\?|$)/);
+      expect(href).not.toContain('evil');
+      expect(href).not.toContain('javascript');
+    },
+  );
+
+  it('uses the first value of an array parameter and ignores an over-long one', async () => {
+    expect(await backHref(['status=disputed', 'status=completed'])).toBe('/admin/matches?status=disputed');
+    expect(await backHref(`q=${'a'.repeat(2000)}`)).toBe('/admin/matches');
+  });
+
+  describe('the detours keep the list query', () => {
+    const renderWith = (back?: string) =>
+      AdminMatchPage({
+        params: Promise.resolve({ id: MATCH_ID }),
+        ...(back === undefined ? {} : { searchParams: Promise.resolve({ back }) }),
+      });
+    const importHref = async (back?: string) => linkHrefs(await renderWith(back)).find((h) => h.includes('/import-replay'));
+    const actionsSuffix = async (back?: string) => findAction(await renderWith(back))?.backSuffix;
+
+    it('appends the canonical back query to the replay import link and hands it to the game edit links', async () => {
+      const suffix = `?back=${encodeURIComponent('status=disputed&page=2')}`;
+      expect(await importHref('page=2&status=disputed')).toBe(`/admin/matches/${MATCH_ID}/import-replay${suffix}`);
+      expect(await actionsSuffix('page=2&status=disputed')).toBe(suffix);
+    });
+
+    it('drops an invalid or missing back value from both', async () => {
+      expect(await importHref('//evil.example')).toBe(`/admin/matches/${MATCH_ID}/import-replay`);
+      expect(await actionsSuffix('//evil.example')).toBe('');
+      expect(await importHref()).toBe(`/admin/matches/${MATCH_ID}/import-replay`);
+    });
   });
 });

@@ -68,6 +68,12 @@ describe('MatchContextHeader', () => {
     expect(html).toContain('Times are shown in your time zone (UTC).');
   });
 
+  it('links back to the list as the viewer left it when it is given one', () => {
+    const html = renderWithI18n(header({ listHref: '/admin/matches?status=disputed&page=2' }));
+    expect(html).toContain('href="/admin/matches?status=disputed&amp;page=2"');
+    expect(html).not.toContain('href="/admin/matches?league=league-1"');
+  });
+
   it('marks a past deadline as overdue unless the match is completed or the deadline is ahead', () => {
     expect(renderWithI18n(header())).toContain('Overdue');
     expect(renderWithI18n(header({ status: 'completed' }))).not.toContain('Overdue');

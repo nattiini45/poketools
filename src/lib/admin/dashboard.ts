@@ -3,7 +3,7 @@
  * route and the page. Pure and client-safe: no server-only imports, so the UI
  * can import the types and the link helpers without pulling in the database.
  */
-import { buildMatchListSearch } from '@/lib/admin/match-list';
+import { buildMatchListSearch, EMPTY_MATCH_LIST_STATE } from '@/lib/admin/match-list';
 
 /** Match statuses that need an admin's attention. */
 export const ATTENTION_STATUSES = ['disputed', 'pending_confirmation'] as const;
@@ -70,7 +70,7 @@ export interface DashboardData {
 
 /** The Matches list filtered to one status. Built with the list's own URL builder so the two cannot drift. */
 export function attentionListHref(status: AttentionStatus): string {
-  const search = buildMatchListSearch({ status, league: '', phase: '', q: '', page: 1 });
+  const search = buildMatchListSearch({ ...EMPTY_MATCH_LIST_STATE, status });
   return `/admin/matches?${search}`;
 }
 

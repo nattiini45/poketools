@@ -159,7 +159,7 @@ export default {
       winner: 'Winner:',
       notes: 'Notes:',
       importReplay: '+ Import replay (manual assign)',
-      backToAdmin: 'Back to admin',
+      backToMatches: 'Back to matches',
     },
     importReplay: {
       title: 'Import Replay',

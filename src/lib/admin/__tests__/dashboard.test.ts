@@ -7,7 +7,7 @@ import {
   DASHBOARD_STAT_HREFS,
   attentionListHref,
 } from '../dashboard';
-import { parseMatchListUrl } from '../match-list';
+import { EMPTY_MATCH_LIST_STATE, parseMatchListUrl } from '../match-list';
 
 describe('attentionListHref', () => {
   it('links the Matches list filtered to one status', () => {
@@ -19,13 +19,7 @@ describe('attentionListHref', () => {
     const href = attentionListHref(status);
     const url = new URL(href, 'https://example.test');
     expect(url.pathname).toBe('/admin/matches');
-    expect(parseMatchListUrl(url.searchParams)).toEqual({
-      status,
-      league: '',
-      phase: '',
-      q: '',
-      page: 1,
-    });
+    expect(parseMatchListUrl(url.searchParams)).toEqual({ ...EMPTY_MATCH_LIST_STATE, status });
   });
 });
 

@@ -24,13 +24,15 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-import AdminMatchList, { AdminMatchListRow, MatchListPager, useMatchListUpdate } from '../AdminMatchList';
+import AdminMatchList, { MatchListPager, useMatchListUpdate } from '../AdminMatchList';
+import { MatchListRow } from '../AdminMatchRowCard';
 import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
 import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import { ADMIN_MATCH_MAX_PAGE, parseMatchListUrl } from '@/lib/admin/match-list';
 
 const LEAGUE = '11111111-1111-4111-8111-111111111111';
 const PHASE = '22222222-2222-4222-8222-222222222222';
+const ROUND = '33333333-3333-4333-8333-333333333333';
 
 beforeEach(() => {
   nav.search = '';
@@ -89,6 +91,37 @@ describe('AdminMatchList', () => {
     expect(html).toMatch(/aria-pressed="true"[^>]*>All<\/button>/);
   });
 
+  it('renders the new filters from the query string on the first paint (deep link)', () => {
+    nav.search = `league=${LEAGUE}&phase=${PHASE}&round=${ROUND}&preset=overdue&sort=status_priority&test=1`;
+    const html = renderWithI18n(<AdminMatchList />);
+    // The round stays selected under a neutral label while the rounds load, like league and phase.
+    expect(html).toContain(`<option value="${ROUND}" selected="">Loading...</option>`);
+    expect(html).not.toContain(`>${ROUND}</option>`);
+    expect(html.match(/aria-pressed="true"[^>]*>Overdue<\/button>/g)).toHaveLength(2);
+    expect(html).toContain('<option value="status_priority" selected="">Needs attention first</option>');
+    const checkbox = (label: string) => new RegExp(`(<input type="checkbox"[^>]*>)<span>${label}</span>`).exec(html)?.[1] ?? '';
+    expect(checkbox('Show test leagues')).toContain('checked=""');
+    expect(checkbox('Show archived leagues and tournaments')).toContain('<input');
+    expect(checkbox('Show archived leagues and tournaments')).not.toContain('checked=""');
+    // One chip per active filter, and the status tab "All" is still the pressed tab (the preset names its own status).
+    expect(html).toContain('aria-label="Remove filter: Overdue"');
+    expect(html).toContain('aria-label="Remove filter: Show test leagues"');
+    expect(html).toMatch(/aria-pressed="true"[^>]*>All<\/button>/);
+  });
+
+  it('collapses "More filters" and shows no chips on a plain visit', () => {
+    const html = renderWithI18n(<AdminMatchList />);
+    expect(html).toMatch(/aria-expanded="false"[^>]*>More filters/);
+    expect(html).not.toContain('Clear all');
+    expect(html).toContain('aria-label="Round"');
+  });
+
+  it('no longer offers the Override button (the whole row opens the admin page)', () => {
+    nav.search = 'status=disputed';
+    expect(renderWithI18n(<AdminMatchList />)).not.toContain('Override');
+    expect(renderWithI18n(<AdminMatchList />, { locale: 'de' })).not.toContain('Korrigieren');
+  });
+
   it('is translated to German', () => {
     const html = renderWithI18n(<AdminMatchList />, { locale: 'de' });
     expect(html).toContain('Alle Ligen');
@@ -96,6 +129,9 @@ describe('AdminMatchList', () => {
     expect(html).toContain('Alle Phasen');
     expect(html).toContain('Spieler oder Spiel-ID suchen');
     expect(html).toContain('>Strittig</button>');
+    expect(html).toContain('Weitere Filter');
+    expect(html).toContain('>Überfällig</button>');
+    expect(html).toContain('aria-label="Runde"');
   });
 });
 
@@ -178,7 +214,7 @@ describe('MatchListPager', () => {
   });
 });
 
-describe('AdminMatchListRow buttons', () => {
+describe('MatchListRow player shortcuts (Submit Result, View Prep)', () => {
   const MATCH_ID = '33333333-3333-4333-8333-333333333333';
   const row = (patch: Partial<AdminMatchRow> = {}) =>
     ({
@@ -193,6 +229,15 @@ describe('AdminMatchListRow buttons', () => {
       player_2_name: 'Jonas',
       winner_name: null,
       status: 'scheduled',
+      games: [],
+      round_name: null,
+      round_number: 1,
+      best_of: 3,
+      scheduled_at: null,
+      round_deadline: null,
+      auto_confirm_at: null,
+      season_is_test: false,
+      archived: false,
       ...patch,
     }) as AdminMatchRow;
   const viewer = (patch: Partial<AdminMatchViewer>): AdminMatchViewer => ({
@@ -202,15 +247,14 @@ describe('AdminMatchListRow buttons', () => {
     ...patch,
   });
   const render = (m: AdminMatchRow, v: AdminMatchViewer | null, locale: 'en' | 'de' = 'en') =>
-    renderWithI18n(<AdminMatchListRow match={m} viewer={v} />, { locale });
+    renderWithI18n(<MatchListRow row={m} backQuery="" viewer={v} />, { locale });
 
-  it('shows neither Submit Result nor View Prep without a viewer, but keeps Override', () => {
+  it('shows neither Submit Result nor View Prep without a viewer, but keeps the link to the admin page', () => {
     const html = render(row(), null);
     expect(html).not.toContain('Submit Result');
     expect(html).not.toContain('View Prep');
     expect(html).not.toContain('/dashboard/');
     expect(html).toContain(`href="/admin/matches/${MATCH_ID}"`);
-    expect(html).toContain('>Override<');
   });
 
   it('links both buttons to the player pages for a participant', () => {
@@ -221,11 +265,10 @@ describe('AdminMatchListRow buttons', () => {
     expect(html).toContain('>View Prep<');
   });
 
-  it('shows neither for a resource admin who does not play, but keeps Override', () => {
+  it('shows neither for a resource admin who does not play, but keeps the link to the admin page', () => {
     const html = render(row(), viewer({}));
     expect(html).not.toContain('Submit Result');
     expect(html).not.toContain('View Prep');
-    expect(html).toContain('>Override<');
   });
 
   it('gives a site admin Submit Result and the superadmin View Prep', () => {
@@ -247,6 +290,6 @@ describe('AdminMatchListRow buttons', () => {
     const html = render(row(), viewer({ playerId: 'player-1' }), 'de');
     expect(html).toContain('>Ergebnis eintragen<');
     expect(html).toContain('>Vorbereitung ansehen<');
-    expect(html).toContain('>Korrigieren<');
+    expect(html).not.toContain('Korrigieren');
   });
 });

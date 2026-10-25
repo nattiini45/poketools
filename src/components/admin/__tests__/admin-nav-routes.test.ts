@@ -63,6 +63,14 @@ function resolves(href: string): boolean {
 /** `/admin/...` strings in the admin sources: quote, path made of plain or `${...}` segments, optional query, same quote. */
 const ADMIN_HREF = /(['"`])(\/admin(?:\/(?:[A-Za-z0-9_.-]|\$\{[^}`'"]*\})+)*\/?)(?:[?#][^'"`\n]*)?\1/g;
 
+/**
+ * A `${...}` glued to the end of a literal segment is a query string built elsewhere (the `?back=` suffix of the
+ * match page links), not a path segment: drop it before resolving the path.
+ */
+function withoutQuerySuffix(href: string): string {
+  return href.replace(/(?<=[A-Za-z0-9_.-])\$\{[^}]*\}$/, '');
+}
+
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   walk(dir, (file) => {
@@ -99,7 +107,7 @@ describe('admin routes', { timeout: FILE_WALK_TIMEOUT_MS }, () => {
     for (const file of [...sourceFiles(ADMIN_APP_DIR), ...sourceFiles(path.join(SRC_DIR, 'components'))]) {
       const source = readFileSync(file, 'utf8');
       for (const match of source.matchAll(ADMIN_HREF)) {
-        found.push({ file: path.relative(SRC_DIR, file).split(path.sep).join('/'), href: match[2].replaceAll(/\$\{[^}]*\}/g, PARAM) });
+        found.push({ file: path.relative(SRC_DIR, file).split(path.sep).join('/'), href: withoutQuerySuffix(match[2]).replaceAll(/\$\{[^}]*\}/g, PARAM) });
       }
     }
     // The scan has to see the links it guards: nav items, sidebar and list buttons.
