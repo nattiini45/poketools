@@ -136,7 +136,7 @@ export default defineDe<typeof en>()({
       testBadge: 'Test',
       summary: {
         leaguesChecked: { one: '{count} Liga mit Formatregeln geprüft', other: '{count} Ligen mit Formatregeln geprüft' },
-        tiebreakerMismatches: { one: '{count} weicht vom Standard des Formatpakets ab', other: '{count} weichen vom Standard des Formatpakets ab' },
+        tiebreakerMismatches: { one: '{count} weicht vom Standard des Format Packs ab', other: '{count} weichen vom Standard des Format Packs ab' },
         pairsChecked: { one: '{count} Phasenpaar mit Regel geprüft', other: '{count} Phasenpaare mit Regel geprüft' },
         pairsConsistent: { one: '{count} stimmig', other: '{count} stimmig' },
         pairsMismatching: { one: '{count} widersprüchlich', other: '{count} widersprüchlich' },
@@ -144,12 +144,12 @@ export default defineDe<typeof en>()({
       tiebreaker: {
         title: 'Tiebreaker-Reihenfolge',
         intro:
-          'Die Tabelle einer Liga nutzt die bei ihr gespeicherte Tiebreaker-Reihenfolge. Diese Ligen haben eine Reihenfolge gespeichert, die vom Standard des Formatpakets abweicht.',
+          'Die Tabelle einer Liga nutzt die bei ihr gespeicherte Tiebreaker-Reihenfolge. Diese Ligen haben eine Reihenfolge gespeichert, die vom Standard des Format Packs abweicht.',
         stored: 'Gespeichert (gilt für die Tabelle)',
-        pack: 'Standard des Formatpakets',
+        pack: 'Standard des Format Packs',
         unusable:
-          'Mit der gespeicherten Reihenfolge lässt sich keine Tabelle sortieren (sie ist leer, enthält einen unbekannten oder doppelten Schritt, ein Entscheidungsspiel, das nicht ganz am Ende steht, oder nichts zum Sortieren). Die Tabelle dieser Liga nutzt deshalb den Standard des Formatpakets.',
-        empty: 'Keine Abweichungen gefunden: Jede gespeicherte Reihenfolge entspricht dem Standard des Formatpakets.',
+          'Mit der gespeicherten Reihenfolge lässt sich keine Tabelle sortieren (sie ist leer, enthält einen unbekannten oder doppelten Schritt, ein Entscheidungsspiel, das nicht ganz am Ende steht, oder nichts zum Sortieren). Die Tabelle dieser Liga nutzt deshalb den Standard des Format Packs.',
+        empty: 'Keine Abweichungen gefunden: Jede gespeicherte Reihenfolge entspricht dem Standard des Format Packs.',
       },
       advancement: {
         title: 'Weiterkommen-Regeln',
