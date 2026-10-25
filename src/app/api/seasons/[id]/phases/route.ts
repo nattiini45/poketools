@@ -14,7 +14,7 @@ import {
 } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
-import { buildLeaguePhase } from '@/lib/tournament/league-phase';
+import { buildLeaguePhase, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { expireSeasonReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
@@ -83,16 +83,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const body = parsed.data;
     const existing = await getStagesBySeasonId(id);
-    const insertAt = body.insert_at ?? existing.length + 1;
 
-    if (insertAt < 1 || insertAt > existing.length + 1) {
+    // Names are unique per league (API-only: the table has no constraint).
+    // Checked before anything is shifted, so a refusal leaves the league as is.
+    assertPhaseNameFree(body.name, existing);
+
+    // Positions run from the highest stage_order, not from the phase count: a
+    // league whose middle phase was deleted has a gap, and counting phases
+    // would hand the new phase an order another phase already holds.
+    const maxOrder = Math.max(0, ...existing.map((phase) => phase.stage_order));
+    const insertAt = body.insert_at ?? maxOrder + 1;
+
+    if (insertAt < 1 || insertAt > maxOrder + 1) {
       throw new UserFacingError('insert_at is out of range', {
         code: 'PHASE_INSERT_INVALID',
         status: 400,
       });
     }
 
-    if (insertAt <= existing.length) {
+    if (insertAt <= maxOrder) {
       const wouldShift = existing.filter((phase) => phase.stage_order >= insertAt);
       const locked = wouldShift.filter((phase) => phase.status !== 'upcoming');
       if (locked.length > 0) {

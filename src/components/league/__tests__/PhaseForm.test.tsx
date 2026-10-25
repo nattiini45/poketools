@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
 import type { Ruleset } from '@/types/ruleset';
-import PhaseForm, { resolveIsDoubles } from '../PhaseForm';
+import PhaseForm, { PhaseNameField, isNameTakenError, resolveIsDoubles } from '../PhaseForm';
 
 function ruleset(id: string, name: string, isDoubles = false): Ruleset {
   return {
@@ -181,5 +181,140 @@ describe('PhaseForm doubles checkbox', () => {
 
     expect(html).toContain('Doppel-Phase');
     expect(html).not.toContain('Doubles phase');
+  });
+});
+
+/** The best-of `<select>` (labelled "Best of (default)"), as HTML. */
+function bestOfSelect(html: string): string {
+  const match = html.match(/<select[^>]*id="best-of-\(default\)"[^>]*>.*?<\/select>/s);
+  expect(match).not.toBeNull();
+  return match ? match[0] : '';
+}
+
+/** The values of the `<option>`s of a select. */
+function optionValues(select: string): string[] {
+  return [...select.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]);
+}
+
+/** The submit button's opening tag. */
+function submitButton(html: string): string {
+  const match = html.match(/<button[^>]*type="submit"[^>]*>/);
+  expect(match).not.toBeNull();
+  return match ? match[0] : '';
+}
+
+describe('PhaseForm best-of', () => {
+  it('offers the odd values 1 to 15', () => {
+    const html = renderToStaticMarkup(<PhaseForm rulesets={[OTHER]} onSubmit={noopSubmit} />);
+
+    expect(optionValues(bestOfSelect(html))).toEqual(['1', '3', '5', '7', '9', '11', '13', '15']);
+    expect(bestOfSelect(html)).toMatch(/<option value="3" selected="">/);
+  });
+
+  it('lists a stored legacy even value in place and keeps it selected', () => {
+    const html = renderToStaticMarkup(
+      <PhaseForm
+        rulesets={[OTHER]}
+        onSubmit={noopSubmit}
+        initialData={{ name: 'Groups', ruleset_id: OTHER.id, best_of_default: 4 }}
+      />,
+    );
+
+    expect(optionValues(bestOfSelect(html))).toEqual(['1', '3', '4', '5', '7', '9', '11', '13', '15']);
+    expect(bestOfSelect(html)).toMatch(/<option value="4" selected="">/);
+  });
+});
+
+describe('PhaseForm submit and locked state', () => {
+  it('enables submit for a named phase with a ruleset', () => {
+    const html = renderToStaticMarkup(
+      <PhaseForm rulesets={[OTHER]} onSubmit={noopSubmit} initialData={{ name: 'Groups', ruleset_id: OTHER.id }} />,
+    );
+
+    expect(submitButton(html)).not.toContain(' disabled=""');
+    expect(html).not.toContain('<fieldset disabled');
+  });
+
+  it('keeps submit disabled for a whitespace-only name', () => {
+    const html = renderToStaticMarkup(
+      <PhaseForm rulesets={[OTHER]} onSubmit={noopSubmit} initialData={{ name: '   ', ruleset_id: OTHER.id }} />,
+    );
+
+    expect(submitButton(html)).toContain(' disabled=""');
+  });
+
+  it('disables the fieldset and the submit button while locked', () => {
+    const html = renderToStaticMarkup(
+      <PhaseForm
+        rulesets={[OTHER]}
+        onSubmit={noopSubmit}
+        initialData={{ name: 'Groups', ruleset_id: OTHER.id }}
+        locked
+      />,
+    );
+
+    expect(html).toMatch(/<fieldset disabled=""/);
+    expect(submitButton(html)).toContain(' disabled=""');
+  });
+});
+
+describe('duplicate phase name error', () => {
+  it('recognises only the name-taken refusal as the name field error', () => {
+    expect(isNameTakenError({ code: 'PHASE_NAME_TAKEN' })).toBe(true);
+    expect(isNameTakenError({ code: 'PHASE_INSERT_LOCKED' })).toBe(false);
+    expect(isNameTakenError({ error: 'Failed' })).toBe(false);
+    expect(isNameTakenError(true)).toBe(false);
+    expect(isNameTakenError(null)).toBe(false);
+  });
+
+  it('marks the name input invalid and points it at the message next to it', () => {
+    const html = renderWithI18n(
+      <PhaseNameField value="Playoffs" onChange={() => {}} errorText="Another phase of this league already has this name." />,
+    );
+    const input = html.match(/<input[^>]*>/)?.[0] ?? '';
+    const describedBy = input.match(/aria-describedby="([^"]+)"/)?.[1];
+
+    expect(input).toContain('aria-invalid="true"');
+    expect(describedBy).toBeTruthy();
+    expect(html).toContain(`<p id="${describedBy}" class="text-sm text-poke-danger">Another phase of this league already has this name.</p>`);
+  });
+
+  it('leaves the name input plain while the name is fine', () => {
+    const html = renderWithI18n(<PhaseNameField value="Playoffs" onChange={() => {}} />);
+
+    expect(html).not.toContain('aria-invalid');
+    expect(html).not.toContain('aria-describedby');
+    expect(html).not.toContain('text-poke-danger');
+  });
+});
+
+describe('doubles hint wording', () => {
+  it('a new phase is told it follows the ruleset', () => {
+    const html = renderWithI18n(<PhaseForm rulesets={[SINGLES]} onSubmit={noopSubmit} />);
+
+    expect(html).toContain('A new phase follows the selected ruleset');
+  });
+
+  it('an existing phase is not told it is new', () => {
+    const html = renderWithI18n(
+      <PhaseForm
+        rulesets={[SINGLES]}
+        onSubmit={noopSubmit}
+        initialData={{ name: 'Groups', ruleset_id: 'rs-singles', is_doubles: false }}
+      />,
+    );
+    const de = renderWithI18n(
+      <PhaseForm
+        rulesets={[SINGLES]}
+        onSubmit={noopSubmit}
+        initialData={{ name: 'Groups', ruleset_id: 'rs-singles', is_doubles: false }}
+      />,
+      { locale: 'de' },
+    );
+
+    expect(html).not.toContain('A new phase');
+    expect(html).toContain('Shown as a Doubles badge');
+    expect(de).not.toContain('Eine neue Phase');
+    expect(de).toContain('Wird als Doppel-Badge angezeigt');
   });
 });

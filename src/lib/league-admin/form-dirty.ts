@@ -3,11 +3,12 @@
  * `unsavedMarker(dirty)` (`./unsaved.ts`), which `UnsavedTabGuard` reads before a tab switch.
  *
  * One pure predicate per form, so the rule is testable without a DOM: `PhaseForm`,
- * `DraftTierLimitsEditor` and `DraftPoolEditor` (src/components/league/) compute their `dirty`
- * flag here and nowhere else.
+ * `DraftTierLimitsEditor`, `DraftPoolEditor` and `LeagueSettingsForm` (src/components/league/)
+ * compute their `dirty` flag here and nowhere else.
  *
  * Pure and client-safe: no reads, no React.
  */
+import type { LeagueSettingsValues } from './settings-patch';
 
 /** The editable values of `PhaseForm` (the fields the admin can change). */
 export interface PhaseFormValues {
@@ -89,4 +90,54 @@ export function poolEditorDirty(input: PoolEditorInput): boolean {
     input.addFormOpen &&
     (input.searchQuery.trim() !== '' || input.selectedPokemon != null || input.addCost !== '');
   return addFormInput || input.templateName.trim() !== '';
+}
+
+/**
+ * `LeagueSettingsForm` is dirty while a field differs from the values it last loaded or saved.
+ * The name compares trimmed, because the save sends it trimmed.
+ */
+export function leagueSettingsDirty(baseline: LeagueSettingsValues, current: LeagueSettingsValues): boolean {
+  return (
+    baseline.name.trim() !== current.name.trim() ||
+    baseline.formatType !== current.formatType ||
+    baseline.rulesetId !== current.rulesetId ||
+    baseline.startDate !== current.startDate ||
+    baseline.endDate !== current.endDate
+  );
+}
+
+/** What `LeagueSettingsForm` keeps between renders: the stored values it last saw, its baseline and the input. */
+export interface LeagueSettingsFormState {
+  /** The stored values (the `initial` prop) the form last took over. */
+  seen: LeagueSettingsValues;
+  baseline: LeagueSettingsValues;
+  values: LeagueSettingsValues;
+}
+
+function sameLeagueSettings(a: LeagueSettingsValues, b: LeagueSettingsValues): boolean {
+  return (
+    a.name === b.name &&
+    a.formatType === b.formatType &&
+    a.rulesetId === b.rulesetId &&
+    a.startDate === b.startDate &&
+    a.endDate === b.endDate
+  );
+}
+
+/**
+ * The form state after the stored values arrive (`initial`, new after `router.refresh()`). Equal
+ * values change nothing and return `state` itself, so a refresh triggered elsewhere on the page never
+ * touches typed input. Different values become the baseline; the input follows them unless the admin
+ * has unsaved edits, which stay. The form is not remounted, so its "saved" notice and the focus survive.
+ */
+export function adoptStoredLeagueSettings(
+  state: LeagueSettingsFormState,
+  stored: LeagueSettingsValues,
+): LeagueSettingsFormState {
+  if (sameLeagueSettings(state.seen, stored)) return state;
+  return {
+    seen: stored,
+    baseline: stored,
+    values: leagueSettingsDirty(state.baseline, state.values) ? state.values : stored,
+  };
 }

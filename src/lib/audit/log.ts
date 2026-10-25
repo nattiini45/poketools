@@ -79,6 +79,7 @@ export type AuditAction =
   | 'season.auto_bind_point_buy_list'
   | 'season.auto_create_battle_ruleset'
   | 'season.clear_battle_ruleset_bans'
+  | 'season.update'
   | 'season.set_test_flag'
   | 'season.delete'
   | 'point_buy_list.create'

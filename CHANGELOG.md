@@ -10,12 +10,25 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Upgrade notes
 
-- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It adds
-  `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
-  new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
-  the migration.
+- No migration and no new environment variable. API clients that send an even best-of value, or change the league type
+  of a started league, now receive `400` / `409`.
 
 ### Added
+
+- **League settings editor.** The Settings tab of the admin league page opens with **League details**: name, league
+  type, battle ruleset and the start and end date, saved with only the changed fields. The description, theme and
+  content language keep their own editors.
+- **Standalone tournament settings editor.** The admin tournament page opens with a **Settings** section (name, ruleset,
+  best-of and overrides, doubles, bracket type, team visibility, grand-final reset). Bracket type, ruleset and doubles
+  lock once the tournament has started.
+- **Reopen a completed phase or tournament.** A **Reopen** button, with a confirmation that states the consequences,
+  sets a completed phase or tournament back to active. Results and standings stay as they are; completing it again
+  announces the completion again.
+- **Insert position for new phases.** A new phase can be placed at the end, before or after an existing phase; options
+  in front of a started phase are disabled.
+- **`season.update` audit event.** A general league edit (name, league type, ruleset, dates, status, archive, theme,
+  language) is now audited with the changed fields. The description text is never stored in the row.
+
 
 - Wiki moderation: the superadmin can close a rejected note for resubmission ("Block from resubmitting", behind a
   confirmation, undone with "Allow resubmitting"). `/admin/wiki` gains a "Rejected" view with a "Blocked" badge. The
@@ -25,10 +38,45 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Changed
 
+- **Best-of is an odd number from 1 to 15** in every form and in the API (tournament, phase, round, manual round and
+  override values). Even values are refused with `400 validation_failed`. A stored even value stays listed in the
+  picker, so editing an old record does not change it, and saving a phase that holds an even value still works as long
+  as that value is left as it is.
+- **Group count is 2 to 26** in the phase groups panel, matching the API cap.
+- **League type is locked once the league has started** (active or completed, a phase that left upcoming, or any
+  round) and across the point-buy boundary: `PATCH /api/seasons/[id]` answers `409 SEASON_FORMAT_LOCKED` or
+  `409 SEASON_FORMAT_POINT_BUY_LOCKED`. Sending the stored type again is still fine.
+- **An end date before the start date** is refused with `400 SEASON_DATES_INVALID` when creating or editing a league.
+- **Phase names are unique per league** (case and spacing ignored): creating or renaming a phase onto another phase's
+  name answers `409 PHASE_NAME_TAKEN`. The rule is enforced in the API only; leagues that already hold duplicates
+  stay editable.
+- **Standalone tournaments lock bracket type, ruleset and doubles after the start:** `PATCH /api/tournaments/[id]`
+  answers `400 tournament_bracket_locked`, `tournament_ruleset_locked` or `tournament_doubles_locked` for a changed value.
+- **Confirm before a group re-draw.** Drawing groups again over existing ones asks first, since it deletes the phase's
+  groups and recreates them from the seeds.
+- `PATCH /api/seasons/[id]` answers `404 SEASON_NOT_FOUND` for an unknown league.
+
+
 - The webhook endpoints (`/api/discord-webhooks`) answer with `webhook_url_hint` instead of `webhook_url`.
 - The export endpoint adds `X-Export-Count` and `X-Export-Total` response headers.
 
 ### Fixed
+
+- **Completed-match reads past 1,000 rows.** The completed-match reads behind standings, pairing history, head-to-head
+  and insights inputs, profile standings, and the set of players with completed matches now page through the full
+  result in 1,000-row steps instead of stopping at the first 1,000 rows. The participants batch used by profiles and the point-buy list entries page the same way. A
+  read that reaches its hard bound (20,000 rows) logs a warning. Results of 1,000 rows or fewer are unchanged. A new
+  test rejects query reads that ask for more than 1,000 rows with `.limit`.
+
+- A phase save error is shown once, not twice.
+- Clearing every best-of override of a phase now saves; before, the empty list was never sent.
+- Adding a phase after a middle phase was deleted no longer reuses another phase's stage order. New phases are placed
+  after the highest stage order.
+- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It adds
+  `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
+  new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
+  the migration.
+
 
 - Wiki: an author's edit to an approved note no longer goes live unreviewed. The edit puts the note back in the
   moderation queue (and re-runs the automated scan); only edits by site admins keep the note's status.

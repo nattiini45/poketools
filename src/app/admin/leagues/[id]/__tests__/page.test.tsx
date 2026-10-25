@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   getDraftPoolsBySeasonWithGroups: vi.fn(),
   getListEntries: vi.fn(),
   loadPublishRefusals: vi.fn(),
+  getSeasonPhaseStartSignals: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -56,6 +57,9 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: mocks.isResourceAdminFor }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
+vi.mock('@/lib/supabase/queries/season-start', () => ({
+  getSeasonPhaseStartSignals: mocks.getSeasonPhaseStartSignals,
+}));
 vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolBySeason: mocks.getDraftPoolBySeason,
   getDraftPoolsBySeason: mocks.getDraftPoolsBySeason,
@@ -80,6 +84,7 @@ vi.mock('@/components/shared/ArchiveButton', () => stub('ArchiveButton'));
 vi.mock('@/components/shared/DeleteResourceButton', () => stub('DeleteResourceButton'));
 vi.mock('@/components/league/LeagueStatusControl', () => stub('LeagueStatusControl'));
 vi.mock('@/components/league/LeagueThemeControl', () => stub('LeagueThemeControl'));
+vi.mock('@/components/league/LeagueSettingsForm', () => stub('LeagueSettingsForm'));
 vi.mock('@/components/league/LeagueTestFlagControl', () => stub('LeagueTestFlagControl'));
 vi.mock('@/components/shared/EditableDescription', () => stub('EditableDescription'));
 vi.mock('@/components/league/EvolutionTierEditor', () => stub('EvolutionTierEditor'));
@@ -106,6 +111,7 @@ import TokenAdminSummary from '@/components/draft-admin/TokenAdminSummary';
 import EvolutionTierEditor from '@/components/league/EvolutionTierEditor';
 import ContentLanguageControl from '../_components/ContentLanguageControl';
 import LeagueThemeControl from '@/components/league/LeagueThemeControl';
+import LeagueSettingsForm from '@/components/league/LeagueSettingsForm';
 import LeagueTestFlagControl from '@/components/league/LeagueTestFlagControl';
 import LeagueStatusControl from '@/components/league/LeagueStatusControl';
 import EditableDescription from '@/components/shared/EditableDescription';
@@ -224,6 +230,7 @@ const TAB_READS = [
   'getDraftPoolsBySeasonWithGroups',
   'getFormatRules',
   'getListEntries',
+  'getSeasonPhaseStartSignals',
 ] as const;
 
 /** The tab-specific reads this render made (the league row and the live access read are shared). */
@@ -258,6 +265,7 @@ beforeEach(() => {
   mocks.getDraftPoolsBySeasonWithGroups.mockResolvedValue([]);
   mocks.getListEntries.mockResolvedValue([]);
   mocks.loadPublishRefusals.mockResolvedValue({});
+  mocks.getSeasonPhaseStartSignals.mockResolvedValue([]);
 });
 
 // ─── Tabs ───────────────────────────────────────────────────────────
@@ -326,7 +334,12 @@ describe('admin league page tabs (?tab=)', () => {
     ],
     ['evolution_point_buy', 'phases', ['listRulesets'], ['Phases', 'Evolution Points']],
     ['evolution_point_buy', 'rules', [], ['Point-Buy List', 'Format Rules', 'Data Import']],
-    ['evolution_point_buy', 'settings', [], ['3D World Theme', 'Content Language', 'Test League', 'League Admins']],
+    [
+      'evolution_point_buy',
+      'settings',
+      ['listRulesets', 'getSeasonPhaseStartSignals'],
+      ['League details', '3D World Theme', 'Content Language', 'Test League', 'League Admins'],
+    ],
     ['evolution_point_buy', 'danger', [], ['Danger zone']],
     ['draft', 'participants', [], ['Participants', 'League groups', 'Type Cores (Core Liga)']],
     ['draft', 'draft', ['getSeasonGroups', 'getDraftPoolBySeason'], ['Draft Pool Pokémon', 'Draft Room']],
@@ -398,7 +411,7 @@ describe('site-admin parts follow the live access check', () => {
     const settings = await render('settings');
     expect(findByType(settings, LeagueTestFlagControl)).toHaveLength(0);
     expect(findByType(settings, ResourceAdminManager)).toHaveLength(0);
-    expect(sectionTitles(settings)).toEqual(['3D World Theme', 'Content Language']);
+    expect(sectionTitles(settings)).toEqual(['League details', '3D World Theme', 'Content Language']);
 
     const phases = await render('phases');
     expect(findByType(phases, PhaseTimeline)[0].props.canDelete).toBe(false);
@@ -501,6 +514,94 @@ describe('settings tab', () => {
     expect(findByType(tree, LeagueTestFlagControl)[0].props).toEqual({ seasonId: S1, isTestSeason: true });
     expect(findByType(tree, LeagueThemeControl)[0].props).toEqual({ seasonId: S1, currentTheme: 'sakura' });
     expect(findByType(tree, ContentLanguageControl)[0].props).toEqual({ seasonId: S1, currentLanguage: 'de' });
+  });
+
+  it('lists the league details first, with the stored values and the rulesets', async () => {
+    const rulesets = [{ id: 'rs-1', name: 'Gen 9 RU' }];
+    mocks.listRulesets.mockResolvedValue(rulesets);
+    mocks.getSeasonWithDetails.mockResolvedValue(
+      season({ format_type: 'singles', point_buy_list_id: null, status: 'upcoming', ruleset_id: 'rs-1' }),
+    );
+    const tree = await render('settings');
+
+    expect(sectionTitles(tree)[0]).toBe('League details');
+    expect(sectionTitled(tree, 'League details')?.props.subtitle).toContain('Name, league type, battle ruleset');
+    const [form] = findByType(tree, LeagueSettingsForm);
+    expect(form.props).toMatchObject({
+      seasonId: S1,
+      rulesets,
+      formatLock: null,
+      initial: {
+        name: 'Summer League S3',
+        formatType: 'singles',
+        rulesetId: 'rs-1',
+        startDate: '2026-09-01',
+        endDate: '2026-12-15',
+      },
+    });
+    // Not keyed by the stored values: a keyed form would remount after every save and lose its
+    // "saved" notice; it takes new stored values over itself (adoptStoredLeagueSettings).
+    expect(form.key).toBeNull();
+    expect(mocks.getSeasonPhaseStartSignals).toHaveBeenCalledWith(S1);
+  });
+
+  it('maps unset ruleset and dates to empty form values', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(
+      season({ format_type: 'singles', status: 'upcoming', ruleset_id: null, start_date: null, end_date: null }),
+    );
+    const [form] = findByType(await render('settings'), LeagueSettingsForm);
+    expect(form.props.initial).toMatchObject({ rulesetId: '', startDate: '', endDate: '' });
+  });
+
+  it.each<[string, Record<string, unknown>, unknown[], string | null]>([
+    ['an upcoming classic league without rounds', { format_type: 'singles', status: 'upcoming' }, [], null],
+    [
+      'an upcoming league whose phases never started',
+      { format_type: 'doubles', status: 'upcoming' },
+      [{ status: 'upcoming', rounds_total: 0 }],
+      null,
+    ],
+    ['an active league', { format_type: 'singles', status: 'active' }, [], 'started'],
+    [
+      'an upcoming league with a phase that has rounds',
+      { format_type: 'draft', status: 'upcoming' },
+      [{ status: 'upcoming', rounds_total: 2 }],
+      'started',
+    ],
+    [
+      'an upcoming league with an active phase',
+      { format_type: 'singles', status: 'upcoming' },
+      [{ status: 'active', rounds_total: 0 }],
+      'started',
+    ],
+    ['a point-buy league', { format_type: 'evolution_point_buy', status: 'upcoming' }, [], 'point_buy'],
+    ['an active point-buy league', { format_type: 'evolution_point_buy', status: 'active' }, [], 'point_buy'],
+  ])('passes the league type lock for %s', async (_label, overrides, phases, lock) => {
+    mocks.getSeasonWithDetails.mockResolvedValue(
+      season({ point_buy_list_id: overrides.format_type === 'evolution_point_buy' ? 'list-1' : null, ...overrides }),
+    );
+    mocks.getSeasonPhaseStartSignals.mockResolvedValue(phases);
+    const [form] = findByType(await render('settings'), LeagueSettingsForm);
+    expect(form.props.formatLock).toBe(lock);
+  });
+
+  it('reads the rulesets and phase signals for the settings tab only', async () => {
+    for (const tab of LEAGUE_ADMIN_TABS.filter((t) => t !== 'settings')) {
+      vi.clearAllMocks();
+      mocks.getLiveAccess.mockResolvedValue(liveAccess());
+      mocks.getSeasonWithDetails.mockResolvedValue(season());
+      mocks.listRulesets.mockResolvedValue([]);
+      mocks.getSeasonGroups.mockResolvedValue([]);
+      mocks.getDraftPoolsBySeasonWithGroups.mockResolvedValue([]);
+      mocks.getListEntries.mockResolvedValue([]);
+      mocks.getFormatRules.mockResolvedValue({ comeback_spend_open: true });
+      mocks.getDraftPoolBySeason.mockResolvedValue({ id: 'pool-1', draft_type: 'budget', pick_order: 'free', status: 'in_progress' });
+      mocks.getDraftPoolsBySeason.mockResolvedValue([]);
+      mocks.getSeasonParticipants.mockResolvedValue(PARTICIPANTS);
+      mocks.loadPublishRefusals.mockResolvedValue({});
+      await render(tab);
+      expect(mocks.getSeasonPhaseStartSignals, tab).not.toHaveBeenCalled();
+    }
   });
 
   it('falls back to the default content language when the row has none', async () => {
@@ -743,7 +844,7 @@ describe('page header and i18n', () => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ archived: true, ruleset_name: null }));
     expect(sectionTitles(await render())).toEqual(['Auf einen Blick', 'Beschreibung']);
     expect(sectionTitles(await render('settings'))).toEqual(
-      expect.arrayContaining(['Inhaltssprache', '3D-Welt-Thema']),
+      expect.arrayContaining(['Liga-Daten', 'Inhaltssprache', '3D-Welt-Thema']),
     );
     expect(sectionTitles(await render('draft'))).toEqual(['Draft-Raum', 'Redraft', 'Tokens']);
     const tree = await render('draft');
