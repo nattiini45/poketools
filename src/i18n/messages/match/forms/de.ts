@@ -97,6 +97,10 @@ export default defineDe<typeof en>()({
     updateFailed: 'Das Spiel konnte nicht aktualisiert werden',
     confirmResult: 'Ergebnis bestätigen',
     disputeResult: 'Ergebnis anfechten',
+    disputeReasonLabel: 'Grund für die Anfechtung (optional)',
+    disputeReasonPlaceholder: 'Beschreibe kurz, was am gemeldeten Ergebnis nicht stimmt',
+    disputeReasonHint: 'Wird den Admins angezeigt, die die Anfechtung prüfen.',
+    disputeReasonCount: '{count} / {max}',
     cannotAct: 'Du kannst bei diesem Spiel nichts tun. Nur dein Gegner kann das Ergebnis bestätigen.',
   },
   scheduling: {

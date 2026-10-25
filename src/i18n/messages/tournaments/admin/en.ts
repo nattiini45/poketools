@@ -27,6 +27,9 @@ export default {
     participants: 'Participants',
     rounds: 'Rounds',
     admins: 'Tournament Admins',
+    settings: 'Settings',
+    settingsHint:
+      'Name, ruleset, best-of, doubles, bracket type and visibility. Bracket type, ruleset and doubles lock once the tournament has started.',
   },
   lifecycle: {
     markCompleted: 'Mark Completed',
@@ -34,13 +37,23 @@ export default {
     confirmPhase: 'Mark phase "{name}" as completed?',
     failedTournament: 'Failed to complete tournament',
     failedPhase: 'Failed to complete phase',
+    reopen: 'Reopen',
+    reopenTitlePhase: 'Reopen phase "{name}"?',
+    reopenTitleTournament: 'Reopen tournament "{name}"?',
+    reopenConsequencePhase:
+      'The phase becomes active again, so its settings, participants and rounds can be changed. Matches, results and standings stay exactly as they are. Completing it again announces the completion on Discord and social channels again. Players who were already advanced into the next phase stay there.',
+    reopenConsequenceTournament:
+      'The tournament becomes active again, so its settings, participants and rounds can be changed. Matches, results and standings stay exactly as they are. Completing it again announces the completion on Discord and social channels again.',
+    reopenConfirm: 'Reopen',
+    reopenFailedPhase: 'Failed to reopen phase',
+    reopenFailedTournament: 'Failed to reopen tournament',
   },
   form: {
     bracketTypes: {
-      single_elim: 'Single Elimination',
-      double_elim: 'Double Elimination',
-      round_robin: 'Round Robin',
-      swiss: 'Swiss (Monrad)',
+      single_elim: 'Single elimination',
+      double_elim: 'Double elimination',
+      round_robin: 'Round robin',
+      swiss: 'Swiss',
     },
     visibility: {
       hidden_until_match: 'Hidden until match',
@@ -58,6 +71,10 @@ export default {
     bracketReset: 'Grand Finals bracket reset (“if necessary” second set)',
     teamVisibility: 'Team Visibility',
     submit: 'Create Tournament',
+    saveChanges: 'Save changes',
+    saved: 'Tournament settings saved.',
+    lockedStarted: 'Locked: the tournament has started.',
+    lockedRounds: 'Locked: rounds have been generated.',
     saveFailed: 'Failed to save',
   },
   boOverrides: {
@@ -103,6 +120,23 @@ export default {
     grandFinalsReset: 'Grand Finals reset',
     empty: 'No rounds yet. Generate the first round to get started.',
     start: 'Start',
+    startNow: {
+      label: 'Start the new round right away',
+      hint: 'Players can report results as soon as a round is started. Leave this off to check the pairings first.',
+      hintAll: 'With Generate All Rounds, only the first new round is started.',
+    },
+    pending: {
+      title: '{round} has not been started',
+      body: 'Players can report once you start this round.',
+      start: 'Start {round}',
+    },
+    allGenerated: {
+      one: 'The only round has been generated',
+      other: 'All {count} rounds generated',
+    },
+    bestOfLabel: 'Best of for {name}',
+    bestOfSaving: 'Saving…',
+    bestOfSaved: 'Saved.',
     complete: 'Complete',
     reset: 'Reset',
     delete: 'Delete',
@@ -166,6 +200,61 @@ export default {
       cascadeConfirm: 'Reset Including Downstream',
     },
   },
+  /** Start-up checklist above Generate in the round manager (standalone tournaments and league phases). */
+  checklist: {
+    title: 'Before you generate',
+    optional: 'Optional',
+    blockedNote: 'Generating is disabled until the open items are done.',
+    checking: 'Checking participants…',
+    loadFailed: 'Could not check the participants. You can still try to generate.',
+    participants: {
+      done: {
+        one: '{count} participant enrolled (minimum {min})',
+        other: '{count} participants enrolled (minimum {min})',
+      },
+      blocked: {
+        one: 'Only {count} participant enrolled. Add at least {min} participants.',
+        other: '{count} participants enrolled. Add at least {min} participants.',
+      },
+      action: 'Add participants',
+    },
+    ruleset: {
+      done: 'Ruleset: {name}',
+      doneUnnamed: 'Ruleset set',
+      blocked: 'No ruleset set. Choose one in the overview.',
+      action: 'Change ruleset',
+    },
+    bestOf: {
+      done: 'Best of {count} by default',
+      blocked: 'No default best-of set.',
+      action: 'Change best-of',
+    },
+    groups: {
+      done: 'Every participant is in a league group',
+      blocked: {
+        one: '{count} participant is not in a league group. Place them first.',
+        other: '{count} participants are not in a league group. Place them first.',
+      },
+      action: 'Open league groups',
+    },
+    seeding: {
+      done: 'All participants are seeded',
+      attention: {
+        one: '{count} participant has no seed and is ordered by name.',
+        other: '{count} participants have no seed and are ordered by name.',
+      },
+      action: 'Set seeds',
+    },
+    previousRound: {
+      done: 'Previous round completed',
+      blocked: '{round} is not completed yet. Complete it before generating the next round.',
+      action: 'Go to rounds',
+    },
+    rounds: {
+      done: '{generated} of {total} rounds generated',
+      gap: 'Round {round} is missing. Generate All Rounds fills the gap.',
+    },
+  },
   participants: {
     loading: 'Loading...',
     loadFailed: 'Failed to load data',
@@ -179,9 +268,14 @@ export default {
     synced: 'Synced with league table',
     source: 'Source: {name}',
     lastSync: 'Last sync {time}',
+    orderHint: {
+      one: 'Saving seeds {count} player in the order shown.',
+      other: 'Saving seeds all {count} players in the order shown.',
+    },
     seedsPositive: 'Seeds must be positive numbers',
     seedsDuplicate: 'Duplicate seed values are not allowed',
     saveFailed: 'Failed to save seeds',
+    saved: 'Seeds saved.',
     reimportConfirm: 'Re-importing will overwrite the current participant list and seeds. Continue?',
     reimportFailed: 'Failed to re-import standings',
     seedByRatingFailed: 'Failed to seed by rating',

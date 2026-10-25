@@ -57,6 +57,7 @@ import type {
 } from '@/types/game';
 import type { EvolutionEvent } from '@/types/evolution';
 import type { ImpossibleLineup } from '@/lib/reconcile/evolution-rebuild';
+import type { MatchResetPreview } from '@/lib/admin/match-detail';
 
 interface GamePipelineBase {
   match_id: string;
@@ -699,7 +700,7 @@ interface EvolutionRecheckResult {
  * never come here: delete and reset rebuild the season
  * (`repairSeasonEvolution`), an edit goes through `recheckEpbAfterEdit`.
  */
-async function recheckEvolutions(
+export async function recheckEvolutions(
   seasonId: string | null,
   player1Id: string,
   player2Id: string
@@ -908,7 +909,7 @@ async function currentMatchStatusAfterConflict(
  * fill (`RatingHistoryIntegrityError`, 409) with nothing written, as
  * `resetMatch` does.
  */
-async function preflightUncompleteRebuild(match: {
+export async function preflightUncompleteRebuild(match: {
   id: string;
   status: MatchStatus;
   player_1_id: string;
@@ -931,7 +932,7 @@ async function preflightUncompleteRebuild(match: {
  * before or still is. Errors propagate: the game change is saved, and the
  * route reports the failure instead of a success with stale ratings.
  */
-async function rebuildGamificationAfterUncomplete(
+export async function rebuildGamificationAfterUncomplete(
   wasCompleted: boolean,
   statusAfter: string,
   player1Id: string,
@@ -949,7 +950,7 @@ async function rebuildGamificationAfterUncomplete(
  * at revert time (the games are already gone); a failed read throws instead of
  * silently skipping the revert.
  */
-async function revertRoundIfCompleted(roundId: string): Promise<void> {
+export async function revertRoundIfCompleted(roundId: string): Promise<void> {
   const round = await requireRound(roundId);
   if (round.status === 'completed') {
     await updateRoundStatus(roundId, 'pending');
@@ -1063,7 +1064,7 @@ function isPlayedBracketMatch(match: {
  * Legacy rows (null `bracket_pos`) and non-elim formats return [] — no cascade.
  * Results are deepest-first so a cascade can reset children before parents.
  */
-async function collectPlayedDownstreamMatches(
+export async function collectPlayedDownstreamMatches(
   match: MatchWithPlayers,
   tournament: { id: string; bracket_type: string },
   participants: ParticipantWithSeed[]
@@ -1358,6 +1359,41 @@ export async function resetMatch(
       evolutionRepaired,
       impossibleLineups: summaryImpossibleLineups,
     },
+  };
+}
+
+/**
+ * Read-only preview of `resetMatch`: how many games it deletes, whether the
+ * match WAS completed (ratings, streaks and signatures are then rebuilt) and
+ * the played later bracket matches a cascading reset also resets, deepest
+ * first. A scheduled match has nothing to reset and previews as zeros. Reads
+ * every match of the tournament plus the games of each downstream slot, so it
+ * belongs behind one dialog open, never on a list page.
+ */
+export async function previewMatchReset(matchId: string): Promise<MatchResetPreview> {
+  const { match, tournament } = await getMatchContext(matchId);
+
+  if (match.status === 'scheduled') {
+    return { games_to_delete: 0, was_completed: false, downstream: [] };
+  }
+
+  const participants = await getParticipants(match.tournament_id);
+  const [playedDownstream, rounds] = await Promise.all([
+    collectPlayedDownstreamMatches(match, tournament, participants),
+    getRoundsByTournament(match.tournament_id),
+  ]);
+  const roundNameById = new Map(rounds.map((round) => [round.id, round.name]));
+
+  return {
+    games_to_delete: match.games.length,
+    was_completed: match.status === 'completed',
+    downstream: playedDownstream.map((child) => ({
+      id: child.id,
+      player_1_name: child.player_1_name,
+      player_2_name: child.player_2_name,
+      status: child.status,
+      round_name: roundNameById.get(child.round_id) ?? '',
+    })),
   };
 }
 

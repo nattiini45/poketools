@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import { ilikeAnyOf, postgrestQuoted } from '@/lib/supabase/postgrest-filter';
+import { readBoundedPages } from '@/lib/supabase/read-bounded-pages';
 import { releaseTeamsFromMatches } from './teams';
 import type { Tables } from '@/types/database';
 import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
@@ -720,7 +721,7 @@ type PageResult<T> = PromiseLike<{ data: T[] | null; error: { message: string } 
 const ID_CHUNK = 100;
 
 /** Every row of a query, in `max_rows` chunks until a short page (PostgREST truncates silently). */
-async function readAllRows<T>(page: (from: number, to: number) => PageResult<T>): Promise<T[]> {
+export async function readAllRows<T>(page: (from: number, to: number) => PageResult<T>): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0; ; from += POSTGREST_MAX_ROWS) {
     const { data, error } = await page(from, from + POSTGREST_MAX_ROWS - 1);
@@ -732,7 +733,7 @@ async function readAllRows<T>(page: (from: number, to: number) => PageResult<T>)
 }
 
 /** Rows whose id is in `ids`, read in chunks of `ID_CHUNK`. */
-async function readRowsByIds<T>(
+export async function readRowsByIds<T>(
   ids: readonly string[],
   read: (chunk: string[]) => PageResult<T>
 ): Promise<T[]> {
@@ -1542,21 +1543,37 @@ export async function updateMatchSchedule(
 }
 
 /**
- * Set a match's scheduled time while the match is not completed: one conditional UPDATE (id and status in the
- * filter), so a completion that landed since the caller's read is not overwritten. Null when no row matched
- * (completed meanwhile, or gone); the caller re-reads to tell the two apart.
+ * Admin schedule change: set or clear `scheduled_at` while the match is not
+ * completed. Returns null when the match is completed or gone, so a race with
+ * a completion writes nothing. `updateMatchSchedule` stays unguarded for the
+ * proposal accept flow.
  */
-export async function setMatchScheduledAtIfOpen(id: string, scheduledAt: string): Promise<Match | null> {
+export async function updateOpenMatchSchedule(
+  id: string,
+  scheduledAt: string | null
+): Promise<MatchWithPlayers | null> {
   assertValidUuid(id, 'match id');
+
   const { data, error } = await supabase
     .from('matches')
     .update({ scheduled_at: scheduledAt })
     .eq('id', id)
-    .neq('status', 'completed' satisfies MatchStatus)
-    .select()
+    .neq('status', 'completed')
+    .select(MATCH_WITH_PLAYERS_SELECT)
     .maybeSingle();
+
   if (error) throw error;
-  return data ? toMatch(data) : null;
+  return data ? toMatchWithPlayers(data as MatchWithPlayersRow) : null;
+}
+
+/**
+ * Set a match's scheduled time while the match is not completed (the matches list bulk action): the same one
+ * conditional UPDATE as `updateOpenMatchSchedule` (id and status in the filter), so a completion that landed since the
+ * caller's read is not overwritten. Null when no row matched (completed meanwhile, or gone); the caller re-reads to
+ * tell the two apart.
+ */
+export async function setMatchScheduledAtIfOpen(id: string, scheduledAt: string): Promise<Match | null> {
+  return updateOpenMatchSchedule(id, scheduledAt);
 }
 
 /**
@@ -1595,6 +1612,7 @@ export interface MatchStatusTransition {
   submitterId?: string | null;
   autoConfirmAt?: string | null;
   confirmedAt?: string | null;
+  datePlayed?: string | null;
 }
 
 /**
@@ -1615,6 +1633,7 @@ export async function transitionMatchStatus(
   if (transition.submitterId !== undefined) updates.submitter_id = transition.submitterId;
   if (transition.autoConfirmAt !== undefined) updates.auto_confirm_at = transition.autoConfirmAt;
   if (transition.confirmedAt !== undefined) updates.confirmed_at = transition.confirmedAt;
+  if (transition.datePlayed !== undefined) updates.date_played = transition.datePlayed;
 
   const { data, error } = await supabase
     .from('matches')
@@ -1788,21 +1807,26 @@ export async function hasDownstreamMatches(
 
 /**
  * Get match records for standings computation.
- * Only returns completed matches with their winner.
+ * Only returns completed matches with their winner. Pages the full result (oldest first) past the
+ * PostgREST `max_rows` ceiling; a result of 1,000 rows or fewer is ONE query.
  */
 export async function getCompletedMatchRecords(
   tournamentId: string
 ): Promise<MatchRecord[]> {
-  const { data, error } = await supabase
-    .from('matches')
-    .select('player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
-    .eq('tournament_id', tournamentId)
-    .eq('status', 'completed')
-    .limit(2000);
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .eq('tournament_id', tournamentId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `getCompletedMatchRecords tournament ${tournamentId}` },
+  );
 
-  if (error) throw error;
-
-  return data.map((row) => ({
+  return rows.map((row) => ({
     player_1_id: row.player_1_id,
     player_2_id: row.player_2_id,
     winner_id: row.winner_id,
@@ -1811,7 +1835,7 @@ export async function getCompletedMatchRecords(
 }
 
 /**
- * Batch-fetch completed match records for multiple tournaments in a single query.
+ * Batch-fetch completed match records for multiple tournaments in one paged read.
  * Returns a Map keyed by tournament_id. Used by profile composition
  * to avoid N+1 queries when computing standings.
  */
@@ -1820,17 +1844,21 @@ export async function getCompletedMatchRecordsBatch(
 ): Promise<Map<string, MatchRecord[]>> {
   if (tournamentIds.length === 0) return new Map();
 
-  const { data, error } = await supabase
-    .from('matches')
-    .select('tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
-    .in('tournament_id', tournamentIds)
-    .eq('status', 'completed')
-    .limit(2000);
-
-  if (error) throw error;
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .in('tournament_id', tournamentIds)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `getCompletedMatchRecordsBatch ${tournamentIds.length} tournaments` },
+  );
 
   const result = new Map<string, MatchRecord[]>();
-  for (const row of data) {
+  for (const row of rows) {
     const record: MatchRecord = {
       player_1_id: row.player_1_id,
       player_2_id: row.player_2_id,
@@ -1866,16 +1894,20 @@ export async function getPlayerIdsWithCompletedMatches(
 ): Promise<Set<string>> {
   if (tournamentIds.length === 0) return new Set();
 
-  const { data, error } = await supabase
-    .from('matches')
-    .select('player_1_id, player_2_id')
-    .in('tournament_id', tournamentIds)
-    .eq('status', 'completed');
-
-  if (error) throw error;
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('player_1_id, player_2_id')
+        .in('tournament_id', tournamentIds)
+        .eq('status', 'completed')
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `getPlayerIdsWithCompletedMatches ${tournamentIds.length} tournaments` },
+  );
 
   const result = new Set<string>();
-  for (const row of data) {
+  for (const row of rows) {
     result.add(row.player_1_id);
     result.add(row.player_2_id);
   }

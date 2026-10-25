@@ -1,7 +1,11 @@
 /**
- * Modal (server render): the Radix portal renders nothing on the server, so the primitives are replaced by plain
- * elements that keep their class names. What is under test is the frame's own markup: a dialog taller than the
- * viewport must keep its header and scroll its body, otherwise the buttons at the bottom cannot be reached.
+ * `Modal` is fixed and centred, so tall content (the reset impact list, a
+ * reason field, the buttons) must scroll inside it on a short viewport instead
+ * of running off the screen. The Radix portal renders nothing on the server, so
+ * the primitives are replaced by plain elements that keep their class names.
+ * What is under test is the frame's own markup: a dialog taller than the
+ * viewport must keep its header and scroll its body, otherwise the buttons at
+ * the bottom cannot be reached.
  */
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -32,6 +36,12 @@ describe('Modal', () => {
       <p>Body text</p>
     </Modal>,
   );
+
+  it('caps its height to the viewport and scrolls its own content', () => {
+    expect(html).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(html).toContain('overflow-y-auto');
+    expect(html).toContain('Body text');
+  });
 
   it('caps the dialog at the viewport height and lays it out as a column', () => {
     const content = /<div class="([^"]*max-h-[^"]*)">/.exec(html)?.[1] ?? '';

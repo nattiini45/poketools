@@ -23,6 +23,7 @@ import { MatchListRow } from '@/components/admin/AdminMatchRowCard';
 import { downloadMatchExport, type MatchExportInfo } from '@/components/admin/match-bulk-client';
 import { isRetryableLoadError, matchListEmptyKey } from '@/components/admin/match-list-view';
 import { useMatchSelection } from '@/components/admin/useMatchSelection';
+import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import Alert from '@/components/ui/Alert';
 import Skeleton from '@/components/ui/Skeleton';
 import Button, { getButtonClasses } from '@/components/ui/Button';
@@ -234,7 +235,7 @@ export function MatchListSelectionHeader({
   );
 }
 
-export default function AdminMatchList() {
+export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchViewer | null }) {
   const t = useT(shellMessages);
   const errorText = useApiErrorText(errorsAdmin);
   const timeZone = useTimeZone();
@@ -563,6 +564,7 @@ export default function AdminMatchList() {
                 <MatchListRow
                   row={row}
                   backQuery={backQuery}
+                  viewer={viewer}
                   selection={{ checked: selection.isSelected(row.id), onChange: () => toggleRow(row.id) }}
                 />
               </AnimatedListItem>

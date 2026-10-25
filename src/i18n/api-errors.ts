@@ -87,6 +87,7 @@ function placeholdersOf(leaf: unknown): string[] {
  */
 const ENUM_PARAMS_BY_CODE: Readonly<Record<string, Readonly<Record<string, EnumGroup>>>> = {
   match_transition_invalid: { from: 'matchStatus', to: 'matchStatus' },
+  match_state_changed: { status: 'matchStatus' },
   ai_match_status_invalid: { status: 'matchStatus' },
   ai_analysis_completed_only: { status: 'matchStatus' },
   ai_scouting_scheduled_only: { status: 'matchStatus' },

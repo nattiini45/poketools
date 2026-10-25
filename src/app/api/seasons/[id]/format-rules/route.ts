@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer, requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { getFormatRules, upsertFormatRules } from '@/lib/supabase/queries/format-rules';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getSeasonById, getSeasonStageIds } from '@/lib/supabase/queries/seasons';
 import { assertEpbSeason } from '@/lib/season/format-utils';
 import { logAuditEvent } from '@/lib/audit/log';
 import { expireSeasonReads } from '@/lib/revalidation';
@@ -68,8 +68,12 @@ export async function PUT(
       );
     }
 
+    // The stored tiebreaker order ranks the league's tables and its phases' tables, so a save expires the reads of
+    // the league AND of each phase (a phase's standings preview is tagged with the phase only). Read before the
+    // write: a failed read blocks the save instead of leaving a saved order behind stale entries.
+    const stageIds = await getSeasonStageIds(id);
     const rules = await upsertFormatRules(id, parsed.data);
-    expireSeasonReads(id);
+    expireSeasonReads(id, stageIds);
 
     logAuditEvent({
       actor_id: admin.playerId,

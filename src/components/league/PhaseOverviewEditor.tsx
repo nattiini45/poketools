@@ -9,9 +9,7 @@ import PhaseForm, { PhaseSaveError } from '@/components/league/PhaseForm';
 import type { PhaseFormData } from '@/components/league/PhaseForm';
 import Alert from '@/components/ui/Alert';
 import { useT } from '@/i18n/client';
-import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
-import { useApiErrorText } from '@/i18n/use-api-error';
-import { errorsSeasons } from '@/i18n/messages/errors/seasons';
+import { toApiErrorLike } from '@/i18n/api-errors';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
 
 interface PhaseOverviewEditorProps {
@@ -27,12 +25,10 @@ export default function PhaseOverviewEditor({
 }: PhaseOverviewEditorProps) {
   const router = useRouter();
   const t = useT(leaguePhasesMessages);
-  const errorText = useApiErrorText(errorsSeasons);
-  const [error, setError] = useState<ApiErrorLike | null>(null);
   const [saved, setSaved] = useState(false);
 
+  /** A refusal is thrown as `PhaseSaveError`: `PhaseForm` shows it, the editor shows no error of its own. */
   async function handleSave(data: PhaseFormData) {
-    setError(null);
     setSaved(false);
     const res = await fetch(`/api/seasons/${seasonId}/phases/${phase.id}`, {
       method: 'PATCH',
@@ -41,17 +37,17 @@ export default function PhaseOverviewEditor({
     });
     const result: ApiResult<LeaguePhase> = await res.json();
     if (!result.success) {
-      const failure = toApiErrorLike(result);
-      setError(failure);
-      throw new PhaseSaveError(failure);
+      throw new PhaseSaveError(toApiErrorLike(result));
     }
     setSaved(true);
     router.refresh();
   }
 
+  const completed = phase.status === 'completed';
+
   return (
     <div className="space-y-3">
-      {error && <Alert variant="error">{errorText(error)}</Alert>}
+      {completed && <Alert variant="info">{t('overview.lockedCompleted')}</Alert>}
       {saved && (
         <p className="text-xs text-poke-green">{t('overview.saved')}</p>
       )}
@@ -71,6 +67,7 @@ export default function PhaseOverviewEditor({
         onSubmit={handleSave}
         submitLabel={t('overview.saveChanges')}
         lockBracketType={phase.status === 'active'}
+        locked={completed}
       />
     </div>
   );

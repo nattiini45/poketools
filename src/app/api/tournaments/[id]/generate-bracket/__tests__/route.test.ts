@@ -28,12 +28,15 @@ vi.mock('@/lib/tournament/bracket-generate', () => ({
   generateEliminationBracket: vi.fn(),
 }));
 
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/lib/discord/notify', () => ({ emitDiscordEvent: vi.fn() }));
 vi.mock('@/lib/social/notify', () => ({ emitSocialEvent: vi.fn() }));
 
 import { POST } from '@/app/api/tournaments/[id]/generate-bracket/route';
 import { requireResourceAdmin, AuthError } from '@/lib/auth/helpers';
-import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
+import { logAuditEvent } from '@/lib/audit/log';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { generateEliminationBracket } from '@/lib/tournament/bracket-generate';
 
 const tournamentId = '00000000-0000-4000-8000-000000000001';
@@ -42,6 +45,18 @@ const params = { params: Promise.resolve({ id: tournamentId }) };
 function request(): NextRequest {
   return {} as NextRequest;
 }
+
+function bodyRequest(body: unknown): NextRequest {
+  return { json: () => Promise.resolve(body) } as unknown as NextRequest;
+}
+
+const elimTournament = {
+  id: tournamentId,
+  name: 'Spring Open',
+  bracket_type: 'single_elim',
+  status: 'upcoming',
+  season_id: null,
+};
 
 describe('POST /api/tournaments/[id]/generate-bracket', () => {
   beforeEach(() => {
@@ -99,5 +114,104 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
     expect(payload.error).toBe('Tournament is already completed');
     expect(payload.code).toBe('tournament_already_completed');
     expect(generateEliminationBracket).not.toHaveBeenCalled();
+  });
+
+  describe('generating', () => {
+    const eightPlayers = Array.from({ length: 8 }, (_, i) => ({ id: `p${i + 1}`, name: `Player ${i + 1}`, seed: i + 1 }));
+
+    beforeEach(() => {
+      vi.mocked(getTournamentById).mockResolvedValue(elimTournament as never);
+      vi.mocked(getParticipants).mockResolvedValue(eightPlayers as never);
+      vi.mocked(generateEliminationBracket).mockResolvedValue({ rounds_created: 3, matches_materialized: 4 });
+    });
+
+    it('answers fewer than 2 participants with tournament_participants_too_few (400, not a generic 500)', async () => {
+      vi.mocked(getParticipants).mockResolvedValue([eightPlayers[0]] as never);
+
+      const response = await POST(request(), params);
+      const payload = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe('Need at least 2 participants');
+      expect(payload.code).toBe('tournament_participants_too_few');
+      expect(generateEliminationBracket).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('passes the typed bracket_already_generated (409) of the library through', async () => {
+      vi.mocked(generateEliminationBracket).mockRejectedValue(
+        new UserFacingError('Bracket already generated', { code: 'bracket_already_generated', status: 409 }),
+      );
+
+      const response = await POST(request(), params);
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.error).toBe('Bracket already generated');
+      expect(payload.code).toBe('bracket_already_generated');
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('generates with every round pending by default and returns the unchanged result shape', async () => {
+      const response = await POST(request(), params);
+      const payload = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(generateEliminationBracket).toHaveBeenCalledWith(elimTournament, eightPlayers, { startFirstRound: false });
+      expect(payload.data).toEqual({ rounds_created: 3, matches_materialized: 4 });
+    });
+
+    it('start_round asks the library to start the first round and returns started_round_id', async () => {
+      vi.mocked(generateEliminationBracket).mockResolvedValue({
+        rounds_created: 3,
+        matches_materialized: 4,
+        started_round_id: 'round-1',
+      });
+
+      const response = await POST(bodyRequest({ start_round: true }), params);
+      const payload = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(generateEliminationBracket).toHaveBeenCalledWith(elimTournament, eightPlayers, { startFirstRound: true });
+      expect(payload.data.started_round_id).toBe('round-1');
+    });
+
+    it('rejects a malformed body with 400 validation_failed before anything is read or written', async () => {
+      const response = await POST(bodyRequest({ start_round: 'yes' }), params);
+      const payload = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(payload.code).toBe('validation_failed');
+      expect(getTournamentById).not.toHaveBeenCalled();
+      expect(generateEliminationBracket).not.toHaveBeenCalled();
+    });
+
+    it('records one bracket.generate event after the write', async () => {
+      const response = await POST(request(), params);
+
+      expect(response.status).toBe(201);
+      expect(logAuditEvent).toHaveBeenCalledTimes(1);
+      expect(logAuditEvent).toHaveBeenCalledWith({
+        actor_id: 'admin-1',
+        actor_name: 'Admin',
+        action: 'bracket.generate',
+        resource_type: 'tournament',
+        resource_id: tournamentId,
+        resource_name: 'Spring Open',
+        metadata: { rounds_created: 3, matches_materialized: 4, started: false },
+      });
+    });
+
+    it('marks the event as started when the first round was started', async () => {
+      vi.mocked(generateEliminationBracket).mockResolvedValue({
+        rounds_created: 3,
+        matches_materialized: 4,
+        started_round_id: 'round-1',
+      });
+
+      await POST(bodyRequest({ start_round: true }), params);
+
+      expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ started: true });
+    });
   });
 });

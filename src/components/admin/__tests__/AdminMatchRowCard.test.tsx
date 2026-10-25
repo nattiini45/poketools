@@ -16,6 +16,7 @@ vi.mock('next/link', () => ({
 import { MatchListRow } from '../AdminMatchRowCard';
 import { EMPTY_MATCH_LIST_STATE, buildMatchListSearch } from '@/lib/admin/match-list';
 import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
+import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import type { GameSummary } from '@/types/match';
 
 const MATCH = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -68,8 +69,12 @@ function row(overrides: Partial<AdminMatchRow> = {}): AdminMatchRow {
   };
 }
 
+// A viewer who may use both player shortcuts, so these tests exercise the status rule; who sees which button is
+// covered in AdminMatchList.test.tsx.
+const VIEWER: AdminMatchViewer = { playerId: 'viewer', isSiteAdmin: true, isSuperadmin: true };
+
 const render = (r: AdminMatchRow, backQuery = '', locale: 'en' | 'de' = 'en') =>
-  renderWithI18n(<MatchListRow row={r} backQuery={backQuery} />, { locale, requestTime: NOW });
+  renderWithI18n(<MatchListRow row={r} backQuery={backQuery} viewer={VIEWER} />, { locale, requestTime: NOW });
 
 /** The text of line two (the muted paragraph). */
 function detailsOf(html: string): string {

@@ -114,7 +114,8 @@ export default function LiveControls({
       ? drafting && vm.activeSlot !== null
       : vm.status === 'in_progress' && vm.activeSlot !== null && !vm.activeSlot.isViewer;
   const canStart = vm.phase === 'setup';
-  const canEnd = vm.phase === 'drafting' || vm.phase === 'setup';
+  // Abort needs started picks to void: before the start the end route can only refuse, so setup shows a hint instead.
+  const canEnd = vm.phase === 'drafting';
 
   const togglePause = async () => {
     const ok = await pauseCall.run(() => onPause(!vm.paused, pauseReason));
@@ -201,6 +202,7 @@ export default function LiveControls({
           </Button>
         ) : null}
       </div>
+      {vm.phase === 'setup' ? <p className={HINT}>{t('live.endSetupHint')}</p> : null}
       {canPickFor ? (
         <p className={HINT}>{pickFor.kind === 'link' ? t('live.pickForHint') : t('live.pickForRoomHint')}</p>
       ) : null}

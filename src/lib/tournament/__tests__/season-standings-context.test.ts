@@ -1,8 +1,9 @@
 /**
  * D36 fix 11: the season standings context. `computeStandingsForSeason` keeps
- * its behaviour (one season read, plus evolution points for EPB), and the
- * batched `loadSeasonStandingsContexts` resolves many seasons with one
- * seasons read plus one evolution-points read per distinct EPB season.
+ * its behaviour (one season read, plus evolution points and the stored
+ * tiebreaker order for EPB), and the batched `loadSeasonStandingsContexts`
+ * resolves many seasons with one seasons read, one evolution-points read per
+ * distinct EPB season and one format rules read for all of them.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +13,10 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 }));
 vi.mock('@/lib/supabase/queries/evolutions', () => ({
   getSeasonEvolutionPoints: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/format-rules', () => ({
+  getFormatRules: vi.fn(),
+  getTiebreakerOrdersBySeason: vi.fn(),
 }));
 
 import {
@@ -25,6 +30,8 @@ import {
 import { computeStandingsForFormat } from '../standings';
 import { getSeasonById, getSeasonFormatTypes } from '@/lib/supabase/queries/seasons';
 import { getSeasonEvolutionPoints } from '@/lib/supabase/queries/evolutions';
+import { getFormatRules, getTiebreakerOrdersBySeason } from '@/lib/supabase/queries/format-rules';
+import type { FormatRules } from '@/types/format-rules';
 import type { Season } from '@/types/season';
 import type { MatchRecord } from '../types';
 
@@ -59,7 +66,11 @@ const MATCHES: MatchRecord[] = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getFormatRules).mockResolvedValue(null);
+  vi.mocked(getTiebreakerOrdersBySeason).mockResolvedValue(new Map());
 });
+
+const rulesWith = (order: FormatRules['tiebreaker_order']) => ({ tiebreaker_order: order }) as FormatRules;
 
 describe('sumEvolutionPoints', () => {
   it('sums evolution_points_awarded per player (the getSeasonEvolutionPoints reduction)', () => {
@@ -83,6 +94,7 @@ describe('computeStandingsForSeason (unchanged behaviour)', () => {
 
     expect(getSeasonById).toHaveBeenCalledWith('s');
     expect(getSeasonEvolutionPoints).toHaveBeenCalledWith('s');
+    expect(getFormatRules).toHaveBeenCalledWith('s');
     expect(standings).toEqual(
       computeStandingsForFormat('evolution_point_buy', IDS, NAMES, MATCHES, {}, {}, {}, { evolutionPoints: { c: 5 } }),
     );
@@ -90,12 +102,26 @@ describe('computeStandingsForSeason (unchanged behaviour)', () => {
     expect(standings[0].player_id).toBe('c');
   });
 
-  it('non-EPB: one season read, no evolution points', async () => {
+  it('EPB: ranks by the stored tiebreaker order, the pack chain without one', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue(season('s', 'evolution_point_buy'));
+    // a beat b; c has played nobody but holds the most evolution points.
+    const aBeatsB: MatchRecord[] = [{ player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 }];
+    vi.mocked(getSeasonEvolutionPoints).mockResolvedValue({ a: 0, b: 1, c: 10 });
+    const order = async () => (await computeStandingsForSeason('s', IDS, NAMES, aBeatsB)).map((row) => row.player_id);
+
+    expect(await order()).toEqual(['a', 'c', 'b']);
+
+    vi.mocked(getFormatRules).mockResolvedValue(rulesWith(['evolution_points', 'match_points']));
+    expect(await order()).toEqual(['c', 'b', 'a']);
+  });
+
+  it('non-EPB: one season read, no evolution points, no format rules', async () => {
     vi.mocked(getSeasonById).mockResolvedValue(season('s', 'singles'));
 
     const standings = await computeStandingsForSeason('s', IDS, NAMES, MATCHES);
 
     expect(getSeasonEvolutionPoints).not.toHaveBeenCalled();
+    expect(getFormatRules).not.toHaveBeenCalled();
     expect(standings).toEqual(computeStandingsForFormat('singles', IDS, NAMES, MATCHES));
   });
 
@@ -109,7 +135,7 @@ describe('computeStandingsForSeason (unchanged behaviour)', () => {
 });
 
 describe('loadSeasonStandingsContexts', () => {
-  it('one formats read for all seasons, one evolution-points read per distinct EPB season', async () => {
+  it('one formats read for all seasons, one evolution-points read per distinct EPB season, one rules read', async () => {
     vi.mocked(getSeasonFormatTypes).mockResolvedValue(
       new Map([
         ['epb-1', 'evolution_point_buy'],
@@ -117,6 +143,7 @@ describe('loadSeasonStandingsContexts', () => {
       ]),
     );
     vi.mocked(getSeasonEvolutionPoints).mockResolvedValue({ a: 2 });
+    vi.mocked(getTiebreakerOrdersBySeason).mockResolvedValue(new Map([['epb-1', ['evolution_points', 'match_points']]]));
 
     const contexts = await loadSeasonStandingsContexts(['epb-1', 'single-1', null, 'epb-1', undefined, 'gone']);
 
@@ -124,10 +151,27 @@ describe('loadSeasonStandingsContexts', () => {
     expect(getSeasonFormatTypes).toHaveBeenCalledWith(['epb-1', 'single-1', 'gone']);
     expect(getSeasonEvolutionPoints).toHaveBeenCalledTimes(1);
     expect(getSeasonEvolutionPoints).toHaveBeenCalledWith('epb-1');
+    expect(getTiebreakerOrdersBySeason).toHaveBeenCalledTimes(1);
+    expect(getTiebreakerOrdersBySeason).toHaveBeenCalledWith(['epb-1']);
     expect(Object.fromEntries(contexts)).toEqual({
-      'epb-1': { formatType: 'evolution_point_buy', evolutionPoints: { a: 2 } },
+      'epb-1': {
+        formatType: 'evolution_point_buy',
+        evolutionPoints: { a: 2 },
+        tiebreakerOrder: ['evolution_points', 'match_points'],
+      },
       'single-1': { formatType: 'singles' },
     });
+  });
+
+  it('reads no format rules when no season is Evolution Point Buy, and adds no order for a season without a row', async () => {
+    vi.mocked(getSeasonFormatTypes).mockResolvedValue(new Map([['single-1', 'singles']]));
+    await loadSeasonStandingsContexts(['single-1']);
+    expect(getTiebreakerOrdersBySeason).not.toHaveBeenCalled();
+
+    vi.mocked(getSeasonFormatTypes).mockResolvedValue(new Map([['epb-1', 'evolution_point_buy']]));
+    vi.mocked(getSeasonEvolutionPoints).mockResolvedValue({});
+    const contexts = await loadSeasonStandingsContexts(['epb-1']);
+    expect(contexts.get('epb-1')).toEqual({ formatType: 'evolution_point_buy', evolutionPoints: {} });
   });
 
   it('no season ids: no reads', async () => {

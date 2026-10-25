@@ -100,6 +100,10 @@ export default {
     updateFailed: 'Failed to update match',
     confirmResult: 'Confirm Result',
     disputeResult: 'Dispute Result',
+    disputeReasonLabel: 'Reason for the dispute (optional)',
+    disputeReasonPlaceholder: 'Briefly say what is wrong with the reported result',
+    disputeReasonHint: 'Shown to the admins who review the dispute.',
+    disputeReasonCount: '{count} / {max}',
     cannotAct: 'You cannot take action on this match. Only the opponent can confirm.',
   },
   scheduling: {

@@ -125,7 +125,8 @@ describe('runBulkAction: confirm', () => {
       player_1_id: P1,
       player_2_id: P2,
     });
-    expect(updateMatchStatus).toHaveBeenCalledWith(ID_1, 'completed', P1, ADMIN, undefined, 'pending_confirmation');
+    // The original reporter (P1 in the fixture) stays the submitter, as in the single confirm.
+    expect(updateMatchStatus).toHaveBeenCalledWith(ID_1, 'completed', P1, P1, undefined, 'pending_confirmation');
     expect(finalizeMatchCompletion).toHaveBeenCalledWith({
       match: { ...m, winner_id: P1, status: 'completed' },
       winnerId: P1,
@@ -206,7 +207,13 @@ describe('runBulkAction: confirm', () => {
     const m = match({ winner_id: P2, winner_name: 'Nora' });
     const [outcome] = await runBulkAction(confirmExpecting(P2, ID_1), mapOf(m), ctx());
     expect(outcome.result).toEqual({ id: ID_1, ok: true, code: 'ok' });
-    expect(updateMatchStatus).toHaveBeenCalledWith(ID_1, 'completed', P2, ADMIN, undefined, 'pending_confirmation');
+    expect(updateMatchStatus).toHaveBeenCalledWith(ID_1, 'completed', P2, P1, undefined, 'pending_confirmation');
+  });
+
+  it('lets the admin fill the submitter slot only when the match has no reporter', async () => {
+    const m = match({ submitter_id: null });
+    await runBulkAction(confirm(ID_1), mapOf(m), ctx());
+    expect(updateMatchStatus).toHaveBeenCalledWith(ID_1, 'completed', P1, ADMIN, undefined, 'pending_confirmation');
   });
 
   it('refuses an item that has no expectation, and only that item', async () => {

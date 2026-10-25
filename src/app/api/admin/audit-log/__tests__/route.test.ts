@@ -78,6 +78,40 @@ describe('GET /api/admin/audit-log', () => {
     expect(listAuditLogEntries).not.toHaveBeenCalled();
   });
 
+  it('returns 400 for a resource_id that is not a UUID, before any query', async () => {
+    const res = await GET(request('http://localhost/api/admin/audit-log?resource_id=not-a-uuid'));
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.code).toBe('validation_failed');
+    expect(listAuditLogEntries).not.toHaveBeenCalled();
+  });
+
+  it('passes a UUID resource_id through trimmed', async () => {
+    const id = '123e4567-e89b-12d3-a456-426614174000';
+    const res = await GET(request(`http://localhost/api/admin/audit-log?resource_id=%20%20${id}%20`));
+
+    expect(res.status).toBe(200);
+    expect(listAuditLogEntries).toHaveBeenCalledWith(expect.objectContaining({ resource_id: id }));
+  });
+
+  it('returns 400 for an actor_id that is not a UUID', async () => {
+    const res = await GET(request('http://localhost/api/admin/audit-log?actor_id=nope'));
+
+    expect(res.status).toBe(400);
+    expect(listAuditLogEntries).not.toHaveBeenCalled();
+  });
+
+  it('still forwards the free-text actor and action filters', async () => {
+    const res = await GET(request('http://localhost/api/admin/audit-log?actor=ash&action=match.override'));
+
+    expect(res.status).toBe(200);
+    expect(listAuditLogEntries).toHaveBeenCalledWith(expect.objectContaining({
+      actor: 'ash',
+      action: 'match.override',
+    }));
+  });
+
   it('delegates unexpected errors to safeErrorResponse', async () => {
     vi.mocked(requireAdmin).mockRejectedValueOnce(new Error('auth failed'));
 

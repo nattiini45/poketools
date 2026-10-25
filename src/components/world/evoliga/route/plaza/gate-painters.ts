@@ -18,6 +18,7 @@
  */
 import type { FormatRules, TiebreakerStep } from '@/types/format-rules';
 import { epbPack } from '@/lib/format-pack';
+import { effectiveTiebreakerChain } from '@/lib/tournament/standings-rules';
 import { LOCALES, type Locale } from '@/i18n/config';
 import { getMessages } from '@/i18n/core';
 import { paintMessages } from '@/i18n/messages/paint';
@@ -225,7 +226,8 @@ export function resolveRuleSet(
   const tera = teraText(formatRules?.tera_rules ?? epbPack.teraByStage, locale);
   const bannedMoves = formatRules?.banned_moves ?? defaults.bannedMoves;
   const bannedItems = formatRules?.banned_items ?? defaults.bannedItems;
-  const order = formatRules?.tiebreaker_order ?? epbPack.tiebreakerChain;
+  // The chain the table ranks by (the stored order when usable, else the pack's).
+  const order = effectiveTiebreakerChain(formatRules);
   const draftBudget = t('gate.label.draftBudget');
   const teraStage = (n: number) => t('gate.label.teraStage', { n: String(n) });
 

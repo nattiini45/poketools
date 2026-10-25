@@ -325,7 +325,8 @@ describe('POST /api/admin/matches/batch: response', () => {
     ]);
     expect(body.data.summary).toEqual({ requested: 2, changed: 1, skipped: 0, conflicts: 1, failed: 0 });
     expect(updateMatchStatus).toHaveBeenCalledTimes(1);
-    expect(updateMatchStatus).toHaveBeenCalledWith(uuid(1), 'completed', P1, 'p-admin', undefined, 'pending_confirmation');
+    // The original reporter stays the submitter, as in the single confirm.
+    expect(updateMatchStatus).toHaveBeenCalledWith(uuid(1), 'completed', P1, P1, undefined, 'pending_confirmation');
   });
 
   it('rejects a confirm without the previewed winners as a 400', async () => {

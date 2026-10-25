@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { SeasonFormData, SeasonFormatType, RouteThemeId } from '@/types/season';
 import type { Ruleset } from '@/types/ruleset';
 import Input from '@/components/ui/Input';
+import { LeagueDateFields, LeagueRulesetField, LeagueTypeField } from '@/components/league/league-form-fields';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -15,6 +16,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { languageMessages } from '@/i18n/messages/language';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import type { LeagueFormIdentity } from '@/lib/league-admin/clone-source';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 
 interface LeagueFormProps {
@@ -25,6 +27,11 @@ interface LeagueFormProps {
    */
   onSubmit: (data: SeasonFormData) => Promise<ApiErrorLike | null | void>;
   initialData?: Partial<SeasonFormData>;
+  /**
+   * Called with the name and dates after each edit of them, so a parent that remounts the form
+   * (a new "start from" league) can hand them back as `initialData`.
+   */
+  onIdentityChange?: (identity: LeagueFormIdentity) => void;
 }
 
 /**
@@ -78,7 +85,7 @@ export function buildLeagueFormPayload(values: LeagueFormValues): SeasonFormData
   };
 }
 
-export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFormProps) {
+export default function LeagueForm({ rulesets, onSubmit, initialData, onIdentityChange }: LeagueFormProps) {
   const t = useT(leagueAdminMessages);
   const tLang = useT(languageMessages);
   const errorText = useApiErrorText(errorsSeasons);
@@ -111,6 +118,10 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
     () => LOCALES.map((value) => ({ value, label: tLang(`names.${value}`) })),
     [tLang],
   );
+
+  function changeIdentity(next: Partial<LeagueFormIdentity>) {
+    onIdentityChange?.({ name, start_date: startDate, end_date: endDate, ...next });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -148,7 +159,10 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
         label={t('form.name')}
         type="text"
         value={name}
-        onChange={(e) => setName(e.target.value)}
+        onChange={(e) => {
+          setName(e.target.value);
+          changeIdentity({ name: e.target.value });
+        }}
         required
         placeholder={t('form.namePlaceholder')}
       />
@@ -170,21 +184,14 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Select
-          id="league-type"
-          label={t('form.leagueType')}
-          value={formatType}
-          onChange={(e) => setFormatType(e.target.value as SeasonFormatType)}
-          options={formatOptions}
-          aria-describedby={isPointBuy ? 'league-battle-format' : undefined}
-        />
-        {isPointBuy && (
-          <p id="league-battle-format" className="text-xs text-poke-text-muted">
-            {t('form.battleFormatFixed')}
-          </p>
-        )}
-      </div>
+      <LeagueTypeField
+        id="league-type"
+        label={t('form.leagueType')}
+        value={formatType}
+        onChange={setFormatType}
+        options={formatOptions}
+        note={isPointBuy ? { id: 'league-battle-format', text: t('form.battleFormatFixed') } : null}
+      />
 
       <Select
         label={t('form.worldTheme')}
@@ -210,48 +217,26 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
         </p>
       </div>
 
-      {isPointBuy ? (
-        <div className="space-y-1.5" data-testid="league-auto-ruleset">
-          <p className="text-sm font-heading font-semibold text-poke-text-primary">
-            {t('form.autoRuleset', { ruleset: t('form.autoRulesetName') })}
-          </p>
-          <p className="text-xs text-poke-text-muted">{t('form.autoRulesetHint')}</p>
-        </div>
-      ) : (
-        <Select
-          label={t('form.ruleset')}
-          value={rulesetId ?? ''}
-          onChange={(e) => setRulesetId(e.target.value)}
-        >
-          <option value="">{t('form.noRuleset')}</option>
-          {rulesets.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </Select>
-      )}
+      <LeagueRulesetField isPointBuy={isPointBuy} rulesets={rulesets} value={rulesetId} onChange={setRulesetId} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label={t('form.startDate')}
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-        <Input
-          label={t('form.endDate')}
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
-      </div>
+      <LeagueDateFields
+        start={startDate}
+        end={endDate}
+        onStart={(value) => {
+          setStartDate(value);
+          changeIdentity({ start_date: value });
+        }}
+        onEnd={(value) => {
+          setEndDate(value);
+          changeIdentity({ end_date: value });
+        }}
+      />
 
       <Button
         type="submit"
         variant="secondary"
         loading={submitting}
-        disabled={!name}
+        disabled={!name.trim()}
       >
         {t('form.submit')}
       </Button>

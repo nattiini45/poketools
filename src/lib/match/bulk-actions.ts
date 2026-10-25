@@ -97,9 +97,11 @@ async function confirmItem(
   }
 
   const previousStatus = match.status;
-  // The same call as the single admin confirm: notes stay untouched (undefined), and the expected status makes a
+  // The same call as the single admin confirm: the same submitter, notes stay untouched (undefined), and the expected status makes a
   // match that moved meanwhile come back as null instead of being overwritten.
-  const updated = await updateMatchStatus(match.id, 'completed', winnerId, ctx.actor.playerId, undefined, previousStatus);
+  // As in the single confirm, the original reporter stays the submitter; the actor only fills an empty slot.
+  const submitterId = match.submitter_id ?? ctx.actor.playerId;
+  const updated = await updateMatchStatus(match.id, 'completed', winnerId, submitterId, undefined, previousStatus);
   if (!updated) return failed(match.id, 'match_bulk_conflict');
 
   // The completion is committed from here on. Whatever goes wrong in the follow-up steps (finalize catches and

@@ -15,6 +15,7 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
     updated_at: '2026-01-01T00:00:00Z',
   })),
   getRoundsByTournament: vi.fn(),
+  updateRoundStatus: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -53,11 +54,12 @@ vi.mock('@/lib/supabase/client', () => {
 });
 
 import {
+  generateEliminationBracket,
   isPlayedBracketMatch,
   regenerateEliminationBracket,
 } from '../bracket-generate';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getRoundsByTournament, updateRoundStatus } from '@/lib/supabase/queries/rounds';
 import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import type { MatchWithPlayers } from '@/types/match';
@@ -251,5 +253,101 @@ describe('regenerateEliminationBracket', () => {
       expect((err as UserFacingError).params).toEqual({ count: 1 });
       expect((err as UserFacingError).message).toContain('played match');
     }
+  });
+});
+describe('generateEliminationBracket', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([]);
+  });
+
+  it('refuses a second generation with the typed bracket_already_generated (409)', async () => {
+    vi.mocked(getRoundsByTournament).mockResolvedValue(existingRounds);
+
+    const attempt = generateEliminationBracket(makeTournament(), makeParticipants(4));
+
+    await expect(attempt).rejects.toBeInstanceOf(UserFacingError);
+    await expect(attempt).rejects.toMatchObject({
+      message: 'Bracket already generated',
+      code: 'bracket_already_generated',
+      statusCode: 409,
+    });
+    expect(updateRoundStatus).not.toHaveBeenCalled();
+  });
+
+  it('refuses fewer than 2 participants with the typed tournament_participants_too_few (400)', async () => {
+    const attempt = generateEliminationBracket(makeTournament(), makeParticipants(1));
+
+    await expect(attempt).rejects.toBeInstanceOf(UserFacingError);
+    await expect(attempt).rejects.toMatchObject({
+      message: 'Need at least 2 participants',
+      code: 'tournament_participants_too_few',
+      statusCode: 400,
+    });
+  });
+
+  it('keeps the guard for non-elimination formats as it was', async () => {
+    const swiss = { ...makeTournament(), bracket_type: 'swiss' as const };
+
+    await expect(generateEliminationBracket(swiss, makeParticipants(4))).rejects.toThrow(
+      'Full bracket generation only applies to elimination formats',
+    );
+  });
+
+  it('returns exactly the two historic keys and starts nothing by default', async () => {
+    const result = await generateEliminationBracket(makeTournament(), makeParticipants(4));
+
+    expect(Object.keys(result).sort()).toEqual(['matches_materialized', 'rounds_created']);
+    expect(result.rounds_created).toBeGreaterThan(0);
+    expect(updateRoundStatus).not.toHaveBeenCalled();
+  });
+
+  it('startFirstRound false behaves like the default', async () => {
+    const result = await generateEliminationBracket(makeTournament(), makeParticipants(4), {
+      startFirstRound: false,
+    });
+
+    expect(Object.keys(result).sort()).toEqual(['matches_materialized', 'rounds_created']);
+    expect(updateRoundStatus).not.toHaveBeenCalled();
+  });
+
+  it('startFirstRound marks the first round active and reports started_round_id', async () => {
+    vi.mocked(updateRoundStatus).mockResolvedValue({} as Round);
+
+    const result = await generateEliminationBracket(makeTournament(), makeParticipants(4), {
+      startFirstRound: true,
+    });
+
+    expect(updateRoundStatus).toHaveBeenCalledTimes(1);
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active');
+    expect(result.started_round_id).toBe('round-1');
+    expect(result.rounds_created).toBeGreaterThan(1);
+  });
+
+  it('a failed start leaves the bracket in place and omits started_round_id', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(updateRoundStatus).mockRejectedValue(new Error('db down'));
+
+    const result = await generateEliminationBracket(makeTournament(), makeParticipants(4), {
+      startFirstRound: true,
+    });
+
+    expect(result.started_round_id).toBeUndefined();
+    expect(Object.keys(result).sort()).toEqual(['matches_materialized', 'rounds_created']);
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it('regenerateEliminationBracket forwards startFirstRound after the wipe', async () => {
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce(existingRounds).mockResolvedValue([]);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([]);
+    vi.mocked(updateRoundStatus).mockResolvedValue({} as Round);
+
+    const result = await regenerateEliminationBracket(makeTournament(), makeParticipants(4), {
+      startFirstRound: true,
+    });
+
+    expect(result.started_round_id).toBe('round-1');
   });
 });
