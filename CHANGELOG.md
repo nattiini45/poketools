@@ -10,10 +10,6 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Upgrade notes
 
-- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It adds
-  `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
-  new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
-  the migration.
 - **Apply three migrations, in this order, BEFORE deploying the code.**
   1. `20261024100000_season_format_type_custom.sql` adds the value `custom` to the league type enum. Apply it alone
      and let it commit before the next file (a new enum value cannot be used in the transaction that adds it). It
@@ -27,6 +23,11 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   Without them a league created as "Custom format", the new format routes and the round and bracket generation of a
   custom league fail. Existing leagues, tournaments and Evolution Point Buy are unaffected by the migrations. There is
   no new environment variable.
+- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It is independent
+  of the three Format Studio migrations above. It adds `wiki_notes.resubmission_blocked_at` and
+  `resubmission_blocked_by` (both nullable) with a CHECK and an index. Note reads keep working without it, but the
+  writes that name the new columns fail until they exist: an author's edit of a note, approving a note, and blocking
+  or unblocking resubmission. Old code keeps working after the migration.
 - API clients that send an even best-of value, or change the league type of a started league, now receive `400` /
   `409`.
 
