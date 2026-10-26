@@ -354,6 +354,14 @@ No migration.
   match page.
 - Abort draft is no longer offered before the draft has started. A hint explains there is nothing to abort yet.
 
+### Security
+
+- **A `?lang=` value no longer chooses which translator gets called.** `createTranslator` caches each language's
+  translator under the matching `LOCALES` entry instead of the string it was handed, so a request value (such as the
+  broadcast recap's `?lang=`) never keys the lookup whose result the caller invokes. Any string that is not a
+  supported locale gets the default (English) translator. Supported locales behave as before. This closes the
+  CodeQL `js/unvalidated-dynamic-method-call` alerts on the recap engine.
+
 ## [0.3.0] - 2026-10-23
 
 ### Upgrade notes
