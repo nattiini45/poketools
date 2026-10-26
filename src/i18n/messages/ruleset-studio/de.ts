@@ -16,7 +16,6 @@ export default defineDe<typeof en>()({
     presetsCount: { one: '{count} Preset', other: '{count} Presets' },
     leagues: 'Liga-Regelwerke',
     leaguesIntro: 'Regelwerke, die zu einer Liga gehören und beim Anhängen eines Formats entstanden sind.',
-    emptyLeagues: 'Keine deiner Ligen hat ein eigenes Regelwerk.',
     site: 'Seitenkatalog',
     siteIntro: 'Die Standard-Regelwerke der Seite, eins pro Generation und Tier. Öffne eins zum Lesen oder forke es, um es zu ändern.',
     emptySite: 'Der Seitenkatalog ist leer.',

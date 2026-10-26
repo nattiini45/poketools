@@ -1016,3 +1016,29 @@ export function getNationalAbility(name: string, gen: number = 9) {
   const ability = Dex.forGen(gen).abilities.get(name);
   return ability.exists && NATIONAL_NONSTANDARD.has(ability.isNonstandard ?? null) ? ability : undefined;
 }
+
+// ── Raw lookups ──────────────────────────────────────────────────────
+
+type RawDex = ReturnType<typeof Dex.forGen>;
+
+/** The raw dex entity of each kind (`Dex.forGen`, whatever its `isNonstandard` mark). */
+interface RawEntityByKind {
+  species: ReturnType<RawDex['species']['get']>;
+  moves: ReturnType<RawDex['moves']['get']>;
+  items: ReturnType<RawDex['items']['get']>;
+  abilities: ReturnType<RawDex['abilities']['get']>;
+}
+
+export type RawEntityKind = keyof RawEntityByKind;
+
+/**
+ * An entity of generation `gen`'s raw dex by id or name, whatever its `isNonstandard` mark (`Future` entries such as the
+ * unreleased Mega Stones included), or `undefined` when the dex has none. Neither the `Generations` wrapper nor the
+ * National Dex universe has these, so this is for a caller whose own list names the entry: the Champions roster in the
+ * catalog index and in the team validator. Anything that picks from a universe uses `listNational*` / `getNational*`.
+ */
+export function getRawEntity<K extends RawEntityKind>(kind: K, name: string, gen: number = 9): RawEntityByKind[K] | undefined {
+  const dex = Dex.forGen(gen);
+  const found = kind === 'species' ? dex.species.get(name) : kind === 'moves' ? dex.moves.get(name) : kind === 'items' ? dex.items.get(name) : dex.abilities.get(name);
+  return found.exists ? (found as RawEntityByKind[K]) : undefined;
+}

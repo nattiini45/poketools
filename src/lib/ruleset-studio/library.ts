@@ -9,13 +9,13 @@
  */
 import 'server-only';
 
-import { resolveLText, type LText } from '@/lib/format-kit';
+import { resolveLText, type LText } from '@/lib/studio-core/ltext';
 import { applyTourOverlay } from '@/lib/ruleset-kit/overlay';
 import type { RulesetDocument } from '@/lib/ruleset-kit/types';
 import { resolvePresetRules, resolveTourOverlay } from '@/lib/pkmn/preset-rules.server';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { extractIdentity, hasSummary } from '@/lib/studio-core/identity';
-import { newRulesetDocument, withBasedOn } from '@/lib/ruleset-studio/document';
+import { newRulesetDocument, withBasedOnDefault } from '@/lib/ruleset-studio/document';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import { insertWithSlug as insertWithSlugCore, type SlugRequest } from '@/lib/studio-core/insert-with-slug.server';
 import {
@@ -33,12 +33,11 @@ import {
   saveRulesetDraft,
   setRulesetVisibility,
 } from '@/lib/supabase/queries/ruleset-definitions';
-import { getRulesetPreset } from '@/lib/format-kit/client';
-import { PRESET_RULES_VERSION } from '@/lib/pkmn/preset-data/pin';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import type { SessionPlayer } from '@/types/auth';
 import type { RulesetCreateBody } from './api-schemas';
 import { canEditDraft, canPublishVersion, canSetVisibility, type RulesetActor } from './access';
-import { compileDocument } from './compile.server';
+import { compileDocument, compileForPublish, type PublishableCompile } from './compile.server';
 import { RulesetStudioError } from './errors';
 import type {
   RulesetCheck,
@@ -46,6 +45,7 @@ import type {
   RulesetDefinitionMeta,
   RulesetDefinitionSummary,
   RulesetKind,
+  RulesetVersion,
   RulesetVersionSummary,
   RulesetVisibility,
 } from './library-types';
@@ -80,6 +80,12 @@ export function checkDocument(document: unknown): RulesetCheck {
     diagnostics: sorted.slice(0, MAX_CHECK_DIAGNOSTICS),
     truncated: sorted.length > MAX_CHECK_DIAGNOSTICS,
   };
+}
+
+/** The listing shape of a stored version: everything but the document, the frozen rules and the definition id. */
+export function toVersionSummary(version: RulesetVersion): RulesetVersionSummary {
+  const { spec: _spec, resolved: _resolved, definition_id: _definitionId, ...summary } = version;
+  return summary;
 }
 
 type OwnerSummary = RulesetDefinitionSummary['owner'];
@@ -241,7 +247,7 @@ export async function forkDefinition(
     if (draft === null || !isRecord(draft.document)) throw new RulesetStudioError('ruleset_not_published');
     base = draft.document;
   }
-  const document = withBasedOn(base, source.slug);
+  const document = withBasedOnDefault(base, source.slug);
   const identity = extractIdentity(document);
   const meta = await insertWithSlug(
     {
@@ -307,27 +313,7 @@ export async function getRulesetDetail(actor: RulesetActor, meta: RulesetDefinit
   return {
     definition,
     draft,
-    published:
-      published === null
-        ? null
-        : {
-            id: published.id,
-            version_no: published.version_no,
-            schema_version: published.schema_version,
-            name_text: published.name_text,
-            base_preset: published.base_preset,
-            content_hash: published.content_hash,
-            resolved_hash: published.resolved_hash,
-            catalog_version: published.catalog_version,
-            gen: published.gen,
-            format_key: published.format_key,
-            is_doubles: published.is_doubles,
-            changelog: published.changelog,
-            created_by: published.created_by,
-            created_at: published.created_at,
-            spec: published.spec,
-            resolved: published.resolved,
-          },
+    published: published === null ? null : { ...toVersionSummary(published), spec: published.spec, resolved: published.resolved },
     versions,
     check: draft === null ? null : checkDocument(draft.document),
   };
@@ -404,41 +390,31 @@ export async function publish(
   if (draft.draft_rev !== input.draftRev) {
     throw new RulesetStudioError('ruleset_stale_revision', undefined, { draft_rev: draft.draft_rev });
   }
-  const { result, catalogVersion } = compileDocument(draft.document);
-  if (!result.ok || result.document === null || result.resolved === null || result.content_hash === null || result.resolved_hash === null) {
-    const errors = result.diagnostics.filter((d) => d.severity === 'error').length;
-    throw new RulesetStudioError('ruleset_document_invalid', { count: Math.max(errors, 1) });
-  }
-  const { versionNo } = await publishRulesetVersion({
-    definitionId: meta.id,
-    expectedRev: input.draftRev,
-    spec: result.document,
-    contentHash: result.content_hash,
-    resolved: result.resolved,
-    resolvedHash: result.resolved_hash,
-    catalogVersion,
-    changelog: input.changelog,
-    actorId: actor.playerId,
-  });
+  const { versionNo } = await publishCompiled(meta.id, input.draftRev, compileForPublish(draft.document), input.changelog, actor.playerId);
   const [stored, fresh] = await Promise.all([getRulesetVersion(meta.id, versionNo), getRulesetDefinitionMeta(meta.id)]);
   if (stored === null || fresh === null) throw new RulesetStudioError('ruleset_not_found');
-  const version: RulesetVersionSummary = {
-    id: stored.id,
-    version_no: stored.version_no,
-    schema_version: stored.schema_version,
-    name_text: stored.name_text,
-    content_hash: stored.content_hash,
-    resolved_hash: stored.resolved_hash,
-    catalog_version: stored.catalog_version,
-    base_preset: stored.base_preset,
-    gen: stored.gen,
-    format_key: stored.format_key,
-    is_doubles: stored.is_doubles,
-    changelog: stored.changelog,
-    created_by: stored.created_by,
-    created_at: stored.created_at,
-  };
-  return { version, definition: await summariseDefinition(fresh) };
+  return { version: toVersionSummary(stored), definition: await summariseDefinition(fresh) };
+}
+
+/** The one publish call: the compiled document, its frozen rules and both hashes go to the atomic publish function. */
+export function publishCompiled(
+  definitionId: string,
+  expectedRev: number,
+  compiled: PublishableCompile,
+  changelog: LText | null,
+  actorId: string | null,
+): Promise<{ versionId: string; versionNo: number }> {
+  return publishRulesetVersion({
+    definitionId,
+    expectedRev,
+    spec: compiled.document,
+    contentHash: compiled.contentHash,
+    resolved: compiled.resolved,
+    resolvedHash: compiled.resolvedHash,
+    catalogVersion: compiled.catalogVersion,
+    changelog,
+    actorId,
+  });
 }
 
 /**
@@ -457,10 +433,7 @@ export async function createPublished(input: {
   seasonId: string | null;
   changelog: LText | null;
 }): Promise<{ definitionId: string; versionId: string }> {
-  const { result, catalogVersion } = compileDocument(input.document);
-  if (!result.ok || result.document === null || result.resolved === null || result.content_hash === null || result.resolved_hash === null) {
-    throw new RulesetStudioError('ruleset_document_invalid', { count: Math.max(result.diagnostics.filter((d) => d.severity === 'error').length, 1) });
-  }
+  const compiled = compileForPublish(input.document);
   const meta = await insertWithSlug(
     {
       name: input.name,
@@ -475,17 +448,7 @@ export async function createPublished(input: {
     { base: slugFromName(input.slugBase) },
   );
   try {
-    const { versionId } = await publishRulesetVersion({
-      definitionId: meta.id,
-      expectedRev: meta.draft_rev,
-      spec: result.document,
-      contentHash: result.content_hash,
-      resolved: result.resolved,
-      resolvedHash: result.resolved_hash,
-      catalogVersion: catalogVersion ?? PRESET_RULES_VERSION,
-      changelog: input.changelog,
-      actorId: input.ownerId,
-    });
+    const { versionId } = await publishCompiled(meta.id, meta.draft_rev, compiled, input.changelog, input.ownerId);
     return { definitionId: meta.id, versionId };
   } catch (err) {
     await deleteRulesetDefinition(meta.id).catch((cleanup: unknown) => {

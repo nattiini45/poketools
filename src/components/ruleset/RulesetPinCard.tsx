@@ -2,20 +2,17 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
-import type { ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
-import { movePinsRequest } from '@/lib/ruleset-studio/editor/api';
 import { pinTargetCompleted, pinTargetStarted, type RulesetPinInfo } from '@/lib/ruleset-studio/pin-info';
 import { rulesetReadOnlyHref } from '@/components/ruleset-studio/hrefs';
 import PinConfirmDialog from './PinConfirmDialog';
 import { describeChange } from './pin-change-text';
-import { usePinImpact } from './use-pin-impact';
+import { usePinMove } from './use-pin-move';
 
 /** What the card is for: wording only (a league, a phase of a league, a standalone tournament). */
 export type PinCardKind = 'season' | 'tournament' | 'standalone';
@@ -25,8 +22,6 @@ interface RulesetPinCardProps {
   /** The league (`season`) or phase / standalone tournament (`tournament`) whose pin this is. */
   target: { kind: 'season' | 'tournament'; id: string; name: string; status: string };
   pin: RulesetPinInfo;
-  /** Defaults to refreshing the page; a test passes its own. */
-  onMoved?: () => void;
 }
 
 /**
@@ -42,47 +37,22 @@ interface RulesetPinCardProps {
  *
  * The move is `POST /api/ruleset-definitions/[id]/pins`, which re-checks the caller's right to administer the target.
  */
-export default function RulesetPinCard({ kind, target, pin, onMoved }: RulesetPinCardProps) {
+export default function RulesetPinCard({ kind, target, pin }: RulesetPinCardProps) {
   const t = useT(rulesetMessages);
   const errorText = useApiErrorText(errorsAdmin);
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<ApiErrorLike | null>(null);
-  const [asking, setAsking] = useState(false);
+  const pinMove = usePinMove(pin.definition_id);
+  const { busy, error, asking } = pinMove;
   const [movedTo, setMovedTo] = useState<number | null>(null);
-  const impact = usePinImpact();
 
   const completed = pinTargetCompleted(target.status);
   const started = pinTargetStarted(target.status);
   const update = completed ? null : pin.update;
+  const refs = [{ kind: target.kind, id: target.id }];
 
   async function move(confirmed: boolean) {
     if (update === null) return;
-    setBusy(true);
-    setError(null);
-    const outcome = await movePinsRequest(pin.definition_id, update.version_no, [{ kind: target.kind, id: target.id }], confirmed ? [target.id] : []);
-    setBusy(false);
-    if (!outcome.ok) {
-      closeDialog();
-      setError(outcome.error);
-      return;
-    }
-    closeDialog();
-    setMovedTo(outcome.data.version_no);
-    if (onMoved) onMoved();
-    else router.refresh();
-  }
-
-  /** Opens the confirmation of a running target and starts counting the teams the update would invalidate. */
-  function askToMove() {
-    if (update === null) return;
-    setAsking(true);
-    void impact.load(pin.definition_id, update.version_no, [{ kind: target.kind, id: target.id }]);
-  }
-
-  function closeDialog() {
-    setAsking(false);
-    impact.reset();
+    const outcome = await pinMove.move(update.version_no, refs, confirmed ? [target.id] : []);
+    if (outcome !== null) setMovedTo(outcome.version_no);
   }
 
   const changeText = update === null ? null : describeChange(update.change, t);
@@ -117,7 +87,7 @@ export default function RulesetPinCard({ kind, target, pin, onMoved }: RulesetPi
             size="sm"
             className="min-h-11 sm:min-h-0"
             disabled={busy}
-            onClick={() => (started ? askToMove() : void move(false))}
+            onClick={() => (started && update !== null ? pinMove.ask(update.version_no, refs) : void move(false))}
           >
             {busy ? t('pin.updating') : t('pin.update', { version: update.version_no })}
           </Button>
@@ -138,12 +108,12 @@ export default function RulesetPinCard({ kind, target, pin, onMoved }: RulesetPi
           open={asking}
           title={t('pin.confirm.title', { target: t(`pin.confirm.${kind}`) })}
           version={update.version_no}
-          impact={impact.state}
+          impact={pinMove.impact}
           busy={busy}
           confirmLabel={t('pin.confirm.confirm', { version: update.version_no })}
           cancelLabel={t('pin.confirm.cancel')}
           onConfirm={() => void move(true)}
-          onCancel={closeDialog}
+          onCancel={pinMove.close}
         >
           <p className="text-sm text-poke-text-secondary">{t('pin.confirm.body', { name: target.name })}</p>
           {changeText !== null && <p className="text-sm text-poke-text-secondary">{t('pin.changeJoin', { changes: changeText })}</p>}

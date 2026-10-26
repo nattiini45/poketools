@@ -1,7 +1,9 @@
 // Tests for scripts/ruleset-presets/champions-roster.mjs: the pure derivation of the Champions roster from Showdown's
 // data tables. Small hand-made tables in the shape of the Showdown source; no network, no downloaded file.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deriveChampionsRoster, emitRosterModule, mergeTable, parseDataTable, toID } from '../champions-roster.mjs';
@@ -175,5 +177,32 @@ describe('the committed roster module', () => {
     const date = /date: '(\d{4}-\d{2}-\d{2})'/.exec(text)?.[1];
     expect(sha).toBeDefined();
     expect(emitRosterModule(roster, { sha, date, mod: 'champions', regulation: 'M-C' }) + '\n').toBe(text);
+  });
+});
+
+describe('generate-champions-roster.mjs', () => {
+  const script = join(ROOT, 'scripts/ruleset-presets/generate-champions-roster.mjs');
+  const sha = 'f6eff35d0316454bda90b82d3782def88a5ae599';
+
+  function run(base, out) {
+    return execFileSync(process.execPath, [script, '--base', base, '--mod', base, '--sha', sha, '--date', '2026-10-26', '--out', out], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+  }
+
+  it('refuses a base directory that lacks a table, pokedex.ts included, instead of writing an empty roster', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'champions-roster-'));
+    try {
+      for (const file of ['formats-data', 'items', 'abilities', 'moves', 'learnsets']) {
+        const table = { 'formats-data': 'FormatsData', items: 'Items', abilities: 'Abilities', moves: 'Moves', learnsets: 'Learnsets' }[file];
+        writeFileSync(join(dir, `${file}.ts`), `export const ${table} = {};
+`);
+      }
+      const out = join(dir, 'out.ts');
+      expect(() => run(dir, out)).toThrow(/missing .*pokedex\.ts/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

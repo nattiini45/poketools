@@ -17,7 +17,6 @@ import { toID } from '@/lib/pkmn/i18n/id';
 import type { PresetList, PresetRules } from '@/lib/pkmn/preset-rules';
 import type { TeamConstraints } from '@/types/ruleset';
 import {
-  RULESET_CATEGORIES,
   type CategoryRules,
   type ResolvedList,
   type ResolvedRules,
@@ -198,15 +197,4 @@ export function diffResolved(from: ResolvedRules, to: ResolvedRules): RulesDiffe
       JSON.stringify(from.team_constraints) !== JSON.stringify(to.team_constraints) ||
       JSON.stringify(from.added_pokemon) !== JSON.stringify(to.added_pokemon),
   };
-}
-
-/** True when the two rules enforce the same thing in every category. */
-export function sameEnforcement(a: ResolvedRules, b: ResolvedRules): boolean {
-  const d = diffResolved(a, b);
-  return (
-    !d.otherChanged &&
-    d.clausesAdded.length === 0 &&
-    d.clausesRemoved.length === 0 &&
-    RULESET_CATEGORIES.every((c) => !d[c].modeChanged && d[c].added.length === 0 && d[c].removed.length === 0)
-  );
 }

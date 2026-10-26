@@ -9,10 +9,11 @@
  * whose `purge_after` has passed even before this job removed it, and the database serialises a restore and an expiry
  * on the same entry, so exactly one of them wins.
  *
- * After the database delete the social-image objects of those matches are swept (`social-image-sweep.ts`, decision
- * D6). A sweep failure is logged with its own code and reported in the body but never undoes the expiry; an object
- * the sweep misses stays in the bucket. One audit event per removed league, written with `actor_id: null` /
- * `actor_name: 'System'` like the other crons.
+ * The database delete is irreversible, so its audit trail comes first: one `season.purge` event per removed league,
+ * written with `actor_id: null` / `actor_name: 'System'` like the other crons, before any storage work. Then the
+ * social-image objects of those matches are swept (`social-image-sweep.ts`, decision D6). A sweep failure is logged
+ * with its own code and reported in the body but never undoes the expiry; an object the sweep misses stays in the
+ * bucket.
  *
  * Answers 5xx when the expiry itself fails, so function-error alerting sees it. Idempotent: a run with nothing due
  * answers 200.
@@ -21,7 +22,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { logAuditEvent } from '@/lib/audit/log';
-import { LEAGUE_TRASH_EXPIRE_BATCH } from '@/lib/league-trash/constants';
+import { LEAGUE_TRASH_EXPIRE_BATCH, LEAGUE_TRASH_SWEEP_BUDGET_MS } from '@/lib/league-trash/constants';
 import { sweepLeagueSocialImages, type SocialImageSweepResult } from '@/lib/league-trash/social-image-sweep';
 import { expireLeagueTrash } from '@/lib/supabase/queries/league-trash';
 import { secretsEqual } from '@/lib/utils/crypto';
@@ -29,9 +30,6 @@ import { formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
 
 export const maxDuration = 120;
-
-/** Wall-clock budget of the storage sweeps of one run, inside `maxDuration`; leftovers are reported, never retried. */
-const SWEEP_BUDGET_MS = 90_000;
 
 export interface ExpireLeagueTrashCronResult {
   /** Leagues removed from the trash for good in this run. */
@@ -77,11 +75,7 @@ async function handle(request: Request) {
 
     const expired = await expireLeagueTrash(new Date(), parsed.data.limit ?? LEAGUE_TRASH_EXPIRE_BATCH);
 
-    const sweepDeadline = Date.now() + SWEEP_BUDGET_MS;
-    const leagues: ExpireLeagueTrashCronResult['leagues'] = [];
     for (const row of expired) {
-      const socialImages = await sweepLeagueSocialImages(row.match_ids, sweepDeadline);
-      leagues.push({ trash_id: row.id, season_id: row.season_id, social_images: socialImages });
       logAuditEvent({
         actor_id: null,
         actor_name: 'System',
@@ -94,9 +88,15 @@ async function handle(request: Request) {
           deleted_at: row.deleted_at,
           purge_after: row.purge_after,
           matches: row.match_ids.length,
-          social_images: socialImages,
         },
       });
+    }
+
+    const sweepDeadline = Date.now() + LEAGUE_TRASH_SWEEP_BUDGET_MS;
+    const leagues: ExpireLeagueTrashCronResult['leagues'] = [];
+    for (const row of expired) {
+      const socialImages = await sweepLeagueSocialImages(row.match_ids, sweepDeadline);
+      leagues.push({ trash_id: row.id, season_id: row.season_id, social_images: socialImages });
     }
 
     return NextResponse.json<ApiResult<ExpireLeagueTrashCronResult>>({

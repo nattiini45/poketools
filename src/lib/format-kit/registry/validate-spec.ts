@@ -24,6 +24,7 @@
 import { inspectJson } from '@/lib/studio-core/json';
 import { KIND_PATTERN, hasOwn } from '@/lib/studio-core/keys';
 import { validateExprJson } from '../expr/validate-json';
+import { LTEXT_MAX_CHARS } from '@/lib/studio-core/ltext';
 import {
   MAX_ISSUES,
   noParams,
@@ -33,7 +34,7 @@ import {
   type SchemaNote,
 } from '../issues';
 import { escapePointerSegment } from '@/lib/studio-core/patch';
-import { JSON_MAX_DEPTH, JSON_MAX_NODES, LTEXT_MAX_CHARS, MAX_BODY_BYTES } from '../limits';
+import { JSON_MAX_DEPTH, JSON_MAX_NODES, MAX_BODY_BYTES } from '../limits';
 import {
   RESERVED_PAIRING_TAGS,
   RESERVED_RULE_KINDS,

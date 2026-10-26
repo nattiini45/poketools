@@ -5,8 +5,8 @@
  * request's "now" so clocks and deadlines are live. Server only in practice (the
  * page builds the scenario and hands the client JSON); no Supabase, no network.
  *
- * The list is always the example list (its prices clamped into the span of the
- * active pack's price tabs, see `TAB_SPAN`); the numbers (budget, roster size,
+ * The list is always the example list (a price outside every price tab of the
+ * active pack snaps into the nearest tab, see `snapPriceIntoTabs`); the numbers (budget, roster size,
  * redraft and token limits, comeback table) come from the active format pack
  * (`@/lib/format-pack`), and the roster size is capped so the eight fixture
  * players can always fill their rosters from the list.
@@ -33,7 +33,13 @@ import type {
 import { DEFAULT_DRAFT_CONFIG } from '@/lib/draft-ui/snapshot-types';
 import type { DraftAdminRedraftSlot } from '@/types/draft-queue';
 import type { RoomAdminTab } from '@/components/draft-admin/RoomAdminSheet';
-import { comebackEarnWindow, comebackTokensPerProgress, epbPack, lineOverrideFor } from '@/lib/format-pack';
+import {
+  comebackEarnWindow,
+  comebackTokensPerProgress,
+  epbPack,
+  lineOverrideFor,
+  priceGroupForPrice,
+} from '@/lib/format-pack';
 import type { PointBuyListEntry } from '@/types/point-buy';
 import rawLines from './fixture-lines.example.json';
 import { advanceSlot, UPCOMING_SHOWN, withViewerVerdicts, type FakeLine, type FakeSourceInit } from './fake-source';
@@ -41,21 +47,32 @@ import { advanceSlot, UPCOMING_SHOWN, withViewerVerdicts, type FakeLine, type Fa
 // ── the list ───────────────────────────────────────────────────────────────
 
 /**
- * The span of prices the active pack's price tabs cover. The fixture list is the example pack's, priced for its
- * tabs; a build with another pack (a maintainer's checkout with a private one) has different tabs, and a line
- * priced outside every tab appears only under "all" and makes the finder report it. Clamping the fixture
- * prices into the span keeps every line in a tab of whichever pack is active, and changes nothing for the
- * example pack (the fixture's 2 to 25 lie inside its 1 to 25).
+ * The nearest price the given price tabs cover. The fixture list is the example pack's, priced for its tabs; a
+ * build with another pack (a maintainer's checkout with a private one) has other tabs, possibly with gaps
+ * between them, and a line priced outside every tab appears only under "all" and makes the finder report it.
+ * A price already in a tab stays; any other snaps to the closest edge of the closest tab.
  */
-const TAB_SPAN = {
-  min: Math.min(...epbPack.priceTabs.map((tab) => tab.min)),
-  max: Math.max(...epbPack.priceTabs.map((tab) => tab.max)),
-};
+export function snapPriceIntoTabs(price: number, tabs: readonly { min: number; max: number }[]): number {
+  let best = price;
+  let bestDistance = Infinity;
+  for (const tab of tabs) {
+    const snapped = Math.min(Math.max(price, tab.min), tab.max);
+    const distance = Math.abs(snapped - price);
+    if (distance < bestDistance) {
+      best = snapped;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
 
-export const PREVIEW_ENTRIES: readonly PointBuyListEntry[] = (rawLines as PointBuyListEntry[]).map((entry) => ({
-  ...entry,
-  price: Math.min(Math.max(entry.price, TAB_SPAN.min), TAB_SPAN.max),
-}));
+/** A snapped line also takes the price group its new price falls in, so the two never disagree. */
+function inActiveTabs(entry: PointBuyListEntry): PointBuyListEntry {
+  const price = snapPriceIntoTabs(entry.price, epbPack.priceTabs);
+  return price === entry.price ? entry : { ...entry, price, price_group: priceGroupForPrice(price) };
+}
+
+export const PREVIEW_ENTRIES: readonly PointBuyListEntry[] = (rawLines as PointBuyListEntry[]).map(inActiveTabs);
 export const PREVIEW_LIST_VERSION_ID = PREVIEW_ENTRIES[0]?.list_version_id ?? 'preview-list-v1';
 export const PREVIEW_SEASON_ID = 'preview-season';
 export const PREVIEW_LEAGUE_NAME = 'EvoLiga Preview';

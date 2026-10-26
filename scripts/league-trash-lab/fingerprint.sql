@@ -19,7 +19,7 @@ BEGIN
       WHEN 'games' THEN ARRAY['aggregate_applied_at']
       ELSE ARRAY[]::text[] END;
     RETURN QUERY EXECUTE format('SELECT %L::text, count(*), coalesce(md5(string_agg((to_jsonb(t) - $2)::text, ''|'' ORDER BY (to_jsonb(t) - $2)::text)), ''-'') FROM public.%I t WHERE %s',
-      r.rel, r.rel, public.league_trash__x(r.pred, p_season)) USING p_season, v_excl;
+      r.rel, r.rel, public.league_trash__x(r.pred)) USING p_season, v_excl;
   END LOOP;
 END $$;
 

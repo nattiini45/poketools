@@ -4,8 +4,7 @@
  * - `toLeagueTrashError(error)` turns a `LeagueTrashDbError` (or a raw PostgREST error of `league_trash_delete` /
  *   `league_trash_restore`) into a `UserFacingError` with a catalogued code (`errors/seasons`), its English text, the
  *   placeholders and the HTTP status. Anything else returns `null` and stays the caller's to rethrow.
- *   `leagueTrashUserError` is the same for an error already typed, `leagueTrashRebuildPendingError` words the route-level
- *   refusal to restore a league whose delete rebuild is still pending. The internal
+ *   `leagueTrashUserError` is the same for an error already typed. The internal
  *   inventory codes (`LEAGUE_TRASH_INVENTORY_INCOMPLETE` / `_STALE`) and `LEAGUE_TRASH_PLAN_MISMATCH` carry table names
  *   in their detail: the detail goes to the server log, never to the client.
  * - `leagueTrashBlockError(error)` words the foreign-key violation (23503) that a delete of a player or a ruleset gets
@@ -33,6 +32,7 @@ export const LEAGUE_TRASH_STATUS: { readonly [C in LeagueTrashDbCode]: number } 
   LEAGUE_TRASH_NOT_FOUND: 404,
   LEAGUE_TRASH_EXPIRED: 410,
   LEAGUE_TRASH_SEASON_EXISTS: 409,
+  LEAGUE_TRASH_REBUILD_PENDING: 409,
   LEAGUE_TRASH_SCHEMA_DRIFT: 409,
   LEAGUE_TRASH_PARENT_MISSING: 409,
   LEAGUE_TRASH_PLAN_MISMATCH: 409,
@@ -105,14 +105,6 @@ export function leagueTrashUserError(dbError: LeagueTrashDbError): UserFacingErr
 export function toLeagueTrashError(error: unknown): UserFacingError | null {
   const dbError = toLeagueTrashDbError(error);
   return dbError ? leagueTrashUserError(dbError) : null;
-}
-
-/** The 409 for a restore of a league whose rebuild after the delete is still pending (it would count twice). */
-export function leagueTrashRebuildPendingError(): UserFacingError {
-  return new UserFacingError(englishSeasons.dynamic('LEAGUE_TRASH_REBUILD_PENDING'), {
-    code: 'LEAGUE_TRASH_REBUILD_PENDING',
-    status: 409,
-  });
 }
 
 /**

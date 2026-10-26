@@ -82,7 +82,6 @@ import {
   buildRulesetSection,
   buildMetaSection,
   buildCondensedFrameSection,
-  parseGenFromFormat,
 } from '../context-builder';
 import type { BattleFrame } from '@/types/replay-viewer';
 import { getMatchById } from '@/lib/supabase/queries/matches';
@@ -96,28 +95,6 @@ import { fetchReplay } from '@/lib/pkmn/replay';
 import { extractBattleFrames } from '@/lib/pkmn/replay-frames';
 import type { Ruleset } from '@/types/ruleset';
 import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
-
-describe('parseGenFromFormat', () => {
-  it('extracts generation from gen9ou', () => {
-    expect(parseGenFromFormat('gen9ou')).toBe(9);
-  });
-
-  it('extracts generation from gen3uu', () => {
-    expect(parseGenFromFormat('gen3uu')).toBe(3);
-  });
-
-  it('defaults to 9 for undefined', () => {
-    expect(parseGenFromFormat(undefined)).toBe(9);
-  });
-
-  it('defaults to 9 for unrecognized format', () => {
-    expect(parseGenFromFormat('custom_format')).toBe(9);
-  });
-
-  it('extracts gen from gen1ou', () => {
-    expect(parseGenFromFormat('gen1ou')).toBe(1);
-  });
-});
 
 describe('buildRulesetSection', () => {
   it('returns custom format section when ruleset is null', () => {

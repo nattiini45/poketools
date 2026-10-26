@@ -14,6 +14,7 @@ SELECT (select id from players where name like 'ltp_%' order by created_at limit
 \echo === 1 + 2 + 3
 ALTER TABLE format_rules ADD COLUMN lt_tmp text DEFAULT 'abc';
 SELECT league_trash_delete(:'sid', :'actor', 90) ->> 'trash_id' AS tid \gset
+SELECT league_trash_rebuild_done(:'tid');
 ALTER TABLE format_rules DROP COLUMN lt_tmp;
 ALTER TABLE season_storylines ADD COLUMN lt_new int NOT NULL DEFAULT 7;
 ALTER TABLE season_storylines ADD COLUMN lt_req text NOT NULL DEFAULT 'x';
@@ -28,6 +29,7 @@ SELECT league_trash_restore_rebuild_done(:'sid');
 
 \echo === 4 a captured table dropped
 SELECT league_trash_delete(:'sid', :'actor', 90) ->> 'trash_id' AS tid \gset
+SELECT league_trash_rebuild_done(:'tid');
 -- pretend the captured draft_tier_limits is gone: rename the live table away for the attempt
 ALTER TABLE draft_tier_limits RENAME TO draft_tier_limits_renamed;
 SELECT league_trash_restore(:'tid');

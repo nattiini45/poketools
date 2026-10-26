@@ -7,11 +7,8 @@ import { rulesetMessages } from '@/i18n/messages/ruleset';
 import { rulesetStudioEditorMessages } from '@/i18n/messages/ruleset-studio/editor';
 import { rulesetStudioMessages } from '@/i18n/messages/ruleset-studio';
 import { rulesetStudioSectionsMessages } from '@/i18n/messages/ruleset-studio/sections';
-import { getPreset } from '@/lib/pkmn/format-catalog';
 import { PRESET_RULES_VERSION } from '@/lib/pkmn/preset-data/pin';
-import type { ResolvedRules } from '@/lib/ruleset-kit/types';
-import { describeResolved } from '@/lib/ruleset-studio/describe.server';
-import { compileDocument } from '@/lib/ruleset-studio/compile.server';
+import { describeDetail } from '@/lib/ruleset-studio/describe.server';
 import { gateRulesetDefinition } from '@/lib/ruleset-studio/gate';
 import { getRulesetDetail } from '@/lib/ruleset-studio/library';
 import { listUsage } from '@/lib/ruleset-studio/pins';
@@ -58,19 +55,9 @@ export default async function RulesetPage({ params }: PageProps) {
   ]);
   const changes = await getVersionChanges(id, detail.versions);
 
-  let rules: ResolvedRules | null = null;
-  let isDraft = false;
-  if (detail.published !== null) {
-    rules = detail.published.resolved;
-  } else if (detail.draft !== null) {
-    rules = compileDocument(detail.draft.document).result.resolved;
-    isDraft = true;
-  }
+  const { described, isDraft } = describeDetail(detail, locale);
   const summary = detail.definition;
   const title = resolveLText(summary.name, { viewer: locale })?.value ?? summary.slug;
-  const document = detail.published?.spec ?? null;
-  const presetName = document !== null && document.base.kind === 'preset' ? (getPreset(document.base.preset)?.name ?? document.base.preset) : null;
-  const described = rules === null ? null : describeResolved(rules, locale, presetName);
 
   return (
     <AdminGuard>

@@ -7,7 +7,8 @@ import Modal from '@/components/ui/Modal';
 import { useT } from '@/i18n/client';
 import { rulesetStudioSectionsMessages } from '@/i18n/messages/ruleset-studio/sections';
 import { GENERATIONS, PRESET_FAMILIES } from '@/lib/pkmn/format-catalog';
-import { filterRulesetPresets, groupRulesetPresets, type PresetFamily, type PresetSource, type RulesetPresetEntry } from '@/lib/format-kit/client';
+import { filterRulesetPresets, groupRulesetPresets, type RulesetPresetEntry } from '@/lib/pkmn/ruleset-preset-catalog';
+import type { PresetFamily, PresetSource } from '@/lib/pkmn/format-catalog';
 import { cn } from '@/lib/utils/cn';
 
 interface PresetBrowserProps {

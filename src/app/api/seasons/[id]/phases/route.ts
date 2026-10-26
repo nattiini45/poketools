@@ -89,6 +89,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Checked before anything is shifted, so a refusal leaves the league as is.
     assertPhaseNameFree(body.name, existing);
 
+    // The ruleset is a pin the caller must be allowed to use; refused here for the same reason.
+    await assertRulesetUsableForCreate(admin, body.ruleset_id);
+
     // Positions run from the highest stage_order, not from the phase count: a
     // league whose middle phase was deleted has a gap, and counting phases
     // would hand the new phase an order another phase already holds.
@@ -113,8 +116,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       await shiftStageOrders(id, insertAt, 1);
     }
-
-    await assertRulesetUsableForCreate(admin, body.ruleset_id);
 
     const tournament = await createTournament({
       name: body.name,

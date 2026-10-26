@@ -7,7 +7,8 @@ import 'server-only';
  *  - the player must be allowed to use the ruleset (`assertRulesetUsable`: it exists, and the player may see it). Without
  *    this check any admin who learned the id of another admin's private ruleset could pin it, which also makes its published
  *    version public;
- *  - once the target has started, the pin cannot be re-pointed through a plain edit: the move goes through
+ *  - once the target has started, the pin cannot be re-pointed or cleared through a plain edit (clearing is a change too, or
+ *    a second request could then pin anything): the move goes through
  *    `POST /api/ruleset-definitions/[id]/pins`, which asks for a confirmation that names the league and records the move.
  *    (A finished phase or standalone tournament is locked by its own guard.)
  */
@@ -20,7 +21,7 @@ export interface RulesetChange {
   player: SessionPlayer;
   /** The stored pin (`null` for a league without a ruleset). */
   current: string | null;
-  /** The pin in the request; `undefined` or `null` means the request does not set one. */
+  /** The pin in the request: `undefined` leaves it alone, `null` clears it, an id sets it. */
   requested: string | null | undefined;
   /** Whether the league or phase has started. */
   started: boolean;
@@ -29,8 +30,8 @@ export interface RulesetChange {
 /** Throws a typed `RulesetStudioError` when the change is not allowed; returns normally for no change. */
 export async function assertRulesetChangeAllowed(change: RulesetChange): Promise<void> {
   const { player, current, requested, started } = change;
-  if (requested === undefined || requested === null || requested === current) return;
-  await assertRulesetUsable(player, requested);
+  if (requested === undefined || requested === current) return;
+  if (requested !== null) await assertRulesetUsable(player, requested);
   if (started && current !== null) throw new RulesetStudioError('ruleset_pin_started');
 }
 

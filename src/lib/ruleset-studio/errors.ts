@@ -2,8 +2,7 @@
  * Errors of the ruleset library and of moving a league's ruleset pin.
  *
  * - `RULESET_ERROR_CODES` lists the codes explicitly (not derived from a prefix: `ruleset_not_found` lives in
- *   `errors/tournaments` and is shared with the old routes; the attach refusal `format_attach_ruleset_forbidden` is a
- *   Format Studio code, `src/lib/format-studio/errors.ts`).
+ *   `errors/tournaments` and is shared with the old routes).
  *   Every member must be an `ApiErrorCode` (`satisfies`), so a code missing from a catalog fails `tsc`.
  * - `RULESET_ERROR_STATUS` gives each code its HTTP status; a missing key fails `tsc`.
  * - `RulesetStudioError` is a `UserFacingError`: `safeErrorResponse` passes its English text, code, params and status.
@@ -49,6 +48,7 @@ export const RULESET_ERROR_CODES = [
   'ruleset_pin_locked',
   'ruleset_pin_started',
   'ruleset_pin_confirm_required',
+  'ruleset_pin_moved',
 ] as const satisfies readonly ApiErrorCode[];
 
 export type RulesetErrorCode = (typeof RULESET_ERROR_CODES)[number];
@@ -81,6 +81,7 @@ export const RULESET_ERROR_STATUS: { readonly [C in RulesetErrorCode]: number } 
   ruleset_pin_locked: 409,
   ruleset_pin_started: 409,
   ruleset_pin_confirm_required: 409,
+  ruleset_pin_moved: 409,
 };
 
 const englishAdmin = createTranslator(errorsAdmin, 'en');

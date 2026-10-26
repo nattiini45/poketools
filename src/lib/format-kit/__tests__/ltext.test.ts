@@ -7,8 +7,9 @@ import {
   missingLocales,
   resolveLText,
   withTranslation,
+  type LText,
 } from '@/lib/studio-core/ltext';
-import type { LText, Locale } from '../types';
+import type { Locale } from '@/i18n/config';
 import { validateFormatDefinition } from '../validate';
 import { lt, minimalDoc } from './fixtures/docs';
 import { setAt } from './fixtures/invalid';

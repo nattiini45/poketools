@@ -6,7 +6,7 @@ import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import { useT } from '@/i18n/client';
 import { rulesetStudioSectionsMessages } from '@/i18n/messages/ruleset-studio/sections';
-import { getRulesetPreset } from '@/lib/format-kit/client';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import type { PresetRules } from '@/lib/pkmn/preset-rules';
 import { computeEffective, diffResolved } from '@/lib/ruleset-kit/effective';
 import { blankBaseOf, rebase } from '@/lib/ruleset-kit/ops';

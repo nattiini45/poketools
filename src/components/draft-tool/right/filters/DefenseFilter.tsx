@@ -14,7 +14,8 @@ import { draftFinderMessages } from '@/i18n/messages/draft/finder';
 import type { DefenseRelation } from '@/lib/draft-finder/filter-types';
 import { cn } from '@/lib/utils/cn';
 import { ALL_TYPES } from './TypeFilter';
-import { FOCUS_RING, type FilterSectionProps } from './types';
+import { type FilterSectionProps } from './types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 const RELATIONS: readonly DefenseRelation[] = ['resists', 'immune', 'weak'];
 

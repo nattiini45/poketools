@@ -14,7 +14,6 @@ vi.mock('@/lib/supabase/queries/format-definitions', () => ({
 vi.mock('@/lib/supabase/queries/season-formats', () => ({
   attachSeasonFormat: vi.fn(),
   detachSeasonFormat: vi.fn(),
-  getPublishedRulesetHeads: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
   getSeasonManualPhaseCount: vi.fn(),
   getSeasonPresetRulesets: vi.fn(),
@@ -22,7 +21,8 @@ vi.mock('@/lib/supabase/queries/season-formats', () => ({
 }));
 // The rulesets of the rule-preset stages are made by the ruleset studio (its own tests); attach only orchestrates.
 vi.mock('@/lib/ruleset-studio/materialise', () => ({ ensurePresetRulesets: vi.fn(), discardMaterialised: vi.fn() }));
-vi.mock('@/lib/ruleset-studio/guards', () => ({ assertDefinitionsUsable: vi.fn() }));
+vi.mock('@/lib/ruleset-studio/guards', () => ({ canUseDefinitions: vi.fn() }));
+vi.mock('@/lib/supabase/queries/ruleset-definitions', () => ({ resolveNamedRulesets: vi.fn() }));
 // The real compile, spied on, to see the environment attach hands it.
 vi.mock('@/lib/format-kit/compile', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/format-kit/compile')>();
@@ -34,14 +34,14 @@ import { getFormatDefinitionMeta, getFormatVersion, getLatestPublishedVersion } 
 import {
   attachSeasonFormat,
   detachSeasonFormat,
-  getPublishedRulesetHeads,
   getSeasonFormatSummary,
   getSeasonManualPhaseCount,
   getSeasonPresetRulesets,
   getSeasonStartSignals,
 } from '@/lib/supabase/queries/season-formats';
 import { discardMaterialised, ensurePresetRulesets } from '@/lib/ruleset-studio/materialise';
-import { assertDefinitionsUsable } from '@/lib/ruleset-studio/guards';
+import { canUseDefinitions } from '@/lib/ruleset-studio/guards';
+import { resolveNamedRulesets } from '@/lib/supabase/queries/ruleset-definitions';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import {
   assertFormatTypeChangeAllowed,
@@ -62,6 +62,8 @@ const NEW_RULESET = '00000000-0000-4000-8000-0000000000cc';
 const NEW_DEFINITION = '00000000-0000-4000-8000-0000000000ee';
 const OLD_RULESET = '00000000-0000-4000-8000-0000000000dd';
 const HEAD_VERSION = '00000000-0000-4000-8000-0000000000f1';
+/** The definition a stage's named ruleset id resolves to (a legacy ruleset id is the id of its version 1). */
+const DEFINITION_OF_NAMED = '00000000-0000-4000-8000-0000000000d1';
 
 const actor = (overrides: Partial<SessionPlayer> = {}): SessionPlayer => ({
   playerId: OWNER,
@@ -154,8 +156,8 @@ beforeEach(() => {
   vi.mocked(getFormatDefinitionMeta).mockResolvedValue(definitionMeta());
   vi.mocked(getLatestPublishedVersion).mockResolvedValue(storedVersion());
   vi.mocked(getFormatVersion).mockResolvedValue(storedVersion());
-  vi.mocked(getPublishedRulesetHeads).mockResolvedValue(new Map());
-  vi.mocked(assertDefinitionsUsable).mockResolvedValue(undefined);
+  vi.mocked(resolveNamedRulesets).mockResolvedValue(new Map());
+  vi.mocked(canUseDefinitions).mockResolvedValue(true);
   vi.mocked(getSeasonManualPhaseCount).mockResolvedValue(0);
   vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary);
   vi.mocked(getSeasonPresetRulesets).mockResolvedValue({});
@@ -261,7 +263,7 @@ describe('attachFormatToSeason: refusals, in order, with no database function ca
     expect(err).not.toBeInstanceOf(FormatStudioError);
     expect((err as Error).message).not.toContain('0000');
     expect(log).toHaveBeenCalledWith(expect.stringContaining(DEFINITION_ID));
-    expect(getPublishedRulesetHeads).not.toHaveBeenCalled();
+    expect(resolveNamedRulesets).not.toHaveBeenCalled();
     expect(attachSeasonFormat).not.toHaveBeenCalled();
     log.mockRestore();
   });
@@ -286,11 +288,26 @@ describe('attachFormatToSeason: refusals, in order, with no database function ca
     vi.mocked(getLatestPublishedVersion).mockResolvedValue(version);
     const err = (await failure(attach())) as FormatStudioError;
     expect(err.params).toEqual({ first: 'ruleset_not_found' });
-    expect(getPublishedRulesetHeads).toHaveBeenCalledWith(['00000000-0000-4000-8000-0000000000aa']);
+    expect(resolveNamedRulesets).toHaveBeenCalledWith(['00000000-0000-4000-8000-0000000000aa']);
 
-    vi.mocked(getPublishedRulesetHeads).mockResolvedValue(new Map([['00000000-0000-4000-8000-0000000000aa', HEAD_VERSION]]));
+    vi.mocked(resolveNamedRulesets).mockResolvedValue(new Map([['00000000-0000-4000-8000-0000000000aa', { definition_id: '00000000-0000-4000-8000-0000000000aa', head_version_id: HEAD_VERSION }]]));
     await attach();
     expect(attachSeasonFormat).toHaveBeenCalledTimes(1);
+  });
+
+  it('5. a ruleset the attacher may not use is format_attach_ruleset_forbidden and nothing is written', async () => {
+    const rulesetId = '00000000-0000-4000-8000-0000000000aa';
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(
+      storedVersion((spec) => {
+        spec.stages[1].ruleset = { kind: 'ruleset', id: rulesetId };
+      }),
+    );
+    vi.mocked(resolveNamedRulesets).mockResolvedValue(new Map([[rulesetId, { definition_id: DEFINITION_OF_NAMED, head_version_id: HEAD_VERSION }]]));
+    vi.mocked(canUseDefinitions).mockResolvedValue(false);
+    const err = (await failure(attach())) as FormatStudioError;
+    expect(err.code).toBe('format_attach_ruleset_forbidden');
+    expect(err.statusCode).toBe(403);
+    expect(attachSeasonFormat).not.toHaveBeenCalled();
   });
 
   it('6. a season_default stage in a league without a ruleset answers format_attach_ruleset_required with the count', async () => {
@@ -310,12 +327,12 @@ describe('attachFormatToSeason: refusals, in order, with no database function ca
         for (const stage of spec.stages) stage.ruleset = { kind: 'ruleset', id: rulesetId };
       }),
     );
-    vi.mocked(getPublishedRulesetHeads).mockResolvedValue(new Map([[rulesetId, HEAD_VERSION]]));
+    vi.mocked(resolveNamedRulesets).mockResolvedValue(new Map([[rulesetId, { definition_id: DEFINITION_OF_NAMED, head_version_id: HEAD_VERSION }]]));
     await attach();
     const rows = vi.mocked(attachSeasonFormat).mock.calls[0][0].stages;
     // The stage names a DEFINITION; the phase pins the head VERSION that was current at attach.
     expect(rows.map((r) => r.ruleset_id)).toEqual([HEAD_VERSION, HEAD_VERSION]);
-    expect(assertDefinitionsUsable).toHaveBeenCalledWith(expect.objectContaining({ playerId: OWNER }), [rulesetId]);
+    expect(canUseDefinitions).toHaveBeenCalledWith(expect.objectContaining({ playerId: OWNER }), [DEFINITION_OF_NAMED]);
   });
 
   it('7. a league with a hand-made phase answers format_attach_manual_phases with the count', async () => {

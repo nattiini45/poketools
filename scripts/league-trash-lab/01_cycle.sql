@@ -18,7 +18,8 @@ SELECT count(*) AS agg_left FROM aggregates WHERE scope_id = :'sid';
 SELECT b.k, b.v, a.v FROM oth_before b JOIN lt_lab.others(:'sid') a ON a.k = b.k WHERE a.v <> b.v;
 \echo junction rows held by the trash
 SELECT (SELECT count(*) FROM league_trash_players WHERE trash_id = :'tid'::uuid) players, (SELECT count(*) FROM league_trash_rulesets WHERE trash_id = :'tid'::uuid) rulesets, (SELECT count(*) FROM league_trash_point_buy_versions WHERE trash_id = :'tid'::uuid) list_versions;
-\echo restore
+\echo restore (after the app confirmed the rebuild of the delete, which a restore requires)
+SELECT league_trash_rebuild_done(:'tid'::uuid);
 SELECT league_trash_restore(:'tid') - 'player_ids' - 'phase_ids' AS res \gset
 SELECT :'res'::jsonb -> 'warnings' AS warnings, :'res'::jsonb -> 'shift_seconds' shift, :'res'::jsonb -> 'queued_aggregate_jobs' queued_jobs, :'res'::jsonb -> 'paused_pools' paused;
 \echo diff after restore (must be empty):

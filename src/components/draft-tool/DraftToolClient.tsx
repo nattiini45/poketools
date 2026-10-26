@@ -52,7 +52,8 @@ import LiveAnnouncer from './feedback/LiveAnnouncer';
 import { useClock } from './hooks/use-clock';
 import { useDraftSnapshot } from './hooks/use-draft-snapshot';
 import { useFavorites } from './hooks/use-favorites';
-import { useFinderState, useWeaknessStage } from './hooks/use-finder-state';
+import { useFinderState } from './hooks/use-finder-state';
+import { useWeaknessStage } from './hooks/use-weakness-stage';
 import {
   buildPickRequest,
   INITIAL_PICK_FLOW,
@@ -481,7 +482,7 @@ export default function DraftToolClient({
         indexFailed={indexError !== null && ix === null}
         weaknessStage={weaknessStage}
         onWeaknessStage={setWeaknessStage}
-        weaknessOpen={initialWeaknessOpen}
+        initialWeaknessOpen={initialWeaknessOpen}
         canFavorite={signedIn}
         onOpenAdmin={isPoolAdmin ? openAdmin : undefined}
         onPrefetchAdmin={isPoolAdmin ? prefetchAdmin : undefined}

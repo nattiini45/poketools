@@ -10,8 +10,8 @@
  *
  * `changes` lists what each entry went from and to, for the undo history and the live announcement ("Garchomp banned").
  */
-import { blankFormatKey, computeEffective, sortedUnique } from './effective';
-import { entryState, presetRulesOut, type EntryState } from './entry-state';
+import { computeEffective, sortedUnique } from './effective';
+import { entryState, isLegalState, presetRulesOut, type EntryState } from './entry-state';
 import { MAX_CLAUSE_IDS, MAX_ID_LENGTH, MAX_IDS_PER_LIST } from './limits';
 import { RULESET_CATEGORIES, type CategoryRules, type RulesetBase, type RulesetCategory, type RulesetDocument } from './types';
 import type { PresetList, PresetRules } from '@/lib/pkmn/preset-rules';
@@ -151,13 +151,8 @@ export const allowEntries = (doc: RulesetDocument, category: RulesetCategory, id
 export function toggleEntries(doc: RulesetDocument, category: RulesetCategory, ids: readonly string[], base: PresetList | null): OpResult {
   const wanted = cleanIds(ids);
   if (wanted.length === 0) return noChange(doc);
-  const firstLegal = isLegalIn(doc, category, wanted[0], base);
+  const firstLegal = isLegalState(entryState(doc[category], base, wanted[0]));
   return setLegal(doc, category, wanted, !firstLegal, base);
-}
-
-function isLegalIn(doc: RulesetDocument, category: RulesetCategory, id: string, base: PresetList | null): boolean {
-  const state = entryState(doc[category], base, id);
-  return state === 'legal' || state === 'you_unbanned' || state === 'allowed';
 }
 
 /** Drops the document's own changes for the ids: back to what the preset says. In allowlist mode there is nothing to reset. */
@@ -301,9 +296,4 @@ export function rebase(doc: RulesetDocument, from: PresetRules | null, to: { bas
     if (result.lossy) lossy.push(category);
   }
   return { doc: next, lossy };
-}
-
-/** The format key a document will have, for the summary line (`blankFormatKey` for a blank base, the preset id otherwise). */
-export function formatKeyOf(doc: RulesetDocument): string {
-  return doc.base.kind === 'preset' ? doc.base.preset : blankFormatKey(doc.identity.based_on, doc.base.gen, doc.base.doubles);
 }

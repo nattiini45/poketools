@@ -11,10 +11,12 @@ import 'server-only';
  *    resource admin of the league or phase, live), must pin a version of this ruleset now, and must not be completed
  *    (`ruleset_pin_locked`). A target that has already started needs its id in `confirm_started`
  *    (`ruleset_pin_confirm_required` names the targets, nothing is written). Each move is a compare-and-set on the version
- *    the caller saw, so a pin that moved meanwhile is a conflict, not a silent overwrite. The check is all-or-nothing up
- *    front; the writes then run one by one and a failed compare-and-set stops the run (the answer lists what moved).
+ *    the caller saw, so a pin that moved meanwhile is a conflict (`ruleset_pin_moved`), not a silent overwrite. The check is
+ *    all-or-nothing up front; the writes then run one by one and a failed compare-and-set stops the run. Every move that
+ *    committed is reported to `onMoved` BEFORE the next one starts, so a later conflict cannot lose the audit event and the
+ *    cache expiry of the moves before it.
  *
- * The caller (the route) expires the read cache and writes one audit event per moved target.
+ * The caller (the route) expires the read cache and writes one audit event per moved target, from `onMoved`.
  */
 import { AuthError } from '@/lib/auth/helpers';
 import { diffResolved } from '@/lib/ruleset-kit/effective';
@@ -26,17 +28,16 @@ import {
   getRulesetVersion,
   listPinnedTargets,
   listRulesetVersions,
-  listVersionIds,
   repinTarget,
   type PinTargetState,
 } from '@/lib/supabase/queries/ruleset-definitions';
 import type { RulesetActor } from './access';
 import type { PinTarget } from './api-schemas';
-import { RulesetStudioError } from './errors';
+import { MAX_VERSIONS_PER_RULESET, RulesetStudioError } from './errors';
 import { pinTargetCompleted, pinTargetStarted, type MovedPin, type MovePinsOutcome } from './pin-info';
 
 export type { MovedPin, MovePinsOutcome } from './pin-info';
-import type { RulesetDefinitionMeta, RulesetPinTarget, RulesetUsage } from './library-types';
+import type { RulesetDefinitionMeta, RulesetPinTarget, RulesetUsage, RulesetVersionSummary } from './library-types';
 
 // ─── Usage ────────────────────────────────────────────────────────────────────
 
@@ -45,8 +46,8 @@ import type { RulesetDefinitionMeta, RulesetPinTarget, RulesetUsage } from './li
  * league-owned ruleset, the admins of that league (`actor.leagueIds`). Everyone else gets counts only.
  */
 export async function listUsage(actor: RulesetActor, definition: RulesetDefinitionMeta): Promise<RulesetUsage> {
-  const [versions, ids] = await Promise.all([listRulesetVersions(definition.id, 100), listVersionIds(definition.id)]);
-  const pinned = await listPinnedTargets(ids);
+  const versions = await listRulesetVersions(definition.id, MAX_VERSIONS_PER_RULESET);
+  const pinned = await listPinnedTargets(versions.map((v) => v.id));
   const numberOf = new Map(versions.map((v) => [v.id, v.version_no] as const));
 
   const counts = new Map<number, { seasons: number; tournaments: number }>();
@@ -85,6 +86,8 @@ export interface MovePinsInput {
   targets: readonly PinTarget[];
   /** Ids of started targets whose move the caller confirmed. */
   confirmStarted: readonly string[];
+  /** Called with each move right after it committed, before the next one starts (audit and cache expiry). */
+  onMoved?: (moved: MovedPin, to: { version_id: string; version_no: number }) => void;
 }
 
 
@@ -104,19 +107,19 @@ const isFinished = (target: PinTargetState): boolean => pinTargetCompleted(targe
 /**
  * The leagues and phases a move (or the impact check of a move, `pin-impact.server.ts`) is asked for, read live and checked one
  * by one in request order; the first failing target throws and nothing is written. Each must exist (`ruleset_not_found`), be
- * administered by the caller (403), pin a version of THIS ruleset now (`ruleset_pin_mismatch`) and not be finished
- * (`ruleset_pin_locked`). Returns the states in request order.
+ * administered by the caller (403), pin one of `versions` (the versions of THIS ruleset, `ruleset_pin_mismatch`) now and not be
+ * finished (`ruleset_pin_locked`). Returns the states in request order.
  */
 export async function loadMoveTargets(
   actor: SessionPlayer,
-  definition: RulesetDefinitionMeta,
   targets: readonly PinTarget[],
+  versions: readonly Pick<RulesetVersionSummary, 'id'>[],
 ): Promise<PinTargetState[]> {
   const seasonIds = targets.filter((t) => t.kind === 'season').map((t) => t.id);
   const tournamentIds = targets.filter((t) => t.kind === 'tournament').map((t) => t.id);
   const states = await getPinTargetStates(seasonIds, tournamentIds);
   const byKey = new Map(states.map((s) => [`${s.kind}:${s.id}`, s] as const));
-  const ownVersionIds = new Set(await listVersionIds(definition.id));
+  const ownVersionIds = new Set(versions.map((v) => v.id));
 
   const checked: PinTargetState[] = [];
   for (const target of targets) {
@@ -135,11 +138,13 @@ export async function movePins(input: MovePinsInput): Promise<MovePinsOutcome> {
   const version = await getRulesetVersion(definition.id, input.toVersionNo);
   if (version === null) throw new RulesetStudioError('ruleset_not_found');
 
+  // Versions are immutable: one read of the list serves the ownership check and the version numbers of the sources.
+  const versions = await listRulesetVersions(definition.id, MAX_VERSIONS_PER_RULESET);
   const confirmed = new Set(input.confirmStarted);
   const plan: PinTargetState[] = [];
   const needConfirmation: string[] = [];
 
-  for (const state of await loadMoveTargets(actor, definition, input.targets)) {
+  for (const state of await loadMoveTargets(actor, input.targets, versions)) {
     if (state.ruleset_id === version.id) continue; // already there: nothing to move
     if (hasStarted(state) && !confirmed.has(state.id)) needConfirmation.push(state.name);
     plan.push(state);
@@ -148,8 +153,8 @@ export async function movePins(input: MovePinsInput): Promise<MovePinsOutcome> {
     throw new RulesetStudioError('ruleset_pin_confirm_required', { targets: needConfirmation.join(', ') });
   }
 
-  // Versions are immutable: one read of the list, then one read of the document-free rules per distinct source version.
-  const numberOf = new Map((await listRulesetVersions(definition.id, 100)).map((v) => [v.id, v.version_no] as const));
+  // One read of the rules per distinct source version.
+  const numberOf = new Map(versions.map((v) => [v.id, v.version_no] as const));
   const sources = new Map<string, ResolvedRules | null>();
   const sourceRules = async (versionId: string): Promise<ResolvedRules | null> => {
     if (!sources.has(versionId)) {
@@ -159,19 +164,23 @@ export async function movePins(input: MovePinsInput): Promise<MovePinsOutcome> {
     return sources.get(versionId) ?? null;
   };
 
+  const to = { version_id: version.id, version_no: version.version_no };
   const moved: MovedPin[] = [];
   for (const state of plan) {
     const ok = await repinTarget(state.kind, state.id, state.ruleset_id, version.id);
-    if (!ok) throw new RulesetStudioError('ruleset_stale_revision', undefined, { draft_rev: 0 });
+    if (!ok) throw new RulesetStudioError('ruleset_pin_moved', { target: state.name });
     const from = state.ruleset_id === null ? null : await sourceRules(state.ruleset_id);
-    moved.push({
+    const entry: MovedPin = {
       kind: state.kind,
       id: state.id,
       name: state.name,
+      season_id: state.season_id,
       from_version_id: state.ruleset_id,
       started: hasStarted(state),
       difference: from === null ? null : diffResolved(from, version.resolved),
-    });
+    };
+    moved.push(entry);
+    input.onMoved?.(entry, to);
   }
-  return { version_id: version.id, version_no: version.version_no, moved };
+  return { ...to, moved };
 }

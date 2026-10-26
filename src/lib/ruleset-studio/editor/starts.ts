@@ -6,7 +6,7 @@
  * A preset start needs no name: the preset's own name is used (a ruleset made to be renamed later), so "Gen 9 OU, ready to
  * tweak" is one click. The Smogon tour toggle exists only for the presets that have documented tour extras.
  */
-import { getRulesetPreset } from '@/lib/format-kit/client';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import type { Locale } from '@/lib/studio-core/ltext';
 import type { CreateRulesetBody } from './api';
 

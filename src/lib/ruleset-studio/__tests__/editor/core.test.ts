@@ -5,11 +5,11 @@ import { banEntries } from '@/lib/ruleset-kit/ops';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
 import {
   clearCatalogCache,
-  fetchCatalogIndex,
+  fetchEntryIndex,
   fetchCatalogText,
   fetchPresetRules,
   indexUrl,
-  peekCatalogIndex,
+  peekEntryIndex,
   peekPresetRules,
   textUrl,
 } from '../../editor/catalog-client';
@@ -166,13 +166,17 @@ describe('history', () => {
 describe('bulk', () => {
   const index = speciesIndex();
 
-  it('covers the clicked entry, the selection or the filtered result, with or without the whole family', () => {
-    const base = { entryId: 'charizard', selectedIds: ['rattata'], filteredIds: ['garchomp', 'charmander'], speciesIndex: index };
-    expect(resolveTargets({ ...base, scope: 'entry', includeFormes: false })).toEqual(['charizard']);
-    expect(resolveTargets({ ...base, scope: 'entry', includeFormes: true }).sort()).toEqual(['charizard', 'charizardmegax', 'charizardmegay']);
-    expect(resolveTargets({ ...base, scope: 'selection', includeFormes: true }).sort()).toEqual(['rattata', 'rattataalola']);
-    expect(resolveTargets({ ...base, scope: 'filtered', includeFormes: false })).toEqual(['garchomp', 'charmander']);
-    expect(resolveTargets({ ...base, entryId: null, scope: 'entry', includeFormes: false })).toEqual([]);
+  it('brings the whole family of each selected id when formes are included, else only the ids given', () => {
+    expect(resolveTargets(['charizard'], 'selection', false, index)).toEqual(['charizard']);
+    expect(resolveTargets(['charizard'], 'selection', true, index).sort()).toEqual(['charizard', 'charizardmegax', 'charizardmegay']);
+    expect(resolveTargets(['rattata', 'rattata'], 'selection', true, index).sort()).toEqual(['rattata', 'rattataalola']);
+    expect(resolveTargets(['charizard'], 'selection', true, null)).toEqual(['charizard']);
+    expect(resolveTargets([], 'selection', true, index)).toEqual([]);
+  });
+
+  it('covers exactly the filtered entries, never their family', () => {
+    expect(resolveTargets(['charizardmegax', 'rattataalola'], 'filtered', true, index)).toEqual(['charizardmegax', 'rattataalola']);
+    expect(resolveTargets(['garchomp', 'charmander', 'garchomp'], 'filtered', false, index)).toEqual(['garchomp', 'charmander']);
   });
 
   it('asks for a confirmation above the threshold', () => {
@@ -213,14 +217,14 @@ describe('catalog client', () => {
       return response(index);
     };
     const [a, b] = await Promise.all([
-      fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f }),
-      fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f }),
+      fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f }),
+      fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f }),
     ]);
-    await fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f });
+    await fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f });
     expect(calls).toBe(1);
     expect(a.ok && b.ok).toBe(true);
-    expect(peekCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' })).toEqual(index);
-    expect(peekCatalogIndex({ kind: 'species', gen: 8, scope: 'standard' })).toBeUndefined();
+    expect(peekEntryIndex({ kind: 'species', gen: 9, scope: 'standard' })?.kind).toBe('species');
+    expect(peekEntryIndex({ kind: 'species', gen: 8, scope: 'standard' })).toBeUndefined();
   });
 
   it('does not cache a failure, so a retry asks again', async () => {
@@ -229,9 +233,9 @@ describe('catalog client', () => {
       calls += 1;
       return calls === 1 ? response(null, false, 500) : response(index);
     };
-    const first = await fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f });
+    const first = await fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f });
     expect(first.ok).toBe(false);
-    const second = await fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f });
+    const second = await fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f });
     expect(second.ok).toBe(true);
     expect(calls).toBe(2);
   });
@@ -240,13 +244,13 @@ describe('catalog client', () => {
     const controller = new AbortController();
     let release: (value: Response) => void = () => undefined;
     const f = () => new Promise<Response>((resolve) => (release = resolve));
-    const waiting = fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f, signal: controller.signal });
+    const waiting = fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f, signal: controller.signal });
     controller.abort();
     expect((await waiting).ok).toBe(false);
     release(await response(index));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(peekCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' })).toEqual(index);
-    expect((await fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f, signal: new AbortController().signal })).ok).toBe(true);
+    expect(peekEntryIndex({ kind: 'species', gen: 9, scope: 'standard' })?.kind).toBe('species');
+    expect((await fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: f, signal: new AbortController().signal })).ok).toBe(true);
   });
 
   it('caches texts and preset rules per key', async () => {

@@ -3,7 +3,7 @@
  * after a league left the league trash for good): strict uuid checks, so a path can never be built from other input.
  */
 import { describe, expect, it } from 'vitest';
-import { isSocialImageObjectName, legacySocialImagePath, socialImageFolder, socialImagePath } from '../storage-path';
+import { isSocialImageObjectName, legacySocialImagePath, socialImageFolder, socialImagePath } from '../social-image-path';
 
 const MATCH = '11111111-1111-4111-8111-111111111111';
 const OBJECT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

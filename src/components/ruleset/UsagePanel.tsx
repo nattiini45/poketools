@@ -1,19 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
-import type { ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
-import { movePinsRequest } from '@/lib/ruleset-studio/editor/api';
 import type { RulesetPinTarget, RulesetUsage } from '@/lib/ruleset-studio/library-types';
 import { pinTargetCompleted, pinTargetStarted } from '@/lib/ruleset-studio/pin-info';
 import PinConfirmDialog from './PinConfirmDialog';
-import { usePinImpact } from './use-pin-impact';
+import { usePinMove } from './use-pin-move';
 
 interface UsagePanelProps {
   definitionId: string;
@@ -34,13 +31,10 @@ const keyOf = (target: Pick<RulesetPinTarget, 'kind' | 'id'>): string => `${targ
 export default function UsagePanel({ definitionId, usage, latestVersionNo }: UsagePanelProps) {
   const t = useT(rulesetMessages);
   const errorText = useApiErrorText(errorsAdmin);
-  const router = useRouter();
+  const pinMove = usePinMove(definitionId);
+  const { busy, error, asking } = pinMove;
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<ApiErrorLike | null>(null);
-  const [asking, setAsking] = useState(false);
   const [moved, setMoved] = useState<number | null>(null);
-  const impact = usePinImpact();
 
   const targets = usage.targets ?? [];
   const movable = (target: RulesetPinTarget): boolean =>
@@ -55,41 +49,18 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
     setSelected(next);
   }
 
+  const refs = chosen.map((target) => ({ kind: target.kind, id: target.id }));
+
   async function move() {
     if (latestVersionNo === null || chosen.length === 0) return;
-    setBusy(true);
-    setError(null);
-    const outcome = await movePinsRequest(
-      definitionId,
+    const outcome = await pinMove.move(
       latestVersionNo,
-      chosen.map((target) => ({ kind: target.kind, id: target.id })),
+      refs,
       running.map((target) => target.id),
     );
-    setBusy(false);
-    closeDialog();
-    if (!outcome.ok) {
-      setError(outcome.error);
-      return;
-    }
-    setMoved(outcome.data.moved.length);
+    if (outcome === null) return;
+    setMoved(outcome.moved.length);
     setSelected(new Set());
-    router.refresh();
-  }
-
-  /** Opens the confirmation of a selection that includes running targets and starts counting the teams it would invalidate. */
-  function askToMove() {
-    if (latestVersionNo === null) return;
-    setAsking(true);
-    void impact.load(
-      definitionId,
-      latestVersionNo,
-      chosen.map((target) => ({ kind: target.kind, id: target.id })),
-    );
-  }
-
-  function closeDialog() {
-    setAsking(false);
-    impact.reset();
   }
 
   const canUpdate = latestVersionNo !== null && targets.some(movable);
@@ -167,7 +138,7 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
                 size="sm"
                 className="min-h-11 sm:min-h-0"
                 disabled={busy || chosen.length === 0}
-                onClick={() => (running.length > 0 ? askToMove() : void move())}
+                onClick={() => (running.length > 0 && latestVersionNo !== null ? pinMove.ask(latestVersionNo, refs) : void move())}
               >
                 {t('usage.updateSelected', { version: latestVersionNo })}
               </Button>
@@ -193,12 +164,12 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
           open={asking}
           title={t('usage.confirm.title')}
           version={latestVersionNo}
-          impact={impact.state}
+          impact={pinMove.impact}
           busy={busy}
           confirmLabel={t('usage.confirm.confirm', { version: latestVersionNo })}
           cancelLabel={t('usage.confirm.cancel')}
           onConfirm={() => void move()}
-          onCancel={closeDialog}
+          onCancel={pinMove.close}
         >
           <p className="text-sm text-poke-text-secondary">{t('usage.confirm.body', { names: running.map((target) => target.name ?? '').join(', ') })}</p>
         </PinConfirmDialog>

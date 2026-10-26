@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { declaredColumns, lastFunctionBody, replayForeignKeys, replayInsertRevokes, replayTriggers, type ForeignKey } from './fk-replay';
 
@@ -254,11 +256,28 @@ describe('owned tables service_role cannot write', () => {
   /**
    * service_role runs the restore (PostgREST), so an owned table whose INSERT was revoked from it (a read-only archive)
    * would fail the restore with "permission denied" and lose the league's rows. Those tables are restored through the
-   * owner-rights `league_trash__insert_rows_owner`, which only accepts `league_trash__archive_tables()`.
+   * owner-rights `league_trash__insert_archive_rows`, which only accepts a restore step of `league_trash__archive_tables()`.
    */
   it('are exactly the archive tables of the migration', () => {
     const revoked = [...replayInsertRevokes('service_role')].filter((table) => OWNED.has(table));
     expect(sorted(revoked)).toEqual(sorted(parseArchiveTables()));
+  });
+
+  /**
+   * An owner-rights function must not take rows or SQL from its caller: the function that writes the archive tables
+   * reads them from the trash entry, so its whole signature is the entry and the restore step. A new `SECURITY
+   * DEFINER` function in this migration fails here until somebody reviews it.
+   */
+  it('the owner-rights functions of the migration take no rows and no SQL from their caller', () => {
+    const sql = readFileSync(path.join(process.cwd(), 'supabase/migrations/20261026091000_league_trash.sql'), 'utf8');
+    const definers = [...sql.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)\(([^)]*)\)\s*RETURNS[^$]*?SECURITY DEFINER/g)].map(
+      (m) => [m[1], m[2].replace(/\s+/g, ' ').trim()],
+    );
+
+    expect(definers).toEqual([
+      ['league_trash_schema_version', ''],
+      ['league_trash__insert_archive_rows', 'p_trash_id uuid, p_step integer'],
+    ]);
   });
 
   it('the parser sees the revoke of the retired trade table (sanity)', () => {

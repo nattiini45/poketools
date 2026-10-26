@@ -1,6 +1,6 @@
 /**
- * Where the preset rule data comes from, and the version of the data. Plain constants (no imports), so the tests and
- * the publish path can read them anywhere.
+ * Where the preset rule data comes from, and the version of the data. Plain constants (the only import is the Champions
+ * roster pin, re-exported from the generated roster module), so the tests and the publish path can read them anywhere.
  *
  * The tables in this folder are transcribed from Pokémon Showdown (MIT, see NOTICE.md): the format and ruleset
  * definitions at `PRESET_DATA_PIN`, the Champions roster (a separate, later commit: the mod moves daily) at
@@ -17,9 +17,12 @@ export const PRESET_DATA_PIN = {
 } as const;
 
 /**
- * The version of everything a preset resolves to: the catalog (`PRESETS` in ../format-catalog.ts), the tables in
- * this folder and the resolution rules in ../preset-rules.server.ts. Any change to those bumps it; a published
- * ruleset version stores it as `catalog_version`, so a version can say which data it was computed from.
- * `preset-data-integrity.server.test.ts` hashes the data and fails on an edit that does not bump this.
+ * The version of everything a preset resolves to, stored with a published ruleset version as `catalog_version`, so a
+ * version can say which data it was computed from. `preset-data-integrity.server.test.ts` hashes the catalog (`PRESETS`
+ * in ../format-catalog.ts) and the tables in this folder, and fails on an edit of those that does not bump this.
+ *
+ * The hash does NOT cover the resolution code in ../preset-rules.server.ts or the dex tier data that the tier-derived
+ * bans are read from (`@pkmn/dex`): a change to that code, or an upgrade of `@pkmn/dex` that moves a tier, changes the
+ * resolved rules under an unchanged version, so it bumps this by hand.
  */
-export const PRESET_RULES_VERSION = '2026-10-26.1';
+export const PRESET_RULES_VERSION = '2026-10-27.1';

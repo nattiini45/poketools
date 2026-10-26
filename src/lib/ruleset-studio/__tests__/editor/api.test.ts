@@ -143,6 +143,14 @@ describe('classifyApiError', () => {
     expect(classifyApiError({ code: 'format_stale_revision', params: { draft_rev: 9 } })).toEqual({ kind: 'other' });
   });
 
+  it('a pin that a concurrent change moved is a conflict to refresh and retry, not a dead end', () => {
+    expect(classifyApiError({ code: 'ruleset_pin_moved', params: { target: 'Summer League' } }, 409)).toEqual({ kind: 'conflict' });
+    // The other pin refusals stay refusals: retrying them unchanged cannot work.
+    for (const code of ['ruleset_pin_locked', 'ruleset_pin_started', 'ruleset_pin_confirm_required', 'ruleset_pin_mismatch']) {
+      expect(classifyApiError({ code }, 409).kind, code).toBe('blocked');
+    }
+  });
+
   it('puts size, permission and lookup failures in their classes', () => {
     expect(classifyApiError({ code: 'ruleset_document_too_large' }).kind).toBe('too_large');
     expect(classifyApiError({ code: 'ruleset_preset_locked' }).kind).toBe('forbidden');

@@ -71,10 +71,11 @@ export interface ContextPackTeam {
 }
 
 /**
- * The active league's effective ruleset + the player's assigned core, so the
+ * The active league's ruleset + the player's assigned core, so the
  * teambuilding assistant builds within the league's rules — not just the base
- * format. Resolved via {@link resolveEffectiveRuleset} so a base-tier ruleset id
- * is upgraded to the league's custom ruleset where one exists.
+ * format. The ruleset is the version the tournament phase pins; a client-supplied
+ * `ruleset_id` is read only through `readExposedRuleset` (shared, or pinned by a
+ * league or phase).
  */
 export interface ContextPackLeague {
   /** The league/season name (its identity for this request), when resolvable. */

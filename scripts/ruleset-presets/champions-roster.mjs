@@ -89,7 +89,7 @@ export function mergeTable(parent, child) {
   return merged;
 }
 
-/** The six tables the derivation reads: `Pokedex` (base only), and the base-plus-mod merge of the other five. */
+/** The six tables the derivation reads, each the base table merged with the mod's own (the mod has only the tables it changes). */
 export const TABLES = ['Pokedex', 'FormatsData', 'Items', 'Abilities', 'Moves', 'Learnsets'];
 
 /**

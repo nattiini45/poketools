@@ -39,13 +39,13 @@ import {
   pendingKey,
   requestLeagueRebuild,
   requestLeagueRestore,
-  type LeagueRestoreWarningView,
   type LeagueTrashHeadlineCounts,
   type LeagueTrashNotice,
   type LeagueTrashPageState,
   type LeagueTrashPendingView,
   type LeagueTrashRowView,
 } from '@/lib/league-trash/client';
+import type { LeagueTrashRestoreWarning } from '@/lib/league-trash/restore-warnings';
 
 type T = Translator<typeof en>;
 
@@ -80,7 +80,7 @@ export interface LeagueTrashViewProps {
 export const restoreBusyKey = (trashId: string) => `restore:${trashId}`;
 export const rebuildBusyKey = (kind: 'delete' | 'restore', trashId: string) => `rebuild:${kind}:${trashId}`;
 
-function warningText(t: T, f: Formatter, warning: LeagueRestoreWarningView): string {
+function warningText(t: T, f: Formatter, warning: LeagueTrashRestoreWarning): string {
   switch (warning.code) {
     case 'parent_missing_nulled':
       return t('trash.notice.warnings.parent_missing_nulled', { count: warning.count, rel: warning.rel, column: warning.column });

@@ -10,8 +10,9 @@ import 'server-only';
  *  - explicit move, item and ability bans are the tables in ./preset-data (`standard.ts`, `draft.ts`), transcribed
  *    from Pokémon Showdown at the pin in `pin.ts` and integrity-tested against the dex;
  *  - the Champions roster is the generated `./preset-data/champions-roster.generated.ts`, an ALLOWLIST;
- *  - a Little Cup preset that is not a tier family (NatDex LC Draft, Doubles LC) allows exactly the first stages that
- *    have an evolution.
+ *  - a Little Cup preset allows exactly the first stages that have an evolution (the ladder Little Cup only those the
+ *    dex tiers as `LC`, which leaves out Showdown's LC Uber species); the ladder NFE allows every species that has an
+ *    evolution.
  *
  * RESOLUTION IS PER MOD, never "the base rulesets only": a mod can replace a rule (the gen 3 mod replaces Standard
  * Draft, the champions mod has its own Standard AG and Flat Rules), so the catalog entry's `mod` selects the table:
@@ -58,21 +59,29 @@ interface Collected {
 
 interface SpeciesLike {
   id: string;
+  tier?: string;
   battleOnly?: unknown;
   prevo?: string;
   evos?: readonly string[];
 }
 
+function universeSpecies(gen: number, universe: RulesetPreset['universe']): readonly SpeciesLike[] {
+  return universe === 'national' ? listNationalSpecies(gen) : Array.from(getGeneration(gen).species);
+}
+
+/** The species of the universe that have an evolution in it. Battle-only formes are never a team member, so they are not listed. */
+function speciesWithEvolution(gen: number, universe: RulesetPreset['universe']): SpeciesLike[] {
+  const species = universeSpecies(gen, universe);
+  const ids = new Set(species.map((s) => s.id));
+  return species.filter((s) => !s.battleOnly && (s.evos ?? []).some((evo) => ids.has(toID(evo))));
+}
+
 /**
  * Showdown's `Little Cup` species rule: the first stage of an evolution line that has an evolution (in the universe
- * being read). Battle-only formes are never a team member, so they are not listed.
+ * being read).
  */
 function littleCupSpecies(gen: number, universe: RulesetPreset['universe']): string[] {
-  const species: readonly SpeciesLike[] = universe === 'national' ? listNationalSpecies(gen) : Array.from(getGeneration(gen).species);
-  const ids = new Set(species.map((s) => s.id));
-  return species
-    .filter((s) => !s.battleOnly && !s.prevo && (s.evos ?? []).some((evo) => ids.has(toID(evo))))
-    .map((s) => s.id);
+  return speciesWithEvolution(gen, universe).filter((s) => !s.prevo).map((s) => s.id);
 }
 
 // ── Per-mod collection ───────────────────────────────────────────────
@@ -109,6 +118,20 @@ function collectLadder(preset: RulesetPreset): Collected {
       allow: { pokemon: littleCupSpecies(gen, preset.universe).filter((id) => !banned.has(id)) },
     };
   }
+  if (tier === 'lc') {
+    // The ladder Little Cup: the first stages the dex tiers as LC (the dex's own LC Uber and NFE leftovers are not),
+    // less the explicit species bans of the generation.
+    const names = gen === 9 ? GEN9_LC_BANS : NO_BANS;
+    const banned = new Set(names.pokemon.map(toID));
+    const pokemon = speciesWithEvolution(gen, preset.universe)
+      .filter((s) => !s.prevo && s.tier === 'LC' && !banned.has(s.id))
+      .map((s) => s.id);
+    return { names, allow: { pokemon } };
+  }
+  if (tier === 'nfe') {
+    // Not Fully Evolved: every species that has an evolution.
+    return { names: NO_BANS, allow: { pokemon: speciesWithEvolution(gen, preset.universe).map((s) => s.id) } };
+  }
   if (tier === 'nationaldexdoublesubers') return { names: GEN9_NATIONAL_DEX_DOUBLES_UBERS_BANS, allow: {} };
 
   // The National Dex family: tier-derived bans over the whole National Dex, plus the explicit tables.
@@ -130,7 +153,6 @@ function collectLadder(preset: RulesetPreset): Collected {
   // Formats with explicit banlists (Gen 9 only; VGC regulations are the admin's to set).
   if (gen === 9) {
     switch (tier) {
-      case 'lc': return { names: GEN9_LC_BANS, allow: {} };
       case 'monotype': return { names: GEN9_MONOTYPE_BANS, allow: {} };
       case '1v1': return { names: GEN9_1V1_BANS, allow: {} };
       case 'vgc': return { names: NO_BANS, allow: {} };
@@ -187,21 +209,20 @@ export function presetBanNames(id: string): RuleNames | null {
   return preset === undefined ? null : collect(preset).names;
 }
 
-const resolved = new Map<string, PresetRules | null>();
+const resolved = new Map<string, PresetRules>();
 
 function listOf(category: Category, { names, allow }: Collected): PresetList {
   const allowed = allow[category];
   return allowed === undefined ? { mode: 'block', ids: sortedIds(names[category]) } : { mode: 'allow', ids: sortedIds(allowed) };
 }
 
-/** The rules a preset implies, resolved for its mod and universe; `null` for an id the catalog does not know. Memoised. */
+/** The rules a preset implies, resolved for its mod and universe; `null` for an id the catalog does not know. Memoised per catalog id. */
 export function resolvePresetRules(id: string): PresetRules | null {
-  if (resolved.has(id)) return resolved.get(id) ?? null;
+  // Only a catalog id is memoised (the key set is bounded by PRESETS): the id comes from public requests.
+  const cached = resolved.get(id);
+  if (cached !== undefined) return cached;
   const preset = getPreset(id);
-  if (preset === undefined) {
-    resolved.set(id, null);
-    return null;
-  }
+  if (preset === undefined) return null;
   const collected = collect(preset);
   const rules: PresetRules = {
     id: preset.id,

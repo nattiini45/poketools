@@ -31,6 +31,14 @@ describe('GET /api/pkmn/catalog/[kind] (public)', () => {
     expect(entries.some((e) => e.id === 'charizardmegax')).toBe(false);
   });
 
+  it('the ETag is a hash of the content: stable for one request, different for another, not the preset data version', async () => {
+    const first = (await call('abilities', '?gen=3')).headers.get('ETag');
+    expect((await call('abilities', '?gen=3')).headers.get('ETag')).toBe(first);
+    expect((await call('abilities', '?gen=4')).headers.get('ETag')).not.toBe(first);
+    expect((await call('abilities', '?gen=3&part=text')).headers.get('ETag')).not.toBe(first);
+    expect(first).toMatch(/^W\/"[A-Za-z0-9_-]{22}"$/);
+  });
+
   it('the National Dex scope adds the Mega Evolutions and other past species, flagged', async () => {
     const entries = decodeIndex((await index('species', '?gen=9&scope=national')) as CatalogIndex<'species'>);
     const mega = entries.find((e) => e.id === 'mewtwomegax');

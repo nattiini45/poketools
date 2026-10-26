@@ -7,8 +7,10 @@
  * (`supabase/migrations/20261024100100_format_definitions.sql`, `20261024100200_season_formats_and_stage_columns.sql`).
  */
 import type { BracketType } from '@/types/tournament';
-import type { Diagnostic, FormatDefinition, LText, Stage } from '@/lib/format-kit/client';
+import type { Diagnostic, FormatDefinition, Stage } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
 import { STUDIO_KINDS, STUDIO_VISIBILITIES, type StudioKind, type StudioVisibility } from '@/lib/studio-core/access';
+import type { RulesetChoice } from './editor/catalog';
 
 export const FORMAT_VISIBILITIES = STUDIO_VISIBILITIES;
 export type FormatVisibility = StudioVisibility;
@@ -87,6 +89,8 @@ export interface FormatDefinitionDetail {
   versions: FormatVersionSummary[];
   /** Compile of the draft; owner and site admins only. */
   check: FormatCheck | null;
+  /** The stored rulesets this viewer may name, plus the legacy ids the draft and the published spec name (`loadRulesetChoices`). */
+  rulesets: RulesetChoice[];
 }
 
 /** What a league stores about its attached format, without the spec and the seed. */

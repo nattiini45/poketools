@@ -3,7 +3,7 @@
  * counts when it is valid under the version the target pins now and invalid under the version it would move to.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ltext } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { makeRuleset } from '@/test/ruleset-fixtures';
 import type { PokemonSet } from '@/types/team';
 import type { SessionPlayer } from '@/types/auth';
@@ -23,7 +23,6 @@ vi.mock('@/lib/supabase/queries/ruleset-definitions', () => ({
   getRulesetVersion: vi.fn(),
   listPinnedTargets: vi.fn(),
   listRulesetVersions: vi.fn(),
-  listVersionIds: vi.fn(),
   repinTarget: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({ getRulesetById: vi.fn() }));
@@ -31,7 +30,7 @@ vi.mock('@/lib/supabase/queries/teams', () => ({ listTeamsForPinImpact: vi.fn() 
 vi.mock('@/lib/supabase/queries/seasons', () => ({ listParticipantCores: vi.fn() }));
 
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
-import { getPinTargetStates, listRulesetVersions, listVersionIds } from '@/lib/supabase/queries/ruleset-definitions';
+import { getPinTargetStates, listRulesetVersions } from '@/lib/supabase/queries/ruleset-definitions';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { listParticipantCores } from '@/lib/supabase/queries/seasons';
 import { listTeamsForPinImpact } from '@/lib/supabase/queries/teams';
@@ -76,7 +75,6 @@ const input = (targets: Array<{ kind: 'season' | 'tournament'; id: string }>, ex
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(listVersionIds).mockResolvedValue([V1, V2]);
   vi.mocked(listRulesetVersions).mockResolvedValue([{ id: V2, version_no: 2 }, { id: V1, version_no: 1 }] as never);
   vi.mocked(getRulesetById).mockImplementation(async (id) => (id === V1 ? RULES_V1 : id === V2 ? RULES_V2 : null));
   vi.mocked(isResourceAdminFor).mockResolvedValue(true);

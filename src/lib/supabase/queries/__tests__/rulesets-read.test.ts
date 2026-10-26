@@ -156,10 +156,15 @@ describe('listRulesetOptionsFor (the select of a league, phase or tournament for
 });
 
 describe('findHeadRulesetsByName', () => {
-  it('reads the heads of the definitions with exactly this list name, oldest definition first', async () => {
+  it('reads the heads of the shared definitions with exactly this list name, oldest definition first', async () => {
     await findHeadRulesetsByName('Spring OU');
     const [query] = fake.current!.queries;
-    expect(query.filters).toEqual([{ op: 'eq', column: 'name_text', value: 'Spring OU' }]);
+    // Shared site rows only: never another admin's private ruleset, never one that belongs to a league.
+    expect(query.filters).toEqual([
+      { op: 'eq', column: 'name_text', value: 'Spring OU' },
+      { op: 'eq', column: 'visibility', value: 'gallery' },
+      { op: 'is', column: 'season_id', value: null },
+    ]);
     expect(query.orders[0]).toEqual({ column: 'created_at', ascending: true });
   });
 });

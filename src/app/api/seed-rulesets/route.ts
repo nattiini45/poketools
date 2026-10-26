@@ -6,7 +6,7 @@ import { AuthError, requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
 import { bootstrapEnvSchema, bootstrapModeEnvSchema, readEnv } from '@/lib/env';
-import { ltext } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { logAuditEvent } from '@/lib/audit/log';
 import { FORMAT_DEFAULTS } from '@/lib/pkmn/formats';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';

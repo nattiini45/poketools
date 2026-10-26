@@ -31,6 +31,10 @@ DELETE FROM players WHERE id = :'victim';
 DELETE FROM ruleset_definitions WHERE id IN (SELECT v.definition_id FROM ruleset_definition_versions v WHERE v.id IN (SELECT ruleset_id FROM league_trash_rulesets WHERE trash_id = :'tid'));
 DELETE FROM point_buy_list_versions WHERE id IN (SELECT list_version_id FROM league_trash_point_buy_versions WHERE trash_id = :'tid');
 
+\echo === (c2) the rebuild after the delete is not confirmed yet: restore refuses (expect LEAGUE_TRASH_REBUILD_PENDING)
+SELECT league_trash_restore(:'tid');
+SELECT league_trash_rebuild_done(:'tid');
+
 \echo === (d) season id taken again: restore refuses (expect LEAGUE_TRASH_SEASON_EXISTS)
 INSERT INTO seasons (id, name, format_type) VALUES (:'sid', 'squatter', 'singles');
 SELECT league_trash_restore(:'tid');
@@ -97,5 +101,6 @@ SELECT league_trash_delete(:'sid3', :'actor', 90) ->> 'trash_id' AS tid3 \gset
 SELECT 'rulesets held by the trash (expect 2: the phases ruleset and the head version of the preset one)', count(*) FROM league_trash_rulesets WHERE trash_id = :'tid3';
 \echo --- the cleanup that removes unused rule-preset rulesets is refused by the database (expect 23503)
 SELECT format_delete_unused_preset_rulesets('{"gen9ou": "33333333-3333-4333-8333-333333333333"}'::jsonb, '{}'::jsonb);
+SELECT league_trash_rebuild_done(:'tid3');
 SELECT league_trash_restore(:'tid3') -> 'warnings' AS warnings;
 SELECT league_trash_restore_rebuild_done(:'sid3');

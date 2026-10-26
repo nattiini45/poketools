@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PRESETS, contentHash, ltext, resolveLText, type FormatDefinition, type LText } from '@/lib/format-kit';
+import { PRESETS, contentHash, type FormatDefinition } from '@/lib/format-kit';
+import { ltext, resolveLText, type LText } from '@/lib/studio-core/ltext';
 import type { SessionPlayer } from '@/types/auth';
 import { FormatStudioError } from '../errors';
+import { loadRulesetChoices } from '../ruleset-choices';
 import type { FormatDefinitionMeta, FormatVersion } from '../library-types';
 
 vi.mock('@/lib/supabase/queries/format-definitions', () => ({
@@ -19,6 +21,7 @@ vi.mock('@/lib/supabase/queries/format-definitions', () => ({
   setFormatVisibility: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/players', () => ({ resolvePlayerNames: vi.fn() }));
+vi.mock('../ruleset-choices', () => ({ loadRulesetChoices: vi.fn() }));
 
 import {
   countFormatVersions,
@@ -672,6 +675,16 @@ describe('getFormatDetail', () => {
     vi.mocked(getLatestPublishedVersion).mockResolvedValue(version(cup()));
     vi.mocked(getFormatDefinitionDraft).mockResolvedValue({ document: cup(), draft_rev: 4 });
     vi.mocked(listFormatVersions).mockResolvedValue([]);
+    vi.mocked(loadRulesetChoices).mockResolvedValue([]);
+  });
+
+  it('labels the rulesets the draft and the published spec name, for the viewer', async () => {
+    const choices = [{ id: 'r1', name: 'Spring OU', version_no: 2 }];
+    vi.mocked(loadRulesetChoices).mockResolvedValue(choices);
+    const viewer = player();
+    const detail = await getFormatDetail(viewer, meta({ current_version_id: 'v1' }));
+    expect(detail.rulesets).toBe(choices);
+    expect(loadRulesetChoices).toHaveBeenCalledWith(viewer, [cup(), cup()]);
   });
 
   it('gives the owner the draft, the versions and the check', async () => {

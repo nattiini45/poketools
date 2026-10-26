@@ -22,15 +22,15 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { CURRENT_ENV } from '@/lib/format-kit/engine/env';
 import { contentHash } from '@/lib/studio-core/json';
-import { presetsOf } from '@/lib/format-kit/ruleset-presets';
+import { namedRulesetsOf, presetsOf } from '@/lib/format-kit/ruleset-presets';
 import type { FormatDefinition } from '@/lib/format-kit/types';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getFormatDefinitionMeta, getFormatVersion, getLatestPublishedVersion } from '@/lib/supabase/queries/format-definitions';
+import { resolveNamedRulesets } from '@/lib/supabase/queries/ruleset-definitions';
 import {
   attachSeasonFormat,
   detachSeasonFormat,
-  getPublishedRulesetHeads,
   getSeasonFormatSummary,
   getSeasonPresetRulesets,
   getSeasonManualPhaseCount,
@@ -44,7 +44,7 @@ import { canAttachDefinition, type FormatActor } from './access';
 import { FormatStudioError } from './errors';
 import type { EngineGap, SeasonFormatSummary } from './library-types';
 import { planStages } from './materialise';
-import { assertDefinitionsUsable } from '@/lib/ruleset-studio/guards';
+import { canUseDefinitions } from '@/lib/ruleset-studio/guards';
 import { discardMaterialised, ensurePresetRulesets } from '@/lib/ruleset-studio/materialise';
 
 export interface AttachInput {
@@ -80,18 +80,6 @@ const toActor = (player: SessionPlayer): FormatActor => ({ playerId: player.play
 
 function seasonNotFound(): UserFacingError {
   return new UserFacingError('Season not found', { code: 'season_not_found', status: 404 });
-}
-
-/** The ids of the rulesets a spec names explicitly (a stored spec; read defensively). */
-function namedRulesetIds(spec: FormatDefinition): string[] {
-  const ids = new Set<string>();
-  const stages: unknown = spec.stages;
-  if (!Array.isArray(stages)) return [];
-  for (const stage of stages) {
-    const ruleset = (stage as { ruleset?: { kind?: unknown; id?: unknown } } | null)?.ruleset;
-    if (ruleset?.kind === 'ruleset' && typeof ruleset.id === 'string') ids.add(ruleset.id);
-  }
-  return [...ids];
 }
 
 /** True when the stored spec still hashes to the hash stored beside it. */
@@ -135,9 +123,14 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
   // 5. The rulesets the spec names are published and usable by the caller, and the spec compiles against them. No
   // roster size: the roster is not final before the league starts, so size-dependent checks belong to the readiness
   // checklist.
-  const namedVersionIds = await getPublishedRulesetHeads(namedRulesetIds(version.spec));
-  await assertDefinitionsUsable(actor, [...namedVersionIds.keys()]);
-  const rulesetIds = new Set(namedVersionIds.keys());
+  // A stage names a ruleset by definition id, or (a format stored before the Ruleset Studio) by the id of a legacy
+  // ruleset, which now is its version 1; both resolve to the definition and its head version.
+  const named = await resolveNamedRulesets(namedRulesetsOf(version.spec));
+  if (!(await canUseDefinitions(actor, [...named.values()].map((ruleset) => ruleset.definition_id)))) {
+    throw new FormatStudioError('format_attach_ruleset_forbidden');
+  }
+  const namedVersionIds = new Map([...named].map(([id, ruleset]) => [id, ruleset.head_version_id] as const));
+  const rulesetIds = new Set(named.keys());
   // Loaded on demand: the guards below are imported by the generate routes, which never compile.
   const { compile } = await import('@/lib/format-kit/compile');
   const compiled = compile(version.spec, { ...CURRENT_ENV, rulesetIds });

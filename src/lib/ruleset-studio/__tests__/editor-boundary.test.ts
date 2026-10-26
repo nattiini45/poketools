@@ -13,7 +13,8 @@ import { REPO_ROOT, SRC_ROOT, importChain, listSourceFiles, reachableGraph } fro
  *  - a server module of the studio (`*.server.ts`, `library.ts`, `guards.ts`, `pins.ts`, ...), anything under
  *    `src/lib/supabase`, or a server file of the format kit.
  *
- * Each of them reaches the format kit (the rule preset catalog view, localized text) through `@/lib/format-kit/client` only.
+ * Each of them reaches the format kit through `@/lib/format-kit/client` only (none needs it today); the rule preset catalog view lives in
+ * `@/lib/pkmn/ruleset-preset-catalog` and localized text in `@/lib/studio-core/ltext`.
  * A negative control proves the walker sees the dex when it starts at the server side of the studio.
  */
 
@@ -74,10 +75,10 @@ describe('the ruleset editor core', () => {
     });
   });
 
-  it('the walker is not blind: the starts reach the kit client barrel and the preset catalog', () => {
+  it('the walker is not blind: the starts reach the preset catalog view and the catalog under it', () => {
     const graph = reachableGraph(path.join(EDITOR, 'starts.ts'));
-    expect(graph.files.has(path.join(KIT, 'client.ts'))).toBe(true);
-    expect(graph.files.has(path.join(KIT, 'ruleset-presets.ts'))).toBe(true);
+    expect(graph.files.has(path.join(SRC_ROOT, 'lib', 'pkmn', 'ruleset-preset-catalog.ts'))).toBe(true);
+    expect(graph.files.has(path.join(SRC_ROOT, 'lib', 'pkmn', 'format-catalog.ts'))).toBe(true);
   });
 
   it('negative control: the library (server side) reaches the dex and Supabase', () => {

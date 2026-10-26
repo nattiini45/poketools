@@ -25,6 +25,8 @@ export interface EntryIndex<K extends CatalogKind = CatalogKind> {
   /** Catalog order: by English name. */
   entries: readonly CatalogEntryByKind[K][];
   byId: ReadonlyMap<string, CatalogEntryByKind[K]>;
+  /** The ids of all entries (the compile's `known` set). */
+  ids: ReadonlySet<string>;
   /** The ids of a species' formes (including Megas), by the id of its base species. */
   formesOf: ReadonlyMap<string, readonly string[]>;
   /** The match keys of an entry, built on first use. */
@@ -50,6 +52,7 @@ export function buildEntryIndex<K extends CatalogKind>(index: CatalogIndex<K>): 
     gen: index.gen,
     entries,
     byId,
+    ids: new Set(byId.keys()),
     formesOf: formes,
     searchKeys(entry) {
       let keys = cache.get(entry.id);

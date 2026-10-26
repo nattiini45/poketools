@@ -4,8 +4,6 @@
  */
 import { slugFromName as coreSlugFromName } from '@/lib/studio-core/slug';
 
-export { withSlugSuffix } from '@/lib/studio-core/slug';
-
 const FALLBACK_SLUG = 'format';
 
 export function slugFromName(name: string): string {

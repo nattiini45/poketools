@@ -4,7 +4,7 @@
  *
  * The key pattern (1..32 chars) is owned by `keys.ts`; the expression limits by `expr/limits.ts`
  * and are re-exported below so a consumer needs one import. The longest text value (`LTEXT_MAX_CHARS`) is owned by
- * the studio core's `ltext.ts`, next to `LText`, and re-exported here for the same reason.
+ * the studio core's `ltext.ts`, next to `LText`; it is listed in `LIMITS` but not re-exported.
  */
 import { LTEXT_MAX_CHARS } from '@/lib/studio-core/ltext';
 
@@ -40,8 +40,6 @@ export const MAX_OVERRIDE_ROUND = 64;
 export const MAX_EXPECTED_COUNT = 4096;
 export const MAX_VIEW_STAGES = 50;
 export const SCORE_ABS_MAX = 1000;
-
-export { LTEXT_MAX_CHARS };
 
 export {
   COLLECTION_ASSUMED_MAX,

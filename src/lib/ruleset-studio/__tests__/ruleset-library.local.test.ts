@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { ltext } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { newRulesetDocument } from '../document';
 import type { SessionPlayer } from '@/types/auth';
 

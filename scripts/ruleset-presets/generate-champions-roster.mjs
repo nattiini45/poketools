@@ -4,7 +4,7 @@
 //   node scripts/ruleset-presets/generate-champions-roster.mjs --base <dir> --mod <dir> --sha <40 hex> --date <YYYY-MM-DD>
 //                                                              [--out <file>] [--regulation M-C]
 //
-// --base  a directory with Showdown's base data tables: pokedex.ts, formats-data.ts, items.ts, abilities.ts, moves.ts,
+// --base  a directory with Showdown's base data tables, all of which must exist: pokedex.ts, formats-data.ts, items.ts, abilities.ts, moves.ts,
 //         learnsets.ts (the files of data/ in smogon/pokemon-showdown)
 // --mod   a directory with the files of data/mods/champions/ (the ones the mod has: formats-data.ts, items.ts, ...)
 // --sha   the commit of smogon/pokemon-showdown both directories were taken from; it is written into the output
@@ -26,12 +26,13 @@ const FILE_OF = {
   Learnsets: 'learnsets',
 };
 
+/** The six data tables of a directory. A base directory has every one (`required`); a mod has only the ones it changes. */
 function readTables(dir, { required }) {
   const tables = {};
   for (const table of TABLES) {
     const file = path.join(dir, `${FILE_OF[table]}.ts`);
     if (!fs.existsSync(file)) {
-      if (required && table !== 'Pokedex') throw new Error(`missing ${file}`);
+      if (required) throw new Error(`missing ${file}`);
       tables[table] = null;
       continue;
     }
@@ -64,6 +65,7 @@ function main() {
   const out =
     args.get('out') ??
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/lib/pkmn/preset-data/champions-roster.generated.ts');
+  if (roster.species.selectable.length === 0) throw new Error('the derived roster has no selectable species: check --base and --mod');
   fs.writeFileSync(out, `${emitRosterModule(roster, { sha, date, mod: 'champions', regulation: args.get('regulation') ?? 'M-C' })}\n`);
   const { species } = roster;
   console.log(

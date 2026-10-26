@@ -74,13 +74,6 @@ const CELL_CLASS: Record<Effect, string | undefined> = {
   neutral: undefined,
 };
 
-/**
- * Tailwind overrides that shrink the site-wide type pill to a narrow vertical column head. In the vertical
- * writing mode the pill's width is its line height plus the side padding, so the tight line height is what
- * lets 18 columns fit the desktop left pane.
- */
-const TYPE_HEAD_CLASS = `${styles.weaknessTypeHead} !min-w-0 !px-0.5 !py-1.5 !text-[0.625rem] !leading-[1.1] !tracking-normal`;
-
 export default function TeamWeaknessTable({ owned, ix, indexFailed, stage, onStageChange, defaultOpen = false, onPin }: TeamWeaknessTableProps) {
   const t = useT(draftScreenMessages);
   const tFinder = useT(draftFinderMessages);
@@ -121,7 +114,7 @@ export default function TeamWeaknessTable({ owned, ix, indexFailed, stage, onSta
                     </th>
                     {TYPES.map((type) => (
                       <th key={type} scope="col" className={styles.weaknessTypeCell}>
-                        <TypeBadge type={type} className={TYPE_HEAD_CLASS} />
+                        <TypeBadge type={type} size="compact" className={styles.weaknessTypeHead} />
                       </th>
                     ))}
                   </tr>

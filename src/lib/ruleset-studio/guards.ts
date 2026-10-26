@@ -14,7 +14,6 @@ import { getDefinitionOfVersion, getRulesetDefinitionMeta } from '@/lib/supabase
 import { isValidUuid } from '@/lib/utils/uuid';
 import type { SessionPlayer } from '@/types/auth';
 import { canEditDraft, canUseRuleset, canViewDefinition, type RulesetActor } from './access';
-import { FormatStudioError } from '@/lib/format-studio/errors';
 import { RulesetStudioError } from './errors';
 import type { RulesetDefinitionMeta } from './library-types';
 
@@ -80,17 +79,16 @@ export async function assertRulesetUsable(
 }
 
 /**
- * The check the format attach runs on the rulesets a format document names (DEFINITION ids): each must exist and be usable by
- * the player. A named ruleset the player may not use is `format_attach_ruleset_forbidden`; an id that names nothing is left to
- * the compile (`ruleset_not_found` diagnostic).
+ * Whether the player may use every ruleset DEFINITION in `definitionIds` (the rulesets a format document names). An id that
+ * names nothing is skipped: that is the compile's business (`ruleset_not_found` diagnostic). The caller decides what a refusal
+ * means for it (the format attach answers `format_attach_ruleset_forbidden`).
  */
-export async function assertDefinitionsUsable(player: SessionPlayer, definitionIds: readonly string[]): Promise<void> {
+export async function canUseDefinitions(player: SessionPlayer, definitionIds: readonly string[]): Promise<boolean> {
   for (const id of definitionIds) {
     const definition = await getRulesetDefinitionMeta(id);
     if (definition === null) continue;
     const actor = await actorFor(player, definition);
-    if (!canUseRuleset(actor, definition, definition.current_version_id !== null)) {
-      throw new FormatStudioError('format_attach_ruleset_forbidden');
-    }
+    if (!canUseRuleset(actor, definition, definition.current_version_id !== null)) return false;
   }
+  return true;
 }

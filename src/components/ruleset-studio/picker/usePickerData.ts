@@ -2,18 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApiErrorLike } from '@/i18n/api-errors';
-import type { CatalogIndex, CatalogKind, CatalogText } from '@/lib/pkmn/catalog-index';
+import type { CatalogKind, CatalogText } from '@/lib/pkmn/catalog-index';
 import {
-  fetchCatalogIndex,
   fetchCatalogText,
+  fetchEntryIndex,
   indexUrl,
-  peekCatalogIndex,
   peekCatalogText,
+  peekEntryIndex,
   textUrl,
   type CatalogQuery,
   type CatalogTextQuery,
 } from '@/lib/ruleset-studio/editor/catalog-client';
-import { buildEntryIndex, type EntryIndex } from '@/lib/ruleset-studio/editor/picker/entry-index';
+import type { EntryIndex } from '@/lib/ruleset-studio/editor/picker/entry-index';
 import type { ApiOutcome } from '@/lib/studio-core/request';
 
 export type IndexState<K extends CatalogKind> =
@@ -21,34 +21,23 @@ export type IndexState<K extends CatalogKind> =
   | { status: 'error'; error: ApiErrorLike }
   | { status: 'ready'; index: EntryIndex<K> };
 
-/** Decoded indexes by response object, so a remount does not decode (and re-key) a thousand rows again. */
-const built = new WeakMap<object, EntryIndex>();
-
-function entryIndexOf<K extends CatalogKind>(response: CatalogIndex<K>): EntryIndex<K> {
-  let index = built.get(response) as EntryIndex<K> | undefined;
-  if (index === undefined) {
-    index = buildEntryIndex(response);
-    built.set(response, index as EntryIndex);
-  }
-  return index;
-}
-
 /**
  * The entries of one kind, generation and scope: loading until the catalog answers, an error with a retry, then the
- * decoded index. Requests go through the module cache of `catalog-client`, so switching sections or reopening the picker
- * never downloads the same catalog twice; an unmounted picker abandons its wait but the request still fills the cache.
+ * decoded index. Requests go through the module cache of `catalog-client`, which also decodes, so switching sections or
+ * reopening the picker never downloads or decodes the same catalog twice; an unmounted picker abandons its wait but the
+ * request still fills the cache.
  */
 export function useEntryIndex<K extends CatalogKind>(query: CatalogQuery & { kind: K } | null): { state: IndexState<K>; retry: () => void } {
   const url = query === null ? '' : indexUrl(query);
-  const [results, setResults] = useState<Record<string, ApiOutcome<CatalogIndex>>>({});
+  const [results, setResults] = useState<Record<string, ApiOutcome<EntryIndex>>>({});
   const [attempt, setAttempt] = useState(0);
-  const cached = query === null ? undefined : peekCatalogIndex(query);
+  const cached = query === null ? undefined : peekEntryIndex(query);
 
   useEffect(() => {
-    if (query === null || peekCatalogIndex(query) !== undefined) return;
+    if (query === null || peekEntryIndex(query) !== undefined) return;
     const controller = new AbortController();
-    void fetchCatalogIndex(query, { signal: controller.signal }).then((outcome) => {
-      if (!controller.signal.aborted) setResults((current) => ({ ...current, [url]: outcome as ApiOutcome<CatalogIndex> }));
+    void fetchEntryIndex(query, { signal: controller.signal }).then((outcome) => {
+      if (!controller.signal.aborted) setResults((current) => ({ ...current, [url]: outcome }));
     });
     return () => controller.abort();
     // The query is rebuilt every render; its URL identifies it.
@@ -66,10 +55,10 @@ export function useEntryIndex<K extends CatalogKind>(query: CatalogQuery & { kin
 
   const result = results[url];
   const state = useMemo<IndexState<K>>(() => {
-    if (cached !== undefined) return { status: 'ready', index: entryIndexOf(cached) };
+    if (cached !== undefined) return { status: 'ready', index: cached };
     if (result === undefined) return { status: 'loading' };
     if (!result.ok) return { status: 'error', error: result.error };
-    return { status: 'ready', index: entryIndexOf(result.data as CatalogIndex<K>) };
+    return { status: 'ready', index: result.data as EntryIndex<K> };
   }, [cached, result]);
   return { state, retry };
 }

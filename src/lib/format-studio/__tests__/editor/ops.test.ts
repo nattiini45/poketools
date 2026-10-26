@@ -10,11 +10,12 @@ import {
   MAX_TEXT_SECTIONS,
   PRESETS,
   deepFreeze,
-  ltext,
   validateFormatDefinition,
+  withRulesetPreset,
   type Edge,
   type Stage,
 } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
 import { intBetween, mulberry32, pick, type Rng } from '@/lib/format-kit/test-utils/prng';
 import { documentSignature, normalizeDraft, type DraftDocument } from '../../editor/document';
 import * as ops from '../../editor/ops';
@@ -332,16 +333,8 @@ describe('stage setters', () => {
     expect(ops.setRuleset(base(), { kind: 'season_default' }).ruleset).toEqual({ kind: 'season_default' });
   });
 
-  it('setRulesetPreset plays the stage under a format: ruleset, doubles and two players, series untouched', () => {
-    const s = ops.setRulesetPreset(base(), 'gen9doublesou');
-    expect(s.ruleset).toEqual({ kind: 'preset', preset: 'gen9doublesou' });
-    expect(s.doubles).toBe(true);
-    expect(s.players_per_match).toBe(2);
-    expect(s.series).toBe(base().series);
-    expect(ops.setRulesetPreset(s, 'gen9doublesou')).toBe(s);
-    expect(ops.setRulesetPreset(s, 'gen9ou').doubles).toBe(false);
-    expect(ops.setRulesetPreset(base(), 'gen99xx')).toBe(base());
-    expect(valid(ops.updateStage(classic(), 0, (stage) => ops.setRulesetPreset(stage, 'gen9vgc')))).toBe(true);
+  it('a stage played under a rule preset (withRulesetPreset) is still a valid document', () => {
+    expect(valid(ops.updateStage(classic(), 0, (stage) => withRulesetPreset(stage, 'gen9vgc')))).toBe(true);
   });
 
   it('setScoreValue sets win, loss and bye', () => {
@@ -408,7 +401,7 @@ describe('stage setters', () => {
       (s) => ops.setBestOf(s, 3),
       (s) => ops.addOverride(s),
       (s) => ops.setRuleset(s, { kind: 'season_default' }),
-      (s) => ops.setRulesetPreset(s, 'gen9ou'),
+      (s) => withRulesetPreset(s, 'gen9ou'),
       (s) => ops.setScoreValue(s, 'win', 5),
       (s) => ops.setDoubles(s, true),
       (s) => ops.addRankStep(s, 'coin_flip'),

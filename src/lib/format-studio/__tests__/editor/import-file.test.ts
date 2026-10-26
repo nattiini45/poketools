@@ -3,7 +3,7 @@ import { canonicalizeJson, validateFormatDefinition as validateBrowser } from '@
 import { validateFormatDefinition as validateServer } from '@/lib/format-kit';
 import { COMPILE_ONLY_CASES, INVALID_CASES, nestedArray } from '@/lib/format-kit/__tests__/fixtures/invalid';
 import { VALID_DOCS, cupDoc, degradedRulesDoc, kitchenSinkDoc, minimalDoc } from '@/lib/format-kit/__tests__/fixtures/docs';
-import { MAX_REQUEST_BODY_BYTES } from '../../api-body';
+import { MAX_REQUEST_BODY_BYTES } from '@/lib/studio-core/api-body';
 import { assertDocument } from '../../document-guard';
 import { FormatStudioError } from '../../errors';
 import { extractIdentity } from '@/lib/studio-core/identity';

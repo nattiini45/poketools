@@ -9,7 +9,7 @@ import PageContainer from '@/components/ui/PageContainer';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { getLocale, getT } from '@/i18n/server';
 import { rulesetStudioSectionsMessages } from '@/i18n/messages/ruleset-studio/sections';
-import { getRulesetPreset } from '@/lib/format-kit/client';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import { resolvePresetRules } from '@/lib/pkmn/preset-rules.server';
 import { computeEffective } from '@/lib/ruleset-kit/effective';
 import { describeResolved } from '@/lib/ruleset-studio/describe.server';

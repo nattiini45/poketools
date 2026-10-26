@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { KEY_PATTERN, PRESETS, ltext, type LText } from '@/lib/format-kit/client';
+import { KEY_PATTERN, PRESETS } from '@/lib/format-kit/client';
+import { ltext, type LText } from '@/lib/studio-core/ltext';
 import {
   blankDocument,
   documentSignature,

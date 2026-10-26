@@ -5,11 +5,11 @@ import FormatDetail from '@/components/format-studio/FormatDetail';
 import ForkStoredButton from '@/components/format-studio/starts/ForkStoredButton';
 import Badge from '@/components/ui/Badge';
 import PageContainer from '@/components/ui/PageContainer';
-import { compile, resolveLText } from '@/lib/format-kit/client';
+import { compile } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import { gateFormatDefinition } from '@/lib/format-studio/gate';
 import { getFormatDetail } from '@/lib/format-studio/library';
 import { toFormatView } from '@/lib/format-studio/view';
-import { listRulesetOptions } from '@/lib/supabase/queries/rulesets';
 import { getLocale, getT } from '@/i18n/server';
 import { formatStudioAdminMessages } from '@/i18n/messages/format-studio/admin';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
@@ -41,16 +41,15 @@ export default async function FormatPage({ params }: PageProps) {
     );
   }
 
-  const [detail, rulesets, t, tEditor, locale] = await Promise.all([
+  const [detail, t, tEditor, locale] = await Promise.all([
     getFormatDetail(gate.player, gate.definition),
-    listRulesetOptions(gate.actor),
     getT(formatStudioAdminMessages),
     getT(formatStudioEditorMessages),
     getLocale(),
   ]);
 
   const source = detail.published !== null ? detail.published.spec : (detail.draft?.document ?? null);
-  const view = source === null ? null : toFormatView(compile(source), { rulesets: rulesets.map((r) => ({ id: r.definition_id, name: r.name })) });
+  const view = source === null ? null : toFormatView(compile(source), { rulesets: detail.rulesets.map((r) => ({ id: r.id, name: r.name })) });
   const summary = detail.definition;
   const title = resolveLText(summary.name, { viewer: locale })?.value ?? summary.slug;
 

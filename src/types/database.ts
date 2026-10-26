@@ -5842,17 +5842,11 @@ export type Database = {
           protection: string
         }[]
       }
-      league_trash__insert_rows: {
-        Args: {
-          p_defer: string[]
-          p_filter: string
-          p_rel: string
-          p_rows: Json
-          p_snapshot_cols: Json
-        }
+      league_trash__insert_archive_rows: {
+        Args: { p_step: number; p_trash_id: string }
         Returns: number
       }
-      league_trash__insert_rows_owner: {
+      league_trash__insert_rows: {
         Args: {
           p_defer: string[]
           p_filter: string
@@ -5898,10 +5892,7 @@ export type Database = {
         Args: { p_col: string; p_row: Json; p_shift: string }
         Returns: Json
       }
-      league_trash__x: {
-        Args: { p_pred: string; p_season: string }
-        Returns: string
-      }
+      league_trash__x: { Args: { p_pred: string }; Returns: string }
       league_trash_delete: {
         Args: { p_actor: string; p_retention_days: number; p_season_id: string }
         Returns: Json

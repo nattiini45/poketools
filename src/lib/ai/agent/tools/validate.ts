@@ -10,12 +10,11 @@
 import type { PokemonSet, StatSpread } from '@/types/team';
 import type { Ruleset } from '@/types/ruleset';
 import type { CoreTriple } from '@/types/season';
-import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { validateTeam as validateTeamCore } from '@/lib/pkmn/validation';
 import { rulesFromBans } from '@/lib/ruleset-kit/effective';
 import { checkMoveLegality } from '@/lib/pkmn/dex';
 import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
-import { parseGenFromFormat } from './format';
+import { parseGenFromFormat } from '../../format';
 import type { ValidateTeamInput } from './schemas';
 
 export interface ValidateTeamIssue {
@@ -64,6 +63,9 @@ function toPokemonSet(set: ValidateTeamInput['team'][number]): PokemonSet {
 
 /** Build a minimal standard Ruleset from a format string (e.g. "gen9ou"). */
 function rulesetForFormat(format: string): Ruleset {
+  // The format text is model-supplied: read it once, case-folded, so the generation and the rules agree.
+  const id = format.toLowerCase();
+  const gen = parseGenFromFormat(id);
   return {
     id: 'agent-synthetic',
     name: format,
@@ -76,11 +78,11 @@ function rulesetForFormat(format: string): Ruleset {
     custom_rules_string: '',
     min_shared_type_pct: 0,
     team_constraints: null,
-    gen: generationOrDefault(format),
+    gen,
     universe: 'standard',
     rules: rulesFromBans({
-      gen: generationOrDefault(format),
-      formatKey: format,
+      gen,
+      formatKey: id,
       doubles: /vgc|doubles|bss/i.test(format),
       clauses: ['Species Clause'],
     }),

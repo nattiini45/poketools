@@ -3,13 +3,11 @@
 import type { SelectHTMLAttributes } from 'react';
 import Link from 'next/link';
 import Select from '@/components/ui/Select';
+import { RULESETS_HREF } from '@/components/ruleset-studio/hrefs';
 import { useT } from '@/i18n/client';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
 import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import { groupRulesetOptions } from './ruleset-options';
-
-/** Where rulesets are made and edited. */
-const STUDIO_HREF = '/admin/rulesets';
 
 interface RulesetSelectProps
   extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'value' | 'onChange' | 'children' | 'id'> {
@@ -55,7 +53,7 @@ export default function RulesetSelect({ id, label, value, onChange, options, pla
         ))}
       </Select>
       {studioLink && (
-        <Link href={STUDIO_HREF} className="inline-flex min-h-11 items-center text-xs font-medium text-poke-blue hover:underline sm:min-h-0">
+        <Link href={RULESETS_HREF} className="inline-flex min-h-11 items-center text-xs font-medium text-poke-blue hover:underline sm:min-h-0">
           {t('select.openStudio')}
         </Link>
       )}

@@ -9,7 +9,7 @@ A **preset** is a named, versioned set of rules: a generation, a game type, a un
 The catalog is data, not behaviour. Two numbers keep it honest:
 
 - `PRESET_DATA_PIN` (`src/lib/pkmn/preset-data/pin.ts`): the commit of `smogon/pokemon-showdown` the format and ruleset tables were transcribed from. The Champions roster has its own pin, `CHAMPIONS_ROSTER_PIN`, because the mod moves faster than the formats.
-- `PRESET_RULES_VERSION`: the version of everything a preset resolves to (the catalog, the tables, the resolution rules). A published ruleset version stores it as `catalog_version`, so a version can say which data it was computed from and the library can flag one computed from older data (`isCatalogStale`).
+- `PRESET_RULES_VERSION`: the version of everything a preset resolves to (the catalog, the tables, the resolution rules and, through the tier-derived bans, the `@pkmn/dex` tier data). The integrity test hashes only the catalog and the tables, so a change of the resolution code or an upgrade of `@pkmn/dex` that moves a tier is bumped by hand. A published ruleset version stores it as `catalog_version`, so a version can say which data it was computed from and the library can flag one computed from older data (`isCatalogStale`).
 
 The data is transcribed from Pokémon Showdown (MIT, see `NOTICE.md`).
 
@@ -22,6 +22,7 @@ src/lib/pkmn/
 ├── formats.ts                 Static format defaults (the legacy flat view, FORMAT_DEFAULTS, derived from PRESETS)
 ├── format-id.ts               The one format-id parser: gen + ONE digit + tier key (gen9ou, gen91v1, gen96v6doublesdraft)
 ├── clauses.ts                 The clause catalog by id; which clauses are enforced (Species, Item) and which are informational
+├── ruleset-preset-catalog.ts  The picker view of the catalog shared by both studios: entries, getRulesetPreset, isRulesetPresetId, search, grouping (client-safe)
 ├── preset-rules.ts            Shapes a preset resolves to (types only, client-safe)
 ├── preset-rules.server.ts     resolvePresetRules(id), resolveTourOverlay(id): per-mod resolution against the dex; memoised per process
 ├── known-ids.server.ts        knownIds(kind, gen, universe), presetKnownIds(preset, kind): the id sets behind the unknown_entry warning
@@ -55,7 +56,7 @@ Resolution is **per mod**, never "the base rulesets only": a mod can replace a r
 - tier-derived Pokémon bans (Uber, UUBL, National Dex OU, ...) are read from the dex tier fields over the preset's universe;
 - explicit move, item and ability bans are the tables in `preset-data` (`standard.ts`, `draft.ts`), integrity-tested against the dex: every name must exist in the dex for its generation and universe;
 - Champions presets use the generated roster, an **allowlist** (every Pokémon, Mega Evolution, battle-only and cosmetic forme the mod makes legal, the moves, items and abilities it has);
-- a Little Cup preset that is not a tier family (NatDex LC Draft, Doubles LC) allows exactly the first stages that have an evolution;
+- a Little Cup preset allows exactly the first stages that have an evolution (NatDex LC Draft, Doubles LC; the ladder Little Cup only those the dex tiers as `LC`, which leaves out the LC Uber species, in every generation), and the ladder NFE allows every species that has an evolution (its own banlist is not transcribed);
 - the other draft formats ban nothing by tier: a draft league's roster is the draft.
 
 What the catalog documents but the app does **not model** is listed per preset (`unmodelled`): combination bans of the older draft formats (an ability with a move, two abilities), the "obtainable from generation N" rule, the Let's Go species the Gen 7 draft re-allows, the NatDex pool of Champions NatDex Draft, and per-species Champions move legality (the move list is the union). The ruleset editor shows these so an admin knows what the preset does not enforce.
@@ -94,7 +95,7 @@ Corrections that did ship with the catalog: the format-id parser reads exactly o
 
 ## Testing
 
-`src/lib/pkmn/__tests__/{clauses,format-id,seed-format-ids,preset-rules.server,preset-data-integrity.server,dex-national,format-catalog-boundary,validation-rules,sheet-cells.server}.test.ts`, `scripts/ruleset-presets/__tests__`. The catalog boundary test keeps `format-catalog.ts` free of the dex so client bundles stay small.
+`src/lib/pkmn/__tests__/{clauses,format-id,seed-format-ids,preset-rules.server,preset-data-integrity.server,dex-national,format-catalog-boundary,ruleset-preset-catalog,validation-rules,sheet-cells.server}.test.ts`, `scripts/ruleset-presets/__tests__`. The catalog boundary test keeps `format-catalog.ts` and `ruleset-preset-catalog.ts` free of the dex so client bundles stay small.
 
 ## Related
 

@@ -105,6 +105,8 @@ export interface MovedPin {
   kind: 'season' | 'tournament';
   id: string;
   name: string;
+  /** For a phase: the league it belongs to (what the cache expiry needs); null for a league. */
+  season_id: string | null;
   /** The version the target pinned before. */
   from_version_id: string | null;
   /** True when the target had started (the move was confirmed). */

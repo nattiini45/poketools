@@ -182,6 +182,8 @@ const RULESET_CODE_KINDS: Readonly<Record<RulesetErrorCode, ApiErrorKind>> = {
   ruleset_pin_locked: 'blocked',
   ruleset_pin_started: 'blocked',
   ruleset_pin_confirm_required: 'blocked',
+  // Someone else changed the pin between the read and the move: the page is stale, and the same move can be retried after a refresh.
+  ruleset_pin_moved: 'conflict',
 };
 
 /** Sorts an API error into a class the UI reacts to (a conflict dialog, a retry hint, a sign-in prompt, ...). */

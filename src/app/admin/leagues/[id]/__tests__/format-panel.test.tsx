@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   loadLeagueFormatState: vi.fn(),
   loadAttachCandidates: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
-  listRulesetOptionsFor: vi.fn(),
   getRulesetPinInfo: vi.fn(),
   otherPanel: vi.fn(),
 }));
@@ -52,7 +51,6 @@ vi.mock('@/lib/format-studio/loader', () => ({ loadLeagueFormat: mocks.loadLeagu
 vi.mock('@/lib/format-studio/readiness-loader', () => ({ loadLeagueFormatState: mocks.loadLeagueFormatState }));
 vi.mock('@/lib/format-studio/attach-candidates', () => ({ loadAttachCandidates: mocks.loadAttachCandidates }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonFormatSummary: mocks.getSeasonFormatSummary }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesetOptionsFor: mocks.listRulesetOptionsFor }));
 vi.mock('@/lib/ruleset-studio/pin-info.server', () => ({ getRulesetPinInfo: mocks.getRulesetPinInfo }));
 vi.mock('@/components/format-studio/FormatDetail', () => stub('FormatDetail'));
 vi.mock('@/components/format-studio/attach/FormatAttachPanel', () => stub('FormatAttachPanel'));
@@ -204,7 +202,6 @@ beforeEach(() => {
   mocks.loadLeagueFormatState.mockResolvedValue(CUSTOM_STATE);
   mocks.loadAttachCandidates.mockResolvedValue({ items: [], capped: false });
   mocks.getSeasonFormatSummary.mockResolvedValue(null);
-  mocks.listRulesetOptionsFor.mockResolvedValue([]);
   mocks.getRulesetPinInfo.mockResolvedValue(null);
 });
 
@@ -387,17 +384,13 @@ describe('Format tab of a custom league', () => {
     mocks.loadLeagueFormatState.mockResolvedValue({ ...CUSTOM_STATE, attached: ATTACHED });
     mocks.loadAttachCandidates.mockResolvedValue({ items: [CANDIDATE], capped: true });
     mocks.getRulesetPinInfo.mockResolvedValue({ definition_id: 'def-1', name: 'Spring OU', version_id: 'rs-1', version_no: 2, update: null, can_view: true });
-    mocks.listRulesetOptionsFor.mockResolvedValue([
-      { id: 'rs-1', definition_id: 'def-1', name: 'Spring OU', is_doubles: false, gen: 9, base_format: 'gen9ou', version_no: 2 },
-    ]);
     const [attach] = findByType(panelOf(await render('format')), FormatAttachPanel);
     expect(attach.props).toEqual({
       seasonId: S1,
       started: false,
       rulesetId: 'rs-1',
-      // The preview names the rulesets the stages use: the league's own pin, and the stored rulesets this admin may use.
+      // The preview names the league's own pin; the labels of the rulesets a format names come with the format's detail.
       seasonRuleset: { name: 'Spring OU', version_no: 2 },
-      namedRulesets: [{ id: 'def-1', name: 'Spring OU', version_no: 2 }],
       seasonLanguage: 'de',
       manualPhaseCount: 0,
       attached: ATTACHED,

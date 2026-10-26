@@ -12,7 +12,7 @@ const PKMN = path.join(SRC_ROOT, 'lib/pkmn');
 const rel = (file: string) => path.relative(PKMN, file).split(path.sep).join('/');
 
 describe('the preset catalog stays client-safe', () => {
-  for (const entry of ['format-catalog.ts', 'format-id.ts', 'clauses.ts', 'preset-rules.ts']) {
+  for (const entry of ['format-catalog.ts', 'ruleset-preset-catalog.ts', 'format-id.ts', 'clauses.ts', 'preset-rules.ts']) {
     it(`${entry} reaches no @pkmn package, no server module and no rule data`, () => {
       const graph = reachableGraph(path.join(PKMN, entry));
       expect([...graph.packages].filter((name) => name.startsWith('@pkmn/') || name === 'server-only')).toEqual([]);
@@ -21,8 +21,14 @@ describe('the preset catalog stays client-safe', () => {
     });
   }
 
-  it('the catalog reaches exactly the parser and itself, the clause catalog the id fold and itself', () => {
+  it('the catalog reaches exactly the parser and itself, its picker view the catalog and the key pattern, the clause catalog the id fold and itself', () => {
     expect([...reachableGraph(path.join(PKMN, 'format-catalog.ts')).files].map(rel).sort()).toEqual(['format-catalog.ts', 'format-id.ts']);
+    expect([...reachableGraph(path.join(PKMN, 'ruleset-preset-catalog.ts')).files].map(rel).sort()).toEqual([
+      '../studio-core/keys.ts',
+      'format-catalog.ts',
+      'format-id.ts',
+      'ruleset-preset-catalog.ts',
+    ]);
     expect([...reachableGraph(path.join(PKMN, 'clauses.ts')).files].map(rel).sort()).toEqual(['clauses.ts', 'i18n/id.ts']);
     expect([...reachableGraph(path.join(PKMN, 'format-id.ts')).files].map(rel)).toEqual(['format-id.ts']);
   });

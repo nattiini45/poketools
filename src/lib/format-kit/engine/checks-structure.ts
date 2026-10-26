@@ -7,8 +7,9 @@
  * `constructor` behave like any other.
  */
 import { toMap } from '@/lib/studio-core/keys';
-import { isRulesetPresetId } from '../ruleset-presets';
-import type { FormatDefinition, LText } from '../types';
+import { isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
+import type { FormatDefinition } from '../types';
+import type { LText } from '@/lib/studio-core/ltext';
 import { diag, ptr, type Diagnostic } from './diagnostics';
 import type { CompileEnv } from './env';
 import { fixUseSeasonRuleset } from './fixes';

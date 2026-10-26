@@ -4,8 +4,8 @@
  * The expiry deletes the league's rows, and with them the `matches.social_image_url` values that name the uploaded
  * cards in the `social-images` bucket, so the objects are found by the match id instead: every card of a match is
  * `matches/<matchId>/<uuid>.png` (or the legacy `matches/<matchId>.png`). Paths are built only from match ids that
- * pass the uuid check and from listed names that pass `isSocialImageObjectName` (the service-role storage client puts
- * a path into the request unencoded, see the Never Do list in AGENTS.md).
+ * the path helpers accept (lowercase uuids) and from listed names that pass `isSocialImageObjectName` (the
+ * service-role storage client puts a path into the request unencoded, see the Never Do list in AGENTS.md).
  *
  * A sweep never undoes or fails the expiry: every failure is counted, logged with one of
  * `LEAGUE_TRASH_SWEEP_ERROR_CODES` and reported in the result. The run stops starting new work at `deadline`
@@ -20,7 +20,7 @@ import {
   isSocialImageObjectName,
   legacySocialImagePath,
   socialImageFolder,
-} from '@/app/api/matches/[id]/social-image/storage-path';
+} from '@/lib/match/social-image-path';
 
 /** The log codes of the sweep, one per cause. */
 export const LEAGUE_TRASH_SWEEP_ERROR_CODES = {
@@ -49,12 +49,21 @@ const CONCURRENCY = 10;
 /** Objects one list call returns at most (a match has a handful of cards). */
 const LIST_LIMIT = 1000;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** Where the cards of one match live: its folder and the legacy fixed name. */
+interface MatchTarget {
+  id: string;
+  folder: string;
+  legacy: string;
+}
 
-async function pathsOfMatch(matchId: string): Promise<string[]> {
+/** The target of a match id, or null when the id is not a lowercase uuid (the path helpers decide that). */
+function targetOf(matchId: string): MatchTarget | null {
   const folder = socialImageFolder(matchId);
   const legacy = legacySocialImagePath(matchId);
-  if (!folder || !legacy) return [];
+  return folder && legacy ? { id: matchId, folder, legacy } : null;
+}
+
+async function pathsOfMatch({ folder, legacy }: MatchTarget): Promise<string[]> {
   const { data, error } = await supabase.storage.from(SOCIAL_IMAGE_BUCKET).list(folder, { limit: LIST_LIMIT });
   if (error) throw error;
   const names = (data ?? []).map((object) => object.name).filter(isSocialImageObjectName);
@@ -66,21 +75,21 @@ export async function sweepLeagueSocialImages(
   matchIds: readonly string[],
   deadline: number,
 ): Promise<SocialImageSweepResult> {
-  const ids = [...new Set(matchIds.map((id) => id.toLowerCase()).filter((id) => UUID_RE.test(id)))];
+  const targets = [...new Set(matchIds.map((id) => id.toLowerCase()))].flatMap((id) => targetOf(id) ?? []);
   const result: SocialImageSweepResult = { swept: 0, unswept: 0, removed: 0, errors: [] };
   const note = (code: LeagueTrashSweepErrorCode) => {
     if (!result.errors.includes(code)) result.errors.push(code);
   };
   const bucket = supabase.storage.from(SOCIAL_IMAGE_BUCKET);
 
-  for (let at = 0; at < ids.length; at += CONCURRENCY) {
+  for (let at = 0; at < targets.length; at += CONCURRENCY) {
     if (Date.now() >= deadline) {
-      result.unswept = ids.length - at;
+      result.unswept = targets.length - at;
       note(LEAGUE_TRASH_SWEEP_ERROR_CODES.incomplete);
       console.error(`[league-trash] ${LEAGUE_TRASH_SWEEP_ERROR_CODES.incomplete}: ${result.unswept} matches not swept`);
       break;
     }
-    const chunk = ids.slice(at, at + CONCURRENCY);
+    const chunk = targets.slice(at, at + CONCURRENCY);
     const listed = await Promise.allSettled(chunk.map(pathsOfMatch));
     const paths: string[] = [];
     listed.forEach((outcome, i) => {
@@ -89,7 +98,7 @@ export async function sweepLeagueSocialImages(
         paths.push(...outcome.value);
       } else {
         note(LEAGUE_TRASH_SWEEP_ERROR_CODES.list);
-        console.error(`[league-trash] ${LEAGUE_TRASH_SWEEP_ERROR_CODES.list}: match ${chunk[i]}`, outcome.reason);
+        console.error(`[league-trash] ${LEAGUE_TRASH_SWEEP_ERROR_CODES.list}: match ${chunk[i].id}`, outcome.reason);
       }
     });
     if (paths.length === 0) continue;

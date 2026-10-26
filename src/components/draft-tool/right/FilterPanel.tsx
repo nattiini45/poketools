@@ -47,7 +47,8 @@ import MoveFilter from './filters/MoveFilter';
 import PriceFilter from './filters/PriceFilter';
 import StatFilter from './filters/StatFilter';
 import TypeFilter from './filters/TypeFilter';
-import { FOCUS_RING, type FilterSectionProps } from './filters/types';
+import { type FilterSectionProps } from './filters/types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 import UtilityFilter from './filters/UtilityFilter';
 
 export interface FilterPanelProps {

@@ -4,8 +4,8 @@
  * publish and attach time, never at save time (a draft may be half built).
  */
 import { z } from 'zod';
-import { isRulesetPresetId, slugSchema, uuidSchema } from '@/lib/format-kit';
-import { ltextSchema } from '@/lib/studio-core/text-schema';
+import { isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
+import { ltextSchema, slugSchema, uuidSchema } from '@/lib/studio-core/text-schema';
 import {
   MAX_REVISION,
   definitionNameSchema,

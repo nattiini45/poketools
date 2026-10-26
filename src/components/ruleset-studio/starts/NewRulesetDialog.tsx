@@ -16,7 +16,7 @@ import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsCommon } from '@/i18n/messages/errors/common';
 import { rulesetStudioMessages } from '@/i18n/messages/ruleset-studio';
 import { useApiErrorText } from '@/i18n/use-api-error';
-import { DEFAULT_RULESET_PRESET, getRulesetPreset } from '@/lib/format-kit/client';
+import { DEFAULT_RULESET_PRESET, getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import { createRulesetRequest, forkRulesetRequest, type CreatedRulesetResponse } from '@/lib/ruleset-studio/editor/api';
 import { IMPORT_MAX_BYTES, prepareImport, type ImportFailure, type ImportReport } from '@/lib/ruleset-studio/editor/import-file';
 import { START_KINDS, presetStartBody, type StartKind } from '@/lib/ruleset-studio/editor/starts';

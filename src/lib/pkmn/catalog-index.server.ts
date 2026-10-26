@@ -12,7 +12,7 @@ import 'server-only';
  * A Champions preset also lists the roster entries the dex files under a later generation (the unreleased Megas), with
  * the `FUTURE` flag, so a roster can be edited entry by entry.
  */
-import { Dex } from '@pkmn/dex';
+import { createHash } from 'node:crypto';
 import { WIKI_ITEM_CATEGORIES, classifyItem } from '@/lib/wiki/item-category';
 import { MOVE_CATEGORY_NAMES, PAST_FLAG, SPECIES_FLAG } from './catalog-index';
 import type {
@@ -26,12 +26,11 @@ import type {
   MoveRow,
   SpeciesRow,
 } from './catalog-index';
-import { getGeneration, listNationalAbilities, listNationalItems, listNationalMoves, listNationalSpecies } from './dex';
+import { getGeneration, getRawEntity, listNationalAbilities, listNationalItems, listNationalMoves, listNationalSpecies } from './dex';
 import { getPreset } from './format-catalog';
 import { toID } from './i18n/id';
 import { localizeDesc, type DescKind } from './i18n/descriptions.server';
 import { CHAMPIONS_ROSTER } from './preset-data/champions';
-import { PRESET_RULES_VERSION } from './preset-data/pin';
 import { itemIconCell, pokemonIconCell } from './sheet-cells.server';
 
 /** The structural slice of a dex entity this module reads (the `@pkmn/data` and `@pkmn/dex` objects both have it). */
@@ -144,13 +143,11 @@ const ROSTER_KEY = { species: 'pokemon', moves: 'moves', items: 'items', abiliti
 
 /** The roster entries of a Champions preset that the base universe does not list, resolved from the full dex of the generation. */
 function rosterExtras(kind: CatalogKind, gen: number, have: ReadonlySet<string>): RawEntity[] {
-  const dex = Dex.forGen(gen);
   const out: RawEntity[] = [];
   for (const id of CHAMPIONS_ROSTER[ROSTER_KEY[kind]]) {
     if (have.has(id)) continue;
-    const found =
-      kind === 'species' ? dex.species.get(id) : kind === 'moves' ? dex.moves.get(id) : kind === 'items' ? dex.items.get(id) : dex.abilities.get(id);
-    if (found.exists) out.push(found as unknown as RawEntity);
+    const found = getRawEntity(kind, id, gen);
+    if (found !== undefined) out.push(found as unknown as RawEntity);
   }
   return out;
 }
@@ -206,14 +203,13 @@ export function buildCatalogText(
   const rows = buildCatalogIndex(kind, gen, scope, preset).rows as readonly (MoveRow | ItemRow | AbilityRow)[];
   const byId = new Map<string, RawText>();
   for (const entity of entities(kind, gen, scope) as readonly RawText[]) byId.set(entity.id, entity);
-  const dex = Dex.forGen(gen);
   const text: Record<string, string> = {};
   const fallback: string[] = [];
   for (const row of rows) {
     const id = row[0];
-    const raw: RawText | undefined =
-      byId.get(id) ?? ((kind === 'moves' ? dex.moves.get(id) : kind === 'items' ? dex.items.get(id) : dex.abilities.get(id)) as unknown as RawText);
-    const english = raw.shortDesc || raw.desc || '';
+    // A roster entry the universe lacks is read from the raw dex; a row exists only for an entity that does.
+    const raw = byId.get(id) ?? (getRawEntity(kind, id, gen) as unknown as RawText | undefined);
+    const english = raw?.shortDesc || raw?.desc || '';
     const localized = localizeDesc(DESC_KIND[kind], row[1], english, lang);
     if (localized.text !== '') text[id] = localized.text;
     if (lang === 'de' && localized.lang === 'en' && english !== '') fallback.push(id);
@@ -223,7 +219,18 @@ export function buildCatalogText(
   return result;
 }
 
-/** A weak ETag for a catalog response: the data version plus the request. */
-export function catalogEtag(parts: readonly (string | number | null)[]): string {
-  return `W/"${PRESET_RULES_VERSION}-${parts.map((part) => String(part ?? '')).join('-')}"`;
+const etags = new WeakMap<object, string>();
+
+/**
+ * A weak ETag for a catalog response: a hash of the built content itself, so it changes exactly when the rows or texts
+ * do (an upgraded `@pkmn/dex`, regenerated German descriptions, an edited preset roster), which no version constant
+ * covers. `buildCatalogIndex` / `buildCatalogText` memoise their result, so the hash is computed once per object.
+ */
+export function catalogEtag(catalog: CatalogIndex | CatalogText): string {
+  let etag = etags.get(catalog);
+  if (etag === undefined) {
+    etag = `W/"${createHash('sha256').update(JSON.stringify(catalog)).digest('base64url').slice(0, 22)}"`;
+    etags.set(catalog, etag);
+  }
+  return etag;
 }

@@ -43,9 +43,11 @@
 --   league_trash_restore_rebuild_done(season)
 --   league_trash_schema_version()        Highest applied migration version. Owner rights: service_role cannot read
 --                                        supabase_migrations.
---   league_trash__insert_rows(_owner)    The INSERT of one captured table over the column intersection. The _owner twin has
---                                        owner rights and only accepts league_trash__archive_tables(): the read-only archive
---                                        redraft_trade_requests, whose INSERT was revoked from service_role on purpose.
+--   league_trash__insert_rows            The INSERT of one captured table over the column intersection.
+--   league_trash__insert_archive_rows    Owner rights, for the read-only archive redraft_trade_requests (INSERT revoked from
+--                                        service_role on purpose). Takes (trash id, restore step) and nothing else: the rows,
+--                                        the column list, the filter and the deferred columns come from the trash entry and
+--                                        league_trash__restore_plan(), so no caller-supplied SQL or rows run with owner rights.
 --
 -- Delete order (all of it inside league_trash_delete): polymorphic rows (resource_admins, discord_webhooks,
 -- social_integrations, wiki_notes) and the league / phase aggregate scopes (they key on the phase ids), then
@@ -344,14 +346,13 @@ LANGUAGE sql IMMUTABLE SET search_path = public AS $$
   ) AS v(step, rel, filter, defer)
 $$;
 
--- Expands the {x} tokens of an inventory predicate.
-CREATE OR REPLACE FUNCTION public.league_trash__x(p_pred text, p_season uuid)
+-- Expands the {x} tokens of an inventory predicate. The season is not substituted: the caller binds it to $1 (USING).
+CREATE OR REPLACE FUNCTION public.league_trash__x(p_pred text)
 RETURNS text LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
 DECLARE s text := p_pred; i int;
 BEGIN
   FOR i IN 1..4 LOOP
     s := replace(s, '{phases}',  '(SELECT id FROM public.tournaments WHERE season_id = $1)');
-    s := replace(s, '{rounds}',  '(SELECT id FROM public.rounds WHERE tournament_id IN {phases})');
     s := replace(s, '{matches}', '(SELECT id FROM public.matches WHERE tournament_id IN {phases})');
     s := replace(s, '{games}',   '(SELECT id FROM public.games WHERE match_id IN {matches})');
     s := replace(s, '{pools}',   '(SELECT id FROM public.draft_pools WHERE season_id = $1)');
@@ -443,14 +444,14 @@ BEGIN
   FOR r IN SELECT i.rel, i.pred FROM public.league_trash__inventory() i WHERE i.cls = 'owned' LOOP
     EXECUTE format('INSERT INTO public.league_trash_tables (trash_id, rel, cols, n, rows)
                     SELECT $2, %1$L, $3, count(*), coalesce(jsonb_agg(to_jsonb(t)), ''[]''::jsonb) FROM public.%2$I t WHERE %3$s',
-                   r.rel, r.rel, public.league_trash__x(r.pred, p_season))
+                   r.rel, r.rel, public.league_trash__x(r.pred))
       USING p_season, p_trash,
             (SELECT jsonb_agg(a.attname ORDER BY a.attnum) FROM pg_attribute a
               WHERE a.attrelid = ('public.' || quote_ident(r.rel))::regclass AND a.attnum > 0 AND NOT a.attisdropped);
   END LOOP;
   FOR r IN SELECT p.rel, p.col, p.pred FROM public.league_trash__pointers() p WHERE p.relink LOOP
     EXECUTE format('SELECT coalesce(jsonb_agg(jsonb_build_object(''rel'', %L, ''col'', %L, ''id'', id, ''old'', %I)), ''[]''::jsonb) FROM public.%I WHERE %s',
-                   r.rel, r.col, r.col, r.rel, public.league_trash__x(r.pred, p_season)) USING p_season INTO v_ptr;
+                   r.rel, r.col, r.col, r.rel, public.league_trash__x(r.pred)) USING p_season INTO v_ptr;
     v_unlinked := v_unlinked || v_ptr;
   END LOOP;
   RETURN v_unlinked;
@@ -510,7 +511,7 @@ BEGIN
   -- Row locks on the spine: a writer that adds a child under a captured parent waits, then fails its FK check.
   FOR r IN SELECT i.rel, i.pred FROM public.league_trash__inventory() i
             WHERE i.rel IN ('tournaments', 'tournament_groups', 'rounds', 'matches', 'games', 'draft_pools') ORDER BY i.rel LOOP
-    EXECUTE format('SELECT 1 FROM public.%I WHERE %s FOR UPDATE', r.rel, public.league_trash__x(r.pred, p_season_id)) USING p_season_id;
+    EXECUTE format('SELECT 1 FROM public.%I WHERE %s FOR UPDATE', r.rel, public.league_trash__x(r.pred)) USING p_season_id;
   END LOOP;
 
   -- Freeze running draft clocks with the draft_set_paused mechanics (inline: no overdue auto-resolution, no
@@ -538,7 +539,7 @@ BEGIN
        SELECT player_id AS p FROM public.season_participants WHERE season_id = $1
        UNION SELECT player_id FROM public.tournament_participants WHERE tournament_id IN {phases}
        UNION SELECT player_1_id FROM public.matches WHERE tournament_id IN {phases}
-       UNION SELECT player_2_id FROM public.matches WHERE tournament_id IN {phases}) s', p_season_id) USING p_season_id INTO v_players;
+       UNION SELECT player_2_id FROM public.matches WHERE tournament_id IN {phases}) s') USING p_season_id INTO v_players;
   SELECT coalesce(array_agg(id), '{}') INTO v_phases FROM public.tournaments WHERE season_id = p_season_id;
   UPDATE public.league_trash SET counts = v_counts, player_ids = v_players, phase_ids = v_phases, unlinked = v_unlinked WHERE id = v_trash;
   DELETE FROM public.league_trash_restore_rebuilds WHERE season_id = p_season_id;   -- this delete's own rebuild covers it
@@ -546,13 +547,13 @@ BEGIN
   -- 1. Polymorphic rows + derived scope rows (they key on the phase ids, so they go before the phases).
   FOR r IN SELECT i.rel, i.pred FROM public.league_trash__inventory() i
             WHERE i.rel IN ('resource_admins', 'discord_webhooks', 'social_integrations', 'wiki_notes', 'aggregates', 'player_aggregates') LOOP
-    EXECUTE format('DELETE FROM public.%I WHERE %s', r.rel, public.league_trash__x(r.pred, p_season_id)) USING p_season_id;
+    EXECUTE format('DELETE FROM public.%I WHERE %s', r.rel, public.league_trash__x(r.pred)) USING p_season_id;
   END LOOP;
   -- 2. Matches (cascade games, stats, per-match rows; SET NULL on teams / cast_sessions / agent_suggestions / streak pointer).
-  EXECUTE public.league_trash__x('DELETE FROM public.matches WHERE tournament_id IN {phases}', p_season_id) USING p_season_id;
+  EXECUTE public.league_trash__x('DELETE FROM public.matches WHERE tournament_id IN {phases}') USING p_season_id;
   -- 3. Teams (the completed-match lock sees match_id NULL now).
   FOR r IN SELECT i.pred FROM public.league_trash__inventory() i WHERE i.rel = 'teams' LOOP
-    EXECUTE public.league_trash__x('DELETE FROM public.teams WHERE ' || r.pred, p_season_id) USING p_season_id;
+    EXECUTE public.league_trash__x('DELETE FROM public.teams WHERE ' || r.pred) USING p_season_id;
   END LOOP;
   -- 4. Phases, 5. all pools in ONE statement, 6. storylines, 7. the league (cascades the rest).
   DELETE FROM public.tournaments WHERE season_id = p_season_id;
@@ -586,7 +587,7 @@ END $$;
 
 -- Owned tables service_role may not write: read-only archives whose INSERT / UPDATE was revoked on purpose
 -- (redraft_trade_requests, 20261018140300_epb_retire_trades.sql). Their rows still belong to the league, so a restore
--- brings them back through league_trash__insert_rows_owner. The replay test fails when a migration revokes INSERT from
+-- brings them back through league_trash__insert_archive_rows. The replay test fails when a migration revokes INSERT from
 -- service_role on an owned table that is not listed here.
 CREATE OR REPLACE FUNCTION public.league_trash__archive_tables()
 RETURNS text[] LANGUAGE sql IMMUTABLE SET search_path = public AS $$
@@ -594,17 +595,26 @@ RETURNS text[] LANGUAGE sql IMMUTABLE SET search_path = public AS $$
 $$;
 
 -- Owner rights, and only for the archive tables above: the restore inserts the captured rows of a read-only archive.
-CREATE OR REPLACE FUNCTION public.league_trash__insert_rows_owner(p_rel text, p_filter text, p_snapshot_cols jsonb, p_defer text[], p_rows jsonb)
+-- The function takes no rows and no SQL from its caller. It reads the rows (as the restore left them in the trash entry,
+-- after the parent and clock adjustments) and the column list from league_trash_tables, and the filter and the deferred
+-- columns from the restore plan step. The worst a caller can do is restore a table of a real trash entry early.
+CREATE OR REPLACE FUNCTION public.league_trash__insert_archive_rows(p_trash_id uuid, p_step integer)
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_rel text; v_filter text; v_defer text[]; v_rows jsonb; v_cols jsonb;
 BEGIN
-  IF p_rel IS NULL OR p_rel <> ALL (public.league_trash__archive_tables()) THEN
+  SELECT pl.rel, pl.filter, pl.defer INTO v_rel, v_filter, v_defer FROM public.league_trash__restore_plan() pl WHERE pl.step = p_step;
+  IF v_rel IS NULL OR v_rel <> ALL (public.league_trash__archive_tables()) THEN
     RAISE EXCEPTION 'LEAGUE_TRASH_NOT_ARCHIVE' USING ERRCODE = 'P0001';
   END IF;
-  RETURN public.league_trash__insert_rows(p_rel, p_filter, p_snapshot_cols, p_defer, p_rows);
+  SELECT lt.rows, lt.cols INTO v_rows, v_cols FROM public.league_trash_tables lt WHERE lt.trash_id = p_trash_id AND lt.rel = v_rel AND lt.n > 0;
+  IF NOT FOUND THEN RAISE EXCEPTION 'LEAGUE_TRASH_NOT_FOUND' USING ERRCODE = 'P0001'; END IF;
+  RETURN public.league_trash__insert_rows(v_rel, v_filter, v_cols, v_defer, v_rows);
 END $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- RESTORE. Errors (P0001, message = code): LEAGUE_TRASH_NOT_FOUND, LEAGUE_TRASH_EXPIRED, LEAGUE_TRASH_SEASON_EXISTS,
+-- LEAGUE_TRASH_REBUILD_PENDING (the rebuild after the delete is not confirmed: the league's games are still counted in
+-- the all-time aggregates, so a restore would count them twice),
 -- LEAGUE_TRASH_SCHEMA_DRIFT (DETAIL {rel, columns}: a NOT NULL column without default that the snapshot lacks),
 -- LEAGUE_TRASH_PARENT_MISSING (DETAIL {rel, column, parent, ids}: a NOT NULL parent that was deleted since),
 -- LEAGUE_TRASH_PLAN_MISMATCH (DETAIL {missing: [rel]} or {mismatched: [{rel, captured, restored}]}: a captured table
@@ -614,7 +624,7 @@ END $$;
 CREATE OR REPLACE FUNCTION public.league_trash_restore(p_trash_id uuid, p_now timestamptz DEFAULT now())
 RETURNS jsonb LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
-  t public.league_trash; p record; f record; e jsonb; v_rows jsonb; v_colsj jsonb; v_miss text[]; v_sql text;
+  t public.league_trash; p record; f record; e jsonb; v_rows jsonb; v_colsj jsonb; v_miss text[]; v_sql text; v_parent text;
   v_n bigint; v_shift interval; v_restored jsonb := '{}'::jsonb; v_warn jsonb := '[]'::jsonb; v_ids uuid[]; v_released bigint;
   v_sid uuid; v_queue uuid[] := '{}'; v_bad jsonb; v_jobs bigint := 0;
 BEGIN
@@ -625,6 +635,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'LEAGUE_TRASH_NOT_FOUND' USING ERRCODE = 'P0001'; END IF;
   IF t.purge_after <= p_now THEN RAISE EXCEPTION 'LEAGUE_TRASH_EXPIRED' USING ERRCODE = 'P0001'; END IF;
   IF EXISTS (SELECT 1 FROM public.seasons WHERE id = t.season_id) THEN RAISE EXCEPTION 'LEAGUE_TRASH_SEASON_EXISTS' USING ERRCODE = 'P0001'; END IF;
+  IF t.rebuild_pending THEN RAISE EXCEPTION 'LEAGUE_TRASH_REBUILD_PENDING' USING ERRCODE = 'P0001'; END IF;
   v_shift := p_now - t.deleted_at;
 
   -- Every captured table with rows must be restorable (in the plan, and still a table).
@@ -705,9 +716,14 @@ BEGIN
       END IF;
     END LOOP;
 
-    v_n := CASE WHEN p.rel = ANY (public.league_trash__archive_tables())
-                THEN public.league_trash__insert_rows_owner(p.rel, p.filter, v_colsj, p.defer, v_rows)
-                ELSE public.league_trash__insert_rows(p.rel, p.filter, v_colsj, p.defer, v_rows) END;
+    IF p.rel = ANY (public.league_trash__archive_tables()) THEN
+      -- The owner-rights insert reads the rows from the trash entry: hand it the adjusted ones (the entry goes away with
+      -- this transaction, restored or rolled back).
+      UPDATE public.league_trash_tables SET rows = v_rows WHERE trash_id = p_trash_id AND rel = p.rel;
+      v_n := public.league_trash__insert_archive_rows(p_trash_id, p.step);
+    ELSE
+      v_n := public.league_trash__insert_rows(p.rel, p.filter, v_colsj, p.defer, v_rows);
+    END IF;
     v_restored := jsonb_set(v_restored, ARRAY[p.rel], to_jsonb(coalesce((v_restored ->> p.rel)::bigint, 0) + v_n));
 
     IF p.rel = 'games' AND cardinality(v_queue) > 0 THEN
@@ -737,9 +753,9 @@ BEGIN
 
   -- Re-link the outside rows that were unlinked (only when the row still exists and its column is still NULL).
   FOR e IN SELECT x FROM jsonb_array_elements(t.unlinked) x LOOP
-    SELECT pt.parent INTO v_sql FROM public.league_trash__pointers() pt WHERE pt.rel = e ->> 'rel' AND pt.col = e ->> 'col';
+    SELECT pt.parent INTO v_parent FROM public.league_trash__pointers() pt WHERE pt.rel = e ->> 'rel' AND pt.col = e ->> 'col';
     EXECUTE format('UPDATE public.%I SET %I = $1 WHERE id = $2 AND %I IS NULL AND EXISTS (SELECT 1 FROM public.%I WHERE id = $1)',
-                   e ->> 'rel', e ->> 'col', e ->> 'col', v_sql) USING (e ->> 'old')::uuid, (e ->> 'id')::uuid;
+                   e ->> 'rel', e ->> 'col', e ->> 'col', v_parent) USING (e ->> 'old')::uuid, (e ->> 'id')::uuid;
   END LOOP;
 
   INSERT INTO public.league_trash_restore_rebuilds (season_id, trash_id, season_name, restored_at, phase_ids, player_ids)
@@ -794,7 +810,7 @@ $$;
 COMMENT ON FUNCTION public.league_trash_delete(uuid, uuid, integer) IS
   'Moves a league to the trash in one transaction: advisory lock, league row, freezes running draft clocks, captures every owned table into league_trash_tables, protects the referenced parents, deletes the league in FK-safe order. Returns {trash_id, counts, player_ids, phase_ids, ...}. Service-role only.';
 COMMENT ON FUNCTION public.league_trash_restore(uuid, timestamptz) IS
-  'Restores a trashed league (same ids, every running deadline shifted by the time in the trash, running drafts paused, games queued for the aggregate worker) and drops the trash row. Errors: LEAGUE_TRASH_NOT_FOUND | _EXPIRED | _SEASON_EXISTS | _SCHEMA_DRIFT | _PARENT_MISSING | _PLAN_MISMATCH. Service-role only.';
+  'Restores a trashed league (same ids, every running deadline shifted by the time in the trash, running drafts paused, games queued for the aggregate worker) and drops the trash row. Errors: LEAGUE_TRASH_NOT_FOUND | _EXPIRED | _SEASON_EXISTS | _REBUILD_PENDING | _SCHEMA_DRIFT | _PARENT_MISSING | _PLAN_MISMATCH. Service-role only.';
 COMMENT ON FUNCTION public.league_trash_expire(timestamptz, integer) IS
   'Deletes trash rows whose purge_after has passed and whose rebuild is confirmed (SKIP LOCKED) and returns them with their match ids. Service-role only.';
 COMMENT ON FUNCTION public.league_trash_rebuild_done(uuid) IS
@@ -808,24 +824,24 @@ COMMENT ON FUNCTION public.league_trash__inventory() IS
 
 REVOKE ALL ON FUNCTION
   public.league_trash__inventory(), public.league_trash__pointers(), public.league_trash__external_parents(),
-  public.league_trash__restore_plan(), public.league_trash__x(text, uuid), public.league_trash__assert_inventory(),
+  public.league_trash__restore_plan(), public.league_trash__x(text), public.league_trash__assert_inventory(),
   public.league_trash_schema_version(),
   public.league_trash__shift_col(jsonb, text, interval), public.league_trash__shift(text, jsonb, interval),
   public.league_trash__capture(uuid, uuid), public.league_trash__protect(uuid),
   public.league_trash__insert_rows(text, text, jsonb, text[], jsonb), public.league_trash__archive_tables(),
-  public.league_trash__insert_rows_owner(text, text, jsonb, text[], jsonb),
+  public.league_trash__insert_archive_rows(uuid, integer),
   public.league_trash_delete(uuid, uuid, integer), public.league_trash_restore(uuid, timestamptz),
   public.league_trash_expire(timestamptz, integer), public.league_trash_rebuild_done(uuid),
   public.league_trash_restore_rebuild_done(uuid)
 FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION
   public.league_trash__inventory(), public.league_trash__pointers(), public.league_trash__external_parents(),
-  public.league_trash__restore_plan(), public.league_trash__x(text, uuid), public.league_trash__assert_inventory(),
+  public.league_trash__restore_plan(), public.league_trash__x(text), public.league_trash__assert_inventory(),
   public.league_trash_schema_version(),
   public.league_trash__shift_col(jsonb, text, interval), public.league_trash__shift(text, jsonb, interval),
   public.league_trash__capture(uuid, uuid), public.league_trash__protect(uuid),
   public.league_trash__insert_rows(text, text, jsonb, text[], jsonb), public.league_trash__archive_tables(),
-  public.league_trash__insert_rows_owner(text, text, jsonb, text[], jsonb),
+  public.league_trash__insert_archive_rows(uuid, integer),
   public.league_trash_delete(uuid, uuid, integer), public.league_trash_restore(uuid, timestamptz),
   public.league_trash_expire(timestamptz, integer), public.league_trash_rebuild_done(uuid),
   public.league_trash_restore_rebuild_done(uuid)

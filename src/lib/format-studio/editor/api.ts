@@ -1,14 +1,15 @@
 /**
  * The Format Studio editor's request layer: one small function per format and attach route over the studio core's
  * `request` (`@/lib/studio-core/request`), each with an injectable `fetch` so the tests run without a network.
- * Client-safe: it imports types from the library and the i18n error helper only, no server code.
+ * Client-safe: library types and the studio core's request layer only, no server code.
  *
  * Every function resolves to an `ApiOutcome` and never throws: a failed response gives the server's `code` and
  * `params` (the UI renders them with `useApiErrorText`), a request that never reached the server gives
  * `network_error` with status 0. Every path segment is URL-encoded. There are no retries here (the UI decides)
  * and a body is never logged. `classifyApiError` carries the class of every format error code.
  */
-import type { LText, Locale } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 import type { FormatErrorCode } from '@/lib/format-studio/errors';
 import type {
   EngineGap,

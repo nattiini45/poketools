@@ -9,7 +9,8 @@ import type { Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
-import { PRESETS, resolveLText } from '@/lib/format-kit/client';
+import { PRESETS } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import type { ImportFailure, ImportReport } from '@/lib/format-studio/editor/import-file';
 import { START_KINDS, type StartKind } from '@/lib/format-studio/editor/starts';
 

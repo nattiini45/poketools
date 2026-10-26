@@ -56,6 +56,7 @@ import {
   expireLeagueTrash,
   getLeagueTrashBySeason,
   getLeagueTrashSchemaVersion,
+  getPendingLeagueRebuild,
   listLeagueTrash,
   listPendingLeagueRebuilds,
   markLeagueRestoreRebuildDone,
@@ -237,8 +238,10 @@ describe('listLeagueTrash', () => {
 
 describe('getLeagueTrashBySeason / countLeagueTrashForPlayer', () => {
   it('reads the trash entry of a league', async () => {
-    state.respond = () => ({ data: { id: TRASH, purge_after: 'x' } });
-    await expect(getLeagueTrashBySeason(SEASON)).resolves.toEqual({ id: TRASH, purge_after: 'x' });
+    const entry = { id: TRASH, season_name: 'Spring', purge_after: 'x', phase_ids: [PHASE], player_ids: [ACTOR] };
+    state.respond = () => ({ data: entry });
+    await expect(getLeagueTrashBySeason(SEASON)).resolves.toEqual(entry);
+    expect(state.calls[0].steps).toContainEqual(['select', 'id, season_name, purge_after, phase_ids, player_ids']);
     expect(state.calls[0].steps).toContainEqual(['eq', 'season_id', SEASON]);
   });
 
@@ -270,6 +273,46 @@ describe('rebuild markers', () => {
       ['restore', 'B', 'r'],
     ]);
     expect(state.calls.find((c) => c.table === 'league_trash')?.steps).toContainEqual(['eq', 'rebuild_pending', true]);
+  });
+
+  describe('getPendingLeagueRebuild', () => {
+    const deleteRow = { id: TRASH, season_id: SEASON, season_name: 'A', deleted_at: 'd', phase_ids: [PHASE], player_ids: [ACTOR] };
+    const restoreRow = { trash_id: TRASH, season_id: SEASON, season_name: 'B', restored_at: 'r', phase_ids: [PHASE], player_ids: [ACTOR] };
+
+    it('looks the trash id up in both markers instead of scanning the lists', async () => {
+      state.respond = () => ({ data: null });
+      await expect(getPendingLeagueRebuild(TRASH)).resolves.toBeNull();
+
+      const trash = state.calls.find((c) => c.table === 'league_trash');
+      const tombstone = state.calls.find((c) => c.table === 'league_trash_restore_rebuilds');
+      expect(trash?.steps).toContainEqual(['eq', 'id', TRASH]);
+      expect(trash?.steps).toContainEqual(['eq', 'rebuild_pending', true]);
+      expect(tombstone?.steps).toContainEqual(['eq', 'trash_id', TRASH]);
+      expect(state.calls.flatMap((c) => c.steps).some(([name]) => name === 'limit')).toBe(false);
+    });
+
+    it('answers the delete rebuild of a trashed league', async () => {
+      state.respond = (call) => ({ data: call.table === 'league_trash' ? deleteRow : null });
+      await expect(getPendingLeagueRebuild(TRASH)).resolves.toEqual({
+        kind: 'delete',
+        trash_id: TRASH,
+        season_id: SEASON,
+        season_name: 'A',
+        at: 'd',
+        phase_ids: [PHASE],
+        player_ids: [ACTOR],
+      });
+    });
+
+    it('answers the restore rebuild of a restored league', async () => {
+      state.respond = (call) => ({ data: call.table === 'league_trash' ? null : restoreRow });
+      await expect(getPendingLeagueRebuild(TRASH)).resolves.toMatchObject({ kind: 'restore', trash_id: TRASH, season_name: 'B', at: 'r' });
+    });
+
+    it('does not query for an id that is not a uuid', async () => {
+      await expect(getPendingLeagueRebuild('nope')).resolves.toBeNull();
+      expect(state.calls).toHaveLength(0);
+    });
   });
 
   it('confirms a rebuild through the two functions', async () => {

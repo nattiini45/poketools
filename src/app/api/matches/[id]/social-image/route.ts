@@ -13,7 +13,7 @@ import {
   SOCIAL_IMAGE_MAX_BYTES,
   socialImagePath,
   socialImagePathFromUrl,
-} from './storage-path';
+} from '@/lib/match/social-image-path';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -32,7 +32,7 @@ function invalidMatchId() {
  * Admin: upload a captured MatchHighlightCard PNG for social posting.
  * Body: { image: string (base64 data URL) }
  *
- * Each upload is a NEW immutable object (`storage-path.ts`) with a one-year
+ * Each upload is a NEW immutable object (`src/lib/match/social-image-path.ts`) with a one-year
  * cache, so the stored URL changes with the image and no cache serves an old
  * card. The object it replaces is kept: a Discord or social post made with
  * the old URL keeps its image (DELETE removes the current object).

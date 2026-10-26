@@ -10,7 +10,6 @@ import { LEAGUE_TRASH_DB_CODES, LeagueTrashDbError } from '../db-error';
 import {
   LEAGUE_TRASH_STATUS,
   leagueTrashBlockError,
-  leagueTrashRebuildPendingError,
   leagueTrashUserError,
   toLeagueTrashError,
 } from '../errors';
@@ -55,6 +54,7 @@ describe('toLeagueTrashError', () => {
       LEAGUE_TRASH_NOT_FOUND: 404,
       LEAGUE_TRASH_EXPIRED: 410,
       LEAGUE_TRASH_SEASON_EXISTS: 409,
+      LEAGUE_TRASH_REBUILD_PENDING: 409,
       LEAGUE_TRASH_SCHEMA_DRIFT: 409,
       LEAGUE_TRASH_PARENT_MISSING: 409,
       LEAGUE_TRASH_PLAN_MISMATCH: 409,
@@ -134,7 +134,7 @@ describe('toLeagueTrashError', () => {
   });
 });
 
-describe('leagueTrashUserError / leagueTrashRebuildPendingError', () => {
+describe('leagueTrashUserError', () => {
   it('words an already typed error', () => {
     expect(leagueTrashUserError(new LeagueTrashDbError('LEAGUE_TRASH_NOT_FOUND'))).toMatchObject({
       code: 'LEAGUE_TRASH_NOT_FOUND',
@@ -142,11 +142,11 @@ describe('leagueTrashUserError / leagueTrashRebuildPendingError', () => {
     });
   });
 
-  it('words the refusal to restore a league whose delete rebuild is pending as a catalogued 409', () => {
-    const error = leagueTrashRebuildPendingError();
+  it('words the database refusal to restore a league whose delete rebuild is pending as a catalogued 409', () => {
+    const error = toLeagueTrashError({ code: 'P0001', message: 'LEAGUE_TRASH_REBUILD_PENDING', details: null });
 
     expect(error).toMatchObject({ code: 'LEAGUE_TRASH_REBUILD_PENDING', statusCode: 409 });
-    expect(seasonsDe.dynamic('LEAGUE_TRASH_REBUILD_PENDING')).not.toBe(error.message);
+    expect(seasonsDe.dynamic('LEAGUE_TRASH_REBUILD_PENDING')).not.toBe(error?.message);
   });
 });
 

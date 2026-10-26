@@ -9,9 +9,10 @@ interface PreviewClientProps {
 }
 
 /**
- * The real Ruleset Studio editor over a fixture draft. While it is mounted, `fetch` answers the ruleset library routes
- * (save, reload, publish) from memory, so the dev page needs no database and spends no Supabase quota; every other request
- * (the entry catalog, the preset rules) goes to the real, dex-only routes.
+ * The real Ruleset Studio editor over a fixture draft. While it is mounted, `window.fetch` answers the ruleset library
+ * routes (save, reload, publish) from memory, so the dev page needs no database and spends no Supabase quota; every other
+ * request (the entry catalog, the preset rules) goes to the real, dex-only routes. The editor's requests all use the
+ * global `fetch`, so this one patch, restored on unmount, is the whole seam of the dev page.
  */
 export default function PreviewClient({ editor }: PreviewClientProps) {
   const state = useRef<FakeLibraryState>({ definitionId: editor.definitionId, rev: editor.initial.draftRev, document: editor.initial.document, versions: editor.published?.versionNo ?? 0 });

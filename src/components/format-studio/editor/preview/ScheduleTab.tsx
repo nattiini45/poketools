@@ -9,9 +9,9 @@ import {
   SCHEDULE_DEFAULT_ROUND_DAYS,
   SCHEDULE_MAX_PLAYERS,
   SCHEDULE_MIN_PLAYERS,
-  resolveLText,
   type CountRange,
 } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import type { DraftDocument } from '@/lib/format-studio/editor/document';
 import { scheduleFor } from '@/lib/format-studio/editor/preview';
 import NumberField from '../fields/NumberField';

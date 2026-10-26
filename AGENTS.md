@@ -142,7 +142,7 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
 ## Pokémon Data Rules
 
 - Use `new Generations(Dex)` from `@pkmn/data` + `@pkmn/dex`. Not `Dex.forFormat()`.
-  - Exception: `listNationalSpecies`, `listNationalMoves` and `listNationalItems` in `src/lib/pkmn/dex.ts` read `Dex.forGen(gen)`, because the National Dex universe includes past entries (and Mega Evolutions, Primal formes) that `Generations` hides. Nothing else bypasses the wrapper.
+  - Exception: the `listNational*` (species, moves, items, abilities) and `getNational*` readers and `getRawEntity` in `src/lib/pkmn/dex.ts` read `Dex.forGen(gen)`, because the National Dex universe includes past entries (and Mega Evolutions, Primal formes) that `Generations` hides. Nothing else bypasses the wrapper.
 - Replay parsing: `@pkmn/protocol` + `@pkmn/client`. NOT `@pkmn/logs` (doesn't exist).
 - Keep static format defaults in `src/lib/pkmn/formats.ts`; the rule catalog behind them is `src/lib/pkmn/format-catalog.ts` (dex-free) and the tables in `src/lib/pkmn/preset-data/` (`docs/ruleset-presets.md`).
 - Never hardcode Pokémon names, moves, types, or stat data — always query `@pkmn/data`.

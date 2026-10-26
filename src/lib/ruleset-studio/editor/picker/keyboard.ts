@@ -82,6 +82,14 @@ const MOVES: Record<string, Move> = {
 const unhandled = (nav: NavState): KeyResult => ({ nav, command: null, handled: false });
 const handled = (nav: NavState, command: PickerCommand | null = null): KeyResult => ({ nav, command, handled: true });
 
+/**
+ * The active index kept inside a list that may have shrunk since it was set (a search narrowed the result): the last
+ * entry when it points past the end, -1 for an empty list. The component renders and the reducer acts on the same entry.
+ */
+export function clampActive(active: number, count: number): number {
+  return count === 0 ? -1 : Math.min(active, count - 1);
+}
+
 /** The ids a command acts on: the selection when there is one, else the active entry. */
 export function targetsOf(nav: NavState, order: readonly string[]): string[] {
   if (nav.selection.ids.size > 0) return [...nav.selection.ids];
@@ -89,7 +97,8 @@ export function targetsOf(nav: NavState, order: readonly string[]): string[] {
   return active === undefined ? [] : [active];
 }
 
-export function reduceKey(nav: NavState, input: KeyInput, ctx: NavContext): KeyResult {
+export function reduceKey(state: NavState, input: KeyInput, ctx: NavContext): KeyResult {
+  const nav: NavState = { ...state, active: clampActive(state.active, ctx.order.length) };
   const { key } = input;
   const letter = key.length === 1 ? key.toLowerCase() : key;
 

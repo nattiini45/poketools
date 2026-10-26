@@ -15,7 +15,8 @@ import 'server-only';
 import { supabase } from '../client';
 import { postgrestQuoted } from '../postgrest-filter';
 import type { Json } from '@/types/database';
-import type { FormatDefinition, LText } from '@/lib/format-kit/client';
+import type { FormatDefinition } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
 import { FormatStudioError, mapFormatDbError } from '@/lib/format-studio/errors';
 import type { FormatActor } from '@/lib/format-studio/access';
 import type {

@@ -21,6 +21,7 @@ import { TOUR_OVERLAYS } from '../preset-data/tour-overlay';
  */
 const DATA_HASHES: Readonly<Record<string, string>> = {
   '2026-10-26.1': '2523ad1f88146ea0499a6015b2038746d3ffdb475e499405cdbfd94a631fb6c5',
+  '2026-10-27.1': 'add971e53efe718d833a820650dd45185199de513dc278134320cbac6c3f0afa',
 };
 
 function canonical(value: unknown): unknown {

@@ -21,16 +21,14 @@ import { useEffect, type RefObject } from 'react';
 
 export const SITE_NAV_ID = 'site-nav';
 
-type Measured = Pick<HTMLElement, 'getBoundingClientRect'>;
-
 /** The measured bars; a missing one keeps its CSS default (the nav alone means 0 px). */
 export interface StickyBars {
-  nav: Measured | null;
-  clock: Measured | null;
-  dock: Measured | null;
+  nav: Element | null;
+  clock: Element | null;
+  dock: Element | null;
 }
 
-const heightOf = (bar: Measured): string => `${Math.ceil(bar.getBoundingClientRect().height)}px`;
+const heightOf = (bar: Element): string => `${Math.ceil(bar.getBoundingClientRect().height)}px`;
 
 /** Writes the bars' heights, rounded up, onto `root`. Exported for the unit test. */
 export function applyStickyOffsets(root: { style: Pick<CSSStyleDeclaration, 'setProperty'> }, bars: StickyBars): void {
@@ -56,7 +54,7 @@ export function observeStickyOffsets(
   measure();
   if (!Observer) return () => {};
   const observer = new Observer(measure);
-  for (const bar of [bars.nav, bars.clock, bars.dock]) if (bar) observer.observe(bar as Element);
+  for (const bar of [bars.nav, bars.clock, bars.dock]) if (bar) observer.observe(bar);
   return () => observer.disconnect();
 }
 

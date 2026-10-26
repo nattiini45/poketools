@@ -6,28 +6,32 @@ import 'server-only';
  *  - A create makes a `gallery` definition owned by the admin and publishes version 1 from the flat form.
  *  - An update edits the flat fields of the HEAD of the definition that the version id belongs to and publishes the result as
  *    a NEW version. The leagues and phases that pin an older version are not touched: moving them is the pin route. The
- *    answer is the new head (a new id).
+ *    answer is the new head (a new id). What the flat form cannot say stays as the head has it (the summary, the other
+ *    languages of the name, `based_on`), and the studio draft is only replaced when it is the head, never when the owner has
+ *    unpublished work in it.
  *  - A delete removes the definition when no league or phase pins any of its versions (`ruleset_in_use` otherwise).
  *
  * The flat form cannot express a preset base, an allowlist, an unban of anything but Pokémon, or removed clauses. A ruleset
  * that uses any of them is read-only here (`ruleset_legacy_editor_unsupported`) instead of being flattened and losing rules.
  */
-import { ltext } from '@/lib/format-kit';
+import { isDeepStrictEqual } from 'node:util';
+import { ltext } from '@/lib/studio-core/ltext';
 import { legacyFormToDocument } from '@/lib/ruleset-kit/legacy';
 import type { RulesetDocument } from '@/lib/ruleset-kit/types';
+import { validateRulesetDocument } from '@/lib/ruleset-kit/validate';
 import {
   getDefinitionOfVersion,
   getLatestPublishedRulesetVersion,
+  getRulesetDefinitionDraft,
   getRulesetDefinitionMeta,
-  publishRulesetVersion,
   saveRulesetDraft,
 } from '@/lib/supabase/queries/ruleset-definitions';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import type { SessionPlayer } from '@/types/auth';
 import type { Ruleset, RulesetFormData } from '@/types/ruleset';
-import { compileDocument } from './compile.server';
+import { compileForPublish } from './compile.server';
 import { RulesetStudioError } from './errors';
-import { createPublished, removeDefinition, toActor } from './library';
+import { createPublished, publishCompiled, removeDefinition, toActor } from './library';
 
 /** The flat form of a published ruleset, as the old builder shows it. */
 export function rulesetToFormData(ruleset: Ruleset): RulesetFormData {
@@ -61,6 +65,27 @@ export function isFlatDocument(doc: RulesetDocument): boolean {
     doc.items.unban.length === 0 &&
     doc.abilities.unban.length === 0
   );
+}
+
+/**
+ * The document of the edited form with the identity of the head. The flat form only knows a name and a base format, so the
+ * summary, the other languages of the name and a `based_on` the form did not touch come from the head; a name or base format
+ * the patch really changes comes from the form.
+ */
+function withHeadIdentity(built: RulesetDocument, head: RulesetDocument['identity'], patch: Partial<RulesetFormData>, current: Ruleset): RulesetDocument {
+  const { based_on: builtBasedOn, name: builtName } = built.identity;
+  const { based_on: _headBasedOn, ...kept } = head;
+  const basedOn = patch.base_format !== undefined && patch.base_format !== current.base_format ? builtBasedOn : head.based_on;
+  const name = patch.name !== undefined && patch.name !== current.name ? builtName : head.name;
+  return { ...built, identity: { ...kept, name, ...(basedOn === undefined ? {} : { based_on: basedOn }) } };
+}
+
+/** Whether the studio draft is the published head (nothing unpublished in it), so a builder edit may move it along. */
+async function draftIsHead(definitionId: string, draftRev: number, head: RulesetDocument): Promise<boolean> {
+  const draft = await getRulesetDefinitionDraft(definitionId);
+  if (draft === null || draft.draft_rev !== draftRev) return false;
+  const parsed = validateRulesetDocument(draft.document);
+  return parsed.ok && isDeepStrictEqual(parsed.document, head);
 }
 
 function mustGet(ruleset: Ruleset | null): Ruleset {
@@ -99,26 +124,19 @@ export async function updateLegacyRuleset(actorId: string | null, versionId: str
   if (!isFlatDocument(head.spec)) throw new RulesetStudioError('ruleset_legacy_editor_unsupported');
 
   const current = mustGet(await getRulesetById(head.id));
-  const document = legacyFormToDocument({ ...rulesetToFormData(current), ...patch }) as unknown as Record<string, unknown>;
-  const { result, catalogVersion } = compileDocument(document);
-  if (!result.ok || result.document === null || result.resolved === null || result.content_hash === null || result.resolved_hash === null) {
-    throw new RulesetStudioError('ruleset_document_invalid', { count: Math.max(result.diagnostics.filter((d) => d.severity === 'error').length, 1) });
-  }
-  if (result.content_hash === head.content_hash && result.resolved_hash === head.resolved_hash) return current;
+  const built = legacyFormToDocument({ ...rulesetToFormData(current), ...patch });
+  const compiled = compileForPublish(withHeadIdentity(built, head.spec.identity, patch, current));
+  if (compiled.contentHash === head.content_hash && compiled.resolvedHash === head.resolved_hash) return current;
 
-  const saved = await saveRulesetDraft({ id: meta.id, expectedRev: meta.draft_rev, document: result.document, name: result.document.identity.name });
-  if (saved === null) throw new RulesetStudioError('ruleset_stale_revision', undefined, { draft_rev: meta.draft_rev });
-  const { versionId: newVersionId } = await publishRulesetVersion({
-    definitionId: meta.id,
-    expectedRev: saved.draft_rev,
-    spec: result.document,
-    contentHash: result.content_hash,
-    resolved: result.resolved,
-    resolvedHash: result.resolved_hash,
-    catalogVersion,
-    changelog: ltext('en', 'Edited in the ruleset builder'),
-    actorId,
-  });
+  // The publish compares the draft revision but never reads the draft, so unpublished studio work stays as it is. A draft that
+  // IS the old head moves to the new document, or the next studio publish would silently bring the old rules back.
+  let expectedRev = meta.draft_rev;
+  if (await draftIsHead(meta.id, meta.draft_rev, head.spec)) {
+    const saved = await saveRulesetDraft({ id: meta.id, expectedRev, document: compiled.document, name: compiled.document.identity.name });
+    if (saved === null) throw new RulesetStudioError('ruleset_stale_revision', undefined, { draft_rev: meta.draft_rev });
+    expectedRev = saved.draft_rev;
+  }
+  const { versionId: newVersionId } = await publishCompiled(meta.id, expectedRev, compiled, ltext('en', 'Edited in the ruleset builder'), actorId);
   return mustGet(await getRulesetById(newVersionId));
 }
 

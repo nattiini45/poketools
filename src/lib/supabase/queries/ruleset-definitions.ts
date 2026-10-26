@@ -18,7 +18,7 @@ import { supabase } from '../client';
 import { postgrestQuoted } from '../postgrest-filter';
 import { readBoundedPages } from '../read-bounded-pages';
 import type { Json } from '@/types/database';
-import type { LText } from '@/lib/format-kit/types';
+import type { LText } from '@/lib/studio-core/ltext';
 import type { ResolvedRules, RulesetDocument } from '@/lib/ruleset-kit/types';
 import type { RulesetActor } from '@/lib/ruleset-studio/access';
 import { RulesetStudioError, mapRulesetDbError } from '@/lib/ruleset-studio/errors';
@@ -628,4 +628,49 @@ export async function isVersionPinned(versionId: string): Promise<boolean> {
   if (seasons.error) throw seasons.error;
   if (tournaments.error) throw tournaments.error;
   return (seasons.count ?? 0) + (tournaments.count ?? 0) > 0;
+}
+
+// ─── Rulesets named by a format ───────────────────────────────────────────────
+
+const NAMED_CHUNK = 50;
+
+/** A stored ruleset that a format stage names: its definition and its newest published version (what an attach pins). */
+export interface NamedRuleset {
+  definition_id: string;
+  head_version_id: string;
+}
+
+/**
+ * Resolves the ids a format document names (`stage.ruleset.id`) to the definitions that exist and have a published version,
+ * keyed by the id as named. The editor writes DEFINITION ids. A format stored before the Ruleset Studio names the id of a
+ * legacy ruleset, which now is the id of version 1 of its definition; a published format version and an attached copy are
+ * immutable and hashed, so they keep that id and it resolves here to the definition of the version. A definition without a
+ * published version is a draft, not a ruleset, and is absent. Chunks of 50; an all-malformed list makes no request.
+ */
+export async function resolveNamedRulesets(ids: readonly string[]): Promise<Map<string, NamedRuleset>> {
+  const resolved = new Map<string, NamedRuleset>();
+  const unique = [...new Set(ids)].filter(isKnownIdShape);
+  for (let i = 0; i < unique.length; i += NAMED_CHUNK) {
+    const chunk = unique.slice(i, i + NAMED_CHUNK);
+    const definitions = await supabase.from('ruleset_definitions').select('id, current_version_id').in('id', chunk);
+    if (definitions.error) throw definitions.error;
+    const definitionIds = new Set<string>();
+    for (const row of definitions.data ?? []) {
+      definitionIds.add(row.id);
+      if (row.current_version_id !== null) resolved.set(row.id, { definition_id: row.id, head_version_id: row.current_version_id });
+    }
+    const rest = chunk.filter((id) => !definitionIds.has(id));
+    if (rest.length === 0) continue;
+    const versions = await supabase
+      .from('ruleset_definition_versions')
+      .select('id, definition:ruleset_definitions!definition_id ( id, current_version_id )')
+      .in('id', rest);
+    if (versions.error) throw versions.error;
+    for (const row of (versions.data ?? []) as unknown as Array<{ id: string; definition: { id: string; current_version_id: string | null } | null }>) {
+      if (row.definition?.current_version_id) {
+        resolved.set(row.id, { definition_id: row.definition.id, head_version_id: row.definition.current_version_id });
+      }
+    }
+  }
+  return resolved;
 }

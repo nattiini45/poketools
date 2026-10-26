@@ -3,10 +3,9 @@ import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
 import FormatEditor from '@/components/format-studio/editor/FormatEditor';
 import PageContainer from '@/components/ui/PageContainer';
-import { resolveLText } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import { gateFormatDefinition } from '@/lib/format-studio/gate';
 import { getFormatDetail } from '@/lib/format-studio/library';
-import { listRulesetOptions } from '@/lib/supabase/queries/rulesets';
 import { getLocale, getT } from '@/i18n/server';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 
@@ -39,7 +38,7 @@ export default async function FormatEditPage({ params }: PageProps) {
   }
   if (!gate.canEdit) redirect(`/admin/formats/${id}`);
 
-  const [detail, rulesets, locale] = await Promise.all([getFormatDetail(gate.player, gate.definition), listRulesetOptions(gate.actor), getLocale()]);
+  const [detail, locale] = await Promise.all([getFormatDetail(gate.player, gate.definition), getLocale()]);
   if (detail.draft === null) notFound();
 
   const title = resolveLText(detail.definition.name, { viewer: locale })?.value ?? detail.definition.slug;
@@ -53,8 +52,8 @@ export default async function FormatEditPage({ params }: PageProps) {
           initial={{ document: detail.draft.document, draftRev: detail.draft.draft_rev }}
           published={detail.published === null ? null : { versionNo: detail.published.version_no, contentHash: detail.published.content_hash }}
           actor={gate.actor}
-          // A stage names a ruleset by its DEFINITION id; attach pins the head version that is current then.
-          rulesets={rulesets.map((r) => ({ id: r.definition_id, name: r.name, version_no: r.version_no }))}
+          // A stage names a ruleset by its DEFINITION id (or a legacy id that resolves to one); attach pins the head version that is current then.
+          rulesets={detail.rulesets}
           hasAttachments={false}
         />
       </PageContainer>

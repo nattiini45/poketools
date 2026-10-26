@@ -117,7 +117,7 @@ export interface DraftToolScreenProps {
   weaknessStage: SortStage;
   onWeaknessStage(stage: SortStage): void;
   /** The overview starts expanded (preview scenarios); collapsed by default. */
-  weaknessOpen?: boolean;
+  initialWeaknessOpen?: boolean;
   /** The last poll failed: showing the last state. */
   stale?: boolean;
   /** The poll answered 401/403 (spectator mode). */
@@ -162,7 +162,7 @@ export default function DraftToolScreen({
   indexFailed = false,
   weaknessStage,
   onWeaknessStage,
-  weaknessOpen = false,
+  initialWeaknessOpen = false,
   stale = false,
   authBlocked = false,
   makeupSeconds = null,
@@ -381,7 +381,7 @@ export default function DraftToolScreen({
                   indexFailed={indexFailed}
                   weaknessStage={weaknessStage}
                   onWeaknessStage={onWeaknessStage}
-                  weaknessOpen={weaknessOpen}
+                  initialWeaknessOpen={initialWeaknessOpen}
                   onPin={pin}
                 />
               </PhoneSection>

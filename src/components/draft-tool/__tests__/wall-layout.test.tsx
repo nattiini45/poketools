@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import { runFinder } from '@/lib/draft-finder/engine';
-import { EMPTY_FILTERS, initialFinderState, type FinderViewState } from '@/lib/draft-finder/filter-types';
+import { EMPTY_FILTERS, initialFinderState, SORT_KEYS, type FinderViewState } from '@/lib/draft-finder/filter-types';
 import { prepareIndex } from '@/lib/draft-finder/prepare';
 import { PRICE_TAB_KEYS } from '@/lib/draft-finder/tabs';
 import { BANNED, buildFixtureCatalog, buildFixtureIndex, stubNames } from '@/lib/draft-finder/__tests__/fixture-index';
@@ -540,6 +540,15 @@ describe('finder bar and filter sheet', () => {
     expect(search).not.toContain('md:flex-1');
   });
 
+  it('offers every sort key of the stored preference in the sort select, in order', () => {
+    const html = renderWithI18n(
+      <FinderBar view={initialFinderState()} dispatch={() => {}} indexReady filterPanelId="fp" names={stubNames} />,
+    );
+    const select = /<select[^>]*>([\s\S]*?)<\/select>/.exec(html)?.[1] ?? '';
+    const values = [...select.matchAll(/<option[^>]*value="([^"]*)"/g)].map((m) => m[1]);
+    expect(values).toEqual([...SORT_KEYS]);
+  });
+
   it('renders the filters as a portalled sheet outside the wall pane (no anchored panel to clip)', () => {
     // Radix portals only after mount: nothing of the sheet lands in the server markup of the wall.
     const html = renderWithI18n(
@@ -565,7 +574,8 @@ describe('finder bar and filter sheet', () => {
 });
 
 describe('applyStickyOffsets', () => {
-  const box = (height: number) => ({ getBoundingClientRect: () => ({ height }) as DOMRect });
+  /** A stand-in bar: the node test environment has no DOM, and only the measured height matters. */
+  const box = (height: number) => ({ getBoundingClientRect: () => ({ height }) as DOMRect }) as unknown as HTMLElement;
   const rootOf = (set: Map<string, string>) => ({ style: { setProperty: (k: string, v: string | null) => void set.set(k, v ?? '') } });
   const bars = (patch: Partial<StickyBars> = {}): StickyBars => ({ nav: null, clock: null, dock: null, ...patch });
 

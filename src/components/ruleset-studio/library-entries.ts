@@ -6,7 +6,8 @@
 import type { Translator } from '@/i18n/core';
 import type { Locale } from '@/i18n/config';
 import type { rulesetStudioMessages } from '@/i18n/messages/ruleset-studio';
-import { resolveLText, type RulesetPresetEntry } from '@/lib/format-kit/client';
+import { type RulesetPresetEntry } from '@/lib/pkmn/ruleset-preset-catalog';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import type { RulesetDefinitionSummary, RulesetPinCounts } from '@/lib/ruleset-studio/library-types';
 import { isCatalogStale } from '@/lib/ruleset-studio/staleness';
 import type { LibraryEntry } from '@/components/studio-shell/library/LibraryList';

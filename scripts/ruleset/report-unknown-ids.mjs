@@ -29,17 +29,10 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { toID } from '../pkmn-i18n/build.mjs';
 
-/** The one id fold of the application (src/lib/pkmn/i18n/id.ts); its body is duplicated here like scripts/pkmn-i18n/build.mjs does. */
-export function toID(text) {
-  return String(text)
-    .replace(/♀/g, 'f')
-    .replace(/♂/g, 'm')
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
-}
+/** The application's id fold (src/lib/pkmn/i18n/id.ts, pinned to `toID` of scripts/pkmn-i18n/build.mjs by the id parity test) of any stored value. */
+const idOf = (entry) => toID(String(entry));
 
 export const CATEGORIES = [
   ['banned_pokemon', 'pokemon'],
@@ -65,7 +58,7 @@ export function analyze(rows, names, sqlFold = null) {
     for (const [column, category] of CATEGORIES) {
       const entries = Array.isArray(row[column]) ? row[column] : [];
       for (const entry of entries) {
-        const id = toID(entry);
+        const id = idOf(entry);
         const entity = names[category].get(id);
         if (entity === undefined) {
           unmatched.push({ ruleset, category, column, entry, id });
@@ -80,7 +73,7 @@ export function analyze(rows, names, sqlFold = null) {
     for (const { entry, sql_id: sqlId } of sqlFold) {
       if (seenFold.has(entry)) continue;
       seenFold.add(entry);
-      if (toID(entry) !== sqlId) foldMismatch.push({ entry, app_id: toID(entry), sql_id: sqlId });
+      if (idOf(entry) !== sqlId) foldMismatch.push({ entry, app_id: idOf(entry), sql_id: sqlId });
     }
   }
   return { unmatched, foldedOnly, foldMismatch };

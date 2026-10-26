@@ -9,16 +9,8 @@
  */
 import 'server-only';
 
-import {
-  CURRENT_ENV,
-  PRESETS,
-  applyRulesetPreset,
-  compile,
-  isSlug,
-  resolveLText,
-  type Diagnostic,
-  type LText,
-} from '@/lib/format-kit';
+import { CURRENT_ENV, PRESETS, applyRulesetPreset, compile, isSlug, type Diagnostic } from '@/lib/format-kit';
+import { resolveLText, type LText } from '@/lib/studio-core/ltext';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import {
   countFormatVersions,
@@ -50,6 +42,7 @@ import type {
   FormatVersionSummary,
   FormatVisibility,
 } from './library-types';
+import { loadRulesetChoices } from './ruleset-choices';
 import { slugFromName } from './slug';
 
 /** Diagnostics a check returns at most; errors sort first, so they survive the cut. */
@@ -275,9 +268,11 @@ export async function getFormatDetail(actor: SessionPlayer, meta: FormatDefiniti
     privileged ? getFormatDefinitionDraft(meta.id) : Promise.resolve(null),
     privileged ? listFormatVersions(meta.id, 100) : Promise.resolve<FormatVersionSummary[]>([]),
   ]);
+  const rulesets = await loadRulesetChoices(actor, [draft?.document, published?.spec]);
   return {
     definition,
     draft,
+    rulesets,
     published:
       published === null
         ? null

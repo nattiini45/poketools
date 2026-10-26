@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CURRENT_ENV, PRESETS, compile, deepFreeze, type FormatDefinition } from '@/lib/format-kit/client';
 import { planStages } from '../../materialise';
-import { previewAttach, type AttachPreview } from '../../editor/attach-preview';
+import { previewAttach, rulesetLabelsOf, type AttachPreview } from '../../editor/attach-preview';
 
 const RULESET = '3f2b8c1e-5a47-4d09-9b6e-7c1d2a4e8f10';
 const HASH = 'a'.repeat(64);
@@ -141,6 +141,20 @@ describe('the league ruleset', () => {
       ['league', { name: 'Summer OU', version_no: 2 }],
       ['named', { name: 'Finals Rules', version_no: 4 }],
     ]);
+  });
+
+  it('labels a stage that names a legacy ruleset id like its definition (the labels come from the format detail)', () => {
+    const legacy = '9a8b7c6d-1111-4222-8333-444455556666';
+    const named = spec('classic-league');
+    named.stages[1] = { ...named.stages[1], ruleset: { kind: 'ruleset', id: legacy } };
+    const labels = rulesetLabelsOf([
+      { id: RULESET, name: 'Finals Rules', version_no: 4 },
+      { id: legacy, name: 'Finals Rules', version_no: 4, definition_id: RULESET },
+      { id: 'no-version', name: 'Without version' },
+    ]);
+    expect([...labels.keys()]).toEqual([RULESET, legacy]);
+    const result = okPreview(named, { namedRulesets: labels });
+    expect(result.stages[1].rulesetLabel).toEqual({ name: 'Finals Rules', version_no: 4 });
   });
 
   it('leaves the label out when the caller does not know the ruleset', () => {

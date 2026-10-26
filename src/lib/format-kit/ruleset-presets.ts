@@ -1,8 +1,8 @@
 /**
- * Rule presets in the format kit: the kit's view of the dex-free preset catalog (`@/lib/pkmn/format-catalog`,
- * `PRESETS`: Showdown's ladder formats and the Smogon draft formats) and the one place that decides what picking a
- * preset pre-fills in a format definition. Pure and client-safe (zero zod, no `@pkmn`; the client-boundary test
- * allow-lists the catalog import).
+ * Rule presets in the format kit: what picking a preset pre-fills in a format definition. The catalog view the
+ * pickers share (entries, lookup, search, grouping) lives in `@/lib/pkmn/ruleset-preset-catalog`; this module is the
+ * one place that decides how a preset changes a format document. Pure and client-safe (zero zod, no `@pkmn`; the
+ * client-boundary test allow-lists the catalog import).
  *
  * A rule preset is the third kind of a stage's ruleset, `{ kind: 'preset', preset: 'gen9ou' }`. Picking one only
  * PRE-PICKS settings; nothing is locked and every field stays editable. The rule, stated here once:
@@ -23,147 +23,16 @@
  * owned by the league. "Preset" also means the shipped example formats (`presets/`, `/api/formats/presets`) in the
  * kit; the interface calls those examples and these rule presets.
  */
-import {
-  GENERATIONS,
-  PRESETS,
-  PRESET_FAMILIES,
-  type PresetFamily,
-  type PresetSource,
-} from '@/lib/pkmn/format-catalog';
-import { KEY_PATTERN, type Key } from '@/lib/studio-core/keys';
-
-export type { PresetFamily, PresetSource } from '@/lib/pkmn/format-catalog';
-import type { FormatDefinition, LText, Locale, Stage } from './types';
-
-export interface RulesetPresetEntry {
-  /** The format id ('gen9ou', 'gen9natdexdraft'); a valid kit key. */
-  id: Key;
-  /** The catalog name ('Gen 9 OU'); Showdown names stay English in every language. */
-  name: string;
-  gen: number;
-  /** 'Gen 9 (SV)'. */
-  genLabel: string;
-  source: PresetSource;
-  family: PresetFamily;
-  /** The tier key ('ou', 'doublesou', 'natdexdraft'). */
-  tier: string;
-  /** The tier label ('OU', 'Doubles OU'). */
-  tierLabel: string;
-  doubles: boolean;
-  /** The preset has documented Smogon tour extras ("add Smogon tour bans" in the ruleset studio). */
-  tourOverlay: boolean;
-}
-
-/** The presets of one source, generation and family: the unit a picker lists under one heading. */
-export interface RulesetPresetGroup {
-  /** `source:gen:family`, unique and stable. */
-  key: string;
-  source: PresetSource;
-  gen: number;
-  genLabel: string;
-  family: PresetFamily;
-  presets: readonly RulesetPresetEntry[];
-}
+import { getRulesetPreset, type RulesetPresetEntry } from '@/lib/pkmn/ruleset-preset-catalog';
+import type { Key } from '@/lib/studio-core/keys';
+import type { FormatDefinition, Stage } from './types';
+import type { LText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 
 /** The best of a VGC series. */
 export const PRESET_VGC_BEST_OF = 3;
 /** Players in a preset's battle. */
 export const PRESET_PLAYERS_PER_MATCH = 2;
-
-const SOURCE_ORDER: readonly PresetSource[] = ['showdown', 'smogon-draft'];
-const FAMILY_ORDER: ReadonlyMap<PresetFamily, number> = new Map(PRESET_FAMILIES.map((family, index) => [family.key, index]));
-const GENERATION_LABELS: ReadonlyMap<number, string> = new Map(GENERATIONS.map((generation) => [generation.num, generation.label]));
-const FAMILY_LABELS: ReadonlyMap<PresetFamily, string> = new Map(PRESET_FAMILIES.map((family) => [family.key, family.label]));
-
-function buildEntries(): RulesetPresetEntry[] {
-  const entries: RulesetPresetEntry[] = [];
-  for (const preset of PRESETS) {
-    if (!KEY_PATTERN.test(preset.id)) continue;
-    entries.push({
-      id: preset.id,
-      name: preset.name,
-      gen: preset.gen,
-      genLabel: GENERATION_LABELS.get(preset.gen) ?? `Gen ${preset.gen}`,
-      source: preset.source,
-      family: preset.family,
-      tier: preset.tier,
-      tierLabel: preset.tierLabel,
-      doubles: preset.gameType === 'doubles',
-      tourOverlay: preset.tourOverlay,
-    });
-  }
-  // Picker order: source (Showdown, then the Smogon drafts), then the newest generation first (the one a league
-  // picks most often), then the family, then the catalog's own order (a stable sort keeps it).
-  return entries.sort(
-    (a, b) =>
-      SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source) ||
-      b.gen - a.gen ||
-      (FAMILY_ORDER.get(a.family) ?? 0) - (FAMILY_ORDER.get(b.family) ?? 0),
-  );
-}
-
-const ENTRIES: readonly RulesetPresetEntry[] = buildEntries();
-const BY_ID: ReadonlyMap<string, RulesetPresetEntry> = new Map(ENTRIES.map((entry) => [entry.id, entry]));
-
-/** The preset a stage starts from when an editor switches it to the preset kind: the first Showdown ladder entry of the newest generation (OU). */
-export const DEFAULT_RULESET_PRESET: Key = ENTRIES[0].id;
-
-/** All presets in picker order. */
-export function listRulesetPresets(): readonly RulesetPresetEntry[] {
-  return ENTRIES;
-}
-
-/** The preset of an id, or `undefined` for an unknown id (and for the ruleset builder's `blank`). */
-export function getRulesetPreset(id: unknown): RulesetPresetEntry | undefined {
-  return typeof id === 'string' ? BY_ID.get(id) : undefined;
-}
-
-export function isRulesetPresetId(id: unknown): id is Key {
-  return getRulesetPreset(id) !== undefined;
-}
-
-/** The words a preset is found by: its name, id, tier, generation, family and source, lower-cased and split at anything that is not a letter or a digit. */
-function searchWords(entry: RulesetPresetEntry): string[] {
-  const source = entry.source === 'showdown' ? 'showdown ladder' : 'smogon draft league';
-  const text = `${entry.name} ${entry.id} ${entry.tierLabel} ${entry.genLabel} ${FAMILY_LABELS.get(entry.family) ?? ''} ${source}`;
-  return text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word !== '');
-}
-
-/**
- * The presets that match `query`, for a picker's search box. The query is split into words and every word must be the
- * start of a word of the preset (its name, id, tier label, generation label, family or source; case-insensitive), so
- * "gen 9 ou", "gen9ou", "doubles", "sv", "draft" and "natdex" all work, and "ou" finds OU but not "doubles". A blank
- * query keeps everything.
- */
-export function filterRulesetPresets(query: string): readonly RulesetPresetEntry[] {
-  const wanted = query.toLowerCase().split(/\s+/).filter((word) => word !== '');
-  if (wanted.length === 0) return ENTRIES;
-  return ENTRIES.filter((entry) => {
-    const words = searchWords(entry);
-    return wanted.every((word) => words.some((candidate) => candidate.startsWith(word)));
-  });
-}
-
-/**
- * Groups presets by source, then generation (newest first), then family, keeping the order of `entries`. A group is
- * what a picker shows under one heading.
- */
-export function groupRulesetPresets(entries: readonly RulesetPresetEntry[]): readonly RulesetPresetGroup[] {
-  const groups: { group: Omit<RulesetPresetGroup, 'presets'>; presets: RulesetPresetEntry[] }[] = [];
-  for (const entry of entries) {
-    const key = `${entry.source}:${entry.gen}:${entry.family}`;
-    let found = groups.find((candidate) => candidate.group.key === key);
-    if (found === undefined) {
-      found = {
-        group: { key, source: entry.source, gen: entry.gen, genLabel: entry.genLabel, family: entry.family },
-        presets: [],
-      };
-      groups.push(found);
-    }
-    found.presets.push(entry);
-  }
-  return groups.map(({ group, presets }) => ({ ...group, presets }));
-}
 
 /** The battle settings a preset pre-picks for a stage (everything except the series length). */
 function battleSettings(preset: RulesetPresetEntry): Pick<Stage, 'ruleset' | 'doubles' | 'players_per_match'> {
@@ -240,4 +109,16 @@ export function presetsOf(definition: Pick<FormatDefinition, 'stages'>): Key[] {
     }
   }
   return out;
+}
+
+/** The ids of the stored rulesets the stages name explicitly (`kind: 'ruleset'`), in stage order. Reads defensively, so it accepts a stored spec of any shape. */
+export function namedRulesetsOf(definition: Pick<FormatDefinition, 'stages'>): string[] {
+  const stages: unknown = definition.stages;
+  if (!Array.isArray(stages)) return [];
+  const ids = new Set<string>();
+  for (const stage of stages) {
+    const ruleset = (stage as { ruleset?: { kind?: unknown; id?: unknown } } | null)?.ruleset;
+    if (ruleset?.kind === 'ruleset' && typeof ruleset.id === 'string') ids.add(ruleset.id);
+  }
+  return [...ids];
 }

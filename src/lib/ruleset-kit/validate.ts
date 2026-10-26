@@ -12,6 +12,7 @@
  *
  * The result is a copy: the input is never mutated and shares no array with the output.
  */
+import { SINGLES_TIER_ORDER } from '@/lib/pkmn/tier-constants';
 import { hasOwn } from '@/lib/studio-core/keys';
 import type { LText } from '@/lib/studio-core/ltext';
 import type { TeamConstraints, TierKey } from '@/types/ruleset';
@@ -72,7 +73,7 @@ const TOP_KEYS = [
   'team_constraints',
   'custom_rules',
 ] as const;
-const TIER_KEYS: ReadonlySet<string> = new Set(['ZU', 'PU', 'PUBL', 'NU', 'NUBL', 'RU', 'RUBL', 'UU', 'UUBL', 'OU', 'Uber', 'AG']);
+const TIER_KEYS: ReadonlySet<string> = new Set(SINGLES_TIER_ORDER);
 const LTEXT_MAX = 4000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

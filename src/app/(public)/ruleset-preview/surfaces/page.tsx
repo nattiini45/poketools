@@ -19,10 +19,8 @@ import { rulesetStudioMessages } from '@/i18n/messages/ruleset-studio';
 import { rulesetStudioEditorMessages } from '@/i18n/messages/ruleset-studio/editor';
 import { rulesetStudioSectionsMessages } from '@/i18n/messages/ruleset-studio/sections';
 import { LEAGUE_TRASH_RETENTION_DAYS } from '@/lib/league-trash/constants';
-import { getPreset } from '@/lib/pkmn/format-catalog';
 import { PRESET_RULES_VERSION } from '@/lib/pkmn/preset-data/pin';
-import { compileDocument } from '@/lib/ruleset-studio/compile.server';
-import { describeResolved } from '@/lib/ruleset-studio/describe.server';
+import { describeDocument } from '@/lib/ruleset-studio/describe.server';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
 import { DialogGallery, FakeApi } from './SurfacesClient';
 import {
@@ -128,9 +126,7 @@ async function renderSurface(surface: SurfaceId, locale: Locale) {
       );
     }
     case 'detail': {
-      const document = newRulesetDocument('Spring OU', 'en', 'gen9ou');
-      const rules = compileDocument(document).result.resolved;
-      const described = rules === null ? null : describeResolved(rules, locale, getPreset('gen9ou')?.name ?? 'gen9ou');
+      const described = describeDocument(newRulesetDocument('Spring OU', 'en', 'gen9ou'), locale);
       const latest = DETAIL_VERSIONS[0].version_no;
       return (
         // i18n-ignore: dev-only fixture page, the title is the fixture's own name
@@ -162,7 +158,7 @@ async function renderSurface(surface: SurfaceId, locale: Locale) {
             <div key={card.key} className="space-y-1">
               {/* i18n-ignore: dev-only fixture page, English only */}
               <p className="text-xs font-semibold uppercase text-poke-text-muted">{card.key}</p>
-              <RulesetPinCard kind={card.kind} target={card.target} pin={card.pin} onMoved={undefined} />
+              <RulesetPinCard kind={card.kind} target={card.target} pin={card.pin} />
             </div>
           ))}
         </div>

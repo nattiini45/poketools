@@ -53,7 +53,7 @@ Written by the league recycle bin ([Season](./season.md#league-recycle-bin)). Re
 | `season.delete` | `DELETE /api/seasons/[id]` (a move to the trash, not a destruction) | `trash_id`, `purge_after`, `counts` (the row counts the trash page shows), `frozen_pools` (running drafts paused), `rebuild`, `rebuild_error` |
 | `season.restore` | `POST /api/admin/league-trash/[id]/restore` (superadmin) | `trash_id`, `restored` (rows per table), `shift_seconds` (the time spent in the trash), `paused_pools`, `queued_aggregate_jobs`, `schema_version_at_delete`, `warnings`, `rebuild`, `rebuild_error` |
 | `season.rebuild` | `POST /api/admin/league-trash/[id]/rebuild` (superadmin) | `trash_id`, `kind` (`delete` or `restore`), `rebuild`, `rebuild_error` |
-| `season.purge` | the expiry cron (`/api/cron/expire-league-trash`) | per removed league: `trash_id`, `deleted_at`, `purge_after`, `matches`, `social_images` (the sweep result). The actor is System (`actor_id` null, `actor_name` `System`), like the other crons |
+| `season.purge` | the expiry cron (`/api/cron/expire-league-trash`) | per removed league: `trash_id`, `deleted_at`, `purge_after`, `matches` (written right after the expiry, before the storage sweep, whose outcome is in the response body and the server log). The actor is System (`actor_id` null, `actor_name` `System`), like the other crons |
 
 The `audit_log` and `draft_action_log` rows of a purged league are kept: both logs are append-only by design and carry no foreign key to the league. Achievements are not touched.
 

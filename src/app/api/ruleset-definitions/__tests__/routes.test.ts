@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { ltext } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { SessionPlayer } from '@/types/auth';
 import type { RulesetDefinitionMeta } from '@/lib/ruleset-studio/library-types';
 
@@ -30,7 +30,6 @@ vi.mock('@/lib/ruleset-studio/pin-impact.server', () => ({ computePinImpact: vi.
 vi.mock('@/lib/supabase/queries/ruleset-definitions', () => ({
   listRulesetDefinitions: vi.fn(),
   getRulesetVersion: vi.fn(),
-  getPinTargetStates: vi.fn(),
 }));
 vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
@@ -45,7 +44,7 @@ import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
 import { changeVisibility, createFromBody, forkDefinition, forkPreset, getRulesetDetail, publish, removeDefinition, saveDraft } from '@/lib/ruleset-studio/library';
 import { listUsage, movePins } from '@/lib/ruleset-studio/pins';
 import { computePinImpact } from '@/lib/ruleset-studio/pin-impact.server';
-import { getPinTargetStates, getRulesetVersion, listRulesetDefinitions } from '@/lib/supabase/queries/ruleset-definitions';
+import { getRulesetVersion, listRulesetDefinitions } from '@/lib/supabase/queries/ruleset-definitions';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { logAuditEvent } from '@/lib/audit/log';
 import { expireSeasonReads, expireTournamentReads } from '@/lib/revalidation';
@@ -240,17 +239,15 @@ describe('pins, usage, versions', () => {
   const body = { to_version_no: 2, targets: [{ kind: 'season', id: SEASON }, { kind: 'tournament', id: ID }], confirm_started: [SEASON] };
 
   it('moves the pins, expires the public reads of every moved target and audits one event per target', async () => {
-    vi.mocked(movePins).mockResolvedValue({
-      version_id: 'v2', version_no: 2,
-      moved: [
-        { kind: 'season', id: SEASON, name: 'Spring League', from_version_id: 'v1', started: true, difference: null },
-        { kind: 'tournament', id: ID, name: 'Groups', from_version_id: 'v1', started: false, difference: null },
-      ],
+    vi.mocked(movePins).mockImplementation(async (input) => {
+      const to = { version_id: 'v2', version_no: 2 };
+      const moved = [
+        { kind: 'season' as const, id: SEASON, name: 'Spring League', season_id: null, from_version_id: 'v1', started: true, difference: null },
+        { kind: 'tournament' as const, id: ID, name: 'Groups', season_id: SEASON, from_version_id: 'v1', started: false, difference: null },
+      ];
+      for (const entry of moved) input.onMoved?.(entry, to);
+      return { ...to, moved };
     });
-    vi.mocked(getPinTargetStates).mockResolvedValue([
-      { kind: 'season', id: SEASON, name: 'Spring League', status: 'active', season_id: null, ruleset_id: 'v2' },
-      { kind: 'tournament', id: ID, name: 'Groups', status: 'upcoming', season_id: SEASON, ruleset_id: 'v2' },
-    ]);
     const res = await pins.POST(request(body), ctx({ id: ID }));
     expect(res.status).toBe(200);
     expect(movePins).toHaveBeenCalledWith(expect.objectContaining({ toVersionNo: 2, confirmStarted: [SEASON] }));
@@ -258,6 +255,24 @@ describe('pins, usage, versions', () => {
     expect(expireTournamentReads).toHaveBeenCalledWith(ID, SEASON);
     expect(vi.mocked(logAuditEvent).mock.calls.map(([e]) => [e.action, e.resource_type, e.resource_id])).toEqual([['ruleset.pin', 'season', SEASON], ['ruleset.pin', 'tournament', ID]]);
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].changes).toEqual({ ruleset_id: { before: 'v1', after: 'v2' } });
+  });
+
+  it('a pin that moved meanwhile stops the run with 409 ruleset_pin_moved, and the moves before it are still expired and audited', async () => {
+    vi.mocked(movePins).mockImplementation(async (input) => {
+      input.onMoved?.({ kind: 'season', id: SEASON, name: 'Spring League', season_id: null, from_version_id: 'v1', started: false, difference: null }, { version_id: 'v2', version_no: 2 });
+      throw new RulesetStudioError('ruleset_pin_moved', { target: 'Groups' });
+    });
+    const res = await pins.POST(request(body), ctx({ id: ID }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('ruleset_pin_moved');
+    expect(expireSeasonReads).toHaveBeenCalledWith(SEASON);
+    expect(vi.mocked(logAuditEvent).mock.calls.map(([e]) => e.resource_id)).toEqual([SEASON]);
+  });
+
+  it('the same league or phase listed twice is a 400 before anything moves', async () => {
+    const twice = { ...body, targets: [{ kind: 'season', id: SEASON }, { kind: 'season', id: SEASON }] };
+    expect((await pins.POST(request(twice), ctx({ id: ID }))).status).toBe(400);
+    expect(movePins).not.toHaveBeenCalled();
   });
 
   it('a started target without a confirmation is a 409 that names it, with no cache expiry and no audit', async () => {

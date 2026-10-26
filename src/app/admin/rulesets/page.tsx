@@ -5,7 +5,7 @@ import PageContainer from '@/components/ui/PageContainer';
 import { getLocale, getT } from '@/i18n/server';
 import { rulesetStudioMessages } from '@/i18n/messages/ruleset-studio';
 import { getLiveAccess } from '@/lib/auth/helpers';
-import { resolveLText } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import { PRESET_RULES_VERSION } from '@/lib/pkmn/preset-data/pin';
 import { countPinsByDefinition, listRulesetDefinitions } from '@/lib/supabase/queries/ruleset-definitions';
 import type { RulesetActor } from '@/lib/ruleset-studio/access';
@@ -17,7 +17,7 @@ const LIST_LIMIT = 50;
 
 /**
  * `/admin/rulesets`: the Ruleset Studio home. The "New ruleset" action, the viewer's own rulesets, the ones other admins
- * shared, the rulesets that belong to one of the viewer's leagues, the site catalog and the catalog of rule presets (every
+ * shared, the viewer's own rulesets that belong to a league (made when a format was attached to it), the site catalog and the catalog of rule presets (every
  * Showdown ladder format and Smogon draft format the app knows, each one a start for a private copy). Any admin may open
  * it; nothing is read before the live gate. The dialog gets names, ids and version numbers only: no draft, no owner id.
  *

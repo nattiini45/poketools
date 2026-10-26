@@ -23,7 +23,8 @@ import { UTILITY_CATEGORIES, UTILITY_ORDER, type UtilityMember } from '@/lib/dra
 import { expandedUtility } from '@/lib/draft-finder/filter-groups';
 import type { PreparedIndex } from '@/lib/draft-finder/prepare';
 import { cn } from '@/lib/utils/cn';
-import { FOCUS_RING, type FilterSectionProps } from './types';
+import { type FilterSectionProps } from './types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 export interface UtilityFilterProps extends FilterSectionProps {
   /** The season's banned move ids (`catalog.bannedMoves`). */

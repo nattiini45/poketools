@@ -8,7 +8,7 @@
  */
 import type { FormatVisibility } from '@/lib/format-studio/library-types';
 import type { AttachPreview } from '@/lib/format-studio/editor/attach-preview';
-import type { LText } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
 
 /** What a league stores about its attached format, as shown in the summary (no spec, no seed). */
 export interface AttachedFormatView {

@@ -138,4 +138,5 @@ export default defineDe<typeof en>()({
   ruleset_pin_started:
     'Diese Liga oder Phase hat bereits begonnen. Wechsle mit dem Regelwerk-Werkzeug auf eine andere Version; dort musst du bestätigen.',
   ruleset_pin_confirm_required: 'Diese Liga oder Phase hat bereits begonnen. Bestätige die Änderung für: {targets}.',
+  ruleset_pin_moved: 'Das Regelwerk von {target} wurde während des Verschiebens von jemand anderem geändert. Die Seite zeigt jetzt den aktuellen Stand; prüfe ihn und versuche es erneut. Die davor wurden bereits verschoben.',
 });

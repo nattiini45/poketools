@@ -16,7 +16,6 @@ export default {
     presetsCount: { one: '{count} preset', other: '{count} presets' },
     leagues: 'League rulesets',
     leaguesIntro: 'Rulesets that belong to one league, made when a format was attached to it.',
-    emptyLeagues: 'None of your leagues has its own ruleset.',
     site: 'Site catalog',
     siteIntro: 'The standard rulesets of the site, one per generation and tier. Open one to read it, or fork it to change it.',
     emptySite: 'The site catalog is empty.',

@@ -38,9 +38,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** A copy of a document with `identity.based_on` set (the identity block is created when the draft lacks one). */
-export function withBasedOn(document: Record<string, unknown>, basedOn: string): Record<string, unknown> {
+/**
+ * A copy of a document that records where it started from in `identity.based_on` (the identity block is created when the
+ * draft lacks one). A value the document already holds stays: on a blank base it is the catalog id that decides the format key
+ * (`blankFormatKey`), so overwriting it would move the copy to another format. The provenance of a fork is `forked_from`.
+ */
+export function withBasedOnDefault(document: Record<string, unknown>, basedOn: string): Record<string, unknown> {
   const copy = structuredClone(document);
   const identity = isRecord(copy.identity) ? copy.identity : {};
+  if (typeof identity.based_on === 'string' && identity.based_on !== '') return copy;
   return { ...copy, identity: { ...identity, based_on: basedOn.slice(0, 64) } };
 }

@@ -9,7 +9,7 @@ import { renderWithI18n } from '@/test/i18n';
 import { expectLabelledControls, expectNoLeftovers, expectUniqueIds } from '@/test/markup';
 import type { CatalogIndex, ItemRow, SpeciesRow } from '@/lib/pkmn/catalog-index';
 import { stateLookup } from '@/lib/ruleset-kit/entry-state';
-import { clearCatalogCache, fetchCatalogIndex } from '@/lib/ruleset-studio/editor/catalog-client';
+import { clearCatalogCache, fetchEntryIndex } from '@/lib/ruleset-studio/editor/catalog-client';
 import { EMPTY_SELECTION } from '@/lib/ruleset-studio/editor/picker/selection';
 import { SPECIES_ROWS } from '@/lib/ruleset-studio/__tests__/editor/picker/fixtures';
 
@@ -25,7 +25,7 @@ import { decodeIndex } from '@/lib/pkmn/catalog-index';
 const response = (data: unknown) => Promise.resolve(new Response(JSON.stringify({ success: true, data }), { status: 200 }));
 
 async function seed(index: CatalogIndex): Promise<void> {
-  const outcome = await fetchCatalogIndex({ kind: index.kind, gen: index.gen, scope: index.scope, preset: index.preset }, { fetch: () => response(index) });
+  const outcome = await fetchEntryIndex({ kind: index.kind, gen: index.gen, scope: index.scope, preset: index.preset }, { fetch: () => response(index) });
   expect(outcome.ok).toBe(true);
 }
 

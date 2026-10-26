@@ -5,7 +5,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { apiErrorText } from '@/i18n/api-errors';
 import { errorsAdmin, errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
-import type { LeagueTrashRestoreWarning } from '@/lib/supabase/queries/league-trash';
 import {
   INITIAL_LEAGUE_TRASH_STATE,
   headlineCounts,
@@ -15,14 +14,7 @@ import {
   requestLeagueRebuild,
   requestLeagueRestore,
   type LeagueRestoreView,
-  type LeagueRestoreWarningView,
 } from '../client';
-
-// The client twin of the restore warnings must stay assignable to the queries' type (and back).
-const _warningsMatch: LeagueTrashRestoreWarning[] = [] as LeagueRestoreWarningView[];
-const _warningsMatchBack: LeagueRestoreWarningView[] = [] as LeagueTrashRestoreWarning[];
-void _warningsMatch;
-void _warningsMatchBack;
 
 const catalogs = [errorsSeasons, errorsTournaments, errorsAdmin];
 

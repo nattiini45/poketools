@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { CURRENT_ENV, PRESETS, compile, ltext, type CountRange, type FormatDefinition, type SeriesOverride, type Stage } from '@/lib/format-kit';
+import {
+  CURRENT_ENV,
+  PRESETS,
+  compile,
+  type CountRange,
+  type FormatDefinition,
+  type SeriesOverride,
+  type Stage,
+} from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';
 import { STAGE_NAME_MAX_CHARS, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
 

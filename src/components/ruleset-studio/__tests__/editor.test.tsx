@@ -11,7 +11,7 @@ import type { CatalogIndex } from '@/lib/pkmn/catalog-index';
 import type { PresetRules } from '@/lib/pkmn/preset-rules';
 import { banEntries, allowEntries, setClause, setMode } from '@/lib/ruleset-kit/ops';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
-import { clearCatalogCache, fetchCatalogIndex } from '@/lib/ruleset-studio/editor/catalog-client';
+import { clearCatalogCache, fetchEntryIndex } from '@/lib/ruleset-studio/editor/catalog-client';
 import { SPECIES_ROWS } from '@/lib/ruleset-studio/__tests__/editor/picker/fixtures';
 import { ltext } from '@/lib/studio-core/ltext';
 
@@ -46,7 +46,7 @@ const response = (data: unknown) => Promise.resolve(new Response(JSON.stringify(
 
 async function seedSpecies(): Promise<void> {
   const index: CatalogIndex<'species'> = { v: 1, kind: 'species', gen: 9, scope: 'standard', preset: null, rows: SPECIES_ROWS };
-  await fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: () => response(index) });
+  await fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: () => response(index) });
 }
 
 const doc = () => {

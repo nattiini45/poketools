@@ -9,8 +9,6 @@ import { createBodyReaders } from '@/lib/studio-core/api-body';
 import { assertDocument } from './document-guard';
 import { FormatStudioError } from './errors';
 
-export { MAX_REQUEST_BODY_BYTES } from '@/lib/studio-core/api-body';
-
 export const { readBoundedJson, readBoundedJsonOrEmpty, assertEnvelopeDocument } = createBodyReaders({
   tooLarge: () => new FormatStudioError('format_document_too_large'),
   assertDocument,

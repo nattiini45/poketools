@@ -15,7 +15,6 @@ export * from '@/lib/studio-core/keys';
 export * from '@/lib/studio-core/json';
 export * from '@/lib/studio-core/patch';
 export * from './issues';
-export * from '@/lib/studio-core/ltext';
 export * from './expr';
 export * from './registry';
 export { validateFormatDefinition } from './validate.browser';

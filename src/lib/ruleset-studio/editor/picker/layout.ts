@@ -173,11 +173,6 @@ function moveRows(rows: readonly GridRow[], positions: readonly Position[], curr
   return row.start + Math.min(col, row.count - 1);
 }
 
-/** The row index of an entry, for scrolling it into view. */
-export function rowOfEntry(positions: readonly Position[], entryIndex: number): number {
-  return positions[entryIndex]?.row ?? 0;
-}
-
 // ── Pages (the table density) ───────────────────────────────────────────────────
 
 export const TABLE_PAGE_SIZE = 50;

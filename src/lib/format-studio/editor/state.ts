@@ -14,7 +14,7 @@ import {
   type StudioEditorState,
 } from '@/lib/studio-core/editor-state';
 import { documentSignature, type DraftDocument } from './document';
-import { DEFAULT_SELECTION, type Selection } from './targets';
+import type { Selection } from './targets';
 
 export type { SaveState };
 export type EditorState = StudioEditorState<DraftDocument, Selection>;
@@ -46,11 +46,3 @@ export const formatEditor = createEditorReducer<DraftDocument, Selection>({
     return index === selection.index ? selection : { ...selection, index };
   },
 });
-
-export function initEditorState(doc: DraftDocument, rev: number, selection: Selection = DEFAULT_SELECTION): EditorState {
-  return formatEditor.init(doc, rev, selection);
-}
-
-export const isDirty = formatEditor.isDirty;
-
-export const editorReducer = formatEditor.reducer;

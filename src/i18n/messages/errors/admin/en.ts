@@ -169,4 +169,5 @@ export default {
   ruleset_pin_locked: 'This league or phase is finished, so its ruleset can no longer be changed.',
   ruleset_pin_started: 'This league or phase has already started. Move it to another ruleset version with the ruleset pin tool, which asks you to confirm.',
   ruleset_pin_confirm_required: 'This league or phase has already started. Confirm the change for: {targets}.',
+  ruleset_pin_moved: 'The ruleset of {target} was changed by someone else while the move ran. The page now shows the current state; check it and try again. The ones before it were already moved.',
 } as const;

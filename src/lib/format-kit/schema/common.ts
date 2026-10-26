@@ -8,12 +8,10 @@
  * so every parse gets a fresh object.
  */
 import { z } from 'zod';
-import { KEY_PATTERN, KIND_PATTERN, SLUG_PATTERN, UUID_PATTERN } from '@/lib/studio-core/keys';
+import { KEY_PATTERN, KIND_PATTERN } from '@/lib/studio-core/keys';
 
 export const keySchema = z.string().regex(KEY_PATTERN);
-export const slugSchema = z.string().regex(SLUG_PATTERN);
 export const kindSchema = z.string().regex(KIND_PATTERN);
-export const uuidSchema = z.string().regex(UUID_PATTERN);
 
 /** An integer `min..max`. A non-integer is a `type` issue; the range checks are skipped then. */
 export function intRange(min: number, max: number) {

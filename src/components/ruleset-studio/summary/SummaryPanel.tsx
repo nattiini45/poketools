@@ -4,7 +4,7 @@ import { useId, useMemo, useState, type KeyboardEvent } from 'react';
 import { Redo2, Undo2 } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 import { rulesetStudioDiagnosticsMessages } from '@/i18n/messages/ruleset-studio/diagnostics';
 import { rulesetStudioSummaryMessages } from '@/i18n/messages/ruleset-studio/summary';
 import { clauseName } from '@/lib/pkmn/clauses';
@@ -24,10 +24,8 @@ const TABS: readonly SummaryTab[] = ['summary', 'changes', 'issues', 'rules'];
 
 interface SummaryPanelProps {
   model: RulesetEditorModel;
-  /** The tab that opens first (the tests and the preview open the others directly). */
+  /** The tab that opens first; the static-markup tests (no DOM to click in) render the other tabs through it. */
   initialTab?: SummaryTab;
-  /** The language the rules text opens in. */
-  initialRulesLocale?: Locale;
   onSelectSection: (section: EditorSection) => void;
   onApplyFix: (diagnostic: RulesetDiagnostic) => void;
 }
@@ -44,11 +42,13 @@ const JUMP =
  * English or German. The numbers come from the same compile that gates the publish, so the column never claims more or
  * less than the server will accept.
  */
-export default function SummaryPanel({ model, initialTab = 'summary', initialRulesLocale = 'en', onSelectSection, onApplyFix }: SummaryPanelProps) {
+export default function SummaryPanel({ model, initialTab = 'summary', onSelectSection, onApplyFix }: SummaryPanelProps) {
   const t = useT(rulesetStudioSummaryMessages);
   const tDiag = useT(rulesetStudioDiagnosticsMessages);
   const [tab, setTab] = useState<SummaryTab>(initialTab);
-  const [rulesLocale, setRulesLocale] = useState<Locale>(initialRulesLocale);
+  // The rules text opens in the viewer's language; the toggle writes it in the other one.
+  const viewerLocale = useLocale();
+  const [rulesLocale, setRulesLocale] = useState<Locale>(viewerLocale);
   const baseId = useId();
   const doc = model.state.doc;
   const result = model.result;

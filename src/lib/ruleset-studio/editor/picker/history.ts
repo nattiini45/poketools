@@ -94,6 +94,3 @@ export function redo(history: History, doc: RulesetDocument): HistoryStep | null
   };
 }
 
-export function clearHistory(): History {
-  return EMPTY_HISTORY;
-}

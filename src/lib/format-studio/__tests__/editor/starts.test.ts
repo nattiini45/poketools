@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PRESETS, compile, ltext, validateFormatDefinition, type FormatDefinition } from '@/lib/format-kit/client';
+import { PRESETS, compile, validateFormatDefinition, type FormatDefinition } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
 import { describeLegacy } from '../../legacy/describe-legacy';
 import { legacyCompileEnv } from '../../view';
 import { compileDraft } from '../../editor/preview';

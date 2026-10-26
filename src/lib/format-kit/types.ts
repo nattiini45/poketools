@@ -9,11 +9,12 @@
  */
 import type { Expr } from './expr/ast';
 import type { Key, Slug } from '@/lib/studio-core/keys';
-import type { LText, LTextStatus, LTextValue, Locale } from '@/lib/studio-core/ltext';
+import type { LText, LTextStatus, LTextValue } from '@/lib/studio-core/ltext';
 
-// The bilingual text types live with the text helpers in the shared studio core; the kit's types module re-exports them
-// so every `@/lib/format-kit/types` (and barrel) importer keeps its import.
-export type { LText, LTextStatus, LTextValue, Locale };
+// The bilingual text types live with the text helpers in the shared studio core (`@/lib/studio-core/ltext`, the one import
+// path for them and for the helpers). `LText` is part of the format document schema (every name, summary, label and
+// text section below is one), so the kit's public types surface keeps the type-only re-export; the values are not re-exported.
+export type { LText, LTextStatus, LTextValue };
 
 export interface FormatDefinition {
   schema_version: 1;

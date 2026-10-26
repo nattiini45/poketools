@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
+import { resolveLText } from '@/lib/studio-core/ltext';
 
 const mocks = vi.hoisted(() => ({
   locale: 'en' as 'en' | 'de',
@@ -308,7 +309,7 @@ describe('example format page', () => {
 
   it('titles the page with the example name in the viewer language and links back to the gallery', async () => {
     mocks.locale = 'de';
-    const { PRESETS, resolveLText } = await import('@/lib/format-kit/client');
+    const { PRESETS } = await import('@/lib/format-kit/client');
     const classic = PRESETS.find((p) => p.id === 'classic-league')!;
     const out = html(await ExamplePage(exampleParams('classic-league')));
     expect(out).toContain((resolveLText(classic.definition.identity.name, { viewer: 'de' })?.value ?? '').replace(/'/g, '&#x27;'));
@@ -326,7 +327,7 @@ describe('detail page titles', () => {
   });
 
   it('the example page is titled with the example name in the viewer language', async () => {
-    const { PRESETS, resolveLText } = await import('@/lib/format-kit/client');
+    const { PRESETS } = await import('@/lib/format-kit/client');
     const cup = PRESETS.find((p) => p.id === 'cup')!;
     for (const locale of ['en', 'de'] as const) {
       mocks.locale = locale;

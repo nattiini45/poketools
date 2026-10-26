@@ -6,13 +6,8 @@ import Select from '@/components/ui/Select';
 import { cn } from '@/lib/utils/cn';
 import { useT } from '@/i18n/client';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
-import {
-  filterRulesetPresets,
-  getRulesetPreset,
-  groupRulesetPresets,
-  type PresetFamily,
-  type PresetSource,
-} from '@/lib/format-kit/client';
+import { filterRulesetPresets, getRulesetPreset, groupRulesetPresets } from '@/lib/pkmn/ruleset-preset-catalog';
+import type { PresetFamily, PresetSource } from '@/lib/pkmn/format-catalog';
 
 /** The `presetSelect.family` key of each family (the catalog's family ids have hyphens). */
 const FAMILY_KEY: Readonly<Record<PresetFamily, string>> = {

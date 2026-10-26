@@ -85,9 +85,13 @@ export const PARTICIPANT_SOURCES = ['roster', 'edges'] as const satisfies readon
 /**
  * A stored ruleset a stage may name, as the editor's pages hand it over: the DEFINITION id (what a format document stores;
  * attach resolves it to the newest published version), the name, and that version's number for the label ("Spring OU v2").
+ * A legacy ruleset id that a stored document still names (the id of version 1 of the definition) is one more entry with that
+ * id as `id` and the definition's id as `definition_id`; the pickers list it only while a stage names it.
  */
 export interface RulesetChoice {
   id: string;
   name: string;
   version_no?: number;
+  /** Set when `id` is not the definition's own id: the definition this legacy id belongs to. */
+  definition_id?: string;
 }

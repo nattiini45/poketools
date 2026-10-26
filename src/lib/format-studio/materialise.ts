@@ -8,15 +8,15 @@
  * params, never as text: the next PR renders them, and Phase 2b makes the engine run them.
  */
 import {
-  resolveLText,
   type CountRange,
   type Edge,
   type FormatDefinition,
-  type Locale,
   type SeriesOverride,
   type Stage,
   type StagePlan,
 } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 import type { BracketType } from '@/types/tournament';
 import type { AttachStageRow } from '@/lib/supabase/queries/season-formats';
 import type { EngineGap, EngineGapCode, StageSpecSnapshot } from './library-types';

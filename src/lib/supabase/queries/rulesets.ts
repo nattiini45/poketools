@@ -166,14 +166,18 @@ export async function listRulesetOptions(actor: RulesetActor | undefined): Promi
 }
 
 /**
- * The head versions of the definitions with exactly this name (the list name of the head), oldest definition first. Names are
- * not unique. For the one shared ruleset that is found by name: the point-buy battle ruleset.
+ * The head versions of the SHARED site definitions (`gallery`, not owned by one league) with exactly this name, oldest
+ * definition first. Names are not unique, and a private definition's name follows its unpublished draft, so only the shared
+ * rows count: another admin's private ruleset must never be picked up, pinned or republished by name. For the one shared
+ * ruleset that is found by name: the point-buy battle ruleset.
  */
 export async function findHeadRulesetsByName(name: string): Promise<Ruleset[]> {
   const { data, error } = await supabase
     .from('ruleset_definitions')
     .select(`head:ruleset_definition_versions!current_version_id ( ${RULESET_VERSION_VIEW_COLUMNS} )`)
     .eq('name_text', name)
+    .eq('visibility', 'gallery')
+    .is('season_id', null)
     .not('current_version_id', 'is', null)
     .order('created_at', { ascending: true })
     .order('id');

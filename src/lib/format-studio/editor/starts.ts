@@ -7,7 +7,9 @@
  * hold league tuning values) and named rulesets (a ruleset id exists in one community, so it would dangle in a
  * shared format). A rule preset is a catalog id every community has, so it stays. Pure and client-safe.
  */
-import type { FormatDefinition, LText, Locale } from '@/lib/format-kit/client';
+import type { FormatDefinition } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 import type { DraftDocument } from './document';
 
 export type StartKind = 'blank' | 'example' | 'league' | 'import';

@@ -7,7 +7,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/supabase/queries/league-trash', () => ({
   moveLeagueToTrash: vi.fn(),
   getLeagueTrashBySeason: vi.fn(),
-  listPendingLeagueRebuilds: vi.fn(),
   markLeagueTrashRebuildDone: vi.fn(),
   markLeagueRestoreRebuildDone: vi.fn(),
 }));
@@ -20,17 +19,15 @@ vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
 import {
   finishLeagueDeleteRebuild,
   finishLeagueRestoreRebuild,
-  findPendingLeagueRebuild,
   trashLeague,
 } from '../service';
 import { LeagueTrashDbError } from '../db-error';
 import {
   getLeagueTrashBySeason,
-  listPendingLeagueRebuilds,
   markLeagueRestoreRebuildDone,
   markLeagueTrashRebuildDone,
   moveLeagueToTrash,
-  type PendingLeagueRebuild,
+  type LeagueTrashEntry,
 } from '@/lib/supabase/queries/league-trash';
 import { rebuildAfterSeasonDelete, rebuildAfterSeasonRestore } from '@/lib/reconcile/entity-delete-rebuild';
 import { EntityDeleteRebuildStepError } from '@/lib/api/delete-rebuild-warning';
@@ -51,12 +48,10 @@ const moved = {
   schema_version: '1',
 };
 
-const pendingDelete: PendingLeagueRebuild = {
-  kind: 'delete',
-  trash_id: TRASH,
-  season_id: SEASON,
+const trashEntry: LeagueTrashEntry = {
+  id: TRASH,
   season_name: 'League One',
-  at: '2026-10-26T10:00:00.000Z',
+  purge_after: '2027-01-24T10:00:00.000Z',
   phase_ids: ['ph1', 'ph2'],
   player_ids: ['p1', 'p2'],
 };
@@ -134,12 +129,10 @@ describe('trashLeague', () => {
       vi.mocked(getLeagueTrashBySeason).mockResolvedValue(null);
 
       await expect(trashLeague(SEASON, 'admin-1')).rejects.toBe(timeout);
-      expect(listPendingLeagueRebuilds).not.toHaveBeenCalled();
     });
 
-    it('settles as committed and takes the rebuild inputs from the pending marker', async () => {
-      vi.mocked(getLeagueTrashBySeason).mockResolvedValue({ id: TRASH, purge_after: '2027-01-24T10:00:00.000Z' });
-      vi.mocked(listPendingLeagueRebuilds).mockResolvedValue([pendingDelete]);
+    it('settles as committed and takes the name and the rebuild inputs from the trash entry', async () => {
+      vi.mocked(getLeagueTrashBySeason).mockResolvedValue(trashEntry);
 
       await expect(trashLeague(SEASON, 'admin-1')).resolves.toEqual({
         trash_id: TRASH,
@@ -152,30 +145,6 @@ describe('trashLeague', () => {
       });
       expect(getLeagueTrashBySeason).toHaveBeenCalledWith(SEASON);
     });
-
-    it('settles as committed with no rebuild inputs when the marker is already gone', async () => {
-      vi.mocked(getLeagueTrashBySeason).mockResolvedValue({ id: TRASH, purge_after: '2027-01-24T10:00:00.000Z' });
-      vi.mocked(listPendingLeagueRebuilds).mockResolvedValue([]);
-
-      await expect(trashLeague(SEASON, 'admin-1')).resolves.toMatchObject({
-        trash_id: TRASH,
-        season_name: SEASON,
-        phase_ids: [],
-        player_ids: [],
-      });
-    });
-  });
-});
-
-describe('findPendingLeagueRebuild', () => {
-  it('finds the pending rebuild of a trash id among the others, or null', async () => {
-    vi.mocked(listPendingLeagueRebuilds).mockResolvedValue([
-      { ...pendingDelete, trash_id: 'other' },
-      pendingDelete,
-    ]);
-
-    await expect(findPendingLeagueRebuild(TRASH)).resolves.toBe(pendingDelete);
-    await expect(findPendingLeagueRebuild('missing')).resolves.toBeNull();
   });
 });
 

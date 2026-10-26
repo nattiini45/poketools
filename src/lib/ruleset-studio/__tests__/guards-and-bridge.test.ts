@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ltext } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { rulesFromBans } from '@/lib/ruleset-kit/effective';
 import { legacyFormToDocument } from '@/lib/ruleset-kit/legacy';
 import type { SessionPlayer } from '@/types/auth';
@@ -19,19 +19,27 @@ vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: v
 vi.mock('@/lib/supabase/queries/ruleset-definitions', () => ({
   getDefinitionOfVersion: vi.fn(),
   getLatestPublishedRulesetVersion: vi.fn(),
+  getRulesetDefinitionDraft: vi.fn(),
   getRulesetDefinitionMeta: vi.fn(),
   isVersionPinned: vi.fn(),
   publishRulesetVersion: vi.fn(),
   saveRulesetDraft: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({ getRulesetById: vi.fn() }));
-vi.mock('../library', () => ({ createPublished: vi.fn(), removeDefinition: vi.fn(), toActor: (p: SessionPlayer) => ({ playerId: p.playerId, isAdmin: p.isAdmin }) }));
+// The real publishCompiled (it only calls the mocked publish query); the rest of the library is replaced.
+vi.mock('../library', async (importOriginal) => ({
+  publishCompiled: (await importOriginal<typeof import('../library')>()).publishCompiled,
+  createPublished: vi.fn(),
+  removeDefinition: vi.fn(),
+  toActor: (p: SessionPlayer) => ({ playerId: p.playerId, isAdmin: p.isAdmin }),
+}));
 
 import { requireAnyAdmin } from '@/lib/auth/helpers';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import {
   getDefinitionOfVersion,
   getLatestPublishedRulesetVersion,
+  getRulesetDefinitionDraft,
   getRulesetDefinitionMeta,
   isVersionPinned,
   publishRulesetVersion,
@@ -40,7 +48,7 @@ import {
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { makeRuleset } from '@/test/ruleset-fixtures';
 import { readExposedRuleset } from '../exposure';
-import { assertDefinitionsUsable, assertRulesetUsable, requireRulesetOwner, requireRulesetViewer } from '../guards';
+import { assertRulesetUsable, canUseDefinitions, requireRulesetOwner, requireRulesetViewer } from '../guards';
 import { createLegacyRuleset, deleteLegacyRuleset, isFlatDocument, rulesetToFormData, updateLegacyRuleset } from '../legacy-bridge';
 import { createPublished, removeDefinition } from '../library';
 import { assertRulesetChangeAllowed, assertRulesetUsableForCreate } from '../pin-change';
@@ -97,7 +105,7 @@ describe('requireRulesetViewer / requireRulesetOwner', () => {
   });
 });
 
-describe('assertRulesetUsable / assertDefinitionsUsable', () => {
+describe('assertRulesetUsable / canUseDefinitions', () => {
   it('a version id of a ruleset the player may not see is 403 ruleset_forbidden; an unknown one is 404', async () => {
     vi.mocked(getDefinitionOfVersion).mockResolvedValue(null);
     await expect(assertRulesetUsable(player(), V1)).rejects.toMatchObject({ code: 'ruleset_not_found' });
@@ -108,12 +116,12 @@ describe('assertRulesetUsable / assertDefinitionsUsable', () => {
     await expect(assertRulesetUsable(player(), V1)).resolves.toMatchObject({ version_no: 1 });
   });
 
-  it('a format that names a ruleset the attacher may not use is format_attach_ruleset_forbidden; an unpublished one is not usable either', async () => {
+  it('a format that names a ruleset the attacher may not use is not usable; an unpublished one is not usable either', async () => {
     vi.mocked(getRulesetDefinitionMeta).mockResolvedValueOnce(meta()).mockResolvedValueOnce(meta({ owner_id: ME, current_version_id: null })).mockResolvedValueOnce(null);
-    await expect(assertDefinitionsUsable(player(), [DEF])).rejects.toMatchObject({ code: 'format_attach_ruleset_forbidden', statusCode: 403 });
-    await expect(assertDefinitionsUsable(player(), [DEF])).rejects.toMatchObject({ code: 'format_attach_ruleset_forbidden' });
+    expect(await canUseDefinitions(player(), [DEF])).toBe(false);
+    expect(await canUseDefinitions(player(), [DEF])).toBe(false);
     // An id that names nothing is the compile's business (ruleset_not_found diagnostic).
-    await expect(assertDefinitionsUsable(player(), [DEF])).resolves.toBeUndefined();
+    expect(await canUseDefinitions(player(), [DEF])).toBe(true);
   });
 });
 
@@ -134,10 +142,17 @@ describe('exposure and pin changes', () => {
   });
 
   it('resending the stored ruleset or sending none is no change and checks nothing', async () => {
-    for (const requested of [undefined, null, V1]) {
+    for (const requested of [undefined, V1]) {
       await assertRulesetChangeAllowed({ player: player(), current: V1, requested, started: true });
     }
+    await assertRulesetChangeAllowed({ player: player(), current: null, requested: null, started: true });
     await assertRulesetUsableForCreate(player(), undefined);
+    expect(getDefinitionOfVersion).not.toHaveBeenCalled();
+  });
+
+  it('clearing the ruleset is a change: allowed before the start, refused after it (a started league cannot be un-pinned and re-pinned)', async () => {
+    await expect(assertRulesetChangeAllowed({ player: player(), current: V1, requested: null, started: false })).resolves.toBeUndefined();
+    await expect(assertRulesetChangeAllowed({ player: player(), current: V1, requested: null, started: true })).rejects.toMatchObject({ code: 'ruleset_pin_started' });
     expect(getDefinitionOfVersion).not.toHaveBeenCalled();
   });
 
@@ -191,14 +206,59 @@ describe('the legacy builder bridge', () => {
     vi.mocked(getLatestPublishedRulesetVersion).mockResolvedValue(head);
     const current = makeRuleset({ id: V1, name: 'Gen 9 OU', base_format: 'gen9ou', bans: { pokemon: ['Koraidon'], moves: [], items: [], abilities: [] } });
     vi.mocked(getRulesetById).mockResolvedValueOnce(current).mockResolvedValueOnce(makeRuleset({ id: V2, name: 'Gen 9 OU (new)' }));
+    // The studio draft IS the head: it moves along, and the publish uses the revision that save returned.
+    vi.mocked(getRulesetDefinitionDraft).mockResolvedValue({ document: head.spec, draft_rev: meta().draft_rev });
     vi.mocked(saveRulesetDraft).mockResolvedValue({ draft_rev: 2, updated_at: 'now' });
     vi.mocked(publishRulesetVersion).mockResolvedValue({ versionId: V2, versionNo: 2 });
 
     const updated = await updateLegacyRuleset(ME, V1, { banned_moves: ['Baton Pass'] });
     expect(updated.id).toBe(V2);
-    expect(vi.mocked(publishRulesetVersion).mock.calls[0][0]).toMatchObject({ definitionId: DEF, actorId: ME });
+    expect(vi.mocked(publishRulesetVersion).mock.calls[0][0]).toMatchObject({ definitionId: DEF, actorId: ME, expectedRev: 2 });
     expect(vi.mocked(publishRulesetVersion).mock.calls[0][0].resolved.moves.ids).toEqual(['batonpass']);
+    expect(vi.mocked(saveRulesetDraft).mock.calls[0][0]).toMatchObject({ id: DEF, expectedRev: meta().draft_rev });
+  });
 
+  describe('an edit with a studio draft and a richer identity', () => {
+    const richIdentity = {
+      name: { base: 'en', en: { v: 'Gen 9 OU', s: 'human' }, de: { v: 'Gen 9 OU (de)', s: 'human' } },
+      summary: { base: 'en', en: { v: 'The ladder rules', s: 'human' } },
+      based_on: 'gen9ou',
+    } as const;
+    const arrange = (draft: unknown) => {
+      const spec = { ...legacyFormToDocument(form()), identity: richIdentity };
+      const head = { id: V1, content_hash: 'x', resolved_hash: 'y', spec } as unknown as RulesetVersion;
+      vi.mocked(getDefinitionOfVersion).mockResolvedValue({ definition: meta(), version_no: 1 });
+      vi.mocked(getRulesetDefinitionMeta).mockResolvedValue(meta());
+      vi.mocked(getLatestPublishedRulesetVersion).mockResolvedValue(head);
+      vi.mocked(getRulesetById)
+        .mockResolvedValueOnce(makeRuleset({ id: V1, name: 'Gen 9 OU', base_format: 'gen9ou', bans: { pokemon: ['Koraidon'], moves: [], items: [], abilities: [] } }))
+        .mockResolvedValueOnce(makeRuleset({ id: V2 }));
+      vi.mocked(getRulesetDefinitionDraft).mockResolvedValue({ document: draft === 'head' ? spec : draft, draft_rev: meta().draft_rev });
+      vi.mocked(saveRulesetDraft).mockResolvedValue({ draft_rev: 5, updated_at: 'now' });
+      vi.mocked(publishRulesetVersion).mockResolvedValue({ versionId: V2, versionNo: 2 });
+    };
+
+    it('keeps the summary, the other languages of the name and based_on of the head', async () => {
+      arrange('head');
+      await updateLegacyRuleset(ME, V1, { banned_moves: ['Baton Pass'] });
+      expect(vi.mocked(publishRulesetVersion).mock.calls[0][0].spec.identity).toEqual(richIdentity);
+    });
+
+    it('takes a name the patch really changes from the form, and keeps the rest of the identity', async () => {
+      arrange('head');
+      await updateLegacyRuleset(ME, V1, { name: 'Gen 9 OU Plus' });
+      const identity = vi.mocked(publishRulesetVersion).mock.calls[0][0].spec.identity;
+      expect(identity.name).toEqual({ base: 'en', en: { v: 'Gen 9 OU Plus', s: 'human' } });
+      expect(identity.summary).toEqual(richIdentity.summary);
+      expect(identity.based_on).toBe('gen9ou');
+    });
+
+    it('leaves a draft with unpublished work alone: it is neither saved over nor lost, and the publish uses its revision', async () => {
+      arrange({ ...legacyFormToDocument(form({ banned_pokemon: ['Koraidon', 'Miraidon'] })), identity: richIdentity });
+      await updateLegacyRuleset(ME, V1, { banned_moves: ['Baton Pass'] });
+      expect(saveRulesetDraft).not.toHaveBeenCalled();
+      expect(vi.mocked(publishRulesetVersion).mock.calls[0][0]).toMatchObject({ definitionId: DEF, expectedRev: meta().draft_rev });
+    });
   });
 
   it('an edit that changes nothing publishes nothing and returns the current head', async () => {

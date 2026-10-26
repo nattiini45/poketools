@@ -21,7 +21,7 @@ import { lookupPokemon, getTypeChart } from './pkmn';
 import { getUsageStats, type UsageStatsPokemon } from './smogon';
 import { validateTeam, type ValidateTeamIssue } from './validate';
 import { createPokepaste } from './pokepaste';
-import { parseGenFromFormat } from './format';
+import { parseGenFromFormat } from '../../format';
 import { getSpecies, getLegalAbilities, listMovesForSpecies } from '@/lib/pkmn/dex';
 import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { toID } from '@/lib/pkmn/i18n/id';

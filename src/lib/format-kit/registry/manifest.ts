@@ -16,7 +16,6 @@
  */
 import { deepFreeze } from '@/lib/studio-core/json';
 import {
-  LTEXT_MAX_CHARS,
   MAX_BEST_OF,
   MAX_COLUMNS,
   MAX_EXPECTED_COUNT,
@@ -36,6 +35,7 @@ import {
   MIN_PLAYERS_PER_MATCH,
   SCORE_ABS_MAX,
 } from '../limits';
+import { LTEXT_MAX_CHARS } from '@/lib/studio-core/ltext';
 import {
   AVAILABLE_KINDS,
   PRIMITIVE_KINDS,

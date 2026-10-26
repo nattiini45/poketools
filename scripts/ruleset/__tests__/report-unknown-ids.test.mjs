@@ -1,7 +1,7 @@
 // Tests for scripts/ruleset/report-unknown-ids.mjs: the pre-flight gate of the Ruleset Studio migration. Small hand-made
 // dex maps and rows; the real-dex test only checks the entries named in the migration notes.
 import { describe, it, expect } from 'vitest';
-import { analyze, loadDexNames, toID } from '../report-unknown-ids.mjs';
+import { analyze, loadDexNames } from '../report-unknown-ids.mjs';
 
 const names = {
   pokemon: new Map([['garchomp', 'Garchomp'], ['mrmime', 'Mr. Mime'], ['tapukoko', 'Tapu Koko'], ['flabebe', 'Flabébé'], ['nidoranf', 'Nidoran-F']]),
@@ -19,16 +19,6 @@ const row = (overrides) => ({
   added_pokemon: [],
   clauses: [],
   ...overrides,
-});
-
-describe('toID', () => {
-  it('folds like src/lib/pkmn/i18n/id.ts: gender signs to f and m, accents stripped, symbols dropped', () => {
-    expect(toID('Flabébé')).toBe('flabebe');
-    expect(toID('Nidoran♀')).toBe('nidoranf');
-    expect(toID('Nidoran♂')).toBe('nidoranm');
-    expect(toID('Type: Null')).toBe('typenull');
-    expect(toID("King's Rock")).toBe('kingsrock');
-  });
 });
 
 describe('analyze', () => {

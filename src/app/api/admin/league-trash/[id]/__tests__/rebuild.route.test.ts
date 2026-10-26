@@ -17,7 +17,7 @@ vi.mock('@/lib/auth/helpers', () => ({
 }));
 
 vi.mock('@/lib/supabase/queries/league-trash', () => ({
-  listPendingLeagueRebuilds: vi.fn(),
+  getPendingLeagueRebuild: vi.fn(),
   markLeagueRestoreRebuildDone: vi.fn(),
   markLeagueTrashRebuildDone: vi.fn(),
 }));
@@ -32,7 +32,7 @@ vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 import { POST } from '@/app/api/admin/league-trash/[id]/rebuild/route';
 import { requireSuperadmin, AuthError } from '@/lib/auth/helpers';
 import {
-  listPendingLeagueRebuilds,
+  getPendingLeagueRebuild,
   markLeagueRestoreRebuildDone,
   markLeagueTrashRebuildDone,
   type PendingLeagueRebuild,
@@ -85,7 +85,7 @@ const call = (id = TRASH_ID) => POST({} as unknown as NextRequest, { params: Pro
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireSuperadmin).mockResolvedValue(superadmin);
-  vi.mocked(listPendingLeagueRebuilds).mockResolvedValue([pendingDelete]);
+  vi.mocked(getPendingLeagueRebuild).mockResolvedValue(pendingDelete);
   vi.mocked(markLeagueTrashRebuildDone).mockResolvedValue(true);
   vi.mocked(markLeagueRestoreRebuildDone).mockResolvedValue(true);
   vi.mocked(rebuildAfterSeasonDelete).mockResolvedValue({
@@ -110,7 +110,7 @@ describe('POST /api/admin/league-trash/[id]/rebuild', () => {
     const response = await call();
 
     expect(response.status).toBe(403);
-    expect(listPendingLeagueRebuilds).not.toHaveBeenCalled();
+    expect(getPendingLeagueRebuild).not.toHaveBeenCalled();
     expect(rebuildAfterSeasonDelete).not.toHaveBeenCalled();
     expect(rebuildAfterSeasonRestore).not.toHaveBeenCalled();
   });
@@ -120,10 +120,11 @@ describe('POST /api/admin/league-trash/[id]/rebuild', () => {
 
     expect(response.status).toBe(404);
     expect((await response.json()).code).toBe('INVALID_LEAGUE_TRASH_ID');
+    expect(getPendingLeagueRebuild).not.toHaveBeenCalled();
   });
 
   it('answers 404 LEAGUE_TRASH_NOT_FOUND when nothing is pending for the id', async () => {
-    vi.mocked(listPendingLeagueRebuilds).mockResolvedValue([{ ...pendingDelete, trash_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' }]);
+    vi.mocked(getPendingLeagueRebuild).mockResolvedValue(null);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     try {
@@ -131,6 +132,7 @@ describe('POST /api/admin/league-trash/[id]/rebuild', () => {
 
       expect(response.status).toBe(404);
       expect((await response.json()).code).toBe('LEAGUE_TRASH_NOT_FOUND');
+      expect(getPendingLeagueRebuild).toHaveBeenCalledWith(TRASH_ID);
       expect(logAuditEvent).not.toHaveBeenCalled();
     } finally {
       errorSpy.mockRestore();
@@ -148,7 +150,7 @@ describe('POST /api/admin/league-trash/[id]/rebuild', () => {
   });
 
   it('runs the rebuild after a restore and confirms it by season id', async () => {
-    vi.mocked(listPendingLeagueRebuilds).mockResolvedValue([pendingRestore]);
+    vi.mocked(getPendingLeagueRebuild).mockResolvedValue(pendingRestore);
 
     const body = await (await call()).json();
 

@@ -22,6 +22,8 @@ const ALLOWED_OUTSIDE = new Set([
   '@/lib/pkmn/i18n/id',
   '@/lib/pkmn/format-id',
   '@/lib/pkmn/clauses',
+  // The singles tier hierarchy: a module with no imports at all, documented as client-safe.
+  '@/lib/pkmn/tier-constants',
   '@/lib/pkmn/team-constraints',
 ]);
 
@@ -91,7 +93,7 @@ describe('ruleset-kit client boundary', () => {
   it('walks the kit files and the shared helpers it is meant to use', () => {
     const relative = [...walked.files].map((file) => path.relative(SRC, file).replace(/\\/g, '/'));
     expect(relative).toEqual(
-      expect.arrayContaining(['lib/ruleset-kit/validate.ts', 'lib/ruleset-kit/compile.ts', 'lib/ruleset-kit/effective.ts', 'lib/pkmn/i18n/id.ts']),
+      expect.arrayContaining(['lib/ruleset-kit/validate.ts', 'lib/ruleset-kit/compile.ts', 'lib/ruleset-kit/effective.ts', 'lib/pkmn/i18n/id.ts', 'lib/pkmn/tier-constants.ts']),
     );
   });
 });

@@ -53,7 +53,11 @@ export interface LeagueFormatSummary {
   coverage: Coverage | null;
 }
 
-/** Stored ruleset names the descriptor refers to, for the ruleset sentences (no extra read). */
+/**
+ * Stored ruleset names the descriptor refers to, for the ruleset sentences (no extra read). The descriptor of a live league
+ * names the VERSION ids its league and phases pin (`describeLegacy`), and these are keyed by the same ids, so there is no
+ * definition or legacy id to resolve here (`loadRulesetChoices` does that for a stored format document).
+ */
 function rulesetNames(league: SeasonWithDetails, stages: readonly TournamentWithDetails[]): { id: string; name: string }[] {
   const byId = new Map<string, string>();
   if (league.ruleset_id && league.ruleset_name) byId.set(league.ruleset_id, league.ruleset_name);

@@ -8,12 +8,14 @@ import 'server-only';
  * `catalogVersion` is the `PRESET_RULES_VERSION` the resolved rules were computed with; a published version stores it.
  */
 import { compileRuleset, type CompileResult } from '@/lib/ruleset-kit/compile';
+import type { ResolvedRules, RulesetDocument } from '@/lib/ruleset-kit/types';
 import { validateRulesetDocument } from '@/lib/ruleset-kit/validate';
 import { RULESET_CATEGORIES, type RulesetCategory } from '@/lib/ruleset-kit/types';
 import { knownIds, presetKnownIds } from '@/lib/pkmn/known-ids.server';
 import { PRESET_RULES_VERSION } from '@/lib/pkmn/preset-data/pin';
 import { resolvePresetRules } from '@/lib/pkmn/preset-rules.server';
 import type { PresetRules } from '@/lib/pkmn/preset-rules';
+import { RulesetStudioError } from './errors';
 
 export interface ServerCompile {
   result: CompileResult;
@@ -37,4 +39,23 @@ export function compileDocument(input: unknown): ServerCompile {
     }
   }
   return { result: compileRuleset(input, { preset, known }), catalogVersion: PRESET_RULES_VERSION };
+}
+
+/** A document that compiled without an error, with everything a publish stores. */
+export interface PublishableCompile {
+  document: RulesetDocument;
+  resolved: ResolvedRules;
+  contentHash: string;
+  resolvedHash: string;
+  catalogVersion: string;
+}
+
+/** The publish gate: compiles `input` and returns what a publish stores, or throws `ruleset_document_invalid` with the error count. */
+export function compileForPublish(input: unknown): PublishableCompile {
+  const { result, catalogVersion } = compileDocument(input);
+  if (!result.ok || result.document === null || result.resolved === null || result.content_hash === null || result.resolved_hash === null) {
+    const errors = result.diagnostics.filter((d) => d.severity === 'error').length;
+    throw new RulesetStudioError('ruleset_document_invalid', { count: Math.max(errors, 1) });
+  }
+  return { document: result.document, resolved: result.resolved, contentHash: result.content_hash, resolvedHash: result.resolved_hash, catalogVersion };
 }

@@ -7,8 +7,8 @@ import { parseFormatId } from './format-id';
 // @pkmn/dex into their bundles. A preset carries only what is cheap and dex-free: id, name, generation, mod, game
 // type, source, family, universe, clause names and the rule FACTS (level, team size, source generation, ...). The
 // ban lists a preset implies are NOT here: they need the dex, and they are resolved on the server per mod by
-// `resolvePresetRules` (./preset-rules.server.ts). The ban lists that need the dex live in ./formats, which
-// re-exports everything here (server API unchanged).
+// `resolvePresetRules` (./preset-rules.server.ts) from the tables in ./preset-data. ./formats only builds the legacy
+// `FORMAT_DEFAULTS` view on top of this catalog and re-exports it (server API unchanged).
 //
 // Format ids: `gen` + one generation digit + tier key (./format-id.ts is the one parser). A key may start with a
 // digit (`gen91v1`), which is why nothing may read an id with a greedy digit pattern.
@@ -272,7 +272,7 @@ const TIER_DEFS: readonly TierDef[] = [
     family: 'draft-doubles',
     universe: 'national',
     showdownId: () => 'gen9natdex6v6doublesdraft',
-    rules: () => ({ minSourceGen: 3 }),
+    rules: () => ({ minSourceGen: 3, unmodelled: ['min_source_gen'] }),
   }),
   draft('doubles4draft', '4v4 Doubles Draft', [9], {
     is_doubles: true,

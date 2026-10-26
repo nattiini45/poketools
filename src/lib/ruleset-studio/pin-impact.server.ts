@@ -57,7 +57,7 @@ export async function computePinImpact(input: PinImpactInput): Promise<PinImpact
   const versions = await listRulesetVersions(definition.id, 100);
   const to = versions.find((v) => v.version_no === input.toVersionNo);
   if (to === undefined) throw new RulesetStudioError('ruleset_not_found');
-  const states = await loadMoveTargets(actor, definition, input.targets);
+  const states = await loadMoveTargets(actor, input.targets, versions);
 
   const rulesets = new Map<string, Ruleset>();
   const rulesetOf = async (versionId: string): Promise<Ruleset> => {

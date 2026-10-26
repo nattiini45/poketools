@@ -20,14 +20,15 @@ import {
   MAX_SWISS_ROUNDS,
   MIN_GROUPS,
   SCORE_ABS_MAX,
-  DEFAULT_RULESET_PRESET,
+  withRulesetPreset,
   ptr,
-  resolveLText,
   type Diagnostic,
-  type Locale,
   type RankStep,
   type Stage,
 } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
+import { DEFAULT_RULESET_PRESET } from '@/lib/pkmn/ruleset-preset-catalog';
 import {
   GROUP_METHODS,
   HEAD_TO_HEAD_SCOPES,
@@ -61,7 +62,6 @@ import {
   setRuleset,
   setScoreValue,
   setSeeding,
-  setRulesetPreset,
   updateStage,
 } from '@/lib/format-studio/editor/ops';
 import { fieldId } from '@/lib/format-studio/editor/targets';
@@ -311,13 +311,19 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
   const eliminationStage = stage.pairing.kind === 'single_elim' || stage.pairing.kind === 'double_elim';
   const seedings = fromRoster ? SEEDING_ROSTER : SEEDING_EDGES;
 
-  const knownRuleset = stage.ruleset.kind !== 'ruleset' || rulesets.some((r) => r.id === (stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : ''));
+  // A legacy id (an alias of a definition) is offered only while this stage names it, in place of its definition's own
+  // entry, so the same ruleset is never listed twice.
+  const namedId = stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : null;
+  const namedChoice = namedId === null ? undefined : rulesets.find((r) => r.id === namedId);
+  const knownRuleset = stage.ruleset.kind !== 'ruleset' || namedChoice !== undefined;
   const rulesetOptions: SelectOption[] = [
     { value: '', label: t('inspector.stage.rulesetDefault') },
-    ...rulesets.map((r) => ({
-      value: r.id,
-      label: r.version_no !== undefined && r.version_no > 1 ? t('inspector.stage.rulesetOption', { name: r.name, version: r.version_no }) : r.name,
-    })),
+    ...rulesets
+      .filter((r) => (r.definition_id === undefined ? r.id !== namedChoice?.definition_id : r.id === namedId))
+      .map((r) => ({
+        value: r.id,
+        label: r.version_no !== undefined && r.version_no > 1 ? t('inspector.stage.rulesetOption', { name: r.name, version: r.version_no }) : r.name,
+      })),
     ...(stage.ruleset.kind === 'ruleset' && !knownRuleset ? [{ value: stage.ruleset.id, label: t('inspector.stage.rulesetUnknown') }] : []),
     { value: PRESET_OPTION, label: t('inspector.stage.rulesetPreset') },
   ];
@@ -326,7 +332,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
     edit((s) => {
       if (value === '') return setRuleset(s, { kind: 'season_default' });
       // Picking the preset kind starts from the newest generation's OU; the preset field below changes it.
-      if (value === PRESET_OPTION) return s.ruleset.kind === 'preset' ? s : setRulesetPreset(s, DEFAULT_RULESET_PRESET);
+      if (value === PRESET_OPTION) return s.ruleset.kind === 'preset' ? s : withRulesetPreset(s, DEFAULT_RULESET_PRESET);
       return setRuleset(s, { kind: 'ruleset', id: value });
     });
 
@@ -595,11 +601,11 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
               label={t('inspector.stage.rulesetPreset')}
               value={stage.ruleset.preset}
               hint={t('inspector.stage.presetHelp')}
-              onChange={(value) => edit((s) => setRulesetPreset(s, value))}
+              onChange={(value) => edit((s) => withRulesetPreset(s, value))}
             />
           )}
           <Link
-            href={stage.ruleset.kind === 'ruleset' && knownRuleset ? rulesetReadOnlyHref(stage.ruleset.id) : RULESETS_HREF}
+            href={namedChoice !== undefined ? rulesetReadOnlyHref(namedChoice.definition_id ?? namedChoice.id) : RULESETS_HREF}
             className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
           >
             {t('inspector.stage.openStudio')}

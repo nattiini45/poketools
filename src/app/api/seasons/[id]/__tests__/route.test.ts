@@ -29,7 +29,6 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 vi.mock('@/lib/supabase/queries/league-trash', () => ({
   moveLeagueToTrash: vi.fn(),
   getLeagueTrashBySeason: vi.fn(),
-  listPendingLeagueRebuilds: vi.fn(),
   markLeagueTrashRebuildDone: vi.fn(),
   markLeagueRestoreRebuildDone: vi.fn(),
 }));
@@ -73,7 +72,6 @@ import { requireAdmin, requireResourceAdmin, AuthError } from '@/lib/auth/helper
 import { getSeasonWithDetails, updateSeason, getSeasonById } from '@/lib/supabase/queries/seasons';
 import {
   getLeagueTrashBySeason,
-  listPendingLeagueRebuilds,
   markLeagueTrashRebuildDone,
   moveLeagueToTrash,
 } from '@/lib/supabase/queries/league-trash';
@@ -775,19 +773,14 @@ describe('DELETE /api/seasons/[id] (the league goes to the trash)', () => {
       vi.mocked(moveLeagueToTrash).mockRejectedValue(timeout());
     });
 
-    it('continues as a success when the trash holds the league, rebuilding from the pending marker', async () => {
-      vi.mocked(getLeagueTrashBySeason).mockResolvedValue({ id: TRASH_ID, purge_after: PURGE_AFTER });
-      vi.mocked(listPendingLeagueRebuilds).mockResolvedValue([
-        {
-          kind: 'delete',
-          trash_id: TRASH_ID,
-          season_id: SEASON_ID,
-          season_name: 'Season One',
-          at: '2026-10-26T10:00:00.000Z',
-          phase_ids: PHASES,
-          player_ids: PLAYERS,
-        },
-      ]);
+    it('continues as a success when the trash holds the league, rebuilding from the trash entry', async () => {
+      vi.mocked(getLeagueTrashBySeason).mockResolvedValue({
+        id: TRASH_ID,
+        season_name: 'Season One',
+        purge_after: PURGE_AFTER,
+        phase_ids: PHASES,
+        player_ids: PLAYERS,
+      });
 
       const response = await call();
       const body = await response.json();

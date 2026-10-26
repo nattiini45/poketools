@@ -45,7 +45,7 @@ function statOf(ix: PreparedIndex | null, id: LineId, sort: SortKey, stage: Sort
 }
 
 /** True for the sorts that read a stat (and so a stage): the five stat sorts and `bst`. */
-export function isStatSort(sort: SortKey): boolean {
+export function isStatSort(sort: SortKey): sort is Exclude<SortKey, 'default' | 'alpha' | 'favorites'> {
   return sort === 'bst' || (STAT_KEYS as readonly string[]).includes(sort);
 }
 

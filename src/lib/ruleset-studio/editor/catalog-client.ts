@@ -4,10 +4,15 @@
  * most once while it is in flight or loaded; a failure is NOT cached, so the picker's Retry asks again. Callers may pass an
  * `AbortSignal`: an aborted caller stops waiting, the shared request keeps going for the others (and for the next call).
  *
+ * The index cache holds the DECODED `EntryIndex`, not the wire response: the editor (names, `known` ids) and the picker
+ * (rows, search) share one object per key, decoded once inside the shared request. The URL is the key; the response is
+ * immutable per deploy and the browser's HTTP cache revalidates it by ETag, so a reload never decodes stale data.
+ *
  * Client-safe: plain `fetch` through the studio core's `request`, with an injectable `fetch` for the tests.
  */
 import type { CatalogIndex, CatalogKind, CatalogScope, CatalogText } from '@/lib/pkmn/catalog-index';
 import type { PresetRules, TourOverlayRules } from '@/lib/pkmn/preset-rules';
+import { buildEntryIndex, type EntryIndex } from '@/lib/ruleset-studio/editor/picker/entry-index';
 import { request, type ApiOutcome, type FetchLike } from '@/lib/studio-core/request';
 
 export interface CatalogQuery {
@@ -83,18 +88,29 @@ function raceAbort<T>(promise: Promise<ApiOutcome<T>>, signal: AbortSignal): Pro
   });
 }
 
-const indexes = new OutcomeCache<CatalogIndex>();
+const indexes = new OutcomeCache<EntryIndex>();
 const texts = new OutcomeCache<CatalogText>();
 const presets = new OutcomeCache<PresetRules>();
 const overlays = new OutcomeCache<TourOverlayRules>();
 
-/** The entries of a kind in a generation and scope. */
-export function fetchCatalogIndex<K extends CatalogKind>(
+/** The decoded entries of a kind in a generation and scope: one shared index per key, fetched and decoded once. */
+export function fetchEntryIndex<K extends CatalogKind>(
   query: CatalogQuery & { kind: K },
   options: { fetch?: FetchLike; signal?: AbortSignal } = {},
-): Promise<ApiOutcome<CatalogIndex<K>>> {
+): Promise<ApiOutcome<EntryIndex<K>>> {
   const url = indexUrl(query);
-  return indexes.fetch(url, () => request<CatalogIndex>(options.fetch, 'GET', url), options.signal) as Promise<ApiOutcome<CatalogIndex<K>>>;
+  return indexes.fetch(url, () => loadEntryIndex(url, options.fetch), options.signal) as Promise<ApiOutcome<EntryIndex<K>>>;
+}
+
+async function loadEntryIndex(url: string, f: FetchLike | undefined): Promise<ApiOutcome<EntryIndex>> {
+  const outcome = await request<CatalogIndex>(f, 'GET', url);
+  if (!outcome.ok) return outcome;
+  try {
+    return { ok: true, data: buildEntryIndex(outcome.data) };
+  } catch {
+    // A body that does not decode is a failed load, never a cached one.
+    return { ok: false, status: 200, error: { code: 'unknown_error' } };
+  }
 }
 
 /** The one-line descriptions of moves, items or abilities in the viewer's language. */
@@ -115,9 +131,9 @@ export function fetchTourOverlay(presetId: string, options: { fetch?: FetchLike;
   return overlays.fetch(url, () => request<TourOverlayRules>(options.fetch, 'GET', url), options.signal);
 }
 
-/** The loaded index, when it is already in the cache (the compile's `known` set reads it without waiting). */
-export function peekCatalogIndex<K extends CatalogKind>(query: CatalogQuery & { kind: K }): CatalogIndex<K> | undefined {
-  return indexes.peek(indexUrl(query)) as CatalogIndex<K> | undefined;
+/** The loaded index, when it is already in the cache (a mounting picker renders it without a loading frame). */
+export function peekEntryIndex<K extends CatalogKind>(query: CatalogQuery & { kind: K }): EntryIndex<K> | undefined {
+  return indexes.peek(indexUrl(query)) as EntryIndex<K> | undefined;
 }
 
 export function peekCatalogText(query: CatalogTextQuery): CatalogText | undefined {

@@ -23,23 +23,17 @@ export function toggleSelected(selection: SelectionState, id: string): Selection
   return { ids, anchor: id };
 }
 
-/** Selects only this entry (a plain click on an unselected entry in selection mode). */
-export function selectOnly(id: string): SelectionState {
-  return { ids: new Set([id]), anchor: id };
-}
-
 /**
- * Selects the range between the anchor and `id` in `order` (the visible entries), added to what is selected when `extend`
- * is true (Ctrl+Shift), else replacing it. Without a usable anchor it selects `id` alone. The anchor stays, so the next
- * Shift click pivots on the same entry.
+ * Selects the range between the anchor and `id` in `order` (the visible entries), replacing what is selected. Without a
+ * usable anchor it selects `id` alone. The anchor stays, so the next Shift click pivots on the same entry.
  */
-export function selectRange(selection: SelectionState, order: readonly string[], id: string, extend = false): SelectionState {
+export function selectRange(selection: SelectionState, order: readonly string[], id: string): SelectionState {
   const to = order.indexOf(id);
   const from = selection.anchor === null ? -1 : order.indexOf(selection.anchor);
   if (to === -1) return selection;
-  if (from === -1) return { ids: new Set(extend ? [...selection.ids, id] : [id]), anchor: id };
+  if (from === -1) return { ids: new Set([id]), anchor: id };
   const [low, high] = from <= to ? [from, to] : [to, from];
-  const ids = new Set(extend ? selection.ids : []);
+  const ids = new Set<string>();
   for (let i = low; i <= high; i += 1) ids.add(order[i]);
   return { ids, anchor: selection.anchor };
 }

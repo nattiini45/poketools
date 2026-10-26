@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import { createTranslator } from '@/i18n/core';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
-import { groupRulesetPresets, listRulesetPresets } from '@/lib/format-kit/client';
+import { groupRulesetPresets, listRulesetPresets } from '@/lib/pkmn/ruleset-preset-catalog';
 import { esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds } from '@/test/markup';
 import RulesetPresetSelect from '../RulesetPresetSelect';
 

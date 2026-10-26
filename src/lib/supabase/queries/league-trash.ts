@@ -11,7 +11,9 @@
  * - The rebuild markers: a delete leaves `league_trash.rebuild_pending` and a restore leaves a row in
  *   `league_trash_restore_rebuilds` until the app confirmed its derived-data rebuild
  *   (`markLeagueTrashRebuildDone` / `markLeagueRestoreRebuildDone`). `listPendingLeagueRebuilds` reads both kinds for the
- *   trash page's "run rebuild" action and the season audit. An expired trash row whose rebuild is pending is not purged.
+ *   trash page and the season audit, `getPendingLeagueRebuild` reads the one of a trash id for the "run rebuild"
+ *   action. An expired trash row whose rebuild is pending is not purged, and a restore refuses it
+ *   (`LEAGUE_TRASH_REBUILD_PENDING`: its games would be counted twice).
  * - `countLeagueTrashForPlayer` counts the trashed leagues a player appears in, from the junction table that makes the
  *   database refuse the player's delete.
  */
@@ -21,6 +23,8 @@ import { supabase } from '../client';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { LEAGUE_TRASH_EXPIRE_BATCH, LEAGUE_TRASH_LIST_LIMIT, LEAGUE_TRASH_RETENTION_DAYS } from '@/lib/league-trash/constants';
 import { toLeagueTrashDbError } from '@/lib/league-trash/db-error';
+import { isRecord, stringItems, type JsonRecord } from '@/lib/league-trash/json';
+import { parseRestoreWarnings, type LeagueTrashRestoreWarning } from '@/lib/league-trash/restore-warnings';
 
 /** Row counts per captured table, as the trash page shows them. */
 export type LeagueTrashCounts = Readonly<Record<string, number>>;
@@ -41,12 +45,6 @@ export interface LeagueTrashDeleteResult {
   /** Highest applied migration at delete time (null when the database has no migration ledger). */
   schema_version: string | null;
 }
-
-/** A thing the restore did that the admin should read. */
-export type LeagueTrashRestoreWarning =
-  | { code: 'parent_missing_nulled'; rel: string; column: string; count: number }
-  | { code: 'replay_hash_released'; count: number }
-  | { code: 'columns_ignored'; rel: string; columns: string[] };
 
 export interface LeagueTrashRestoreResult {
   season_id: string;
@@ -99,57 +97,32 @@ export type PendingLeagueRebuild =
 const LIST_COLUMNS =
   'id, season_id, season_name, format_type, deleted_at, deleted_by, deleted_by_name, purge_after, counts, rebuild_pending, schema_version';
 
-type Rec = Record<string, unknown>;
-
-function asRecord(value: unknown, what: string): Rec {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error(`[league-trash] ${what} returned an unexpected shape`);
-  }
-  return value as Rec;
+function asRecord(value: unknown, what: string): JsonRecord {
+  if (!isRecord(value)) throw new Error(`[league-trash] ${what} returned an unexpected shape`);
+  return value;
 }
 
-function str(rec: Rec, key: string): string {
+function str(rec: JsonRecord, key: string): string {
   const v = rec[key];
   if (typeof v !== 'string') throw new Error(`[league-trash] expected a string at "${key}"`);
   return v;
 }
 
-function strOrNull(rec: Rec, key: string): string | null {
+function strOrNull(rec: JsonRecord, key: string): string | null {
   const v = rec[key];
   return typeof v === 'string' ? v : null;
 }
 
-function num(rec: Rec, key: string): number {
+function num(rec: JsonRecord, key: string): number {
   const v = rec[key];
   if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error(`[league-trash] expected a number at "${key}"`);
   return v;
-}
-
-function strings(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
 
 function counts(value: unknown): LeagueTrashCounts {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
   const out: Record<string, number> = {};
   for (const [key, n] of Object.entries(value)) if (typeof n === 'number') out[key] = n;
-  return out;
-}
-
-function warnings(value: unknown): LeagueTrashRestoreWarning[] {
-  if (!Array.isArray(value)) return [];
-  const out: LeagueTrashRestoreWarning[] = [];
-  for (const raw of value) {
-    if (typeof raw !== 'object' || raw === null) continue;
-    const w = raw as Rec;
-    if (w.code === 'parent_missing_nulled' && typeof w.rel === 'string' && typeof w.column === 'string' && typeof w.count === 'number') {
-      out.push({ code: 'parent_missing_nulled', rel: w.rel, column: w.column, count: w.count });
-    } else if (w.code === 'replay_hash_released' && typeof w.count === 'number') {
-      out.push({ code: 'replay_hash_released', count: w.count });
-    } else if (w.code === 'columns_ignored' && typeof w.rel === 'string') {
-      out.push({ code: 'columns_ignored', rel: w.rel, columns: strings(w.columns) });
-    }
-  }
   return out;
 }
 
@@ -178,8 +151,8 @@ export async function moveLeagueToTrash(seasonId: string, actorId: string): Prom
     deleted_at: str(rec, 'deleted_at'),
     purge_after: str(rec, 'purge_after'),
     counts: counts(rec.counts),
-    player_ids: strings(rec.player_ids),
-    phase_ids: strings(rec.phase_ids),
+    player_ids: stringItems(rec.player_ids),
+    phase_ids: stringItems(rec.phase_ids),
     frozen_pools: num(rec, 'frozen_pools'),
     schema_version: strOrNull(rec, 'schema_version'),
   };
@@ -199,12 +172,12 @@ export async function restoreLeagueFromTrash(trashId: string): Promise<LeagueTra
     season_name: str(rec, 'season_name'),
     restored: counts(rec.restored),
     shift_seconds: num(rec, 'shift_seconds'),
-    player_ids: strings(rec.player_ids),
-    phase_ids: strings(rec.phase_ids),
+    player_ids: stringItems(rec.player_ids),
+    phase_ids: stringItems(rec.phase_ids),
     paused_pools: num(rec, 'paused_pools'),
     queued_aggregate_jobs: num(rec, 'queued_aggregate_jobs'),
     schema_version_at_delete: strOrNull(rec, 'schema_version_at_delete'),
-    warnings: warnings(rec.warnings),
+    warnings: parseRestoreWarnings(rec.warnings),
   };
 }
 
@@ -221,7 +194,7 @@ export async function expireLeagueTrash(now: Date = new Date(), limit: number = 
       season_name: str(rec, 'season_name'),
       deleted_at: str(rec, 'deleted_at'),
       purge_after: str(rec, 'purge_after'),
-      match_ids: strings(rec.match_ids),
+      match_ids: stringItems(rec.match_ids),
     };
   });
 }
@@ -237,10 +210,23 @@ export async function listLeagueTrash(): Promise<LeagueTrashListItem[]> {
   return (data ?? []).map((row) => ({ ...row, counts: counts(row.counts) }));
 }
 
-/** The trash entry of a league (id and end of retention), or null. Used to tell whether a timed-out delete committed. */
-export async function getLeagueTrashBySeason(seasonId: string): Promise<{ id: string; purge_after: string } | null> {
+/** The trash entry of a league as the routes need it after a delete: its name, end of retention and rebuild inputs. */
+export interface LeagueTrashEntry {
+  id: string;
+  season_name: string;
+  purge_after: string;
+  phase_ids: string[];
+  player_ids: string[];
+}
+
+/** The trash entry of a league, or null. Used to tell whether a timed-out delete committed. */
+export async function getLeagueTrashBySeason(seasonId: string): Promise<LeagueTrashEntry | null> {
   if (!isValidUuid(seasonId)) return null;
-  const { data, error } = await supabase.from('league_trash').select('id, purge_after').eq('season_id', seasonId).maybeSingle();
+  const { data, error } = await supabase
+    .from('league_trash')
+    .select('id, season_name, purge_after, phase_ids, player_ids')
+    .eq('season_id', seasonId)
+    .maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -293,6 +279,38 @@ export async function listPendingLeagueRebuilds(): Promise<PendingLeagueRebuild[
       player_ids: r.player_ids,
     })),
   ];
+}
+
+/**
+ * The unconfirmed rebuild of one trash id: the delete's (the trash row still has `rebuild_pending`) or, after the
+ * restore, the restore's (its tombstone carries the trash id). Null when nothing is pending for the id.
+ */
+export async function getPendingLeagueRebuild(trashId: string): Promise<PendingLeagueRebuild | null> {
+  if (!isValidUuid(trashId)) return null;
+  const [trash, restored] = await Promise.all([
+    supabase
+      .from('league_trash')
+      .select('id, season_id, season_name, deleted_at, phase_ids, player_ids')
+      .eq('id', trashId)
+      .eq('rebuild_pending', true)
+      .maybeSingle(),
+    supabase
+      .from('league_trash_restore_rebuilds')
+      .select('trash_id, season_id, season_name, restored_at, phase_ids, player_ids')
+      .eq('trash_id', trashId)
+      .maybeSingle(),
+  ]);
+  if (trash.error) throw trash.error;
+  if (restored.error) throw restored.error;
+  if (trash.data) {
+    const r = trash.data;
+    return { kind: 'delete', trash_id: r.id, season_id: r.season_id, season_name: r.season_name, at: r.deleted_at, phase_ids: r.phase_ids, player_ids: r.player_ids };
+  }
+  if (restored.data) {
+    const r = restored.data;
+    return { kind: 'restore', trash_id: r.trash_id, season_id: r.season_id, season_name: r.season_name, at: r.restored_at, phase_ids: r.phase_ids, player_ids: r.player_ids };
+  }
+  return null;
 }
 
 /** Confirms the derived-data rebuild after a delete. True when a pending marker was cleared. */

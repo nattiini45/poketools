@@ -4,7 +4,7 @@ import { createTranslator } from '@/i18n/core';
 import { errorsCommon } from '@/i18n/messages/errors';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
-import { ltext } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
 import {
   attachFormatRequest,
   classifyApiError,

@@ -21,11 +21,11 @@ import { createTranslator, type Translator } from '@/i18n/core';
 import { createFormatter } from '@/i18n/format';
 import { formatStudioDescribeMessages } from '@/i18n/messages/format-studio/describe';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
-import { resolveLText } from '@/lib/studio-core/ltext';
+import { resolveLText, type LText } from '@/lib/studio-core/ltext';
 import { describePrimitive } from '../registry/describe';
 import type { PrimitiveKind } from '../registry/kinds';
 import { manifestEntry } from '../registry/manifest';
-import type { FormatDefinition, LText } from '../types';
+import type { FormatDefinition } from '../types';
 import type { StagePlan } from './plan';
 
 /** Rule units of a definition by how they are enforced; `total` is the sum of the four buckets. */

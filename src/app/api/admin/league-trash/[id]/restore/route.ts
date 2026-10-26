@@ -4,10 +4,11 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import type { DeleteRebuildWarning } from '@/lib/api/delete-rebuild-warning';
 import { logAuditEvent } from '@/lib/audit/log';
-import { leagueTrashRebuildPendingError, toLeagueTrashError } from '@/lib/league-trash/errors';
-import { finishLeagueRestoreRebuild, findPendingLeagueRebuild } from '@/lib/league-trash/service';
-import { restoreLeagueFromTrash, type LeagueTrashRestoreWarning } from '@/lib/supabase/queries/league-trash';
-import { expirePublicTags, expireSeasonReads, publicTags } from '@/lib/revalidation';
+import { toLeagueTrashError } from '@/lib/league-trash/errors';
+import type { LeagueTrashRestoreWarning } from '@/lib/league-trash/restore-warnings';
+import { finishLeagueRestoreRebuild } from '@/lib/league-trash/service';
+import { restoreLeagueFromTrash } from '@/lib/supabase/queries/league-trash';
+import { expirePublicTags, expireRatingReads, expireSeasonReads, publicTags } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 
 // The restore itself is one database call; the rebuild after it (rating settle passes, streaks, the aggregate queue)
@@ -37,7 +38,8 @@ export interface LeagueRestoreResult {
  * league spent in the trash, comes back with its running drafts paused and queues its games for the aggregate worker;
  * nothing is restored when anything fails. The rebuild after it (aggregate queue, ratings, streaks, EPB repair) is
  * confirmed to the database; a failure of it is a `rebuild_warning` next to a successful restore. A deleted league
- * whose own delete rebuild is still pending is refused (409): its statistics would be counted twice.
+ * whose own delete rebuild is still pending is refused by the database (409 `LEAGUE_TRASH_REBUILD_PENDING`): its
+ * statistics would be counted twice.
  */
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   try {
@@ -45,9 +47,6 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     const admin = await requireSuperadmin();
     const invalidId = rejectInvalidPathId(id, 'INVALID_LEAGUE_TRASH_ID');
     if (invalidId) return invalidId;
-
-    const pending = await findPendingLeagueRebuild(id);
-    if (pending?.kind === 'delete') throw leagueTrashRebuildPendingError();
 
     const restored = await restoreLeagueFromTrash(id);
     // The league is back in every read: its own tag, its phases' tags, the lists and the profiles.
@@ -57,12 +56,13 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       seasonId: restored.season_id,
       playerIds: restored.player_ids,
     });
-    // The rebuild counted the games into the aggregates (league, phases, all-time) and rewrote ratings.
+    // The rebuild counted the games into the aggregates (league, phases, all-time) and rewrote ratings and streaks.
     expirePublicTags([
       publicTags.aggregates('league', restored.season_id),
       publicTags.aggregates('all_time', null),
       ...restored.phase_ids.map((phaseId) => publicTags.aggregates('tournament', phaseId)),
     ]);
+    expireRatingReads(restored.player_ids);
 
     logAuditEvent({
       action: 'season.restore',

@@ -98,6 +98,8 @@ export type ApiErrorKind =
   | 'not_found'
   | 'invalid'
   | 'blocked'
+  /** A concurrent change got in the way of a request that was valid when the page was read: refresh, then retry. */
+  | 'conflict'
   | 'network'
   | 'other';
 

@@ -13,7 +13,7 @@ import type { PresetRules } from '@/lib/pkmn/preset-rules';
 import { RULESET_DIAGNOSTIC_SEVERITY, type RulesetDiagnostic } from '@/lib/ruleset-kit/compile';
 import { banEntries, setClause } from '@/lib/ruleset-kit/ops';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
-import { clearCatalogCache, fetchCatalogIndex } from '@/lib/ruleset-studio/editor/catalog-client';
+import { clearCatalogCache, fetchEntryIndex } from '@/lib/ruleset-studio/editor/catalog-client';
 import { SPECIES_ROWS } from '@/lib/ruleset-studio/__tests__/editor/picker/fixtures';
 import { applyListAction } from '@/lib/ruleset-studio/editor/picker/list-edit';
 
@@ -46,12 +46,12 @@ const response = (data: unknown) => Promise.resolve(new Response(JSON.stringify(
 
 async function seed(): Promise<void> {
   const index: CatalogIndex<'species'> = { v: 1, kind: 'species', gen: 9, scope: 'standard', preset: null, rows: SPECIES_ROWS };
-  await fetchCatalogIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: () => response(index) });
+  await fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: () => response(index) });
 }
 
-function Harness({ doc, tab, rulesLocale }: { doc: ReturnType<typeof newRulesetDocument>; tab: SummaryTab; rulesLocale?: 'en' | 'de' }) {
+function Harness({ doc, tab }: { doc: ReturnType<typeof newRulesetDocument>; tab: SummaryTab }) {
   const model = useRulesetEditor({ definitionId: 'r1', initialDoc: doc, initialRev: 1, initialPreset: PRESET });
-  return <SummaryPanel model={model} initialTab={tab} initialRulesLocale={rulesLocale} onSelectSection={() => undefined} onApplyFix={() => undefined} />;
+  return <SummaryPanel model={model} initialTab={tab} onSelectSection={() => undefined} onApplyFix={() => undefined} />;
 }
 
 const edited = () => {
@@ -123,12 +123,12 @@ describe('SummaryPanel', () => {
     expect(note).toContain('Sleep Clause Mod is shown on the rules page but the team validator does not check it.');
   });
 
-  it('the rules text is written in the chosen language and marked with it', () => {
-    const english = renderWithI18n(<Harness doc={edited()} tab="rules" rulesLocale="en" />);
+  it("the rules text opens in the viewer's language and is marked with it", () => {
+    const english = renderWithI18n(<Harness doc={edited()} tab="rules" />);
     expect(english).toContain('lang="en"');
     expect(english).toContain('Starts from the rule preset Gen 9 OU.');
     expect(english).toContain('aria-pressed="true"');
-    const german = renderWithI18n(<Harness doc={edited()} tab="rules" rulesLocale="de" />, { locale: 'de' });
+    const german = renderWithI18n(<Harness doc={edited()} tab="rules" />, { locale: 'de' });
     expect(german).toContain('lang="de"');
     expect(german).toContain('Startet vom Regel-Preset Gen 9 OU.');
     expect(german).toContain('Pokémon sind gebannt');

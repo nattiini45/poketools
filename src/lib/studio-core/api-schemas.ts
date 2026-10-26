@@ -1,8 +1,8 @@
 /**
  * The pieces of the studio request envelopes that do not depend on the studio (zod, server side): the opaque `document`
  * member, the draft revision, a new definition's name, the visibility, the list query and the 400 answer. A studio's
- * `api-schemas.ts` composes its own strict envelopes from these (adding its slug schema, which lives in the format kit,
- * and the ltext schema from `text-schema.ts`).
+ * `api-schemas.ts` composes its own strict envelopes from these (adding the slug, UUID and ltext schemas of
+ * `text-schema.ts`).
  *
  * The `document` member is opaque here: the route has already run the studio's `assertDocument` on it
  * (`assertEnvelopeDocument`), and the kit validates its content at check and publish time, never at save time (a draft
@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
 import { STUDIO_KINDS, STUDIO_VISIBILITIES } from './access';
+import { DEFINITION_NAME_MAX, isStorableName } from './name';
 
 /** The largest `draft_rev` a client may send (the column is a 32-bit integer). */
 export const MAX_REVISION = 2_147_483_646;
@@ -23,18 +24,15 @@ export const documentSchema = z.custom<Record<string, unknown>>(
   { message: 'Expected a JSON object' },
 );
 
-/** A UTF-16 surrogate without its partner: JSON text with one is refused by the database (and by `jsonb`). */
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-
 export const draftRevSchema = z.number().int().min(1).max(MAX_REVISION);
 
-/** A new definition's name: 1 to 120 characters that can be stored. */
+/** A new definition's name: the rule in `name.ts`, the same one the browser checks. */
 export const definitionNameSchema = z
   .string()
   .trim()
   .min(1)
-  .max(120)
-  .refine((value) => !value.includes('\u0000') && !LONE_SURROGATE.test(value), {
+  .max(DEFINITION_NAME_MAX)
+  .refine(isStorableName, {
     message: 'Name contains characters that cannot be stored',
   });
 

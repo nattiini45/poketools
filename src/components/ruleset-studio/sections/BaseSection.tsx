@@ -6,7 +6,7 @@ import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import { useLocale, useT } from '@/i18n/client';
 import { rulesetStudioSectionsMessages } from '@/i18n/messages/ruleset-studio/sections';
-import { getRulesetPreset } from '@/lib/format-kit/client';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import { GENERATIONS, getPreset } from '@/lib/pkmn/format-catalog';
 import type { PresetUnmodelled } from '@/lib/pkmn/format-catalog';
 import type { PresetRules } from '@/lib/pkmn/preset-rules';

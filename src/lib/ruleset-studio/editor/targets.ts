@@ -13,10 +13,6 @@ const FIELD_PREFIX = 'rf';
 export const EDITOR_SECTIONS = ['base', 'clauses', 'pokemon', 'moves', 'items', 'abilities', 'constraints', 'notes'] as const;
 export type EditorSection = (typeof EDITOR_SECTIONS)[number];
 
-export function isEditorSection(value: unknown): value is EditorSection {
-  return typeof value === 'string' && (EDITOR_SECTIONS as readonly string[]).includes(value);
-}
-
 export interface Selection {
   section: EditorSection;
 }

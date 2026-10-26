@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ltext } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { RulesetDocument } from '@/lib/ruleset-kit/types';
 import { newRulesetDocument } from '../document';
 import type { RulesetDefinitionMeta, RulesetVersion } from '../library-types';
@@ -89,6 +89,14 @@ const meta = (overrides: Partial<RulesetDefinitionMeta> = {}): RulesetDefinition
 });
 
 const document = (preset = 'gen9ou') => newRulesetDocument('Spring OU', 'en', preset) as unknown as Record<string, unknown>;
+/** A document whose identity holds the given `based_on` (`undefined`: none). */
+const documentBasedOn = (basedOn: string | undefined): Record<string, unknown> => {
+  const doc = document();
+  const identity = { ...(doc.identity as Record<string, unknown>) };
+  if (basedOn === undefined) delete identity.based_on;
+  else identity.based_on = basedOn;
+  return { ...doc, identity };
+};
 const slugTaken = () => new RulesetStudioError('ruleset_slug_taken');
 const codeOf = async (promise: Promise<unknown>) => ((await promise.then(() => null, (e: unknown) => e)) as RulesetStudioError | null)?.code;
 
@@ -145,9 +153,9 @@ describe('create, fork', () => {
     expect(createRulesetDefinition).not.toHaveBeenCalled();
   });
 
-  it('forks the latest published document with based_on and forked_from set; a draft only for those who may edit', async () => {
+  it('forks the latest published document with forked_from set and a missing based_on filled; a draft only for those who may edit', async () => {
     const source = meta({ id: OTHER, owner_id: OTHER, visibility: 'gallery', slug: 'site-ou' });
-    vi.mocked(getLatestPublishedRulesetVersion).mockResolvedValue({ spec: document() } as unknown as RulesetVersion);
+    vi.mocked(getLatestPublishedRulesetVersion).mockResolvedValue({ spec: documentBasedOn(undefined) } as unknown as RulesetVersion);
     await forkDefinition(player(), source, false);
     const input = vi.mocked(createRulesetDefinition).mock.calls[0][0];
     expect(input).toMatchObject({ forkedFrom: OTHER, ownerId: OWNER, slug: 'site-ou-copy' });
@@ -157,6 +165,15 @@ describe('create, fork', () => {
     expect(await codeOf(forkDefinition(player(), source, false))).toBe('ruleset_not_published');
     vi.mocked(getRulesetDefinitionDraft).mockResolvedValue({ document: document(), draft_rev: 1 });
     await expect(forkDefinition(player(), source, true)).resolves.toBeDefined();
+  });
+
+  it('a fork keeps the based_on the source already holds (it decides the format key of a blank base)', async () => {
+    const source = meta({ id: OTHER, owner_id: OTHER, visibility: 'gallery', slug: 'r-name-abc123' });
+    vi.mocked(getLatestPublishedRulesetVersion).mockResolvedValue({ spec: documentBasedOn('gen9vgc2025') } as unknown as RulesetVersion);
+    await forkDefinition(player(), source, false);
+    const input = vi.mocked(createRulesetDefinition).mock.calls[0][0];
+    expect((input.document as { identity: { based_on: string } }).identity.based_on).toBe('gen9vgc2025');
+    expect(input.forkedFrom).toBe(OTHER);
   });
 
   it('forks a catalog preset into a document based on it; an unknown preset is ruleset_preset_unknown', async () => {

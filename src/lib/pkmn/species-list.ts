@@ -14,7 +14,7 @@ import type { SpeciesSearchResult } from './dex';
 // A National Dex preset (`universe: 'national'` in the catalog) lists the generation's whole National Dex, past
 // species included (`listNationalSpecies`); every other format lists the generation's own species. Legality
 // comes from the preset's resolved rules (`resolvePresetRules`): a banned Pokémon is illegal, and where the
-// preset lists the legal Pokémon instead (a roster, Little Cup) only those are legal.
+// preset lists the legal Pokémon instead (a roster, Little Cup, NFE) only those are legal.
 //
 // This is a leaf module: it depends on dex.ts + the preset rules but nothing here
 // depends on it, avoiding the dex → formats → tiers → dex cycle that would
@@ -78,19 +78,10 @@ export function listSpeciesForFormat(
     const rawTier = species[tierField] as string | undefined;
     const tier = toDisplayTier(rawTier, isDoubles);
 
-    let legal: boolean;
-    if (!tierKey) {
-      legal = true;
-    } else if (tierKey === 'lc') {
-      legal = rawTier === 'LC' && isLegalByRule(species.id);
-    } else if (tierKey === 'nfe') {
-      legal = (species.evos?.length ?? 0) > 0 && isLegalByRule(species.id);
-    } else {
-      // Standard tiers, monotype, 1v1, doublesou, nationaldex, vgc, ag, cap, drafts, …
-      // "Lower tiers stay legal" falls out of getBannedPokemonForTier only
-      // collecting tiers strictly above the selected one.
-      legal = isLegalByRule(species.id);
-    }
+    // Everything the format rules in or out is in the preset's resolved list: the banned tiers, a roster, and the
+    // Little Cup / NFE species lists. "Lower tiers stay legal" falls out of getBannedPokemonForTier only collecting
+    // tiers strictly above the selected one.
+    const legal = isLegalByRule(species.id);
 
     results.push({
       name: species.name,

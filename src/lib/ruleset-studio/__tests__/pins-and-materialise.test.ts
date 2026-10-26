@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ltext } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { rulesFromBans } from '@/lib/ruleset-kit/effective';
 import type { SessionPlayer } from '@/types/auth';
 import type { RulesetDefinitionMeta, RulesetVersion } from '../library-types';
@@ -18,7 +18,6 @@ vi.mock('@/lib/supabase/queries/ruleset-definitions', () => ({
   getRulesetVersion: vi.fn(),
   listPinnedTargets: vi.fn(),
   listRulesetVersions: vi.fn(),
-  listVersionIds: vi.fn(),
   repinTarget: vi.fn(),
   deleteRulesetDefinition: vi.fn(),
 }));
@@ -32,7 +31,6 @@ import {
   getRulesetVersion,
   listPinnedTargets,
   listRulesetVersions,
-  listVersionIds,
   repinTarget,
 } from '@/lib/supabase/queries/ruleset-definitions';
 import { getPublishedRulesetHeads } from '@/lib/supabase/queries/season-formats';
@@ -73,7 +71,6 @@ const state = (kind: 'season' | 'tournament', id: string, status: string, rulese
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(listVersionIds).mockResolvedValue([V1, V2]);
   vi.mocked(listRulesetVersions).mockResolvedValue([
     { id: V2, version_no: 2 }, { id: V1, version_no: 1 },
   ] as never);
@@ -135,7 +132,24 @@ describe('movePins', () => {
     expect((await movePins(input([{ kind: 'season', id: SEASON }]))).moved).toEqual([]);
     vi.mocked(getPinTargetStates).mockResolvedValue([state('season', SEASON, 'upcoming', V1)]);
     vi.mocked(repinTarget).mockResolvedValue(false);
-    await expect(movePins(input([{ kind: 'season', id: SEASON }]))).rejects.toMatchObject({ code: 'ruleset_stale_revision' });
+    await expect(movePins(input([{ kind: 'season', id: SEASON }]))).rejects.toMatchObject({ code: 'ruleset_pin_moved', params: { target: 'season 1' } });
+  });
+
+  it('reports each committed move before the next one starts, so a conflict later in the run loses nothing of the earlier moves', async () => {
+    vi.mocked(getPinTargetStates).mockResolvedValue([state('season', SEASON, 'upcoming'), state('tournament', PHASE, 'upcoming')]);
+    vi.mocked(repinTarget).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const reported: Array<[string, string]> = [];
+    await expect(
+      movePins({ ...input([{ kind: 'season', id: SEASON }, { kind: 'tournament', id: PHASE }]), onMoved: (moved, to) => reported.push([moved.id, to.version_id]) }),
+    ).rejects.toMatchObject({ code: 'ruleset_pin_moved' });
+    expect(reported).toEqual([[SEASON, V2]]);
+  });
+
+  it('reads the version list once for the ownership check and the version numbers, and tells the moved phase its league', async () => {
+    vi.mocked(getPinTargetStates).mockResolvedValue([state('tournament', PHASE, 'upcoming')]);
+    const outcome = await movePins(input([{ kind: 'tournament', id: PHASE }]));
+    expect(listRulesetVersions).toHaveBeenCalledTimes(1);
+    expect(outcome.moved[0]).toMatchObject({ kind: 'tournament', id: PHASE, season_id: SEASON });
   });
 });
 

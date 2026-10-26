@@ -10,7 +10,6 @@ import {
   allowEntries,
   banEntries,
   blankBaseOf,
-  formatKeyOf,
   rebase,
   resetCategory,
   resetEntries,
@@ -217,7 +216,6 @@ describe('rebase', () => {
     const after = computeEffective(result.doc, null);
     expect(diffResolved({ ...before, format_key: 'x' }, { ...after, format_key: 'x' }).moves).toEqual({ modeChanged: false, added: [], removed: [] });
     expect(after.moves.ids).toEqual(['lastrespects', 'spore']);
-    expect(formatKeyOf(result.doc)).toBe('gen9ou');
   });
 
   it('an allowlist stays an allowlist; a block list cannot be written against a roster and is reported', () => {

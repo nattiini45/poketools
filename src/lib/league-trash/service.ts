@@ -8,7 +8,7 @@
  *   delete or restore and confirm it to the database (`markLeagueTrashRebuildDone` /
  *   `markLeagueRestoreRebuildDone`), which is what lets the expiry purge an entry. A rebuild that fails, or a restore
  *   whose ratings did not settle, stays UNconfirmed and comes back as a typed warning; the superadmin runs it again
- *   from the trash page (`findPendingLeagueRebuild`). The delete committed either way, so none of this throws.
+ *   from the trash page (`getPendingLeagueRebuild`). The delete committed either way, so none of this throws.
  *
  * Cache expiry is NOT here: the write-route-tags rule wants the route handler itself to call the expiry helpers.
  */
@@ -28,12 +28,10 @@ import {
 } from '@/lib/api/delete-rebuild-warning';
 import {
   getLeagueTrashBySeason,
-  listPendingLeagueRebuilds,
   markLeagueRestoreRebuildDone,
   markLeagueTrashRebuildDone,
   moveLeagueToTrash,
   type LeagueTrashCounts,
-  type PendingLeagueRebuild,
 } from '@/lib/supabase/queries/league-trash';
 import { toLeagueTrashDbError, type LeagueTrashDbError } from './db-error';
 
@@ -49,12 +47,6 @@ export interface TrashedLeague {
   counts: LeagueTrashCounts;
   /** Running queue drafts the delete paused; null when the delete was settled after a request deadline. */
   frozen_pools: number | null;
-}
-
-/** The pending rebuild of a trash entry (delete) or a restored league (restore), by trash id. */
-export async function findPendingLeagueRebuild(trashId: string): Promise<PendingLeagueRebuild | null> {
-  const pending = await listPendingLeagueRebuilds();
-  return pending.find((rebuild) => rebuild.trash_id === trashId) ?? null;
 }
 
 /**
@@ -84,14 +76,12 @@ export async function trashLeague(seasonId: string, actorId: string): Promise<Tr
 async function settleTimedOutDelete(seasonId: string, timeout: LeagueTrashDbError): Promise<TrashedLeague> {
   const entry = await getLeagueTrashBySeason(seasonId);
   if (!entry) throw timeout;
-  // The delete left its rebuild marker, which carries the league's name and the rebuild inputs.
-  const pending = await findPendingLeagueRebuild(entry.id);
   return {
     trash_id: entry.id,
-    season_name: pending?.season_name ?? seasonId,
+    season_name: entry.season_name,
     purge_after: entry.purge_after,
-    phase_ids: pending?.phase_ids ?? [],
-    player_ids: pending?.player_ids ?? [],
+    phase_ids: entry.phase_ids,
+    player_ids: entry.player_ids,
     counts: {},
     frozen_pools: null,
   };

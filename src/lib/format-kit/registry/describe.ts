@@ -17,9 +17,8 @@ import type { ParamValue } from '@/i18n/types';
 import { hasOwn, isKey } from '@/lib/studio-core/keys';
 import { printExpr } from '../expr/printer';
 import type { Expr } from '../expr/ast';
-import { resolveLText } from '@/lib/studio-core/ltext';
-import { getRulesetPreset } from '../ruleset-presets';
-import type { LText } from '../types';
+import { resolveLText, type LText } from '@/lib/studio-core/ltext';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import { kindKey, type AvailableKind, type PrimitiveKind } from './kinds';
 import { manifestEntry } from './manifest';
 

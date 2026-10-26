@@ -6,7 +6,7 @@ import 'server-only';
  * shows. No owner id, no draft body and no `players` row reaches the client: the owner is a display name.
  */
 import { listFormatDefinitions } from '@/lib/supabase/queries/format-definitions';
-import type { LText } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
 import type { SessionPlayer } from '@/types/auth';
 import { canAttachDefinition, type FormatActor } from './access';
 import type { FormatVisibility } from './library-types';

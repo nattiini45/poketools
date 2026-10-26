@@ -9,11 +9,11 @@ import { renderWithI18n } from '@/test/i18n';
 import type { Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
-import { ltext } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
 import { classifyApiError, publishRequest } from '@/lib/format-studio/editor/api';
 import { blankDocument, normalizeDraft } from '@/lib/format-studio/editor/document';
 import { setBestOf, updateStage } from '@/lib/format-studio/editor/ops';
-import { isDirty } from '@/lib/format-studio/editor/state';
+import { formatEditor } from '@/lib/format-studio/editor/state';
 import type { FormatDefinitionSummary } from '@/lib/format-studio/library-types';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
@@ -30,6 +30,8 @@ import StageInspector from '../../editor/inspectors/StageInspector';
 import { runPublishFlow } from '@/components/studio-shell/dialogs/PublishDialog';
 import { useFormatEditor, type FormatEditorModel } from '../../editor/useFormatEditor';
 import { esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, presetDoc, stageNameOf } from './test-helpers';
+
+const { isDirty } = formatEditor;
 
 const SUMMARY: FormatDefinitionSummary = {
   id: 'def-1',

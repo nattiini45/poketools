@@ -15,8 +15,8 @@ import 'server-only';
  * follows fails, the caller discards them (`discardMaterialised`), so a failed attach leaves no orphan row. What a
  * re-attach or a detach leaves unused is deleted by the database functions, in the same transaction as the stages.
  */
-import { ltext } from '@/lib/format-kit';
-import { getRulesetPreset } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import { deleteRulesetDefinition } from '@/lib/supabase/queries/ruleset-definitions';
 import { getPublishedRulesetHeads } from '@/lib/supabase/queries/season-formats';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';

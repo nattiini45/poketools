@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useDeferredValue, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { Keyboard } from 'lucide-react';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
@@ -17,7 +17,7 @@ import type { PresetList } from '@/lib/pkmn/preset-rules';
 import { WIKI_ITEM_CATEGORY_KEYS } from '@/lib/wiki/item-category';
 import { needsConfirmation, resolveTargets, type BulkAction, type BulkScope } from '@/lib/ruleset-studio/editor/picker/bulk';
 import { isSpeciesIndex } from '@/lib/ruleset-studio/editor/picker/entry-index';
-import { reduceKey, type NavContext, type NavState } from '@/lib/ruleset-studio/editor/picker/keyboard';
+import { clampActive, reduceKey, type NavContext, type NavState } from '@/lib/ruleset-studio/editor/picker/keyboard';
 import {
   GAP,
   buildRows,
@@ -142,7 +142,7 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
   const rows = useMemo(() => (view === null ? [] : buildRows(view.items, columns)), [view, columns]);
   const positions = useMemo(() => positionsOf(rows), [rows]);
 
-  const active = entries.length === 0 ? -1 : Math.min(nav.active, entries.length - 1);
+  const active = clampActive(nav.active, entries.length);
   const activeEntry: CatalogEntry | null = active >= 0 ? entries[active] : null;
   const selection = nav.selection;
   const visible = useMemo(() => new Set(order), [order]);
@@ -165,14 +165,7 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
   const speciesIndex = index !== null && isSpeciesIndex(index) ? index : null;
   const requestAct = useCallback(
     (action: BulkAction, ids: readonly string[], scopeOfAction: BulkScope = 'selection') => {
-      const targets = resolveTargets({
-        scope: scopeOfAction === 'filtered' ? 'filtered' : 'selection',
-        entryId: null,
-        selectedIds: ids,
-        filteredIds: ids,
-        includeFormes: prefs.includeFormes,
-        speciesIndex,
-      });
+      const targets = resolveTargets(ids, scopeOfAction, prefs.includeFormes, speciesIndex);
       if (targets.length === 0) return;
       if (needsConfirmation(targets.length)) setPending({ action, ids: targets });
       else onAct(action, targets);
@@ -217,8 +210,15 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
     if (result.command !== null) runCommand(result.command);
   };
 
+  // The option handler stays the same function across renders, so a memoised option only re-renders when its own props
+  // change; it reads the current entries and actions through this ref.
+  const latest = useRef({ entries, order, requestAct });
+  useEffect(() => {
+    latest.current = { entries, order, requestAct };
+  });
   const onPick = useCallback(
     (entryIndex: number, event: MouseEvent<HTMLDivElement>) => {
+      const { entries, order, requestAct } = latest.current;
       const entry = entries[entryIndex];
       if (entry === undefined) return;
       const pick = (event.target as HTMLElement).closest('[data-pick]')?.getAttribute('data-pick');
@@ -236,7 +236,7 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
         setNav((current) => ({ ...current, active: entryIndex }));
       }
     },
-    [entries, order, requestAct],
+    [],
   );
 
   const updateFilters = (next: PickerFilters) => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PresetRules } from '@/lib/pkmn/preset-rules';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
-import { blankFormatKey, computeEffective, diffResolved, rulesFromBans, sameEnforcement } from '../effective';
+import { blankFormatKey, computeEffective, diffResolved, rulesFromBans } from '../effective';
 import type { RulesetDocument } from '../types';
 
 const PRESET: PresetRules = {
@@ -134,8 +134,6 @@ describe('diffResolved', () => {
     const diff = diffResolved(a, b);
     expect(diff.pokemon).toEqual({ modeChanged: false, added: ['garchomp'], removed: ['koraidon'] });
     expect(diff.moves.added).toEqual([]);
-    expect(sameEnforcement(a, a)).toBe(true);
-    expect(sameEnforcement(a, b)).toBe(false);
     // Two versions with the same document but a corrected preset differ in `resolved` only.
     const corrected = computeEffective(doc(), { ...PRESET, pokemon: { mode: 'block', ids: ['koraidon', 'miraidon', 'calyrexshadow'] } });
     expect(diffResolved(a, corrected).pokemon.added).toEqual(['calyrexshadow']);

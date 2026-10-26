@@ -27,6 +27,13 @@ describe('resolvePresetRules', () => {
     expect(rules('gen9ou').catalog_version).toBe(PRESET_RULES_VERSION);
   });
 
+  it('does not grow the memo with ids the catalog does not know (the id comes from public requests)', () => {
+    for (let i = 0; i < 50; i++) expect(resolvePresetRules(`junk${i}`)).toBeNull();
+    // A miss is never stored: asking again re-reads the catalog, and a known id is unaffected.
+    expect(resolvePresetRules('junk0')).toBeNull();
+    expect(resolvePresetRules('gen9ou')).toBe(resolvePresetRules('gen9ou'));
+  });
+
   it('resolves every preset of the catalog, with sorted unique ids and clause ids', () => {
     for (const preset of PRESETS) {
       const resolved = rules(preset.id);
@@ -40,6 +47,28 @@ describe('resolvePresetRules', () => {
         expect(ids.every((id) => /^[a-z0-9]+$/.test(id)), `${preset.id} ${category} ids`).toBe(true);
       }
     }
+  });
+});
+
+describe('the ladder Little Cup and NFE presets are allowlists', () => {
+  it('Little Cup allows the first stages the dex tiers as LC, less the generation bans, in every generation', () => {
+    for (const id of ['gen4lc', 'gen8lc', 'gen9lc']) {
+      const lc = rules(id);
+      expect(lc.pokemon.mode, id).toBe('allow');
+      expect(lc.pokemon.ids, id).toEqual(expect.arrayContaining(['pichu', 'dratini', 'riolu']));
+      for (const out of ['pikachu', 'dragonite', 'garchomp', 'scyther', 'gligar']) expect(lc.pokemon.ids, `${id} ${out}`).not.toContain(out);
+      expect(lc.facts).toMatchObject({ littleCup: true, maxLevel: 5 });
+    }
+    const gen9 = rules('gen9lc');
+    for (const banned of ['diglett', 'dunsparce', 'aipom', 'yanma']) expect(gen9.pokemon.ids).not.toContain(banned);
+    expect(gen9.moves.ids).toEqual(['batonpass', 'stickyweb']);
+  });
+
+  it('NFE allows every species that can still evolve', () => {
+    const nfe = rules('gen9nfe');
+    expect(nfe.pokemon.mode).toBe('allow');
+    expect(nfe.pokemon.ids).toEqual(expect.arrayContaining(['haunter', 'dratini', 'dragonair', 'pichu']));
+    for (const out of ['garchomp', 'gengar', 'dragonite']) expect(nfe.pokemon.ids).not.toContain(out);
   });
 });
 

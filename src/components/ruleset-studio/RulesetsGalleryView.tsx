@@ -4,7 +4,8 @@ import RulesetLibraryList from '@/components/ruleset-studio/starts/RulesetLibrar
 import type { Translator } from '@/i18n/core';
 import type { Locale } from '@/i18n/config';
 import type { rulesetStudioMessages } from '@/i18n/messages/ruleset-studio';
-import { groupRulesetPresets, listRulesetPresets, type PresetSource } from '@/lib/format-kit/client';
+import { groupRulesetPresets, listRulesetPresets } from '@/lib/pkmn/ruleset-preset-catalog';
+import type { PresetSource } from '@/lib/pkmn/format-catalog';
 import type { RulesetDefinitionSummary, RulesetPinCounts } from '@/lib/ruleset-studio/library-types';
 
 const SOURCES: readonly { source: PresetSource; heading: 'presetsShowdown' | 'presetsDraft' }[] = [
@@ -21,7 +22,7 @@ export interface GalleryList {
 export interface RulesetsGalleryViewProps {
   t: Translator<typeof rulesetStudioMessages.en>;
   locale: Locale;
-  /** The viewer's own rulesets, including the ones that belong to one of their leagues. */
+  /** The viewer's own rulesets, the ones made for a league among them. */
   mine: GalleryList;
   /** The custom rulesets other admins shared. */
   shared: GalleryList;
@@ -36,7 +37,7 @@ export interface RulesetsGalleryViewProps {
 }
 
 /**
- * The sections of `/admin/rulesets` below the page title: the viewer's rulesets, the shared ones, the league-owned ones,
+ * The sections of `/admin/rulesets` below the page title: the viewer's rulesets, the shared ones, the viewer's own that belong to a league,
  * the catalog of rule presets and the site catalog. Pure over already-read lists and an already-built translator, so the
  * page reads and gates, and the dev preview (`/ruleset-preview/surfaces`) renders the same sections over fixtures.
  */
@@ -72,7 +73,7 @@ export default function RulesetsGalleryView({ t, locale, mine, shared, site, usa
         <section className="space-y-3" aria-labelledby="rulesets-leagues">
           {heading('rulesets-leagues', t('page.leagues'))}
           <p className="text-sm text-poke-text-secondary">{t('page.leaguesIntro')}</p>
-          <RulesetLibraryList entries={leagueOwned.map((item) => rulesetLibraryEntry(item, locale, t, true, extrasFor(item)))} empty={empty(t('page.emptyLeagues'))} />
+          <RulesetLibraryList entries={leagueOwned.map((item) => rulesetLibraryEntry(item, locale, t, true, extrasFor(item)))} empty={null} />
         </section>
       )}
 

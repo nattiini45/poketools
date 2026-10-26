@@ -2,7 +2,6 @@
  * Maps our internal format keys to data.pkmn.cc stats format slugs.
  * Cross-referenced with /stats/index.json at import time.
  */
-import { generationOf, parseFormatId } from '@/lib/pkmn/format-id';
 
 // Formats to attempt importing from data.pkmn.cc
 // Keyed by our internal gen+tier format string
@@ -31,22 +30,6 @@ export const STATS_FORMATS: string[] = [
   'gen9monotype', 'gen9nationaldex', 'gen9doublesou',
   'gen9vgc2024', 'gen9vgc2025', 'gen91v1',
 ];
-
-/**
- * Extract the generation number from a format string.
- * e.g. 'gen9ou' → 9, 'gen3ubers' → 3
- */
-export function extractGenFromFormat(format: string): number | null {
-  return generationOf(format);
-}
-
-/**
- * Extract the tier key from a format string.
- * e.g. 'gen9ou' → 'ou', 'gen9vgc2025' → 'vgc2025'
- */
-export function extractTierFromFormat(format: string): string {
-  return parseFormatId(format)?.key ?? format;
-}
 
 /**
  * Fetch the available format list from data.pkmn.cc/stats/index.json.

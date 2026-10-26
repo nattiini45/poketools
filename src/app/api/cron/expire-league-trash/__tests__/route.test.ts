@@ -12,8 +12,9 @@ vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
 }));
 
-import { GET, POST } from '@/app/api/cron/expire-league-trash/route';
-import { LEAGUE_TRASH_EXPIRE_BATCH } from '@/lib/league-trash/constants';
+import { GET, POST, maxDuration } from '@/app/api/cron/expire-league-trash/route';
+import { LEAGUE_TRASH_EXPIRE_BATCH, LEAGUE_TRASH_SWEEP_BUDGET_MS } from '@/lib/league-trash/constants';
+import { SUPABASE_STORAGE_TIMEOUT_MS } from '@/lib/supabase/timeout-fetch';
 import { sweepLeagueSocialImages, type SocialImageSweepResult } from '@/lib/league-trash/social-image-sweep';
 import { expireLeagueTrash, type LeagueTrashExpiredRow } from '@/lib/supabase/queries/league-trash';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -143,10 +144,24 @@ describe('/api/cron/expire-league-trash', () => {
           deleted_at: '2026-07-01T10:00:00.000Z',
           purge_after: '2026-09-29T10:00:00.000Z',
           matches: 2,
-          social_images: swept,
         },
       }),
     );
+  });
+
+  it('writes every audit event before the first sweep starts, so a killed sweep leaves no purge unrecorded', async () => {
+    vi.mocked(expireLeagueTrash).mockResolvedValue([row(1), row(2)]);
+
+    await POST(request());
+
+    const audits = vi.mocked(logAuditEvent).mock.invocationCallOrder;
+    const sweeps = vi.mocked(sweepLeagueSocialImages).mock.invocationCallOrder;
+    expect(audits).toHaveLength(2);
+    expect(Math.max(...audits)).toBeLessThan(Math.min(...sweeps));
+  });
+
+  it('keeps the sweep budget plus two storage timeouts inside maxDuration', () => {
+    expect(LEAGUE_TRASH_SWEEP_BUDGET_MS + 2 * SUPABASE_STORAGE_TIMEOUT_MS).toBeLessThan(maxDuration * 1000);
   });
 
   it('shares one sweep deadline across the leagues of a run', async () => {
@@ -159,7 +174,7 @@ describe('/api/cron/expire-league-trash', () => {
     expect(first[1]).toBeGreaterThan(Date.now());
   });
 
-  it('keeps the expiry a success when a sweep reports failures, and records them', async () => {
+  it('keeps the expiry a success when a sweep reports failures, and reports them in the body', async () => {
     vi.mocked(expireLeagueTrash).mockResolvedValue([row(1)]);
     const failed: SocialImageSweepResult = {
       swept: 1,
@@ -174,9 +189,7 @@ describe('/api/cron/expire-league-trash', () => {
 
     expect(res.status).toBe(200);
     expect(body.data.leagues[0].social_images).toEqual(failed);
-    expect(logAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'season.purge', metadata: expect.objectContaining({ social_images: failed }) }),
-    );
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: 'season.purge' }));
   });
 
   it('answers 5xx when the expiry itself fails, so function-error alerting sees it', async () => {

@@ -13,6 +13,8 @@
  * Pure and client-safe: no reads, no `server-only`.
  */
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
+import { isRecord, type JsonRecord } from './json';
+import { parseRestoreWarnings, type LeagueTrashRestoreWarning } from './restore-warnings';
 
 /** The counts column: what the league held, from the captured row counts (table name -> rows). */
 export interface LeagueTrashHeadlineCounts {
@@ -78,21 +80,12 @@ export function pendingKey(kind: 'delete' | 'restore', trashId: string): string 
 
 // ─── Requests ────────────────────────────────────────────────────────────────
 
-/**
- * A thing the restore did that the superadmin should read: the `warnings` of the restore route (the type twin of
- * `LeagueTrashRestoreWarning` in the server-only queries; the test pins that they stay assignable).
- */
-export type LeagueRestoreWarningView =
-  | { code: 'parent_missing_nulled'; rel: string; column: string; count: number }
-  | { code: 'replay_hash_released'; count: number }
-  | { code: 'columns_ignored'; rel: string; columns: string[] };
-
 export interface LeagueRestoreView {
   seasonId: string;
   seasonName: string;
   /** Running drafts that came back paused. */
   pausedPools: number;
-  warnings: LeagueRestoreWarningView[];
+  warnings: LeagueTrashRestoreWarning[];
   /** Null when the rebuild after the restore finished; otherwise it stays pending. */
   rebuildWarning: ApiErrorLike | null;
 }
@@ -105,18 +98,8 @@ export interface LeagueRebuildView {
 /** `ok`: the route answered 2xx; `refused`: nothing happened (or not completely), with the catalogued error. */
 export type LeagueTrashRequestOutcome<T> = { kind: 'ok'; value: T } | { kind: 'refused'; error: ApiErrorLike | null };
 
-type Rec = Record<string, unknown>;
-
-function isRecord(v: unknown): v is Rec {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-function strings(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
-}
-
 /** `data.rebuild_warning` of a route body (`DeleteRebuildWarning`), or null. */
-function rebuildWarningOf(data: Rec): ApiErrorLike | null {
+function rebuildWarningOf(data: JsonRecord): ApiErrorLike | null {
   const warning = data.rebuild_warning;
   if (!isRecord(warning) || typeof warning.code !== 'string') return null;
   const params = isRecord(warning.params)
@@ -131,22 +114,6 @@ function rebuildWarningOf(data: Rec): ApiErrorLike | null {
     ...(typeof warning.error === 'string' ? { error: warning.error } : {}),
     ...(params ? { params } : {}),
   };
-}
-
-function restoreWarnings(value: unknown): LeagueRestoreWarningView[] {
-  if (!Array.isArray(value)) return [];
-  const out: LeagueRestoreWarningView[] = [];
-  for (const raw of value) {
-    if (!isRecord(raw)) continue;
-    if (raw.code === 'parent_missing_nulled' && typeof raw.rel === 'string' && typeof raw.column === 'string' && typeof raw.count === 'number') {
-      out.push({ code: 'parent_missing_nulled', rel: raw.rel, column: raw.column, count: raw.count });
-    } else if (raw.code === 'replay_hash_released' && typeof raw.count === 'number') {
-      out.push({ code: 'replay_hash_released', count: raw.count });
-    } else if (raw.code === 'columns_ignored' && typeof raw.rel === 'string') {
-      out.push({ code: 'columns_ignored', rel: raw.rel, columns: strings(raw.columns) });
-    }
-  }
-  return out;
 }
 
 async function post(endpoint: string, fetchImpl: typeof fetch): Promise<{ ok: boolean; status: number; body: unknown }> {
@@ -183,7 +150,7 @@ export async function requestLeagueRestore(
       seasonId: data.season_id,
       seasonName: typeof data.season_name === 'string' ? data.season_name : '',
       pausedPools: typeof data.paused_pools === 'number' ? data.paused_pools : 0,
-      warnings: restoreWarnings(data.warnings),
+      warnings: parseRestoreWarnings(data.warnings),
       rebuildWarning: rebuildWarningOf(data),
     },
   };

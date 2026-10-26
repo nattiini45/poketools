@@ -20,19 +20,19 @@ import { glossaryMessages } from '@/i18n/messages/glossary';
 import { activeFilterCount } from '@/lib/draft-finder/filter-groups';
 import {
   hasActiveFilters,
+  SORT_KEYS,
   SORT_STAGES,
   STAGE_MODES,
   type FinderAction,
   type FinderFilters,
   type FinderViewState,
   type SortKey,
-  type StatKey,
 } from '@/lib/draft-finder/filter-types';
 import type { NameResolver } from '@/lib/draft-finder/names-port';
 import { isStatSort } from '@/lib/draft-finder/sort';
 import { cn } from '@/lib/utils/cn';
 import { statLabel, useFinderLabelContext } from './finder-labels';
-import { FOCUS_RING } from './filters/types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 export const SEARCH_DEBOUNCE_MS = 120;
 
@@ -97,10 +97,6 @@ export function createTextCommitter(commit: (value: string) => void, delayMs: nu
   };
 }
 
-const BASE_SORTS = ['default', 'alpha', 'favorites'] as const satisfies readonly SortKey[];
-/** The stat sorts of `SortKey` (read at the chosen sort stage, §4.7 rule 4); HP is not a sort. */
-const STAT_SORTS = ['spe', 'atk', 'def', 'spa', 'spd', 'bst'] as const satisfies readonly (Extract<SortKey, StatKey> | 'bst')[];
-
 export default function FinderBar({
   view,
   dispatch,
@@ -142,10 +138,10 @@ export default function FinderBar({
 
   const activeCount = activeFilterCount(view.filters);
   const filtersLabel = tg('state.filters');
-  const sortOptions: { key: SortKey; label: string }[] = [
-    ...BASE_SORTS.map((key) => ({ key, label: t(`sort.${key}`) })),
-    ...STAT_SORTS.map((key) => ({ key, label: statLabel(key, ctx, 'long') })),
-  ];
+  const sortOptions: { key: SortKey; label: string }[] = SORT_KEYS.map((key) => ({
+    key,
+    label: isStatSort(key) ? statLabel(key, ctx, 'long') : t(`sort.${key}`),
+  }));
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2 px-3 py-2', className)}>

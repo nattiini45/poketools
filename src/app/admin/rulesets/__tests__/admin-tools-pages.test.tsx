@@ -466,6 +466,14 @@ describe('read-only page', () => {
     expect(text).toContain('This is the saved draft. It is not published.');
   });
 
+  it('names the base preset of the saved draft, and a blank base only for a draft that starts blank', async () => {
+    const preset = html(await DetailPage(params(ID)));
+    expect(preset).toContain('Starts from the');
+    expect(preset).not.toContain('Starts from a blank base.');
+    mocks.getRulesetDetail.mockResolvedValue(detail({ draft: { document: newRulesetDocument('Blank', 'en'), draft_rev: 1 } }));
+    expect(html(await DetailPage(params(ID)))).toContain('Starts from a blank base.');
+  });
+
   it('hides the editor link and the version list from a viewer who may only read', async () => {
     mocks.getRulesetDefinitionMeta.mockResolvedValue(meta({ owner_id: 'p2', visibility: 'league' }));
     mocks.getRulesetDetail.mockResolvedValue(detail({ published: published(), draft: null, versions: [] }));

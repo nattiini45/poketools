@@ -11,6 +11,7 @@ SELECT (SELECT count(*) FROM matches m JOIN tournaments t ON t.id = m.tournament
 \timing on
 \echo >>> DELETE
 SELECT league_trash_delete(:'sid', :'actor', 90) ->> 'trash_id' AS tid \gset
+SELECT league_trash_rebuild_done(:'tid');
 \echo >>> RESTORE
 SELECT league_trash_restore(:'tid') ->> 'queued_aggregate_jobs' AS queued_jobs;
 \timing off

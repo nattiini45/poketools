@@ -66,7 +66,7 @@ src/lib/match/
 - **Route**: `POST` and `DELETE /api/matches/[id]/social-image`, site admins only (`requireAdmin()`). The match page's `CreateSocialImageButton` captures the match card, POSTs it, and calls `router.refresh()` after the 201 so the page shows the new URL.
 - **Naming**: each upload is a NEW object in the `social-images` bucket at `matches/<matchId>/<uuid>.png`, written with `cacheControl: '31536000'` (one year) and `upsert: false`. An object is never overwritten; `matches.social_image_url` is updated to the new URL.
 - **Re-upload keeps the old object** on purpose: a Discord or social post made with the old URL keeps its image.
-- **DELETE** removes only the object the stored URL names, and only when `socialImagePathFromUrl` (`src/app/api/matches/[id]/social-image/storage-path.ts`) accepts it: the project's own origin, the `social-images` bucket, and a path of THIS match (the legacy `matches/<id>.png` or `matches/<id>/<uuid>.png`). A foreign, other-match or path-escape URL clears the column without touching Storage. A failed removal returns 500 `STORAGE_REMOVE_FAILED` and keeps the URL.
+- **DELETE** removes only the object the stored URL names, and only when `socialImagePathFromUrl` (`src/lib/match/social-image-path.ts`) accepts it: the project's own origin, the `social-images` bucket, and a path of THIS match (the legacy `matches/<id>.png` or `matches/<id>/<uuid>.png`). A foreign, other-match or path-escape URL clears the column without touching Storage. A failed removal returns 500 `STORAGE_REMOVE_FAILED` and keeps the URL.
 
 ## Data Flows
 - **Input**: Battle stats grouped by game + player IDs

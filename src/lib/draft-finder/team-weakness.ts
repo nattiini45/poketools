@@ -10,7 +10,8 @@
  * Empty types (a stage the dex could not resolve, see `build-index.server.ts`) have NO profile: `null`
  * means "no data", never an all-neutral row that would pass for a typing without weaknesses.
  */
-import { getEffectiveness, TYPES } from '@/lib/pkmn/type-chart';
+import { TYPES } from '@/lib/pkmn/type-chart';
+import { typingMultiplier } from './ability-defense';
 import type { TypeId } from './index-types';
 
 /** The multiplier an attacking type deals to a typing, one entry per attacking type in `TYPES` order. */
@@ -29,8 +30,7 @@ export interface TypeTally {
 /** The profile of a typing, or null when `types` is empty (no data). */
 export function defensiveProfile(types: readonly TypeId[]): DefensiveProfile | null {
   if (types.length === 0) return null;
-  const defending = [...types];
-  return TYPES.map((attacking) => getEffectiveness(attacking, defending));
+  return TYPES.map((attacking) => typingMultiplier(attacking, types));
 }
 
 /** The class of a multiplier (0, ¼, ½, 1, 2, 4). */

@@ -22,7 +22,6 @@
 import { createTranslator } from '@/i18n/core';
 import { formatStudioLegacyMessages } from '@/i18n/messages/format-studio/legacy';
 import {
-  LTEXT_MAX_CHARS,
   MAX_BEST_OF,
   MAX_GROUPS,
   MAX_N,
@@ -33,18 +32,17 @@ import {
   SCORE_ABS_MAX,
   isKey,
   isUuid,
-  ltext,
   type AdvanceSelect,
   type Edge,
   type FormatDefinition,
-  type LText,
-  type Locale,
   type Pairing,
   type RankStep,
   type Scoring,
   type Stage,
   type TextSection,
 } from '@/lib/format-kit/client';
+import { LTEXT_MAX_CHARS, ltext, type LText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 import { ROUND_ROBIN_MATCH_POINTS, effectiveMatchPoints, effectiveTiebreakerChain } from '@/lib/tournament/standings-rules';
 import { buildModules, type LegacyTexts } from './facts';
 import { mapOverrides } from './overrides';

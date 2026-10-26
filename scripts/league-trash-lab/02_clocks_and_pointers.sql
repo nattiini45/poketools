@@ -24,6 +24,7 @@ SELECT 'cast_sessions with a league link', count(*) FROM cast_sessions WHERE sea
 SELECT 'streak pointers (any)', count(*) FROM player_streaks WHERE last_match_id IS NOT NULL;
 SELECT 'trash row', season_name, format_type, purge_after - deleted_at AS window_, jsonb_array_length(unlinked) unlinked, cardinality(phase_ids) phases, cardinality(player_ids) players, rebuild_pending FROM league_trash WHERE id = :'tid';
 -- simulate 30 days in the trash
+SELECT league_trash_rebuild_done(:'tid');
 SELECT league_trash_restore(:'tid', now() + interval '30 days') ->> 'shift_seconds' AS shift \gset
 \echo === AFTER RESTORE (30 days later): shift = :shift s
 SELECT 'pool' k, p.id::text, p.phase, p.paused_at IS NOT NULL paused, p.pause_reason, (p.submission_deadline_at - b.submission_deadline_at) sub_shift, (p.token_purchase_closes_at - b.token_purchase_closes_at) tok_shift

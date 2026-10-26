@@ -9,7 +9,7 @@ import type { Locale } from '@/i18n/config';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
-import { MAX_RANK_STEPS, renderDiagnostic } from '@/lib/format-kit/client';
+import { MAX_RANK_STEPS, renderDiagnostic, withRulesetPreset } from '@/lib/format-kit/client';
 import { PAIRING_KINDS, type RulesetChoice } from '@/lib/format-studio/editor/catalog';
 import {
   addRankStep,
@@ -17,7 +17,6 @@ import {
   setGroups,
   setPairingKind,
   setRuleset,
-  setRulesetPreset,
   updateStage,
 } from '@/lib/format-studio/editor/ops';
 import { errorId, fieldId } from '@/lib/format-studio/editor/targets';
@@ -199,6 +198,32 @@ describe('StageInspector: ruleset', () => {
     expect(html).toContain('Open the Ruleset Studio');
   });
 
+  describe('a legacy ruleset id (an alias of a definition)', () => {
+    const WITH_ALIAS: RulesetChoice[] = [
+      { id: 'rs-ou', name: 'OU Singles', version_no: 3 },
+      { id: 'rs-lc', name: 'Little Cup', version_no: 1 },
+      { id: 'legacy-ou', name: 'OU Singles', version_no: 3, definition_id: 'rs-ou' },
+    ];
+
+    it('shows the ruleset by name, once, and links to the studio page of its definition', () => {
+      const doc = updateStage(presetDoc(), 0, (s) => setRuleset(s, { kind: 'ruleset', id: 'legacy-ou' }));
+      const html = render(doc, 0, 'en', WITH_ALIAS);
+      expect(html).toContain('<option value="legacy-ou" selected="">OU Singles v3</option>');
+      expect(html).not.toContain('value="rs-ou"');
+      expect(html).toContain('>Little Cup</option>');
+      expect(html).not.toContain('Unknown ruleset');
+      expect(html).toContain('href="/admin/rulesets/rs-ou"');
+      expect(html).toContain('Attaching the format pins the newest published version of this ruleset to the league.');
+    });
+
+    it('is not offered to a stage that names the definition itself or none', () => {
+      const named = render(updateStage(presetDoc(), 0, (s) => setRuleset(s, { kind: 'ruleset', id: 'rs-ou' })), 0, 'en', WITH_ALIAS);
+      expect(named).toContain('<option value="rs-ou" selected="">OU Singles v3</option>');
+      expect(named).not.toContain('legacy-ou');
+      expect(render(presetDoc(), 0, 'en', WITH_ALIAS)).not.toContain('legacy-ou');
+    });
+  });
+
   it('links to the studio gallery when the stage names no stored ruleset, and prints no pin help', () => {
     const html = render();
     expect(html).toContain('href="/admin/rulesets"');
@@ -215,7 +240,7 @@ describe('StageInspector: ruleset', () => {
 });
 
 describe('StageInspector: rule preset', () => {
-  const presetDoc2 = (format = 'gen9doublesou') => updateStage(presetDoc(), 0, (s) => setRulesetPreset(s, format));
+  const presetDoc2 = (format = 'gen9doublesou') => updateStage(presetDoc(), 0, (s) => withRulesetPreset(s, format));
 
   it.each(['en', 'de'] as const)('offers the preset kind next to the league default and the stored rulesets (%s)', (locale) => {
     const { e } = words(locale);

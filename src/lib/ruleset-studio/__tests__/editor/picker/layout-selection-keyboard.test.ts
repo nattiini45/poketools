@@ -11,17 +11,15 @@ import {
   pageCount,
   positionsOf,
   rowHeightFor,
-  rowOfEntry,
 } from '../../../editor/picker/layout';
 import {
   EMPTY_SELECTION,
   hiddenCount,
   selectAll,
-  selectOnly,
   selectRange,
   toggleSelected,
 } from '../../../editor/picker/selection';
-import { reduceKey, targetsOf, type KeyInput, type NavContext, type NavState } from '../../../editor/picker/keyboard';
+import { clampActive, reduceKey, targetsOf, type KeyInput, type NavContext, type NavState } from '../../../editor/picker/keyboard';
 import type { HeaderItem, ViewItem } from '../../../editor/picker/view';
 import { speciesIndex } from './fixtures';
 
@@ -79,7 +77,6 @@ describe('columns and rows', () => {
     const rows = buildRows(items, 3);
     expect(rows.map((r) => (r.kind === 'header' ? 'H' : `${r.start}+${r.count}`))).toEqual(['H', '0+3', '3+2', 'H', '5+3']);
     expect(positionsOf(rows)[4]).toEqual({ row: 2, col: 1 });
-    expect(rowOfEntry(positionsOf(rows), 5)).toBe(4);
     expect(buildRows([], 3)).toEqual([]);
     expect(buildRows(items, 0).filter((r) => r.kind === 'cells')).toHaveLength(8);
   });
@@ -139,15 +136,14 @@ describe('selection', () => {
     expect([...one.ids]).toEqual(['b']);
     expect(one.anchor).toBe('b');
     expect(toggleSelected(one, 'b').ids.size).toBe(0);
-    expect(selectOnly('c').anchor).toBe('c');
   });
 
-  it('selects a range from the anchor in either direction, replacing or extending', () => {
+  it('selects a range from the anchor in either direction, replacing the selection', () => {
     const start = toggleSelected(EMPTY_SELECTION, 'b');
     expect([...selectRange(start, order, 'd').ids]).toEqual(['b', 'c', 'd']);
     expect([...selectRange(start, order, 'a').ids].sort()).toEqual(['a', 'b']);
-    const second = selectRange(toggleSelected(start, 'e'), order, 'c', true);
-    expect([...second.ids].sort()).toEqual(['b', 'c', 'd', 'e']);
+    const second = selectRange(toggleSelected(start, 'e'), order, 'c');
+    expect([...second.ids].sort()).toEqual(['c', 'd', 'e']);
     expect(selectRange(start, order, 'zz')).toBe(start);
     expect([...selectRange(EMPTY_SELECTION, order, 'c').ids]).toEqual(['c']);
   });
@@ -198,6 +194,18 @@ describe('the key reducer', () => {
     expect(reduceKey(nav(2), key('u'), ctx).command).toEqual({ type: 'unban', ids: ['garchomp'] });
     expect(reduceKey(nav(2), key('r'), ctx).command).toEqual({ type: 'reset', ids: ['garchomp'] });
     expect(targetsOf(nav(9), order)).toEqual([]);
+  });
+
+  it('acts on the last shown entry when the list shrank below the active index', () => {
+    const shrunk = ['a', 'b', 'c'];
+    const small: NavContext = { ...ctx, order: shrunk };
+    expect(clampActive(50, 3)).toBe(2);
+    expect(clampActive(1, 3)).toBe(1);
+    expect(clampActive(-1, 3)).toBe(-1);
+    expect(clampActive(7, 0)).toBe(-1);
+    expect(reduceKey(nav(50), key('Enter'), small).command).toEqual({ type: 'toggle', ids: ['c'] });
+    expect(reduceKey(nav(50), key('u'), small).command).toEqual({ type: 'unban', ids: ['c'] });
+    expect([...reduceKey(nav(50), key(' '), small).nav.selection.ids]).toEqual(['c']);
   });
 
   it('A adds to the allowlist only in allowlist mode', () => {

@@ -6,11 +6,8 @@ import type { DeleteRebuildWarning } from '@/lib/api/delete-rebuild-warning';
 import { logAuditEvent } from '@/lib/audit/log';
 import { leagueTrashUserError, toLeagueTrashError } from '@/lib/league-trash/errors';
 import { LeagueTrashDbError } from '@/lib/league-trash/db-error';
-import {
-  finishLeagueDeleteRebuild,
-  finishLeagueRestoreRebuild,
-  findPendingLeagueRebuild,
-} from '@/lib/league-trash/service';
+import { finishLeagueDeleteRebuild, finishLeagueRestoreRebuild } from '@/lib/league-trash/service';
+import { getPendingLeagueRebuild } from '@/lib/supabase/queries/league-trash';
 import { expirePublicTags, expireRatingReads, publicTags } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 
@@ -42,7 +39,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_LEAGUE_TRASH_ID');
     if (invalidId) return invalidId;
 
-    const pending = await findPendingLeagueRebuild(id);
+    const pending = await getPendingLeagueRebuild(id);
     if (!pending) throw leagueTrashUserError(new LeagueTrashDbError('LEAGUE_TRASH_NOT_FOUND'));
 
     const outcome =

@@ -4,8 +4,8 @@
  * publish time, never at save time (a draft may be half built).
  */
 import { z } from 'zod';
-import { getRulesetPreset, isRulesetPresetId, slugSchema, uuidSchema } from '@/lib/format-kit';
-import { ltextSchema } from '@/lib/studio-core/text-schema';
+import { getRulesetPreset, isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
+import { ltextSchema, slugSchema, uuidSchema } from '@/lib/studio-core/text-schema';
 import {
   MAX_REVISION,
   definitionNameSchema,
@@ -91,6 +91,13 @@ export const pinTargetSchema = z.strictObject({
 });
 export type PinTarget = z.infer<typeof pinTargetSchema>;
 
+/** A league or phase appears once: two moves of the same target would race each other's compare-and-set. */
+const pinTargetsSchema = z
+  .array(pinTargetSchema)
+  .min(1)
+  .max(50)
+  .refine((targets) => new Set(targets.map((t) => `${t.kind}:${t.id}`)).size === targets.length, { message: 'A league or phase may be listed only once' });
+
 /**
  * `POST /api/ruleset-definitions/[id]/pins`: move the pin of up to 50 leagues and phases to one version of this ruleset.
  * A target that has already started needs its id in `confirm_started` (the confirmation that names it); a finished one is
@@ -98,7 +105,7 @@ export type PinTarget = z.infer<typeof pinTargetSchema>;
  */
 export const rulesetPinsSchema = z.strictObject({
   to_version_no: z.number().int().min(1).max(MAX_REVISION),
-  targets: z.array(pinTargetSchema).min(1).max(50),
+  targets: pinTargetsSchema,
   confirm_started: z.array(uuidSchema).max(50).optional(),
 });
 export type RulesetPinsBody = z.infer<typeof rulesetPinsSchema>;

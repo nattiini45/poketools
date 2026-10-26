@@ -73,6 +73,15 @@ describe('validateTeam', () => {
     expect(result.issues.some((i) => /cannot legally learn/i.test(i.issue))).toBe(true);
   });
 
+  it('reads a mixed-case format as the same generation as its lower-case form', async () => {
+    const team = [{ species: 'Sprigatito', moves: ['Tackle'] }];
+    const lower = await validateTeam({ format: 'gen8ou', team });
+    const mixed = await validateTeam({ format: 'Gen8OU', team });
+    // Sprigatito does not exist in generation 8, so a mixed-case id must not fall back to generation 9.
+    expect(lower.valid).toBe(false);
+    expect({ ...mixed, format: lower.format }).toEqual(lower);
+  });
+
   it('flags an unknown move as invalid', async () => {
     const input: ValidateTeamInput = {
       format: 'gen9ou',

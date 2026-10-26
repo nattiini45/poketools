@@ -50,6 +50,21 @@ describe('validateTeam from the resolved rules', () => {
     expect(codes(result)).not.toContain('species_banned');
   });
 
+  it('an allowlist entry the dex files under Future (a roster Mega Stone) is legal; one it does not list is not', () => {
+    const ruleset = makeRuleset({
+      universe: 'national',
+      allow: { pokemon: null, moves: null, items: ['Feraligite', 'Leftovers'], abilities: null },
+      clauses: [],
+    });
+    const result = validateTeam([mon({ item: 'Feraligite' })], ruleset);
+    expect(codes(result)).not.toContain('unknown_item');
+    expect(codes(result)).not.toContain('item_not_allowed');
+    // A Future item that the allowlist leaves out is reported as not allowed, not skipped as unknown.
+    expect(codes(validateTeam([mon({ item: 'Garchompite' })], ruleset))).toContain('item_not_allowed');
+    // A block list does not widen the universe: the same item stays unknown there.
+    expect(codes(validateTeam([mon({ item: 'Feraligite' })], makeRuleset({ universe: 'national', clauses: [] })))).toContain('unknown_item');
+  });
+
   it('allowlists work for moves, items and abilities too, and a clean set passes', () => {
     const ruleset = makeRuleset({
       allow: { pokemon: null, moves: ['Earthquake'], items: ['Leftovers'], abilities: ['Rough Skin'] },

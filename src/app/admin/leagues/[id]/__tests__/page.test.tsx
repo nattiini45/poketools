@@ -385,7 +385,7 @@ describe('admin league page tabs (?tab=)', () => {
     ['singles', 'phases', ['listRulesetOptionsFor'], ['Phases']],
     // A custom league: the overview adds its readiness checklist, the Format tab its checklist and the attach panel.
     ['custom', 'overview', ['loadLeagueFormatState'], ['At a glance', 'Description']],
-    ['custom', 'format', ['loadLeagueFormat', 'loadLeagueFormatState', 'loadAttachCandidates', 'listRulesetOptionsFor', 'getRulesetPinInfo'], ['Format']],
+    ['custom', 'format', ['loadLeagueFormat', 'loadLeagueFormatState', 'loadAttachCandidates', 'getRulesetPinInfo'], ['Format']],
   ])('%s ?tab=%s renders only its panel and makes only its reads', async (format, tab, reads, titles) => {
     mocks.getSeasonWithDetails.mockResolvedValue(
       season({ format_type: format, point_buy_list_id: format === 'evolution_point_buy' ? 'list-1' : null }),

@@ -15,7 +15,7 @@ interface RouteParams {
   params: Promise<{ kind: string }>;
 }
 
-/** Long edge cache: the catalog is immutable per deploy, and the ETag changes with the data version. */
+/** Long edge cache: the catalog is immutable per deploy, and the ETag is a hash of the content. */
 const CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800';
 
 function invalid(field: string): NextResponse {
@@ -54,22 +54,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (presetParam !== null && getPreset(presetParam) === undefined) return invalid('preset');
     const preset = extendingPreset(presetParam, gen);
 
-    let etag: string;
-    let body: () => CatalogIndex | CatalogText;
+    let catalog: CatalogIndex | CatalogText;
     if (part === 'index') {
-      etag = catalogEtag([kind, gen, scope, 'index', preset]);
-      body = () => buildCatalogIndex(kind, gen, scope, preset);
+      catalog = buildCatalogIndex(kind, gen, scope, preset);
     } else {
       if (kind === 'species') return invalid('part');
       const rawLang = search.get('lang');
       const lang = isLocale(rawLang) ? rawLang : 'en';
-      etag = catalogEtag([kind, gen, scope, 'text', lang, preset]);
-      body = () => buildCatalogText(kind, gen, scope, lang, preset);
+      catalog = buildCatalogText(kind, gen, scope, lang, preset);
     }
 
+    // The ETag hashes the built content (memoised with it), so a revalidating client gets a 304 only for unchanged data.
+    const etag = catalogEtag(catalog);
     const headers = { 'Cache-Control': CACHE_CONTROL, ETag: etag };
     if (request.headers.get('if-none-match') === etag) return new NextResponse(null, { status: 304, headers });
-    return NextResponse.json<ApiResult<CatalogIndex | CatalogText>>({ success: true, data: body() }, { headers });
+    return NextResponse.json<ApiResult<CatalogIndex | CatalogText>>({ success: true, data: catalog }, { headers });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to build the catalog');
   }

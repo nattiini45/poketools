@@ -17,6 +17,8 @@ import {
   getNationalMove,
   getNationalItem,
   getNationalAbility,
+  getRawEntity,
+  type RawEntityKind,
   isFullyEvolved,
   isLegendary,
 } from './dex';
@@ -112,6 +114,36 @@ function allowedBy(list: ResolvedList): (id: string) => boolean {
   return list.mode === 'block' ? (id) => !ids.has(id) : (id) => ids.has(id);
 }
 
+type ListKind = 'species' | 'moves' | 'items' | 'abilities';
+
+/** The issue codes of a category: what a block list reports and what an allowlist reports. */
+const LIST_ISSUE: Record<
+  ListKind,
+  { banned: 'species_banned' | 'move_banned' | 'item_banned' | 'ability_banned'; notAllowed: 'species_not_allowed' | 'move_not_allowed' | 'item_not_allowed' | 'ability_not_allowed'; plural: string; param: 'species' | 'move' | 'item' | 'ability' }
+> = {
+  species: { banned: 'species_banned', notAllowed: 'species_not_allowed', plural: 'Pokémon', param: 'species' },
+  moves: { banned: 'move_banned', notAllowed: 'move_not_allowed', plural: 'moves', param: 'move' },
+  items: { banned: 'item_banned', notAllowed: 'item_not_allowed', plural: 'items', param: 'item' },
+  abilities: { banned: 'ability_banned', notAllowed: 'ability_not_allowed', plural: 'abilities', param: 'ability' },
+};
+
+/**
+ * The issue for an entity the ruleset rules out: a block list reports it as banned, an allowlist as not on the list of
+ * allowed entries.
+ */
+function listIssue(kind: ListKind, mode: ResolvedList['mode'], index: number, speciesName: string, entityName: string): SetIssue {
+  const { banned, notAllowed, plural, param } = LIST_ISSUE[kind];
+  return mode === 'block'
+    ? { pokemon_index: index, species: speciesName, issue: `${entityName} is banned`, severity: 'error', ...codedIssue(banned, { [param]: entityName }) }
+    : {
+        pokemon_index: index,
+        species: speciesName,
+        issue: `${entityName} is not on this ruleset's list of allowed ${plural}`,
+        severity: 'error',
+        ...codedIssue(notAllowed, { [param]: entityName }),
+      };
+}
+
 /**
  * Validate a team (array of PokemonSet) against a Ruleset.
  * Returns a granular result with per-set and team-wide issues.
@@ -151,11 +183,20 @@ export function validateTeam(
   const movesAllowed = allowedBy(rules.moves);
   const itemsAllowed = allowedBy(rules.items);
   const abilitiesAllowed = allowedBy(rules.abilities);
-  const resolveSpecies = (name: string) => (national ? getNationalSpecies(name, gen) : getSpecies(name, gen));
-  const resolveMove = (name: string): Resolved | undefined => (national ? getNationalMove(name, gen) : getMove(name, gen));
-  const resolveItem = (name: string): Resolved | undefined => (national ? getNationalItem(name, gen) : getItem(name, gen));
-  const resolveAbility = (name: string): Resolved | undefined =>
-    national ? getNationalAbility(name, gen) : getAbility(name, gen);
+  // An entry the ruleset's allowlist names is legal whatever the dex calls it: a roster lists the unreleased Mega Stones
+  // and Mega Evolutions that the dex files under `Future`, which neither universe resolves (the Studio's known ids
+  // widen the same way). Without this such an entry would be an unknown one and would skip the allowlist check.
+  const resolver = <T extends Resolved>(kind: RawEntityKind, list: ResolvedList, inUniverse: (name: string) => T | undefined) => {
+    const listed = list.mode === 'allow' ? new Set(list.ids) : null;
+    return (name: string): T | undefined =>
+      inUniverse(name) ?? (listed?.has(toID(name)) ? (getRawEntity(kind, name, gen) as T | undefined) : undefined);
+  };
+  const resolveSpecies = resolver('species', rules.pokemon, (name) => (national ? getNationalSpecies(name, gen) : getSpecies(name, gen)));
+  const resolveMove = resolver<Resolved>('moves', rules.moves, (name) => (national ? getNationalMove(name, gen) : getMove(name, gen)));
+  const resolveItem = resolver<Resolved>('items', rules.items, (name) => (national ? getNationalItem(name, gen) : getItem(name, gen)));
+  const resolveAbility = resolver<Resolved>('abilities', rules.abilities, (name) =>
+    national ? getNationalAbility(name, gen) : getAbility(name, gen),
+  );
 
   for (let i = 0; i < pokemon.length; i++) {
     const set = pokemon[i];
@@ -175,23 +216,7 @@ export function validateTeam(
 
     // Banned Pokémon
     if (!speciesAllowed(toID(species.name))) {
-      issues.push(
-        rules.pokemon.mode === 'block'
-          ? {
-              pokemon_index: i,
-              species: species.name,
-              issue: `${species.name} is banned`,
-              severity: 'error',
-              ...codedIssue('species_banned', { species: species.name }),
-            }
-          : {
-              pokemon_index: i,
-              species: species.name,
-              issue: `${species.name} is not on this ruleset's list of allowed Pokémon`,
-              severity: 'error',
-              ...codedIssue('species_not_allowed', { species: species.name }),
-            },
-      );
+      issues.push(listIssue('species', rules.pokemon.mode, i, species.name, species.name));
     }
 
     // Move validation
@@ -212,23 +237,7 @@ export function validateTeam(
           ...codedIssue('unknown_move', { move: moveName }),
         });
       } else if (!movesAllowed(toID(move.name))) {
-        issues.push(
-          rules.moves.mode === 'block'
-            ? {
-                pokemon_index: i,
-                species: species.name,
-                issue: `${move.name} is banned`,
-                severity: 'error',
-                ...codedIssue('move_banned', { move: move.name }),
-              }
-            : {
-                pokemon_index: i,
-                species: species.name,
-                issue: `${move.name} is not on this ruleset's list of allowed moves`,
-                severity: 'error',
-                ...codedIssue('move_not_allowed', { move: move.name }),
-              },
-        );
+        issues.push(listIssue('moves', rules.moves.mode, i, species.name, move.name));
       }
     }
 
@@ -244,23 +253,7 @@ export function validateTeam(
           ...codedIssue('unknown_item', { item: set.item }),
         });
       } else if (!itemsAllowed(toID(item.name))) {
-        issues.push(
-          rules.items.mode === 'block'
-            ? {
-                pokemon_index: i,
-                species: species.name,
-                issue: `${item.name} is banned`,
-                severity: 'error',
-                ...codedIssue('item_banned', { item: item.name }),
-              }
-            : {
-                pokemon_index: i,
-                species: species.name,
-                issue: `${item.name} is not on this ruleset's list of allowed items`,
-                severity: 'error',
-                ...codedIssue('item_not_allowed', { item: item.name }),
-              },
-        );
+        issues.push(listIssue('items', rules.items.mode, i, species.name, item.name));
       }
     }
 
@@ -276,23 +269,7 @@ export function validateTeam(
           ...codedIssue('unknown_ability', { ability: set.ability }),
         });
       } else if (!abilitiesAllowed(toID(ability.name))) {
-        issues.push(
-          rules.abilities.mode === 'block'
-            ? {
-                pokemon_index: i,
-                species: species.name,
-                issue: `${ability.name} is banned`,
-                severity: 'error',
-                ...codedIssue('ability_banned', { ability: ability.name }),
-              }
-            : {
-                pokemon_index: i,
-                species: species.name,
-                issue: `${ability.name} is not on this ruleset's list of allowed abilities`,
-                severity: 'error',
-                ...codedIssue('ability_not_allowed', { ability: ability.name }),
-              },
-        );
+        issues.push(listIssue('abilities', rules.abilities.mode, i, species.name, ability.name));
       }
     }
 

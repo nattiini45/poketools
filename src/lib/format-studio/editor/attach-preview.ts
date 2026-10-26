@@ -5,14 +5,10 @@
  *
  * Pure and client-safe. A spec that does not compile cleanly is not planned; the first error code is reported.
  */
-import {
-  CURRENT_ENV,
-  compile,
-  getRulesetPreset,
-  presetsOf,
-  type DiagnosticCode,
-  type Locale,
-} from '@/lib/format-kit/client';
+import { CURRENT_ENV, compile, namedRulesetsOf, presetsOf, type DiagnosticCode } from '@/lib/format-kit/client';
+import type { Locale } from '@/i18n/config';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
+import type { RulesetChoice } from '@/lib/format-studio/editor/catalog';
 import type { EngineGap } from '@/lib/format-studio/library-types';
 import { planStages } from '@/lib/format-studio/materialise';
 import type { BracketType } from '@/types/tournament';
@@ -20,19 +16,19 @@ import type { BracketType } from '@/types/tournament';
 /** Stands in for a ruleset id the preview does not have (the league's, a preset's); `planStages` only needs an id to avoid its guard. */
 const PLACEHOLDER_RULESET_ID = '00000000-0000-0000-0000-000000000000';
 
-/** The definition ids of the stored rulesets the stages name. */
-function namedRulesetsOf(definition: { stages: readonly { ruleset: { kind: string; id?: string } }[] }): string[] {
-  const ids = new Set<string>();
-  for (const stage of definition.stages) {
-    if (stage.ruleset.kind === 'ruleset' && stage.ruleset.id !== undefined) ids.add(stage.ruleset.id);
-  }
-  return [...ids];
-}
-
 /** A stored ruleset by name and version, for the preview's wording. */
 export interface RulesetLabel {
   name: string;
   version_no: number;
+}
+
+/**
+ * The labels of the stored rulesets a spec may name, by the id the spec uses: the choices a format detail carries
+ * (`FormatDefinitionDetail.rulesets`), a definition id and a legacy id alike. A choice without a version number cannot be
+ * worded as "Name v2" and is left out, so its stage is shown without a label.
+ */
+export function rulesetLabelsOf(choices: readonly RulesetChoice[]): Map<string, RulesetLabel> {
+  return new Map(choices.flatMap((r) => (r.version_no === undefined ? [] : [[r.id, { name: r.name, version_no: r.version_no }] as const])));
 }
 
 export interface AttachPreviewStage {
@@ -69,7 +65,7 @@ export function previewAttach(input: {
   specHash: string;
   /** The name and version of the league's own ruleset, for the stages that use it. */
   seasonRuleset?: RulesetLabel | null;
-  /** The stored rulesets a stage may name, by DEFINITION id: name and newest published version (what attach pins). */
+  /** The stored rulesets a stage may name, by the id the spec uses (a definition id or a legacy id, `rulesetLabelsOf`): name and newest published version (what attach pins). */
   namedRulesets?: ReadonlyMap<string, RulesetLabel>;
 }): AttachPreview {
   const result = compile(input.spec, CURRENT_ENV);

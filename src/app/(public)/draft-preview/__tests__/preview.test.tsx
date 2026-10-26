@@ -33,6 +33,7 @@ import {
   PREVIEW_SCENARIOS,
   PREVIEW_WALL_MAX_PRICE,
   PREVIEW_WALL_PIN,
+  snapPriceIntoTabs,
   type PreviewScenario,
   type PreviewScreen,
 } from '../fixtures';
@@ -117,11 +118,23 @@ describe('fixture-lines.example.json (make-example-list-fixtures output)', () =>
     expect(PREVIEW_ENTRIES.every((e) => e.list_version_id === PREVIEW_LIST_VERSION_ID)).toBe(true);
   });
 
-  it('prices every line inside one of the active pack’s price tabs (clamped into their span)', () => {
+  it('prices every line inside one of the active pack’s price tabs', () => {
     const price = new Map(PREVIEW_ENTRIES.map((e) => [e.line_id ?? '', e.price]));
     const counts = countByTab(price.keys(), (id) => price.get(id) ?? 0);
     expect(counts.all).toBe(48);
     expect(PRICE_TABS.reduce((sum, t) => sum + counts[t.key], 0)).toBe(48);
+  });
+
+  it('snaps a price outside every tab to the nearest tab edge, also across gaps between tabs', () => {
+    const gapped = [
+      { min: 20, max: 25 },
+      { min: 1, max: 10 },
+    ];
+    expect(snapPriceIntoTabs(14, gapped)).toBe(10);
+    expect(snapPriceIntoTabs(16, gapped)).toBe(20);
+    expect(snapPriceIntoTabs(7, gapped)).toBe(7);
+    expect(snapPriceIntoTabs(30, gapped)).toBe(25);
+    expect(snapPriceIntoTabs(0, gapped)).toBe(1);
   });
 
   it('has the example override applied to the participation line and no prose columns', () => {

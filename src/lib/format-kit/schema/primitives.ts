@@ -8,8 +8,8 @@
  */
 import { z } from 'zod';
 import { exprSchemaFor } from '../expr/schema';
+import { LTEXT_MAX_CHARS } from '@/lib/studio-core/ltext';
 import {
-  LTEXT_MAX_CHARS,
   MAX_BEST_OF,
   MAX_COLUMNS,
   MAX_EXPECTED_COUNT,
@@ -30,8 +30,8 @@ import {
   SCORE_ABS_MAX,
 } from '../limits';
 import type { AvailableKind } from '../registry/kinds';
-import { ltextSchema, textString } from '@/lib/studio-core/text-schema';
-import { boundedArray, intRange, keySchema, numberAbs, uuidSchema, kindSchema } from './common';
+import { ltextSchema, textString, uuidSchema } from '@/lib/studio-core/text-schema';
+import { boundedArray, intRange, keySchema, numberAbs, kindSchema } from './common';
 
 // --- Pairing ------------------------------------------------------------------------------------
 

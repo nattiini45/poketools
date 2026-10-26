@@ -11,7 +11,8 @@ import { useT } from '@/i18n/client';
 import { draftFinderMessages } from '@/i18n/messages/draft/finder';
 import type { PreparedIndex } from '@/lib/draft-finder/prepare';
 import { cn } from '@/lib/utils/cn';
-import { FOCUS_RING, SECTION_HEADING, type FilterSectionProps } from './types';
+import { SECTION_HEADING, type FilterSectionProps } from './types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 /** The lowest and highest line price of the index ({8, 30} for the EvoLiga list). Pure. */
 export function priceBounds(ix: PreparedIndex): { min: number; max: number } {

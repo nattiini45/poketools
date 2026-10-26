@@ -255,6 +255,13 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       expect(await q.countLeagueTrashForPlayer(league.playerIds[0])).toBe(1);
       const pending = await q.listPendingLeagueRebuilds();
       expect(pending.find((p) => p.trash_id === trash.trash_id)).toMatchObject({ kind: 'delete', season_id: league.seasonId });
+      expect(await q.getPendingLeagueRebuild(trash.trash_id)).toMatchObject({
+        kind: 'delete',
+        trash_id: trash.trash_id,
+        season_id: league.seasonId,
+        season_name: 'LTT small',
+      });
+      expect(await q.getLeagueTrashBySeason(league.seasonId)).toMatchObject({ id: trash.trash_id, season_name: 'LTT small' });
     });
 
     it('the database refuses to delete a player, a ruleset or a list version of a trashed league', async () => {
@@ -289,6 +296,13 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
     });
 
     it('restore is row-identical, shifts every running deadline, queues the games and re-links the outside rows', async () => {
+      // The rebuild after the delete is not confirmed yet: the database itself refuses, and changes nothing.
+      await expect(q.restoreLeagueFromTrash(trash.trash_id)).rejects.toMatchObject({ code: 'LEAGUE_TRASH_REBUILD_PENDING' });
+      expect(await trashRowExists(trash.trash_id)).toBe(true);
+      expect(await seasonExists(league.seasonId)).toBe(false);
+      expect(await q.markLeagueTrashRebuildDone(trash.trash_id)).toBe(true);
+      expect(await q.getPendingLeagueRebuild(trash.trash_id)).toBeNull();
+
       const restoreNow = new Date(Date.now() + 30 * DAY).toISOString();
       const t0 = Date.now();
       const restored = await rpc<{
@@ -359,6 +373,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       expect(await q.countLeagueTrashForPlayer(league.playerIds[0])).toBe(0);
       const pending = await q.listPendingLeagueRebuilds();
       expect(pending.find((p) => p.season_id === league.seasonId)).toMatchObject({ kind: 'restore', trash_id: trash.trash_id });
+      expect(await q.getPendingLeagueRebuild(trash.trash_id)).toMatchObject({ kind: 'restore', season_id: league.seasonId });
       expect(await q.markLeagueRestoreRebuildDone(league.seasonId)).toBe(true);
       expect(await q.markLeagueRestoreRebuildDone(league.seasonId)).toBe(false);
 
@@ -374,6 +389,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
 
     it('refuses a taken season id and a corrupted snapshot, and restores nothing', async () => {
       const second = await q.moveLeagueToTrash(league.seasonId, league.adminId);
+      await q.markLeagueTrashRebuildDone(second.trash_id);
       const mutate = (rel: string, patch: Record<string, unknown>) => admin.from('league_trash_tables').update(patch).eq('trash_id', second.trash_id).eq('rel', rel);
 
       // A captured table whose row count disagrees with what comes back.
@@ -464,6 +480,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       const t0 = Date.now();
       const trash = await q.moveLeagueToTrash(ids.seasonId, ids.adminId);
       const deleteMs = Date.now() - t0;
+      await q.markLeagueTrashRebuildDone(trash.trash_id);
       const t1 = Date.now();
       const restored = await q.restoreLeagueFromTrash(trash.trash_id);
       const restoreMs = Date.now() - t1;

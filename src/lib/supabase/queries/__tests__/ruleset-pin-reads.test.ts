@@ -15,7 +15,7 @@ vi.mock('@/lib/supabase/client', () => ({
   },
 }));
 
-import { countPinsByDefinition, listRulesetDefinitions, listRulesetVersions, listVersionRules } from '../ruleset-definitions';
+import { countPinsByDefinition, listRulesetDefinitions, listRulesetVersions, listVersionRules, resolveNamedRulesets } from '../ruleset-definitions';
 import { listParticipantCores } from '../seasons';
 import { listTeamsForPinImpact } from '../teams';
 
@@ -256,5 +256,51 @@ describe('listParticipantCores', () => {
     expect([...cores]).toEqual([['p1', ['fire', 'water', 'grass']]]);
     expect(fake.current.queries[0].select).toBe('player_id, core_types');
     expect(fake.current.queries[0].filters).toEqual([{ op: 'eq', column: 'season_id', value: 's1' }]);
+  });
+});
+
+describe('resolveNamedRulesets', () => {
+  const DEF_PUBLISHED = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+  const HEAD = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
+  const DEF_DRAFT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+  /** A legacy ruleset id: the id of version 1 of its definition. */
+  const LEGACY_ID = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1';
+  const LEGACY_DEF = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2';
+  const LEGACY_HEAD = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3';
+  const UNKNOWN = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
+
+  beforeEach(() => {
+    fake.current = createFakeSupabase({
+      ruleset_definitions: [
+        { id: DEF_PUBLISHED, current_version_id: HEAD },
+        { id: DEF_DRAFT, current_version_id: null },
+        { id: LEGACY_DEF, current_version_id: LEGACY_HEAD },
+      ],
+      ruleset_definition_versions: [
+        { id: LEGACY_ID, definition: { id: LEGACY_DEF, current_version_id: LEGACY_HEAD } },
+      ],
+    });
+  });
+
+  it('resolves a definition id to itself and its head, and a legacy ruleset id (a version id) to its definition and head', async () => {
+    const resolved = await resolveNamedRulesets([DEF_PUBLISHED, LEGACY_ID, DEF_PUBLISHED]);
+    expect(Object.fromEntries(resolved)).toEqual({
+      [DEF_PUBLISHED]: { definition_id: DEF_PUBLISHED, head_version_id: HEAD },
+      [LEGACY_ID]: { definition_id: LEGACY_DEF, head_version_id: LEGACY_HEAD },
+    });
+  });
+
+  it('leaves out a draft-only definition and an unknown id, and does not look a draft up as a version', async () => {
+    const resolved = await resolveNamedRulesets([DEF_DRAFT, UNKNOWN]);
+    expect(resolved.size).toBe(0);
+    const versionReads = fake.current!.queries.filter((q) => q.table === 'ruleset_definition_versions');
+    expect(versionReads).toHaveLength(1);
+    expect(versionReads[0].filters).toEqual([{ op: 'in', column: 'id', value: [UNKNOWN] }]);
+  });
+
+  it('reads nothing for no ids or malformed ids', async () => {
+    expect((await resolveNamedRulesets([])).size).toBe(0);
+    expect((await resolveNamedRulesets(['nope'])).size).toBe(0);
+    expect(fake.current!.queries).toEqual([]);
   });
 });

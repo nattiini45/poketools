@@ -5,7 +5,7 @@ import { expectNoLeftovers, expectUniqueIds } from '@/test/markup';
 import { createTranslator } from '@/i18n/core';
 import type { Locale } from '@/i18n/config';
 import { rulesetStudioMessages } from '@/i18n/messages/ruleset-studio';
-import { listRulesetPresets } from '@/lib/format-kit/client';
+import { listRulesetPresets } from '@/lib/pkmn/ruleset-preset-catalog';
 import type { RulesetDefinitionSummary } from '@/lib/ruleset-studio/library-types';
 import { ltext } from '@/lib/studio-core/ltext';
 

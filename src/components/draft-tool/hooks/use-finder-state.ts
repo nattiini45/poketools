@@ -10,9 +10,9 @@
  *
  * The weakness stage is a preference of the weakness overview, not part of the
  * finder view (it does not change the wall), so it has its own hook
- * (`useWeaknessStage`). Both hooks merge into the same blob (`updatePrefs`).
+ * (`use-weakness-stage.ts`). Both merge into the same blob (`updatePrefs`).
  */
-import { useCallback, useEffect, useReducer, useRef, type Dispatch } from 'react';
+import { useEffect, useReducer, useRef, type Dispatch } from 'react';
 import {
   initialFinderState,
   SORT_KEYS,
@@ -94,25 +94,4 @@ export function useFinderState(poolId: string): [FinderViewState, Dispatch<Finde
   }, [poolId]);
 
   return [view, dispatch];
-}
-
-/** The reducer of `useWeaknessStage`: the action is the new stage. */
-const takeStage = (_: SortStage, next: SortStage): SortStage => next;
-
-/**
- * The stage (`base` or `final`) the team weakness overview reads, as `[stage, setStage]`. Starts at 'final'
- * (the server markup), takes the stored choice after mount (a reducer, like the finder view, so the restore is
- * a dispatch) and stores every change.
- */
-export function useWeaknessStage(): [SortStage, (stage: SortStage) => void] {
-  const [stage, dispatch] = useReducer(takeStage, 'final');
-  useEffect(() => {
-    const stored = parsePrefs(readPrefs()).weaknessStage;
-    if (stored) dispatch(stored);
-  }, []);
-  const choose = useCallback((next: SortStage) => {
-    dispatch(next);
-    updatePrefs({ weaknessStage: next });
-  }, []);
-  return [stage, choose];
 }

@@ -17,3 +17,10 @@ export const LEAGUE_TRASH_EXPIRE_BATCH = 20;
 
 /** Rows `listLeagueTrash` returns at most (the trash page lists newest first). */
 export const LEAGUE_TRASH_LIST_LIMIT = 200;
+
+/**
+ * Wall-clock budget of the storage sweeps of one expiry run; leftovers are reported, never retried. The sweep checks it
+ * only before it starts a chunk, and a chunk (a parallel list, then a remove) can take two storage timeouts (30 s
+ * each, `SUPABASE_STORAGE_TIMEOUT_MS`), so the budget leaves that much room inside the cron route's `maxDuration` (120 s).
+ */
+export const LEAGUE_TRASH_SWEEP_BUDGET_MS = 45_000;

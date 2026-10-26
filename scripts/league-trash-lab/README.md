@@ -25,6 +25,8 @@ bash scripts/league-trash-lab/run-all.sh --timing   # plus 05 for four league si
 | `05_timing.sql` | Delete and restore time for a league of the given size (`-v players=32 -v rounds=12`). |
 | `06_service_role.sql` | The whole cycle as `service_role`, the role PostgREST uses: the archive rows come back through the owner-rights helper and the helper refuses any other table. |
 
+A restore needs the rebuild after the delete confirmed (`league_trash_rebuild_done`, else `LEAGUE_TRASH_REBUILD_PENDING`), so the scripts call it between delete and restore; `03_edge_cases.sql` also proves the refusal.
+
 Each script prints what it expects. A block that must fail prints the error and the script goes on.
 
 Timings (local, PostgreSQL 17, vacuumed, one statement each; PostgREST allows 8 s per call):

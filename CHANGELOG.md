@@ -56,9 +56,13 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
      published version **whose id is the old ruleset's id**, replays the old "which ruleset does this phase enforce"
      heuristic once into the stored pins (every changed row is logged in `ruleset_pin_backfill_log`) and adds the pin
      foreign keys. From here until step 10, **pause creating and editing rulesets** with the old code.
-  9. Deploy the code and check a league page, a team validation and a format attach.
-  10. `20261026100200_ruleset_contract.sql` (contract) runs a catch-up conversion, aborts if a ruleset was edited after
-      the conversion (publish the edit as a new version or restore the row, then retry), swaps the pin keys and renames
+  9. Deploy the code and run step 10 straight away. Until it runs, the pin keys of leagues and phases still point at the
+     old table, so everything that publishes a ruleset version and pins it fails (a format attach with a rule-preset
+     stage, the first point-buy league, a league or phase given a ruleset published after step 8). Check a league page
+     and a team validation in that window, not a format attach with a preset stage.
+  10. `20261026100200_ruleset_contract.sql` (contract) runs a catch-up conversion, aborts if the rules or the name of a
+      ruleset were edited after the conversion (publish the edit as a new version or restore the row, then retry),
+      rewrites format drafts that name a legacy ruleset id to its definition id, swaps the pin keys and renames
       `rulesets` to `rulesets_legacy`. Keep `rulesets_legacy` and `ruleset_pin_backfill_log` for one release as the
       revert source; a later cleanup migration drops them.
   The new code needs the files of steps 1 to 8; the code that is still deployed keeps working until step 10, which is
@@ -123,7 +127,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Price groups filter the EvoLiga point-buy list.** The roster section of a league page has a row of price-group pills
   with line counts; the league admin Overview links the dates to the Settings tab.
 - **Showdown formats as editable presets in the Format Studio.** A stage can name a rule preset (`gen9ou`, a draft
-  format, Champions). It pre-picks the doubles setting and the series length; attaching the format creates a ruleset per
+  format, Champions). Picking one on a stage pre-picks the doubles setting (a new format or an example fork also sets
+  best of 3 for VGC; the series length of a stage is otherwise the editor's own choice); attaching the format creates a ruleset per
   preset for the league (version 1, editable in the Ruleset Studio), which a re-attach reuses and a detach removes.
   New diagnostic `ruleset_preset_unknown`.
 - **Dev previews** `/ruleset-preview` (editor scenarios) and `/ruleset-preview/surfaces` (library, read-only page, pin
@@ -790,4 +795,5 @@ and selectable sprite styles.
 
 - First public release.
 
-[Unreleased]: https://github.com/nattiini45/poketools/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/nattiini45/poketools/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/nattiini45/poketools/compare/v0.3.0...v0.4.0

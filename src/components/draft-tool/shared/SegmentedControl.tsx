@@ -16,7 +16,7 @@
  */
 import { useRef, type KeyboardEvent } from 'react';
 import { cn } from '@/lib/utils/cn';
-import { FOCUS_RING } from '../right/filters/types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 export interface SegmentedOption<V extends string> {
   value: V;

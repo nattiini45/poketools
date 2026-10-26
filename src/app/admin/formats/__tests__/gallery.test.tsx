@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
+import { resolveLText } from '@/lib/studio-core/ltext';
 
 const mocks = vi.hoisted(() => ({
   locale: 'en' as 'en' | 'de',
@@ -248,7 +249,7 @@ describe('format gallery: examples', () => {
 
   it('shows the example titles and the open link in the viewer language', async () => {
     mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
-    const { PRESETS, resolveLText } = await import('@/lib/format-kit/client');
+    const { PRESETS } = await import('@/lib/format-kit/client');
     const esc = (text: string) => text.replace(/&/g, '&amp;').replace(/'/g, '&#x27;').replace(/"/g, '&quot;');
     for (const [locale, open] of [['en', 'Open'], ['de', 'Öffnen']] as const) {
       mocks.locale = locale;
@@ -381,7 +382,7 @@ describe('format gallery: the New format action', () => {
     mocks.locale = 'de';
     mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
     html(await FormatsGalleryPage());
-    const { PRESETS, resolveLText } = await import('@/lib/format-kit/client');
+    const { PRESETS } = await import('@/lib/format-kit/client');
     const names = mocks.dialogProps.mock.calls[0][0].data.examples.map((e: { name: string }) => e.name);
     expect(names).toEqual(PRESETS.map((p) => resolveLText(p.definition.identity.name, { viewer: 'de' })?.value));
   });

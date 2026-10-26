@@ -36,7 +36,8 @@ import {
   getFormatDefinitionDraft,
   getLatestPublishedVersion,
 } from '@/lib/supabase/queries/format-definitions';
-import { PRESETS, ltext, type FormatDefinition } from '@/lib/format-kit';
+import { PRESETS, type FormatDefinition } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { FormatStudioError } from '@/lib/format-studio/errors';
 import type { FormatDefinitionMeta, FormatVersion } from '@/lib/format-studio/library-types';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';

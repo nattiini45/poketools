@@ -30,6 +30,9 @@ vi.mock('@/lib/supabase/queries/format-definitions', () => ({
   setFormatVisibility: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/players', () => ({ resolvePlayerNames: vi.fn() }));
+vi.mock('@/lib/format-studio/ruleset-choices', () => ({
+  loadRulesetChoices: vi.fn(async () => [{ id: 'rs-1', name: 'Spring OU', version_no: 2 }]),
+}));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({
   attachSeasonFormat: vi.fn(),
@@ -69,7 +72,8 @@ import {
   getSeasonStartSignals,
 } from '@/lib/supabase/queries/season-formats';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { PRESETS, compile, contentHash, ltext, type FormatDefinition } from '@/lib/format-kit';
+import { PRESETS, compile, contentHash, type FormatDefinition } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { FormatDefinitionMeta, FormatVersion, SeasonFormatSummary } from '@/lib/format-studio/library-types';
 import type { SessionPlayer } from '@/types/auth';
 import type { Season } from '@/types/season';

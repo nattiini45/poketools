@@ -9,13 +9,13 @@ import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
 import { decideMatchRosterVisibility, type TeamViewer } from '@/lib/team/visibility';
 import { getMatchPrepTeam } from '@/lib/supabase/queries/match-prep-teams';
 import { getTeamTypeAnalysis, type TeamTypeAnalysis } from '@/lib/pkmn/dex';
-import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { fetchReplay } from '@/lib/pkmn/replay';
 import { extractBattleFrames } from '@/lib/pkmn/replay-frames';
 import type { BattleStat, Aggregate } from '@/types/game';
 import type { Ruleset } from '@/types/ruleset';
 import type { PokemonSet } from '@/types/team';
 import type { BattleFrame } from '@/types/replay-viewer';
+import { parseGenFromFormat } from './format';
 import { renderAllowlists, renderTeamConstraints, renderCoreAssignments } from './league-context';
 
 // ─── System Prompt ──────────────────────────────────────────────────
@@ -954,10 +954,4 @@ function extractSpeciesFromContext(
     }
   }
   return Array.from(species);
-}
-
-/** Parse generation number from base_format string like "gen9ou" → 9 */
-export function parseGenFromFormat(baseFormat?: string): number {
-  if (!baseFormat) return 9;
-  return generationOrDefault(baseFormat);
 }

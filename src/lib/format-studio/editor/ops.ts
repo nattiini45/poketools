@@ -20,14 +20,11 @@ import {
   MAX_STAGES,
   MAX_TEXT_SECTIONS,
   applyPatch,
-  withRulesetPreset,
   type AdvanceSelect,
   type Edge,
   type Fix,
   type GroupsSpec,
   type JsonValue,
-  type LText,
-  type Locale,
   type Pairing,
   type RankStep,
   type RuleCard,
@@ -36,6 +33,8 @@ import {
   type Stage,
   type TextSection,
 } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 import { LTEXT_LIMIT, defaultStageName, editLText, newStage, uniqueKey, type DraftDocument } from './document';
 import { SEEDING_EDGES, SEEDING_ROSTER } from './catalog';
 
@@ -340,15 +339,6 @@ export function removeOverride(s: Stage, i: number): Stage {
 
 export function setRuleset(s: Stage, ref: RulesetRef): Stage {
   return { ...s, ruleset: { ...ref } };
-}
-
-/**
- * Plays the stage under a rule preset: its ruleset, and the doubles setting and players per match the preset
- * implies (the rule lives in `ruleset-presets.ts`). The series length stays the editor's own choice. An id the
- * catalog does not know leaves the stage as it is.
- */
-export function setRulesetPreset(s: Stage, presetId: string): Stage {
-  return withRulesetPreset(s, presetId);
 }
 
 export function setScoreValue(s: Stage, key: 'win' | 'loss' | 'bye', n: number): Stage {

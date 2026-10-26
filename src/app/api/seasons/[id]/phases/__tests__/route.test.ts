@@ -50,6 +50,8 @@ import {
   getTournamentWithDetails,
 } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
+import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { makeRequest, makeParams } from '@/lib/__tests__/helpers/api-request';
 import { revalidateTag } from 'next/cache';
@@ -178,6 +180,28 @@ describe('POST /api/seasons/[id]/phases', () => {
 
     expect(response.status).toBe(409);
     expect(payload.code).toBe('PHASE_NAME_TAKEN');
+    expect(shiftStageOrders).not.toHaveBeenCalled();
+    expect(createTournament).not.toHaveBeenCalled();
+  });
+
+  it('refuses a ruleset the caller may not use before any stage order is shifted', async () => {
+    vi.mocked(getStagesBySeasonId).mockResolvedValue([
+      { id: 'phase-1', name: 'Hinrunde', status: 'upcoming', stage_order: 1 },
+      { id: 'phase-2', name: 'Playoffs', status: 'upcoming', stage_order: 2 },
+    ] as never);
+    vi.mocked(assertRulesetUsableForCreate).mockRejectedValueOnce(new RulesetStudioError('ruleset_forbidden'));
+
+    const request = makeRequest({
+      name: 'Zwischenrunde',
+      bracket_type: 'single_elim',
+      ruleset_id: '00000000-0000-4000-8000-000000000002',
+      insert_at: 1,
+    }) as NextRequest;
+
+    const response = await POST(request, { params: makeParams({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }) });
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).code).toBe('ruleset_forbidden');
     expect(shiftStageOrders).not.toHaveBeenCalled();
     expect(createTournament).not.toHaveBeenCalled();
   });
