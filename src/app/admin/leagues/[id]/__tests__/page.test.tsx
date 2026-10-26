@@ -136,6 +136,7 @@ import LeagueAdminTabs from '../_components/LeagueAdminTabs';
 import ReadinessCard from '@/components/format-studio/attach/ReadinessCard';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioAttachMessages } from '@/i18n/messages/format-studio/attach';
+import { leagueAdminSeasonPageMessages } from '@/i18n/messages/league-admin/season-page';
 
 /** The league id: a uuid, since the page answers 404 for any other `[id]`. */
 const S1 = '5e150000-0000-4000-8000-000000000001';
@@ -406,6 +407,34 @@ describe('admin league page tabs (?tab=)', () => {
       expect(findByType(tree, ArchiveButton).length, tab).toBe(tab === 'danger' ? 1 : 0);
       expect(findByType(tree, DeleteResourceButton).length, tab).toBe(tab === 'danger' ? 1 : 0);
     }
+  });
+
+  it.each([
+    ['en', 'Edit dates'],
+    ['de', 'Zeitraum bearbeiten'],
+  ] as const)('the dates fact links to the Settings tab where the dates are edited (%s)', async (locale, label) => {
+    mocks.locale = locale;
+    const links = findByType(await render(), Link);
+    const edit = links.filter((l) => l.props.href === `/admin/leagues/${S1}?tab=settings`);
+    expect(edit).toHaveLength(1);
+    expect(plainText(edit[0])).toBe(label);
+    expect(label).toBe(createTranslator(leagueAdminSeasonPageMessages, locale)('overview.editDates'));
+  });
+
+  it('the dates link shows for a league admin who is not a site admin, and for a league without dates', async () => {
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ start_date: null, end_date: null }));
+    const tree = await render();
+    expect(visibleText(tree)).toContain('Not set');
+    expect(findByType(tree, Link).map((l) => l.props.href)).toContain(`/admin/leagues/${S1}?tab=settings`);
+  });
+
+  it('an admin of another league sees no overview, so no link to the Settings tab', async () => {
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    mocks.isResourceAdminFor.mockResolvedValue(false);
+    const tree = await render();
+    expect(findByType(tree, Link)).toHaveLength(0);
+    expect(visibleText(tree)).not.toContain('Edit dates');
   });
 
   it('an old ?tab=schedule link opens the phases tab', async () => {

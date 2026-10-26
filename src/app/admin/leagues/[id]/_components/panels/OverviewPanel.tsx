@@ -6,10 +6,13 @@ import { getFormatter, getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
 import { loadLeagueFormatState } from '@/lib/format-studio/readiness-loader';
+import { leagueAdminHref } from '@/lib/league-admin/tabs';
 import type { LeagueAdminPanelContext } from './context';
 
 /**
- * Overview tab (the default): the league at a glance and its description.
+ * Overview tab (the default): the league at a glance and its description. The dates fact links to the
+ * Settings tab, where the dates are edited; every viewer of this page is a league admin and the Settings tab
+ * exists for every format, so the link needs no capability check of its own.
  * Renders from the league row alone, with one exception: a custom league also reads its attached format and the
  * start signals in one wave, and shows the readiness checklist ("Ready to start?") until it has started. Every
  * other league type makes no read of its own.
@@ -41,14 +44,18 @@ export async function overviewPanel({ id, league, t }: LeagueAdminPanelContext) 
         ? t('overview.battleFormatSingles')
         : null;
 
-  const facts: { term: string; value: string }[] = [
+  const facts: { term: string; value: string; edit?: { href: string; label: string } }[] = [
     { term: t('overview.format'), value: enumLabel(tEnum, 'formatType', league.format_type) },
     ...(battleFormat ? [{ term: t('overview.battleFormat'), value: battleFormat }] : []),
     { term: t('overview.ruleset'), value: league.ruleset_name ?? t('overview.noRuleset') },
     { term: t('overview.status'), value: enumLabel(tEnum, 'seasonStatus', league.status) },
     { term: t('overview.participants'), value: String(league.participant_count) },
     { term: t('overview.phases'), value: String(league.tournament_count) },
-    { term: t('overview.dates'), value: dates },
+    {
+      term: t('overview.dates'),
+      value: dates,
+      edit: { href: leagueAdminHref(id, 'settings'), label: t('overview.editDates') },
+    },
   ];
 
   return (
@@ -61,7 +68,17 @@ export async function overviewPanel({ id, league, t }: LeagueAdminPanelContext) 
             {facts.map((fact) => (
               <div key={fact.term} className="min-w-0">
                 <dt className="text-xs font-heading text-poke-text-muted">{fact.term}</dt>
-                <dd className="text-sm text-poke-text-primary break-words">{fact.value}</dd>
+                <dd className="text-sm text-poke-text-primary break-words">
+                  {fact.value}
+                  {fact.edit && (
+                    <Link
+                      href={fact.edit.href}
+                      className="ml-2 inline-flex min-h-11 items-center font-medium text-poke-blue hover:underline sm:min-h-0"
+                    >
+                      {fact.edit.label}
+                    </Link>
+                  )}
+                </dd>
               </div>
             ))}
           </dl>

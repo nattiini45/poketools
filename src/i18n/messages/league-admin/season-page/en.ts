@@ -55,6 +55,8 @@ export default {
     dateRange: '{start} – {end}',
     startOnly: 'From {start}',
     endOnly: 'Until {end}',
+    /** Link beside the dates fact: opens the Settings tab, where the dates are edited. */
+    editDates: 'Edit dates',
     publicPage: 'Open the public league page',
   },
   danger: {

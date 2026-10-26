@@ -36,8 +36,14 @@ export default {
   rosterTable: {
     searchPlaceholder: 'Search Pokémon…',
     searchLabel: 'Search evolution lines',
-    priceGroupFilter: 'Filter by price group',
+    /** Heading of the price-group pills under the search and sort controls. */
+    priceGroups: 'Price groups',
     allPriceGroups: 'All price groups',
+    /** The accessible name of one price-group pill: its label and how many lines it holds. */
+    priceGroupPill: {
+      one: '{label}: {count} line',
+      other: '{label}: {count} lines',
+    },
     sortLabel: 'Sort table',
     sort: {
       line: 'Line number',

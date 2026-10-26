@@ -7,16 +7,20 @@ import PokemonSprite from '@/components/shared/PokemonSprite';
 import { FOCUS_RING, TABLE_HEAD } from '@/components/world/panel';
 import { useDataLocale, useT } from '@/i18n/client';
 import { worldClientMessages } from '@/i18n/messages/world/client';
-import { localizeSpecies, speciesSearchKeys } from '@/lib/pkmn/i18n/names/species';
-import { foldForSearch } from '@/lib/pkmn/i18n/search';
-import { displayPriceGroup, priceGroupFilterOptions, priceGroupMatches } from '@/lib/evolution/point-buy-display';
+import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
+import {
+  displayPriceGroup,
+  filterAndSortRosterEntries,
+  priceGroupLineCounts,
+  type PriceGroupFilter,
+  type RosterSortKey,
+} from '@/lib/evolution/point-buy-display';
+import PriceGroupBar from './PriceGroupBar';
 import { PRICE_GROUP_CHIP } from './price-group-chip';
 
 interface RosterTableProps {
   entries: PointBuyListEntry[];
 }
-
-type SortKey = 'line' | 'price-asc' | 'price-desc' | 'kills';
 
 /** Sort options in display order, with their `world/client` label keys. */
 const SORT_KEYS = {
@@ -24,7 +28,7 @@ const SORT_KEYS = {
   'price-asc': 'rosterTable.sort.priceAsc',
   'price-desc': 'rosterTable.sort.priceDesc',
   kills: 'rosterTable.sort.kills',
-} as const satisfies Record<SortKey, string>;
+} as const satisfies Record<RosterSortKey, string>;
 
 const CONTROL_CLASS =
   'rounded-lg border border-arena-border bg-arena-elevated px-3 py-1.5 text-sm text-arena-ink ' +
@@ -33,7 +37,10 @@ const CONTROL_CLASS =
 
 /**
  * In-section point-buy roster with local-state filter/sort, in the viewer's
- * language; the search matches English and German species names alike.
+ * language; the search matches English and German species names alike. The
+ * price-group filter is the `PriceGroupBar` pills directly under the controls,
+ * so the rows and the "N / total lines" count it changes stay in view; the
+ * rows themselves come from the pure `filterAndSortRosterEntries`.
  * Rows open the LineOverlay via the `?mon=<line id>` search param — the URL
  * stays shareable and the overlay content comes from page-loaded data.
  *
@@ -43,37 +50,17 @@ const CONTROL_CLASS =
  */
 export default function RosterTable({ entries }: RosterTableProps) {
   const [search, setSearch] = useState('');
-  const [priceGroup, setPriceGroup] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('line');
+  const [priceGroup, setPriceGroup] = useState<PriceGroupFilter>('');
+  const [sortKey, setSortKey] = useState<RosterSortKey>('line');
   const t = useT(worldClientMessages);
   const dataLocale = useDataLocale();
   const species = (name: string) => localizeSpecies(name, dataLocale);
 
-  const filtered = useMemo(() => {
-    // Folded, space-free needle against every stage's English + German keys.
-    const needle = foldForSearch(search).replace(/ /g, '');
-    const rows = entries.filter((entry) => {
-      // Groups in one finder tab share a label, so one option covers them all.
-      if (priceGroup && !priceGroupMatches(entry.price_group, priceGroup)) return false;
-      if (!needle) return true;
-      return [entry.base_pokemon, entry.stage2_pokemon, entry.stage3_pokemon]
-        .filter((n): n is string => Boolean(n))
-        .some((name) => speciesSearchKeys(name).compact.some((key) => key.includes(needle)));
-    });
-
-    return [...rows].sort((a, b) => {
-      switch (sortKey) {
-        case 'price-asc':
-          return a.price - b.price;
-        case 'price-desc':
-          return b.price - a.price;
-        case 'kills':
-          return a.kills_to_stage2 - b.kills_to_stage2;
-        default:
-          return a.line_number - b.line_number;
-      }
-    });
-  }, [entries, search, priceGroup, sortKey]);
+  const filtered = useMemo(
+    () => filterAndSortRosterEntries(entries, { search, priceGroup, sortKey }),
+    [entries, search, priceGroup, sortKey],
+  );
+  const priceGroupCounts = useMemo(() => priceGroupLineCounts(entries), [entries]);
 
   return (
     <div>
@@ -87,34 +74,23 @@ export default function RosterTable({ entries }: RosterTableProps) {
           className={`min-w-[12rem] flex-1 ${CONTROL_CLASS}`}
         />
         <select
-          value={priceGroup}
-          onChange={(e) => setPriceGroup(e.target.value)}
-          aria-label={t('rosterTable.priceGroupFilter')}
-          className={CONTROL_CLASS}
-        >
-          <option value="">{t('rosterTable.allPriceGroups')}</option>
-          {priceGroupFilterOptions().map((key) => (
-            <option key={key} value={key}>
-              {t(`rosterTable.priceGroup.${key}`)}
-            </option>
-          ))}
-        </select>
-        <select
           value={sortKey}
-          onChange={(e) => setSortKey(e.target.value as SortKey)}
+          onChange={(e) => setSortKey(e.target.value as RosterSortKey)}
           aria-label={t('rosterTable.sortLabel')}
           className={CONTROL_CLASS}
         >
-          {(Object.keys(SORT_KEYS) as SortKey[]).map((key) => (
+          {(Object.keys(SORT_KEYS) as RosterSortKey[]).map((key) => (
             <option key={key} value={key}>
               {t(SORT_KEYS[key])}
             </option>
           ))}
         </select>
-        <span className="self-center text-xs text-arena-ink-secondary">
+        <span className="self-center text-xs text-arena-ink-secondary" aria-live="polite">
           {t('rosterTable.count', { shown: filtered.length, total: entries.length })}
         </span>
       </div>
+
+      <PriceGroupBar selected={priceGroup} onSelect={setPriceGroup} counts={priceGroupCounts} />
 
       <div className="max-h-[70vh] overflow-auto rounded-xl border border-arena-border">
         <table className="w-full text-left text-sm">

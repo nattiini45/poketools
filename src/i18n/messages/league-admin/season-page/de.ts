@@ -40,6 +40,7 @@ export default defineDe<typeof en>()({
     dateRange: '{start} – {end}',
     startOnly: 'Ab {start}',
     endOnly: 'Bis {end}',
+    editDates: 'Zeitraum bearbeiten',
     publicPage: 'Öffentliche Ligaseite öffnen',
   },
   danger: {

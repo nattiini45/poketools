@@ -26,7 +26,6 @@ export default defineDe<typeof en>()({
     noList:
       'Für diese Liga wurde noch keine Point-Buy-Liste hinterlegt. Die Liste erscheint hier, sobald sie von der Ligaleitung gebunden wird.',
     emptyList: 'Die gebundene Point-Buy-Liste ist noch leer.',
-    priceGroups: 'Preisgruppen',
   },
   teams: {
     heading: 'Teams',

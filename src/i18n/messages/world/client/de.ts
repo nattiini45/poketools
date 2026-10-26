@@ -28,8 +28,12 @@ export default defineDe<typeof en>()({
   rosterTable: {
     searchPlaceholder: 'Pokémon suchen …',
     searchLabel: 'Entwicklungslinien durchsuchen',
-    priceGroupFilter: 'Nach Preisgruppe filtern',
+    priceGroups: 'Preisgruppen',
     allPriceGroups: 'Alle Preisgruppen',
+    priceGroupPill: {
+      one: '{label}: {count} Linie',
+      other: '{label}: {count} Linien',
+    },
     sortLabel: 'Tabelle sortieren',
     sort: {
       line: 'Liniennummer',
