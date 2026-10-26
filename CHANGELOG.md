@@ -27,7 +27,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   of the three Format Studio migrations above. It adds `wiki_notes.resubmission_blocked_at` and
   `resubmission_blocked_by` (both nullable) with a CHECK and an index. Note reads keep working without it, but the
   writes that name the new columns fail until they exist: an author's edit of a note, approving a note, and blocking
-  or unblocking resubmission. Old code keeps working after the migration.
+  or unblocking resubmission. Old code keeps working after the migration until a note is blocked: its CHECK then
+  refuses an old approve or author edit of that note, so do not roll back to old code once a note is blocked.
 - API clients that send an even best-of value, or change the league type of a started league, now receive `400` /
   `409`.
 
