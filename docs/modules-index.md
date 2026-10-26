@@ -22,6 +22,7 @@ This is the central documentation index for all major PokéTools modules.
 - **Draft** — Draft pools, picks, and evo-league helpers. See [Draft](./draft.md).
 - **Evolution Point Buy** — EPB format engine (mechanics only): point-buy lists, progress sources and tokens, redraft, format gating; the league's numbers and rulings come from the active format pack. See [Evolution Point Buy](./evolution-point-buy.md) and the [EPB Admin Guide](./ADMIN_GUIDE_EVOLUTION_POINT_BUY.md).
 - **Format packs** — League tuning (EPB numbers and rulings, price groups and tabs, utility categories, workbook layout, `draft`-format and Core Liga defaults, rule prose) as data: the contract and accessors in `src/lib/format-pack`, the public example pack in `src/format-packs/example`, the `@format-pack` alias and `FORMAT_PACK`, and the optional pack-extension seam (`src/lib/pack-extensions`, `@pack-extensions`: supplementary records, extra sections and links a pack may add). See [Format Packs](./format-packs.md) and [Point-Buy Workbook Format](./point-buy-format.md).
+- **Format kit** — A pure library under `src/lib/format-kit` that describes a league or tournament format as a validated, bilingual JSON document with a safe expression language, a primitive registry and a compiler that reports diagnostics with fixes. Library only: it is not wired into the app yet (no database, route or UI). See [Format Kit](./format-kit.md).
 - **Season** — Season lifecycle, participants, cores, draft/kill tokens, redraft, EPB phase engine. See [Season](./season.md).
 - **Match** — Match aggregation and completion workflows. See [Match](./match.md).
 - **Rating** — Glicko-2 rating logic and rollback. See [Rating](./rating.md).
@@ -93,6 +94,10 @@ Test suites live in `__tests__/` directories adjacent to the modules they cover.
 | Rating / Tiers | `src/lib/rating/__tests__/tiers.test.ts` | `getRatingTier` — Poké/Great/Ultra/Master bands, provisional rule, Master Ball RD gate (Spec §11.5) |
 | Draft Engine | `src/lib/draft/__tests__/engine.test.ts` | Snake order, pick validation, draft state, completion |
 | Format pack contract | `src/lib/format-pack/__tests__/pack-contract.test.ts`, `pack-pkmn.server.test.ts` | Pack schema, en/de message contract, example fixture, accessors; `@pkmn/dex` ids of every present pack |
+| Format kit / expression language | `src/lib/format-kit/expr/__tests__/*.test.ts` | Parser, printer and print-parse round trip, type check, evaluation semantics, limits fuzz, zod and browser shape parity, seeded rand vectors |
+| Format kit / document and validators | `src/lib/format-kit/__tests__/{schema,validate-spec,validate-parity,registry,describe,ltext,limits}.test.ts` | Strict schema and limits, Spec interpreter, zod versus browser validator parity (seeded fuzz), registry and catalog coverage, LText fallback |
+| Format kit / compile and diagnostics | `src/lib/format-kit/__tests__/{compile,diagnostics,graph,plan,fixes,capabilities,memo,render}.test.ts` | Compile pipeline, one negative fixture per diagnostic code, stage graph and plan counts, fix patches, capabilities, LRU memo, rendering in both languages |
+| Format kit / boundaries | `src/lib/format-kit/__tests__/{client-boundary,source-safety,preset-parity,presets}.test.ts` | Client barrel import closure, source scan for banned constructs, preset and fixture parity between entries, preset quality |
 | Broadcast Tracker | `src/lib/broadcast/__tests__/tracker-reducer.test.ts` | Reducer actions, undo, game submit/reset, payload builder |
 | Team Visibility | `src/lib/team/__tests__/visibility.test.ts` | `canViewTeamPokemon`, `filterTeamVisibility` (Spec §7) |
 | Auth Helpers | `src/lib/auth/__tests__/helpers.test.ts` | `requireAuth`, `requireAdmin`, `requireCreator`, sync checks |
@@ -145,6 +150,7 @@ When modifying a module:
 - [Tournament Module](./tournament.md)
 - [Draft Module](./draft.md)
 - [Evolution Point Buy Module](./evolution-point-buy.md)
+- [Format Kit](./format-kit.md)
 - [Season Module](./season.md)
 - [Match Module](./match.md)
 - [Rating Module](./rating.md)
