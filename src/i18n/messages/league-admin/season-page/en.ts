@@ -30,6 +30,8 @@ export default {
     /** The league's phases (there is no league-scoped match list). Old `?tab=schedule` links still open it. */
     phases: 'Phases',
     rules: 'Rules',
+    /** The read-only Format Studio view of the league (generated outline, rules text, diagnostics). */
+    format: 'Format',
     settings: 'Settings',
     danger: 'Danger zone',
     /** Native confirm before a tab switch while the open tab holds unsaved input (forms marked `data-unsaved`). */

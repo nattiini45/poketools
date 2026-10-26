@@ -81,6 +81,20 @@ describe('ResourceForbidden', () => {
     expect(html).toContain('Only admins of this league.');
   });
 
+  it('has an h1 heading above the message, in English and German', async () => {
+    expect(renderToStaticMarkup(await ResourceForbidden({ children: 'Only admins.' }))).toMatch(
+      /<h1[^>]*>Access Denied<\/h1>\s*<p[^>]*>Only admins\.<\/p>/,
+    );
+    cookieJar.locale = 'de';
+    expect(renderToStaticMarkup(await ResourceForbidden({}))).toContain('>Kein Zugriff</h1>');
+  });
+
+  it('takes an optional title', async () => {
+    const html = renderToStaticMarkup(await ResourceForbidden({ title: 'Nope', children: 'msg' }));
+    expect(html).toContain('>Nope</h1>');
+    expect(html).not.toContain('Access Denied');
+  });
+
   it('falls back to the generic text in English and German', async () => {
     expect(renderToStaticMarkup(await ResourceForbidden({}))).toContain(
       'You are not an admin of this league or tournament.',

@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   getListEntries: vi.fn(),
   loadPublishRefusals: vi.fn(),
   getSeasonPhaseStartSignals: vi.fn(),
+  loadLeagueFormat: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -67,6 +68,8 @@ vi.mock('@/lib/supabase/queries/drafts', () => ({
 }));
 vi.mock('@/lib/supabase/queries/season-groups', () => ({ getSeasonGroups: mocks.getSeasonGroups }));
 vi.mock('@/lib/supabase/queries/point-buy-lists', () => ({ getListEntries: mocks.getListEntries }));
+vi.mock('@/lib/format-studio/loader', () => ({ loadLeagueFormat: mocks.loadLeagueFormat }));
+vi.mock('@/components/format-studio/FormatDetail', () => stub('FormatDetail'));
 vi.mock('../draft/_lib/load', () => ({ loadPublishRefusals: mocks.loadPublishRefusals }));
 vi.mock('@/components/league/groups/LeagueGroupsEditor', () => stub('LeagueGroupsEditor'));
 vi.mock('@/i18n/LocalTime', () => ({ LocalTime: stub('LocalTime').default }));
@@ -232,6 +235,7 @@ const TAB_READS = [
   'getFormatRules',
   'getListEntries',
   'getSeasonPhaseStartSignals',
+  'loadLeagueFormat',
 ] as const;
 
 /** The tab-specific reads this render made (the league row and the live access read are shared). */
@@ -267,15 +271,17 @@ beforeEach(() => {
   mocks.getListEntries.mockResolvedValue([]);
   mocks.loadPublishRefusals.mockResolvedValue({});
   mocks.getSeasonPhaseStartSignals.mockResolvedValue([]);
+  // The Format tab loads its descriptor through one call; a league without phases is the cheapest result.
+  mocks.loadLeagueFormat.mockResolvedValue({ kind: 'no_phases' });
 });
 
 // ─── Tabs ───────────────────────────────────────────────────────────
 
 describe('admin league page tabs (?tab=)', () => {
   it.each([
-    ['singles', ['overview', 'participants', 'phases', 'settings', 'danger']],
-    ['doubles', ['overview', 'participants', 'phases', 'settings', 'danger']],
-    ['draft', ['overview', 'participants', 'draft', 'phases', 'rules', 'settings', 'danger']],
+    ['singles', ['overview', 'participants', 'phases', 'format', 'settings', 'danger']],
+    ['doubles', ['overview', 'participants', 'phases', 'format', 'settings', 'danger']],
+    ['draft', ['overview', 'participants', 'draft', 'phases', 'rules', 'format', 'settings', 'danger']],
     ['evolution_point_buy', [...LEAGUE_ADMIN_TABS]],
   ])('%s: the tab strip shows the format’s tabs', async (format, expected) => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: format }));
@@ -335,6 +341,8 @@ describe('admin league page tabs (?tab=)', () => {
     ],
     ['evolution_point_buy', 'phases', ['listRulesets'], ['Phases', 'Evolution Points']],
     ['evolution_point_buy', 'rules', ['getSeasonPhaseStartSignals'], ['Point-Buy List', 'Format Rules', 'Data Import']],
+    // No phases (the default mock): the empty state, no section.
+    ['evolution_point_buy', 'format', ['loadLeagueFormat'], []],
     [
       'evolution_point_buy',
       'settings',
@@ -398,6 +406,7 @@ describe('admin league page tabs (?tab=)', () => {
       draft: 'Draft',
       phases: 'Phasen',
       rules: 'Regeln',
+      format: 'Format',
       settings: 'Einstellungen',
       danger: 'Gefahrenzone',
     });

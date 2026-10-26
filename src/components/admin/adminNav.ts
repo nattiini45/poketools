@@ -63,6 +63,7 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
       { href: '/admin/tournaments/archived', labelKey: 'archivedTournaments', sub: true },
       { href: '/admin/matches', labelKey: 'matches' },
       { href: '/admin/rulesets', labelKey: 'rulesets', siteAdminOnly: true },
+      { href: '/admin/formats', labelKey: 'formats' },
     ],
   },
   {

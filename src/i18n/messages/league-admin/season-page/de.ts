@@ -19,6 +19,7 @@ export default defineDe<typeof en>()({
     draft: 'Draft',
     phases: 'Phasen',
     rules: 'Regeln',
+    format: 'Format',
     settings: 'Einstellungen',
     danger: 'Gefahrenzone',
     unsavedConfirm: 'Dieser Tab hat ungespeicherte Änderungen. Trotzdem wechseln und sie verwerfen?',

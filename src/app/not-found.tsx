@@ -9,9 +9,9 @@ export default async function NotFound() {
     <div className="flex flex-col items-center justify-center min-h-[50vh] gap-6 text-center">
       <div className="text-5xl">🔍</div>
       <div>
-        <h2 className="text-xl font-heading font-bold text-poke-text-primary mb-2">
+        <h1 className="text-xl font-heading font-bold text-poke-text-primary mb-2">
           {t("notFound.title")}
-        </h2>
+        </h1>
         <p className="text-sm text-poke-text-secondary max-w-md">
           {t("notFound.body")}
         </p>

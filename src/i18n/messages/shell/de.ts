@@ -49,6 +49,7 @@ export default defineDe<typeof en>()({
       archivedTournaments: 'Archivierte Turniere',
       matches: 'Spiele',
       rulesets: 'Regelwerke',
+      formats: 'Formate',
       players: 'Spielerliste',
       achievements: 'Erfolge',
       wiki: 'Wiki-Moderation',

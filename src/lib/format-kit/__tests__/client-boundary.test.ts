@@ -12,8 +12,8 @@ import { describe, expect, it } from 'vitest';
  *
  * Allowed outside the kit, and why:
  *  - `@/i18n/{core,config,format,define,types}`: the translator runtime is client-safe by design.
- *  - `@/i18n/messages/format-studio` (and its `primitives` child): the catalogs the renderer reads. They are
- *    walked like kit files.
+ *  - `@/i18n/messages/format-studio` (and its `primitives` and `describe` children): the catalogs the renderers
+ *    read. They are walked like kit files.
  *  - `@/lib/season/format-capabilities`: capability flags; it holds type imports only.
  *  - `@/lib/tournament/round-robin`: the pure round count the plan reuses; it imports only `./types`.
  */
@@ -130,11 +130,13 @@ describe('client barrel boundary', () => {
       'registry/describe.ts',
       'expr/validate-json.ts',
       'engine/render.ts',
+      'engine/describe-definition.ts',
       'presets/index.ts',
     ]) {
       expect(reached.has(expected), expected).toBe(true);
     }
     expect([...closure.files].some((f) => f.startsWith(FORMAT_STUDIO))).toBe(true);
+    expect(closure.files.has(path.resolve(FORMAT_STUDIO, 'describe/index.ts'))).toBe(true);
     expect(closure.files.size).toBeGreaterThan(40);
   });
 

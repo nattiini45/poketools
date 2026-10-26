@@ -24,6 +24,7 @@ export const LEAGUE_ADMIN_TABS = [
   'draft',
   'phases',
   'rules',
+  'format',
   'settings',
   'danger',
 ] as const;
@@ -43,9 +44,11 @@ export const LEAGUE_ADMIN_TAB_ALIASES: Readonly<Record<string, LeagueAdminTab>> 
 
 /**
  * The tabs a league's format shows, in display order (from `getFormatCapabilities`):
- * - singles / doubles: overview, participants, phases, settings, danger;
+ * - singles / doubles: overview, participants, phases, format, settings, danger;
  * - classic draft: those plus draft (pool and Draft Room) and rules (evolution tiers, tier limits);
- * - Evolution Point Buy: all seven (rules = point-buy list, format rules, data import).
+ * - Evolution Point Buy: all eight (rules = point-buy list, format rules, data import).
+ *
+ * The format tab (read-only generated outline and rules text) has no capability gate: every format shows it.
  */
 export function availableLeagueAdminTabs(format: SeasonFormatType): LeagueAdminTab[] {
   const caps = getFormatCapabilities(format);
