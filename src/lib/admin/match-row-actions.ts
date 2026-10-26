@@ -3,8 +3,8 @@
  * Prep open pages under /dashboard that redirect everyone they do not admit back to the player
  * dashboard, so a button the viewer cannot use is a dead end. The rules mirror those pages:
  * the submit page admits the two participants and a live site admin, the prep page admits the
- * two participants and the superadmin; both need the viewer to be a player. Override (the admin
- * page) is not decided here, it stays on every row.
+ * two participants and the superadmin; both need the viewer to be a player. Override is not a
+ * row action: the whole row opens the admin match page.
  */
 import type { MatchStatus } from '@/types/match';
 

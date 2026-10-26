@@ -15,8 +15,9 @@
 -- authenticated) hold no table grants there (20261008081443_close_public_api_roles.sql), so only service_role reads or
 -- writes them; the baseline 'Public read approved wiki_notes' policy is irrelevant without a grant. RLS stays as it is.
 --
--- DEPLOY ORDER: apply this migration BEFORE deploying the application code. The code selects the columns on every
--- moderation list and note read, so before they exist those reads fail with a missing-column error.
+-- DEPLOY ORDER: apply this migration BEFORE deploying the application code. Note reads select '*' and keep working
+-- without the columns, but the writes that name them (an author's edit, approving a note, blocking or unblocking
+-- resubmission) fail with a missing-column error until they exist.
 BEGIN;
 
 ALTER TABLE public.wiki_notes
