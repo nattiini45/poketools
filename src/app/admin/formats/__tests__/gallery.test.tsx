@@ -1,7 +1,8 @@
 /**
- * `/admin/formats`: the gallery. The viewer is read live and nothing is read before the gate; a site admin sees
- * every active league, a resource admin only their own (never `listSeasons`); the examples carry the example
- * label; the list stops at 100 and says so.
+ * `/admin/formats`: the Format Studio home. The viewer is read live and nothing is read before the gate; a site
+ * admin sees every active league, a resource admin only their own (never `listSeasons`); the examples carry the
+ * example label; the league list stops at 100 and says so. "Your formats" and "Shared with you" come from the
+ * library list with the live actor, stop at 50 and say so, and the New format dialog gets names and ids only.
  */
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -16,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   listSeasonsByIds: vi.fn(),
   getAdminSeasonIds: vi.fn(),
   loadLeagueFormatSummaries: vi.fn(),
+  listFormatDefinitions: vi.fn(),
+  gallery: vi.fn(),
+  dialogProps: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -30,6 +34,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
 }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock('@/i18n/server', async () => {
   const { createTranslator } = await import('@/i18n/core');
   return {
@@ -51,6 +56,14 @@ vi.mock('@/lib/format-studio/loader', async () => {
     presetViews: () => PRESETS.map((p) => ({ id: p.id, view: toFormatView(compile(p.definition)) })),
   };
 });
+vi.mock('@/lib/supabase/queries/format-definitions', () => ({ listFormatDefinitions: mocks.listFormatDefinitions }));
+vi.mock('@/lib/cache/format-reads', () => ({ formatReads: { gallery: mocks.gallery } }));
+vi.mock('@/components/format-studio/starts/NewFormatDialog', () => ({
+  default: (props: unknown) => {
+    mocks.dialogProps(props);
+    return <button type="button">New format</button>;
+  },
+}));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 
 import FormatsGalleryPage, { generateMetadata } from '../page';
@@ -110,7 +123,34 @@ const html = (tree: ReactNode, locale: Locale = mocks.locale) =>
     </I18nProvider>,
   );
 
-const allReads = () => [mocks.listSeasons, mocks.listSeasonsByIds, mocks.getAdminSeasonIds, mocks.loadLeagueFormatSummaries];
+const allReads = () => [
+  mocks.listSeasons,
+  mocks.listSeasonsByIds,
+  mocks.getAdminSeasonIds,
+  mocks.loadLeagueFormatSummaries,
+  mocks.listFormatDefinitions,
+  mocks.gallery,
+];
+
+function stored(id: string, name: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    slug: id,
+    name: { base: 'en', en: { v: name, s: 'human' } },
+    description: null,
+    kind: 'custom',
+    visibility: 'private',
+    forked_from: null,
+    draft_rev: 1,
+    created_at: '2026-10-01T10:00:00Z',
+    updated_at: '2026-10-02T10:00:00Z',
+    owner: { id: 'p1', name: 'Alex' },
+    current_version: null,
+    ...over,
+  };
+}
+
+const version = (n: number) => ({ id: 'v', version_no: n, content_hash: 'h', created_at: 'x' });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -121,6 +161,8 @@ beforeEach(() => {
   mocks.loadLeagueFormatSummaries.mockImplementation(async (leagues: { id: string; name: string }[]) =>
     leagues.map((l) => summary(l.id, l.name)),
   );
+  mocks.listFormatDefinitions.mockImplementation(async () => ({ items: [], total: 0 }));
+  mocks.gallery.mockResolvedValue([]);
 });
 
 describe('format gallery: the gate', () => {
@@ -193,9 +235,15 @@ describe('format gallery: examples', () => {
     expect(out).not.toMatch(/undefined|\{[a-z_]+\}/);
   });
 
-  it('tells the reader the examples are read-only for now', async () => {
+  it('tells the reader the examples are read-only and how to get a copy, without "for now"', async () => {
     mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
-    expect(html(await FormatsGalleryPage())).toContain('read-only for now');
+    const out = html(await FormatsGalleryPage());
+    expect(out).toContain('Examples are read-only. Use one as a starting point to get a private copy you can change.');
+    expect(out).not.toContain('for now');
+    mocks.locale = 'de';
+    const de = html(await FormatsGalleryPage());
+    expect(de).toContain('Beispiele sind schreibgeschützt.');
+    expect(de).not.toContain('vorerst');
   });
 
   it('shows the example titles and the open link in the viewer language', async () => {
@@ -295,5 +343,140 @@ describe('format gallery: metadata', () => {
   ] as const)('has a page title in %s', async (locale, title) => {
     mocks.locale = locale;
     expect(await generateMetadata()).toEqual({ title });
+  });
+});
+
+describe('format gallery: the New format action', () => {
+  it('hands the dialog example names, gallery names with versions and the leagues that have phases, nothing else', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    mocks.listSeasons.mockResolvedValue([league('s1', 'Open League'), league('s2', 'Empty League')]);
+    mocks.loadLeagueFormatSummaries.mockResolvedValue([
+      summary('s1', 'Open League'),
+      summary('s2', 'Empty League', { stageCount: 0, pairings: [], coverage: null }),
+    ]);
+    mocks.gallery.mockResolvedValue([
+      {
+        id: 'g1',
+        slug: 'autumn-cup',
+        name: { base: 'en', en: { v: 'Autumn Cup', s: 'human' } },
+        description: null,
+        kind: 'custom',
+        version_no: 3,
+        content_hash: 'h',
+        updated_at: '2026-10-02T10:00:00Z',
+      },
+    ]);
+    const out = html(await FormatsGalleryPage());
+    expect(out).toContain('New format');
+    expect(mocks.dialogProps).toHaveBeenCalledTimes(1);
+    const data = mocks.dialogProps.mock.calls[0][0].data;
+    expect(data.examples.map((e: { id: string }) => e.id)).toEqual(['classic-league', 'cup', 'swiss-top-cut']);
+    expect(data.examples.every((e: { name: string }) => e.name.length > 0)).toBe(true);
+    expect(data.gallery).toEqual([{ id: 'g1', name: 'Autumn Cup', version: 3 }]);
+    expect(data.leagues).toEqual([{ id: 's1', name: 'Open League' }]);
+    expect(Object.keys(data).sort()).toEqual(['examples', 'gallery', 'leagues']);
+  });
+
+  it('names the examples in the viewer language', async () => {
+    mocks.locale = 'de';
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    html(await FormatsGalleryPage());
+    const { PRESETS, resolveLText } = await import('@/lib/format-kit/client');
+    const names = mocks.dialogProps.mock.calls[0][0].data.examples.map((e: { name: string }) => e.name);
+    expect(names).toEqual(PRESETS.map((p) => resolveLText(p.definition.identity.name, { viewer: 'de' })?.value));
+  });
+});
+
+describe('format gallery: your formats and shared formats', () => {
+  it('lists with the live actor, 50 at a time, mine and shared', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    await FormatsGalleryPage();
+    expect(mocks.listFormatDefinitions).toHaveBeenCalledTimes(2);
+    const actor = { playerId: 'p1', isAdmin: true };
+    expect(mocks.listFormatDefinitions).toHaveBeenCalledWith({ actor, scope: 'mine', limit: 50, offset: 0 });
+    expect(mocks.listFormatDefinitions).toHaveBeenCalledWith({ actor, scope: 'shared', limit: 50, offset: 0 });
+  });
+
+  it('a resource admin lists as a plain admin, never as a site admin', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    await FormatsGalleryPage();
+    for (const call of mocks.listFormatDefinitions.mock.calls) expect(call[0].actor).toEqual({ playerId: 'p1', isAdmin: false });
+  });
+
+  it('own formats lead to the editor, with their state in words', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    mocks.listFormatDefinitions.mockImplementation(async ({ scope }: { scope: string }) =>
+      scope === 'mine'
+        ? {
+            items: [
+              stored('d1', 'Draft cup'),
+              stored('d2', 'Live cup', { visibility: 'league', current_version: version(4) }),
+              stored('d3', 'Gallery cup', { visibility: 'gallery', current_version: version(1) }),
+            ],
+            total: 3,
+          }
+        : { items: [], total: 0 },
+    );
+    const out = html(await FormatsGalleryPage());
+    expect(out).toContain('Your formats');
+    expect(out).toContain('href="/admin/formats/d1/edit"');
+    expect(out).toContain('href="/admin/formats/d2/edit"');
+    expect(out).toContain('>Draft<');
+    expect(out).toContain('Published v4');
+    expect(out).toContain('Shared with league admins');
+    expect(out).toContain('In the gallery');
+    expect(out).toContain('>Edit<');
+    expect(out).not.toContain('>Fork<');
+  });
+
+  it('shared formats lead to the read-only page, name their owner and offer Fork', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    mocks.listFormatDefinitions.mockImplementation(async ({ scope }: { scope: string }) =>
+      scope === 'shared'
+        ? {
+            items: [stored('s9', 'Shared cup', { visibility: 'league', owner: { id: 'p2', name: 'Sam' }, current_version: version(2) })],
+            total: 1,
+          }
+        : { items: [], total: 0 },
+    );
+    const out = html(await FormatsGalleryPage());
+    expect(out).toContain('Shared with you');
+    expect(out).toContain('href="/admin/formats/s9"');
+    expect(out).not.toContain('href="/admin/formats/s9/edit"');
+    expect(out).toContain('By Sam');
+    expect(out).toContain('>Open<');
+    expect(out).toContain('>Fork<');
+  });
+
+  it.each([
+    ['en', 'You have no formats yet.', 'Nobody has shared a format with you yet.'],
+    ['de', 'Du hast noch keine Formate.', 'Noch hat niemand ein Format mit dir geteilt.'],
+  ] as const)('says when a list is empty (%s)', async (locale, mine, shared) => {
+    mocks.locale = locale;
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    const out = html(await FormatsGalleryPage());
+    expect(out).toContain(mine);
+    expect(out).toContain(shared);
+  });
+
+  it('notes the cap only for a list that has more than it shows', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    mocks.listFormatDefinitions.mockImplementation(async ({ scope }: { scope: string }) =>
+      scope === 'mine' ? { items: [stored('d1', 'One')], total: 80 } : { items: [], total: 0 },
+    );
+    const out = html(await FormatsGalleryPage());
+    expect(out.match(/Showing the first 50 formats only\./g)).toHaveLength(1);
+  });
+
+  it('a tournament-only admin still gets the lists and the empty league state', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    mocks.getAdminSeasonIds.mockResolvedValue([]);
+    mocks.listSeasonsByIds.mockResolvedValue([]);
+    mocks.loadLeagueFormatSummaries.mockResolvedValue([]);
+    const out = html(await FormatsGalleryPage());
+    expect(out).toContain('Your formats');
+    expect(out).toContain('Shared with you');
+    expect(out).toContain('No leagues to show yet.');
+    expect(mocks.listFormatDefinitions).toHaveBeenCalledTimes(2);
   });
 });

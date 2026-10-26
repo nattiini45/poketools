@@ -22,6 +22,11 @@ import {
  *  - every module under those directories (pages included) imports the kit through `@/lib/format-kit/client`
  *    only, never the bare `@/lib/format-kit`, `validate`, `compile`, `schema` or `registry/server`;
  *  - a negative control proves the walker sees zod when it starts at the server barrel.
+ *
+ * One pre-existing bridge is not followed: the format pack's entry (`src/lib/format-pack/index.ts`). Every client
+ * component that renders an API error reaches it through `useApiErrorText` -> `api-errors` -> the enum catalog,
+ * and the pack validates itself with zod in both the server and the browser build. It is app-wide and not part
+ * of the kit's boundary; a row below keeps the exception honest (it must still be reached, and still pull zod).
  */
 
 const KIT = path.join(SRC_ROOT, 'lib', 'format-kit');
@@ -34,6 +39,9 @@ const KIT_SERVER_DIRS = [path.join(KIT, 'schema') + path.sep];
 const SUPABASE_DIR = path.join(SRC_ROOT, 'lib', 'supabase') + path.sep;
 const LOADER = path.join(SRC_ROOT, 'lib', 'format-studio', 'loader.ts');
 
+/** Reached by every client module that uses `useApiErrorText`; see the header. */
+const PREEXISTING_BRIDGES: ReadonlySet<string> = new Set([path.join(SRC_ROOT, 'lib', 'format-pack', 'index.ts')]);
+
 const FORBIDDEN_PACKAGES = [/^zod(\/|$)/, /^server-only$/, /^@pkmn\//, /^@supabase\//];
 
 const rel = (file: string) => path.relative(REPO_ROOT, file).split(path.sep).join('/');
@@ -44,13 +52,27 @@ const clientFiles = sourceFiles.filter(isUseClientFile);
 describe('Format Studio client boundary', () => {
   it('finds the client modules it is supposed to check', () => {
     const names = clientFiles.map((file) => path.basename(file));
-    for (const expected of ['FormatDetail.tsx', 'RulesText.tsx', 'DiagnosticsList.tsx', 'StageOutline.tsx', 'ModuleFacts.tsx']) {
+    const expectedModules = [
+      'FormatDetail.tsx',
+      'RulesText.tsx',
+      'DiagnosticsList.tsx',
+      'StageOutline.tsx',
+      'ModuleFacts.tsx',
+      // The editor and the starts: each is checked below like the read-only modules.
+      'FormatEditor.tsx',
+      'NewFormatDialog.tsx',
+      'PreviewPanel.tsx',
+      'StageInspector.tsx',
+      'PublishDialog.tsx',
+      'ForkPresetButton.tsx',
+    ];
+    for (const expected of expectedModules) {
       expect(names, expected).toContain(expected);
     }
   });
 
   describe.each(clientFiles.map((file) => [rel(file), file] as const))('%s', (_name, file) => {
-    const graph = reachableGraph(file);
+    const graph = reachableGraph(file, { stopAt: PREEXISTING_BRIDGES });
 
     it('reaches no zod, server-only, @pkmn or @supabase package', () => {
       const hits = [...graph.packages].filter((pkg) => FORBIDDEN_PACKAGES.some((re) => re.test(pkg)));
@@ -67,6 +89,14 @@ describe('Format Studio client boundary', () => {
       );
       expect(bad.map((reached) => importChain(graph, reached))).toEqual([]);
     });
+  });
+
+  it('the pre-existing format-pack bridge is still reached by client code and still pulls zod (no stale exception)', () => {
+    const graph = reachableGraph(clientFiles, { stopAt: PREEXISTING_BRIDGES });
+    for (const bridge of PREEXISTING_BRIDGES) {
+      expect(graph.files.has(bridge), `${rel(bridge)} is no longer reached by a Studio client module`).toBe(true);
+      expect([...reachableGraph(bridge).packages].some((pkg) => /^zod(\/|$)/.test(pkg)), `${rel(bridge)} no longer pulls zod`).toBe(true);
+    }
   });
 
   it('the walker is not blind: the client graph contains the kit client barrel and the renderer', () => {

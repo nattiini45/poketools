@@ -69,7 +69,7 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   until requested, and reads at most 10,000 rows per list. `GET /api/admin/format-drift`.
 - **`season.clone` and `season.clone_failed` audit events** for a league started from another league.
 - **Format kit library.** `src/lib/format-kit` now holds the document schema with bilingual text, a safe expression language, a primitive registry, a compiler that reports diagnostics with fixes, and three preset definitions (classic league, cup, Swiss with top cut). On its own it changes no page or route; the format definitions API below builds on it. See `docs/format-kit.md`.
-- **Format Studio (read-only).** Site admins and league admins get a **Formats** entry in the admin navigation. The gallery at `/admin/formats` shows three example formats, each marked "Example. Change anything.", and **Your leagues** with a generated descriptor per league (league admins see only their own). The detail pages show a stage outline, the rules text in English and German, diagnostics in plain words and a coverage line, and the league admin page gains a **Format** tab with the same view. Nothing can be edited on these pages yet; public pages are unchanged, and existing leagues and Evolution Point Buy behave exactly as before. For an Evolution Point Buy league the Format view describes what its tables do: the stored tiebreaker order (else the pack's chain) and the pack's match points in round robin and Swiss. See `docs/format-kit.md`.
+- **Format Studio.** Site admins and league admins get a **Formats** entry in the admin navigation. The gallery at `/admin/formats` shows three example formats, each marked "Example. Change anything.", and **Your leagues** with a generated descriptor per league (league admins see only their own). The detail pages show a stage outline, the rules text in English and German, diagnostics in plain words and a coverage line, and the league admin page gains a **Format** tab with the same view. Public pages are unchanged, and existing leagues and Evolution Point Buy behave exactly as before. For an Evolution Point Buy league the Format view describes what its tables do: the stored tiebreaker order (else the pack's chain) and the pack's match points in round robin and Swiss. See `docs/format-kit.md`.
 - **Format definitions API.** Admins can create, save, publish, fork, share and delete formats through `/api/formats`.
   A draft is any JSON object and is saved with a revision check (`draft_rev`), so two editors cannot overwrite each
   other silently. Publishing compiles the draft with the format kit and stores an immutable, hash-checked version;
@@ -90,9 +90,32 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   phase round names cannot express) as codes.
 - **A custom league without a format cannot start.** The round and bracket generation routes refuse it with
   `format_not_attached` before anything is written, and a database trigger refuses to set the league active.
-- **Storage and API only for now.** There is no editor, no gallery page and no readiness checklist yet, and nothing in
-  pairing, standings or advancement uses an attached format: the phases it creates follow the classic engine, and
-  groups are not created. The shipped examples are forked from code, not stored as rows.
+- **Format Studio editor.** Admins can now write formats in `/admin/formats`. **New format** starts from a blank
+  document, one of the shipped examples (or a gallery format), a league's structure (the "Copy as a new format" button
+  on a league's Studio page, which drops the league's module facts and resets named rulesets) or an imported `.json`
+  file, with a report of unknown fields and an option to remove them. The editor is a form with an outline and an
+  inspector for the identity, stages (participants, groups, pairing, match length with round exceptions, ruleset,
+  scoring, ranking chain), advancement rules, Honor cards and rules text, in English and German. A live preview shows
+  the **Issues** in plain words with jump-to-field and one-click fixes, the generated **Rules** text and a **Schedule**
+  estimate (rounds, matches, byes and weeks for a chosen number of players and cadence). Saving is explicit (Save draft
+  or Ctrl/Cmd+S) with a "changed elsewhere" dialog when another editor saved first (a publish that finds a newer
+  revision opens it too); leaving with unsaved changes asks first, the browser's back button included. Number fields
+  take a decimal comma where decimals are allowed. A format can be published with an optional English and German changelog, shared (private, shared with league
+  admins, or in the gallery for site admins), forked and deleted. The index lists **Your formats** and **Shared with
+  you**, and each has a read-only page.
+- **Attach a format to a custom league.** The Format tab of a custom league has an attach panel: pick one of your
+  published formats, one shared with league admins or a gallery format, see the phases the attach would create (and
+  the parts the engine does not run yet, in plain words), then attach, re-attach or detach. The panel says why the
+  button is disabled (nothing chosen, version with errors, no league ruleset for a stage that needs one, hand-made
+  phases, league already started) and shows the attached version, its frozen hash and the phases created.
+- **Readiness checklist.** A custom league that has not started shows "Ready to start?" on its overview and Format tabs: a format is
+  attached, its phases exist, enough players are registered, every stage has a ruleset, each with a link to where it is
+  fixed. Until a format is attached the **Active** status is disabled and says why, instead of failing after the click.
+  Creating a league of the type Custom format now opens its Format tab.
+- **Not in the engine yet.** Attaching a format creates its phases, but the engine still pairs, scores and advances
+  them like any other phase: there is no mock standings preview, sentence builder, flow canvas or simulator, groups are
+  not created, and round-robin legs, third-place matches and wildcard, threshold and bottom-N selections are not run.
+  The shipped examples are forked from code, not stored as rows.
 
 
 - Wiki moderation: the superadmin can close a rejected note for resubmission ("Block from resubmitting", behind a
@@ -230,6 +253,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - `POST /api/seasons` accepts an optional `clone_from` (`season_id`, `copy_roster`, `copy_admins`). Without it the
   request behaves as before. New error codes: `SEASON_CLONE_FORBIDDEN`, `SEASON_CLONE_ADMINS_FORBIDDEN`,
   `SEASON_CLONE_FAILED`, `SEASON_CLONE_CLEANUP_FAILED` and `SEASON_CLONE_CUSTOM_FORMAT` (409, a custom-type source).
+- **Dialogs fit short screens.** The shared dialog is capped to the screen height: its header stays in place and its
+  body scrolls, so a tall form or list no longer pushes the title or the buttons out of reach.
 - **League types gain a fifth value, `custom`.** `PATCH /api/seasons/[id]` refuses a switch of the league type to or
   from `custom` (409 `season_format_type_locked`) while a format is attached or after the league has started. A
   change between the four classic league types takes no extra read and follows the league type lock above.

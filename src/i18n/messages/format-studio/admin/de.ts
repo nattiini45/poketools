@@ -4,7 +4,7 @@ import type en from './en';
 /** German for `format-studio/admin`. Casual du; a format's stages are "Stages", a league's phases are "Phasen". */
 export default defineDe<typeof en>()({
   title: 'Formate',
-  subtitle: 'So sind Ligen und Beispielformate aufgebaut, in einfachen Worten aufgeschrieben. Vorerst nur zum Lesen.',
+  subtitle: 'Baue Ligen und Turniere aus Formaten oder lies nach, wie bestehende aufgebaut sind.',
   meta: {
     galleryTitle: 'Formate | PokéTools',
     leagueTitle: 'Liga-Format | PokéTools',
@@ -12,9 +12,9 @@ export default defineDe<typeof en>()({
   },
   gallery: {
     heading: 'Beispiele',
-    intro: 'Drei Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Stages, Regeln und Prüfungen zu lesen.',
+    intro: 'Drei Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Stages, Regeln und Prüfungen zu lesen, oder nutze es als Ausgangspunkt.',
     exampleBadge: 'Beispiel',
-    readOnlyNote: 'Beispiele sind vorerst schreibgeschützt. Du kannst sie lesen, aber noch nicht bearbeiten oder speichern.',
+    readOnlyNote: 'Beispiele sind schreibgeschützt. Nutze eines als Ausgangspunkt, um eine private Kopie zu bekommen, die du ändern kannst.',
     open: 'Öffnen',
   },
   leagues: {

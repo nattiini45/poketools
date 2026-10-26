@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import FormatDetail from '@/components/format-studio/FormatDetail';
+import ForkPresetButton from '@/components/format-studio/starts/ForkPresetButton';
 import PageContainer from '@/components/ui/PageContainer';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { PRESETS, resolveLText } from '@/lib/format-kit/client';
@@ -27,8 +28,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 /**
- * `/admin/formats/example/[presetId]`: one example format, read-only. Any admin may open it; it reads no data
- * (the presets are constants compiled once per process). A preset id that is not one of the kit presets is a 404.
+ * `/admin/formats/example/[presetId]`: one example format, read-only, with a button that forks it into a private
+ * draft. Any admin may open it; it reads no data (the presets are constants compiled once per process). A preset
+ * id that is not one of the kit presets is a 404.
  */
 export default async function FormatExamplePage({ params }: PageProps) {
   const { presetId } = await params;
@@ -48,6 +50,7 @@ export default async function FormatExamplePage({ params }: PageProps) {
         <Link href="/admin/formats" className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0">
           {t('detail.back')}
         </Link>
+        <ForkPresetButton presetId={presetId} />
         <FormatDetail view={view} variant="page" example />
       </PageContainer>
     </AdminGuard>

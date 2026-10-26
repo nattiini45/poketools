@@ -1,7 +1,8 @@
 /**
  * The two detail routes. League detail: the live per-league gate runs before any read (a malformed id is a 404,
  * a non-admin gets the guard, an admin of another league or a tournament-only admin the forbidden notice), then
- * one `loadLeagueFormat`. Example detail: any admin, a known preset only, no data read.
+ * one `loadLeagueFormat`; a league with phases offers "Copy as a new format" with the structure document built on
+ * the server. Example detail: any admin, a known preset only, no data read, with the fork button.
  */
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -33,6 +34,7 @@ vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('NEXT_NOT_FOUND');
   },
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock('@/i18n/server', async () => {
   const { createTranslator } = await import('@/i18n/core');
@@ -55,12 +57,17 @@ vi.mock('@/lib/format-studio/loader', async () => {
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/shared/ResourceForbidden', () => stub('ResourceForbidden'));
 vi.mock('@/components/format-studio/FormatDetail', () => stub('FormatDetail'));
+vi.mock('@/components/format-studio/starts/ForkPresetButton', () => stub('ForkPresetButton'));
+vi.mock('@/components/format-studio/starts/CopyLeagueStructureButton', () => stub('CopyLeagueStructureButton'));
 
 import LeaguePage, { generateMetadata as leagueMetadata } from '../league/[id]/page';
 import ExamplePage, { generateMetadata as exampleMetadata } from '../example/[presetId]/page';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
 import FormatDetail from '@/components/format-studio/FormatDetail';
+import ForkPresetButton from '@/components/format-studio/starts/ForkPresetButton';
+import CopyLeagueStructureButton from '@/components/format-studio/starts/CopyLeagueStructureButton';
+import { PRESETS, type FormatDefinition } from '@/lib/format-kit/client';
 
 const LEAGUE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -69,7 +76,15 @@ function access(flags: { isSiteAdmin?: boolean; isAnyAdmin?: boolean }) {
 }
 
 const league = { id: LEAGUE_ID, name: 'Spring League', format_type: 'singles' };
-const okResult = { kind: 'ok', view: { ok: true, marker: 'view' }, editorLinks: { epb: '/x' } };
+/** A league's descriptor: a format with a module (league tuning) and a named ruleset, as the loader can return. */
+function leagueDefinition(): FormatDefinition {
+  const base = structuredClone(PRESETS[0].definition) as FormatDefinition;
+  base.identity.based_on = 'classic-league';
+  base.stages[0].ruleset = { kind: 'ruleset', id: 'rs-league' };
+  base.modules = [{ kind: 'module.legacy', adapter: 'core_liga', facts: [] }];
+  return base;
+}
+const okResult = { kind: 'ok', view: { ok: true, marker: 'view', definition: leagueDefinition() }, editorLinks: { epb: '/x' } };
 
 function findByType(node: ReactNode, type: unknown): ReactElement<Record<string, unknown>>[] {
   const found: ReactElement<Record<string, unknown>>[] = [];
@@ -211,6 +226,46 @@ describe('league format page', () => {
   });
 });
 
+describe('league format page: copy as a new format', () => {
+  it('offers the copy with a structure document built on the server: no modules, no named rulesets, no based_on', async () => {
+    const tree = await LeaguePage(leagueParams(LEAGUE_ID));
+    const copy = findByType(tree, CopyLeagueStructureButton);
+    expect(copy).toHaveLength(1);
+    const document = copy[0].props.definition as FormatDefinition;
+    expect(document.modules).toEqual([]);
+    expect(document.stages[0].ruleset).toEqual({ kind: 'season_default' });
+    expect(document.identity.based_on).toBeUndefined();
+    expect(document.stages).toHaveLength(okResult.view.definition.stages.length);
+    expect(JSON.stringify(document)).not.toContain('rs-league');
+    expect(JSON.stringify(document)).not.toContain('core_liga');
+  });
+
+  it('the copy sits before the detail and the page still shows the detail', async () => {
+    const tree = await LeaguePage(leagueParams(LEAGUE_ID));
+    expect(findByType(tree, FormatDetail)).toHaveLength(1);
+  });
+
+  it('a league without phases offers no copy', async () => {
+    mocks.loadLeagueFormat.mockResolvedValue({ kind: 'no_phases' });
+    const tree = await LeaguePage(leagueParams(LEAGUE_ID));
+    expect(findByType(tree, CopyLeagueStructureButton)).toHaveLength(0);
+  });
+
+  it('a league whose format could not be shown offers no copy', async () => {
+    mocks.loadLeagueFormat.mockResolvedValue({ ...okResult, view: { ok: false, definition: null } });
+    const tree = await LeaguePage(leagueParams(LEAGUE_ID));
+    expect(findByType(tree, CopyLeagueStructureButton)).toHaveLength(0);
+    expect(findByType(tree, FormatDetail)).toHaveLength(1);
+  });
+
+  it('nobody who fails the gate gets the copy button or a structure document', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    mocks.isResourceAdminFor.mockResolvedValue(false);
+    const tree = await LeaguePage(leagueParams(LEAGUE_ID));
+    expect(findByType(tree, CopyLeagueStructureButton)).toHaveLength(0);
+  });
+});
+
 describe('example format page', () => {
   it.each(['nope', '../league', 'CLASSIC-LEAGUE', 'classic-league/', '', 'constructor'])('%j is a 404', async (presetId) => {
     await expect(ExamplePage(exampleParams(presetId))).rejects.toThrow('NEXT_NOT_FOUND');
@@ -235,6 +290,20 @@ describe('example format page', () => {
     expect((detail[0].props.view as { ok: boolean }).ok).toBe(true);
     expect(mocks.isResourceAdminFor).not.toHaveBeenCalled();
     for (const read of leagueReads()) expect(read).not.toHaveBeenCalled();
+  });
+
+  it.each(['classic-league', 'cup', 'swiss-top-cut'])('%s: offers the fork button for that preset', async (presetId) => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    const tree = await ExamplePage(exampleParams(presetId));
+    const fork = findByType(tree, ForkPresetButton);
+    expect(fork).toHaveLength(1);
+    expect(fork[0].props.presetId).toBe(presetId);
+  });
+
+  it('a viewer who fails the gate gets no fork button', async () => {
+    mocks.getLiveAccess.mockResolvedValue(null);
+    const tree = await ExamplePage(exampleParams('cup'));
+    expect(findByType(tree, ForkPresetButton)).toHaveLength(0);
   });
 
   it('titles the page with the example name in the viewer language and links back to the gallery', async () => {

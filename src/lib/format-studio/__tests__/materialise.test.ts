@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CURRENT_ENV, PRESETS, compile, ltext, type CountRange, type FormatDefinition, type SeriesOverride, type Stage } from '@/lib/format-kit';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';
-import { mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
+import { STAGE_NAME_MAX_CHARS, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
 
 const preset = (id: string): FormatDefinition => {
   const found = PRESETS.find((entry) => entry.id === id);
@@ -256,6 +256,10 @@ describe('planStages', () => {
       const definition = preset('cup');
       definition.stages[0].name = ltext('en', 'Only English');
       expect(plan(definition, { seasonLanguage: 'de' }, 16).stages[0].name).toBe('Only English');
+    });
+
+    it('keeps the stage name cut equal to the title limit of the validation module', () => {
+      expect(STAGE_NAME_MAX_CHARS).toBe(FIELD_LIMITS.TITLE);
     });
 
     it('cuts a long name to the title limit', () => {
