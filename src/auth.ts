@@ -200,6 +200,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientId: discordEnv.DISCORD_CLIENT_ID,
       clientSecret: discordEnv.DISCORD_CLIENT_SECRET,
       checks: ['state'],
+      // Discord sends an RFC 9207 `iss` parameter on the callback. Without an issuer Auth.js compares it with its
+      // "https://authjs.dev" placeholder and every sign-in fails. The token and userinfo URLs stay absolute, so this
+      // adds no discovery request.
+      issuer: 'https://discord.com',
     }),
     Credentials({
       credentials: {
