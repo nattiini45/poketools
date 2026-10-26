@@ -3,7 +3,8 @@
 /**
  * Compare up to three lines side by side (draft-frontend §5.5, SPEC:423-431):
  * price, types per stage, evolution requirements and the active filters
- * (✓/✕). A collapsible strip at the bottom of the left column.
+ * (✓/✕). A collapsible strip at the bottom of the left column (the shared
+ * `Disclosure`, which the tray opens itself when the first line arrives).
  */
 import { useState } from 'react';
 import { X } from 'lucide-react';
@@ -17,8 +18,9 @@ import { MAX_COMPARE } from '@/lib/draft-finder/filter-types';
 import type { DraftLineCatalog, DraftLineCatalogEntry } from '@/lib/draft-finder/line-catalog';
 import { pkmnNameResolver } from '@/lib/draft-finder/names-port';
 import type { PreparedIndex } from '@/lib/draft-finder/prepare';
+import type { CriterionLabel } from '../right/finder-labels';
 import type { LineId } from '@/lib/draft-ui/snapshot-types';
-import type { CriterionLabel } from './criterion-text';
+import Disclosure from '../shared/Disclosure';
 import styles from '../draft-tool.module.css';
 
 export interface CompareTrayProps {
@@ -137,14 +139,7 @@ export default function CompareTray({ lineIds, catalog, ix, evaluations, criteri
   }
 
   return (
-    <details
-      className="rounded-lg border border-[var(--draft-border)] p-2"
-      open={open}
-      onToggle={(e) => setOpen(e.currentTarget.open)}
-    >
-      <summary className={`${styles.focusable} cursor-pointer rounded text-sm font-semibold`}>
-        {t('compare.title', { n: entries.length, max: MAX_COMPARE })}
-      </summary>
+    <Disclosure summary={t('compare.title', { n: entries.length, max: MAX_COMPARE })} open={open} onOpenChange={setOpen}>
       {entries.length === 0 ? (
         <p className="mt-1 text-sm text-[var(--draft-ink-2)]">{t('compare.empty')}</p>
       ) : (
@@ -162,6 +157,6 @@ export default function CompareTray({ lineIds, catalog, ix, evaluations, criteri
           ))}
         </ul>
       )}
-    </details>
+    </Disclosure>
   );
 }

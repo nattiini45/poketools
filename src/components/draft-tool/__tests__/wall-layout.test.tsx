@@ -10,19 +10,22 @@ import { BANNED, buildFixtureCatalog, buildFixtureIndex, stubNames } from '@/lib
 import { computeClock } from '@/lib/draft-ui/clock';
 import { toDraftViewModel, type CardState } from '@/lib/draft-ui/snapshot-adapter';
 import { snapshot } from '@/lib/draft-ui/__tests__/fixtures';
+import DraftToolClient from '../DraftToolClient';
 import DraftToolScreen, { type DraftToolScreenProps } from '../DraftToolScreen';
 import { applyStickyOffsets, observeStickyOffsets } from '../hooks/use-sticky-offsets';
 import { NOTIFY_UNSUPPORTED } from '../hooks/use-turn-watch';
 import FilterPanel from '../right/FilterPanel';
 import FinderBar from '../right/FinderBar';
-import RosterCard from '../right/RosterCard';
+import RosterCard, { CARD_SPRITE_PX, FOOTER_SPRITE_PX } from '../right/RosterCard';
 import styles from '../draft-tool.module.css';
 
 /**
  * The line wall's layout contract (owner feedback 2026-10-18): the grid scrolls inside the wall pane from
- * 1024 px, the price tabs are pinned on top of the wall at every breakpoint, every card has one size and one
- * inner grid with or without a branch, the search field keeps a real width, and the sticky offsets are
- * measured instead of a silent 64 px fallback.
+ * 1024 px (and, beside it, the left column in its own scroller; the page header is the screen's first row, so
+ * the document never scrolls there), the price tabs are pinned on top of the wall at every breakpoint, every card has one size and one
+ * row skeleton with or without a branch footer, the card's slant lives in ONE frame layer (no counter-skewed
+ * content, so the wall never scrolls sideways), the search field keeps a real width, and the sticky offsets
+ * are measured instead of a silent 64 px fallback.
  */
 
 vi.mock('@/components/shared/PokemonSprite', () => ({
@@ -66,12 +69,42 @@ describe('wall layout CSS', () => {
     expect(desktop).toMatch(/overflow-y: auto;/);
     expect(desktop).toMatch(/min-height: 0;/);
     expect(desktop).toMatch(/flex: 1 1 auto;/);
-    // The screen has a bounded height there (the grid's scroll range), minus the public layout's main padding,
-    // so the page itself does not scroll past it.
-    expect(rule('.screen', media('(min-width: 1024px)', '.screen'))).toMatch(
-      /height: calc\(100dvh - var\(--nav-h\) - var\(--draft-page-pad-y\)\);/,
-    );
+    // The screen has a bounded height there (the grid's scroll range): the viewport minus the nav and the public
+    // layout's main padding. The page header is the screen's own first row, so nothing else is subtracted and the
+    // page itself does not scroll past it.
+    const screen = rule('.screen', media('(min-width: 1024px)', '.screen'));
+    expect(screen).toMatch(/height: calc\(100dvh - var\(--nav-h\) - var\(--draft-page-pad-y\)\);/);
     expect(CSS).toMatch(/--draft-page-pad-y: 3rem;/);
+    // The floor: in a very short window the page scrolls instead of crushing the panes.
+    expect(screen).toMatch(/min-height: 600px;/);
+  });
+
+  it('gives the page header its own grid row, ahead of the clock row, so it sits inside the fixed height', () => {
+    // Phones and tablets: sorted first, full width; no fixed height there.
+    expect(rule('.screenHeader')).toMatch(/order: 0;/);
+    expect(CSS).toMatch(/\.screenHeader,\s*\.clockRow,\s*\.orderRow \{\s*grid-column: 1 \/ -1;/);
+    // Tablet rows (header, clock, panes; the order strip is hidden) and the desktop's extra row for the strip.
+    expect(rule('.screen', media('(min-width: 768px)', '.screen'))).toMatch(/grid-template-rows: auto auto minmax\(0, 1fr\);/);
+    expect(rule('.screenWithHeader', media('(min-width: 1024px)', '.screenWithHeader'))).toMatch(
+      /grid-template-rows: auto auto auto minmax\(0, 1fr\);/,
+    );
+    // The root takes the extra track only when it has a header; the header row precedes the clock row.
+    expect(SCREEN_SRC).toMatch(/header \? `\$\{styles\.root\} \$\{styles\.screen\} \$\{styles\.screenWithHeader\}`/);
+  });
+
+  it('scrolls the left column in an inner scroller, so its scrollbar stays clear of the diagonal clip', () => {
+    // The clipped frame is not a scroller; the scroller ends 3.75rem short of its right edge (the diagonal takes 48px).
+    const frame = rule('.stagePane', media('(min-width: 1024px)', '.stagePane'));
+    expect(frame).toMatch(/clip-path: polygon\(/);
+    expect(frame).toMatch(/padding-right: 3\.75rem;/);
+    expect(frame).not.toMatch(/overflow/);
+    const scroller = rule('.stageScroll', media('(min-width: 1024px)', '.stageScroll'));
+    expect(scroller).toMatch(/overflow-y: auto;/);
+    expect(scroller).toMatch(/min-height: 0;/);
+    expect(scroller).toMatch(/flex: 1 1 auto;/);
+    expect(scroller).toMatch(/padding-right: 0;/);
+    // Phones dissolve both, so the card, the dock and the extras still order around the wall.
+    expect(CSS).toMatch(/\.stagePane,\s*\.stageScroll \{\s*display: contents;/);
   });
 
   it('clips the wall pane without making it a scroller, so sticky tabs reach the viewport below 1024 px', () => {
@@ -95,8 +128,10 @@ describe('wall layout CSS', () => {
     expect(phoneRow).toMatch(/top: var\(--nav-h\);/);
     // The bar is not sticky on its own anywhere: its parent is exactly its height.
     expect(CSS).not.toMatch(/\.clockBar \{[^}]*position: sticky;/);
-    // The row is a direct child of the screen (the tall containing block it sticks within).
-    expect(SCREEN_SRC).toMatch(/className=\{`\$\{styles\.root\} \$\{styles\.screen\}`\}>\s*<div ref=\{clockRowRef\} className=\{styles\.clockRow\}>/);
+    // The row is a direct child of the screen (the tall containing block it sticks within), right after the header.
+    expect(SCREEN_SRC).toMatch(
+      /<div ref=\{rootRef\} className=\{screenClass\}>\s*\{header \? <div className=\{styles\.screenHeader\}>\{header\}<\/div> : null\}\s*<div ref=\{clockRowRef\} className=\{styles\.clockRow\}>/,
+    );
   });
 
   it('defines --nav-h once on the root instead of a silent 64 px fallback', () => {
@@ -104,22 +139,82 @@ describe('wall layout CSS', () => {
     expect(rule('.tokens,\n.root')).toMatch(/--nav-h: calc\(4rem \+ 1px\);/);
   });
 
-  it('gives every card one height token and one fixed inner grid, rows included', () => {
+  it('gives every card one height token and one fixed row skeleton, rows included', () => {
     const tokens = rule('.tokens,\n.root');
-    for (const token of ['--draft-card-h', '--draft-card-sprite', '--draft-card-name', '--draft-card-meta', '--draft-card-branch']) {
+    for (const token of [
+      '--draft-card-h',
+      '--draft-card-head',
+      '--draft-card-sprite',
+      '--draft-card-name',
+      '--draft-card-meta',
+      '--draft-card-footer',
+    ]) {
       expect(tokens).toContain(`${token}:`);
     }
+    // The card is the sum of its rows plus the frame's two borders.
+    const height = tokens.replace(/\s+/g, ' ');
+    for (const part of ['--draft-card-head', '--draft-card-sprite', '--draft-card-name', '--draft-card-meta', '--draft-card-footer']) {
+      expect(height).toMatch(new RegExp(`--draft-card-h: calc\\([^;]*var\\(${part}\\)`));
+    }
+    expect(height).toMatch(/--draft-card-h: calc\([^;]*2 \* var\(--draft-card-border\)/);
     expect(rule('.card')).toMatch(/height: var\(--draft-card-h\);/);
     expect(rule('.wallGrid')).toMatch(/grid-auto-rows: var\(--draft-card-h\);/);
-    const body = rule('.cardBody');
-    expect(body).toMatch(/display: grid;/);
-    expect(body.replace(/\s+/g, ' ')).toContain(
-      'grid-template-rows: var(--draft-card-sprite) var(--draft-card-name) var(--draft-card-meta) var(--draft-card-branch);',
+    const card = rule('.card');
+    expect(card).toMatch(/display: grid;/);
+    expect(card.replace(/\s+/g, ' ')).toContain(
+      'grid-template-rows: var(--draft-card-head) var(--draft-card-sprite) var(--draft-card-name) var(--draft-card-meta) var(--draft-card-footer);',
     );
-    expect(rule('.cardBranch')).toMatch(/height: var\(--draft-card-branch\);/);
-    const ellipsis = rule('.cardName,\n.cardMeta,\n.cardBranchLabel');
+    const ellipsis = rule('.cardName,\n.cardMeta');
     expect(ellipsis).toMatch(/text-overflow: ellipsis;/);
     expect(ellipsis).toMatch(/white-space: nowrap;/);
+    // The footer name wraps to two lines (a clamp), it is not an ellipsised single line.
+    expect(rule('.cardFooterName')).toMatch(/-webkit-line-clamp: 2;/);
+  });
+
+  it('keeps the sprite constants of the card in step with the CSS boxes they fill', () => {
+    const tokens = rule('.tokens,\n.root');
+    const rem = (name: string) => Number(new RegExp(`${name}: ([\\d.]+)rem;`).exec(tokens)?.[1]) * 16;
+    expect(rem('--draft-card-sprite')).toBe(CARD_SPRITE_PX);
+    expect(rem('--draft-card-footer-sprite')).toBe(FOOTER_SPRITE_PX);
+  });
+
+  it('defines the card skew once (−6deg, −8deg from 1024 px) and derives every slant length from it', () => {
+    expect(CSS.match(/--draft-card-skew:/g)).toHaveLength(2);
+    expect(rule('.tokens,\n.root')).toMatch(/--draft-card-skew: -6deg;/);
+    expect(rule('.tokens,\n  .root', media('(min-width: 1024px)', '.tokens,\n  .root'))).toMatch(/--draft-card-skew: -8deg;/);
+    // No hand-written angle anywhere else: the frame, the dock tiles (and their lean-back) all read the token.
+    const angles = [...CSS.matchAll(/skewX\(([^;]*)\);/g)].map((m) => m[1]);
+    expect(angles).toHaveLength(4);
+    for (const angle of angles) expect(angle).toContain('var(--draft-card-skew)');
+    // The grid pads its sides by the corner overhang plus the ring; no overflow-x rule hides a scrollbar.
+    const tokens = rule('.tokens,\n.root').replace(/\s+/g, ' ');
+    expect(tokens).toMatch(/--draft-card-overhang: calc\(var\(--draft-card-h\) \/ 2 \* tan\(var\(--draft-card-skew\)\) \* -1\);/);
+    expect(tokens).toMatch(/--draft-card-grid-inset: calc\(var\(--draft-card-overhang\) \+ var\(--draft-card-ring\)\);/);
+    expect(rule('.wallGrid')).toMatch(/padding-inline: var\(--draft-card-grid-inset\);/);
+    expect(rule('.wallGrid')).toMatch(/minmax\(var\(--draft-card-min\), 1fr\)/);
+    // The structural fix is the padding; no sideways overflow rule on the scroller or the grid hides a bar.
+    expect(rule('.wallGrid')).not.toMatch(/overflow/);
+    expect(media('(min-width: 1024px)', '.wallScroll')).not.toMatch(/overflow-x/);
+  });
+
+  it('carries the slant in the frame layer only: no transformed element inside the card', () => {
+    expect(rule('.cardFrame')).toMatch(/transform: skewX\(var\(--draft-card-skew\)\);/);
+    // Every other `.card*` rule (content rows, the footer plate inside the frame) is free of transforms.
+    const cardRules = [...CSS.matchAll(/(?:^|\n)(\.card\w*)(?:[^{}]*)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1], body: m[2] }));
+    expect(cardRules.length).toBeGreaterThan(8);
+    expect(cardRules.filter((r) => /transform:/.test(r.body)).map((r) => r.selector)).toEqual(['.cardFrame']);
+    // The frame sits behind the content without leaving the card, and keeps the state colour classes' hands off.
+    expect(rule('.card')).toMatch(/isolation: isolate;/);
+    expect(rule('.cardFrame')).toMatch(/z-index: -1;/);
+    expect(rule('.cardFrame')).not.toMatch(/border:|border-color:/);
+  });
+
+  it('puts the head row on one centre line, shifted by the slant at its own height', () => {
+    const head = rule('.cardHead');
+    expect(head).toMatch(/align-items: center;/);
+    expect(head).toMatch(/justify-content: space-between;/);
+    expect(head).toMatch(/left: var\(--draft-card-head-shift\);/);
+    expect(rule('.cardFooter')).toMatch(/right: var\(--draft-card-footer-shift\);/);
   });
 });
 
@@ -161,9 +256,9 @@ function rows(html: string): string[] {
   );
 }
 
-/** The class tokens of the card's outer frame (`styles.card ...`). */
+/** The class tokens of the card's frame layer (`styles.cardFrame ...`). */
 function frameClasses(html: string): string[] {
-  const cls = new RegExp(`class="(${styles.card} [^"]*)"`).exec(html)?.[1] ?? '';
+  const cls = new RegExp(`class="(${styles.cardFrame} [^"]*)"`).exec(html)?.[1] ?? '';
   return cls.split(/\s+/).filter(Boolean);
 }
 
@@ -173,21 +268,24 @@ function borderWidths(tokens: readonly string[]): string[] {
 }
 
 describe('RosterCard structure', () => {
-  // The four rows in order, each with the same full class list on every card variant.
+  // The five rows in order, each with the same full class list on every card variant.
   const SKELETON = rows(card('gastly--gengar'));
 
-  it('renders the same rows with and without a branch, the branch row reserved but empty when unused', () => {
+  it('renders the same rows with and without a branch, the footer reserved but empty when unused', () => {
     const branched = card('teddiursa--ursalunabloodmoon');
     const plain = card('gastly--gengar');
-    expect(SKELETON.map((r) => r.split(':')[0])).toEqual(['sprite', 'name', 'meta', 'branch']);
-    expect(SKELETON[0]).toContain(styles.cardSprite);
-    expect(SKELETON[3]).toContain(styles.cardBranch);
+    expect(SKELETON.map((r) => r.split(':')[0])).toEqual(['head', 'sprite', 'name', 'meta', 'footer']);
+    expect(SKELETON[0]).toContain(styles.cardHead);
+    expect(SKELETON[1]).toContain(styles.cardSprite);
+    expect(SKELETON[4]).toContain(styles.cardFooter);
     expect(rows(branched)).toEqual(SKELETON);
     expect(rows(plain)).toEqual(SKELETON);
-    expect(plain).toMatch(/data-card-row="branch" data-branch="false" aria-hidden="true"><\/span>/);
-    expect(branched).toContain('data-branch="true"');
-    // Both cards carry the fixed-size frame class.
-    for (const html of [branched, plain]) expect(html).toMatch(new RegExp(`class="${styles.card} `));
+    expect(plain).toMatch(/data-card-row="footer" data-branch="false" aria-hidden="true"><\/span>/);
+    expect(branched).toContain('data-card-row="footer" data-branch="true"');
+    // The option is the unskewed grid cell; the frame is its first child.
+    for (const html of [branched, plain]) {
+      expect(html).toMatch(new RegExp(`class="${styles.card} [^"]*"[^>]*><span aria-hidden="true" class="${styles.cardFrame} `));
+    }
   });
 
   it('keeps the same rows for drafted, mine, blocked and pinned cards (the owner row is always there)', () => {
@@ -198,21 +296,91 @@ describe('RosterCard structure', () => {
     expect(card('mona--x')).toMatch(/data-card-row="meta" aria-hidden="true"><\/span>/);
   });
 
-  it('truncates a long branch label and names it in a title', () => {
+  it('slants only the frame layer: no skew utility, no counter-skew, and the dimming sits on the whole card', () => {
+    for (const html of [card('teddiursa--ursalunabloodmoon'), card('mona--x', 'blocked', null, true)]) {
+      expect(html).not.toMatch(/skew-x|skewX/);
+      expect(html.match(new RegExp(`class="${styles.cardFrame} `, 'g'))).toHaveLength(1);
+    }
+    const blocked = card('mona--x', 'blocked');
+    expect(new RegExp(`class="${styles.card} [^"]*grayscale`).test(blocked)).toBe(true);
+    expect(frameClasses(blocked).includes('grayscale')).toBe(false);
+  });
+
+  it('shows the final stage in the footer of a branched line: blob sprite, arrow icon, full name in the title', () => {
     const html = card('teddiursa--ursalunabloodmoon');
-    const branch = /data-card-row="branch" data-branch="true" title="([^"]+)"/.exec(html);
-    expect(branch?.[1]).toMatch(/^→ /);
-    expect(html).toContain(`class="${styles.cardBranchLabel}">${branch?.[1]}</span>`);
+    const footer = /data-card-row="footer" data-branch="true" title="([^"]+)"/.exec(html);
+    expect(footer?.[1]).toMatch(/^→ /);
+    const finalName = footer?.[1].slice(2) ?? '';
+    expect(finalName.length).toBeGreaterThan(0);
+    expect(html).toContain(`class="${styles.cardFooterName}">${finalName}</span>`);
+    expect(html).toContain(`data-sprite="${finalName}"`);
+    expect(html).toContain(`data-size="${FOOTER_SPRITE_PX}"`);
+    // The arrow is a decorative icon, not a glyph in the text.
+    expect(html).toMatch(new RegExp(`<svg[^>]*class="[^"]*lucide-arrow-right ${styles.cardFooterArrow}[^"]*" aria-hidden="true"`));
+    // The slanted plate is a layer inside the frame, only when there is a footer.
+    expect(html.match(new RegExp(styles.cardFooterPlate, 'g'))).toHaveLength(1);
+    expect(card('gastly--gengar')).not.toContain(styles.cardFooterPlate);
+  });
+
+  it('puts the star cluster first and the price pill last in the head row, the lock next to the pill', () => {
+    const plain = card('mona--x');
+    const star = plain.indexOf('data-favorite');
+    const pill = plain.indexOf(' P</span>');
+    expect(plain.indexOf('data-card-row="head"')).toBeLessThan(star);
+    expect(star).toBeLessThan(pill);
+    const blocked = card('mona--x', 'blocked');
+    const lock = blocked.indexOf('<svg aria-hidden="true" width="12"');
+    expect(lock).toBeGreaterThan(blocked.indexOf('data-favorite'));
+    expect(lock).toBeLessThan(blocked.indexOf(' P</span>'));
+  });
+
+  it('draws the favourite star as a gold SVG: outline when not a favourite, filled when it is', () => {
+    const star = (isFavorite: boolean) =>
+      renderWithI18n(
+        <RosterCard
+          entry={entryOf('mona--x')}
+          state="available"
+          ownerName={null}
+          isPinned={false}
+          isFavorite={isFavorite}
+          inCompare={false}
+          reasonText={null}
+          names={stubNames}
+          dl="en"
+        />,
+      );
+    const off = star(false);
+    const on = star(true);
+    expect(off).toContain('data-favorite="false"');
+    expect(off).toContain('data-filled="false"');
+    expect(off).toContain('fill-transparent');
+    expect(on).toContain('data-favorite="true"');
+    expect(on).toContain('data-filled="true"');
+    expect(on).toContain('fill-[color:var(--draft-star)]');
+    // The gold is the token in both states, not a text glyph and not the world accent.
+    for (const html of [off, on]) {
+      expect(html).toContain('stroke-[color:var(--draft-star)]');
+      expect(html).not.toMatch(/[★☆]/);
+    }
   });
 
   it('draws the pinned ring as a shadow, not a thicker border (same inner size)', () => {
     const pinned = frameClasses(card('mona--x', 'available', null, true));
     const plain = frameClasses(card('mona--x'));
     expect(pinned.length).toBeGreaterThan(0);
-    // Same border widths as an unpinned card: only colour and the box-shadow ring differ.
-    expect(borderWidths(pinned)).toEqual(borderWidths(plain));
+    // The border width is the frame rule's token for every state; no width utility on the frame.
+    expect(borderWidths(pinned)).toEqual([]);
+    expect(borderWidths(plain)).toEqual([]);
+    expect(rule('.cardFrame')).toMatch(/border-width: var\(--draft-card-border\);/);
     expect(pinned.some((t) => t.startsWith('shadow-[0_0_0_1px_var(--draft-accent'))).toBe(true);
     expect(plain.some((t) => t.startsWith('shadow-[0_0_0_1px'))).toBe(false);
+  });
+
+  it('shows the keyboard focus ring on the slanted frame, not on the unskewed option', () => {
+    const html = card('mona--x');
+    expect(rule('.card:focus-visible > .cardFrame')).toMatch(/outline: 2px solid var\(--poke-focus\);/);
+    expect(new RegExp(`class="${styles.card} [^"]*outline-none`).test(html)).toBe(true);
+    expect(html).not.toContain('focus-visible:outline');
   });
 });
 
@@ -236,6 +404,8 @@ function screenProps(view: FinderViewState): DraftToolScreenProps {
     adminOverride: false,
     links: { redraft: '/r', tokens: '/t', admin: null, adminAudit: null, trainerCreator: '/c' },
     ix,
+    weaknessStage: 'final',
+    onWeaknessStage: noop,
   };
 }
 
@@ -280,6 +450,57 @@ describe('DraftToolScreen wall order', () => {
     const html = renderWithI18n(<DraftToolScreen {...screenProps(view)} />);
     const cls = /role="tablist"[^>]*class="([^"]*)"/.exec(html)?.[1] ?? '';
     expect(cls.split(' ')).toEqual(expect.arrayContaining(['overflow-x-auto', 'md:flex-wrap', 'md:overflow-x-visible']));
+  });
+});
+
+describe('DraftToolScreen page header', () => {
+  const view = initialFinderState();
+
+  it('renders the host header as the first row of the screen, before the clock row', () => {
+    const html = renderWithI18n(<DraftToolScreen {...screenProps(view)} header={<h1>Room title</h1>} />);
+    const root = html.indexOf(`<div class="${styles.root} ${styles.screen} ${styles.screenWithHeader}">`);
+    const header = html.indexOf(`<div class="${styles.screenHeader}"><h1>Room title</h1></div>`);
+    const clock = html.indexOf(`class="${styles.clockRow}"`);
+    expect(root).toBe(0);
+    expect(header).toBeGreaterThan(root);
+    expect(clock).toBeGreaterThan(header);
+  });
+
+  it('adds no header row or track without one (the dev preview keeps its picker outside)', () => {
+    const html = renderWithI18n(<DraftToolScreen {...screenProps(view)} />);
+    expect(html.startsWith(`<div class="${styles.root} ${styles.screen}">`)).toBe(true);
+    expect(html).not.toContain(`class="${styles.screenHeader}"`);
+    expect(html).not.toContain(styles.screenWithHeader);
+  });
+
+  it('keeps the header above the loading placeholder while there is no snapshot yet', () => {
+    const html = renderWithI18n(
+      <DraftToolClient
+        header={<h1>Room title</h1>}
+        poolId="pool"
+        seasonId="season"
+        leagueName="League"
+        catalog={catalog}
+        initialSnapshot={null}
+        indexUrl="/index"
+        viewer={{ playerId: null, isSiteAdmin: false }}
+        links={screenProps(view).links}
+      />,
+    );
+    expect(html).toContain(`<div class="${styles.screenHeader}"><h1>Room title</h1></div>`);
+    expect(html.indexOf('role="status"')).toBeGreaterThan(html.indexOf('Room title'));
+  });
+
+  it('wraps the whole left column in one scroller inside the frame, before the wall', () => {
+    const html = renderWithI18n(<DraftToolScreen {...screenProps(initialFinderState({ pinnedLineId: 'gastly--gengar' }))} />);
+    const open = `<div class="${styles.stagePane}"><div class="${styles.stageScroll}">`;
+    expect(html).toContain(open);
+    // The frame holds nothing but the scroller: the dock and the extras are inside it.
+    const scroller = html.indexOf(open);
+    const wall = html.indexOf(`class="${styles.wallPane}"`);
+    expect(html.indexOf(`class="${styles.extras}"`)).toBeGreaterThan(scroller);
+    expect(html.indexOf(`class="${styles.extras}"`)).toBeLessThan(wall);
+    expect(html.indexOf(styles.ctaDock)).toBeGreaterThan(scroller);
   });
 });
 

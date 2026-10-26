@@ -7,6 +7,7 @@
  * the typing only. The picked relation is finder view state (`filterSheet.defenseRelation`), so it survives
  * closing the sheet.
  */
+import SegmentedControl from '@/components/draft-tool/shared/SegmentedControl';
 import TypeBadge from '@/components/shared/TypeBadge';
 import { useT } from '@/i18n/client';
 import { draftFinderMessages } from '@/i18n/messages/draft/finder';
@@ -26,44 +27,16 @@ export default function DefenseFilter({ view, dispatch, names, dl }: FilterSecti
 
   return (
     <section aria-label={heading}>
-      <div
-        role="radiogroup"
-        aria-label={t('defense.relationLabel')}
-        className="mb-2 inline-flex overflow-hidden rounded-poke-md border border-[var(--draft-border,var(--poke-border))] text-xs"
-        onKeyDown={(e) => {
-          const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
-          if (step === 0) return;
-          e.preventDefault();
-          const next = RELATIONS[(RELATIONS.indexOf(relation) + step + RELATIONS.length) % RELATIONS.length];
-          setRelation(next);
-          e.currentTarget.querySelector<HTMLButtonElement>(`[data-relation="${next}"]`)?.focus();
-        }}
-      >
-        {RELATIONS.map((r) => {
+      <SegmentedControl<DefenseRelation>
+        value={relation}
+        onChange={setRelation}
+        ariaLabel={t('defense.relationLabel')}
+        className="mb-2"
+        options={RELATIONS.map((r) => {
           const count = picked.filter((d) => d.relation === r).length;
-          return (
-            <button
-              key={r}
-              type="button"
-              role="radio"
-              data-relation={r}
-              aria-checked={relation === r}
-              tabIndex={relation === r ? 0 : -1}
-              onClick={() => setRelation(r)}
-              className={cn(
-                'min-h-[44px] px-2.5 py-1 font-semibold md:min-h-0',
-                relation === r
-                  ? 'bg-[var(--draft-accent,var(--poke-accent))] text-[var(--poke-surface)]'
-                  : 'bg-[var(--draft-surface,var(--poke-surface))] text-[var(--draft-ink-2,var(--poke-text-secondary))]',
-                FOCUS_RING,
-              )}
-            >
-              {t(`defense.relation.${r}`)}
-              {count > 0 && <span className="ml-1 tabular-nums">({count})</span>}
-            </button>
-          );
+          return { value: r, label: count > 0 ? `${t(`defense.relation.${r}`)} (${count})` : t(`defense.relation.${r}`) };
         })}
-      </div>
+      />
 
       <div role="group" aria-label={t('defense.typesLabel')} className="flex flex-wrap gap-1.5">
         {ALL_TYPES.map((type) => {

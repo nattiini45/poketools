@@ -6,7 +6,10 @@
  * locale (`NameResolver`), every other word from `draft/finder`, `draft/shared` or `glossary`.
  *
  * The pure functions take a `FinderLabelContext`; components build one with `useFinderLabelContext()`.
- * DF2a's `MatchExplanation` and `CompareTray` can render criteria through the same functions.
+ * This file is the one implementation of the match explanation: the hover popover and the pinned line's
+ * panel render their rows through `shared/MatchReasons`, and the compare tray labels its criteria with
+ * `criterionLabel`. A result names the Pokémon of the stage it first holds on ("Spikes, from Incineroar"),
+ * never a bare stage number.
  */
 import { useMemo } from 'react';
 import { useDataLocale, useT } from '@/i18n/client';
@@ -18,8 +21,8 @@ import { glossaryMessages } from '@/i18n/messages/glossary';
 import { utilityLabel as packUtilityLabel } from '@/lib/format-pack';
 import type { UtilityKey } from '@/types/draft-queue';
 import type { ChipLabelParts } from '@/lib/draft-finder/chips';
-import type { CriterionResult, MatchVia } from '@/lib/draft-finder/engine';
-import type { DefenseRelation, FinderFilters, StatKey } from '@/lib/draft-finder/filter-types';
+import type { CriterionResult, LineEvaluation, MatchVia } from '@/lib/draft-finder/engine';
+import type { DefenseRelation, FinderFilters, StageMode, StatKey } from '@/lib/draft-finder/filter-types';
 import { isTypeId } from '@/lib/draft-finder/index-types';
 import { indexAbilityName, indexMoveName, pkmnNameResolver, type NameResolver } from '@/lib/draft-finder/names-port';
 import type { PreparedIndex } from '@/lib/draft-finder/prepare';
@@ -43,6 +46,15 @@ export function useFinderLabelContext(names: NameResolver = pkmnNameResolver): F
   const dl = useDataLocale();
   return useMemo(() => ({ t, tg, ts, names, dl }), [t, tg, ts, names, dl]);
 }
+
+/** One active criterion with its display text (the compare tray's ✓/✕ rows). */
+export interface CriterionLabel {
+  id: string;
+  label: string;
+}
+
+/** The stages of a line as the catalog holds them: stage number and canonical English species name. */
+export type LineStages = readonly { stage: number; name: string }[];
 
 /** Separator between alternatives of one criterion ("Ground / Water"). */
 const ALTERNATIVES = ' / ';
@@ -73,8 +85,13 @@ export function abilityDisplayName(id: string, ix: PreparedIndex | null, ctx: Fi
   return ix && idx !== undefined ? indexAbilityName(ix.raw, idx, ctx.names, ctx.dl) : id;
 }
 
-/** The text of an active-filter chip. */
-export function chipLabel(parts: ChipLabelParts, ctx: FinderLabelContext): string {
+/**
+ * The text of an active-filter chip. `short` is the visible chip: a utility member is just its move or
+ * ability name (the category is no longer a chip beside it). `full` is `title` and the remove button's
+ * accessible name: it keeps the category in front ("Hazards: Spikes"), so a member chip is told apart from
+ * a move chip of the same name.
+ */
+export function chipLabel(parts: ChipLabelParts, ctx: FinderLabelContext, form: 'short' | 'full'): string {
   switch (parts.kind) {
     case 'type':
       return ctx.names.type(parts.type, ctx.dl);
@@ -84,12 +101,11 @@ export function chipLabel(parts: ChipLabelParts, ctx: FinderLabelContext): strin
       return ctx.names.ability(parts.name, ctx.dl);
     case 'utility':
       return utilityLabel(parts.key, ctx);
-    case 'utilityMember':
-      return ctx.t('chips.utilityMember', {
-        category: utilityLabel(parts.key, ctx),
-        member:
-          parts.memberKind === 'move' ? ctx.names.move(parts.name, ctx.dl) : ctx.names.ability(parts.name, ctx.dl),
-      });
+    case 'utilityMember': {
+      const member =
+        parts.memberKind === 'move' ? ctx.names.move(parts.name, ctx.dl) : ctx.names.ability(parts.name, ctx.dl);
+      return form === 'short' ? member : ctx.t('chips.utilityMember', { category: utilityLabel(parts.key, ctx), member });
+    }
     case 'stat':
       return ctx.t('chips.stat', { stat: statLabel(parts.stat, ctx), n: parts.value });
     case 'price':
@@ -159,10 +175,42 @@ export function viaText(via: MatchVia, ix: PreparedIndex | null, ctx: FinderLabe
   }
 }
 
-/** "Stealth Rock, from Stage 3"; a line-level reason (price) has no stage; '' when unsatisfied. */
-export function resultText(result: CriterionResult, ix: PreparedIndex | null, ctx: FinderLabelContext): string {
+/**
+ * The localised name of the line's Pokémon at a stage number; null when the line has no such stage. Looks the
+ * stage up by its number, never by array position.
+ */
+export function stageSpecies(stages: LineStages, stage: number, ctx: FinderLabelContext): string | null {
+  const found = stages.find((s) => s.stage === stage);
+  return found ? ctx.names.species(found.name, ctx.dl) : null;
+}
+
+/**
+ * "Stealth Rock, from Incineroar": what satisfied a criterion and the Pokémon of the stage it first holds on.
+ * A line-level reason (the price) names no Pokémon, a stage the line lacks leaves it out; '' when unsatisfied.
+ */
+export function resultText(result: CriterionResult, stages: LineStages, ix: PreparedIndex | null, ctx: FinderLabelContext): string {
   if (!result.satisfied || !result.via) return '';
   const what = viaText(result.via, ix, ctx);
   if (result.via.kind === 'price' || result.firstStage === null) return what;
-  return what ? ctx.t('hover.via', { what, stage: result.firstStage }) : ctx.t('hover.fromStage', { stage: result.firstStage });
+  const species = stageSpecies(stages, result.firstStage, ctx);
+  if (species === null) return what;
+  return what ? ctx.t('hover.via', { what, species }) : ctx.t('hover.fromStage', { species });
+}
+
+/**
+ * The line under several criteria: "All at once – from Incineroar" when they all hold on one Pokémon, "Not
+ * all on the same Pokémon" when the stage mode lets them hold apart and they never meet; null otherwise.
+ */
+export function togetherText(
+  evaluation: LineEvaluation | null,
+  stages: LineStages,
+  stageMode: StageMode,
+  ctx: FinderLabelContext,
+): string | null {
+  if (!evaluation || evaluation.results.length < 2) return null;
+  if (evaluation.simultaneousFromStage !== null) {
+    const species = stageSpecies(stages, evaluation.simultaneousFromStage, ctx);
+    return species === null ? null : ctx.t('hover.allAtOnce', { species });
+  }
+  return stageMode === 'anywhere' && evaluation.matches ? ctx.t('hover.notTogether') : null;
 }

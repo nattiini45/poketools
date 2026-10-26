@@ -205,6 +205,14 @@ describe('finder engine vectors (draft-frontend §4.9)', () => {
     ]);
   });
 
+  it('V12b: the sort stage picks whose stats a stat sort reads', () => {
+    const order = (sortStage: 'base' | 'final') => run({ sort: 'spe', sortStage }).rows.map((r) => r.lineId);
+    // Mona's final stage is the fastest line (110), its base stage the slowest (40).
+    expect(order('final')[0]).toBe('mona--x');
+    expect(order('base').at(-1)).toBe('mona--x');
+    expect(initialFinderState().sortStage).toBe('final');
+  });
+
   it('V13: price tabs on the example list fixture are 12 / 12 / 12 / 12 / 48', () => {
     const price = new Map(fixture.entries.map((e) => [e.line_id, e.price]));
     expect(countByTab(price.keys(), (id) => price.get(id) ?? 0)).toEqual({

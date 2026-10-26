@@ -45,6 +45,12 @@ import { SPRITE_STYLE_PREFERENCES, isSpriteStylePreference, type SpriteStylePref
  * network** (AGENTS.md: automation never spends the Supabase quota), and the
  * route 404s in production like `/route-preview`.
  *
+ * Layout: the scenario picker (a tall dev tool) stays above the screen and the
+ * page scrolls here. It is deliberately NOT passed as the screen's `header`
+ * (the real room does that, `leagues/[id]/draft-room/page.tsx`, so its header
+ * sits inside the fixed desktop height): a picker that tall would crush the
+ * panes of a fixed-height screen.
+ *
  * Query:
  * - `?scenario=<id>` — see `PREVIEW_SCENARIOS` (default `live-my-turn`);
  *   `admin-room` / `admin-room-sheet` show the room's Admin button and its

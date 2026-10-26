@@ -98,8 +98,8 @@ export const PREVIEW_PRESET_LINES = {
 const PRESET_LINES: LineId[] = Object.values(PREVIEW_PRESET_LINES);
 
 /**
- * `live-wall` pins this branched line (the longest branch label in this fixture list: "→ Raichu-Alola", German
- * "→ Alola-Raichu"; real lists have longer ones, e.g. "→ Ursaluna-Bloodmoon", which truncate the same way). Not a
+ * `live-wall` pins this branched line (the longest footer name in this fixture list: "Raichu-Alola", German
+ * "Alola-Raichu"; real lists have longer ones, e.g. "Ursaluna-Bloodmoon", which wrap at the hyphen). Not a
  * reserved preset line: the wall scenario shows whatever state the simulation leaves it in.
  */
 export const PREVIEW_WALL_PIN: LineId = 'pichu--raichualola';
@@ -927,9 +927,9 @@ export function buildPreviewScenario(id: PreviewScenarioId, now: number): Previe
     case 'live-confirm':
       return scenarioOf(id, initialDraft({ now, played: DAWN_TURN, scenarioId: id }), { preset: { pinnedLineId: PREVIEW_PRESET_LINES.confirm, dialog: true } });
     case 'live-wall':
-      // The wall layout: branched and unbranched cards side by side (uniform card grid), drafted / mine /
-      // available states, a long branch label, a scrolling grid under the pinned price tabs with
-      // matching/total counts.
+      // The wall layout: branched cards (with a footer) and unbranched ones (empty footer slot) side by side
+      // (uniform card grid), drafted / mine / available states, a long footer name, a scrolling grid under the
+      // pinned price tabs with matching/total counts.
       return scenarioOf(id, initialDraft({ now, played: DAWN_TURN, scenarioId: id }), {
         preset: { pinnedLineId: PREVIEW_WALL_PIN, filters: filtersOf({ maxPrice: PREVIEW_WALL_MAX_PRICE }) },
       });

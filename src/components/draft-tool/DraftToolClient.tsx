@@ -3,8 +3,10 @@
 /**
  * The EPB pick screen container (draft-frontend §3.1, §5): wires the snapshot
  * poll, the search index, favourites, the finder reducer and engine, the
- * clock, the my-turn watch, toasts, the announcer and the pick dialog, and
- * renders `DraftToolScreen`.
+ * stored weakness-stage preference of the roster dock, the clock, the my-turn watch, toasts, the announcer and the pick dialog, and
+ * renders `DraftToolScreen`. The host's page header (`header`) goes into the
+ * screen as its first row, and above the loading placeholder while there is no
+ * snapshot yet, so the page's title never disappears.
  *
  * Pool admins also get the admin sheet (`RoomAdminSheet`, lazy-loaded via
  * `admin-sheet-loader` on first use): it reads this container's one snapshot
@@ -14,7 +16,7 @@
  * pick applies the response's snapshot, then refreshes the poller. State
  * holds keys and data, never translated text (i18n-core §1.7).
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { commonMessages } from '@/i18n/messages/common';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
@@ -50,7 +52,7 @@ import LiveAnnouncer from './feedback/LiveAnnouncer';
 import { useClock } from './hooks/use-clock';
 import { useDraftSnapshot } from './hooks/use-draft-snapshot';
 import { useFavorites } from './hooks/use-favorites';
-import { useFinderState } from './hooks/use-finder-state';
+import { useFinderState, useWeaknessStage } from './hooks/use-finder-state';
 import {
   buildPickRequest,
   INITIAL_PICK_FLOW,
@@ -66,6 +68,12 @@ import DraftToolScreen, { type DraftToolLinks } from './DraftToolScreen';
 import styles from './draft-tool.module.css';
 
 export interface DraftToolClientProps {
+  /**
+   * The host page's header (title, group switch, notices). The screen renders it as its first grid row so the
+   * desktop screen's fixed height includes it (see `DraftToolScreen`). Omit it when the host renders its own
+   * header outside the room and the page scrolls (the dev preview).
+   */
+  header?: ReactNode;
   poolId: string;
   seasonId: string;
   /**
@@ -141,6 +149,7 @@ function toastLine(entry: DraftLineCatalogEntry | undefined, lineId: LineId): To
 }
 
 export default function DraftToolClient({
+  header,
   poolId,
   seasonId,
   seasonGroup = null,
@@ -194,18 +203,19 @@ export default function DraftToolClient({
   const [seededView, seededDispatch] = useReducer(finderReducer, initialView, (v) => ({ ...initialFinderState(), ...v }));
   const view = seeded ? seededView : storedView;
   const dispatch = seeded ? seededDispatch : storedDispatch;
+  const [weaknessStage, setWeaknessStage] = useWeaknessStage();
 
   const taken = dto?.taken;
   // Keyed on the fields the finder reads (`FinderQueryView`), not the whole view: picker queries, group and
   // expander toggles of the filter sheet live in the view too and must not re-run the finder per keystroke.
-  const { filters, stageMode, tab, sort, showDrafted, pinnedLineId } = view;
+  const { filters, stageMode, tab, sort, sortStage, showDrafted, pinnedLineId } = view;
   const finder: FinderResult | null = useMemo(
     () =>
       ix
         ? runFinder({
             ix,
             catalog,
-            view: { filters, stageMode, tab, sort, showDrafted, pinnedLineId },
+            view: { filters, stageMode, tab, sort, sortStage, showDrafted, pinnedLineId },
             taken: taken ?? {},
             favorites,
             dataLocale: dl,
@@ -213,7 +223,7 @@ export default function DraftToolClient({
             banned,
           })
         : null,
-    [ix, catalog, filters, stageMode, tab, sort, showDrafted, pinnedLineId, taken, favorites, dl, banned],
+    [ix, catalog, filters, stageMode, tab, sort, sortStage, showDrafted, pinnedLineId, taken, favorites, dl, banned],
   );
 
   const clock = useClock(vm?.activeSlot ?? null, vm?.serverNow ?? 0, snap.serverOffsetMs);
@@ -415,8 +425,11 @@ export default function DraftToolClient({
 
   if (!vm) {
     return (
-      <div className={`${styles.root} rounded-xl border border-[var(--draft-border)] p-8 text-center text-[var(--draft-ink-2)]`} role="status">
-        {snap.stale ? t('page.loadFailed') : tCommon('states.loading')}
+      <div className="flex flex-col gap-3">
+        {header ? <div className={styles.screenHeader}>{header}</div> : null}
+        <div className={`${styles.root} rounded-xl border border-[var(--draft-border)] p-8 text-center text-[var(--draft-ink-2)]`} role="status">
+          {snap.stale ? t('page.loadFailed') : tCommon('states.loading')}
+        </div>
       </div>
     );
   }
@@ -439,6 +452,7 @@ export default function DraftToolClient({
   return (
     <>
       <DraftToolScreen
+        header={header}
         vm={vm}
         catalog={catalog}
         finder={finder}
@@ -462,6 +476,8 @@ export default function DraftToolClient({
         draftButtonRef={draftButtonRef}
         draftBarButtonRef={draftBarButtonRef}
         indexFailed={indexError !== null && ix === null}
+        weaknessStage={weaknessStage}
+        onWeaknessStage={setWeaknessStage}
         canFavorite={signedIn}
         onOpenAdmin={isPoolAdmin ? openAdmin : undefined}
         onPrefetchAdmin={isPoolAdmin ? prefetchAdmin : undefined}

@@ -21,8 +21,15 @@ const busy: FinderFilters = {
 
 describe('filterGroupCounts', () => {
   it('counts the chips of each group; the search text belongs to none', () => {
-    expect(filterGroupCounts(busy)).toEqual({ pokemon: 3, movesAbilities: 3, stats: 2, utility: 4, defense: 1 });
+    expect(filterGroupCounts(busy)).toEqual({ pokemon: 3, movesAbilities: 3, stats: 2, utility: 3, defense: 1 });
     expect(filterGroupCounts(EMPTY_FILTERS)).toEqual({ pokemon: 0, movesAbilities: 0, stats: 0, utility: 0, defense: 0 });
+  });
+
+  it('counts a utility selection once per picked member, or once for the category without members', () => {
+    const one = (members: string[]): FinderFilters => ({ ...EMPTY_FILTERS, utility: [{ key: 'pivot', members }] });
+    expect(filterGroupCounts(one([])).utility).toBe(1);
+    expect(filterGroupCounts(one(['uturn'])).utility).toBe(1);
+    expect(filterGroupCounts(one(['uturn', 'voltswitch'])).utility).toBe(2);
   });
 
   it('adds up to the chip count', () => {

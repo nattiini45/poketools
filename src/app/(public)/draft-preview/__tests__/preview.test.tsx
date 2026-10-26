@@ -698,7 +698,8 @@ describe('rendering (no network, EN + DE)', () => {
     expect(more.filters.stats).toEqual({ spe: 80, bst: 500 });
     expect(more.filters.utility).toHaveLength(1);
     expect(more.filters.utility[0].members).toHaveLength(1);
-    expect(moreHtml).toContain('Filters (4)');
+    // Two stat thresholds, plus one chip for the picked member (the category chip is not shown beside it).
+    expect(moreHtml).toContain('Filters (3)');
 
     // Presets reach the draft room's client as preview props (no separate harness).
     mounts.list.length = 0;
@@ -736,10 +737,11 @@ describe('rendering (no network, EN + DE)', () => {
   it('live-wall: branched and unbranched cards share one card skeleton under the pinned price tabs', () => {
     for (const locale of ['en', 'de'] as const) {
       const html = render('live-wall', locale);
-      // Mixed lines: cards with a branch row and cards whose branch row is an empty placeholder.
+      // Mixed lines: cards with a footer (the final stage) and cards whose footer slot is an empty placeholder.
       expect(html).toContain('data-branch="true"');
       expect(html).toContain('data-branch="false"');
-      expect(html.split('data-card-row="branch"').length).toBe(html.split('role="option"').length);
+      expect(html.split('data-card-row="footer"').length).toBe(html.split('role="option"').length);
+      expect(html.split('data-card-row="head"').length).toBe(html.split('role="option"').length);
       // The tabs come before the grid (pinned on top), with matching/total counts while the price filter is on.
       const tablist = html.indexOf('role="tablist"');
       expect(tablist).toBeGreaterThan(-1);

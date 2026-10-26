@@ -20,7 +20,7 @@ import { snapshot } from '@/lib/draft-ui/__tests__/fixtures';
 import ActiveFilterChips from '../ActiveFilterChips';
 import FilterPanel from '../FilterPanel';
 import FinderBar from '../FinderBar';
-import { HoverDetailsContent, hasHoverDetails, utilityResults } from '../HoverDetails';
+import { HoverDetailsContent, hasHoverDetails } from '../HoverDetails';
 import PriceTabs from '../PriceTabs';
 import RosterCard from '../RosterCard';
 import RosterWall from '../RosterWall';
@@ -108,14 +108,38 @@ describe('RosterCard', () => {
       />,
       { locale: 'de' },
     );
-    expect(html).toContain('→ Hisui-Admurai');
+    // The footer: the final stage's name (no arrow glyph in the text, the arrow is an icon), the full text in the title.
+    expect(html).toContain('title="→ Hisui-Admurai"');
+    expect(html).toContain('>Hisui-Admurai</span>');
     expect(html).toContain('data-sprite="Samurott-Hisui"');
     expect(html).toContain('25 P');
     expect(html).toContain('aria-selected="true"');
+    expect(html).toContain('lucide-git-compare-arrows');
     // The favourite star is a pointer-only shortcut: no focusable control nested inside role="option".
     expect(html).toContain('data-favorite="true"');
+    expect(html).toContain('data-filled="true"');
     expect(html).not.toContain('<button');
     expect(html).toContain('aus den Favoriten entfernen');
+  });
+
+  it('keeps the footer slot empty for a line whose base starts no other line', () => {
+    const html = renderWithI18n(
+      <RosterCard
+        entry={entryOf('gastly--gengar')}
+        state="available"
+        ownerName={null}
+        isPinned={false}
+        isFavorite={false}
+        inCompare={false}
+        reasonText={null}
+        names={testNames}
+        dl="en"
+      />,
+    );
+    expect(entryOf('gastly--gengar').branch.count).toBe(1);
+    expect(html).toContain('data-card-row="footer" data-branch="false"');
+    expect(html).not.toContain('lucide-arrow-right');
+    expect(html).not.toContain('title="→');
   });
 
   it('dims a blocked line and puts the reason into its label', () => {
@@ -259,19 +283,50 @@ describe('ActiveFilterChips', () => {
     expect(de).toContain('7 Linien');
   });
 
-  it('only the chip list scrolls: "Clear all" and the count sit outside the scroller, 44 px targets on phones', () => {
+  it('wraps instead of scrolling: no horizontal scroller, "Clear all" and the count in the same flow', () => {
     const html = renderWithI18n(<ActiveFilterChips chips={chips} count={3} onRemove={noop} onClearAll={noop} names={testNames} />);
-    const scrollerStart = html.indexOf('overflow-x-auto');
-    expect(scrollerStart).toBeGreaterThan(-1);
-    const scroller = html.slice(scrollerStart, html.indexOf('</ul></div>', scrollerStart));
-    expect(scroller).toContain('Remove filter: Ground');
-    expect(scroller).not.toContain('Clear all filters');
-    expect(scroller).not.toContain('3 lines');
-    expect(html.slice(scrollerStart)).toContain('Clear all filters');
-    // Every chip button and "Clear all" has the phone touch target.
+    const group = html.slice(html.indexOf('role="group"'), html.indexOf('>', html.indexOf('role="group"')));
+    expect(group).toContain('flex-wrap');
+    expect(html).not.toContain('overflow-x-auto');
+    expect(html).not.toContain('w-max');
+    expect(html).not.toContain('<ul');
+    // Chips, then "Clear all", then the count, all direct children of the one wrapping group.
+    expect(html.indexOf('Remove filter: Ground')).toBeLessThan(html.indexOf('Clear all filters'));
+    expect(html.indexOf('Clear all filters')).toBeLessThan(html.indexOf('3 lines'));
+    expect(html).toMatch(/<span class="[^"]*ml-auto[^"]*">3 lines<\/span>/);
+  });
+
+  it('draws compact pills with an aria-hidden icon inside a 44 px phone target', () => {
+    const html = renderWithI18n(<ActiveFilterChips chips={chips} count={3} onRemove={noop} onClearAll={noop} names={testNames} />);
+    // Every chip button and "Clear all" has the phone touch target; the pill inside it is the small drawing.
     const buttons = [...html.matchAll(/<button[^>]*class="([^"]*)"/g)].map((m) => m[1]);
     expect(buttons).toHaveLength(3);
     for (const cls of buttons) expect(cls).toContain('min-h-[44px]');
+    expect(html).toMatch(/<span class="truncate">Ground<\/span><svg[^>]*aria-hidden="true"/);
+    expect(html).not.toContain('border-r');
+  });
+
+  it('shows a utility member as its bare name and keeps the category in title and remove label', () => {
+    const memberChips = buildChips(
+      { ...EMPTY_FILTERS, utility: [{ key: 'hazards', members: ['spikes', 'stealthrock'] }] },
+      { moveName: (id) => ix.raw.moveNames[ix.moveIdToIdx.get(id) ?? -1], abilityName: () => undefined },
+    );
+    const html = renderWithI18n(<ActiveFilterChips chips={memberChips} count={2} onRemove={noop} onClearAll={noop} names={testNames} />);
+    expect(html).toContain('aria-label="Remove filter: Hazards: Spikes"');
+    expect(html).toContain('title="Hazards: Spikes"');
+    expect(html).toMatch(/<span class="truncate">Spikes<\/span>/);
+    expect(html).not.toMatch(/<span class="truncate">Hazards/);
+    const de = renderWithI18n(<ActiveFilterChips chips={memberChips} count={2} onRemove={noop} onClearAll={noop} names={testNames} />, {
+      locale: 'de',
+    });
+    expect(de).toContain('aria-label="Filter entfernen: Hazards: Stachler"');
+  });
+
+  it('shows a category without members as one chip', () => {
+    const categoryChips = buildChips({ ...EMPTY_FILTERS, utility: [{ key: 'hazards', members: [] }] });
+    const html = renderWithI18n(<ActiveFilterChips chips={categoryChips} count={2} onRemove={noop} onClearAll={noop} names={testNames} />);
+    expect(html.match(/Remove filter:/g)).toHaveLength(1);
+    expect(html).toMatch(/<span class="truncate">Hazards<\/span>/);
   });
 
   it('always renders: a "No filters" placeholder and the count, no "Clear all"', () => {
@@ -295,9 +350,49 @@ describe('FinderBar', () => {
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('id="draft-filter-panel-trigger"');
     expect(html).toMatch(/>Filters<\/button>/);
-    expect(html).toContain('Speed (final stage)');
-    expect(html).toContain('BST (final stage)');
+    expect(html).toContain('>Speed</option>');
+    expect(html).toContain('>BST</option>');
+    expect(html).not.toContain('final stage');
     expect(html).toContain('Show drafted');
+  });
+
+  describe('sort stage switch', () => {
+    const groups = (html: string) => html.match(/<div role="radiogroup"[^>]*>/g) ?? [];
+
+    it('follows the stage mode in DOM order, after the sort select, and names itself', () => {
+      const html = renderWithI18n(<FinderBar view={view({ sort: 'spe' })} dispatch={noop} indexReady names={testNames} />);
+      expect(groups(html)).toHaveLength(2);
+      expect(groups(html)[0]).toContain('aria-label="Where the filters must match"');
+      expect(groups(html)[1]).toContain('aria-label="Stats of"');
+      expect(html.indexOf('<select')).toBeLessThan(html.indexOf('aria-label="Stats of"'));
+      expect(html).toMatch(/aria-checked="true"[^>]*>Final</);
+      expect(html).toMatch(/aria-checked="false"[^>]*>Base</);
+    });
+
+    it('shows the stored stage and is operable for the stat sorts and BST', () => {
+      for (const sort of ['spe', 'atk', 'def', 'spa', 'spd', 'bst'] as const) {
+        const html = renderWithI18n(<FinderBar view={view({ sort, sortStage: 'base' })} dispatch={noop} indexReady names={testNames} />);
+        expect(html).toMatch(/aria-checked="true"[^>]*>Base</);
+        expect(groups(html)[1]).not.toContain('aria-disabled');
+      }
+    });
+
+    it('stays in place but is disabled and muted for the sorts without a stat', () => {
+      for (const sort of ['default', 'alpha', 'favorites'] as const) {
+        const html = renderWithI18n(<FinderBar view={view({ sort })} dispatch={noop} indexReady names={testNames} />);
+        expect(groups(html)[1]).toContain('aria-disabled="true"');
+        expect(html.match(/<button[^>]*role="radio"[^>]*disabled=""/g)).toHaveLength(2);
+      }
+    });
+
+    it('speaks German', () => {
+      const html = renderWithI18n(<FinderBar view={view({ sort: 'spe' })} dispatch={noop} indexReady names={testNames} />, {
+        locale: 'de',
+      });
+      expect(html).toContain('aria-label="Werte der"');
+      expect(html).toMatch(/aria-checked="false"[^>]*>Basis</);
+      expect(html).toMatch(/aria-checked="true"[^>]*>Endstufe</);
+    });
   });
 
   it('renders German and the loading state of the Filters button', () => {
@@ -306,7 +401,8 @@ describe('FinderBar', () => {
     });
     expect(html).toContain('Am selben Pokémon');
     expect(html).toContain('Irgendwo in der Linie');
-    expect(html).toContain('Init. (Endstufe)');
+    expect(html).toContain('>Init.</option>');
+    expect(html).not.toContain('(Endstufe)');
     expect(html).toContain('Gedraftete anzeigen');
     expect(html).toContain('Filter werden geladen');
     expect(html).toMatch(/<button[^>]*disabled=""/);
@@ -400,11 +496,15 @@ describe('FilterPanel', () => {
     expect(html).toContain('Clear all filters');
     // Type 2 + move 2 + relations 3.
     expect(countOf(html, 'role="radio"')).toBe(7);
+    // The relation switch shows how many types are picked per relation; the match switches name their section.
+    expect(html).toMatch(/aria-checked="false"[^>]*>Immune \(1\)</);
+    expect(html).toContain('aria-label="Moves – Match"');
   });
 
   it('takes the defensive relation from the view state', () => {
     const html = renderWithI18n(panel(open({}, { openGroups: ['defense'], defenseRelation: 'weak' })));
-    expect(html).toMatch(/data-relation="weak" aria-checked="true"/);
+    expect(html).toMatch(/aria-checked="true"[^>]*>Weak</);
+    expect(html).toContain('aria-label="Defensive relation"');
     expect(html).toContain('Weaknesses count the typing only.');
   });
 
@@ -498,11 +598,45 @@ describe('HoverDetailsContent', () => {
       />,
     );
     expect(html).toContain('Recovery ✓');
-    expect(html).toContain('Regenerator, from Stage 3');
-    expect(html).toContain('U-turn, from Stage 2');
+    expect(html).toContain('Regenerator, from Monx');
+    expect(html).toContain('U-turn, from Monamid');
     expect(html).toContain('Not all on the same Pokémon');
-    expect(html).toContain('Recovery: Regenerator, from Stage 3');
-    expect(utilityResults(evaluation)).toHaveLength(2);
+    expect(html).not.toContain('Stage');
+  });
+
+  it('lists a utility result once: no second "Utility matches" section', () => {
+    const html = renderWithI18n(
+      <HoverDetailsContent
+        evaluation={evaluate('mona--x', 'anywhere')}
+        entry={entryOf('mona--x')}
+        filters={{ ...EMPTY_FILTERS, ...healingMomentum }}
+        ix={ix}
+        stageMode="anywhere"
+        names={testNames}
+      />,
+    );
+    expect(html).not.toContain('Utility matches');
+    expect(html.match(/Regenerator/g)).toHaveLength(1);
+    expect(html.match(/U-turn/g)).toHaveLength(1);
+  });
+
+  it('names the Pokémon of the first stage in the data locale (a branch form too)', () => {
+    const filters = { ...EMPTY_FILTERS, utility: [{ key: 'hazards' as const, members: [] }] };
+    const line = ix.byLineId.get('oshawott--samurotthisui');
+    if (!line) throw new Error('fixture line missing');
+    const evaluation = evaluateLine(line, compileCriteria(filters, ix, { banned: BANNED }), 'anywhere');
+    const content = (
+      <HoverDetailsContent
+        evaluation={evaluation}
+        entry={entryOf('oshawott--samurotthisui')}
+        filters={filters}
+        ix={ix}
+        stageMode="anywhere"
+        names={testNames}
+      />
+    );
+    expect(renderWithI18n(content)).toContain('Spikes, from Samurott-Hisui');
+    expect(renderWithI18n(content, { locale: 'de' })).toContain('Stachler, ab Hisui-Admurai');
   });
 
   it('says from which stage everything holds at once (V6, same stage) in German', () => {
@@ -518,7 +652,7 @@ describe('HoverDetailsContent', () => {
       { locale: 'de' },
     );
     expect(html).toContain('Heilung ✓');
-    expect(html).toContain('Alles gleichzeitig – ab Stufe 3');
+    expect(html).toContain('Alles gleichzeitig – ab Mony');
   });
 
   it('shows the special rule with its language and nothing core', () => {

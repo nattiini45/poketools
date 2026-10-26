@@ -2,36 +2,61 @@
 
 /**
  * Finder view state (draft-frontend §5.1, FR-2): a client reducer, no URL
- * sync. Per-viewer preferences (stage mode, sort, show drafted) persist in
- * `localStorage['draft:prefs:v1']`; the pinned line in
- * `sessionStorage['draft:pinned:<pool>']`. Storage is read after mount (the
- * server markup uses the defaults) and every access goes through
- * `storage.ts`, so the screen works without storage.
+ * sync. Per-viewer preferences (stage mode, sort, sort stage, show drafted, and
+ * the weakness overview's stage) persist in `localStorage['draft:prefs:v1']`;
+ * the pinned line in `sessionStorage['draft:pinned:<pool>']`. Storage is read
+ * after mount (the server markup uses the defaults) and every access goes
+ * through `storage.ts`, so the screen works without storage.
+ *
+ * The weakness stage is a preference of the weakness overview, not part of the
+ * finder view (it does not change the wall), so it has its own hook
+ * (`useWeaknessStage`). Both hooks merge into the same blob (`updatePrefs`).
  */
-import { useEffect, useReducer, useRef, type Dispatch } from 'react';
-import { initialFinderState, type FinderAction, type FinderViewState, type SortKey, type StageMode } from '@/lib/draft-finder/filter-types';
+import { useCallback, useEffect, useReducer, useRef, type Dispatch } from 'react';
+import {
+  initialFinderState,
+  SORT_KEYS,
+  SORT_STAGES,
+  STAGE_MODES,
+  type FinderAction,
+  type FinderViewState,
+  type SortKey,
+  type SortStage,
+  type StageMode,
+} from '@/lib/draft-finder/filter-types';
 import { finderReducer } from '@/lib/draft-finder/reducer';
-import { readPinned, readPrefs, writePinned, writePrefs } from '@/lib/draft-ui/storage';
-
-const STAGE_MODES: readonly StageMode[] = ['same_stage', 'anywhere'];
-const SORTS: readonly SortKey[] = ['default', 'alpha', 'favorites', 'spe', 'atk', 'def', 'spa', 'spd', 'bst'];
+import { readPinned, readPrefs, updatePrefs, writePinned } from '@/lib/draft-ui/storage';
 
 export interface StoredPrefs {
   stageMode?: StageMode;
   sort?: SortKey;
+  sortStage?: SortStage;
   showDrafted?: boolean;
+  weaknessStage?: SortStage;
 }
 
-/** Validates the stored preference blob; unknown or malformed fields are dropped. */
+/** `value` when it is one of the `allowed` strings, else undefined. */
+function oneOf<T extends string>(allowed: readonly T[], value: unknown): T | undefined {
+  return typeof value === 'string' ? allowed.find((a) => a === value) : undefined;
+}
+
+/**
+ * Validates the stored preference blob; unknown or malformed fields are dropped. A field missing from an
+ * older blob stays absent, so the default applies (`sortStage` and `weaknessStage` default to 'final').
+ */
 export function parsePrefs(raw: unknown): StoredPrefs {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
   const r = raw as Record<string, unknown>;
   const prefs: StoredPrefs = {};
-  if (typeof r.stageMode === 'string' && (STAGE_MODES as readonly string[]).includes(r.stageMode)) {
-    prefs.stageMode = r.stageMode as StageMode;
-  }
-  if (typeof r.sort === 'string' && (SORTS as readonly string[]).includes(r.sort)) prefs.sort = r.sort as SortKey;
+  const stageMode = oneOf(STAGE_MODES, r.stageMode);
+  if (stageMode) prefs.stageMode = stageMode;
+  const sort = oneOf(SORT_KEYS, r.sort);
+  if (sort) prefs.sort = sort;
+  const sortStage = oneOf(SORT_STAGES, r.sortStage);
+  if (sortStage) prefs.sortStage = sortStage;
   if (typeof r.showDrafted === 'boolean') prefs.showDrafted = r.showDrafted;
+  const weaknessStage = oneOf(SORT_STAGES, r.weaknessStage);
+  if (weaknessStage) prefs.weaknessStage = weaknessStage;
   return prefs;
 }
 
@@ -47,6 +72,7 @@ export function useFinderState(poolId: string): [FinderViewState, Dispatch<Finde
     const prefs = parsePrefs(readPrefs());
     if (prefs.stageMode) dispatch({ type: 'setStageMode', mode: prefs.stageMode });
     if (prefs.sort) dispatch({ type: 'setSort', sort: prefs.sort });
+    if (prefs.sortStage) dispatch({ type: 'setSortStage', stage: prefs.sortStage });
     if (prefs.showDrafted !== undefined) dispatch({ type: 'setShowDrafted', on: prefs.showDrafted });
     const pinned = readPinned(poolId);
     if (pinned) dispatch({ type: 'pin', lineId: pinned });
@@ -54,8 +80,8 @@ export function useFinderState(poolId: string): [FinderViewState, Dispatch<Finde
 
   useEffect(() => {
     if (!hydrated.current) return;
-    writePrefs({ stageMode: view.stageMode, sort: view.sort, showDrafted: view.showDrafted });
-  }, [view.stageMode, view.sort, view.showDrafted]);
+    updatePrefs({ stageMode: view.stageMode, sort: view.sort, sortStage: view.sortStage, showDrafted: view.showDrafted });
+  }, [view.stageMode, view.sort, view.sortStage, view.showDrafted]);
 
   useEffect(() => {
     if (!hydrated.current) return;
@@ -68,4 +94,25 @@ export function useFinderState(poolId: string): [FinderViewState, Dispatch<Finde
   }, [poolId]);
 
   return [view, dispatch];
+}
+
+/** The reducer of `useWeaknessStage`: the action is the new stage. */
+const takeStage = (_: SortStage, next: SortStage): SortStage => next;
+
+/**
+ * The stage (`base` or `final`) the team weakness overview reads, as `[stage, setStage]`. Starts at 'final'
+ * (the server markup), takes the stored choice after mount (a reducer, like the finder view, so the restore is
+ * a dispatch) and stores every change.
+ */
+export function useWeaknessStage(): [SortStage, (stage: SortStage) => void] {
+  const [stage, dispatch] = useReducer(takeStage, 'final');
+  useEffect(() => {
+    const stored = parsePrefs(readPrefs()).weaknessStage;
+    if (stored) dispatch(stored);
+  }, []);
+  const choose = useCallback((next: SortStage) => {
+    dispatch(next);
+    updatePrefs({ weaknessStage: next });
+  }, []);
+  return [stage, choose];
 }

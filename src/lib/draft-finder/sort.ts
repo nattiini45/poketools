@@ -4,19 +4,22 @@
  * - `default`: price desc, then base display name, then final-stage display name (product decision);
  * - `alpha`: base display name asc, then final stage;
  * - `favorites`: favourites first, then `default`;
- * - stat sorts and `bst`: the FINAL stage's value desc, then `default`.
+ * - stat sorts and `bst`: the value desc at the chosen stage (`sortStage`: the line's base stage or its final
+ *   stage, see `lineStage`), then `default`. The tie-break does not depend on the stage.
  * Display names are compared in the data locale (`names.compare`), so German order differs from English.
  */
 import type { Locale } from '@/i18n/config';
 import type { LineId } from '@/types/draft-queue';
-import { STAT_KEYS, type SortKey } from './filter-types';
+import { STAT_KEYS, type SortKey, type SortStage } from './filter-types';
 import type { DraftLineCatalogEntry } from './line-catalog';
 import type { NameResolver } from './names-port';
-import type { PreparedIndex } from './prepare';
+import { lineStage, type PreparedIndex } from './prepare';
 
 export interface SortContext {
   catalog: ReadonlyMap<LineId, DraftLineCatalogEntry>;
   ix: PreparedIndex | null;
+  /** Whose stats the stat sorts read; no effect on the other sorts. */
+  sortStage: SortStage;
   favorites: ReadonlySet<LineId>;
   names: NameResolver;
   dataLocale: Locale;
@@ -32,16 +35,17 @@ interface SortRow {
   favorite: boolean;
 }
 
-function finalStatOf(ix: PreparedIndex | null, id: LineId, sort: SortKey): number {
+function statOf(ix: PreparedIndex | null, id: LineId, sort: SortKey, stage: SortStage): number {
   const line = ix?.byLineId.get(id);
   if (!line) return Number.NEGATIVE_INFINITY;
-  const stats = line.finalStage.stats;
+  const { stats } = lineStage(line, stage);
   if (sort === 'bst') return stats.reduce((sum, v) => sum + v, 0);
   const i = STAT_KEYS.indexOf(sort as (typeof STAT_KEYS)[number]);
   return i >= 0 ? stats[i] : 0;
 }
 
-function isStatSort(sort: SortKey): boolean {
+/** True for the sorts that read a stat (and so a stage): the five stat sorts and `bst`. */
+export function isStatSort(sort: SortKey): boolean {
   return sort === 'bst' || (STAT_KEYS as readonly string[]).includes(sort);
 }
 
@@ -57,7 +61,7 @@ export function sortLineIds(ids: readonly LineId[], sort: SortKey, ctx: SortCont
       price: entry ? entry.price : Number.NEGATIVE_INFINITY,
       base: stages[0] ? names.species(stages[0].name, dl) : '',
       final: stages.length > 0 ? names.species(stages[stages.length - 1].name, dl) : '',
-      stat: isStatSort(sort) ? finalStatOf(ctx.ix, id, sort) : 0,
+      stat: isStatSort(sort) ? statOf(ctx.ix, id, sort, ctx.sortStage) : 0,
       favorite: ctx.favorites.has(id),
     };
   });

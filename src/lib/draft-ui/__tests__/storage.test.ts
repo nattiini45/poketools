@@ -10,8 +10,8 @@ import {
   setNotifyOptIn,
   storageGet,
   storageSet,
+  updatePrefs,
   writePinned,
-  writePrefs,
 } from '@/lib/draft-ui/storage';
 
 class MemoryStorage implements Storage {
@@ -62,17 +62,28 @@ describe('draft-ui storage', () => {
     };
     installWindow(broken);
     expect(storageGet('local', 'draft:prefs:v1')).toBeNull();
-    expect(writePrefs({ sort: 'price' })).toBe(false);
+    expect(updatePrefs({ sort: 'price' })).toBe(false);
     expect(isNotifyOptedIn('pool-1')).toBe(false);
   });
 
   it('round-trips prefs as JSON and ignores garbage', () => {
     const local = new MemoryStorage();
     installWindow(local);
-    expect(writePrefs({ stageMode: 'same_stage', showDrafted: true })).toBe(true);
+    expect(updatePrefs({ stageMode: 'same_stage', showDrafted: true })).toBe(true);
     expect(readPrefs()).toEqual({ stageMode: 'same_stage', showDrafted: true });
     local.setItem('draft:prefs:v1', '{not json');
     expect(readPrefs()).toBeNull();
+  });
+
+  it('merges a prefs patch into the stored blob and replaces a corrupt one', () => {
+    const local = new MemoryStorage();
+    installWindow(local);
+    updatePrefs({ sort: 'spe', sortStage: 'base' });
+    updatePrefs({ weaknessStage: 'final', sort: 'bst' });
+    expect(readPrefs()).toEqual({ sort: 'bst', sortStage: 'base', weaknessStage: 'final' });
+    local.setItem('draft:prefs:v1', '[1,2]');
+    updatePrefs({ sort: 'alpha' });
+    expect(readPrefs()).toEqual({ sort: 'alpha' });
   });
 
   it('keeps the pinned line per pool in sessionStorage', () => {

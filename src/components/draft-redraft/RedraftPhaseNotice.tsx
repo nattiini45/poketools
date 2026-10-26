@@ -4,7 +4,8 @@
  * The draft room's redraft notice (draft-frontend §3.1, §6.1): shown above
  * the read-only finder while the redraft collects its secret drops. A client
  * leaf so the server page can render it (it reads the language through hooks
- * and shows the deadline with `<LocalTime zone="both">`).
+ * and shows the deadline with `<LocalTime zone="both">`). It sets no outer
+ * margin: the room spaces its header rows itself.
  */
 import Link from 'next/link';
 import { useT } from '@/i18n/client';
@@ -26,7 +27,7 @@ export default function RedraftPhaseNotice({ phase, deadlineAt, links }: Redraft
   if (phase !== 'submissions' && phase !== 'locked') return null;
 
   return (
-    <div role="status" className="mb-4 flex flex-col gap-1 rounded-lg border border-poke-border bg-poke-card p-3 text-sm">
+    <div role="status" className="flex flex-col gap-1 rounded-lg border border-poke-border bg-poke-card p-3 text-sm">
       <p>{phase === 'submissions' ? t('notice.submissions') : t('notice.locked')}</p>
       {phase === 'submissions' && deadlineAt ? (
         <p className="text-poke-text-secondary">

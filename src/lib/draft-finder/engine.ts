@@ -297,7 +297,10 @@ export function viaSubject(via: MatchVia, ix: PreparedIndex, names: NameResolver
  * compare tray and the open flag are not among them, so a caller can memoise on these fields alone and a
  * keystroke in a filter picker does not re-run the finder.
  */
-export type FinderQueryView = Pick<FinderViewState, 'filters' | 'stageMode' | 'tab' | 'sort' | 'showDrafted' | 'pinnedLineId'>;
+export type FinderQueryView = Pick<
+  FinderViewState,
+  'filters' | 'stageMode' | 'tab' | 'sort' | 'sortStage' | 'showDrafted' | 'pinnedLineId'
+>;
 
 export interface FinderInput {
   ix: PreparedIndex;
@@ -370,7 +373,14 @@ export function runFinder(input: FinderInput): FinderResult {
   const sortedIds = sortLineIds(
     inTab.map((m) => m.lineId),
     view.sort,
-    { catalog: catalogById, ix, favorites: input.favorites, names: input.names, dataLocale: input.dataLocale },
+    {
+      catalog: catalogById,
+      ix,
+      sortStage: view.sortStage,
+      favorites: input.favorites,
+      names: input.names,
+      dataLocale: input.dataLocale,
+    },
   );
 
   const pinned = view.pinnedLineId;

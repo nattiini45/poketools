@@ -115,29 +115,13 @@ export default {
     title: 'Why this line matches',
     matched: '{criterion} ✓',
     failed: '{criterion} ✕',
-    via: '{what}, from Stage {stage}',
-    viaTyping: 'by typing',
-    viaPrice: '{n} P',
-    viaBst: 'BST {n}',
-    viaStat: '{stat} {n}',
-    allAtOnce: 'All at once – from Stage {stage}',
-    notAtOnce: 'Never all on the same stage',
     noLonger: 'No longer matches your filters',
     notInTab: 'Not in the current price tab',
-    criterion: {
-      types: 'Type: {list}',
-      moves: 'Move: {list}',
-      abilities: 'Ability: {list}',
-      stat: '{stat} ≥ {n}',
-      bst: 'BST ≥ {n}',
-      price: '≤ {n} P',
-      resists: 'Resists {type}',
-      immune: 'Immune to {type}',
-      weak: 'Weak to {type}',
-    },
   },
   cost: {
     remaining: 'Remaining after pick: {n} P',
+    /** An admin picking on behalf: the figure is the active player's budget. */
+    remainingFor: 'Remaining for {player} after pick: {n} P',
   },
   cta: {
     adminPick: 'Pick for {player} (admin)',
@@ -196,6 +180,20 @@ export default {
     emptySlot: 'Empty slot',
     redraftSlot: { one: 'Slot {label} · {count} KO', other: 'Slot {label} · {count} KOs' },
     pinAria: 'Show {line} ({price} P)',
+    /** The team weakness overview under the dock: damage multipliers of the owned lines, by attacking type. */
+    weakness: {
+      title: 'Team weaknesses',
+      /** Group name of the Base | Final switch (its options reuse `draft/finder` sort.stage.*). */
+      stageLabel: 'Typing of',
+      caption: 'Damage your roster takes, by attacking type',
+      pokemon: 'Pokémon',
+      rowWeak: 'Weak',
+      rowResist: 'Resist',
+      rowImmune: 'Immune',
+      noData: 'No type data for this line.',
+      loading: 'Loading types …',
+      note: 'Typing only: abilities are not counted.',
+    },
   },
   recent: {
     title: 'Last picks',
