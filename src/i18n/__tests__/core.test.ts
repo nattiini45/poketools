@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTranslator, getMessages, interpolate, selectPlural, upperForPaint } from '../core';
 import { defineDe, defineNamespace } from '../define';
+import type { Locale } from '../config';
 
 const en = {
   hello: 'Hello {name}',
@@ -62,6 +63,15 @@ describe('createTranslator', () => {
     expect(createTranslator(ns, 'en')).toBe(createTranslator(ns, 'en'));
     expect(createTranslator(ns, 'en')).not.toBe(createTranslator(ns, 'de'));
     expect(createTranslator(ns, 'de').locale).toBe('de');
+  });
+
+  it('keys the cache by a LOCALES entry: an unchecked string gets the default translator', () => {
+    for (const raw of ['fr', 'constructor', '__proto__', '']) {
+      const t = createTranslator(ns, raw as Locale);
+      expect(t).toBe(createTranslator(ns, 'en'));
+      expect(t.locale).toBe('en');
+      expect(t('hello', { name: 'Ash' })).toBe('Hello Ash');
+    }
   });
 
   it('dynamic falls back: locale -> English -> fallback -> key', () => {

@@ -4,7 +4,7 @@
  * posts, painters) uses `createTranslator(ns, locale)` directly.
  */
 import type { ReactNode } from 'react';
-import { INTL_TAG, type Locale } from './config';
+import { DEFAULT_LOCALE, INTL_TAG, LOCALES, type Locale } from './config';
 import { formatParamNumber, pluralRulesFor } from './intl-cache';
 import { renderRich, type RichValues } from './rich';
 import type {
@@ -150,16 +150,21 @@ function buildTranslator<E extends MessageTree>(ns: Namespace<E>, locale: Locale
   return translator as unknown as Translator<E>;
 }
 
-/** Memoized per `(namespace, locale)`. */
+/**
+ * Memoized per `(namespace, locale)`. The cache key is the matching `LOCALES`
+ * entry, never the caller's string, so a request value (`?lang=`) cannot pick
+ * the function a caller invokes; an unknown string gets the default locale.
+ */
 export function createTranslator<E extends MessageTree>(ns: Namespace<E>, locale: Locale): Translator<E> {
+  const key = LOCALES.find((l) => l === locale) ?? DEFAULT_LOCALE;
   let perLocale = translators.get(ns);
   if (!perLocale) {
     perLocale = new Map();
     translators.set(ns, perLocale);
   }
-  const existing = perLocale.get(locale);
+  const existing = perLocale.get(key);
   if (existing) return existing as unknown as Translator<E>;
-  const created = buildTranslator(ns, locale);
-  perLocale.set(locale, created as unknown as Translator<MessageTree>);
+  const created = buildTranslator(ns, key);
+  perLocale.set(key, created as unknown as Translator<MessageTree>);
   return created;
 }
