@@ -12,6 +12,21 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 - No migration and no new environment variable. API clients that send an even best-of value, or change the league type
   of a started league, now receive `400` / `409`.
+- **Apply three migrations, in this order, BEFORE deploying the code.**
+  1. `20261024100000_season_format_type_custom.sql` adds the value `custom` to the league type enum. Apply it alone
+     and let it commit before the next file (a new enum value cannot be used in the transaction that adds it). It
+     cannot be undone.
+  2. `20261024100100_format_definitions.sql` adds `format_definitions` and `format_definition_versions` and the
+     function that publishes a version.
+  3. `20261024100200_season_formats_and_stage_columns.sql` adds `season_formats`, the two `tournaments` columns
+     `format_stage_key` and `stage_spec`, the attach and detach functions and the trigger that keeps a custom league
+     without a format from starting.
+
+  Without them a league created as "Custom format", the new format routes and the round and bracket generation of a
+  custom league fail. Existing leagues, tournaments and Evolution Point Buy are unaffected by the migrations. There is
+  no new environment variable.
+- API clients that send an even best-of value, or change the league type of a started league, now receive `400` /
+  `409`.
 
 ### Added
 
@@ -43,7 +58,9 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   Picking or changing the league keeps the name and dates already typed.
   Rounds, matches, results, phase participants, groups, point-buy lists, tokens, draft data and format rules are
   never copied. If a step fails the new league is removed again; if that cleanup fails too, the error names what
-  remains. The API takes an optional `clone_from` on `POST /api/seasons`.
+  remains. A league with the custom type is not offered as a source and the server refuses it (the phases of a custom
+  league come from its attached format, so a copy could never start). The API takes an optional `clone_from` on
+  `POST /api/seasons`.
 - **Format drift report** on the admin Data page (site admins). **Run report** lists, read-only, leagues whose stored
   tiebreaker order differs from the format pack's default (information: the standings use the stored order; an order
   the standings cannot use is marked, because the table then falls back to the pack default) and phase pairs
@@ -51,8 +68,31 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   from the phase being enrolled, the phase timeline shows it on the phase before). It changes nothing, is not loaded
   until requested, and reads at most 10,000 rows per list. `GET /api/admin/format-drift`.
 - **`season.clone` and `season.clone_failed` audit events** for a league started from another league.
-- **Format kit library.** `src/lib/format-kit` now holds the document schema with bilingual text, a safe expression language, a primitive registry, a compiler that reports diagnostics with fixes, and three preset definitions (classic league, cup, Swiss with top cut). It is not used by the app yet: there is no database, route or UI change, and no upgrade steps. See `docs/format-kit.md`.
-- **Format Studio (read-only).** Site admins and league admins get a **Formats** entry in the admin navigation. The gallery at `/admin/formats` shows three example formats, each marked "Example. Change anything.", and **Your leagues** with a generated descriptor per league (league admins see only their own). The detail pages show a stage outline, the rules text in English and German, diagnostics in plain words and a coverage line, and the league admin page gains a **Format** tab with the same view. Nothing can be edited yet. No database change and no upgrade steps; public pages are unchanged, and existing leagues and Evolution Point Buy behave exactly as before. For an Evolution Point Buy league the Format view describes what its tables do: the stored tiebreaker order (else the pack's chain) and the pack's match points in round robin and Swiss. See `docs/format-kit.md`.
+- **Format kit library.** `src/lib/format-kit` now holds the document schema with bilingual text, a safe expression language, a primitive registry, a compiler that reports diagnostics with fixes, and three preset definitions (classic league, cup, Swiss with top cut). On its own it changes no page or route; the format definitions API below builds on it. See `docs/format-kit.md`.
+- **Format Studio (read-only).** Site admins and league admins get a **Formats** entry in the admin navigation. The gallery at `/admin/formats` shows three example formats, each marked "Example. Change anything.", and **Your leagues** with a generated descriptor per league (league admins see only their own). The detail pages show a stage outline, the rules text in English and German, diagnostics in plain words and a coverage line, and the league admin page gains a **Format** tab with the same view. Nothing can be edited on these pages yet; public pages are unchanged, and existing leagues and Evolution Point Buy behave exactly as before. For an Evolution Point Buy league the Format view describes what its tables do: the stored tiebreaker order (else the pack's chain) and the pack's match points in round robin and Swiss. See `docs/format-kit.md`.
+- **Format definitions API.** Admins can create, save, publish, fork, share and delete formats through `/api/formats`.
+  A draft is any JSON object and is saved with a revision check (`draft_rev`), so two editors cannot overwrite each
+  other silently. Publishing compiles the draft with the format kit and stores an immutable, hash-checked version;
+  a draft with an error is refused with the count of errors. A format is `private`, shared with all admins
+  (`league`) or in the gallery (site admins only); league admins see only their own formats and the shared ones. The name
+  and summary other admins see follow the draft only while a format is private; once it is shared, only a publish updates them (from the published version's identity). A name that holds a NUL character or
+  a lone surrogate is refused with a 400 instead of a server error, and a list page past the last row answers an empty
+  page with the real total.
+  Forking copies the latest published version of a format, or one of the three shipped examples, into a private
+  format of the caller. A format that was published or is attached to a league cannot be deleted. Bodies are bounded
+  (1 MiB raw, 256 KB document) and every write is rate limited and audited.
+- **Custom format league type.** A league can be created with the new league type **Custom format (Format Studio)**.
+  `POST /api/seasons/[id]/format` attaches a published format version to it before it starts: the version is frozen
+  into the league (later changes to the format do not touch it) and one phase is created per format stage with its
+  bracket type, best-of lengths, round overrides, doubles flag and ruleset. Attaching again replaces the format and
+  keeps the phases the new version still has; `DELETE` detaches it. The answer lists what the engine does not run yet
+  (round-robin legs, a third-place match, wildcard, threshold and bottom-N selections, groups, round lengths the
+  phase round names cannot express) as codes.
+- **A custom league without a format cannot start.** The round and bracket generation routes refuse it with
+  `format_not_attached` before anything is written, and a database trigger refuses to set the league active.
+- **Storage and API only for now.** There is no editor, no gallery page and no readiness checklist yet, and nothing in
+  pairing, standings or advancement uses an attached format: the phases it creates follow the classic engine, and
+  groups are not created. The shipped examples are forked from code, not stored as rows.
 
 
 - Wiki moderation: the superadmin can close a rejected note for resubmission ("Block from resubmitting", behind a
@@ -189,7 +229,10 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - The Format Rules section subtitle on the league admin Rules tab now describes the editor.
 - `POST /api/seasons` accepts an optional `clone_from` (`season_id`, `copy_roster`, `copy_admins`). Without it the
   request behaves as before. New error codes: `SEASON_CLONE_FORBIDDEN`, `SEASON_CLONE_ADMINS_FORBIDDEN`,
-  `SEASON_CLONE_FAILED` and `SEASON_CLONE_CLEANUP_FAILED`.
+  `SEASON_CLONE_FAILED`, `SEASON_CLONE_CLEANUP_FAILED` and `SEASON_CLONE_CUSTOM_FORMAT` (409, a custom-type source).
+- **League types gain a fifth value, `custom`.** `PATCH /api/seasons/[id]` refuses a switch of the league type to or
+  from `custom` (409 `season_format_type_locked`) while a format is attached or after the league has started. A
+  change between the four classic league types takes no extra read and follows the league type lock above.
 
 
 - **Save in the seeding table persists the visible order.** Dragging, moving and shuffling renumber every row, and

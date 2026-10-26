@@ -25,6 +25,15 @@ export interface CloneSourceOption {
   participant_count: number;
 }
 
+/**
+ * Whether a league of this type can be a clone source. A custom league gets its phases from an
+ * attached format, so a copy of its phases could not attach one and could never start: the picker
+ * leaves such leagues out and the server refuses them (`SEASON_CLONE_CUSTOM_FORMAT`).
+ */
+export function isCloneSourceFormat(format: SeasonFormatType): boolean {
+  return format !== 'custom';
+}
+
 /** What the viewer picked in the source picker. */
 export interface CloneChoice {
   sourceId: string;

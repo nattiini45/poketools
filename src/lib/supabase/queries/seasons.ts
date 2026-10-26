@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { supabase } from '../client';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { toDraftRuleError } from '@/lib/draft/rpc-errors';
+import { mapFormatDbError } from '@/lib/format-studio/errors';
 import { DEFAULT_CONTENT_LOCALE, isLocale } from '@/i18n/config';
 import {
   CoreNotInPoolError,
@@ -354,7 +355,9 @@ export async function updateSeason(
     .select()
     .single();
 
-  if (error) throw error;
+  // A custom league without an attached format cannot become active (trigger on `seasons`): FORMAT_NOT_ATTACHED
+  // becomes a typed 409. Every other error is returned unchanged by the mapper, so legacy leagues behave as before.
+  if (error) throw mapFormatDbError(error);
   return toSeason(data);
 }
 

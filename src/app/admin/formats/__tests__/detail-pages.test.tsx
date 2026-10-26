@@ -197,6 +197,18 @@ describe('league format page', () => {
     expect(out).toContain('This league has no phases yet.');
     expect(out).toContain(`href="/admin/leagues/${LEAGUE_ID}?tab=phases"`);
   });
+
+  it.each([
+    ['en', 'A custom league gets its phases when a format is attached to it'],
+    ['de', 'Eine eigene Liga bekommt ihre Phasen, wenn ein Format angehängt wird'],
+  ] as const)('a custom league without phases is not sent to the Phases tab (%s)', async (locale, expected) => {
+    mocks.locale = locale;
+    mocks.getSeasonWithDetails.mockResolvedValue({ ...league, format_type: 'custom' });
+    mocks.loadLeagueFormat.mockResolvedValue({ kind: 'no_phases' });
+    const out = html(await LeaguePage(leagueParams(LEAGUE_ID)));
+    expect(out).toContain(expected);
+    expect(out).not.toContain('tab=phases');
+  });
 });
 
 describe('example format page', () => {

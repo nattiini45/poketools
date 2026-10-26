@@ -67,13 +67,15 @@ export default async function FormatLeaguePage({ params }: PageProps) {
         </div>
         {result.kind === 'no_phases' ? (
           <p className="text-sm text-poke-text-muted">
-            {t.rich('detail.noPhases', {
-              link: (chunks) => (
-                <Link href={leagueAdminHref(id, 'phases')} className="text-poke-blue hover:underline">
-                  {chunks}
-                </Link>
-              ),
-            })}
+            {league.format_type === 'custom'
+              ? t('detail.noPhasesCustom')
+              : t.rich('detail.noPhases', {
+                  link: (chunks) => (
+                    <Link href={leagueAdminHref(id, 'phases')} className="text-poke-blue hover:underline">
+                      {chunks}
+                    </Link>
+                  ),
+                })}
           </p>
         ) : (
           <FormatDetail view={result.view} variant="page" editorLinks={result.editorLinks} />

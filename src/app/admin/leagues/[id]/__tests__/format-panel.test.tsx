@@ -219,6 +219,19 @@ describe('Format tab (?tab=format)', () => {
     expect(textOf(panel).trim().length).toBeGreaterThan(0);
   });
 
+  it.each([
+    ['en', 'A custom league gets its phases when a format is attached to it'],
+    ['de', 'Eine eigene Liga bekommt ihre Phasen, wenn ein Format angehängt wird'],
+  ] as const)('a custom league without phases gets no link to the phases tab (%s)', async (locale, expected) => {
+    mocks.locale = locale;
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'custom' }));
+    mocks.loadLeagueFormat.mockResolvedValue({ kind: 'no_phases' });
+    const panel = panelOf(await render('format'));
+    expect(findByType(panel, Link)).toHaveLength(0);
+    expect(textOf(panel)).toContain(expected);
+    expect(textOf(panel)).not.toMatch(/Ã|Â|�/);
+  });
+
   it('an admin of another league gets only the forbidden notice: the loader is not called', async () => {
     mocks.getLiveAccess.mockResolvedValue({ player: { playerId: 'u1' }, isSiteAdmin: false, isAnyAdmin: true });
     mocks.isResourceAdminFor.mockResolvedValue(false);

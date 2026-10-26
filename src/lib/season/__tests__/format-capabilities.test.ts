@@ -92,3 +92,69 @@ describe('getFormatCapabilities', () => {
     }
   });
 });
+
+/** Every flag of every classic format, pinned in full so a new format or flag cannot shift one by accident. */
+const ALL_OFF = {
+  participantTypeAssignment: false,
+  typeCores: false,
+  evolutionTiers: false,
+  wildcards: false,
+  tierLimits: false,
+  genericDraftPool: false,
+  pointBuyList: false,
+  draftTokens: false,
+  killTokens: false,
+  cosmoPoints: false,
+  evolutionProgress: false,
+  evolutionPoints: false,
+  evolutionRedraft: false,
+  earlyFinalStageLock: false,
+  matchupRoles: false,
+};
+
+describe('getFormatCapabilities (full objects)', () => {
+  it('singles and doubles share the classic baseline', () => {
+    const expected = { ...ALL_OFF, participantTypeAssignment: true, typeCores: true };
+    expect(getFormatCapabilities('singles')).toEqual(expected);
+    expect(getFormatCapabilities('doubles')).toEqual(expected);
+  });
+
+  it('draft is the baseline plus the draft pool flags', () => {
+    expect(getFormatCapabilities('draft')).toEqual({
+      ...ALL_OFF,
+      participantTypeAssignment: true,
+      typeCores: true,
+      evolutionTiers: true,
+      wildcards: true,
+      tierLimits: true,
+      genericDraftPool: true,
+    });
+  });
+
+  it('evolution_point_buy has the nine point-buy flags and neither classic participant feature', () => {
+    expect(getFormatCapabilities('evolution_point_buy')).toEqual({
+      ...ALL_OFF,
+      pointBuyList: true,
+      draftTokens: true,
+      killTokens: true,
+      cosmoPoints: true,
+      evolutionProgress: true,
+      evolutionPoints: true,
+      evolutionRedraft: true,
+      earlyFinalStageLock: true,
+      matchupRoles: true,
+    });
+  });
+
+  it('has exactly the fifteen flags', () => {
+    expect(Object.keys(getFormatCapabilities('singles'))).toHaveLength(15);
+  });
+});
+
+describe('getFormatCapabilities (custom)', () => {
+  it('has every flag off: a kit document starts with no gym types, cores or draft machinery', () => {
+    expect(getFormatCapabilities('custom')).toEqual(ALL_OFF);
+    expect(Object.isFrozen(getFormatCapabilities('custom'))).toBe(true);
+  });
+});
+

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildCreateRequest, cloneFormDefaults, createFormInitialData, type CloneSourceOption } from '../clone-source';
+import {
+  buildCreateRequest,
+  cloneFormDefaults,
+  createFormInitialData,
+  isCloneSourceFormat,
+  type CloneSourceOption,
+} from '../clone-source';
 import type { SeasonFormData } from '@/types/season';
 
 const SOURCE: CloneSourceOption = {
@@ -27,6 +33,15 @@ const FORM: SeasonFormData = {
   route_theme: 'sakura',
   language: 'en',
 };
+
+describe('isCloneSourceFormat', () => {
+  it('accepts every league type except custom', () => {
+    for (const format of ['singles', 'doubles', 'draft', 'evolution_point_buy'] as const) {
+      expect(isCloneSourceFormat(format)).toBe(true);
+    }
+    expect(isCloneSourceFormat('custom')).toBe(false);
+  });
+});
 
 describe('cloneFormDefaults', () => {
   it('carries the settings a new league repeats', () => {

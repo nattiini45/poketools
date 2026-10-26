@@ -73,6 +73,8 @@ export default {
   // Starting a league from another one (POST /api/seasons with clone_from)
   SEASON_CLONE_FORBIDDEN: 'You can only start a league from a league you administer.',
   SEASON_CLONE_ADMINS_FORBIDDEN: 'Only site admins can copy the league admins.',
+  SEASON_CLONE_CUSTOM_FORMAT:
+    'A league with a custom format cannot be used as a source: its phases come from an attached format, and a copy could not attach one.',
   SEASON_CLONE_FAILED: 'The league could not be created from the source. Nothing was kept.',
   SEASON_CLONE_CLEANUP_FAILED:
     'The league could not be created from the source, and it could not be removed again: league {league_id} remains with {phases} phases and {participants} roster entries. A site admin can delete it.',
@@ -103,4 +105,24 @@ export default {
   IN_ALREADY_IN_PHASE: 'Incoming player is already enrolled in {phase}',
   SUBSTITUTE_LEAGUE_GROUP_MISMATCH:
     'The incoming player is not in league group {group}, which {phase} follows; substitute across the whole league instead',
+
+  // Custom format (Format Studio): attach, detach and readiness (api/seasons/[id]/format, src/lib/format-studio/errors.ts)
+  format_season_not_custom: 'This league does not use a custom format.',
+  format_season_started: 'The league has already started, so its format can no longer be changed.',
+  format_attach_forbidden: 'You can only attach formats that you own or that are shared with all admins.',
+  format_attach_invalid: 'This version has errors and cannot be attached ({first}).',
+  format_attach_ruleset_required: {
+    one: "{count} stage uses the league's default ruleset, but the league has none. Set a default ruleset first.",
+    other: "{count} stages use the league's default ruleset, but the league has none. Set a default ruleset first.",
+  },
+  format_attach_manual_phases: {
+    one: 'This league already has {count} phase that was not created from a format. Delete it first.',
+    other: 'This league already has {count} phases that were not created from a format. Delete them first.',
+  },
+  format_not_attached:
+    'This league uses a custom format, but none is attached yet. Attach a format before the league starts.',
+  format_nothing_attached: 'No format is attached to this league.',
+  format_detach_blocked: 'Teams still point to a phase of this format, so it cannot be detached.',
+  season_format_type_locked:
+    'The league type cannot be switched to or from a custom format while a format is attached or after the league has started.',
 } as const;

@@ -70,6 +70,17 @@ describe('CloneSourcePicker', () => {
     expect(html).toContain('Start from');
   });
 
+  it('does not offer a custom-format league, and renders nothing when only custom leagues exist', () => {
+    const custom = source({ id: '33333333-3333-4333-8333-333333333333', name: 'Studio Cup', format_type: 'custom' });
+    const html = render({ sources: [source(), custom, pointBuy] });
+    const values = [...html.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]);
+
+    expect(values).toEqual(['', SELECTED, pointBuy.id]);
+    expect(html).not.toContain('Studio Cup');
+    expect(render({ sources: [custom] })).toBe('');
+    expect(render({ sources: [custom], sourceId: custom.id })).toBe('');
+  });
+
   it('shows nothing about options until a source is picked', () => {
     const html = render();
 

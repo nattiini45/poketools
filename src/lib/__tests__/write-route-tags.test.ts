@@ -28,6 +28,7 @@ import {
   EXPIRE_NOW,
   draftWriteTags,
   expireDraftReads,
+  expireFormatLibraryReads,
   expireSeasonReads,
   expireTournamentReads,
   publicTags,
@@ -37,15 +38,18 @@ import {
 
 const API_DIR = path.resolve(__dirname, '../../app/api');
 
-/** Route trees (relative to `src/app/api`) whose every write handler expires tags. */
-const TREES = ['tournaments/[id]', 'seasons', 'drafts/[id]'];
+/**
+ * Route trees (relative to `src/app/api`) whose every write handler expires tags. `formats` is the format
+ * library: its writes expire the `format-library` tag.
+ */
+const TREES = ['tournaments/[id]', 'seasons', 'drafts/[id]', 'formats'];
 
 /** Single routes outside those trees with the same duty (tournament and draft creation, round pairings). */
 const EXTRA_ROUTES = ['tournaments/route.ts', 'generate-round/[tid]/route.ts', 'drafts/route.ts'];
 
 /** A call that expires public read-cache tags (directly or through a match pass). */
 const EXPIRE_CALL =
-  /\b(expireTournamentReads|expireSeasonReads|expireDraftReads|expirePublicTags|revalidateMatchPages|revalidatePublicPath)\(/;
+  /\b(expireTournamentReads|expireSeasonReads|expireDraftReads|expireFormatLibraryReads|expirePublicTags|revalidateMatchPages|revalidatePublicPath)\(/;
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -121,6 +125,16 @@ const REQUIRED = [
   'drafts/[id]/end/route.ts#POST',
   'drafts/[id]/picks/[pickId]/void/route.ts#POST',
   'drafts/[id]/picks/[pickId]/correct/route.ts#POST',
+  // format library and the format of a league
+  'formats/route.ts#POST',
+  'formats/[id]/route.ts#PATCH',
+  'formats/[id]/route.ts#DELETE',
+  'formats/[id]/draft/route.ts#PUT',
+  'formats/[id]/publish/route.ts#POST',
+  'formats/[id]/fork/route.ts#POST',
+  'formats/presets/[presetId]/fork/route.ts#POST',
+  'seasons/[id]/format/route.ts#POST',
+  'seasons/[id]/format/route.ts#DELETE',
   // redraft routes
   'drafts/[id]/redraft/publish/route.ts#POST',
   'drafts/[id]/redraft/slots/[redraftSlotId]/restore/route.ts#POST',
@@ -225,6 +239,14 @@ describe('write tags: what each route helper expires', () => {
 
   it('a draft write expires its league only', () => {
     expect(draftWriteTags('s1')).toEqual(['season:s1']);
+  });
+
+  it('a format library write expires the format-library tag, immediately', () => {
+    vi.mocked(revalidateTag).mockClear();
+    expireFormatLibraryReads();
+
+    expect(vi.mocked(revalidateTag).mock.calls).toEqual([[publicTags.formatLibrary, EXPIRE_NOW]]);
+    expect(publicTags.formatLibrary).toBe('format-library');
   });
 
   it('the expire helpers expire exactly those tags, immediately', () => {

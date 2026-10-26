@@ -61,4 +61,33 @@ export default defineDe<typeof en>()({
   match_bulk_item_failed: 'Die Aktion ist für dieses Spiel fehlgeschlagen. Der Fehler wurde protokolliert.',
 
   admin_export_rate_limited: 'Export-Limit erreicht. Versuche es nach {resetAt} noch einmal.',
+
+  format_not_found: 'Format nicht gefunden',
+  format_preset_not_found: 'Beispielformat nicht gefunden',
+  format_stale_revision:
+    'Dieses Format wurde zwischenzeitlich geändert. Lade es neu und wende deine Änderung erneut an.',
+  format_slug_taken: 'Diese Format-Adresse ist bereits vergeben.',
+  format_document_not_json: 'Das Formatdokument ist kein gültiges JSON.',
+  format_document_not_object: 'Das Formatdokument muss ein JSON-Objekt sein.',
+  format_document_too_deep: 'Das Formatdokument ist zu tief verschachtelt.',
+  format_document_too_many_nodes: 'Das Formatdokument hat zu viele Einträge.',
+  format_document_too_large: 'Das Formatdokument ist zu groß (Limit 256 KB).',
+  format_document_too_large_to_store: 'Das Formatdokument ist zu groß zum Speichern.',
+  format_document_name_required: 'Das Formatdokument braucht einen gültigen Namen unter identity.',
+  format_publish_invalid: {
+    one: 'Dieses Format hat {count} Fehler und kann nicht veröffentlicht werden. Behebe ihn zuerst.',
+    other: 'Dieses Format hat {count} Fehler und kann nicht veröffentlicht werden. Behebe sie zuerst.',
+  },
+  format_nothing_to_publish: 'Seit der letzten veröffentlichten Version gibt es keine Änderungen.',
+  format_not_published: 'Dieses Format hat noch keine veröffentlichte Version.',
+  format_published_locked: 'Ein Format in der Galerie können nur Site-Admins veröffentlichen.',
+  format_visibility_forbidden:
+    'Nur Site-Admins können ein Format in die Galerie stellen oder ein Galerie-Format ändern.',
+  format_preset_locked: 'Beispielformate können nur Site-Admins ändern.',
+  format_attached: {
+    one: 'Dieses Format ist an {count} Liga angehängt und kann nicht gelöscht werden.',
+    other: 'Dieses Format ist an {count} Ligen angehängt und kann nicht gelöscht werden.',
+  },
+  format_has_versions: 'Dieses Format hat veröffentlichte Versionen und kann deshalb nicht gelöscht werden.',
+  format_version_immutable: 'Eine veröffentlichte Version kann nicht geändert werden.',
 });

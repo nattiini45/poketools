@@ -16,6 +16,7 @@ import {
   removeResourceAdmin,
 } from '@/lib/supabase/queries/resource-admins';
 import { addSeasonParticipants, listSeasonParticipantIds } from '@/lib/supabase/queries/season-clone';
+import { isCloneSourceFormat } from '@/lib/league-admin/clone-source';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import type { Season } from '@/types/season';
 import type { Tournament, TournamentFormData } from '@/types/tournament';
@@ -97,8 +98,9 @@ export function createCloneTracker(init: {
  * Policy, checked before anything is written (a refusal creates nothing): the
  * source must exist, the caller must be a site admin or admin of that league,
  * and copying the league admins is for site admins only (granting league
- * admin is a site-admin action; a copy must not widen it). The source may be
- * archived or a test league.
+ * admin is a site-admin action; a copy must not widen it). A source with the
+ * custom format type is refused with 409 (see `isCloneSourceFormat`). The source
+ * may be archived or a test league.
  */
 export async function assertCloneAllowed(
   actor: CloneActor,
@@ -113,6 +115,16 @@ export async function assertCloneAllowed(
     throw new UserFacingError('You can only start a league from a league you administer', {
       code: 'SEASON_CLONE_FORBIDDEN',
       status: 403,
+    });
+  }
+
+  // A custom league's phases come from its attached format: a copy would hold bare phases, could
+  // not attach a format and could never start. Checked after the permission, so a caller who may
+  // not copy the league learns nothing about its type.
+  if (!isCloneSourceFormat(source.format_type)) {
+    throw new UserFacingError('A league with a custom format cannot be used as a source', {
+      code: 'SEASON_CLONE_CUSTOM_FORMAT',
+      status: 409,
     });
   }
 

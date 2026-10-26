@@ -50,6 +50,7 @@ export default defineDe<typeof en>()({
     editIn: 'Im Liga-Admin öffnen',
     invalid: 'Dieses Format konnte nicht angezeigt werden. Die Prüfungen unten nennen den Grund.',
     noPhases: 'Diese Liga hat noch keine Phasen. Lege sie im Tab <link>Phasen</link> an, dann erscheint das Format hier.',
+    noPhasesCustom: 'Diese Liga hat noch keine Phasen. Eine eigene Liga bekommt ihre Phasen, wenn ein Format angehängt wird, nicht durch Anlegen von Hand.',
     forbidden: 'Nur Admins dieser Liga können ihr Format öffnen.',
   },
   tab: {

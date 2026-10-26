@@ -155,6 +155,21 @@ describe('POST /api/seasons with clone_from — refusals write nothing', () => {
     expect(mocks.addResourceAdmin).not.toHaveBeenCalled();
   });
 
+  it('409 for a custom-format source: no ruleset ensure, no league, no admin grant, no phase read', async () => {
+    mocks.getSeasonById.mockResolvedValue({ ...sourceSeason, format_type: 'custom' });
+
+    const response = await POST(request(cloneBody({ copy_roster: true })));
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.code).toBe('SEASON_CLONE_CUSTOM_FORMAT');
+    expect(mocks.ensurePointBuyBattleRuleset).not.toHaveBeenCalled();
+    expect(mocks.createSeason).not.toHaveBeenCalled();
+    expect(mocks.addResourceAdmin).not.toHaveBeenCalled();
+    expect(mocks.getStagesBySeasonId).not.toHaveBeenCalled();
+    expect(mocks.createTournament).not.toHaveBeenCalled();
+  });
+
   it('403 when a resource admin copies the league admins, even from their own league', async () => {
     mocks.requireAnyAdmin.mockResolvedValue(resourceAdmin);
 

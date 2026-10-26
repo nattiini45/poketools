@@ -21,7 +21,8 @@ Four 3D route-themed worlds are registered:
 - **`evoliga`** — the EvoLiga plaza (theme id `plaza`, German locale); the
   auto-map for `evolution_point_buy` seasons.
 - **`sakura`** — the cherry-blossom lakeside park; the auto-map default for
-  every other season format (`singles` / `doubles` / `draft`) and for
+  every other season format (`singles` / `doubles` / `draft`, and the Format
+  Studio `custom` type, which `getSeasonWorld` returns by name) and for
   standalone tournaments (`getDefaultWorld()`). Nav manifest
   `#pulse #roster #teams #schedule #rules`.
 - **`mountain`** — the alpine valley pass; matches NO format, reachable only
@@ -291,7 +292,12 @@ src/components/world/
   DOM-only default world with exactly one `console.warn`; `'auto'`/absent
   follows `getSeasonWorld`.
 - **`getSeasonWorld(format)`** — auto-map arm: `evolution_point_buy` → evoliga;
-  every other format → sakura.
+  every other format → sakura. `custom` (a league whose phases come from an
+  attached Format Studio format) is mapped to sakura explicitly, so it never
+  reaches the default-world safety net; it is not listed in the sakura
+  world's `matchesFormats`, which keeps the world payload of every existing
+  league unchanged. The explicit `route_theme` pins and the viewer override win
+  over it as before.
 - **`getWorldByRouteThemeId(id)`** — the world providing a theme id, or null
   (the default world carries no `routeThemeId`).
 - **`getDefaultWorld()`** — the sakura world: the standalone-tournament

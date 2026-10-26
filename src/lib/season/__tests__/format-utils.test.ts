@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { isDraftLike, isEvolutionPointBuy, assertEpbSeason, leagueDraftHref } from '../format-utils';
+import { isDraftLike, isEvolutionPointBuy, isLeagueDoubles, assertEpbSeason, leagueDraftHref } from '../format-utils';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
 describe('leagueDraftHref', () => {
@@ -67,3 +67,56 @@ describe('assertEpbSeason (format gate)', () => {
     }
   );
 });
+
+describe('draft gate over every league type', () => {
+  const MATRIX = [
+    { format: 'singles', draftLike: false, href: null },
+    { format: 'doubles', draftLike: false, href: null },
+    { format: 'draft', draftLike: true, href: '/leagues/s1/draft' },
+    { format: 'evolution_point_buy', draftLike: true, href: '/leagues/s1/draft-room' },
+    { format: 'custom', draftLike: false, href: null },
+  ] as const;
+
+  it.each(MATRIX)('$format: isDraftLike $draftLike, draft page $href', ({ format, draftLike, href }) => {
+    expect(isDraftLike(format)).toBe(draftLike);
+    expect(leagueDraftHref('s1', format)).toBe(href);
+    expect(isEvolutionPointBuy(format)).toBe(format === 'evolution_point_buy');
+  });
+});
+
+describe('assertEpbSeason (custom)', () => {
+  it('throws 400 format_mismatch for a custom league', () => {
+    try {
+      assertEpbSeason({ format_type: 'custom' });
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      expect((err as UserFacingError).statusCode).toBe(400);
+      expect((err as UserFacingError).code).toBe('format_mismatch');
+    }
+  });
+});
+
+describe('isLeagueDoubles', () => {
+  const doubles = { is_doubles: true };
+  const singles = { is_doubles: false };
+
+  it.each([
+    ['singles', false],
+    ['draft', false],
+    ['evolution_point_buy', false],
+    ['doubles', true],
+  ] as const)('%s follows the league type, whatever its stages say', (format, expected) => {
+    expect(isLeagueDoubles(format, [])).toBe(expected);
+    expect(isLeagueDoubles(format, [doubles, doubles])).toBe(expected);
+    expect(isLeagueDoubles(format, [singles])).toBe(expected);
+  });
+
+  it('custom is doubles only when it has stages and every stage is doubles', () => {
+    expect(isLeagueDoubles('custom', [])).toBe(false);
+    expect(isLeagueDoubles('custom', [singles])).toBe(false);
+    expect(isLeagueDoubles('custom', [doubles, singles])).toBe(false);
+    expect(isLeagueDoubles('custom', [doubles])).toBe(true);
+    expect(isLeagueDoubles('custom', [doubles, doubles])).toBe(true);
+  });
+});
+

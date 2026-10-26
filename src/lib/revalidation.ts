@@ -26,6 +26,8 @@ export const publicTags = {
   teamRoles: 'team-roles',
   /** Imported meta usage (insights fallback when no games exist). */
   metaUsage: 'meta-usage',
+  /** The format gallery shelf (`src/lib/cache/format-reads.ts`). */
+  formatLibrary: 'format-library',
   /** Everything read for one league: row, stages, participants, world, schedule. */
   season: (seasonId: string) => `season:${seasonId}`,
   /** Everything read for one tournament (or league stage). */
@@ -185,6 +187,14 @@ export function expireRatingReads(playerIds: readonly string[]): void {
 /** Expire the public reads a draft write changed (see `draftWriteTags`). */
 export function expireDraftReads(seasonId: string): void {
   expirePublicTags(draftWriteTags(seasonId));
+}
+
+/**
+ * Expire the cached format gallery (`publicTags.formatLibrary`). Every format library write route (create, fork,
+ * publish, visibility, delete) calls this right after the write commits.
+ */
+export function expireFormatLibraryReads(): void {
+  expirePublicTags([publicTags.formatLibrary]);
 }
 
 /**

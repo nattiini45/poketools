@@ -18,7 +18,7 @@ function embeddedCount(embed: { count: number }[] | null | undefined): number {
  * The leagues a viewer may start a new league from: lean season fields plus
  * the phase and roster counts as embedded COUNTs (no player rows, no child id
  * arrays). Archived and test leagues are included: last season's archived
- * league is the typical source. `seasonIds` scopes a resource admin to their
+ * league is the typical source; custom-format leagues are left out (`isCloneSourceFormat`). `seasonIds` scopes a resource admin to their
  * own leagues (`null` = no scope, for site admins); an empty list reads nothing.
  */
 export async function listCloneSourceOptions(seasonIds: string[] | null): Promise<CloneSourceOption[]> {
@@ -30,6 +30,9 @@ export async function listCloneSourceOptions(seasonIds: string[] | null): Promis
       'id, name, format_type, status, archived, is_test_season, ruleset_id, route_theme, language, description, tournaments ( count ), season_participants ( count )',
     );
   if (seasonIds) query = query.in('id', seasonIds);
+  // A custom league is no source (its phases come from an attached format): leave it out here so it
+  // does not use up one of the bounded rows either.
+  query = query.neq('format_type', 'custom');
 
   const { data, error } = await query
     .order('created_at', { ascending: false })

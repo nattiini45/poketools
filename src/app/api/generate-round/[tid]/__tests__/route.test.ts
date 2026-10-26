@@ -76,6 +76,10 @@ vi.mock('@/lib/feature-flags', () => ({
   ENABLE_KALE_CABBAGE: false,
 }));
 
+vi.mock('@/lib/format-studio/attach', () => ({
+  assertSeasonFormatAttached: vi.fn(),
+}));
+
 // --------------- imports (after mocks) ---------------
 
 import { POST } from '@/app/api/generate-round/[tid]/route';
@@ -103,6 +107,8 @@ import { planGroupSchedule } from '@/lib/tournament/group-schedule';
 import { generateRound } from '@/lib/tournament';
 import { revalidateTag } from 'next/cache';
 import { logAuditEvent } from '@/lib/audit/log';
+import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
+import { FormatStudioError } from '@/lib/format-studio/errors';
 
 // --------------- helpers ---------------
 
@@ -1009,6 +1015,71 @@ describe('POST /api/generate-round/[tid]', () => {
 
       expect(response.status).toBe(400);
       expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---- custom leagues: the format must be attached before anything is written ----
+
+  describe('league type and the format check', () => {
+    const tournamentOf = (seasonFormatType: string | null | undefined, extra: Record<string, unknown> = {}) =>
+      ({ ...baseTournament, season_format_type: seasonFormatType, ...extra }) as never;
+
+    it('refuses a custom league without an attached format with 409 format_not_attached, before any read or write', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(tournamentOf('custom'));
+      vi.mocked(assertSeasonFormatAttached).mockRejectedValue(new FormatStudioError('format_not_attached'));
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('format_not_attached');
+      expect(assertSeasonFormatAttached).toHaveBeenCalledWith('s-1');
+      expect(getRoundsByTournament).not.toHaveBeenCalled();
+      expect(getParticipants).not.toHaveBeenCalled();
+      expect(generateRound).not.toHaveBeenCalled();
+      expect(createRound).not.toHaveBeenCalled();
+      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(updateSeason).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it('refuses a custom league before the completed check, so nothing else is answered first', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(tournamentOf('custom', { status: 'completed' }));
+      vi.mocked(assertSeasonFormatAttached).mockRejectedValue(new FormatStudioError('format_not_attached'));
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      expect(response.status).toBe(409);
+    });
+
+    it('generates the round of a custom league whose format is attached', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(tournamentOf('custom'));
+      vi.mocked(assertSeasonFormatAttached).mockResolvedValue(undefined);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
+      expect(assertSeasonFormatAttached).toHaveBeenCalledTimes(1);
+      expect(createRound).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['singles', 'doubles', 'draft', 'evolution_point_buy', undefined])(
+      'does not look at the format of a %s league: no check, same round',
+      async (formatType) => {
+        vi.mocked(getTournamentById).mockResolvedValue(tournamentOf(formatType));
+
+        const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+        expect(response.status).toBe(201);
+        expect(assertSeasonFormatAttached).not.toHaveBeenCalled();
+        expect(createRound).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('does not check a stand-alone tournament', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(tournamentOf(null, { season_id: null }));
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      expect(response.status).toBe(201);
+      expect(assertSeasonFormatAttached).not.toHaveBeenCalled();
     });
   });
 

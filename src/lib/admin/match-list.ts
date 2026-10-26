@@ -48,6 +48,7 @@ export const ADMIN_MATCH_FORMAT_TYPES = [
   'doubles',
   'draft',
   'evolution_point_buy',
+  'custom',
 ] as const satisfies readonly Enums<'season_format_type'>[];
 
 // Compile-time check: a format added to the enum must be listed above.

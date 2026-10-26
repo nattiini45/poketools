@@ -23,7 +23,7 @@ export default defineDe<typeof en>()({
     swiss: 'Schweizer System',
   },
   bracketSide: { winners: 'Gewinnerseite', losers: 'Verliererseite', grand_finals: 'Großes Finale' },
-  formatType: { singles: 'Einzel', doubles: 'Doppel', draft: 'Draft', evolution_point_buy: 'Evolution Point Buy' },
+  formatType: { singles: 'Einzel', doubles: 'Doppel', draft: 'Draft', evolution_point_buy: 'Evolution Point Buy', custom: 'Eigenes Format' },
   draftType: { snake: 'Snake', auction: 'Auktion', budget: 'Budget' },
   draftPoolStatus: { pending: 'Ausstehend', in_progress: 'Läuft', complete: 'Abgeschlossen' },
   matchProposalStatus: {
