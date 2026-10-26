@@ -13,6 +13,7 @@ vi.mock('../dex', () => ({
 
 import { getSpecies, getMove, getItem, getAbility } from '../dex';
 import { validateTeam, validateDraftOwnership } from '../validation';
+import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ function makePokemonSet(overrides?: Partial<PokemonSet>): PokemonSet {
 }
 
 function makeRuleset(overrides?: Partial<Ruleset>): Ruleset {
-  return {
+  return buildRuleset({
     id: 'ruleset-1',
     name: 'Gen 9 OU',
     base_format: 'gen9ou',
@@ -56,7 +57,7 @@ function makeRuleset(overrides?: Partial<Ruleset>): Ruleset {
     created_at: '2025-01-01',
     updated_at: '2025-01-01',
     ...overrides,
-  };
+  });
 }
 
 function setupDexMocks() {
@@ -328,5 +329,27 @@ describe('validateTeam', () => {
     const team = [makePokemonSet({ item: 'Mystery Item' })];
     const result = validateTeam(team, makeRuleset());
     expect(result.valid).toBe(true);
+  });
+});
+
+describe('validateTeam: the generation of the base format', () => {
+  const genOf = (baseFormat: string): number => {
+    vi.mocked(getSpecies).mockClear();
+    validateTeam([makePokemonSet()], makeRuleset({ base_format: baseFormat }));
+    return vi.mocked(getSpecies).mock.calls[0][1] as number;
+  };
+
+  it('reads the one generation digit of the id, so gen91v1 is generation 9 and not 911', () => {
+    expect(genOf('gen9ou')).toBe(9);
+    expect(genOf('gen3ou')).toBe(3);
+    expect(genOf('gen91v1')).toBe(9);
+    expect(genOf('gen96v6doublesdraft')).toBe(9);
+    expect(genOf('gen8natdexdraft')).toBe(8);
+  });
+
+  it('falls back to generation 9 for the blank template, a bare generation and anything that is no format id', () => {
+    expect(genOf('blank')).toBe(9);
+    expect(genOf('gen9')).toBe(9);
+    expect(genOf('')).toBe(9);
   });
 });

@@ -14,7 +14,7 @@ import type {
   Stage,
 } from '../types';
 import { documentShape } from './document';
-import { ltextSchema } from './common';
+import { ltextSchema } from '@/lib/studio-core/text-schema';
 import {
   advanceSelectSchema,
   edgeSchema,

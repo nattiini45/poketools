@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compile } from '../compile';
-import { deepFreeze } from '../json';
+import { deepFreeze } from '@/lib/studio-core/json';
 import {
   computeCoverage,
   definitionToPlainText,
@@ -9,7 +9,7 @@ import {
   type DefinitionDescription,
 } from '../engine/describe-definition';
 import type { StagePlan } from '../engine/plan';
-import { ltext } from '../ltext';
+import { ltext } from '@/lib/studio-core/ltext';
 import { classicLeague } from '../presets/classic-league';
 import { cup } from '../presets/cup';
 import { PRESETS } from '../presets';
@@ -138,9 +138,9 @@ describe('coverage', () => {
     expect(computeCoverage(def)).toEqual({ auto: 14, checked: 1, honor: 1, legacy: 0, total: 16 });
   });
 
-  it('counts a Showdown format like a named ruleset', () => {
+  it('counts a rule preset like a named ruleset', () => {
     const def = clone(classicLeague);
-    def.stages[1].ruleset = { kind: 'showdown', format: 'gen9ou' };
+    def.stages[1].ruleset = { kind: 'preset', preset: 'gen9ou' };
     expect(computeCoverage(def)).toEqual({ auto: 12, checked: 1, honor: 1, legacy: 0, total: 14 });
   });
 
@@ -213,11 +213,11 @@ describe('stage blocks', () => {
     expect(describeStage(classicLeague, 'constructor', 'de')).toBeNull();
   });
 
-  it('names the Showdown format of a stage in both languages', () => {
+  it('names the rule preset of a stage in both languages', () => {
     const def = clone(classicLeague);
-    def.stages[1].ruleset = { kind: 'showdown', format: 'gen9vgc' };
-    expect(describeStage(def, 'playoffs', 'en')?.ruleset).toBe('Teams follow the Showdown format Gen 9 VGC.');
-    expect(describeStage(def, 'playoffs', 'de')?.ruleset).toBe('Die Teams folgen dem Showdown-Format Gen 9 VGC.');
+    def.stages[1].ruleset = { kind: 'preset', preset: 'gen9vgc' };
+    expect(describeStage(def, 'playoffs', 'en')?.ruleset).toBe('Teams follow the rule preset Gen 9 VGC.');
+    expect(describeStage(def, 'playoffs', 'de')?.ruleset).toBe('Die Teams folgen dem Regel-Preset Gen 9 VGC.');
   });
 
   it('names a stored ruleset and falls back to the generic sentence', () => {

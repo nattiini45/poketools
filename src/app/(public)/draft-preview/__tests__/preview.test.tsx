@@ -29,6 +29,7 @@ import {
   PREVIEW_LIST_VERSION_ID,
   PREVIEW_PARTICIPATION_LINE,
   PREVIEW_PRESET_LINES,
+  PREVIEW_ROSTER,
   PREVIEW_SCENARIOS,
   PREVIEW_WALL_MAX_PRICE,
   PREVIEW_WALL_PIN,
@@ -116,7 +117,7 @@ describe('fixture-lines.example.json (make-example-list-fixtures output)', () =>
     expect(PREVIEW_ENTRIES.every((e) => e.list_version_id === PREVIEW_LIST_VERSION_ID)).toBe(true);
   });
 
-  it('prices every line inside one of the example price tabs', () => {
+  it('prices every line inside one of the active pack’s price tabs (clamped into their span)', () => {
     const price = new Map(PREVIEW_ENTRIES.map((e) => [e.line_id ?? '', e.price]));
     const counts = countByTab(price.keys(), (id) => price.get(id) ?? 0);
     expect(counts.all).toBe(48);
@@ -750,6 +751,20 @@ describe('rendering (no network, EN + DE)', () => {
       // The pinned branched line.
       expect(html).toMatch(new RegExp(`aria-selected="true"[^>]*data-line-id="${PREVIEW_WALL_PIN}"`));
     }
+  });
+
+  it('live-roster: the team weakness table is open under My roster, with the Base | Final switch and the counts', () => {
+    expect(build('live-roster').preset?.weaknessOpen).toBe(true);
+    for (const locale of ['en', 'de'] as const) {
+      const html = render('live-roster', locale);
+      expect(html).toMatch(/<details [^>]*\bopen=""[^>]*><summary[^>]*>[^<]+<\/summary>/);
+      expect(html).toContain('weaknessTable');
+      expect(html).toMatch(/role="radiogroup"[^>]*aria-label="(?:Typing of|Typen der)"/);
+      // Dawn's owned lines (her second-to-last pick is on the clock) are the rows; the tally rows close the table.
+      expect(html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1].split('</tr>').filter((r) => r.includes('<tr'))).toHaveLength(PREVIEW_ROSTER - 2);
+    }
+    // Every other pick scenario leaves the overview collapsed.
+    expect(build('live-my-turn').preset).toBeNull();
   });
 });
 

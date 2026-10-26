@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import AdminGuard from '@/components/shared/AdminGuard';
-import FormatCard from '@/components/format-studio/FormatCard';
-import FormatLibraryList, { type LibraryEntry } from '@/components/format-studio/starts/FormatLibraryList';
+import LibraryCard from '@/components/studio-shell/library/LibraryCard';
+import FormatLibraryList from '@/components/format-studio/starts/FormatLibraryList';
+import type { LibraryEntry } from '@/components/studio-shell/library/LibraryList';
 import NewFormatDialog from '@/components/format-studio/starts/NewFormatDialog';
 import Badge from '@/components/ui/Badge';
 import PageContainer from '@/components/ui/PageContainer';
@@ -118,7 +119,7 @@ export default async function FormatsGalleryPage() {
           <p className="text-sm text-poke-text-muted">{t('gallery.readOnlyNote')}</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {examples.map(({ id, doc }) => (
-              <FormatCard
+              <LibraryCard
                 key={id}
                 href={`/admin/formats/example/${id}`}
                 title={doc.title}
@@ -169,7 +170,7 @@ export default async function FormatsGalleryPage() {
               {summaries.map((league) => {
                 const chain = league.pairings.map((kind) => enumLabel(tEnum, 'bracketType', kind)).join(' → ');
                 return (
-                  <FormatCard
+                  <LibraryCard
                     key={league.id}
                     href={`/admin/formats/league/${league.id}`}
                     title={league.name}

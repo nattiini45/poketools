@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as exprLimits from '../expr/limits';
-import { KEY_PATTERN } from '../keys';
+import { KEY_PATTERN } from '@/lib/studio-core/keys';
 import * as limits from '../limits';
 
 describe('document limits', () => {

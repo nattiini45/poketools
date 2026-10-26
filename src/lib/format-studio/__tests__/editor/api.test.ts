@@ -17,9 +17,8 @@ import {
   publishRequest,
   saveDraftRequest,
   visibilityRequest,
-  type ApiErrorKind,
-  type FetchLike,
 } from '../../editor/api';
+import type { ApiErrorKind, FetchLike } from '@/lib/studio-core/request';
 import { FORMAT_ERROR_CODES, FORMAT_ERROR_STATUS } from '../../errors';
 
 interface Call {
@@ -112,12 +111,12 @@ describe('requests', () => {
     }
   });
 
-  it('forkPresetRequest sends the Showdown format it was given', async () => {
+  it('forkPresetRequest sends the rule preset it was given', async () => {
     const { f, calls } = fakeFetch(ok({}, 201));
     await forkPresetRequest('classic-league', 'gen9ou', f);
     expect(calls[0].url).toBe('/api/formats/presets/classic-league/fork');
     expect(calls[0].init?.method).toBe('POST');
-    expect(bodyOf(calls[0])).toEqual({ showdown_format: 'gen9ou' });
+    expect(bodyOf(calls[0])).toEqual({ ruleset_preset: 'gen9ou' });
   });
 
   it('createFormatRequest POSTs a document or a name', async () => {
@@ -275,6 +274,7 @@ describe('classifyApiError', () => {
     format_season_started: 'blocked',
     format_attach_forbidden: 'forbidden',
     format_attach_invalid: 'invalid',
+    format_attach_ruleset_forbidden: 'forbidden',
     format_attach_ruleset_required: 'invalid',
     format_attach_manual_phases: 'blocked',
     format_not_attached: 'blocked',

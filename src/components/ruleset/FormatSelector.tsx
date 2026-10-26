@@ -2,6 +2,7 @@
 
 import type { BaseFormat } from '@/types/ruleset';
 import { GENERATIONS, getTiersForGen, getFormatSummary } from '@/lib/pkmn/format-catalog';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { useT } from '@/i18n/client';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
 
@@ -10,11 +11,10 @@ interface FormatSelectorProps {
   onChange: (format: BaseFormat) => void;
 }
 
-/** Extract generation number from a format ID like 'gen9ou' → 9 */
+/** Extract generation number from a format ID like 'gen9ou' → 9 ('blank' is 0, the custom format) */
 function genFromFormatId(formatId: string): number {
   if (formatId === 'blank') return 0;
-  const match = formatId.match(/^gen(\d)/);
-  return match ? parseInt(match[1], 10) : 9;
+  return generationOrDefault(formatId);
 }
 
 /**

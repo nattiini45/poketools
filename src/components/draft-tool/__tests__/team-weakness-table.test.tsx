@@ -60,6 +60,12 @@ describe('TeamWeaknessTable', () => {
     expect(html).toMatch(/<summary [^>]*>Team weaknesses<\/summary>/);
   });
 
+  it('starts expanded when asked to (the preview scenario), still the same disclosure', () => {
+    const html = render({ defaultOpen: true });
+    expect(html).toMatch(/^<details [^>]*\bopen=""/);
+    expect(html).toContain(styles.weaknessTable);
+  });
+
   it('switches Base | Final with the persisted stage (Final checked by default)', () => {
     const html = render();
     expect(html).toContain('role="radiogroup"');

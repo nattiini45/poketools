@@ -15,10 +15,15 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 
 vi.mock('@/lib/match/aggregate-rebuild', () => ({
   rebuildAggregatesForScope: vi.fn(),
+  drainPendingAggregateJobs: vi.fn(),
 }));
 
 vi.mock('@/lib/rating/updateRatings', () => ({
   rebuildRatingsForPlayers: vi.fn(),
+}));
+
+vi.mock('@/lib/rating/test-league-rebuild', () => ({
+  rebuildRatingsSettled: vi.fn(),
 }));
 
 vi.mock('@/lib/gamification/streaks', () => ({
@@ -36,23 +41,32 @@ vi.mock('@/lib/reconcile/evolution-rebuild', () => ({
 // ─── Imports (after mocks) ─────────────────────────────────────────
 
 import {
+  RESTORE_AGGREGATE_DRAIN_BUDGET_MS,
   rebuildAfterSeasonDelete,
+  rebuildAfterSeasonRestore,
   rebuildAfterTournamentDelete,
 } from '../entity-delete-rebuild';
 import { clearAggregatesForScope } from '@/lib/supabase/queries/aggregates';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
+import { drainPendingAggregateJobs, rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
 import { rebuildRatingsForPlayers } from '@/lib/rating/updateRatings';
+import { rebuildRatingsSettled } from '@/lib/rating/test-league-rebuild';
 import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
-import { EntityDeleteRebuildStepError, toDeleteRebuildWarning } from '@/lib/api/delete-rebuild-warning';
+import {
+  EntityDeleteRebuildStepError,
+  toDeleteRebuildWarning,
+  toRestoreRebuildWarning,
+} from '@/lib/api/delete-rebuild-warning';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
 const mockClear = vi.mocked(clearAggregatesForScope);
 const mockGetSeasonById = vi.mocked(getSeasonById);
 const mockRebuildScope = vi.mocked(rebuildAggregatesForScope);
 const mockRebuildRatings = vi.mocked(rebuildRatingsForPlayers);
+const mockRatingsSettled = vi.mocked(rebuildRatingsSettled);
+const mockDrain = vi.mocked(drainPendingAggregateJobs);
 const mockRecomputeStreaks = vi.mocked(recomputeStreaks);
 const mockIsEpb = vi.mocked(isEvolutionPointBuy);
 const mockRepairEvolution = vi.mocked(repairSeasonEvolution);
@@ -60,6 +74,7 @@ const mockRepairEvolution = vi.mocked(repairSeasonEvolution);
 const SEASON_ID = 'season-1';
 const TOURNAMENT_ID = 'tournament-1';
 const PLAYERS = ['p1', 'p2'];
+const PHASES = ['phase-1', 'phase-2'];
 
 /** Minimal Season shape the module reads (id + format_type). */
 function seasonOf(formatType: string): { id: string; format_type: string } {
@@ -93,6 +108,14 @@ beforeEach(() => {
     }))
   );
   mockRecomputeStreaks.mockResolvedValue(undefined);
+  mockRatingsSettled.mockResolvedValue({ rebuiltPlayerIds: PLAYERS, passes: 2, settled: true, unratedMatches: 0 });
+  mockDrain.mockResolvedValue({
+    processed: 4,
+    failed: 0,
+    reclaimed: 0,
+    rounds: 1,
+    statsAfter: { pending: 0, processing: 0, completed: 4, failed: 0, cancelled: 0 },
+  });
   mockRepairEvolution.mockResolvedValue({
     trackersUpdated: 0,
     eventsRewritten: 0,
@@ -226,11 +249,20 @@ describe('rebuildAfterTournamentDelete', () => {
 });
 
 describe('rebuildAfterSeasonDelete', () => {
-  it('clears the league scope, rebuilds all_time, rebuilds players, no evolution repair', async () => {
-    const summary = await rebuildAfterSeasonDelete({ seasonId: SEASON_ID, playerIds: PLAYERS });
+  it('clears every phase scope and the league scope, rebuilds all_time, rebuilds players, no evolution repair', async () => {
+    mockClear
+      .mockResolvedValueOnce({ aggregatesDeleted: 3, playerAggregatesDeleted: 10 }) // phase-1
+      .mockResolvedValueOnce({ aggregatesDeleted: 4, playerAggregatesDeleted: 20 }) // phase-2
+      .mockResolvedValueOnce({ aggregatesDeleted: 1, playerAggregatesDeleted: 2 }); // league
 
-    // 1. League scope cleared (nothing feeds it anymore), never rebuilt.
-    expect(mockClear).toHaveBeenCalledWith('league', SEASON_ID);
+    const summary = await rebuildAfterSeasonDelete({ seasonId: SEASON_ID, playerIds: PLAYERS, phaseIds: PHASES });
+
+    // 1. Each phase's tournament scope, then the league scope, cleared (nothing feeds them anymore), never rebuilt.
+    expect(mockClear.mock.calls).toEqual([
+      ['tournament', 'phase-1'],
+      ['tournament', 'phase-2'],
+      ['league', SEASON_ID],
+    ]);
     expect(mockRebuildScope).toHaveBeenCalledTimes(1);
     expect(mockRebuildScope).toHaveBeenCalledWith('all_time', null);
 
@@ -238,12 +270,127 @@ describe('rebuildAfterSeasonDelete', () => {
     expect(mockRebuildRatings).toHaveBeenCalledWith(PLAYERS);
     expect(mockRecomputeStreaks).toHaveBeenCalledTimes(2);
 
-    // 3. Evolution state cascades with the season row — no repair path.
+    // 3. Evolution state is gone with the league — no repair path.
     expect(mockRepairEvolution).not.toHaveBeenCalled();
-    expect(summary.tournamentScopeCleared).toBeNull();
+    expect(summary.tournamentScopeCleared).toEqual({ aggregatesDeleted: 7, playerAggregatesDeleted: 30 });
     expect(summary.evolutionRepair).toBeNull();
-    expect(summary.leagueScope).toMatchObject({ seasonId: SEASON_ID, mode: 'cleared' });
+    expect(summary.leagueScope).toMatchObject({ seasonId: SEASON_ID, mode: 'cleared', aggregatesDeleted: 1 });
     expect(summary.scope).toBe('season');
+  });
+
+  it('clears the phase scopes BEFORE the league scope and the global all_time rebuild', async () => {
+    await rebuildAfterSeasonDelete({ seasonId: SEASON_ID, playerIds: PLAYERS, phaseIds: PHASES });
+
+    const lastPhaseClear = mockClear.mock.invocationCallOrder[1];
+    const leagueClear = mockClear.mock.invocationCallOrder[2];
+    ranAfter(leagueClear, lastPhaseClear);
+    ranAfter(mockRebuildScope.mock.invocationCallOrder[0], leagueClear);
+  });
+
+  it('a league without phases clears only the league scope and reports no tournament scope', async () => {
+    const summary = await rebuildAfterSeasonDelete({ seasonId: SEASON_ID, playerIds: PLAYERS, phaseIds: [] });
+
+    expect(mockClear.mock.calls).toEqual([['league', SEASON_ID]]);
+    expect(summary.tournamentScopeCleared).toBeNull();
+  });
+});
+
+describe('rebuildAfterSeasonRestore', () => {
+  it('drains the aggregate queue (time-boxed), settles ratings, recomputes streaks, repairs evolution', async () => {
+    mockGetSeasonById.mockResolvedValue(seasonOf('evolution_point_buy') as never);
+    mockIsEpb.mockReturnValue(true);
+    mockRepairEvolution.mockResolvedValue({
+      trackersUpdated: 2,
+      eventsRewritten: 5,
+      evolutionPoints: { points_awarded: 1 },
+    } as never);
+    const before = Date.now();
+
+    const summary = await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS });
+
+    const drainOptions = mockDrain.mock.calls[0][0];
+    expect(drainOptions?.batchSize).toBe(50);
+    expect(drainOptions?.deadline).toBeGreaterThanOrEqual(before + RESTORE_AGGREGATE_DRAIN_BUDGET_MS);
+    expect(mockRatingsSettled).toHaveBeenCalledWith(PLAYERS);
+    expect(mockRecomputeStreaks.mock.calls).toEqual([['p1'], ['p2']]);
+    expect(mockRepairEvolution).toHaveBeenCalledWith(SEASON_ID);
+    expect(summary).toEqual({
+      scope: 'season_restore',
+      playerIds: PLAYERS,
+      aggregateJobs: { processed: 4, failed: 0, remaining: 0 },
+      ratingsRebuilt: 2,
+      ratingPasses: 2,
+      ratingsSettled: true,
+      streaksRebuilt: 2,
+      evolutionRepair: { trackersUpdated: 2, eventsRewritten: 5, pointsAwarded: 1 },
+    });
+  });
+
+  it('never rebuilds or clears an aggregate scope: the restored games count through the queue', async () => {
+    await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS });
+
+    expect(mockRebuildScope).not.toHaveBeenCalled();
+    expect(mockClear).not.toHaveBeenCalled();
+    expect(mockRebuildRatings).not.toHaveBeenCalled();
+  });
+
+  it('runs the steps in order: aggregates, ratings, streaks, evolution', async () => {
+    await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS });
+
+    const order = [
+      mockDrain.mock.invocationCallOrder[0],
+      mockRatingsSettled.mock.invocationCallOrder[0],
+      mockRecomputeStreaks.mock.invocationCallOrder[0],
+      mockGetSeasonById.mock.invocationCallOrder[0],
+    ];
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('reports the jobs the drain left to the cron and unsettled ratings', async () => {
+    mockDrain.mockResolvedValue({
+      processed: 50,
+      failed: 1,
+      reclaimed: 0,
+      rounds: 2,
+      statsAfter: { pending: 30, processing: 2, completed: 50, failed: 1, cancelled: 0 },
+    });
+    mockRatingsSettled.mockResolvedValue({ rebuiltPlayerIds: PLAYERS, passes: 9, settled: false, unratedMatches: 0 });
+
+    const summary = await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS });
+
+    expect(summary.aggregateJobs).toEqual({ processed: 50, failed: 1, remaining: 32 });
+    expect(summary).toMatchObject({ ratingsSettled: false, ratingPasses: 9 });
+  });
+
+  it('skips the evolution repair for a non-EPB league', async () => {
+    const summary = await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS });
+
+    expect(mockRepairEvolution).not.toHaveBeenCalled();
+    expect(summary.evolutionRepair).toBeNull();
+  });
+
+  it.each([
+    ['aggregates', () => mockDrain.mockRejectedValueOnce(new Error('drain failed')), 'restore_rebuild_aggregates_failed'],
+    ['ratings', () => mockRatingsSettled.mockRejectedValueOnce(new Error('ratings failed')), 'restore_rebuild_ratings_failed'],
+    ['streaks', () => mockRecomputeStreaks.mockRejectedValueOnce(new Error('streaks failed')), 'restore_rebuild_streaks_failed'],
+  ] as const)('a failed %s step names the step and stops the later ones', async (stepName, arrange, code) => {
+    arrange();
+    const err = await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS }).then(() => null, (e: unknown) => e);
+
+    expect(err).toBeInstanceOf(EntityDeleteRebuildStepError);
+    expect((err as EntityDeleteRebuildStepError).step).toBe(stepName);
+    expect(toRestoreRebuildWarning(err)).toMatchObject({ code });
+    if (stepName === 'aggregates') expect(mockRatingsSettled).not.toHaveBeenCalled();
+  });
+
+  it('a failed evolution repair names the evolution step', async () => {
+    mockIsEpb.mockReturnValue(true);
+    mockRepairEvolution.mockRejectedValueOnce(new Error('repair failed'));
+
+    const err = await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS }).then(() => null, (e: unknown) => e);
+
+    expect((err as EntityDeleteRebuildStepError).step).toBe('evolution');
+    expect(toRestoreRebuildWarning(err)).toMatchObject({ code: 'restore_rebuild_evolution_failed' });
   });
 });
 
@@ -280,7 +427,7 @@ describe('a failed rebuild step names the step (distinct warning code per cause)
 
   it('season delete: aggregates', async () => {
     mockClear.mockRejectedValueOnce(new Error('clear failed'));
-    const err = await failure(() => rebuildAfterSeasonDelete({ seasonId: SEASON_ID, playerIds: PLAYERS }));
+    const err = await failure(() => rebuildAfterSeasonDelete({ seasonId: SEASON_ID, playerIds: PLAYERS, phaseIds: PHASES }));
     expect(err.step).toBe('aggregates');
     // Nothing after the failed step ran.
     expect(mockRebuildRatings).not.toHaveBeenCalled();
@@ -293,7 +440,7 @@ describe('a failed rebuild step names the step (distinct warning code per cause)
       status: 409,
     });
     mockRebuildRatings.mockRejectedValueOnce(refusal);
-    const err = await failure(() => rebuildAfterSeasonDelete({ seasonId: SEASON_ID, playerIds: PLAYERS }));
+    const err = await failure(() => rebuildAfterSeasonDelete({ seasonId: SEASON_ID, playerIds: PLAYERS, phaseIds: PHASES }));
     expect(err.cause).toBe(refusal);
     expect(toDeleteRebuildWarning(err)).toEqual({
       code: 'rating_history_incomplete',

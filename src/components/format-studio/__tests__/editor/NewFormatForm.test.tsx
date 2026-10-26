@@ -8,6 +8,7 @@ import { renderWithI18n } from '@/test/i18n';
 import type { Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
+import { rulesetMessages } from '@/i18n/messages/ruleset';
 import { PRESETS, resolveLText } from '@/lib/format-kit/client';
 import type { ImportFailure, ImportReport } from '@/lib/format-studio/editor/import-file';
 import { START_KINDS, type StartKind } from '@/lib/format-studio/editor/starts';
@@ -103,18 +104,19 @@ describe('NewFormatForm: example', () => {
   });
 });
 
-describe('NewFormatForm: the Showdown format', () => {
+describe('NewFormatForm: the rule preset', () => {
   it.each(['en', 'de'] as const)('is an optional, searchable, grouped pick for a blank format (%s)', (locale) => {
     const t = createTranslator(formatStudioEditorMessages, locale);
+    const r = createTranslator(rulesetMessages, locale);
     const html = render({ start: 'blank', locale });
-    expect(html).toContain('for="fe-new-showdown"');
-    expect(html).toContain(esc(t('new.showdownLabel')));
-    expect(html).toContain(`<option value="" selected="">${esc(t('new.showdownNone'))}</option>`);
-    expect(html).toContain('<optgroup label="Gen 9 (SV)">');
+    expect(html).toContain('for="fe-new-preset"');
+    expect(html).toContain(esc(t('new.presetLabel')));
+    expect(html).toContain(`<option value="" selected="">${esc(t('new.presetNone'))}</option>`);
+    expect(html).toContain(`<optgroup label="${esc(r('presetSelect.group', { source: r('presetSelect.source.showdown'), generation: 'Gen 9 (SV)', family: r('presetSelect.family.singles') }))}">`);
     expect(html).toContain('<option value="gen9ou">Gen 9 OU</option>');
     expect(html).toContain('type="search"');
-    expect(html).toContain('for="fe-new-showdown-search"');
-    expect(html).toContain(esc(t('new.showdownHelp')));
+    expect(html).toContain('for="fe-new-preset-search"');
+    expect(html).toContain(esc(t('new.presetHelp')));
     expectLabelledControls(html);
     expectNoLeftovers(html);
     expectUniqueIds(html);
@@ -122,16 +124,16 @@ describe('NewFormatForm: the Showdown format', () => {
 
   it('is offered for a shipped example', () => {
     const html = render({ start: 'example' });
-    expect(html).toContain('for="fe-new-showdown"');
+    expect(html).toContain('for="fe-new-preset"');
     expect(html).toContain('<option value="gen9vgc">Gen 9 VGC</option>');
   });
 
   it('is not offered for a gallery format, a league structure or an import', () => {
     const gallery = { gallery: [{ id: 'g1', name: 'Autumn Cup', version: 3 }], examples: [] };
     // With no shipped example the first (and only) choice is a gallery format.
-    expect(render({ start: 'example', data: gallery })).not.toContain('fe-new-showdown');
-    expect(render({ start: 'league' })).not.toContain('fe-new-showdown');
-    expect(render({ start: 'import' })).not.toContain('fe-new-showdown');
+    expect(render({ start: 'example', data: gallery })).not.toContain('fe-new-preset');
+    expect(render({ start: 'league' })).not.toContain('fe-new-preset');
+    expect(render({ start: 'import' })).not.toContain('fe-new-preset');
   });
 });
 

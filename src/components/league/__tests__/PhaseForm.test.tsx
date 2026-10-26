@@ -10,25 +10,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import PhaseForm, { PhaseNameField, isNameTakenError, resolveIsDoubles } from '../PhaseForm';
+import { makeRulesetOption } from '@/test/ruleset-fixtures';
 
-function ruleset(id: string, name: string, isDoubles = false): Ruleset {
-  return {
-    id,
-    name,
-    base_format: 'gen9',
-    is_doubles: isDoubles,
-    clauses: [],
-    bans: { pokemon: [], moves: [], items: [], abilities: [] },
-    additions: { pokemon: [] },
-    custom_rules_string: '',
-    min_shared_type_pct: 0,
-    team_constraints: null,
-    created_by: null,
-    created_at: '',
-    updated_at: '',
-  };
+function ruleset(id: string, name: string, isDoubles = false): RulesetOption {
+  return makeRulesetOption({ id, name, base_format: 'gen9', is_doubles: isDoubles });
 }
 
 const PACK = ruleset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Evolution Point Buy');

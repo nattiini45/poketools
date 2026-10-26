@@ -6,7 +6,7 @@
  * Stage-ish params (`stage`, `from_stage`, `to_stage`, `edge`, `rule`) always carry KEYS; names are resolved when
  * rendering.
  */
-import { escapePointerSegment, type PatchOp } from '../patch';
+import { escapePointerSegment, type PatchOp } from '@/lib/studio-core/patch';
 
 export const DIAGNOSTIC_CODES = [
   // Schema (validator issues, one code per issue code)
@@ -58,7 +58,7 @@ export const DIAGNOSTIC_CODES = [
   'rank_duplicate_step',
   // References and text
   'ruleset_not_found',
-  'showdown_format_unknown',
+  'ruleset_preset_unknown',
   'module_duplicate',
   'ltext_untranslated',
   // Expressions
@@ -151,7 +151,7 @@ const ERROR_CODES: readonly DiagnosticCode[] = [
   'metric_unproduced',
   'rank_decision_match_position',
   'ruleset_not_found',
-  'showdown_format_unknown',
+  'ruleset_preset_unknown',
   'module_duplicate',
   'expr_shape',
   'expr_depth',

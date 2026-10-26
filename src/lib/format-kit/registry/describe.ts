@@ -14,11 +14,11 @@ import { createTranslator } from '@/i18n/core';
 import { createFormatter } from '@/i18n/format';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
 import type { ParamValue } from '@/i18n/types';
-import { hasOwn, isKey } from '../keys';
+import { hasOwn, isKey } from '@/lib/studio-core/keys';
 import { printExpr } from '../expr/printer';
 import type { Expr } from '../expr/ast';
-import { resolveLText } from '../ltext';
-import { getShowdownFormat } from '../showdown';
+import { resolveLText } from '@/lib/studio-core/ltext';
+import { getRulesetPreset } from '../ruleset-presets';
 import type { LText } from '../types';
 import { kindKey, type AvailableKind, type PrimitiveKind } from './kinds';
 import { manifestEntry } from './manifest';
@@ -181,10 +181,10 @@ const DESCRIBERS: ReadonlyMap<AvailableKind, Describer> = new Map<AvailableKind,
       const kind = str(n, 'kind');
       if (kind === 'season_default') return { params: {} };
       if (kind === 'ruleset') return { key: 'team_ruleset_custom', params: {} };
-      if (kind === 'showdown') {
-        const format = str(n, 'format');
+      if (kind === 'preset') {
+        const preset = str(n, 'preset');
         // An id the catalog does not know (a compile error elsewhere) is shown as written.
-        return format === null ? null : { key: 'team_ruleset_showdown', params: { format: getShowdownFormat(format)?.name ?? format } };
+        return preset === null ? null : { key: 'team_ruleset_preset', params: { preset: getRulesetPreset(preset)?.name ?? preset } };
       }
       return null;
     },

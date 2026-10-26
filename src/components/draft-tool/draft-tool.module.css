@@ -66,6 +66,14 @@
    */
   --draft-page-pad-y: 3rem;
   /*
+   * The stage column's fit: the line picture's height in percent of its width, the DRAFT dock's height
+   * (the default holds until `useStickyOffsets` has measured the real one) and, on phones, the bottom bar's
+   * (a button of 48px plus its padding). See "Left stage".
+   */
+  --draft-preview-h: 72;
+  --draft-dock-h: 7.5rem;
+  --draft-bottom-bar-h: 4.5rem;
+  /*
    * Gold of the favourite star (Pokémon HOME look, both themes). The palette
    * yellow is too pale for a thin outline on the light surfaces, so it is
    * mixed toward its ink variant; the dark palettes make both the same gold.
@@ -80,7 +88,7 @@
    */
   --draft-card-border: 2px;
   --draft-card-head: 1.75rem;
-  --draft-card-sprite: 4rem;
+  --draft-card-sprite: 5.5rem;
   --draft-card-name: 1rem;
   --draft-card-meta: 0.875rem;
   --draft-card-footer-sprite: 2.5rem;
@@ -353,6 +361,21 @@
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
   }
+  /*
+   * The stage card never outgrows the scroller minus the dock below it: the dock is sticky at the bottom, so a
+   * taller card would end under it with the base stage cut off. Capped, the card's one flexible item, the line
+   * picture (`.previewArea`), takes the shortfall, and the dock sits in its natural place right under the card
+   * (the scroller's gap is the 0.75rem taken off here). `100%` is the scroller's content height: definite,
+   * because the scroller is a flex item of the fixed-height frame. In a window too short for even the
+   * picture's floor, `min-height: min-content` lets the card keep its content height instead of overflowing
+   * its box (an overflow would stay under the dock at every scroll position): the column scrolls, and once
+   * the card has scrolled past the dock's natural place the stage is whole.
+   */
+  .stageCard {
+    flex: 0 0 auto;
+    min-height: min-content;
+    max-height: calc(100% - var(--draft-dock-h) - 0.75rem);
+  }
   .wallPane {
     margin-left: -48px;
     padding-left: calc(48px + 0.75rem);
@@ -453,7 +476,7 @@
  *
  * Overflow geometry. A card of height H skewed about its centre leaves its
  * cell by H/2 * tan(skew) at the top-right and the bottom-left corner
- * (`--draft-card-overhang`: 12px at the 174px card and 8deg). `.wallGrid`
+ * (`--draft-card-overhang`: 14px at the 198px card and 8deg). `.wallGrid`
  * pads its inline sides by exactly that plus the ring (the ring is a shadow
  * and adds no scroll range, it only needs the room), so the right-most
  * column's frame ends inside the scroller's content box: scrollWidth equals
@@ -632,25 +655,48 @@
 }
 
 /*
- * The line as a group portrait (`LinePreview`): an ordered list whose items
- * stand on one ascending diagonal, the base smallest in front at the lower
- * left, the final stage largest at the back on the upper right, overlapping
- * about a third, so left to right is the evolution order. Everything is a
- * fraction of the pane: the list is the size container (`cqi` = its width), so
- * the picture scales from a phone to the desktop column without a pixel size,
- * and its height follows from the aspect ratio. A two-stage line is the same
- * picture with two slots, centred as a pair. Keep the sprites inside the list:
- * from 1024 px the pane's diagonal edge clips whatever reaches the right padding.
+ * The line as a group portrait (`LinePreview`). `.previewArea` is the halftone
+ * field and a SIZE container: it takes the room the stage column leaves it and
+ * `.previewStage`, the ordered list of the stages, fits inside it by both its
+ * inline and its block size (`--draft-preview-h`: the picture's height in
+ * percent of its width). A short stage column therefore shrinks the picture
+ * instead of letting the base stage run under the sticky DRAFT button, and a
+ * narrow one shrinks it by width, with no pixel size anywhere.
+ *
+ * Where the room comes from. Phones and tablets: the field is as high as the
+ * picture's aspect ratio gives (full width), capped on phones to the window
+ * between the sticky clock row and the bottom bar, so it can always be seen
+ * whole. From 1024 px: the stage card is capped to the scroller minus the
+ * dock (`--draft-dock-h`, measured by `useStickyOffsets`), and the field is the
+ * one flexible item in it, so it shrinks to what the info box and the dock
+ * leave. `min-height` is the floor below which the page scrolls instead.
+ *
+ * The slots are placed in container units of the picture, on one ascending
+ * diagonal: the base smallest in front at the lower left, the final largest at
+ * the back on the upper right. Each box overlaps the next only at its corner (a
+ * little in width, still less in height, because each stage stands higher than
+ * the one before), so every silhouette stays mostly visible, wide ones (a long
+ * final form) included. A two-stage line is the same picture with two slots,
+ * centred as a pair. Keep the sprites inside the list: from 1024 px the pane's
+ * diagonal edge clips whatever reaches the right padding.
  */
+.previewArea {
+  container-type: size;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 100 / var(--draft-preview-h);
+  /* A size container has no content height of its own, so the floor is explicit: a tight flex column never squashes it below it. */
+  min-height: 11rem;
+}
+
 .previewStage {
+  position: relative;
   container-type: inline-size;
-  aspect-ratio: 100 / 82;
-  width: min(100%, 30rem);
-  margin: 0 auto;
+  width: min(100cqi, 30rem, calc(100cqh * 100 / var(--draft-preview-h)));
+  aspect-ratio: 100 / var(--draft-preview-h);
+  margin: 0;
   padding: 0;
   list-style: none;
-  /* A size container has no content height of its own: never let a tight flex column squash it. */
-  flex-shrink: 0;
 }
 
 .previewSlot {
@@ -659,30 +705,30 @@
 }
 
 .previewStage[data-stages="3"] > .previewSlot[data-slot="0"] {
-  left: 2cqi;
-  top: 50cqi;
+  left: 1cqi;
+  top: 42cqi;
   width: 30cqi;
 }
 .previewStage[data-stages="3"] > .previewSlot[data-slot="1"] {
-  left: 22cqi;
-  top: 26cqi;
+  left: 27cqi;
+  top: 24cqi;
   width: 38cqi;
 }
 .previewStage[data-stages="3"] > .previewSlot[data-slot="2"] {
-  left: 45cqi;
+  left: 54cqi;
   top: 2cqi;
-  width: 53cqi;
+  width: 46cqi;
 }
 
 .previewStage[data-stages="2"] > .previewSlot[data-slot="0"] {
-  left: 8cqi;
-  top: 38cqi;
-  width: 36cqi;
+  left: 6cqi;
+  top: 34cqi;
+  width: 38cqi;
 }
 .previewStage[data-stages="2"] > .previewSlot[data-slot="1"] {
-  left: 36cqi;
-  top: 4cqi;
-  width: 54cqi;
+  left: 40cqi;
+  top: 6cqi;
+  width: 52cqi;
 }
 
 /* The image fills its slot (the width/height attributes are only the asset's nominal size); a soft shadow separates the overlaps. */
@@ -694,9 +740,14 @@
   filter: drop-shadow(0 0.4rem 0.5rem color-mix(in srgb, var(--draft-ink) 22%, transparent));
 }
 
-/* The pixel style stays crisp when it is blown up to this size. */
-.previewPixel .previewImg {
-  image-rendering: pixelated;
+/*
+ * Phones: the picture must fit the window left between the sticky clock row under the nav and the sticky
+ * bottom bar, so it can be seen whole at some scroll position (`min-height` still wins on a very short phone).
+ */
+@media (max-width: 767px) {
+  .previewArea {
+    max-height: calc(100svh - var(--nav-h) - var(--draft-clock-h) - var(--draft-bottom-bar-h) - 1.5rem);
+  }
 }
 
 /*
@@ -806,12 +857,14 @@
 /*
  * Team weakness table (`TeamWeaknessTable`): Pokémon as rows, the 18 attacking types as columns.
  *
- * Width: a type column is 1.25 rem and the first column takes the width of its widest count label (about
- * 3.5 rem in German, "Resistent"), so the table needs about 26 rem (410 to 420 px). The desktop left pane is
- * about 435 px wide inside its padding and clip, so the table fits there without scrolling; a phone (about
- * 340 px) scrolls `.weaknessScroll` sideways and the Pokémon column stays put
- * (`position: sticky`), which is why the cells use separate borders (collapsed borders do not travel with a
- * sticky cell).
+ * Width: a type column is 1 rem (18 px at the site's 18 px root; its widest cell text, "¼×", is about 15 px,
+ * and the vertical type pill is as wide as its tight line height) and the first column takes the width of its
+ * widest count label (about 2.75 rem), so the table needs about 21.5 rem (385 px). The desktop left pane is
+ * 450 px wide at 1440 and 385 px at 1280 inside its padding and clip, so all 18 columns show without
+ * scrolling at both (at 1.25 rem the last one,
+ * Fairy, sat half under the pane's edge with nothing hinting at it); a narrower pane or a phone scrolls
+ * `.weaknessScroll` sideways and the Pokémon column stays put (`position: sticky`), which is why the cells
+ * use separate borders (collapsed borders do not travel with a sticky cell).
  *
  * Colour: a weakness is amber (a 4× one stronger and ringed), a resistance green, an immunity the neutral
  * elevated surface, a neutral 1× cell stays blank. Never red (red means "drafted"). The multiplier text is
@@ -834,7 +887,7 @@
 
 .weaknessTable th,
 .weaknessTable td {
-  min-width: 1.25rem;
+  min-width: 1rem;
   padding: 0;
   border-right: 1px solid color-mix(in srgb, var(--draft-border) 55%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--draft-border) 55%, transparent);
@@ -919,7 +972,8 @@
 .timerTrack {
   position: relative;
   height: 0.5rem;
-  min-width: 6rem;
+  /* Never wider than the line it is on: a fixed 6rem pushed the bar past a 375 px phone's edge. */
+  min-width: min(6rem, 100%);
   flex: 1 1 8rem;
   overflow: hidden;
   border-radius: 9999px;

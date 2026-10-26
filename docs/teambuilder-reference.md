@@ -302,10 +302,12 @@ Returns: `TeamValidationResult { issues: SetIssue[], team_issues: string[], vali
 | Export | Purpose |
 |--------|---------|
 | `GENERATIONS[]` | Gen 1-9 with tier availability |
-| `FORMAT_DEFAULTS{}` | Pre-built configs: gen9ou, gen9lc, monotype, 1v1, etc. |
+| `FORMAT_DEFAULTS{}` | The legacy flat view (name, clause names, banned Pokémon, moves, items, abilities as names, `banned_abilities` included) of every catalog preset, derived from `PRESETS`; used by the seed route. A roster or Little Cup preset shows only its explicit bans; `resolvePresetRules(id)` has the full rules |
+| `GENERATIONS[]`, `PRESETS`, `getPreset(id)` | Re-exported from the dex-free `format-catalog.ts` (the part client code imports) |
 | `clausesForTier(tier)` | Default clause set per format |
-| `getBannedPokemonForTier(tier)` | Dynamic banlist from `@pkmn/dex` |
-| `getFormatDefaults(format)` | Full config for a format string |
+| `getBannedPokemonForTier(tier)` | Dynamic banlist from `@pkmn/dex` (lives in `tiers.ts`) |
+
+`getFormatDefaults()` and `GET /api/pkmn/format-defaults` were removed with the old ruleset builder; the teambuilder reads the ruleset it is locked to (`getRulesetById`), and the editor reads presets through `GET /api/pkmn/presets/[id]/rules`.
 
 ---
 
@@ -320,7 +322,8 @@ Returns: `TeamValidationResult { issues: SetIssue[], team_issues: string[], vali
 | `/api/pkmn/species-info` | GET | `src/app/api/pkmn/species-info/route.ts` | `?names=Garchomp,Tyranitar` → batch info (max 12) |
 | `/api/pkmn/type-analysis` | POST | `src/app/api/pkmn/type-analysis/route.ts` | Body: `{ species[], gen? }` → per-mon + team weaknesses/resistances |
 | `/api/pkmn/validate-set` | POST | `src/app/api/pkmn/validate-set/route.ts` | Body: `{ species, ability?, moves? }` → ability + move legality |
-| `/api/pkmn/format-defaults` | GET | `src/app/api/pkmn/format-defaults/route.ts` | `?format=gen9ou` → clauses, banlists |
+| `/api/pkmn/presets/[id]/rules` | GET | `src/app/api/pkmn/presets/[id]/rules/route.ts` | Rules a catalog preset implies (clauses, lists, facts); replaces the removed format-defaults route |
+| `/api/pkmn/catalog/[kind]` | GET | `src/app/api/pkmn/catalog/[kind]/route.ts` | Entry catalog of one generation for the Ruleset Studio pickers |
 
 ---
 

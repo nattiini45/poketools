@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
   isResourceAdminFor: vi.fn(),
   getSeasonWithDetails: vi.fn(),
   getSeasonParticipants: vi.fn(),
-  listRulesets: vi.fn(),
+  listRulesetOptionsFor: vi.fn(),
+  getRulesetPinInfo: vi.fn(),
   getDraftPoolBySeason: vi.fn(),
   getDraftPoolsBySeason: vi.fn(),
   getFormatRules: vi.fn(),
@@ -60,7 +61,9 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonParticipants: mocks.getSeasonParticipants,
 }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: mocks.isResourceAdminFor }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesetOptionsFor: mocks.listRulesetOptionsFor }));
+vi.mock('@/lib/ruleset-studio/pin-info.server', () => ({ getRulesetPinInfo: mocks.getRulesetPinInfo }));
+vi.mock('@/components/ruleset/RulesetPinCard', () => ({ default: function RulesetPinCard() { return null; } }));
 vi.mock('@/lib/supabase/queries/season-start', () => ({
   getSeasonPhaseStartSignals: mocks.getSeasonPhaseStartSignals,
 }));
@@ -124,6 +127,7 @@ import FormatRulesEditor from '@/components/league/FormatRulesEditor';
 import ContentLanguageControl from '../_components/ContentLanguageControl';
 import LeagueThemeControl from '@/components/league/LeagueThemeControl';
 import LeagueSettingsForm from '@/components/league/LeagueSettingsForm';
+import RulesetPinCard from '@/components/ruleset/RulesetPinCard';
 import LeagueTestFlagControl from '@/components/league/LeagueTestFlagControl';
 import LeagueStatusControl from '@/components/league/LeagueStatusControl';
 import EditableDescription from '@/components/shared/EditableDescription';
@@ -239,7 +243,8 @@ function panelOf(tree: ReactNode): El {
 
 const TAB_READS = [
   'getSeasonParticipants',
-  'listRulesets',
+  'listRulesetOptionsFor',
+  'getRulesetPinInfo',
   'getSeasonGroups',
   'getDraftPoolBySeason',
   'getDraftPoolsBySeason',
@@ -273,7 +278,8 @@ beforeEach(() => {
   mocks.isResourceAdminFor.mockResolvedValue(true);
   mocks.getSeasonWithDetails.mockResolvedValue(season());
   mocks.getSeasonParticipants.mockResolvedValue(PARTICIPANTS);
-  mocks.listRulesets.mockResolvedValue([]);
+  mocks.listRulesetOptionsFor.mockResolvedValue([]);
+  mocks.getRulesetPinInfo.mockResolvedValue(null);
   mocks.getDraftPoolBySeason.mockResolvedValue({ id: 'pool-1', draft_type: 'budget', pick_order: 'free', status: 'in_progress' });
   mocks.getDraftPoolsBySeason.mockResolvedValue([
     { id: 'pool-1', kind: 'initial', phase: 'complete', mode: 'live', status: 'complete' },
@@ -362,24 +368,24 @@ describe('admin league page tabs (?tab=)', () => {
       ['getSeasonGroups', 'getSeasonParticipants', 'getDraftPoolBySeason', 'getDraftPoolsBySeason', 'getFormatRules'],
       ['Draft Room', 'Redraft', 'Tokens'],
     ],
-    ['evolution_point_buy', 'phases', ['listRulesets'], ['Phases', 'Evolution Points']],
+    ['evolution_point_buy', 'phases', ['listRulesetOptionsFor'], ['Phases', 'Evolution Points']],
     ['evolution_point_buy', 'rules', ['getSeasonPhaseStartSignals'], ['Point-Buy List', 'Format Rules', 'Data Import']],
     // No phases (the default mock): the empty state, no section.
     ['evolution_point_buy', 'format', ['loadLeagueFormat'], []],
     [
       'evolution_point_buy',
       'settings',
-      ['listRulesets', 'getSeasonPhaseStartSignals'],
+      ['listRulesetOptionsFor', 'getRulesetPinInfo', 'getSeasonPhaseStartSignals'],
       ['League details', '3D World Theme', 'Content Language', 'Test League', 'League Admins'],
     ],
     ['evolution_point_buy', 'danger', [], ['Danger zone']],
     ['draft', 'participants', [], ['Participants', 'League groups', 'Type Cores (Core Liga)']],
     ['draft', 'draft', ['getSeasonGroups', 'getDraftPoolBySeason'], ['Draft Pool Pokémon', 'Draft Room']],
     ['draft', 'rules', ['getSeasonParticipants'], ['Evolution Tiers', 'Draft Settings']],
-    ['singles', 'phases', ['listRulesets'], ['Phases']],
+    ['singles', 'phases', ['listRulesetOptionsFor'], ['Phases']],
     // A custom league: the overview adds its readiness checklist, the Format tab its checklist and the attach panel.
     ['custom', 'overview', ['loadLeagueFormatState'], ['At a glance', 'Description']],
-    ['custom', 'format', ['loadLeagueFormat', 'loadLeagueFormatState', 'loadAttachCandidates'], ['Format']],
+    ['custom', 'format', ['loadLeagueFormat', 'loadLeagueFormatState', 'loadAttachCandidates', 'listRulesetOptionsFor', 'getRulesetPinInfo'], ['Format']],
   ])('%s ?tab=%s renders only its panel and makes only its reads', async (format, tab, reads, titles) => {
     mocks.getSeasonWithDetails.mockResolvedValue(
       season({ format_type: format, point_buy_list_id: format === 'evolution_point_buy' ? 'list-1' : null }),
@@ -441,7 +447,7 @@ describe('admin league page tabs (?tab=)', () => {
     const tree = await render('schedule');
     expect(panelOf(tree).props['data-admin-panel']).toBe('phases');
     expect(tabsOf(tree).props.activeTab).toBe('phases');
-    expect(tabReads()).toEqual(['listRulesets']);
+    expect(tabReads()).toEqual(['listRulesetOptionsFor']);
   });
 
   it('the phases tab is labelled Phases / Phasen', async () => {
@@ -484,8 +490,8 @@ describe('site-admin parts follow the live access check', () => {
     expect(findByType(danger, DeleteResourceButton)).toHaveLength(0);
     expect(findByType(danger, ArchiveButton)).toHaveLength(1);
     expect(visibleText(danger)).toContain('Only site admins can delete a league.');
-    // The cascade list is for the people who can delete.
-    expect(visibleText(danger)).not.toContain('together with');
+    // The list of what the trash keeps is for the people who can delete.
+    expect(visibleText(danger)).not.toContain('The trash keeps a full copy of');
     expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('u1', 'season', S1);
   });
 
@@ -512,25 +518,38 @@ describe('site-admin parts follow the live access check', () => {
     expect(mocks.isResourceAdminFor).not.toHaveBeenCalled();
   });
 
-  it('the delete hint lists what the delete removes, what refuses it and what it keeps (en + de)', async () => {
+  it('the delete hint says the league moves to the trash, what the trash copies, what is recalculated and what stays (en + de)', async () => {
     const text = visibleText(await render('danger'));
-    expect(text).toContain('Deletes the league permanently, together with:');
+    expect(text).toContain('Moves the league to the trash. The superadmin can restore it for 90 days');
     for (const part of [
       'its participants',
       'its league groups and their members',
       'its format rules, evolution tiers, tier limits and draft pool list',
+      'its phases with their groups, rounds and reports',
+      'every match with its games, battle stats, analyses, proposals and highlights',
+      'its draft pools with participants, slots, picks and replay events',
+      'its teams',
       'every evolution record',
       'every token grant, Draft Kill Token purchase and Comeback Token spend',
       'every Redraft slot, submission, history entry and trade request',
-      'The delete is refused while the league still has phases, draft pools, teams and storylines.',
-      'Cast sessions of the league are kept',
-      'This cannot be undone.',
+      'its storylines',
+      'its league admins, Discord webhooks, social integrations and wiki notes',
+      'recalculated without it',
+      'Cast sessions, agent suggestions and teams outside the league',
+      'The audit log and the draft action log are kept.',
+      'Running drafts are paused',
     ])
       expect(text).toContain(part);
+    // A delete is never refused for what the league holds, and it is not final any more.
+    expect(text).not.toContain('refused');
+    expect(text).not.toContain('permanently');
+    expect(text).not.toContain('cannot be undone');
     mocks.locale = 'de';
     const de = visibleText(await render('danger'));
-    expect(de).toContain('Löscht die Liga endgültig, zusammen mit:');
-    expect(de).toContain('solange die Liga noch Phasen, Draft-Pools, Teams und Storylines hat');
+    expect(de).toContain('Verschiebt die Liga in den Papierkorb. Der Superadmin kann sie 90 Tage lang wiederherstellen');
+    expect(de).toContain('ihren Phasen mit Gruppen, Runden und Berichten');
+    expect(de).toContain('Das Audit-Log und das Draft-Aktionslog bleiben erhalten.');
+    expect(de).not.toContain('endgültig, zusammen mit');
   });
 
   it('a site admin gets them', async () => {
@@ -582,7 +601,7 @@ describe('settings tab', () => {
 
   it('lists the league details first, with the stored values and the rulesets', async () => {
     const rulesets = [{ id: 'rs-1', name: 'Gen 9 RU' }];
-    mocks.listRulesets.mockResolvedValue(rulesets);
+    mocks.listRulesetOptionsFor.mockResolvedValue(rulesets);
     mocks.getSeasonWithDetails.mockResolvedValue(
       season({ format_type: 'singles', point_buy_list_id: null, status: 'upcoming', ruleset_id: 'rs-1' }),
     );
@@ -607,6 +626,24 @@ describe('settings tab', () => {
     // "saved" notice; it takes new stored values over itself (adoptStoredLeagueSettings).
     expect(form.key).toBeNull();
     expect(mocks.getSeasonPhaseStartSignals).toHaveBeenCalledWith(S1);
+  });
+
+  it('lists the rulesets the viewer may use, with the pin of the league kept in, and shows the pin card under the form', async () => {
+    const pin = { definition_id: 'def-1', name: 'Gen 9 RU', version_id: 'rs-1', version_no: 1, update: null, can_view: true };
+    mocks.getRulesetPinInfo.mockResolvedValue(pin);
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'singles', status: 'active', ruleset_id: 'rs-1' }));
+    const tree = await render('settings');
+
+    expect(mocks.listRulesetOptionsFor).toHaveBeenCalledWith({ actor: { playerId: 'u1', isAdmin: false }, seasonId: S1, keep: ['rs-1'] });
+    expect(mocks.getRulesetPinInfo).toHaveBeenCalledWith('rs-1', { playerId: 'u1', isAdmin: false });
+    const [card] = findByType(tree, RulesetPinCard);
+    expect(card.props).toEqual({ kind: 'season', target: { kind: 'season', id: S1, name: 'Summer League S3', status: 'active' }, pin });
+  });
+
+  it('a league without a ruleset shows no pin card', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'singles', status: 'upcoming', ruleset_id: null }));
+    expect(findByType(await render('settings'), RulesetPinCard)).toHaveLength(0);
   });
 
   it('maps unset ruleset and dates to empty form values', async () => {
@@ -649,12 +686,27 @@ describe('settings tab', () => {
     expect(form.props.formatLock).toBe(lock);
   });
 
+  it.each<[string, Record<string, unknown>, unknown[], boolean]>([
+    ['an upcoming league with a ruleset', { status: 'upcoming', ruleset_id: 'rs-1' }, [], false],
+    ['an upcoming league whose phases never started', { status: 'upcoming', ruleset_id: 'rs-1' }, [{ status: 'upcoming', rounds_total: 0 }], false],
+    ['an active league with a ruleset', { status: 'active', ruleset_id: 'rs-1' }, [], true],
+    ['a finished league with a ruleset', { status: 'completed', ruleset_id: 'rs-1' }, [], true],
+    ['an upcoming league with a running phase', { status: 'upcoming', ruleset_id: 'rs-1' }, [{ status: 'active', rounds_total: 0 }], true],
+    ['an upcoming league with a phase that has rounds', { status: 'upcoming', ruleset_id: 'rs-1' }, [{ status: 'upcoming', rounds_total: 1 }], true],
+    ['an active league that has no ruleset yet (it may still get one)', { status: 'active', ruleset_id: null }, [], false],
+  ])('locks the ruleset select for %s', async (_label, overrides, phases, locked) => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'singles', point_buy_list_id: null, ...overrides }));
+    mocks.getSeasonPhaseStartSignals.mockResolvedValue(phases);
+    const [form] = findByType(await render('settings'), LeagueSettingsForm);
+    expect(form.props.rulesetLocked).toBe(locked);
+  });
+
   it('reads the phase signals for the settings tab and the point-buy rules tab only', async () => {
     for (const tab of LEAGUE_ADMIN_TABS.filter((t) => t !== 'settings' && t !== 'rules')) {
       vi.clearAllMocks();
       mocks.getLiveAccess.mockResolvedValue(liveAccess());
       mocks.getSeasonWithDetails.mockResolvedValue(season());
-      mocks.listRulesets.mockResolvedValue([]);
+      mocks.listRulesetOptionsFor.mockResolvedValue([]);
       mocks.getSeasonGroups.mockResolvedValue([]);
       mocks.getDraftPoolsBySeasonWithGroups.mockResolvedValue([]);
       mocks.getListEntries.mockResolvedValue([]);

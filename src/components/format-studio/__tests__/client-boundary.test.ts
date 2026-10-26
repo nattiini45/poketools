@@ -16,7 +16,8 @@ import {
  * alias between them (unlike `format-pack`, whose server and browser import the SAME specifier), so the entry
  * file IS the boundary, and this test keeps it:
  *
- *  - every `'use client'` module under `src/components/format-studio` and `src/app/admin/formats` reaches no
+ *  - every `'use client'` module under `src/components/format-studio`, `src/components/studio-shell` (the editor frame and
+ *    dialogs both studios share) and `src/app/admin/formats` reaches no
  *    `zod`, `server-only`, `@pkmn/*` or `@supabase/*` package, none of the kit's server files, nothing under
  *    `src/lib/supabase` and not the Studio loader;
  *  - every module under those directories (pages included) imports the kit through `@/lib/format-kit/client`
@@ -30,7 +31,11 @@ import {
  */
 
 const KIT = path.join(SRC_ROOT, 'lib', 'format-kit');
-const SCAN_DIRS = [path.join(SRC_ROOT, 'components', 'format-studio'), path.join(SRC_ROOT, 'app', 'admin', 'formats')];
+const SCAN_DIRS = [
+  path.join(SRC_ROOT, 'components', 'format-studio'),
+  path.join(SRC_ROOT, 'components', 'studio-shell'),
+  path.join(SRC_ROOT, 'app', 'admin', 'formats'),
+];
 
 const KIT_SERVER_FILES = ['validate.ts', 'compile.ts', 'index.ts', 'registry/server.ts', 'expr/schema.ts'].map((f) =>
   path.join(KIT, f),

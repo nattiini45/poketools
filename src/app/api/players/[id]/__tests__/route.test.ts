@@ -350,7 +350,7 @@ describe('DELETE /api/players/[id]', () => {
     vi.clearAllMocks();
     // Default happy path: player exists and has no competitive references.
     vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
-    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 0 });
+    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 0, trashedLeagues: 0 });
   });
 
   it('returns 403 when not admin', async () => {
@@ -397,7 +397,7 @@ describe('DELETE /api/players/[id]', () => {
 
   it('returns 409 when the player has match history', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
-    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 3, proposals: 0, leagueHistory: 0, activeDrafts: 0 });
+    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 3, proposals: 0, leagueHistory: 0, activeDrafts: 0, trashedLeagues: 0 });
 
     const request = {} as unknown as NextRequest;
     const response = await DELETE(request, makeRouteArgs('51541de2-cef5-42ee-8563-d412cf4563a2'));
@@ -414,7 +414,7 @@ describe('DELETE /api/players/[id]', () => {
 
   it('returns 409 when the player has match proposals but no matches', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
-    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 1, leagueHistory: 0, activeDrafts: 0 });
+    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 1, leagueHistory: 0, activeDrafts: 0, trashedLeagues: 0 });
 
     const request = {} as unknown as NextRequest;
     const response = await DELETE(request, makeRouteArgs('51541de2-cef5-42ee-8563-d412cf4563a2'));
@@ -425,7 +425,7 @@ describe('DELETE /api/players/[id]', () => {
 
   it('returns a coded 409 when the player has EvoLiga/EPB history and no matches', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
-    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 0, leagueHistory: 2, activeDrafts: 0 });
+    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 0, leagueHistory: 2, activeDrafts: 0, trashedLeagues: 0 });
 
     const request = {} as unknown as NextRequest;
     const response = await DELETE(request, makeRouteArgs('51541de2-cef5-42ee-8563-d412cf4563a2'));
@@ -438,9 +438,29 @@ describe('DELETE /api/players/[id]', () => {
     expect(revalidateTag).not.toHaveBeenCalled();
   });
 
+  it('returns the same coded 409 when the player appears in a league in the trash', async () => {
+    vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({
+      matches: 0,
+      proposals: 0,
+      leagueHistory: 0,
+      activeDrafts: 0,
+      trashedLeagues: 1,
+    });
+
+    const request = {} as unknown as NextRequest;
+    const response = await DELETE(request, makeRouteArgs('51541de2-cef5-42ee-8563-d412cf4563a2'));
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.code).toBe('player_still_referenced');
+    expect(vi.mocked(deletePlayer)).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
   it('returns a coded 409 when the player is seated in an unfinished queue draft', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
-    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 1 });
+    vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 1, trashedLeagues: 0 });
 
     const request = {} as unknown as NextRequest;
     const response = await DELETE(request, makeRouteArgs('51541de2-cef5-42ee-8563-d412cf4563a2'));
@@ -469,6 +489,28 @@ describe('DELETE /api/players/[id]', () => {
     expect(body.error).toContain('still reference');
     expect(body.code).toBe('player_still_referenced');
     expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it('maps the foreign key of a league that reached the trash after the pre-check to the same coded 409', async () => {
+    vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+    vi.mocked(deletePlayer).mockRejectedValue({
+      code: '23503',
+      message:
+        'update or delete on table "players" violates foreign key constraint "league_trash_players_player_id_fkey" on table "league_trash_players"',
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs('51541de2-cef5-42ee-8563-d412cf4563a2'));
+      const body = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(body.code).toBe('player_still_referenced');
+      expect(body.error).toContain('still reference');
+      expect(revalidateTag).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('returns 500 on unexpected error', async () => {

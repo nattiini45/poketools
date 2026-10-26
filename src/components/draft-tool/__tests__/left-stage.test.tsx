@@ -60,30 +60,33 @@ describe('LinePreview', () => {
     expect(html).toMatch(/<img alt="[^"]+"[^>]* width="256" height="256"[^>]* class="[^"]*previewImg/);
   });
 
-  it('marks the pixel style for crisp scaling and nothing else', () => {
-    const plain = renderWithI18n(<LinePreview entry={threeStage} />);
-    expect(plain).not.toContain(styles.previewPixel);
-    const pixel = renderToStaticMarkup(
-      withI18n(
-        <SpriteStyleProvider initialPreference="pixel">
-          <LinePreview entry={threeStage} />
-        </SpriteStyleProvider>,
-      ),
-    );
-    expect(pixel).toContain(styles.previewPixel);
-    const home = renderToStaticMarkup(
-      withI18n(
-        <SpriteStyleProvider initialPreference="home">
-          <LinePreview entry={threeStage} />
-        </SpriteStyleProvider>,
-      ),
-    );
-    expect(home).not.toContain(styles.previewPixel);
-    expect(rule('.previewPixel .previewImg')).toMatch(/image-rendering: pixelated;/);
+  it('pins the art-directed sprite style: a viewer who chose pixel or animated still sees the large renders', () => {
+    const srcs = (html: string) => [...html.matchAll(/<img alt="[^"]+"[^>]* src="([^"]+)"/g)].map((m) => decodeURIComponent(m[1]));
+    for (const preference of ['site', 'pixel', 'animated'] as const) {
+      const html = renderToStaticMarkup(
+        withI18n(
+          <SpriteStyleProvider initialPreference={preference}>
+            <LinePreview entry={threeStage} />
+          </SpriteStyleProvider>,
+        ),
+      );
+      const urls = srcs(html);
+      expect(urls, preference).toHaveLength(3);
+      // Broadcast renders where the species has one, else HOME: never a Showdown pixel or animated sprite.
+      for (const url of urls) expect(url, preference).not.toContain('play.pokemonshowdown.com');
+    }
+    // No pixelated rendering is needed any more: the pinned style is always a smooth render.
+    expect(CSS).not.toMatch(/previewPixel|image-rendering/);
   });
 
-  it('sizes the picture from the pane width: a size container, container units, no pixel sizes', () => {
-    expect(rule('.previewStage')).toMatch(/container-type: inline-size;/);
+  it('sizes the picture from its field: a size container, the picture fitted by width AND height, container units only', () => {
+    expect(rule('.previewArea')).toMatch(/container-type: size;/);
+    expect(rule('.previewArea')).toMatch(/min-height: 11rem;/);
+    // The picture is as wide as the field's width allows and as the field's height allows (the aspect token).
+    const stage = rule('.previewStage').replace(/\s+/g, ' ');
+    expect(stage).toMatch(/container-type: inline-size;/);
+    expect(stage).toMatch(/width: min\(100cqi, 30rem, calc\(100cqh \* 100 \/ var\(--draft-preview-h\)\)\);/);
+    expect(stage).toMatch(/aspect-ratio: 100 \/ var\(--draft-preview-h\);/);
     const slots = [...CSS.matchAll(/\.previewStage\[data-stages="(\d)"\] > \.previewSlot\[data-slot="(\d)"\] \{([^}]*)\}/g)];
     // Three slots for a three-stage line, two for a pair.
     expect(slots.map((m) => `${m[1]}:${m[2]}`)).toEqual(['3:0', '3:1', '3:2', '2:0', '2:1']);
@@ -98,8 +101,9 @@ describe('LinePreview', () => {
   it('ascends left to right: each later stage is larger, further right and higher', () => {
     const px = (stages: string, slot: string, prop: 'left' | 'top' | 'width') => {
       const body = new RegExp(String.raw`data-stages="${stages}"\] > \.previewSlot\[data-slot="${slot}"\] \{([^}]*)\}`).exec(CSS)?.[1] ?? '';
-      return Number(new RegExp(`${prop}: ([\\d.]+)cqi`).exec(body)?.[1]);
+      return Number(new RegExp(String.raw`${prop}: ([\d.]+)cqi`).exec(body)?.[1]);
     };
+    const pictureHeight = Number(/--draft-preview-h: ([\d.]+);/.exec(CSS)?.[1]);
     for (const [stages, count] of [['3', 3], ['2', 2]] as const) {
       for (let i = 1; i < count; i += 1) {
         const prev = String(i - 1);
@@ -109,15 +113,30 @@ describe('LinePreview', () => {
         expect(px(stages, next, 'top')).toBeLessThan(px(stages, prev, 'top'));
       }
     }
-    // The final stage takes about half of the pane or more; the slots overlap but stay inside the stage.
-    expect(px('3', '2', 'width')).toBeGreaterThanOrEqual(50);
+    // The final stage takes about half of the picture, and every slot stays inside it.
+    expect(px('3', '2', 'width')).toBeGreaterThanOrEqual(45);
     expect(px('2', '1', 'width')).toBeGreaterThanOrEqual(50);
     for (const [stages, slot] of [['3', '0'], ['3', '1'], ['3', '2'], ['2', '0'], ['2', '1']] as const) {
       expect(px(stages, slot, 'left') + px(stages, slot, 'width')).toBeLessThanOrEqual(100);
-      expect(px(stages, slot, 'top') + px(stages, slot, 'width')).toBeLessThanOrEqual(82);
+      expect(px(stages, slot, 'top') + px(stages, slot, 'width')).toBeLessThanOrEqual(pictureHeight);
     }
-    expect(px('3', '1', 'left')).toBeLessThan(px('3', '0', 'left') + px('3', '0', 'width'));
-    expect(px('3', '2', 'left')).toBeLessThan(px('3', '1', 'left') + px('3', '1', 'width'));
+  });
+
+  it('overlaps neighbouring stages only at their corners, so every silhouette stays mostly visible', () => {
+    const box = (stages: string, slot: string) => {
+      const body = new RegExp(String.raw`data-stages="${stages}"\] > \.previewSlot\[data-slot="${slot}"\] \{([^}]*)\}`).exec(CSS)?.[1] ?? '';
+      const n = (prop: string) => Number(new RegExp(String.raw`${prop}: ([\d.]+)cqi`).exec(body)?.[1]);
+      return { x0: n('left'), y0: n('top'), x1: n('left') + n('width'), y1: n('top') + n('width'), size: n('width') };
+    };
+    for (const [stages, count] of [['3', 3], ['2', 2]] as const) {
+      for (let i = 1; i < count; i += 1) {
+        const a = box(stages, String(i - 1));
+        const b = box(stages, String(i));
+        const overlap = Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+        // Less than a fifth of the smaller box (the old arrangement hid about two fifths of a middle stage).
+        expect(overlap, `${stages}-stage slots ${i - 1}/${i}`).toBeLessThan(0.2 * a.size * a.size);
+      }
+    }
   });
 
   it('keeps the shared phone/desktop switches for the clock bar, but the stage uses neither', () => {

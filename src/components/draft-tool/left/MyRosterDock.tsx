@@ -33,6 +33,8 @@ export interface MyRosterDockProps {
   /** The stage (Base | Final) the weakness overview reads. */
   weaknessStage: SortStage;
   onWeaknessStage(stage: SortStage): void;
+  /** The weakness overview starts expanded (preview scenarios). */
+  weaknessOpen: boolean;
   onPin(lineId: LineId): void;
 }
 
@@ -57,7 +59,7 @@ export function rosterCounts(vm: DraftViewModel, catalog: DraftLineCatalog): { n
   return layout ? { n: layout.owned.length, total: layout.total } : null;
 }
 
-export default function MyRosterDock({ vm, catalog, ix, indexFailed, weaknessStage, onWeaknessStage, onPin }: MyRosterDockProps) {
+export default function MyRosterDock({ vm, catalog, ix, indexFailed, weaknessStage, onWeaknessStage, weaknessOpen, onPin }: MyRosterDockProps) {
   const t = useT(draftScreenMessages);
   const tShared = useT(draftSharedMessages);
   const dl = useDataLocale();
@@ -111,6 +113,7 @@ export default function MyRosterDock({ vm, catalog, ix, indexFailed, weaknessSta
           indexFailed={indexFailed}
           stage={weaknessStage}
           onStageChange={onWeaknessStage}
+          defaultOpen={weaknessOpen}
           onPin={onPin}
         />
       ) : null}

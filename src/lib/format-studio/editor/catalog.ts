@@ -81,3 +81,13 @@ export const OVERRIDE_FROM = ['start', 'end'] as const;
 
 /** Where a stage gets its players (`option.from_<value>`). */
 export const PARTICIPANT_SOURCES = ['roster', 'edges'] as const satisfies readonly Stage['participants']['from'][];
+
+/**
+ * A stored ruleset a stage may name, as the editor's pages hand it over: the DEFINITION id (what a format document stores;
+ * attach resolves it to the newest published version), the name, and that version's number for the label ("Spring OU v2").
+ */
+export interface RulesetChoice {
+  id: string;
+  name: string;
+  version_no?: number;
+}

@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -23,9 +23,15 @@ interface LeagueSettingsFormProps {
   seasonId: string;
   /** The stored values; the form's baseline until a save succeeds. */
   initial: LeagueSettingsValues;
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
   /** Why the league type cannot change (the league started, or a point-buy boundary); null while it can. */
   formatLock: FormatLockReason | null;
+  /**
+   * The league has started and has a ruleset, so the select is read-only and the hint points to the ruleset card: the server
+   * refuses a swap then (`ruleset_pin_started`) and only moves the pin to another version of the same ruleset
+   * (`isRulesetPinLocked`).
+   */
+  rulesetLocked: boolean;
 }
 
 /**
@@ -36,7 +42,7 @@ interface LeagueSettingsFormProps {
  * refresh: new stored values become the baseline during render (`adoptStoredLeagueSettings`), and
  * unsaved input is kept, so the "saved" notice stays and typing is not lost.
  */
-export default function LeagueSettingsForm({ seasonId, initial, rulesets, formatLock }: LeagueSettingsFormProps) {
+export default function LeagueSettingsForm({ seasonId, initial, rulesets, formatLock, rulesetLocked }: LeagueSettingsFormProps) {
   const t = useT(leagueAdminMessages);
   const errorText = useApiErrorText(errorsSeasons);
   const router = useRouter();
@@ -144,7 +150,8 @@ export default function LeagueSettingsForm({ seasonId, initial, rulesets, format
         rulesets={rulesets}
         value={values.rulesetId}
         onChange={(rulesetId) => update({ rulesetId })}
-        hint={{ id: rulesetHintId, text: t('form.rulesetEditHint') }}
+        hint={{ id: rulesetHintId, text: t(rulesetLocked ? 'form.rulesetLockedHint' : 'form.rulesetEditHint') }}
+        disabled={rulesetLocked}
       />
 
       <LeagueDateFields

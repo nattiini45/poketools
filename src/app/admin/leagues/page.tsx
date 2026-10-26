@@ -43,6 +43,11 @@ export default async function AdminLeaguesPage() {
             <Link href="/admin/leagues/archived" className={getButtonClasses('ghost', 'sm')}>
               {t('list.viewArchived')}
             </Link>
+            {access.isSuperadmin && (
+              <Link href="/admin/leagues/trash" className={getButtonClasses('ghost', 'sm')}>
+                {t('trash.link')}
+              </Link>
+            )}
             <Link href="/admin/leagues/new" className={getButtonClasses('secondary', 'sm')}>
               {t('list.newLeague')}
             </Link>

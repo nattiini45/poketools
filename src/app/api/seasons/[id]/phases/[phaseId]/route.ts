@@ -30,6 +30,7 @@ import {
   type DeleteRebuildWarning,
   type EntityDeleteResult,
 } from '@/lib/api/delete-rebuild-warning';
+import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -121,6 +122,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         }
       }
     }
+
+    // The phase's ruleset is a pin to an immutable version: a new value must be a ruleset the caller may use, and once the
+    // phase has started it moves only through the pin route. Resending the stored value passes.
+    await assertRulesetChangeAllowed({
+      player: admin,
+      current: before.ruleset_id,
+      requested: body.ruleset_id,
+      started: before.status !== 'upcoming',
+    });
 
     // A rename may not take another phase's name. Saving the unchanged name
     // passes, so a league that already holds duplicates stays editable.

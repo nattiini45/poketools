@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { getSampleSets } from '@/lib/supabase/queries/sample-sets';
 import { resolveMoveset } from '@/lib/pkmn/set-resolver';
+import { parseFormatId } from '@/lib/pkmn/format-id';
 import {
   getGenFromBaseFormat,
   getTierFromBaseFormat,
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
   const includeOutdated = searchParams.get('include_outdated') === 'true';
 
   // Accept full format slugs ("gen9ou") — the sets table stores bare tiers ("ou")
-  if (format && /^gen\d/i.test(format)) {
+  if (format && parseFormatId(format.toLowerCase()) !== null) {
     generation = generation ?? getGenFromBaseFormat(format);
     format = normalizeTierForSets(getTierFromBaseFormat(format));
   }

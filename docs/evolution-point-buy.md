@@ -75,48 +75,37 @@ Point-buy battles are always **Gen 9 singles**: the form shows *Battle format:
 Singles (fixed)* and offers no ruleset choice; instead it names the ruleset the
 league will use (*Battle ruleset: {name} (set automatically)*).
 
-Every phase still needs a `rulesets` row (`tournamentCreateSchema.ruleset_id`),
+Every phase still needs a ruleset version to pin (`tournamentCreateSchema.ruleset_id`),
 so `POST /api/seasons` gives a point-buy league without an explicit
 `ruleset_id` the pack's **battle ruleset** as its default (`seasons.ruleset_id`)
 before inserting the season (`ensurePointBuyBattleRuleset`,
 `src/lib/season/point-buy-battle-ruleset.ts`):
 
-- The row: name = the pack's `leagueAdmin.form.battleRulesetName` (English
-  text; ruleset names are stored once), `base_format 'gen9'`,
-  `is_doubles false`, clauses `['Item Clause']` (the clauses the point-buy team
-  validator enforces), **no bans** (all four ban lists empty), no
-  additions, `custom_rules_string` empty and `team_constraints` null, so
-  `isCustomLeagueRuleset` is false and `resolveEffectiveRuleset` treats it as a
-  base ruleset.
-- One shared row, created on first use: an existing row with that name that is
-  still Gen 9 singles and non-custom is reused (oldest first), so a retry or
-  the next point-buy league inserts nothing. Bans found on a reused row (rows
-  created before this rule, or added by hand) are cleared on that reuse
-  (audited as `season.clear_battle_ruleset_bans`). A creation is audited as
-  `season.auto_create_battle_ruleset` (resource `ruleset`). A failed lookup or
-  insert fails the league creation before the season row is written.
+- The ruleset: name = the pack's `leagueAdmin.form.battleRulesetName` (English text; ruleset names are stored once),
+  base format `gen9`, singles, clauses `['Item Clause']` (the clause the point-buy team validator enforces), **no
+  bans** (all four lists empty), no added Pokémon, no custom rules and `team_constraints` null. It is a shared ruleset of
+  the [Ruleset Studio](./ruleset-studio.md), created through its bridge, and the league pins its **head version**
+  (`seasons.ruleset_id` is a version id).
+- One shared ruleset, created on first use: the head of the oldest ruleset with that name that is still Gen 9 singles and
+  has no team constraints, custom rules or added Pokémon is reused, so a retry or the next point-buy league creates
+  nothing. Bans found on a reused ruleset are cleared by publishing a **new version** without them (audited as
+  `season.clear_battle_ruleset_bans`); a league that already pins a version with bans keeps them until its pin is moved
+  through the pin card. A creation is audited as `season.auto_create_battle_ruleset` (resource `ruleset`). A failed
+  lookup or insert fails the league creation before the season row is written.
 - An explicit `ruleset_id` in the request body is kept as is (API clients).
 - The admin phase form preselects the league's default ruleset
   (`PhaseTimeline` / `PhaseForm` `defaultRulesetId`), so new phases need no
   manual ruleset. Leagues created before this change keep `ruleset_id` null
   until an admin sets one (`PATCH /api/seasons/[id]`).
-- Team validation reads this row too. `/api/validate-team` (the teambuilder's
-  live check sends `tournament_id`) resolves it through
-  `resolveEffectiveRuleset`'s step-4 fallback, runs `validateTeam()` against
-  it, and ANDs that with the point-buy validator, which builds its own ruleset
-  from the season's `format_rules` (`src/lib/draft/epb-team-validation.ts`).
-  That is why the shared row carries no bans: `format_rules` is the only
-  source of point-buy bans, so a ban a league lifts
-  (`PUT /api/seasons/[id]/format-rules`) stops rejecting teams, and its one
-  clause (Item Clause) is one the point-buy validator enforces anyway.
-- The fallback to this row logs no *Custom league ruleset not found* warning
-  when the season is point-buy and the phase uses the season's default
-  ruleset (`season.formatType` in `resolveEffectiveRuleset`); a point-buy
-  phase on any other base ruleset still warns.
-- Names are not unique (`rulesets.name` has no unique index), so two
-  point-buy leagues created at the same moment can each insert a row; both
-  are valid and later lookups take the oldest. No migration backfills
-  `ruleset_id` on older point-buy leagues (see above).
+- Team validation reads the ruleset the phase pins. `/api/validate-team` (the teambuilder's live check sends
+  `tournament_id`) loads the pinned version with `getRulesetById(tournament.ruleset_id)`, runs `validateTeam()` against
+  its frozen rules, and ANDs that with the point-buy validator, which builds its own ruleset from the season's
+  `format_rules` (`src/lib/draft/epb-team-validation.ts`). That is why the shared ruleset carries no bans: `format_rules`
+  is the only source of point-buy bans, so a ban a league lifts (`PUT /api/seasons/[id]/format-rules`) stops rejecting
+  teams, and its one clause (Item Clause) is one the point-buy validator enforces anyway. The old read-time resolver (a
+  fallback chain that guessed a ruleset from the league's name and type) is gone.
+- Names are not unique, so two point-buy leagues created at the same moment can each create a ruleset; both are valid
+  and later lookups take the oldest. No migration backfills `ruleset_id` on older point-buy leagues (see above).
 
 ## Point-Buy List Snapshot & Binding Rules
 

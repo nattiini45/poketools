@@ -145,13 +145,15 @@ describe('formatForkSchema', () => {
 });
 
 describe('presetForkSchema', () => {
-  it('takes a slug and an optional Showdown format of the catalog, and nothing else', () => {
+  it('takes a slug and an optional rule preset of the catalog, and nothing else', () => {
     expect(presetForkSchema.safeParse({}).success).toBe(true);
-    expect(presetForkSchema.safeParse({ slug: 'my-copy', showdown_format: 'gen9ou' }).success).toBe(true);
-    expect(presetForkSchema.safeParse({ showdown_format: 'gen9vgc' }).success).toBe(true);
-    expect(presetForkSchema.safeParse({ showdown_format: 'gen99xx' }).success).toBe(false);
-    expect(presetForkSchema.safeParse({ showdown_format: 'blank' }).success).toBe(false);
-    expect(presetForkSchema.safeParse({ showdown_format: 7 }).success).toBe(false);
+    expect(presetForkSchema.safeParse({ slug: 'my-copy', ruleset_preset: 'gen9ou' }).success).toBe(true);
+    expect(presetForkSchema.safeParse({ ruleset_preset: 'gen9vgc' }).success).toBe(true);
+    expect(presetForkSchema.safeParse({ ruleset_preset: 'gen9natdexdraft' }).success).toBe(true);
+    expect(presetForkSchema.safeParse({ showdown_format: 'gen9ou' }).success).toBe(false);
+    expect(presetForkSchema.safeParse({ ruleset_preset: 'gen99xx' }).success).toBe(false);
+    expect(presetForkSchema.safeParse({ ruleset_preset: 'blank' }).success).toBe(false);
+    expect(presetForkSchema.safeParse({ ruleset_preset: 7 }).success).toBe(false);
     expect(presetForkSchema.safeParse({ owner_id: UUID }).success).toBe(false);
   });
 });

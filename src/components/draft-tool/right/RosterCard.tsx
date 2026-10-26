@@ -63,10 +63,10 @@ export interface RosterCardProps {
 
 /**
  * The sprites' pixel sizes (the `size` the image asks for); the boxes they fill are the CSS tokens
- * `--draft-card-sprite` (4rem) and `--draft-card-footer-sprite` (2.5rem). `wall-layout.test.tsx` keeps both
+ * `--draft-card-sprite` (5.5rem) and `--draft-card-footer-sprite` (2.5rem). `wall-layout.test.tsx` keeps both
  * pairs in step.
  */
-export const CARD_SPRITE_PX = 64;
+export const CARD_SPRITE_PX = 88;
 export const FOOTER_SPRITE_PX = 40;
 
 /** The frame layer's colours per state (its border width and slant are CSS). */

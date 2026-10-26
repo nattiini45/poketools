@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
+import RulesetPresetSelect from '@/components/ruleset/RulesetPresetSelect';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -15,8 +16,10 @@ import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsCommon } from '@/i18n/messages/errors/common';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import { useApiErrorText } from '@/i18n/use-api-error';
-import { createFormatRequest, forkFormatRequest, forkPresetRequest, type ApiOutcome, type CreatedFormatResponse } from '@/lib/format-studio/editor/api';
-import { applyShowdownFormat } from '@/lib/format-kit/client';
+import { createFormatRequest, forkFormatRequest, forkPresetRequest, type CreatedFormatResponse } from '@/lib/format-studio/editor/api';
+import { DEFINITION_NAME_MAX, nameProblem } from '@/lib/studio-core/name';
+import type { ApiOutcome } from '@/lib/studio-core/request';
+import { applyRulesetPreset } from '@/lib/format-kit/client';
 import { blankDocument } from '@/lib/format-studio/editor/document';
 import {
   IMPORT_MAX_BYTES,
@@ -26,7 +29,7 @@ import {
   type ImportReport,
 } from '@/lib/format-studio/editor/import-file';
 import { START_KINDS, type StartKind } from '@/lib/format-studio/editor/starts';
-import ShowdownFormatSelect from '../ShowdownFormatSelect';
+import { formatEditorHref } from '../editor/hrefs';
 
 /** What the dialog offers. Names are already in the viewer's language; nothing here is a draft or a player. */
 export interface NewFormatData {
@@ -44,19 +47,7 @@ interface NewFormatFormProps {
   initialImportReport?: ImportReport;
 }
 
-const NAME_MAX = 120;
-// NUL, and a surrogate half that has no partner: neither belongs in a name.
-const NAME_FORBIDDEN = /\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const REPORT_LIST_MAX = 20;
-
-type NameProblem = 'required' | 'invalid' | null;
-
-function nameProblem(raw: string): NameProblem {
-  const name = raw.trim();
-  if (name === '') return 'required';
-  if (name.length > NAME_MAX || NAME_FORBIDDEN.test(name)) return 'invalid';
-  return null;
-}
 
 /** The pointers of a report, the first twenty, then how many more there are. */
 function PointerList({ heading, pointers, id }: { heading: string; pointers: readonly string[]; id: string }) {
@@ -110,7 +101,7 @@ function ImportReportView({ report, strip, onStrip }: { report: ImportReport; st
 /**
  * The four ways to start a format: blank, from an example, from a league's structure, or from a `.json` file.
  * One radio group chooses the start and the panel below it asks for what that start needs. A blank format and a
- * shipped example can also pre-pick a Showdown format (`showdown.ts` says what that sets on every stage; the
+ * shipped example can also pre-pick a rule preset (`ruleset-presets.ts` says what that sets on every stage; the
  * document stays fully editable). Creating goes through the library API and ends in the editor; a failure shows
  * its message in the viewer's language and the form stays usable for another try. A file is only parsed, never
  * evaluated.
@@ -125,8 +116,8 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
   const [name, setName] = useState('');
   const [language, setLanguage] = useState<Locale>(locale);
   const [example, setExample] = useState(() => (data.examples[0] !== undefined ? `preset:${data.examples[0].id}` : ''));
-  // A Showdown format id, or '' for none; offered for a blank format and for a shipped example.
-  const [showdown, setShowdown] = useState('');
+  // A rule preset id, or '' for none; offered for a blank format and for a shipped example.
+  const [rulesetPreset, setRulesetPreset] = useState('');
   const [leagueId, setLeagueId] = useState(data.leagues[0]?.id ?? '');
   const [report, setReport] = useState<ImportReport | null>(initialImportReport ?? null);
   const [importFailure, setImportFailure] = useState<ImportFailure | null>(null);
@@ -136,9 +127,9 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
   const [error, setError] = useState<ApiErrorLike | null>(null);
 
   const problem = nameProblem(name);
-  const nameError = touched && problem !== null ? (problem === 'required' ? t('new.nameRequired') : t('new.nameInvalid', { max: NAME_MAX })) : null;
+  const nameError = touched && problem !== null ? (problem === 'required' ? t('new.nameRequired') : t('new.nameInvalid', { max: DEFINITION_NAME_MAX })) : null;
   const presetExample = example.startsWith('preset:');
-  const offersShowdown = start === 'blank' || (start === 'example' && presetExample);
+  const offersPreset = start === 'blank' || (start === 'example' && presetExample);
   const canSubmit =
     start === 'blank' ? problem === null : start === 'example' ? example !== '' : start === 'league' ? leagueId !== '' : report !== null && importFailure === null;
 
@@ -166,11 +157,11 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
       case 'blank': {
         const document = blankDocument(name.trim(), language);
         // The author typed the name, so it stays as it is.
-        return createFormatRequest({ document: showdown === '' ? document : applyShowdownFormat(document, showdown) });
+        return createFormatRequest({ document: rulesetPreset === '' ? document : applyRulesetPreset(document, rulesetPreset) });
       }
       case 'example':
         return presetExample
-          ? forkPresetRequest(example.slice('preset:'.length), showdown === '' ? undefined : showdown)
+          ? forkPresetRequest(example.slice('preset:'.length), rulesetPreset === '' ? undefined : rulesetPreset)
           : forkFormatRequest(example.slice('gallery:'.length));
       case 'import':
         return report === null ? null : createFormatRequest({ document: strip ? stripUnknownFields(report) : report.document });
@@ -196,7 +187,7 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
       return;
     }
     if (outcome.ok) {
-      router.push(`/admin/formats/${encodeURIComponent(outcome.data.definition.id)}/edit`);
+      router.push(formatEditorHref(outcome.data.definition.id));
       return;
     }
     setError(outcome.error);
@@ -247,7 +238,7 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
                 id="fe-new-name"
                 label={t('new.name')}
                 value={name}
-                maxLength={NAME_MAX * 2}
+                maxLength={DEFINITION_NAME_MAX * 2}
                 autoComplete="off"
                 aria-invalid={nameError !== null ? true : undefined}
                 aria-describedby={nameError !== null ? 'fe-new-name-err' : undefined}
@@ -294,18 +285,18 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
           </>
         )}
 
-        {offersShowdown && (
+        {offersPreset && (
           <div className="space-y-1">
-            <ShowdownFormatSelect
-              id="fe-new-showdown"
-              label={t('new.showdownLabel')}
-              value={showdown}
-              onChange={setShowdown}
-              noneLabel={t('new.showdownNone')}
-              describedBy="fe-new-showdown-help"
+            <RulesetPresetSelect
+              id="fe-new-preset"
+              label={t('new.presetLabel')}
+              value={rulesetPreset}
+              onChange={setRulesetPreset}
+              noneLabel={t('new.presetNone')}
+              describedBy="fe-new-preset-help"
             />
-            <p id="fe-new-showdown-help" className="text-sm text-poke-text-muted">
-              {t('new.showdownHelp')}
+            <p id="fe-new-preset-help" className="text-sm text-poke-text-muted">
+              {t('new.presetHelp')}
             </p>
           </div>
         )}

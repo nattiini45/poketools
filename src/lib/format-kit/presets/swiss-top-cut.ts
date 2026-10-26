@@ -2,7 +2,7 @@
  * Preset: Swiss with a top cut. The number of Swiss rounds follows the field size; the best eight play a
  * single-elimination cut with a third-place match.
  */
-import { ltext } from '../ltext';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { FormatDefinition } from '../types';
 
 export const swissTopCut: FormatDefinition = {

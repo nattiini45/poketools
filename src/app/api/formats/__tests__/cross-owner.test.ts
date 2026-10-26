@@ -34,7 +34,7 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({
   attachSeasonFormat: vi.fn(),
   detachSeasonFormat: vi.fn(),
-  getExistingRulesetIds: vi.fn(),
+  getPublishedRulesetHeads: vi.fn(),
   getSeasonFormat: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
   getSeasonManualPhaseCount: vi.fn(),
@@ -62,7 +62,7 @@ import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import {
   attachSeasonFormat,
   detachSeasonFormat,
-  getExistingRulesetIds,
+  getPublishedRulesetHeads,
   getSeasonFormat,
   getSeasonFormatSummary,
   getSeasonManualPhaseCount,
@@ -329,7 +329,7 @@ describe('cross-owner matrix: attaching to a league', () => {
   beforeEach(() => {
     vi.mocked(getSeasonById).mockResolvedValue(season());
     vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'upcoming', phases: [] });
-    vi.mocked(getExistingRulesetIds).mockResolvedValue(new Set());
+    vi.mocked(getPublishedRulesetHeads).mockResolvedValue(new Map());
     vi.mocked(getSeasonManualPhaseCount).mockResolvedValue(0);
     vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary);
     vi.mocked(getLatestPublishedVersion).mockResolvedValue(storedVersion());

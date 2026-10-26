@@ -9,11 +9,10 @@
  */
 import 'server-only';
 
-import { randomBytes } from 'node:crypto';
 import {
   CURRENT_ENV,
   PRESETS,
-  applyShowdownFormat,
+  applyRulesetPreset,
   compile,
   isSlug,
   resolveLText,
@@ -36,11 +35,13 @@ import {
   setFormatVisibility,
 } from '@/lib/supabase/queries/format-definitions';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
+import { extractIdentity, hasSummary } from '@/lib/studio-core/identity';
+import { insertWithSlug as insertWithSlugCore, type SlugRequest } from '@/lib/studio-core/insert-with-slug.server';
 import type { SessionPlayer } from '@/types/auth';
 import type { FormatCreateBody } from './api-schemas';
 import { canEditDraft, canPublishVersion, canSetVisibility, type FormatActor } from './access';
 import { FormatStudioError } from './errors';
-import { extractIdentity, hasSummary, skeletonDocument } from './identity';
+import { skeletonDocument } from './document';
 import type {
   FormatCheck,
   FormatDefinitionDetail,
@@ -49,7 +50,7 @@ import type {
   FormatVersionSummary,
   FormatVisibility,
 } from './library-types';
-import { slugFromName, withSlugSuffix } from './slug';
+import { slugFromName } from './slug';
 
 /** Diagnostics a check returns at most; errors sort first, so they survive the cut. */
 export const MAX_CHECK_DIAGNOSTICS = 200;
@@ -143,24 +144,8 @@ interface NewDefinition {
  * Inserts a definition. An explicit slug that is taken answers `format_slug_taken`; a generated one retries with
  * the suffixes -2 to -9 and then four random hex digits, giving up with `format_slug_taken`.
  */
-async function insertWithSlug(
-  input: NewDefinition,
-  slug: { explicit: string } | { base: string },
-): Promise<FormatDefinitionMeta> {
-  if ('explicit' in slug) return createFormatDefinition({ ...input, slug: slug.explicit });
-  let lastError: unknown;
-  const candidates = [slug.base, ...[2, 3, 4, 5, 6, 7, 8, 9].map((attempt) => withSlugSuffix(slug.base, attempt))];
-  // The last resort: the base plus four random hex digits.
-  candidates.push(withSlugSuffix(slug.base, 10, randomBytes(2).toString('hex')));
-  for (const candidate of candidates) {
-    try {
-      return await createFormatDefinition({ ...input, slug: candidate });
-    } catch (err) {
-      if (!isSlugTaken(err)) throw err;
-      lastError = err;
-    }
-  }
-  throw lastError;
+function insertWithSlug(input: NewDefinition, slug: SlugRequest): Promise<FormatDefinitionMeta> {
+  return insertWithSlugCore((candidate) => createFormatDefinition({ ...input, slug: candidate }), isSlugTaken, slug);
 }
 
 function textOf(text: LText): string {
@@ -248,19 +233,19 @@ export async function forkDefinition(actor: SessionPlayer, source: FormatDefinit
 
 export interface ForkPresetOptions {
   slug?: string;
-  /** A catalog id: pre-picked on every stage of the copy, and the format name is appended to the copy's name. */
-  showdownFormat?: string;
+  /** A catalog id: pre-picked on every stage of the copy, and the preset name is appended to the copy's name. */
+  rulesetPreset?: string;
 }
 
 /**
- * Forks a shipped example (the code presets) into a new private definition owned by the caller. With a Showdown
- * format the copy has it pre-picked on every stage (`applyShowdownFormat`), the format in its name and its slug.
+ * Forks a shipped example (the code presets) into a new private definition owned by the caller. With a rule preset
+ * the copy has it pre-picked on every stage (`applyRulesetPreset`), the preset in its name and its slug.
  */
 export async function forkPreset(actor: SessionPlayer, presetId: string, options: ForkPresetOptions = {}): Promise<CreatedFormat> {
-  const { slug, showdownFormat } = options;
+  const { slug, rulesetPreset } = options;
   const preset = isSlug(presetId) ? PRESETS.find((entry) => entry.id === presetId) : undefined;
   if (preset === undefined) throw new FormatStudioError('format_preset_not_found');
-  const structure = showdownFormat === undefined ? preset.definition : applyShowdownFormat(preset.definition, showdownFormat, { retitle: true });
+  const structure = rulesetPreset === undefined ? preset.definition : applyRulesetPreset(preset.definition, rulesetPreset, { retitle: true });
   const document = withBasedOn(structure as unknown as Record<string, unknown>, preset.id);
   const identity = extractIdentity(document);
   const meta = await insertWithSlug(
@@ -271,7 +256,7 @@ export async function forkPreset(actor: SessionPlayer, presetId: string, options
       forkedFrom: null,
       document,
     },
-    slug !== undefined ? { explicit: slug } : { base: slugFromName(showdownFormat === undefined ? preset.id : `${preset.id}-${showdownFormat}`) },
+    slug !== undefined ? { explicit: slug } : { base: slugFromName(rulesetPreset === undefined ? preset.id : `${preset.id}-${rulesetPreset}`) },
   );
   return { definition: createdSummary(meta, actor), check: checkDocument(document) };
 }

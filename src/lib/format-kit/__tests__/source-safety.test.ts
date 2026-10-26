@@ -48,6 +48,9 @@ export function scanSource(text: string, relPath: string): string[] {
 }
 
 const KIT = path.resolve(__dirname, '..');
+/** The JSON, key, localized-text and patch helpers moved out of the kit into the studio core; they are scanned with it. */
+const CORE = path.resolve(KIT, '../studio-core');
+const CORE_KIT_FILES = ['json.ts', 'keys.ts', 'ltext.ts', 'patch.ts'].map((name) => path.join(CORE, name));
 const SELF = path.resolve(__filename);
 
 function listTs(dir: string): string[] {
@@ -107,7 +110,7 @@ describe('scanner', () => {
 });
 
 describe('kit source', () => {
-  const files = listTs(KIT).filter((f) => path.resolve(f) !== SELF);
+  const files = [...listTs(KIT), ...CORE_KIT_FILES].filter((f) => path.resolve(f) !== SELF);
 
   it('scans a real tree', () => {
     expect(files.length).toBeGreaterThan(60);

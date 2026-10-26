@@ -21,7 +21,7 @@ import { createTranslator, type Translator } from '@/i18n/core';
 import { createFormatter } from '@/i18n/format';
 import { formatStudioDescribeMessages } from '@/i18n/messages/format-studio/describe';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
-import { resolveLText } from '../ltext';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import { describePrimitive } from '../registry/describe';
 import type { PrimitiveKind } from '../registry/kinds';
 import { manifestEntry } from '../registry/manifest';
@@ -141,8 +141,8 @@ function levelOf(kind: string): Bucket {
 
 /**
  * Counts the rule units of a definition. Per stage: one pairing, one series, one scoring, one groups unit when the
- * stage splits into groups, one per rank step and one when the stage names a ruleset (a stored one or a Showdown
- * format). Per advancement rule: one per selection, `checked` under the `admin_confirm` gate and `auto` otherwise.
+ * stage splits into groups, one per rank step and one when the stage names a ruleset (a stored one or a rule
+ * preset). Per advancement rule: one per selection, `checked` under the `admin_confirm` gate and `auto` otherwise.
  * Per combined standings view: one. Every rule card is an `honor` unit and every module a `legacy` unit.
  * Locale-free; any value is safe.
  */
@@ -160,7 +160,7 @@ export function computeCoverage(def: FormatDefinition): Coverage {
       if (isRec(step)) cov[levelOf(`rank.${strOf(step, 'kind') ?? 'manual'}`)] += 1;
     }
     const rulesetKind = strOf(recOf(entry.ruleset), 'kind');
-    if (rulesetKind === 'ruleset' || rulesetKind === 'showdown') cov[levelOf('team.ruleset')] += 1;
+    if (rulesetKind === 'ruleset' || rulesetKind === 'preset') cov[levelOf('team.ruleset')] += 1;
   }
   for (const edge of listOf(root.edges)) {
     if (!isRec(edge)) continue;

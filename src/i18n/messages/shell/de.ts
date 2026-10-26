@@ -18,6 +18,7 @@ export default defineDe<typeof en>()({
     adminOnly: 'Für diese Seite brauchst du Admin-Rechte.',
     creatorOnly: 'Für diese Seite brauchst du Creator-Rechte.',
     siteAdminOnly: 'Diese Seite können nur Site-Admins öffnen.',
+    superadminOnly: 'Diese Seite kann nur der Superadmin öffnen.',
     resourceForbidden: 'Du bist kein Admin dieser Liga oder dieses Turniers.',
   },
   session: {
@@ -45,6 +46,7 @@ export default defineDe<typeof en>()({
       overview: 'Übersicht',
       leagues: 'Ligen',
       archivedLeagues: 'Archivierte Ligen',
+      leagueTrash: 'Liga-Papierkorb',
       tournaments: 'Turniere',
       archivedTournaments: 'Archivierte Turniere',
       matches: 'Spiele',

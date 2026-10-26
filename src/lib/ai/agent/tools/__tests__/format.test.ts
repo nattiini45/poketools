@@ -25,8 +25,13 @@ describe('parseGenFromFormat', () => {
     expect(parseGenFromFormat(null)).toBe(9);
   });
 
-  it('clamps out-of-range gens into 1..9', () => {
-    expect(parseGenFromFormat('gen0test')).toBe(1);
-    expect(parseGenFromFormat('gen42test')).toBe(9);
+  it('reads exactly one generation digit, so a key that starts with a digit is not a bigger generation', () => {
+    expect(parseGenFromFormat('gen91v1')).toBe(9);
+    expect(parseGenFromFormat('gen96v6doublesdraft')).toBe(9);
+    expect(parseGenFromFormat('gen42test')).toBe(4);
+  });
+
+  it('answers 9 for a generation outside 1..9, which is no format id', () => {
+    expect(parseGenFromFormat('gen0test')).toBe(9);
   });
 });

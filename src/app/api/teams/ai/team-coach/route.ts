@@ -6,10 +6,9 @@ import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
 import { teamCoachSchema, formatZodErrors } from '@/lib/validation';
 import { withOutputLanguage } from '@/lib/ai/language';
 import { getRequestLocale } from '@/i18n/server';
+import { parseFormatId } from '@/lib/pkmn/format-id';
 import type { ApiResult } from '@/types/api';
 import type { PokemonSet } from '@/types/team';
-
-const FORMAT_RE = /^gen[1-9][a-z0-9]*$/;
 
 /**
  * POST /api/teams/ai/team-coach
@@ -31,7 +30,7 @@ export async function POST(req: NextRequest) {
     }
     const { team, format, generation } = zodResult.data;
 
-    if (!FORMAT_RE.test(format)) {
+    if (parseFormatId(format) === null) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Invalid format', code: 'ai_coach_format_invalid' },
         { status: 400 },

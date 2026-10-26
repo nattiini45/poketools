@@ -3,12 +3,12 @@
 import { useRouter } from 'next/navigation';
 import TournamentForm from '@/components/tournament/TournamentForm';
 import type { TournamentFormData } from '@/types/tournament';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import type { ApiResult } from '@/types/api';
 import type { Tournament } from '@/types/tournament';
 
 interface TournamentCreatorProps {
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
 }
 
 export default function TournamentCreator({ rulesets }: TournamentCreatorProps) {

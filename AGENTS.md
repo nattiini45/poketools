@@ -36,6 +36,8 @@ Non-negotiable. Violations must be caught and corrected immediately.
 - **Browser Supabase exception is Realtime-only** — `NEXT_PUBLIC_SUPABASE_ANON_KEY` is allowed in the browser only through `src/lib/supabase/realtime-client.ts` and `src/lib/broadcast/channel.ts` for Cast Studio broadcast channels. Do not use browser Supabase for table reads or writes. On the server it is read only by the stateless GoTrue client `src/lib/supabase/auth-client.ts` (email/password sign-in) through the env schema in `src/lib/env.ts`.
 - **RLS enabled as defense-in-depth** — all tables have RLS; the service role key bypasses RLS entirely, so auth guards in API routes remain the primary authorization layer. `anon` and `authenticated` hold no privilege on any table, sequence or function in `public`, now or created later by `postgres` (`supabase/migrations/20261008081443_close_public_api_roles.sql`; `public.matches` was closed first by `20261008081402_revoke_anon_private_match_columns.sql`; both applied in production 2026-10-08), so the public SELECT policies left from the baseline have no effect and the browser anon key reads nothing from `public`. Exception: postgres cannot change `supabase_admin`'s default privileges, and on a hosted project they still grant ALL to both API roles, so an object created from the dashboard (as `supabase_admin`) is open from the start. After creating one that way, run checks V7 and V10 from `docs/security/anon-match-columns.md` and revoke whatever the API roles received in a migration. A policy only filters rows: it exposes every column the role holds a privilege on. A new table's migration enables RLS on it and grants it to `service_role` explicitly (Supabase stops doing that automatically from 2026-10-30). Restricted tables (teams, credentials, cast sessions) are service-role-only. Policies and grants: `supabase/migrations/20260608100000_baseline_professional_schema.sql`, `20260608100003_advisor_fixes.sql` and the two files above; background, the live post-checks and the read-only checks: `docs/security/anon-match-columns.md`.
 - **Pre-compute aggregates** — stats pages read `aggregates` by default. Never scan `battle_stats` at read time for usage, standings, or move stats. Targeted server-side reads of `battle_stats` are allowed only when aggregate tables lack the required granularity (kill rankings, scouting, match detail). Every write to `games` / `battle_stats` enqueues an aggregate job (`enqueueAggregateJob`), applied atomically with the game's `aggregate_applied_at` marker by `apply_aggregate_job`; admin edits, deletes and resets roll a counted game back through `rollback_game_aggregates` (deltas from `buildGameAggregateDeltas`).
+- **A league delete is a move to the recycle bin** — `DELETE /api/seasons/[id]` calls `league_trash_delete`, which captures what the league owns and restores it for 90 days. A new table that references seasons, tournaments, matches, games or draft pools, a new foreign-key column on an owned table to a new parent, a new INSERT trigger on an owned table, or a `REVOKE INSERT` from `service_role` on an owned table must be classified in `league_trash__inventory()` and its siblings by a new migration (`CREATE OR REPLACE`; the test reads the last definition), or `src/lib/league-trash/__tests__/inventory.test.ts` fails and the delete aborts at runtime (`docs/season.md`, "League recycle bin").
+- **Rulesets are pinned versions** — `seasons.ruleset_id` and `tournaments.ruleset_id` hold the id of an immutable `ruleset_definition_versions` row. Never write them directly: a change of the value goes through `assertRulesetChangeAllowed` / `assertRulesetUsable`, and a move after the start through `movePins` (`docs/ruleset-studio.md`). Enforcement reads only the version's frozen `resolved` rules.
 - **Explicit match state transitions** — validated through `src/lib/tournament/match-state.ts`. Legal transitions: spec Section 8. No direct status overwrites.
 - **TypeScript strict, no `any`** — row types in `src/types/database.ts`, domain types in per-entity files.
 - **Schema changes require type regen** — update `src/types/database.ts` after any Supabase schema change. Migrations: `supabase/migrations/`.
@@ -140,9 +142,11 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
 ## Pokémon Data Rules
 
 - Use `new Generations(Dex)` from `@pkmn/data` + `@pkmn/dex`. Not `Dex.forFormat()`.
+  - Exception: `listNationalSpecies`, `listNationalMoves` and `listNationalItems` in `src/lib/pkmn/dex.ts` read `Dex.forGen(gen)`, because the National Dex universe includes past entries (and Mega Evolutions, Primal formes) that `Generations` hides. Nothing else bypasses the wrapper.
 - Replay parsing: `@pkmn/protocol` + `@pkmn/client`. NOT `@pkmn/logs` (doesn't exist).
-- Keep static format defaults in `src/lib/pkmn/formats.ts`.
+- Keep static format defaults in `src/lib/pkmn/formats.ts`; the rule catalog behind them is `src/lib/pkmn/format-catalog.ts` (dex-free) and the tables in `src/lib/pkmn/preset-data/` (`docs/ruleset-presets.md`).
 - Never hardcode Pokémon names, moves, types, or stat data — always query `@pkmn/data`.
+  - Exception: the rule tables in `src/lib/pkmn/preset-data/` (move, item and ability bans, the Champions roster, the Smogon tour overlay) are authored lists transcribed from Pokémon Showdown at a pinned commit; `preset-data-integrity.server.test.ts` checks every name against the dex and fails on an edit that does not bump `PRESET_RULES_VERSION`.
   - Exception: league configuration ids are authored `@pkmn` ids validated against `@pkmn/dex` by a server test; display names still come from `src/lib/pkmn/i18n`. They are the format pack's `epb.utility`, `epb.workbook.utilitySheet` and `epb.reconciliation` id tables (the workbook tables map the sheet's spellings onto `@pkmn` names/ids; validated by `src/lib/format-pack/__tests__/pack-pkmn.server.test.ts`), and the immunity-ability table in `src/lib/draft-finder/ability-defense.ts`.
 - Display names of species, moves, items, abilities, types, natures and stats come from `src/lib/pkmn/i18n` (`localize*`, `<PkmnName>`) with the viewer's data locale; the stored, imported, exported and computed values stay English `@pkmn` names/ids.
 - Never import `@pkmn/dex` in client components — it is 2MB+; use `/api/pkmn/*` routes.
@@ -174,7 +178,9 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
 | Match state transitions | `src/lib/tournament/match-state.ts` |
 | Live draft poller (visibility-aware) | `src/lib/draft/use-visible-poll.ts` |
 | Aggregate updater | `src/lib/match/aggregation.ts` |
-| Pokémon format metadata | `src/lib/pkmn/formats.ts` |
+| Pokémon format metadata / rule preset catalog and its data | `src/lib/pkmn/formats.ts` / `src/lib/pkmn/format-catalog.ts`, `src/lib/pkmn/preset-data/` |
+| Rulesets (document kit, library, pins) | `src/lib/ruleset-kit/`, `src/lib/ruleset-studio/`, `src/lib/supabase/queries/ruleset-definitions.ts`; read model by version id: `src/lib/supabase/queries/rulesets.ts` |
+| League recycle bin (delete, restore, expiry) | `src/lib/league-trash/`, `src/lib/supabase/queries/league-trash.ts`, migration `20261026091000_league_trash.sql` |
 | Pokémon validation | `src/lib/pkmn/validation.ts` |
 | AI wrapper | `src/lib/ai/client.ts` |
 | Avatar rate limiter | `src/lib/avatar/rate-limit.ts` |
@@ -266,7 +272,7 @@ Applies to every change — `src/`, `scripts/`, config, tooling, and docs-adjace
 
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 

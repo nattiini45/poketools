@@ -5,8 +5,9 @@
  * request's "now" so clocks and deadlines are live. Server only in practice (the
  * page builds the scenario and hands the client JSON); no Supabase, no network.
  *
- * The list is always the example list; the numbers (budget, roster size, redraft
- * and token limits, comeback table) come from the active format pack
+ * The list is always the example list (its prices clamped into the span of the
+ * active pack's price tabs, see `TAB_SPAN`); the numbers (budget, roster size,
+ * redraft and token limits, comeback table) come from the active format pack
  * (`@/lib/format-pack`), and the roster size is capped so the eight fixture
  * players can always fill their rosters from the list.
  *
@@ -39,7 +40,22 @@ import { advanceSlot, UPCOMING_SHOWN, withViewerVerdicts, type FakeLine, type Fa
 
 // ── the list ───────────────────────────────────────────────────────────────
 
-export const PREVIEW_ENTRIES: readonly PointBuyListEntry[] = rawLines as PointBuyListEntry[];
+/**
+ * The span of prices the active pack's price tabs cover. The fixture list is the example pack's, priced for its
+ * tabs; a build with another pack (a maintainer's checkout with a private one) has different tabs, and a line
+ * priced outside every tab appears only under "all" and makes the finder report it. Clamping the fixture
+ * prices into the span keeps every line in a tab of whichever pack is active, and changes nothing for the
+ * example pack (the fixture's 2 to 25 lie inside its 1 to 25).
+ */
+const TAB_SPAN = {
+  min: Math.min(...epbPack.priceTabs.map((tab) => tab.min)),
+  max: Math.max(...epbPack.priceTabs.map((tab) => tab.max)),
+};
+
+export const PREVIEW_ENTRIES: readonly PointBuyListEntry[] = (rawLines as PointBuyListEntry[]).map((entry) => ({
+  ...entry,
+  price: Math.min(Math.max(entry.price, TAB_SPAN.min), TAB_SPAN.max),
+}));
 export const PREVIEW_LIST_VERSION_ID = PREVIEW_ENTRIES[0]?.list_version_id ?? 'preview-list-v1';
 export const PREVIEW_SEASON_ID = 'preview-season';
 export const PREVIEW_LEAGUE_NAME = 'EvoLiga Preview';
@@ -149,6 +165,7 @@ export const PREVIEW_SCENARIOS = [
   'live-filters',
   'live-confirm',
   'live-wall',
+  'live-roster',
   'live-filters-more',
   'live-index-loading',
   'live-index-failed',
@@ -735,6 +752,8 @@ export interface PreviewPreset {
   dialog?: boolean;
   /** Pool admins: open the room's admin sheet on this tab. */
   adminTab?: RoomAdminTab;
+  /** Expand the team weakness overview under "My roster". */
+  weaknessOpen?: boolean;
 }
 
 /** Which real screen the scenario mounts (the draft room's pick screen unless noted). */
@@ -933,6 +952,11 @@ export function buildPreviewScenario(id: PreviewScenarioId, now: number): Previe
       return scenarioOf(id, initialDraft({ now, played: DAWN_TURN, scenarioId: id }), {
         preset: { pinnedLineId: PREVIEW_WALL_PIN, filters: filtersOf({ maxPrice: PREVIEW_WALL_MAX_PRICE }) },
       });
+    case 'live-roster':
+      // Dawn's scripted roster of five (Dragon, Fire and Dragon/Ghost lines among them, whose typing changes
+      // between the first and the last stage): "My roster" with the team weakness table expanded, the matrix
+      // (Base | Final toggle) and the Weak / Resist / Immune counts under it.
+      return scenarioOf(id, initialDraft({ now, played: DAWN_TURN, scenarioId: id }), { preset: { weaknessOpen: true } });
     case 'live-filters-more': {
       // The sheet with the other two groups in use: Base stats (header summary "Spe ≥ 80 · BST ≥ 500") and a
       // Utility category with one picked member, its member list expanded.

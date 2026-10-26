@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   seasonHasGroups: vi.fn(),
   getSeasonGroupMembership: vi.fn(),
   getGroupsByTournament: vi.fn(),
-  listRulesets: vi.fn(),
+  listRulesetOptionsFor: vi.fn(),
+  getRulesetPinInfo: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -54,7 +55,9 @@ vi.mock('@/lib/supabase/queries/season-groups', () => ({
   getSeasonGroupMembership: mocks.getSeasonGroupMembership,
 }));
 vi.mock('@/lib/supabase/queries/tournament-groups', () => ({ getGroupsByTournament: mocks.getGroupsByTournament }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesetOptionsFor: mocks.listRulesetOptionsFor }));
+vi.mock('@/lib/ruleset-studio/pin-info.server', () => ({ getRulesetPinInfo: mocks.getRulesetPinInfo }));
+vi.mock('@/components/ruleset/RulesetPinCard', () => ({ default: function RulesetPinCard() { return null; } }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
 vi.mock('@/components/ui/Section', () => stub('Section'));
@@ -72,6 +75,7 @@ import Section from '@/components/ui/Section';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import RoundManager from '@/components/tournament/RoundManager';
 import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
+import RulesetPinCard from '@/components/ruleset/RulesetPinCard';
 import TournamentLifecycleActions from '@/components/tournament/TournamentLifecycleActions';
 import PageContainer from '@/components/ui/PageContainer';
 
@@ -118,7 +122,8 @@ const PHASE_READS = [
   'getRoundsByTournament',
   'seasonHasGroups',
   'getGroupsByTournament',
-  'listRulesets',
+  'listRulesetOptionsFor',
+  'getRulesetPinInfo',
 ] as const;
 
 function phaseReads(): string[] {
@@ -153,7 +158,8 @@ beforeEach(() => {
   mocks.seasonHasGroups.mockResolvedValue(false);
   mocks.getGroupsByTournament.mockResolvedValue([]);
   mocks.getSeasonGroupMembership.mockResolvedValue({});
-  mocks.listRulesets.mockResolvedValue([]);
+  mocks.listRulesetOptionsFor.mockResolvedValue([]);
+  mocks.getRulesetPinInfo.mockResolvedValue(null);
 });
 
 // ─── Access ─────────────────────────────────────────────────────────
@@ -226,6 +232,24 @@ describe('admin league phase page: per-league access', () => {
   it('a phase of another league → notFound', async () => {
     mocks.getTournamentWithDetails.mockResolvedValue({ id: T1, season_id: 'other' });
     await expect(render()).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it('lists the rulesets of the viewer with the pins of the phase and of the league kept in, and shows the pin card of the phase', async () => {
+    const pin = { definition_id: 'def-1', name: 'Standard OU', version_id: 'rs-t', version_no: 2, update: null, can_view: true };
+    mocks.getRulesetPinInfo.mockResolvedValue(pin);
+    mocks.getSeasonById.mockResolvedValue({ id: S1, name: 'Summer League S3', ruleset_id: 'rs-s' });
+    mocks.getTournamentWithDetails.mockResolvedValue({ ...(await mocks.getTournamentWithDetails()), ruleset_id: 'rs-t' });
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    const tree = await render();
+
+    expect(mocks.listRulesetOptionsFor).toHaveBeenCalledWith({ actor: { playerId: 'u1', isAdmin: false }, seasonId: S1, keep: ['rs-t', 'rs-s'] });
+    expect(mocks.getRulesetPinInfo).toHaveBeenCalledWith('rs-t', { playerId: 'u1', isAdmin: false });
+    const [card] = findByType(tree, RulesetPinCard);
+    expect(card.props).toEqual({ kind: 'tournament', target: { kind: 'tournament', id: T1, name: 'Group stage', status: 'active' }, pin });
+  });
+
+  it('a phase without a readable pin shows no pin card', async () => {
+    expect(findByType(await render(), RulesetPinCard)).toHaveLength(0);
   });
 
   it('the page source no longer reads the session copy', () => {

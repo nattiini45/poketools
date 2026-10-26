@@ -14,7 +14,7 @@
  *
  * Zero zod, no server-only import.
  */
-import { deepFreeze } from '../json';
+import { deepFreeze } from '@/lib/studio-core/json';
 import {
   LTEXT_MAX_CHARS,
   MAX_BEST_OF,
@@ -188,7 +188,7 @@ const RULESET: Spec = {
   variants: [
     { tag: 'season_default', spec: variant('kind', 'season_default', []) },
     { tag: 'ruleset', spec: variant('kind', 'ruleset', [req('id', UUID)]) },
-    { tag: 'showdown', spec: variant('kind', 'showdown', [req('format', KEY)]) },
+    { tag: 'preset', spec: variant('kind', 'preset', [req('preset', KEY)]) },
   ],
 };
 const SCORE_NUM: Spec = { t: 'num', min: -SCORE_ABS_MAX, max: SCORE_ABS_MAX };

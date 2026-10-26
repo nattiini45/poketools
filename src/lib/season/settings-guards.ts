@@ -43,6 +43,16 @@ export function formatChangeLock(
   return null;
 }
 
+/**
+ * Whether the league's ruleset can no longer be replaced through the settings form: the league has a ruleset and has started
+ * (the same test as `isSeasonStarted`). The server agrees (`assertRulesetChangeAllowed`, error `ruleset_pin_started`): from then
+ * on the ruleset only moves to another version of the SAME ruleset, through the pin card and its confirmation. A league
+ * without a ruleset can still be given one after it started.
+ */
+export function isRulesetPinLocked(rulesetId: string | null, signals: SeasonStartSignals): boolean {
+  return rulesetId !== null && isSeasonStarted(signals);
+}
+
 /** The league types a settings form offers for a league currently of type `current`. */
 export function editableFormatTypes(current: SeasonFormatType): readonly SeasonFormatType[] {
   if (current === 'evolution_point_buy') return ['evolution_point_buy'];

@@ -12,13 +12,13 @@ import {
 } from '@/lib/league-admin/clone-source';
 import type { SeasonFormData } from '@/types/season';
 import type { Season } from '@/types/season';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { leagueCreatedHref } from '@/lib/league-admin/tabs';
 
 interface LeagueCreatorProps {
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
   /** Leagues the viewer may start from; empty = the plain create form. */
   sources: CloneSourceOption[];
   /** Only site admins may copy the league admins. */
@@ -68,6 +68,7 @@ export default function LeagueCreator({ rulesets, sources, isSiteAdmin }: League
     <>
       <CloneSourcePicker
         sources={sources}
+        rulesets={rulesets}
         isSiteAdmin={isSiteAdmin}
         sourceId={source?.id ?? null}
         copyRoster={copyRoster}

@@ -31,7 +31,7 @@
  * empty, the one place the match count shows), then the price tabs pinned on top (sticky under
  * the site nav while the page scrolls, a fixed row from 1024 px), then the card
  * grid, which is the scroll container from 1024 px. `useStickyOffsets` measures
- * the nav and the clock row for the sticky offsets. The filters open in a
+ * the nav, the clock row and the DRAFT dock (the stage card is capped above it). The filters open in a
  * portalled side sheet (`FilterPanel`), outside the wall pane.
  */
 import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type ReactNode, type Ref } from 'react';
@@ -116,6 +116,8 @@ export interface DraftToolScreenProps {
   /** The stage (Base | Final) the team weakness overview under "My roster" reads; a persisted preference. */
   weaknessStage: SortStage;
   onWeaknessStage(stage: SortStage): void;
+  /** The overview starts expanded (preview scenarios); collapsed by default. */
+  weaknessOpen?: boolean;
   /** The last poll failed: showing the last state. */
   stale?: boolean;
   /** The poll answered 401/403 (spectator mode). */
@@ -160,6 +162,7 @@ export default function DraftToolScreen({
   indexFailed = false,
   weaknessStage,
   onWeaknessStage,
+  weaknessOpen = false,
   stale = false,
   authBlocked = false,
   makeupSeconds = null,
@@ -185,8 +188,9 @@ export default function DraftToolScreen({
   const { intent: hover, onHover } = useHoverIntent<{ lineId: LineId; anchor: HTMLElement | null }>();
   const rootRef = useRef<HTMLDivElement>(null);
   const clockRowRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
   const wallScrollRef = useRef<HTMLDivElement>(null);
-  useStickyOffsets(rootRef, clockRowRef);
+  useStickyOffsets(rootRef, clockRowRef, dockRef);
 
   // A new price tab starts at the top of the grid (desktop scroller; below 1024 px the page scrolls and the
   // tabs stay where they are). Filters and the pinned line are untouched (SPEC:196-199).
@@ -348,7 +352,7 @@ export default function DraftToolScreen({
           </section>
 
           {/* Outside the card, so the sticky dock is bounded by the whole left column (§5.3). */}
-          <div className={`${styles.ctaDock} ${dockOnPhone ? '' : styles.ctaDockPhoneEmpty} flex flex-col gap-2`}>
+          <div ref={dockRef} className={`${styles.ctaDock} ${dockOnPhone ? '' : styles.ctaDockPhoneEmpty} flex flex-col gap-2`}>
             {pinned ? <CostConsequence remainingAfter={remainingAfter} forPlayer={remainingFor} reason={cta.lineReason} vm={vm} /> : null}
             {draftButton(styles.stageCta)}
             {adminSwitch ? (
@@ -377,6 +381,7 @@ export default function DraftToolScreen({
                   indexFailed={indexFailed}
                   weaknessStage={weaknessStage}
                   onWeaknessStage={onWeaknessStage}
+                  weaknessOpen={weaknessOpen}
                   onPin={pin}
                 />
               </PhoneSection>

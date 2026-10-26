@@ -6,6 +6,7 @@ import {
   editableFormatTypes,
   formatChangeLock,
   isSeasonDateRangeValid,
+  isRulesetPinLocked,
   isSeasonStarted,
   type SeasonStartSignals,
 } from '../settings-guards';
@@ -25,6 +26,26 @@ function thrown(fn: () => void): UserFacingError {
   }
   throw new Error('expected a UserFacingError');
 }
+
+describe('isRulesetPinLocked', () => {
+  const running = signals({ status: 'active' });
+
+  it('locks a started league that has a ruleset, by every start signal', () => {
+    expect(isRulesetPinLocked('rs-1', running)).toBe(true);
+    expect(isRulesetPinLocked('rs-1', signals({ status: 'completed' }))).toBe(true);
+    expect(isRulesetPinLocked('rs-1', signals({ phases: [{ status: 'active', rounds_total: 0 }] }))).toBe(true);
+    expect(isRulesetPinLocked('rs-1', signals({ phases: [{ status: 'upcoming', rounds_total: 2 }] }))).toBe(true);
+  });
+
+  it('leaves a league that has not started editable', () => {
+    expect(isRulesetPinLocked('rs-1', signals())).toBe(false);
+    expect(isRulesetPinLocked('rs-1', signals({ phases: [upcomingPhase] }))).toBe(false);
+  });
+
+  it('leaves a started league without a ruleset editable: the server still lets it get its first one', () => {
+    expect(isRulesetPinLocked(null, running)).toBe(false);
+  });
+});
 
 describe('isSeasonStarted', () => {
   it('is false for an upcoming league without phases', () => {

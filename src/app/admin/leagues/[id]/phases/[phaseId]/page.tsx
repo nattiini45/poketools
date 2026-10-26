@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
+import RulesetPinCard from '@/components/ruleset/RulesetPinCard';
 import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
 import { gateResourceAdmin } from '@/lib/auth/resource-gate';
@@ -11,7 +12,8 @@ import { getStagesBySeasonId, getTournamentWithDetails } from '@/lib/supabase/qu
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getSeasonGroupMembership, seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
-import { listRulesets } from '@/lib/supabase/queries/rulesets';
+import { getRulesetPinInfo } from '@/lib/ruleset-studio/pin-info.server';
+import { listRulesetOptionsFor } from '@/lib/supabase/queries/rulesets';
 import { buildLeaguePhase } from '@/lib/tournament/league-phase';
 import { phaseNumbers } from '@/lib/league-admin/phase-controls';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
@@ -58,15 +60,15 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
     );
   }
   // Phase delete is site-admin only, decided from the live gate (never the session copy).
-  const { isSiteAdmin } = gate;
+  const { isSiteAdmin, playerId } = gate;
+  const viewer = { playerId, isAdmin: isSiteAdmin };
 
-  const [league, tournament, stages, rounds, rulesets, leagueHasGroups, phaseGroups, t, tEnum, tCommon] = await Promise.all([
+  const [league, tournament, stages, rounds, leagueHasGroups, phaseGroups, t, tEnum, tCommon] = await Promise.all([
     getSeasonById(seasonId),
     getTournamentWithDetails(phaseId),
     // The league's phases, to count this one as a position (1, 2, ...) in the subtitle.
     getStagesBySeasonId(seasonId),
     getRoundsByTournament(phaseId),
-    listRulesets(),
     // A league with groups owns its phases' groups (the panel shows them read-only).
     seasonHasGroups(seasonId),
     getGroupsByTournament(phaseId),
@@ -76,6 +78,12 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
   ]);
 
   if (!league || !tournament || tournament.season_id !== seasonId) notFound();
+
+  // The phase's own pin (and the league's, the default of a new phase) stays selectable even when it is not the newest version.
+  const [rulesets, pin] = await Promise.all([
+    listRulesetOptionsFor({ actor: viewer, seasonId, keep: [tournament.ruleset_id, league.ruleset_id] }),
+    getRulesetPinInfo(tournament.ruleset_id, viewer),
+  ]);
 
   const phase = buildLeaguePhase(tournament, rounds);
   const isNewPhase = phase.participant_count > 0 && phase.rounds_total === 0;
@@ -134,6 +142,11 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
 
         <Section id="tournament-overview" title={t('phasePage.overview')} collapsible>
           <PhaseOverviewEditor seasonId={seasonId} phase={phase} rulesets={rulesets} />
+          {pin !== null && (
+            <div className="mt-4">
+              <RulesetPinCard kind="tournament" target={{ kind: 'tournament', id: phaseId, name: phase.name, status: phase.status }} pin={pin} />
+            </div>
+          )}
         </Section>
 
         <Section title={t('phasePage.description')} collapsible defaultCollapsed>

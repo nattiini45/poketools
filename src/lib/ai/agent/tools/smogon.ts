@@ -12,6 +12,7 @@
 import { Smogon } from '@pkmn/smogon';
 import type { Analysis, DisplayStatistics } from '@pkmn/smogon';
 import { getGeneration, getSpecies } from '@/lib/pkmn/dex';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { LruCache } from '@/lib/utils/lru-cache';
 import type { GetUsageStatsInput, SearchStrategyKnowledgeInput } from './schemas';
 
@@ -96,9 +97,7 @@ function topEntries(map: Record<string, number> | undefined, n: number): UsageEn
 
 function genFromFormat(format?: string, fallbackGen?: number): number {
   if (fallbackGen) return fallbackGen;
-  const m = format?.match(/^gen(\d)/i);
-  if (m) return Number(m[1]);
-  return 9;
+  return generationOrDefault(format?.toLowerCase());
 }
 
 async function fetchFormatStats(format: string): Promise<DisplayStatistics | null> {

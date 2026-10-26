@@ -62,6 +62,22 @@ export default {
   delete_rebuild_evolution_failed:
     "The delete succeeded, but repairing the league's evolution progress afterwards failed. The failure was logged; a site admin can repair it with Record Reconciliation in the admin data tools.",
 
+  // League restore warnings (sent with a 200 in data.rebuild_warning by POST /api/admin/league-trash/[id]/restore and
+  // by the pending-rebuild route): the league is back, the derived-data rebuild after it failed or did not settle
+  // (details in the server log and the audit record). The superadmin can run the pending rebuild again on the trash page.
+  restore_rebuild_failed:
+    'The league was restored, but rebuilding the derived data (statistics, ratings, streaks) afterwards failed. The failure was logged; run the pending rebuild on the trash page again.',
+  restore_rebuild_aggregates_failed:
+    'The league was restored, but counting its games into the usage statistics (aggregates) afterwards failed. The failure was logged; run the pending rebuild on the trash page again.',
+  restore_rebuild_ratings_failed:
+    'The league was restored, but rebuilding the ratings afterwards failed. The failure was logged; run the pending rebuild on the trash page again.',
+  restore_rebuild_streaks_failed:
+    'The league was restored, but rebuilding the win streaks afterwards failed. The failure was logged; run the pending rebuild on the trash page again.',
+  restore_rebuild_evolution_failed:
+    "The league was restored, but repairing the league's evolution progress afterwards failed. The failure was logged; run the pending rebuild on the trash page again.",
+  restore_rebuild_ratings_unsettled:
+    'The league was restored and the ratings were rebuilt, but they had not fully settled. Run the pending rebuild on the trash page again.',
+
   // Test-league flag warning (sent with a 200 in data.rebuild_warning by PATCH /api/seasons/[id]): the flag is
   // saved, the rating rebuild of the league's players after it failed (details in the server log and the audit record).
   test_flag_rating_rebuild_failed:
@@ -119,4 +135,38 @@ export default {
   },
   format_has_versions: 'This format has published versions, so it cannot be deleted.',
   format_version_immutable: 'A published version cannot be changed.',
+
+  // Ruleset library (api/ruleset-definitions/**, src/lib/ruleset-studio/{errors,library,pins}.ts). Statuses: src/lib/ruleset-studio/errors.ts.
+  // `ruleset_not_found` lives in errors/tournaments.
+  ruleset_forbidden: 'You cannot use this ruleset: it is private to another admin or has no published version.',
+  ruleset_slug_taken: 'This ruleset address is already in use.',
+  ruleset_stale_revision: 'This ruleset was changed in the meantime. Reload it and apply your edit again.',
+  ruleset_document_not_json: 'The ruleset document is not valid JSON.',
+  ruleset_document_not_object: 'The ruleset document must be a JSON object.',
+  ruleset_document_too_deep: 'The ruleset document is nested too deeply.',
+  ruleset_document_too_many_nodes: 'The ruleset document has too many entries.',
+  ruleset_document_too_large: 'The ruleset document is too large (limit 256 KB).',
+  ruleset_document_too_large_to_store: 'The ruleset document is too large to store.',
+  ruleset_document_invalid: {
+    one: 'This ruleset has {count} error and cannot be published. Fix it first.',
+    other: 'This ruleset has {count} errors and cannot be published. Fix them first.',
+  },
+  ruleset_nothing_to_publish: 'There are no changes since the latest published version.',
+  ruleset_not_published: 'This ruleset has no published version yet.',
+  ruleset_published_locked: 'A ruleset in the gallery can only be published by site admins.',
+  ruleset_visibility_forbidden: 'Only site admins can put a ruleset in the gallery or change a gallery ruleset.',
+  ruleset_preset_locked: 'Site rulesets can only be changed by site admins.',
+  ruleset_preset_unknown: 'Rule preset not found',
+  ruleset_in_use: {
+    one: 'This ruleset is used by {count} league or phase and cannot be deleted.',
+    other: 'This ruleset is used by {count} leagues or phases and cannot be deleted.',
+  },
+  ruleset_version_immutable: 'A published version cannot be changed.',
+  ruleset_legacy_editor_unsupported: 'This ruleset uses features the old ruleset editor cannot show (a preset base or an allowlist). Edit it in the ruleset studio.',
+  ruleset_version_quota_exceeded: 'A ruleset can have at most {max} published versions.',
+  ruleset_owner_quota_exceeded: 'You can own at most {max} rulesets. Delete one you no longer need.',
+  ruleset_pin_mismatch: 'That version does not belong to this ruleset.',
+  ruleset_pin_locked: 'This league or phase is finished, so its ruleset can no longer be changed.',
+  ruleset_pin_started: 'This league or phase has already started. Move it to another ruleset version with the ruleset pin tool, which asks you to confirm.',
+  ruleset_pin_confirm_required: 'This league or phase has already started. Confirm the change for: {targets}.',
 } as const;

@@ -4,13 +4,37 @@
  * Both the legacy match-analysis/scouting builders (`context-builder.ts`),
  * the Kale tournament-report builder (`tournament-report-context.ts`), and the
  * agent context pack (`agent/context-pack.ts`) need to describe the same league
- * mechanics — type-quota / tera / evolution constraints and per-player Core Liga
- * assignments — to the model. These pure formatters keep that wording in ONE
+ * mechanics — type-quota / tera / evolution constraints, allowlists and per-player
+ * Core Liga assignments — to the model. These pure formatters keep that wording in ONE
  * place so the prompts can't drift apart. The text mirrors the actual semantics
  * enforced in `src/lib/pkmn/validation.ts` (`enforceTeamConstraints`).
  */
-import type { TeamConstraints } from '@/types/ruleset';
+import type { Ruleset, TeamConstraints } from '@/types/ruleset';
 import type { CoreTriple } from '@/types/season';
+
+const ALLOWLIST_LABELS = [
+  ['pokemon', 'Pokémon'],
+  ['moves', 'moves'],
+  ['items', 'items'],
+  ['abilities', 'abilities'],
+] as const;
+
+/**
+ * Render the lists of a ruleset that are ALLOWLISTS (only the listed entries are legal) as one line each; nothing for a list
+ * that is not in allowlist mode. A long list is cut at `cap` names with the rest counted. A model that is told only about
+ * bans would call an allowlist league's other Pokémon legal, so every prompt that prints bans prints these too.
+ */
+export function renderAllowlists(allow: Ruleset['allow'], cap = 30): string[] {
+  const lines: string[] = [];
+  for (const [key, label] of ALLOWLIST_LABELS) {
+    const names = allow[key];
+    if (names === null) continue;
+    const shown = names.slice(0, cap).join(', ');
+    const more = names.length > cap ? ` (+${names.length - cap} more)` : '';
+    lines.push(`Allowlist: ONLY these ${label} are legal (${names.length}): ${shown || 'none'}${more}`);
+  }
+  return lines;
+}
 
 /**
  * Render a league's `team_constraints` as terse human-readable lines (no

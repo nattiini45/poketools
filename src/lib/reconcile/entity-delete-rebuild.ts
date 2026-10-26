@@ -1,10 +1,12 @@
 /**
- * Derived-data rebuild after entity deletion (EPB spec §18 "leave the league
- * as if that match had never been imported" + §22 reconcile intent).
+ * Derived-data rebuild after an entity is deleted or a deleted league is
+ * restored (EPB spec §18 "leave the league as if that match had never been
+ * imported" + §22 reconcile intent).
  *
- * Hard-deleting a tournament or season cascades away the raw rows
- * (matches → games → battle_stats), but the data DERIVED from those rows is
- * not cascade-deleted and must be rebuilt from what remains:
+ * Hard-deleting a tournament or season (a season goes to the league trash,
+ * see `src/lib/league-trash`) removes the raw rows (matches → games →
+ * battle_stats), but the data DERIVED from those rows is not cascade-deleted
+ * and must be rebuilt from what remains:
  *   - aggregates (tournament/league/all_time scopes, incl. player_aggregates)
  *   - player ratings + rating_history curves (deleted matches vanish from
  *     the chronological replay)
@@ -21,16 +23,25 @@
  * `--repair` completes it. Orphaned scopes cannot recur because the deleted
  * entity's scopes are explicitly cleared here.
  *
+ * `rebuildAfterSeasonRestore` is the mirror image for a league restored from
+ * the trash. The database brings the rows back with their games marked as not
+ * yet counted and one pending increment job per game (the aggregate queue's
+ * own contract), so the aggregates step only DRAINS that queue (time-boxed; the
+ * cron finishes the rest) and never rebuilds a scope globally. Ratings (the
+ * settle loop of the test-league rebuild), streaks and the EPB evolution
+ * repair run from the restored rows.
+ *
  * A failed step throws `EntityDeleteRebuildStepError` naming the step
  * (aggregates, ratings, streaks, evolution) with the step's own error as its
- * `cause`, so the DELETE routes report a distinct warning code per cause
- * (`toDeleteRebuildWarning`).
+ * `cause`, so the routes report a distinct warning code per cause
+ * (`toDeleteRebuildWarning`, `toRestoreRebuildWarning`).
  */
 
 import { clearAggregatesForScope } from '@/lib/supabase/queries/aggregates';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
+import { drainPendingAggregateJobs, rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
 import { rebuildRatingsForPlayers } from '@/lib/rating/updateRatings';
+import { rebuildRatingsSettled } from '@/lib/rating/test-league-rebuild';
 import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
@@ -65,6 +76,7 @@ export interface EntityDeleteRebuildSummary {
   playerIds: string[];
   ratingsRebuilt: number;
   streaksRebuilt: number;
+  /** The tournament's own scope; for a season delete the sum over all of the league's phases (null without phases). */
   tournamentScopeCleared: ScopeClear | null;
   leagueScope: LeagueScopeOutcome | null;
   allTime: ScopeClear & { gamesProcessed: number };
@@ -171,26 +183,36 @@ export async function rebuildAfterTournamentDelete(input: {
 }
 
 /**
- * Rebuild derived data after a season hard-delete. Call AFTER the delete
- * committed; `playerIds` must be the season's participants captured BEFORE
- * the delete. The season FK is ON DELETE NO ACTION, so a season can only be
- * deleted once it has no tournaments left — no tournament scopes to clear.
- * Evolution state cascades with the season row and needs no repair.
+ * Rebuild derived data after a league was deleted (moved to the trash). Call
+ * AFTER the delete committed; `playerIds` and `phaseIds` come from the delete
+ * itself (the participants and phases the league had). The database already
+ * removed the league's and the phases' aggregate scope rows with the league;
+ * clearing them again here is idempotent and keeps a re-run (the pending
+ * rebuild) self-contained. Evolution state is gone with the league and needs
+ * no repair.
  */
 export async function rebuildAfterSeasonDelete(input: {
   seasonId: string;
   playerIds: string[];
+  /** The league's phases (tournaments): each phase's own aggregate scope is cleared. */
+  phaseIds: string[];
 }): Promise<EntityDeleteRebuildSummary> {
-  const { seasonId, playerIds } = input;
+  const { seasonId, playerIds, phaseIds } = input;
 
-  const { cleared, allTime } = await step('aggregates', async () => {
-    // 1. The season's league-scope aggregates are now orphaned — clear them
-    //    (no rebuild: nothing feeds the scope anymore).
+  const { phaseScopes, cleared, allTime } = await step('aggregates', async () => {
+    // 1. The phases' tournament scopes and the league scope are orphaned —
+    //    clear them (no rebuild: nothing feeds the scopes anymore).
+    const phaseScopes: ScopeClear = { aggregatesDeleted: 0, playerAggregatesDeleted: 0 };
+    for (const phaseId of phaseIds) {
+      const phaseCleared = await clearAggregatesForScope('tournament', phaseId);
+      phaseScopes.aggregatesDeleted += phaseCleared.aggregatesDeleted;
+      phaseScopes.playerAggregatesDeleted += phaseCleared.playerAggregatesDeleted;
+    }
     const cleared = await clearAggregatesForScope('league', seasonId);
 
     // 2. all_time spans every scope — rebuild globally.
     const allTime = await rebuildAggregatesForScope('all_time', null);
-    return { cleared, allTime };
+    return { phaseScopes, cleared, allTime };
   });
 
   // 3. Ratings + streaks for the deleted season's participants.
@@ -199,7 +221,7 @@ export async function rebuildAfterSeasonDelete(input: {
   return {
     scope: 'season',
     ...players,
-    tournamentScopeCleared: null,
+    tournamentScopeCleared: phaseIds.length > 0 ? phaseScopes : null,
     leagueScope: {
       seasonId,
       mode: 'cleared',
@@ -212,5 +234,75 @@ export async function rebuildAfterSeasonDelete(input: {
       playerAggregatesDeleted: allTime.playerAggregatesDeleted,
     },
     evolutionRepair: null,
+  };
+}
+
+/** Wall-clock budget of the aggregate queue drain inside the restore rebuild; the cron finishes what remains. */
+export const RESTORE_AGGREGATE_DRAIN_BUDGET_MS = 90_000;
+
+/** Jobs per drain round of the restore rebuild. */
+const RESTORE_AGGREGATE_BATCH_SIZE = 50;
+
+export interface EntityRestoreRebuildSummary {
+  scope: 'season_restore';
+  playerIds: string[];
+  /** The aggregate queue drain: jobs applied and failed this run, and how many are still queued for the cron. */
+  aggregateJobs: { processed: number; failed: number; remaining: number };
+  ratingsRebuilt: number;
+  ratingPasses: number;
+  /** False when the settle loop hit its pass cap while a pass still changed ratings. */
+  ratingsSettled: boolean;
+  streaksRebuilt: number;
+  evolutionRepair: { trackersUpdated: number; eventsRewritten: number; pointsAwarded: number } | null;
+}
+
+/**
+ * Rebuild derived data after a league was restored from the trash. Call AFTER
+ * the restore committed; `playerIds` come from the restore itself. Each step is
+ * idempotent, so the pending rebuild can run it again after a failure:
+ *   1. aggregates: drain the aggregate queue (the restore queued one increment
+ *      job per game with stats). League, tournament and all_time scopes are
+ *      counted by the queue's own atomic apply, never rebuilt globally here.
+ *   2. ratings: the settle loop of the test-league rebuild over the players.
+ *   3. streaks: `recomputeStreaks` per player (the restored matches' streak
+ *      pointers were not re-linked).
+ *   4. evolution: the EPB repair of the restored season.
+ */
+export async function rebuildAfterSeasonRestore(input: {
+  seasonId: string;
+  playerIds: string[];
+}): Promise<EntityRestoreRebuildSummary> {
+  const { seasonId, playerIds } = input;
+
+  const drained = await step('aggregates', () =>
+    drainPendingAggregateJobs({
+      batchSize: RESTORE_AGGREGATE_BATCH_SIZE,
+      deadline: Date.now() + RESTORE_AGGREGATE_DRAIN_BUDGET_MS,
+    })
+  );
+
+  const ratings = await step('ratings', () => rebuildRatingsSettled(playerIds));
+
+  await step('streaks', async () => {
+    for (const playerId of playerIds) {
+      await recomputeStreaks(playerId);
+    }
+  });
+
+  const evolutionRepair = await maybeRepairEvolution(seasonId);
+
+  return {
+    scope: 'season_restore',
+    playerIds,
+    aggregateJobs: {
+      processed: drained.processed,
+      failed: drained.failed,
+      remaining: drained.statsAfter.pending + drained.statsAfter.processing,
+    },
+    ratingsRebuilt: ratings.rebuiltPlayerIds.length,
+    ratingPasses: ratings.passes,
+    ratingsSettled: ratings.settled,
+    streaksRebuilt: playerIds.length,
+    evolutionRepair,
   };
 }

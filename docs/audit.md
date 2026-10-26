@@ -45,6 +45,31 @@ Actions written by the admin match page and the confirm route (module doc [Match
 
 `match.reset` and `game.delete` gained an optional `metadata.reason`. Admin disputes through the Admin Override form are now `match.dispute`; `match.override` covers only the move to `completed`.
 
+## League Trash Actions
+Written by the league recycle bin ([Season](./season.md#league-recycle-bin)). Resource type `season`, the league id as `resource_id`.
+
+| Action | Written by | `metadata` |
+|---|---|---|
+| `season.delete` | `DELETE /api/seasons/[id]` (a move to the trash, not a destruction) | `trash_id`, `purge_after`, `counts` (the row counts the trash page shows), `frozen_pools` (running drafts paused), `rebuild`, `rebuild_error` |
+| `season.restore` | `POST /api/admin/league-trash/[id]/restore` (superadmin) | `trash_id`, `restored` (rows per table), `shift_seconds` (the time spent in the trash), `paused_pools`, `queued_aggregate_jobs`, `schema_version_at_delete`, `warnings`, `rebuild`, `rebuild_error` |
+| `season.rebuild` | `POST /api/admin/league-trash/[id]/rebuild` (superadmin) | `trash_id`, `kind` (`delete` or `restore`), `rebuild`, `rebuild_error` |
+| `season.purge` | the expiry cron (`/api/cron/expire-league-trash`) | per removed league: `trash_id`, `deleted_at`, `purge_after`, `matches`, `social_images` (the sweep result). The actor is System (`actor_id` null, `actor_name` `System`), like the other crons |
+
+The `audit_log` and `draft_action_log` rows of a purged league are kept: both logs are append-only by design and carry no foreign key to the league. Achievements are not touched.
+
+## Ruleset Actions
+Written by the Ruleset Studio routes ([Ruleset Studio](./ruleset-studio.md#api)). Saving a draft and the pin impact check write nothing.
+
+| Action | Written by | Resource | `changes` / `metadata` |
+|---|---|---|---|
+| `ruleset.create` | `POST /api/ruleset-definitions`; `POST /api/rulesets` (site admins, `metadata.via` `builder`) | `ruleset` | the slug is the resource name |
+| `ruleset.fork` | `POST /api/ruleset-definitions/[id]/fork`, `.../presets/[presetId]/fork` | `ruleset` | `forked_from` and `source_slug`, or `preset` (and `tour_overlay: true` when the Smogon tour extras were added) |
+| `ruleset.publish` | `POST .../publish`; `PATCH /api/rulesets/[id]` (`via` `builder`) | `ruleset` | `version_no`, `content_hash`, `resolved_hash` |
+| `ruleset.visibility` | `PATCH /api/ruleset-definitions/[id]` | `ruleset` | `visibility` before/after |
+| `ruleset.delete` | `DELETE /api/ruleset-definitions/[id]`, `DELETE /api/rulesets/[id]` | `ruleset` | the slug is the resource name |
+| `ruleset.pin` | `POST .../pins`; one event per moved target | `season` or `tournament` | `ruleset_id` before/after (version ids); `ruleset` (slug), `version_no`, `started` |
+| `ruleset.seed` | `POST /api/seed-rulesets` | `ruleset` | `count` of rulesets created |
+
 ## Data Flows
 - **Writers**: API routes across modules call `logAuditEvent` after mutations (actions span players, tournaments, games, matches, rounds, Discord webhooks, admin, cast/broadcast, wiki, resource admin, seasons, point-buy lists).
 - **Storage**: all entries land in the Supabase `audit_log` table.

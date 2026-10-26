@@ -16,7 +16,7 @@ import { buildChips, type FilterChip } from './chips';
 import { STAT_KEYS, type FinderFilters, type FinderViewState, type PriceTabKey, type StageMode, type StatKey } from './filter-types';
 import type { IndexStage, TypeId } from './index-types';
 import type { DraftLineCatalog, DraftLineCatalogEntry } from './line-catalog';
-import { indexAbilityName, indexMoveName, type NameResolver } from './names-port';
+import type { NameResolver } from './names-port';
 import type { PreparedIndex, PreparedLine } from './prepare';
 import { foldQuery, isEmptyQuery, lineMatchesText } from './search';
 import { sortLineIds } from './sort';
@@ -267,27 +267,6 @@ export function evaluateLine(line: PreparedLine, criteria: readonly Criterion[],
 
   const matches = mode === 'same_stage' ? simultaneousFromStage !== null : results.every((r) => r.satisfied);
   return { lineId: line.lineId, matches, results, simultaneousFromStage };
-}
-
-/**
- * The Pokémon-data subject of a match reason in the data locale: the move, ability (incl. a defensive one),
- * type or stat name. `null` for the typing multiplier, the price and BST, whose wording is UI copy.
- */
-export function viaSubject(via: MatchVia, ix: PreparedIndex, names: NameResolver, dl: Locale): string | null {
-  switch (via.kind) {
-    case 'move':
-      return indexMoveName(ix.raw, via.moveIdx, names, dl);
-    case 'ability':
-    case 'ability-defense':
-      return indexAbilityName(ix.raw, via.abilityIdx, names, dl);
-    case 'type':
-      return names.type(via.type, dl);
-    case 'stat':
-      return via.stat === 'bst' ? null : names.stat(via.stat, dl, 'short');
-    case 'typing':
-    case 'price':
-      return null;
-  }
 }
 
 // ── run ────────────────────────────────────────────────────────────

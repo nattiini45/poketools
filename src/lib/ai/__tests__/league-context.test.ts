@@ -1,7 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { renderTeamConstraints, renderCoreAssignments } from '../league-context';
+import { renderAllowlists, renderTeamConstraints, renderCoreAssignments } from '../league-context';
 import type { TeamConstraints } from '@/types/ruleset';
 import type { CoreTriple } from '@/types/season';
+
+describe('renderAllowlists', () => {
+  const NONE = { pokemon: null, moves: null, items: null, abilities: null };
+
+  it('prints nothing for a ruleset without an allowlist', () => {
+    expect(renderAllowlists(NONE)).toEqual([]);
+  });
+
+  it('prints one line per list in allowlist mode, so the model cannot take the other entries for legal', () => {
+    const lines = renderAllowlists({ ...NONE, pokemon: ['Pikachu', 'Raichu'], abilities: ['Static'] });
+    expect(lines).toEqual([
+      'Allowlist: ONLY these Pokémon are legal (2): Pikachu, Raichu',
+      'Allowlist: ONLY these abilities are legal (1): Static',
+    ]);
+  });
+
+  it('cuts a long list and counts the rest; an empty allowlist says that nothing is legal', () => {
+    const names = Array.from({ length: 35 }, (_, i) => `Mon${i}`);
+    expect(renderAllowlists({ ...NONE, pokemon: names })[0]).toContain('(+5 more)');
+    expect(renderAllowlists({ ...NONE, items: [] })).toEqual(['Allowlist: ONLY these items are legal (0): none']);
+  });
+});
 
 describe('renderTeamConstraints', () => {
   it('returns [] for null/empty constraints', () => {

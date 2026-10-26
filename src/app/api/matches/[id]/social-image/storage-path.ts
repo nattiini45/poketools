@@ -36,6 +36,27 @@ export function socialImagePath(matchId: string, objectId: string = randomUUID()
 }
 
 /**
+ * The folder holding a match's immutable cards (`matches/<matchId>`), or null when `matchId` is not a lowercase uuid.
+ * With `legacySocialImagePath` and `isSocialImageObjectName` this is how every card of a match is found when the
+ * match row (and with it the stored URL) is gone, for example after its league left the trash for good.
+ */
+export function socialImageFolder(matchId: string): string | null {
+  return MATCH_ID_RE.test(matchId) ? `matches/${matchId}` : null;
+}
+
+/** The fixed name an upload before the immutable names used (`matches/<matchId>.png`), or null for a non-uuid id. */
+export function legacySocialImagePath(matchId: string): string | null {
+  return MATCH_ID_RE.test(matchId) ? `matches/${matchId}.png` : null;
+}
+
+const OBJECT_NAME_RE = new RegExp(`^${UUID_PATTERN}\\.png$`);
+
+/** Whether `name`, listed in a match's folder, is one of the objects `socialImagePath` writes (`<uuid>.png`). */
+export function isSocialImageObjectName(name: string): boolean {
+  return OBJECT_NAME_RE.test(name);
+}
+
+/**
  * The object path in `social-images` that a stored `social_image_url` of
  * match `matchId` names, or null for anything else: another origin or
  * bucket, another match's object, a name this route never writes, or

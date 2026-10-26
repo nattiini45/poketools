@@ -17,6 +17,7 @@ import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { buildLeaguePhase, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { expireSeasonReads } from '@/lib/revalidation';
+import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 
@@ -112,6 +113,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       await shiftStageOrders(id, insertAt, 1);
     }
+
+    await assertRulesetUsableForCreate(admin, body.ruleset_id);
 
     const tournament = await createTournament({
       name: body.name,

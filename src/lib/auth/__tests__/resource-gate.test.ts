@@ -19,7 +19,7 @@ const ID = '0b9f1c2e-5d4a-4c3b-9a8e-7f6d5c4b3a21';
 const PLAYER = { playerId: 'p1' } as LiveAccess['player'];
 
 function access(flags: Partial<LiveAccess>): LiveAccess {
-  return { player: PLAYER, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, ...flags };
+  return { player: PLAYER, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, isSuperadmin: false, ...flags };
 }
 
 beforeEach(() => {

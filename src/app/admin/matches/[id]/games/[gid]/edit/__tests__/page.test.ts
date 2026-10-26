@@ -62,6 +62,7 @@ function access(flags: Partial<Omit<LiveAccess, 'player'>>): LiveAccess {
     isSiteAdmin: false,
     isAnyAdmin: false,
     isCreator: false,
+    isSuperadmin: false,
     ...flags,
   };
 }

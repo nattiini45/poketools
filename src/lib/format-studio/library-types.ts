@@ -8,12 +8,13 @@
  */
 import type { BracketType } from '@/types/tournament';
 import type { Diagnostic, FormatDefinition, LText, Stage } from '@/lib/format-kit/client';
+import { STUDIO_KINDS, STUDIO_VISIBILITIES, type StudioKind, type StudioVisibility } from '@/lib/studio-core/access';
 
-export const FORMAT_VISIBILITIES = ['private', 'league', 'gallery'] as const;
-export type FormatVisibility = (typeof FORMAT_VISIBILITIES)[number];
+export const FORMAT_VISIBILITIES = STUDIO_VISIBILITIES;
+export type FormatVisibility = StudioVisibility;
 
-export const FORMAT_KINDS = ['preset', 'custom'] as const;
-export type FormatKind = (typeof FORMAT_KINDS)[number];
+export const FORMAT_KINDS = STUDIO_KINDS;
+export type FormatKind = StudioKind;
 
 export const SEASON_FORMAT_ENGINES = ['legacy', 'shadow', 'kit'] as const;
 export type SeasonFormatEngine = (typeof SEASON_FORMAT_ENGINES)[number];

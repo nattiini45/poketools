@@ -18,8 +18,8 @@ interface RouteParams {
  *
  * Admin tiers only. Copies one of the shipped example formats (a code constant, not a stored row) into a new
  * private definition owned by the caller, with `identity.based_on` set to the example's id. An unknown example
- * is a 404 `format_preset_not_found`. The body is optional; its members are a slug and a Showdown format
- * (`showdown_format`, a catalog id) that is pre-picked on every stage of the copy.
+ * is a 404 `format_preset_not_found`. The body is optional; its members are a slug and a rule preset
+ * (`ruleset_preset`, a catalog id) that is pre-picked on every stage of the copy.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const parsed = presetForkSchema.safeParse(await readBoundedJsonOrEmpty(request));
     if (!parsed.success) return validationFailedResponse(parsed.error);
 
-    const forked = await forkPreset(player, presetId, { slug: parsed.data.slug, showdownFormat: parsed.data.showdown_format });
+    const forked = await forkPreset(player, presetId, { slug: parsed.data.slug, rulesetPreset: parsed.data.ruleset_preset });
     expireFormatLibraryReads();
 
     logAuditEvent({
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       resource_type: 'format',
       resource_id: forked.definition.id,
       resource_name: forked.definition.slug,
-      metadata: { preset_id: presetId, ...(parsed.data.showdown_format !== undefined && { showdown_format: parsed.data.showdown_format }) },
+      metadata: { preset_id: presetId, ...(parsed.data.ruleset_preset !== undefined && { ruleset_preset: parsed.data.ruleset_preset }) },
     });
 
     return NextResponse.json<ApiResult<CreatedFormat>>({ success: true, data: forked }, { status: 201 });

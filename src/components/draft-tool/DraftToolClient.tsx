@@ -112,6 +112,8 @@ export interface DraftToolClientProps {
   adminActions?: AdminDraftActions;
   /** Preview only: the admin sheet is open at mount (pool admins only), on this tab. */
   initialAdminTab?: RoomAdminTab;
+  /** Preview only: the team weakness overview under "My roster" is expanded at mount. */
+  initialWeaknessOpen?: boolean;
 }
 
 /**
@@ -166,6 +168,7 @@ export default function DraftToolClient({
   initialConfirmLineId,
   adminActions,
   initialAdminTab,
+  initialWeaknessOpen,
 }: DraftToolClientProps) {
   const t = useT(draftScreenMessages);
   const tShared = useT(draftSharedMessages);
@@ -478,6 +481,7 @@ export default function DraftToolClient({
         indexFailed={indexError !== null && ix === null}
         weaknessStage={weaknessStage}
         onWeaknessStage={setWeaknessStage}
+        weaknessOpen={initialWeaknessOpen}
         canFavorite={signedIn}
         onOpenAdmin={isPoolAdmin ? openAdmin : undefined}
         onPrefetchAdmin={isPoolAdmin ? prefetchAdmin : undefined}

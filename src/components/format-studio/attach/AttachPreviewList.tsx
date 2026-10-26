@@ -57,7 +57,8 @@ interface AttachPreviewListProps {
 }
 
 /**
- * What an attach would create: the ordered phases (name, bracket type, best of, doubles, ruleset: the league's, a stored one or a Showdown format) and the engine
+ * What an attach would create: the ordered phases (name, bracket type, best of, doubles, ruleset: the league's, a stored one or a rule preset
+ * that attach turns into a ruleset of the league; the preview names the ruleset and its version when it knows them) and the engine
  * gaps in plain words. An invalid version gets one fixed sentence and a link to its page; the first error is not
  * worded here, because a diagnostic sentence needs params the preview does not keep.
  */
@@ -108,11 +109,15 @@ export default function AttachPreviewList({ preview, formatHref = null, headingL
               <span>{t('preview.bestOf', { n: stage.bestOf })}</span>
               <span aria-hidden="true">·</span>
               <span>
-                {stage.ruleset === 'showdown'
-                  ? t('preview.rulesetShowdown', { format: stage.showdownFormat ?? '' })
+                {stage.ruleset === 'preset'
+                  ? t('preview.rulesetPreset', { preset: stage.presetName ?? '' })
                   : stage.ruleset === 'named'
-                    ? t('preview.rulesetOwn')
-                    : t('preview.rulesetLeague')}
+                    ? stage.rulesetLabel === undefined
+                      ? t('preview.rulesetOwn')
+                      : t('preview.rulesetOwnNamed', { name: stage.rulesetLabel.name, version: stage.rulesetLabel.version_no })
+                    : stage.rulesetLabel === undefined
+                      ? t('preview.rulesetLeague')
+                      : t('preview.rulesetLeagueNamed', { name: stage.rulesetLabel.name, version: stage.rulesetLabel.version_no })}
               </span>
               {stage.doubles && <Badge variant="blue">{t('preview.doubles')}</Badge>}
             </div>

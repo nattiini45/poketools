@@ -1,60 +1,59 @@
-import Link from 'next/link';
-import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
+import AdminGuard from '@/components/shared/AdminGuard';
+import RulesetsGalleryView from '@/components/ruleset-studio/RulesetsGalleryView';
+import NewRulesetDialog from '@/components/ruleset-studio/starts/NewRulesetDialog';
 import PageContainer from '@/components/ui/PageContainer';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import { getLocale, getT } from '@/i18n/server';
+import { rulesetStudioMessages } from '@/i18n/messages/ruleset-studio';
 import { getLiveAccess } from '@/lib/auth/helpers';
-import { listRulesets } from '@/lib/supabase/queries/rulesets';
-import { getT } from '@/i18n/server';
-import { adminToolsMessages } from '@/i18n/messages/admin-tools';
+import { resolveLText } from '@/lib/format-kit/client';
+import { PRESET_RULES_VERSION } from '@/lib/pkmn/preset-data/pin';
+import { countPinsByDefinition, listRulesetDefinitions } from '@/lib/supabase/queries/ruleset-definitions';
+import type { RulesetActor } from '@/lib/ruleset-studio/access';
 
 export const dynamic = 'force-dynamic';
 
-export const revalidate = 60;
+/** The most stored rulesets each list shows. */
+const LIST_LIMIT = 50;
 
-export default async function AdminRulesetsPage() {
-  // Site-admin page: no ruleset read for a viewer who is not one (the guard renders the denial).
+/**
+ * `/admin/rulesets`: the Ruleset Studio home. The "New ruleset" action, the viewer's own rulesets, the ones other admins
+ * shared, the rulesets that belong to one of the viewer's leagues, the site catalog and the catalog of rule presets (every
+ * Showdown ladder format and Smogon draft format the app knows, each one a start for a private copy). Any admin may open
+ * it; nothing is read before the live gate. The dialog gets names, ids and version numbers only: no draft, no owner id.
+ *
+ * Each published card says how many leagues and phases use the ruleset (counts only, read for the listed definitions in one
+ * go) and carries a "Catalog updated" badge when its published version was computed from older catalog data than this
+ * build has (`isCatalogStale`).
+ */
+export default async function RulesetsGalleryPage() {
   const access = await getLiveAccess();
-  if (!access?.isSiteAdmin) return <SiteAdminGuard>{null}</SiteAdminGuard>;
+  if (!access?.isAnyAdmin || !access.player) return <AdminGuard>{null}</AdminGuard>;
 
-  const [rulesets, t] = await Promise.all([listRulesets(), getT(adminToolsMessages)]);
+  const [t, locale] = await Promise.all([getT(rulesetStudioMessages), getLocale()]);
+  const actor: RulesetActor = { playerId: access.player.playerId, isAdmin: access.isSiteAdmin };
+
+  const [mine, shared, site] = await Promise.all([
+    listRulesetDefinitions({ actor, scope: 'mine', limit: LIST_LIMIT, offset: 0 }),
+    listRulesetDefinitions({ actor, scope: 'shared', kind: 'custom', limit: LIST_LIMIT, offset: 0 }),
+    listRulesetDefinitions({ actor, scope: 'shared', kind: 'preset', limit: LIST_LIMIT, offset: 0 }),
+  ]);
+
+  const usage = await countPinsByDefinition([...mine.items, ...shared.items, ...site.items].map((item) => item.id));
+  const dialogData = {
+    shared: shared.items
+      .filter((item) => item.current_version !== null)
+      .map((item) => ({
+        id: item.id,
+        name: resolveLText(item.name, { viewer: locale })?.value ?? item.slug,
+        version: item.current_version?.version_no ?? 1,
+      })),
+  };
 
   return (
-    <SiteAdminGuard>
-      <PageContainer
-        title={t('rulesets.title')}
-        maxWidth="md"
-        action={
-          <Link href="/admin/rulesets/new" className={getButtonClasses('secondary', 'sm')}>
-            {t('rulesets.newRuleset')}
-          </Link>
-        }
-      >
-        {rulesets.length === 0 ? (
-          <p className="text-poke-text-muted">{t('rulesets.empty')}</p>
-        ) : (
-          <div className="grid gap-3">
-            {rulesets.map((r) => (
-              <Link key={r.id} href={`/admin/rulesets/${r.id}/edit`}>
-                <Card hover>
-                  <h2 className="font-heading font-semibold text-poke-text-primary">{r.name}</h2>
-                  <div className="flex gap-2 mt-1 flex-wrap">
-                    <Badge>{r.base_format}</Badge>
-                    {r.is_doubles && <Badge variant="purple">{t('rulesets.doubles')}</Badge>}
-                    <Badge variant="gray">{t('rulesets.clauses', { count: r.clauses.length })}</Badge>
-                    <Badge variant="gray">
-                      {t('rulesets.bans', {
-                        count: r.bans.pokemon.length + r.bans.moves.length + r.bans.items.length + r.bans.abilities.length,
-                      })}
-                    </Badge>
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
+    <AdminGuard>
+      <PageContainer title={t('page.title')} subtitle={t('page.subtitle')} maxWidth="xl" action={<NewRulesetDialog data={dialogData} />}>
+        <RulesetsGalleryView t={t} locale={locale} mine={mine} shared={shared} site={site} usage={usage} catalogVersion={PRESET_RULES_VERSION} limit={LIST_LIMIT} />
       </PageContainer>
-    </SiteAdminGuard>
+    </AdminGuard>
   );
 }

@@ -2,6 +2,7 @@
  * Maps our internal format keys to data.pkmn.cc stats format slugs.
  * Cross-referenced with /stats/index.json at import time.
  */
+import { generationOf, parseFormatId } from '@/lib/pkmn/format-id';
 
 // Formats to attempt importing from data.pkmn.cc
 // Keyed by our internal gen+tier format string
@@ -36,8 +37,7 @@ export const STATS_FORMATS: string[] = [
  * e.g. 'gen9ou' → 9, 'gen3ubers' → 3
  */
 export function extractGenFromFormat(format: string): number | null {
-  const match = format.match(/^gen(\d)/);
-  return match ? parseInt(match[1], 10) : null;
+  return generationOf(format);
 }
 
 /**
@@ -45,7 +45,7 @@ export function extractGenFromFormat(format: string): number | null {
  * e.g. 'gen9ou' → 'ou', 'gen9vgc2025' → 'vgc2025'
  */
 export function extractTierFromFormat(format: string): string {
-  return format.replace(/^gen\d/, '');
+  return parseFormatId(format)?.key ?? format;
 }
 
 /**

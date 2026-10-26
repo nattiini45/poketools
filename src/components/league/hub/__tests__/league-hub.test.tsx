@@ -92,6 +92,7 @@ import type { Ruleset } from '@/types/ruleset';
 import type { CoreTriple, SeasonWithDetails, TournamentGroupWithMembers } from '@/types/season';
 import type { TournamentReport } from '@/types/tournament-report';
 import type { TournamentWithDetails } from '@/types/tournament';
+import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
 
 // ─── Dates as the hub prints them (provider time zone UTC) ─────────────────
 
@@ -393,7 +394,7 @@ function makeRound(overrides: Partial<Round> & Pick<Round, 'id' | 'tournament_id
 }
 
 function makeRuleset(overrides: Partial<Ruleset> = {}): Ruleset {
-  return {
+  return buildRuleset({
     id: 'rs-1',
     name: 'Spring OU Rules',
     base_format: 'gen9ou',
@@ -408,7 +409,7 @@ function makeRuleset(overrides: Partial<Ruleset> = {}): Ruleset {
     created_at: STAMP,
     updated_at: STAMP,
     ...overrides,
-  };
+  });
 }
 
 function makeReport(id: string, headline: string, createdAt: string, tournamentId: string): TournamentReport {

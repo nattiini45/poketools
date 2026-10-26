@@ -27,7 +27,7 @@ import SiteAdminGuard from '../SiteAdminGuard';
 import ResourceForbidden from '../ResourceForbidden';
 
 function access(flags: Partial<Omit<LiveAccess, 'player'>>): LiveAccess {
-  return { player: null, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, ...flags };
+  return { player: null, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, isSuperadmin: false, ...flags };
 }
 
 beforeEach(() => {

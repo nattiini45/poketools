@@ -28,6 +28,10 @@ const siteAdminHrefs = ADMIN_NAV.flatMap((group) => group.items)
   .filter((item) => item.siteAdminOnly)
   .map((item) => item.href);
 
+const superadminHrefs = ADMIN_NAV.flatMap((group) => group.items)
+  .filter((item) => item.superadminOnly && !item.deprecated)
+  .map((item) => item.href);
+
 describe('site-admin-only admin pages', () => {
   it('the nav declares site-admin-only items to check', () => {
     expect(siteAdminHrefs.length).toBeGreaterThan(0);
@@ -42,6 +46,25 @@ describe('site-admin-only admin pages', () => {
       const label = path.relative(APP_DIR, file);
       expect(src, `${label} must use SiteAdminGuard`).toContain("from '@/components/shared/SiteAdminGuard'");
       expect(src, `${label} must render <SiteAdminGuard>`).toMatch(/<SiteAdminGuard>/);
+      expect(src, `${label} must not use the any-admin AdminGuard`).not.toMatch(/(?<![A-Za-z])AdminGuard\b/);
+    }
+  });
+});
+
+describe('superadmin-only admin pages', () => {
+  it('the nav declares superadmin-only items to check (the soft-deprecated Kale console has its own gate)', () => {
+    expect(superadminHrefs).toContain('/admin/leagues/trash');
+  });
+
+  it.each(superadminHrefs)('%s: every page under it is wrapped in SuperadminGuard, not AdminGuard', (href) => {
+    const dir = path.join(APP_DIR, ...href.split('/').filter(Boolean));
+    const pages = pageFiles(dir);
+    expect(pages.length, `no page.tsx under ${href}`).toBeGreaterThan(0);
+    for (const file of pages) {
+      const src = readFileSync(file, 'utf8');
+      const label = path.relative(APP_DIR, file);
+      expect(src, `${label} must use SuperadminGuard`).toContain("from '@/components/shared/SuperadminGuard'");
+      expect(src, `${label} must render <SuperadminGuard>`).toMatch(/<SuperadminGuard>/);
       expect(src, `${label} must not use the any-admin AdminGuard`).not.toMatch(/(?<![A-Za-z])AdminGuard\b/);
     }
   });

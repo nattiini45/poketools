@@ -14,6 +14,10 @@ vi.mock('@/lib/revalidation', () => ({
   expireTournamentReads: vi.fn(),
 }));
 
+vi.mock('@/lib/ruleset-studio/pin-change', () => ({
+  assertRulesetChangeAllowed: vi.fn(),
+}));
+
 vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
   diffField: vi.fn(),
@@ -41,6 +45,8 @@ import { requireResourceAdmin } from '@/lib/auth/helpers';
 import * as tournamentQueries from '@/lib/supabase/queries/tournaments';
 import * as roundQueries from '@/lib/supabase/queries/rounds';
 import { rebuildAfterTournamentDelete } from '@/lib/reconcile/entity-delete-rebuild';
+import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
+import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
 
 const {
   getTournamentById,
@@ -210,5 +216,36 @@ describe('PATCH /api/seasons/[id]/phases/[phaseId]: completed phase', () => {
     expect(json.code).toBe('PHASE_COMPLETED_LOCKED');
     expect(updateTournament).not.toHaveBeenCalled();
     expect(getStagesBySeasonId).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/seasons/[id]/phases/[phaseId]: ruleset pin', () => {
+  const RULESET_A = '00000000-0000-4000-8000-0000000000a1';
+  const RULESET_B = '00000000-0000-4000-8000-0000000000b2';
+
+  it('asks the pin guard with the stored pin, the requested one and whether the phase has started', async () => {
+    getTournamentById.mockResolvedValue({ ...(phaseRow('active') as object), ruleset_id: RULESET_A } as never);
+    vi.mocked(assertRulesetChangeAllowed).mockResolvedValue(undefined);
+
+    const response = await PATCH(request({ ruleset_id: RULESET_B }), args());
+
+    expect(response.status).toBe(200);
+    expect(assertRulesetChangeAllowed).toHaveBeenCalledWith({
+      player: expect.objectContaining({ playerId: 'admin-1' }),
+      current: RULESET_A,
+      requested: RULESET_B,
+      started: true,
+    });
+  });
+
+  it('a refused change (a ruleset the caller may not use, or a started phase) writes nothing', async () => {
+    getTournamentById.mockResolvedValue({ ...(phaseRow('active') as object), ruleset_id: RULESET_A } as never);
+    vi.mocked(assertRulesetChangeAllowed).mockRejectedValue(new RulesetStudioError('ruleset_pin_started'));
+
+    const response = await PATCH(request({ ruleset_id: RULESET_B }), args());
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('ruleset_pin_started');
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 });

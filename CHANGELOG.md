@@ -8,6 +8,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-26
+
 ### Upgrade notes
 
 - **Apply three migrations, in this order, BEFORE deploying the code.**
@@ -31,9 +33,105 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   refuses an old approve or author edit of that note, so do not roll back to old code once a note is blocked.
 - API clients that send an even best-of value, or change the league type of a started league, now receive `400` /
   `409`.
+- **Apply the league recycle bin, Format Studio preset and Ruleset Studio migrations in this order, BEFORE deploying the
+  code, and not with one blanket `db push`.** The last file is the contract step of the ruleset change and must wait
+  for the new code.
+  1. `20261026090000_season_format_preset_rulesets.sql` (after the three Format Studio files above) adds
+     `season_formats.preset_rulesets` and a new `format_attach_season` overload (the old 7-argument one is dropped).
+     File 8 rewrites its cleanup function for ruleset definitions, so apply the files in this order.
+  2. `20261026091000_league_trash.sql` adds the six `league_trash*` tables, the delete, restore and expiry functions
+     and swaps `player_streaks.last_match_id` to `ON DELETE SET NULL` (`NOT VALID`).
+  3. `20261026091100_league_trash_validate_streak_fk.sql` validates that key.
+  4. `20261026091200`, `20261026091300`, `20261026091400` and `20261026091500` (`league_trash_index_*`) each build one
+     index `CONCURRENTLY`. They are one statement per file on purpose; if your tooling sends files in a transaction,
+     run them by hand at a quiet time with `SET lock_timeout = '5s';` first (`docs/operations-backup.md`).
+  5. Before the first real league delete on a database that carries tables this repository cannot see, run
+     `SELECT public.league_trash__assert_inventory();`: a table that references a league and is not classified makes
+     the delete abort instead of losing data.
+  6. `20261026100000_ruleset_definitions.sql` adds the ruleset library tables.
+  7. Run `node scripts/ruleset/report-unknown-ids.mjs` against a read-only export of the rulesets (the queries are in
+     its header). `foldedOnly` entries become **stricter** after the conversion and `foldMismatch` must be empty; decide
+     per entry before continuing.
+  8. `20261026100100_ruleset_conversion_and_pins.sql` (expand) converts every ruleset into a definition with one
+     published version **whose id is the old ruleset's id**, replays the old "which ruleset does this phase enforce"
+     heuristic once into the stored pins (every changed row is logged in `ruleset_pin_backfill_log`) and adds the pin
+     foreign keys. From here until step 10, **pause creating and editing rulesets** with the old code.
+  9. Deploy the code and check a league page, a team validation and a format attach.
+  10. `20261026100200_ruleset_contract.sql` (contract) runs a catch-up conversion, aborts if a ruleset was edited after
+      the conversion (publish the edit as a new version or restore the row, then retry), swaps the pin keys and renames
+      `rulesets` to `rulesets_legacy`. Keep `rulesets_legacy` and `ruleset_pin_backfill_log` for one release as the
+      revert source; a later cleanup migration drops them.
+  The new code needs the files of steps 1 to 8; the code that is still deployed keeps working until step 10, which is
+  why step 10 waits for the new code. There is no new environment variable. Migrations are forward-only (no down files).
+- **New cron `/api/cron/expire-league-trash`** (daily, 03:40 UTC, declared in `vercel.json`). On another host call it
+  once a day with `Authorization: Bearer <CRON_SECRET>`, like the other cron routes. Alert on non-2xx answers.
+- **`@tanstack/react-virtual` 3.14.23** is a new dependency (the ruleset picker): run `npm ci`.
+- **Deleting a league no longer destroys it**, and `DELETE /api/seasons/[id]` no longer answers `409
+  SEASON_HAS_DEPENDENTS`. Clients that expect either must follow the new answer (see **Changed**).
+- **Leagues and phases now pin a ruleset version.** API clients that read `ruleset_id` get a version id (for a converted
+  ruleset the same uuid as before); `PATCH /api/rulesets/[id]` publishes a new version and returns a new id instead of
+  editing in place.
 
 ### Added
 
+- **Ruleset Studio.** Rulesets are now data you can inspect and trust: a ruleset is a base (a catalog preset or a blank
+  page) plus bans, unbans, allowlists and clauses per category, edited as a draft and **published as an immutable,
+  numbered version** whose effective rules are computed once and frozen. A league or phase **pins** a version, so editing
+  a ruleset never changes a running league. `/admin/rulesets` is open to every admin tier and has a library (**Your
+  rulesets**, **Shared with you**, **League rulesets**, the **Site catalog** and the **Rule presets**), a read-only page
+  per ruleset (rules in plain sentences, versions with what each changed, where it is used) and an editor with a live
+  summary against the base, an issues list with one-click fixes, an undo history and a change list with a revert per
+  entry. A new ruleset starts blank, from a rule preset, from a shared ruleset or from a `.json` file. Rulesets are
+  `private`, shared with league admins or in the gallery (site admins); the permission matrix is in
+  `docs/ruleset-studio.md`. API: `/api/ruleset-definitions` (create, draft with a compare-and-set revision, publish,
+  fork, usage, pins, version read) and the public `/api/rulesets` keeps its URL and flat shape (plus `gen`, `universe`,
+  `allow`, `version`).
+- **Entry picker.** Bans, unbans and allowlists are chosen in a virtualized picker over the catalog of one generation
+  (cards, compact list or table): bilingual search, facets (state, type, tier, generation, number ranges, item category,
+  forme), sorting, "include formes", multi-select with bulk actions and keyboard navigation with screen-reader
+  announcements. `GET /api/pkmn/catalog/[kind]` serves the catalog (public, ETag, long cache); icons are drawn from the
+  Showdown sheets by cell number (`SheetIcon`).
+- **Rule preset catalog.** Every Showdown ladder format of generations 1 to 9 (singles, doubles, the National Dex family,
+  Monotype, 1v1), the **Smogon draft formats** (Draft for generations 3 to 9, NatDex, NatDex LC, 6v6 and 4v4 doubles) and
+  Pokémon Champions (a roster allowlist) as presets with their clauses, ban lists and rule facts, transcribed from
+  Pokémon Showdown at a pinned commit and integrity-tested against the dex. **Add Smogon tour bans** applies the
+  documented tournament extras of a draft preset as ordinary, editable entries. `GET /api/pkmn/presets/[id]/rules` and
+  `.../tour-overlay`. See `docs/ruleset-presets.md`.
+- **Move a league to a newer ruleset version, knowing what it costs.** The pin card on a league, phase or standalone
+  tournament offers "update to version N". For a started target the confirmation first says how many already
+  submitted teams would stop being valid (`POST /api/ruleset-definitions/[id]/pins/impact`; the real validator against
+  both versions, differential, at most 2,000 teams per request), and the move needs an explicit confirmation. A completed
+  target is locked. Every move is audited (`ruleset.pin`).
+- **Library details.** Ruleset cards show how many leagues and phases use them and a **Catalog updated** badge when the
+  published version was computed from older catalog data; the read-only page lists what each recent version changed
+  against the one before; the ruleset select groups doubles rulesets; a league cloned with "Start from" shows the
+  ruleset it starts with.
+- **League recycle bin.** Deleting a league moves it to the trash for 90 days instead of destroying it. The superadmin
+  sees the trash at **Admin > Leagues > League trash**, restores a league in one step (all or nothing; running drafts
+  come back paused; every deadline moves by the time spent in the trash; statistics, ratings and streaks are rebuilt) and
+  can run a rebuild that a delete or restore left pending. A daily cron (`/api/cron/expire-league-trash`) removes
+  leagues whose time ran out and their social images. New audit events `season.restore`, `season.rebuild` and
+  `season.purge`. While a league is in the trash its players, rulesets and point-buy lists cannot be deleted. See
+  `docs/season.md`.
+- **Draft room, after the first round of player feedback.** The left stage shows the pinned line as one **group
+  portrait** of its stages that fits its pane by width and height; a slim status strip replaces the connection and
+  spectator banners; the roster cards have a larger sprite row; filter chips are compact Showdown-style pills that wrap
+  instead of scrolling; the finder has a **Base | Final** switch for the stat sorts; **My roster** has a collapsible
+  **team weakness table** (which attacking types the owned lines are weak to, with Weak, Resist and Immune counts, for
+  the base or the final stage); the screen is a fixed-height box on desktop so only the stage column and the wall scroll.
+  `/draft-preview?scenario=live-roster` shows the table open.
+- **Price groups filter the EvoLiga point-buy list.** The roster section of a league page has a row of price-group pills
+  with line counts; the league admin Overview links the dates to the Settings tab.
+- **Showdown formats as editable presets in the Format Studio.** A stage can name a rule preset (`gen9ou`, a draft
+  format, Champions). It pre-picks the doubles setting and the series length; attaching the format creates a ruleset per
+  preset for the league (version 1, editable in the Ruleset Studio), which a re-attach reuses and a detach removes.
+  New diagnostic `ruleset_preset_unknown`.
+- **Dev previews** `/ruleset-preview` (editor scenarios) and `/ruleset-preview/surfaces` (library, read-only page, pin
+  and usage panels, dialogs, trash, Danger tab) render the real components against an in-memory library; they refuse
+  every `/api` path they do not fake.
+- Audit events `ruleset.create`, `ruleset.fork`, `ruleset.publish`, `ruleset.visibility`, `ruleset.delete`, `ruleset.pin`
+  and `ruleset.seed`.
+- New docs: `docs/ruleset-studio.md`, `docs/ruleset-presets.md`.
 - **League settings editor.** The Settings tab of the admin league page opens with **League details**: name, league
   type, battle ruleset and the start and end date, saved with only the changed fields. The description, theme and
   content language keep their own editors.
@@ -143,12 +241,6 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   page still opens without it) and tags the player the games favour. Completing warns when the result contradicts the recorded games (no games, games without a winner,
   fewer wins than the best-of needs, a different winner) and then needs a ticked acknowledgement. The reset dialog
   for downstream matches shows how many matches it resets.
-- **Format-change confirmation in the ruleset builder.** Switching the base format keeps the form until the new
-  defaults are loaded and asks before replacing lists you changed, naming what would be lost. **Keep my lists** only
-  changes the format label. A new ruleset starts from its format's defaults.
-- **Empty-ruleset notice.** A ruleset with a real base format but no clause, ban or addition says that it enforces
-  nothing beyond the generation, with a button to load the format's defaults. An empty team-constraints block says it
-  is saved as no constraints.
 - **Dismissible roster errors.** A failed action on the admin Players page shows a dismissible alert, scrolled into view, and keeps
   the table; a failed first load shows the error with **Retry**.
 - **Role-change and delete confirmations** on the Players page name the player: make or remove admin, make or remove
@@ -213,6 +305,41 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Changed
 
+- **A league delete is a move to the trash.** `DELETE /api/seasons/[id]` is never blocked by phases, draft pools, teams or
+  storylines (`SEASON_HAS_DEPENDENTS` is gone), answers `data.trash { id, purge_after }` and, when the rebuild of derived
+  data failed, `data.rebuild_warning` next to the successful delete. The Danger tab and the delete confirmation say what
+  the trash keeps, what is recalculated and that a superadmin can restore the league for 90 days.
+  `player_streaks.last_match_id` is `ON DELETE SET NULL`, so deleting a phase or league that held a player's latest match
+  no longer fails.
+- **The enforced ruleset is the pinned version.** `seasons.ruleset_id` and `tournaments.ruleset_id` hold the id of an
+  immutable version; the old read-time guess (a phase's own "custom" ruleset, else the league's, else a ruleset named like
+  the league) is gone, replaced once by the migration. Team validation enforces the four lists in block or allowlist mode,
+  the Species Clause, the Item Clause, the shared-type share and the team constraints from the version's frozen rules;
+  every other clause is informational and marked so. The league Settings ruleset select is read-only once the league has
+  started and has a ruleset (the server refuses with `ruleset_pin_started`); the pin card is the way to a newer version.
+- **The site's rulesets are seeded as gallery rulesets** (`POST /api/seed-rulesets`: one shared ruleset per standard
+  Smogon format of a frozen list of 88 ids, published as version 1); the draft formats and the rest of the National Dex
+  family are starting points, not seeded.
+- **Format ids are parsed with one rule**: `gen`, exactly one generation digit and the tier key. `gen91v1` was read as
+  generation 91 before.
+- **National Dex bans were corrected** and each family's explicit bans now come from tables pinned to a Showdown commit
+  (`PRESET_RULES_VERSION`). The older tier families keep their previous tables; `docs/ruleset-presets.md` lists the known
+  differences.
+- **Draft room.** Filter chips wrap onto as many lines as they need (nothing scrolls sideways); the stage mode, the sort
+  stage and the filter sheet's switches are one shared radio-group control; the stage card is capped above the DRAFT dock
+  from 1024 px, so the line picture shrinks to fit instead of ending under the button; the line-up picture's final stage
+  is 46 % of the picture width (was 53 %) and neighbouring sprites overlap by at most 20 %; the line-up picture always
+  uses the site default sprite style at full size (pixel and animated sprites would be scaled up blurred); the
+  fixed-height desktop box measures the DRAFT dock as well as the nav and clock row.
+- **Rulesets are open to every admin tier**; league admins see their own rulesets and the ones shared with all admins.
+- A point-buy league's shared battle ruleset is published through the Ruleset Studio; clearing bans found on it publishes
+  a new version, and leagues keep the version they pin.
+- The shared studio code moved: key, JSON hashing, patch, bilingual text and identity helpers are in
+  `src/lib/studio-core`, the editor frame, dialogs and library cards in `src/components/studio-shell`, and
+  `RulesetPresetSelect` in `src/components/ruleset`. The format-kit barrel no longer exports `ltextSchema`,
+  `boundedString` or `textString`.
+- The ruleset library pages, the Danger tab and the league trash page are translated into English and German; the
+  German copy has not been read by a native speaker.
 - **Evolution Point Buy tables rank by the stored tiebreaker order and use the configured match points.** The
   tiebreaker order saved on the league's Rules tab now decides every Evolution Point Buy table: the league's season
   table, the group and phase tables, the tournament page, the home and dashboard standings, Insights, profiles, phase
@@ -270,6 +397,10 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Removed
 
+- **The five-step ruleset builder** (`RulesetBuilder`, `ClauseToggleGrid`, `BanlistEditor`, `FormatChangeDialog`) and its
+  messages; the Ruleset Studio replaces it. `GET /api/pkmn/format-defaults` is removed (the editor reads
+  `GET /api/pkmn/presets/[id]/rules`).
+- The "custom league ruleset" heuristic and the name match that chose a phase's ruleset at read time.
 - The unused advancement helper (`src/lib/tournament/advancement.ts`). Internal only: league phases advance through
   the enrollment sync, which is unchanged, and its behaviour is now covered by the enrollment sync tests.
 - Test Players: Reset Data, Reset Login (Mint Login for a player who already has a login), Clear Login, Remove from Season and Delete Test-Only Matches now ask first in a confirmation dialog that names the player and the season, in English and German. Create / Repair, Refresh and the first Mint Login stay one click.
@@ -278,6 +409,17 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Fixed
 
+- **Ruleset picker.** Entries no longer overlap in the grid (row heights follow the 18 px root size), the list uses the
+  columns the pane has (the width was never measured, so it always showed one column), items sorted by name no longer
+  repeat group headers or produce duplicate keys, compact rows keep the entry name visible, and toolbar buttons and
+  toggles are 44 px touch targets on phones.
+- **League trash page on phones**: each row is a card with labelled fields, so Restore is no longer behind horizontal
+  scroll.
+- **Draft room.** The phone timer no longer overflows the page at 375 px; the team weakness table fits the 1280 and
+  1440 px panes (the Fairy column was half outside the pane); the draft preview's fixture prices follow the active
+  pack's price tabs, so no line falls outside every tab.
+- The format attach cleanup (`format_delete_unused_preset_rulesets`) no longer fails with 23503 on a ruleset a league
+  in the trash still holds; it keeps it.
 - **Discord sign-in works again.** Discord now sends an RFC 9207 `iss` parameter on the OAuth callback, and every
   Discord sign-in failed with a server Configuration error because the provider had no issuer to compare it with.
   The Discord provider now expects `https://discord.com`.
@@ -323,8 +465,7 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   disable saving and binding after a failed read until a read succeeds, so pack defaults cannot be saved over the
   stored limits or list binding.
 - **Empty team constraints are no longer stored.** A new ruleset with an empty team-constraints block stores none
-  instead of an empty object (which made it count as a custom league ruleset). Rulesets already stored with an empty
-  object resolve as before.
+  instead of an empty object. A stored empty object that the author did not touch stays as it is.
 - The Admin Override form no longer reports success when the match changed state in the meantime. It answers 409
   `match_state_changed` and the page reloads, so the admin reviews the current state.
 - Submit Result and View Prep in the matches list no longer send an admin to the player dashboard. They show only to
@@ -333,6 +474,12 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Security
 
+- **A ruleset version id is a read capability.** The public ruleset routes, the free team validator, the team importer
+  and the AI tools serve a version of a private ruleset only while a league or phase pins it; a guessed id of an
+  unpinned private version is a 404. Usage names are shown only to site admins and the admins of a league-owned ruleset.
+- **Superadmin-only restore.** `requireSuperadmin` (live player, superadmin identity) guards the league trash routes and
+  `SuperadminGuard` the page. Two league-trash helpers run with owner rights, with an empty `search_path` and execute
+  granted to `service_role` only; every new function and table of this release is service-role only.
 - **A `?lang=` value no longer chooses which translator gets called.** `createTranslator` caches each language's
   translator under the matching `LOCALES` entry instead of the string it was handed, so a request value (such as the
   broadcast recap's `?lang=`) never keys the lookup whose result the caller invokes. Any string that is not a

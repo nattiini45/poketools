@@ -1,4 +1,5 @@
-import { getGeneration, getSpecies } from './dex';
+import { getGeneration, getSpecies, listNationalSpecies } from './dex';
+import type { RulesetUniverse } from './format-catalog';
 import type { TierKey } from '@/types/ruleset';
 import { formatPack } from '@/lib/format-pack';
 import { SINGLES_TIER_ORDER, DOUBLES_TIER_ORDER } from './tier-constants';
@@ -23,11 +24,17 @@ const SKIP_TIERS = new Set(['(PU)', '(NU)', '(RU)', '(UU)', '(OU)', '(Uber)', 'I
  * Get all species names in tiers ABOVE the given tier in the hierarchy.
  * For 'OU', returns all Pokemon in Uber + AG tiers.
  * For 'UU', returns all Pokemon in UUBL + OU + Uber + AG tiers.
+ *
+ * `universe` says which species are looked at: the generation's own (`standard`, the default) or its whole
+ * National Dex (`national`, past species included; see `listNationalSpecies` in ./dex for why that is a separate
+ * read). A National Dex tier field (`natDexTier`) is meaningless on the standard universe's past-less list, so the
+ * National Dex formats pass `national`.
  */
 export function getBannedPokemonForTier(
   tierKey: string,
   gen: number = 9,
   tierField: 'tier' | 'doublesTier' | 'natDexTier' = 'tier',
+  universe: RulesetUniverse = 'standard',
 ): string[] {
   const hierarchy = tierField === 'doublesTier'
     ? DOUBLES_TIER_ORDER
@@ -42,10 +49,10 @@ export function getBannedPokemonForTier(
     bannedTiers.add(hierarchy[i]);
   }
 
-  const generation = getGeneration(gen);
   const banned: string[] = [];
 
-  for (const species of Array.from(generation.species)) {
+  const candidates = universe === 'national' ? listNationalSpecies(gen) : Array.from(getGeneration(gen).species);
+  for (const species of candidates) {
     const t = species[tierField];
     if (typeof t === 'string' && bannedTiers.has(t) && !SKIP_TIERS.has(t)) {
       banned.push(species.name);

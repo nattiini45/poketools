@@ -13,6 +13,7 @@ import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { getBaseStats } from '@/lib/pkmn/dex';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { getItemSpriteUrl } from '@/lib/pkmn/sprites';
 import { siteSpriteUrl } from '@/lib/pkmn/sprite-styles';
 import { calcSpeed } from '@/lib/pkmn/speed-calc';
@@ -120,8 +121,7 @@ export async function fetchCasterData(
   // Extract generation from ruleset base_format
   const ruleset = tournament ? await getRulesetById(tournament.ruleset_id) : null;
   const formatStr = ruleset?.base_format ?? 'gen9ou';
-  const genMatch = formatStr.match(/gen(\d+)/);
-  const gen = genMatch ? parseInt(genMatch[1], 10) : 9;
+  const gen = generationOrDefault(formatStr);
   const bestOf = round?.best_of ?? tournament?.best_of_default ?? 3;
 
   // ── Build aggregate lookup ──────────────────────────────────────

@@ -7,11 +7,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
-import type { Ruleset } from '@/types/ruleset';
+import { makeRulesetOption } from '@/test/ruleset-fixtures';
 import TournamentForm from '../TournamentForm';
 
 const RULESET_ID = '11111111-1111-4111-8111-111111111111';
-const rulesets = [{ id: RULESET_ID, name: 'Standard Rules' }] as unknown as Ruleset[];
+const rulesets = [makeRulesetOption({ id: RULESET_ID, name: 'Standard Rules' })];
 const noopSubmit = vi.fn(async () => {});
 
 /** The option values of the select with the given id. */
@@ -88,7 +88,7 @@ describe('TournamentForm edit mode', () => {
       <TournamentForm rulesets={rulesets} onSubmit={noopSubmit} mode="edit" initialData={stored} />,
     );
     expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(false);
-    expect(isDisabled(tagWithId(html, 'ruleset'))).toBe(false);
+    expect(isDisabled(tagWithId(html, 'tournament-ruleset'))).toBe(false);
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(false);
     expect(html).not.toContain('Locked: the tournament has started.');
   });
@@ -105,7 +105,7 @@ describe('TournamentForm edit mode', () => {
     );
 
     expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(true);
-    expect(isDisabled(tagWithId(html, 'ruleset'))).toBe(true);
+    expect(isDisabled(tagWithId(html, 'tournament-ruleset'))).toBe(true);
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(true);
     expect(html.match(/Locked: the tournament has started\./g)).toHaveLength(3);
     // Best-of, visibility and the name stay editable.

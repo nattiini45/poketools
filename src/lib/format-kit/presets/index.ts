@@ -1,4 +1,4 @@
-import type { Slug } from '../keys';
+import type { Slug } from '@/lib/studio-core/keys';
 import type { FormatDefinition } from '../types';
 import { classicLeague } from './classic-league';
 import { cup } from './cup';

@@ -6,7 +6,7 @@ import { VALID_DOCS, cupDoc, degradedRulesDoc, kitchenSinkDoc, minimalDoc } from
 import { MAX_REQUEST_BODY_BYTES } from '../../api-body';
 import { assertDocument } from '../../document-guard';
 import { FormatStudioError } from '../../errors';
-import { extractIdentity } from '../../identity';
+import { extractIdentity } from '@/lib/studio-core/identity';
 import { IMPORT_MAX_BYTES, prepareImport, stripUnknownFields, type ImportFailure, type ImportReport } from '../../editor/import-file';
 
 const text = (value: unknown): string => JSON.stringify(value);

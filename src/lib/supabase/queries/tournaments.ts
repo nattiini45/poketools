@@ -59,7 +59,7 @@ export async function listAllTournaments(): Promise<TournamentWithDetails[]> {
     .from('tournaments')
     .select(`
       *,
-      rulesets ( name ),
+      rulesets:ruleset_definition_versions ( name:name_text ),
       seasons ( name ),
       tournament_participants ( count )
     `)
@@ -81,7 +81,7 @@ export async function listTournaments(): Promise<TournamentWithDetails[]> {
     .from('tournaments')
     .select(`
       *,
-      rulesets ( name ),
+      rulesets:ruleset_definition_versions ( name:name_text ),
       seasons ( name ),
       tournament_participants ( count )
     `)
@@ -105,7 +105,7 @@ export async function listArchivedTournaments(): Promise<TournamentWithDetails[]
     .from('tournaments')
     .select(`
       *,
-      rulesets ( name ),
+      rulesets:ruleset_definition_versions ( name:name_text ),
       seasons ( name ),
       tournament_participants ( count )
     `)
@@ -140,7 +140,7 @@ export async function listTournamentsByIds(
     .from('tournaments')
     .select(`
       *,
-      rulesets ( name ),
+      rulesets:ruleset_definition_versions ( name:name_text ),
       seasons ( name, format_type ),
       tournament_participants ( count )
     `)
@@ -190,7 +190,7 @@ export async function getTournamentWithDetails(
     .from('tournaments')
     .select(`
       *,
-      rulesets ( name ),
+      rulesets:ruleset_definition_versions ( name:name_text ),
       seasons ( name, format_type ),
       tournament_participants ( count )
     `)
@@ -242,7 +242,7 @@ export async function getStagesBySeasonId(seasonId: string): Promise<TournamentW
     .from('tournaments')
     .select(`
       *,
-      rulesets ( name ),
+      rulesets:ruleset_definition_versions ( name:name_text ),
       seasons ( name ),
       tournament_participants ( count )
     `)
@@ -286,7 +286,7 @@ export async function getStagesBySeasonIds(seasonIds: string[]): Promise<Map<str
         .from('tournaments')
         .select(`
           *,
-          rulesets ( name ),
+          rulesets:ruleset_definition_versions ( name:name_text ),
           seasons ( name ),
           tournament_participants ( count )
         `)

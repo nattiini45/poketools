@@ -127,6 +127,7 @@ import {
   getTotalGamesInScope,
 } from '@/lib/supabase/queries/aggregates';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { rulesFromBans } from '@/lib/ruleset-kit/effective';
 
 // ─── Fixture extension (local to this file) ───────────────────────────────
 
@@ -251,24 +252,16 @@ function playoffMatch(
   };
 }
 
+/** A ruleset VERSION row: a league pins one (`seasons.ruleset_id`), and its frozen rules are read in one select. */
 function rulesetRow(id: string, name: string): FakeRow {
   return {
     id,
-    name,
-    base_format: 'gen9vgc2026',
-    is_doubles: false,
-    clauses: ['Species Clause'],
-    banned_pokemon: ['Mewtwo'],
-    banned_moves: [],
-    banned_items: [],
-    banned_abilities: [],
-    added_pokemon: [],
-    custom_rules_string: '',
-    min_shared_type_pct: 0,
-    team_constraints: null,
+    definition_id: `definition-of-${id}`,
+    version_no: 1,
+    name_text: name,
+    resolved: rulesFromBans({ gen: 9, formatKey: 'gen9vgc2026', clauses: ['Species Clause'], bans: { pokemon: ['Mewtwo'] } }) as unknown as FakeRow['resolved'],
     created_by: null,
     created_at: ISO,
-    updated_at: ISO,
   };
 }
 
@@ -335,7 +328,7 @@ function buildHubTables(): FakeTables {
       groupRow('grp-b', 'e-stage-1', 'Gruppe B', 2, ['p3', 'p4']),
       groupRow('grp-a', 'e-stage-1', 'Gruppe A', 1, ['p1', 'p2']),
     ],
-    rulesets: [rulesetRow('ruleset-1', 'Liga-Regelwerk'), rulesetRow('ruleset-stage', 'Phasen-Regelwerk')],
+    ruleset_definition_versions: [rulesetRow('ruleset-1', 'Liga-Regelwerk'), rulesetRow('ruleset-stage', 'Phasen-Regelwerk')],
     aggregates: [
       {
         id: 'agg-1',
@@ -436,7 +429,7 @@ const EPB_TAB_READS: Array<[LeagueHubTab, string[]]> = [
   // resolve the season's stage ids themselves: `getBattleStatsForSeason`).
   ['insights', ['aggregates', 'battle_stats', 'get_total_games_in_scope', 'tournaments']],
   // The ruleset, read live.
-  ['rules', ['rulesets']],
+  ['rules', ['ruleset_definition_versions']],
 ];
 
 type SearchQuery = Record<string, string | string[] | undefined>;
@@ -982,7 +975,7 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
 
     expect(getRulesetById).toHaveBeenCalledTimes(1);
     expect(getRulesetById).toHaveBeenCalledWith('ruleset-1');
-    expect(eqValuesRead('rulesets', 'id')).toEqual(['ruleset-1']);
+    expect(eqValuesRead('ruleset_definition_versions', 'id')).toEqual(['ruleset-1']);
     expect(getAggregatesSummary).not.toHaveBeenCalled();
     expect(getTotalGamesInScope).not.toHaveBeenCalled();
     expect(getBattleStatsForSeason).not.toHaveBeenCalled();
@@ -1005,7 +998,7 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
 
     expect(getRulesetById).toHaveBeenCalledTimes(1);
     expect(getRulesetById).toHaveBeenCalledWith('ruleset-stage');
-    expect(tablesRead()).toEqual([...EPB_BASE_TABLES, 'rulesets'].sort());
+    expect(tablesRead()).toEqual([...EPB_BASE_TABLES, 'ruleset_definition_versions'].sort());
     expect(panelOf(hubOf(page), 'rules').ruleset).toEqual(
       expect.objectContaining({ id: 'ruleset-stage', name: 'Phasen-Regelwerk' }),
     );
@@ -1213,7 +1206,7 @@ describe('league hub — warm renders', () => {
 
     const page = await renderPage(EPB_SEASON_ID, { tab: 'rules' });
 
-    expect(fake.current!.queries.slice(cold).map((q) => q.table)).toEqual(['rulesets']);
+    expect(fake.current!.queries.slice(cold).map((q) => q.table)).toEqual(['ruleset_definition_versions']);
     expect(getRulesetById).toHaveBeenCalledTimes(2);
     expect(panelOf(hubOf(page), 'rules').ruleset).toEqual(expect.objectContaining({ id: 'ruleset-1' }));
   });

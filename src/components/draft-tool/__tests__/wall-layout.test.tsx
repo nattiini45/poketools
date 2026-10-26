@@ -12,7 +12,7 @@ import { toDraftViewModel, type CardState } from '@/lib/draft-ui/snapshot-adapte
 import { snapshot } from '@/lib/draft-ui/__tests__/fixtures';
 import DraftToolClient from '../DraftToolClient';
 import DraftToolScreen, { type DraftToolScreenProps } from '../DraftToolScreen';
-import { applyStickyOffsets, observeStickyOffsets } from '../hooks/use-sticky-offsets';
+import { applyStickyOffsets, observeStickyOffsets, type StickyBars } from '../hooks/use-sticky-offsets';
 import { NOTIFY_UNSUPPORTED } from '../hooks/use-turn-watch';
 import FilterPanel from '../right/FilterPanel';
 import FinderBar from '../right/FinderBar';
@@ -33,6 +33,7 @@ vi.mock('@/components/shared/PokemonSprite', () => ({
 }));
 
 const SCREEN_SRC = readFileSync(path.resolve(__dirname, '../DraftToolScreen.tsx'), 'utf8');
+const TIMER_SRC = readFileSync(path.resolve(__dirname, '../layout/TimerBar.tsx'), 'utf8');
 const CSS = readFileSync(path.resolve(__dirname, '../draft-tool.module.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
 /** The declarations of the first rule `selector { … }` inside `scope` (the whole file or one @media block). */
@@ -134,6 +135,29 @@ describe('wall layout CSS', () => {
     );
   });
 
+  it('keeps the line picture above the sticky bars: capped on phones, the stage card capped above the dock from 1024 px', () => {
+    const phone = media('(max-width: 767px)', '.previewArea');
+    expect(rule('.previewArea', phone)).toMatch(
+      /max-height: calc\(100svh - var\(--nav-h\) - var\(--draft-clock-h\) - var\(--draft-bottom-bar-h\) - 1\.5rem\);/,
+    );
+    // From 1024 px the card ends where the dock begins: the scroller's height less the measured dock and the gap.
+    const desktop = rule('.stageCard', media('(min-width: 1024px)', '.stageCard'));
+    expect(desktop).toMatch(/max-height: calc\(100% - var\(--draft-dock-h\) - 0\.75rem\);/);
+    expect(desktop).toMatch(/flex: 0 0 auto;/);
+    // Too short a window: the card keeps its content height (the column scrolls) rather than overflowing its box.
+    expect(desktop).toMatch(/min-height: min-content;/);
+    // The dock's height is measured (a verdict can wrap), not assumed: the screen hands the dock to the offsets hook.
+    expect(SCREEN_SRC).toMatch(/useStickyOffsets\(rootRef, clockRowRef, dockRef\);/);
+    expect(SCREEN_SRC).toMatch(/<div ref=\{dockRef\} className=\{`\$\{styles\.ctaDock\}/);
+    expect(rule('.tokens,\n.root')).toMatch(/--draft-dock-h: [\d.]+rem;/);
+  });
+
+  it('never lets the timer bar push past a narrow clock row (375 px phones)', () => {
+    // The track's floor is capped by the line it is on, and its row's flex basis lets bar and digits wrap whole.
+    expect(rule('.timerTrack')).toMatch(/min-width: min\(6rem, 100%\);/);
+    expect(TIMER_SRC).toMatch(/className="flex min-w-0 flex-\[1_1_10rem\] flex-wrap/);
+  });
+
   it('defines --nav-h once on the root instead of a silent 64 px fallback', () => {
     expect(CSS).not.toMatch(/var\(--nav-h,/);
     expect(rule('.tokens,\n.root')).toMatch(/--nav-h: calc\(4rem \+ 1px\);/);
@@ -176,6 +200,8 @@ describe('wall layout CSS', () => {
     const rem = (name: string) => Number(new RegExp(`${name}: ([\\d.]+)rem;`).exec(tokens)?.[1]) * 16;
     expect(rem('--draft-card-sprite')).toBe(CARD_SPRITE_PX);
     expect(rem('--draft-card-footer-sprite')).toBe(FOOTER_SPRITE_PX);
+    // The Pokémon dominates its card: the sprite row is the tallest, well above the old 64px.
+    expect(CARD_SPRITE_PX).toBeGreaterThanOrEqual(80);
   });
 
   it('defines the card skew once (−6deg, −8deg from 1024 px) and derives every slant length from it', () => {
@@ -206,7 +232,7 @@ describe('wall layout CSS', () => {
     // The frame sits behind the content without leaving the card, and keeps the state colour classes' hands off.
     expect(rule('.card')).toMatch(/isolation: isolate;/);
     expect(rule('.cardFrame')).toMatch(/z-index: -1;/);
-    expect(rule('.cardFrame')).not.toMatch(/border:|border-color:/);
+    expect(rule('.cardFrame')).not.toMatch(/\bborder:|border-color:/);
   });
 
   it('puts the head row on one centre line, shifted by the slant at its own height', () => {
@@ -540,20 +566,25 @@ describe('finder bar and filter sheet', () => {
 
 describe('applyStickyOffsets', () => {
   const box = (height: number) => ({ getBoundingClientRect: () => ({ height }) as DOMRect });
+  const rootOf = (set: Map<string, string>) => ({ style: { setProperty: (k: string, v: string | null) => void set.set(k, v ?? '') } });
+  const bars = (patch: Partial<StickyBars> = {}): StickyBars => ({ nav: null, clock: null, dock: null, ...patch });
 
-  it('writes the measured nav and clock heights, rounded up', () => {
+  it('writes the measured nav, clock and dock heights, rounded up', () => {
     const set = new Map<string, string>();
-    applyStickyOffsets({ style: { setProperty: (k: string, v: string | null) => void set.set(k, v ?? '') } }, box(64.4), box(52));
+    applyStickyOffsets(rootOf(set), bars({ nav: box(64.4), clock: box(52), dock: box(118.2) }));
     expect(set.get('--nav-h')).toBe('65px');
     expect(set.get('--draft-clock-h')).toBe('52px');
+    expect(set.get('--draft-dock-h')).toBe('119px');
   });
 
-  it('observes the nav and the clock row, re-applies on resize and disconnects on clean-up', () => {
+  it('observes the nav, the clock row and the dock, re-applies on resize and disconnects on clean-up', () => {
     const set = new Map<string, string>();
-    const root = { style: { setProperty: (k: string, v: string | null) => void set.set(k, v ?? '') } } as unknown as HTMLElement;
+    const root = rootOf(set) as unknown as HTMLElement;
     let navH = 64;
+    let dockH = 100;
     const nav = { getBoundingClientRect: () => ({ height: navH }) as DOMRect } as HTMLElement;
     const clock = box(48) as HTMLElement;
+    const dock = { getBoundingClientRect: () => ({ height: dockH }) as DOMRect } as HTMLElement;
     const observed: unknown[] = [];
     let fire = () => {};
     let disconnected = 0;
@@ -568,19 +599,22 @@ describe('applyStickyOffsets', () => {
         disconnected++;
       }
     }
-    const cleanup = observeStickyOffsets(root, nav, clock, StubObserver);
+    const cleanup = observeStickyOffsets(root, { nav, clock, dock }, StubObserver);
     expect(set.get('--nav-h')).toBe('64px');
-    expect(observed).toEqual([nav, clock]);
+    expect(set.get('--draft-dock-h')).toBe('100px');
+    expect(observed).toEqual([nav, clock, dock]);
     navH = 120;
+    dockH = 140;
     fire();
     expect(set.get('--nav-h')).toBe('120px');
+    expect(set.get('--draft-dock-h')).toBe('140px');
     cleanup();
     expect(disconnected).toBe(1);
   });
 
-  it('observes only the clock row when the page has no nav, and measures once without ResizeObserver', () => {
+  it('observes only the bars the page has, and measures once without ResizeObserver', () => {
     const set = new Map<string, string>();
-    const root = { style: { setProperty: (k: string, v: string | null) => void set.set(k, v ?? '') } } as unknown as HTMLElement;
+    const root = rootOf(set) as unknown as HTMLElement;
     const clock = box(40) as HTMLElement;
     const observed: unknown[] = [];
     class StubObserver {
@@ -589,19 +623,20 @@ describe('applyStickyOffsets', () => {
       }
       disconnect() {}
     }
-    observeStickyOffsets(root, null, clock, StubObserver)();
+    observeStickyOffsets(root, bars({ clock }), StubObserver)();
     expect(observed).toEqual([clock]);
     expect(set.get('--nav-h')).toBe('0px');
     set.clear();
-    const cleanup = observeStickyOffsets(root, null, clock, undefined);
+    const cleanup = observeStickyOffsets(root, bars({ clock }), undefined);
     expect(set.get('--draft-clock-h')).toBe('40px');
     expect(() => cleanup()).not.toThrow();
   });
 
-  it('treats a missing nav as 0 px and leaves the clock default without a clock row', () => {
+  it('treats a missing nav as 0 px and leaves the CSS defaults without a clock row or a dock', () => {
     const set = new Map<string, string>();
-    applyStickyOffsets({ style: { setProperty: (k: string, v: string | null) => void set.set(k, v ?? '') } }, null, null);
+    applyStickyOffsets(rootOf(set), bars());
     expect(set.get('--nav-h')).toBe('0px');
     expect(set.has('--draft-clock-h')).toBe(false);
+    expect(set.has('--draft-dock-h')).toBe(false);
   });
 });

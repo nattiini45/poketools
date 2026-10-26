@@ -2,7 +2,8 @@
  * getPlayerCompetitiveRefs: the delete route's pre-check. Every players FK left
  * ON DELETE NO ACTION must be counted, so a delete that would hit SQLSTATE
  * 23503 is refused with a coded 409 before the DELETE runs. Served by a tiny
- * in-memory head-count stub (no network).
+ * in-memory head-count stub (no network). `trashedLeagues` counts the leagues in
+ * the recycle bin the player appears in (the junction table `league_trash_players`).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -69,6 +70,7 @@ describe('getPlayerCompetitiveRefs', () => {
       proposals: 0,
       leagueHistory: 0,
       activeDrafts: 0,
+      trashedLeagues: 0,
     });
   });
 
@@ -82,6 +84,7 @@ describe('getPlayerCompetitiveRefs', () => {
       proposals: 3,
       leagueHistory: 0,
       activeDrafts: 0,
+      trashedLeagues: 0,
     });
   });
 
@@ -101,7 +104,7 @@ describe('getPlayerCompetitiveRefs', () => {
   ])('counts the NO ACTION reference %s.%s as league history', async (table, column) => {
     state.tables = { [table]: [{ [column]: 'p1' }] };
     const refs = await getPlayerCompetitiveRefs('p1');
-    expect(refs).toEqual({ matches: 0, proposals: 0, leagueHistory: 1, activeDrafts: 0 });
+    expect(refs).toEqual({ matches: 0, proposals: 0, leagueHistory: 1, activeDrafts: 0, trashedLeagues: 0 });
     expect(state.calls).toContainEqual({ table, column });
   });
 
@@ -122,9 +125,37 @@ describe('getPlayerCompetitiveRefs', () => {
       ],
     };
     const refs = await getPlayerCompetitiveRefs('p1');
-    expect(refs).toEqual({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 3 });
+    expect(refs).toEqual({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 3, trashedLeagues: 0 });
     expect(state.calls).toContainEqual({ table: 'draft_participants', column: 'player_id' });
     expect(state.calls).toContainEqual({ table: 'draft_participants', column: 'draft_pools.engine' });
+  });
+
+  describe('trashed leagues (the junction table of the recycle bin)', () => {
+    const PLAYER = '3f0c1f6e-2c4a-4d8e-9a53-0d6f7a1b2c3d';
+    const OTHER = '9b1d8c52-7e4f-4a36-8f20-5c3e1a0b9d47';
+
+    it('counts the trashed leagues the player appears in, by player id only', async () => {
+      state.tables = {
+        league_trash_players: [
+          { trash_id: 't1', player_id: PLAYER },
+          { trash_id: 't2', player_id: PLAYER },
+          { trash_id: 't1', player_id: OTHER },
+        ],
+      };
+      const refs = await getPlayerCompetitiveRefs(PLAYER);
+      expect(refs).toEqual({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 0, trashedLeagues: 2 });
+      expect(state.calls).toContainEqual({ table: 'league_trash_players', column: 'player_id' });
+    });
+
+    it('is zero for a player in no trashed league', async () => {
+      state.tables = { league_trash_players: [{ trash_id: 't1', player_id: OTHER }] };
+      await expect(getPlayerCompetitiveRefs(PLAYER)).resolves.toMatchObject({ trashedLeagues: 0 });
+    });
+
+    it('rethrows a count error', async () => {
+      state.failTable = 'league_trash_players';
+      await expect(getPlayerCompetitiveRefs(PLAYER)).rejects.toEqual({ message: 'boom' });
+    });
   });
 
   it('rethrows a draft-seat count error', async () => {

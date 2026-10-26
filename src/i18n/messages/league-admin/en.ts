@@ -27,6 +27,100 @@ export default {
     empty: 'No archived leagues.',
     badge: 'Archived',
   },
+  /**
+   * The league trash (`/admin/leagues/trash`, superadmin only): deleted leagues wait here until `{days}` days
+   * (LEAGUE_TRASH_RETENTION_DAYS) are over. The restore warnings are the `warnings` of the restore route
+   * (`LeagueTrashRestoreWarning`).
+   */
+  trash: {
+    title: 'League trash',
+    /** `{days}` = LEAGUE_TRASH_RETENTION_DAYS. */
+    subtitle:
+      'Deleted leagues stay here for {days} days. A restore brings a league back with its phases, matches, games, drafts and settings, or restores nothing at all.',
+    back: 'Back to Leagues',
+    /** The link on the league list. */
+    link: 'League trash',
+    empty: 'The trash is empty.',
+    caption: 'Deleted leagues',
+    columns: {
+      league: 'League',
+      format: 'Format',
+      deletedBy: 'Deleted by',
+      deletedAt: 'Deleted',
+      restorableUntil: 'Restorable until',
+      contents: 'Contents',
+      status: 'Status',
+      actions: 'Actions',
+    },
+    deletedByUnknown: 'Unknown',
+    counts: {
+      players: { one: '{count} player', other: '{count} players' },
+      phases: { one: '{count} phase', other: '{count} phases' },
+      matches: { one: '{count} match', other: '{count} matches' },
+      games: { one: '{count} game', other: '{count} games' },
+      draftPools: { one: '{count} draft pool', other: '{count} draft pools' },
+    },
+    badges: {
+      schemaChanged: 'Schema changed since delete',
+      rebuildPending: 'Rebuild pending',
+      ready: 'Ready to restore',
+    },
+    schemaChangedHint:
+      'The database schema changed after the leagues marked this way were deleted. A restore checks the saved copy against the current tables and restores nothing if they no longer fit.',
+    restore: {
+      button: 'Restore',
+      /** The button name for assistive technology: `{name}` = the league. */
+      buttonLabel: 'Restore league {name}',
+      blocked: 'Run the pending rebuild of this delete first.',
+      confirmTitle: 'Restore league?',
+      /** `{name}` = the league. */
+      confirmMessage:
+        'Restore league "{name}" from the trash? It comes back with its matches, games and drafts. Running drafts come back paused, and every deadline moves by the time the league spent in the trash.',
+      confirmAction: 'Restore league',
+      failedTitle: 'Could not restore league "{name}".',
+    },
+    pending: {
+      title: 'Pending rebuilds',
+      hint: 'After a delete or a restore the statistics, ratings and win streaks are recalculated. These recalculations were not confirmed. Running one again is safe.',
+      kind: { delete: 'After the delete', restore: 'After the restore' },
+      run: 'Run rebuild',
+      runLabel: 'Run the rebuild of league {name}',
+      failedTitle: 'Could not rebuild league "{name}".',
+    },
+    notice: {
+      dismiss: 'Dismiss',
+      /** `{name}` = the league. */
+      restored: 'League "{name}" was restored.',
+      openLeague: 'Open league',
+      /** Queue drafts that came back paused. */
+      pausedPools: {
+        one: '{count} running draft came back paused. Resume it from the draft panel of the league.',
+        other: '{count} running drafts came back paused. Resume them from the draft panel of the league.',
+      },
+      warningsTitle: 'Please read',
+      warnings: {
+        /** `{count}` records of table `{rel}` pointed (column `{column}`) to something that was deleted in the meantime. */
+        parent_missing_nulled: {
+          one: '{count} record in {rel} referred to something that was deleted while the league was in the trash. The reference {column} was cleared.',
+          other:
+            '{count} records in {rel} referred to something that was deleted while the league was in the trash. The reference {column} was cleared.',
+        },
+        replay_hash_released: {
+          one: '{count} restored game used a replay that another game uses now. The replay link of this game was removed.',
+          other: '{count} restored games used a replay that another game uses now. The replay link of these games was removed.',
+        },
+        /** `{count}` = how many columns, `{columns}` = their names as a list. */
+        columns_ignored: {
+          one: 'The table {rel} no longer has the column {columns}. The saved values of this column were not restored.',
+          other: 'The table {rel} no longer has the columns {columns}. The saved values of these columns were not restored.',
+        },
+      },
+      /** `{name}` = the league. */
+      rebuilt: 'The rebuild of league "{name}" finished.',
+      rebuildIncomplete: 'The rebuild did not finish:',
+    },
+    failed: 'The request failed.',
+  },
   create: {
     title: 'Create League',
   },
@@ -73,6 +167,8 @@ export default {
       'The league type can no longer be changed: the league has started (it is active or completed, or a phase has rounds).',
     leagueTypeLockedPointBuy:
       'A point-buy league keeps its league type, and other leagues cannot become one: its setup (format rules, point-buy list, battle ruleset) is created together with the league.',
+    rulesetLockedHint:
+      'The league has started, so its ruleset can no longer be swapped here. A newer version of the same ruleset is applied with the ruleset card below.',
     rulesetEditHint:
       'The default for new phases and for team validation where a phase has no custom ruleset of its own. Existing phases keep theirs.',
   },

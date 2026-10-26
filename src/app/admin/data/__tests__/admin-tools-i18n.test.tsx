@@ -41,9 +41,7 @@ describe('admin-tools messages', () => {
   it('turn the old "(s)" pseudo-plurals into real plurals in both languages', () => {
     const en = createTranslator(adminToolsMessages, 'en');
     const de = createTranslator(adminToolsMessages, 'de');
-    expect(en('rulesets.clauses', { count: 1 })).toBe('1 clause');
-    expect(en('rulesets.clauses', { count: 3 })).toBe('3 clauses');
-    expect(de('rulesets.clauses', { count: 3 })).toBe('3 Klauseln');
+    expect(en('data.reconcile.seasonCount', { count: 3 })).toBe('3 seasons');
     expect(en('data.reconcile.seasonCount', { count: 1 })).toBe('1 season');
     expect(de('data.reconcile.seasonCount', { count: 2 })).toBe('2 Saisons');
     expect(de('data.export.remaining', { count: 1 })).toBe('Heute noch 1 Export möglich');

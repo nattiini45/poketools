@@ -33,13 +33,22 @@ export interface PlanStagesInput {
   graphOrder: readonly string[];
   /** The compiled plan (`CompileResult.plan`): bracket mapping and round counts per stage. */
   plan: readonly StagePlan[];
-  /** The league's default ruleset; a `season_default` stage uses it. The caller refuses a league without one. */
+  /**
+   * The league's default ruleset: the VERSION its `season_default` stages pin (the same version as the league, so a phase
+   * never drifts from the league default). The caller refuses a league without one.
+   */
   seasonRulesetId: string | null;
   /**
-   * The ruleset row of every Showdown format the stages name (format id to ruleset id): attach creates (or reuses)
-   * them before it plans. A `showdown` stage whose format is missing here is a programming error.
+   * The head version of every stored ruleset the stages name (definition id to version id): attach resolves them before
+   * it plans, so the stage pins the version that was current at attach. A `ruleset` stage whose definition is missing
+   * here is a programming error.
    */
-  showdownRulesetIds?: ReadonlyMap<string, string>;
+  namedRulesetVersionIds?: ReadonlyMap<string, string>;
+  /**
+   * The version of the ruleset attach created (or reused) for every rule preset the stages name (preset id to version
+   * id). A `preset` stage whose preset is missing here is a programming error.
+   */
+  presetRulesetIds?: ReadonlyMap<string, string>;
   /** The league's content language, used to pick the text of a stage name. */
   seasonLanguage: Locale;
   /** The content hash of the stored version the stages come from. */
@@ -153,17 +162,18 @@ function orderedStages(definition: FormatDefinition, graphOrder: readonly string
   return out;
 }
 
-/** The ruleset row a stage plays under: its stored ruleset, the row of its Showdown format, or the league's. */
+/** The ruleset VERSION a stage pins: the head of its stored ruleset, the version of its rule preset's ruleset, or the league's. */
 function stageRulesetId(
   stage: Stage,
   seasonRulesetId: string | null,
-  showdownRulesetIds: ReadonlyMap<string, string> | undefined,
+  namedRulesetVersionIds: ReadonlyMap<string, string> | undefined,
+  presetRulesetIds: ReadonlyMap<string, string> | undefined,
 ): string | null {
   switch (stage.ruleset.kind) {
     case 'ruleset':
-      return stage.ruleset.id;
-    case 'showdown':
-      return showdownRulesetIds?.get(stage.ruleset.format) ?? null;
+      return namedRulesetVersionIds?.get(stage.ruleset.id) ?? null;
+    case 'preset':
+      return presetRulesetIds?.get(stage.ruleset.preset) ?? null;
     case 'season_default':
       return seasonRulesetId;
   }
@@ -208,11 +218,12 @@ function edgeWarnings(edges: readonly Edge[]): EngineGap[] {
 /**
  * One `tournaments` row per kit stage, in graph order (`stage_order` counts from 1), plus the engine gaps the
  * attach reports. A `season_default` stage needs `seasonRulesetId` (the caller refuses a league without a
- * default ruleset before it plans) and a `showdown` stage needs the row of its format in `showdownRulesetIds`
- * (the caller creates those first), so a missing one here is a programming error.
+ * default ruleset before it plans), a `ruleset` stage needs the head version of its ruleset in `namedRulesetVersionIds`
+ * and a `preset` stage the version of its preset's ruleset in `presetRulesetIds` (the caller resolves and creates those
+ * first), so a missing one here is a programming error.
  */
 export function planStages(input: PlanStagesInput): PlannedStages {
-  const { definition, graphOrder, plan, seasonRulesetId, showdownRulesetIds, seasonLanguage, specHash } = input;
+  const { definition, graphOrder, plan, seasonRulesetId, namedRulesetVersionIds, presetRulesetIds, seasonLanguage, specHash } = input;
   const planByKey = new Map<string, StagePlan>();
   for (const entry of plan) {
     if (!planByKey.has(entry.key)) planByKey.set(entry.key, entry);
@@ -224,7 +235,7 @@ export function planStages(input: PlanStagesInput): PlannedStages {
     const order = index + 1;
     const stagePlan = planByKey.get(stage.key);
     const bracket = mappedBracketOf(stage, stagePlan);
-    const rulesetId = stageRulesetId(stage, seasonRulesetId, showdownRulesetIds);
+    const rulesetId = stageRulesetId(stage, seasonRulesetId, namedRulesetVersionIds, presetRulesetIds);
     if (rulesetId === null) throw new Error(`planStages: stage "${stage.key}" has no ruleset`);
     const series = mapSeriesOverrides(bracket, stage.series.overrides, stagePlan?.rounds ?? null);
     const snapshot: StageSpecSnapshot = {

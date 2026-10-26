@@ -90,7 +90,7 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
       </AdminGuard>
     );
   }
-  const { isSiteAdmin } = gate;
+  const { isSiteAdmin, playerId } = gate;
 
   const [league, t, tEnum] = await Promise.all([
     getSeasonWithDetails(id),
@@ -111,6 +111,7 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
     id,
     league,
     caps: getFormatCapabilities(league.format_type),
+    playerId,
     isSiteAdmin,
     t,
     tabLink,

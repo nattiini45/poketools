@@ -41,7 +41,7 @@ A private web application for managing competitive Pokémon leagues and tourname
 ### Competitive formats
 - Standard Smogon singles tiers (Gen 9 OU, UU, RU, NU, PU, LC, Ubers, AG)
 - VGC / doubles (Bring/Lead/Win stats enabled for these formats only)
-- Custom / homebrew rulesets (via ruleset builder)
+- Custom / homebrew rulesets (the Ruleset Studio: a base preset plus changes, published as immutable versions; [ruleset-studio.md](./ruleset-studio.md))
 - Draft leagues (data model included; UI in Phase 2)
 - **Custom format** (`custom`, Format Studio) — a league whose phases come from an attached, published format document ([format-kit.md](./format-kit.md#database-and-api)); the engine of those phases is still the classic one. No editor UI yet.
 - **Evolution Point Buy** (`evolution_point_buy`) — versioned point-buy list, budget/pick-capped draft with branched-line identity `(base, stage3)`, surviving-Pokémon Comeback Tokens, Participation Tokens and per-line rulings. The league's tuning (budget, picks, token tables, line rulings, price groups, workbook layout, draft-clock quiet hours, Comeback Token earn window and exchange ratio) comes from the active format pack (`docs/format-packs.md`). Canonical module doc: `docs/evolution-point-buy.md`.
@@ -70,11 +70,14 @@ Authenticated — Discord OAuth (must be in Players DB)
 Admin — `is_admin: true` in Players DB
   └── Create / edit / delete tournaments, leagues, rulesets
       Deleting a tournament or league (`DELETE /api/tournaments/[id]`, `DELETE /api/seasons/[id]`)
-      rebuilds all data derived from its matches after the cascade: the entity's aggregate
+      rebuilds all data derived from its matches afterwards: the entity's aggregate
       scopes are cleared (or the parent league's rebuilt), `all_time` aggregates are rebuilt,
       and affected players' ratings, rating history, and streaks are recomputed. EPB seasons
       also get their evolution state repaired. Rebuild failures never fail the delete — they
       are logged and surfaced by the §28 season audit (`npm run audit:seasons`) for repair.
+      A league delete is a move to the league trash (90 days, `LEAGUE_TRASH_RETENTION_DAYS`):
+      nothing blocks it, and the superadmin can restore the league until a daily cron removes it
+      for good (§4.13 `league_trash*`, `docs/season.md`, `docs/reconcile.md`).
   └── Generate next round pairings (Swiss, round robin, single/double elimination)
   └── Override or dispute match results
   └── Manage player roster and PS username mappings
@@ -206,21 +209,35 @@ Games are unique per `(match_id, game_number)`: a concurrent submission of the s
 A game recorded from a replay takes its winner and its battle stats from that same hashed replay, never from a client-supplied value. A battle already bound to any game is refused with 409 `replay_already_recorded`; see `docs/match.md` ("Replay Binding").
 
 ### 4.7 Rulesets
+A ruleset is a **definition** with immutable, numbered **versions** (Ruleset Studio, [ruleset-studio.md](./ruleset-studio.md)). The migrations are `20261026100000_ruleset_definitions.sql`, `20261026100100_ruleset_conversion_and_pins.sql` and `20261026100200_ruleset_contract.sql`.
+
+`ruleset_definitions` (one row per ruleset)
 | Field | Type | Notes |
 |---|---|---|
-| name | Title | |
-| base_format | Select | gen9ou / gen9vgc / gen9uu / etc. / blank |
-| is_doubles | Checkbox | |
-| clauses | Multi-select | Sleep Clause, Species Clause, etc. |
-| banned_pokemon | Multi-select | |
-| banned_moves | Multi-select | |
-| banned_items | Multi-select | |
-| banned_abilities | Multi-select | |
-| added_pokemon | Multi-select | (unbanned from base) |
-| custom_rules_string | Text | raw PS rules overflow |
-| min_shared_type_pct | Number | 0–100; relaxed-monotype share |
-| team_constraints | JSONB | Generic composition engine — see Section 9.1 |
-| created_by | Relation → Players | |
+| slug | Text | unique, `^[a-z0-9][a-z0-9-]{0,62}$` |
+| name, description | JSONB | bilingual text (`{ base, en: { v }, de: { v } }`); `name_text` is the generated list name |
+| kind | Select | `custom` / `preset` (a site catalog ruleset written by the seed route) |
+| owner_id | Relation → Players | `ON DELETE SET NULL` |
+| visibility | Select | `private` / `league` (all admins) / `gallery` (the site's own; only site admins publish to it) |
+| season_id | UUID | the league a format attach created the ruleset for; no foreign key on purpose (the league trash needs the definition to outlive the league row) |
+| forked_from | Relation → ruleset_definitions | |
+| current_draft, draft_rev | JSONB, Number | the working document (may be invalid) and its compare-and-set revision |
+| current_version_id | UUID | the head published version |
+
+`ruleset_definition_versions` (immutable; a trigger refuses any change)
+| Field | Type | Notes |
+|---|---|---|
+| definition_id, version_no | | unique pair; numbered per definition |
+| spec | JSONB | the ruleset document (a base preset or blank start plus changes), up to 256 KiB |
+| resolved | JSONB | the FROZEN effective rules as dex ids, computed once at publish; enforcement reads only this |
+| content_hash, resolved_hash | Text | SHA-256 of the canonical JSON |
+| catalog_version | Text | `PRESET_RULES_VERSION` the rules were computed with (`legacy` for a converted row) |
+| name_text, gen, format_key, is_doubles | | denormalised for embeds; `format_key` is the key of usage statistics, tiers and the AI context |
+| changelog, created_by, created_at | | |
+
+**Pins.** `seasons.ruleset_id` and `tournaments.ruleset_id` hold the id of a **version**, with a foreign key that has no delete action: a pinned version cannot be deleted (the API answers `ruleset_in_use`). Publishing a new version never changes a running league; moving a pin is an explicit, audited act. A converted legacy ruleset keeps its old id as the id of its version 1, so every stored id, URL and request body kept its meaning. The enforced ruleset of a phase is its own pin; the old "custom ruleset" heuristic and name match are gone.
+
+`ruleset_pin_backfill_log` records the previous `ruleset_id` of every league and phase the one-time replay of the old resolver changed. `rulesets_legacy` is the former `rulesets` table, closed to every API role and kept for one release as the revert source; a cleanup migration after the next release drops both. The shape of the document and of the resolved rules: Section 9.
 
 ### 4.8 Teams
 | Field | Type | Notes |
@@ -400,10 +417,26 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `matches` | Matches (4.5) |
 | `match_proposals` | Proposed match times and their answers |
 | `games` | Games of a match (4.6) |
-| `rulesets` | Rulesets (4.7, 9) |
+| `ruleset_definitions` | Ruleset Studio library: one row per ruleset with slug, bilingual name, owner, visibility (`private`, `league`, `gallery`), the draft being edited and its revision, and the head version (4.7) |
+| `ruleset_definition_versions` | Immutable published versions of a ruleset: document, frozen effective rules, hashes, catalog version. A league or phase pins one (4.7, 9) |
+| `ruleset_pin_backfill_log` | The previous `ruleset_id` of every league and phase the one-time pin replay changed (revert source) |
+| `rulesets_legacy` | The former `rulesets` table, closed to every API role; kept for one release as the revert source and then dropped |
 | `legacy_standings` | Baseline table; the public app neither reads nor writes it |
 | `format_definitions` | Format Studio library: one row per format with slug, bilingual name, owner, visibility (`private`, `league`, `gallery`), the draft being edited and its revision, and the latest published version |
 | `format_definition_versions` | Immutable published versions of a format: parsed spec, canonical SHA-256 `content_hash`, changelog. A trigger refuses any change of a published row |
+
+**League recycle bin**
+
+A deleted league is captured here and deleted from the live tables in one transaction (`league_trash_delete`); `league_trash_restore` re-inserts it. Service-role only; the trash page never reads the captured rows, only their counts. Details: [season.md](./season.md#league-recycle-bin).
+
+| Table | Purpose |
+|---|---|
+| `league_trash` | One row per trashed league: name, deleted by and at, `purge_after`, the row counts the trash page shows, the players and phases the league touched, the highest migration applied at delete time and the `rebuild_pending` marker |
+| `league_trash_tables` | One row per captured table: the league's rows of it as a JSON array |
+| `league_trash_players` | Junction: every player a captured row points at. `ON DELETE RESTRICT`, so the database refuses a delete of such a player while the league is in the trash |
+| `league_trash_rulesets` | Junction: every ruleset version a captured row points at (same protection) |
+| `league_trash_point_buy_versions` | Junction: every point-buy list version a captured row points at (same protection) |
+| `league_trash_restore_rebuilds` | Tombstone keyed by league, written by a restore and removed once the app has rebuilt the derived data |
 
 **Stats, ratings and achievements**
 
@@ -689,8 +722,15 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin/leagues/[id]/draft/audit  Read-only draft audit trail (draft_action_log)
 /admin/tournaments/new         Create standalone tournament (no season_id)
 /admin/tournaments/[id]/rounds Standalone tournament rounds (season-linked → redirect to phase page)
-/admin/rulesets/new            Ruleset builder
-/admin/rulesets/[id]/edit      Edit existing ruleset
+/admin/leagues/trash           League recycle bin (superadmin): trashed leagues with Restore, pending rebuilds
+/admin/rulesets                Ruleset Studio library: Your rulesets, Shared with you, League rulesets, Site catalog,
+                               Rule presets (Showdown and Smogon draft); New ruleset (blank, from a preset,
+                               from a shared ruleset, from a file)
+/admin/rulesets/[id]           One ruleset, read-only: rules in plain sentences, versions with what each changed,
+                               where it is used (UsagePanel), the pin card
+/admin/rulesets/[id]/edit      The ruleset editor (owner, league admins of a league-owned ruleset, site admins)
+/admin/rulesets/catalog/[presetId]  One catalog rule preset, read-only, with the start of a private copy
+/admin/rulesets/new            Redirects to the library, where the New ruleset dialog starts a ruleset
 /admin/formats                 Format Studio (read-only): three example formats and "Your leagues"
                                with a generated descriptor each (site admins: all leagues; league admins: their own)
 /admin/formats/example/[presetId]  One example format: stage outline, rules text (EN/DE), diagnostics, coverage
@@ -720,7 +760,8 @@ dashboard (attention queue, recent audit) only.
 of the leagues and tournaments they administer: every page is wrapped in
 `AdminGuard`; pages for one league, phase or tournament also call
 `gateResourceAdmin` (`src/lib/auth/resource-gate.ts`) before any read and render
-`ResourceForbidden` for anyone else; `siteAdminOnly` pages use `SiteAdminGuard`.
+`ResourceForbidden` for anyone else; `siteAdminOnly` pages use `SiteAdminGuard`,
+`superadminOnly` pages (the league trash) use `SuperadminGuard`.
 The scoped API routes below call `requireAnyAdmin` and narrow their reads with
 `getAdminScope` (`src/lib/auth/admin-scope.ts`). Details: `docs/admin.md`.
 
@@ -767,6 +808,9 @@ GET  /api/admin/player-search              Any admin (a resource admin names a s
                                             keeps accounts with a login
 DELETE /api/admin/rounds/[id]               Admin: delete latest round or zero-game round
                                             (400 STRUCTURE_ELIM_ROUND_DELETE for v2 elim)
+DELETE /api/seasons/[id]                    Site admin: move the league to the trash (never blocked; running drafts are
+                                            frozen first). Answers `data.trash { id, purge_after }` and, when the rebuild
+                                            of derived data failed, `data.rebuild_warning`. Restore: the superadmin routes below
 
 POST /api/seasons                           Create a league (any admin). Optional `clone_from` { season_id, copy_roster,
                                             copy_admins } copies the source league's phases (and, on request, its roster and,
@@ -804,6 +848,49 @@ POST /api/formats/[id]/publish              Publish the draft as the next immuta
                                             error diagnostic). format-publish 30 per hour
 POST /api/formats/[id]/fork                 Copy the latest published spec into a private format of the caller
 POST /api/formats/presets/[presetId]/fork   Copy a shipped example into a private format of the caller
+GET/POST /api/ruleset-definitions           Ruleset library: list (`scope` all | mine | shared | gallery, `visibility`, `kind`,
+                                            `limit` max 100, `offset`) / create (a whole `document`, or a `name` with a blank
+                                            start or a catalog `preset`, optionally with `tour_overlay`). Any admin tier; an
+                                            owner sees own and shared rulesets, a site admin all; ruleset-create 20 per hour
+GET/PATCH/DELETE /api/ruleset-definitions/[id]  Detail (summary and latest version; draft and version list for those who may
+                                            edit) / visibility (private <-> league for the owner, gallery for site admins) /
+                                            delete (409 ruleset_in_use while a league or phase pins a version). 60 writes per hour
+PUT /api/ruleset-definitions/[id]/draft     Save the draft: `draft_rev` compare-and-set (409 ruleset_stale_revision), bounded
+                                            body; a draft may be invalid, not audited. ruleset-draft 300 per 10 minutes
+POST /api/ruleset-definitions/[id]/publish  Publish the draft as the next immutable version after a clean compile; the
+                                            effective rules are computed once and frozen. ruleset-publish 30 per hour
+POST /api/ruleset-definitions/[id]/fork     Copy the latest published document into a private ruleset of the caller
+POST /api/ruleset-definitions/presets/[presetId]/fork  Start a private ruleset from a catalog preset (optional
+                                            `tour_overlay`: the preset's documented Smogon tour extras as editable entries)
+GET  /api/ruleset-definitions/[id]/usage    Which versions leagues and phases pin: counts for everyone who may see the ruleset,
+                                            names only for site admins and the admins of a league-owned ruleset
+POST /api/ruleset-definitions/[id]/pins     Move leagues and phases (up to 50) to another version of the ruleset: the caller must
+                                            administer every target; a started target needs `confirm_started`
+                                            (409 ruleset_pin_confirm_required), a completed one is refused
+                                            (ruleset_pin_locked); compare-and-set per target; audited per target. 30 per hour
+POST /api/ruleset-definitions/[id]/pins/impact  The question before a move: how many already-submitted teams would stop being
+                                            valid under the target version (differential, at most 2000 teams per request,
+                                            `truncated` says so). Writes nothing, no audit. ruleset-pin-impact 60 per hour
+GET  /api/ruleset-definitions/[id]/versions/[no]  One published version with its document and frozen rules (diff, rebase)
+GET  /api/rulesets                          Public: the head version of every shared ruleset in the flat shape of the old API
+                                            (names in `bans`, `additions`, `clauses`, plus `gen`, `universe`, `allow`, `version`);
+                                            `id` is the version id a league pins
+GET  /api/rulesets/[id]                     Public: one published VERSION by id (a private ruleset's version only while a
+                                            league or phase pins it, else 404); immutable, so the answer never changes
+POST /api/rulesets; PATCH/DELETE /api/rulesets/[id]  Site admins: the flat body of the old builder through a bridge;
+                                            PATCH publishes a NEW version and leaves pins where they are. A ruleset the flat
+                                            body cannot express is read-only here (ruleset_legacy_editor_unsupported)
+POST /api/seed-rulesets                     Admin (or the bootstrap secret before any admin exists): one shared `gallery`
+                                            ruleset per standard Smogon format of `SEED_FORMAT_IDS`, published as version 1;
+                                            idempotent
+GET  /api/pkmn/catalog/[kind]               Public: the entry catalog the ruleset pickers read (`species` | `moves` | `items` |
+                                            `abilities`; `gen`, `scope` standard | national, `part` index | text, `lang`,
+                                            `preset`); ETag and a long cache
+GET  /api/pkmn/presets/[id]/rules           Public: the rules a catalog preset implies, resolved for its mod and universe
+GET  /api/pkmn/presets/[id]/tour-overlay    Public: the documented Smogon tour extras of a draft preset (404 without)
+POST /api/admin/league-trash/[id]/restore   Superadmin: bring a deleted league back (one transaction; running drafts come
+                                            back paused; 409 LEAGUE_TRASH_REBUILD_PENDING while its delete rebuild is open)
+POST /api/admin/league-trash/[id]/rebuild   Superadmin: run the derived-data rebuild a delete or restore left pending
 GET  /api/players (admin)                    Player directory page: `limit`, `offset`, `search`, `sort` (name | discord_id |
                                             ps_username | status), `dir` (asc | desc); default name ascending; exact total
 POST /api/players (admin)                   Create registered or guest (`is_guest: true`) players
@@ -858,6 +945,10 @@ GET  /api/cron/process-aggregates  Cron (10 min): claims and applies queued aggr
 GET  /api/cron/expire-suspensions  Cron (15 min): lifts timed suspensions whose end has passed (one
                                 audit event per player)
 GET  /api/cron/refresh-usage-stats  Cron (monthly): re-imports Smogon usage stats and current-gen sample sets
+GET  /api/cron/expire-league-trash  Cron (daily): removes the leagues whose time in the league trash ran out (at most
+                                20 per run; entries whose rebuild after the delete is unconfirmed are skipped), then sweeps
+                                their social-image objects (a sweep failure is logged, never undoes the removal); one
+                                System `season.purge` audit event per league; 500 when the expiry itself fails
 ```
 
 Every cron route but refresh-usage-stats also accepts POST for a manual run; all require `Authorization: Bearer <CRON_SECRET>` (500 `cron_not_configured` when the secret is unset, 401 `cron_unauthorized` otherwise). Schedules: `vercel.json`.
@@ -1133,44 +1224,59 @@ pending_confirmation  (Bo threshold reached, winner determined)
 
 ## 9. Ruleset Data Structure
 
-```typescript
-// base_format is widened to a string of shape `gen{1-9}{tier}` (or 'blank')
-// to support all generation × tier combinations exposed by @pkmn/dex.
-type BaseFormat = string;
+A ruleset is stored twice, on purpose (`src/lib/ruleset-kit`, [ruleset-studio.md](./ruleset-studio.md)):
 
+```typescript
+// The DOCUMENT is what a person edits: a base plus per-category changes relative to it.
+interface RulesetDocument {
+  schema_version: 1
+  identity: { name: LText; summary?: LText; based_on?: string }
+  base:
+    | { kind: 'preset'; preset: string }                          // a catalog id: gen9ou, gen9natdexdraft, ...
+    | { kind: 'blank'; gen: number; doubles: boolean; universe: 'standard' | 'national' }
+  clauses: { add: string[]; remove: string[] }                    // clause ids, relative to the preset's
+  pokemon | moves | items | abilities: {
+    ban: string[]                                                 // banned in addition to the base
+    unban: string[]                                               // made legal although the base rules them out
+    allow: string[] | null                                        // non-null: ALLOWLIST mode, only these are legal
+  }
+  min_shared_type_pct: number                                     // 0–100; 0 disables
+  team_constraints: TeamConstraints | null                        // see Section 9.1
+  custom_rules: string                                            // notes, shown, never enforced
+}
+
+// The RESOLVED rules are the effective rules as dex ids, computed ONCE at publish and frozen in the version.
+// The validator reads only these, so correcting the preset catalog later never changes a running league.
+interface ResolvedRules {
+  v: 1; gen: number; format_key: string; universe: 'standard' | 'national'; doubles: boolean
+  clauses: string[]                                               // ids, sorted
+  pokemon | moves | items | abilities: { mode: 'block' | 'allow'; ids: string[] }
+  added_pokemon: string[]                                         // legal although the format key's tier bans them
+  min_shared_type_pct: number; team_constraints: TeamConstraints | null; custom_rules: string
+}
+
+// What the rest of the app reads (src/types/ruleset.ts): the stored version as a flat read model.
+// `rules` is the one enforcement source; bans/additions/allow/clauses are derived display-name views of it.
 interface Ruleset {
-  id: string
-  name: string
-  base_format: BaseFormat
-  is_doubles: boolean
-  clauses: string[]           // e.g. ['Sleep Clause Mod', 'Species Clause']
-  bans: {
-    pokemon: string[]
-    moves: string[]
-    items: string[]
-    abilities: string[]
-  }
-  additions: {
-    pokemon: string[]         // unbanned from base format
-  }
-  custom_rules_string: string // raw PS rules string overflow
-  min_shared_type_pct: number // 0–100; 0 disables
-  team_constraints: TeamConstraints | null // see Section 9.1
+  id: string                  // the VERSION id: what seasons.ruleset_id / tournaments.ruleset_id pin
+  name: string; base_format: string; is_doubles: boolean; gen: number; universe: 'standard' | 'national'
+  clauses: string[]; bans: { pokemon; moves; items; abilities: string[] }; additions: { pokemon: string[] }
+  allow: { pokemon; moves; items; abilities: string[] | null }
+  custom_rules_string: string; min_shared_type_pct: number; team_constraints: TeamConstraints | null
+  rules: ResolvedRules
+  version: { definition_id: string; version_no: number } | null
 }
 ```
 
-**Ruleset builder UI flow:**
-1. Select base format (pre-fills clauses + bans from @pkmn/data)
-2. Toggle clause checkboxes (pre-filled, overrideable)
-3. Banlist editor: inherited chips (removable) + search-to-add picker
-4. Additions picker: search to unban from base
-5. Custom rules text field (optional overflow)
-6. Team constraints (optional): type quotas, tera match, evolution-stage limits, Eviolite tier cap
-7. Name + save
+**Effective rules** (`computeEffective`, one pure function used by the server at publish and by the browser for the live summary): in block mode `banned = (base banned ∪ ban) minus unban`; with an `allow` list only the listed ids are legal and the base is ignored; a preset whose own list is an allowlist (a roster, Little Cup) keeps that mode. Clauses are `(base ∪ add) minus remove`.
+
+**Enforcement.** `validateTeam` enforces the four lists, the Species Clause, the Item Clause, `min_shared_type_pct` and `team_constraints`. Every other clause is informational: shown on the rules page, carried into the battle by the players, not enforced by the app.
+
+**Editing.** The Ruleset Studio editor (`/admin/rulesets/[id]/edit`): base and name, the four entry lists in a virtualized picker (ban, unban, allowlist), clauses, team constraints and notes, with a live summary against the base, an undo history, a change list with a revert button per entry, an issues list with one-click fixes and "Add Smogon tour bans" for draft presets. Save draft is a compare-and-set; Publish needs a clean compile.
 
 ### 9.1 Team Constraints Engine
 
-Generic JSONB blob on `rulesets.team_constraints` that lets a ruleset express
+Generic JSONB blob (`team_constraints` of the ruleset document and of its frozen rules) that lets a ruleset express
 composition rules beyond simple banlists. All fields are optional; absent or
 `null` constraints behave as if disabled (existing rulesets are unaffected).
 
@@ -1223,13 +1329,11 @@ interface TeamConstraints {
 }
 ```
 
-An empty block carries no rule, so the ruleset builder and `createRuleset` store
-it as `null` (`normalizeTeamConstraints` in `src/lib/pkmn/team-constraints.ts`)
-instead of `{}`. `isCustomLeagueRuleset` is unchanged: a ruleset whose stored
-`team_constraints` is already an empty object still counts as a custom league
-ruleset and resolves as before. `updateRuleset` writes the value it is given, and
-the builder keeps an untouched stored empty object as it is; only a new ruleset,
-or turning the toggle off, yields `null`.
+An empty block carries no rule, so the ruleset editor stores it as `null`
+(`normalizeTeamConstraints` in `src/lib/pkmn/team-constraints.ts`) instead of `{}`;
+a stored empty object that the author did not touch stays as it is. There is no
+"custom league ruleset" heuristic any more: the enforced ruleset of a phase is
+the version it pins (Section 4.7).
 
 The constraint engine is implemented in `src/lib/pkmn/validation.ts`
 (`validateTeam(team, ruleset, ctx)`), with `ctx.playerCore` populated from
@@ -1405,8 +1509,12 @@ app/
     leagues/[id]/phases/[phaseId]/page.tsx  Phase workspace
     tournaments/new/page.tsx
     tournaments/[id]/rounds/page.tsx   Round generator (redirects season-linked)
-    rulesets/new/page.tsx              Ruleset builder
-    rulesets/[id]/edit/page.tsx
+    leagues/trash/page.tsx             League recycle bin (superadmin)
+    rulesets/page.tsx                  Ruleset Studio library
+    rulesets/[id]/page.tsx             Read-only ruleset page (versions, usage, pin card)
+    rulesets/[id]/edit/page.tsx        Ruleset editor
+    rulesets/catalog/[presetId]/page.tsx  Catalog rule preset, read-only
+    rulesets/new/page.tsx              Redirects to the library
     matches/[id]/page.tsx              Override interface
     players/page.tsx
 
@@ -1536,9 +1644,14 @@ components/
     GameList.tsx              Per-game results within a match
 
   ruleset/
-    RulesetBuilder.tsx        Multi-step: base → clauses → bans → custom
-    ClauseToggleGrid.tsx
-    BanlistEditor.tsx
+    RulesetSelect.tsx         Version-aware ruleset select of the league, phase and tournament forms
+    RulesetPinCard.tsx        The pin of a league or phase: version, newer version, "update" with its impact
+    UsagePanel.tsx            Which leagues and phases pin which version
+    RulesetDetail.tsx         Public rules view of a ruleset
+    TeamConstraintsEditor.tsx
+  ruleset-studio/             Library views, the editor (editor/, sections/, picker/, summary/), starts/
+  studio-shell/               The frame, dialogs and library cards the Ruleset and Format Studios share
+  league-trash/               LeagueTrashPanel
 
   shared/
     PokemonSprite.tsx
@@ -1602,7 +1715,7 @@ Rules:
 - [ ] Next.js project init with TypeScript, Tailwind, NextAuth Discord
 - [ ] Environment config and Supabase client setup
 - [ ] Auth layer: Discord OAuth, session → Players DB lookup, admin flag
-- [ ] Ruleset builder (full UI: inheritance + clause toggles + banlist)
+- [ ] Rulesets (shipped as the Ruleset Studio: preset base + ban, unban and allowlist per category + clauses, published as versions)
 - [ ] Ruleset browser (public)
 - [ ] Player registration + PS username mapping
 

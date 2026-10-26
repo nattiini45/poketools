@@ -41,6 +41,11 @@ export interface SpeciesListOptions {
    */
   extraBans?: Set<string>;
   additions?: Set<string>;
+  /**
+   * A Pokémon allowlist (lowercased names): the ruleset lists the only legal species, so the base-format flag, the bans and the
+   * additions no longer matter. `undefined` or `null`: the ruleset is not an allowlist.
+   */
+  allowOnly?: Set<string> | null;
   /** Draft pool costs (lowercased name → cost). Non-null only in draft mode. */
   poolCosts: Map<string, number | null> | null;
   showTaken: boolean;
@@ -157,10 +162,12 @@ export function buildSpeciesListView(
 
   // Legality (strict hide). Skipped in draft mode (pool governs availability).
   // Ruleset overrides refine the base-format `legal` flag: an explicit extra ban
-  // always hides; an addition unbans an otherwise-illegal mon.
+  // always hides; an addition unbans an otherwise-illegal mon. A ruleset with a
+  // Pokémon allowlist replaces the flag altogether: only the listed species are legal.
   if (opts.applyLegality) {
     filtered = filtered.filter((p) => {
       const lower = p.pokemon_name.toLowerCase();
+      if (opts.allowOnly) return opts.allowOnly.has(lower);
       if (opts.extraBans?.has(lower)) return false;
       if (opts.additions?.has(lower)) return true;
       return p.legal !== false;

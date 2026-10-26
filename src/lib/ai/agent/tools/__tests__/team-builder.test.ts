@@ -1,19 +1,20 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
-// Only `getRulesetById` is mocked; it's invoked solely when a `ruleset_id` is
+// Only `readExposedRuleset` is mocked; it's invoked solely when a `ruleset_id` is
 // passed, so the unconstrained live tests below are unaffected.
-vi.mock('@/lib/supabase/queries/rulesets', () => ({
-  getRulesetById: vi.fn(async () => null),
+vi.mock('@/lib/ruleset-studio/exposure', () => ({
+  readExposedRuleset: vi.fn(async () => null),
 }));
 
 import { buildTeam } from '../team-builder';
 import { validateTeam } from '../validate';
 import { __clearSmogonToolCache } from '../smogon';
-import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import type { Ruleset } from '@/types/ruleset';
+import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
 
 function makeRuleset(overrides: Partial<Ruleset>): Ruleset {
-  return {
+  return buildRuleset({
     id: 'rs-test', name: 'Test League', base_format: 'gen9ou', is_doubles: false,
     clauses: ['Species Clause'],
     bans: { pokemon: [], moves: [], items: [], abilities: [] },
@@ -21,7 +22,7 @@ function makeRuleset(overrides: Partial<Ruleset>): Ruleset {
     team_constraints: null,
     created_by: null, created_at: '', updated_at: '',
     ...overrides,
-  };
+  });
 }
 
 // buildTeam hits the live https://data.pkmn.cc usage dataset (generous timeout),
@@ -117,7 +118,7 @@ describe('buildTeam (live usage, mocked pokepaste)', () => {
 
   it('respects a league ruleset: skips a banned core and never places it', async () => {
     mockPokepasteOnly();
-    vi.mocked(getRulesetById).mockResolvedValue(
+    vi.mocked(readExposedRuleset).mockResolvedValue(
       makeRuleset({ id: 'rs-ban', name: 'No Kingambit League', bans: { pokemon: ['Kingambit'], moves: [], items: [], abilities: [] } }),
     );
 
@@ -133,7 +134,7 @@ describe('buildTeam (live usage, mocked pokepaste)', () => {
 
   it('never places a banned move or item, even when requested', async () => {
     mockPokepasteOnly();
-    vi.mocked(getRulesetById).mockResolvedValue(
+    vi.mocked(readExposedRuleset).mockResolvedValue(
       makeRuleset({
         id: 'rs-ban2',
         bans: { pokemon: [], moves: ['Stealth Rock'], items: ['Leftovers'], abilities: [] },
@@ -156,7 +157,7 @@ describe('buildTeam (live usage, mocked pokepaste)', () => {
 
   it('satisfies a player-core type quota from the league ruleset', async () => {
     mockPokepasteOnly();
-    vi.mocked(getRulesetById).mockResolvedValue(
+    vi.mocked(readExposedRuleset).mockResolvedValue(
       makeRuleset({
         id: 'rs-core', name: 'Sample Custom League',
         team_constraints: {

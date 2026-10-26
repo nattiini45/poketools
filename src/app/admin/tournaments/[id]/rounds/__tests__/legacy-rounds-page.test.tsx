@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   getTournamentWithDetails: vi.fn(),
   getRoundsByTournament: vi.fn(),
   getGroupsByTournament: vi.fn(),
-  listRulesets: vi.fn(),
+  listRulesetOptionsFor: vi.fn(),
+  getRulesetPinInfo: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -36,7 +37,9 @@ vi.mock('@/i18n/server', async () => {
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentWithDetails: mocks.getTournamentWithDetails }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: mocks.getRoundsByTournament }));
 vi.mock('@/lib/supabase/queries/tournament-groups', () => ({ getGroupsByTournament: mocks.getGroupsByTournament }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesetOptionsFor: mocks.listRulesetOptionsFor }));
+vi.mock('@/lib/ruleset-studio/pin-info.server', () => ({ getRulesetPinInfo: mocks.getRulesetPinInfo }));
+vi.mock('@/components/ruleset/RulesetPinCard', () => stub('RulesetPinCard'));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/shared/ResourceAdminManager', () => stub('ResourceAdminManager'));
 vi.mock('@/components/shared/EditableDescription', () => stub('EditableDescription'));
@@ -48,6 +51,7 @@ vi.mock('@/components/tournament/TournamentSettingsEditor', () => stub('Tourname
 import LegacyRoundsPage from '../LegacyRoundsPage';
 import Section from '@/components/ui/Section';
 import TournamentSettingsEditor from '@/components/tournament/TournamentSettingsEditor';
+import RulesetPinCard from '@/components/ruleset/RulesetPinCard';
 
 type El = ReactElement<Record<string, unknown>>;
 
@@ -90,14 +94,15 @@ function tournament(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const render = () => LegacyRoundsPage({ id: ID, isSiteAdmin: true });
+const render = () => LegacyRoundsPage({ id: ID, playerId: 'admin-1', isSiteAdmin: true });
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getTournamentWithDetails.mockResolvedValue(tournament());
   mocks.getRoundsByTournament.mockResolvedValue([]);
   mocks.getGroupsByTournament.mockResolvedValue([]);
-  mocks.listRulesets.mockResolvedValue(rulesets);
+  mocks.getRulesetPinInfo.mockResolvedValue(null);
+  mocks.listRulesetOptionsFor.mockResolvedValue(rulesets);
 });
 
 describe('LegacyRoundsPage settings section', () => {
@@ -161,6 +166,17 @@ describe('LegacyRoundsPage settings section', () => {
     expect(active.props.lockReason).toBe('started');
   });
 
+  it('lists the rulesets of the viewer with the pin of the tournament kept in, and shows its pin card under the settings', async () => {
+    const pin = { definition_id: 'def-1', name: 'Standard Rules', version_id: RULESET_ID, version_no: 2, update: null, can_view: true };
+    mocks.getRulesetPinInfo.mockResolvedValue(pin);
+    const tree = await render();
+    expect(mocks.listRulesetOptionsFor).toHaveBeenCalledWith({ actor: { playerId: 'admin-1', isAdmin: true }, seasonId: null, keep: [RULESET_ID] });
+    expect(mocks.getRulesetPinInfo).toHaveBeenCalledWith(RULESET_ID, { playerId: 'admin-1', isAdmin: true });
+    const [first] = findByType(tree, Section);
+    const [card] = findByType(first, RulesetPinCard);
+    expect(card.props).toEqual({ kind: 'standalone', target: { kind: 'tournament', id: ID, name: 'Spring Cup', status: 'upcoming' }, pin });
+  });
+
   it('keeps the other sections after the settings', async () => {
     const titles = findByType(await render(), Section).map((s) => s.props.title);
     expect(titles).toEqual(['Settings', 'Description', 'Participants', 'Rounds', 'Tournament Admins']);
@@ -168,11 +184,11 @@ describe('LegacyRoundsPage settings section', () => {
 
   it('reads the rulesets once and 404s for a missing tournament before any other read', async () => {
     await render();
-    expect(mocks.listRulesets).toHaveBeenCalledTimes(1);
+    expect(mocks.listRulesetOptionsFor).toHaveBeenCalledTimes(1);
 
     mocks.getTournamentWithDetails.mockResolvedValue(null);
-    mocks.listRulesets.mockClear();
+    mocks.listRulesetOptionsFor.mockClear();
     await expect(render()).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(mocks.listRulesets).not.toHaveBeenCalled();
+    expect(mocks.listRulesetOptionsFor).not.toHaveBeenCalled();
   });
 });

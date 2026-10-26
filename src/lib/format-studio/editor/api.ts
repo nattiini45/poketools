@@ -1,18 +1,13 @@
 /**
- * The Studio editor's request layer: one small function per format and attach route, each with an injectable
- * `fetch` so the tests run without a network. Client-safe: it imports types from the library and the i18n error
- * helper only, no server code.
- *
- * The error shape is `ApiErrorLike` (a type import only): `@/i18n/api-errors` itself reaches the format pack and so
- * zod in a static import walk, which the editor-core closure test forbids. The body is read here with the same
- * rules instead.
+ * The Format Studio editor's request layer: one small function per format and attach route over the studio core's
+ * `request` (`@/lib/studio-core/request`), each with an injectable `fetch` so the tests run without a network.
+ * Client-safe: it imports types from the library and the i18n error helper only, no server code.
  *
  * Every function resolves to an `ApiOutcome` and never throws: a failed response gives the server's `code` and
  * `params` (the UI renders them with `useApiErrorText`), a request that never reached the server gives
  * `network_error` with status 0. Every path segment is URL-encoded. There are no retries here (the UI decides)
- * and a body is never logged.
+ * and a body is never logged. `classifyApiError` carries the class of every format error code.
  */
-import type { ApiErrorLike } from '@/i18n/api-errors';
 import type { LText, Locale } from '@/lib/format-kit/client';
 import type { FormatErrorCode } from '@/lib/format-studio/errors';
 import type {
@@ -24,10 +19,7 @@ import type {
   FormatVisibility,
   SeasonFormatSummary,
 } from '@/lib/format-studio/library-types';
-
-export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
-
-export type ApiOutcome<T> = { ok: true; data: T } | { ok: false; status: number; error: ApiErrorLike };
+import { makeClassifier, request, type ApiErrorKind, type ApiOutcome, type FetchLike } from '@/lib/studio-core/request';
 
 export interface CreatedFormatResponse {
   definition: FormatDefinitionSummary;
@@ -52,79 +44,7 @@ export interface SeasonFormatAttachResponse {
   warnings: EngineGap[];
 }
 
-function defaultFetch(input: string, init?: RequestInit): Promise<Response> {
-  return fetch(input, init);
-}
-
 const enc = encodeURIComponent;
-
-interface Envelope {
-  success?: unknown;
-  data?: unknown;
-}
-
-function isEnvelope(value: unknown): value is Envelope {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** The `error`, `code` and `params` members of an API error body that have the right type (as `toApiErrorLike`). */
-function errorLikeOf(body: unknown): ApiErrorLike {
-  if (!isRecord(body)) return {};
-  const out: ApiErrorLike = {};
-  if (typeof body.error === 'string') out.error = body.error;
-  if (typeof body.code === 'string') out.code = body.code;
-  if (isRecord(body.params)) {
-    const params: Record<string, string | number> = {};
-    for (const [name, value] of Object.entries(body.params)) {
-      if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) params[name] = value;
-    }
-    out.params = params;
-  }
-  return out.error !== undefined || out.code !== undefined ? out : {};
-}
-
-/** The error of a failed response: the server's code and params, else a code derived from the status. */
-function failureOf(response: Response, body: unknown): ApiErrorLike {
-  const parsed = errorLikeOf(body);
-  if (parsed.code !== undefined && parsed.code !== null) return parsed;
-  if (response.status === 401) return { ...parsed, code: 'unauthenticated' };
-  if (response.status === 429) {
-    const header = response.headers?.get('retry-after');
-    const seconds = header === null || header === undefined || header.trim() === '' ? Number.NaN : Number(header);
-    return Number.isFinite(seconds) && seconds >= 0
-      ? { ...parsed, code: 'rate_limited', params: { seconds } }
-      : { ...parsed, code: 'rate_limited' };
-  }
-  return { ...parsed, code: 'unknown_error' };
-}
-
-async function request<T>(
-  f: FetchLike | undefined,
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
-  path: string,
-  body?: unknown,
-): Promise<ApiOutcome<T>> {
-  const init: RequestInit = { method };
-  if (body !== undefined) {
-    init.headers = { 'Content-Type': 'application/json' };
-    init.body = JSON.stringify(body);
-  }
-  let response: Response;
-  try {
-    response = await (f ?? defaultFetch)(path, init);
-  } catch {
-    return { ok: false, status: 0, error: { code: 'network_error' } };
-  }
-  const parsed: unknown = await response.json().catch(() => null);
-  if (response.ok && isEnvelope(parsed) && parsed.success === true) {
-    return { ok: true, data: parsed.data as T };
-  }
-  return { ok: false, status: response.status, error: failureOf(response, parsed) };
-}
 
 // ─── Format routes ───────────────────────────────────────────────────────────────────────────────
 
@@ -175,15 +95,15 @@ export function forkFormatRequest(id: string, f?: FetchLike): Promise<ApiOutcome
 }
 
 /**
- * `POST /api/formats/presets/{presetId}/fork`: a private copy of a shipped example, optionally with a Showdown
- * format (a catalog id) pre-picked on every stage.
+ * `POST /api/formats/presets/{presetId}/fork`: a private copy of a shipped example, optionally with a rule preset
+ * (a catalog id) pre-picked on every stage.
  */
 export function forkPresetRequest(
   presetId: string,
-  showdownFormat?: string,
+  rulesetPreset?: string,
   f?: FetchLike,
 ): Promise<ApiOutcome<CreatedFormatResponse>> {
-  return request(f, 'POST', `/api/formats/presets/${enc(presetId)}/fork`, showdownFormat === undefined ? undefined : { showdown_format: showdownFormat });
+  return request(f, 'POST', `/api/formats/presets/${enc(presetId)}/fork`, rulesetPreset === undefined ? undefined : { ruleset_preset: rulesetPreset });
 }
 
 /** `POST /api/formats`: a whole document, or a name and its language for a skeleton. */
@@ -213,26 +133,6 @@ export function detachFormatRequest(seasonId: string, f?: FetchLike): Promise<Ap
 
 // ─── Error classes ───────────────────────────────────────────────────────────────────────────────
 
-export type ApiErrorKind =
-  | 'stale_revision'
-  | 'rate_limited'
-  | 'too_large'
-  | 'forbidden'
-  | 'unauthenticated'
-  | 'not_found'
-  | 'invalid'
-  | 'blocked'
-  | 'network'
-  | 'other';
-
-export interface ClassifiedError {
-  kind: ApiErrorKind;
-  /** The revision the server holds (`stale_revision`). */
-  staleRev?: number;
-  /** Seconds until the next request is allowed (`rate_limited`). */
-  retryAfter?: number;
-}
-
 /**
  * The class of every format error code. A `Record` over `FormatErrorCode` makes a new code a type error until it
  * is classified here.
@@ -261,6 +161,7 @@ const FORMAT_CODE_KINDS: Readonly<Record<FormatErrorCode, ApiErrorKind>> = {
   format_season_not_custom: 'blocked',
   format_season_started: 'blocked',
   format_attach_forbidden: 'forbidden',
+  format_attach_ruleset_forbidden: 'forbidden',
   format_attach_invalid: 'invalid',
   format_attach_ruleset_required: 'invalid',
   format_attach_manual_phases: 'blocked',
@@ -270,39 +171,9 @@ const FORMAT_CODE_KINDS: Readonly<Record<FormatErrorCode, ApiErrorKind>> = {
   season_format_type_locked: 'blocked',
 };
 
-/** Codes outside the format list that the editor and the attach panel meet. */
-const OTHER_CODE_KINDS: Readonly<Record<string, ApiErrorKind>> = {
-  rate_limited: 'rate_limited',
-  validation_failed: 'invalid',
-  unauthenticated: 'unauthenticated',
-  forbidden: 'forbidden',
-  season_not_found: 'not_found',
-  network_error: 'network',
-};
-
-const hasOwn = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
-
-function numberParam(error: ApiErrorLike, name: string): number | undefined {
-  const value = error.params?.[name];
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
 /** Sorts an API error into a class the UI reacts to (a conflict dialog, a retry hint, a sign-in prompt, ...). */
-export function classifyApiError(error: ApiErrorLike, status?: number): ClassifiedError {
-  const code = error.code ?? undefined;
-  if (code === 'format_stale_revision') {
-    const staleRev = numberParam(error, 'draft_rev');
-    return staleRev === undefined ? { kind: 'stale_revision' } : { kind: 'stale_revision', staleRev };
-  }
-  if (code === 'rate_limited' || (code === undefined && status === 429)) {
-    const retryAfter = numberParam(error, 'seconds');
-    return retryAfter === undefined ? { kind: 'rate_limited' } : { kind: 'rate_limited', retryAfter };
-  }
-  if (code !== undefined) {
-    if (hasOwn(FORMAT_CODE_KINDS, code)) return { kind: FORMAT_CODE_KINDS[code as FormatErrorCode] };
-    if (hasOwn(OTHER_CODE_KINDS, code)) return { kind: OTHER_CODE_KINDS[code] };
-  }
-  if (status === 401) return { kind: 'unauthenticated' };
-  if (status === 0) return { kind: 'network' };
-  return { kind: 'other' };
-}
+export const classifyApiError = makeClassifier({
+  // `season_not_found` is the one code outside the format list that the attach panel meets.
+  codeKinds: { ...FORMAT_CODE_KINDS, season_not_found: 'not_found' },
+  staleRevisionCode: 'format_stale_revision',
+});

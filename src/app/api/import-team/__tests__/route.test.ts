@@ -14,8 +14,9 @@ vi.mock('@/lib/auth/helpers', () => {
   return { requirePlayer: vi.fn(), AuthError };
 });
 
-vi.mock('@/lib/supabase/queries/rulesets', () => ({
-  getRulesetById: vi.fn(),
+// A ruleset id from the request is read through the exposure check (shared or pinned rulesets only).
+vi.mock('@/lib/ruleset-studio/exposure', () => ({
+  readExposedRuleset: vi.fn(),
 }));
 
 vi.mock('@/lib/pkmn/teams', () => ({
@@ -35,13 +36,13 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
 
 import { POST } from '../route';
 import { requirePlayer, AuthError } from '@/lib/auth/helpers';
-import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { parseTeamText } from '@/lib/pkmn/teams';
 import { validateTeam } from '@/lib/pkmn/validation';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 
 const mockRequirePlayer = requirePlayer as ReturnType<typeof vi.fn>;
-const mockGetRuleset = getRulesetById as ReturnType<typeof vi.fn>;
+const mockGetRuleset = readExposedRuleset as ReturnType<typeof vi.fn>;
 const mockParseTeam = parseTeamText as ReturnType<typeof vi.fn>;
 const mockValidateTeam = validateTeam as ReturnType<typeof vi.fn>;
 

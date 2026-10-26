@@ -173,6 +173,27 @@ describe('POST /api/players/[id]/claim', () => {
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
+  it('maps the junction key of a league in the trash to 409 SOURCE_HAS_ACTIVITY and says so in the log', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(claimGuestPlayer).mockRejectedValue({
+      code: '23503',
+      message:
+        'update or delete on table "players" violates foreign key constraint "league_trash_players_player_id_fkey" on table "league_trash_players"',
+    });
+
+    const res = await POST(
+      makeRequest({ source_player_id: SOURCE_ID }),
+      { params: makeParams({ id: GUEST_ID }) },
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.code).toBe('SOURCE_HAS_ACTIVITY');
+    expect(JSON.stringify(json)).not.toContain('league_trash');
+    expect(errorSpy.mock.calls.some(([message]) => String(message).includes('league in the trash'))).toBe(true);
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
   it.each(['banned', 'suspended'])(
     'refuses a %s source with 409 SOURCE_NOT_ACTIVE before the claim (a claim must not lift a sanction)',
     async (status) => {

@@ -10,6 +10,11 @@ import { createMockSupabase } from '@/lib/__tests__/helpers/supabase-mock';
 import { supabase } from '@/lib/supabase/client';
 
 const mockRequireAdmin = vi.fn();
+
+// Each site ruleset is made by the ruleset studio's `createPublished` (its own tests); here only the calls are checked.
+vi.mock('@/lib/ruleset-studio/library', () => ({ createPublished: vi.fn(async () => ({ definitionId: 'd', versionId: 'v' })) }));
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock('@/lib/auth/helpers', () => {
   class AuthError extends Error {
     constructor(message: string, public statusCode: number) {
@@ -40,7 +45,9 @@ vi.mock('@/lib/pkmn/formats', () => ({
   FORMAT_DEFAULTS: {
     blank: { name: 'Blank', is_doubles: false, clauses: [], banned_pokemon: [], banned_moves: [], banned_items: [] },
     gen9ou: { name: 'Gen 9 OU', is_doubles: false, clauses: ['Species Clause'], banned_pokemon: ['Koraidon'], banned_moves: [], banned_items: [] },
-    gen9uu: { name: 'Gen 9 UU', is_doubles: false, clauses: ['Species Clause'], banned_pokemon: [], banned_moves: [], banned_items: [] },
+    gen9uu: { name: 'Gen 9 UU', is_doubles: false, clauses: ['Species Clause'], banned_pokemon: [], banned_moves: [], banned_items: [], banned_abilities: ['Moody'] },
+    // A preset of the catalog that is not one of the 88 seeded formats: never inserted.
+    gen9draft: { name: 'Gen 9 Draft', is_doubles: false, clauses: ['Nickname Clause'], banned_pokemon: [], banned_moves: [], banned_items: [], banned_abilities: [] },
   },
 }));
 
@@ -49,6 +56,8 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { makeRequest } from '@/lib/__tests__/helpers/api-request';
 import { AuthError } from '@/lib/auth/helpers';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
+import { createPublished } from '@/lib/ruleset-studio/library';
+import { logAuditEvent } from '@/lib/audit/log';
 import type { NextRequest } from 'next/server';
 
 const mock = supabase as unknown as ReturnType<typeof createMockSupabase>;
@@ -72,16 +81,9 @@ describe('POST /api/seed-rulesets', () => {
   });
 
   it('seeds rulesets when admin authenticated', async () => {
-    mockRequireAdmin.mockResolvedValue(undefined);
-
-    // We override .then to return different results in sequence
-    let callCount = 0;
-    const results = [
-      { data: [], error: null },
-      { data: [{ name: 'Gen 9 OU' }, { name: 'Gen 9 UU' }], error: null },
-    ];
+    mockRequireAdmin.mockResolvedValue({ playerId: 'admin-1', name: 'Admin' });
     (mock.then as ReturnType<typeof vi.fn>).mockImplementation(
-      (resolve: (v: unknown) => void) => resolve(results[callCount++])
+      (resolve: (v: unknown) => void) => resolve({ data: [], error: null })
     );
 
     const req = makeRequest();
@@ -92,6 +94,35 @@ describe('POST /api/seed-rulesets', () => {
     expect(json.success).toBe(true);
     expect(json.data.count).toBe(2);
     expect(json.data.message).toContain('Seeded 2');
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: 'ruleset.seed', actor_id: 'admin-1', metadata: { count: 2 } }));
+  });
+
+  it('seeds only the 88 standard formats of the frozen list, never the other presets of the catalog, as preset-based gallery rulesets', async () => {
+    mockRequireAdmin.mockResolvedValue({ playerId: 'admin-1', name: 'Admin' });
+    (mock.then as ReturnType<typeof vi.fn>).mockImplementation(
+      (resolve: (v: unknown) => void) => resolve({ data: [], error: null })
+    );
+
+    await POST(makeRequest());
+
+    const calls = vi.mocked(createPublished).mock.calls.map(([input]) => input);
+    // The Gen 9 Draft preset is in the catalog but not in the frozen list.
+    expect(calls.map((c) => (c.document.base as { preset: string }).preset)).toEqual(['gen9ou', 'gen9uu']);
+    expect(calls[0]).toMatchObject({ kind: 'preset', visibility: 'gallery', ownerId: null, seasonId: null });
+    // The effective bans come from the preset when the version is published, not from a copy in the row.
+    expect(calls[1].document).toMatchObject({ base: { kind: 'preset', preset: 'gen9uu' }, pokemon: { ban: [] }, abilities: { ban: [] } });
+  });
+
+  it('skips the formats whose name already exists', async () => {
+    mockRequireAdmin.mockResolvedValue({ playerId: 'admin-1', name: 'Admin' });
+    (mock.then as ReturnType<typeof vi.fn>).mockImplementation(
+      (resolve: (v: unknown) => void) => resolve({ data: [{ name_text: 'Gen 9 OU' }], error: null })
+    );
+
+    const json = await (await POST(makeRequest())).json();
+
+    expect(json.data.count).toBe(1);
+    expect(vi.mocked(createPublished).mock.calls.map(([input]) => (input.document.base as { preset: string }).preset)).toEqual(['gen9uu']);
   });
 
   it('returns 403 when not admin and bootstrap mode disabled', async () => {
@@ -109,13 +140,8 @@ describe('POST /api/seed-rulesets', () => {
     process.env.BOOTSTRAP_MODE_ENABLED = 'true';
     process.env.BOOTSTRAP_SECRET = 'my-secret';
 
-    let callCount = 0;
-    const results = [
-      { data: [], error: null },
-      { data: [{ name: 'Gen 9 OU' }], error: null },
-    ];
     (mock.then as ReturnType<typeof vi.fn>).mockImplementation(
-      (resolve: (v: unknown) => void) => resolve(results[callCount++])
+      (resolve: (v: unknown) => void) => resolve({ data: [], error: null })
     );
 
     const req = makeRequest({ secret: 'my-secret' });
@@ -210,7 +236,7 @@ describe('POST /api/seed-rulesets', () => {
     mockRequireAdmin.mockResolvedValue(undefined);
 
     // Return existing names that match FORMAT_DEFAULTS (minus blank)
-    const existingNames = [{ name: 'Gen 9 OU' }, { name: 'Gen 9 UU' }];
+    const existingNames = [{ name_text: 'Gen 9 OU' }, { name_text: 'Gen 9 UU' }];
     (mock.then as ReturnType<typeof vi.fn>).mockImplementation(
       (resolve: (v: unknown) => void) => resolve({ data: existingNames, error: null })
     );

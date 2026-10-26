@@ -6,7 +6,7 @@
  * Patches use `add` for object members that may be absent in a stored document (the schema fills defaults), and
  * `replace` / `remove` only for members the diagnostic itself proves exist.
  */
-import type { PatchOp } from '../patch';
+import type { PatchOp } from '@/lib/studio-core/patch';
 import type { Fix } from './diagnostics';
 import { ptr } from './diagnostics';
 

@@ -1,7 +1,8 @@
-import { getGeneration } from './dex';
-import { getFormatDefaults } from './formats';
+import { getGeneration, listNationalSpecies } from './dex';
+import { getPreset, getTierInfo } from './format-catalog';
+import { parseFormatId } from './format-id';
+import { resolvePresetRules } from './preset-rules.server';
 import type { SpeciesSearchResult } from './dex';
-import type { BaseFormat } from '@/types/ruleset';
 
 // ── Format-aware species listing ────────────────────────────────────
 //
@@ -10,7 +11,12 @@ import type { BaseFormat } from '@/types/ruleset';
 // teambuilder picker can show tiers, sort by them, group by them, and hide
 // Pokémon that are illegal in the selected meta.
 //
-// This is a leaf module: it depends on dex.ts + formats.ts but nothing here
+// A National Dex preset (`universe: 'national'` in the catalog) lists the generation's whole National Dex, past
+// species included (`listNationalSpecies`); every other format lists the generation's own species. Legality
+// comes from the preset's resolved rules (`resolvePresetRules`): a banned Pokémon is illegal, and where the
+// preset lists the legal Pokémon instead (a roster, Little Cup) only those are legal.
+//
+// This is a leaf module: it depends on dex.ts + the preset rules but nothing here
 // depends on it, avoiding the dex → formats → tiers → dex cycle that would
 // arise from extending dex.ts directly.
 
@@ -48,46 +54,42 @@ export function listSpeciesForFormat(
   gen: number,
   format?: string | null,
 ): FormatSpeciesListItem[] {
-  const match = format ? /^gen(\d+)([a-z0-9]+)$/.exec(format) : null;
-  const tierKey = match ? match[2] : null;
+  const parsed = format ? parseFormatId(format) : null;
+  const tierKey = parsed !== null && parsed.key !== '' ? parsed.key : null;
+  const preset = format ? getPreset(format) : undefined;
+  const national = preset?.universe === 'national';
 
-  // Which @pkmn tier field drives the display tier for this format family.
-  const tierField: 'tier' | 'doublesTier' | 'natDexTier' =
-    tierKey === 'doublesou' || tierKey === 'vgc'
-      ? 'doublesTier'
-      : tierKey === 'nationaldex'
-        ? 'natDexTier'
-        : 'tier';
-  const isDoubles = tierField === 'doublesTier';
+  // Which @pkmn tier field drives the display tier for this format family: doubles formats read the doubles tier,
+  // the National Dex singles formats the National Dex tier.
+  const isDoubles = tierKey !== null && getTierInfo(tierKey)?.is_doubles === true;
+  const tierField: 'tier' | 'doublesTier' | 'natDexTier' = isDoubles ? 'doublesTier' : national ? 'natDexTier' : 'tier';
 
-  // Banned set for the format (empty for vgc/ag/cap/blank/unknown → all legal).
-  const banned = new Set(
-    (format ? getFormatDefaults(format as BaseFormat).banned_pokemon : []).map((n) =>
-      n.toLowerCase(),
-    ),
-  );
+  // The preset's Pokémon rule (empty for vgc/ag/cap/blank/unknown → all legal).
+  const rule = (format ? resolvePresetRules(format)?.pokemon : undefined) ?? { mode: 'block' as const, ids: [] };
+  const listed = new Set(rule.ids);
+  const isLegalByRule = (id: string) => (rule.mode === 'allow' ? listed.has(id) : !listed.has(id));
 
   const results: FormatSpeciesListItem[] = [];
-  for (const species of Array.from(getGeneration(gen).species)) {
-    // Mirror listAllSpeciesRich: skip cosmetic/battle-only and non-standard forms.
-    if (species.battleOnly || species.isNonstandard) continue;
+  for (const species of national ? listNationalSpecies(gen) : Array.from(getGeneration(gen).species)) {
+    // Mirror listAllSpeciesRich: skip cosmetic/battle-only and non-standard forms. The National Dex universe is made of
+    // species the generation calls non-standard (Past), so there only the battle-only formes are skipped.
+    if (species.battleOnly || (!national && species.isNonstandard)) continue;
 
     const rawTier = species[tierField] as string | undefined;
     const tier = toDisplayTier(rawTier, isDoubles);
-    const nameLower = species.name.toLowerCase();
 
     let legal: boolean;
     if (!tierKey) {
       legal = true;
     } else if (tierKey === 'lc') {
-      legal = rawTier === 'LC' && !banned.has(nameLower);
+      legal = rawTier === 'LC' && isLegalByRule(species.id);
     } else if (tierKey === 'nfe') {
-      legal = (species.evos?.length ?? 0) > 0 && !banned.has(nameLower);
+      legal = (species.evos?.length ?? 0) > 0 && isLegalByRule(species.id);
     } else {
-      // Standard tiers, monotype, 1v1, doublesou, nationaldex, vgc, ag, cap, …
+      // Standard tiers, monotype, 1v1, doublesou, nationaldex, vgc, ag, cap, drafts, …
       // "Lower tiers stay legal" falls out of getBannedPokemonForTier only
       // collecting tiers strictly above the selected one.
-      legal = !banned.has(nameLower);
+      legal = isLegalByRule(species.id);
     }
 
     results.push({

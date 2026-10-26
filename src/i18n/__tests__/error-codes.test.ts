@@ -36,8 +36,21 @@ const KEY = /^[A-Za-z0-9_]+$/;
  * - `lib/draft/reconciliation-report.ts`: finding codes of the admin import's
  *   reconciliation report (a Markdown/JSON report field, never an HTTP error
  *   body); they belong to the report's own namespace, not to `errors/*`.
+ * - `lib/supabase/queries/league-trash.ts`: the `warnings` of a league restore
+ *   (`parent_missing_nulled`, `replay_hash_released`, `columns_ignored`). They
+ *   are data the restore function reports next to a SUCCESSFUL restore, rendered
+ *   by the trash page from its own messages, and never an HTTP error body.
+ * - `lib/league-trash/client.ts`: the client side of that page; it parses the same restore `warnings` out of the
+ *   restore route's answer (the type twin of the queries file's union), so the same three literals appear there.
+ * - `lib/studio-core/text-schema.ts`: the `length` and `refine` params of the shared zod text schemas. They are the
+ *   format kit's schema issue codes (see NOT_API_ERROR_DIRS below), kept next to the `ltext` type both kits share.
  */
-const NOT_API_ERROR_FILES = new Set(['lib/draft/reconciliation-report.ts']);
+const NOT_API_ERROR_FILES = new Set([
+  'lib/draft/reconciliation-report.ts',
+  'lib/supabase/queries/league-trash.ts',
+  'lib/league-trash/client.ts',
+  'lib/studio-core/text-schema.ts',
+]);
 /**
  * Directories whose `code: '<x>'` literals are not API error codes, relative to src/.
  * - `lib/format-kit/`: schema, expression and compile issue codes of the pure

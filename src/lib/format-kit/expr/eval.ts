@@ -1,4 +1,4 @@
-import { KEY_PATTERN } from '../keys';
+import { KEY_PATTERN } from '@/lib/studio-core/keys';
 import { valueType, type EvalContext, type Expr, type ExprIssue, type ExprIssueCode, type ExprType, type ExprValue } from './ast';
 import { exceededLimit, measureExpr } from './measure';
 import {

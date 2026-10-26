@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from '@/lib/draft/__tests__/fixtures/example-list.json';
-import { compileCriteria, evaluateLine, runFinder, viaSubject, type FinderInput, type LineEvaluation } from '../engine';
+import { compileCriteria, evaluateLine, runFinder, type FinderInput, type LineEvaluation } from '../engine';
 import { EMPTY_FILTERS, initialFinderState, type FinderFilters, type FinderViewState } from '../filter-types';
 import { prepareIndex } from '../prepare';
 import { finderReducer } from '../reducer';
@@ -239,15 +239,6 @@ describe('finder engine vectors (draft-frontend §4.9)', () => {
     expect(evaluateLine(line, compileCriteria(parentFilters, ix, { banned: bannedPivot }), 'anywhere').matches).toBe(false);
     const picked = filters({ utility: [{ key: 'pivot', members: ['partingshot'] }] });
     expect(evaluateLine(line, compileCriteria(picked, ix, { banned: bannedPivot }), 'anywhere').matches).toBe(false);
-  });
-
-  it('V16: an explanation names the move from moveNames, never the id', () => {
-    const hisui = evaluate('oshawott--samurotthisui', filters({ utility: [{ key: 'hazards', members: [] }] }), 'anywhere');
-    const via = hisui.results[0].via;
-    expect(via).not.toBeNull();
-    if (!via) return;
-    expect(viaSubject(via, ix, stubNames, 'en')).toBe('Spikes');
-    expect(viaSubject(via, ix, stubNames, 'de')).toBe('Stachler');
   });
 });
 

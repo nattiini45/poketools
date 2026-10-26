@@ -8,7 +8,7 @@ import Alert from '@/components/ui/Alert';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import BanlistEditor from '@/components/ruleset/BanlistEditor';
+import NameListEditor from '@/components/ruleset-studio/NameListEditor';
 import { loadFormatRules, saveFormatRules } from '@/components/league/format-rules-requests';
 import {
   createFormatRulesController,
@@ -280,19 +280,19 @@ export function FormatRulesEditorView({
 
       {/* Banned moves and items (canonical English names, shown in the viewer's data locale) */}
       <div>
-        <BanlistEditor
+        <NameListEditor
+          category="moves"
           label={t('formatRules.bannedMoves')}
-          searchType="moves"
-          items={values.banned_moves}
+          value={values.banned_moves}
           onChange={(banned_moves) => onChange({ ...values, banned_moves })}
         />
         {listError('banned_moves')}
       </div>
       <div>
-        <BanlistEditor
+        <NameListEditor
+          category="items"
           label={t('formatRules.bannedItems')}
-          searchType="items"
-          items={values.banned_items}
+          value={values.banned_items}
           onChange={(banned_items) => onChange({ ...values, banned_items })}
         />
         {listError('banned_items')}

@@ -950,3 +950,69 @@ export function listAllSpeciesNatDex(): WikiSpeciesListRow[] {
   }
   return Array.from(latest.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
+
+// ── National Dex universe ────────────────────────────────────────────
+
+/** The `isNonstandard` values of a species that is part of a generation's National Dex: none, past, unobtainable. */
+const NATIONAL_NONSTANDARD: ReadonlySet<string | null> = new Set([null, 'Past', 'Unobtainable']);
+
+/**
+ * Every species of a generation's National Dex universe: the generation's own species plus the ones the
+ * generation dropped (`isNonstandard: 'Past'`: Mega Evolutions, Primals, regional forms and whole lines that the
+ * games removed) and the unobtainable ones. CAP, Future, LGPE and Custom species are not part of it.
+ *
+ * This reads `Dex.forGen(gen).species.all()` instead of the `Generations` wrapper the rest of the module uses,
+ * on purpose and only here: `Generations(gen).species` hides every `Past` species, so a National Dex list built
+ * on it misses them (gen 9: 73 of the 102 Uber and AG National Dex species are visible; the other 29, among them
+ * Mega Mewtwo X and Y, Primal Groudon and Kyogre, Genesect and Xerneas, only exist in the raw data). `Dex.forGen`
+ * is not the forbidden `Dex.forFormat`, and the tier fields (`tier`, `doublesTier`, `natDexTier`) are read from
+ * the very objects this returns.
+ */
+export function listNationalSpecies(gen: number = 9) {
+  return Dex.forGen(gen).species.all().filter((s) => s.exists && NATIONAL_NONSTANDARD.has(s.isNonstandard ?? null));
+}
+
+/** The moves of a generation's National Dex universe (past moves such as Hidden Power and Pursuit included); same rule as `listNationalSpecies`. */
+export function listNationalMoves(gen: number = 9) {
+  return Dex.forGen(gen).moves.all().filter((m) => m.exists && NATIONAL_NONSTANDARD.has(m.isNonstandard ?? null));
+}
+
+/** The items of a generation's National Dex universe (Z-crystals, Mega stones and the other past items included); same rule as `listNationalSpecies`. */
+export function listNationalItems(gen: number = 9) {
+  return Dex.forGen(gen).items.all().filter((i) => i.exists && NATIONAL_NONSTANDARD.has(i.isNonstandard ?? null));
+}
+
+/** The abilities of a generation's National Dex universe; same rule as `listNationalSpecies`. */
+export function listNationalAbilities(gen: number = 9) {
+  return Dex.forGen(gen).abilities.all().filter((a) => a.exists && NATIONAL_NONSTANDARD.has(a.isNonstandard ?? null));
+}
+
+// ── Single lookups inside a National Dex universe ────────────────────
+//
+// The twins of `listNational*` for one name: the entity of `gen`'s National Dex (past and unobtainable ones included), or
+// `undefined`. The ruleset validator uses them for a ruleset whose universe is `national`, so a Mega Evolution or a past
+// move is a legal team member there instead of an unknown one.
+
+/** A species of generation `gen`'s National Dex universe, or `undefined` (CAP, Future, LGPE and Custom species are not part of it). */
+export function getNationalSpecies(name: string, gen: number = 9) {
+  const species = Dex.forGen(gen).species.get(name);
+  return species.exists && NATIONAL_NONSTANDARD.has(species.isNonstandard ?? null) ? species : undefined;
+}
+
+/** A move of generation `gen`'s National Dex universe, or `undefined`. */
+export function getNationalMove(name: string, gen: number = 9) {
+  const move = Dex.forGen(gen).moves.get(name);
+  return move.exists && NATIONAL_NONSTANDARD.has(move.isNonstandard ?? null) ? move : undefined;
+}
+
+/** An item of generation `gen`'s National Dex universe, or `undefined`. */
+export function getNationalItem(name: string, gen: number = 9) {
+  const item = Dex.forGen(gen).items.get(name);
+  return item.exists && NATIONAL_NONSTANDARD.has(item.isNonstandard ?? null) ? item : undefined;
+}
+
+/** An ability of generation `gen`'s National Dex universe, or `undefined`. */
+export function getNationalAbility(name: string, gen: number = 9) {
+  const ability = Dex.forGen(gen).abilities.get(name);
+  return ability.exists && NATIONAL_NONSTANDARD.has(ability.isNonstandard ?? null) ? ability : undefined;
+}

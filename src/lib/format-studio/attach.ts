@@ -5,12 +5,14 @@
  * `attachFormatToSeason` checks, in this order and with bounded reads, before it writes anything: the league is
  * custom and has not started, the caller may attach the definition, the version exists and its stored spec still
  * hashes to the stored hash, the spec compiles without an error against the rulesets that exist, every
- * `season_default` stage has a league ruleset to fall back on (a stage with a stored ruleset or a Showdown format
- * names its own), and the league has no hand-made phase. Only then are the Showdown stages given their ruleset rows
- * (one per distinct format, reused from the league's previous attach, see `showdown-rulesets.ts`) and one RPC (a
- * single transaction that locks the league and repeats the started and manual-phase checks) writes the frozen spec,
- * the stages, the readiness row and the record of the rulesets. A refusal at any step calls no RPC; when the RPC
- * fails, the rulesets this attach created are discarded, so a failed attach leaves no orphan row.
+ * `season_default` stage has a league ruleset to fall back on (a stage with a stored ruleset or a rule preset
+ * names its own), and the league has no hand-made phase. A stage that names a stored ruleset (a DEFINITION id in the
+ * document) must name one the caller may use and that has a published version; the phase pins that definition's head
+ * version at attach. Only then are the preset stages given their rulesets (one definition per distinct preset, owned by the
+ * league, reused from the league's previous attach, see `src/lib/ruleset-studio/materialise.ts`) and one RPC (a single
+ * transaction that locks the league and repeats the started and manual-phase checks) writes the frozen spec, the stages,
+ * the readiness row and the record of the rulesets. A refusal at any step calls no RPC; when the RPC fails, the rulesets
+ * this attach created are discarded, so a failed attach leaves no orphan row.
  *
  * The caller (the route) expires the read cache and writes the audit event after the RPC commits; this module
  * returns the stage ids to expire.
@@ -19,8 +21,8 @@ import 'server-only';
 
 import { randomBytes } from 'node:crypto';
 import { CURRENT_ENV } from '@/lib/format-kit/engine/env';
-import { contentHash } from '@/lib/format-kit/json';
-import { showdownFormatsOf } from '@/lib/format-kit/showdown';
+import { contentHash } from '@/lib/studio-core/json';
+import { presetsOf } from '@/lib/format-kit/ruleset-presets';
 import type { FormatDefinition } from '@/lib/format-kit/types';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
@@ -28,9 +30,9 @@ import { getFormatDefinitionMeta, getFormatVersion, getLatestPublishedVersion } 
 import {
   attachSeasonFormat,
   detachSeasonFormat,
-  getExistingRulesetIds,
+  getPublishedRulesetHeads,
   getSeasonFormatSummary,
-  getSeasonShowdownRulesets,
+  getSeasonPresetRulesets,
   getSeasonManualPhaseCount,
   getSeasonStartSignals,
 } from '@/lib/supabase/queries/season-formats';
@@ -42,7 +44,8 @@ import { canAttachDefinition, type FormatActor } from './access';
 import { FormatStudioError } from './errors';
 import type { EngineGap, SeasonFormatSummary } from './library-types';
 import { planStages } from './materialise';
-import { discardRulesets, ensureShowdownRulesets } from './showdown-rulesets';
+import { assertDefinitionsUsable } from '@/lib/ruleset-studio/guards';
+import { discardMaterialised, ensurePresetRulesets } from '@/lib/ruleset-studio/materialise';
 
 export interface AttachInput {
   actor: SessionPlayer;
@@ -129,9 +132,12 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
     throw new Error('Stored format version failed its integrity check');
   }
 
-  // 5. The spec compiles against the rulesets that exist. No roster size: the roster is not final before the
-  // league starts, so size-dependent checks belong to the readiness checklist.
-  const rulesetIds = await getExistingRulesetIds(namedRulesetIds(version.spec));
+  // 5. The rulesets the spec names are published and usable by the caller, and the spec compiles against them. No
+  // roster size: the roster is not final before the league starts, so size-dependent checks belong to the readiness
+  // checklist.
+  const namedVersionIds = await getPublishedRulesetHeads(namedRulesetIds(version.spec));
+  await assertDefinitionsUsable(actor, [...namedVersionIds.keys()]);
+  const rulesetIds = new Set(namedVersionIds.keys());
   // Loaded on demand: the guards below are imported by the generate routes, which never compile.
   const { compile } = await import('@/lib/format-kit/compile');
   const compiled = compile(version.spec, { ...CURRENT_ENV, rulesetIds });
@@ -151,14 +157,15 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
   const manual = await getSeasonManualPhaseCount(seasonId);
   if (manual > 0) throw new FormatStudioError('format_attach_manual_phases', { count: manual });
 
-  // 8. Each Showdown format the stages name gets a ruleset row (reused from the league's previous attach), then
+  // 8. Each rule preset the stages name gets a ruleset row (reused from the league's previous attach), then
   // the stages are planned and everything is written in one transaction.
-  const showdownFormats = showdownFormatsOf(definition);
-  const ensured = await ensureShowdownRulesets({
-    formats: showdownFormats,
+  const presets = presetsOf(definition);
+  const ensured = await ensurePresetRulesets({
+    presets,
     leagueName: season.name,
     actorId: actor.playerId,
-    recorded: showdownFormats.length > 0 ? await getSeasonShowdownRulesets(seasonId) : {},
+    seasonId,
+    recorded: presets.length > 0 ? await getSeasonPresetRulesets(seasonId) : {},
   });
   let planned: ReturnType<typeof planStages>;
   let result: Awaited<ReturnType<typeof attachSeasonFormat>>;
@@ -168,7 +175,8 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
       graphOrder: compiled.graph.order,
       plan: compiled.plan,
       seasonRulesetId: season.ruleset_id,
-      showdownRulesetIds: ensured.rulesetIds,
+      namedRulesetVersionIds: namedVersionIds,
+      presetRulesetIds: ensured.versionIds,
       seasonLanguage: season.language,
       specHash: version.content_hash,
     });
@@ -180,10 +188,10 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
       specHash: version.content_hash,
       seed: randomBytes(16).toString('hex'),
       stages: planned.stages,
-      showdownRulesets: Object.fromEntries(ensured.rulesetIds),
+      presetRulesets: Object.fromEntries(ensured.definitionIds),
     });
   } catch (err) {
-    await discardRulesets(ensured.created);
+    await discardMaterialised(ensured.created);
     throw err;
   }
 
@@ -214,7 +222,7 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
 }
 
 /**
- * Removes the attached format, the stages it created and the rulesets it created for its Showdown stages (the
+ * Removes the attached format, the stages it created and the rulesets it created for its preset stages (the
  * ones no phase or league still points at), in one transaction.
  */
 export async function detachFormatFromSeason(

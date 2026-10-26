@@ -1,5 +1,5 @@
 /**
- * The ruleset detail and the builder's leaf editors in both languages (i18n
+ * The ruleset detail, the format selector and the team constraints editor in both languages (i18n
  * T11): labels from the `ruleset` namespace, banned names from the pkmn layer,
  * Showdown clause and format names unchanged, a `labels` prop still
  * overriding. Rendered through react-dom/server (vitest 'node' env, no DOM).
@@ -10,13 +10,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import RulesetDetail, { DEFAULT_RULESET_DETAIL_LABELS, rulesetDetailLabels } from '../RulesetDetail';
-import BanlistEditor from '../BanlistEditor';
-import ClauseToggleGrid from '../ClauseToggleGrid';
 import FormatSelector, { nextFormatForGen, nextFormatForTier } from '../FormatSelector';
-import RulesetBuilder from '../RulesetBuilder';
 import TeamConstraintsEditor from '../TeamConstraintsEditor';
 import { renderWithI18n } from '@/test/i18n';
 import type { Ruleset } from '@/types/ruleset';
+import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
 
 function textOf(html: string): string {
   // `&amp;` is decoded last so an escaped entity such as `&amp;nbsp;` is not double-unescaped.
@@ -29,7 +27,7 @@ function textOf(html: string): string {
     .trim();
 }
 
-const RULESET: Ruleset = {
+const RULESET: Ruleset = buildRuleset({
   id: 'rs-1',
   name: 'Spring OU',
   base_format: 'gen9ou',
@@ -43,7 +41,7 @@ const RULESET: Ruleset = {
   created_by: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
-};
+});
 
 describe('RulesetDetail', () => {
   it('keeps the English labels and names without a provider', () => {
@@ -110,43 +108,10 @@ describe('RulesetDetail', () => {
   });
 });
 
-describe('ruleset builder editors', () => {
-  it('translates the builder chrome and keeps English without a provider', () => {
-    const en = textOf(renderToStaticMarkup(<RulesetBuilder />));
-    for (const s of ['Format & Name', 'Ruleset Name', 'Base Format', 'Generation', 'Previous', 'Next']) {
-      expect(en).toContain(s);
-    }
-    const de = textOf(renderWithI18n(<RulesetBuilder />, { locale: 'de' }));
-    for (const s of ['Klauseln', 'Übersicht', 'Name des Regelwerks', 'Basisformat', 'Zurück', 'Weiter', 'Ausgewählt:']) {
-      expect(de).toContain(s);
-    }
-  });
-
+describe('ruleset editors', () => {
   it('shows the selected format in a rich sentence', () => {
     const html = renderWithI18n(<FormatSelector value="gen9ou" onChange={() => {}} />, { locale: 'de' });
     expect(html).toMatch(/Ausgewählt: <span class="text-poke-text-primary font-medium">[^<]+<\/span>/);
-  });
-
-  it('labels the clause grid', () => {
-    expect(textOf(renderWithI18n(<ClauseToggleGrid selected={[]} onChange={() => {}} />, { locale: 'de' }))).toContain(
-      'Klauseln',
-    );
-  });
-
-  it('shows banned names in the data locale with a translated placeholder and remove label', () => {
-    const html = renderWithI18n(
-      <BanlistEditor label="Gebannte Pokémon" searchType="species" items={['Charizard']} onChange={() => {}} />,
-      { locale: 'de' },
-    );
-    expect(textOf(html)).toContain('Glurak');
-    expect(html).toContain('placeholder="Pokémon suchen …"');
-    expect(html).toContain('aria-label="Glurak entfernen"');
-
-    const en = renderToStaticMarkup(
-      <BanlistEditor label="Banned Moves" searchType="moves" items={['Flamethrower']} onChange={() => {}} />,
-    );
-    expect(en).toContain('placeholder="Search moves..."');
-    expect(textOf(en)).toContain('Flamethrower');
   });
 
   it('translates the team constraints with Pokémon-data names from the pkmn layer', () => {
@@ -213,48 +178,5 @@ describe('FormatSelector selection', () => {
     const selected = [...html.matchAll(/<button[^>]*class="[^"]*bg-poke-accent[^"]*"[^>]*>(.*?)<\/button>/g)];
     expect(selected).toHaveLength(1);
     expect(textOf(selected[0][1])).toBe('Eigenes');
-  });
-});
-
-describe('ruleset builder empty notice', () => {
-  // A stored ruleset with nothing in it: the notice is shown without waiting for any request.
-  const EMPTY = {
-    name: 'Empty',
-    base_format: 'gen9ou',
-    is_doubles: false,
-    clauses: [],
-    banned_pokemon: [],
-    banned_moves: [],
-    banned_items: [],
-    banned_abilities: [],
-    added_pokemon: [],
-    custom_rules_string: '',
-    min_shared_type_pct: 0,
-    team_constraints: null,
-  };
-
-  it('explains what an empty ruleset enforces, in English and German', () => {
-    const en = textOf(renderToStaticMarkup(<RulesetBuilder initialData={EMPTY} rulesetId="rs-1" />));
-    expect(en).toContain('This ruleset enforces nothing yet');
-    expect(en).toContain('there are no clauses and no bans');
-    expect(en).toContain('Load Gen 9 OU defaults');
-    const de = textOf(renderWithI18n(<RulesetBuilder initialData={EMPTY} rulesetId="rs-1" />, { locale: 'de' }));
-    expect(de).toContain('Dieses Regelwerk erzwingt noch nichts');
-    expect(de).toContain('Standardwerte von Gen 9 OU laden');
-  });
-
-  it('shows no notice when a list has an entry or the format is blank', () => {
-    const withClause = textOf(
-      renderToStaticMarkup(<RulesetBuilder initialData={{ ...EMPTY, clauses: ['Species Clause'] }} rulesetId="rs-1" />),
-    );
-    expect(withClause).not.toContain('enforces nothing yet');
-    const blank = textOf(
-      renderToStaticMarkup(<RulesetBuilder initialData={{ ...EMPTY, base_format: 'blank' }} rulesetId="rs-1" />),
-    );
-    expect(blank).not.toContain('enforces nothing yet');
-  });
-
-  it('waits for the defaults of a new ruleset instead of flashing the notice', () => {
-    expect(textOf(renderToStaticMarkup(<RulesetBuilder />))).not.toContain('enforces nothing yet');
   });
 });

@@ -219,6 +219,7 @@ export default defineDe<typeof en>()({
       liveFilters: 'Filter + warum es passt',
       liveConfirm: 'Bestätigungsdialog',
       liveWall: 'Linienwand: Verzweigungen, Scrollen, Preis-Tabs',
+      liveRoster: 'Mein Kader mit Team-Schwächen',
       liveFiltersMore: 'Filter: Basiswerte + Utility',
       liveIndexLoading: 'Suchindex lädt',
       liveIndexFailed: 'Suchindex fehlgeschlagen',

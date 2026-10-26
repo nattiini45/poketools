@@ -7,7 +7,7 @@ import {
   missingLocales,
   resolveLText,
   withTranslation,
-} from '../ltext';
+} from '@/lib/studio-core/ltext';
 import type { LText, Locale } from '../types';
 import { validateFormatDefinition } from '../validate';
 import { lt, minimalDoc } from './fixtures/docs';

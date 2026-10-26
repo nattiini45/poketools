@@ -2,7 +2,7 @@
  * Preset: a classic league. A double round robin ranks the table, the top four meet in a best-of-three
  * knockout and the final is a best of five.
  */
-import { ltext } from '../ltext';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { FormatDefinition } from '../types';
 
 export const classicLeague: FormatDefinition = {

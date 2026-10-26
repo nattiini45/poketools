@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import type { TournamentFormData, BracketType, TeamVisibility, BoOverrides } from '@/types/tournament';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import BoOverrideEditor from './BoOverrideEditor';
 import Input from '@/components/ui/Input';
+import RulesetSelect from '@/components/ruleset/RulesetSelect';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -18,7 +19,7 @@ import { bestOfChoices } from '@/lib/tournament/best-of';
 import type { UiError } from './ui-error';
 
 interface TournamentFormProps {
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
   onSubmit: (data: TournamentFormData) => Promise<void>;
   initialData?: Partial<TournamentFormData>;
   /** `edit` hides the description (the page has its own editor) and is used with `initialData`. */
@@ -149,21 +150,18 @@ export default function TournamentForm({
       />
       {lockedFields?.bracketType && <LockedHint id="bracket-type-locked">{lockedText}</LockedHint>}
 
-      <Select
+      <RulesetSelect
+        id="tournament-ruleset"
         label={t('form.ruleset')}
         value={rulesetId}
-        onChange={(e) => setRulesetId(e.target.value)}
+        onChange={setRulesetId}
+        options={rulesets}
+        placeholder={t('form.selectRuleset')}
         required
         disabled={lockedFields?.ruleset}
+        studioLink={!lockedFields?.ruleset}
         aria-describedby={lockedFields?.ruleset ? 'ruleset-locked' : undefined}
-      >
-        <option value="">{t('form.selectRuleset')}</option>
-        {rulesets.map((r) => (
-          <option key={r.id} value={r.id}>
-            {r.name}
-          </option>
-        ))}
-      </Select>
+      />
       {lockedFields?.ruleset && <LockedHint id="ruleset-locked">{lockedText}</LockedHint>}
 
       <Select

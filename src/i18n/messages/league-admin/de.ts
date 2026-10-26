@@ -19,6 +19,86 @@ export default defineDe<typeof en>()({
     empty: 'Keine archivierten Ligen.',
     badge: 'Archiviert',
   },
+  trash: {
+    title: 'Liga-Papierkorb',
+    subtitle:
+      'Gelöschte Ligen bleiben hier {days} Tage lang erhalten. Eine Wiederherstellung bringt eine Liga mit ihren Phasen, Matches, Spielen, Drafts und Einstellungen zurück, oder stellt gar nichts wieder her.',
+    back: 'Zurück zu den Ligen',
+    link: 'Liga-Papierkorb',
+    empty: 'Der Papierkorb ist leer.',
+    caption: 'Gelöschte Ligen',
+    columns: {
+      league: 'Liga',
+      format: 'Format',
+      deletedBy: 'Gelöscht von',
+      deletedAt: 'Gelöscht am',
+      restorableUntil: 'Wiederherstellbar bis',
+      contents: 'Inhalt',
+      status: 'Status',
+      actions: 'Aktionen',
+    },
+    deletedByUnknown: 'Unbekannt',
+    counts: {
+      players: { one: '{count} Spieler', other: '{count} Spieler' },
+      phases: { one: '{count} Phase', other: '{count} Phasen' },
+      matches: { one: '{count} Match', other: '{count} Matches' },
+      games: { one: '{count} Spiel', other: '{count} Spiele' },
+      draftPools: { one: '{count} Draft-Pool', other: '{count} Draft-Pools' },
+    },
+    badges: {
+      schemaChanged: 'Schema seit dem Löschen geändert',
+      rebuildPending: 'Neuaufbau ausstehend',
+      ready: 'Bereit zur Wiederherstellung',
+    },
+    schemaChangedHint:
+      'Das Datenbankschema hat sich geändert, nachdem die so markierten Ligen gelöscht wurden. Eine Wiederherstellung prüft die gespeicherte Kopie gegen die aktuellen Tabellen und stellt nichts wieder her, wenn sie nicht mehr passen.',
+    restore: {
+      button: 'Wiederherstellen',
+      buttonLabel: 'Liga {name} wiederherstellen',
+      blocked: 'Führe zuerst den ausstehenden Neuaufbau dieses Löschens aus.',
+      confirmTitle: 'Liga wiederherstellen?',
+      confirmMessage:
+        'Liga „{name}“ aus dem Papierkorb wiederherstellen? Sie kommt mit ihren Matches, Spielen und Drafts zurück. Laufende Drafts kommen pausiert zurück, und jede Frist verschiebt sich um die Zeit, die die Liga im Papierkorb lag.',
+      confirmAction: 'Liga wiederherstellen',
+      failedTitle: 'Liga „{name}“ konnte nicht wiederhergestellt werden.',
+    },
+    pending: {
+      title: 'Ausstehende Neuaufbauten',
+      hint: 'Nach einem Löschen oder einer Wiederherstellung werden Statistiken, Ratings und Siegesserien neu aufgebaut. Dieser Neuaufbau wurde nicht bestätigt. Ihn noch einmal auszuführen ist sicher.',
+      kind: { delete: 'Nach dem Löschen', restore: 'Nach der Wiederherstellung' },
+      run: 'Neuaufbau starten',
+      runLabel: 'Neuaufbau der Liga {name} starten',
+      failedTitle: 'Der Neuaufbau der Liga „{name}“ ist fehlgeschlagen.',
+    },
+    notice: {
+      dismiss: 'Ausblenden',
+      restored: 'Liga „{name}“ wurde wiederhergestellt.',
+      openLeague: 'Liga öffnen',
+      pausedPools: {
+        one: '{count} laufender Draft kam pausiert zurück. Setze ihn im Draft-Bereich der Liga fort.',
+        other: '{count} laufende Drafts kamen pausiert zurück. Setze sie im Draft-Bereich der Liga fort.',
+      },
+      warningsTitle: 'Bitte lesen',
+      warnings: {
+        parent_missing_nulled: {
+          one: '{count} Eintrag in {rel} verwies auf etwas, das gelöscht wurde, während die Liga im Papierkorb lag. Der Verweis {column} wurde geleert.',
+          other:
+            '{count} Einträge in {rel} verwiesen auf etwas, das gelöscht wurde, während die Liga im Papierkorb lag. Der Verweis {column} wurde geleert.',
+        },
+        replay_hash_released: {
+          one: '{count} wiederhergestelltes Spiel nutzte ein Replay, das jetzt ein anderes Spiel nutzt. Der Replay-Link dieses Spiels wurde entfernt.',
+          other: '{count} wiederhergestellte Spiele nutzten ein Replay, das jetzt ein anderes Spiel nutzt. Der Replay-Link dieser Spiele wurde entfernt.',
+        },
+        columns_ignored: {
+          one: 'Die Tabelle {rel} hat die Spalte {columns} nicht mehr. Die gespeicherten Werte dieser Spalte wurden nicht wiederhergestellt.',
+          other: 'Die Tabelle {rel} hat die Spalten {columns} nicht mehr. Die gespeicherten Werte dieser Spalten wurden nicht wiederhergestellt.',
+        },
+      },
+      rebuilt: 'Der Neuaufbau der Liga „{name}“ ist fertig.',
+      rebuildIncomplete: 'Der Neuaufbau wurde nicht abgeschlossen:',
+    },
+    failed: 'Die Anfrage ist fehlgeschlagen.',
+  },
   create: {
     title: 'Liga erstellen',
   },
@@ -58,6 +138,8 @@ export default defineDe<typeof en>()({
       'Der Liga-Typ lässt sich nicht mehr ändern: Die Liga ist gestartet (sie ist aktiv oder abgeschlossen, oder eine Phase hat Runden).',
     leagueTypeLockedPointBuy:
       'Eine Point-Buy-Liga behält ihren Liga-Typ, und andere Ligen können keine werden: Ihre Einrichtung (Formatregeln, Point-Buy-Liste, Battle-Regelwerk) wird zusammen mit der Liga angelegt.',
+    rulesetLockedHint:
+      'Die Liga hat begonnen, ihr Regelwerk lässt sich hier nicht mehr austauschen. Eine neuere Version desselben Regelwerks übernimmst du mit der Regelwerk-Karte darunter.',
     rulesetEditHint:
       'Der Standard für neue Phasen und für die Teamprüfung, wo eine Phase kein eigenes Custom-Regelwerk hat. Bestehende Phasen behalten ihres.',
   },

@@ -1,7 +1,16 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import ConflictDialog from '@/components/studio-shell/dialogs/ConflictDialog';
+import DeleteDialog from '@/components/studio-shell/dialogs/DeleteDialog';
+import ForkDialog from '@/components/studio-shell/dialogs/ForkDialog';
+import PublishDialog from '@/components/studio-shell/dialogs/PublishDialog';
+import ShareDialog from '@/components/studio-shell/dialogs/ShareDialog';
+import EditorLayout, { ActionErrorAlert, SaveErrorAlert, revealInspector } from '@/components/studio-shell/EditorLayout';
+import EditorToolbar from '@/components/studio-shell/EditorToolbar';
+import { useShellText } from '@/components/studio-shell/text';
+import { useUnsavedGuard } from '@/components/studio-shell/useUnsavedGuard';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -14,20 +23,17 @@ import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { resolveLText, type Diagnostic, type Locale } from '@/lib/format-kit/client';
 import { canDeleteDefinition, type FormatActor } from '@/lib/format-studio/access';
-import { deleteFormatRequest, saveDraftRequest } from '@/lib/format-studio/editor/api';
+import { classifyApiError, deleteFormatRequest, forkFormatRequest, publishRequest, saveDraftRequest, visibilityRequest } from '@/lib/format-studio/editor/api';
 import { blankDocument, normalizeDraft, type DraftDocument } from '@/lib/format-studio/editor/document';
+import type { RulesetChoice } from '@/lib/format-studio/editor/catalog';
 import { addStage, duplicateStage, moveStage, removeStage } from '@/lib/format-studio/editor/ops';
 import { compileDraft, publishGate } from '@/lib/format-studio/editor/preview';
 import type { Selection } from '@/lib/format-studio/editor/targets';
 import type { FormatDefinitionSummary, FormatVisibility } from '@/lib/format-studio/library-types';
-import { unsavedMarker } from '@/lib/league-admin/unsaved';
 import DiagnosticsList from '../DiagnosticsList';
-import ConflictDialog from './dialogs/ConflictDialog';
-import ForkDialog from './dialogs/ForkDialogBody';
-import PublishDialog from './dialogs/PublishDialog';
-import ShareDialog from './dialogs/ShareDialog';
-import EditorToolbar from './EditorToolbar';
+import PublishSummary from './dialogs/PublishSummary';
 import { INSPECTOR_HEADING_ID } from './fields/FieldMessage';
+import { FORMATS_HREF, formatEditorHref, formatReadOnlyHref } from './hrefs';
 import EdgesInspector from './inspectors/EdgesInspector';
 import IdentityInspector from './inspectors/IdentityInspector';
 import RulesInspector from './inspectors/RulesInspector';
@@ -35,7 +41,6 @@ import StageInspector from './inspectors/StageInspector';
 import OutlineNav from './OutlineNav';
 import PreviewPanel from './preview/PreviewPanel';
 import { useFormatEditor } from './useFormatEditor';
-import { useUnsavedGuard } from './useUnsavedGuard';
 
 export interface FormatEditorProps {
   definitionId: string;
@@ -44,14 +49,12 @@ export interface FormatEditorProps {
   initial: { document: unknown; draftRev: number };
   published: { versionNo: number; contentHash: string } | null;
   actor: FormatActor;
-  rulesets: { id: string; name: string }[];
+  rulesets: RulesetChoice[];
   /** False when unknown; the API refuses a delete of an attached format anyway. */
   hasAttachments: boolean;
 }
 
 type DialogId = 'publish' | 'share' | 'fork' | 'delete' | 'conflict';
-
-const BACK_HREF = '/admin/formats';
 
 /** The suffix a duplicated stage's name gets, in each language. */
 function copySuffixes(): Partial<Record<Locale, string>> {
@@ -78,7 +81,7 @@ interface InspectorArgs {
   diagnostics: readonly Diagnostic[];
   onChange: (next: DraftDocument) => void;
   authorBase: Locale;
-  rulesets: { id: string; name: string }[];
+  rulesets: RulesetChoice[];
   /** The line for a stage selection that points at no stage. */
   noStageText: string;
 }
@@ -194,9 +197,9 @@ export default function FormatEditor(props: FormatEditorProps) {
 
 function LoadedEditor({ definitionId, summary, initial, published: initialPublished, actor, rulesets, hasAttachments, initialDoc }: FormatEditorProps & { initialDoc: DraftDocument }) {
   const t = useT(formatStudioEditorMessages);
+  const text = useShellText(formatStudioEditorMessages);
   const locale = useLocale();
   const router = useRouter();
-  const errorText = useApiErrorText(errorsAdmin, errorsCommon);
 
   const rulesetIds = useMemo(() => new Set(rulesets.map((r) => r.id)), [rulesets]);
   const model = useFormatEditor({ definitionId, initialDoc, initialRev: initial.draftRev, rulesetIds });
@@ -208,7 +211,7 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
   const [dialog, setDialog] = useState<DialogId | null>(null);
   const [actionError, setActionError] = useState<ApiErrorLike | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const skipGuard = useUnsavedGuard(dirty, t('save.guardConfirm'));
+  const skipGuard = useUnsavedGuard(dirty, text('save.guardConfirm'));
 
   useEffect(() => {
     if (state.save.status === 'conflict') setDialog('conflict');
@@ -230,19 +233,9 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
     if (outcome === 'conflict') setDialog('conflict');
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      void save();
-    }
-  };
-
   const select = (selection: Selection) => {
     model.select(selection);
-    // Below `lg` the outline sits above the inspector: bring the reader to the heading of what they chose.
-    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 1024px)').matches) {
-      window.requestAnimationFrame(() => document.getElementById(INSPECTOR_HEADING_ID)?.focus());
-    }
+    revealInspector(INSPECTOR_HEADING_ID);
   };
 
   const selectedStage = state.selection.section === 'stage' ? state.selection.index : null;
@@ -284,7 +277,7 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
       const outcome = await deleteFormatRequest(definitionId);
       if (outcome.ok) {
         skipGuard.current = true;
-        router.push(BACK_HREF);
+        router.push(FORMATS_HREF);
       } else {
         setDialog(null);
         setActionError(outcome.error);
@@ -305,78 +298,79 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
   });
 
   return (
-    <div className="min-w-0 space-y-4" data-format-editor="" {...unsavedMarker(dirty)} onKeyDown={onKeyDown}>
-      <EditorToolbar
-        name={name}
-        save={state.save}
-        dirty={dirty}
-        counts={model.counts}
-        visibility={visibility}
-        publishedVersion={published?.versionNo ?? null}
-        canDelete={canDelete}
-        backHref={BACK_HREF}
-        readOnlyHref={`/admin/formats/${encodeURIComponent(definitionId)}`}
-        onSave={() => void save()}
-        onPublish={() => setDialog('publish')}
-        onShare={() => setDialog('share')}
-        onFork={() => setDialog('fork')}
-        onDelete={() => setDialog('delete')}
-      />
-
-      {state.save.status === 'error' && (
-        <Alert variant="error" className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            {t('save.failed')} {errorText(state.save.error)}
-          </span>
-          <Button type="button" variant="secondary" size="sm" className="min-h-11 sm:min-h-0" onClick={() => void save()}>
-            {t('save.retry')}
-          </Button>
-        </Alert>
-      )}
-      {actionError !== null && <Alert variant="error">{errorText(actionError)}</Alert>}
-
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[15rem_minmax(0,1fr)_24rem]">
-        <aside className="min-w-0">
-          <OutlineNav
-            doc={doc}
-            selection={state.selection}
-            diagnostics={model.result.diagnostics}
-            onSelect={select}
-            onAddStage={onAddStage}
-            onMoveStage={onMoveStage}
-            onDuplicateStage={onDuplicateStage}
-            onDeleteStage={onDeleteStage}
-          />
-        </aside>
-        <div className="min-w-0">{inspector}</div>
-        <div className="min-w-0 lg:col-span-2 xl:col-span-1">
-          <PreviewPanel
-            doc={doc}
-            previewDoc={model.previewDoc}
-            result={model.result}
-            rows={model.rows}
-            counts={model.counts}
-            rulesets={rulesets}
-            rulesetIds={rulesetIds}
-            onEdit={model.edit}
-            onSelect={select}
-          />
-        </div>
-      </div>
-
+    <EditorLayout
+      rootAttribute="data-format-editor"
+      dirty={dirty}
+      onSave={() => void save()}
+      toolbar={
+        <EditorToolbar
+          text={text}
+          name={name}
+          save={state.save}
+          dirty={dirty}
+          counts={model.counts}
+          visibility={visibility}
+          publishedVersion={published?.versionNo ?? null}
+          canDelete={canDelete}
+          backHref={FORMATS_HREF}
+          readOnlyHref={formatReadOnlyHref(definitionId)}
+          onSave={() => void save()}
+          onPublish={() => setDialog('publish')}
+          onShare={() => setDialog('share')}
+          onFork={() => setDialog('fork')}
+          onDelete={() => setDialog('delete')}
+        />
+      }
+      banners={
+        <>
+          <SaveErrorAlert text={text} save={state.save} onRetry={() => void save()} />
+          <ActionErrorAlert error={actionError} />
+        </>
+      }
+      outline={
+        <OutlineNav
+          doc={doc}
+          selection={state.selection}
+          diagnostics={model.result.diagnostics}
+          onSelect={select}
+          onAddStage={onAddStage}
+          onMoveStage={onMoveStage}
+          onDuplicateStage={onDuplicateStage}
+          onDeleteStage={onDeleteStage}
+        />
+      }
+      main={inspector}
+      side={
+        <PreviewPanel
+          doc={doc}
+          previewDoc={model.previewDoc}
+          result={model.result}
+          rows={model.rows}
+          counts={model.counts}
+          rulesets={rulesets}
+          rulesetIds={rulesetIds}
+          onEdit={model.edit}
+          onSelect={select}
+        />
+      }
+    >
       {publishResult !== null && gate !== null && (
         <PublishDialog
+          text={text}
+          idPrefix="fe"
           open={dialog === 'publish'}
           onClose={() => setDialog(null)}
-          definitionId={definitionId}
-          doc={doc}
-          result={publishResult}
+          summary={<PublishSummary doc={doc} result={publishResult} />}
           gate={gate}
+          errorCount={publishResult.diagnostics.filter((d) => d.severity === 'error').length}
           dirty={dirty}
           publishedVersion={published?.versionNo ?? null}
           authorBase={locale}
+          readOnlyHref={formatReadOnlyHref(definitionId)}
           save={model.save}
           latest={model.latest}
+          publish={(rev, changelog) => publishRequest(definitionId, rev, changelog)}
+          classify={classifyApiError}
           onPublished={(version) => setPublished(version)}
           onConflict={(staleRev) => {
             // A publish can meet the newer revision before any save did: record it, so the dialog names it.
@@ -387,33 +381,29 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
       )}
       <ShareDialog
         key={visibility}
+        text={text}
+        idPrefix="fe"
         open={dialog === 'share'}
         onClose={() => setDialog(null)}
-        definitionId={definitionId}
         actor={actor}
         definition={access}
         hasPublished={published !== null}
+        request={(next) => visibilityRequest(definitionId, next)}
         onChanged={setVisibility}
       />
       <ForkDialog
+        text={text}
         open={dialog === 'fork'}
         onClose={() => setDialog(null)}
-        definitionId={definitionId}
+        request={() => forkFormatRequest(definitionId)}
         onForked={(newId) => {
           skipGuard.current = true;
-          router.push(`/admin/formats/${encodeURIComponent(newId)}/edit`);
+          router.push(formatEditorHref(newId));
         }}
       />
-      <ConfirmDialog
-        open={dialog === 'delete'}
-        onClose={() => setDialog(null)}
-        onConfirm={() => void removeDraft()}
-        title={t('delete.title')}
-        message={t('delete.body')}
-        confirmLabel={t('delete.confirm')}
-        loading={deleting}
-      />
+      <DeleteDialog text={text} open={dialog === 'delete'} onClose={() => setDialog(null)} onConfirm={() => void removeDraft()} loading={deleting} />
       <ConflictDialog
+        text={text}
         open={dialog === 'conflict'}
         serverRev={state.save.status === 'conflict' ? state.save.serverRev : state.rev}
         dirty={dirty}
@@ -430,6 +420,6 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
         }}
         onClose={() => setDialog(null)}
       />
-    </div>
+    </EditorLayout>
   );
 }

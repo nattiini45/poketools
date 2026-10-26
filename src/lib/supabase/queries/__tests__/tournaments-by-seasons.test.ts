@@ -100,7 +100,7 @@ describe('getStagesBySeasonIds', () => {
     const call = state.calls[0];
     expect(stepsOf(call, 'order').map(([, column]) => column)).toEqual(['season_id', 'stage_order', 'created_at', 'id']);
     const select = String(stepsOf(call, 'select')[0][1]);
-    expect(select).toContain('rulesets ( name )');
+    expect(select).toContain('rulesets:ruleset_definition_versions ( name:name_text )');
     expect(select).toContain('seasons ( name )');
     expect(select).toContain('tournament_participants ( count )');
   });

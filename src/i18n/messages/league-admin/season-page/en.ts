@@ -65,26 +65,35 @@ export default {
     archiveHint:
       'An archived league leaves the active lists and moves to the archive. Its matches, standings and history stay; you can unarchive it at any time.',
     deleteTitle: 'Delete league',
-    /** The delete hint follows the schema's foreign keys (`src/lib/league-admin/season-delete.ts`). */
-    deleteIntro: 'Deletes the league permanently, together with:',
+    /**
+     * The delete hint follows the league trash inventory (`src/lib/league-admin/season-delete.ts`, checked against the
+     * migrations). `{days}` = LEAGUE_TRASH_RETENTION_DAYS.
+     */
+    deleteIntro:
+      'Moves the league to the trash. The superadmin can restore it for {days} days; after that it is removed for good. The trash keeps a full copy of:',
+    /** The folded inventory of what the trash copy holds; `{count}` = the number of groups. */
+    deletesSummary: 'Show the list ({count} groups)',
     deletes: {
       participants: 'its participants',
       groups: 'its league groups and their members',
       rules: 'its format rules, evolution tiers, tier limits and draft pool list',
+      phases: 'its phases with their groups, rounds and reports',
+      matches: 'every match with its games, battle stats, analyses, proposals and highlights',
+      draft: 'its draft pools with participants, slots, picks and replay events',
+      teams: 'its teams',
       evolution: 'every evolution record: the drafted lines, their progress and evolution events',
       tokens: 'every token grant, Draft Kill Token purchase and Comeback Token spend',
       redraft: 'every Redraft slot, submission, history entry and trade request',
+      storylines: 'its storylines',
+      connections: 'its league admins, Discord webhooks, social integrations and wiki notes',
     },
-    /** `{list}` = the blocker labels as a list ("phases, draft pools and teams"). */
-    deleteBlocked: 'The delete is refused while the league still has {list}. Delete those first.',
-    blockers: {
-      phases: 'phases',
-      draftPools: 'draft pools',
-      teams: 'teams',
-      storylines: 'storylines',
-    },
-    deleteUnlinked: 'Cast sessions of the league are kept, no longer linked to it.',
-    deleteFinal: 'This cannot be undone.',
+    deleteDerived:
+      'Statistics, ratings and win streaks that counted its matches are recalculated without it, and again when it is restored.',
+    deleteUnlinked:
+      'Cast sessions, agent suggestions and teams outside the league that point into it are kept without the link. A restore links them again.',
+    deleteKept: 'The audit log and the draft action log are kept.',
+    deleteFinal:
+      'Running drafts are paused when the league is deleted and come back paused after a restore. While the league is in the trash, its players, rulesets and point-buy lists cannot be deleted.',
     deleteSiteAdminOnly: 'Only site admins can delete a league.',
   },
   description: {

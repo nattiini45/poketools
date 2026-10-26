@@ -3,6 +3,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { getHybridPokemonDetail } from '@/lib/supabase/queries/usage-hybrid';
 import { getSpeciesTypeInfo, getBaseStats, getMove } from '@/lib/pkmn/dex';
 import { getFallbackFormats } from '@/lib/pkmn/formats';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { localizeDesc } from '@/lib/pkmn/i18n/descriptions.server';
 import { isLocale, type Locale } from '@/i18n/config';
 import type { ApiResult } from '@/types/api';
@@ -78,7 +79,7 @@ export async function GET(
     const speciesInfo = getBaseStats(pokemonName);
 
     // Enrich moves with type, category, power from @pkmn/data
-    const gen = parseInt(format.match(/gen(\d)/)?.[1] || '9');
+    const gen = generationOrDefault(format);
     const enrichedMoves: EnrichedMoveEntry[] = Object.entries(detail.moves)
       .sort(([, a], [, b]) => b - a)
       .map(([moveName, usagePct]) => {

@@ -3,8 +3,11 @@
  * Spec-driven browser validator, the registry and the tests read the same numbers.
  *
  * The key pattern (1..32 chars) is owned by `keys.ts`; the expression limits by `expr/limits.ts`
- * and are re-exported below so a consumer needs one import.
+ * and are re-exported below so a consumer needs one import. The longest text value (`LTEXT_MAX_CHARS`) is owned by
+ * the studio core's `ltext.ts`, next to `LText`, and re-exported here for the same reason.
  */
+import { LTEXT_MAX_CHARS } from '@/lib/studio-core/ltext';
+
 
 /** Largest accepted document body (canonical JSON bytes). */
 export const MAX_BODY_BYTES = 262_144;
@@ -36,8 +39,9 @@ export const MAX_SWISS_ROUNDS = 32;
 export const MAX_OVERRIDE_ROUND = 64;
 export const MAX_EXPECTED_COUNT = 4096;
 export const MAX_VIEW_STAGES = 50;
-export const LTEXT_MAX_CHARS = 4000;
 export const SCORE_ABS_MAX = 1000;
+
+export { LTEXT_MAX_CHARS };
 
 export {
   COLLECTION_ASSUMED_MAX,

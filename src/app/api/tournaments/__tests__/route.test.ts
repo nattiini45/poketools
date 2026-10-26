@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The route expires public read-cache tags after its write (D37). Outside a
 // Next request `revalidateTag` throws, so record the calls instead.
+vi.mock('@/lib/ruleset-studio/pin-change', () => ({
+  assertRulesetChangeAllowed: vi.fn(),
+  assertRulesetUsableForCreate: vi.fn(),
+}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 import type { NextRequest } from 'next/server';
 

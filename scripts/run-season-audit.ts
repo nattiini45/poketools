@@ -57,6 +57,12 @@
  *   --season=<id>   Audit one season (by id). Default: all seasons.
  *   --repair        Run in REPAIR mode (writes). Default OFF = DRY-RUN.
  *
+ * Pending league rebuilds: a league moved to the trash (or restored from it) leaves a marker until the app's
+ * derived-data rebuild after it finished (`listPendingLeagueRebuilds`, `src/lib/supabase/queries/league-trash.ts`).
+ * The audit lists those markers after the per-season reports; running the rebuild is the superadmin's, from the
+ * league trash page (`POST /api/admin/league-trash/[id]/rebuild`), also with `--repair`. An entry whose rebuild is
+ * pending is never purged.
+ *
  * This script is READ-ONLY by default (dry-run). It only mutates data when run
  * with `--repair`. It never applies migrations.
  */
@@ -287,7 +293,8 @@ function printSeasonBlock(r: ParsedReport): void {
 function printAggregate(
   reports: ParsedReport[],
   mode: 'DRY-RUN' | 'REPAIR',
-  errorCount: number
+  errorCount: number,
+  pendingRebuilds: number
 ): void {
   const totalSeasons = reports.length;
   const totalMismatches = reports.reduce((s, r) => s + r.totalMismatches, 0);
@@ -304,6 +311,7 @@ function printAggregate(
   console.log(`  total mismatches     : ${totalMismatches}`);
   console.log(`  total impossibleLineups : ${totalImpossible}`);
   console.log(`  total players affected : ${allAffected.size}`);
+  console.log(`  pending league rebuilds : ${pendingRebuilds}`);
   if (mode === 'DRY-RUN') {
     console.log('  REPAIR was NOT run (dry-run) — no data was written.');
   } else if (errorCount > 0 && totalSeasons === 0) {
@@ -318,6 +326,32 @@ function printAggregate(
     console.log('  REPAIR applied — derived rows were rewritten for reported seasons.');
   }
   console.log(bar);
+}
+
+/**
+ * Lists the league delete/restore rebuilds the app has not confirmed (all of them, or those of one league). Report
+ * only; a failed read is printed and never fails the audit (the trash tables may not be migrated yet).
+ * Returns how many are pending.
+ */
+async function printPendingLeagueRebuilds(seasonId: string | null): Promise<number> {
+  let pending: import('@/lib/supabase/queries/league-trash').PendingLeagueRebuild[];
+  try {
+    const { listPendingLeagueRebuilds } = await import('@/lib/supabase/queries/league-trash');
+    pending = (await listPendingLeagueRebuilds()).filter((p) => seasonId === null || p.season_id === seasonId);
+  } catch (err) {
+    console.error(`\n  [WARN] could not read the pending league rebuilds: ${describeError(err)}`);
+    return 0;
+  }
+  if (pending.length === 0) return 0;
+  const line = '─'.repeat(72);
+  console.log(`\n${line}`);
+  console.log('  PENDING LEAGUE REBUILDS (the derived data after a league delete/restore is not confirmed)');
+  console.log(line);
+  for (const p of pending) {
+    console.log(`  ${p.kind.padEnd(7)} ${p.season_name} (season ${p.season_id}, trash ${p.trash_id}) since ${p.at}`);
+  }
+  console.log('  Run them from the league trash page (POST /api/admin/league-trash/<trash id>/rebuild).');
+  return pending.length;
 }
 
 // ── Map a ReconcileReport into the slim ParsedReport for printing ──────────
@@ -495,7 +529,8 @@ async function main(): Promise<void> {
     }
   }
 
-  printAggregate(parsedReports, mode, errorCount);
+  const pendingRebuilds = await printPendingLeagueRebuilds(args.seasonId);
+  printAggregate(parsedReports, mode, errorCount, pendingRebuilds);
 
   // Non-zero exit when any season errored, so CI/automation can detect a
   // partial failure distinctly from a clean dry-run with zero mismatches.

@@ -40,7 +40,7 @@ requireAuth() → requirePlayer() → requireAdmin()
 Table-specific modules in `src/lib/supabase/queries/`, for example:
 - `players.ts`, `seasons.ts`, `tournaments.ts`, `matches.ts`, `rounds.ts`
 - `games.ts`, `aggregates.ts`, `ratings.ts`, `achievements.ts`
-- `teams.ts`, `drafts.ts`, `draft-pool-entries.ts`, `rulesets.ts`
+- `teams.ts`, `drafts.ts`, `draft-pool-entries.ts`, `rulesets.ts`, `ruleset-definitions.ts`, `league-trash.ts`
 - `broadcast-moments.ts`, `broadcast-presets.ts`
 - `match-analyses.ts`, `match-prep-analyses.ts`
 - `wiki-notes.ts`, `social-integrations.ts`, `signatures.ts`, `streaks.ts`

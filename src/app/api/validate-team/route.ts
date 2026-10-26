@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { validateTeamSchema, formatZodErrors } from '@/lib/validation';
-import {
-  getRulesetById,
-  resolveEffectiveRuleset,
-} from '@/lib/supabase/queries/rulesets';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { getSeasonById, getParticipantCore } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getPicksByPlayer } from '@/lib/supabase/queries/drafts';
@@ -71,15 +69,14 @@ export async function POST(request: NextRequest) {
 
     const body = zodResult.data;
 
-    // ─── Resolve the effective ruleset ───────────────────────────────
-    // If the request supplies tournament context we resolve the EFFECTIVE
-    // ruleset for that tournament, applying the custom-over-base precedence.
-    // This prevents a base tier ruleset (e.g. standard 'Gen 9 RU') from
-    // silently overriding a tournament's dedicated custom league ruleset
-    // when the UI somehow sends a stale id.
+    // ─── The ruleset to enforce ──────────────────────────────────────
+    // With tournament context the phase's own PIN is enforced: `tournaments.ruleset_id` is the id of an immutable
+    // ruleset version, so what a phase enforces never depends on how a ruleset was edited since, on the name of the
+    // league, or on a client-supplied id (a stale id from the UI is ignored). A tournament that does not exist is a 404:
+    // validating against some other ruleset instead would hide the mistake.
     //
-    // Without tournament context we trust the ruleset_id supplied by the
-    // caller (legacy path used by ad-hoc format validation).
+    // Without tournament context (the free teambuilder, ad-hoc format validation) the caller names a ruleset version;
+    // it is served only when that ruleset is meant to be seen (shared, or pinned by a league).
     let ruleset = null as Awaited<ReturnType<typeof getRulesetById>>;
     let resolvedSeasonId: string | null = body.season_id ?? null;
     // Season resolved inside the tournament branch is hoisted here so the EPB
@@ -87,24 +84,18 @@ export async function POST(request: NextRequest) {
     let tournamentBranchSeason: Awaited<ReturnType<typeof getSeasonById>> = null;
     if (body.tournament_id) {
       const tournament = await getTournamentById(body.tournament_id);
-      const season = tournament?.season_id ? await getSeasonById(tournament.season_id) : null;
+      if (!tournament) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Tournament not found', code: 'tournament_not_found' },
+          { status: 404 }
+        );
+      }
+      const season = tournament.season_id ? await getSeasonById(tournament.season_id) : null;
       if (season) resolvedSeasonId = season.id;
       tournamentBranchSeason = season;
-      const resolved = await resolveEffectiveRuleset({
-        tournamentRulesetId: tournament?.ruleset_id ?? body.ruleset_id,
-        tournamentBracketType: tournament?.bracket_type ?? null,
-        season: season
-          ? {
-              id: season.id,
-              name: season.name,
-              rulesetId: season.ruleset_id,
-              formatType: season.format_type,
-            }
-          : null,
-      });
-      ruleset = resolved?.ruleset ?? null;
+      ruleset = await getRulesetById(tournament.ruleset_id);
     } else {
-      ruleset = await getRulesetById(body.ruleset_id);
+      ruleset = await readExposedRuleset(body.ruleset_id);
     }
 
     if (!ruleset) {

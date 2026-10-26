@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { KEY_PATTERN, REF_NAME_PATTERN } from '../keys';
+import { KEY_PATTERN, REF_NAME_PATTERN } from '@/lib/studio-core/keys';
 import { EXPR_KINDS, type Expr, type ExprType } from './ast';
 import { EXPR_MAX_ARGS, EXPR_MAX_ROUND_DIGITS, EXPR_MAX_SET, EXPR_SCHEMA_MAX_DEPTH, EXPR_SCHEMA_MAX_NODES } from './limits';
 import { exceededLimit, measureExpr } from './measure';

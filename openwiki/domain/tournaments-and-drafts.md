@@ -134,9 +134,12 @@ Public spoiler-free replay browser at `/replays` — see `docs/replays.md`.
 
 ## Rulesets
 
-Custom rulesets define format constraints (allowed Pokémon, moves, items, clauses, team size, etc.).
+A ruleset is a **definition** (`ruleset_definitions`) with immutable, numbered **versions** (`ruleset_definition_versions`). A version holds the document an author edited (a base catalog preset plus bans, unbans, allowlists and clauses) and the **effective rules**, computed once at publish and frozen. A league or phase **pins** a version (`seasons.ruleset_id` / `tournaments.ruleset_id`), so editing a ruleset never changes a running league; moving a pin is an explicit, audited act that first counts the submitted teams it would invalidate. Details: `docs/ruleset-studio.md`, the preset catalog in `docs/ruleset-presets.md`.
 
-- `/api/rulesets` — CRUD
-- `/api/seed-rulesets` — Populate from Smogon tier defaults
-- `/api/validate-team` — Validate a team against a ruleset
-- `src/lib/supabase/queries/rulesets.ts` — Query module including `resolveEffectiveRuleset()` (base-tier upgrade)
+- `/admin/rulesets` — the Ruleset Studio (library, read-only page, editor), open to every admin tier
+- `/api/ruleset-definitions` (+ `[id]/{draft,publish,fork,usage,pins,pins/impact,versions/[no]}`) — the library API
+- `/api/rulesets`, `/api/rulesets/[id]` — the public, read-only ruleset API (a version id is the capability to read that version; a private ruleset is served only while a league or phase pins it); the old flat POST/PATCH/DELETE remain for site admins
+- `/api/seed-rulesets` — seeds one shared ruleset per standard Smogon format
+- `/api/pkmn/catalog/[kind]`, `/api/pkmn/presets/[id]/{rules,tour-overlay}` — the entry catalog and preset rules the editor reads
+- `/api/validate-team` — Validate a team against the ruleset the tournament pins
+- `src/lib/supabase/queries/rulesets.ts` — reads of the `Ruleset` model by version id; `ruleset-definitions.ts` — the library

@@ -1,7 +1,7 @@
 # Draft Module
 
 ## Overview
-The Draft module handles draft pool lifecycle, pick validation/order, and evolution-league progression checks.
+The Draft module handles draft pool lifecycle, pick validation/order, and evolution-league progression checks. Deleting a league freezes its running queue drafts and moves them to the league trash; a restore brings them back **paused** with every deadline shifted by the time spent in the trash ([Season, League recycle bin](./season.md#league-recycle-bin), [Draft Room](./draft-room.md)).
 
 ## File Structure
 ```

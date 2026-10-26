@@ -95,6 +95,7 @@ import { getMatchPrepTeam } from '@/lib/supabase/queries/match-prep-teams';
 import { fetchReplay } from '@/lib/pkmn/replay';
 import { extractBattleFrames } from '@/lib/pkmn/replay-frames';
 import type { Ruleset } from '@/types/ruleset';
+import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
 
 describe('parseGenFromFormat', () => {
   it('extracts generation from gen9ou', () => {
@@ -126,7 +127,7 @@ describe('buildRulesetSection', () => {
   });
 
   it('includes base format, generation, and singles/doubles', () => {
-    const ruleset: Ruleset = {
+    const ruleset: Ruleset = buildRuleset({
       id: 'rs-1', name: 'Gen 9 OU', base_format: 'gen9ou', is_doubles: false,
       clauses: ['Sleep Clause', 'Species Clause'],
       bans: { pokemon: ['Koraidon'], moves: ['Baton Pass'], items: ['King\'s Rock'], abilities: [] },
@@ -135,7 +136,7 @@ describe('buildRulesetSection', () => {
       min_shared_type_pct: 0,
       team_constraints: null,
       created_by: null, created_at: '', updated_at: '',
-    };
+    });
 
     const result = buildRulesetSection(ruleset, false, 9);
     expect(result).toContain('gen9ou');
@@ -149,27 +150,43 @@ describe('buildRulesetSection', () => {
     expect(result).toContain('No Dynamax');
   });
 
+  it('names the pinned version, the banned abilities and the allowlists', () => {
+    const ruleset: Ruleset = buildRuleset({
+      name: 'Spring Cup',
+      base_format: 'gen9ou',
+      bans: { pokemon: [], moves: [], items: [], abilities: ['Moody'] },
+      allow: { pokemon: ['Pikachu', 'Raichu'], moves: null, items: null, abilities: null },
+      version: { definition_id: 'def-1', version_no: 3 },
+    });
+
+    const result = buildRulesetSection(ruleset, false, 9);
+    expect(result).toContain('Ruleset: Spring Cup, version 3');
+    expect(result).toContain('Banned Abilities: Moody');
+    expect(result).toContain('Allowlist: ONLY these Pokémon are legal (2): Pikachu, Raichu');
+    expect(result).not.toContain('Banned Pokémon');
+  });
+
   it('shows Doubles when isDoubles is true', () => {
-    const ruleset: Ruleset = {
+    const ruleset: Ruleset = buildRuleset({
       id: 'rs-1', name: 'VGC', base_format: 'gen9vgc', is_doubles: true,
       clauses: [], bans: { pokemon: [], moves: [], items: [], abilities: [] },
       additions: { pokemon: [] }, custom_rules_string: '', min_shared_type_pct: 0,
       team_constraints: null,
       created_by: null, created_at: '', updated_at: '',
-    };
+    });
 
     const result = buildRulesetSection(ruleset, true, 9);
     expect(result).toContain('Doubles');
   });
 
   it('includes min_shared_type_pct when > 0', () => {
-    const ruleset: Ruleset = {
+    const ruleset: Ruleset = buildRuleset({
       id: 'rs-1', name: 'Mono', base_format: 'gen9ou', is_doubles: false,
       clauses: [], bans: { pokemon: [], moves: [], items: [], abilities: [] },
       additions: { pokemon: [] }, custom_rules_string: '', min_shared_type_pct: 50,
       team_constraints: null,
       created_by: null, created_at: '', updated_at: '',
-    };
+    });
 
     const result = buildRulesetSection(ruleset, false, 9);
     expect(result).toContain('Minimum shared type: 50%');
@@ -177,20 +194,20 @@ describe('buildRulesetSection', () => {
 
   it('truncates banned pokemon list over 30', () => {
     const pokemon = Array.from({ length: 35 }, (_, i) => `Mon${i}`);
-    const ruleset: Ruleset = {
+    const ruleset: Ruleset = buildRuleset({
       id: 'rs-1', name: 'Big Bans', base_format: 'gen9ou', is_doubles: false,
       clauses: [], bans: { pokemon, moves: [], items: [], abilities: [] },
       additions: { pokemon: [] }, custom_rules_string: '', min_shared_type_pct: 0,
       team_constraints: null,
       created_by: null, created_at: '', updated_at: '',
-    };
+    });
 
     const result = buildRulesetSection(ruleset, false, 9);
     expect(result).toContain('(+5 more)');
   });
 
   it('renders team composition constraints (type quota + tera)', () => {
-    const ruleset: Ruleset = {
+    const ruleset: Ruleset = buildRuleset({
       id: 'rs-1', name: 'Sample Custom League', base_format: 'gen9ou', is_doubles: false,
       clauses: [], bans: { pokemon: [], moves: [], items: [], abilities: [] },
       additions: { pokemon: [] }, custom_rules_string: '', min_shared_type_pct: 0,
@@ -199,7 +216,7 @@ describe('buildRulesetSection', () => {
         tera_match: 'player_core',
       },
       created_by: null, created_at: '', updated_at: '',
-    };
+    });
 
     const result = buildRulesetSection(ruleset, false, 9);
     expect(result).toContain('Team composition constraints');

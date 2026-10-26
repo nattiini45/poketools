@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_ISSUES, type SchemaIssue } from '../issues';
-import { canonicalizeJson } from '../json';
+import { canonicalizeJson } from '@/lib/studio-core/json';
 import { RESERVED_PAIRING_TAGS } from '../registry/manifest';
 import type { Spec } from '../registry/spec';
 import {

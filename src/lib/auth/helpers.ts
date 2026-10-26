@@ -14,7 +14,7 @@
  *    scope, so there each call still runs auth(), which reads no DB within the TTL.
  *
  * 2. Guards are live. They are requireAuth, requirePlayer, requireAdmin,
- *    requireAnyAdmin, requireCreator, requireResourceAdmin,
+ *    requireSuperadmin, requireAnyAdmin, requireCreator, requireResourceAdmin,
  *    requireDraftAdmin, requireFormatOwner and requireFormatViewer. Each one
  *    takes only the identity (provider + id) from
  *    the token and then re-reads that identity's player with one narrow select
@@ -30,7 +30,9 @@
  *      - a failed read throws the database error (fail closed). API routes turn
  *        it into a 500 through safeErrorResponse().
  *    Site admins bypass the ban/suspend check, as before. The superadmin
- *    identity (SUPERADMIN_DISCORD_ID / SUPERADMIN_EMAIL) is always site admin.
+ *    identity (SUPERADMIN_DISCORD_ID / SUPERADMIN_EMAIL) is always site admin;
+ *    requireSuperadmin accepts only that identity (restoring a league from the
+ *    trash).
  *
  * 3. View gates are live too. getLiveAccess() and getLiveSessionPlayer() make
  *    the same narrow read (memoised per render, so a layout gate, a page gate
@@ -111,6 +113,8 @@ export interface LiveAccess {
   isAnyAdmin: boolean;
   /** Site admin, or content creator in good standing. What requireCreator() accepts. */
   isCreator: boolean;
+  /** The superadmin identity with a player row in good standing. What requireSuperadmin() accepts. */
+  isSuperadmin: boolean;
 }
 
 /**
@@ -131,13 +135,14 @@ export async function getLiveAccess(): Promise<LiveAccess | null> {
 
   const player = await readLivePlayer(session);
   if (!player || !isInGoodStanding(player)) {
-    return { player, isSiteAdmin: false, isAnyAdmin: false, isCreator: false };
+    return { player, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, isSuperadmin: false };
   }
   return {
     player,
     isSiteAdmin: player.isAdmin,
     isAnyAdmin: player.isAdmin || player.isResourceAdmin,
     isCreator: player.isAdmin || player.isCreator,
+    isSuperadmin: player.isAdmin && isSuperadmin(session),
   };
 }
 
@@ -192,6 +197,24 @@ export async function requireAdmin(): Promise<SessionPlayer> {
   const player = await requirePlayer();
   if (!player.isAdmin) {
     throw new AuthError('Admin access required', 403, 'forbidden');
+  }
+  return player;
+}
+
+/**
+ * Requires the superadmin identity (SUPERADMIN_DISCORD_ID / SUPERADMIN_EMAIL) with a player row in good standing
+ * (live). Use for the few actions a site admin must not take, e.g. restoring a league from the trash. The identity
+ * comes from the token's provider and user id, the player row from the database; one `auth()` call.
+ */
+export async function requireSuperadmin(): Promise<SessionPlayer> {
+  const session = await requireSignedIn();
+  const player = await readLivePlayer(session);
+  if (!player) {
+    throw new AuthError('Not a registered player', 403, 'forbidden');
+  }
+  assertInGoodStanding(player);
+  if (!player.isAdmin || !isSuperadmin(session)) {
+    throw new AuthError('Superadmin access required', 403, 'forbidden');
   }
   return player;
 }

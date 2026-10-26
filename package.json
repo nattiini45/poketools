@@ -1,6 +1,6 @@
 {
   "name": "poketools",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Competitive Pokemon league and tournament management platform",
   "license": "MIT",
   "private": true,
@@ -50,6 +50,7 @@
     "@react-three/rapier": "^2.2.0",
     "@smogon/calc": "^0.11.0",
     "@supabase/supabase-js": "^2.99.2",
+    "@tanstack/react-virtual": "3.14.23",
     "@types/three": "^0.185.1",
     "@vercel/analytics": "^2.0.1",
     "ai": "^6.0.141",

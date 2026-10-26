@@ -40,10 +40,15 @@ interface SpeciesPickerProps {
 // Merged usage+dex list cached per `format:gen:seasonId`
 const listCache = new Map<string, UsageListItem[]>();
 
-/** Ruleset legality overrides (lowercased names), cached per ruleset id. */
+/**
+ * Ruleset legality overrides (lowercased names), cached per ruleset id. The id is a pinned VERSION (immutable), so a cached
+ * entry never goes stale.
+ */
 interface RulesetOverrides {
   extraBans: Set<string>;
   additions: Set<string>;
+  /** The only legal species when the ruleset's Pokémon list is an allowlist; null otherwise. */
+  allowOnly: Set<string> | null;
 }
 const rulesetOverrideCache = new Map<string, RulesetOverrides>();
 
@@ -62,6 +67,9 @@ async function loadRulesetOverrides(
     additions: new Set<string>(
       (ruleset?.additions?.pokemon ?? []).map((n: string) => n.toLowerCase()),
     ),
+    allowOnly: Array.isArray(ruleset?.allow?.pokemon)
+      ? new Set<string>(ruleset.allow.pokemon.map((n: string) => n.toLowerCase()))
+      : null,
   };
 }
 
@@ -138,7 +146,7 @@ async function loadList(
  * sortable by tier, individual stats, BST, or Pick% — each click/tap stacks a
  * criterion (up to 3); "Clear sort" resets. Outside draft mode the list hides Pokémon that are illegal in the
  * selected format (ruleset-bound teams refine this with the ruleset's own
- * bans/additions), and each row shows its tier. An optional "Group: Tier" toggle
+ * bans, additions or allowlist), and each row shows its tier. An optional "Group: Tier" toggle
  * partitions the list into sticky tier sections, sorting within each group. In
  * draft mode the list is constrained to the season's pool with point costs and
  * taken-status.
@@ -255,6 +263,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
   const applyLegality = !draft;
   const extraBans = rulesetOverrides?.extraBans;
   const additions = rulesetOverrides?.additions;
+  const allowOnly = rulesetOverrides?.allowOnly;
   const view = useMemo(
     () =>
       buildSpeciesListView(pokemonList, {
@@ -265,6 +274,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
         applyLegality,
         extraBans,
         additions,
+        allowOnly,
         poolCosts,
         showTaken,
         takenSet,
@@ -273,7 +283,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
       }, dl),
     [
       pokemonList, poolCosts, takenSet, rosterSet, teamSpecies, showTaken,
-      query, typeFilters, sortCriteria, groupByTier, applyLegality, extraBans, additions, dl,
+      query, typeFilters, sortCriteria, groupByTier, applyLegality, extraBans, additions, allowOnly, dl,
     ],
   );
   const sorted = view.items;

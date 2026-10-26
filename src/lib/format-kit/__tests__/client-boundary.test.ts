@@ -16,7 +16,10 @@ import { describe, expect, it } from 'vitest';
  *    read. They are walked like kit files.
  *  - `@/lib/season/format-capabilities`: capability flags; it holds type imports only.
  *  - `@/lib/tournament/round-robin`: the pure round count the plan reuses; it imports only `./types`.
- *  - `@/lib/pkmn/format-catalog`: the dex-free Showdown format catalog `showdown.ts` reads; its only import is a type.
+ *  - `@/lib/studio-core/{json,keys,ltext,patch}`: the shared JSON, key, localized-text and patch helpers (pure, zod-free,
+ *    they import only each other and `@/i18n/config`).
+ *  - `@/lib/pkmn/format-catalog`: the dex-free rule preset catalog `ruleset-presets.ts` reads; it walks to no dex, no
+ *    server data and no `@pkmn` package (`src/lib/pkmn/__tests__/format-catalog-boundary.test.ts` proves it).
  */
 
 const KIT = path.resolve(__dirname, '..');
@@ -32,6 +35,10 @@ const ALLOWED_OUTSIDE = new Set([
   '@/lib/season/format-capabilities',
   '@/lib/tournament/round-robin',
   '@/lib/pkmn/format-catalog',
+  '@/lib/studio-core/json',
+  '@/lib/studio-core/keys',
+  '@/lib/studio-core/ltext',
+  '@/lib/studio-core/patch',
 ]);
 
 const FORBIDDEN_BARE = [/^zod(\/|$)/, /^server-only$/, /^@pkmn\//, /^next(\/|$)/, /^react(-dom)?(\/|$)/, /^@\/lib\/supabase\//];

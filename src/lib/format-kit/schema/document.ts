@@ -7,8 +7,9 @@
  * `inspectJson` has bounded (depth, nodes, bytes); `validate.ts` guarantees that.
  */
 import { z } from 'zod';
+import { ltextSchema } from '@/lib/studio-core/text-schema';
 import { MAX_EDGES, MAX_MODULES, MAX_RULES, MAX_STAGES, MAX_TEXT_SECTIONS, MAX_VIEWS } from '../limits';
-import { boundedArray, ltextSchema, slugSchema } from './common';
+import { boundedArray, slugSchema } from './common';
 import {
   crossStageViewSchema,
   edgeSchema,

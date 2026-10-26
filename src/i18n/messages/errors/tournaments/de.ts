@@ -90,6 +90,8 @@ export default defineDe<typeof en>()({
 
   // Rulesets and the ruleset seeder
   ruleset_not_found: 'Regelwerk nicht gefunden.',
+  ruleset_in_trashed_league:
+    'Eine Liga im Papierkorb nutzt dieses Regelwerk noch, daher wurde es nicht gelöscht. Stelle die Liga zuerst wieder her oder entferne sie endgültig.',
   seed_rulesets_admin_required: 'Dafür musst du als Admin angemeldet sein.',
   seed_rulesets_secret_invalid: 'Das Bootstrap-Secret fehlt oder ist ungültig.',
 

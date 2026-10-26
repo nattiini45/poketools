@@ -236,6 +236,7 @@ export default {
       liveFilters: 'Filters + why it matches',
       liveConfirm: 'Confirm dialog',
       liveWall: 'Line wall: branches, scrolling, price tabs',
+      liveRoster: 'My roster with team weaknesses',
       liveFiltersMore: 'Filters: base stats + utility',
       liveIndexLoading: 'Search index loading',
       liveIndexFailed: 'Search index failed',

@@ -252,7 +252,9 @@ export async function copyLeagueStructure(
  * rows (`resource_admins` has no foreign key to leagues, so deleting the league
  * would orphan them), then the league itself, which cascades its roster and
  * format rules. The shared battle ruleset a point-buy league may have
- * created is a shared row and stays.
+ * created is a shared row and stays. The league goes through the hard delete
+ * (`deleteSeason`), not the league trash: it was created moments ago, holds no
+ * match, and a half-copied league has nothing worth restoring.
  *
  * Neither failure is swallowed: the original error and, if the cleanup fails
  * too, the cleanup error are logged, a `season.clone_failed` audit entry says

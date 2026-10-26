@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   getLiveAccess: vi.fn(),
   getFormatDefinitionMeta: vi.fn(),
   getFormatDetail: vi.fn(),
-  listRulesets: vi.fn(),
+  listRulesetOptions: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -50,7 +50,7 @@ vi.mock('@/i18n/server', async () => {
 vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
 vi.mock('@/lib/supabase/queries/format-definitions', () => ({ getFormatDefinitionMeta: mocks.getFormatDefinitionMeta }));
 vi.mock('@/lib/format-studio/library', () => ({ getFormatDetail: mocks.getFormatDetail }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesetOptions: mocks.listRulesetOptions }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/shared/ResourceForbidden', () => stub('ResourceForbidden'));
 vi.mock('@/components/format-studio/editor/FormatEditor', () => stub('FormatEditor'));
@@ -147,7 +147,7 @@ const html = (tree: ReactNode, locale: Locale = mocks.locale) =>
   );
 
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
-const reads = () => [mocks.getFormatDefinitionMeta, mocks.getFormatDetail, mocks.listRulesets];
+const reads = () => [mocks.getFormatDefinitionMeta, mocks.getFormatDetail, mocks.listRulesetOptions];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -155,8 +155,9 @@ beforeEach(() => {
   mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
   mocks.getFormatDefinitionMeta.mockResolvedValue(meta());
   mocks.getFormatDetail.mockResolvedValue(detail());
-  mocks.listRulesets.mockResolvedValue([
-    { id: 'rs1', name: 'OU Singles', created_by: 'p7', clauses: ['x'] },
+  // The options carry the head VERSION id (what a league pins) and the DEFINITION id (what a format stage names).
+  mocks.listRulesetOptions.mockResolvedValue([
+    { id: 'rs1-v3', definition_id: 'rs1', name: 'OU Singles', is_doubles: false, gen: 9, base_format: 'gen9ou', version_no: 3 },
   ]);
 });
 
@@ -196,7 +197,7 @@ describe.each([
     expect(notice).toHaveLength(1);
     expect(html(notice[0].props.children as ReactNode)).toBe('This format is private to its owner.');
     expect(mocks.getFormatDetail).not.toHaveBeenCalled();
-    expect(mocks.listRulesets).not.toHaveBeenCalled();
+    expect(mocks.listRulesetOptions).not.toHaveBeenCalled();
   });
 
   it('the forbidden notice is in German for a German viewer', async () => {
@@ -230,7 +231,8 @@ describe('edit page', () => {
       initial: { document: presetDoc(), draftRev: 3 },
       published: { versionNo: 2, contentHash: 'hash-2' },
       actor: { playerId: 'p1', isAdmin: false },
-      rulesets: [{ id: 'rs1', name: 'OU Singles' }],
+      // A stage names the DEFINITION id; the version number labels the option ("OU Singles v3").
+      rulesets: [{ id: 'rs1', name: 'OU Singles', version_no: 3 }],
       hasAttachments: false,
     });
     expect(mocks.getFormatDetail).toHaveBeenCalledTimes(1);

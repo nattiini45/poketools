@@ -3,9 +3,10 @@
 import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import type { TournamentFormData, BracketType, TeamVisibility, BoOverrides } from '@/types/tournament';
 import type { AdvancementRule } from '@/types/season';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import BoOverrideEditor from '@/components/tournament/BoOverrideEditor';
 import Input from '@/components/ui/Input';
+import RulesetSelect from '@/components/ruleset/RulesetSelect';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -27,7 +28,7 @@ export interface PhaseFormData extends TournamentFormData {
 }
 
 interface PhaseFormProps {
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
   onSubmit: (data: PhaseFormData) => Promise<void>;
   initialData?: Partial<PhaseFormData>;
   submitLabel?: string;
@@ -118,7 +119,7 @@ export function resolveIsDoubles(
   pinned: boolean,
   choice: boolean,
   rulesetId: string,
-  rulesets: readonly Pick<Ruleset, 'id' | 'is_doubles'>[]
+  rulesets: readonly Pick<RulesetOption, 'id' | 'is_doubles'>[]
 ): boolean {
   if (pinned) return choice;
   return rulesets.find((r) => r.id === rulesetId)?.is_doubles ?? false;
@@ -265,17 +266,15 @@ export default function PhaseForm({
           disabled={lockBracketType}
         />
 
-        <Select
+        <RulesetSelect
+          id="phase-ruleset"
           label={t('form.ruleset')}
           value={rulesetId}
-          onChange={(e) => setRulesetId(e.target.value)}
+          onChange={setRulesetId}
+          options={rulesets}
+          placeholder={t('form.selectRuleset')}
           required
-        >
-          <option value="">{t('form.selectRuleset')}</option>
-          {rulesets.map((r) => (
-            <option key={r.id} value={r.id}>{r.name}</option>
-          ))}
-        </Select>
+        />
 
         <Select
           label={t('form.bestOf')}

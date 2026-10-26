@@ -138,6 +138,7 @@ const SCENARIO_KEY: Record<PreviewScenarioId, keyof DraftScreenEn['preview']['sc
   'live-filters': 'liveFilters',
   'live-confirm': 'liveConfirm',
   'live-wall': 'liveWall',
+  'live-roster': 'liveRoster',
   'live-filters-more': 'liveFiltersMore',
   'live-index-loading': 'liveIndexLoading',
   'live-index-failed': 'liveIndexFailed',

@@ -22,9 +22,16 @@ vi.mock('@/lib/auth/helpers', () => ({
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonWithDetails: vi.fn(),
   updateSeason: vi.fn(),
-  deleteSeason: vi.fn(),
   getSeasonById: vi.fn(),
-  getSeasonParticipants: vi.fn(),
+}));
+
+// The recycle bin: the database functions behind the DELETE (league-trash.test.ts and the SQL lab cover them).
+vi.mock('@/lib/supabase/queries/league-trash', () => ({
+  moveLeagueToTrash: vi.fn(),
+  getLeagueTrashBySeason: vi.fn(),
+  listPendingLeagueRebuilds: vi.fn(),
+  markLeagueTrashRebuildDone: vi.fn(),
+  markLeagueRestoreRebuildDone: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
@@ -38,6 +45,7 @@ vi.mock('@/lib/supabase/queries/season-start', () => ({
 
 vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
   rebuildAfterSeasonDelete: vi.fn(),
+  rebuildAfterSeasonRestore: vi.fn(),
 }));
 
 // The custom league type guard reads the attached format and the start signals only for a change involving `custom`.
@@ -45,6 +53,8 @@ vi.mock('@/lib/supabase/queries/season-formats', () => ({
   getSeasonFormatSummary: vi.fn(),
   getSeasonStartSignals: vi.fn(),
 }));
+
+vi.mock('@/lib/ruleset-studio/pin-change', () => ({ assertRulesetChangeAllowed: vi.fn() }));
 
 vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
@@ -60,19 +70,23 @@ vi.mock('@/lib/rating/test-league-rebuild', () => ({
 
 import { GET, PATCH, DELETE } from '@/app/api/seasons/[id]/route';
 import { requireAdmin, requireResourceAdmin, AuthError } from '@/lib/auth/helpers';
+import { getSeasonWithDetails, updateSeason, getSeasonById } from '@/lib/supabase/queries/seasons';
 import {
-  getSeasonWithDetails,
-  updateSeason,
-  deleteSeason,
-  getSeasonById,
-  getSeasonParticipants,
-} from '@/lib/supabase/queries/seasons';
+  getLeagueTrashBySeason,
+  listPendingLeagueRebuilds,
+  markLeagueTrashRebuildDone,
+  moveLeagueToTrash,
+} from '@/lib/supabase/queries/league-trash';
+import { LeagueTrashDbError } from '@/lib/league-trash/db-error';
+import { LEAGUE_TRASH_RETENTION_DAYS } from '@/lib/league-trash/constants';
 import { rebuildAfterSeasonDelete } from '@/lib/reconcile/entity-delete-rebuild';
 import { logAuditEvent } from '@/lib/audit/log';
 import { archiveTournamentsBySeason } from '@/lib/supabase/queries/tournaments';
 import { rebuildRatingsAfterTestFlagChange } from '@/lib/rating/test-league-rebuild';
 import { getSeasonFormatSummary, getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
 import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
+import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
+import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
 import { revalidateTag } from 'next/cache';
 
 const mockSeason: SeasonWithDetails = {
@@ -517,16 +531,36 @@ describe('PATCH /api/seasons/[id] — league type and the custom format', () => 
   });
 });
 
-describe('DELETE /api/seasons/[id]', () => {
+describe('DELETE /api/seasons/[id] (the league goes to the trash)', () => {
+  const SEASON_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const TRASH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const PHASES = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+  const PLAYERS = ['p1', 'p2'];
+  const PURGE_AFTER = '2027-01-24T10:00:00.000Z';
+
+  const moved = {
+    trash_id: TRASH_ID,
+    season_id: SEASON_ID,
+    season_name: 'Season One',
+    deleted_at: '2026-10-26T10:00:00.000Z',
+    purge_after: PURGE_AFTER,
+    counts: { matches: 12, games: 30 },
+    player_ids: PLAYERS,
+    phase_ids: PHASES,
+    frozen_pools: 1,
+    schema_version: '20261026091500',
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getSeasonById).mockResolvedValue(mockSeason as never);
-    vi.mocked(getSeasonParticipants).mockResolvedValue([] as never);
+    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
+    vi.mocked(moveLeagueToTrash).mockResolvedValue(moved);
+    vi.mocked(markLeagueTrashRebuildDone).mockResolvedValue(true);
     vi.mocked(rebuildAfterSeasonDelete).mockResolvedValue({
       scope: 'season',
-      playerIds: [],
-      ratingsRebuilt: 0,
-      streaksRebuilt: 0,
+      playerIds: PLAYERS,
+      ratingsRebuilt: 2,
+      streaksRebuilt: 2,
       tournamentScopeCleared: null,
       leagueScope: null,
       allTime: { gamesProcessed: 0, aggregatesDeleted: 0, playerAggregatesDeleted: 0 },
@@ -534,88 +568,118 @@ describe('DELETE /api/seasons/[id]', () => {
     } as never);
   });
 
-  it('returns 403 when not admin', async () => {
+  const call = (id = SEASON_ID) => DELETE({} as unknown as NextRequest, makeRouteArgs(id));
+
+  it('returns 403 when not admin, and never touches the trash', async () => {
     vi.mocked(requireAdmin).mockRejectedValue(
       new (AuthError as unknown as new (m: string, s: number) => Error)('Admin access required', 403),
     );
 
-    const request = {} as unknown as NextRequest;
-    const response = await DELETE(request, makeRouteArgs('cccccccc-cccc-4ccc-8ccc-cccccccccccc'));
-    const body = await response.json();
+    const response = await call();
 
     expect(response.status).toBe(403);
-    expect(body.success).toBe(false);
+    expect((await response.json()).success).toBe(false);
+    expect(moveLeagueToTrash).not.toHaveBeenCalled();
   });
 
-  it('deletes season and reports no rebuild warning', async () => {
-    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
-    vi.mocked(deleteSeason).mockResolvedValue(undefined);
+  it('answers 404 INVALID_SEASON_ID for a malformed id before any database call', async () => {
+    const response = await call('not-a-uuid');
 
-    const request = {} as unknown as NextRequest;
-    const response = await DELETE(request, makeRouteArgs('cccccccc-cccc-4ccc-8ccc-cccccccccccc'));
+    expect(response.status).toBe(404);
+    expect((await response.json()).code).toBe('INVALID_SEASON_ID');
+    expect(moveLeagueToTrash).not.toHaveBeenCalled();
+  });
+
+  it('moves the league to the trash by the acting admin, reports the trash entry and no rebuild warning', async () => {
+    const response = await call();
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.success).toBe(true);
-    expect(body.data).toEqual({ rebuild_warning: null });
-    expect(vi.mocked(deleteSeason)).toHaveBeenCalledWith('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
-    expect(revalidateTag).toHaveBeenCalledWith('season:cccccccc-cccc-4ccc-8ccc-cccccccccccc', { expire: 0 });
-    expect(revalidateTag).toHaveBeenCalledWith('seasons', { expire: 0 });
-  });
-
-  it('captures participants before the delete, rebuilds derived data, and audit-logs the deletion', async () => {
-    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
-    vi.mocked(deleteSeason).mockResolvedValue(undefined);
-    vi.mocked(getSeasonParticipants).mockResolvedValue([
-      { id: 'p1', name: 'One' },
-      { id: 'p2', name: 'Two' },
-    ] as never);
-
-    const request = {} as unknown as NextRequest;
-    const response = await DELETE(request, makeRouteArgs('cccccccc-cccc-4ccc-8ccc-cccccccccccc'));
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body.success).toBe(true);
-
-    // Participants captured BEFORE the cascade removes the rows.
-    expect(getSeasonParticipants).toHaveBeenCalledWith('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
-    expect(vi.mocked(getSeasonParticipants).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(deleteSeason).mock.invocationCallOrder[0]
-    );
-
-    // Rebuild runs after the delete committed, with the captured players.
-    expect(rebuildAfterSeasonDelete).toHaveBeenCalledWith({
-      seasonId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-      playerIds: ['p1', 'p2'],
+    expect(body).toEqual({
+      success: true,
+      data: { rebuild_warning: null, trash: { id: TRASH_ID, purge_after: PURGE_AFTER } },
     });
-    expect(vi.mocked(rebuildAfterSeasonDelete).mock.invocationCallOrder[0]).toBeGreaterThan(
-      vi.mocked(deleteSeason).mock.invocationCallOrder[0]
-    );
+    expect(moveLeagueToTrash).toHaveBeenCalledWith(SEASON_ID, 'admin-1');
+  });
 
-    // Season deletion is audit-logged (previously it was not) with the summary.
+  it('keeps the retention window a database matter: the route passes no days of its own', async () => {
+    await call();
+
+    expect(vi.mocked(moveLeagueToTrash).mock.calls[0]).toEqual([SEASON_ID, 'admin-1']);
+    expect(LEAGUE_TRASH_RETENTION_DAYS).toBeGreaterThan(0);
+  });
+
+  it('expires the league, its phases and the lists, then the aggregate and rating reads after the rebuild', async () => {
+    await call();
+
+    const tags = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
+    expect(tags).toEqual(
+      expect.arrayContaining([
+        `season:${SEASON_ID}`,
+        'seasons',
+        'tournaments',
+        'player-profiles',
+        `tournament:${PHASES[0]}`,
+        `tournament:${PHASES[1]}`,
+        `aggregates:league:${SEASON_ID}`,
+        'aggregates:all_time',
+        `aggregates:tournament:${PHASES[0]}`,
+        `aggregates:tournament:${PHASES[1]}`,
+        'ratings',
+        'player:p1',
+        'player:p2',
+      ]),
+    );
+    // The league's reads go first (it is gone from every read), the aggregates only once the rebuild ran.
+    const aggregateExpiry = vi.mocked(revalidateTag).mock.invocationCallOrder[tags.indexOf('aggregates:all_time')];
+    expect(vi.mocked(rebuildAfterSeasonDelete).mock.invocationCallOrder[0]).toBeLessThan(aggregateExpiry);
+    expect(vi.mocked(revalidateTag).mock.invocationCallOrder[tags.indexOf(`season:${SEASON_ID}`)]).toBeLessThan(
+      vi.mocked(rebuildAfterSeasonDelete).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('rebuilds the derived data with the participants and phases the delete returned, then confirms it', async () => {
+    await call();
+
+    expect(rebuildAfterSeasonDelete).toHaveBeenCalledWith({
+      seasonId: SEASON_ID,
+      playerIds: PLAYERS,
+      phaseIds: PHASES,
+    });
+    expect(markLeagueTrashRebuildDone).toHaveBeenCalledWith(TRASH_ID);
+    expect(vi.mocked(markLeagueTrashRebuildDone).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(rebuildAfterSeasonDelete).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('audit-logs the delete with the trash entry, the counts and the rebuild summary', async () => {
+    await call();
+
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'season.delete',
+        actor_id: 'admin-1',
         resource_type: 'season',
-        resource_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        resource_id: SEASON_ID,
+        resource_name: 'Season One',
         metadata: expect.objectContaining({
+          trash_id: TRASH_ID,
+          purge_after: PURGE_AFTER,
+          counts: { matches: 12, games: 30 },
+          frozen_pools: 1,
           rebuild: expect.objectContaining({ scope: 'season' }),
           rebuild_error: null,
         }),
-      })
+      }),
     );
   });
 
-  it('still returns success when the derived-data rebuild fails (the delete already committed)', async () => {
-    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
-    vi.mocked(deleteSeason).mockResolvedValue(undefined);
+  it('still returns success when the derived-data rebuild fails, leaves the rebuild unconfirmed and keeps the cause', async () => {
     vi.mocked(rebuildAfterSeasonDelete).mockRejectedValue(new Error('rebuild blew up'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     try {
-      const request = {} as unknown as NextRequest;
-      const response = await DELETE(request, makeRouteArgs('cccccccc-cccc-4ccc-8ccc-cccccccccccc'));
+      const response = await call();
       const body = await response.json();
 
       expect(response.status).toBe(200);
@@ -625,14 +689,16 @@ describe('DELETE /api/seasons/[id]', () => {
         code: 'derived_data_rebuild_failed',
         error: expect.stringContaining('rebuilding the derived data'),
       });
+      expect(body.data.trash).toEqual({ id: TRASH_ID, purge_after: PURGE_AFTER });
       expect(JSON.stringify(body)).not.toContain('rebuild blew up');
-      // The original error is logged server-side, never masked.
       expect(errorSpy).toHaveBeenCalled();
+      // Without the confirmation the entry is never purged: the superadmin runs the rebuild again.
+      expect(markLeagueTrashRebuildDone).not.toHaveBeenCalled();
       expect(logAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'season.delete',
           metadata: expect.objectContaining({ rebuild_error: 'derived_data_rebuild_failed' }),
-        })
+        }),
       );
     } finally {
       errorSpy.mockRestore();
@@ -640,72 +706,163 @@ describe('DELETE /api/seasons/[id]', () => {
   });
 
   it('records the distinct cause when the rebuild refuses with a catalog code', async () => {
-    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
-    vi.mocked(deleteSeason).mockResolvedValue(undefined);
     vi.mocked(rebuildAfterSeasonDelete).mockRejectedValue(
       new UserFacingError('Rating history has gaps that no rebuild order can fill', {
         code: 'rating_history_incomplete',
         params: { count: 1, players: 'Alice, Bob' },
         status: 409,
-      })
+      }),
     );
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     try {
-      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs('cccccccc-cccc-4ccc-8ccc-cccccccccccc'));
-      const body = await response.json();
+      const body = await (await call()).json();
 
-      expect(response.status).toBe(200);
       expect(body.data.rebuild_warning).toEqual({
         code: 'rating_history_incomplete',
         error: 'Rating history has gaps that no rebuild order can fill',
         params: { count: 1, players: 'Alice, Bob' },
       });
-      expect(errorSpy).toHaveBeenCalled();
       expect(logAuditEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'season.delete',
-          metadata: expect.objectContaining({ rebuild_error: 'rating_history_incomplete' }),
-        })
+        expect.objectContaining({ metadata: expect.objectContaining({ rebuild_error: 'rating_history_incomplete' }) }),
       );
     } finally {
       errorSpy.mockRestore();
     }
   });
 
-  it('answers 409 SEASON_HAS_DEPENDENTS with nothing rebuilt or audited when the delete is refused', async () => {
-    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
-    vi.mocked(getSeasonById).mockResolvedValue(mockSeason);
-    vi.mocked(getSeasonParticipants).mockResolvedValue([]);
-    vi.mocked(rebuildAfterSeasonDelete).mockClear();
-    vi.mocked(logAuditEvent).mockClear();
-    // The real deleteSeason throws SeasonHasDependentsError (a UserFacingError) on SQLSTATE 23503.
-    vi.mocked(deleteSeason).mockRejectedValue(
-      new UserFacingError('This league still has phases, draft pools, teams or storylines that point to it.', {
-        code: 'SEASON_HAS_DEPENDENTS',
-        status: 409,
-      }),
-    );
+  it('answers 404 SEASON_NOT_FOUND for a league that does not exist, with nothing rebuilt or audited', async () => {
+    vi.mocked(moveLeagueToTrash).mockRejectedValue(new LeagueTrashDbError('LEAGUE_TRASH_SEASON_NOT_FOUND'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const response = await DELETE({} as unknown as NextRequest, makeRouteArgs('cccccccc-cccc-4ccc-8ccc-cccccccccccc'));
-    const body = await response.json();
+    try {
+      const response = await call();
 
-    expect(response.status).toBe(409);
-    expect(body).toMatchObject({ success: false, code: 'SEASON_HAS_DEPENDENTS' });
-    expect(rebuildAfterSeasonDelete).not.toHaveBeenCalled();
-    expect(logAuditEvent).not.toHaveBeenCalled();
+      expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({ success: false, code: 'SEASON_NOT_FOUND' });
+      expect(rebuildAfterSeasonDelete).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
-  it('returns 500 on unexpected error', async () => {
-    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
-    vi.mocked(deleteSeason).mockRejectedValue(new Error('FK constraint'));
+  it.each([
+    ['LEAGUE_TRASH_BUSY', 409],
+    ['LEAGUE_TRASH_INVENTORY_INCOMPLETE', 500],
+  ] as const)('maps %s to a coded %i and keeps table names out of the body', async (code, status) => {
+    vi.mocked(moveLeagueToTrash).mockRejectedValue(new LeagueTrashDbError(code, { rels: ['secret_table'] }));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const request = {} as unknown as NextRequest;
-    const response = await DELETE(request, makeRouteArgs('cccccccc-cccc-4ccc-8ccc-cccccccccccc'));
-    const body = await response.json();
+    try {
+      const response = await call();
+      const text = JSON.stringify(await response.json());
 
-    expect(response.status).toBe(500);
-    expect(body.success).toBe(false);
-    expect(body.error).toBe('Failed to delete league');
+      expect(response.status).toBe(status);
+      expect(text).toContain(code);
+      expect(text).not.toContain('secret_table');
+      expect(rebuildAfterSeasonDelete).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  describe('a request deadline (the delete may still have committed)', () => {
+    const timeout = () => new LeagueTrashDbError('LEAGUE_TRASH_TIMEOUT');
+
+    beforeEach(() => {
+      vi.mocked(moveLeagueToTrash).mockRejectedValue(timeout());
+    });
+
+    it('continues as a success when the trash holds the league, rebuilding from the pending marker', async () => {
+      vi.mocked(getLeagueTrashBySeason).mockResolvedValue({ id: TRASH_ID, purge_after: PURGE_AFTER });
+      vi.mocked(listPendingLeagueRebuilds).mockResolvedValue([
+        {
+          kind: 'delete',
+          trash_id: TRASH_ID,
+          season_id: SEASON_ID,
+          season_name: 'Season One',
+          at: '2026-10-26T10:00:00.000Z',
+          phase_ids: PHASES,
+          player_ids: PLAYERS,
+        },
+      ]);
+
+      const response = await call();
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.data.trash).toEqual({ id: TRASH_ID, purge_after: PURGE_AFTER });
+      expect(getLeagueTrashBySeason).toHaveBeenCalledWith(SEASON_ID);
+      expect(rebuildAfterSeasonDelete).toHaveBeenCalledWith({ seasonId: SEASON_ID, playerIds: PLAYERS, phaseIds: PHASES });
+      expect(markLeagueTrashRebuildDone).toHaveBeenCalledWith(TRASH_ID);
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'season.delete', resource_name: 'Season One' }),
+      );
+    });
+
+    it('answers 504 LEAGUE_TRASH_TIMEOUT when the trash does not hold the league', async () => {
+      vi.mocked(getLeagueTrashBySeason).mockResolvedValue(null);
+
+      const response = await call();
+
+      expect(response.status).toBe(504);
+      expect(await response.json()).toMatchObject({ success: false, code: 'LEAGUE_TRASH_TIMEOUT' });
+      expect(rebuildAfterSeasonDelete).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  it('returns 500 on an unexpected error', async () => {
+    vi.mocked(moveLeagueToTrash).mockRejectedValue(new Error('connection reset'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const response = await call();
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body.success).toBe(false);
+      expect(body.error).toBe('Failed to delete league');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
+
+describe('PATCH /api/seasons/[id] — the league ruleset pin', () => {
+  const SEASON_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const PINNED = '00000000-0000-4000-8000-0000000000a1';
+  const NEXT = '00000000-0000-4000-8000-0000000000b2';
+  const patch = (body: Record<string, unknown>) =>
+    PATCH({ json: vi.fn().mockResolvedValue(body) } as unknown as NextRequest, makeRouteArgs(SEASON_ID));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireResourceAdmin).mockResolvedValue(adminPlayer);
+    vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, ruleset_id: PINNED, status: 'active' });
+    vi.mocked(updateSeason).mockImplementation(async (_id, input) => ({ ...mockSeason, ...input }) as never);
+    vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([{ status: 'active', rounds_total: 2 }] as never);
+  });
+
+  it('asks the pin guard with the stored pin, the requested one and whether the league has started', async () => {
+    vi.mocked(assertRulesetChangeAllowed).mockResolvedValue(undefined);
+    expect((await patch({ ruleset_id: NEXT })).status).toBe(200);
+    expect(assertRulesetChangeAllowed).toHaveBeenCalledWith({ player: adminPlayer, current: PINNED, requested: NEXT, started: true });
+  });
+
+  it('a refused change writes nothing', async () => {
+    vi.mocked(assertRulesetChangeAllowed).mockRejectedValue(new RulesetStudioError('ruleset_pin_started'));
+    const response = await patch({ ruleset_id: NEXT });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('ruleset_pin_started');
+    expect(updateSeason).not.toHaveBeenCalled();
+  });
+
+  it('resending the stored ruleset (a settings form always sends it) reads and checks nothing', async () => {
+    expect((await patch({ ruleset_id: PINNED, name: 'Renamed' })).status).toBe(200);
+    expect(assertRulesetChangeAllowed).not.toHaveBeenCalled();
+    expect(getSeasonPhaseStartSignals).not.toHaveBeenCalled();
   });
 });

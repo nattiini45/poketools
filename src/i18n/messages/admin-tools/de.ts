@@ -345,17 +345,6 @@ export default defineDe<typeof en>()({
     },
   },
 
-  rulesets: {
-    title: 'Regelwerke verwalten',
-    newRuleset: '+ Neues Regelwerk',
-    empty: 'Noch keine Regelwerke.',
-    doubles: 'Doppel',
-    clauses: { one: '{count} Klausel', other: '{count} Klauseln' },
-    bans: { one: '{count} Ban', other: '{count} Bans' },
-    createTitle: 'Regelwerk erstellen',
-    editTitle: 'Regelwerk bearbeiten: {name}',
-  },
-
   social: {
     title: 'Social-Integration',
     intro:

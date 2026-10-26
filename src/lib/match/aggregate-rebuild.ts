@@ -36,9 +36,15 @@ export interface RebuildAggregatesForScopeResult {
   playerAggregatesDeleted: number;
 }
 
+/**
+ * Processes pending aggregate jobs in rounds until none is pending or processing, `maxRounds` rounds ran, or
+ * `deadline` (epoch milliseconds) passed before a round started. A run cut short leaves the rest to the cron
+ * (`statsAfter` says how much); a round that already started is never interrupted.
+ */
 export async function drainPendingAggregateJobs(options?: {
   batchSize?: number;
   maxRounds?: number;
+  deadline?: number;
 }): Promise<DrainAggregateJobsResult> {
   const batchSize = Math.min(Math.max(options?.batchSize ?? DEFAULT_BATCH_SIZE, 1), 100);
   const maxRounds = Math.min(Math.max(options?.maxRounds ?? DEFAULT_MAX_ROUNDS, 1), 500);
@@ -51,6 +57,7 @@ export async function drainPendingAggregateJobs(options?: {
   let rounds = 0;
 
   for (let round = 0; round < maxRounds; round++) {
+    if (options?.deadline !== undefined && Date.now() >= options.deadline) break;
     const statsBefore = await getAggregateJobStats();
     if (statsBefore.pending === 0 && statsBefore.processing === 0) {
       break;

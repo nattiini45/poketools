@@ -24,6 +24,7 @@ export default defineDe<typeof en>()({
     copyAdmins: 'Liga-Admins übernehmen',
     copyAdminsHint: 'Die Admins der Vorlage können dann auch die neue Liga verwalten.',
     datesHint: 'Datum und Name kommen aus diesem Formular.',
+    rulesetSame: 'Startet mit denselben Regeln wie die Vorlage: {name}, Version {version}.',
     pointBuyNote:
       'Eine Point-Buy-Liga wird wie gewohnt eingerichtet: Formatregeln und die Point-Buy-Liste werden nicht übernommen.',
   },

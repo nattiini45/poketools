@@ -4,10 +4,17 @@
  */
 import { describe, expect, it } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
+import { ShareDialogBody } from '@/components/studio-shell/dialogs/ShareDialog';
+import { useShellText } from '@/components/studio-shell/text';
 import type { Locale } from '@/i18n/config';
+import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import type { FormatVisibility } from '@/lib/format-studio/library-types';
-import { ShareDialogBody } from '../../editor/dialogs/ShareDialog';
 import { expectLabelledControls, expectNoLeftovers } from './test-helpers';
+
+/** The shared dialog body with the Format Studio's words and ids. */
+function FormatShareBody(props: Omit<Parameters<typeof ShareDialogBody>[0], 'text' | 'idPrefix'>) {
+  return <ShareDialogBody text={useShellText(formatStudioEditorMessages)} idPrefix="fe" {...props} />;
+}
 
 const OWNER = { playerId: 'p1', isAdmin: false };
 const SITE_ADMIN = { playerId: 'p9', isAdmin: true };
@@ -25,7 +32,7 @@ interface Over {
 function render(over: Over = {}) {
   const visibility = over.visibility ?? 'private';
   return renderWithI18n(
-    <ShareDialogBody
+    <FormatShareBody
       actor={over.actor ?? OWNER}
       definition={{ kind: over.kind ?? 'custom', owner_id: over.ownerId === undefined ? 'p1' : over.ownerId, visibility }}
       hasPublished={over.hasPublished ?? true}

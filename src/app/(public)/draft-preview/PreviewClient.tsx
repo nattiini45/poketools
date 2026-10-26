@@ -6,8 +6,9 @@
  * scenario's real screen against them:
  *
  * - `pick`: `DraftToolClient` (the draft room); a scenario preset (pinned
- *   line, filters, open confirm dialog) goes in through its `initialView` /
- *   `initialConfirmLineId` preview props; a pool admin's room gets the fake as
+ *   line, filters, open confirm dialog, expanded weakness overview) goes in
+ *   through its `initialView` / `initialConfirmLineId` / `initialWeaknessOpen`
+ *   preview props; a pool admin's room gets the fake as
  *   its admin sheet's `AdminDraftActions` (`adminActions`), and a preset
  *   `adminTab` opens the sheet at mount;
  * - `redraft`: `RedraftCenter` (`/leagues/[id]/redraft`);
@@ -192,6 +193,7 @@ export default function PreviewClient({
       initialConfirmLineId={preset?.dialog === true ? preset.pinnedLineId : undefined}
       adminActions={source}
       initialAdminTab={preset?.adminTab}
+      initialWeaknessOpen={preset?.weaknessOpen}
     />
   );
 }

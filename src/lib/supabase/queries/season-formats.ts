@@ -5,8 +5,8 @@
  * Reads name their columns (the summary read never selects the spec or the seed), id lists are chunked by 50 and an
  * empty list makes no request. The writes are the two Postgres functions `format_attach_season` and
  * `format_detach_season` (one transaction each); their database signals leave this module as typed errors through
- * `mapFormatDbError`. `season_formats.showdown_rulesets` records the rulesets an attach created for the format's
- * Showdown stages ({ showdown format id: ruleset id }); the two functions delete the ones a re-attach or a detach
+ * `mapFormatDbError`. `season_formats.preset_rulesets` records the rulesets an attach created for the format's
+ * rule-preset stages ({ preset id: ruleset id }); the two functions delete the ones a re-attach or a detach
  * leaves unused.
  */
 import 'server-only';
@@ -67,22 +67,22 @@ export async function getSeasonFormatSummary(seasonId: string): Promise<SeasonFo
 }
 
 /**
- * The rulesets the league's attach created for its Showdown stages, as { showdown format id: ruleset id }; empty
- * when no format is attached or it has no Showdown stage.
+ * The rulesets the league's attach created for its rule-preset stages, as { preset id: ruleset id }; empty when no
+ * format is attached or it has no preset stage.
  */
-export async function getSeasonShowdownRulesets(seasonId: string): Promise<Record<string, string>> {
+export async function getSeasonPresetRulesets(seasonId: string): Promise<Record<string, string>> {
   if (!isValidUuid(seasonId)) return {};
   const { data, error } = await supabase
     .from('season_formats')
-    .select('showdown_rulesets')
+    .select('preset_rulesets')
     .eq('season_id', seasonId)
     .maybeSingle();
   if (error) throw error;
-  const recorded = data?.showdown_rulesets;
+  const recorded = data?.preset_rulesets;
   if (typeof recorded !== 'object' || recorded === null || Array.isArray(recorded)) return {};
   const out: Record<string, string> = {};
-  for (const [format, id] of Object.entries(recorded)) {
-    if (typeof id === 'string' && isValidUuid(id)) out[format] = id;
+  for (const [preset, id] of Object.entries(recorded)) {
+    if (typeof id === 'string' && isValidUuid(id)) out[preset] = id;
   }
   return out;
 }
@@ -143,17 +143,23 @@ export async function getSeasonManualPhaseCount(seasonId: string): Promise<numbe
   return count ?? 0;
 }
 
-/** Which of `ids` are rulesets that exist. Chunks of 50; an empty (or all-malformed) list makes no request. */
-export async function getExistingRulesetIds(ids: readonly string[]): Promise<Set<string>> {
-  const found = new Set<string>();
+/**
+ * Which of the ruleset DEFINITION ids `ids` exist and have a published version, with that head version's id (what an attach
+ * pins). A definition without a published version is a draft, not a ruleset, and is absent. Chunks of 50; an empty (or
+ * all-malformed) list makes no request.
+ */
+export async function getPublishedRulesetHeads(ids: readonly string[]): Promise<Map<string, string>> {
+  const heads = new Map<string, string>();
   const unique = [...new Set(ids)].filter((id) => isValidUuid(id));
   for (let i = 0; i < unique.length; i += BATCH_IDS) {
     const chunk = unique.slice(i, i + BATCH_IDS);
-    const { data, error } = await supabase.from('rulesets').select('id').in('id', chunk);
+    const { data, error } = await supabase.from('ruleset_definitions').select('id, current_version_id').in('id', chunk);
     if (error) throw error;
-    for (const row of data ?? []) found.add(row.id);
+    for (const row of data ?? []) {
+      if (row.current_version_id !== null) heads.set(row.id, row.current_version_id);
+    }
   }
-  return found;
+  return heads;
 }
 
 /** One generated stage, as `format_attach_season` reads it (a `tournaments` row to upsert by `(season_id, key)`). */
@@ -178,8 +184,8 @@ export interface AttachRpcInput {
   specHash: string;
   seed: string;
   stages: AttachStageRow[];
-  /** { showdown format id: ruleset id } of the Showdown stages; `{}` when the spec has none. */
-  showdownRulesets: Readonly<Record<string, string>>;
+  /** { preset id: ruleset id } of the rule-preset stages; `{}` when the spec has none. */
+  presetRulesets: Readonly<Record<string, string>>;
 }
 
 export interface AttachRpcResult {
@@ -204,7 +210,7 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     p_spec_hash: input.specHash,
     p_seed: input.seed,
     p_stages: input.stages as unknown as Json,
-    p_showdown_rulesets: input.showdownRulesets as unknown as Json,
+    p_preset_rulesets: input.presetRulesets as unknown as Json,
   });
   if (error) throw mapFormatDbError(error);
   const result = (data ?? {}) as {

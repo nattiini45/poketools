@@ -21,6 +21,7 @@ export default {
     adminOnly: 'You need admin privileges to view this page.',
     creatorOnly: 'You need content creator privileges to view this page.',
     siteAdminOnly: 'Only site admins can view this page.',
+    superadminOnly: 'Only the superadmin can view this page.',
     resourceForbidden: 'You are not an admin of this league or tournament.',
   },
   session: {
@@ -48,6 +49,7 @@ export default {
       overview: 'Overview',
       leagues: 'Leagues',
       archivedLeagues: 'Archived leagues',
+      leagueTrash: 'League trash',
       tournaments: 'Tournaments',
       archivedTournaments: 'Archived tournaments',
       matches: 'Matches',

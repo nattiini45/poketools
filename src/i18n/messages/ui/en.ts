@@ -95,7 +95,8 @@ export default {
   deleteResource: {
     label: 'Delete',
     confirm: {
-      season: 'Delete league "{name}"? This removes it and its dependent records. This cannot be undone.',
+      // `{days}` = LEAGUE_TRASH_RETENTION_DAYS: the league moves to the trash instead of vanishing.
+      season: 'Delete league "{name}"? It moves to the trash; the superadmin can restore it for {days} days.',
       tournament: 'Delete tournament "{name}"? This removes it and its dependent records. This cannot be undone.',
     },
     failed: {
@@ -104,7 +105,7 @@ export default {
     },
     // The delete committed; the derived-data rebuild after it reported a problem ({warning}: the catalogued text of data.rebuild_warning)
     deletedWithWarning: {
-      season: 'League "{name}" was deleted. {warning}',
+      season: 'League "{name}" was moved to the trash. {warning}',
       tournament: 'Tournament "{name}" was deleted. {warning}',
     },
   },

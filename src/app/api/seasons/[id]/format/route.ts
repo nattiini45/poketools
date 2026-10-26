@@ -89,7 +89,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * POST /api/seasons/[id]/format
  *
  * League admin (or site admin). Attaches a published format version to a custom league that has not started:
- * freezes the spec and creates one phase per format stage (and one ruleset per distinct Showdown format the
+ * freezes the spec and creates one phase per format stage (and one ruleset per distinct rule preset the
  * stages name). 201 for a first attach, 200 when it replaced an earlier one. `warnings` lists what the engine
  * does not run yet (codes and params).
  */
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  * DELETE /api/seasons/[id]/format
  *
  * League admin (or site admin). Detaches the format from a league that has not started and removes the phases it
- * created, and the rulesets it created for Showdown stages that nothing else points at. 404
+ * created, and the rulesets it created for rule-preset stages that nothing else points at. 404
  * `format_nothing_attached`, 409 `format_season_started`, 409 `format_detach_blocked` (teams still point at a phase).
  */
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {

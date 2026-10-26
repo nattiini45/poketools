@@ -15,6 +15,7 @@ import BattleTracker from '@/components/broadcast/tracker/BattleTracker';
 import Link from 'next/link';
 import type { CasterData } from '@/types/caster';
 import { getT } from '@/i18n/server';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { creatorMessages } from '@/i18n/messages/creator';
 
 export const dynamic = 'force-dynamic';
@@ -120,9 +121,7 @@ export default async function TrackerPage({ params }: Props) {
         const ruleset = tournament?.ruleset_id
           ? await getRulesetById(tournament.ruleset_id)
           : null;
-        const generation = ruleset?.base_format
-          ? Number.parseInt(ruleset.base_format.match(/^gen(\d+)/)?.[1] ?? '9', 10)
-          : 9;
+        const generation = generationOrDefault(ruleset?.base_format);
 
         const createdSession = await createCastSession(player.playerId, {
           name: `${match.player_1_name} vs ${match.player_2_name}`,

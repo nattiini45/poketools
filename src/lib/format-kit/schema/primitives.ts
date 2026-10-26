@@ -30,7 +30,8 @@ import {
   SCORE_ABS_MAX,
 } from '../limits';
 import type { AvailableKind } from '../registry/kinds';
-import { boundedArray, intRange, keySchema, ltextSchema, numberAbs, textString, uuidSchema, kindSchema } from './common';
+import { ltextSchema, textString } from '@/lib/studio-core/text-schema';
+import { boundedArray, intRange, keySchema, numberAbs, uuidSchema, kindSchema } from './common';
 
 // --- Pairing ------------------------------------------------------------------------------------
 
@@ -128,8 +129,8 @@ export const seriesSchema = z.strictObject({
 export const rulesetSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('season_default') }),
   z.strictObject({ kind: z.literal('ruleset'), id: uuidSchema }),
-  // The catalog check (is this a Showdown format we know?) is a compile diagnostic, not a schema issue.
-  z.strictObject({ kind: z.literal('showdown'), format: keySchema }),
+  // The catalog check (is this a rule preset we know?) is a compile diagnostic, not a schema issue.
+  z.strictObject({ kind: z.literal('preset'), preset: keySchema }),
 ]);
 
 export const scoringSchema = z.strictObject({

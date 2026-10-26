@@ -47,6 +47,7 @@ import {
   requireAuth,
   requirePlayer,
   requireAdmin,
+  requireSuperadmin,
   requireCreator,
   requireAnyAdmin,
   requireResourceAdmin,
@@ -460,6 +461,20 @@ describe('getLiveAccess', () => {
     expect((await getLiveAccess())?.isSiteAdmin).toBe(true);
   });
 
+  it('flags isSuperadmin only for the superadmin identity, not for any site admin', async () => {
+    signIn(makePlayer({ isAdmin: true }));
+    expect((await getLiveAccess())?.isSuperadmin).toBe(false);
+
+    process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
+    expect((await getLiveAccess())?.isSuperadmin).toBe(true);
+  });
+
+  it('gives the superadmin identity of a player row that is not found no superadmin flag', async () => {
+    process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
+    signIn(makePlayer(), null);
+    expect((await getLiveAccess())?.isSuperadmin).toBe(false);
+  });
+
   it('returns no roles when the identity has no player', async () => {
     signIn(makePlayer({ isAdmin: true }), null);
     expect(await getLiveAccess()).toEqual({
@@ -467,6 +482,7 @@ describe('getLiveAccess', () => {
       isSiteAdmin: false,
       isAnyAdmin: false,
       isCreator: false,
+      isSuperadmin: false,
     });
   });
 
@@ -643,6 +659,75 @@ describe('requireAdmin', () => {
     process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
     signIn(makePlayer(), makePlayer({ isAdmin: false }));
     await expect(requireAdmin()).resolves.toMatchObject({ isAdmin: true });
+  });
+});
+
+describe('requireSuperadmin', () => {
+  it('passes for the Discord superadmin identity, with the live player marked admin', async () => {
+    process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
+    signIn(makePlayer(), makePlayer({ isAdmin: false }));
+    await expect(requireSuperadmin()).resolves.toMatchObject({ playerId: 'player-1', isAdmin: true });
+  });
+
+  it('passes for the credentials superadmin identity (SUPERADMIN_EMAIL)', async () => {
+    process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials' });
+    mockedLoad.mockImplementation(async () => makePlayer());
+    await expect(requireSuperadmin()).resolves.toMatchObject({ isAdmin: true });
+    expect(mockedLoad).toHaveBeenCalledWith('credentials', 'discord-1');
+  });
+
+  it('throws AuthError(401) when not authenticated, without a live read', async () => {
+    mockedAuth.mockResolvedValue(null);
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 401, code: 'unauthenticated' });
+    expect(mockedLoad).not.toHaveBeenCalled();
+  });
+
+  it('refuses a site admin that is not the superadmin identity', async () => {
+    process.env.SUPERADMIN_DISCORD_ID = 'someone-else';
+    signIn(makePlayer({ isAdmin: true }));
+    await expect(requireSuperadmin()).rejects.toThrow(AuthError);
+    await expect(requireSuperadmin()).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'forbidden',
+      message: 'Superadmin access required',
+    });
+  });
+
+  it('refuses a site admin when no superadmin identity is configured', async () => {
+    signIn(makePlayer({ isAdmin: true }));
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('refuses a credentials session on the Discord superadmin id (and the reverse)', async () => {
+    process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials' });
+    mockedLoad.mockImplementation(async () => makePlayer({ isAdmin: true }));
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('refuses the superadmin identity without a player row (403, like every admin action)', async () => {
+    process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
+    signIn(makePlayer({ isAdmin: true }), null);
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 403, code: 'forbidden' });
+  });
+
+  it('lets the superadmin identity through whatever the row status says (site admins bypass standing)', async () => {
+    process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
+    signIn(makePlayer(), makePlayer({ status: 'banned' }));
+    await expect(requireSuperadmin()).resolves.toMatchObject({ isAdmin: true });
+  });
+
+  it('reads the identity from the token and the player live: a revoked token admin without the identity is refused', async () => {
+    signIn(makePlayer({ isAdmin: true }), makePlayer({ isAdmin: false }));
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('runs auth() once per call', async () => {
+    process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
+    signIn(makePlayer());
+    await requireSuperadmin();
+    expect(mockedAuth).toHaveBeenCalledTimes(1);
   });
 });
 

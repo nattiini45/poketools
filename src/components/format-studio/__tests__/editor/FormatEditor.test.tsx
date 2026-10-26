@@ -10,6 +10,7 @@ import type { Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import { ltext } from '@/lib/format-kit/client';
+import { classifyApiError, publishRequest } from '@/lib/format-studio/editor/api';
 import { blankDocument, normalizeDraft } from '@/lib/format-studio/editor/document';
 import { setBestOf, updateStage } from '@/lib/format-studio/editor/ops';
 import { isDirty } from '@/lib/format-studio/editor/state';
@@ -26,7 +27,7 @@ vi.mock('next/link', () => ({
 
 import FormatEditor, { inspectorFor, type FormatEditorProps } from '../../editor/FormatEditor';
 import StageInspector from '../../editor/inspectors/StageInspector';
-import { runPublishFlow } from '../../editor/dialogs/PublishDialog';
+import { runPublishFlow } from '@/components/studio-shell/dialogs/PublishDialog';
 import { useFormatEditor, type FormatEditorModel } from '../../editor/useFormatEditor';
 import { esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, presetDoc, stageNameOf } from './test-helpers';
 
@@ -366,13 +367,13 @@ describe('the editor flows: publish', () => {
   const noChangelog = { en: '', de: '' };
   const flow = (m: ReturnType<typeof mount>, dirty: boolean) =>
     runPublishFlow({
-      definitionId: 'def-1',
       dirty,
       changelog: noChangelog,
       authorBase: 'en',
       save: () => m.model().save(),
       latest: () => m.model().latest(),
-      fetchImpl: m.fetchImpl,
+      publish: (rev, changelog) => publishRequest('def-1', rev, changelog, m.fetchImpl),
+      classify: classifyApiError,
     });
 
   it('a clean draft is published at the known revision', async () => {
@@ -441,13 +442,13 @@ describe('the editor flows: a conflict found by a publish', () => {
   it('after a stale publish the conflict is registered, so no second request is needed to open it', async () => {
     const m = mount([stale(9)]);
     const outcome = await runPublishFlow({
-      definitionId: 'def-1',
       dirty: false,
       changelog: { en: '', de: '' },
       authorBase: 'en',
       save: () => m.model().save(),
       latest: () => m.model().latest(),
-      fetchImpl: m.fetchImpl,
+      publish: (rev, changelog) => publishRequest('def-1', rev, changelog, m.fetchImpl),
+      classify: classifyApiError,
     });
     expect(outcome).toEqual({ kind: 'conflict', staleRev: 9 });
     m.model().markConflict(outcome.kind === 'conflict' ? outcome.staleRev : undefined);

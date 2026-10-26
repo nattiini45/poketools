@@ -8,9 +8,12 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { leagueCloneMessages } from '@/i18n/messages/league-clone';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { isCloneSourceFormat, type CloneSourceOption } from '@/lib/league-admin/clone-source';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 
 interface CloneSourcePickerProps {
   sources: CloneSourceOption[];
+  /** The ruleset options of the create form, which hold the version each source pins (even when it is no longer the newest). */
+  rulesets: readonly RulesetOption[];
   /** Only site admins may copy the league admins. */
   isSiteAdmin: boolean;
   /** The picked source league; null = a blank league. */
@@ -30,6 +33,7 @@ interface CloneSourcePickerProps {
  */
 export default function CloneSourcePicker({
   sources: allSources,
+  rulesets,
   isSiteAdmin,
   sourceId,
   copyRoster,
@@ -68,6 +72,8 @@ export default function CloneSourcePicker({
   if (sources.length === 0) return null;
 
   const selected = sourceId ? (sources.find((source) => source.id === sourceId) ?? null) : null;
+  // The new league starts on the very version the source pins, which can be older than the newest one.
+  const sourceRuleset = selected?.ruleset_id ? (rulesets.find((ruleset) => ruleset.id === selected.ruleset_id) ?? null) : null;
 
   return (
     <section className="mb-6 max-w-lg space-y-3" aria-label={t('picker.label')}>
@@ -86,6 +92,9 @@ export default function CloneSourcePicker({
             <p>{t('picker.copied', { count: selected.phase_count })}</p>
             <p>{t('picker.notCopied')}</p>
             <p>{t('picker.datesHint')}</p>
+            {sourceRuleset && (
+              <p>{t('picker.rulesetSame', { name: sourceRuleset.name, version: sourceRuleset.version_no })}</p>
+            )}
             {isEvolutionPointBuy(selected.format_type) && <p>{t('picker.pointBuyNote')}</p>}
           </div>
 

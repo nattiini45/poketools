@@ -6,16 +6,14 @@
  * Only named string patterns exist; a pattern string coming from input is never compiled.
  * Zero zod, no server-only import.
  */
-import { KEY_PATTERN, KIND_PATTERN, SLUG_PATTERN, UUID_PATTERN } from '../keys';
-import type { JsonValue } from '../json';
+import { KEY_PATTERN, KIND_PATTERN, SLUG_PATTERN, TEXT_PATTERN, UUID_PATTERN } from '@/lib/studio-core/keys';
+import type { JsonValue } from '@/lib/studio-core/json';
 import type { ExprType } from '../expr/ast';
 
 export type JsonDefault = JsonValue;
 
 /** `text` is any string without NUL (U+0000), which Postgres jsonb cannot store. */
 export type StrPattern = 'key' | 'slug' | 'uuid' | 'kind' | 'text';
-
-export const TEXT_PATTERN = /^[^\u0000]*$/;
 
 const PATTERNS: ReadonlyMap<StrPattern, RegExp> = new Map<StrPattern, RegExp>([
   ['key', KEY_PATTERN],

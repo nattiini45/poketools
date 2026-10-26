@@ -49,25 +49,31 @@ export default defineDe<typeof en>()({
     archiveHint:
       'Eine archivierte Liga verschwindet aus den aktiven Listen und landet im Archiv. Spiele, Tabelle und Verlauf bleiben erhalten; du kannst sie jederzeit wiederherstellen.',
     deleteTitle: 'Liga löschen',
-    deleteIntro: 'Löscht die Liga endgültig, zusammen mit:',
+    deleteIntro:
+      'Verschiebt die Liga in den Papierkorb. Der Superadmin kann sie {days} Tage lang wiederherstellen; danach wird sie endgültig entfernt. Der Papierkorb behält eine vollständige Kopie von:',
+    deletesSummary: 'Liste anzeigen ({count} Gruppen)',
     deletes: {
       participants: 'ihren Teilnehmern',
       groups: 'ihren Liga-Gruppen und deren Mitgliedern',
       rules: 'ihren Formatregeln, Entwicklungsstufen, Tier-Limits und der Draft-Pool-Liste',
+      phases: 'ihren Phasen mit Gruppen, Runden und Berichten',
+      matches: 'allen Matches mit Spielen, Kampfstatistiken, Analysen, Vorschlägen und Highlights',
+      draft: 'ihren Draft-Pools mit Teilnehmern, Slots, Picks und Replay-Ereignissen',
+      teams: 'ihren Teams',
       evolution: 'allen Entwicklungsdaten: den gedrafteten Linien, ihrem Fortschritt und den Entwicklungsereignissen',
       tokens: 'allen Token-Vergaben, Draft-Kill-Token-Käufen und eingelösten Comeback-Tokens',
       redraft: 'allen Redraft-Plätzen, Abgaben, Verlaufseinträgen und Tauschanfragen',
+      storylines: 'ihren Storylines',
+      connections: 'ihren Liga-Admins, Discord-Webhooks, Social-Anbindungen und Wiki-Notizen',
     },
-    deleteBlocked: 'Das Löschen wird abgelehnt, solange die Liga noch {list} hat. Lösche diese zuerst.',
-    blockers: {
-      phases: 'Phasen',
-      draftPools: 'Draft-Pools',
-      teams: 'Teams',
-      storylines: 'Storylines',
-    },
-    deleteUnlinked: 'Cast-Sessions der Liga bleiben erhalten, aber ohne Verbindung zur Liga.',
-    deleteFinal: 'Das lässt sich nicht rückgängig machen.',
-    deleteSiteAdminOnly: 'Nur Seiten-Admins können eine Liga löschen.',
+    deleteDerived:
+      'Statistiken, Ratings und Siegesserien, in die ihre Matches eingeflossen sind, werden ohne sie neu aufgebaut, und nach einer Wiederherstellung noch einmal.',
+    deleteUnlinked:
+      'Cast-Sessions, Agent-Vorschläge und Teams außerhalb der Liga, die auf sie verweisen, bleiben ohne diese Verbindung erhalten. Eine Wiederherstellung verbindet sie wieder.',
+    deleteKept: 'Das Audit-Log und das Draft-Aktionslog bleiben erhalten.',
+    deleteFinal:
+      'Laufende Drafts werden beim Löschen pausiert und kommen nach einer Wiederherstellung pausiert zurück. Solange die Liga im Papierkorb liegt, lassen sich ihre Spieler, Regelwerke und Point-Buy-Listen nicht löschen.',
+    deleteSiteAdminOnly: 'Nur Site-Admins können eine Liga löschen.',
   },
   description: {
     title: 'Beschreibung',
@@ -95,7 +101,7 @@ export default defineDe<typeof en>()({
   testLeague: {
     title: 'Testliga',
     subtitle:
-      'Nur für Seiten-Admins. Markiert eine Liga zum Testen: mit Testliga-Badge gelistet, nicht in Ratings und Gesamtstatistiken.',
+      'Nur für Site-Admins. Markiert eine Liga zum Testen: mit Testliga-Badge gelistet, nicht in Ratings und Gesamtstatistiken.',
   },
   participants: {
     title: 'Teilnehmer',

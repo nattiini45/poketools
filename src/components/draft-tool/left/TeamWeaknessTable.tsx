@@ -44,6 +44,8 @@ export interface TeamWeaknessTableProps {
   indexFailed: boolean;
   stage: SortStage;
   onStageChange(stage: SortStage): void;
+  /** Starts expanded (preview scenarios); collapsed by default. */
+  defaultOpen?: boolean;
   onPin(lineId: LineId): void;
 }
 
@@ -72,10 +74,14 @@ const CELL_CLASS: Record<Effect, string | undefined> = {
   neutral: undefined,
 };
 
-/** Tailwind overrides that shrink the site-wide type pill to a narrow vertical column head. */
-const TYPE_HEAD_CLASS = `${styles.weaknessTypeHead} !min-w-0 !px-0.5 !py-1.5 !text-[0.625rem] !tracking-normal`;
+/**
+ * Tailwind overrides that shrink the site-wide type pill to a narrow vertical column head. In the vertical
+ * writing mode the pill's width is its line height plus the side padding, so the tight line height is what
+ * lets 18 columns fit the desktop left pane.
+ */
+const TYPE_HEAD_CLASS = `${styles.weaknessTypeHead} !min-w-0 !px-0.5 !py-1.5 !text-[0.625rem] !leading-[1.1] !tracking-normal`;
 
-export default function TeamWeaknessTable({ owned, ix, indexFailed, stage, onStageChange, onPin }: TeamWeaknessTableProps) {
+export default function TeamWeaknessTable({ owned, ix, indexFailed, stage, onStageChange, defaultOpen = false, onPin }: TeamWeaknessTableProps) {
   const t = useT(draftScreenMessages);
   const tFinder = useT(draftFinderMessages);
   const dl = useDataLocale();
@@ -90,7 +96,7 @@ export default function TeamWeaknessTable({ owned, ix, indexFailed, stage, onSta
   ] as const;
 
   return (
-    <Disclosure summary={t('roster.weakness.title')} className="mt-1.5">
+    <Disclosure summary={t('roster.weakness.title')} defaultOpen={defaultOpen} className="mt-1.5">
       <div className="mt-2 flex flex-col gap-2">
         <span className="inline-flex items-center gap-1.5 text-sm text-[var(--draft-ink-2)]">
           <span aria-hidden="true">{t('roster.weakness.stageLabel')}</span>

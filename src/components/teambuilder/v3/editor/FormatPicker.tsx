@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { GENERATIONS, getFormatName, getTiersForGen } from '@/lib/pkmn/format-catalog';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 import type { BaseFormat } from '@/types/ruleset';
 import { useT } from '@/i18n/client';
 import { teambuilderMessages } from '@/i18n/messages/teambuilder';
@@ -23,10 +24,7 @@ export default function FormatPicker({ currentFormat, onSelect, disabled }: Form
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const currentGen = useMemo(() => {
-    const m = currentFormat.match(/gen(\d)/);
-    return m ? parseInt(m[1], 10) : 9;
-  }, [currentFormat]);
+  const currentGen = useMemo(() => generationOrDefault(currentFormat), [currentFormat]);
 
   const latestGen = GENERATIONS[GENERATIONS.length - 1].num;
 

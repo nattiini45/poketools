@@ -1,6 +1,9 @@
+import { generationOrDefault, parseFormatId } from './format-id';
+
 /**
  * Maps a ruleset's base_format to the closest data.pkmn.cc stats format.
- * Used to connect our rulesets to external usage data.
+ * Used to connect our rulesets to external usage data. Format ids are read with the one parser,
+ * `parseFormatId` (./format-id.ts), after lower-casing.
  */
 
 // Common aliases: our base_format → data.pkmn.cc format slug
@@ -36,9 +39,7 @@ export function resolveStatsFormat(baseFormat: string): string | null {
  * Extract generation number from a base_format string.
  */
 export function getGenFromBaseFormat(baseFormat: string): number {
-  if (!baseFormat) return 9;
-  const match = baseFormat.match(/gen(\d)/i);
-  return match ? parseInt(match[1], 10) : 9; // default to gen 9
+  return generationOrDefault(baseFormat.toLowerCase()); // default to gen 9
 }
 
 /**
@@ -46,8 +47,8 @@ export function getGenFromBaseFormat(baseFormat: string): number {
  * e.g. 'gen9ou' → 'ou', 'gen9vgc2025' → 'vgc2025'
  */
 export function getTierFromBaseFormat(baseFormat: string): string {
-  if (!baseFormat) return '';
-  return baseFormat.replace(/^gen\d/i, '').toLowerCase();
+  const id = baseFormat.toLowerCase();
+  return parseFormatId(id)?.key ?? id;
 }
 
 /**

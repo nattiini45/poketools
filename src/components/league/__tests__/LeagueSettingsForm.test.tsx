@@ -6,28 +6,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import type { LeagueSettingsValues } from '@/lib/league-admin/settings-patch';
 import LeagueSettingsForm from '../LeagueSettingsForm';
+import { makeRulesetOption } from '@/test/ruleset-fixtures';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
-function ruleset(id: string, name: string): Ruleset {
-  return {
-    id,
-    name,
-    base_format: 'gen9ru',
-    is_doubles: false,
-    clauses: [],
-    bans: { pokemon: [], moves: [], items: [], abilities: [] },
-    additions: { pokemon: [] },
-    custom_rules_string: '',
-    min_shared_type_pct: 0,
-    team_constraints: null,
-    created_by: null,
-    created_at: '',
-    updated_at: '',
-  };
+function ruleset(id: string, name: string): RulesetOption {
+  return makeRulesetOption({ id, name, base_format: 'gen9ru' });
 }
 
 const RULESETS = [ruleset('rs-1', 'Gen 9 RU'), ruleset('rs-2', 'Gen 9 OU')];
@@ -56,11 +43,18 @@ function submitButton(html: string): string {
   return match ? match[0] : '';
 }
 
-function render(initial: LeagueSettingsValues, formatLock: 'started' | 'point_buy' | null, locale?: 'de') {
+function render(initial: LeagueSettingsValues, formatLock: 'started' | 'point_buy' | null, locale?: 'de', rulesetLocked = false) {
   return renderWithI18n(
-    <LeagueSettingsForm seasonId="s1" initial={initial} rulesets={RULESETS} formatLock={formatLock} />,
+    <LeagueSettingsForm seasonId="s1" initial={initial} rulesets={RULESETS} formatLock={formatLock} rulesetLocked={rulesetLocked} />,
     { locale },
   );
+}
+
+/** The ruleset `<select>`, as HTML. */
+function rulesetSelect(html: string): string {
+  const match = html.match(/<select[^>]*id="league-ruleset"[^>]*>.*?<\/select>/s);
+  expect(match).not.toBeNull();
+  return match ? match[0] : '';
 }
 
 describe('LeagueSettingsForm', () => {
@@ -141,9 +135,42 @@ describe('LeagueSettingsForm', () => {
     expect(de).not.toContain('Start Date');
   });
 
+  it('keeps the ruleset select editable before the league has started', () => {
+    const html = render(CLASSIC, null);
+
+    expect(rulesetSelect(html)).not.toContain(' disabled=""');
+    expect(html).toContain('The default for new phases');
+    expect(html).not.toContain('The league has started, so its ruleset');
+    expect(html).toContain('href="/admin/rulesets"');
+  });
+
+  it('disables the ruleset select once the league has started and points to the ruleset card', () => {
+    const html = render(CLASSIC, 'started', undefined, true);
+    const select = rulesetSelect(html);
+
+    expect(select).toContain(' disabled=""');
+    // The stored choice stays visible, so the league does not look like it has none.
+    expect(select).toMatch(/<option value="rs-2" selected="">Gen 9 OU<\/option>/);
+    expect(html).toContain('The league has started, so its ruleset can no longer be swapped here.');
+    expect(html).toContain('ruleset card below');
+    expect(html).not.toContain('The default for new phases');
+    // The select is described by the hint, and a locked select offers no detour to the studio.
+    const describedBy = select.match(/aria-describedby="([^"]+)"/)?.[1];
+    expect(describedBy && html.includes(`id="${describedBy}"`)).toBe(true);
+    expect(html).not.toContain('href="/admin/rulesets"');
+  });
+
+  it('says the same in German', () => {
+    const de = render(CLASSIC, 'started', 'de', true);
+
+    expect(rulesetSelect(de)).toContain(' disabled=""');
+    expect(de).toContain('Die Liga hat begonnen, ihr Regelwerk lässt sich hier nicht mehr austauschen.');
+    expect(de).not.toContain('The league has started');
+  });
+
   it('matches the create form wording for the shared fields', () => {
     const html = renderToStaticMarkup(
-      <LeagueSettingsForm seasonId="s1" initial={CLASSIC} rulesets={RULESETS} formatLock={null} />,
+      <LeagueSettingsForm seasonId="s1" initial={CLASSIC} rulesets={RULESETS} formatLock={null} rulesetLocked={false} />,
     );
 
     expect(html).toContain('League Name');
