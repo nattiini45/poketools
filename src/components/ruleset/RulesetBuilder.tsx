@@ -1,15 +1,27 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RulesetFormData, BaseFormat } from '@/types/ruleset';
-import type { FormatDefaults } from '@/lib/pkmn/format-catalog';
+import { getFormatName, type FormatDefaults } from '@/lib/pkmn/format-catalog';
+import { isEmptyTeamConstraints } from '@/lib/pkmn/team-constraints';
 import type { ApiResult } from '@/types/api';
 import type { Ruleset } from '@/types/ruleset';
 import FormatSelector from './FormatSelector';
+import FormatChangeDialog from './FormatChangeDialog';
 import ClauseToggleGrid from './ClauseToggleGrid';
 import BanlistEditor from './BanlistEditor';
 import TeamConstraintsEditor from './TeamConstraintsEditor';
+import {
+  applyDefaults,
+  defaultsToLists,
+  formatSwitchImpact,
+  isRuleless,
+  keepLists,
+  listsOf,
+  toSavePayload,
+  type FormatSwitchImpact,
+} from './ruleset-form';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -57,6 +69,25 @@ const EMPTY_FORM: RulesetFormData = {
   team_constraints: null,
 };
 
+/** The blank (custom) format starts with nothing, so its defaults need no request. */
+const BLANK_DEFAULTS: FormatDefaults = {
+  name: 'Custom Format',
+  gen: 9,
+  tier: 'Custom',
+  is_doubles: false,
+  clauses: [],
+  banned_pokemon: [],
+  banned_moves: [],
+  banned_items: [],
+};
+
+/** A base-format switch that waits for the admin's answer: keep, replace or cancel. */
+interface PendingFormatChange {
+  format: BaseFormat;
+  impact: FormatSwitchImpact;
+  defaults: FormatDefaults;
+}
+
 export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilderProps) {
   const router = useRouter();
   const t = useT(rulesetMessages);
@@ -66,48 +97,92 @@ export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilde
   const [form, setForm] = useState<RulesetFormData>(initialData ?? EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<SaveError | null>(null);
+  // The format whose defaults could not be loaded (the form was left untouched).
+  const [defaultsFailure, setDefaultsFailure] = useState<BaseFormat | null>(null);
+  const [defaultsLoading, setDefaultsLoading] = useState(() => !rulesetId && isRuleless(initialData ?? EMPTY_FORM));
+  const [pendingChange, setPendingChange] = useState<PendingFormatChange | null>(null);
   const formatRequestId = useRef(0);
+  const defaultsCache = useRef(new Map<string, FormatDefaults>());
+  // Async answers compare against the form as it is when they arrive.
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
 
-  const handleFormatChange = (format: BaseFormat) => {
+  /** Defaults of a format, cached per builder; `null` when they cannot be loaded. */
+  const fetchDefaults = useCallback(async (format: BaseFormat): Promise<FormatDefaults | null> => {
+    if (format === 'blank') return BLANK_DEFAULTS;
+    const cached = defaultsCache.current.get(format);
+    if (cached) return cached;
+    try {
+      const res = await fetch(`/api/pkmn/format-defaults?format=${encodeURIComponent(format)}`);
+      const json = (await res.json()) as ApiResult<FormatDefaults>;
+      if (!json.success) return null;
+      defaultsCache.current.set(format, json.data);
+      return json.data;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /**
+   * Fills a form that enforces nothing with `format`'s defaults. Applied only
+   * if the form is still empty when the answer arrives.
+   */
+  const loadDefaultsIntoEmptyForm = useCallback(
+    async (format: BaseFormat) => {
+      const requestId = ++formatRequestId.current;
+      setDefaultsFailure(null);
+      setDefaultsLoading(true);
+      const d = await fetchDefaults(format);
+      if (requestId !== formatRequestId.current) return; // stale response
+      setDefaultsLoading(false);
+      if (!d) {
+        setDefaultsFailure(format);
+        return;
+      }
+      const latest = formRef.current;
+      if (latest.base_format !== format || !isRuleless(latest)) return;
+      setForm((prev) => applyDefaults(prev, format, d));
+    },
+    [fetchDefaults],
+  );
+
+  // A new ruleset starts from its base format's defaults instead of an empty rule set.
+  useEffect(() => {
+    const initial = formRef.current;
+    if (!rulesetId && isRuleless(initial)) void loadDefaultsIntoEmptyForm(initial.base_format);
+  }, [rulesetId, loadDefaultsIntoEmptyForm]);
+
+  const handleFormatChange = async (format: BaseFormat) => {
+    const current = formRef.current.base_format;
+    if (format === current) return;
     // Increment request counter so any in-flight fetch is ignored
     const requestId = ++formatRequestId.current;
+    setDefaultsFailure(null);
+    setDefaultsLoading(false);
+    setPendingChange(null);
 
-    // Clear banlists immediately so stale data doesn't linger
-    setForm(prev => ({
-      ...prev,
-      base_format: format,
-      is_doubles: false,
-      clauses: [],
-      banned_pokemon: [],
-      banned_moves: [],
-      banned_items: [],
-      banned_abilities: [],
-      added_pokemon: [],
-    }));
+    // The form stays as it is until the answer is in.
+    const [target, currentDefaults] = await Promise.all([fetchDefaults(format), fetchDefaults(current)]);
+    if (requestId !== formatRequestId.current) return; // stale response
+    if (!target) {
+      setDefaultsFailure(format);
+      return;
+    }
+    const baseline = currentDefaults ? defaultsToLists(currentDefaults) : null;
+    const impact = formatSwitchImpact(listsOf(formRef.current), baseline);
+    if (impact.customised) {
+      setPendingChange({ format, impact, defaults: target });
+    } else {
+      setForm((prev) => applyDefaults(prev, format, target));
+    }
+  };
 
-    // Fetch the new format's defaults
-    fetch(`/api/pkmn/format-defaults?format=${format}`)
-      .then(res => res.json())
-      .then((json: ApiResult<FormatDefaults>) => {
-        if (requestId !== formatRequestId.current) return; // stale response
-        if (json.success) {
-          const d = json.data;
-          setForm(prev => ({
-            ...prev,
-            base_format: format,
-            is_doubles: d.is_doubles,
-            clauses: d.clauses,
-            banned_pokemon: d.banned_pokemon,
-            banned_moves: d.banned_moves,
-            banned_items: d.banned_items,
-            banned_abilities: [],
-            added_pokemon: [],
-          }));
-        }
-      })
-      .catch(() => {
-        // Keep cleared state on fetch failure
-      });
+  const retryDefaults = () => {
+    if (defaultsFailure === null) return;
+    if (defaultsFailure === formRef.current.base_format) void loadDefaultsIntoEmptyForm(defaultsFailure);
+    else void handleFormatChange(defaultsFailure);
   };
 
   const handleSave = async () => {
@@ -121,7 +196,7 @@ export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilde
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(toSavePayload(form, initialData?.team_constraints)),
       });
 
       if (!res.ok) {
@@ -176,6 +251,22 @@ export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilde
         : t('review.nfeOnly', { cap: stage.fully_evolved_cap ?? 0 })
       : null;
 
+  // A form with a real base format but no clause, ban or addition enforces nothing beyond the generation.
+  const emptyNotice =
+    isRuleless(form) && !defaultsLoading && defaultsFailure === null ? (
+      <Alert variant="warning" className="space-y-2">
+        <p className="font-semibold">{t('builder.emptyNotice.title')}</p>
+        <p>{t('builder.emptyNotice.body', { format: getFormatName(form.base_format) })}</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void loadDefaultsIntoEmptyForm(form.base_format)}
+        >
+          {t('builder.emptyNotice.load', { format: getFormatName(form.base_format) })}
+        </Button>
+      </Alert>
+    ) : null;
+
   return (
     <div className="max-w-2xl">
       {/* Step indicators */}
@@ -197,6 +288,29 @@ export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilde
 
       {error && <Alert variant="error" className="mb-4">{errorMessage(error)}</Alert>}
 
+      {defaultsFailure !== null && (
+        <Alert variant="error" className="mb-4 flex items-center justify-between gap-3">
+          <span>{t('builder.defaultsFailed', { format: getFormatName(defaultsFailure) })}</span>
+          <Button variant="secondary" size="sm" onClick={retryDefaults}>
+            {t('builder.defaultsRetry')}
+          </Button>
+        </Alert>
+      )}
+
+      <FormatChangeDialog
+        format={pendingChange?.format ?? null}
+        impact={pendingChange?.impact ?? null}
+        onKeep={() => {
+          if (pendingChange) setForm((prev) => keepLists(prev, pendingChange.format));
+          setPendingChange(null);
+        }}
+        onReplace={() => {
+          if (pendingChange) setForm((prev) => applyDefaults(prev, pendingChange.format, pendingChange.defaults));
+          setPendingChange(null);
+        }}
+        onCancel={() => setPendingChange(null)}
+      />
+
       {/* Step 0: Format & Name */}
       {step === 0 && (
         <div className="space-y-4">
@@ -206,7 +320,8 @@ export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilde
             onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
             placeholder={t('builder.namePlaceholder')}
           />
-          <FormatSelector value={form.base_format} onChange={handleFormatChange} />
+          <FormatSelector value={form.base_format} onChange={(format) => void handleFormatChange(format)} />
+          {emptyNotice}
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -312,6 +427,7 @@ export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilde
       {/* Step 4: Review */}
       {step === 4 && (
         <div className="space-y-4 text-sm text-poke-text-primary">
+          {emptyNotice}
           <div>
             <span className="font-heading font-semibold">{t('review.name')}</span> {form.name || t('review.unnamed')}
           </div>
@@ -383,7 +499,7 @@ export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilde
               {t('detail.sharedTypeRule', { percent: pct })}
             </div>
           )}
-          {constraints && (
+          {constraints && !isEmptyTeamConstraints(constraints) && (
             <div>
               <span className="font-heading font-semibold">{t('review.teamConstraints')}</span>
               <ul className="mt-1 ml-4 list-disc text-xs text-poke-text-secondary space-y-0.5">

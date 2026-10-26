@@ -1,0 +1,12 @@
+-- Format Studio, step 1 of 3: the 'custom' league type.
+--
+-- A league whose format comes from a stored format definition (src/lib/format-kit, docs/format-kit.md) is a
+-- 'custom' league. The value only names the type; the format itself is attached by the two migrations after this one.
+--
+-- Apply this file ALONE and let it commit before the next one: a new enum value cannot be used in the transaction
+-- that adds it, and 20261024100200_season_formats_and_stage_columns.sql uses it in a trigger condition. There is no
+-- BEGIN/COMMIT here on purpose. The value cannot be dropped again (Postgres has no DROP VALUE), so this step is
+-- irreversible.
+--
+-- Deploy order: all three Format Studio migrations, in file order, before the code that reads or writes them.
+ALTER TYPE public.season_format_type ADD VALUE IF NOT EXISTS 'custom';

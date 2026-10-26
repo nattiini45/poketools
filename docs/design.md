@@ -182,7 +182,7 @@ interactivity) and consume the tokens above.
 
 | Component | Purpose |
 |---|---|
-| `PageContainer` | Page shell: title/subtitle + max-width wrapper (`maxWidth="xl"` etc.) |
+| `PageContainer` | Page shell: title/subtitle + max-width wrapper (`maxWidth="xl"` etc.); the title row wraps, so the `action` slot drops below the title on narrow screens |
 | `Card` | Surface container with `variant` (outlined/elevated), `padding`, optional `hover` |
 | `Button` | Primary/secondary/ghost/danger variants × sm/md/lg sizes |
 | `buttonStyles.ts` | `getButtonClasses(variant, size)` for non-`<Button>` callers (e.g. anchor tags) |
@@ -304,7 +304,9 @@ Ids, labels and the token-name list live in `src/lib/design/site-palettes.ts`
   too. It pauses while `withDefaultSitePalette` renders plaza for the social
   image and skips `/broadcast/*`.
 - **Picker** (`src/components/shared/PalettePicker.tsx`). `PalettePicker` sits
-  right before the light/dark toggle in the desktop NavBar: a disclosure
+  right before the light/dark toggle in the NavBar (the link row shows from
+  `xl`, a menu button replaces it below; at `md` to `xl` the language and palette
+  pickers stay in the bar): a disclosure
   button whose panel is a native radio group (`PaletteOptions`; arrow keys
   select and apply at once, Enter or Escape closes and returns focus to the
   button). It is never portalled: the panel stays inside `#site-nav`, so the

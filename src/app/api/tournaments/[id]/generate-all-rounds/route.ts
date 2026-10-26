@@ -6,10 +6,16 @@ import {
   getParticipants,
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
-import { getRoundsByTournament, createRound, updateRoundByePlayers } from '@/lib/supabase/queries/rounds';
+import {
+  getRoundsByTournament,
+  createRound,
+  updateRoundByePlayers,
+  updateRoundStatus,
+} from '@/lib/supabase/queries/rounds';
 import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { generateRoundRobinRound, getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
+import { parseGenerateOptions } from '@/lib/tournament/generate-options';
 import {
   ensurePhaseGroupsFromLeague,
   pendingWeeks,
@@ -18,6 +24,7 @@ import {
   roundsAwaitingMatches,
 } from '@/lib/tournament/group-rounds';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import type { Round } from '@/types/round';
 import type { Pairing } from '@/lib/tournament/types';
@@ -41,13 +48,18 @@ interface RouteParams {
  * planned and validated before the first one is written. A round and its matches are two writes: a written week
  * an interrupted call left without matches is filled by the next call (`roundsAwaitingMatches`), never skipped.
  * A phase without groups does the same for its circle-method rounds: a written round with no match is refilled.
+ *
+ * Optional JSON body `{ "start_round": true }` starts the lowest-numbered round this call wrote (best effort: if
+ * the start fails the round stays pending and the admin starts it by hand); the later rounds stay pending.
  */
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireResourceAdmin('tournament', id);
+    const admin = await requireResourceAdmin('tournament', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_TOURNAMENT_ID');
     if (invalidId) return invalidId;
+    const options = await parseGenerateOptions(request);
+    if (!options.ok) return options.response;
 
     const tournament = await getTournamentById(id);
     if (!tournament) {
@@ -179,7 +191,36 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       updates.status = 'active';
     }
     await updateTournament(id, updates);
+
+    // Start only the first new round, once every round and its matches are written. Best effort: the rounds exist
+    // either way, and a round that is still pending shows the Start banner.
+    let startedRoundNumber: number | null = null;
+    if (options.startRound && createdRounds.length > 0) {
+      const first = createdRounds.reduce((lowest, round) => (round.round_number < lowest.round_number ? round : lowest));
+      try {
+        const started = await updateRoundStatus(first.id, 'active');
+        createdRounds[createdRounds.indexOf(first)] = started;
+        startedRoundNumber = first.round_number;
+      } catch (startErr) {
+        console.error('[generate-all-rounds] Failed to start the first new round:', startErr);
+      }
+    }
+
     expireTournamentReads(id, tournament.season_id);
+
+    logAuditEvent({
+      actor_id: admin.playerId,
+      actor_name: admin.name,
+      action: 'round.generate',
+      resource_type: 'tournament',
+      resource_id: id,
+      resource_name: tournament.name,
+      metadata: {
+        rounds_created: createdRounds.length,
+        round_numbers: createdRounds.map((round) => round.round_number),
+        started_round_number: startedRoundNumber,
+      },
+    });
 
     return NextResponse.json<ApiResult<Round[]>>(
       { success: true, data: createdRounds },

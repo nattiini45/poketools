@@ -3,65 +3,33 @@ import { requireAnyAdmin } from '@/lib/auth/helpers';
 import { getAdminScope } from '@/lib/auth/admin-scope';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { supabase } from '@/lib/supabase/client';
+import { listActiveCompetitions } from '@/lib/supabase/queries/admin-dashboard';
+import {
+  ATTENTION_NOTE_MAX_LENGTH,
+  ATTENTION_STATUSES,
+  DASHBOARD_ATTENTION_LIMIT,
+  type AttentionMatch,
+  type AttentionStatus,
+  type AuditLogEntry,
+  type DashboardData,
+} from '@/lib/admin/dashboard';
 import type { ApiResult } from '@/types/api';
 import type { MatchStatus } from '@/types/match';
 
-export interface AuditLogEntry {
-  id: string;
-  actor_name: string;
-  action: string;
-  resource_type: string;
-  resource_id: string | null;
-  resource_name: string | null;
-  created_at: string;
-}
+export type { AttentionMatch, AuditLogEntry, DashboardCounts, DashboardData } from '@/lib/admin/dashboard';
 
-export interface AttentionMatch {
-  id: string;
-  tournament_id: string;
-  tournament_name: string;
-  /** The league the tournament is a phase of; null for a standalone tournament. */
-  season_name: string | null;
-  player_1_name: string;
-  player_2_name: string;
-  status: MatchStatus;
-  created_at: string;
-}
-
-/**
- * `null` means "not available for your role": a resource admin gets no
- * site-wide player and game totals.
- */
-export interface DashboardCounts {
-  players: number | null;
-  tournaments: number;
-  active_matches: number;
-  seasons: number;
-  games: number | null;
-}
-
-export interface DashboardData {
-  counts: DashboardCounts;
-  /** At most ATTENTION_LIMIT rows, newest first. */
-  attention_required: AttentionMatch[];
-  /** Every match needing attention, so the UI can show "N of M" when truncated. */
-  attention_total: number;
-  /** Site-wide audit trail; null for a resource admin (not available for your role). */
-  recent_activity: AuditLogEntry[] | null;
-}
-
-const ATTENTION_LIMIT = 20;
 /** Ids per `.in()` filter: keeps the request URL short for an admin with many tournaments. */
 const ID_CHUNK_SIZE = 100;
 
 const ACTIVE_STATUSES: MatchStatus[] = ['scheduled', 'in_progress', 'pending_confirmation'];
-const ATTENTION_STATUSES: MatchStatus[] = ['pending_confirmation', 'disputed'];
 
 const ATTENTION_COLUMNS = `
   id,
   tournament_id,
   status,
   created_at,
+  updated_at,
+  notes,
   player_1:players!matches_player_1_id_fkey ( name ),
   player_2:players!matches_player_2_id_fkey ( name ),
   tournaments ( name, seasons ( name ) )
@@ -79,13 +47,8 @@ function countOf(result: { count: number | null; error: unknown }): number {
   return result.count ?? 0;
 }
 
-/** Count of the matches in `statuses`; `tournamentIds` null = every tournament. */
-async function countMatches(statuses: MatchStatus[], tournamentIds: string[] | null): Promise<number> {
-  if (tournamentIds === null) {
-    return countOf(
-      await supabase.from('matches').select('*', { count: 'exact', head: true }).in('status', statuses)
-    );
-  }
+/** Count of the matches in `statuses` within `tournamentIds`; no tournaments means no query. */
+async function countMatches(statuses: MatchStatus[], tournamentIds: string[]): Promise<number> {
   const counts = await Promise.all(
     chunk(tournamentIds).map(async (ids) =>
       countOf(
@@ -105,46 +68,73 @@ interface AttentionRow {
   tournament_id: string;
   status: string;
   created_at: string;
+  updated_at: string;
+  notes: string | null;
   player_1: { name: string } | null;
   player_2: { name: string } | null;
   tournaments: { name: string; seasons: { name: string } | null } | null;
 }
 
-/** The newest matches needing attention plus the real total; `tournamentIds` null = every tournament. */
-async function loadAttention(
-  tournamentIds: string[] | null
-): Promise<{ rows: AttentionMatch[]; total: number }> {
-  const groups: Array<string[] | null> = tournamentIds === null ? [null] : chunk(tournamentIds);
+/** The dispute note of a row: trimmed and capped, null for an empty note or a row that is not disputed. */
+function attentionNote(row: AttentionRow): string | null {
+  if (row.status !== 'disputed') return null;
+  const note = (row.notes ?? '').trim().slice(0, ATTENTION_NOTE_MAX_LENGTH);
+  return note === '' ? null : note;
+}
 
-  const results = await Promise.all(
-    groups.map(async (ids) => {
-      let query = supabase
-        .from('matches')
-        .select(ATTENTION_COLUMNS, { count: 'exact' })
-        .in('status', ATTENTION_STATUSES);
-      if (ids) query = query.in('tournament_id', ids);
-      const result = await query.order('created_at', { ascending: false }).limit(ATTENTION_LIMIT);
-      if (result.error) throw result.error;
-      return { rows: (result.data ?? []) as unknown as AttentionRow[], total: result.count ?? 0 };
-    })
-  );
+/**
+ * The matches waiting longest (oldest `updated_at` first) plus the exact
+ * per-status totals, within `tournamentIds`. No tournaments means no query.
+ */
+async function loadAttention(tournamentIds: string[]): Promise<{
+  rows: AttentionMatch[];
+  total: number;
+  byStatus: Record<AttentionStatus, number>;
+}> {
+  const [chunked, disputed, pending] = await Promise.all([
+    Promise.all(
+      chunk(tournamentIds).map(async (ids) => {
+        const result = await supabase
+          .from('matches')
+          .select(ATTENTION_COLUMNS)
+          .in('status', [...ATTENTION_STATUSES])
+          .in('tournament_id', ids)
+          .order('updated_at', { ascending: true })
+          .order('id')
+          .limit(DASHBOARD_ATTENTION_LIMIT);
+        if (result.error) throw result.error;
+        return (result.data ?? []) as unknown as AttentionRow[];
+      })
+    ),
+    countMatches(['disputed'], tournamentIds),
+    countMatches(['pending_confirmation'], tournamentIds),
+  ]);
 
-  const rows = results
-    .flatMap((r) => r.rows)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, ATTENTION_LIMIT)
-    .map((row) => ({
-      id: row.id,
-      tournament_id: row.tournament_id,
-      tournament_name: row.tournaments?.name ?? 'Unknown',
-      season_name: row.tournaments?.seasons?.name ?? null,
-      player_1_name: row.player_1?.name ?? 'Unknown',
-      player_2_name: row.player_2?.name ?? 'Unknown',
-      status: row.status as MatchStatus,
-      created_at: row.created_at,
-    }));
+  // Each chunk holds its own oldest rows, so the oldest rows overall are among the merged ones.
+  const rows = chunked
+    .flat()
+    .sort((a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at) || a.id.localeCompare(b.id))
+    .slice(0, DASHBOARD_ATTENTION_LIMIT)
+    .map(
+      (row): AttentionMatch => ({
+        id: row.id,
+        tournament_id: row.tournament_id,
+        tournament_name: row.tournaments?.name ?? null,
+        season_name: row.tournaments?.seasons?.name ?? null,
+        player_1_name: row.player_1?.name ?? null,
+        player_2_name: row.player_2?.name ?? null,
+        status: row.status as AttentionStatus,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        note: attentionNote(row),
+      })
+    );
 
-  return { rows, total: results.reduce((sum, r) => sum + r.total, 0) };
+  return {
+    rows,
+    total: disputed + pending,
+    byStatus: { disputed, pending_confirmation: pending },
+  };
 }
 
 async function loadRecentActivity(): Promise<AuditLogEntry[]> {
@@ -168,6 +158,11 @@ async function loadRecentActivity(): Promise<AuditLogEntry[]> {
 /**
  * GET /api/admin/dashboard — the landing dashboard of /admin.
  *
+ * Counts and the attention list cover live competitions only: test leagues
+ * and archived leagues and tournaments are left out, and the site-wide player
+ * total skips test accounts. The list is the 20 matches that have waited
+ * longest, with exact per-status totals.
+ *
  * A site admin gets the site-wide totals and the audit trail. A resource
  * admin gets the tournament, league, active-match and attention figures of
  * their own scope only; the site-wide player and game totals and the audit
@@ -179,54 +174,49 @@ export async function GET() {
     const player = await requireAnyAdmin();
     const scope = await getAdminScope(player);
 
+    const active = await listActiveCompetitions({
+      seasonIds: scope.seasonIds,
+      tournamentIds: scope.tournamentIds,
+    });
+
+    const [activeMatches, attention] = await Promise.all([
+      countMatches(ACTIVE_STATUSES, active.tournamentIds),
+      loadAttention(active.tournamentIds),
+    ]);
+
+    const counts = {
+      tournaments: active.standaloneTournamentIds.length,
+      active_matches: activeMatches,
+      leagues: active.seasonIds.length,
+    };
+    const attentionData = {
+      attention_required: attention.rows,
+      attention_total: attention.total,
+      attention_by_status: attention.byStatus,
+    };
+
     if (scope.isSiteAdmin) {
-      const [players, tournaments, seasons, games, activeMatches, attention, recentActivity] =
-        await Promise.all([
-          supabase.from('players').select('*', { count: 'exact', head: true }),
-          supabase.from('tournaments').select('*', { count: 'exact', head: true }),
-          supabase.from('seasons').select('*', { count: 'exact', head: true }),
-          supabase.from('games').select('*', { count: 'exact', head: true }),
-          countMatches(ACTIVE_STATUSES, null),
-          loadAttention(null),
-          loadRecentActivity(),
-        ]);
+      const [players, games, recentActivity] = await Promise.all([
+        supabase.from('players').select('*', { count: 'exact', head: true }).eq('is_test_account', false),
+        supabase.from('games').select('*', { count: 'exact', head: true }),
+        loadRecentActivity(),
+      ]);
 
       return NextResponse.json<ApiResult<DashboardData>>({
         success: true,
         data: {
-          counts: {
-            players: countOf(players),
-            tournaments: countOf(tournaments),
-            active_matches: activeMatches,
-            seasons: countOf(seasons),
-            games: countOf(games),
-          },
-          attention_required: attention.rows,
-          attention_total: attention.total,
+          counts: { players: countOf(players), ...counts, games: countOf(games) },
+          ...attentionData,
           recent_activity: recentActivity,
         },
       });
     }
 
-    const tournamentIds = scope.tournamentIds ?? [];
-    const seasonIds = scope.seasonIds ?? [];
-    const [activeMatches, attention] = await Promise.all([
-      tournamentIds.length > 0 ? countMatches(ACTIVE_STATUSES, tournamentIds) : 0,
-      tournamentIds.length > 0 ? loadAttention(tournamentIds) : { rows: [], total: 0 },
-    ]);
-
     return NextResponse.json<ApiResult<DashboardData>>({
       success: true,
       data: {
-        counts: {
-          players: null,
-          tournaments: tournamentIds.length,
-          active_matches: activeMatches,
-          seasons: seasonIds.length,
-          games: null,
-        },
-        attention_required: attention.rows,
-        attention_total: attention.total,
+        counts: { players: null, ...counts, games: null },
+        ...attentionData,
         recent_activity: null,
       },
     });

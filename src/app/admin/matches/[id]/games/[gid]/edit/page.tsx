@@ -5,6 +5,7 @@ import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getGameById, getBattleStatsByGame } from '@/lib/supabase/queries/games';
 import EditGameForm from './EditGameForm';
 import { canAdministerMatch, MatchAccessDenied, viewerIsSiteAdmin } from '../../../match-access';
+import { matchPageBackSuffix } from '@/lib/admin/match-list';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { getT } from '@/i18n/server';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
@@ -13,9 +14,11 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ id: string; gid: string }>;
+  /** `back` carries the Matches list query of the match page this edit was opened from. */
+  searchParams?: Promise<{ back?: string | string[] }>;
 }
 
-export default async function EditGamePage({ params }: PageProps) {
+export default async function EditGamePage({ params, searchParams }: PageProps) {
   const { id: matchId, gid: gameId } = await params;
   if (!isValidUuid(matchId) || !isValidUuid(gameId)) notFound();
 
@@ -40,10 +43,11 @@ export default async function EditGamePage({ params }: PageProps) {
     );
   }
 
-  const [battleStats, t, isSiteAdmin] = await Promise.all([
+  const [battleStats, t, isSiteAdmin, query] = await Promise.all([
     getBattleStatsByGame(gameId),
     getT(adminCoreMessages),
     viewerIsSiteAdmin(),
+    searchParams,
   ]);
 
   return (
@@ -62,6 +66,7 @@ export default async function EditGamePage({ params }: PageProps) {
           player2={{ id: match.player_2_id, name: match.player_2_name }}
           battleStats={battleStats}
           isSiteAdmin={isSiteAdmin}
+          returnHref={`/admin/matches/${matchId}${matchPageBackSuffix(query?.back)}`}
         />
       </PageContainer>
     </AdminGuard>

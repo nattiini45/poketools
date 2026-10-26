@@ -8,7 +8,9 @@ import Badge from '@/components/ui/Badge';
 import LeagueStatusControl from '@/components/league/LeagueStatusControl';
 import { gateResourceAdmin } from '@/lib/auth/resource-gate';
 import { getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
+import { getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
+import type { SeasonStatus } from '@/types/season';
 import {
   LEAGUE_ADMIN_TAB_PARAM,
   availableLeagueAdminTabs,
@@ -20,6 +22,7 @@ import { getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
 import { leagueAdminSeasonPageMessages } from '@/i18n/messages/league-admin/season-page';
+import { formatStudioAttachMessages } from '@/i18n/messages/format-studio/attach';
 import LeagueAdminTabs, { LEAGUE_ADMIN_PANEL_ID, leagueAdminTabId } from './_components/LeagueAdminTabs';
 import type { LeagueAdminPanelContext } from './_components/panels/context';
 import { overviewPanel } from './_components/panels/OverviewPanel';
@@ -27,6 +30,7 @@ import { participantsPanel } from './_components/panels/ParticipantsPanel';
 import { draftPanel } from './_components/panels/DraftPanel';
 import { phasesPanel } from './_components/panels/PhasesPanel';
 import { rulesPanel } from './_components/panels/RulesPanel';
+import { formatPanel } from './_components/panels/FormatPanel';
 import { settingsPanel } from './_components/panels/SettingsPanel';
 import { dangerPanel } from './_components/panels/DangerPanel';
 
@@ -44,14 +48,21 @@ const PANELS: Record<LeagueAdminTab, (ctx: LeagueAdminPanelContext) => Promise<R
   draft: draftPanel,
   phases: phasesPanel,
   rules: rulesPanel,
+  format: formatPanel,
   settings: settingsPanel,
   danger: dangerPanel,
 };
 
+/** The statuses a custom league cannot take yet, with the reason; undefined once a format is attached. */
+async function customBlockedStatuses(seasonId: string): Promise<Partial<Record<SeasonStatus, string>> | undefined> {
+  const [attached, tAttach] = await Promise.all([getSeasonFormatSummary(seasonId), getT(formatStudioAttachMessages)]);
+  return attached === null ? { active: tAttach('status.blockedNoFormat') } : undefined;
+}
+
 /**
  * `/admin/leagues/[id]?tab=` — one league's admin page, split into tabs
  * (`src/lib/league-admin/tabs.ts`): overview (default), participants, draft,
- * phases, rules, settings, danger. The format decides which tabs exist
+ * phases, rules, format, settings, danger. The format decides which tabs exist
  * (`getFormatCapabilities`); an unknown or unavailable `?tab=` opens the
  * overview, the former `?tab=schedule` opens phases. The server renders, and reads for, the selected tab only: every
  * tab shares the live gate and the league row, the overview needs
@@ -104,7 +115,13 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
     t,
     tabLink,
   };
-  const panel = await PANELS[activeTab](ctx);
+  // A custom league cannot start without an attached format (the database and the generate routes refuse it too):
+  // its Active status is disabled, with the reason, until one is attached. One cheap read, custom leagues only;
+  // the current status is never blocked, so a league that is already active stays editable.
+  const [panel, blockedStatuses] = await Promise.all([
+    PANELS[activeTab](ctx),
+    league.format_type === 'custom' && league.status !== 'active' ? customBlockedStatuses(id) : undefined,
+  ]);
 
   const format = enumLabel(tEnum, 'formatType', league.format_type);
   const baseSubtitle = league.ruleset_name
@@ -117,6 +134,7 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
     draft: t('tabs.draft'),
     phases: t('tabs.phases'),
     rules: t('tabs.rules'),
+    format: t('tabs.format'),
     settings: t('tabs.settings'),
     danger: t('tabs.danger'),
   };
@@ -128,7 +146,11 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
             status control plus the badge would widen the page at phone width. */}
         <div className="flex flex-wrap items-center gap-3" data-admin-league-header>
           {league.is_test_season && <Badge variant="yellow">{t('header.testBadge')}</Badge>}
-          <LeagueStatusControl seasonId={id} currentStatus={league.status} />
+          <LeagueStatusControl
+            seasonId={id}
+            currentStatus={league.status}
+            {...(blockedStatuses ? { blocked: blockedStatuses } : {})}
+          />
         </div>
 
         <LeagueAdminTabs

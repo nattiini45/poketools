@@ -2015,6 +2015,130 @@ export type Database = {
           },
         ]
       }
+      format_definition_versions: {
+        Row: {
+          changelog: Json | null
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          definition_id: string
+          id: string
+          schema_version: number
+          spec: Json
+          status: string
+          version_no: number
+        }
+        Insert: {
+          changelog?: Json | null
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          definition_id: string
+          id?: string
+          schema_version: number
+          spec: Json
+          status?: string
+          version_no: number
+        }
+        Update: {
+          changelog?: Json | null
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          definition_id?: string
+          id?: string
+          schema_version?: number
+          spec?: Json
+          status?: string
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_definition_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_definition_versions_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "format_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      format_definitions: {
+        Row: {
+          created_at: string
+          current_draft: Json
+          current_version_id: string | null
+          description: Json | null
+          draft_rev: number
+          forked_from: string | null
+          id: string
+          kind: string
+          name: Json
+          owner_id: string | null
+          slug: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          created_at?: string
+          current_draft: Json
+          current_version_id?: string | null
+          description?: Json | null
+          draft_rev?: number
+          forked_from?: string | null
+          id?: string
+          kind?: string
+          name: Json
+          owner_id?: string | null
+          slug: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          created_at?: string
+          current_draft?: Json
+          current_version_id?: string | null
+          description?: Json | null
+          draft_rev?: number
+          forked_from?: string | null
+          id?: string
+          kind?: string
+          name?: Json
+          owner_id?: string | null
+          slug?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_definitions_current_version_fkey"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "format_definition_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_definitions_forked_from_fkey"
+            columns: ["forked_from"]
+            isOneToOne: false
+            referencedRelation: "format_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_definitions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       format_rules: {
         Row: {
           banned_items: string[]
@@ -3678,6 +3802,60 @@ export type Database = {
           },
         ]
       }
+      season_formats: {
+        Row: {
+          amendments: Json
+          definition_id: string | null
+          engine: string
+          frozen_at: string
+          season_id: string
+          seed: string
+          spec: Json
+          spec_hash: string
+          tunables: Json
+          version_no: number
+        }
+        Insert: {
+          amendments?: Json
+          definition_id?: string | null
+          engine?: string
+          frozen_at?: string
+          season_id: string
+          seed: string
+          spec: Json
+          spec_hash: string
+          tunables?: Json
+          version_no: number
+        }
+        Update: {
+          amendments?: Json
+          definition_id?: string | null
+          engine?: string
+          frozen_at?: string
+          season_id?: string
+          seed?: string
+          spec?: Json
+          spec_hash?: string
+          tunables?: Json
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "season_formats_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "format_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "season_formats_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: true
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       season_group_members: {
         Row: {
           created_at: string
@@ -4329,6 +4507,7 @@ export type Database = {
           current_round: number
           description: string
           enrollment_source: Json | null
+          format_stage_key: string | null
           id: string
           is_doubles: boolean
           legacy: boolean
@@ -4336,6 +4515,7 @@ export type Database = {
           ruleset_id: string
           season_id: string | null
           stage_order: number
+          stage_spec: Json | null
           status: Database["public"]["Enums"]["tournament_status"]
           team_visibility: Database["public"]["Enums"]["team_visibility"]
           updated_at: string
@@ -4351,6 +4531,7 @@ export type Database = {
           current_round?: number
           description?: string
           enrollment_source?: Json | null
+          format_stage_key?: string | null
           id?: string
           is_doubles?: boolean
           legacy?: boolean
@@ -4358,6 +4539,7 @@ export type Database = {
           ruleset_id: string
           season_id?: string | null
           stage_order?: number
+          stage_spec?: Json | null
           status?: Database["public"]["Enums"]["tournament_status"]
           team_visibility?: Database["public"]["Enums"]["team_visibility"]
           updated_at?: string
@@ -4373,6 +4555,7 @@ export type Database = {
           current_round?: number
           description?: string
           enrollment_source?: Json | null
+          format_stage_key?: string | null
           id?: string
           is_doubles?: boolean
           legacy?: boolean
@@ -4380,6 +4563,7 @@ export type Database = {
           ruleset_id?: string
           season_id?: string | null
           stage_order?: number
+          stage_spec?: Json | null
           status?: Database["public"]["Enums"]["tournament_status"]
           team_visibility?: Database["public"]["Enums"]["team_visibility"]
           updated_at?: string
@@ -4534,6 +4718,8 @@ export type Database = {
           rejected_at: string | null
           rejected_by: string | null
           rejection_reason: string | null
+          resubmission_blocked_at: string | null
+          resubmission_blocked_by: string | null
           scope_id: string | null
           scope_type: string
           updated_at: string
@@ -4552,6 +4738,8 @@ export type Database = {
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
+          resubmission_blocked_at?: string | null
+          resubmission_blocked_by?: string | null
           scope_id?: string | null
           scope_type?: string
           updated_at?: string
@@ -4570,6 +4758,8 @@ export type Database = {
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
+          resubmission_blocked_at?: string | null
+          resubmission_blocked_by?: string | null
           scope_id?: string | null
           scope_type?: string
           updated_at?: string
@@ -4592,6 +4782,13 @@ export type Database = {
           {
             foreignKeyName: "wiki_notes_rejected_by_fkey"
             columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wiki_notes_resubmission_blocked_by_fkey"
+            columns: ["resubmission_blocked_by"]
             isOneToOne: false
             referencedRelation: "players"
             referencedColumns: ["id"]
@@ -5150,6 +5347,35 @@ export type Database = {
         }
         Returns: string
       }
+      format_attach_season: {
+        Args: {
+          p_definition_id: string
+          p_season_id: string
+          p_seed: string
+          p_spec: Json
+          p_spec_hash: string
+          p_stages: Json
+          p_version_no: number
+        }
+        Returns: Json
+      }
+      format_detach_season: { Args: { p_season_id: string }; Returns: Json }
+      format_publish_version: {
+        Args: {
+          p_actor: string
+          p_changelog: Json
+          p_content_hash: string
+          p_definition_id: string
+          p_expected_rev: number
+          p_schema_version: number
+          p_spec: Json
+        }
+        Returns: {
+          out_version_id: string
+          out_version_no: number
+        }[]
+      }
+      format_season_started: { Args: { p_season_id: string }; Returns: boolean }
       get_item_usage_for_pokemon: {
         Args: {
           p_limit?: number
@@ -5372,6 +5598,7 @@ export type Database = {
         | "doubles"
         | "draft"
         | "evolution_point_buy"
+        | "custom"
       season_status: "upcoming" | "active" | "completed"
       team_import_source: "pokepastes" | "manual" | "ps_text"
       team_visibility: "hidden_until_match" | "always_public"
@@ -5528,6 +5755,7 @@ export const Constants = {
         "doubles",
         "draft",
         "evolution_point_buy",
+        "custom",
       ],
       season_status: ["upcoming", "active", "completed"],
       team_import_source: ["pokepastes", "manual", "ps_text"],

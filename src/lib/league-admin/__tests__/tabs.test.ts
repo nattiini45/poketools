@@ -8,12 +8,13 @@ import {
 } from '../tabs';
 
 describe('availableLeagueAdminTabs (from getFormatCapabilities)', () => {
-  it('singles and doubles: overview, participants, phases, settings, danger', () => {
+  it('singles and doubles: overview, participants, phases, format, settings, danger', () => {
     for (const format of ['singles', 'doubles'] as const) {
       expect(availableLeagueAdminTabs(format), format).toEqual([
         'overview',
         'participants',
         'phases',
+        'format',
         'settings',
         'danger',
       ]);
@@ -27,13 +28,35 @@ describe('availableLeagueAdminTabs (from getFormatCapabilities)', () => {
       'draft',
       'phases',
       'rules',
+      'format',
       'settings',
       'danger',
     ]);
   });
 
-  it('Evolution Point Buy gets all seven, in display order', () => {
+  it('Evolution Point Buy gets all eight, in display order', () => {
     expect(availableLeagueAdminTabs('evolution_point_buy')).toEqual([...LEAGUE_ADMIN_TABS]);
+    expect(LEAGUE_ADMIN_TABS).toHaveLength(8);
+  });
+
+  it('a custom league gets the singles-like set: no draft, no rules', () => {
+    expect(availableLeagueAdminTabs('custom')).toEqual([
+      'overview',
+      'participants',
+      'phases',
+      'format',
+      'settings',
+      'danger',
+    ]);
+  });
+
+  it('the format tab sits between rules and settings and every format has it', () => {
+    const order = [...LEAGUE_ADMIN_TABS];
+    expect(order.indexOf('format')).toBe(order.indexOf('rules') + 1);
+    expect(order.indexOf('settings')).toBe(order.indexOf('format') + 1);
+    for (const format of ['singles', 'doubles', 'draft', 'evolution_point_buy', 'custom'] as const) {
+      expect(availableLeagueAdminTabs(format), format).toContain('format');
+    }
   });
 });
 
@@ -59,6 +82,7 @@ describe('parseLeagueAdminTab', () => {
   it('keeps old ?tab=schedule links working: they open the phases tab', () => {
     expect(parseLeagueAdminTab('schedule', epb)).toBe('phases');
     expect(parseLeagueAdminTab('schedule', singles)).toBe('phases');
+    expect(parseLeagueAdminTab('format', singles)).toBe('format');
     expect(parseLeagueAdminTab('phases', singles)).toBe('phases');
     // Aliases never widen the whitelist: an inherited key is not an alias.
     expect(parseLeagueAdminTab('toString', epb)).toBe('overview');
@@ -71,5 +95,6 @@ describe('leagueAdminHref', () => {
     expect(leagueAdminHref('s1', 'draft')).toBe('/admin/leagues/s1?tab=draft');
     expect(leagueAdminHref('s1', 'danger')).toBe('/admin/leagues/s1?tab=danger');
     expect(leagueAdminHref('s1', 'phases')).toBe('/admin/leagues/s1?tab=phases');
+    expect(leagueAdminHref('s1', 'format')).toBe('/admin/leagues/s1?tab=format');
   });
 });

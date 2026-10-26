@@ -32,6 +32,8 @@ vi.mock('@/lib/players/roster-access', () => ({
 
 // The write paths expire the public read cache (SD); revalidateTag needs a
 // Next request scope, which a unit test does not have.
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
+
 vi.mock('@/lib/revalidation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/revalidation')>()),
   expireTournamentReads: vi.fn(),
@@ -51,6 +53,7 @@ import {
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { canViewAdminRoster } from '@/lib/players/roster-access';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
 import { SeedConflictError, SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
 import { apiErrorText } from '@/i18n/api-errors';
 import { errorsTournaments } from '@/i18n/messages/errors';
@@ -63,6 +66,8 @@ const makeRequest = (body: Record<string, unknown>) =>
   ({ json: () => Promise.resolve(body) }) as unknown as NextRequest;
 
 const routeParams = { params: Promise.resolve({ id: '22222222-2222-4222-8222-222222222222' }) };
+
+const ADMIN = { playerId: 'admin-1', name: 'Admin' };
 
 const PLAYER_1 = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01';
 const PLAYER_2 = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a02';
@@ -177,7 +182,7 @@ describe('POST /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 when player_id missing', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
 
     const res = await POST(makeRequest({}), routeParams);
@@ -189,7 +194,7 @@ describe('POST /api/tournaments/[id]/participants', () => {
   });
 
   it('adds a participant successfully', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(addParticipant).mockResolvedValue(undefined as never);
 
@@ -203,7 +208,7 @@ describe('POST /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 when tournament has already started', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockActiveTournament as never);
 
     const res = await POST(makeRequest({ player_id: PLAYER_1 }), routeParams);
@@ -216,7 +221,7 @@ describe('POST /api/tournaments/[id]/participants', () => {
   });
 
   it('rejects add when elim bracket already has rounds', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       status: 'upcoming',
@@ -256,7 +261,7 @@ describe('DELETE /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 when player_id missing', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
 
     const res = await DELETE(makeRequest({}), routeParams);
@@ -268,7 +273,7 @@ describe('DELETE /api/tournaments/[id]/participants', () => {
   });
 
   it('removes a participant successfully', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(removeParticipant).mockResolvedValue(undefined as never);
 
@@ -282,7 +287,7 @@ describe('DELETE /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 when tournament has already started', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockActiveTournament as never);
 
     const res = await DELETE(makeRequest({ player_id: PLAYER_1 }), routeParams);
@@ -311,7 +316,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 when seeds array missing or empty', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
 
     const res = await PATCH(makeRequest({ seeds: [] }), routeParams);
     const json = await res.json();
@@ -322,7 +327,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 for invalid seed value', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
 
     const res = await PATCH(
       makeRequest({ seeds: [{ player_id: PLAYER_1, seed: -1 }] }),
@@ -335,7 +340,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 for duplicate seed values', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
 
     const res = await PATCH(
@@ -355,7 +360,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 when player is not a participant', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
 
@@ -373,7 +378,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('updates seeds successfully', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
     vi.mocked(updateParticipantSeeds).mockResolvedValue(undefined as never);
@@ -392,7 +397,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('forwards starting_bracket to updateParticipantSeeds', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
     vi.mocked(updateParticipantSeeds).mockResolvedValue(undefined as never);
@@ -410,7 +415,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 400 when seeding is locked after tournament start', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockActiveTournament as never);
 
     const res = await PATCH(
@@ -427,7 +432,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('allows null seeds', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
     vi.mocked(updateParticipantSeeds).mockResolvedValue(undefined as never);
@@ -441,7 +446,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 409 SEED_CONFLICT (nothing written, no tag expiry) when a seed is held outside the request', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
     vi.mocked(updateParticipantSeeds).mockRejectedValue(new SeedConflictError(2));
@@ -460,7 +465,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('returns 500 SEED_UPDATE_PARTIAL and still expires the tags when a write lands half-way', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
     vi.mocked(updateParticipantSeeds).mockRejectedValue(
@@ -490,7 +495,7 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
   });
 
   it('keeps the static 500 fallback for an unexpected seed write error', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
     mockUpcomingTournamentFetch();
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
     vi.mocked(updateParticipantSeeds).mockRejectedValue(new Error('db down'));
@@ -503,5 +508,87 @@ describe('PATCH /api/tournaments/[id]/participants', () => {
     expect(json.error).toBe('Failed to update seeds');
     expect(json.code).toBeUndefined();
     expect(expireTournamentReads).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/tournaments/[id]/participants — audit', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ ...mockUpcomingTournament, name: 'Spring Open' } as never);
+    vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
+    vi.mocked(updateParticipantSeeds).mockResolvedValue(undefined as never);
+  });
+
+  it('records one tournament.seeds.update event after a successful save', async () => {
+    const res = await PATCH(
+      makeRequest({
+        seeds: [
+          { player_id: PLAYER_1, seed: 2 },
+          { player_id: PLAYER_2, seed: null },
+        ],
+      }),
+      routeParams,
+    );
+
+    expect(res.status).toBe(200);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledWith({
+      actor_id: 'admin-1',
+      actor_name: 'Admin',
+      action: 'tournament.seeds.update',
+      resource_type: 'tournament',
+      resource_id: '22222222-2222-4222-8222-222222222222',
+      resource_name: 'Spring Open',
+      metadata: { participants: 2, seeded: 1 },
+    });
+    // Written after the seeds, never before.
+    expect(vi.mocked(updateParticipantSeeds).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(logAuditEvent).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('records nothing for a duplicate-seed 400', async () => {
+    const res = await PATCH(
+      makeRequest({
+        seeds: [
+          { player_id: PLAYER_1, seed: 1 },
+          { player_id: PLAYER_2, seed: 1 },
+        ],
+      }),
+      routeParams,
+    );
+
+    expect(res.status).toBe(400);
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('records nothing for a validation error', async () => {
+    const res = await PATCH(makeRequest({ seeds: [] }), routeParams);
+
+    expect(res.status).toBe(400);
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('records nothing once seeding is locked', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(mockActiveTournament as never);
+
+    const res = await PATCH(makeRequest({ seeds: [{ player_id: PLAYER_1, seed: 1 }] }), routeParams);
+
+    expect(res.status).toBe(400);
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('records nothing when the write is only partly saved or conflicts', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(updateParticipantSeeds).mockRejectedValueOnce(new SeedUpdatePartialError([PLAYER_2], [new Error('write err')]));
+    const partial = await PATCH(makeRequest({ seeds: [{ player_id: PLAYER_1, seed: 1 }] }), routeParams);
+    expect(partial.status).toBe(500);
+
+    vi.mocked(updateParticipantSeeds).mockRejectedValueOnce(new SeedConflictError(2));
+    const conflict = await PATCH(makeRequest({ seeds: [{ player_id: PLAYER_1, seed: 1 }] }), routeParams);
+    expect(conflict.status).toBe(409);
+
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });

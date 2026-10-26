@@ -4,9 +4,13 @@ import { publicReads } from '@/lib/cache/public-reads';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
-import { sumEvolutionPoints, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
+import {
+  epbStandingsContext,
+  sumEvolutionPoints,
+  type SeasonStandingsContext,
+} from '@/lib/tournament/season-standings';
 import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
-import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { isEvolutionPointBuy, isLeagueDoubles } from '@/lib/season/format-utils';
 import type { LeagueGroupStandings, LeagueStanding } from '@/lib/supabase/queries/league-standings';
 import type { CombinedRanking } from '@/lib/tournament/group-standings';
 import type { PublicSeasonParticipant, PublicTournamentParticipant } from '@/lib/players/public-player';
@@ -236,10 +240,10 @@ export async function loadLeagueHubPanel(
       const [participants, groups, battleStats, swissRounds] = reads;
       // One season context for every table on the page (AGENTS.md: never one
       // standings lookup per table).
-      const context: SeasonStandingsContext = {
-        formatType: league.format_type,
-        evolutionPoints: epb ? sumEvolutionPoints(data.trackers) : undefined,
-      };
+      // The stored tiebreaker order comes from the world payload's format rules (already read, no extra query).
+      const context: SeasonStandingsContext = epb
+        ? epbStandingsContext(league.format_type, sumEvolutionPoints(data.trackers), data.formatRules?.tiebreaker_order)
+        : { formatType: league.format_type };
       const gymTypes = gymTypeMap(ctx.participants);
       return {
         tab,
@@ -337,7 +341,7 @@ export async function loadLeagueHubPanel(
         tab,
         usageRows: aggregatesToUsageRows(aggregates, totalGames),
         killRanking: buildKillRanking(battleStats),
-        isDoubles: league.format_type === 'doubles',
+        isDoubles: isLeagueDoubles(league.format_type, stages),
       };
     }
 

@@ -24,6 +24,8 @@ import {
   scoringByeRecords,
   scoringByeRecordsForStages,
 } from '@/lib/tournament/byes';
+import { epbStandingsContext, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
+import { isEvolutionPointBuy, isLeagueDoubles } from '@/lib/season/format-utils';
 import { getT } from '@/i18n/server';
 import { insightsMessages } from '@/i18n/messages/insights';
 
@@ -36,6 +38,15 @@ interface PageProps {
 }
 
 type InsightsScope = ReturnType<typeof parseScopeFromSearchParams>;
+
+/** The standings context of an Evolution Point Buy league, from the league's cached reads (30 s, season-tagged). */
+async function epbRanking(seasonId: string, formatType: string): Promise<SeasonStandingsContext> {
+  const [evolutionPoints, formatRules] = await Promise.all([
+    publicReads.seasonEvolutionPoints(seasonId),
+    publicReads.seasonFormatRules(seasonId),
+  ]);
+  return epbStandingsContext(formatType, evolutionPoints, formatRules?.tiebreaker_order);
+}
 
 /** The scope-specific rows (everything but the usage table). */
 interface ScopeRows {
@@ -74,6 +85,12 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
       tournament.bracket_type === 'swiss' && formatScoresByes(tournament.season_format_type)
         ? scoringByeRecords(tournament.bracket_type, await publicReads.tournamentRounds(scope.id))
         : [];
+    // A stage of an Evolution Point Buy league ranks like the league's tables: its stored tiebreaker order and the
+    // season's evolution points, from the league's cached entries. Any other tournament reads nothing more.
+    const ranking =
+      tournament.season_id && tournament.season_format_type && isEvolutionPointBuy(tournament.season_format_type)
+        ? await epbRanking(tournament.season_id, tournament.season_format_type)
+        : undefined;
     return {
       title: tournament.name,
       isDoubles: tournament.is_doubles,
@@ -89,6 +106,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
         })),
         records,
         byes,
+        ranking,
       ),
     };
   }
@@ -109,11 +127,15 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
     // batched read for all Swiss stages, and a league with no Swiss stage, or an Evolution Point Buy one (its
     // tables never read byes), reads none.
     const readsByes = formatScoresByes(season.format_type) && stages.some((stage) => stage.bracket_type === 'swiss');
-    const byeRounds = readsByes ? await publicReads.seasonByeRounds(scope.id) : [];
+    const [byeRounds, ranking] = await Promise.all([
+      readsByes ? publicReads.seasonByeRounds(scope.id) : [],
+      // An Evolution Point Buy league ranks by its stored tiebreaker order and evolution points, like its tables.
+      isEvolutionPointBuy(season.format_type) ? epbRanking(scope.id, season.format_type) : undefined,
+    ]);
     const byes = scoringByeRecordsForStages(stages, groupRoundsByStage(byeRounds));
     return {
       title: season.name,
-      isDoubles: season.format_type === 'doubles',
+      isDoubles: isLeagueDoubles(season.format_type, stages),
       participants: parts.map((p) => ({ id: p.id, name: p.name })),
       tournamentId: null,
       killRanking: buildKillRanking(battleStats),
@@ -126,6 +148,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
         })),
         matchRecords,
         byes,
+        ranking,
       ),
     };
   }

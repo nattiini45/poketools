@@ -54,7 +54,7 @@ export const bracketTypeSchema = z.enum(['single_elim', 'double_elim', 'round_ro
 export const tournamentStatusSchema = z.enum(['upcoming', 'active', 'completed']);
 export const matchStatusSchema = z.enum(['scheduled', 'in_progress', 'pending_confirmation', 'completed', 'disputed']);
 export const roundStatusSchema = z.enum(['pending', 'active', 'completed']);
-export const seasonFormatTypeSchema = z.enum(['singles', 'doubles', 'draft', 'evolution_point_buy']);
+export const seasonFormatTypeSchema = z.enum(['singles', 'doubles', 'draft', 'evolution_point_buy', 'custom']);
 export const seasonStatusSchema = z.enum(['upcoming', 'active', 'completed']);
 /** 3D world theme pick for a league season (`seasons.route_theme`). */
 export const routeThemeSchema = z.enum(['auto', 'plaza', 'sakura', 'mountain', 'clouds']);
@@ -251,7 +251,8 @@ export const auditLogQuerySchema = z.object({
   actor_id: uuid.optional(),
   actor: z.string().trim().min(1).max(120).optional(),
   resource_type: z.string().trim().min(1).max(120).optional(),
-  resource_id: z.string().trim().min(1).max(120).optional(),
+  // The audit `resource_id` column is a uuid: a free-text value would raise a Postgres type error.
+  resource_id: z.string().trim().pipe(uuid).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -433,6 +434,26 @@ export const seasonCreateSchema = z.object({
   language: contentLanguageSchema.optional(),
 });
 
+/**
+ * Optional "start from an existing league" block of `POST /api/seasons`: the
+ * source league and what to copy besides its phases. Both flags default to
+ * off, so a bare `{ season_id }` copies the phases only.
+ */
+export const seasonCloneOptionsSchema = z.object({
+  season_id: uuid,
+  copy_roster: z.boolean().default(false),
+  copy_admins: z.boolean().default(false),
+});
+
+/**
+ * The `POST /api/seasons` body: the create fields plus the optional clone
+ * block. `seasonCreateSchema` stays as it is (PATCH and other callers build
+ * on it); the extra key is stripped there.
+ */
+export const seasonCreateRequestSchema = seasonCreateSchema.extend({
+  clone_from: seasonCloneOptionsSchema.optional(),
+});
+
 export const seasonUpdateSchema = z.object({
   name: z.string().trim().min(1).max(FIELD_LIMITS.TITLE).optional(),
   description: z.string().max(FIELD_LIMITS.LONG_TEXT).optional(),
@@ -581,10 +602,54 @@ export const replayImportSchema = z.object({
   side_player_ids: z.tuple([uuid, uuid]),
 });
 
+/** Short free-text reason an admin or a player gives for an action on a match. */
+export const reasonSchema = z.string().trim().min(1).max(FIELD_LIMITS.DESCRIPTION);
+
 export const confirmMatchSchema = z.object({
   action: confirmActionSchema.default('confirm'),
   winner_id: uuid.optional(),
   notes: z.string().trim().max(FIELD_LIMITS.MEDIUM_TEXT).optional(),
+  /** Dispute reason; only valid together with action 'dispute'. */
+  reason: reasonSchema.optional(),
+}).refine((data) => data.reason === undefined || data.action === 'dispute', {
+  message: 'reason is only allowed when disputing a match',
+  path: ['reason'],
+});
+
+const MATCH_SCHEDULE_MIN_MS = Date.UTC(2000, 0, 1);
+const MATCH_SCHEDULE_MAX_MS = Date.UTC(2100, 0, 1);
+
+/** Admin schedule change: an ISO instant with an offset, or null to clear it. */
+export const matchScheduleSchema = z.object({
+  scheduled_at: z.iso.datetime({ offset: true }).nullable(),
+}).refine((data) => {
+  if (data.scheduled_at === null) return true;
+  const ms = Date.parse(data.scheduled_at);
+  return Number.isFinite(ms) && ms >= MATCH_SCHEDULE_MIN_MS && ms < MATCH_SCHEDULE_MAX_MS;
+}, {
+  message: 'scheduled_at must be between 2000-01-01 and 2100-01-01',
+  path: ['scheduled_at'],
+});
+
+/** Admin reopen of a match to in_progress; the reason is required. */
+export const matchReopenSchema = z.object({
+  reason: reasonSchema,
+});
+
+/** Match reset: cascade flag plus an optional reason (the admin UI requires it). */
+export const matchResetSchema = cascadeActionSchema.extend({
+  reason: reasonSchema.optional(),
+});
+
+/** Optional body of an admin game delete. */
+export const gameDeleteSchema = z.object({
+  reason: reasonSchema.optional(),
+});
+
+/** Paging of the per-match history; query-string values are coerced. */
+export const matchHistoryQuerySchema = z.object({
+  offset: z.coerce.number().int().min(0).max(1000).default(0),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
 // ─── Ruleset Schemas ─────────────────────────────────────────────────
@@ -796,6 +861,14 @@ export const wikiNotePatchSchema = z.object({
   rejected: z.boolean().optional(),
   rejection_reason: z.string().trim().min(1).max(FIELD_LIMITS.DESCRIPTION).optional(),
 });
+
+/**
+ * The superadmin's block / unblock request (`PATCH /api/wiki/notes/[id]`). Strict and alone: it cannot be combined
+ * with an edit, an approval or a rejection.
+ */
+export const wikiNoteBlockResubmissionSchema = z.object({
+  block_resubmission: z.boolean(),
+}).strict();
 
 export const wikiNoteReportSchema = z.object({
   reason: z.enum(['inaccurate', 'spam', 'abusive', 'off_topic', 'other']),
@@ -1191,6 +1264,14 @@ export const roundUpdateSchema = z.object({
   { message: 'Provide status, best_of and/or deadline to update' },
 );
 
+/**
+ * Optional JSON body of the three generate routes (generate-round, generate-all-rounds, generate-bracket).
+ * `start_round` starts the lowest-numbered round that call created; omitted or false leaves it pending.
+ */
+export const generateRoundOptionsSchema = z.object({
+  start_round: z.boolean().optional(),
+}).strict();
+
 export const broadcastMomentSchema = z.object({
   match_id: uuid,
   // The DB CHECK's set (broadcast_moments_moment_type_check), shared with the manual-result moments.
@@ -1278,9 +1359,16 @@ export type TournamentCreateInput = z.infer<typeof tournamentCreateSchema>;
 export type TournamentUpdateInput = z.infer<typeof tournamentUpdateSchema>;
 export type SeasonCreateInput = z.infer<typeof seasonCreateSchema>;
 export type SeasonUpdateInput = z.infer<typeof seasonUpdateSchema>;
+export type SeasonCloneOptionsInput = z.infer<typeof seasonCloneOptionsSchema>;
+export type SeasonCreateRequestInput = z.infer<typeof seasonCreateRequestSchema>;
 export type ParseReplayInput = z.infer<typeof parseReplaySchema>;
 export type ManualResultInput = z.infer<typeof manualResultSchema>;
 export type ConfirmMatchInput = z.infer<typeof confirmMatchSchema>;
+export type MatchScheduleInput = z.infer<typeof matchScheduleSchema>;
+export type MatchReopenInput = z.infer<typeof matchReopenSchema>;
+export type MatchResetInput = z.infer<typeof matchResetSchema>;
+export type GameDeleteInput = z.infer<typeof gameDeleteSchema>;
+export type MatchHistoryQueryInput = z.infer<typeof matchHistoryQuerySchema>;
 export type RulesetCreateInput = z.infer<typeof rulesetCreateSchema>;
 export type RulesetUpdateInput = z.infer<typeof rulesetUpdateSchema>;
 export type AchievementCreateInput = z.infer<typeof achievementCreateSchema>;
@@ -1302,6 +1390,7 @@ export type DraftPickInput = z.infer<typeof draftPickSchema>;
 export type AdminGameEditInput = z.infer<typeof adminGameEditSchema>;
 export type PaginationQueryInput = z.infer<typeof paginationQuerySchema>;
 export type WikiNotePatchInput = z.infer<typeof wikiNotePatchSchema>;
+export type WikiNoteBlockResubmissionInput = z.infer<typeof wikiNoteBlockResubmissionSchema>;
 export type TournamentParticipantSeedsInput = z.infer<typeof tournamentParticipantSeedsSchema>;
 export type TypeAnalysisInput = z.infer<typeof typeAnalysisSchema>;
 export type ValidateSetInput = z.infer<typeof validateSetSchema>;
@@ -1327,6 +1416,7 @@ export type DraftPoolEntryUpdateInput = z.infer<typeof draftPoolEntryUpdateSchem
 export type EvolutionCreateInput = z.infer<typeof evolutionCreateSchema>;
 export type EvolutionUpdateInput = z.infer<typeof evolutionUpdateSchema>;
 export type RoundUpdateInput = z.infer<typeof roundUpdateSchema>;
+export type GenerateRoundOptionsInput = z.infer<typeof generateRoundOptionsSchema>;
 export type BroadcastMomentInput = z.infer<typeof broadcastMomentSchema>;
 export type BroadcastPresetCreateInput = z.infer<typeof broadcastPresetCreateSchema>;
 export type BroadcastPresetUpdateInput = z.infer<typeof broadcastPresetUpdateSchema>;

@@ -40,6 +40,12 @@ vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
   rebuildAfterSeasonDelete: vi.fn(),
 }));
 
+// The custom league type guard reads the attached format and the start signals only for a change involving `custom`.
+vi.mock('@/lib/supabase/queries/season-formats', () => ({
+  getSeasonFormatSummary: vi.fn(),
+  getSeasonStartSignals: vi.fn(),
+}));
+
 vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
   diffField: (changes: Record<string, { before: unknown; after: unknown }>, field: string, before: unknown, after: unknown) => {
@@ -65,6 +71,8 @@ import { rebuildAfterSeasonDelete } from '@/lib/reconcile/entity-delete-rebuild'
 import { logAuditEvent } from '@/lib/audit/log';
 import { archiveTournamentsBySeason } from '@/lib/supabase/queries/tournaments';
 import { rebuildRatingsAfterTestFlagChange } from '@/lib/rating/test-league-rebuild';
+import { getSeasonFormatSummary, getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
+import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
 import { revalidateTag } from 'next/cache';
 
 const mockSeason: SeasonWithDetails = {
@@ -372,6 +380,140 @@ describe('PATCH /api/seasons/[id] — test-league flag', () => {
     expect(body.error).toContain('is_test_season');
     expect(updateSeason).not.toHaveBeenCalled();
     expect(revalidateTag).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/seasons/[id] — league type and the custom format', () => {
+  const SEASON_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const attachedSummary = {
+    season_id: SEASON_ID,
+    definition_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    version_no: 1,
+    spec_hash: 'a'.repeat(64),
+    tunables: {},
+    engine: 'kit' as const,
+    frozen_at: '2026-10-05T00:00:00.000Z',
+    amendments: [],
+  };
+  const patch = (body: Record<string, unknown>) =>
+    PATCH({ json: vi.fn().mockResolvedValue(body) } as unknown as NextRequest, makeRouteArgs(SEASON_ID));
+
+  /** The league as it is stored before the PATCH: its current type. */
+  const storedAs = (formatType: SeasonWithDetails['format_type']) =>
+    vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, format_type: formatType, status: 'upcoming' });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireResourceAdmin).mockResolvedValue(adminPlayer);
+    vi.mocked(updateSeason).mockImplementation(async (_id, input) => ({ ...mockSeason, ...input }) as never);
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue(null);
+    vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'upcoming', phases: [] });
+    // The settings guard (league type lock) reads the phases' start signals for any real change of the type.
+    vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([]);
+  });
+
+  it('singles to doubles: allowed, and no format or start read happens', async () => {
+    storedAs('singles');
+    const response = await patch({ format_type: 'doubles' });
+    expect(response.status).toBe(200);
+    expect(updateSeason).toHaveBeenCalledWith(SEASON_ID, { format_type: 'doubles' });
+    expect(getSeasonFormatSummary).not.toHaveBeenCalled();
+    expect(getSeasonStartSignals).not.toHaveBeenCalled();
+  });
+
+  it('singles to draft: allowed, and the custom guard reads nothing', async () => {
+    storedAs('singles');
+    expect((await patch({ format_type: 'draft' })).status).toBe(200);
+    expect(getSeasonFormatSummary).not.toHaveBeenCalled();
+    expect(getSeasonStartSignals).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['draft', 'evolution_point_buy'],
+    ['evolution_point_buy', 'singles'],
+  ] as const)('%s to %s: the point-buy lock of the settings guard answers, not the custom guard', async (from, to) => {
+    storedAs(from);
+    const response = await patch({ format_type: to });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('SEASON_FORMAT_POINT_BUY_LOCKED');
+    expect(getSeasonFormatSummary).not.toHaveBeenCalled();
+    expect(getSeasonStartSignals).not.toHaveBeenCalled();
+    expect(updateSeason).not.toHaveBeenCalled();
+  });
+
+  it('a started league cannot change between classic types: the settings guard answers, the custom guard reads nothing', async () => {
+    storedAs('singles');
+    vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([{ status: 'active', rounds_total: 3 }] as never);
+    const response = await patch({ format_type: 'draft' });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('SEASON_FORMAT_LOCKED');
+    expect(getSeasonFormatSummary).not.toHaveBeenCalled();
+    expect(getSeasonStartSignals).not.toHaveBeenCalled();
+  });
+
+  it('a PATCH without format_type reads nothing about the format', async () => {
+    storedAs('custom');
+    expect((await patch({ name: 'Renamed' })).status).toBe(200);
+    expect(getSeasonFormatSummary).not.toHaveBeenCalled();
+    expect(getSeasonStartSignals).not.toHaveBeenCalled();
+  });
+
+  it('singles to custom: allowed while the league is upcoming and has no format', async () => {
+    storedAs('singles');
+    expect((await patch({ format_type: 'custom' })).status).toBe(200);
+    expect(updateSeason).toHaveBeenCalledWith(SEASON_ID, { format_type: 'custom' });
+  });
+
+  it('singles to custom after the league started: 409 season_format_type_locked, nothing written', async () => {
+    storedAs('singles');
+    vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'upcoming', phases: [{ status: 'upcoming', rounds_total: 1 }] });
+    const response = await patch({ format_type: 'custom' });
+    const body = await response.json();
+    expect(response.status).toBe(409);
+    expect(body.code).toBe('season_format_type_locked');
+    expect(updateSeason).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it('custom with an attached format to singles: 409 season_format_type_locked, nothing written', async () => {
+    storedAs('custom');
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue(attachedSummary);
+    const response = await patch({ format_type: 'singles' });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('season_format_type_locked');
+    expect(updateSeason).not.toHaveBeenCalled();
+  });
+
+  it('custom without a format back to singles: allowed while upcoming', async () => {
+    storedAs('custom');
+    expect((await patch({ format_type: 'singles' })).status).toBe(200);
+    expect(updateSeason).toHaveBeenCalledTimes(1);
+  });
+
+  it('custom to custom: unchanged, allowed even with an attached format', async () => {
+    storedAs('custom');
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue(attachedSummary);
+    vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'active', phases: [] });
+    expect((await patch({ format_type: 'custom', name: 'Renamed' })).status).toBe(200);
+    expect(getSeasonFormatSummary).not.toHaveBeenCalled();
+  });
+
+  it('refuses before any other write of the same request (point-buy binding, test flag)', async () => {
+    storedAs('custom');
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue(attachedSummary);
+    const response = await patch({ format_type: 'singles', point_buy_list_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' });
+    expect(response.status).toBe(409);
+    expect(updateSeason).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('answers the typed 409 the database trigger gives when the status is set to active without a format', async () => {
+    const { FormatStudioError } = await import('@/lib/format-studio/errors');
+    storedAs('custom');
+    vi.mocked(updateSeason).mockRejectedValue(new FormatStudioError('format_not_attached'));
+    const response = await patch({ status: 'active' });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('format_not_attached');
   });
 });
 

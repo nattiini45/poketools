@@ -96,11 +96,23 @@ const EVOLUTION_POINT_BUY_CAPABILITIES: FormatCapabilities = Object.freeze({
   matchupRoles: true,
 });
 
+/**
+ * A custom (Format Studio) league: a format document starts with every flag off. Gym types and Core Liga cores
+ * belong to the classic formats, so they are off as well; this equals `deriveCapabilities` of a definition with
+ * no legacy modules (`format-kit/engine/capabilities.ts`).
+ */
+const CUSTOM_CAPABILITIES: FormatCapabilities = Object.freeze({
+  ...BASELINE,
+  participantTypeAssignment: false,
+  typeCores: false,
+});
+
 const CAPABILITY_MAP: Record<SeasonFormatType, FormatCapabilities> = Object.freeze({
   singles: BASELINE,
   doubles: BASELINE,
   draft: DRAFT_CAPABILITIES,
   evolution_point_buy: EVOLUTION_POINT_BUY_CAPABILITIES,
+  custom: CUSTOM_CAPABILITIES,
 });
 
 /**

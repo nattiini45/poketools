@@ -120,6 +120,67 @@ export default defineDe<typeof en>()({
       failed: 'Export fehlgeschlagen',
       remaining: { one: 'Heute noch {count} Export möglich', other: 'Heute noch {count} Exporte möglich' },
       ready: 'Export fertig',
+      summary: 'Exportiert: {count} von {total} Zeilen',
+      summaryLimited:
+        'Exportiert: {count} von {total} Zeilen. Das Limit wurde erreicht; erhöhe es (bis 10.000), um mehr zu exportieren.',
+      summaryMaxed: 'Exportiert: {count} von {total} Zeilen. Ein Export enthält höchstens 10.000 Zeilen.',
+    },
+    formatDrift: {
+      title: 'Format-Drift-Bericht',
+      subtitle: 'Vergleicht, was Ligen gespeichert haben, mit dem, was die Engine tatsächlich verwendet.',
+      run: 'Bericht erstellen',
+      running: 'Wird erstellt…',
+      retry: 'Erneut versuchen',
+      failed: 'Der Format-Drift-Bericht konnte nicht erstellt werden',
+      readOnlyNote:
+        'Dieser Bericht liest nur und ändert nichts. Die Tabellen nutzen die bei der jeweiligen Liga gespeicherte Tiebreaker-Reihenfolge, und beim Einschreiben einer Phase wird die Weiterkommen-Regel der einzuschreibenden Phase (der Zielphase) gelesen.',
+      truncated: 'Der Bericht ist unvollständig: Ein Lesevorgang hat bei {max} Zeilen aufgehört, deshalb fehlen einige Ligen oder Phasen.',
+      generatedAt: 'Erstellt {time}',
+      archivedBadge: 'Archiviert',
+      testBadge: 'Test',
+      summary: {
+        leaguesChecked: { one: '{count} Liga mit Formatregeln geprüft', other: '{count} Ligen mit Formatregeln geprüft' },
+        tiebreakerMismatches: { one: '{count} weicht vom Standard des Format Packs ab', other: '{count} weichen vom Standard des Format Packs ab' },
+        pairsChecked: { one: '{count} Phasenpaar mit Regel geprüft', other: '{count} Phasenpaare mit Regel geprüft' },
+        pairsConsistent: { one: '{count} stimmig', other: '{count} stimmig' },
+        pairsMismatching: { one: '{count} widersprüchlich', other: '{count} widersprüchlich' },
+      },
+      tiebreaker: {
+        title: 'Tiebreaker-Reihenfolge',
+        intro:
+          'Die Tabelle einer Liga nutzt die bei ihr gespeicherte Tiebreaker-Reihenfolge. Diese Ligen haben eine Reihenfolge gespeichert, die vom Standard des Format Packs abweicht.',
+        stored: 'Gespeichert (gilt für die Tabelle)',
+        pack: 'Standard des Format Packs',
+        unusable:
+          'Mit der gespeicherten Reihenfolge lässt sich keine Tabelle sortieren (sie ist leer, enthält einen unbekannten oder doppelten Schritt, ein Entscheidungsspiel, das nicht ganz am Ende steht, oder nichts zum Sortieren). Die Tabelle dieser Liga nutzt deshalb den Standard des Format Packs.',
+        empty: 'Keine Abweichungen gefunden: Jede gespeicherte Reihenfolge entspricht dem Standard des Format Packs.',
+      },
+      advancement: {
+        title: 'Weiterkommen-Regeln',
+        intro:
+          'Eine Regel, die an der einen Phase eines aufeinanderfolgenden Paars gespeichert ist, wird an der anderen angewendet oder angezeigt. Bei diesen Paaren passt das nicht zusammen.',
+        empty: 'Keine Abweichungen gefunden: Keine Weiterkommen-Regel hängt an der falschen Seite eines Phasenpaars.',
+        source: 'Quellphase',
+        target: 'Zielphase',
+        ruleNone: 'keine',
+        ruleTop: 'Top {count}',
+        ruleTopPerGroup: 'Top {count} je Gruppe',
+        kindLabel: {
+          source_only: 'Regel nur an der Quellphase',
+          target_only: 'Regel nur an der Zielphase',
+          both_differ: 'Regeln unterscheiden sich',
+          orphan: 'Ungenutzte Regel',
+        },
+        kind: {
+          source_only:
+            'Die Zeitleiste zeigt diese Regel zwischen den beiden Phasen, aber beim Einschreiben der Zielphase wird deren eigene Regel gelesen, es wird also nichts abgeschnitten.',
+          target_only:
+            'Beim Einschreiben der Zielphase wird diese Regel angewendet, die Zeitleiste zeigt sie aber nicht zwischen den beiden Phasen an.',
+          both_differ:
+            'Beim Einschreiben der Zielphase gilt deren Regel, die Zeitleiste zeigt aber die Regel der Quellphase.',
+          orphan: 'Das ist die einzige Phase der Liga, und niemand liest ihre Regel.',
+        },
+      },
     },
   },
 
@@ -161,7 +222,8 @@ export default defineDe<typeof en>()({
       actorPlaceholder: 'Name des Admins',
       resourceType: 'Ressourcentyp',
       resourceId: 'Ressourcen-ID',
-      resourceIdPlaceholder: 'UUID oder Ressourcen-ID',
+      resourceIdPlaceholder: 'UUID',
+      resourceIdInvalid: 'Gib eine gültige UUID ein, zum Beispiel 123e4567-e89b-12d3-a456-426614174000.',
       from: 'Von',
       to: 'Bis',
       apply: 'Anwenden',
@@ -255,8 +317,25 @@ export default defineDe<typeof en>()({
     noReports: 'Keine offenen Meldungen.',
     reviewed: 'Geprüft',
     dismiss: 'Verwerfen',
+    unpublish: 'Notiz zurückziehen',
+    noteLive: 'Diese Notiz ist öffentlich',
+    noteHidden: 'Diese Notiz ist nicht öffentlich',
     loadFailed: 'Die Moderationswarteschlange konnte nicht geladen werden',
     actionFailed: 'Die Moderationsaktion ist fehlgeschlagen',
+    rejectedNotes: 'Abgelehnte Notizen',
+    viewPending: 'Offen',
+    viewRejected: 'Abgelehnt',
+    noRejected: 'Keine abgelehnten Notizen.',
+    blocked: 'Gesperrt',
+    blockedHint: 'Der Autor kann diese Notiz nicht mehr bearbeiten, um sie erneut zur Prüfung einzureichen.',
+    blockResubmission: 'Erneutes Einreichen sperren',
+    allowResubmission: 'Erneutes Einreichen erlauben',
+    blockDialog: {
+      title: 'Erneutes Einreichen dieser Notiz sperren?',
+      message:
+        'Für den Autor ist das endgültig: Er kann diese Notiz nicht mehr bearbeiten, um sie erneut zur Prüfung einzureichen. Nur du kannst die Sperre wieder aufheben.',
+      confirm: 'Erneutes Einreichen sperren',
+    },
     reportReasons: {
       inaccurate: 'Ungenau',
       spam: 'Spam',

@@ -31,7 +31,7 @@ export default {
     swiss: 'Swiss',
   },
   bracketSide: { winners: 'Winners bracket', losers: 'Losers bracket', grand_finals: 'Grand finals' },
-  formatType: { singles: 'Singles', doubles: 'Doubles', draft: 'Draft', evolution_point_buy: 'Evolution Point Buy' },
+  formatType: { singles: 'Singles', doubles: 'Doubles', draft: 'Draft', evolution_point_buy: 'Evolution Point Buy', custom: 'Custom format' },
   draftType: { snake: 'Snake', auction: 'Auction', budget: 'Budget' },
   draftPoolStatus: { pending: 'Pending', in_progress: 'In progress', complete: 'Complete' },
   matchProposalStatus: {

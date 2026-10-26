@@ -19,6 +19,7 @@ export default defineDe<typeof en>()({
     draft: 'Draft',
     phases: 'Phasen',
     rules: 'Regeln',
+    format: 'Format',
     settings: 'Einstellungen',
     danger: 'Gefahrenzone',
     unsavedConfirm: 'Dieser Tab hat ungespeicherte Änderungen. Trotzdem wechseln und sie verwerfen?',
@@ -122,7 +123,8 @@ export default defineDe<typeof en>()({
   },
   formatRules: {
     title: 'Formatregeln',
-    subtitle: 'Bans, Tera-Regeln, Tiebreaker-Reihenfolge und {token}-Einstellungen für dieses Format.',
+    subtitle:
+      'Bearbeite Draft-Budget, Picks, {token}-Limits, Bans und die gespeicherte Tiebreaker-Reihenfolge. Die Tera-Regeln kommen aus dem Format Pack und lassen sich hier nicht ändern.',
   },
   draftRoom: {
     title: 'Draft-Raum',

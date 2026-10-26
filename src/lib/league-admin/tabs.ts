@@ -24,6 +24,7 @@ export const LEAGUE_ADMIN_TABS = [
   'draft',
   'phases',
   'rules',
+  'format',
   'settings',
   'danger',
 ] as const;
@@ -43,9 +44,11 @@ export const LEAGUE_ADMIN_TAB_ALIASES: Readonly<Record<string, LeagueAdminTab>> 
 
 /**
  * The tabs a league's format shows, in display order (from `getFormatCapabilities`):
- * - singles / doubles: overview, participants, phases, settings, danger;
+ * - singles / doubles: overview, participants, phases, format, settings, danger;
  * - classic draft: those plus draft (pool and Draft Room) and rules (evolution tiers, tier limits);
- * - Evolution Point Buy: all seven (rules = point-buy list, format rules, data import).
+ * - Evolution Point Buy: all eight (rules = point-buy list, format rules, data import).
+ *
+ * The format tab (read-only generated outline and rules text) has no capability gate: every format shows it.
  */
 export function availableLeagueAdminTabs(format: SeasonFormatType): LeagueAdminTab[] {
   const caps = getFormatCapabilities(format);
@@ -81,4 +84,12 @@ export function parseLeagueAdminTab(
 export function leagueAdminHref(leagueId: string, tab: LeagueAdminTab): string {
   const base = `/admin/leagues/${leagueId}`;
   return tab === DEFAULT_LEAGUE_ADMIN_TAB ? base : `${base}?${LEAGUE_ADMIN_TAB_PARAM}=${tab}`;
+}
+
+/**
+ * Where a new league's admin lands after it is created. A custom league goes straight to the Format tab, because
+ * attaching a format is its first step (it cannot start without one); every other league type opens its overview.
+ */
+export function leagueCreatedHref(leagueId: string, formatType: SeasonFormatType): string {
+  return formatType === 'custom' ? leagueAdminHref(leagueId, 'format') : `/admin/leagues/${leagueId}`;
 }

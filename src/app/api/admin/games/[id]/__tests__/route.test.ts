@@ -94,6 +94,62 @@ describe('DELETE /api/admin/games/[id]', () => {
     expect(revalidateMatchPages).toHaveBeenCalledWith('tourn-1', 'match-1');
   });
 
+  it('adds the reason to the game.delete audit metadata', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getGameById).mockResolvedValue(mockGame as never);
+    vi.mocked(getMatchById).mockResolvedValue(mockMatch as never);
+    vi.mocked(deleteGame).mockResolvedValue({
+      match_status: 'in_progress',
+      games_remaining: 1,
+      evolution_events: [],
+    });
+    vi.mocked(revalidateMatchPages).mockResolvedValue(undefined);
+
+    const request = { json: async () => ({ reason: ' Duplicate replay ' }) } as NextRequest;
+    const res = await DELETE(request, routeParams);
+
+    expect(res.status).toBe(200);
+    const entry = vi.mocked(logAuditEvent).mock.calls[0][0];
+    expect(entry.action).toBe('game.delete');
+    expect(entry.metadata).toMatchObject({ match_id: 'match-1', games_remaining: 1, reason: 'Duplicate replay' });
+  });
+
+  it('still deletes with an empty or unreadable body and logs no reason', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getGameById).mockResolvedValue(mockGame as never);
+    vi.mocked(getMatchById).mockResolvedValue(mockMatch as never);
+    vi.mocked(deleteGame).mockResolvedValue({
+      match_status: 'in_progress',
+      games_remaining: 0,
+      evolution_events: [],
+    });
+    vi.mocked(revalidateMatchPages).mockResolvedValue(undefined);
+
+    const unreadable = {
+      json: async () => {
+        throw new SyntaxError('Unexpected end of JSON input');
+      },
+    } as unknown as NextRequest;
+    const res = await DELETE(unreadable, routeParams);
+
+    expect(res.status).toBe(200);
+    expect(deleteGame).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).not.toHaveProperty('reason');
+  });
+
+  it('rejects a blank reason with 400 and deletes nothing', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getGameById).mockResolvedValue(mockGame as never);
+    vi.mocked(getMatchById).mockResolvedValue(mockMatch as never);
+
+    const res = await DELETE({ json: async () => ({ reason: '  ' }) } as NextRequest, routeParams);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.code).toBe('validation_failed');
+    expect(deleteGame).not.toHaveBeenCalled();
+  });
+
   it('deletes a game when user is resource admin', async () => {
     const nonAdmin = { playerId: 'player-2', isAdmin: false, isCreator: false };
     vi.mocked(requirePlayer).mockResolvedValue(nonAdmin as never);

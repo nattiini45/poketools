@@ -260,6 +260,22 @@ describe('RoomAdminSheet: the room keeps the pick', () => {
     expect(html).toContain('--draft-warn-ink');
   });
 
+  it('abort is offered while drafting only: before the start the live tab shows a hint, not a button that can only fail', () => {
+    const base = adminDto();
+    expect(base.pool.phase).toBe('drafting');
+    expect(render(props(base))).toContain('Abort draft');
+
+    const setup = adminDto({ pool: { ...base.pool, status: 'pending', phase: 'setup' } });
+    const html = render(props(setup));
+    expect(html).toContain('Start draft');
+    expect(html).toContain('Nothing to abort yet: the draft has not started.');
+    expect(html).not.toContain('Abort draft');
+
+    const german = render(props(setup), 'de');
+    expect(german).toContain('Es gibt noch nichts abzubrechen');
+    expect(german).not.toContain('Draft abbrechen');
+  });
+
   it('main actions (Start draft, Save settings) use the neutral draft ink in the room, never the theme accent', () => {
     const base = adminDto();
     const setup = adminDto({ pool: { ...base.pool, status: 'pending', phase: 'setup' } });

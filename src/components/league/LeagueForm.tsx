@@ -16,6 +16,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { languageMessages } from '@/i18n/messages/language';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import type { LeagueFormIdentity } from '@/lib/league-admin/clone-source';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 
 interface LeagueFormProps {
@@ -26,13 +27,19 @@ interface LeagueFormProps {
    */
   onSubmit: (data: SeasonFormData) => Promise<ApiErrorLike | null | void>;
   initialData?: Partial<SeasonFormData>;
+  /**
+   * Called with the name and dates after each edit of them, so a parent that remounts the form
+   * (a new "start from" league) can hand them back as `initialData`.
+   */
+  onIdentityChange?: (identity: LeagueFormIdentity) => void;
 }
 
 /**
  * The league type (`seasons.format_type`). Point-buy leagues battle in singles under the active
- * format pack's battle ruleset, which the server sets as the league default on creation.
+ * format pack's battle ruleset, which the server sets as the league default on creation. A custom
+ * league gets its phases from a format attached in the Format Studio after creation.
  */
-const FORMAT_TYPES: readonly SeasonFormatType[] = ['singles', 'doubles', 'draft', 'evolution_point_buy'];
+const FORMAT_TYPES: readonly SeasonFormatType[] = ['singles', 'doubles', 'draft', 'evolution_point_buy', 'custom'];
 
 /**
  * 3D World Theme options: Auto + every REGISTERED route theme — shared with
@@ -79,7 +86,7 @@ export function buildLeagueFormPayload(values: LeagueFormValues): SeasonFormData
   };
 }
 
-export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFormProps) {
+export default function LeagueForm({ rulesets, onSubmit, initialData, onIdentityChange }: LeagueFormProps) {
   const t = useT(leagueAdminMessages);
   const tLang = useT(languageMessages);
   const errorText = useApiErrorText(errorsSeasons);
@@ -112,6 +119,10 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
     () => LOCALES.map((value) => ({ value, label: tLang(`names.${value}`) })),
     [tLang],
   );
+
+  function changeIdentity(next: Partial<LeagueFormIdentity>) {
+    onIdentityChange?.({ name, start_date: startDate, end_date: endDate, ...next });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -149,7 +160,10 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
         label={t('form.name')}
         type="text"
         value={name}
-        onChange={(e) => setName(e.target.value)}
+        onChange={(e) => {
+          setName(e.target.value);
+          changeIdentity({ name: e.target.value });
+        }}
         required
         placeholder={t('form.namePlaceholder')}
       />
@@ -206,7 +220,18 @@ export default function LeagueForm({ rulesets, onSubmit, initialData }: LeagueFo
 
       <LeagueRulesetField isPointBuy={isPointBuy} rulesets={rulesets} value={rulesetId} onChange={setRulesetId} />
 
-      <LeagueDateFields start={startDate} end={endDate} onStart={setStartDate} onEnd={setEndDate} />
+      <LeagueDateFields
+        start={startDate}
+        end={endDate}
+        onStart={(value) => {
+          setStartDate(value);
+          changeIdentity({ start_date: value });
+        }}
+        onEnd={(value) => {
+          setEndDate(value);
+          changeIdentity({ end_date: value });
+        }}
+      />
 
       <Button
         type="submit"

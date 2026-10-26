@@ -102,6 +102,18 @@ describe('apiErrorText', () => {
     expect(apiErrorText(res, { locale: 'en', catalogs: [errorsMatches] })).toBe('Invalid transition: scheduled → completed');
   });
 
+  it('renders the status param of match_state_changed as an enum label', () => {
+    const res: ApiErrorLike = {
+      error: 'The match changed to completed while you were editing it. Review it and try again.',
+      code: 'match_state_changed',
+      params: { status: 'completed' },
+    };
+    expect(apiErrorText(res, { locale: 'de', catalogs: [errorsMatches] })).toBe(
+      'Das Spiel wurde auf Beendet geändert, während du es bearbeitet hast. Prüfe es und versuche es erneut.',
+    );
+    expect(apiErrorText(res, { locale: 'en', catalogs: [errorsMatches] })).toBe(res.error);
+  });
+
   it('renders the match status param of the AI status codes as an enum label (A7)', () => {
     const analysis: ApiErrorLike = {
       error: 'Match analysis is only available for completed matches (current: scheduled)',
@@ -165,5 +177,18 @@ describe('useApiErrorText', () => {
   it('renders the English server text without a provider', () => {
     const html = renderToStaticMarkup(createElement(Probe, { res }));
     expect(html).toBe('<p>Charmander has already been drafted|Charmander has already been drafted</p>');
+  });
+});
+
+describe('apiErrorText for the clone refusal of a custom-format league', () => {
+  it('has an English and a German text', () => {
+    const res: ApiErrorLike = { error: 'A league with a custom format cannot be used as a source', code: 'SEASON_CLONE_CUSTOM_FORMAT' };
+    const en = apiErrorText(res, { locale: 'en', catalogs: [errorsSeasons] });
+    const de = apiErrorText(res, { locale: 'de', catalogs: [errorsSeasons] });
+
+    expect(en).toContain('custom format');
+    expect(de).toBe(
+      'Eine Liga mit eigenem Format kann nicht als Vorlage dienen: Ihre Phasen kommen aus einem angehängten Format, und eine Kopie könnte keines anhängen.',
+    );
   });
 });

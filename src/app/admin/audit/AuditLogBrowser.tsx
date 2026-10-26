@@ -8,6 +8,7 @@ import Section from '@/components/ui/Section';
 import Badge from '@/components/ui/Badge';
 import type { ApiError, ApiResult } from '@/types/api';
 import type { Json } from '@/types/database';
+import { isValidUuid } from '@/lib/utils/uuid';
 import { useT } from '@/i18n/client';
 import { LocalTime } from '@/i18n/LocalTime';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -74,6 +75,12 @@ function jsonPreview(value: Json | null): string | null {
   return JSON.stringify(value, null, 2);
 }
 
+/** Whether the Resource ID filter draft can be sent: blank (no filter) or a UUID (the column is a uuid). */
+export function isValidAuditResourceId(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed === '' || isValidUuid(trimmed);
+}
+
 export default function AuditLogBrowser({
   extensionActionLabels = {},
 }: {
@@ -99,7 +106,7 @@ export default function AuditLogBrowser({
     if (appliedFilters.action) params.set('action', appliedFilters.action);
     if (appliedFilters.actor) params.set('actor', appliedFilters.actor);
     if (appliedFilters.resource_type) params.set('resource_type', appliedFilters.resource_type);
-    if (appliedFilters.resource_id) params.set('resource_id', appliedFilters.resource_id);
+    if (appliedFilters.resource_id.trim()) params.set('resource_id', appliedFilters.resource_id.trim());
     if (appliedFilters.from) params.set('from', `${appliedFilters.from}T00:00:00.000Z`);
     if (appliedFilters.to) params.set('to', `${appliedFilters.to}T23:59:59.999Z`);
     return params.toString();
@@ -130,7 +137,10 @@ export default function AuditLogBrowser({
     setFilters((current) => ({ ...current, [key]: value }));
   }
 
+  const resourceIdInvalid = !isValidAuditResourceId(filters.resource_id);
+
   function applyFilters() {
+    if (resourceIdInvalid) return;
     setOffset(0);
     setAppliedFilters(filters);
   }
@@ -176,12 +186,13 @@ export default function AuditLogBrowser({
             value={filters.resource_id}
             onChange={(event) => updateFilter('resource_id', event.target.value)}
             placeholder={t('audit.filters.resourceIdPlaceholder')}
+            error={resourceIdInvalid ? t('audit.filters.resourceIdInvalid') : undefined}
           />
           <Input label={t('audit.filters.from')} type="date" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} />
           <Input label={t('audit.filters.to')} type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
         </div>
         <div className="flex flex-wrap gap-3 mt-4">
-          <Button onClick={applyFilters} loading={loading}>{t('audit.filters.apply')}</Button>
+          <Button onClick={applyFilters} loading={loading} disabled={resourceIdInvalid}>{t('audit.filters.apply')}</Button>
           <Button variant="secondary" onClick={clearFilters} disabled={loading}>{t('audit.filters.clear')}</Button>
         </div>
       </Section>

@@ -16,6 +16,7 @@ import {
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
 import { expireSeasonReads } from '@/lib/revalidation';
+import { assertFormatTypeChangeAllowed } from '@/lib/format-studio/attach';
 import {
   toDeleteRebuildWarning,
   toTestFlagRebuildWarning,
@@ -96,6 +97,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // `language` (the league's content language, i18n-core §6.1) passes
     // through to `updateSeason` with the other settings.
     const body = zodResult.data;
+
+    // A switch to or from the custom type is refused once a format is attached or the league has started. A change
+    // between the legacy types takes no extra read and no new refusal.
+    if (body.format_type !== undefined) {
+      await assertFormatTypeChangeAllowed(id, body.format_type);
+    }
 
     // The test-league flag is site-admin only (checked before any write): it
     // badges the league in every public list, keeps its matches out of player

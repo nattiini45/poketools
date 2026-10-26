@@ -1,0 +1,2284 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden: core_liga_style > compile verdict 1`] = `
+{
+  "capabilities": {
+    "cosmoPoints": false,
+    "draftTokens": false,
+    "earlyFinalStageLock": false,
+    "evolutionPoints": false,
+    "evolutionProgress": false,
+    "evolutionRedraft": false,
+    "evolutionTiers": false,
+    "genericDraftPool": false,
+    "killTokens": false,
+    "matchupRoles": false,
+    "participantTypeAssignment": true,
+    "pointBuyList": false,
+    "tierLimits": false,
+    "typeCores": true,
+    "wildcards": false,
+  },
+  "coverage": {
+    "auto": 11,
+    "checked": 1,
+    "honor": 0,
+    "legacy": 1,
+    "total": 13,
+  },
+  "diagnostics": [
+    {
+      "code": "rank_open_ended",
+      "pointer": "/stages/0/rank",
+      "severity": "warning",
+    },
+  ],
+  "hash": "a7f8c430da24d047a55c241497cd3fbc57ce71e0ebc25eadaef686a9757bad41",
+  "ok": true,
+}
+`;
+
+exports[`golden: core_liga_style > descriptor 1`] = `
+"{
+  "schema_version": 1,
+  "identity": {
+    "name": {
+      "base": "en",
+      "en": {
+        "v": "Core League",
+        "s": "human"
+      },
+      "de": {
+        "v": "Core League",
+        "s": "human"
+      }
+    }
+  },
+  "stages": [
+    {
+      "key": "stage_1",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Swiss rounds",
+          "s": "human"
+        },
+        "de": {
+          "v": "Swiss rounds",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "roster",
+        "seeding": "manual"
+      },
+      "pairing": {
+        "kind": "swiss",
+        "rounds": "auto",
+        "avoid_repeats": true
+      },
+      "series": {
+        "best_of": 1,
+        "allow_draw": false,
+        "overrides": []
+      },
+      "ruleset": {
+        "kind": "season_default"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 1,
+        "loss": 0,
+        "bye": 1
+      },
+      "rank": [
+        {
+          "kind": "metric",
+          "metric": "points",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "kill_differential",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "buchholz",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "wins",
+          "direction": "desc"
+        }
+      ],
+      "columns": []
+    },
+    {
+      "key": "stage_2",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Playoffs",
+          "s": "human"
+        },
+        "de": {
+          "v": "Playoffs",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "edges",
+        "seeding": "edge_order"
+      },
+      "pairing": {
+        "kind": "single_elim",
+        "third_place": false
+      },
+      "series": {
+        "best_of": 3,
+        "allow_draw": false,
+        "overrides": [
+          {
+            "round": 1,
+            "from": "start",
+            "best_of": 1
+          },
+          {
+            "round": 1,
+            "from": "end",
+            "best_of": 5
+          }
+        ]
+      },
+      "ruleset": {
+        "kind": "ruleset",
+        "id": "00000000-0000-4000-8000-000000000902"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 1,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [],
+      "columns": []
+    }
+  ],
+  "edges": [
+    {
+      "key": "advance_1_2",
+      "from": "stage_1",
+      "to": "stage_2",
+      "select": [
+        {
+          "kind": "top_n",
+          "n": 4
+        }
+      ],
+      "seeding": "rank",
+      "gate": "admin_confirm"
+    }
+  ],
+  "views": [],
+  "rules": [],
+  "text": {
+    "sections": []
+  },
+  "theme": {
+    "world": "auto"
+  },
+  "modules": [
+    {
+      "kind": "module.legacy",
+      "adapter": "core_liga",
+      "facts": [
+        {
+          "key": "core_pool_size",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Cores in the pool",
+              "s": "human"
+            },
+            "de": {
+              "v": "Cores im Pool",
+              "s": "human"
+            }
+          },
+          "value": 12
+        },
+        {
+          "key": "cores_assigned",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Players with an assigned core",
+              "s": "human"
+            },
+            "de": {
+              "v": "Spieler mit zugewiesenem Core",
+              "s": "human"
+            }
+          },
+          "value": 5
+        },
+        {
+          "key": "gym_types_assigned",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Players with a gym type",
+              "s": "human"
+            },
+            "de": {
+              "v": "Spieler mit Arena-Typ",
+              "s": "human"
+            }
+          },
+          "value": 6
+        },
+        {
+          "key": "roster_size",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Players in the league",
+              "s": "human"
+            },
+            "de": {
+              "v": "Spieler in der Liga",
+              "s": "human"
+            }
+          },
+          "value": 10
+        }
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`golden: core_liga_style > rules text (de) 1`] = `
+"Core League
+
+2 Stages: Swiss rounds und Playoffs.
+
+Stages
+- Stage Swiss rounds. Schweizer System; die Rundenzahl ergibt sich aus der Teilnehmerzahl. Die Spiele werden im Best-of-1-Modus ausgetragen. Punkte: Sieg 1, Niederlage 0, Freilos 1. Die Tabelle wird gereiht nach: Punkte (höchster Wert zuerst), Kill-Differenz (höchster Wert zuerst), Buchholz-Wertung (höchster Wert zuerst) und Siege (höchster Wert zuerst).
+  Die Teilnehmer kommen aus der Teilnehmerliste, von Hand gesetzt.
+  Die Teams folgen dem Regelwerk der Saison.
+  Erwartet: 10 Teilnehmer. Gespielt werden 4 Runden.
+- Stage Playoffs. K.-o.-System mit einfacher Ausscheidung. Die Spiele werden im Best-of-3-Modus ausgetragen; 2 Runden weichen davon ab. Punkte: Sieg 1, Niederlage 0, Freilos 0.
+  Die Teilnehmer kommen aus den früheren Stages, in der Reihenfolge des Weiterkommens.
+  Die Teams folgen einem bestimmten Regelwerk.
+  Erwartet: 4 Teilnehmer. Gespielt werden 2 Runden. Der Turnierbaum hat 4 Plätze.
+
+Weiterkommen
+- Spieler kommen von Swiss rounds nach Playoffs weiter. Auswahl: die besten 4. Gesetzt wird nach der Endplatzierung. Ein Admin bestätigt das Ergebnis, bevor die Spieler weiterkommen.
+
+Legacy-Module
+- Core Liga
+  Legacy-Modul Core Liga mit 4 Angaben.
+  Cores im Pool: 12
+  Spieler mit zugewiesenem Core: 5
+  Spieler mit Arena-Typ: 6
+  Spieler in der Liga: 10
+
+Abdeckung
+11 automatisch, 1 vom Admin bestätigt, 1 Legacy-Modul."
+`;
+
+exports[`golden: core_liga_style > rules text (en) 1`] = `
+"Core League
+
+2 stages: Swiss rounds and Playoffs.
+
+Stages
+- Stage Swiss rounds. Swiss system; the number of rounds follows from the field size. Matches are best of 1. Points: win 1, loss 0, bye 1. Standings are ranked by: points (highest first), kill differential (highest first), Buchholz score (highest first) and wins (highest first).
+  Participants come from the roster, seeded by hand.
+  Teams follow the ruleset of the season.
+  Expected: 10 participants. Plays 4 rounds.
+- Stage Playoffs. Single-elimination bracket. Matches are best of 3; 2 rounds use a different length. Points: win 1, loss 0, bye 0.
+  Participants come from the earlier stages, in the order they advance.
+  Teams follow a specific ruleset.
+  Expected: 4 participants. Plays 2 rounds. The bracket has 4 places.
+
+Advancement
+- Players advance from Swiss rounds to Playoffs. Selection: top 4. Seeded by final rank. An admin confirms the result before players move on.
+
+Legacy modules
+- Core Liga
+  Legacy module Core Liga with 4 facts.
+  Cores in the pool: 12
+  Players with an assigned core: 5
+  Players with a gym type: 6
+  Players in the league: 10
+
+Coverage
+11 automated, 1 confirmed by an admin, 1 legacy module."
+`;
+
+exports[`golden: doubles_round_robin > compile verdict 1`] = `
+{
+  "capabilities": {
+    "cosmoPoints": false,
+    "draftTokens": false,
+    "earlyFinalStageLock": false,
+    "evolutionPoints": false,
+    "evolutionProgress": false,
+    "evolutionRedraft": false,
+    "evolutionTiers": false,
+    "genericDraftPool": false,
+    "killTokens": false,
+    "matchupRoles": false,
+    "participantTypeAssignment": false,
+    "pointBuyList": false,
+    "tierLimits": false,
+    "typeCores": false,
+    "wildcards": false,
+  },
+  "coverage": {
+    "auto": 8,
+    "checked": 0,
+    "honor": 0,
+    "legacy": 0,
+    "total": 8,
+  },
+  "diagnostics": [
+    {
+      "code": "rank_open_ended",
+      "pointer": "/stages/0/rank",
+      "severity": "warning",
+    },
+  ],
+  "hash": "8dd655624850d0bdec52a472ad2ebb08e8e81255fdd89b9815ff1cb2346bb559",
+  "ok": true,
+}
+`;
+
+exports[`golden: doubles_round_robin > descriptor 1`] = `
+"{
+  "schema_version": 1,
+  "identity": {
+    "name": {
+      "base": "en",
+      "en": {
+        "v": "Doubles Ladder",
+        "s": "human"
+      },
+      "de": {
+        "v": "Doubles Ladder",
+        "s": "human"
+      }
+    }
+  },
+  "stages": [
+    {
+      "key": "stage_1",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Doubles round robin",
+          "s": "human"
+        },
+        "de": {
+          "v": "Doubles round robin",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "roster",
+        "seeding": "manual"
+      },
+      "pairing": {
+        "kind": "round_robin",
+        "legs": 1,
+        "mirror_legs": true
+      },
+      "series": {
+        "best_of": 3,
+        "allow_draw": false,
+        "overrides": []
+      },
+      "ruleset": {
+        "kind": "ruleset",
+        "id": "00000000-0000-4000-8000-000000000901"
+      },
+      "doubles": true,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 3,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [
+        {
+          "kind": "metric",
+          "metric": "points",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "kill_differential",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "buchholz",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "wins",
+          "direction": "desc"
+        }
+      ],
+      "columns": []
+    }
+  ],
+  "edges": [],
+  "views": [],
+  "rules": [],
+  "text": {
+    "sections": []
+  },
+  "theme": {
+    "world": "sakura"
+  },
+  "modules": []
+}"
+`;
+
+exports[`golden: doubles_round_robin > rules text (de) 1`] = `
+"Doubles Ladder
+
+Eine Stage: Doubles round robin.
+
+Stages
+- Stage Doubles round robin. Jeder spielt einmal gegen jeden. Die Spiele werden im Best-of-3-Modus ausgetragen. Punkte: Sieg 3, Niederlage 0, Freilos 0. Die Tabelle wird gereiht nach: Punkte (höchster Wert zuerst), Kill-Differenz (höchster Wert zuerst), Buchholz-Wertung (höchster Wert zuerst) und Siege (höchster Wert zuerst).
+  Die Teilnehmer kommen aus der Teilnehmerliste, von Hand gesetzt.
+  Die Teams folgen einem bestimmten Regelwerk.
+  Wird als Doppel gespielt.
+  Erwartet: 6 Teilnehmer. Gespielt werden 5 Runden.
+
+Abdeckung
+8 automatisch."
+`;
+
+exports[`golden: doubles_round_robin > rules text (en) 1`] = `
+"Doubles Ladder
+
+One stage: Doubles round robin.
+
+Stages
+- Stage Doubles round robin. Everyone plays everyone once. Matches are best of 3. Points: win 3, loss 0, bye 0. Standings are ranked by: points (highest first), kill differential (highest first), Buchholz score (highest first) and wins (highest first).
+  Participants come from the roster, seeded by hand.
+  Teams follow a specific ruleset.
+  Played as doubles.
+  Expected: 6 participants. Plays 5 rounds.
+
+Coverage
+8 automated."
+`;
+
+exports[`golden: draft_double_elim > compile verdict 1`] = `
+{
+  "capabilities": {
+    "cosmoPoints": false,
+    "draftTokens": false,
+    "earlyFinalStageLock": false,
+    "evolutionPoints": false,
+    "evolutionProgress": false,
+    "evolutionRedraft": false,
+    "evolutionTiers": true,
+    "genericDraftPool": true,
+    "killTokens": false,
+    "matchupRoles": false,
+    "participantTypeAssignment": true,
+    "pointBuyList": false,
+    "tierLimits": true,
+    "typeCores": true,
+    "wildcards": true,
+  },
+  "coverage": {
+    "auto": 3,
+    "checked": 0,
+    "honor": 0,
+    "legacy": 1,
+    "total": 4,
+  },
+  "diagnostics": [],
+  "hash": "df080f26115422fd1f25b3ae8a23fde66fc2ee6a52c16ce1b61d077921e5fd5e",
+  "ok": true,
+}
+`;
+
+exports[`golden: draft_double_elim > descriptor 1`] = `
+"{
+  "schema_version": 1,
+  "identity": {
+    "name": {
+      "base": "de",
+      "en": {
+        "v": "Draft Showdown",
+        "s": "human"
+      },
+      "de": {
+        "v": "Draft Showdown",
+        "s": "human"
+      }
+    }
+  },
+  "stages": [
+    {
+      "key": "stage_1",
+      "name": {
+        "base": "de",
+        "en": {
+          "v": "Double elimination",
+          "s": "human"
+        },
+        "de": {
+          "v": "Double elimination",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "roster",
+        "seeding": "manual"
+      },
+      "pairing": {
+        "kind": "double_elim",
+        "bracket_reset": true
+      },
+      "series": {
+        "best_of": 3,
+        "allow_draw": false,
+        "overrides": []
+      },
+      "ruleset": {
+        "kind": "season_default"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 1,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [],
+      "columns": []
+    }
+  ],
+  "edges": [],
+  "views": [],
+  "rules": [],
+  "text": {
+    "sections": [
+      {
+        "id": "bo_stage_1",
+        "title": {
+          "base": "en",
+          "en": {
+            "v": "Match lengths in Double elimination",
+            "s": "human"
+          },
+          "de": {
+            "v": "Spiellängen in Double elimination",
+            "s": "human"
+          }
+        },
+        "body": {
+          "base": "en",
+          "en": {
+            "v": "Grand Finals is played as best of 5.",
+            "s": "human"
+          },
+          "de": {
+            "v": "Grand Finals wird im Best-of-5-Modus gespielt.",
+            "s": "human"
+          }
+        },
+        "stage": "stage_1"
+      }
+    ]
+  },
+  "theme": {
+    "world": "auto"
+  },
+  "modules": [
+    {
+      "kind": "module.legacy",
+      "adapter": "legacy_draft",
+      "facts": [
+        {
+          "key": "tier_limit_s",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Pick limit for tier S",
+              "s": "human"
+            },
+            "de": {
+              "v": "Pick-Limit für Tier S",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "tier_limit_a",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Pick limit for tier A",
+              "s": "human"
+            },
+            "de": {
+              "v": "Pick-Limit für Tier A",
+              "s": "human"
+            }
+          },
+          "value": 2
+        },
+        {
+          "key": "tier_limit_b",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Pick limit for tier B",
+              "s": "human"
+            },
+            "de": {
+              "v": "Pick-Limit für Tier B",
+              "s": "human"
+            }
+          },
+          "value": 3
+        },
+        {
+          "key": "tier_limit_c",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Pick limit for tier C",
+              "s": "human"
+            },
+            "de": {
+              "v": "Pick-Limit für Tier C",
+              "s": "human"
+            }
+          },
+          "value": 4
+        }
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`golden: draft_double_elim > rules text (de) 1`] = `
+"Draft Showdown
+
+Eine Stage: Double elimination.
+
+Stages
+- Stage Double elimination. Doppel-K.-o.-System mit Bracket-Reset. Die Spiele werden im Best-of-3-Modus ausgetragen. Punkte: Sieg 1, Niederlage 0, Freilos 0.
+  Die Teilnehmer kommen aus der Teilnehmerliste, von Hand gesetzt.
+  Die Teams folgen dem Regelwerk der Saison.
+  Erwartet: 8 Teilnehmer. Gespielt werden 6 Runden. Der Turnierbaum hat 8 Plätze.
+
+Legacy-Module
+- Legacy-Draft
+  Legacy-Modul Legacy-Draft mit 4 Angaben.
+  Pick-Limit für Tier S: 1
+  Pick-Limit für Tier A: 2
+  Pick-Limit für Tier B: 3
+  Pick-Limit für Tier C: 4
+
+Hinweise
+Spiellängen in Double elimination
+Grand Finals wird im Best-of-5-Modus gespielt.
+
+Abdeckung
+3 automatisch, 1 Legacy-Modul."
+`;
+
+exports[`golden: draft_double_elim > rules text (en) 1`] = `
+"Draft Showdown
+
+One stage: Double elimination.
+
+Stages
+- Stage Double elimination. Double-elimination bracket with a bracket reset. Matches are best of 3. Points: win 1, loss 0, bye 0.
+  Participants come from the roster, seeded by hand.
+  Teams follow the ruleset of the season.
+  Expected: 8 participants. Plays 6 rounds. The bracket has 8 places.
+
+Legacy modules
+- Legacy draft
+  Legacy module Legacy draft with 4 facts.
+  Pick limit for tier S: 1
+  Pick limit for tier A: 2
+  Pick limit for tier B: 3
+  Pick limit for tier C: 4
+
+Notes
+Match lengths in Double elimination
+Grand Finals is played as best of 5.
+
+Coverage
+3 automated, 1 legacy module."
+`;
+
+exports[`golden: epb_pack_points_differ > compile verdict 1`] = `
+{
+  "capabilities": {
+    "cosmoPoints": true,
+    "draftTokens": true,
+    "earlyFinalStageLock": true,
+    "evolutionPoints": true,
+    "evolutionProgress": true,
+    "evolutionRedraft": true,
+    "evolutionTiers": false,
+    "genericDraftPool": false,
+    "killTokens": true,
+    "matchupRoles": true,
+    "participantTypeAssignment": false,
+    "pointBuyList": true,
+    "tierLimits": false,
+    "typeCores": false,
+    "wildcards": false,
+  },
+  "coverage": {
+    "auto": 14,
+    "checked": 0,
+    "honor": 0,
+    "legacy": 1,
+    "total": 15,
+  },
+  "diagnostics": [],
+  "hash": "28eb09b4c8659f8f9f557f8a699203d43576700d0ed40b6d6e8faac5487b3473",
+  "ok": true,
+}
+`;
+
+exports[`golden: epb_pack_points_differ > descriptor 1`] = `
+"{
+  "schema_version": 1,
+  "identity": {
+    "name": {
+      "base": "en",
+      "en": {
+        "v": "Evolution Cup",
+        "s": "human"
+      },
+      "de": {
+        "v": "Evolution Cup",
+        "s": "human"
+      }
+    }
+  },
+  "stages": [
+    {
+      "key": "stage_1",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Table",
+          "s": "human"
+        },
+        "de": {
+          "v": "Table",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "roster",
+        "seeding": "manual"
+      },
+      "pairing": {
+        "kind": "round_robin",
+        "legs": 1,
+        "mirror_legs": true
+      },
+      "series": {
+        "best_of": 1,
+        "allow_draw": false,
+        "overrides": []
+      },
+      "ruleset": {
+        "kind": "season_default"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 2,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [
+        {
+          "kind": "metric",
+          "metric": "points",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "kill_differential",
+          "direction": "desc"
+        },
+        {
+          "kind": "head_to_head",
+          "scope": "pairwise"
+        },
+        {
+          "kind": "decision_match"
+        }
+      ],
+      "columns": []
+    },
+    {
+      "key": "stage_2",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Swiss table",
+          "s": "human"
+        },
+        "de": {
+          "v": "Swiss table",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "roster",
+        "seeding": "manual"
+      },
+      "pairing": {
+        "kind": "swiss",
+        "rounds": "auto",
+        "avoid_repeats": true
+      },
+      "series": {
+        "best_of": 1,
+        "allow_draw": false,
+        "overrides": []
+      },
+      "ruleset": {
+        "kind": "season_default"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 2,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [
+        {
+          "kind": "metric",
+          "metric": "points",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "kill_differential",
+          "direction": "desc"
+        },
+        {
+          "kind": "head_to_head",
+          "scope": "pairwise"
+        },
+        {
+          "kind": "decision_match"
+        }
+      ],
+      "columns": []
+    }
+  ],
+  "edges": [],
+  "views": [],
+  "rules": [],
+  "text": {
+    "sections": []
+  },
+  "theme": {
+    "world": "auto"
+  },
+  "modules": [
+    {
+      "kind": "module.legacy",
+      "adapter": "epb",
+      "facts": [
+        {
+          "key": "match_points_win",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Match points per win",
+              "s": "human"
+            },
+            "de": {
+              "v": "Matchpunkte pro Sieg",
+              "s": "human"
+            }
+          },
+          "value": 2
+        },
+        {
+          "key": "tiebreak_match_points",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Tiebreak position of match points",
+              "s": "human"
+            },
+            "de": {
+              "v": "Rang der Matchpunkte im Tiebreak",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "tiebreak_kill_difference",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Tiebreak position of the KO difference",
+              "s": "human"
+            },
+            "de": {
+              "v": "Rang der KO-Differenz im Tiebreak",
+              "s": "human"
+            }
+          },
+          "value": 2
+        },
+        {
+          "key": "tiebreak_evolution_points",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Tiebreak position of evolution points",
+              "s": "human"
+            },
+            "de": {
+              "v": "Rang der Evolutionspunkte im Tiebreak",
+              "s": "human"
+            }
+          },
+          "value": 3
+        },
+        {
+          "key": "tiebreak_head_to_head",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Tiebreak position of the head-to-head result",
+              "s": "human"
+            },
+            "de": {
+              "v": "Rang des direkten Vergleichs im Tiebreak",
+              "s": "human"
+            }
+          },
+          "value": 4
+        },
+        {
+          "key": "tiebreak_decision_match",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Tiebreak position of the decision match",
+              "s": "human"
+            },
+            "de": {
+              "v": "Rang des Entscheidungsspiels im Tiebreak",
+              "s": "human"
+            }
+          },
+          "value": 5
+        },
+        {
+          "key": "tera_stage1",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Terastallization for stage 1 Pokémon",
+              "s": "human"
+            },
+            "de": {
+              "v": "Terakristallisieren für Pokémon der Stufe 1",
+              "s": "human"
+            }
+          },
+          "value": "any"
+        },
+        {
+          "key": "tera_stage2",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Terastallization for stage 2 Pokémon",
+              "s": "human"
+            },
+            "de": {
+              "v": "Terakristallisieren für Pokémon der Stufe 2",
+              "s": "human"
+            }
+          },
+          "value": "any"
+        },
+        {
+          "key": "tera_stage3",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Terastallization for stage 3 Pokémon",
+              "s": "human"
+            },
+            "de": {
+              "v": "Terakristallisieren für Pokémon der Stufe 3",
+              "s": "human"
+            }
+          },
+          "value": "stab_only"
+        },
+        {
+          "key": "draft_budget",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft budget",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Budget",
+              "s": "human"
+            }
+          },
+          "value": 100
+        },
+        {
+          "key": "draft_picks",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft picks",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Picks",
+              "s": "human"
+            }
+          },
+          "value": 6
+        },
+        {
+          "key": "draft_token_ratio",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft token ratio",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Token-Verhältnis",
+              "s": "human"
+            }
+          },
+          "value": 5
+        },
+        {
+          "key": "draft_token_max",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft tokens per player (maximum)",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Token pro Spieler (Maximum)",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "draft_token_max_per_line",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft tokens per line (maximum)",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Token pro Linie (Maximum)",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "redraft_open",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Redraft phase open",
+              "s": "human"
+            },
+            "de": {
+              "v": "Redraft-Phase offen",
+              "s": "human"
+            }
+          },
+          "value": false
+        },
+        {
+          "key": "banned_moves",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Banned moves",
+              "s": "human"
+            },
+            "de": {
+              "v": "Gebannte Attacken",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "banned_items",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Banned items",
+              "s": "human"
+            },
+            "de": {
+              "v": "Gebannte Items",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "stage_lock_enabled",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Early final-stage lock",
+              "s": "human"
+            },
+            "de": {
+              "v": "Frühe Sperre der Endstufe",
+              "s": "human"
+            }
+          },
+          "value": true
+        },
+        {
+          "key": "stage_lock_stage",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Stage the lock applies to",
+              "s": "human"
+            },
+            "de": {
+              "v": "Stufe, auf die die Sperre wirkt",
+              "s": "human"
+            }
+          },
+          "value": 3
+        },
+        {
+          "key": "stage_lock_by_matchday",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Lock applies up to matchday",
+              "s": "human"
+            },
+            "de": {
+              "v": "Sperre gilt bis zum Spieltag",
+              "s": "human"
+            }
+          },
+          "value": 2
+        },
+        {
+          "key": "stage_lock_suspend_matchdays",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Matchdays a locked player is suspended",
+              "s": "human"
+            },
+            "de": {
+              "v": "Spieltage, die ein gesperrter Spieler aussetzt",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "participation_per_matchday",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Participation points per matchday",
+              "s": "human"
+            },
+            "de": {
+              "v": "Teilnahmepunkte pro Spieltag",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "participation_until_stage",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Participation points until stage",
+              "s": "human"
+            },
+            "de": {
+              "v": "Teilnahmepunkte bis Stufe",
+              "s": "human"
+            }
+          },
+          "value": 3
+        },
+        {
+          "key": "comeback_earn_window",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Comeback tokens are earned over",
+              "s": "human"
+            },
+            "de": {
+              "v": "Comeback-Token werden verdient über",
+              "s": "human"
+            }
+          },
+          "value": "season"
+        }
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`golden: epb_pack_points_differ > rules text (de) 1`] = `
+"Evolution Cup
+
+2 Stages: Table und Swiss table.
+
+Stages
+- Stage Table. Jeder spielt einmal gegen jeden. Die Spiele werden im Best-of-1-Modus ausgetragen. Punkte: Sieg 2, Niederlage 0, Freilos 0. Die Tabelle wird gereiht nach: Punkte (höchster Wert zuerst), Kill-Differenz (höchster Wert zuerst), direkter Vergleich (paarweise) und Entscheidungsspiel.
+  Die Teilnehmer kommen aus der Teilnehmerliste, von Hand gesetzt.
+  Die Teams folgen dem Regelwerk der Saison.
+  Erwartet: 8 Teilnehmer. Gespielt werden 7 Runden.
+- Stage Swiss table. Schweizer System; die Rundenzahl ergibt sich aus der Teilnehmerzahl. Die Spiele werden im Best-of-1-Modus ausgetragen. Punkte: Sieg 2, Niederlage 0, Freilos 0. Die Tabelle wird gereiht nach: Punkte (höchster Wert zuerst), Kill-Differenz (höchster Wert zuerst), direkter Vergleich (paarweise) und Entscheidungsspiel.
+  Die Teilnehmer kommen aus der Teilnehmerliste, von Hand gesetzt.
+  Die Teams folgen dem Regelwerk der Saison.
+  Erwartet: 8 Teilnehmer. Gespielt werden 3 Runden.
+
+Legacy-Module
+- Evolution Point Buy
+  Legacy-Modul Evolution Point Buy mit 24 Angaben.
+  Matchpunkte pro Sieg: 2
+  Rang der Matchpunkte im Tiebreak: 1
+  Rang der KO-Differenz im Tiebreak: 2
+  Rang der Evolutionspunkte im Tiebreak: 3
+  Rang des direkten Vergleichs im Tiebreak: 4
+  Rang des Entscheidungsspiels im Tiebreak: 5
+  Terakristallisieren für Pokémon der Stufe 1: beliebig
+  Terakristallisieren für Pokémon der Stufe 2: beliebig
+  Terakristallisieren für Pokémon der Stufe 3: nur Tera-Typen, die das Pokémon bereits hat
+  Draft-Budget: 100
+  Draft-Picks: 6
+  Draft-Token-Verhältnis: 5
+  Draft-Token pro Spieler (Maximum): 1
+  Draft-Token pro Linie (Maximum): 1
+  Redraft-Phase offen: nein
+  Gebannte Attacken: 1
+  Gebannte Items: 1
+  Frühe Sperre der Endstufe: ja
+  Stufe, auf die die Sperre wirkt: 3
+  Sperre gilt bis zum Spieltag: 2
+  Spieltage, die ein gesperrter Spieler aussetzt: 1
+  Teilnahmepunkte pro Spieltag: 1
+  Teilnahmepunkte bis Stufe: 3
+  Comeback-Token werden verdient über: ganze Saison
+
+Abdeckung
+14 automatisch, 1 Legacy-Modul."
+`;
+
+exports[`golden: epb_pack_points_differ > rules text (en) 1`] = `
+"Evolution Cup
+
+2 stages: Table and Swiss table.
+
+Stages
+- Stage Table. Everyone plays everyone once. Matches are best of 1. Points: win 2, loss 0, bye 0. Standings are ranked by: points (highest first), kill differential (highest first), head-to-head (pairwise) and decision match.
+  Participants come from the roster, seeded by hand.
+  Teams follow the ruleset of the season.
+  Expected: 8 participants. Plays 7 rounds.
+- Stage Swiss table. Swiss system; the number of rounds follows from the field size. Matches are best of 1. Points: win 2, loss 0, bye 0. Standings are ranked by: points (highest first), kill differential (highest first), head-to-head (pairwise) and decision match.
+  Participants come from the roster, seeded by hand.
+  Teams follow the ruleset of the season.
+  Expected: 8 participants. Plays 3 rounds.
+
+Legacy modules
+- Evolution Point Buy
+  Legacy module Evolution Point Buy with 24 facts.
+  Match points per win: 2
+  Tiebreak position of match points: 1
+  Tiebreak position of the KO difference: 2
+  Tiebreak position of evolution points: 3
+  Tiebreak position of the head-to-head result: 4
+  Tiebreak position of the decision match: 5
+  Terastallization for stage 1 Pokémon: any
+  Terastallization for stage 2 Pokémon: any
+  Terastallization for stage 3 Pokémon: only Tera types the Pokémon already has
+  Draft budget: 100
+  Draft picks: 6
+  Draft token ratio: 5
+  Draft tokens per player (maximum): 1
+  Draft tokens per line (maximum): 1
+  Redraft phase open: no
+  Banned moves: 1
+  Banned items: 1
+  Early final-stage lock: yes
+  Stage the lock applies to: 3
+  Lock applies up to matchday: 2
+  Matchdays a locked player is suspended: 1
+  Participation points per matchday: 1
+  Participation points until stage: 3
+  Comeback tokens are earned over: whole season
+
+Coverage
+14 automated, 1 legacy module."
+`;
+
+exports[`golden: epb_two_stage > compile verdict 1`] = `
+{
+  "capabilities": {
+    "cosmoPoints": true,
+    "draftTokens": true,
+    "earlyFinalStageLock": true,
+    "evolutionPoints": true,
+    "evolutionProgress": true,
+    "evolutionRedraft": true,
+    "evolutionTiers": false,
+    "genericDraftPool": false,
+    "killTokens": true,
+    "matchupRoles": true,
+    "participantTypeAssignment": false,
+    "pointBuyList": true,
+    "tierLimits": false,
+    "typeCores": false,
+    "wildcards": false,
+  },
+  "coverage": {
+    "auto": 9,
+    "checked": 1,
+    "honor": 0,
+    "legacy": 1,
+    "total": 11,
+  },
+  "diagnostics": [
+    {
+      "code": "rank_open_ended",
+      "pointer": "/stages/0/rank",
+      "severity": "warning",
+    },
+  ],
+  "hash": "be057129ddb4ab8cafb8ad48b487b901eca6d829369f3dd412055b0dca50aac6",
+  "ok": true,
+}
+`;
+
+exports[`golden: epb_two_stage > descriptor 1`] = `
+"{
+  "schema_version": 1,
+  "identity": {
+    "name": {
+      "base": "en",
+      "en": {
+        "v": "Evolution Season",
+        "s": "human"
+      },
+      "de": {
+        "v": "Evolution Season",
+        "s": "human"
+      }
+    }
+  },
+  "stages": [
+    {
+      "key": "stage_1",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Regular season",
+          "s": "human"
+        },
+        "de": {
+          "v": "Regular season",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "roster",
+        "seeding": "manual"
+      },
+      "pairing": {
+        "kind": "round_robin",
+        "legs": 1,
+        "mirror_legs": true
+      },
+      "series": {
+        "best_of": 1,
+        "allow_draw": false,
+        "overrides": []
+      },
+      "ruleset": {
+        "kind": "season_default"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 3,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [
+        {
+          "kind": "metric",
+          "metric": "points",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "kill_differential",
+          "direction": "desc"
+        },
+        {
+          "kind": "head_to_head",
+          "scope": "pairwise"
+        }
+      ],
+      "columns": []
+    },
+    {
+      "key": "stage_2",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Playoffs",
+          "s": "human"
+        },
+        "de": {
+          "v": "Playoffs",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "edges",
+        "seeding": "edge_order"
+      },
+      "pairing": {
+        "kind": "single_elim",
+        "third_place": false
+      },
+      "series": {
+        "best_of": 3,
+        "allow_draw": false,
+        "overrides": [
+          {
+            "round": 1,
+            "from": "end",
+            "best_of": 5
+          },
+          {
+            "round": 2,
+            "from": "end",
+            "best_of": 3
+          }
+        ]
+      },
+      "ruleset": {
+        "kind": "season_default"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 1,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [],
+      "columns": []
+    }
+  ],
+  "edges": [
+    {
+      "key": "advance_1_2",
+      "from": "stage_1",
+      "to": "stage_2",
+      "select": [
+        {
+          "kind": "top_n",
+          "n": 4
+        }
+      ],
+      "seeding": "rank",
+      "gate": "admin_confirm"
+    }
+  ],
+  "views": [],
+  "rules": [],
+  "text": {
+    "sections": []
+  },
+  "theme": {
+    "world": "auto"
+  },
+  "modules": [
+    {
+      "kind": "module.legacy",
+      "adapter": "epb",
+      "facts": [
+        {
+          "key": "match_points_win",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Match points per win",
+              "s": "human"
+            },
+            "de": {
+              "v": "Matchpunkte pro Sieg",
+              "s": "human"
+            }
+          },
+          "value": 3
+        },
+        {
+          "key": "tiebreak_match_points",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Tiebreak position of match points",
+              "s": "human"
+            },
+            "de": {
+              "v": "Rang der Matchpunkte im Tiebreak",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "tiebreak_kill_difference",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Tiebreak position of the KO difference",
+              "s": "human"
+            },
+            "de": {
+              "v": "Rang der KO-Differenz im Tiebreak",
+              "s": "human"
+            }
+          },
+          "value": 2
+        },
+        {
+          "key": "tiebreak_head_to_head",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Tiebreak position of the head-to-head result",
+              "s": "human"
+            },
+            "de": {
+              "v": "Rang des direkten Vergleichs im Tiebreak",
+              "s": "human"
+            }
+          },
+          "value": 3
+        },
+        {
+          "key": "tera_stage1",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Terastallization for stage 1 Pokémon",
+              "s": "human"
+            },
+            "de": {
+              "v": "Terakristallisieren für Pokémon der Stufe 1",
+              "s": "human"
+            }
+          },
+          "value": "any"
+        },
+        {
+          "key": "tera_stage2",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Terastallization for stage 2 Pokémon",
+              "s": "human"
+            },
+            "de": {
+              "v": "Terakristallisieren für Pokémon der Stufe 2",
+              "s": "human"
+            }
+          },
+          "value": "stab_only"
+        },
+        {
+          "key": "tera_stage3",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Terastallization for stage 3 Pokémon",
+              "s": "human"
+            },
+            "de": {
+              "v": "Terakristallisieren für Pokémon der Stufe 3",
+              "s": "human"
+            }
+          },
+          "value": "none"
+        },
+        {
+          "key": "draft_budget",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft budget",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Budget",
+              "s": "human"
+            }
+          },
+          "value": 120
+        },
+        {
+          "key": "draft_picks",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft picks",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Picks",
+              "s": "human"
+            }
+          },
+          "value": 6
+        },
+        {
+          "key": "draft_token_ratio",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft token ratio",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Token-Verhältnis",
+              "s": "human"
+            }
+          },
+          "value": 5
+        },
+        {
+          "key": "draft_token_max",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft tokens per player (maximum)",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Token pro Spieler (Maximum)",
+              "s": "human"
+            }
+          },
+          "value": 2
+        },
+        {
+          "key": "draft_token_max_per_line",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Draft tokens per line (maximum)",
+              "s": "human"
+            },
+            "de": {
+              "v": "Draft-Token pro Linie (Maximum)",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "redraft_open",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Redraft phase open",
+              "s": "human"
+            },
+            "de": {
+              "v": "Redraft-Phase offen",
+              "s": "human"
+            }
+          },
+          "value": true
+        },
+        {
+          "key": "banned_moves",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Banned moves",
+              "s": "human"
+            },
+            "de": {
+              "v": "Gebannte Attacken",
+              "s": "human"
+            }
+          },
+          "value": 2
+        },
+        {
+          "key": "banned_items",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Banned items",
+              "s": "human"
+            },
+            "de": {
+              "v": "Gebannte Items",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "stage_lock_enabled",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Early final-stage lock",
+              "s": "human"
+            },
+            "de": {
+              "v": "Frühe Sperre der Endstufe",
+              "s": "human"
+            }
+          },
+          "value": true
+        },
+        {
+          "key": "stage_lock_stage",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Stage the lock applies to",
+              "s": "human"
+            },
+            "de": {
+              "v": "Stufe, auf die die Sperre wirkt",
+              "s": "human"
+            }
+          },
+          "value": 3
+        },
+        {
+          "key": "stage_lock_by_matchday",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Lock applies up to matchday",
+              "s": "human"
+            },
+            "de": {
+              "v": "Sperre gilt bis zum Spieltag",
+              "s": "human"
+            }
+          },
+          "value": 2
+        },
+        {
+          "key": "stage_lock_suspend_matchdays",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Matchdays a locked player is suspended",
+              "s": "human"
+            },
+            "de": {
+              "v": "Spieltage, die ein gesperrter Spieler aussetzt",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "participation_per_matchday",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Participation points per matchday",
+              "s": "human"
+            },
+            "de": {
+              "v": "Teilnahmepunkte pro Spieltag",
+              "s": "human"
+            }
+          },
+          "value": 1
+        },
+        {
+          "key": "participation_until_stage",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Participation points until stage",
+              "s": "human"
+            },
+            "de": {
+              "v": "Teilnahmepunkte bis Stufe",
+              "s": "human"
+            }
+          },
+          "value": 3
+        },
+        {
+          "key": "comeback_earn_window",
+          "label": {
+            "base": "en",
+            "en": {
+              "v": "Comeback tokens are earned over",
+              "s": "human"
+            },
+            "de": {
+              "v": "Comeback-Token werden verdient über",
+              "s": "human"
+            }
+          },
+          "value": "season"
+        }
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`golden: epb_two_stage > rules text (de) 1`] = `
+"Evolution Season
+
+2 Stages: Regular season und Playoffs.
+
+Stages
+- Stage Regular season. Jeder spielt einmal gegen jeden. Die Spiele werden im Best-of-1-Modus ausgetragen. Punkte: Sieg 3, Niederlage 0, Freilos 0. Die Tabelle wird gereiht nach: Punkte (höchster Wert zuerst), Kill-Differenz (höchster Wert zuerst) und direkter Vergleich (paarweise).
+  Die Teilnehmer kommen aus der Teilnehmerliste, von Hand gesetzt.
+  Die Teams folgen dem Regelwerk der Saison.
+  Erwartet: 8 Teilnehmer. Gespielt werden 7 Runden.
+- Stage Playoffs. K.-o.-System mit einfacher Ausscheidung. Die Spiele werden im Best-of-3-Modus ausgetragen; 2 Runden weichen davon ab. Punkte: Sieg 1, Niederlage 0, Freilos 0.
+  Die Teilnehmer kommen aus den früheren Stages, in der Reihenfolge des Weiterkommens.
+  Die Teams folgen dem Regelwerk der Saison.
+  Erwartet: 4 Teilnehmer. Gespielt werden 2 Runden. Der Turnierbaum hat 4 Plätze.
+
+Weiterkommen
+- Spieler kommen von Regular season nach Playoffs weiter. Auswahl: die besten 4. Gesetzt wird nach der Endplatzierung. Ein Admin bestätigt das Ergebnis, bevor die Spieler weiterkommen.
+
+Legacy-Module
+- Evolution Point Buy
+  Legacy-Modul Evolution Point Buy mit 22 Angaben.
+  Matchpunkte pro Sieg: 3
+  Rang der Matchpunkte im Tiebreak: 1
+  Rang der KO-Differenz im Tiebreak: 2
+  Rang des direkten Vergleichs im Tiebreak: 3
+  Terakristallisieren für Pokémon der Stufe 1: beliebig
+  Terakristallisieren für Pokémon der Stufe 2: nur Tera-Typen, die das Pokémon bereits hat
+  Terakristallisieren für Pokémon der Stufe 3: nicht erlaubt
+  Draft-Budget: 120
+  Draft-Picks: 6
+  Draft-Token-Verhältnis: 5
+  Draft-Token pro Spieler (Maximum): 2
+  Draft-Token pro Linie (Maximum): 1
+  Redraft-Phase offen: ja
+  Gebannte Attacken: 2
+  Gebannte Items: 1
+  Frühe Sperre der Endstufe: ja
+  Stufe, auf die die Sperre wirkt: 3
+  Sperre gilt bis zum Spieltag: 2
+  Spieltage, die ein gesperrter Spieler aussetzt: 1
+  Teilnahmepunkte pro Spieltag: 1
+  Teilnahmepunkte bis Stufe: 3
+  Comeback-Token werden verdient über: ganze Saison
+
+Abdeckung
+9 automatisch, 1 vom Admin bestätigt, 1 Legacy-Modul."
+`;
+
+exports[`golden: epb_two_stage > rules text (en) 1`] = `
+"Evolution Season
+
+2 stages: Regular season and Playoffs.
+
+Stages
+- Stage Regular season. Everyone plays everyone once. Matches are best of 1. Points: win 3, loss 0, bye 0. Standings are ranked by: points (highest first), kill differential (highest first) and head-to-head (pairwise).
+  Participants come from the roster, seeded by hand.
+  Teams follow the ruleset of the season.
+  Expected: 8 participants. Plays 7 rounds.
+- Stage Playoffs. Single-elimination bracket. Matches are best of 3; 2 rounds use a different length. Points: win 1, loss 0, bye 0.
+  Participants come from the earlier stages, in the order they advance.
+  Teams follow the ruleset of the season.
+  Expected: 4 participants. Plays 2 rounds. The bracket has 4 places.
+
+Advancement
+- Players advance from Regular season to Playoffs. Selection: top 4. Seeded by final rank. An admin confirms the result before players move on.
+
+Legacy modules
+- Evolution Point Buy
+  Legacy module Evolution Point Buy with 22 facts.
+  Match points per win: 3
+  Tiebreak position of match points: 1
+  Tiebreak position of the KO difference: 2
+  Tiebreak position of the head-to-head result: 3
+  Terastallization for stage 1 Pokémon: any
+  Terastallization for stage 2 Pokémon: only Tera types the Pokémon already has
+  Terastallization for stage 3 Pokémon: not allowed
+  Draft budget: 120
+  Draft picks: 6
+  Draft token ratio: 5
+  Draft tokens per player (maximum): 2
+  Draft tokens per line (maximum): 1
+  Redraft phase open: yes
+  Banned moves: 2
+  Banned items: 1
+  Early final-stage lock: yes
+  Stage the lock applies to: 3
+  Lock applies up to matchday: 2
+  Matchdays a locked player is suspended: 1
+  Participation points per matchday: 1
+  Participation points until stage: 3
+  Comeback tokens are earned over: whole season
+
+Coverage
+9 automated, 1 confirmed by an admin, 1 legacy module."
+`;
+
+exports[`golden: singles_groups_playoffs > compile verdict 1`] = `
+{
+  "capabilities": {
+    "cosmoPoints": false,
+    "draftTokens": false,
+    "earlyFinalStageLock": false,
+    "evolutionPoints": false,
+    "evolutionProgress": false,
+    "evolutionRedraft": false,
+    "evolutionTiers": false,
+    "genericDraftPool": false,
+    "killTokens": false,
+    "matchupRoles": false,
+    "participantTypeAssignment": false,
+    "pointBuyList": false,
+    "tierLimits": false,
+    "typeCores": false,
+    "wildcards": false,
+  },
+  "coverage": {
+    "auto": 11,
+    "checked": 1,
+    "honor": 0,
+    "legacy": 0,
+    "total": 12,
+  },
+  "diagnostics": [
+    {
+      "code": "rank_open_ended",
+      "pointer": "/stages/0/rank",
+      "severity": "warning",
+    },
+  ],
+  "hash": "3722162dda8b2e728444d304ff8034d7eec1103cedd762c5ea65f5d4dc470f75",
+  "ok": true,
+}
+`;
+
+exports[`golden: singles_groups_playoffs > descriptor 1`] = `
+"{
+  "schema_version": 1,
+  "identity": {
+    "name": {
+      "base": "en",
+      "en": {
+        "v": "Group Cup",
+        "s": "human"
+      },
+      "de": {
+        "v": "Group Cup",
+        "s": "human"
+      }
+    },
+    "summary": {
+      "base": "en",
+      "en": {
+        "v": "Two groups, then a knockout.",
+        "s": "human"
+      },
+      "de": {
+        "v": "Two groups, then a knockout.",
+        "s": "human"
+      }
+    }
+  },
+  "stages": [
+    {
+      "key": "stage_1",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Group stage",
+          "s": "human"
+        },
+        "de": {
+          "v": "Group stage",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "roster",
+        "seeding": "manual"
+      },
+      "groups": {
+        "count": 2,
+        "method": "manual"
+      },
+      "pairing": {
+        "kind": "round_robin",
+        "legs": 1,
+        "mirror_legs": true
+      },
+      "series": {
+        "best_of": 1,
+        "allow_draw": false,
+        "overrides": []
+      },
+      "ruleset": {
+        "kind": "season_default"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 3,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [
+        {
+          "kind": "metric",
+          "metric": "points",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "kill_differential",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "buchholz",
+          "direction": "desc"
+        },
+        {
+          "kind": "metric",
+          "metric": "wins",
+          "direction": "desc"
+        }
+      ],
+      "columns": []
+    },
+    {
+      "key": "stage_2",
+      "name": {
+        "base": "en",
+        "en": {
+          "v": "Playoffs",
+          "s": "human"
+        },
+        "de": {
+          "v": "Playoffs",
+          "s": "human"
+        }
+      },
+      "participants": {
+        "from": "edges",
+        "seeding": "edge_order"
+      },
+      "pairing": {
+        "kind": "single_elim",
+        "third_place": false
+      },
+      "series": {
+        "best_of": 3,
+        "allow_draw": false,
+        "overrides": [
+          {
+            "round": 1,
+            "from": "end",
+            "best_of": 5
+          }
+        ]
+      },
+      "ruleset": {
+        "kind": "season_default"
+      },
+      "doubles": false,
+      "players_per_match": 2,
+      "scoring": {
+        "win": 1,
+        "loss": 0,
+        "bye": 0
+      },
+      "rank": [],
+      "columns": []
+    }
+  ],
+  "edges": [
+    {
+      "key": "advance_1_2",
+      "from": "stage_1",
+      "to": "stage_2",
+      "select": [
+        {
+          "kind": "per_group",
+          "n": 2
+        }
+      ],
+      "seeding": "rank",
+      "gate": "admin_confirm"
+    }
+  ],
+  "views": [],
+  "rules": [],
+  "text": {
+    "sections": [
+      {
+        "id": "bo_stage_2",
+        "title": {
+          "base": "en",
+          "en": {
+            "v": "Match lengths in Playoffs",
+            "s": "human"
+          },
+          "de": {
+            "v": "Spiellängen in Playoffs",
+            "s": "human"
+          }
+        },
+        "body": {
+          "base": "en",
+          "en": {
+            "v": "Third Place is played as best of 3.",
+            "s": "human"
+          },
+          "de": {
+            "v": "Third Place wird im Best-of-3-Modus gespielt.",
+            "s": "human"
+          }
+        },
+        "stage": "stage_2"
+      }
+    ]
+  },
+  "theme": {
+    "world": "auto"
+  },
+  "modules": []
+}"
+`;
+
+exports[`golden: singles_groups_playoffs > rules text (de) 1`] = `
+"Group Cup
+Two groups, then a knockout.
+
+2 Stages: Group stage und Playoffs.
+
+Stages
+- Stage Group stage. Jeder spielt einmal gegen jeden. Die Spiele werden im Best-of-1-Modus ausgetragen. Punkte: Sieg 3, Niederlage 0, Freilos 0. Die Tabelle wird gereiht nach: Punkte (höchster Wert zuerst), Kill-Differenz (höchster Wert zuerst), Buchholz-Wertung (höchster Wert zuerst) und Siege (höchster Wert zuerst).
+  Die Teilnehmer kommen aus der Teilnehmerliste, von Hand gesetzt.
+  Die Spieler werden auf 2 Gruppen verteilt. Zuteilung: Manuell.
+  Die Teams folgen dem Regelwerk der Saison.
+  Erwartet: 8 Teilnehmer. Gespielt werden 3 Runden.
+- Stage Playoffs. K.-o.-System mit einfacher Ausscheidung. Die Spiele werden im Best-of-3-Modus ausgetragen; eine Runde weicht davon ab. Punkte: Sieg 1, Niederlage 0, Freilos 0.
+  Die Teilnehmer kommen aus den früheren Stages, in der Reihenfolge des Weiterkommens.
+  Die Teams folgen dem Regelwerk der Saison.
+  Erwartet: 4 Teilnehmer. Gespielt werden 2 Runden. Der Turnierbaum hat 4 Plätze.
+
+Weiterkommen
+- Spieler kommen von Group stage nach Playoffs weiter. Auswahl: die besten 2 jeder Gruppe. Gesetzt wird nach der Endplatzierung. Ein Admin bestätigt das Ergebnis, bevor die Spieler weiterkommen.
+
+Hinweise
+Spiellängen in Playoffs
+Third Place wird im Best-of-3-Modus gespielt.
+
+Abdeckung
+11 automatisch, 1 vom Admin bestätigt."
+`;
+
+exports[`golden: singles_groups_playoffs > rules text (en) 1`] = `
+"Group Cup
+Two groups, then a knockout.
+
+2 stages: Group stage and Playoffs.
+
+Stages
+- Stage Group stage. Everyone plays everyone once. Matches are best of 1. Points: win 3, loss 0, bye 0. Standings are ranked by: points (highest first), kill differential (highest first), Buchholz score (highest first) and wins (highest first).
+  Participants come from the roster, seeded by hand.
+  Players are split into 2 groups. Assignment: Manual.
+  Teams follow the ruleset of the season.
+  Expected: 8 participants. Plays 3 rounds.
+- Stage Playoffs. Single-elimination bracket. Matches are best of 3; one round uses a different length. Points: win 1, loss 0, bye 0.
+  Participants come from the earlier stages, in the order they advance.
+  Teams follow the ruleset of the season.
+  Expected: 4 participants. Plays 2 rounds. The bracket has 4 places.
+
+Advancement
+- Players advance from Group stage to Playoffs. Selection: top 2 of each group. Seeded by final rank. An admin confirms the result before players move on.
+
+Notes
+Match lengths in Playoffs
+Third Place is played as best of 3.
+
+Coverage
+11 automated, 1 confirmed by an admin."
+`;

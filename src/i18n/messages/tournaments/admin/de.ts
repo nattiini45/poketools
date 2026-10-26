@@ -117,6 +117,20 @@ export default defineDe<typeof en>()({
     grandFinalsReset: 'Reset im Großen Finale',
     empty: 'Noch keine Runden. Erstelle die erste Runde, um loszulegen.',
     start: 'Starten',
+    startNow: {
+      label: 'Neue Runde sofort starten',
+      hint: 'Spieler können Ergebnisse melden, sobald eine Runde gestartet ist. Lass es aus, wenn du die Paarungen erst prüfen möchtest.',
+      hintAll: 'Bei „Alle Runden erstellen“ wird nur die erste neue Runde gestartet.',
+    },
+    pending: {
+      title: '{round} wurde noch nicht gestartet',
+      body: 'Spieler können Ergebnisse melden, sobald du diese Runde startest.',
+      start: '{round} starten',
+    },
+    allGenerated: {
+      one: 'Die einzige Runde wurde erstellt',
+      other: 'Alle {count} Runden wurden erstellt',
+    },
     bestOfLabel: 'Best-of für {name}',
     bestOfSaving: 'Wird gespeichert …',
     bestOfSaved: 'Gespeichert.',
@@ -183,6 +197,60 @@ export default defineDe<typeof en>()({
       cascadeConfirm: 'Inklusive Folgespielen zurücksetzen',
     },
   },
+  checklist: {
+    title: 'Vor dem Erstellen',
+    optional: 'Optional',
+    blockedNote: 'Das Erstellen ist gesperrt, bis die offenen Punkte erledigt sind.',
+    checking: 'Teilnehmer werden geprüft …',
+    loadFailed: 'Die Teilnehmer konnten nicht geprüft werden. Du kannst trotzdem versuchen, zu erstellen.',
+    participants: {
+      done: {
+        one: '{count} Teilnehmer eingetragen (mindestens {min})',
+        other: '{count} Teilnehmer eingetragen (mindestens {min})',
+      },
+      blocked: {
+        one: 'Erst {count} Teilnehmer eingetragen. Trage mindestens {min} Teilnehmer ein.',
+        other: '{count} Teilnehmer eingetragen. Trage mindestens {min} Teilnehmer ein.',
+      },
+      action: 'Teilnehmer hinzufügen',
+    },
+    ruleset: {
+      done: 'Regelwerk: {name}',
+      doneUnnamed: 'Regelwerk festgelegt',
+      blocked: 'Kein Regelwerk festgelegt. Wähle in der Übersicht eines aus.',
+      action: 'Regelwerk ändern',
+    },
+    bestOf: {
+      done: 'Standardmäßig Best of {count}',
+      blocked: 'Kein Standard-Best-of festgelegt.',
+      action: 'Best-of ändern',
+    },
+    groups: {
+      done: 'Jeder Teilnehmer ist einer Ligagruppe zugeordnet',
+      blocked: {
+        one: '{count} Teilnehmer ist keiner Ligagruppe zugeordnet. Ordne ihn zuerst zu.',
+        other: '{count} Teilnehmer sind keiner Ligagruppe zugeordnet. Ordne sie zuerst zu.',
+      },
+      action: 'Ligagruppen öffnen',
+    },
+    seeding: {
+      done: 'Alle Teilnehmer haben einen Setzplatz',
+      attention: {
+        one: '{count} Teilnehmer hat keinen Setzplatz und wird nach Namen einsortiert.',
+        other: '{count} Teilnehmer haben keinen Setzplatz und werden nach Namen einsortiert.',
+      },
+      action: 'Setzplätze festlegen',
+    },
+    previousRound: {
+      done: 'Vorherige Runde abgeschlossen',
+      blocked: '{round} ist noch nicht abgeschlossen. Schließe sie ab, bevor du die nächste Runde erstellst.',
+      action: 'Zu den Runden',
+    },
+    rounds: {
+      done: '{generated} von {total} Runden erstellt',
+      gap: 'Runde {round} fehlt. „Alle Runden erstellen“ füllt die Lücke.',
+    },
+  },
   participants: {
     loading: 'Wird geladen …',
     loadFailed: 'Die Daten konnten nicht geladen werden.',
@@ -196,9 +264,14 @@ export default defineDe<typeof en>()({
     synced: 'Mit der Ligatabelle abgeglichen',
     source: 'Quelle: {name}',
     lastSync: 'Letzter Abgleich {time}',
+    orderHint: {
+      one: 'Beim Speichern erhält {count} Spieler den Setzplatz seiner Position in der Liste.',
+      other: 'Beim Speichern erhalten alle {count} Spieler den Setzplatz ihrer Position in der Liste.',
+    },
     seedsPositive: 'Setzplätze müssen positive Zahlen sein.',
     seedsDuplicate: 'Jeder Setzplatz darf nur einmal vergeben werden.',
     saveFailed: 'Die Setzliste konnte nicht gespeichert werden.',
+    saved: 'Die Setzliste wurde gespeichert.',
     reimportConfirm: 'Der Neuimport überschreibt die aktuelle Teilnehmerliste und die Setzplätze. Fortfahren?',
     reimportFailed: 'Die Tabelle konnte nicht neu importiert werden.',
     seedByRatingFailed: 'Das Setzen nach Rating ist fehlgeschlagen.',

@@ -53,6 +53,13 @@ export default defineDe<typeof en>()({
   SEASON_FORMAT_POINT_BUY_LOCKED:
     'Eine Point-Buy-Liga behält ihren Liga-Typ, und andere Ligen lassen sich nicht darauf umstellen.',
   SEASON_DATES_INVALID: 'Das Enddatum darf nicht vor dem Startdatum liegen.',
+  SEASON_CLONE_FORBIDDEN: 'Du kannst nur aus einer Liga starten, die du selbst verwaltest.',
+  SEASON_CLONE_ADMINS_FORBIDDEN: 'Nur Site-Admins können die Liga-Admins übernehmen.',
+  SEASON_CLONE_CUSTOM_FORMAT:
+    'Eine Liga mit eigenem Format kann nicht als Vorlage dienen: Ihre Phasen kommen aus einem angehängten Format, und eine Kopie könnte keines anhängen.',
+  SEASON_CLONE_FAILED: 'Die Liga konnte nicht aus der Vorlage erstellt werden. Es wurde nichts behalten.',
+  SEASON_CLONE_CLEANUP_FAILED:
+    'Die Liga konnte nicht aus der Vorlage erstellt und auch nicht wieder entfernt werden: Liga {league_id} besteht weiter, mit {phases} Phasen und {participants} Kadereinträgen. Ein Site-Admin kann sie löschen.',
   season_test_flag_site_admin_only: 'Nur Site-Admins können die Testliga-Markierung ändern.',
   participant_update_empty: 'Gib gym_type und/oder core_types an, um den Teilnehmer zu ändern.',
   format_mismatch: 'Diese Saison nutzt nicht das Format Evolution Point Buy.',
@@ -79,4 +86,26 @@ export default defineDe<typeof en>()({
   IN_ALREADY_IN_PHASE: 'Der Ersatzspieler ist bereits in der Phase „{phase}“ eingetragen.',
   SUBSTITUTE_LEAGUE_GROUP_MISMATCH:
     'Der Ersatzspieler ist nicht in der Ligagruppe „{group}“, der die Phase „{phase}“ folgt; ersetze stattdessen in der ganzen Liga.',
+
+  format_season_not_custom: 'Diese Liga nutzt kein eigenes Format.',
+  format_season_started: 'Die Liga hat bereits begonnen, deshalb lässt sich ihr Format nicht mehr ändern.',
+  format_attach_forbidden:
+    'Du kannst nur Formate anhängen, die dir gehören oder für alle Admins freigegeben sind.',
+  format_attach_invalid: 'Diese Version hat Fehler und kann nicht angehängt werden ({first}).',
+  format_attach_ruleset_required: {
+    one: '{count} Stage nutzt das Standard-Regelwerk der Liga, die Liga hat aber keines. Lege zuerst ein Standard-Regelwerk fest.',
+    other:
+      '{count} Stages nutzen das Standard-Regelwerk der Liga, die Liga hat aber keines. Lege zuerst ein Standard-Regelwerk fest.',
+  },
+  format_attach_manual_phases: {
+    one: 'Diese Liga hat bereits {count} Phase, die nicht aus einem Format entstanden ist. Lösche sie zuerst.',
+    other: 'Diese Liga hat bereits {count} Phasen, die nicht aus einem Format entstanden sind. Lösche sie zuerst.',
+  },
+  format_not_attached:
+    'Diese Liga nutzt ein eigenes Format, es ist aber noch keines angehängt. Hänge vor dem Start ein Format an.',
+  format_nothing_attached: 'An diese Liga ist kein Format angehängt.',
+  format_detach_blocked:
+    'Teams verweisen noch auf eine Phase dieses Formats, deshalb lässt es sich nicht abhängen.',
+  season_format_type_locked:
+    'Der Ligatyp lässt sich nicht auf oder von einem eigenen Format umstellen, solange ein Format angehängt ist oder nachdem die Liga begonnen hat.',
 });

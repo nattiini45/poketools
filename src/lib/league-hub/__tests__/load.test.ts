@@ -196,6 +196,39 @@ describe('a failed tab read', () => {
   });
 });
 
+describe('insights tab doubles flag', () => {
+  async function insights(
+    formatType: string,
+    stages: Partial<TournamentWithDetails>[] = [],
+  ): Promise<Extract<LeagueHubPanelData, { tab: 'insights' }>> {
+    const base = context();
+    const panel = await loadLeagueHubPanel('insights', {
+      ...base,
+      league: { ...base.league, format_type: formatType } as SeasonWithDetails,
+      stages: stages.map((s, i) => stage(`s${i}`, s)),
+    });
+    expect(panel?.tab).toBe('insights');
+    return panel as Extract<LeagueHubPanelData, { tab: 'insights' }>;
+  }
+
+  it.each([
+    ['singles', false],
+    ['draft', false],
+    ['evolution_point_buy', false],
+    ['doubles', true],
+  ])('%s: follows the league type', async (formatType, expected) => {
+    expect((await insights(formatType)).isDoubles).toBe(expected);
+    expect((await insights(formatType, [{ is_doubles: !expected }])).isDoubles).toBe(expected);
+  });
+
+  it('a custom league is doubles when it has stages and every stage is doubles', async () => {
+    expect((await insights('custom')).isDoubles).toBe(false);
+    expect((await insights('custom', [{ is_doubles: false }])).isDoubles).toBe(false);
+    expect((await insights('custom', [{ is_doubles: true }, { is_doubles: false }])).isDoubles).toBe(false);
+    expect((await insights('custom', [{ is_doubles: true }, { is_doubles: true }])).isDoubles).toBe(true);
+  });
+});
+
 describe('standings tab', () => {
   it('a league without groups: the season table, no group tables, ranked by points', async () => {
     const panel = await loadLeagueHubPanel('standings', context());
@@ -271,6 +304,33 @@ describe('groups tab', () => {
     });
     if (last?.tab !== 'groups') throw new Error('expected the groups panel');
     expect(last.stages.find((s) => s.stage.id === 'groups')?.advancementRule).toBeNull();
+  });
+});
+
+describe('groups tab ranking of an Evolution Point Buy league', () => {
+  // `sub` beat `ash` in m-1; `ash` holds the evolution points.
+  const trackers = [{ player_id: 'ash', evolution_points_awarded: 10 }];
+  const rankedBy = async (formatRules: unknown) => {
+    const base = context();
+    const data = { ...routeDataOf(), trackers, formatRules } as unknown as WorldRouteData;
+    const panel = await loadLeagueHubPanel('groups', {
+      ...base,
+      league: { ...base.league, format_type: 'evolution_point_buy' } as SeasonWithDetails,
+      stages: [GROUPS],
+      routeData: Promise.resolve(data),
+    });
+    if (panel?.tab !== 'groups') throw new Error('expected the groups panel');
+    return panel.stages[0].tables.flatMap((table) => table.standings.map((row) => row.player_id));
+  };
+
+  it('ranks by the stored tiebreaker order from the world payload, with no extra read', async () => {
+    expect(await rankedBy({ tiebreaker_order: ['evolution_points', 'match_points'] })).toEqual(['ash', 'sub']);
+    // The mocked read cache has no format rules read: the tab would throw if it asked for one.
+  });
+
+  it('ranks by the format pack chain without a rules row or with an order it cannot use', async () => {
+    expect(await rankedBy(null)).toEqual(['sub', 'ash']);
+    expect(await rankedBy({ tiebreaker_order: [] })).toEqual(['sub', 'ash']);
   });
 });
 
