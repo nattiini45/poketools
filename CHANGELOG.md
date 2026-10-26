@@ -299,7 +299,6 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   result in 1,000-row steps instead of stopping at the first 1,000 rows. The participants batch used by profiles and the point-buy list entries page the same way. A
   read that reaches its hard bound (20,000 rows) logs a warning. Results of 1,000 rows or fewer are unchanged. A new
   test rejects query reads that ask for more than 1,000 rows with `.limit`.
-
 - A phase save error is shown once, not twice.
 - Clearing every best-of override of a phase now saves; before, the empty list was never sent.
 - Adding a phase after a middle phase was deleted no longer reuses another phase's stage order. New phases are placed
@@ -327,7 +326,6 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - The site header fits every screen width: the menu button now replaces the link row below 1280 px, the display name is shortened with an ellipsis (full name on hover), Sign Out stays on one line, and the dark-mode toggle no longer sits outside the viewport at 1280 px.
 - Page header buttons (for example New League, or Mark Completed, Archive and Delete on a phase) now wrap below the title on phones instead of widening the page, so no button is cut off.
 - The admin Test Players page is translated: headings, buttons, table headers and status messages follow the site language.
-
 - Generating a bracket with fewer than 2 participants, or a second time, now answers a translated **400**
   `tournament_participants_too_few` or **409** `bracket_already_generated` instead of a generic 500.
 - Generate Next Round on a round robin that is past its last round answers **400** `rounds_all_generated` instead of a
@@ -342,19 +340,18 @@ No migration.
   meantime (for example a dispute landing just before a completion). It now answers `409 match_state_changed` and
   writes nothing, and the page reloads. Admin and participant confirms no longer overwrite the original submitter.
 - **Admin disputes are audited.** Marking a match disputed as an admin now writes a `match.dispute` audit event
-  (shown as "Match disputed by an admin"); before, it left an event only when the request carried notes.
+  (shown as "Match disputed"); before, it left an event only when the request carried notes.
 - **Failed loads can no longer overwrite stored data.** The draft tier limits editor and the point-buy list manager
   disable saving and binding after a failed read until a read succeeds, so pack defaults cannot be saved over the
   stored limits or list binding.
 - **Empty team constraints are no longer stored.** A new ruleset with an empty team-constraints block stores none
   instead of an empty object (which made it count as a custom league ruleset). Rulesets already stored with an empty
   object resolve as before.
-
 - The Admin Override form no longer reports success when the match changed state in the meantime. It answers 409
   `match_state_changed` and the page reloads, so the admin reviews the current state.
-
 - Submit Result and View Prep in the matches list no longer send an admin to the player dashboard. They show only to
-  people who can use them (a player in the match, or a site admin for Submit Result); Override stays for every admin.
+  people who can use them (a player in the match, or a site admin for Submit Result); the row itself opens the admin
+  match page.
 - Abort draft is no longer offered before the draft has started. A hint explains there is nothing to abort yet.
 
 ## [0.3.0] - 2026-10-23
