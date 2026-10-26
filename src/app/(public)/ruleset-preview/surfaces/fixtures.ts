@@ -236,7 +236,7 @@ export const TRASH_ROWS: LeagueTrashRowView[] = [
   {
     id: 'trash-warn',
     seasonId: id(402),
-    name: 'Evolution Liga Season 4 with a very long league name that has to wrap inside the table cell',
+    name: 'Autumn Point Buy League with a very long league name that has to wrap inside the table cell',
     formatLabel: 'Evolution point buy',
     deletedAt: '2026-10-02T18:05:00Z',
     deletedByName: null,

@@ -68,7 +68,7 @@ export function createFakeSurfacesApi(passthrough: typeof fetch): typeof fetch {
         success: true,
         data: {
           season_id: '00000000-0000-4000-8000-000000000401',
-          season_name: trashId === 'trash-warn' ? 'Evolution Liga Season 4' : 'Spring League 2026',
+          season_name: trashId === 'trash-warn' ? 'Autumn Point Buy League' : 'Spring League 2026',
           paused_pools: trashId === 'trash-warn' ? 2 : 0,
           warnings:
             trashId === 'trash-warn'
