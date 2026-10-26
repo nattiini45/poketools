@@ -10,8 +10,10 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Upgrade notes
 
-- No migration and no new environment variable. API clients that send an even best-of value, or change the league type
-  of a started league, now receive `400` / `409`.
+- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It adds
+  `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
+  new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
+  the migration.
 - **Apply three migrations, in this order, BEFORE deploying the code.**
   1. `20261024100000_season_format_type_custom.sql` adds the value `custom` to the league type enum. Apply it alone
      and let it commit before the next file (a new enum value cannot be used in the transaction that adds it). It
@@ -283,10 +285,6 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - Clearing every best-of override of a phase now saves; before, the empty list was never sent.
 - Adding a phase after a middle phase was deleted no longer reuses another phase's stage order. New phases are placed
   after the highest stage order.
-- **Apply migration `20261025090000_wiki_note_resubmission_block.sql` BEFORE deploying the code.** It adds
-  `wiki_notes.resubmission_blocked_at` and `resubmission_blocked_by` (both nullable) with a CHECK and an index. The
-  new code selects the columns on every note read, so those reads fail until they exist. Old code keeps working after
-  the migration.
 - The Format Rules section no longer offers **Initialize** after a failed load. A failed read used to look like "no
   rules yet" and let one click overwrite the stored rules with defaults.
 - Wiki: an author's edit to an approved note no longer goes live unreviewed. The edit puts the note back in the
@@ -311,9 +309,6 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - A participant list that fails to load is no longer shown to the start-up checklist as an empty roster, which
   blocked Generate with "0 participants". The participant manager now announces only a roster it actually read;
   the checklist keeps its last list, or shows its own error, until the next successful read.
-
-No migration.
-
 - **Complete/Dispute race.** The confirm-match route reported success when the match had changed state in the
   meantime (for example a dispute landing just before a completion). It now answers `409 match_state_changed` and
   writes nothing, and the page reloads. Admin and participant confirms no longer overwrite the original submitter.
