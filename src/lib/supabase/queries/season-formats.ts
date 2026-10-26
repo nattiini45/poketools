@@ -5,7 +5,9 @@
  * Reads name their columns (the summary read never selects the spec or the seed), id lists are chunked by 50 and an
  * empty list makes no request. The writes are the two Postgres functions `format_attach_season` and
  * `format_detach_season` (one transaction each); their database signals leave this module as typed errors through
- * `mapFormatDbError`.
+ * `mapFormatDbError`. `season_formats.showdown_rulesets` records the rulesets an attach created for the format's
+ * Showdown stages ({ showdown format id: ruleset id }); the two functions delete the ones a re-attach or a detach
+ * leaves unused.
  */
 import 'server-only';
 
@@ -62,6 +64,27 @@ export async function getSeasonFormatSummary(seasonId: string): Promise<SeasonFo
     .maybeSingle();
   if (error) throw error;
   return data ? toSummary(data as unknown as SummaryRow) : null;
+}
+
+/**
+ * The rulesets the league's attach created for its Showdown stages, as { showdown format id: ruleset id }; empty
+ * when no format is attached or it has no Showdown stage.
+ */
+export async function getSeasonShowdownRulesets(seasonId: string): Promise<Record<string, string>> {
+  if (!isValidUuid(seasonId)) return {};
+  const { data, error } = await supabase
+    .from('season_formats')
+    .select('showdown_rulesets')
+    .eq('season_id', seasonId)
+    .maybeSingle();
+  if (error) throw error;
+  const recorded = data?.showdown_rulesets;
+  if (typeof recorded !== 'object' || recorded === null || Array.isArray(recorded)) return {};
+  const out: Record<string, string> = {};
+  for (const [format, id] of Object.entries(recorded)) {
+    if (typeof id === 'string' && isValidUuid(id)) out[format] = id;
+  }
+  return out;
 }
 
 /** The full attached row, spec and seed included. For the engine and the admin spec view only. */
@@ -155,12 +178,16 @@ export interface AttachRpcInput {
   specHash: string;
   seed: string;
   stages: AttachStageRow[];
+  /** { showdown format id: ruleset id } of the Showdown stages; `{}` when the spec has none. */
+  showdownRulesets: Readonly<Record<string, string>>;
 }
 
 export interface AttachRpcResult {
   replaced: boolean;
   stages: { id: string; key: string }[];
   removed_stage_ids: string[];
+  /** Rulesets the previous attach created that the new one no longer uses (deleted by the function). */
+  removed_ruleset_ids: string[];
 }
 
 function stringArray(value: unknown): string[] {
@@ -177,9 +204,15 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     p_spec_hash: input.specHash,
     p_seed: input.seed,
     p_stages: input.stages as unknown as Json,
+    p_showdown_rulesets: input.showdownRulesets as unknown as Json,
   });
   if (error) throw mapFormatDbError(error);
-  const result = (data ?? {}) as { replaced?: unknown; stages?: unknown; removed_stage_ids?: unknown };
+  const result = (data ?? {}) as {
+    replaced?: unknown;
+    stages?: unknown;
+    removed_stage_ids?: unknown;
+    removed_ruleset_ids?: unknown;
+  };
   const stages = Array.isArray(result.stages)
     ? (result.stages as Array<{ id?: unknown; key?: unknown }>).flatMap((stage) =>
         typeof stage.id === 'string' && typeof stage.key === 'string' ? [{ id: stage.id, key: stage.key }] : [],
@@ -189,17 +222,23 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     replaced: result.replaced === true,
     stages,
     removed_stage_ids: stringArray(result.removed_stage_ids),
+    removed_ruleset_ids: stringArray(result.removed_ruleset_ids),
   };
 }
 
 export interface DetachRpcResult {
   removed_stage_ids: string[];
+  /** The rulesets the attach had created that nothing points at any more (deleted by the function). */
+  removed_ruleset_ids: string[];
 }
 
-/** Remove the attached format and the phases created from it, one transaction. */
+/** Remove the attached format, the phases created from it and the rulesets it created, one transaction. */
 export async function detachSeasonFormat(seasonId: string): Promise<DetachRpcResult> {
   const { data, error } = await supabase.rpc('format_detach_season', { p_season_id: seasonId });
   if (error) throw mapFormatDbError(error);
-  const result = (data ?? {}) as { removed_stage_ids?: unknown };
-  return { removed_stage_ids: stringArray(result.removed_stage_ids) };
+  const result = (data ?? {}) as { removed_stage_ids?: unknown; removed_ruleset_ids?: unknown };
+  return {
+    removed_stage_ids: stringArray(result.removed_stage_ids),
+    removed_ruleset_ids: stringArray(result.removed_ruleset_ids),
+  };
 }

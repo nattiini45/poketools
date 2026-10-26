@@ -18,6 +18,7 @@ import {
   MAX_SWISS_ROUNDS,
   MIN_GROUPS,
   SCORE_ABS_MAX,
+  SHOWDOWN_DEFAULT_FORMAT,
   ptr,
   resolveLText,
   type Diagnostic,
@@ -57,6 +58,7 @@ import {
   setRuleset,
   setScoreValue,
   setSeeding,
+  setShowdownFormat,
   updateStage,
 } from '@/lib/format-studio/editor/ops';
 import { fieldId } from '@/lib/format-studio/editor/targets';
@@ -66,6 +68,10 @@ import LTextField from '../fields/LTextField';
 import NumberField from '../fields/NumberField';
 import ReorderControls, { useMoveFocus } from '../fields/ReorderControls';
 import SelectField, { CheckboxField, type SelectOption } from '../fields/SelectField';
+import ShowdownFormatField from '../fields/ShowdownFormatField';
+
+/** The value of the ruleset select that stands for a Showdown format (a stored ruleset id is a UUID, so it cannot clash). */
+const SHOWDOWN_OPTION = 'showdown';
 
 interface StageInspectorProps {
   doc: DraftDocument;
@@ -280,7 +286,9 @@ function UnsupportedScoreRow({ pointer, label, value, reason }: { pointer: strin
 
 /**
  * The form for one stage, as labelled sections: name, participants, groups, pairing, match length, ruleset,
- * scoring and the rank chain. Every edit is one pure operation on the whole document, handed to `onChange`.
+ * scoring and the rank chain. The ruleset is the league default, a stored ruleset or a Showdown format; the
+ * Showdown kind adds a searchable format picker and sets the doubles setting the format implies, which stays
+ * editable. Every edit is one pure operation on the whole document, handed to `onChange`.
  * Findings of the compiler appear next to the field they are about.
  */
 export default function StageInspector({ doc, index, diagnostics, rulesets, authorBase, onChange }: StageInspectorProps) {
@@ -299,12 +307,21 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
   const eliminationStage = stage.pairing.kind === 'single_elim' || stage.pairing.kind === 'double_elim';
   const seedings = fromRoster ? SEEDING_ROSTER : SEEDING_EDGES;
 
-  const knownRuleset = stage.ruleset.kind === 'season_default' || rulesets.some((r) => r.id === (stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : ''));
+  const knownRuleset = stage.ruleset.kind !== 'ruleset' || rulesets.some((r) => r.id === (stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : ''));
   const rulesetOptions: SelectOption[] = [
     { value: '', label: t('inspector.stage.rulesetDefault') },
     ...rulesets.map((r) => ({ value: r.id, label: r.name })),
     ...(stage.ruleset.kind === 'ruleset' && !knownRuleset ? [{ value: stage.ruleset.id, label: t('inspector.stage.rulesetUnknown') }] : []),
+    { value: SHOWDOWN_OPTION, label: t('inspector.stage.rulesetShowdown') },
   ];
+  const rulesetValue = stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : stage.ruleset.kind === 'showdown' ? SHOWDOWN_OPTION : '';
+  const chooseRuleset = (value: string) =>
+    edit((s) => {
+      if (value === '') return setRuleset(s, { kind: 'season_default' });
+      // Picking the Showdown kind starts from the newest generation's OU; the format field below changes it.
+      if (value === SHOWDOWN_OPTION) return s.ruleset.kind === 'showdown' ? s : setShowdownFormat(s, SHOWDOWN_DEFAULT_FORMAT);
+      return setRuleset(s, { kind: 'ruleset', id: value });
+    });
 
   const pairing = stage.pairing;
   const rank = stage.rank;
@@ -558,10 +575,19 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
           <SelectField
             pointer={ptr('stages', index, 'ruleset', 'id')}
             label={p('field.ruleset')}
-            value={stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : ''}
+            value={rulesetValue}
             options={rulesetOptions}
-            onChange={(value) => edit((s) => setRuleset(s, value === '' ? { kind: 'season_default' } : { kind: 'ruleset', id: value }))}
+            onChange={chooseRuleset}
           />
+          {stage.ruleset.kind === 'showdown' && (
+            <ShowdownFormatField
+              pointer={ptr('stages', index, 'ruleset', 'format')}
+              label={t('inspector.stage.rulesetShowdown')}
+              value={stage.ruleset.format}
+              hint={t('inspector.stage.showdownHelp')}
+              onChange={(value) => edit((s) => setShowdownFormat(s, value))}
+            />
+          )}
         </Section>
 
         <Section pointer={ptr('stages', index, 'scoring')} legend={p('field.scoring')}>

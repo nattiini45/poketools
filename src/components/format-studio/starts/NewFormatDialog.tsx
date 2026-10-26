@@ -16,6 +16,7 @@ import { errorsCommon } from '@/i18n/messages/errors/common';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { createFormatRequest, forkFormatRequest, forkPresetRequest, type ApiOutcome, type CreatedFormatResponse } from '@/lib/format-studio/editor/api';
+import { applyShowdownFormat } from '@/lib/format-kit/client';
 import { blankDocument } from '@/lib/format-studio/editor/document';
 import {
   IMPORT_MAX_BYTES,
@@ -25,6 +26,7 @@ import {
   type ImportReport,
 } from '@/lib/format-studio/editor/import-file';
 import { START_KINDS, type StartKind } from '@/lib/format-studio/editor/starts';
+import ShowdownFormatSelect from '../ShowdownFormatSelect';
 
 /** What the dialog offers. Names are already in the viewer's language; nothing here is a draft or a player. */
 export interface NewFormatData {
@@ -107,9 +109,11 @@ function ImportReportView({ report, strip, onStrip }: { report: ImportReport; st
 
 /**
  * The four ways to start a format: blank, from an example, from a league's structure, or from a `.json` file.
- * One radio group chooses the start and the panel below it asks for what that start needs. Creating goes through
- * the library API and ends in the editor; a failure shows its message in the viewer's language and the form
- * stays usable for another try. A file is only parsed, never evaluated.
+ * One radio group chooses the start and the panel below it asks for what that start needs. A blank format and a
+ * shipped example can also pre-pick a Showdown format (`showdown.ts` says what that sets on every stage; the
+ * document stays fully editable). Creating goes through the library API and ends in the editor; a failure shows
+ * its message in the viewer's language and the form stays usable for another try. A file is only parsed, never
+ * evaluated.
  */
 export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialImportReport }: NewFormatFormProps) {
   const t = useT(formatStudioEditorMessages);
@@ -121,6 +125,8 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
   const [name, setName] = useState('');
   const [language, setLanguage] = useState<Locale>(locale);
   const [example, setExample] = useState(() => (data.examples[0] !== undefined ? `preset:${data.examples[0].id}` : ''));
+  // A Showdown format id, or '' for none; offered for a blank format and for a shipped example.
+  const [showdown, setShowdown] = useState('');
   const [leagueId, setLeagueId] = useState(data.leagues[0]?.id ?? '');
   const [report, setReport] = useState<ImportReport | null>(initialImportReport ?? null);
   const [importFailure, setImportFailure] = useState<ImportFailure | null>(null);
@@ -131,6 +137,8 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
 
   const problem = nameProblem(name);
   const nameError = touched && problem !== null ? (problem === 'required' ? t('new.nameRequired') : t('new.nameInvalid', { max: NAME_MAX })) : null;
+  const presetExample = example.startsWith('preset:');
+  const offersShowdown = start === 'blank' || (start === 'example' && presetExample);
   const canSubmit =
     start === 'blank' ? problem === null : start === 'example' ? example !== '' : start === 'league' ? leagueId !== '' : report !== null && importFailure === null;
 
@@ -155,10 +163,15 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
 
   const run = async (): Promise<ApiOutcome<CreatedFormatResponse> | null> => {
     switch (start) {
-      case 'blank':
-        return createFormatRequest({ document: blankDocument(name.trim(), language) });
+      case 'blank': {
+        const document = blankDocument(name.trim(), language);
+        // The author typed the name, so it stays as it is.
+        return createFormatRequest({ document: showdown === '' ? document : applyShowdownFormat(document, showdown) });
+      }
       case 'example':
-        return example.startsWith('gallery:') ? forkFormatRequest(example.slice('gallery:'.length)) : forkPresetRequest(example.slice('preset:'.length));
+        return presetExample
+          ? forkPresetRequest(example.slice('preset:'.length), showdown === '' ? undefined : showdown)
+          : forkFormatRequest(example.slice('gallery:'.length));
       case 'import':
         return report === null ? null : createFormatRequest({ document: strip ? stripUnknownFields(report) : report.document });
       default:
@@ -279,6 +292,22 @@ export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialI
               )}
             </Select>
           </>
+        )}
+
+        {offersShowdown && (
+          <div className="space-y-1">
+            <ShowdownFormatSelect
+              id="fe-new-showdown"
+              label={t('new.showdownLabel')}
+              value={showdown}
+              onChange={setShowdown}
+              noneLabel={t('new.showdownNone')}
+              describedBy="fe-new-showdown-help"
+            />
+            <p id="fe-new-showdown-help" className="text-sm text-poke-text-muted">
+              {t('new.showdownHelp')}
+            </p>
+          </div>
         )}
 
         {start === 'league' &&

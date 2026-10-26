@@ -141,9 +141,10 @@ function levelOf(kind: string): Bucket {
 
 /**
  * Counts the rule units of a definition. Per stage: one pairing, one series, one scoring, one groups unit when the
- * stage splits into groups, one per rank step and one when the stage names a ruleset. Per advancement rule: one per
- * selection, `checked` under the `admin_confirm` gate and `auto` otherwise. Per combined standings view: one. Every
- * rule card is an `honor` unit and every module a `legacy` unit. Locale-free; any value is safe.
+ * stage splits into groups, one per rank step and one when the stage names a ruleset (a stored one or a Showdown
+ * format). Per advancement rule: one per selection, `checked` under the `admin_confirm` gate and `auto` otherwise.
+ * Per combined standings view: one. Every rule card is an `honor` unit and every module a `legacy` unit.
+ * Locale-free; any value is safe.
  */
 export function computeCoverage(def: FormatDefinition): Coverage {
   const cov: Coverage = { auto: 0, checked: 0, honor: 0, legacy: 0, total: 0 };
@@ -158,7 +159,8 @@ export function computeCoverage(def: FormatDefinition): Coverage {
     for (const step of listOf(entry.rank)) {
       if (isRec(step)) cov[levelOf(`rank.${strOf(step, 'kind') ?? 'manual'}`)] += 1;
     }
-    if (strOf(recOf(entry.ruleset), 'kind') === 'ruleset') cov[levelOf('team.ruleset')] += 1;
+    const rulesetKind = strOf(recOf(entry.ruleset), 'kind');
+    if (rulesetKind === 'ruleset' || rulesetKind === 'showdown') cov[levelOf('team.ruleset')] += 1;
   }
   for (const edge of listOf(root.edges)) {
     if (!isRec(edge)) continue;

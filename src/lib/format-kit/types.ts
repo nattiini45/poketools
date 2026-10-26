@@ -103,7 +103,13 @@ export interface SeriesOverride {
   best_of: number;
 }
 
-export type RulesetRef = { kind: 'season_default' } | { kind: 'ruleset'; id: string };
+/**
+ * Which ruleset a stage's teams follow: the league's, a stored ruleset by id, or a Showdown format of the catalog
+ * (`format` is its id such as `gen9ou`). A Showdown format only pre-picks settings; attaching the format to a
+ * league turns it into a normal, editable ruleset row. An id the catalog does not know is a compile error, not a
+ * schema error, so a stored document stays loadable.
+ */
+export type RulesetRef = { kind: 'season_default' } | { kind: 'ruleset'; id: string } | { kind: 'showdown'; format: Key };
 
 export interface Scoring {
   win: number;

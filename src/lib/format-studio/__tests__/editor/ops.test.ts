@@ -332,6 +332,18 @@ describe('stage setters', () => {
     expect(ops.setRuleset(base(), { kind: 'season_default' }).ruleset).toEqual({ kind: 'season_default' });
   });
 
+  it('setShowdownFormat plays the stage under a format: ruleset, doubles and two players, series untouched', () => {
+    const s = ops.setShowdownFormat(base(), 'gen9doublesou');
+    expect(s.ruleset).toEqual({ kind: 'showdown', format: 'gen9doublesou' });
+    expect(s.doubles).toBe(true);
+    expect(s.players_per_match).toBe(2);
+    expect(s.series).toBe(base().series);
+    expect(ops.setShowdownFormat(s, 'gen9doublesou')).toBe(s);
+    expect(ops.setShowdownFormat(s, 'gen9ou').doubles).toBe(false);
+    expect(ops.setShowdownFormat(base(), 'gen99xx')).toBe(base());
+    expect(valid(ops.updateStage(classic(), 0, (stage) => ops.setShowdownFormat(stage, 'gen9vgc')))).toBe(true);
+  });
+
   it('setScoreValue sets win, loss and bye', () => {
     expect(ops.setScoreValue(base(), 'win', 2).scoring.win).toBe(2);
     expect(ops.setScoreValue(base(), 'loss', -1).scoring.loss).toBe(-1);
@@ -396,6 +408,7 @@ describe('stage setters', () => {
       (s) => ops.setBestOf(s, 3),
       (s) => ops.addOverride(s),
       (s) => ops.setRuleset(s, { kind: 'season_default' }),
+      (s) => ops.setShowdownFormat(s, 'gen9ou'),
       (s) => ops.setScoreValue(s, 'win', 5),
       (s) => ops.setDoubles(s, true),
       (s) => ops.addRankStep(s, 'coin_flip'),

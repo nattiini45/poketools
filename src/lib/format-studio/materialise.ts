@@ -35,6 +35,11 @@ export interface PlanStagesInput {
   plan: readonly StagePlan[];
   /** The league's default ruleset; a `season_default` stage uses it. The caller refuses a league without one. */
   seasonRulesetId: string | null;
+  /**
+   * The ruleset row of every Showdown format the stages name (format id to ruleset id): attach creates (or reuses)
+   * them before it plans. A `showdown` stage whose format is missing here is a programming error.
+   */
+  showdownRulesetIds?: ReadonlyMap<string, string>;
   /** The league's content language, used to pick the text of a stage name. */
   seasonLanguage: Locale;
   /** The content hash of the stored version the stages come from. */
@@ -148,6 +153,22 @@ function orderedStages(definition: FormatDefinition, graphOrder: readonly string
   return out;
 }
 
+/** The ruleset row a stage plays under: its stored ruleset, the row of its Showdown format, or the league's. */
+function stageRulesetId(
+  stage: Stage,
+  seasonRulesetId: string | null,
+  showdownRulesetIds: ReadonlyMap<string, string> | undefined,
+): string | null {
+  switch (stage.ruleset.kind) {
+    case 'ruleset':
+      return stage.ruleset.id;
+    case 'showdown':
+      return showdownRulesetIds?.get(stage.ruleset.format) ?? null;
+    case 'season_default':
+      return seasonRulesetId;
+  }
+}
+
 /** An engine gap. The code is an argument, not a `code:` property: it is a gap code, not an API error code. */
 function gap(gapCode: EngineGapCode, where: { stage?: string; edge?: string }, params: Record<string, string | number> = {}): EngineGap {
   return { code: gapCode, ...where, params };
@@ -186,11 +207,12 @@ function edgeWarnings(edges: readonly Edge[]): EngineGap[] {
 
 /**
  * One `tournaments` row per kit stage, in graph order (`stage_order` counts from 1), plus the engine gaps the
- * attach reports. A `season_default` stage needs `seasonRulesetId`; the caller refuses a league without a
- * default ruleset before it plans, so a null here is a programming error.
+ * attach reports. A `season_default` stage needs `seasonRulesetId` (the caller refuses a league without a
+ * default ruleset before it plans) and a `showdown` stage needs the row of its format in `showdownRulesetIds`
+ * (the caller creates those first), so a missing one here is a programming error.
  */
 export function planStages(input: PlanStagesInput): PlannedStages {
-  const { definition, graphOrder, plan, seasonRulesetId, seasonLanguage, specHash } = input;
+  const { definition, graphOrder, plan, seasonRulesetId, showdownRulesetIds, seasonLanguage, specHash } = input;
   const planByKey = new Map<string, StagePlan>();
   for (const entry of plan) {
     if (!planByKey.has(entry.key)) planByKey.set(entry.key, entry);
@@ -202,7 +224,7 @@ export function planStages(input: PlanStagesInput): PlannedStages {
     const order = index + 1;
     const stagePlan = planByKey.get(stage.key);
     const bracket = mappedBracketOf(stage, stagePlan);
-    const rulesetId = stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : seasonRulesetId;
+    const rulesetId = stageRulesetId(stage, seasonRulesetId, showdownRulesetIds);
     if (rulesetId === null) throw new Error(`planStages: stage "${stage.key}" has no ruleset`);
     const series = mapSeriesOverrides(bracket, stage.series.overrides, stagePlan?.rounds ?? null);
     const snapshot: StageSpecSnapshot = {

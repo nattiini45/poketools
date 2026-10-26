@@ -92,7 +92,7 @@ const REPLACEMENTS: readonly (() => unknown)[] = [
   () => ({ kind: 'top_n', n: 2 }),
 ];
 const BOUNDARY_NUMBERS = [0, 1, 2, 3, 4, 5, 8, 9, 15, 16, 26, 27, 32, 33, 50, 51, 63, 64, 65, 200, 201, 1000, 1001, 1024, 1025, 4096, 4097, -1000, -1001];
-const TAGS = ['swiss', 'round_robin', 'top_n', 'threshold', 'metric', 'coin_flip', 'bipartite', 'rule.on_event', 'rule.custom', 'rule.weird_kind', 'Not A Kind', 'constructor', 'roster', 'edges', 'season', 'stage', 'ruleset'];
+const TAGS = ['swiss', 'round_robin', 'top_n', 'threshold', 'metric', 'coin_flip', 'bipartite', 'rule.on_event', 'rule.custom', 'rule.weird_kind', 'Not A Kind', 'constructor', 'roster', 'edges', 'season', 'stage', 'ruleset', 'showdown'];
 const EXTRA_KEYS = ['extra', '__proto__', 'constructor', 'toString', 'kind', 'zz'];
 const RESERVED_INSERTS: readonly [string, unknown][] = [
   ['attributes', {}],

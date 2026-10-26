@@ -188,6 +188,7 @@ const RULESET: Spec = {
   variants: [
     { tag: 'season_default', spec: variant('kind', 'season_default', []) },
     { tag: 'ruleset', spec: variant('kind', 'ruleset', [req('id', UUID)]) },
+    { tag: 'showdown', spec: variant('kind', 'showdown', [req('format', KEY)]) },
   ],
 };
 const SCORE_NUM: Spec = { t: 'num', min: -SCORE_ABS_MAX, max: SCORE_ABS_MAX };

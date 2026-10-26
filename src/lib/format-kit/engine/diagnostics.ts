@@ -58,6 +58,7 @@ export const DIAGNOSTIC_CODES = [
   'rank_duplicate_step',
   // References and text
   'ruleset_not_found',
+  'showdown_format_unknown',
   'module_duplicate',
   'ltext_untranslated',
   // Expressions
@@ -150,6 +151,7 @@ const ERROR_CODES: readonly DiagnosticCode[] = [
   'metric_unproduced',
   'rank_decision_match_position',
   'ruleset_not_found',
+  'showdown_format_unknown',
   'module_duplicate',
   'expr_shape',
   'expr_depth',

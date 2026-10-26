@@ -26,4 +26,5 @@ export type { CountRange, StagePlan } from './engine/plan';
 export { deriveCapabilities } from './engine/capabilities';
 export { renderDiagnostic, renderFix, renderSeverity } from './engine/render';
 export * from './engine/describe-definition';
+export * from './showdown';
 export * from './presets';

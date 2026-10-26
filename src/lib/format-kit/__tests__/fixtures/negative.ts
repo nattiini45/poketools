@@ -341,6 +341,9 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'ruleset-not-found', 'ruleset_not_found', '/stages/0/ruleset/id', mutate(C, [
     { op: 'replace', path: '/stages/0/ruleset', value: { kind: 'ruleset', id: RULESET_ID } },
   ]), { env: envWith({ rulesetIds: NO_RULESETS }), params: { stage: 'league', id: RULESET_ID } }),
+  fx('error', 'showdown-format-unknown', 'showdown_format_unknown', '/stages/0/ruleset/format', mutate(C, [
+    { op: 'replace', path: '/stages/0/ruleset', value: { kind: 'showdown', format: 'gen99xx' } },
+  ]), { params: { stage: 'league', format: 'gen99xx' } }),
   fx('error', 'module-duplicate', 'module_duplicate', '/modules/1/adapter', mutate(C, [
     {
       op: 'replace',

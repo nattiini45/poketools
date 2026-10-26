@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FormatDefaults } from '@/lib/pkmn/format-catalog';
 import type { RulesetFormData } from '@/types/ruleset';
 import {
+  EMPTY_RULESET_FORM,
   applyDefaults,
   defaultsToLists,
   formatSwitchImpact,
@@ -183,5 +184,17 @@ describe('toSavePayload', () => {
   it('does not change the other fields', () => {
     const f = form({ name: 'Spring', clauses: ['Species Clause'] });
     expect(toSavePayload(f)).toEqual(f);
+  });
+});
+
+describe('EMPTY_RULESET_FORM', () => {
+  it('is a ruleless Gen 9 OU form, and applyDefaults fills it from a format without touching it', () => {
+    expect(isRuleless(EMPTY_RULESET_FORM)).toBe(true);
+    expect(EMPTY_RULESET_FORM).toMatchObject({ name: '', base_format: 'gen9ou', team_constraints: null, min_shared_type_pct: 0 });
+    const snapshot = structuredClone(EMPTY_RULESET_FORM);
+    const filled = applyDefaults({ ...EMPTY_RULESET_FORM, name: 'League' }, 'gen9ou', OU);
+    expect(filled).toMatchObject({ name: 'League', base_format: 'gen9ou', clauses: OU.clauses, banned_pokemon: OU.banned_pokemon });
+    expect(filled.clauses).not.toBe(OU.clauses);
+    expect(EMPTY_RULESET_FORM).toEqual(snapshot);
   });
 });

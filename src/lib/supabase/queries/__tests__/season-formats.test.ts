@@ -57,6 +57,7 @@ import {
   getSeasonFormat,
   getSeasonFormatSummary,
   getSeasonManualPhaseCount,
+  getSeasonShowdownRulesets,
   getSeasonStartSignals,
   type AttachStageRow,
 } from '../season-formats';
@@ -124,6 +125,32 @@ describe('getSeasonFormatSummary and getSeasonFormat', () => {
     const boom = { message: 'boom' };
     state.respond = () => ({ error: boom });
     await expect(getSeasonFormatSummary(SEASON)).rejects.toBe(boom);
+  });
+});
+
+describe('getSeasonShowdownRulesets', () => {
+  it('reads the recorded map and keeps only well-formed entries', async () => {
+    state.respond = () => ({ data: { showdown_rulesets: { gen9ou: uuid(1), gen9vgc: 'nope', gen8ou: 7 } } });
+    expect(await getSeasonShowdownRulesets(SEASON)).toEqual({ gen9ou: uuid(1) });
+    expect(state.calls[0].table).toBe('season_formats');
+    expect(stepsOf(state.calls[0], 'select')[0][1]).toBe('showdown_rulesets');
+    expect(stepsOf(state.calls[0], 'eq')[0].slice(1)).toEqual(['season_id', SEASON]);
+  });
+
+  it('answers an empty map when nothing is attached, the value is malformed or the id is not a uuid', async () => {
+    state.respond = () => ({ data: null });
+    expect(await getSeasonShowdownRulesets(SEASON)).toEqual({});
+    state.respond = () => ({ data: { showdown_rulesets: [uuid(1)] } });
+    expect(await getSeasonShowdownRulesets(SEASON)).toEqual({});
+    state.calls.length = 0;
+    expect(await getSeasonShowdownRulesets('x')).toEqual({});
+    expect(state.calls).toHaveLength(0);
+  });
+
+  it('rethrows a database error', async () => {
+    const boom = new Error('db down');
+    state.respond = () => ({ error: boom });
+    await expect(getSeasonShowdownRulesets(SEASON)).rejects.toBe(boom);
   });
 });
 
@@ -219,14 +246,26 @@ describe('attachSeasonFormat', () => {
     stage_order: 1,
     stage_spec: { v: 1, spec_hash: 'h', stage: {} as never, mapped_bracket_type: 'round_robin' },
   };
-  const input = { seasonId: SEASON, definitionId: uuid(5), versionNo: 2, spec, specHash: 'h'.repeat(64), seed: 'abcdef12', stages: [stage] };
+  const input = {
+    seasonId: SEASON,
+    definitionId: uuid(5),
+    versionNo: 2,
+    spec,
+    specHash: 'h'.repeat(64),
+    seed: 'abcdef12',
+    stages: [stage],
+    showdownRulesets: { gen9ou: uuid(7) },
+  };
 
   it('calls format_attach_season with the frozen spec, hash, seed and stages', async () => {
-    state.rpcReply = { data: { replaced: true, stages: [{ id: 't1', key: 'groups' }], removed_stage_ids: ['t2'] } };
+    state.rpcReply = {
+      data: { replaced: true, stages: [{ id: 't1', key: 'groups' }], removed_stage_ids: ['t2'], removed_ruleset_ids: ['r1'] },
+    };
     expect(await attachSeasonFormat(input)).toEqual({
       replaced: true,
       stages: [{ id: 't1', key: 'groups' }],
       removed_stage_ids: ['t2'],
+      removed_ruleset_ids: ['r1'],
     });
     expect(state.rpcCalls).toEqual([
       {
@@ -239,6 +278,7 @@ describe('attachSeasonFormat', () => {
           p_spec_hash: 'h'.repeat(64),
           p_seed: 'abcdef12',
           p_stages: [stage],
+          p_showdown_rulesets: { gen9ou: uuid(7) },
         },
       },
     ]);
@@ -246,7 +286,7 @@ describe('attachSeasonFormat', () => {
 
   it('reads a malformed function result as an empty one', async () => {
     state.rpcReply = { data: { stages: [{ id: 1 }, 'x'], removed_stage_ids: [1, 'a'] } };
-    expect(await attachSeasonFormat(input)).toEqual({ replaced: false, stages: [], removed_stage_ids: ['a'] });
+    expect(await attachSeasonFormat(input)).toEqual({ replaced: false, stages: [], removed_stage_ids: ['a'], removed_ruleset_ids: [] });
   });
 
   it.each([
@@ -281,9 +321,9 @@ describe('attachSeasonFormat', () => {
 });
 
 describe('detachSeasonFormat', () => {
-  it('calls format_detach_season and returns the removed stage ids', async () => {
-    state.rpcReply = { data: { removed_stage_ids: ['a', 'b'] } };
-    expect(await detachSeasonFormat(SEASON)).toEqual({ removed_stage_ids: ['a', 'b'] });
+  it('calls format_detach_season and returns the removed stage and ruleset ids', async () => {
+    state.rpcReply = { data: { removed_stage_ids: ['a', 'b'], removed_ruleset_ids: ['r'] } };
+    expect(await detachSeasonFormat(SEASON)).toEqual({ removed_stage_ids: ['a', 'b'], removed_ruleset_ids: ['r'] });
     expect(state.rpcCalls).toEqual([{ name: 'format_detach_season', args: { p_season_id: SEASON } }]);
   });
 

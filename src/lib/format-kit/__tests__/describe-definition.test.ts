@@ -138,6 +138,12 @@ describe('coverage', () => {
     expect(computeCoverage(def)).toEqual({ auto: 14, checked: 1, honor: 1, legacy: 0, total: 16 });
   });
 
+  it('counts a Showdown format like a named ruleset', () => {
+    const def = clone(classicLeague);
+    def.stages[1].ruleset = { kind: 'showdown', format: 'gen9ou' };
+    expect(computeCoverage(def)).toEqual({ auto: 12, checked: 1, honor: 1, legacy: 0, total: 14 });
+  });
+
   it('gives the no-rules sentence for an empty definition', () => {
     const empty = { ...clone(classicLeague), stages: [], edges: [], rules: [], modules: [] } satisfies FormatDefinition;
     expect(computeCoverage(empty)).toEqual({ auto: 0, checked: 0, honor: 0, legacy: 0, total: 0 });
@@ -205,6 +211,13 @@ describe('stage blocks', () => {
     expect(describeStage(classicLeague, 'nope', 'en')).toBeNull();
     expect(describeStage(classicLeague, '', 'de')).toBeNull();
     expect(describeStage(classicLeague, 'constructor', 'de')).toBeNull();
+  });
+
+  it('names the Showdown format of a stage in both languages', () => {
+    const def = clone(classicLeague);
+    def.stages[1].ruleset = { kind: 'showdown', format: 'gen9vgc' };
+    expect(describeStage(def, 'playoffs', 'en')?.ruleset).toBe('Teams follow the Showdown format Gen 9 VGC.');
+    expect(describeStage(def, 'playoffs', 'de')?.ruleset).toBe('Die Teams folgen dem Showdown-Format Gen 9 VGC.');
   });
 
   it('names a stored ruleset and falls back to the generic sentence', () => {

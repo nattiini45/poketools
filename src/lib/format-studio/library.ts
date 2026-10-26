@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import {
   CURRENT_ENV,
   PRESETS,
+  applyShowdownFormat,
   compile,
   isSlug,
   resolveLText,
@@ -245,11 +246,22 @@ export async function forkDefinition(actor: SessionPlayer, source: FormatDefinit
   return { definition: createdSummary(meta, actor), check: checkDocument(document) };
 }
 
-/** Forks a shipped example (the code presets) into a new private definition owned by the caller. */
-export async function forkPreset(actor: SessionPlayer, presetId: string, slug?: string): Promise<CreatedFormat> {
+export interface ForkPresetOptions {
+  slug?: string;
+  /** A catalog id: pre-picked on every stage of the copy, and the format name is appended to the copy's name. */
+  showdownFormat?: string;
+}
+
+/**
+ * Forks a shipped example (the code presets) into a new private definition owned by the caller. With a Showdown
+ * format the copy has it pre-picked on every stage (`applyShowdownFormat`), the format in its name and its slug.
+ */
+export async function forkPreset(actor: SessionPlayer, presetId: string, options: ForkPresetOptions = {}): Promise<CreatedFormat> {
+  const { slug, showdownFormat } = options;
   const preset = isSlug(presetId) ? PRESETS.find((entry) => entry.id === presetId) : undefined;
   if (preset === undefined) throw new FormatStudioError('format_preset_not_found');
-  const document = withBasedOn(preset.definition as unknown as Record<string, unknown>, preset.id);
+  const structure = showdownFormat === undefined ? preset.definition : applyShowdownFormat(preset.definition, showdownFormat, { retitle: true });
+  const document = withBasedOn(structure as unknown as Record<string, unknown>, preset.id);
   const identity = extractIdentity(document);
   const meta = await insertWithSlug(
     {
@@ -259,7 +271,7 @@ export async function forkPreset(actor: SessionPlayer, presetId: string, slug?: 
       forkedFrom: null,
       document,
     },
-    slug !== undefined ? { explicit: slug } : { base: slugFromName(preset.id) },
+    slug !== undefined ? { explicit: slug } : { base: slugFromName(showdownFormat === undefined ? preset.id : `${preset.id}-${showdownFormat}`) },
   );
   return { definition: createdSummary(meta, actor), check: checkDocument(document) };
 }

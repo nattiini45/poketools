@@ -18,6 +18,7 @@ import { hasOwn, isKey } from '../keys';
 import { printExpr } from '../expr/printer';
 import type { Expr } from '../expr/ast';
 import { resolveLText } from '../ltext';
+import { getShowdownFormat } from '../showdown';
 import type { LText } from '../types';
 import { kindKey, type AvailableKind, type PrimitiveKind } from './kinds';
 import { manifestEntry } from './manifest';
@@ -176,10 +177,15 @@ const DESCRIBERS: ReadonlyMap<AvailableKind, Describer> = new Map<AvailableKind,
   ),
   d(
     'team.ruleset',
-    (n) => {
+    (n): Described | null => {
       const kind = str(n, 'kind');
       if (kind === 'season_default') return { params: {} };
       if (kind === 'ruleset') return { key: 'team_ruleset_custom', params: {} };
+      if (kind === 'showdown') {
+        const format = str(n, 'format');
+        // An id the catalog does not know (a compile error elsewhere) is shown as written.
+        return format === null ? null : { key: 'team_ruleset_showdown', params: { format: getShowdownFormat(format)?.name ?? format } };
+      }
       return null;
     },
   ),

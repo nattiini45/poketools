@@ -128,6 +128,12 @@ describe('rulesets', () => {
     expect(item(ready({ seasonRulesetId: null, attached: { version_no: 1, spec: named } }), 'rulesets')).toMatchObject({ state: 'met', params: { count: 0 } });
   });
 
+  it('is met without a league ruleset when every stage plays a Showdown format', () => {
+    const showdown = spec('classic-league');
+    showdown.stages = showdown.stages.map((s) => ({ ...s, ruleset: { kind: 'showdown' as const, format: 'gen9ou' } }));
+    expect(item(ready({ seasonRulesetId: null, attached: { version_no: 1, spec: showdown } }), 'rulesets')).toMatchObject({ state: 'met', params: { count: 0 } });
+  });
+
   it('counts only the stages that fall back on the league ruleset', () => {
     const mixed = spec('classic-league');
     mixed.stages[0] = { ...mixed.stages[0], ruleset: { kind: 'ruleset', id: RULESET } };

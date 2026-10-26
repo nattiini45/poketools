@@ -1,11 +1,13 @@
 /**
  * Structural checks: duplicate keys, references to stages that do not exist, repeated legacy modules, unknown
- * rulesets, and the translation coverage of the document's texts.
+ * rulesets (a stored id that does not exist, a Showdown format the catalog does not know), and the translation
+ * coverage of the document's texts.
  *
  * Every lookup goes through a Map built with `toMap` (first wins), never object indexing, so keys such as
  * `constructor` behave like any other.
  */
 import { toMap } from '../keys';
+import { isShowdownFormatId } from '../showdown';
 import type { FormatDefinition, LText } from '../types';
 import { diag, ptr, type Diagnostic } from './diagnostics';
 import type { CompileEnv } from './env';
@@ -77,6 +79,21 @@ export function checkStructure(def: FormatDefinition, env: CompileEnv): Diagnost
       out.push(diag('module_duplicate', ptr('modules', i, 'adapter'), { adapter: module.adapter }));
     }
     adapters.add(module.adapter);
+  });
+
+  // A Showdown format must be one the catalog knows. The schema only checks the shape, so a stored document
+  // that names a format the catalog later dropped still loads, and the editor shows this error instead.
+  def.stages.forEach((stage, i) => {
+    if (stage.ruleset.kind === 'showdown' && !isShowdownFormatId(stage.ruleset.format)) {
+      out.push(
+        diag(
+          'showdown_format_unknown',
+          ptr('stages', i, 'ruleset', 'format'),
+          { stage: stage.key, format: stage.ruleset.format },
+          [fixUseSeasonRuleset(i)],
+        ),
+      );
+    }
   });
 
   const rulesetIds = env.rulesetIds;

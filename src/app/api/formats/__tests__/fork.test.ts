@@ -238,6 +238,34 @@ describe('POST /api/formats/presets/[presetId]/fork', () => {
     expectNoPrivatePlayerData(body);
   });
 
+  it('pre-picks a Showdown format on every stage when the body names one, and audits it', async () => {
+    const response = await forkPreset(post('/api/formats/presets/cup/fork', { showdown_format: 'gen9doublesou' }), presetParams('cup'));
+    expect(response.status).toBe(201);
+    const input = vi.mocked(createFormatDefinition).mock.calls[0][0];
+    const stages = (input.document as { stages: { ruleset: unknown; doubles: boolean }[] }).stages;
+    expect(stages.map((s) => s.ruleset)).toEqual([
+      { kind: 'showdown', format: 'gen9doublesou' },
+      { kind: 'showdown', format: 'gen9doublesou' },
+    ]);
+    expect(stages.every((s) => s.doubles)).toBe(true);
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'format.fork', metadata: { preset_id: 'cup', showdown_format: 'gen9doublesou' } }),
+    );
+  });
+
+  it('answers 400 validation_failed for a Showdown format the catalog does not know, and for one on the stored-format route', async () => {
+    const unknown = await forkPreset(post('/api/formats/presets/cup/fork', { showdown_format: 'gen99xx' }), presetParams('cup'));
+    expect(unknown.status).toBe(400);
+    expect((await unknown.json()).code).toBe('validation_failed');
+    const blank = await forkPreset(post('/api/formats/presets/cup/fork', { showdown_format: 'blank' }), presetParams('cup'));
+    expect(blank.status).toBe(400);
+    expect(createFormatDefinition).not.toHaveBeenCalled();
+    // Only the example route takes a Showdown format.
+    const stored = await forkStored(post(`/api/formats/${ID}/fork`, { showdown_format: 'gen9ou' }), storedParams());
+    expect(stored.status).toBe(400);
+    expect(createFormatDefinition).not.toHaveBeenCalled();
+  });
+
   it('answers 404 format_preset_not_found for an unknown example and writes nothing', async () => {
     const response = await forkPreset(post('/api/formats/presets/nope/fork', {}), presetParams('nope'));
     expect(response.status).toBe(404);

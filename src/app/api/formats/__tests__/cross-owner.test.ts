@@ -340,6 +340,7 @@ describe('cross-owner matrix: attaching to a league', () => {
         { id: STAGE_2, key: 'knockout' },
       ],
       removed_stage_ids: [],
+      removed_ruleset_ids: [],
     });
   });
 

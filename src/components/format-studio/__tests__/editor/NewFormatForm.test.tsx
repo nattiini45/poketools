@@ -103,6 +103,38 @@ describe('NewFormatForm: example', () => {
   });
 });
 
+describe('NewFormatForm: the Showdown format', () => {
+  it.each(['en', 'de'] as const)('is an optional, searchable, grouped pick for a blank format (%s)', (locale) => {
+    const t = createTranslator(formatStudioEditorMessages, locale);
+    const html = render({ start: 'blank', locale });
+    expect(html).toContain('for="fe-new-showdown"');
+    expect(html).toContain(esc(t('new.showdownLabel')));
+    expect(html).toContain(`<option value="" selected="">${esc(t('new.showdownNone'))}</option>`);
+    expect(html).toContain('<optgroup label="Gen 9 (SV)">');
+    expect(html).toContain('<option value="gen9ou">Gen 9 OU</option>');
+    expect(html).toContain('type="search"');
+    expect(html).toContain('for="fe-new-showdown-search"');
+    expect(html).toContain(esc(t('new.showdownHelp')));
+    expectLabelledControls(html);
+    expectNoLeftovers(html);
+    expectUniqueIds(html);
+  });
+
+  it('is offered for a shipped example', () => {
+    const html = render({ start: 'example' });
+    expect(html).toContain('for="fe-new-showdown"');
+    expect(html).toContain('<option value="gen9vgc">Gen 9 VGC</option>');
+  });
+
+  it('is not offered for a gallery format, a league structure or an import', () => {
+    const gallery = { gallery: [{ id: 'g1', name: 'Autumn Cup', version: 3 }], examples: [] };
+    // With no shipped example the first (and only) choice is a gallery format.
+    expect(render({ start: 'example', data: gallery })).not.toContain('fe-new-showdown');
+    expect(render({ start: 'league' })).not.toContain('fe-new-showdown');
+    expect(render({ start: 'import' })).not.toContain('fe-new-showdown');
+  });
+});
+
 describe('NewFormatForm: a league', () => {
   it('lists the leagues, says the copy happens on that page, and the button opens it', () => {
     const html = render({ start: 'league' });

@@ -73,6 +73,7 @@ export default {
     rank_step_unreachable: 'A rank step in stage {stage} never applies because an earlier step always decides.',
     rank_duplicate_step: 'Stage {stage} repeats a rank step.',
     ruleset_not_found: 'Stage {stage} uses the ruleset {id}, which does not exist.',
+    showdown_format_unknown: 'Stage {stage} uses the Showdown format {format}, which is not in the catalog.',
     module_duplicate: 'The legacy module {adapter} is added more than once.',
     ltext_untranslated: 'Some texts have no translation for {locale}.',
     expr_shape: 'The condition of advancement rule {edge} is not a well-formed expression.',

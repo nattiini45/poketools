@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
  *    read. They are walked like kit files.
  *  - `@/lib/season/format-capabilities`: capability flags; it holds type imports only.
  *  - `@/lib/tournament/round-robin`: the pure round count the plan reuses; it imports only `./types`.
+ *  - `@/lib/pkmn/format-catalog`: the dex-free Showdown format catalog `showdown.ts` reads; its only import is a type.
  */
 
 const KIT = path.resolve(__dirname, '..');
@@ -30,6 +31,7 @@ const ALLOWED_OUTSIDE = new Set([
   '@/i18n/types',
   '@/lib/season/format-capabilities',
   '@/lib/tournament/round-robin',
+  '@/lib/pkmn/format-catalog',
 ]);
 
 const FORBIDDEN_BARE = [/^zod(\/|$)/, /^server-only$/, /^@pkmn\//, /^next(\/|$)/, /^react(-dom)?(\/|$)/, /^@\/lib\/supabase\//];

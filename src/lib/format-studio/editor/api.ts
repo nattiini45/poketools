@@ -174,9 +174,16 @@ export function forkFormatRequest(id: string, f?: FetchLike): Promise<ApiOutcome
   return request(f, 'POST', `/api/formats/${enc(id)}/fork`);
 }
 
-/** `POST /api/formats/presets/{presetId}/fork`: a private copy of a shipped example. */
-export function forkPresetRequest(presetId: string, f?: FetchLike): Promise<ApiOutcome<CreatedFormatResponse>> {
-  return request(f, 'POST', `/api/formats/presets/${enc(presetId)}/fork`);
+/**
+ * `POST /api/formats/presets/{presetId}/fork`: a private copy of a shipped example, optionally with a Showdown
+ * format (a catalog id) pre-picked on every stage.
+ */
+export function forkPresetRequest(
+  presetId: string,
+  showdownFormat?: string,
+  f?: FetchLike,
+): Promise<ApiOutcome<CreatedFormatResponse>> {
+  return request(f, 'POST', `/api/formats/presets/${enc(presetId)}/fork`, showdownFormat === undefined ? undefined : { showdown_format: showdownFormat });
 }
 
 /** `POST /api/formats`: a whole document, or a name and its language for a skeleton. */

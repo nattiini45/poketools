@@ -16,9 +16,10 @@ import {
   setGroups,
   setPairingKind,
   setRuleset,
+  setShowdownFormat,
   updateStage,
 } from '@/lib/format-studio/editor/ops';
-import { errorId } from '@/lib/format-studio/editor/targets';
+import { errorId, fieldId } from '@/lib/format-studio/editor/targets';
 import StageInspector from '../../editor/inspectors/StageInspector';
 import { compiled, esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, presetDoc, stageNameOf } from './test-helpers';
 
@@ -192,6 +193,44 @@ describe('StageInspector: ruleset', () => {
     expect(html).toContain('<option value="rs-gone" selected="">Unknown ruleset</option>');
     const german = render(doc, 0, 'de');
     expect(german).toContain('Unbekanntes Regelwerk');
+  });
+});
+
+describe('StageInspector: Showdown format', () => {
+  const showdownDoc = (format = 'gen9doublesou') => updateStage(presetDoc(), 0, (s) => setShowdownFormat(s, format));
+
+  it.each(['en', 'de'] as const)('offers the Showdown kind next to the league default and the stored rulesets (%s)', (locale) => {
+    const { e } = words(locale);
+    const html = render(presetDoc(), 0, locale);
+    expect(html).toContain(`<option value="showdown">${esc(e('inspector.stage.rulesetShowdown'))}</option>`);
+    // Not picked: no format picker.
+    expect(html).not.toContain(`id="${fieldId('/stages/0/ruleset/format')}"`);
+  });
+
+  it.each(['en', 'de'] as const)('shows the picker with the chosen format selected, grouped by generation (%s)', (locale) => {
+    const { e } = words(locale);
+    const html = render(showdownDoc(), 0, locale);
+    expect(html).toContain('<option value="showdown" selected="">');
+    expect(html).toContain(`id="${fieldId('/stages/0/ruleset/format')}"`);
+    expect(html).toContain('<option value="gen9doublesou" selected="">Gen 9 Doubles OU</option>');
+    expect(html).toContain('<optgroup label="Gen 9 (SV)">');
+    expect(html).toContain('<optgroup label="Gen 1 (RBY)">');
+    expect(html).toContain(esc(e('fields.showdownSearch')));
+    expect(html).toContain(esc(e('inspector.stage.showdownHelp')));
+    expectLabelledControls(html);
+    expectNoLeftovers(html);
+    expectUniqueIds(html);
+  });
+
+  it('shows a format the catalog does not know as unknown, selected, so it can be replaced', () => {
+    const doc = updateStage(presetDoc(), 0, (s) => ({ ...s, ruleset: { kind: 'showdown' as const, format: 'gen99xx' } }));
+    const html = render(doc);
+    expect(html).toContain('<option value="gen99xx" selected="">Unknown format (gen99xx)</option>');
+    // The compiler's finding is tied to the select.
+    const diagnostic = compiled(doc).diagnostics.find((d) => d.code === 'showdown_format_unknown');
+    expect(diagnostic?.json_pointer).toBe('/stages/0/ruleset/format');
+    expect(html).toContain(`aria-describedby="${errorId('/stages/0/ruleset/format')}"`);
+    expect(html).toContain('aria-invalid="true"');
   });
 });
 

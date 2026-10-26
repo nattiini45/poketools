@@ -13,6 +13,7 @@ import ClauseToggleGrid from './ClauseToggleGrid';
 import BanlistEditor from './BanlistEditor';
 import TeamConstraintsEditor from './TeamConstraintsEditor';
 import {
+  EMPTY_RULESET_FORM,
   applyDefaults,
   defaultsToLists,
   formatSwitchImpact,
@@ -54,21 +55,6 @@ type SaveError =
   | { kind: 'server'; status: number; statusText?: string }
   | { kind: 'failed' };
 
-const EMPTY_FORM: RulesetFormData = {
-  name: '',
-  base_format: 'gen9ou',
-  is_doubles: false,
-  clauses: [],
-  banned_pokemon: [],
-  banned_moves: [],
-  banned_items: [],
-  banned_abilities: [],
-  added_pokemon: [],
-  custom_rules_string: '',
-  min_shared_type_pct: 0,
-  team_constraints: null,
-};
-
 /** The blank (custom) format starts with nothing, so its defaults need no request. */
 const BLANK_DEFAULTS: FormatDefaults = {
   name: 'Custom Format',
@@ -94,12 +80,12 @@ export default function RulesetBuilder({ initialData, rulesetId }: RulesetBuilde
   const dl = useDataLocale();
   const errorText = useApiErrorText(errorsTournaments);
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<RulesetFormData>(initialData ?? EMPTY_FORM);
+  const [form, setForm] = useState<RulesetFormData>(initialData ?? EMPTY_RULESET_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<SaveError | null>(null);
   // The format whose defaults could not be loaded (the form was left untouched).
   const [defaultsFailure, setDefaultsFailure] = useState<BaseFormat | null>(null);
-  const [defaultsLoading, setDefaultsLoading] = useState(() => !rulesetId && isRuleless(initialData ?? EMPTY_FORM));
+  const [defaultsLoading, setDefaultsLoading] = useState(() => !rulesetId && isRuleless(initialData ?? EMPTY_RULESET_FORM));
   const [pendingChange, setPendingChange] = useState<PendingFormatChange | null>(null);
   const formatRequestId = useRef(0);
   const defaultsCache = useRef(new Map<string, FormatDefaults>());

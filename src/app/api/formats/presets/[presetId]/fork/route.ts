@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAnyAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readBoundedJsonOrEmpty } from '@/lib/format-studio/api-body';
-import { formatForkSchema, validationFailedResponse } from '@/lib/format-studio/api-schemas';
+import { presetForkSchema, validationFailedResponse } from '@/lib/format-studio/api-schemas';
 import { forkPreset, type CreatedFormat } from '@/lib/format-studio/library';
 import { logAuditEvent } from '@/lib/audit/log';
 import { expireFormatLibraryReads } from '@/lib/revalidation';
@@ -18,7 +18,8 @@ interface RouteParams {
  *
  * Admin tiers only. Copies one of the shipped example formats (a code constant, not a stored row) into a new
  * private definition owned by the caller, with `identity.based_on` set to the example's id. An unknown example
- * is a 404 `format_preset_not_found`. The body is optional; its only member is a slug.
+ * is a 404 `format_preset_not_found`. The body is optional; its members are a slug and a Showdown format
+ * (`showdown_format`, a catalog id) that is pre-picked on every stage of the copy.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -28,10 +29,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const rate = await checkRateLimit('format-create', player.playerId, { limit: 20, windowSeconds: 60 * 60 });
     if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
 
-    const parsed = formatForkSchema.safeParse(await readBoundedJsonOrEmpty(request));
+    const parsed = presetForkSchema.safeParse(await readBoundedJsonOrEmpty(request));
     if (!parsed.success) return validationFailedResponse(parsed.error);
 
-    const forked = await forkPreset(player, presetId, parsed.data.slug);
+    const forked = await forkPreset(player, presetId, { slug: parsed.data.slug, showdownFormat: parsed.data.showdown_format });
     expireFormatLibraryReads();
 
     logAuditEvent({
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       resource_type: 'format',
       resource_id: forked.definition.id,
       resource_name: forked.definition.slug,
-      metadata: { preset_id: presetId },
+      metadata: { preset_id: presetId, ...(parsed.data.showdown_format !== undefined && { showdown_format: parsed.data.showdown_format }) },
     });
 
     return NextResponse.json<ApiResult<CreatedFormat>>({ success: true, data: forked }, { status: 201 });

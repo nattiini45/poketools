@@ -3810,6 +3810,7 @@ export type Database = {
           frozen_at: string
           season_id: string
           seed: string
+          showdown_rulesets: Json
           spec: Json
           spec_hash: string
           tunables: Json
@@ -3822,6 +3823,7 @@ export type Database = {
           frozen_at?: string
           season_id: string
           seed: string
+          showdown_rulesets?: Json
           spec: Json
           spec_hash: string
           tunables?: Json
@@ -3834,6 +3836,7 @@ export type Database = {
           frozen_at?: string
           season_id?: string
           seed?: string
+          showdown_rulesets?: Json
           spec?: Json
           spec_hash?: string
           tunables?: Json
@@ -5352,12 +5355,17 @@ export type Database = {
           p_definition_id: string
           p_season_id: string
           p_seed: string
+          p_showdown_rulesets?: Json
           p_spec: Json
           p_spec_hash: string
           p_stages: Json
           p_version_no: number
         }
         Returns: Json
+      }
+      format_delete_unused_showdown_rulesets: {
+        Args: { p_kept: Json; p_recorded: Json }
+        Returns: string[]
       }
       format_detach_season: { Args: { p_season_id: string }; Returns: Json }
       format_publish_version: {

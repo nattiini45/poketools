@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PRESETS, contentHash, ltext, type FormatDefinition } from '@/lib/format-kit';
+import { PRESETS, contentHash, ltext, resolveLText, type FormatDefinition, type LText } from '@/lib/format-kit';
 import type { SessionPlayer } from '@/types/auth';
 import { FormatStudioError } from '../errors';
 import type { FormatDefinitionMeta, FormatVersion } from '../library-types';
@@ -365,7 +365,29 @@ describe('forkPreset', () => {
     expect(forked.definition.visibility).toBe('private');
   });
 
+  it('pre-picks a Showdown format on every stage, names it in the copy and in its slug', async () => {
+    const forked = await forkPreset(player(), 'cup', { showdownFormat: 'gen9vgc' });
+    const input = vi.mocked(createFormatDefinition).mock.calls[0][0];
+    const document = input.document as { identity: { based_on: string }; stages: { ruleset: unknown; doubles: boolean; series: { best_of: number } }[] };
+    expect(document.stages.map((s) => s.ruleset)).toEqual([
+      { kind: 'showdown', format: 'gen9vgc' },
+      { kind: 'showdown', format: 'gen9vgc' },
+    ]);
+    expect(document.stages.every((s) => s.doubles && s.series.best_of === 3)).toBe(true);
+    expect(document.identity.based_on).toBe('cup');
+    expect(resolveLText(input.name as LText, { viewer: 'en' })?.value).toMatch(/ \(Gen 9 VGC\)$/);
+    expect(input.slug).toBe('cup-gen9vgc');
+    expect(forked.check.ok).toBe(true);
+  });
+
+  it('an explicit slug wins over the derived one', async () => {
+    await forkPreset(player(), 'cup', { slug: 'my-cup', showdownFormat: 'gen9ou' });
+    expect(vi.mocked(createFormatDefinition).mock.calls[0][0].slug).toBe('my-cup');
+  });
+
   it('does not change the shipped constant', async () => {
+    await forkPreset(player(), 'swiss-top-cut', { showdownFormat: 'gen9ou' });
+    expect(PRESETS.find((p) => p.id === 'swiss-top-cut')!.definition.stages[0].ruleset).toEqual({ kind: 'season_default' });
     await forkPreset(player(), 'swiss-top-cut');
     expect(PRESETS.find((p) => p.id === 'swiss-top-cut')!.definition.identity.based_on).toBeUndefined();
   });

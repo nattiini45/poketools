@@ -8,6 +8,8 @@
 import {
   CURRENT_ENV,
   compile,
+  getShowdownFormat,
+  showdownFormatsOf,
   type DiagnosticCode,
   type Locale,
 } from '@/lib/format-kit/client';
@@ -15,7 +17,7 @@ import type { EngineGap } from '@/lib/format-studio/library-types';
 import { planStages } from '@/lib/format-studio/materialise';
 import type { BracketType } from '@/types/tournament';
 
-/** Stands in for the league's ruleset when it has none; `planStages` only needs an id to avoid its guard. */
+/** Stands in for a ruleset id the preview does not have (the league's, a Showdown format's); `planStages` only needs an id to avoid its guard. */
 const PLACEHOLDER_RULESET_ID = '00000000-0000-0000-0000-000000000000';
 
 export interface AttachPreviewStage {
@@ -27,8 +29,10 @@ export interface AttachPreviewStage {
   bracketType: BracketType;
   bestOf: number;
   doubles: boolean;
-  /** `named`: the stage names its own ruleset; `league`: it uses the league's. */
-  ruleset: 'league' | 'named';
+  /** `named`: the stage names its own stored ruleset; `showdown`: a Showdown format (`showdownFormat`); `league`: it uses the league's. */
+  ruleset: 'league' | 'named' | 'showdown';
+  /** The catalog name of the Showdown format ('Gen 9 OU'); set when `ruleset` is `showdown`. */
+  showdownFormat?: string;
 }
 
 export type AttachPreview =
@@ -58,19 +62,20 @@ export function previewAttach(input: {
     graphOrder: result.graph.order,
     plan: result.plan,
     seasonRulesetId: input.seasonRulesetId ?? PLACEHOLDER_RULESET_ID,
+    // Attach creates one ruleset row per Showdown format; the preview only needs the plan to go through.
+    showdownRulesetIds: new Map(showdownFormatsOf(definition).map((format) => [format, PLACEHOLDER_RULESET_ID])),
     seasonLanguage: input.seasonLanguage,
     specHash: input.specHash,
   });
   const stageByKey = new Map(definition.stages.map((stage) => [stage.key, stage]));
-  const stages = planned.stages.map((row): AttachPreviewStage => ({
-    key: row.key,
-    order: row.stage_order,
-    name: row.name,
-    bracketType: row.bracket_type,
-    bestOf: row.best_of_default,
-    doubles: row.is_doubles,
-    ruleset: stageByKey.get(row.key)?.ruleset.kind === 'ruleset' ? 'named' : 'league',
-  }));
+  const stages = planned.stages.map((row): AttachPreviewStage => {
+    const ruleset = stageByKey.get(row.key)?.ruleset;
+    const base = { key: row.key, order: row.stage_order, name: row.name, bracketType: row.bracket_type, bestOf: row.best_of_default, doubles: row.is_doubles };
+    if (ruleset?.kind === 'showdown') {
+      return { ...base, ruleset: 'showdown', showdownFormat: getShowdownFormat(ruleset.format)?.name ?? ruleset.format };
+    }
+    return { ...base, ruleset: ruleset?.kind === 'ruleset' ? 'named' : 'league' };
+  });
   const leagueRulesetMissing =
     input.seasonRulesetId === null ? definition.stages.filter((stage) => stage.ruleset.kind === 'season_default').length : 0;
   return { ok: true, stages, warnings: planned.warnings, leagueRulesetMissing };

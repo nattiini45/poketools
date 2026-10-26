@@ -31,7 +31,7 @@ vi.mock('@/lib/supabase/queries/season-formats', () => ({
   getSeasonStartSignals: vi.fn(),
 }));
 
-import { revalidateTag } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { AuthError, requireResourceAdmin } from '@/lib/auth/helpers';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -88,6 +88,7 @@ const outcome = (overrides: Partial<AttachOutcome> = {}): AttachOutcome => ({
   version_no: 2,
   spec_hash: 'a'.repeat(64),
   touched_stage_ids: [STAGE_A, STAGE_B, STAGE_OLD],
+  rulesets_changed: false,
   ...overrides,
 });
 
@@ -297,17 +298,28 @@ describe('POST /api/seasons/[id]/format', () => {
 
 describe('DELETE /api/seasons/[id]/format', () => {
   it('detaches: 200 with the removed ids, expires them and audits', async () => {
-    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A, STAGE_B] });
+    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A, STAGE_B], removed_ruleset_ids: [] });
     const response = await DELETE(del(), params());
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, data: { removed_stage_ids: [STAGE_A, STAGE_B] } });
+    expect(revalidatePath).not.toHaveBeenCalled();
     expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID);
     expect(checkRateLimit).toHaveBeenCalledWith('format-attach', admin.playerId, { limit: 30, windowSeconds: 3600 });
     const expired = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
     expect(expired).toEqual(expect.arrayContaining([`season:${SEASON_ID}`, `tournament:${STAGE_A}`, `tournament:${STAGE_B}`]));
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'season.format.detach', resource_type: 'season', resource_id: SEASON_ID }),
+    );
+  });
+
+  it('refreshes the ruleset list when the detach removed the rulesets the attach had created', async () => {
+    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A], removed_ruleset_ids: [STAGE_OLD] });
+    const response = await DELETE(del(), params());
+    expect(response.status).toBe(200);
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/rulesets');
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'season.format.detach', metadata: { removed_stage_count: 1, removed_ruleset_count: 1 } }),
     );
   });
 

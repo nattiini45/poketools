@@ -57,7 +57,7 @@ interface AttachPreviewListProps {
 }
 
 /**
- * What an attach would create: the ordered phases (name, bracket type, best of, doubles, ruleset) and the engine
+ * What an attach would create: the ordered phases (name, bracket type, best of, doubles, ruleset: the league's, a stored one or a Showdown format) and the engine
  * gaps in plain words. An invalid version gets one fixed sentence and a link to its page; the first error is not
  * worded here, because a diagnostic sentence needs params the preview does not keep.
  */
@@ -107,7 +107,13 @@ export default function AttachPreviewList({ preview, formatHref = null, headingL
               <span aria-hidden="true">·</span>
               <span>{t('preview.bestOf', { n: stage.bestOf })}</span>
               <span aria-hidden="true">·</span>
-              <span>{stage.ruleset === 'named' ? t('preview.rulesetOwn') : t('preview.rulesetLeague')}</span>
+              <span>
+                {stage.ruleset === 'showdown'
+                  ? t('preview.rulesetShowdown', { format: stage.showdownFormat ?? '' })
+                  : stage.ruleset === 'named'
+                    ? t('preview.rulesetOwn')
+                    : t('preview.rulesetLeague')}
+              </span>
               {stage.doubles && <Badge variant="blue">{t('preview.doubles')}</Badge>}
             </div>
           </li>

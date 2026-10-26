@@ -239,6 +239,26 @@ describe('planStages', () => {
       expect(stages.map((s) => s.ruleset_id)).toEqual([RULESET_EXPLICIT, RULESET_EXPLICIT]);
     });
 
+    it('points a Showdown stage at the ruleset row of its format, without a league ruleset', () => {
+      const definition = preset('cup');
+      definition.stages[0].ruleset = { kind: 'showdown', format: 'gen9ou' };
+      definition.stages[1].ruleset = { kind: 'showdown', format: 'gen9vgc' };
+      const showdownRulesetIds = new Map([
+        ['gen9ou', RULESET_EXPLICIT],
+        ['gen9vgc', RULESET_SEASON],
+      ]);
+      const { stages } = plan(definition, { seasonRulesetId: null, showdownRulesetIds }, 16);
+      expect(stages.map((s) => s.ruleset_id)).toEqual([RULESET_EXPLICIT, RULESET_SEASON]);
+      // The frozen stage keeps the pick, not the row.
+      expect(stages[0].stage_spec.stage.ruleset).toEqual({ kind: 'showdown', format: 'gen9ou' });
+    });
+
+    it('does not map a Showdown stage whose ruleset row is missing (the caller creates it first)', () => {
+      const definition = preset('cup');
+      for (const stage of definition.stages) stage.ruleset = { kind: 'showdown', format: 'gen9ou' };
+      expect(() => plan(definition, { seasonRulesetId: RULESET_SEASON }, 16)).toThrow(/has no ruleset/);
+    });
+
     it('does not map a season_default stage without a league ruleset (the caller refuses first)', () => {
       expect(() => plan(preset('cup'), { seasonRulesetId: null }, 16)).toThrow(/has no ruleset/);
     });

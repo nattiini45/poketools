@@ -130,6 +130,25 @@ describe('the league ruleset', () => {
     expect(result.stages.map((s) => s.ruleset)).toEqual(['league', 'named']);
   });
 
+  it('previews Showdown stages with the format name and needs no league ruleset for them', () => {
+    const showdown = spec('classic-league');
+    showdown.stages[0] = { ...showdown.stages[0], ruleset: { kind: 'showdown', format: 'gen9ou' } };
+    showdown.stages[1] = { ...showdown.stages[1], ruleset: { kind: 'showdown', format: 'gen9doublesou' }, doubles: true };
+    const result = okPreview(showdown, { seasonRulesetId: null });
+    expect(result.leagueRulesetMissing).toBe(0);
+    expect(result.stages.map((s) => [s.ruleset, s.showdownFormat])).toEqual([
+      ['showdown', 'Gen 9 OU'],
+      ['showdown', 'Gen 9 Doubles OU'],
+    ]);
+    expect(JSON.stringify(result)).not.toContain('00000000-0000');
+  });
+
+  it('is not planned when a stage names a Showdown format the catalog does not know', () => {
+    const unknown = spec('classic-league');
+    unknown.stages[0] = { ...unknown.stages[0], ruleset: { kind: 'showdown', format: 'gen99xx' } };
+    expect(preview(unknown)).toEqual({ ok: false, reason: 'invalid', firstError: 'showdown_format_unknown' });
+  });
+
   it('never shows the stand-in id the planner needs', () => {
     expect(JSON.stringify(okPreview(spec('classic-league'), { seasonRulesetId: null }))).not.toContain('00000000-0000');
   });

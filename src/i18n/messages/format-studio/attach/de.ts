@@ -71,6 +71,7 @@ export default defineDe<typeof en>()({
     doubles: 'Doppel',
     rulesetLeague: 'Regelwerk der Liga',
     rulesetOwn: 'Eigenes Regelwerk',
+    rulesetShowdown: 'Showdown-Format {format}',
     invalid: 'Diese Version kann nicht angehängt werden: Sie enthält Fehler. Öffne sie im Editor, um sie zu sehen.',
     openFormat: 'Format öffnen',
     gapsHeading: 'Von der Engine noch nicht umgesetzt',

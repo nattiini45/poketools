@@ -5,6 +5,7 @@ import {
   formatForkSchema,
   formatListQuerySchema,
   formatPublishSchema,
+  presetForkSchema,
   formatVisibilitySchema,
   seasonFormatAttachSchema,
   seasonFormatQuerySchema,
@@ -140,6 +141,18 @@ describe('formatForkSchema', () => {
     expect(formatForkSchema.safeParse({ slug: 'my-copy' }).success).toBe(true);
     expect(formatForkSchema.safeParse({ slug: 'My Copy' }).success).toBe(false);
     expect(formatForkSchema.safeParse({ owner_id: UUID }).success).toBe(false);
+  });
+});
+
+describe('presetForkSchema', () => {
+  it('takes a slug and an optional Showdown format of the catalog, and nothing else', () => {
+    expect(presetForkSchema.safeParse({}).success).toBe(true);
+    expect(presetForkSchema.safeParse({ slug: 'my-copy', showdown_format: 'gen9ou' }).success).toBe(true);
+    expect(presetForkSchema.safeParse({ showdown_format: 'gen9vgc' }).success).toBe(true);
+    expect(presetForkSchema.safeParse({ showdown_format: 'gen99xx' }).success).toBe(false);
+    expect(presetForkSchema.safeParse({ showdown_format: 'blank' }).success).toBe(false);
+    expect(presetForkSchema.safeParse({ showdown_format: 7 }).success).toBe(false);
+    expect(presetForkSchema.safeParse({ owner_id: UUID }).success).toBe(false);
   });
 });
 

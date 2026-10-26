@@ -5,9 +5,12 @@
  * `attachFormatToSeason` checks, in this order and with bounded reads, before it writes anything: the league is
  * custom and has not started, the caller may attach the definition, the version exists and its stored spec still
  * hashes to the stored hash, the spec compiles without an error against the rulesets that exist, every
- * `season_default` stage has a league ruleset to fall back on, and the league has no hand-made phase. Only then
- * does one RPC (a single transaction that locks the league and repeats the started and manual-phase checks)
- * write the frozen spec, the stages and the readiness row. A refusal at any step calls no RPC.
+ * `season_default` stage has a league ruleset to fall back on (a stage with a stored ruleset or a Showdown format
+ * names its own), and the league has no hand-made phase. Only then are the Showdown stages given their ruleset rows
+ * (one per distinct format, reused from the league's previous attach, see `showdown-rulesets.ts`) and one RPC (a
+ * single transaction that locks the league and repeats the started and manual-phase checks) writes the frozen spec,
+ * the stages, the readiness row and the record of the rulesets. A refusal at any step calls no RPC; when the RPC
+ * fails, the rulesets this attach created are discarded, so a failed attach leaves no orphan row.
  *
  * The caller (the route) expires the read cache and writes the audit event after the RPC commits; this module
  * returns the stage ids to expire.
@@ -17,6 +20,7 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { CURRENT_ENV } from '@/lib/format-kit/engine/env';
 import { contentHash } from '@/lib/format-kit/json';
+import { showdownFormatsOf } from '@/lib/format-kit/showdown';
 import type { FormatDefinition } from '@/lib/format-kit/types';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
@@ -26,6 +30,7 @@ import {
   detachSeasonFormat,
   getExistingRulesetIds,
   getSeasonFormatSummary,
+  getSeasonShowdownRulesets,
   getSeasonManualPhaseCount,
   getSeasonStartSignals,
 } from '@/lib/supabase/queries/season-formats';
@@ -37,6 +42,7 @@ import { canAttachDefinition, type FormatActor } from './access';
 import { FormatStudioError } from './errors';
 import type { EngineGap, SeasonFormatSummary } from './library-types';
 import { planStages } from './materialise';
+import { discardRulesets, ensureShowdownRulesets } from './showdown-rulesets';
 
 export interface AttachInput {
   actor: SessionPlayer;
@@ -63,6 +69,8 @@ export interface AttachOutcome {
   spec_hash: string;
   /** Created, updated and removed stage ids: what the cache expiry needs. */
   touched_stage_ids: string[];
+  /** True when the attach created or deleted a ruleset row (the ruleset list has changed). */
+  rulesets_changed: boolean;
 }
 
 const toActor = (player: SessionPlayer): FormatActor => ({ playerId: player.playerId, isAdmin: player.isAdmin });
@@ -143,24 +151,41 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
   const manual = await getSeasonManualPhaseCount(seasonId);
   if (manual > 0) throw new FormatStudioError('format_attach_manual_phases', { count: manual });
 
-  // 8. Plan the stages and write everything in one transaction.
-  const planned = planStages({
-    definition,
-    graphOrder: compiled.graph.order,
-    plan: compiled.plan,
-    seasonRulesetId: season.ruleset_id,
-    seasonLanguage: season.language,
-    specHash: version.content_hash,
+  // 8. Each Showdown format the stages name gets a ruleset row (reused from the league's previous attach), then
+  // the stages are planned and everything is written in one transaction.
+  const showdownFormats = showdownFormatsOf(definition);
+  const ensured = await ensureShowdownRulesets({
+    formats: showdownFormats,
+    leagueName: season.name,
+    actorId: actor.playerId,
+    recorded: showdownFormats.length > 0 ? await getSeasonShowdownRulesets(seasonId) : {},
   });
-  const result = await attachSeasonFormat({
-    seasonId,
-    definitionId,
-    versionNo: version.version_no,
-    spec: version.spec,
-    specHash: version.content_hash,
-    seed: randomBytes(16).toString('hex'),
-    stages: planned.stages,
-  });
+  let planned: ReturnType<typeof planStages>;
+  let result: Awaited<ReturnType<typeof attachSeasonFormat>>;
+  try {
+    planned = planStages({
+      definition,
+      graphOrder: compiled.graph.order,
+      plan: compiled.plan,
+      seasonRulesetId: season.ruleset_id,
+      showdownRulesetIds: ensured.rulesetIds,
+      seasonLanguage: season.language,
+      specHash: version.content_hash,
+    });
+    result = await attachSeasonFormat({
+      seasonId,
+      definitionId,
+      versionNo: version.version_no,
+      spec: version.spec,
+      specHash: version.content_hash,
+      seed: randomBytes(16).toString('hex'),
+      stages: planned.stages,
+      showdownRulesets: Object.fromEntries(ensured.rulesetIds),
+    });
+  } catch (err) {
+    await discardRulesets(ensured.created);
+    throw err;
+  }
 
   const rowByKey = new Map(planned.stages.map((row) => [row.key, row]));
   const stages: AttachedStage[] = [];
@@ -184,13 +209,19 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
     version_no: version.version_no,
     spec_hash: version.content_hash,
     touched_stage_ids: [...result.stages.map((s) => s.id), ...result.removed_stage_ids],
+    rulesets_changed: ensured.created.length > 0 || result.removed_ruleset_ids.length > 0,
   };
 }
 
-/** Removes the attached format and the stages it created, in one transaction. */
-export async function detachFormatFromSeason(seasonId: string): Promise<{ removed_stage_ids: string[] }> {
+/**
+ * Removes the attached format, the stages it created and the rulesets it created for its Showdown stages (the
+ * ones no phase or league still points at), in one transaction.
+ */
+export async function detachFormatFromSeason(
+  seasonId: string,
+): Promise<{ removed_stage_ids: string[]; removed_ruleset_ids: string[] }> {
   const result = await detachSeasonFormat(seasonId);
-  return { removed_stage_ids: result.removed_stage_ids };
+  return { removed_stage_ids: result.removed_stage_ids, removed_ruleset_ids: result.removed_ruleset_ids };
 }
 
 /**

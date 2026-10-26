@@ -55,9 +55,9 @@ function item(id: ReadinessItemId, state: ReadinessState, params: Record<string,
   return { id, state, params, action: state === 'unmet' ? action : null };
 }
 
-/** Stages that fall back on the league's ruleset. */
+/** Stages that fall back on the league's ruleset (a stored ruleset and a Showdown format both name their own). */
 function leagueRulesetStages(spec: FormatDefinition): number {
-  return spec.stages.filter((stage) => stage.ruleset?.kind !== 'ruleset').length;
+  return spec.stages.filter((stage) => (stage.ruleset?.kind ?? 'season_default') === 'season_default').length;
 }
 
 export function computeReadiness(input: ReadinessInput): ReadinessResult {

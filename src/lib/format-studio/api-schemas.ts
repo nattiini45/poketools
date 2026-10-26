@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ltextSchema, slugSchema, uuidSchema } from '@/lib/format-kit';
+import { isShowdownFormatId, ltextSchema, slugSchema, uuidSchema } from '@/lib/format-kit';
 import { formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
 import { FORMAT_KINDS, FORMAT_VISIBILITIES } from './library-types';
@@ -74,11 +74,20 @@ export const formatVisibilitySchema = z.strictObject({
 });
 export type FormatVisibilityBody = z.infer<typeof formatVisibilitySchema>;
 
-/** `POST /api/formats/[id]/fork` and `POST /api/formats/presets/[presetId]/fork` */
+/** `POST /api/formats/[id]/fork` */
 export const formatForkSchema = z.strictObject({
   slug: slugSchema.optional(),
 });
 export type FormatForkBody = z.infer<typeof formatForkSchema>;
+
+/**
+ * `POST /api/formats/presets/[presetId]/fork`: the fork body plus an optional Showdown format (a catalog id such as
+ * `gen9ou`) that is pre-picked on every stage of the copy. An id the catalog does not know is a 400.
+ */
+export const presetForkSchema = formatForkSchema.extend({
+  showdown_format: z.string().refine(isShowdownFormatId, { message: 'Unknown Showdown format' }).optional(),
+});
+export type PresetForkBody = z.infer<typeof presetForkSchema>;
 
 /** `POST /api/seasons/[id]/format` */
 export const seasonFormatAttachSchema = z.strictObject({

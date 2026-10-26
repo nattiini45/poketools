@@ -5,7 +5,7 @@
  * Copying a league's structure keeps what the format itself says (stages, groups, pairing, series, scoring,
  * ranking, advancement, rule cards, text) and drops what belongs to that league: legacy modules (their facts can
  * hold league tuning values) and named rulesets (a ruleset id exists in one community, so it would dangle in a
- * shared format). Pure and client-safe.
+ * shared format). A Showdown format is a catalog id every community has, so it stays. Pure and client-safe.
  */
 import type { FormatDefinition, LText, Locale } from '@/lib/format-kit/client';
 import type { DraftDocument } from './document';

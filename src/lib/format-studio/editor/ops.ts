@@ -20,6 +20,7 @@ import {
   MAX_STAGES,
   MAX_TEXT_SECTIONS,
   applyPatch,
+  withShowdownFormat,
   type AdvanceSelect,
   type Edge,
   type Fix,
@@ -339,6 +340,15 @@ export function removeOverride(s: Stage, i: number): Stage {
 
 export function setRuleset(s: Stage, ref: RulesetRef): Stage {
   return { ...s, ruleset: { ...ref } };
+}
+
+/**
+ * Plays the stage under a Showdown format: its ruleset, and the doubles setting and players per match the format
+ * implies (the rule lives in `showdown.ts`). The series length stays the editor's own choice. An id the catalog
+ * does not know leaves the stage as it is.
+ */
+export function setShowdownFormat(s: Stage, formatId: string): Stage {
+  return withShowdownFormat(s, formatId);
 }
 
 export function setScoreValue(s: Stage, key: 'win' | 'loss' | 'bye', n: number): Stage {

@@ -42,6 +42,26 @@ export interface FormatSwitchImpact {
   changes: ListChange[];
 }
 
+/**
+ * A new ruleset before any defaults are applied: Gen 9 OU with nothing in the lists. The builder starts from it and
+ * the Format Studio's attach builds its Showdown-format rulesets from it, so both pre-fill the same way
+ * (`applyDefaults` on top).
+ */
+export const EMPTY_RULESET_FORM: RulesetFormData = {
+  name: '',
+  base_format: 'gen9ou',
+  is_doubles: false,
+  clauses: [],
+  banned_pokemon: [],
+  banned_moves: [],
+  banned_items: [],
+  banned_abilities: [],
+  added_pokemon: [],
+  custom_rules_string: '',
+  min_shared_type_pct: 0,
+  team_constraints: null,
+};
+
 export function listsOf(form: RulesetFormData): RulesetLists {
   return {
     is_doubles: form.is_doubles,

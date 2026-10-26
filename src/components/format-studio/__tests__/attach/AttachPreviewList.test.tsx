@@ -43,6 +43,24 @@ function render(ui: ReactNode, locale: Locale = 'en') {
   return renderWithI18n(<>{ui}</>, { locale });
 }
 
+describe('AttachPreviewList: Showdown formats', () => {
+  it.each(['en', 'de'] as const)('names the Showdown format of a phase instead of a ruleset (%s)', (locale) => {
+    const preset = PRESETS.find((p) => p.id === 'classic-league');
+    if (!preset) throw new Error('no preset');
+    const spec = structuredClone(preset.definition);
+    spec.stages[0] = { ...spec.stages[0], ruleset: { kind: 'showdown', format: 'gen9vgc' }, doubles: true };
+    const preview = previewAttach({ spec, seasonRulesetId: null, seasonLanguage: locale, specHash: 'hash-1' });
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    expect(preview.leagueRulesetMissing).toBe(1);
+    const html = render(<AttachPreviewList preview={preview} />, locale);
+    const t = createTranslator(formatStudioAttachMessages, locale);
+    expect(html).toContain(esc(t('preview.rulesetShowdown', { format: 'Gen 9 VGC' })));
+    expect(html).toContain(esc(t('preview.rulesetLeague')));
+    expectNoLeftovers(html);
+  });
+});
+
 describe('AttachPreviewList: the shipped examples', () => {
   it.each(PRESETS.map((p) => p.id))('%s: every phase in order, with its bracket word and best of', (presetId) => {
     for (const locale of ['en', 'de'] as const) {

@@ -79,6 +79,7 @@ export default {
     doubles: 'Doubles',
     rulesetLeague: 'League ruleset',
     rulesetOwn: 'Own ruleset',
+    rulesetShowdown: 'Showdown format {format}',
     invalid: 'This version cannot be attached: it has errors. Open it in the editor to see them.',
     openFormat: 'Open the format',
     gapsHeading: 'Not run by the engine yet',

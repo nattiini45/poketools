@@ -26,10 +26,10 @@ const fixture = (id: string) => {
 };
 
 describe('diagnostic vocabulary', () => {
-  it('lists 58 distinct codes', () => {
-    expect(DIAGNOSTIC_CODES).toHaveLength(58);
+  it('lists 59 distinct codes', () => {
+    expect(DIAGNOSTIC_CODES).toHaveLength(59);
     expect(new Set(DIAGNOSTIC_CODES).size).toBe(DIAGNOSTIC_CODES.length);
-    expect(DIAGNOSTIC_SEVERITY.size).toBe(58);
+    expect(DIAGNOSTIC_SEVERITY.size).toBe(59);
   });
 
   it('has at least one negative fixture for every code, and none for an unknown code', () => {

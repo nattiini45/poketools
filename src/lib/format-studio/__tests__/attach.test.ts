@@ -17,8 +17,10 @@ vi.mock('@/lib/supabase/queries/season-formats', () => ({
   getExistingRulesetIds: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
   getSeasonManualPhaseCount: vi.fn(),
+  getSeasonShowdownRulesets: vi.fn(),
   getSeasonStartSignals: vi.fn(),
 }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ createRuleset: vi.fn(), deleteRuleset: vi.fn() }));
 // The real compile, spied on, to see the environment attach hands it.
 vi.mock('@/lib/format-kit/compile', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/format-kit/compile')>();
@@ -33,8 +35,10 @@ import {
   getExistingRulesetIds,
   getSeasonFormatSummary,
   getSeasonManualPhaseCount,
+  getSeasonShowdownRulesets,
   getSeasonStartSignals,
 } from '@/lib/supabase/queries/season-formats';
+import { createRuleset, deleteRuleset } from '@/lib/supabase/queries/rulesets';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import {
   assertFormatTypeChangeAllowed,
@@ -51,6 +55,8 @@ const RULESET = '00000000-0000-4000-8000-000000000001';
 const STAGE_GROUPS = 'cccccccc-cccc-4ccc-8ccc-cccccccccc01';
 const STAGE_KNOCKOUT = 'cccccccc-cccc-4ccc-8ccc-cccccccccc02';
 const STAGE_OLD = 'cccccccc-cccc-4ccc-8ccc-cccccccccc03';
+const NEW_RULESET = '00000000-0000-4000-8000-0000000000cc';
+const OLD_RULESET = '00000000-0000-4000-8000-0000000000dd';
 
 const actor = (overrides: Partial<SessionPlayer> = {}): SessionPlayer => ({
   playerId: OWNER,
@@ -146,6 +152,11 @@ beforeEach(() => {
   vi.mocked(getExistingRulesetIds).mockResolvedValue(new Set());
   vi.mocked(getSeasonManualPhaseCount).mockResolvedValue(0);
   vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary);
+  vi.mocked(getSeasonShowdownRulesets).mockResolvedValue({});
+  vi.mocked(createRuleset).mockImplementation(
+    async (input) => ({ id: NEW_RULESET, name: input.name }) as Awaited<ReturnType<typeof createRuleset>>,
+  );
+  vi.mocked(deleteRuleset).mockResolvedValue(undefined);
   vi.mocked(attachSeasonFormat).mockResolvedValue({
     replaced: false,
     stages: [
@@ -153,6 +164,7 @@ beforeEach(() => {
       { id: STAGE_GROUPS, key: 'groups' },
     ],
     removed_stage_ids: [],
+    removed_ruleset_ids: [],
   });
 });
 
@@ -371,6 +383,7 @@ describe('attachFormatToSeason: the write', () => {
         { id: STAGE_KNOCKOUT, key: 'knockout' },
       ],
       removed_stage_ids: [STAGE_OLD],
+      removed_ruleset_ids: [],
     });
     const outcome = await attach();
     expect(outcome.replaced).toBe(true);
@@ -383,10 +396,117 @@ describe('attachFormatToSeason: the write', () => {
   });
 });
 
+describe('attachFormatToSeason: Showdown stages', () => {
+  const attach = () => attachFormatToSeason({ actor: actor(), seasonId: SEASON_ID, definitionId: DEFINITION_ID });
+  const showdownVersion = (formats: [string, string] = ['gen9ou', 'gen9ou']) =>
+    storedVersion((spec) => {
+      spec.stages[0].ruleset = { kind: 'showdown', format: formats[0] };
+      spec.stages[1].ruleset = { kind: 'showdown', format: formats[1] };
+    });
+
+  it('a league without a ruleset is fine when every stage names a Showdown format', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue(season({ ruleset_id: null }));
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(showdownVersion());
+    await attach();
+    expect(attachSeasonFormat).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates one ruleset per distinct format, built like the ruleset builder pre-fill, and points the stages at it', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(showdownVersion());
+    const outcome = await attach();
+
+    expect(createRuleset).toHaveBeenCalledTimes(1);
+    const [form, createdBy] = vi.mocked(createRuleset).mock.calls[0];
+    expect(createdBy).toBe(OWNER);
+    expect(form).toMatchObject({ name: 'League \u00b7 Gen 9 OU', base_format: 'gen9ou', is_doubles: false, banned_abilities: [], added_pokemon: [] });
+    expect(form.clauses).toEqual(expect.arrayContaining(['Species Clause', 'Terastal Clause']));
+    expect(form.banned_pokemon.length).toBeGreaterThan(0);
+
+    const input = vi.mocked(attachSeasonFormat).mock.calls[0][0];
+    expect(input.stages.map((row) => row.ruleset_id)).toEqual([NEW_RULESET, NEW_RULESET]);
+    expect(input.showdownRulesets).toEqual({ gen9ou: NEW_RULESET });
+    // The frozen stage keeps the Showdown pick; the row holds the created ruleset.
+    expect(input.stages[0].stage_spec.stage.ruleset).toEqual({ kind: 'showdown', format: 'gen9ou' });
+    expect(outcome.rulesets_changed).toBe(true);
+  });
+
+  it('one ruleset per format when the stages name two different ones', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(showdownVersion(['gen9ou', 'gen9vgc']));
+    let n = 0;
+    vi.mocked(createRuleset).mockImplementation(
+      async (input) => ({ id: `00000000-0000-4000-8000-00000000010${n++}`, name: input.name }) as Awaited<ReturnType<typeof createRuleset>>,
+    );
+    await attach();
+    expect(vi.mocked(createRuleset).mock.calls.map(([form]) => form.base_format)).toEqual(['gen9ou', 'gen9vgc']);
+    const input = vi.mocked(attachSeasonFormat).mock.calls[0][0];
+    expect(Object.keys(input.showdownRulesets).sort()).toEqual(['gen9ou', 'gen9vgc']);
+    expect(new Set(input.stages.map((row) => row.ruleset_id)).size).toBe(2);
+  });
+
+  it('a re-attach reuses the ruleset the league already holds for the format (the admin keeps their edits)', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(showdownVersion());
+    vi.mocked(getSeasonShowdownRulesets).mockResolvedValue({ gen9ou: OLD_RULESET });
+    vi.mocked(getExistingRulesetIds).mockResolvedValue(new Set([OLD_RULESET]));
+    const outcome = await attach();
+    expect(createRuleset).not.toHaveBeenCalled();
+    expect(vi.mocked(attachSeasonFormat).mock.calls[0][0].showdownRulesets).toEqual({ gen9ou: OLD_RULESET });
+    expect(outcome.rulesets_changed).toBe(false);
+  });
+
+  it('a spec without a Showdown stage reads no recorded rulesets and creates none', async () => {
+    const outcome = await attach();
+    expect(getSeasonShowdownRulesets).not.toHaveBeenCalled();
+    expect(createRuleset).not.toHaveBeenCalled();
+    expect(vi.mocked(attachSeasonFormat).mock.calls[0][0].showdownRulesets).toEqual({});
+    expect(outcome.rulesets_changed).toBe(false);
+  });
+
+  it('reports a change of the ruleset list when the database function removed an old ruleset', async () => {
+    vi.mocked(attachSeasonFormat).mockResolvedValue({
+      replaced: true,
+      stages: [
+        { id: STAGE_GROUPS, key: 'groups' },
+        { id: STAGE_KNOCKOUT, key: 'knockout' },
+      ],
+      removed_stage_ids: [],
+      removed_ruleset_ids: [OLD_RULESET],
+    });
+    expect((await attach()).rulesets_changed).toBe(true);
+  });
+
+  it('discards the rulesets it created when the database function refuses, and rethrows', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(showdownVersion());
+    vi.mocked(attachSeasonFormat).mockRejectedValue(new FormatStudioError('format_season_started'));
+    expect(codeOf(await failure(attach()))).toBe('format_season_started');
+    expect(deleteRuleset).toHaveBeenCalledWith(NEW_RULESET);
+  });
+
+  it('does not discard a reused ruleset when the database function refuses', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(showdownVersion());
+    vi.mocked(getSeasonShowdownRulesets).mockResolvedValue({ gen9ou: OLD_RULESET });
+    vi.mocked(getExistingRulesetIds).mockResolvedValue(new Set([OLD_RULESET]));
+    vi.mocked(attachSeasonFormat).mockRejectedValue(new FormatStudioError('format_season_started'));
+    await failure(attach());
+    expect(deleteRuleset).not.toHaveBeenCalled();
+  });
+
+  it('a format the catalog does not know is a compile error and creates nothing', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(showdownVersion(['gen99xx', 'gen9ou']));
+    const err = (await failure(attach())) as FormatStudioError;
+    expect(err.code).toBe('format_attach_invalid');
+    expect(err.params).toEqual({ first: 'showdown_format_unknown' });
+    expect(createRuleset).not.toHaveBeenCalled();
+    expect(attachSeasonFormat).not.toHaveBeenCalled();
+  });
+});
+
 describe('detachFormatFromSeason', () => {
-  it('returns the removed stage ids', async () => {
-    vi.mocked(detachSeasonFormat).mockResolvedValue({ removed_stage_ids: [STAGE_GROUPS] });
-    await expect(detachFormatFromSeason(SEASON_ID)).resolves.toEqual({ removed_stage_ids: [STAGE_GROUPS] });
+  it('returns the removed stage ids and the rulesets the attach had created', async () => {
+    vi.mocked(detachSeasonFormat).mockResolvedValue({ removed_stage_ids: [STAGE_GROUPS], removed_ruleset_ids: [OLD_RULESET] });
+    await expect(detachFormatFromSeason(SEASON_ID)).resolves.toEqual({
+      removed_stage_ids: [STAGE_GROUPS],
+      removed_ruleset_ids: [OLD_RULESET],
+    });
     expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID);
   });
 
