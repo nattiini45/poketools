@@ -278,6 +278,9 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Fixed
 
+- **Discord sign-in works again.** Discord now sends an RFC 9207 `iss` parameter on the OAuth callback, and every
+  Discord sign-in failed with a server Configuration error because the provider had no issuer to compare it with.
+  The Discord provider now expects `https://discord.com`.
 - **Completed-match reads past 1,000 rows.** The completed-match reads behind standings, pairing history, head-to-head
   and insights inputs, profile standings, and the set of players with completed matches now page through the full
   result in 1,000-row steps instead of stopping at the first 1,000 rows. The participants batch used by profiles and the point-buy list entries page the same way. A

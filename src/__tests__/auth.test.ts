@@ -213,6 +213,11 @@ describe('Discord provider config', () => {
       clientSecret: 'test-DISCORD_CLIENT_SECRET',
     });
   });
+
+  it("expects Discord's issuer, so the iss parameter Discord sends on the callback validates", () => {
+    const discord = (config().providers as unknown as Array<Record<string, unknown>>).find((p) => p.id === 'discord');
+    expect(discord?.issuer).toBe('https://discord.com');
+  });
 });
 
 describe('isSessionRefreshDue', () => {
