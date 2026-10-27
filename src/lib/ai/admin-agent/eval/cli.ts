@@ -13,6 +13,7 @@
  *   --out DIR              where results.jsonl and errors.jsonl go (default: a folder in the system temp directory)
  *   --resume DIR           continue a run: cases already scored in DIR/results.jsonl are skipped
  *   --record DIR           live only: write each sound transcript as a recording to DIR (replayable offline)
+ *   --transcripts DIR      write every run's transcript and checks to DIR, passed or failed (for diagnosing failures)
  *   --timeout-sec N        wall-clock ceiling per case (default 180 live, 30 replay)
  *   --retries N            re-runs of a case whose model call failed (jittered backoff)
  *   --max-cost-usd X       live only: stop the suite once the cases scored so far cost more than X (default 5)
@@ -63,6 +64,7 @@ interface Parsed {
   out?: string;
   resume?: string;
   record?: string;
+  transcripts?: string;
   timeoutSec?: number;
   retries: number;
   maxCostUsd: number;
@@ -72,7 +74,7 @@ export class UsageError extends Error {}
 
 /** The names read from an env file on a live run: the key and its deprecated alias (see `src/lib/ai/api-key.ts`). */
 const API_KEY_NAMES = ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'] as const;
-const VALUE_FLAGS = new Set(['--stage', '--port', '--cases', '--repeat', '--model', '--effort', '--out', '--resume', '--record', '--timeout-sec', '--retries', '--max-cost-usd']);
+const VALUE_FLAGS = new Set(['--stage', '--port', '--cases', '--repeat', '--model', '--effort', '--out', '--resume', '--record', '--transcripts', '--timeout-sec', '--retries', '--max-cost-usd']);
 
 export function parseArgs(argv: readonly string[]): Parsed {
   const parsed: Parsed = { help: false, list: false, json: false, stage: 'plan', port: 'live', cases: [], repeat: 1, retries: 0, maxCostUsd: 5 };
@@ -118,6 +120,9 @@ export function parseArgs(argv: readonly string[]): Parsed {
         case '--record':
           parsed.record = value;
           break;
+        case '--transcripts':
+          parsed.transcripts = value;
+          break;
         case '--timeout-sec':
           parsed.timeoutSec = Number(value);
           if (!Number.isFinite(parsed.timeoutSec) || parsed.timeoutSec <= 0) throw new UsageError('--timeout-sec is a positive number');
@@ -157,7 +162,7 @@ export function readAllowedKeys(text: string, allowed: readonly string[]): Recor
   return out;
 }
 
-const USAGE = `admin-agent eval (plan stage). Flags: --stage plan, --port live|replay (--selftest), --cases IDS, --repeat N, --model ID, --effort low|medium|high, --out DIR, --resume DIR, --record DIR, --timeout-sec N, --retries N, --max-cost-usd X, --list, --json, --help. See the header of src/lib/ai/admin-agent/eval/cli.ts.`;
+const USAGE = `admin-agent eval (plan stage). Flags: --stage plan, --port live|replay (--selftest), --cases IDS, --repeat N, --model ID, --effort low|medium|high, --out DIR, --resume DIR, --record DIR, --transcripts DIR, --timeout-sec N, --retries N, --max-cost-usd X, --list, --json, --help. See the header of src/lib/ai/admin-agent/eval/cli.ts.`;
 
 function readIfPresent(file: string): string | null {
   try {
@@ -283,6 +288,7 @@ export async function main(options: CliOptions): Promise<number> {
   const prior = parsed.resume ? priorScores(outDir) : [];
   const done = new Set(prior.map((score) => resultKey(score.caseId, score.repeat)));
   if (parsed.record) mkdirSync(path.resolve(parsed.record), { recursive: true });
+  if (parsed.transcripts) mkdirSync(path.resolve(parsed.transcripts), { recursive: true });
 
   io.log(`admin-agent eval: ${cases.length} case(s), port ${parsed.port}, repeat ${parsed.repeat}, results in ${outDir}`);
   const restoreFetch = installEgressGuard(globalThis, { allowModelApi: parsed.port === 'live', onBlocked: (host) => io.error(`admin-agent eval: blocked a request to ${host}`) });
@@ -304,6 +310,11 @@ export async function main(options: CliOptions): Promise<number> {
         appendFileSync(resultsFile, `${JSON.stringify({ ...score, model: outcome.record.model, effort: outcome.record.effort, port: parsed.port })}\n`);
         if (parsed.record && parsed.port === 'live' && score.pass) {
           writeFileSync(path.join(path.resolve(parsed.record), `${score.caseId}.json`), `${JSON.stringify({ [score.caseId]: recordingOf(outcome) }, null, 2)}\n`);
+        }
+        if (parsed.transcripts) {
+          const file = path.join(path.resolve(parsed.transcripts), `${score.caseId}#${score.repeat}.json`);
+          writeFileSync(file, `${JSON.stringify({ caseId: score.caseId, pass: score.pass, checks: score.checks, steps: recordingOf(outcome), status: outcome.record.status, failure: outcome.record.failure, turns: outcome.record.turns, toolCalls: outcome.record.toolCalls, plan: outcome.record.plan, proposals: outcome.record.proposals }, null, 2)}
+`);
         }
         const failed = score.checks.filter((c) => !c.pass).map((c) => c.name);
         io.log(`${score.pass ? 'PASS' : 'FAIL'}  ${score.caseId}#${score.repeat}  ${score.metrics.modelRequests} requests, ${score.metrics.toolCalls} tool calls${failed.length > 0 ? `  failed: ${failed.join('; ')}` : ''}`);
