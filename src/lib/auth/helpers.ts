@@ -44,6 +44,7 @@
  */
 import { cache } from 'react';
 import { auth, loadSessionPlayer } from '@/auth';
+import { getVerifiedSession } from '@/lib/auth/session-override';
 import type { Session } from 'next-auth';
 import type { SessionPlayer } from '@/types/auth';
 import type { AdminResourceType } from '@/types/resource-admin';
@@ -56,13 +57,20 @@ import type { FormatDefinitionMeta } from '@/lib/format-studio/library-types';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isValidUuid } from '@/lib/utils/uuid';
 
+/** `auth()`, memoised per server render with React cache(). */
+const cachedAuth: () => Promise<Session | null> = cache(async (): Promise<Session | null> => auth());
+
 /**
  * The signed-in session, from the token (see the module comment: may be up to
  * 5 minutes stale). Memoised per server render with React cache().
+ *
+ * Inside the Admin Assistant's dispatch layer the answer is the verified
+ * session of the enclosing request instead (`./session-override.ts`). It is
+ * read OUTSIDE the cached call: the cache holds only `auth()`, so an override
+ * can never be memoised into, or served from, a render's cache entry.
  */
-export const getSession: () => Promise<Session | null> = cache(
-  async (): Promise<Session | null> => auth()
-);
+export const getSession: () => Promise<Session | null> = async (): Promise<Session | null> =>
+  getVerifiedSession() ?? (await cachedAuth());
 
 /** The token's player copy (read paths only; may be up to 5 minutes stale). */
 export async function getSessionPlayer(): Promise<SessionPlayer | null> {
