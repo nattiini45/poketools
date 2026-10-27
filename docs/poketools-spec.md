@@ -1876,7 +1876,7 @@ SUPERADMIN_EMAIL=
 FORMAT_PACK=                       # unset | example | private (docs/format-packs.md, Choosing the Active Pack)
 
 # AI (optional)
-CLAUDE_API_KEY=
+ANTHROPIC_API_KEY=                 # every AI feature; the deprecated CLAUDE_API_KEY is read when this is unset
 AI_DAILY_LIMIT=10                  # per player and AI endpoint, rolling 24 h (teambuilder coaches, analyses, reports)
 AGENT_DAILY_LIMIT=20               # per player, the agent chat
 ```

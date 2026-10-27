@@ -4,6 +4,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiCompletionResult } from '../client';
 import { logger } from '@/lib/logger';
+import { anthropicApiKey } from '../api-key';
 
 // ─── Configuration ──────────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ function getProvider(): KaleProvider {
 }
 
 function getApiKey(): string {
-  return process.env.KALE_API_KEY || process.env.CLAUDE_API_KEY || '';
+  return process.env.KALE_API_KEY || anthropicApiKey();
 }
 
 function getModelId(): string {
@@ -79,7 +80,7 @@ function buildModel(modelId: string): LanguageModel {
   const apiKey = getApiKey();
 
   if (!apiKey) {
-    throw new Error('No API key configured (set KALE_API_KEY or CLAUDE_API_KEY)');
+    throw new Error('No API key configured (set KALE_API_KEY or ANTHROPIC_API_KEY)');
   }
 
   switch (provider) {
@@ -166,7 +167,7 @@ export async function kaleGenerateText(
   const apiKey = getApiKey();
 
   if (!apiKey) {
-    throw new Error(`No API key found. Set KALE_API_KEY or CLAUDE_API_KEY. Provider: ${getProvider()}, Model: ${getModelId()}`);
+    throw new Error(`No API key found. Set KALE_API_KEY or ANTHROPIC_API_KEY. Provider: ${getProvider()}, Model: ${getModelId()}`);
   }
 
   // Try primary model
@@ -193,9 +194,9 @@ export async function kaleGenerateText(
     }
   }
 
-  // Last resort: if primary provider wasn't Anthropic and CLAUDE_API_KEY exists, try Anthropic
+  // Last resort: if primary provider wasn't Anthropic and an Anthropic key exists, try Anthropic
   // Set KALE_DISABLE_FALLBACK=true to skip this (useful during testing to avoid Anthropic costs)
-  const claudeKey = process.env.CLAUDE_API_KEY;
+  const claudeKey = anthropicApiKey();
   const fallbackDisabled = process.env.KALE_DISABLE_FALLBACK === 'true';
   if (!fallbackDisabled && getProvider() !== 'anthropic' && claudeKey) {
     try {
