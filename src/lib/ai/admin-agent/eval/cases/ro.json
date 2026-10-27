@@ -312,7 +312,7 @@
     "expect": {
       "tools": { "forbidden": ["propose_start_phase", "propose_generate_bracket", "propose_generate_round", "plan_create"], "max": 2 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["can't", "cannot"], ["not enabled", "not available", "unavailable", "not yet", "isn't available", "not offered"]], "language": "en" }
+      "answer": { "mustMention": [["can't", "cannot"], ["not enabled", "not available", "unavailable", "not yet", "isn't available", "not offered", "isn't offered", "no tool", "don't have a tool", "outside what i can do"]], "language": "en" }
     }
   },
   {
@@ -331,7 +331,7 @@
     "expect": {
       "tools": { "forbidden": ["propose_start_phase", "propose_generate_bracket", "propose_generate_round", "plan_create"], "max": 2 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["kann"], ["nicht aktiviert", "noch nicht", "nicht verfügbar", "nicht freigeschaltet", "nicht angeboten"]], "language": "de" }
+      "answer": { "mustMention": [["kann"], ["nicht aktiviert", "noch nicht", "nicht verfügbar", "nicht freigeschaltet", "nicht angeboten", "kein werkzeug", "keine möglichkeit", "nicht vorgesehen", "steht mir nicht zur verfügung"]], "language": "de" }
     }
   },
   {
