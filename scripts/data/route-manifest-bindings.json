@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "bindings": [
+    {"method": "POST", "path": "/api/formats", "class": "D", "phase": "P3", "operation": "format_create"},
+    {"method": "POST", "path": "/api/formats/presets/[presetId]/fork", "class": "D", "phase": "P3", "operation": "format_fork_preset"},
+    {"method": "POST", "path": "/api/formats/[id]/fork", "class": "D", "phase": "P3", "operation": "format_fork"},
+    {"method": "PUT", "path": "/api/formats/[id]/draft", "class": "D", "phase": "P3", "operation": "format_save_draft"},
+    {"method": "POST", "path": "/api/ruleset-definitions", "class": "D", "phase": "P1", "operation": "ruleset_create_draft (new draft)"},
+    {"method": "POST", "path": "/api/ruleset-definitions/presets/[presetId]/fork", "class": "D", "phase": "P1", "operation": "ruleset_create_draft (fork a preset)"},
+    {"method": "POST", "path": "/api/ruleset-definitions/[id]/fork", "class": "D", "phase": "P1", "operation": "ruleset_create_draft (fork a ruleset)"},
+    {"method": "PUT", "path": "/api/ruleset-definitions/[id]/draft", "class": "D", "phase": "P1", "operation": "ruleset_patch_draft"},
+    {"method": "POST", "path": "/api/seasons", "class": "B", "phase": "P1", "operation": "league create"},
+    {"method": "POST", "path": "/api/seasons/[id]/participants", "class": "B", "phase": "P1", "operation": "roster add"},
+    {"method": "DELETE", "path": "/api/seasons/[id]/participants", "class": "B", "phase": "P1", "operation": "roster remove"},
+    {"method": "POST", "path": "/api/seasons/[id]/phases", "class": "B", "phase": "P1", "operation": "phase create"},
+    {"method": "POST", "path": "/api/tournaments", "class": "B", "phase": "P1", "operation": "tournament create"},
+    {"method": "PATCH", "path": "/api/tournaments/[id]", "class": "B", "phase": "P1", "operation": "tournament update"},
+    {"method": "POST", "path": "/api/tournaments/[id]/participants", "class": "B", "phase": "P1", "operation": "tournament participant add"},
+    {"method": "DELETE", "path": "/api/tournaments/[id]/participants", "class": "B", "phase": "P1", "operation": "tournament participant remove"},
+    {"method": "PATCH", "path": "/api/tournaments/[id]/participants", "class": "B", "phase": "P1", "operation": "tournament seeds"},
+    {"method": "POST", "path": "/api/generate-round/[tid]", "class": "G", "phase": "P1", "operation": "propose_start_phase / propose_generate_round"},
+    {"method": "POST", "path": "/api/tournaments/[id]/generate-bracket", "class": "G", "phase": "P1", "operation": "propose_generate_bracket"},
+    {"method": "POST", "path": "/api/ruleset-definitions/[id]/publish", "class": "G", "phase": "P1", "operation": "propose_publish_ruleset"},
+    {"method": "POST", "path": "/api/ruleset-definitions/[id]/pins", "class": "G", "phase": "P1", "operation": "propose_move_pin"},
+    {"method": "POST", "path": "/api/ruleset-definitions/[id]/pins/impact", "class": "P", "phase": "P1", "operation": "ruleset_pin_impact_preview"}
+  ]
+}
