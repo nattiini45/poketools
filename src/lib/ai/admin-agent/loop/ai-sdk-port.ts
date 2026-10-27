@@ -53,7 +53,10 @@ function cacheControl(adapter: ProviderAdapterConfig) {
 /** The provider options of every request of a conversation. Exported so the contract test and the docs read one source. */
 export function providerOptionsFor(effort: ModelStepInput['effort'], adapter: ProviderAdapterConfig): ProviderOptions {
   const anthropic = {
-    thinking: { type: 'adaptive' },
+    thinking:
+      adapter.thinkingBlockBinding === 'error'
+        ? { type: 'adaptive', blockBinding: { prefixMismatchBehavior: 'error' } }
+        : { type: 'adaptive' },
     effort,
     sendReasoning: adapter.sendReasoning,
     toolStreaming: false,
@@ -75,7 +78,7 @@ function buildTools(input: ModelStepInput, adapter: ProviderAdapterConfig) {
     tools[wire.name] = tool({
       description: wire.description,
       inputSchema: jsonSchema(wire.input_schema as unknown as Parameters<typeof jsonSchema>[0]),
-      ...(adapter.strictTools ? { strict: true } : {}),
+      ...(adapter.strictTools && wire.strict ? { strict: true } : {}),
       ...(isLast && adapter.cacheToolsBreakpoint ? { providerOptions: { anthropic: { cacheControl: cacheControl(adapter) } } } : {}),
     });
   });

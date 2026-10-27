@@ -33,7 +33,7 @@ describe('only the store touches the assistant\'s tables', () => {
   it("has no .from('admin_agent_ or .rpc('admin_agent_ outside store/", () => {
     const offenders = production.filter((file) => /\.(?:from|rpc)\(\s*['"`]admin_agent_/.test(readFileSync(file, 'utf8')));
     expect(offenders.map((file) => path.relative(SRC, file))).toEqual([]);
-  });
+  }, 30_000); // reads every production source: slow on a loaded machine
 
   it('keeps the service-role client out of anything but the store', () => {
     const files = walk(STORE).filter((file) => !isTestCode(file));

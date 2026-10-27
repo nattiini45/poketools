@@ -111,7 +111,7 @@ export interface ProviderAdapterConfig {
    * port inserts a one-line user anchor (`auto`) or does not (`never`, if S2 shows it is not needed).
    */
   systemAnchor: 'auto' | 'never';
-  /** Send `strict: true` on every tool (spike S4 checks the limits for 69 strict tools). */
+  /** Send `strict: true` on the tools the set's strict budget marks (spike S4: at most 20 strict tools, 24 optional and 16 union parameters per request); false sends none. */
   strictTools: boolean;
   /** Replay thinking blocks (`sendReasoning`). Off only if spike S3 fails and thinking is dropped from history. */
   sendReasoning: boolean;
@@ -119,6 +119,12 @@ export interface ProviderAdapterConfig {
   cacheTtl: '5m' | '1h';
   /** Also put a breakpoint on the last tool, so a prompt-only change keeps the tool cache. */
   cacheToolsBreakpoint: boolean;
+  /**
+   * Thinking-block binding (spike S8). `default` sends nothing (the API's default accepts an edited prefix); `error`
+   * asks the API to refuse a replayed thinking block whose prefix changed, so a history bug fails loudly. The history
+   * is append-only either way; eval runs use `error`.
+   */
+  thinkingBlockBinding: 'default' | 'error';
 }
 
 // ─── Stream events (spec §18.5 "Stream events"; plan 5.7) ────────────

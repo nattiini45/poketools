@@ -78,51 +78,51 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
 {
   "scoped:0": {
     "tools": 34,
-    "version": "ddeb9d997b24e895",
+    "version": "9f82436791e1d74b",
   },
   "scoped:1": {
     "tools": 41,
-    "version": "44d3fe27138ad107",
+    "version": "c7691576d6e01a0e",
   },
   "scoped:2": {
     "tools": 48,
-    "version": "7e188631ea7d9bce",
+    "version": "1d1c3096f55ff1e9",
   },
   "scoped:3": {
     "tools": 60,
-    "version": "4dd572bc2f43e95d",
+    "version": "6016c71908fa00a7",
   },
   "scoped:4": {
     "tools": 68,
-    "version": "b9f388bac4787fd4",
+    "version": "d680332374063958",
   },
   "scoped:5": {
     "tools": 68,
-    "version": "b9f388bac4787fd4",
+    "version": "d680332374063958",
   },
   "site:0": {
     "tools": 34,
-    "version": "ddeb9d997b24e895",
+    "version": "9f82436791e1d74b",
   },
   "site:1": {
     "tools": 41,
-    "version": "44d3fe27138ad107",
+    "version": "c7691576d6e01a0e",
   },
   "site:2": {
     "tools": 49,
-    "version": "2af632edbcf17356",
+    "version": "7ae050a82373ddaa",
   },
   "site:3": {
     "tools": 61,
-    "version": "205be54b1a06b416",
+    "version": "f276a04e1fa9c7ff",
   },
   "site:4": {
     "tools": 69,
-    "version": "35c22a156ec68e57",
+    "version": "b2e415e9b15bedcb",
   },
   "site:5": {
     "tools": 69,
-    "version": "35c22a156ec68e57",
+    "version": "b2e415e9b15bedcb",
   },
 }
 `;

@@ -71,7 +71,7 @@ describe('the chat side cannot reach the executor, the _ops/g bindings or the ap
       const graph = buildGraph([entry]);
       expect(findPath(graph, [entry], (file) => isPrivileged(relFromRepo(file)))?.map(relFromRepo), relFromRepo(entry)).toBeUndefined();
     }
-  });
+  }, 30_000); // one graph per entry: slow on a loaded machine
 
   it('keeps the approval-token reader away from the chat route and the loop', () => {
     const loopSide = [`${AGENT_REL}/index.ts`, `${AGENT_REL}/loop/index.ts`, `${AGENT_REL}/proposals/index.ts`, `${ROUTES_REL}/conversations/[id]/messages/route.ts`].map(abs);

@@ -24,6 +24,7 @@ import type { RunnableTool, ToolDefinition } from './define';
 import { STAGED_TOOLS } from './staged';
 import { DEFERRED_TOOLS } from './deferred';
 import type { ToolContext, ToolResult, ToolRole } from './types';
+import { chooseStrictTools } from './strict-budget';
 import { canonicalJson, toWireSchema, type JsonValue } from './wire-schema';
 
 export type { RunnableTool, StagedTool, ToolDefinition } from './define';
@@ -31,6 +32,7 @@ export type { ToolContext, ToolResult, ToolError, ToolRole, ToolClass, DeferredT
 export { DEFERRED_TOOLS } from './deferred';
 export { NOT_TOOLS, NOT_TOOL_NAMES, notToolPath } from './not-tools';
 export { isCataloguedCode } from './errors';
+export { STRICT_LIMITS, chooseStrictTools, schemaCost } from './strict-budget';
 export { extractResultRefs, RESULT_REFS_MAX } from './result-refs';
 export type { ResultRef } from './result-refs';
 
@@ -55,12 +57,12 @@ export function getToolDefinition(name: string): ToolDefinition | undefined {
   return BY_NAME.get(name);
 }
 
-/** One tool as the model port sends it (Anthropic strict tool shape). */
+/** One tool as the model port sends it (Anthropic tool shape). `strict` comes from the set's strict budget (S4). */
 export interface WireTool {
   readonly name: string;
   readonly description: string;
   readonly input_schema: Readonly<Record<string, JsonValue>>;
-  readonly strict: true;
+  readonly strict: boolean;
 }
 
 export interface ToolSet {
@@ -77,12 +79,13 @@ export interface ToolSet {
   readonly definitions: ReadonlyMap<string, ToolDefinition>;
 }
 
-export function toWireTool(tool: ToolDefinition): WireTool {
+/** One tool's wire shape; `strict` defaults to true for the per-tool snapshot hash, the set decides the real flag. */
+export function toWireTool(tool: ToolDefinition, strict = true): WireTool {
   return {
     name: tool.name,
     description: tool.description,
     input_schema: toWireSchema(tool.name, tool.args),
-    strict: true,
+    strict,
   };
 }
 
@@ -105,7 +108,9 @@ export function buildToolSet(input: { role: ToolRole; maxPhase: AdminAgentPhase 
   if (hit) return hit;
 
   const offered = ALL_TOOLS.filter((tool) => isOffered(tool, input.role, input.maxPhase));
-  const wire = offered.map(toWireTool);
+  const schemas = offered.map((tool) => toWireSchema(tool.name, tool.args));
+  const strict = chooseStrictTools(offered.map((tool, i) => ({ name: tool.name, class: tool.class, inputSchema: schemas[i] })));
+  const wire = offered.map((tool) => toWireTool(tool, strict.has(tool.name)));
   const wireBytes = canonicalJson(wire as unknown as JsonValue);
   const set: ToolSet = Object.freeze({
     role: input.role,

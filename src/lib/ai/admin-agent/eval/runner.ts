@@ -111,7 +111,8 @@ export async function runCase(testCase: EvalCase, options: RunCaseOptions): Prom
   const phase = testCase.phase as AdminAgentPhase;
   const config = evalConfig(testCase.phase, options.env);
   const toolSet = buildToolSet({ role, maxPhase: phase });
-  const adapter: ProviderAdapterConfig = { ...DEFAULT_ADAPTER, ...options.adapter };
+  // Eval runs refuse an edited thinking prefix (spike S8), so a persistence bug fails the case instead of passing silently.
+  const adapter: ProviderAdapterConfig = { ...DEFAULT_ADAPTER, thinkingBlockBinding: 'error', ...options.adapter };
   const choice = config.models.read;
   const model = options.model ?? choice.model;
   const effort = options.effort ?? choice.effort;

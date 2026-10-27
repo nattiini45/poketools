@@ -24,6 +24,7 @@ export const DEFAULT_ADAPTER: ProviderAdapterConfig = {
   sendReasoning: true,
   cacheTtl: '1h',
   cacheToolsBreakpoint: true,
+  thinkingBlockBinding: 'default',
 };
 
 /** The user message a `system-message` channel needs when a system message would directly follow an assistant message. */
