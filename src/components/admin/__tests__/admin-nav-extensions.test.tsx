@@ -30,7 +30,7 @@ const hrefs = (groups: ReturnType<typeof visibleAdminNav>) => groups.flatMap((g)
 
 describe('admin navigation with pack extension items', () => {
   it('is the built-in navigation without extension items', () => {
-    const builtIn = ADMIN_NAV.flatMap((g) => g.items.filter((i) => !i.superadminOnly).map((i) => i.href));
+    const builtIn = ADMIN_NAV.flatMap((g) => g.items.filter((i) => !i.superadminOnly && !i.assistant).map((i) => i.href));
     expect(hrefs(visibleAdminNav(SITE_ADMIN))).toEqual(builtIn);
     expect(hrefs(visibleAdminNav(SITE_ADMIN))).not.toContain('/admin/leagues/trash');
     expect(hrefs(visibleAdminNav(SUPERADMIN))).toContain('/admin/leagues/trash');
