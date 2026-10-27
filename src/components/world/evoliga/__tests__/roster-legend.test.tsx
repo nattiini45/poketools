@@ -36,6 +36,7 @@ import type { PointBuyListEntry, PriceGroup } from '@/types/point-buy';
 import PriceGroupBar from '../PriceGroupBar';
 import RosterSection from '../RosterSection';
 import { PRICE_GROUP_CHIP } from '../price-group-chip';
+import { stripMarkup } from '@/test/markup';
 
 function entry(id: string, group: PriceGroup, price: number): PointBuyListEntry {
   const e: Omit<PointBuyListEntry, 'line_id'> = {
@@ -91,7 +92,7 @@ function pills(html: string): Pill[] {
       pressed: /aria-pressed="([^"]+)"/.exec(attrs)?.[1] ?? '',
       disabled: /\bdisabled=""/.test(attrs),
       ariaLabel: /aria-label="([^"]*)"/.exec(attrs)?.[1] ?? '',
-      text: inner.replace(/<[^>]+>/g, ''),
+      text: stripMarkup(inner),
     }));
 }
 
