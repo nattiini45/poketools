@@ -35,11 +35,18 @@ export default {
   agent_budget_global_day: 'The assistant has reached its daily limit for all admins. Try again tomorrow.',
   agent_context_full: 'This conversation is too long to continue. Start a new conversation; the plan is carried over.',
   agent_cap_reached: 'This conversation has reached its limit of {limit} for this kind of change.',
+  agent_model_refused: 'The assistant cannot help with this request.',
+  agent_output_truncated: 'The answer was cut off because it got too long. Ask for it in smaller steps.',
+  agent_model_unavailable: 'The assistant is not reachable right now. Try again in a moment.',
+  agent_conversation_outdated: 'This conversation can no longer be continued. Start a new one; the plan is carried over.',
+  agent_nothing_to_continue: 'There is nothing to continue.',
 
   // Conversations, plans and tools
   conversation_not_found: 'Conversation not found.',
   plan_not_ready: 'The plan is not ready to build yet.',
   plan_stale: 'The plan changed since this was prepared. Review it again.',
+  nothing_to_build: 'The plan has nothing to build yet.',
+  build_too_large: 'This build is too large ({steps} steps, {creating} new). Split it into smaller parts.',
   tool_not_available: 'The assistant cannot do this with your role.',
   unknown_reference: 'This refers to something the assistant has not looked up in this conversation.',
   text_not_allowed: 'This text contains characters or links that are not allowed.',

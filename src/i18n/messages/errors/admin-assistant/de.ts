@@ -22,10 +22,17 @@ export default defineDe<typeof en>()({
   agent_context_full:
     'Diese Unterhaltung ist zu lang, um fortzufahren. Starte eine neue Unterhaltung; der Plan wird übernommen.',
   agent_cap_reached: 'Diese Unterhaltung hat ihre Grenze von {limit} für diese Art von Änderung erreicht.',
+  agent_model_refused: 'Bei dieser Anfrage kann der Assistent nicht helfen.',
+  agent_output_truncated: 'Die Antwort wurde abgeschnitten, weil sie zu lang wurde. Bitte um kleinere Schritte.',
+  agent_model_unavailable: 'Der Assistent ist gerade nicht erreichbar. Versuch es gleich noch einmal.',
+  agent_conversation_outdated: 'Diese Unterhaltung kann nicht mehr fortgesetzt werden. Starte eine neue; der Plan wird übernommen.',
+  agent_nothing_to_continue: 'Es gibt nichts, womit es weitergehen könnte.',
 
   conversation_not_found: 'Unterhaltung nicht gefunden.',
   plan_not_ready: 'Der Plan ist noch nicht bereit zum Bauen.',
   plan_stale: 'Der Plan hat sich seit der Vorbereitung geändert. Prüf ihn noch einmal.',
+  nothing_to_build: 'Der Plan enthält noch nichts zum Bauen.',
+  build_too_large: 'Dieser Bau ist zu groß ({steps} Schritte, {creating} neu). Teile ihn in kleinere Teile auf.',
   tool_not_available: 'Der Assistent kann das mit deiner Rolle nicht tun.',
   unknown_reference: 'Das bezieht sich auf etwas, das der Assistent in dieser Unterhaltung nicht nachgeschlagen hat.',
   text_not_allowed: 'Dieser Text enthält Zeichen oder Links, die nicht erlaubt sind.',

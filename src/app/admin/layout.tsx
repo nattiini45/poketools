@@ -2,6 +2,7 @@ import NavBar from '@/components/shared/NavBar';
 import PageTransitionWrapper from '@/components/shared/PageTransitionWrapper';
 import AdminGuard from '@/components/shared/AdminGuard';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import AssistantDrawer from '@/components/admin/assistant/AssistantDrawer';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { agentEnabledFor, parseAdminAgentEnv } from '@/lib/ai/admin-agent/env';
 import { ENABLE_ADMIN_ASSISTANT } from '@/lib/feature-flags';
@@ -52,6 +53,9 @@ export default async function AdminLayout({
               <PageTransitionWrapper>{children}</PageTransitionWrapper>
             </div>
           </div>
+          {/* The assistant drawer sits beside the page transition, not inside it, so a conversation survives navigation.
+              It renders only where the assistant is on for this live viewer (UI flag, server switch, audience). */}
+          {roles.assistantEnabled && <AssistantDrawer />}
         </AdminGuard>
       </main>
     </>
