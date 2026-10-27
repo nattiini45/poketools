@@ -1,0 +1,17 @@
+{
+  "$comment": "Run-only tsconfig for scripts/admin-agent-eval.ts (plan 7.2). Modelled on tsconfig.example.json, not on tsconfig.audit.json: `@format-pack` and `@pack-extensions` are pinned to the public EXAMPLE pack (tsx never reads FORMAT_PACK, and the audit config lists the private pack first), so a maintainer checkout cannot load the private pack into a run that sends data to a model API. `server-only` and `next/cache` map to the no-op stubs the tests use, and `@/auth` maps to a stub with no sign-in (the plan stage answers its reads from the fixture world, so no guard runs). The root tsconfig is untouched; `tsc --noEmit` does not use this file. A test (`eval/__tests__/eval-static.test.ts`) fails when this file lets a private path in.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "paths": {
+      "@/auth": ["../src/lib/ai/admin-agent/eval/stubs/auth.ts"],
+      "@/*": ["../src/*"],
+      "@format-pack": ["../src/format-packs/example"],
+      "@pack-extensions": ["../src/format-packs/example/extensions"],
+      "server-only": ["../src/test/server-only-stub.ts"],
+      "next/cache": ["../src/test/next-cache-stub.ts"]
+    }
+  },
+  "include": ["./admin-agent-eval.ts"]
+}
