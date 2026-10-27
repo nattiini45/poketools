@@ -208,6 +208,13 @@ describe('POST /api/seasons with clone_from — copy', () => {
     expect(mocks.addSeasonParticipants).toHaveBeenCalledWith('season-new', ['p1', 'p2']);
     expect(mocks.addResourceAdmin).toHaveBeenCalledWith('a2', 'season', 'season-new');
     expect(mocks.logAuditEvent.mock.calls.filter(([e]) => e.action === 'season.clone')).toHaveLength(1);
+    expect(mocks.logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'season.create',
+        resource_id: 'season-new',
+        metadata: expect.objectContaining({ clone_from: SOURCE_ID }),
+      }),
+    );
     expect(mocks.expireSeasonReads).toHaveBeenCalledWith('season-new', ['new-ph-1', 'new-ph-2']);
   });
 
@@ -264,6 +271,8 @@ describe('POST /api/seasons with clone_from — failure removes the new league',
     expect(mocks.deleteSeason).toHaveBeenCalledWith('season-new');
     expect(mocks.logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: 'season.clone_failed' }));
     expect(mocks.logAuditEvent).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'season.clone' }));
+    // The league was removed again: no creation event is left behind.
+    expect(mocks.logAuditEvent).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'season.create' }));
   });
 
   it('a non-site-admin creator loses the league admin row that was granted for the failed league', async () => {
@@ -330,10 +339,11 @@ describe('POST /api/seasons without clone_from', () => {
       mocks.createTournament,
       mocks.listSeasonParticipantIds,
       mocks.isResourceAdminFor,
-      mocks.logAuditEvent,
     ]) {
       expect(untouched).not.toHaveBeenCalled();
     }
+    // The only audit event of a plain create is the creation itself (no clone events).
+    expect(mocks.logAuditEvent.mock.calls.map(([e]) => e.action)).toEqual(['season.create']);
   });
 
   it('a failure after the league exists passes through without a rollback', async () => {

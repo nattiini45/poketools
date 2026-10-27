@@ -49,6 +49,8 @@ vi.mock('@/lib/supabase/queries/resource-admins', () => ({
   addResourceAdmin: vi.fn(),
 }));
 
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
+
 // --------------- imports (after mocks) ---------------
 
 import { GET, POST } from '@/app/api/tournaments/route';
@@ -60,6 +62,7 @@ import {
   createTournament,
 } from '@/lib/supabase/queries/tournaments';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
+import { logAuditEvent } from '@/lib/audit/log';
 import { revalidateTag } from 'next/cache';
 
 // --------------- helpers ---------------
@@ -220,6 +223,42 @@ describe('POST /api/tournaments', () => {
     expect(payload.data.id).toBe('t-new');
     // D37: the new tournament shows in the list on the next view.
     expect(revalidateTag).toHaveBeenCalledWith('tournaments', { expire: 0 });
+  });
+
+  it('logs tournament.create with the actor and the new tournament', async () => {
+    vi.mocked(requireAnyAdmin).mockResolvedValue({
+      playerId: 'p1',
+      isAdmin: true,
+      name: 'Admin',
+    } as never);
+    vi.mocked(createTournament).mockResolvedValue({ id: 't-new', ...validBody } as never);
+
+    await POST(makePostRequest(validBody));
+
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledWith({
+      actor_id: 'p1',
+      actor_name: 'Admin',
+      action: 'tournament.create',
+      resource_type: 'tournament',
+      resource_id: 't-new',
+      resource_name: 'Weekly #5',
+      metadata: { bracket_type: 'swiss', ruleset_id: validBody.ruleset_id },
+    });
+  });
+
+  it('logs no creation event for a rejected or failed create', async () => {
+    vi.mocked(requireAnyAdmin).mockResolvedValue({
+      playerId: 'p1',
+      isAdmin: true,
+      name: 'Admin',
+    } as never);
+
+    await POST(makePostRequest({ ...validBody, season_id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12' }));
+    vi.mocked(createTournament).mockRejectedValue(new Error('DB error'));
+    await POST(makePostRequest(validBody));
+
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   it('rejects season_id payloads (league phases use the phases API)', async () => {
