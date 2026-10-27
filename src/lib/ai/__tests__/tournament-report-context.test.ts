@@ -67,7 +67,6 @@ vi.mock('@/lib/match/aggregation', () => ({
 
 vi.mock('../context-builder', () => ({
   buildRulesetSection: vi.fn(() => '## FORMAT: gen9ou\n'),
-  parseGenFromFormat: vi.fn(() => 9),
 }));
 
 vi.mock('@/lib/pkmn/dex', () => ({

@@ -53,6 +53,7 @@ export default async function DashboardTeamPage({ params }: PageProps) {
         rulesetId={ruleset?.id}
         rulesetName={ruleset?.name}
         baseFormat={ruleset?.base_format}
+        gen={ruleset?.gen}
         seasonId={tournament?.season_id ?? undefined}
         isDraftLeague={!!draftPool}
         initialPokemon={team.pokemon}

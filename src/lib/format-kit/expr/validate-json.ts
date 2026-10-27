@@ -1,5 +1,5 @@
-import { KEY_PATTERN, REF_NAME_PATTERN } from '../keys';
-import { escapePointerSegment } from '../patch';
+import { KEY_PATTERN, REF_NAME_PATTERN } from '@/lib/studio-core/keys';
+import { escapePointerSegment } from '@/lib/studio-core/patch';
 import { EXPR_KINDS, type ExprKind, type ExprType } from './ast';
 import { EXPR_MAX_ARGS, EXPR_MAX_SET, EXPR_SCHEMA_MAX_DEPTH, EXPR_SCHEMA_MAX_NODES, EXPR_MAX_ROUND_DIGITS } from './limits';
 import { exceededLimit, measureExpr } from './measure';

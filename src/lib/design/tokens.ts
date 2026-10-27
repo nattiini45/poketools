@@ -17,23 +17,23 @@ export const colors = {
   text: {
     primary: "#241A0C",
     secondary: "#5C4E37",
-    muted: "#8B7B5E",
+    muted: "#675940",
     inverse: "#FFF8E9",
-    link: "#B54708",
+    link: "#954506",
   },
   accent: {
-    accent: "#C05E0A",
-    accentStrong: "#8F4206",
-    blue: "#3B82F6",
-    blueHover: "#2563EB",
-    green: "#16A34A",
+    accent: "#9A4806",
+    accentStrong: "#843C05",
+    blue: "#1E4BC8",
+    blueHover: "#1A3FA6",
+    green: "#166534",
     yellow: "#EAB308",
-    danger: "#DC2626",
+    danger: "#A91B1B",
   },
   border: {
     default: "#E3D2AC",
     strong: "#C9B183",
-    focus: "#B54708",
+    focus: "#954506",
   },
 } as const;
 

@@ -9,7 +9,7 @@ import { renderWithI18n } from '@/test/i18n';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioAttachMessages } from '@/i18n/messages/format-studio/attach';
 import type { Locale } from '@/i18n/config';
-import { ltext } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { AttachPreview } from '@/lib/format-studio/editor/attach-preview';
 
 vi.mock('next/link', () => ({

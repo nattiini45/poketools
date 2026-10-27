@@ -14,11 +14,15 @@ vi.mock('@/lib/supabase/queries/format-definitions', () => ({
 vi.mock('@/lib/supabase/queries/season-formats', () => ({
   attachSeasonFormat: vi.fn(),
   detachSeasonFormat: vi.fn(),
-  getExistingRulesetIds: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
   getSeasonManualPhaseCount: vi.fn(),
+  getSeasonPresetRulesets: vi.fn(),
   getSeasonStartSignals: vi.fn(),
 }));
+// The rulesets of the rule-preset stages are made by the ruleset studio (its own tests); attach only orchestrates.
+vi.mock('@/lib/ruleset-studio/materialise', () => ({ ensurePresetRulesets: vi.fn(), discardMaterialised: vi.fn() }));
+vi.mock('@/lib/ruleset-studio/guards', () => ({ canUseDefinitions: vi.fn() }));
+vi.mock('@/lib/supabase/queries/ruleset-definitions', () => ({ resolveNamedRulesets: vi.fn() }));
 // The real compile, spied on, to see the environment attach hands it.
 vi.mock('@/lib/format-kit/compile', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/format-kit/compile')>();
@@ -30,11 +34,14 @@ import { getFormatDefinitionMeta, getFormatVersion, getLatestPublishedVersion } 
 import {
   attachSeasonFormat,
   detachSeasonFormat,
-  getExistingRulesetIds,
   getSeasonFormatSummary,
   getSeasonManualPhaseCount,
+  getSeasonPresetRulesets,
   getSeasonStartSignals,
 } from '@/lib/supabase/queries/season-formats';
+import { discardMaterialised, ensurePresetRulesets } from '@/lib/ruleset-studio/materialise';
+import { canUseDefinitions } from '@/lib/ruleset-studio/guards';
+import { resolveNamedRulesets } from '@/lib/supabase/queries/ruleset-definitions';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import {
   assertFormatTypeChangeAllowed,
@@ -51,6 +58,12 @@ const RULESET = '00000000-0000-4000-8000-000000000001';
 const STAGE_GROUPS = 'cccccccc-cccc-4ccc-8ccc-cccccccccc01';
 const STAGE_KNOCKOUT = 'cccccccc-cccc-4ccc-8ccc-cccccccccc02';
 const STAGE_OLD = 'cccccccc-cccc-4ccc-8ccc-cccccccccc03';
+const NEW_RULESET = '00000000-0000-4000-8000-0000000000cc';
+const NEW_DEFINITION = '00000000-0000-4000-8000-0000000000ee';
+const OLD_RULESET = '00000000-0000-4000-8000-0000000000dd';
+const HEAD_VERSION = '00000000-0000-4000-8000-0000000000f1';
+/** The definition a stage's named ruleset id resolves to (a legacy ruleset id is the id of its version 1). */
+const DEFINITION_OF_NAMED = '00000000-0000-4000-8000-0000000000d1';
 
 const actor = (overrides: Partial<SessionPlayer> = {}): SessionPlayer => ({
   playerId: OWNER,
@@ -143,9 +156,18 @@ beforeEach(() => {
   vi.mocked(getFormatDefinitionMeta).mockResolvedValue(definitionMeta());
   vi.mocked(getLatestPublishedVersion).mockResolvedValue(storedVersion());
   vi.mocked(getFormatVersion).mockResolvedValue(storedVersion());
-  vi.mocked(getExistingRulesetIds).mockResolvedValue(new Set());
+  vi.mocked(resolveNamedRulesets).mockResolvedValue(new Map());
+  vi.mocked(canUseDefinitions).mockResolvedValue(true);
   vi.mocked(getSeasonManualPhaseCount).mockResolvedValue(0);
   vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary);
+  vi.mocked(getSeasonPresetRulesets).mockResolvedValue({});
+  // One new ruleset per requested preset: definition NEW_DEFINITION, version NEW_RULESET (distinct per preset by suffix).
+  vi.mocked(ensurePresetRulesets).mockImplementation(async ({ presets }) => ({
+    definitionIds: new Map(presets.map((preset) => [preset, NEW_DEFINITION])),
+    versionIds: new Map(presets.map((preset) => [preset, NEW_RULESET])),
+    created: presets.length === 0 ? [] : [NEW_DEFINITION],
+  }));
+  vi.mocked(discardMaterialised).mockResolvedValue(undefined);
   vi.mocked(attachSeasonFormat).mockResolvedValue({
     replaced: false,
     stages: [
@@ -153,6 +175,7 @@ beforeEach(() => {
       { id: STAGE_GROUPS, key: 'groups' },
     ],
     removed_stage_ids: [],
+    removed_ruleset_ids: [],
   });
 });
 
@@ -240,7 +263,7 @@ describe('attachFormatToSeason: refusals, in order, with no database function ca
     expect(err).not.toBeInstanceOf(FormatStudioError);
     expect((err as Error).message).not.toContain('0000');
     expect(log).toHaveBeenCalledWith(expect.stringContaining(DEFINITION_ID));
-    expect(getExistingRulesetIds).not.toHaveBeenCalled();
+    expect(resolveNamedRulesets).not.toHaveBeenCalled();
     expect(attachSeasonFormat).not.toHaveBeenCalled();
     log.mockRestore();
   });
@@ -258,18 +281,33 @@ describe('attachFormatToSeason: refusals, in order, with no database function ca
     expect(attachSeasonFormat).not.toHaveBeenCalled();
   });
 
-  it('5. a ruleset that does not exist is an error, checked against the rulesets of the database', async () => {
+  it('5. a ruleset that does not exist (or has no published version) is an error, checked against the database', async () => {
     const version = storedVersion((spec) => {
       spec.stages[1].ruleset = { kind: 'ruleset', id: '00000000-0000-4000-8000-0000000000aa' };
     });
     vi.mocked(getLatestPublishedVersion).mockResolvedValue(version);
     const err = (await failure(attach())) as FormatStudioError;
     expect(err.params).toEqual({ first: 'ruleset_not_found' });
-    expect(getExistingRulesetIds).toHaveBeenCalledWith(['00000000-0000-4000-8000-0000000000aa']);
+    expect(resolveNamedRulesets).toHaveBeenCalledWith(['00000000-0000-4000-8000-0000000000aa']);
 
-    vi.mocked(getExistingRulesetIds).mockResolvedValue(new Set(['00000000-0000-4000-8000-0000000000aa']));
+    vi.mocked(resolveNamedRulesets).mockResolvedValue(new Map([['00000000-0000-4000-8000-0000000000aa', { definition_id: '00000000-0000-4000-8000-0000000000aa', head_version_id: HEAD_VERSION }]]));
     await attach();
     expect(attachSeasonFormat).toHaveBeenCalledTimes(1);
+  });
+
+  it('5. a ruleset the attacher may not use is format_attach_ruleset_forbidden and nothing is written', async () => {
+    const rulesetId = '00000000-0000-4000-8000-0000000000aa';
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(
+      storedVersion((spec) => {
+        spec.stages[1].ruleset = { kind: 'ruleset', id: rulesetId };
+      }),
+    );
+    vi.mocked(resolveNamedRulesets).mockResolvedValue(new Map([[rulesetId, { definition_id: DEFINITION_OF_NAMED, head_version_id: HEAD_VERSION }]]));
+    vi.mocked(canUseDefinitions).mockResolvedValue(false);
+    const err = (await failure(attach())) as FormatStudioError;
+    expect(err.code).toBe('format_attach_ruleset_forbidden');
+    expect(err.statusCode).toBe(403);
+    expect(attachSeasonFormat).not.toHaveBeenCalled();
   });
 
   it('6. a season_default stage in a league without a ruleset answers format_attach_ruleset_required with the count', async () => {
@@ -289,10 +327,12 @@ describe('attachFormatToSeason: refusals, in order, with no database function ca
         for (const stage of spec.stages) stage.ruleset = { kind: 'ruleset', id: rulesetId };
       }),
     );
-    vi.mocked(getExistingRulesetIds).mockResolvedValue(new Set([rulesetId]));
+    vi.mocked(resolveNamedRulesets).mockResolvedValue(new Map([[rulesetId, { definition_id: DEFINITION_OF_NAMED, head_version_id: HEAD_VERSION }]]));
     await attach();
     const rows = vi.mocked(attachSeasonFormat).mock.calls[0][0].stages;
-    expect(rows.map((r) => r.ruleset_id)).toEqual([rulesetId, rulesetId]);
+    // The stage names a DEFINITION; the phase pins the head VERSION that was current at attach.
+    expect(rows.map((r) => r.ruleset_id)).toEqual([HEAD_VERSION, HEAD_VERSION]);
+    expect(canUseDefinitions).toHaveBeenCalledWith(expect.objectContaining({ playerId: OWNER }), [DEFINITION_OF_NAMED]);
   });
 
   it('7. a league with a hand-made phase answers format_attach_manual_phases with the count', async () => {
@@ -371,6 +411,7 @@ describe('attachFormatToSeason: the write', () => {
         { id: STAGE_KNOCKOUT, key: 'knockout' },
       ],
       removed_stage_ids: [STAGE_OLD],
+      removed_ruleset_ids: [],
     });
     const outcome = await attach();
     expect(outcome.replaced).toBe(true);
@@ -383,10 +424,114 @@ describe('attachFormatToSeason: the write', () => {
   });
 });
 
+describe('attachFormatToSeason: rule-preset stages', () => {
+  const attach = () => attachFormatToSeason({ actor: actor(), seasonId: SEASON_ID, definitionId: DEFINITION_ID });
+  const presetVersion = (formats: [string, string] = ['gen9ou', 'gen9ou']) =>
+    storedVersion((spec) => {
+      spec.stages[0].ruleset = { kind: 'preset', preset: formats[0] };
+      spec.stages[1].ruleset = { kind: 'preset', preset: formats[1] };
+    });
+
+  it('a league without a ruleset is fine when every stage names a rule preset', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue(season({ ruleset_id: null }));
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(presetVersion());
+    await attach();
+    expect(attachSeasonFormat).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for one ruleset per distinct preset (owned by the league, recorded by the previous attach) and pins its version', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(presetVersion());
+    vi.mocked(getSeasonPresetRulesets).mockResolvedValue({ gen9ou: OLD_RULESET });
+    const outcome = await attach();
+
+    expect(ensurePresetRulesets).toHaveBeenCalledTimes(1);
+    expect(ensurePresetRulesets).toHaveBeenCalledWith({
+      presets: ['gen9ou'],
+      leagueName: 'League',
+      seasonId: SEASON_ID,
+      actorId: OWNER,
+      recorded: { gen9ou: OLD_RULESET },
+    });
+
+    const input = vi.mocked(attachSeasonFormat).mock.calls[0][0];
+    // The stages pin the VERSION; the league records the DEFINITION.
+    expect(input.stages.map((row) => row.ruleset_id)).toEqual([NEW_RULESET, NEW_RULESET]);
+    expect(input.presetRulesets).toEqual({ gen9ou: NEW_DEFINITION });
+    // The frozen stage keeps the preset pick; the row holds the created ruleset.
+    expect(input.stages[0].stage_spec.stage.ruleset).toEqual({ kind: 'preset', preset: 'gen9ou' });
+    expect(outcome.rulesets_changed).toBe(true);
+  });
+
+  it('one ruleset per format when the stages name two different ones', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(presetVersion(['gen9ou', 'gen9vgc']));
+    vi.mocked(ensurePresetRulesets).mockImplementation(async ({ presets }) => ({
+      definitionIds: new Map(presets.map((preset, i) => [preset, `00000000-0000-4000-8000-00000000020${i}`])),
+      versionIds: new Map(presets.map((preset, i) => [preset, `00000000-0000-4000-8000-00000000010${i}`])),
+      created: [],
+    }));
+    await attach();
+    expect(vi.mocked(ensurePresetRulesets).mock.calls[0][0].presets).toEqual(['gen9ou', 'gen9vgc']);
+    const input = vi.mocked(attachSeasonFormat).mock.calls[0][0];
+    expect(Object.keys(input.presetRulesets).sort()).toEqual(['gen9ou', 'gen9vgc']);
+    expect(new Set(input.stages.map((row) => row.ruleset_id)).size).toBe(2);
+  });
+
+  it('a spec without a rule-preset stage reads no recorded rulesets and creates none', async () => {
+    const outcome = await attach();
+    expect(getSeasonPresetRulesets).not.toHaveBeenCalled();
+    expect(vi.mocked(ensurePresetRulesets).mock.calls[0][0].presets).toEqual([]);
+    expect(vi.mocked(attachSeasonFormat).mock.calls[0][0].presetRulesets).toEqual({});
+    expect(outcome.rulesets_changed).toBe(false);
+  });
+
+  it('reports no change of the ruleset list when every ruleset was reused', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(presetVersion());
+    vi.mocked(ensurePresetRulesets).mockImplementation(async ({ presets }) => ({
+      definitionIds: new Map(presets.map((preset) => [preset, OLD_RULESET])),
+      versionIds: new Map(presets.map((preset) => [preset, HEAD_VERSION])),
+      created: [],
+    }));
+    const outcome = await attach();
+    expect(outcome.rulesets_changed).toBe(false);
+  });
+
+  it('reports a change of the ruleset list when the database function removed an old ruleset', async () => {
+    vi.mocked(attachSeasonFormat).mockResolvedValue({
+      replaced: true,
+      stages: [
+        { id: STAGE_GROUPS, key: 'groups' },
+        { id: STAGE_KNOCKOUT, key: 'knockout' },
+      ],
+      removed_stage_ids: [],
+      removed_ruleset_ids: [OLD_RULESET],
+    });
+    expect((await attach()).rulesets_changed).toBe(true);
+  });
+
+  it('discards the rulesets it created when the database function refuses, and rethrows', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(presetVersion());
+    vi.mocked(attachSeasonFormat).mockRejectedValue(new FormatStudioError('format_season_started'));
+    expect(codeOf(await failure(attach()))).toBe('format_season_started');
+    expect(discardMaterialised).toHaveBeenCalledWith([NEW_DEFINITION]);
+  });
+
+  it('a format the catalog does not know is a compile error and creates nothing', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(presetVersion(['gen99xx', 'gen9ou']));
+    const err = (await failure(attach())) as FormatStudioError;
+    expect(err.code).toBe('format_attach_invalid');
+    expect(err.params).toEqual({ first: 'ruleset_preset_unknown' });
+    expect(ensurePresetRulesets).not.toHaveBeenCalled();
+    expect(attachSeasonFormat).not.toHaveBeenCalled();
+  });
+});
+
 describe('detachFormatFromSeason', () => {
-  it('returns the removed stage ids', async () => {
-    vi.mocked(detachSeasonFormat).mockResolvedValue({ removed_stage_ids: [STAGE_GROUPS] });
-    await expect(detachFormatFromSeason(SEASON_ID)).resolves.toEqual({ removed_stage_ids: [STAGE_GROUPS] });
+  it('returns the removed stage ids and the rulesets the attach had created', async () => {
+    vi.mocked(detachSeasonFormat).mockResolvedValue({ removed_stage_ids: [STAGE_GROUPS], removed_ruleset_ids: [OLD_RULESET] });
+    await expect(detachFormatFromSeason(SEASON_ID)).resolves.toEqual({
+      removed_stage_ids: [STAGE_GROUPS],
+      removed_ruleset_ids: [OLD_RULESET],
+    });
     expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID);
   });
 

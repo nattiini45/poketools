@@ -14,11 +14,11 @@ import { createTranslator } from '@/i18n/core';
 import { createFormatter } from '@/i18n/format';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
 import type { ParamValue } from '@/i18n/types';
-import { hasOwn, isKey } from '../keys';
+import { hasOwn, isKey } from '@/lib/studio-core/keys';
 import { printExpr } from '../expr/printer';
 import type { Expr } from '../expr/ast';
-import { resolveLText } from '../ltext';
-import type { LText } from '../types';
+import { resolveLText, type LText } from '@/lib/studio-core/ltext';
+import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import { kindKey, type AvailableKind, type PrimitiveKind } from './kinds';
 import { manifestEntry } from './manifest';
 
@@ -176,10 +176,15 @@ const DESCRIBERS: ReadonlyMap<AvailableKind, Describer> = new Map<AvailableKind,
   ),
   d(
     'team.ruleset',
-    (n) => {
+    (n): Described | null => {
       const kind = str(n, 'kind');
       if (kind === 'season_default') return { params: {} };
       if (kind === 'ruleset') return { key: 'team_ruleset_custom', params: {} };
+      if (kind === 'preset') {
+        const preset = str(n, 'preset');
+        // An id the catalog does not know (a compile error elsewhere) is shown as written.
+        return preset === null ? null : { key: 'team_ruleset_preset', params: { preset: getRulesetPreset(preset)?.name ?? preset } };
+      }
       return null;
     },
   ),

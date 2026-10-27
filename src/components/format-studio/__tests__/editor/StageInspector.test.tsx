@@ -7,9 +7,10 @@ import { renderWithI18n } from '@/test/i18n';
 import { createTranslator } from '@/i18n/core';
 import type { Locale } from '@/i18n/config';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
+import { rulesetMessages } from '@/i18n/messages/ruleset';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
-import { MAX_RANK_STEPS, renderDiagnostic } from '@/lib/format-kit/client';
-import { PAIRING_KINDS } from '@/lib/format-studio/editor/catalog';
+import { MAX_RANK_STEPS, renderDiagnostic, withRulesetPreset } from '@/lib/format-kit/client';
+import { PAIRING_KINDS, type RulesetChoice } from '@/lib/format-studio/editor/catalog';
 import {
   addRankStep,
   setBestOf,
@@ -18,11 +19,11 @@ import {
   setRuleset,
   updateStage,
 } from '@/lib/format-studio/editor/ops';
-import { errorId } from '@/lib/format-studio/editor/targets';
+import { errorId, fieldId } from '@/lib/format-studio/editor/targets';
 import StageInspector from '../../editor/inspectors/StageInspector';
 import { compiled, esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, presetDoc, stageNameOf } from './test-helpers';
 
-const RULESETS = [{ id: 'rs-ou', name: 'OU Singles' }];
+const RULESETS: RulesetChoice[] = [{ id: 'rs-ou', name: 'OU Singles' }];
 
 function render(doc = presetDoc(), index = 0, locale: Locale = 'en', rulesets = RULESETS) {
   return renderWithI18n(
@@ -34,6 +35,7 @@ function render(doc = presetDoc(), index = 0, locale: Locale = 'en', rulesets = 
 const words = (locale: Locale) => ({
   p: createTranslator(formatStudioPrimitivesMessages, locale),
   e: createTranslator(formatStudioEditorMessages, locale),
+  r: createTranslator(rulesetMessages, locale),
 });
 
 describe('StageInspector: sections', () => {
@@ -186,12 +188,92 @@ describe('StageInspector: ruleset', () => {
     expect(html).not.toContain('Unknown ruleset');
   });
 
+  it('labels a ruleset with its version from the second version on, and links to the ruleset in the studio', () => {
+    const doc = updateStage(presetDoc(), 0, (s) => setRuleset(s, { kind: 'ruleset', id: 'rs-ou' }));
+    const html = render(doc, 0, 'en', [{ id: 'rs-ou', name: 'OU Singles', version_no: 3 }, { id: 'rs-lc', name: 'Little Cup', version_no: 1 }]);
+    expect(html).toContain('<option value="rs-ou" selected="">OU Singles v3</option>');
+    expect(html).toContain('>Little Cup</option>');
+    expect(html).toContain('href="/admin/rulesets/rs-ou"');
+    expect(html).toContain('Attaching the format pins the newest published version of this ruleset to the league.');
+    expect(html).toContain('Open the Ruleset Studio');
+  });
+
+  describe('a legacy ruleset id (an alias of a definition)', () => {
+    const WITH_ALIAS: RulesetChoice[] = [
+      { id: 'rs-ou', name: 'OU Singles', version_no: 3 },
+      { id: 'rs-lc', name: 'Little Cup', version_no: 1 },
+      { id: 'legacy-ou', name: 'OU Singles', version_no: 3, definition_id: 'rs-ou' },
+    ];
+
+    it('shows the ruleset by name, once, and links to the studio page of its definition', () => {
+      const doc = updateStage(presetDoc(), 0, (s) => setRuleset(s, { kind: 'ruleset', id: 'legacy-ou' }));
+      const html = render(doc, 0, 'en', WITH_ALIAS);
+      expect(html).toContain('<option value="legacy-ou" selected="">OU Singles v3</option>');
+      expect(html).not.toContain('value="rs-ou"');
+      expect(html).toContain('>Little Cup</option>');
+      expect(html).not.toContain('Unknown ruleset');
+      expect(html).toContain('href="/admin/rulesets/rs-ou"');
+      expect(html).toContain('Attaching the format pins the newest published version of this ruleset to the league.');
+    });
+
+    it('is not offered to a stage that names the definition itself or none', () => {
+      const named = render(updateStage(presetDoc(), 0, (s) => setRuleset(s, { kind: 'ruleset', id: 'rs-ou' })), 0, 'en', WITH_ALIAS);
+      expect(named).toContain('<option value="rs-ou" selected="">OU Singles v3</option>');
+      expect(named).not.toContain('legacy-ou');
+      expect(render(presetDoc(), 0, 'en', WITH_ALIAS)).not.toContain('legacy-ou');
+    });
+  });
+
+  it('links to the studio gallery when the stage names no stored ruleset, and prints no pin help', () => {
+    const html = render();
+    expect(html).toContain('href="/admin/rulesets"');
+    expect(html).not.toContain('pins the newest published version');
+  });
+
   it('shows a ruleset id that is not in the list as an unknown ruleset, selected, so it can be kept', () => {
     const doc = updateStage(presetDoc(), 0, (s) => setRuleset(s, { kind: 'ruleset', id: 'rs-gone' }));
     const html = render(doc);
     expect(html).toContain('<option value="rs-gone" selected="">Unknown ruleset</option>');
     const german = render(doc, 0, 'de');
     expect(german).toContain('Unbekanntes Regelwerk');
+  });
+});
+
+describe('StageInspector: rule preset', () => {
+  const presetDoc2 = (format = 'gen9doublesou') => updateStage(presetDoc(), 0, (s) => withRulesetPreset(s, format));
+
+  it.each(['en', 'de'] as const)('offers the preset kind next to the league default and the stored rulesets (%s)', (locale) => {
+    const { e } = words(locale);
+    const html = render(presetDoc(), 0, locale);
+    expect(html).toContain(`<option value="preset">${esc(e('inspector.stage.rulesetPreset'))}</option>`);
+    // Not picked: no preset picker.
+    expect(html).not.toContain(`id="${fieldId('/stages/0/ruleset/preset')}"`);
+  });
+
+  it.each(['en', 'de'] as const)('shows the picker with the chosen preset selected, grouped by source, generation and family (%s)', (locale) => {
+    const { e, r } = words(locale);
+    const html = render(presetDoc2(), 0, locale);
+    expect(html).toContain('<option value="preset" selected="">');
+    expect(html).toContain(`id="${fieldId('/stages/0/ruleset/preset')}"`);
+    expect(html).toContain('<option value="gen9doublesou" selected="">Gen 9 Doubles OU</option>');
+    expect(html).toContain(`<optgroup label="${esc(r('presetSelect.group', { source: r('presetSelect.source.showdown'), generation: 'Gen 9 (SV)', family: r('presetSelect.family.singles') }))}">`);
+    expect(html).toContain(`<optgroup label="${esc(r('presetSelect.group', { source: r('presetSelect.source.smogonDraft'), generation: 'Gen 9 (SV)', family: r('presetSelect.family.draft') }))}">`);
+    expect(html).toContain(esc(r('presetSelect.search')));
+    expect(html).toContain(esc(e('inspector.stage.presetHelp')));
+    expectLabelledControls(html);
+    expectNoLeftovers(html);
+    expectUniqueIds(html);
+  });
+
+  it('shows a preset the catalog does not know as unknown, selected, so it can be replaced', () => {
+    const doc = updateStage(presetDoc(), 0, (s) => ({ ...s, ruleset: { kind: 'preset' as const, preset: 'gen99xx' } }));
+    const html = render(doc);
+    expect(html).toContain('<option value="gen99xx" selected="">Unknown rule preset (gen99xx)</option>');
+    // The compiler's finding is tied to the select.
+    const diagnostic = compiled(doc).diagnostics.find((d) => d.code === 'ruleset_preset_unknown');
+    expect(diagnostic?.json_pointer).toBe('/stages/0/ruleset/preset');
+    expect(html).toContain(`aria-describedby="${errorId('/stages/0/ruleset/preset')}"`);
+    expect(html).toContain('aria-invalid="true"');
   });
 });
 

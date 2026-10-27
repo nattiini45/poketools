@@ -63,6 +63,7 @@ export default defineDe<typeof en>()({
     rank_step_unreachable: 'Ein Rangschritt in Stage {stage} greift nie, weil ein früherer Schritt immer entscheidet.',
     rank_duplicate_step: 'Stage {stage} wiederholt einen Rangschritt.',
     ruleset_not_found: 'Stage {stage} nutzt das Regelwerk {id}, das es nicht gibt.',
+    ruleset_preset_unknown: 'Stage {stage} nutzt das Regel-Preset {preset}, das es im Katalog nicht gibt.',
     module_duplicate: 'Das Altmodul {adapter} wurde mehrfach hinzugefügt.',
     ltext_untranslated: 'Einige Texte haben keine Übersetzung für {locale}.',
     expr_shape: 'Die Bedingung der Weiterkommens-Regel {edge} ist kein wohlgeformter Ausdruck.',

@@ -1,57 +1,85 @@
 /**
- * What deleting a league (`DELETE /api/seasons/[id]` -> `deleteSeason`, one `DELETE FROM seasons`) does to the
- * rows around it, as the database's foreign keys decide it. The league admin's Danger tab lists it.
+ * What deleting a league (`DELETE /api/seasons/[id]` -> `moveLeagueToTrash`) does to the rows around it. The league
+ * admin's Danger tab lists it. A delete is never refused for what the league still holds: the league moves to the
+ * recycle bin (`supabase/migrations/20261026091000_league_trash.sql`), the superadmin can restore it for
+ * `LEAGUE_TRASH_RETENTION_DAYS`, and after that it is gone.
  *
- * - `deleted`: every table the delete reaches through `ON DELETE CASCADE`, directly or through another cascaded
- *   table (for example `redraft_submissions` through `evolution_tracker`), grouped for the hint.
- * - `blockers`: tables whose `season_id` key has no delete action (NO ACTION / RESTRICT). While the league still
- *   has such rows the database refuses the whole delete, so they must be removed first.
- * - `unlinked`: tables whose `season_id` is `ON DELETE SET NULL`: those rows stay, without the league.
+ * The lists are the SQL inventory, grouped for the hint:
+ * - `owned` (`league_trash__inventory`, class `owned`): captured into the trash, deleted from the live tables, and
+ *   brought back by a restore. Named groups for the hint, plus tables the hint does not name.
+ * - `derived`: deleted with the league and NOT captured; statistics and ratings are recalculated without the league
+ *   after the delete and again after a restore.
+ * - `kept`: append-only logs that stay untouched (the audit log, the draft action log).
+ * - `unlinked` (`league_trash__pointers`): rows OUTSIDE the league that point into it. They stay, lose the link, and get
+ *   it back on a restore (`NOT_RELINKED`: the win-streak pointers are not re-linked; streaks are recalculated).
  *
- * Derived from the schema, not guessed: `season-delete.test.ts` parses every public migration under
- * `supabase/migrations/` and fails when a foreign key adds, drops or changes an entry here. The live check is
- * the recursive `pg_constraint` query on the local stack with league groups applied, plus a rolled-back delete of a
- * league with one phase that the database refuses with SQLSTATE 23503 (evidence R4-UI-season-delete-fk-cascades.txt).
+ * Derived from the schema, not guessed: `__tests__/season-delete.test.ts` replays the migrations, reads the LAST
+ * definition of the inventory and pointer functions, and fails when a table is added, dropped or reclassified there
+ * without this file following. `src/lib/league-trash/__tests__/inventory.test.ts` is the guard that makes the SQL
+ * inventory itself complete.
  *
  * Pure and client-safe: no reads.
  */
 
-/** The groups the hint names, in display order. */
-export const SEASON_DELETE_GROUPS = ['participants', 'groups', 'rules', 'evolution', 'tokens', 'redraft'] as const;
+/** The groups of owned tables the hint names, in display order. */
+export const SEASON_DELETE_GROUPS = [
+  'participants',
+  'groups',
+  'rules',
+  'phases',
+  'matches',
+  'draft',
+  'teams',
+  'evolution',
+  'tokens',
+  'redraft',
+  'storylines',
+  'connections',
+] as const;
 export type SeasonDeleteGroup = (typeof SEASON_DELETE_GROUPS)[number];
 
-export const SEASON_DELETE_BLOCKER_GROUPS = ['phases', 'draftPools', 'teams', 'storylines'] as const;
-export type SeasonDeleteBlocker = (typeof SEASON_DELETE_BLOCKER_GROUPS)[number];
-
-export const SEASON_DELETE_UNLINK_GROUPS = ['castSessions'] as const;
-export type SeasonDeleteUnlink = (typeof SEASON_DELETE_UNLINK_GROUPS)[number];
-
-/** Cascaded tables per hint group. */
-export const SEASON_DELETE_CASCADES: Readonly<Record<SeasonDeleteGroup, readonly string[]>> = {
+/** Owned tables per hint group. */
+export const SEASON_DELETE_OWNED: Readonly<Record<SeasonDeleteGroup, readonly string[]>> = {
   participants: ['season_participants'],
   groups: ['season_groups', 'season_group_members'],
   rules: ['format_rules', 'season_formats', 'evolution_tiers', 'draft_tier_limits', 'draft_pool_entries'],
+  phases: ['tournaments', 'tournament_participants', 'tournament_groups', 'tournament_group_members', 'rounds', 'tournament_reports'],
+  matches: [
+    'matches',
+    'games',
+    'battle_stats',
+    'match_analyses',
+    'match_prep_analyses',
+    'match_prep_teams',
+    'match_proposals',
+    'match_evolution_snapshots',
+    'epb_animation_views',
+    'broadcast_moments',
+  ],
+  draft: ['draft_pools', 'draft_participants', 'draft_slots', 'draft_picks', 'draft_replay_events', 'draft_line_restrictions'],
+  teams: ['teams'],
   evolution: ['evolution_tracker', 'evolution_events', 'evo_progress_log'],
   tokens: ['epb_token_grants', 'epb_draft_token_purchases', 'epb_comeback_token_spends'],
   redraft: ['redraft_slots', 'redraft_submissions', 'redraft_history', 'redraft_trade_requests'],
+  storylines: ['season_storylines'],
+  connections: ['resource_admins', 'discord_webhooks', 'social_integrations', 'wiki_notes', 'wiki_note_reports'],
 };
 
 /**
- * Cascaded tables the hint does not name: a baseline table the public app neither reads nor writes (spec 4.13), and
- * the internal EvoLiga kill-credit fence counter (`epb_kill_credit_epochs`, 20261021100100).
- * Listed so the schema check still accounts for every cascade.
+ * Owned tables the hint does not name: the league row itself, a baseline table the public app neither reads nor writes
+ * (spec 4.13), and the internal EvoLiga kill-credit fence counter (`epb_kill_credit_epochs`, 20261021100100).
+ * Listed so the schema check still accounts for every owned table.
  */
-export const SEASON_DELETE_UNNAMED_CASCADES: readonly string[] = ['legacy_standings', 'epb_kill_credit_epochs'];
+export const SEASON_DELETE_UNNAMED_OWNED: readonly string[] = ['seasons', 'legacy_standings', 'epb_kill_credit_epochs'];
 
-/** Tables that refuse the delete while they hold rows of the league. */
-export const SEASON_DELETE_BLOCKERS: Readonly<Record<SeasonDeleteBlocker, readonly string[]>> = {
-  phases: ['tournaments'],
-  draftPools: ['draft_pools'],
-  teams: ['teams'],
-  storylines: ['season_storylines'],
-};
+/** Tables deleted with the league and not captured: recalculated, not restored. */
+export const SEASON_DELETE_DERIVED: readonly string[] = ['aggregates', 'player_aggregates', 'aggregate_jobs', 'rating_history'];
 
-/** Tables whose rows stay, with `season_id` set to NULL. */
-export const SEASON_DELETE_UNLINKS: Readonly<Record<SeasonDeleteUnlink, readonly string[]>> = {
-  castSessions: ['cast_sessions'],
-};
+/** Append-only logs: a delete and a restore leave them untouched. */
+export const SEASON_DELETE_KEPT: readonly string[] = ['audit_log', 'draft_action_log'];
+
+/** Tables outside the league whose rows point into it; they stay, and lose the link until a restore. */
+export const SEASON_DELETE_UNLINKS: readonly string[] = ['cast_sessions', 'agent_suggestions', 'teams', 'player_streaks'];
+
+/** The unlinked tables a restore does not link again (their pointers are recalculated instead). */
+export const SEASON_DELETE_NOT_RELINKED: readonly string[] = ['player_streaks'];

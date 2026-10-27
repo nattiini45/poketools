@@ -5,7 +5,9 @@
  * Reads name their columns (the summary read never selects the spec or the seed), id lists are chunked by 50 and an
  * empty list makes no request. The writes are the two Postgres functions `format_attach_season` and
  * `format_detach_season` (one transaction each); their database signals leave this module as typed errors through
- * `mapFormatDbError`.
+ * `mapFormatDbError`. `season_formats.preset_rulesets` records the rulesets an attach created for the format's
+ * rule-preset stages ({ preset id: ruleset id }); the two functions delete the ones a re-attach or a detach
+ * leaves unused.
  */
 import 'server-only';
 
@@ -64,6 +66,27 @@ export async function getSeasonFormatSummary(seasonId: string): Promise<SeasonFo
   return data ? toSummary(data as unknown as SummaryRow) : null;
 }
 
+/**
+ * The rulesets the league's attach created for its rule-preset stages, as { preset id: ruleset id }; empty when no
+ * format is attached or it has no preset stage.
+ */
+export async function getSeasonPresetRulesets(seasonId: string): Promise<Record<string, string>> {
+  if (!isValidUuid(seasonId)) return {};
+  const { data, error } = await supabase
+    .from('season_formats')
+    .select('preset_rulesets')
+    .eq('season_id', seasonId)
+    .maybeSingle();
+  if (error) throw error;
+  const recorded = data?.preset_rulesets;
+  if (typeof recorded !== 'object' || recorded === null || Array.isArray(recorded)) return {};
+  const out: Record<string, string> = {};
+  for (const [preset, id] of Object.entries(recorded)) {
+    if (typeof id === 'string' && isValidUuid(id)) out[preset] = id;
+  }
+  return out;
+}
+
 /** The full attached row, spec and seed included. For the engine and the admin spec view only. */
 export async function getSeasonFormat(seasonId: string): Promise<SeasonFormatRow | null> {
   if (!isValidUuid(seasonId)) return null;
@@ -120,17 +143,23 @@ export async function getSeasonManualPhaseCount(seasonId: string): Promise<numbe
   return count ?? 0;
 }
 
-/** Which of `ids` are rulesets that exist. Chunks of 50; an empty (or all-malformed) list makes no request. */
-export async function getExistingRulesetIds(ids: readonly string[]): Promise<Set<string>> {
-  const found = new Set<string>();
+/**
+ * Which of the ruleset DEFINITION ids `ids` exist and have a published version, with that head version's id (what an attach
+ * pins). A definition without a published version is a draft, not a ruleset, and is absent. Chunks of 50; an empty (or
+ * all-malformed) list makes no request.
+ */
+export async function getPublishedRulesetHeads(ids: readonly string[]): Promise<Map<string, string>> {
+  const heads = new Map<string, string>();
   const unique = [...new Set(ids)].filter((id) => isValidUuid(id));
   for (let i = 0; i < unique.length; i += BATCH_IDS) {
     const chunk = unique.slice(i, i + BATCH_IDS);
-    const { data, error } = await supabase.from('rulesets').select('id').in('id', chunk);
+    const { data, error } = await supabase.from('ruleset_definitions').select('id, current_version_id').in('id', chunk);
     if (error) throw error;
-    for (const row of data ?? []) found.add(row.id);
+    for (const row of data ?? []) {
+      if (row.current_version_id !== null) heads.set(row.id, row.current_version_id);
+    }
   }
-  return found;
+  return heads;
 }
 
 /** One generated stage, as `format_attach_season` reads it (a `tournaments` row to upsert by `(season_id, key)`). */
@@ -155,12 +184,16 @@ export interface AttachRpcInput {
   specHash: string;
   seed: string;
   stages: AttachStageRow[];
+  /** { preset id: ruleset id } of the rule-preset stages; `{}` when the spec has none. */
+  presetRulesets: Readonly<Record<string, string>>;
 }
 
 export interface AttachRpcResult {
   replaced: boolean;
   stages: { id: string; key: string }[];
   removed_stage_ids: string[];
+  /** Rulesets the previous attach created that the new one no longer uses (deleted by the function). */
+  removed_ruleset_ids: string[];
 }
 
 function stringArray(value: unknown): string[] {
@@ -177,9 +210,15 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     p_spec_hash: input.specHash,
     p_seed: input.seed,
     p_stages: input.stages as unknown as Json,
+    p_preset_rulesets: input.presetRulesets as unknown as Json,
   });
   if (error) throw mapFormatDbError(error);
-  const result = (data ?? {}) as { replaced?: unknown; stages?: unknown; removed_stage_ids?: unknown };
+  const result = (data ?? {}) as {
+    replaced?: unknown;
+    stages?: unknown;
+    removed_stage_ids?: unknown;
+    removed_ruleset_ids?: unknown;
+  };
   const stages = Array.isArray(result.stages)
     ? (result.stages as Array<{ id?: unknown; key?: unknown }>).flatMap((stage) =>
         typeof stage.id === 'string' && typeof stage.key === 'string' ? [{ id: stage.id, key: stage.key }] : [],
@@ -189,17 +228,23 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     replaced: result.replaced === true,
     stages,
     removed_stage_ids: stringArray(result.removed_stage_ids),
+    removed_ruleset_ids: stringArray(result.removed_ruleset_ids),
   };
 }
 
 export interface DetachRpcResult {
   removed_stage_ids: string[];
+  /** The rulesets the attach had created that nothing points at any more (deleted by the function). */
+  removed_ruleset_ids: string[];
 }
 
-/** Remove the attached format and the phases created from it, one transaction. */
+/** Remove the attached format, the phases created from it and the rulesets it created, one transaction. */
 export async function detachSeasonFormat(seasonId: string): Promise<DetachRpcResult> {
   const { data, error } = await supabase.rpc('format_detach_season', { p_season_id: seasonId });
   if (error) throw mapFormatDbError(error);
-  const result = (data ?? {}) as { removed_stage_ids?: unknown };
-  return { removed_stage_ids: stringArray(result.removed_stage_ids) };
+  const result = (data ?? {}) as { removed_stage_ids?: unknown; removed_ruleset_ids?: unknown };
+  return {
+    removed_stage_ids: stringArray(result.removed_stage_ids),
+    removed_ruleset_ids: stringArray(result.removed_ruleset_ids),
+  };
 }

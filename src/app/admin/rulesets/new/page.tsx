@@ -1,18 +1,12 @@
-import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
-import PageContainer from '@/components/ui/PageContainer';
-import RulesetBuilder from '@/components/ruleset/RulesetBuilder';
-import { getT } from '@/i18n/server';
-import { adminToolsMessages } from '@/i18n/messages/admin-tools';
+import { redirect } from 'next/navigation';
+import { RULESETS_HREF } from '@/components/ruleset-studio/hrefs';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewRulesetPage() {
-  const t = await getT(adminToolsMessages);
-  return (
-    <SiteAdminGuard>
-      <PageContainer title={t('rulesets.createTitle')} maxWidth="md">
-        <RulesetBuilder />
-      </PageContainer>
-    </SiteAdminGuard>
-  );
+/**
+ * `/admin/rulesets/new` used to be the wizard. A new ruleset now starts from the "New ruleset" dialog on the gallery (blank,
+ * from a rule preset, from a shared ruleset, from a file), so the old address leads there.
+ */
+export default function NewRulesetPage() {
+  redirect(RULESETS_HREF);
 }

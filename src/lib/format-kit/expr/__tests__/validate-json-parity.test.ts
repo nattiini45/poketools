@@ -3,7 +3,7 @@ import type { ZodIssue } from 'zod';
 import type { Expr, ExprType } from '../ast';
 import { cloneJson, genExpr, genHostile, mutateJson, TEST_ENV, x } from '../../test-utils/gen-expr';
 import { intBetween, mulberry32, pick } from '../../test-utils/prng';
-import { escapePointerSegment } from '../../patch';
+import { escapePointerSegment } from '@/lib/studio-core/patch';
 import { exprSchemaFor } from '../schema';
 import { validateExprJson } from '../validate-json';
 

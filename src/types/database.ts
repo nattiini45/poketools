@@ -2273,6 +2273,217 @@ export type Database = {
           },
         ]
       }
+      league_trash: {
+        Row: {
+          counts: Json
+          deleted_at: string
+          deleted_by: string | null
+          deleted_by_name: string | null
+          format_type: string
+          frozen_pools: number
+          id: string
+          phase_ids: string[]
+          player_ids: string[]
+          purge_after: string
+          rebuild_pending: boolean
+          schema_version: string | null
+          season_id: string
+          season_name: string
+          unlinked: Json
+        }
+        Insert: {
+          counts?: Json
+          deleted_at?: string
+          deleted_by?: string | null
+          deleted_by_name?: string | null
+          format_type: string
+          frozen_pools?: number
+          id?: string
+          phase_ids?: string[]
+          player_ids?: string[]
+          purge_after: string
+          rebuild_pending?: boolean
+          schema_version?: string | null
+          season_id: string
+          season_name: string
+          unlinked?: Json
+        }
+        Update: {
+          counts?: Json
+          deleted_at?: string
+          deleted_by?: string | null
+          deleted_by_name?: string | null
+          format_type?: string
+          frozen_pools?: number
+          id?: string
+          phase_ids?: string[]
+          player_ids?: string[]
+          purge_after?: string
+          rebuild_pending?: boolean
+          schema_version?: string | null
+          season_id?: string
+          season_name?: string
+          unlinked?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_trash_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      league_trash_players: {
+        Row: {
+          player_id: string
+          trash_id: string
+        }
+        Insert: {
+          player_id: string
+          trash_id: string
+        }
+        Update: {
+          player_id?: string
+          trash_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_trash_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_trash_players_trash_id_fkey"
+            columns: ["trash_id"]
+            isOneToOne: false
+            referencedRelation: "league_trash"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      league_trash_point_buy_versions: {
+        Row: {
+          list_version_id: string
+          trash_id: string
+        }
+        Insert: {
+          list_version_id: string
+          trash_id: string
+        }
+        Update: {
+          list_version_id?: string
+          trash_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_trash_point_buy_versions_list_version_id_fkey"
+            columns: ["list_version_id"]
+            isOneToOne: false
+            referencedRelation: "point_buy_list_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_trash_point_buy_versions_trash_id_fkey"
+            columns: ["trash_id"]
+            isOneToOne: false
+            referencedRelation: "league_trash"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      league_trash_restore_rebuilds: {
+        Row: {
+          phase_ids: string[]
+          player_ids: string[]
+          restored_at: string
+          season_id: string
+          season_name: string
+          trash_id: string
+        }
+        Insert: {
+          phase_ids?: string[]
+          player_ids?: string[]
+          restored_at?: string
+          season_id: string
+          season_name: string
+          trash_id: string
+        }
+        Update: {
+          phase_ids?: string[]
+          player_ids?: string[]
+          restored_at?: string
+          season_id?: string
+          season_name?: string
+          trash_id?: string
+        }
+        Relationships: []
+      }
+      league_trash_rulesets: {
+        Row: {
+          ruleset_id: string
+          trash_id: string
+        }
+        Insert: {
+          ruleset_id: string
+          trash_id: string
+        }
+        Update: {
+          ruleset_id?: string
+          trash_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_trash_rulesets_ruleset_id_fkey"
+            columns: ["ruleset_id"]
+            isOneToOne: false
+            referencedRelation: "ruleset_definition_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_trash_rulesets_trash_id_fkey"
+            columns: ["trash_id"]
+            isOneToOne: false
+            referencedRelation: "league_trash"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      league_trash_tables: {
+        Row: {
+          cols: Json
+          n: number
+          rel: string
+          rows: Json
+          trash_id: string
+        }
+        Insert: {
+          cols: Json
+          n: number
+          rel: string
+          rows: Json
+          trash_id: string
+        }
+        Update: {
+          cols?: Json
+          n?: number
+          rel?: string
+          rows?: Json
+          trash_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_trash_tables_trash_id_fkey"
+            columns: ["trash_id"]
+            isOneToOne: false
+            referencedRelation: "league_trash"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       legacy_standings: {
         Row: {
           created_at: string
@@ -3737,7 +3948,185 @@ export type Database = {
           },
         ]
       }
-      rulesets: {
+      ruleset_definition_versions: {
+        Row: {
+          catalog_version: string
+          changelog: Json | null
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          definition_id: string
+          format_key: string
+          gen: number
+          id: string
+          is_doubles: boolean
+          name_text: string
+          resolved: Json
+          resolved_hash: string
+          schema_version: number
+          spec: Json
+          version_no: number
+        }
+        Insert: {
+          catalog_version: string
+          changelog?: Json | null
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          definition_id: string
+          format_key: string
+          gen: number
+          id?: string
+          is_doubles: boolean
+          name_text: string
+          resolved: Json
+          resolved_hash: string
+          schema_version: number
+          spec: Json
+          version_no: number
+        }
+        Update: {
+          catalog_version?: string
+          changelog?: Json | null
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          definition_id?: string
+          format_key?: string
+          gen?: number
+          id?: string
+          is_doubles?: boolean
+          name_text?: string
+          resolved?: Json
+          resolved_hash?: string
+          schema_version?: number
+          spec?: Json
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ruleset_definition_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ruleset_definition_versions_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ruleset_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ruleset_definitions: {
+        Row: {
+          created_at: string
+          current_draft: Json
+          current_version_id: string | null
+          description: Json | null
+          draft_rev: number
+          forked_from: string | null
+          id: string
+          kind: string
+          name: Json
+          name_text: string | null
+          owner_id: string | null
+          season_id: string | null
+          slug: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          created_at?: string
+          current_draft: Json
+          current_version_id?: string | null
+          description?: Json | null
+          draft_rev?: number
+          forked_from?: string | null
+          id?: string
+          kind?: string
+          name: Json
+          name_text?: string | null
+          owner_id?: string | null
+          season_id?: string | null
+          slug: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          created_at?: string
+          current_draft?: Json
+          current_version_id?: string | null
+          description?: Json | null
+          draft_rev?: number
+          forked_from?: string | null
+          id?: string
+          kind?: string
+          name?: Json
+          name_text?: string | null
+          owner_id?: string | null
+          season_id?: string | null
+          slug?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ruleset_definitions_current_version_fkey"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "ruleset_definition_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ruleset_definitions_forked_from_fkey"
+            columns: ["forked_from"]
+            isOneToOne: false
+            referencedRelation: "ruleset_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ruleset_definitions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ruleset_pin_backfill_log: {
+        Row: {
+          created_at: string
+          id: number
+          kind: string
+          new_ruleset_id: string
+          old_ruleset_id: string
+          step: string
+          target_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          kind: string
+          new_ruleset_id: string
+          old_ruleset_id: string
+          step: string
+          target_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          kind?: string
+          new_ruleset_id?: string
+          old_ruleset_id?: string
+          step?: string
+          target_id?: string
+        }
+        Relationships: []
+      }
+      rulesets_legacy: {
         Row: {
           added_pokemon: string[]
           banned_abilities: string[]
@@ -3808,6 +4197,7 @@ export type Database = {
           definition_id: string | null
           engine: string
           frozen_at: string
+          preset_rulesets: Json
           season_id: string
           seed: string
           spec: Json
@@ -3820,6 +4210,7 @@ export type Database = {
           definition_id?: string | null
           engine?: string
           frozen_at?: string
+          preset_rulesets?: Json
           season_id: string
           seed: string
           spec: Json
@@ -3832,6 +4223,7 @@ export type Database = {
           definition_id?: string | null
           engine?: string
           frozen_at?: string
+          preset_rulesets?: Json
           season_id?: string
           seed?: string
           spec?: Json
@@ -4087,7 +4479,7 @@ export type Database = {
             foreignKeyName: "seasons_ruleset_id_fkey"
             columns: ["ruleset_id"]
             isOneToOne: false
-            referencedRelation: "rulesets"
+            referencedRelation: "ruleset_definition_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -4573,7 +4965,7 @@ export type Database = {
             foreignKeyName: "tournaments_ruleset_id_fkey"
             columns: ["ruleset_id"]
             isOneToOne: false
-            referencedRelation: "rulesets"
+            referencedRelation: "ruleset_definition_versions"
             referencedColumns: ["id"]
           },
           {
@@ -5350,6 +5742,7 @@ export type Database = {
       format_attach_season: {
         Args: {
           p_definition_id: string
+          p_preset_rulesets?: Json
           p_season_id: string
           p_seed: string
           p_spec: Json
@@ -5358,6 +5751,10 @@ export type Database = {
           p_version_no: number
         }
         Returns: Json
+      }
+      format_delete_unused_preset_rulesets: {
+        Args: { p_kept: Json; p_recorded: Json }
+        Returns: string[]
       }
       format_detach_season: { Args: { p_season_id: string }; Returns: Json }
       format_publish_version: {
@@ -5433,6 +5830,93 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      league_trash__archive_tables: { Args: never; Returns: string[] }
+      league_trash__assert_inventory: { Args: never; Returns: undefined }
+      league_trash__capture: {
+        Args: { p_season: string; p_trash: string }
+        Returns: Json
+      }
+      league_trash__external_parents: {
+        Args: never
+        Returns: {
+          jcol: string
+          junction: string
+          parent: string
+          protection: string
+        }[]
+      }
+      league_trash__insert_archive_rows: {
+        Args: { p_step: number; p_trash_id: string }
+        Returns: number
+      }
+      league_trash__insert_rows: {
+        Args: {
+          p_defer: string[]
+          p_filter: string
+          p_rel: string
+          p_rows: Json
+          p_snapshot_cols: Json
+        }
+        Returns: number
+      }
+      league_trash__inventory: {
+        Args: never
+        Returns: {
+          cls: string
+          pred: string
+          rel: string
+        }[]
+      }
+      league_trash__pointers: {
+        Args: never
+        Returns: {
+          col: string
+          parent: string
+          pred: string
+          rel: string
+          relink: boolean
+        }[]
+      }
+      league_trash__protect: { Args: { p_trash: string }; Returns: undefined }
+      league_trash__restore_plan: {
+        Args: never
+        Returns: {
+          defer: string[]
+          filter: string
+          rel: string
+          step: number
+        }[]
+      }
+      league_trash__shift: {
+        Args: { p_rel: string; p_row: Json; p_shift: string }
+        Returns: Json
+      }
+      league_trash__shift_col: {
+        Args: { p_col: string; p_row: Json; p_shift: string }
+        Returns: Json
+      }
+      league_trash__x: { Args: { p_pred: string }; Returns: string }
+      league_trash_delete: {
+        Args: { p_actor: string; p_retention_days: number; p_season_id: string }
+        Returns: Json
+      }
+      league_trash_expire: {
+        Args: { p_limit?: number; p_now?: string }
+        Returns: Json
+      }
+      league_trash_rebuild_done: {
+        Args: { p_trash_id: string }
+        Returns: boolean
+      }
+      league_trash_restore: {
+        Args: { p_now?: string; p_trash_id: string }
+        Returns: Json
+      }
+      league_trash_restore_rebuild_done: {
+        Args: { p_season_id: string }
+        Returns: boolean
+      }
+      league_trash_schema_version: { Args: never; Returns: string }
       match_in_test_season: { Args: { p_match_id: string }; Returns: boolean }
       merge_move_counts: {
         Args: { existing: Json; incoming: Json }
@@ -5509,6 +5993,28 @@ export type Database = {
           p_player_deltas: Json
         }
         Returns: string
+      }
+      ruleset_fold_ids: { Args: { p_names: string[] }; Returns: string[] }
+      ruleset_publish_version: {
+        Args: {
+          p_actor: string
+          p_catalog_version: string
+          p_changelog: Json
+          p_content_hash: string
+          p_definition_id: string
+          p_expected_rev: number
+          p_format_key: string
+          p_gen: number
+          p_is_doubles: boolean
+          p_resolved: Json
+          p_resolved_hash: string
+          p_schema_version: number
+          p_spec: Json
+        }
+        Returns: {
+          out_version_id: string
+          out_version_no: number
+        }[]
       }
       season_group__has_live_pool: {
         Args: { p_group_id: string }

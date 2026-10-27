@@ -117,6 +117,7 @@ export default defineDe<typeof en>()({
     },
     team_ruleset: 'Die Teams folgen dem Regelwerk der Saison.',
     team_ruleset_custom: 'Die Teams folgen einem bestimmten Regelwerk.',
+    team_ruleset_preset: 'Die Teams folgen dem Regel-Preset {preset}.',
     score_match: 'Punkte: Sieg {win}, Niederlage {loss}, Freilos {bye}.',
     rank_metric: 'Gereiht wird nach der Kennzahl {metric} ({direction}).',
     rank_head_to_head: 'Gleichstände werden nach dem direkten Vergleich entschieden ({scope}).',
@@ -202,6 +203,7 @@ export default defineDe<typeof en>()({
     pairing: 'Paarung',
     series: 'Spiellänge',
     ruleset: 'Regelwerk',
+    preset: 'Regel-Preset',
     doubles: 'Doppel',
     players_per_match: 'Spieler pro Spiel',
     scoring: 'Wertung',
@@ -287,6 +289,7 @@ export default defineDe<typeof en>()({
     kind_stage: 'Eine Stage',
     kind_season_default: 'Standard der Saison',
     kind_ruleset: 'Bestimmtes Regelwerk',
+    kind_preset: 'Regel-Preset',
   },
   level: {
     auto: 'Automatisch',

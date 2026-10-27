@@ -37,6 +37,16 @@ page no longer exists — non-EPB leagues render the sakura park, and the
 DOM-only fallback renders `DefaultWorld`
 (`src/components/world/default/DefaultWorld.tsx`, anchored sections, not tabs).
 
+**EvoLiga `#roster` price groups.** The point-buy list on the EvoLiga roster
+section is filtered by price group: `PriceGroupBar`
+(`src/components/world/evoliga/`) shows an "All" pill and one toggle pill per
+distinct displayed group, in the ladder colours, each with its line count
+(`priceGroupLineCounts`, `src/lib/evolution/point-buy-display.ts`; stored groups
+that share a label count and match together). A click on the active pill clears
+the filter, a group without lines is disabled unless it is the selected one, and
+the selected pill keeps an ink ring so the state never rides on colour alone. The
+filter composes with the search and the sort (`filterAndSortRosterEntries`).
+
 **League hub.** The world keeps its anchored sections; the league overview
 (standings, matches, group tables, playoff brackets, phases, insights, rules,
 and Kale reports behind `ENABLE_KALE_CABBAGE`) is a tabbed panel INSIDE

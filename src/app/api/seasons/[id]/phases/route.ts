@@ -17,6 +17,7 @@ import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { buildLeaguePhase, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { expireSeasonReads } from '@/lib/revalidation';
+import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 
@@ -87,6 +88,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Names are unique per league (API-only: the table has no constraint).
     // Checked before anything is shifted, so a refusal leaves the league as is.
     assertPhaseNameFree(body.name, existing);
+
+    // The ruleset is a pin the caller must be allowed to use; refused here for the same reason.
+    await assertRulesetUsableForCreate(admin, body.ruleset_id);
 
     // Positions run from the highest stage_order, not from the phase count: a
     // league whose middle phase was deleted has a gap, and counting phases

@@ -74,7 +74,10 @@ const SCRIPT_TEST_TIMEOUT_MS = 60_000;
 export default defineConfig({
   plugins: [react()],
   test: {
+    // Node for the whole suite (fast). A component test that needs a DOM opts in with a `@vitest-environment jsdom`
+    // docblock on its first lines (docs/dependencies.md, "DOM tests"); the setup file unmounts what it rendered.
     environment: 'node',
+    setupFiles: ['./src/test/dom-setup.ts'],
     coverage: {
       provider: 'v8',
       include: [

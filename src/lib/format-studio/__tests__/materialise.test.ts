@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { CURRENT_ENV, PRESETS, compile, ltext, type CountRange, type FormatDefinition, type SeriesOverride, type Stage } from '@/lib/format-kit';
+import {
+  CURRENT_ENV,
+  PRESETS,
+  compile,
+  type CountRange,
+  type FormatDefinition,
+  type SeriesOverride,
+  type Stage,
+} from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';
 import { STAGE_NAME_MAX_CHARS, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
 
@@ -225,18 +234,48 @@ describe('planStages', () => {
   });
 
   describe('rulesets', () => {
-    it('uses the league ruleset for a season_default stage and the named one otherwise', () => {
+    // A stage names a stored ruleset by its DEFINITION id; the phase pins the definition's head VERSION that attach resolved.
+    const HEAD_VERSION = '00000000-0000-4000-8000-0000000000e1';
+    const namedVersions = new Map([[RULESET_EXPLICIT, HEAD_VERSION]]);
+
+    it('uses the league pin for a season_default stage and the head version of the named ruleset otherwise', () => {
       const definition = preset('cup');
       definition.stages[1].ruleset = { kind: 'ruleset', id: RULESET_EXPLICIT };
-      const { stages } = plan(definition, { seasonRulesetId: RULESET_SEASON }, 16);
-      expect(stages.map((s) => s.ruleset_id)).toEqual([RULESET_SEASON, RULESET_EXPLICIT]);
+      const { stages } = plan(definition, { seasonRulesetId: RULESET_SEASON, namedRulesetVersionIds: namedVersions }, 16);
+      expect(stages.map((s) => s.ruleset_id)).toEqual([RULESET_SEASON, HEAD_VERSION]);
     });
 
     it('needs no league ruleset when every stage names one', () => {
       const definition = preset('cup');
       for (const stage of definition.stages) stage.ruleset = { kind: 'ruleset', id: RULESET_EXPLICIT };
-      const { stages } = plan(definition, { seasonRulesetId: null }, 16);
-      expect(stages.map((s) => s.ruleset_id)).toEqual([RULESET_EXPLICIT, RULESET_EXPLICIT]);
+      const { stages } = plan(definition, { seasonRulesetId: null, namedRulesetVersionIds: namedVersions }, 16);
+      expect(stages.map((s) => s.ruleset_id)).toEqual([HEAD_VERSION, HEAD_VERSION]);
+    });
+
+    it('is a programming error when the head version of a named ruleset was not resolved', () => {
+      const definition = preset('cup');
+      definition.stages[1].ruleset = { kind: 'ruleset', id: RULESET_EXPLICIT };
+      expect(() => plan(definition, { seasonRulesetId: RULESET_SEASON }, 16)).toThrow('has no ruleset');
+    });
+
+    it('points a rule-preset stage at the ruleset row of its preset, without a league ruleset', () => {
+      const definition = preset('cup');
+      definition.stages[0].ruleset = { kind: 'preset', preset: 'gen9ou' };
+      definition.stages[1].ruleset = { kind: 'preset', preset: 'gen9vgc' };
+      const presetRulesetIds = new Map([
+        ['gen9ou', RULESET_EXPLICIT],
+        ['gen9vgc', RULESET_SEASON],
+      ]);
+      const { stages } = plan(definition, { seasonRulesetId: null, presetRulesetIds }, 16);
+      expect(stages.map((s) => s.ruleset_id)).toEqual([RULESET_EXPLICIT, RULESET_SEASON]);
+      // The frozen stage keeps the pick, not the row.
+      expect(stages[0].stage_spec.stage.ruleset).toEqual({ kind: 'preset', preset: 'gen9ou' });
+    });
+
+    it('does not map a rule-preset stage whose ruleset row is missing (the caller creates it first)', () => {
+      const definition = preset('cup');
+      for (const stage of definition.stages) stage.ruleset = { kind: 'preset', preset: 'gen9ou' };
+      expect(() => plan(definition, { seasonRulesetId: RULESET_SEASON }, 16)).toThrow(/has no ruleset/);
     });
 
     it('does not map a season_default stage without a league ruleset (the caller refuses first)', () => {

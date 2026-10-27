@@ -8,8 +8,27 @@ import type {
 } from '@/types/team';
 import type { Ruleset, TeamConstraints, TierKey } from '@/types/ruleset';
 import type { CoreTriple } from '@/types/season';
-import { getSpecies, getMove, getItem, getAbility, isFullyEvolved, isLegendary } from './dex';
+import {
+  getSpecies,
+  getMove,
+  getItem,
+  getAbility,
+  getNationalSpecies,
+  getNationalMove,
+  getNationalItem,
+  getNationalAbility,
+  getRawEntity,
+  type RawEntityKind,
+  isFullyEvolved,
+  isLegendary,
+} from './dex';
+import { toID } from './i18n/id';
 import { compareTier, computeEvioliteBannedSpecies, normalizeTier } from './tiers';
+import type { ResolvedList } from '@/lib/ruleset-kit/types';
+
+/** The ids of the two clauses the validator enforces (`./clauses.ts`). */
+const SPECIES_CLAUSE = 'speciesclause';
+const ITEM_CLAUSE = 'itemclause';
 
 /**
  * Issues carry an English `issue` (kept for the AI agent tools and logs) plus a
@@ -84,9 +103,56 @@ function asContext(
   return arg;
 }
 
+/** What the validator reads of a resolved move, item or ability: its display name (the id is `toID` of it). */
+interface Resolved {
+  name: string;
+}
+
+/** A membership test for a resolved list: not banned in block mode, listed in allow mode. */
+function allowedBy(list: ResolvedList): (id: string) => boolean {
+  const ids = new Set(list.ids);
+  return list.mode === 'block' ? (id) => !ids.has(id) : (id) => ids.has(id);
+}
+
+type ListKind = 'species' | 'moves' | 'items' | 'abilities';
+
+/** The issue codes of a category: what a block list reports and what an allowlist reports. */
+const LIST_ISSUE: Record<
+  ListKind,
+  { banned: 'species_banned' | 'move_banned' | 'item_banned' | 'ability_banned'; notAllowed: 'species_not_allowed' | 'move_not_allowed' | 'item_not_allowed' | 'ability_not_allowed'; plural: string; param: 'species' | 'move' | 'item' | 'ability' }
+> = {
+  species: { banned: 'species_banned', notAllowed: 'species_not_allowed', plural: 'Pokémon', param: 'species' },
+  moves: { banned: 'move_banned', notAllowed: 'move_not_allowed', plural: 'moves', param: 'move' },
+  items: { banned: 'item_banned', notAllowed: 'item_not_allowed', plural: 'items', param: 'item' },
+  abilities: { banned: 'ability_banned', notAllowed: 'ability_not_allowed', plural: 'abilities', param: 'ability' },
+};
+
+/**
+ * The issue for an entity the ruleset rules out: a block list reports it as banned, an allowlist as not on the list of
+ * allowed entries.
+ */
+function listIssue(kind: ListKind, mode: ResolvedList['mode'], index: number, speciesName: string, entityName: string): SetIssue {
+  const { banned, notAllowed, plural, param } = LIST_ISSUE[kind];
+  return mode === 'block'
+    ? { pokemon_index: index, species: speciesName, issue: `${entityName} is banned`, severity: 'error', ...codedIssue(banned, { [param]: entityName }) }
+    : {
+        pokemon_index: index,
+        species: speciesName,
+        issue: `${entityName} is not on this ruleset's list of allowed ${plural}`,
+        severity: 'error',
+        ...codedIssue(notAllowed, { [param]: entityName }),
+      };
+}
+
 /**
  * Validate a team (array of PokemonSet) against a Ruleset.
  * Returns a granular result with per-set and team-wide issues.
+ *
+ * What is enforced comes from `ruleset.rules`, the frozen effective rules of the pinned version (dex ids, not names):
+ * the ban lists of the four categories, or an allowlist in place of a ban list (only the listed entries are legal), the
+ * Species Clause and the Item Clause (the only clauses the app enforces; every other clause is informational), the
+ * shared-type rule and the team constraints. A ruleset whose universe is `national` resolves species, moves, items and
+ * abilities in the National Dex of its generation, so a Mega Evolution or a past move is a legal entry there.
  *
  * The 3rd argument may be either a `TeamValidationContext` or a legacy
  * `string[]` of drafted Pokémon (kept for backwards compat).
@@ -110,13 +176,33 @@ export function validateTeam(
   }
 
   // ── Per-set validation ─────────────────────────────────────────────
-  const gen = Number(ruleset.base_format.replace(/\D/g, '')) || 9;
+  const gen = ruleset.gen;
+  const rules = ruleset.rules;
+  const national = rules.universe === 'national';
+  const speciesAllowed = allowedBy(rules.pokemon);
+  const movesAllowed = allowedBy(rules.moves);
+  const itemsAllowed = allowedBy(rules.items);
+  const abilitiesAllowed = allowedBy(rules.abilities);
+  // An entry the ruleset's allowlist names is legal whatever the dex calls it: a roster lists the unreleased Mega Stones
+  // and Mega Evolutions that the dex files under `Future`, which neither universe resolves (the Studio's known ids
+  // widen the same way). Without this such an entry would be an unknown one and would skip the allowlist check.
+  const resolver = <T extends Resolved>(kind: RawEntityKind, list: ResolvedList, inUniverse: (name: string) => T | undefined) => {
+    const listed = list.mode === 'allow' ? new Set(list.ids) : null;
+    return (name: string): T | undefined =>
+      inUniverse(name) ?? (listed?.has(toID(name)) ? (getRawEntity(kind, name, gen) as T | undefined) : undefined);
+  };
+  const resolveSpecies = resolver('species', rules.pokemon, (name) => (national ? getNationalSpecies(name, gen) : getSpecies(name, gen)));
+  const resolveMove = resolver<Resolved>('moves', rules.moves, (name) => (national ? getNationalMove(name, gen) : getMove(name, gen)));
+  const resolveItem = resolver<Resolved>('items', rules.items, (name) => (national ? getNationalItem(name, gen) : getItem(name, gen)));
+  const resolveAbility = resolver<Resolved>('abilities', rules.abilities, (name) =>
+    national ? getNationalAbility(name, gen) : getAbility(name, gen),
+  );
 
   for (let i = 0; i < pokemon.length; i++) {
     const set = pokemon[i];
 
     // Species existence
-    const species = getSpecies(set.species, gen);
+    const species = resolveSpecies(set.species);
     if (!species) {
       issues.push({
         pokemon_index: i,
@@ -129,14 +215,8 @@ export function validateTeam(
     }
 
     // Banned Pokémon
-    if (ruleset.bans.pokemon.some(b => b.toLowerCase() === species.name.toLowerCase())) {
-      issues.push({
-        pokemon_index: i,
-        species: species.name,
-        issue: `${species.name} is banned`,
-        severity: 'error',
-        ...codedIssue('species_banned', { species: species.name }),
-      });
+    if (!speciesAllowed(toID(species.name))) {
+      issues.push(listIssue('species', rules.pokemon.mode, i, species.name, species.name));
     }
 
     // Move validation
@@ -147,7 +227,7 @@ export function validateTeam(
       issues.push({ pokemon_index: i, species: species.name, issue: 'Cannot have more than 4 moves', severity: 'error', ...codedIssue('max_moves') });
     }
     for (const moveName of set.moves) {
-      const move = getMove(moveName, gen);
+      const move = resolveMove(moveName);
       if (!move) {
         issues.push({
           pokemon_index: i,
@@ -156,20 +236,14 @@ export function validateTeam(
           severity: 'error',
           ...codedIssue('unknown_move', { move: moveName }),
         });
-      } else if (ruleset.bans.moves.some(b => b.toLowerCase() === move.name.toLowerCase())) {
-        issues.push({
-          pokemon_index: i,
-          species: species.name,
-          issue: `${move.name} is banned`,
-          severity: 'error',
-          ...codedIssue('move_banned', { move: move.name }),
-        });
+      } else if (!movesAllowed(toID(move.name))) {
+        issues.push(listIssue('moves', rules.moves.mode, i, species.name, move.name));
       }
     }
 
     // Item validation
     if (set.item) {
-      const item = getItem(set.item, gen);
+      const item = resolveItem(set.item);
       if (!item) {
         issues.push({
           pokemon_index: i,
@@ -178,20 +252,14 @@ export function validateTeam(
           severity: 'warning',
           ...codedIssue('unknown_item', { item: set.item }),
         });
-      } else if (ruleset.bans.items.some(b => b.toLowerCase() === item.name.toLowerCase())) {
-        issues.push({
-          pokemon_index: i,
-          species: species.name,
-          issue: `${item.name} is banned`,
-          severity: 'error',
-          ...codedIssue('item_banned', { item: item.name }),
-        });
+      } else if (!itemsAllowed(toID(item.name))) {
+        issues.push(listIssue('items', rules.items.mode, i, species.name, item.name));
       }
     }
 
     // Ability validation
     if (set.ability) {
-      const ability = getAbility(set.ability, gen);
+      const ability = resolveAbility(set.ability);
       if (!ability) {
         issues.push({
           pokemon_index: i,
@@ -200,14 +268,8 @@ export function validateTeam(
           severity: 'warning',
           ...codedIssue('unknown_ability', { ability: set.ability }),
         });
-      } else if (ruleset.bans.abilities.some(b => b.toLowerCase() === ability.name.toLowerCase())) {
-        issues.push({
-          pokemon_index: i,
-          species: species.name,
-          issue: `${ability.name} is banned`,
-          severity: 'error',
-          ...codedIssue('ability_banned', { ability: ability.name }),
-        });
+      } else if (!abilitiesAllowed(toID(ability.name))) {
+        issues.push(listIssue('abilities', rules.abilities.mode, i, species.name, ability.name));
       }
     }
 
@@ -238,10 +300,10 @@ export function validateTeam(
   }
 
   // ── Clause checks ──────────────────────────────────────────────────
-  if (ruleset.clauses.includes('Species Clause')) {
+  if (rules.clauses.includes(SPECIES_CLAUSE)) {
     const seen = new Map<string, number>();
     for (let i = 0; i < pokemon.length; i++) {
-      const species = getSpecies(pokemon[i].species, gen);
+      const species = resolveSpecies(pokemon[i].species);
       if (!species) continue;
       // Species Clause keys on base species (e.g. Rotom-Wash → Rotom)
       const baseSpecies = species.baseSpecies ?? species.name;
@@ -259,7 +321,7 @@ export function validateTeam(
   }
 
   // Duplicate item check (Item Clause — not standard in most formats, but supported)
-  if (ruleset.clauses.includes('Item Clause')) {
+  if (rules.clauses.includes(ITEM_CLAUSE)) {
     const seenItems = new Map<string, number>();
     for (let i = 0; i < pokemon.length; i++) {
       if (!pokemon[i].item) continue;
@@ -277,11 +339,11 @@ export function validateTeam(
   }
 
   // ── Shared type check (relaxed monotype) ─────────────────────────
-  if (ruleset.min_shared_type_pct > 0) {
-    const required = Math.round(pokemon.length * ruleset.min_shared_type_pct / 100);
+  if (rules.min_shared_type_pct > 0) {
+    const required = Math.round(pokemon.length * rules.min_shared_type_pct / 100);
     const typeCounts = new Map<string, number>();
     for (const set of pokemon) {
-      const species = getSpecies(set.species, gen);
+      const species = resolveSpecies(set.species);
       if (!species) continue;
       for (const t of species.types) {
         typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
@@ -293,12 +355,12 @@ export function validateTeam(
       const bestType = counts.find(([, c]) => c === bestCount)?.[0] ?? 'any';
       teamIssues.push({
         issue:
-          `Shared Type rule: at least ${required} of ${pokemon.length} Pokémon must share a type (${ruleset.min_shared_type_pct}%), ` +
+          `Shared Type rule: at least ${required} of ${pokemon.length} Pokémon must share a type (${rules.min_shared_type_pct}%), ` +
           `but the most common type (${bestType}) only covers ${bestCount}`,
         ...codedIssue('shared_type', {
           required,
           total: pokemon.length,
-          pct: ruleset.min_shared_type_pct,
+          pct: rules.min_shared_type_pct,
           type: bestType,
           covered: bestCount,
         }),
@@ -307,10 +369,10 @@ export function validateTeam(
   }
 
   // ── Team Constraints engine ───────────────────────────────────────
-  if (ruleset.team_constraints) {
+  if (rules.team_constraints) {
     enforceTeamConstraints(
       pokemon,
-      ruleset.team_constraints,
+      rules.team_constraints,
       gen,
       ctx.playerCore ?? null,
       issues,

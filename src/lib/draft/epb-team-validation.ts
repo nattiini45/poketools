@@ -11,6 +11,7 @@ import { codedIssue, validateTeam } from '@/lib/pkmn/validation';
 import { getSpecies } from '@/lib/pkmn/dex';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { PokemonSet, TeamValidationResult } from '@/types/team';
+import { rulesFromBans } from '@/lib/ruleset-kit/effective';
 import type { Ruleset } from '@/types/ruleset';
 import type { TeraRules } from '@/types/format-rules';
 import { DEFAULT_TERA_RULES, DEFAULT_BANNED_MOVES, DEFAULT_BANNED_ITEMS } from '@/types/format-rules';
@@ -124,9 +125,14 @@ function buildEpbRuleset(bannedMoves: string[], bannedItems: string[]): Ruleset 
       abilities: [],
     },
     additions: { pokemon: [] },
+    allow: { pokemon: null, moves: null, items: null, abilities: null },
     custom_rules_string: '',
     min_shared_type_pct: 0,
     team_constraints: null,
+    gen: 9,
+    universe: 'standard',
+    rules: rulesFromBans({ gen: 9, formatKey: 'gen9', clauses: ['Item Clause'], bans: { moves: bannedMoves, items: bannedItems } }),
+    version: null,
     created_by: null,
     created_at: '',
     updated_at: '',

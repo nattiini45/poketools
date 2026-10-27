@@ -13,7 +13,7 @@
  * text, so a cached result is locale-free; `render.ts` produces sentences after the read.
  */
 import type { FormatCapabilities } from '@/lib/season/format-capabilities';
-import { contentHash, deepFreeze, inspectJson, type InspectResult } from '../json';
+import { contentHash, deepFreeze, inspectJson, type InspectResult } from '@/lib/studio-core/json';
 import type { SchemaIssueCode, ValidationResult } from '../issues';
 import type { FormatDefinition } from '../types';
 import { deriveCapabilities } from './capabilities';

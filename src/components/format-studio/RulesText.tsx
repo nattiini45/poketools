@@ -7,7 +7,8 @@ import { createTranslator } from '@/i18n/core';
 import { useLocale, useT } from '@/i18n/client';
 import { formatStudioAdminMessages } from '@/i18n/messages/format-studio/admin';
 import { formatStudioDescribeMessages } from '@/i18n/messages/format-studio/describe';
-import { describeDefinition, type FormatDefinition, type Locale, type StagePlan } from '@/lib/format-kit/client';
+import { describeDefinition, type FormatDefinition, type StagePlan } from '@/lib/format-kit/client';
+import type { Locale } from '@/i18n/config';
 import { cn } from '@/lib/utils/cn';
 import { Heading, childLevel, type HeadingLevel } from './headingLevel';
 

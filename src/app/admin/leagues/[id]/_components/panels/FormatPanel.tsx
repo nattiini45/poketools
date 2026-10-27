@@ -11,6 +11,7 @@ import { loadAttachCandidates } from '@/lib/format-studio/attach-candidates';
 import { loadLeagueFormat } from '@/lib/format-studio/loader';
 import { loadLeagueFormatState } from '@/lib/format-studio/readiness-loader';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
+import { getRulesetPinInfo } from '@/lib/ruleset-studio/pin-info.server';
 import type { LeagueAdminPanelContext } from './context';
 
 /**
@@ -24,7 +25,9 @@ import type { LeagueAdminPanelContext } from './context';
  * A custom league adds two blocks above the outline: its readiness checklist and the attach panel (`#format-attach`),
  * where a published format is chosen, previewed and attached. They read in the same wave as the outline: the attached
  * format and the start signals (`loadLeagueFormatState`), and the formats this admin may attach
- * (`loadAttachCandidates`, for the live player). Only plain props reach the client: no spec, no seed, no player row.
+ * (`loadAttachCandidates`, for the live player). The attach preview names the rulesets the stages use ("Ruleset Spring OU v2"):
+ * the format detail it loads carries the labels of the stored rulesets the spec names, and the league's own pin is a prop. Only plain props reach the client: no spec, no seed, no
+ * player row.
  */
 export async function formatPanel(ctx: LeagueAdminPanelContext) {
   if (ctx.league.format_type === 'custom') return customFormatPanel(ctx);
@@ -60,13 +63,15 @@ async function readOnlyFormatPanel({ id, league, tabLink }: LeagueAdminPanelCont
   );
 }
 
-async function customFormatPanel({ id, league }: LeagueAdminPanelContext) {
+async function customFormatPanel({ id, league, playerId, isSiteAdmin }: LeagueAdminPanelContext) {
+  const viewer = { playerId, isAdmin: isSiteAdmin };
   // The page gate already decided who may open this tab; the live player only scopes the picker's formats.
   const access = await getLiveAccess();
-  const [result, state, candidates, tStudio, tAttach] = await Promise.all([
+  const [result, state, candidates, pin, tStudio, tAttach] = await Promise.all([
     loadLeagueFormat(league),
     loadLeagueFormatState(league),
     access?.player ? loadAttachCandidates(access.player) : Promise.resolve({ items: [], capped: false }),
+    getRulesetPinInfo(league.ruleset_id, viewer),
     getT(formatStudioAdminMessages),
     getT(formatStudioAttachMessages),
   ]);
@@ -80,6 +85,7 @@ async function customFormatPanel({ id, league }: LeagueAdminPanelContext) {
           seasonId={id}
           started={state?.started ?? false}
           rulesetId={league.ruleset_id}
+          seasonRuleset={pin === null ? null : { name: pin.name, version_no: pin.version_no }}
           seasonLanguage={league.language}
           manualPhaseCount={state?.manualPhaseCount ?? 0}
           attached={state?.attached ?? null}

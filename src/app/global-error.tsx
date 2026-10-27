@@ -68,7 +68,7 @@ export default function GlobalError({
           </div>
           <button
             onClick={() => reset()}
-            className="px-4 py-2 rounded-lg bg-[#C05E0A] text-[#FFF8E9] font-semibold text-sm hover:bg-[#8F4206] transition-colors"
+            className="px-4 py-2 rounded-lg bg-[#9A4806] text-[#FFF8E9] font-semibold text-sm hover:bg-[#843C05] transition-colors"
           >
             {copy.retry}
           </button>

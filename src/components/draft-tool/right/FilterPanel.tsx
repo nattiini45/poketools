@@ -47,7 +47,8 @@ import MoveFilter from './filters/MoveFilter';
 import PriceFilter from './filters/PriceFilter';
 import StatFilter from './filters/StatFilter';
 import TypeFilter from './filters/TypeFilter';
-import { FOCUS_RING, type FilterSectionProps } from './filters/types';
+import { type FilterSectionProps } from './filters/types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 import UtilityFilter from './filters/UtilityFilter';
 
 export interface FilterPanelProps {
@@ -210,7 +211,7 @@ export function FilterSheetBody({ view, dispatch, ix, names, dl, banned, count, 
           type="button"
           onClick={onClose}
           className={cn(
-            'ml-auto min-h-[44px] rounded-poke-md bg-[var(--draft-accent,var(--poke-accent))] px-4 text-sm font-semibold text-[var(--poke-surface)] hover:brightness-110',
+            'ml-auto min-h-[44px] rounded-poke-md bg-[var(--draft-accent-fill,var(--poke-accent))] px-4 text-sm font-semibold text-[var(--poke-surface)] hover:brightness-110',
             FOCUS_RING,
           )}
         >

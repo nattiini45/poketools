@@ -138,3 +138,81 @@ describe('listSpeciesForFormat', () => {
     });
   });
 });
+
+describe('listSpeciesForFormat: the National Dex universe', () => {
+  const standard = listSpeciesForFormat(9, 'gen9ou');
+  const natdex = listSpeciesForFormat(9, 'gen9nationaldex');
+
+  it('lists the species the generation dropped, which the standard universe hides', () => {
+    expect(byName(standard, 'Genesect')).toBeUndefined();
+    expect(byName(standard, 'Tapu Koko')).toBeUndefined();
+    expect(byName(natdex, 'Genesect')).toBeDefined();
+    expect(byName(natdex, 'Tapu Koko')).toBeDefined();
+    expect(natdex.length).toBeGreaterThan(standard.length + 300);
+  });
+
+  it('uses the National Dex tier and bans the Uber and AG past species too', () => {
+    expect(byName(natdex, 'Genesect')?.tier).toBe('Uber');
+    expect(byName(natdex, 'Genesect')?.legal).toBe(false);
+    expect(byName(natdex, 'Xerneas')?.legal).toBe(false);
+    expect(byName(natdex, 'Tapu Koko')?.legal).toBe(true);
+    expect(byName(natdex, 'Garchomp')?.legal).toBe(true);
+    // Mega Evolutions are battle-only formes and are never listed as team members.
+    expect(natdex.some((p) => p.name.endsWith('-Mega'))).toBe(false);
+  });
+});
+
+describe('listSpeciesForFormat: the draft and Little Cup presets', () => {
+  it('a Standard Draft bans nobody: every species of the generation is legal', () => {
+    const list = listSpeciesForFormat(9, 'gen9draft');
+    expect(list.length).toBeGreaterThan(500);
+    expect(list.every((p) => p.legal)).toBe(true);
+    expect(byName(list, 'Koraidon')?.legal).toBe(true);
+  });
+
+  it('the gen 3 draft bans the Uber tier species of the gen 3 mod', () => {
+    const list = listSpeciesForFormat(3, 'gen3draft');
+    expect(byName(list, 'Mewtwo')?.legal).toBe(false);
+    expect(byName(list, 'Rayquaza')?.legal).toBe(false);
+    expect(byName(list, 'Blissey')?.legal).toBe(true);
+  });
+
+  it('the National Dex draft lists past species and keeps them all legal', () => {
+    const list = listSpeciesForFormat(9, 'gen9natdexdraft');
+    expect(byName(list, 'Genesect')?.legal).toBe(true);
+    expect(byName(list, 'Tapu Koko')?.legal).toBe(true);
+  });
+
+  it('the NatDex LC Draft allows only first stages that have an evolution', () => {
+    const list = listSpeciesForFormat(9, 'gen9natdexlcdraft');
+    expect(byName(list, 'Pichu')?.legal).toBe(true);
+    expect(byName(list, 'Dratini')?.legal).toBe(true);
+    expect(byName(list, 'Pikachu')?.legal).toBe(false);
+    expect(byName(list, 'Ditto')?.legal).toBe(false);
+    expect(byName(list, 'Dragonite')?.legal).toBe(false);
+  });
+
+  it('the Doubles LC format allows the Little Cup species less its 15 bans', () => {
+    const list = listSpeciesForFormat(9, 'gen9doubleslc');
+    expect(byName(list, 'Gastly')?.legal).toBe(true);
+    expect(byName(list, 'Scyther')?.legal).toBe(false);
+    expect(byName(list, 'Dunsparce')?.legal).toBe(false);
+    expect(byName(list, 'Dragonite')?.legal).toBe(false);
+  });
+
+  it('the Champions Draft allows exactly the roster, which has species the Gen 9 games dropped', () => {
+    const list = listSpeciesForFormat(9, 'gen9championsdraft');
+    expect(byName(list, 'Beedrill')?.legal).toBe(true);
+    expect(byName(list, 'Garchomp')?.legal).toBe(true);
+    expect(byName(list, 'Mewtwo')?.legal).toBe(false);
+    expect(byName(list, 'Koraidon')?.legal).toBe(false);
+    expect(list.filter((p) => p.legal).length).toBeGreaterThan(200);
+    expect(list.filter((p) => p.legal).length).toBeLessThanOrEqual(382);
+  });
+
+  it('reads a format id whose key starts with a digit as a format of its generation', () => {
+    const list = listSpeciesForFormat(9, 'gen91v1');
+    expect(byName(list, 'Mewtwo')?.legal).toBe(false);
+    expect(byName(list, 'Garchomp')?.legal).toBe(true);
+  });
+});

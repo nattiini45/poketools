@@ -2,11 +2,14 @@
  * The publish dialog body (static markup, not the Radix portal): what a publish will do, the block on errors,
  * warnings that do not block, "nothing changed", the changelog fields and the success state.
  */
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
+import { PublishDialogBody as ShellPublishDialogBody, changelogText } from '@/components/studio-shell/dialogs/PublishDialog';
+import { useShellText } from '@/components/studio-shell/text';
 import type { Locale } from '@/i18n/config';
-import { renderDiagnostic } from '@/lib/format-kit/client';
+import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
+import { renderDiagnostic, type CompileResult } from '@/lib/format-kit/client';
 import type { DraftDocument } from '@/lib/format-studio/editor/document';
 import { setBestOf, setScoreValue, updateStage } from '@/lib/format-studio/editor/ops';
 import { publishGate } from '@/lib/format-studio/editor/preview';
@@ -15,8 +18,25 @@ vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
 }));
 
-import { PublishDialogBody, changelogText } from '../../editor/dialogs/PublishDialog';
+import PublishSummary from '../../editor/dialogs/PublishSummary';
 import { compiled, esc, expectLabelledControls, expectNoLeftovers, presetDoc } from './test-helpers';
+
+/** The shared dialog body with the Format Studio's words, ids and compile summary. */
+function PublishDialogBody({
+  doc,
+  result,
+  ...rest
+}: { doc: DraftDocument; result: CompileResult } & Omit<ComponentProps<typeof ShellPublishDialogBody>, 'text' | 'idPrefix' | 'summary' | 'errorCount'>) {
+  return (
+    <ShellPublishDialogBody
+      text={useShellText(formatStudioEditorMessages)}
+      idPrefix="fe"
+      summary={<PublishSummary doc={doc} result={result} />}
+      errorCount={result.diagnostics.filter((d) => d.severity === 'error').length}
+      {...rest}
+    />
+  );
+}
 
 interface Over {
   doc?: DraftDocument;

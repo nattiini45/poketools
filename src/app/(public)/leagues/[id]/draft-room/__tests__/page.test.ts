@@ -120,6 +120,14 @@ const SNAPSHOT = {
   ],
 } as unknown as DraftSnapshotDTO;
 
+/**
+ * The page's header (title, legacy line, group switch, redraft notice) is the room's `header` prop, not a
+ * sibling above it, so the walkers follow that prop as well as `children`.
+ */
+function childrenOf(node: ReactElement<Record<string, unknown>>): ReactNode[] {
+  return [node.props.children as ReactNode, node.props.header as ReactNode];
+}
+
 function findByType(node: ReactNode, type: unknown): ReactElement<Record<string, unknown>>[] {
   const found: ReactElement<Record<string, unknown>>[] = [];
   const visit = (n: ReactNode) => {
@@ -129,18 +137,18 @@ function findByType(node: ReactNode, type: unknown): ReactElement<Record<string,
     }
     if (isValidElement<Record<string, unknown>>(n)) {
       if (n.type === type) found.push(n);
-      visit(n.props.children as ReactNode);
+      childrenOf(n).forEach(visit);
     }
   };
   visit(node);
   return found;
 }
 
-/** Every string in an element tree (component elements are not invoked). */
+/** Every string in an element tree (component elements are not invoked; the room's `header` prop is followed). */
 function textOf(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(textOf).join(' ');
-  if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children);
+  if (isValidElement<Record<string, unknown>>(node)) return childrenOf(node).map(textOf).join(' ');
   return '';
 }
 
@@ -199,7 +207,7 @@ describe('DraftRoomPage: client boundary', () => {
     const props = clients[0].props;
 
     expect(Object.keys(props).sort()).toEqual(
-      ['catalog', 'indexUrl', 'initialSnapshot', 'leagueName', 'links', 'poolId', 'seasonGroup', 'seasonId', 'viewer'].sort(),
+      ['catalog', 'header', 'indexUrl', 'initialSnapshot', 'leagueName', 'links', 'poolId', 'seasonGroup', 'seasonId', 'viewer'].sort(),
     );
     expect(props.poolId).toBe(POOL_ID);
     // A league without groups: no group for the admin sheet's Create Redraft.
@@ -224,6 +232,16 @@ describe('DraftRoomPage: client boundary', () => {
     const serialized = JSON.stringify(props);
     expect(serialized).not.toContain('SECRET');
     expectNoPrivatePlayerData(props);
+  });
+
+  it('hands the page header to the room as its first row instead of rendering it above the room', async () => {
+    const tree = await render();
+    const [client] = findByType(tree, DraftRoomClient);
+    // The header is the room's prop, so it lands inside the room's fixed desktop height ...
+    expect(textOf(client.props.header as ReactNode)).toContain('Evo Liga – Draft room');
+    // ... and the page's wrapper holds the room alone: nothing sits above it to push the document past the viewport.
+    const [wrapper] = findByType(tree, 'div');
+    expect((wrapper.props.children as ReactElement).type).toBe(DraftRoomClient);
   });
 
   it('every link points at a real app route (DF6 handoff 4)', async () => {

@@ -14,6 +14,7 @@ import type { AuthProvider, SessionPlayer } from '@/types/auth';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { ilikeAnyOf } from '@/lib/supabase/postgrest-filter';
 import { DEFAULT_PLAYER_SORT, type PlayerSort } from '@/lib/players/player-sort';
+import { countLeagueTrashForPlayer } from './league-trash';
 
 type PlayerRow = Tables<'players'>;
 
@@ -627,6 +628,9 @@ export async function claimGuestPlayer(
  * would corrupt the draft order, so the route refuses with a coded 409 until
  * the draft is finished or cancelled, or the player is removed from it.
  *
+ * `trashedLeagues` counts the leagues in the recycle bin that the player appears in: the database refuses the delete
+ * while one does (a junction table), and the restore of such a league would otherwise abort on the missing player.
+ *
  * Otherwise the draft-queue tables (migrations M2–M4) add no blocking reference: rows a
  * player owns (draft_participants, draft_slots, draft_line_restrictions,
  * redraft_submissions, redraft_slots, epb_draft_token_purchases,
@@ -639,6 +643,11 @@ export interface PlayerCompetitiveRefs {
   leagueHistory: number;
   /** Seats in unfinished queue-engine drafts (draft_participants of a pool not complete/cancelled). */
   activeDrafts: number;
+  /**
+   * Leagues in the trash the player appears in (`league_trash_players`, ON DELETE RESTRICT). The captured rows of such
+   * a league are not live rows, so none of the counts above sees them, but restoring the league needs the player.
+   */
+  trashedLeagues: number;
 }
 
 export async function getPlayerCompetitiveRefs(id: string): Promise<PlayerCompetitiveRefs> {
@@ -646,7 +655,8 @@ export async function getPlayerCompetitiveRefs(id: string): Promise<PlayerCompet
   // can appear in several columns, so count each and sum. Over-counting is
   // harmless: the caller only checks whether the totals are > 0.
   const head = { count: 'exact', head: true } as const;
-  const [activeSeats, asPlayer1, asPlayer2, asProposer, asResponder, ...history] = await Promise.all([
+  const [trashedLeagues, activeSeats, asPlayer1, asPlayer2, asProposer, asResponder, ...history] = await Promise.all([
+    countLeagueTrashForPlayer(id),
     supabase
       .from('draft_participants')
       .select('draft_pool_id, draft_pools!inner(engine, phase)', head)
@@ -680,6 +690,7 @@ export async function getPlayerCompetitiveRefs(id: string): Promise<PlayerCompet
     proposals: (asProposer.count ?? 0) + (asResponder.count ?? 0),
     leagueHistory: history.reduce((sum, result) => sum + (result.count ?? 0), 0),
     activeDrafts: activeSeats.count ?? 0,
+    trashedLeagues,
   };
 }
 

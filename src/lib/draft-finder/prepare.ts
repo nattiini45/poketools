@@ -6,7 +6,8 @@
  */
 import type { LineId } from '@/types/draft-queue';
 import type { SearchKeys } from '@/lib/pkmn/i18n/search';
-import type { DraftSearchIndex, IndexLine, IndexStage } from './index-types';
+import type { SortStage } from './filter-types';
+import type { DraftSearchIndex, IndexLine } from './index-types';
 import type { NameResolver } from './names-port';
 
 export interface PreparedLine extends IndexLine {
@@ -16,7 +17,6 @@ export interface PreparedLine extends IndexLine {
   stageAbilitySets: Set<number>[];
   /** Per stage: names.searchKeys('species', stage.name). */
   stageKeys: SearchKeys[];
-  finalStage: IndexStage;
 }
 
 export interface PreparedIndex {
@@ -36,8 +36,16 @@ function prepareLine(line: IndexLine, names: NameResolver): PreparedLine {
     stageMoveSets: line.stages.map((s) => new Set(s.moves)),
     stageAbilitySets: line.stages.map((s) => new Set(s.abilities)),
     stageKeys: line.stages.map((s) => names.searchKeys('species', s.name)),
-    finalStage: line.stages[line.stages.length - 1],
   };
+}
+
+/**
+ * The stage of a line a stat or typing reading uses: `base` = the first stage, `final` = the last (stage 3, or
+ * stage 2 of a two-stage line; a middle stage is never offered). Every indexed line has at least two stages.
+ * Generic over the stage shape, so index lines, prepared lines and catalog entries all read through it.
+ */
+export function lineStage<S>(line: { stages: readonly S[] }, stage: SortStage): S {
+  return stage === 'base' ? line.stages[0] : line.stages[line.stages.length - 1];
 }
 
 export function prepareIndex(index: DraftSearchIndex, names: NameResolver): PreparedIndex {

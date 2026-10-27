@@ -1,5 +1,5 @@
 import { valueType, type CollectionType, type Expr, type ExprIssue, type ExprIssueCode, type ExprType, type TypeEnv } from './ast';
-import { KEY_PATTERN } from '../keys';
+import { KEY_PATTERN } from '@/lib/studio-core/keys';
 import { exceededLimit, measureExpr } from './measure';
 import {
   EXPR_MAX_ARGS,

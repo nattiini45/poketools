@@ -19,6 +19,7 @@ vi.mock('next/link', () => ({
 import AdminSidebar from '../AdminSidebar';
 
 const SITE_ADMIN = { isSiteAdmin: true, isSuperadmin: false };
+const SUPERADMIN = { isSiteAdmin: true, isSuperadmin: true };
 const RESOURCE_ADMIN = { isSiteAdmin: false, isSuperadmin: false };
 const EXTRA: AdminNavExtraItem[] = [
   { href: '/admin/extra', label: 'Extra records', group: 'system', siteAdminOnly: true },
@@ -29,10 +30,10 @@ const hrefs = (groups: ReturnType<typeof visibleAdminNav>) => groups.flatMap((g)
 
 describe('admin navigation with pack extension items', () => {
   it('is the built-in navigation without extension items', () => {
-    const builtIn = ADMIN_NAV.flatMap((g) => g.items.map((i) => i.href));
-    expect(hrefs(visibleAdminNav(SITE_ADMIN))).toEqual(
-      builtIn.filter((href) => href !== '/admin/kale'), // superadmin only
-    );
+    const builtIn = ADMIN_NAV.flatMap((g) => g.items.filter((i) => !i.superadminOnly).map((i) => i.href));
+    expect(hrefs(visibleAdminNav(SITE_ADMIN))).toEqual(builtIn);
+    expect(hrefs(visibleAdminNav(SITE_ADMIN))).not.toContain('/admin/leagues/trash');
+    expect(hrefs(visibleAdminNav(SUPERADMIN))).toContain('/admin/leagues/trash');
     expect(hrefs(visibleAdminNav(SITE_ADMIN, []))).toEqual(hrefs(visibleAdminNav(SITE_ADMIN)));
   });
 

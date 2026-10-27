@@ -38,6 +38,8 @@ function props(dto: DraftSnapshotDTO, view: FinderViewState = initialFinderState
     adminOverride: false,
     links: { redraft: '/leagues/s/redraft', tokens: '/leagues/s/tokens', admin: null, adminAudit: null, trainerCreator: '/draft-room/trainer-creator' },
     ix,
+    weaknessStage: 'final',
+    onWeaknessStage: noop,
     makeupSeconds: 150,
   };
 }
@@ -148,6 +150,78 @@ describe('DraftToolScreen', () => {
     expect(html).not.toContain(styles.ctaDockPhoneEmpty);
   });
 
+  it('shows the price once in the left column (the info box title) and not on the DRAFT dock or the phone bar', () => {
+    const html = renderWithI18n(<DraftToolScreen {...props(snapshot(), initialFinderState({ pinnedLineId: 'oshawott--samurott' }))} />);
+    // The stage card and the dock, up to the roster/picks/compare column (which lists prices of other lines).
+    const stage = html.slice(html.indexOf(styles.stageCard), html.indexOf(styles.extras));
+    expect(stage.match(/(?<!\d)14 P/g)).toHaveLength(1);
+    expect(stage).toMatch(/<h2[^>]*>Oshawott \(14 P\)<\/h2>/);
+    expect(stage).toContain('Remaining after pick: 136 P');
+    const bar = html.slice(html.search(new RegExp(cls(styles.bottomBar))));
+    expect(bar).toContain('Remaining after pick: 136 P');
+    expect(bar).not.toMatch(/(?<!\d)14 P/);
+  });
+
+  it('names the player whose budget it is when an admin picks on behalf', () => {
+    const dto = snapshot({
+      viewer: { ...snapshot().viewer, player_id: MISTY, is_pool_admin: true, pick_block: { code: 'NOT_YOUR_TURN' }, active_player_line_status: {} },
+    });
+    const view = initialFinderState({ pinnedLineId: 'oshawott--samurott' });
+    const own = renderWithI18n(<DraftToolScreen {...props(dto, view)} />);
+    expect(own).not.toContain('Remaining for');
+    const admin = renderWithI18n(<DraftToolScreen {...props(dto, view)} adminOverride />);
+    expect(admin.match(/Remaining for Dawn after pick: 136 P/g)).toHaveLength(2);
+    const de = renderWithI18n(<DraftToolScreen {...props(dto, view)} adminOverride />, { locale: 'de' });
+    expect(de).toContain('Restbudget von Dawn nach dem Pick: 136 P');
+  });
+
+  it('hides the dock on phones when it would hold only the budget line the bottom bar already shows', () => {
+    const view = initialFinderState({ pinnedLineId: 'oshawott--samurott' });
+    // Available line, plain player: nothing but the budget (and the hidden DRAFT button) is in the dock.
+    expect(renderWithI18n(<DraftToolScreen {...props(snapshot(), view)} />)).toContain(styles.ctaDockPhoneEmpty);
+    // A line-level verdict next to a different viewer-level reason keeps it.
+    const dto = snapshot({ viewer: { ...snapshot().viewer, player_id: MISTY, pick_block: { code: 'NOT_YOUR_TURN' } } });
+    const taken = renderWithI18n(<DraftToolScreen {...props(dto, initialFinderState({ pinnedLineId: 'gastly--gengar' }))} />);
+    expect(taken).not.toContain(styles.ctaDockPhoneEmpty);
+  });
+
+  it('keeps the team weakness overview collapsed inside the roster section, for a seated viewer with a line', () => {
+    const html = renderWithI18n(<DraftToolScreen {...props(snapshot())} />);
+    const opening = /<details([^>]*)><summary [^>]*>Team weaknesses<\/summary>/.exec(html);
+    expect(opening).not.toBeNull();
+    expect(opening![1]).not.toContain('open');
+    // It lives in the roster's section: after the roster tiles, before the last picks. The phone toggles stay
+    // the three pinned below (it is not a section of its own).
+    expect(html.indexOf('Team weaknesses')).toBeGreaterThan(html.indexOf('My roster (1/9)'));
+    expect(html.indexOf('Team weaknesses')).toBeLessThan(html.indexOf('Last picks'));
+    expect(renderWithI18n(<DraftToolScreen {...props(snapshot())} />, { locale: 'de' })).toContain('Team-Schwächen');
+  });
+
+  it('has no team weakness overview without a roster: spectators, and viewers who own no line', () => {
+    const guest = snapshot({ viewer: { ...snapshot().viewer, player_id: null, is_participant: false, pick_block: { code: 'SIGNED_OUT' } } });
+    expect(renderWithI18n(<DraftToolScreen {...props(guest)} />)).not.toContain('Team weaknesses');
+    expect(renderWithI18n(<DraftToolScreen {...props(snapshot({ taken: {} }))} />)).not.toContain('Team weaknesses');
+  });
+
+  it('hides the overview when the index failed and shows a loading line while it loads', () => {
+    const failed = renderWithI18n(<DraftToolScreen {...props(snapshot())} ix={null} indexFailed />);
+    expect(failed).not.toContain('Team weaknesses');
+    const loading = renderWithI18n(<DraftToolScreen {...props(snapshot())} ix={null} />);
+    expect(loading).toContain('Team weaknesses');
+    expect(loading).toContain('Loading types …');
+  });
+
+  it('puts the stale and spectator notices in one slim status strip above the info box', () => {
+    const dto = snapshot({ viewer: { ...snapshot().viewer, player_id: null, is_participant: false, pick_block: { code: 'SIGNED_OUT' } } });
+    const html = renderWithI18n(<DraftToolScreen {...props(dto)} stale />);
+    const strip = html.indexOf('Connection lost');
+    expect(strip).toBeGreaterThan(0);
+    expect(html.indexOf('You are watching as a guest')).toBeGreaterThan(strip);
+    expect(html.indexOf('<h2')).toBeGreaterThan(html.indexOf('You are watching as a guest'));
+    expect(html).not.toMatch(/<p[^>]*rounded-lg border[^>]*>(?:<svg[^>]*><\/svg>)?(?:Connection lost|You are)/);
+    expect(renderWithI18n(<DraftToolScreen {...props(snapshot())} />)).not.toContain('Connection lost');
+  });
+
   it('says "not in the current price tab" only when the tab hides a matching line', () => {
     const ghost = { ...EMPTY_FILTERS, types: { ids: ['Ghost'] as never[], match: 'any' as const } };
     const base = initialFinderState({ pinnedLineId: 'gastly--gengar' });
@@ -157,6 +231,18 @@ describe('DraftToolScreen', () => {
     expect(drafted).toContain('Why this line matches');
     const otherTab = renderWithI18n(<DraftToolScreen {...props(snapshot(), { ...base, filters: ghost, tab: '9-1' })} />);
     expect(otherTab).toContain('Not in the current price tab');
+  });
+
+  it('explains the pinned line like the hover popover: the Pokémon it holds on, no stage numbers', () => {
+    const filters = { ...EMPTY_FILTERS, utility: [{ key: 'hazards' as const, members: [] }] };
+    const view = { ...initialFinderState({ pinnedLineId: 'oshawott--samurotthisui' }), filters };
+    const en = renderWithI18n(<DraftToolScreen {...props(snapshot(), view)} />);
+    expect(en).toContain('Hazards ✓');
+    expect(en).toContain('Spikes, from Samurott-Hisui');
+    expect(en).not.toMatch(/from Stage \d/);
+    const de = renderWithI18n(<DraftToolScreen {...props(snapshot(), view)} />, { locale: 'de' });
+    expect(de).toMatch(/Stachler, ab \S+/);
+    expect(de).not.toMatch(/ab Stufe \d/);
   });
 
   it('evaluates compared lines that have no row in the current tab', () => {
@@ -176,11 +262,13 @@ describe('DraftToolScreen', () => {
     expect(de).toContain('Nächste 5:');
   });
 
-  it('gives phones the compact timer and sprites and collapsible sections (§5.3 items 1, 3, 8)', () => {
+  it('gives phones the compact timer and collapsible sections, and one responsive line preview (§5.3 items 1, 3, 8)', () => {
     const html = renderWithI18n(<DraftToolScreen {...props(snapshot())} />);
     expect(html).toContain(styles.timerTrackCompact);
-    expect(html).toContain(styles.previewCompact);
-    expect(html).toMatch(new RegExp(`<div ${cls(styles.phoneOnly)}><div ${cls(styles.previewCompact)}`));
+    // One instance for every width: no second, compact copy of the sprites and no wide/phone wrappers around it.
+    expect(html.split(styles.previewStage)).toHaveLength(2);
+    expect(html).not.toMatch(new RegExp(`<div ${cls(styles.phoneOnly)}><ol `));
+    expect(html).not.toMatch(new RegExp(`<div ${cls(styles.wideOnly)}><ol `));
     const toggles = [...html.matchAll(new RegExp(`<button type="button" ${cls(styles.phoneToggle)} aria-expanded="true" aria-controls="[^"]+"><span[^>]*>([^<]+)</span>`, 'g'))].map(
       (m) => m[1],
     );

@@ -9,6 +9,10 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
  * viewer's language (`rating_history_incomplete` when the rating rebuild
  * refused a history gap, otherwise `derived_data_rebuild_failed`), `error` is
  * the English fallback and `params` fills the message's placeholders.
+ *
+ * A league RESTORED from the trash gets the same warning shape from
+ * `toRestoreRebuildWarning` (its texts say "restored", its codes are
+ * `restore_rebuild_*`); see the end of this file.
  */
 export interface DeleteRebuildWarning {
   code: ApiErrorCode;
@@ -20,6 +24,8 @@ export interface DeleteRebuildWarning {
 export interface EntityDeleteResult {
   /** Null when the rebuild after the delete succeeded. */
   rebuild_warning: DeleteRebuildWarning | null;
+  /** A league delete only: the trash entry the league now sits in, and when it is removed for good. */
+  trash?: { id: string; purge_after: string };
 }
 
 /** The step of the derived-data rebuild after an entity delete that failed. */
@@ -127,4 +133,70 @@ export function toTestFlagRebuildWarning(err: unknown): DeleteRebuildWarning {
  */
 export function testFlagRebuildUnsettledWarning(): DeleteRebuildWarning {
   return { code: 'test_flag_rating_rebuild_unsettled', error: TEST_FLAG_UNSETTLED_MESSAGE };
+}
+
+// ─── The same warning after a league is RESTORED from the trash ──────────────
+
+const RESTORE_STEP_WARNINGS: Readonly<Record<EntityDeleteRebuildStep, { code: ApiErrorCode; error: string }>> = {
+  aggregates: {
+    code: 'restore_rebuild_aggregates_failed',
+    error:
+      'The league was restored, but counting its games into the usage statistics (aggregates) afterwards failed. The failure was logged; run the pending rebuild on the trash page again.',
+  },
+  ratings: {
+    code: 'restore_rebuild_ratings_failed',
+    error:
+      'The league was restored, but rebuilding the ratings afterwards failed. The failure was logged; run the pending rebuild on the trash page again.',
+  },
+  streaks: {
+    code: 'restore_rebuild_streaks_failed',
+    error:
+      'The league was restored, but rebuilding the win streaks afterwards failed. The failure was logged; run the pending rebuild on the trash page again.',
+  },
+  evolution: {
+    code: 'restore_rebuild_evolution_failed',
+    error:
+      "The league was restored, but repairing the league's evolution progress afterwards failed. The failure was logged; run the pending rebuild on the trash page again.",
+  },
+};
+
+const RESTORE_GENERIC_MESSAGE =
+  'The league was restored, but rebuilding the derived data (statistics, ratings, streaks) afterwards failed. The failure was logged; run the pending rebuild on the trash page again.';
+
+const RESTORE_UNSETTLED_MESSAGE =
+  'The league was restored and the ratings were rebuilt, but they had not fully settled. Run the pending rebuild on the trash page again.';
+
+/**
+ * The warning of a failed rebuild after a league restore (`rebuildAfterSeasonRestore`): the same shape and rules as
+ * `toDeleteRebuildWarning` (a catalogued domain refusal keeps its own code, a failed step gets its own
+ * `restore_rebuild_<step>_failed`, anything else `restore_rebuild_failed`), with texts that say "restored".
+ */
+export function toRestoreRebuildWarning(err: unknown): DeleteRebuildWarning {
+  const domain = fromUserFacing(err);
+  if (domain) return domain;
+  if (err instanceof EntityDeleteRebuildStepError) {
+    return fromUserFacing(err.cause) ?? { ...RESTORE_STEP_WARNINGS[err.step] };
+  }
+  return { code: 'restore_rebuild_failed', error: RESTORE_GENERIC_MESSAGE };
+}
+
+/** The warning of a restore rebuild whose rating settle loop reached its pass cap while a pass still changed ratings. */
+export function restoreRebuildUnsettledWarning(): DeleteRebuildWarning {
+  return { code: 'restore_rebuild_ratings_unsettled', error: RESTORE_UNSETTLED_MESSAGE };
+}
+
+const RESTORE_AGGREGATE_JOBS_FAILED_MESSAGE =
+  'The league was restored, but {count} of its games could not be counted into the usage statistics: their aggregate jobs failed on every attempt. The failure was logged; run the pending rebuild on the trash page again, which queues them once more.';
+
+/**
+ * The warning of a restore rebuild that left aggregate jobs of the league failed for good (attempts exhausted): those
+ * games are missing from the league, phase and all-time statistics, so the rebuild stays pending. `count` fills the
+ * message's placeholder.
+ */
+export function restoreRebuildAggregateJobsFailedWarning(count: number): DeleteRebuildWarning {
+  return {
+    code: 'restore_rebuild_aggregate_jobs_failed',
+    error: RESTORE_AGGREGATE_JOBS_FAILED_MESSAGE.replace('{count}', String(count)),
+    params: { count },
+  };
 }

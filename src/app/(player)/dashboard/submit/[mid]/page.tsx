@@ -23,14 +23,6 @@ interface PageProps {
   params: Promise<{ mid: string }>;
 }
 
-/** The generation of a ruleset's base format (`gen9ou` -> 9); 9 when it names none in 1..9. */
-function generationOf(baseFormat: string | null | undefined): number {
-  const genMatch = baseFormat ? /^gen(\d+)/.exec(baseFormat) : null;
-  if (!genMatch) return 9;
-  const parsed = parseInt(genMatch[1], 10);
-  return parsed >= 1 && parsed <= 9 ? parsed : 9;
-}
-
 export default async function SubmitResultPage({ params }: PageProps) {
   const { mid } = await params;
   // Live roles (AGENTS.md): this page decides who sees which planned roster.
@@ -56,16 +48,14 @@ export default async function SubmitResultPage({ params }: PageProps) {
     getMatchPrepTeams(mid),
     supabase
       .from('tournaments')
-      .select('team_visibility, rulesets(base_format)')
+      .select('team_visibility, ruleset:ruleset_definition_versions ( gen )')
       .eq('id', match.tournament_id)
       .maybeSingle(),
   ]);
   if (tournamentResult.error) throw tournamentResult.error;
   const tournament = tournamentResult.data;
   const tournamentVisibility: TeamVisibility | null = tournament?.team_visibility ?? null;
-  const generation = generationOf(
-    (tournament?.rulesets as { base_format: string } | null)?.base_format
-  );
+  const generation = (tournament?.ruleset as { gen: number } | null)?.gen ?? 9;
 
   // Spec §7 per side: a participant sees only their own planned roster until
   // the match is completed (or the tournament is always_public); admins see both.

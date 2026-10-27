@@ -85,7 +85,7 @@ function season(id: string, name: string, format: string, extra: Partial<FakeRow
     route_theme: 'auto',
     created_at: ISO,
     updated_at: ISO,
-    rulesets: { name: 'Liga-Regelwerk' },
+    rulesets: { name: 'Liga-Regelwerk', name_text: 'Liga-Regelwerk' },
     season_participants: participantIds.map((player_id) => ({ player_id })),
     tournaments: stageIds.map((tid) => ({ id: tid })),
     ...extra,
@@ -113,7 +113,7 @@ function stage(id: string, seasonId: string, seasonName: string, name: string, o
     legacy: false,
     created_at: ISO,
     updated_at: ISO,
-    rulesets: { name: 'Bühnen-Regelwerk' },
+    rulesets: { name: 'Bühnen-Regelwerk', name_text: 'Bühnen-Regelwerk' },
     seasons: { name: seasonName },
     tournament_participants: participantIds.map((player_id) => ({ player_id })),
   };

@@ -45,8 +45,8 @@ async function call(id: string, query: Record<string, string>) {
   return { res, json: await res.json() };
 }
 
-const admin = { player: makePlayer({ isAdmin: true }), isSiteAdmin: true, isAnyAdmin: true, isCreator: true };
-const nonAdmin = { player: makePlayer(), isSiteAdmin: false, isAnyAdmin: false, isCreator: false };
+const admin = { player: makePlayer({ isAdmin: true }), isSiteAdmin: true, isAnyAdmin: true, isCreator: true, isSuperadmin: false };
+const nonAdmin = { player: makePlayer(), isSiteAdmin: false, isAnyAdmin: false, isCreator: false, isSuperadmin: false };
 
 describe('GET /api/point-buy-lists/[id]/search-index', () => {
   beforeEach(() => {

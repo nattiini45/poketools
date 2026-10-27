@@ -12,6 +12,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import type { Player } from '@/types/player';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { leagueTrashBlockOf } from '@/lib/league-trash/db-error';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -103,7 +104,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // holds source rows (presets, cast sessions, AI generations, achievements, ...)
       // that the delete would otherwise silently destroy.
       if ((err as { code?: string } | null)?.code === '23503') {
-        console.error('[players] guest claim blocked by a reference to the source account:', err);
+        // A league in the recycle bin that the source appears in blocks the delete through its junction table; the
+        // answer is the same (the source has activity), the log says which kind of reference it was.
+        const inTrashedLeague = leagueTrashBlockOf(err) === 'player';
+        console.error(
+          inTrashedLeague
+            ? '[players] guest claim blocked: the source account appears in a league in the trash:'
+            : '[players] guest claim blocked by a reference to the source account:',
+          err,
+        );
         throw new UserFacingError(
           'Source account has existing activity — use substitute instead',
           { code: 'SOURCE_HAS_ACTIVITY', status: 409 },

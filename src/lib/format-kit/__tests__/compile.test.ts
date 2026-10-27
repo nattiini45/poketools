@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compile } from '../compile';
 import { sortDiagnostics, type Diagnostic } from '../engine/diagnostics';
 import { CURRENT_ENV } from '../engine/env';
-import { contentHash } from '../json';
+import { contentHash } from '@/lib/studio-core/json';
 import { classicLeague } from '../presets/classic-league';
 import { cup } from '../presets/cup';
 import { PRESETS } from '../presets';

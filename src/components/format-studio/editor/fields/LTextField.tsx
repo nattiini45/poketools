@@ -1,9 +1,9 @@
 'use client';
 
-import { LOCALES } from '@/i18n/config';
+import { LOCALES, type Locale } from '@/i18n/config';
 import { useT } from '@/i18n/client';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
-import { LTEXT_MAX_CHARS, missingLocales, type LText, type Locale } from '@/lib/format-kit/client';
+import { LTEXT_MAX_CHARS, missingLocales, type LText } from '@/lib/studio-core/ltext';
 import { editLText } from '@/lib/format-studio/editor/document';
 import { fieldId } from '@/lib/format-studio/editor/targets';
 import Button from '@/components/ui/Button';

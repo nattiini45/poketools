@@ -11,9 +11,10 @@ import type { PokemonSet, StatSpread } from '@/types/team';
 import type { Ruleset } from '@/types/ruleset';
 import type { CoreTriple } from '@/types/season';
 import { validateTeam as validateTeamCore } from '@/lib/pkmn/validation';
+import { rulesFromBans } from '@/lib/ruleset-kit/effective';
 import { checkMoveLegality } from '@/lib/pkmn/dex';
-import { getRulesetById } from '@/lib/supabase/queries/rulesets';
-import { parseGenFromFormat } from './format';
+import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
+import { parseGenFromFormat } from '../../format';
 import type { ValidateTeamInput } from './schemas';
 
 export interface ValidateTeamIssue {
@@ -62,6 +63,9 @@ function toPokemonSet(set: ValidateTeamInput['team'][number]): PokemonSet {
 
 /** Build a minimal standard Ruleset from a format string (e.g. "gen9ou"). */
 function rulesetForFormat(format: string): Ruleset {
+  // The format text is model-supplied: read it once, case-folded, so the generation and the rules agree.
+  const id = format.toLowerCase();
+  const gen = parseGenFromFormat(id);
   return {
     id: 'agent-synthetic',
     name: format,
@@ -70,9 +74,19 @@ function rulesetForFormat(format: string): Ruleset {
     clauses: ['Species Clause'],
     bans: { pokemon: [], moves: [], items: [], abilities: [] },
     additions: { pokemon: [] },
+    allow: { pokemon: null, moves: null, items: null, abilities: null },
     custom_rules_string: '',
     min_shared_type_pct: 0,
     team_constraints: null,
+    gen,
+    universe: 'standard',
+    rules: rulesFromBans({
+      gen,
+      formatKey: id,
+      doubles: /vgc|doubles|bss/i.test(format),
+      clauses: ['Species Clause'],
+    }),
+    version: null,
     created_by: null,
     created_at: '',
     updated_at: '',
@@ -88,7 +102,8 @@ function rulesetForFormat(format: string): Ruleset {
 async function resolveRuleset(input: ValidateTeamInput): Promise<Ruleset> {
   if (input.ruleset_id) {
     try {
-      const real = await getRulesetById(input.ruleset_id);
+      // A model-supplied id is read only when the ruleset is meant to be seen (never another admin's private draft).
+      const real = await readExposedRuleset(input.ruleset_id);
       if (real) return real;
     } catch {
       // fall through to synthetic

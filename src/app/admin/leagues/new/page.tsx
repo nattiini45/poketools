@@ -2,7 +2,7 @@ import AdminGuard from '@/components/shared/AdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import LeagueCreator from '@/components/league/LeagueCreator';
 import { getLiveAccess } from '@/lib/auth/helpers';
-import { listRulesets } from '@/lib/supabase/queries/rulesets';
+import { listRulesetOptionsFor } from '@/lib/supabase/queries/rulesets';
 import { listCloneSourceOptions } from '@/lib/supabase/queries/season-clone';
 import { getAdminSeasonIds } from '@/lib/supabase/queries/resource-admins';
 import { getT } from '@/i18n/server';
@@ -18,11 +18,14 @@ export default async function NewLeaguePage() {
   // Site admin: any league may be a source. Resource admin: only their own.
   const sourceScope = access.isSiteAdmin ? null : await getAdminSeasonIds(access.player.playerId);
 
-  const [rulesets, t, sources] = await Promise.all([
-    listRulesets(),
-    getT(leagueAdminMessages),
-    listCloneSourceOptions(sourceScope),
-  ]);
+  const [t, sources] = await Promise.all([getT(leagueAdminMessages), listCloneSourceOptions(sourceScope)]);
+  // A league started from another one takes over its ruleset pin, which may be an older version than the newest: the select
+  // keeps those versions so the cloned choice is shown as what it is.
+  const rulesets = await listRulesetOptionsFor({
+    actor: { playerId: access.player.playerId, isAdmin: access.isSiteAdmin },
+    seasonId: null,
+    keep: sources.map((source) => source.ruleset_id),
+  });
 
   return (
     <AdminGuard>

@@ -9,9 +9,9 @@ import {
   SCHEDULE_DEFAULT_ROUND_DAYS,
   SCHEDULE_MAX_PLAYERS,
   SCHEDULE_MIN_PLAYERS,
-  resolveLText,
   type CountRange,
 } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import type { DraftDocument } from '@/lib/format-studio/editor/document';
 import { scheduleFor } from '@/lib/format-studio/editor/preview';
 import NumberField from '../fields/NumberField';
@@ -23,9 +23,6 @@ interface ScheduleTabProps {
   rulesetIds: ReadonlySet<string>;
   /** Opens the Issues tab (shown next to the "fix the errors first" message). */
   onShowIssues: () => void;
-  /** For tests: start with these values instead of 8 players and a weekly cadence. */
-  initialPlayers?: number;
-  initialRoundDays?: number;
 }
 
 const CELL = 'px-3 py-2 text-right tabular-nums';
@@ -35,12 +32,12 @@ const CELL = 'px-3 py-2 text-right tabular-nums';
  * weeks for each stage, and the total. The numbers come from the same compile as the Issues tab; a document with
  * errors has no schedule, and the tab says so instead of showing guesses.
  */
-export default function ScheduleTab({ doc, rulesetIds, onShowIssues, initialPlayers = SCHEDULE_DEFAULT_PLAYERS, initialRoundDays = SCHEDULE_DEFAULT_ROUND_DAYS }: ScheduleTabProps) {
+export default function ScheduleTab({ doc, rulesetIds, onShowIssues }: ScheduleTabProps) {
   const t = useT(formatStudioEditorMessages);
   const locale = useLocale();
   const format = useFormatter();
-  const [players, setPlayers] = useState(initialPlayers);
-  const [roundDays, setRoundDays] = useState(initialRoundDays);
+  const [players, setPlayers] = useState(SCHEDULE_DEFAULT_PLAYERS);
+  const [roundDays, setRoundDays] = useState(SCHEDULE_DEFAULT_ROUND_DAYS);
 
   const estimate = useMemo(() => scheduleFor(doc, players, roundDays, rulesetIds), [doc, players, roundDays, rulesetIds]);
 

@@ -13,11 +13,11 @@ import {
   MAX_SELECTS,
   printExpr,
   ptr,
-  resolveLText,
   type AdvanceSelect,
   type Diagnostic,
   type Edge,
 } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import { EDGE_GATES, EDGE_SEEDINGS, SELECT_KINDS_EDITABLE } from '@/lib/format-studio/editor/catalog';
 import type { DraftDocument } from '@/lib/format-studio/editor/document';
 import { addEdge, addSelect, moveEdge, patchSelect, removeEdge, removeSelect, updateEdge } from '@/lib/format-studio/editor/ops';

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 
 // LIVE-LOCAL test for supabase/migrations/20261018130000_match_finalize_integrity.sql
 // (code review C2, H2). It runs the real query functions against a LOCAL
@@ -89,7 +90,7 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
       if (error) throw new Error(`[seed ${label}] ${JSON.stringify(error)}`);
     };
 
-    await run('rulesets', client.from('rulesets').insert({ id: ids.ruleset, name: `Finalize ${RUN} Ruleset` }));
+    await run('rulesets', insertLocalRuleset(client, { id: ids.ruleset, name: `Finalize ${RUN} Ruleset` }));
     await run(
       'players',
       client.from('players').insert([
@@ -133,7 +134,7 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
     await del('matches', client.from('matches').delete().eq('tournament_id', ids.tournament));
     await del('rounds', client.from('rounds').delete().eq('id', ids.round));
     await del('tournaments', client.from('tournaments').delete().eq('id', ids.tournament));
-    await del('rulesets', client.from('rulesets').delete().eq('id', ids.ruleset));
+    await del('rulesets', deleteLocalRuleset(client, ids.ruleset));
     await del('players', client.from('players').delete().in('id', [ids.p1, ids.p2]));
     if (failures.length > 0) throw new Error(`[cleanup] ${failures.join('; ')}`);
   }, 60000);

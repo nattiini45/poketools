@@ -1,6 +1,7 @@
 'use client';
 
 import FormatSelector from '@/components/ruleset/FormatSelector';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 import type { BaseFormat } from '@/types/ruleset';
 import { useCastStudio } from '../CastStudioContext';
 
@@ -13,8 +14,7 @@ export default function SoloFormatPicker() {
   const { state, dispatch } = useCastStudio();
 
   const handleFormatChange = (format: BaseFormat) => {
-    const match = format.match(/^gen(\d)/);
-    const generation = match ? parseInt(match[1], 10) : 9;
+    const generation = generationOrDefault(format);
     dispatch({ type: 'set_format', format, generation });
   };
 

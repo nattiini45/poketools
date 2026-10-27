@@ -1,4 +1,5 @@
 import type { PokemonSet, TeamImportSource, TeamMode, TeamValidationResult } from '@/types/team';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 import type { CalcField } from '@/types/calc';
 import type { DraftPoolEntry } from '@/types/draft-pool';
 
@@ -184,7 +185,7 @@ export function editorReducer(
   switch (action.type) {
     // ── Format ─────────────────────────────────────────────────────
     case 'SET_FORMAT': {
-      const gen = parseInt(action.format.match(/gen(\d)/)?.[1] || '9');
+      const gen = generationOrDefault(action.format);
       // Legality differs per format — force revalidation
       return { ...state, format: action.format, generation: gen, validationStatus: 'stale' };
     }
@@ -397,7 +398,7 @@ export function createInitialState(params?: {
   teamName?: string;
 }): EditorState {
   const format = params?.format ?? 'gen9ou';
-  const gen = params?.generation ?? parseInt(format.match(/gen(\d)/)?.[1] || '9');
+  const gen = params?.generation ?? generationOrDefault(format);
   return {
     mode: params?.mode ?? 'teambuilder',
     format,

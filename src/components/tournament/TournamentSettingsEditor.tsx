@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TournamentForm from './TournamentForm';
 import type { Tournament, TournamentFormData } from '@/types/tournament';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import type { ApiResult } from '@/types/api';
 import { useT } from '@/i18n/client';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
@@ -19,7 +19,7 @@ type EditableTournament = TournamentSettingsSource & Pick<Tournament, 'id'>;
 
 interface TournamentSettingsEditorProps {
   tournament: EditableTournament;
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
   /** The tournament has started (not upcoming, or it has rounds): bracket type, ruleset and doubles are frozen. */
   started: boolean;
   /** Why it is frozen, for the hint under the locked controls; defaults to "the tournament has started". */

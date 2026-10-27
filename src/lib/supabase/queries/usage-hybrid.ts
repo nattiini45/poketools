@@ -7,6 +7,7 @@ import { getUsageByFormat, getPokemonUsageStats } from './meta-usage';
 import { getAggregates, getAggregateForPokemon, getTotalGamesInScope } from './aggregates';
 import { speciesSearchKeys } from '@/lib/pkmn/i18n/names/species';
 import { MATCH_WORD_PREFIX, matchRank } from '@/lib/pkmn/i18n/search';
+import { generationOrDefault } from '@/lib/pkmn/format-id';
 
 // ── Hybrid usage list ───────────────────────────────────────────────
 
@@ -30,8 +31,7 @@ const MAX_NAME_CANDIDATES = 200;
  * full candidate list (English matches included) for an exact `in` filter.
  */
 async function germanSearchCandidates(search: string, format: string): Promise<string[] | null> {
-  const parsedGen = Number(/^gen(\d+)/.exec(format)?.[1] ?? 9);
-  const gen = parsedGen >= 1 && parsedGen <= 9 ? parsedGen : 9;
+  const gen = generationOrDefault(format);
   // Lazy: the dex is only loaded for searches, and this module stays server-side.
   const { getGeneration } = await import('@/lib/pkmn/dex');
   const ilikePrefix = search.toLowerCase();

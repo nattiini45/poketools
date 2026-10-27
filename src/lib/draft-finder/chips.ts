@@ -4,6 +4,10 @@
  * A chip carries ids and canonical English names only (`labelParts`); the component renders the label
  * through the name layer and `draft/finder` messages. Chip ids are stable and parsed back by the reducer's
  * `removeChip`.
+ *
+ * A utility selection is ONE chip level: the category chip when no member is picked ("any of the category"),
+ * otherwise only its member chips. The category is never shown beside its own members, so the row has no
+ * redundant handle; removing the last member chip removes the whole category (`reducer.removeChip`).
  */
 import type { UtilityKey } from '@/types/draft-queue';
 import { UTILITY_CATEGORIES } from '@/lib/draft/utility-categories';
@@ -92,8 +96,9 @@ export function parseChipId(id: string): ParsedChipId | null {
 const STAT_ORDER: readonly (StatKey | 'bst')[] = ['hp', 'atk', 'def', 'spa', 'spd', 'spe', 'bst'];
 
 /**
- * One chip per active selection, in panel order: types, moves, abilities, utility (category, then its
- * picked members), stats, max price, defensive relations. The search text is not a chip.
+ * One chip per active selection, in panel order: types, moves, abilities, utility (the category chip, or one
+ * chip per picked member when members are picked), stats, max price, defensive relations. The search text
+ * is not a chip.
  */
 export function buildChips(f: FinderFilters, names?: ChipNameSource | null): FilterChip[] {
   const chips: FilterChip[] = [];
@@ -115,7 +120,10 @@ export function buildChips(f: FinderFilters, names?: ChipNameSource | null): Fil
     });
   }
   for (const u of f.utility) {
-    chips.push({ id: chipId.utility(u.key), kind: 'utility', labelParts: { kind: 'utility', key: u.key } });
+    if (u.members.length === 0) {
+      chips.push({ id: chipId.utility(u.key), kind: 'utility', labelParts: { kind: 'utility', key: u.key } });
+      continue;
+    }
     const def = UTILITY_CATEGORIES.find((c) => c.key === u.key);
     for (const memberId of u.members) {
       const memberKind = def?.members.find((m) => m.id === memberId)?.kind ?? 'move';

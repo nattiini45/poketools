@@ -2,7 +2,7 @@ import NavBar from '@/components/shared/NavBar';
 import PageTransitionWrapper from '@/components/shared/PageTransitionWrapper';
 import AdminGuard from '@/components/shared/AdminGuard';
 import AdminSidebar from '@/components/admin/AdminSidebar';
-import { getLiveAccess, getSession, isSuperadmin } from '@/lib/auth/helpers';
+import { getLiveAccess } from '@/lib/auth/helpers';
 import { extensionAdminLinks, siteNavExtraLinks } from '@/lib/pack-extensions';
 
 export default async function AdminLayout({
@@ -10,11 +10,10 @@ export default async function AdminLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // D37: the site-admin flag comes from the live row (one memoised read,
-  // shared with AdminGuard below), not the up-to-5-minute-old session copy.
-  // The superadmin identity is configuration, so the session decides it.
-  const [session, access, extraItems, navExtraLinks] = await Promise.all([
-    getSession(),
+  // D37: both flags come from the live read (one memoised read, shared with
+  // AdminGuard below), not the up-to-5-minute-old session copy. The superadmin
+  // is the configured identity with a live site-admin row in good standing.
+  const [access, extraItems, navExtraLinks] = await Promise.all([
     getLiveAccess(),
     // Admin pages of the active pack extension; a failing provider propagates (never fails open).
     extensionAdminLinks(),
@@ -22,7 +21,7 @@ export default async function AdminLayout({
   ]);
   const roles = {
     isSiteAdmin: access?.isSiteAdmin ?? false,
-    isSuperadmin: isSuperadmin(session),
+    isSuperadmin: access?.isSuperadmin ?? false,
   };
 
   return (

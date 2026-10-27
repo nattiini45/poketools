@@ -25,7 +25,7 @@
  * Array length limits are `custom` issues with `params.code = 'length'` (the schema builds them so
  * the check also runs when an element is invalid, like the browser interpreter).
  */
-import { escapePointerSegment } from './patch';
+import { escapePointerSegment } from '@/lib/studio-core/patch';
 import type { FormatDefinition } from './types';
 
 export type SchemaIssueCode =

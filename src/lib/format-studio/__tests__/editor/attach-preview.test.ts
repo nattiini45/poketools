@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CURRENT_ENV, PRESETS, compile, deepFreeze, type FormatDefinition } from '@/lib/format-kit/client';
 import { planStages } from '../../materialise';
-import { previewAttach, type AttachPreview } from '../../editor/attach-preview';
+import { previewAttach, rulesetLabelsOf, type AttachPreview } from '../../editor/attach-preview';
 
 const RULESET = '3f2b8c1e-5a47-4d09-9b6e-7c1d2a4e8f10';
 const HASH = 'a'.repeat(64);
@@ -128,6 +128,57 @@ describe('the league ruleset', () => {
     const result = okPreview(mixed, { seasonRulesetId: null });
     expect(result.leagueRulesetMissing).toBe(1);
     expect(result.stages.map((s) => s.ruleset)).toEqual(['league', 'named']);
+  });
+
+  it('labels a stage with the name and version of the ruleset it will pin: its own named ruleset, or the league ruleset', () => {
+    const mixed = spec('classic-league');
+    mixed.stages[1] = { ...mixed.stages[1], ruleset: { kind: 'ruleset', id: RULESET } };
+    const result = okPreview(mixed, {
+      seasonRuleset: { name: 'Summer OU', version_no: 2 },
+      namedRulesets: new Map([[RULESET, { name: 'Finals Rules', version_no: 4 }]]),
+    });
+    expect(result.stages.map((s) => [s.ruleset, s.rulesetLabel])).toEqual([
+      ['league', { name: 'Summer OU', version_no: 2 }],
+      ['named', { name: 'Finals Rules', version_no: 4 }],
+    ]);
+  });
+
+  it('labels a stage that names a legacy ruleset id like its definition (the labels come from the format detail)', () => {
+    const legacy = '9a8b7c6d-1111-4222-8333-444455556666';
+    const named = spec('classic-league');
+    named.stages[1] = { ...named.stages[1], ruleset: { kind: 'ruleset', id: legacy } };
+    const labels = rulesetLabelsOf([
+      { id: RULESET, name: 'Finals Rules', version_no: 4 },
+      { id: legacy, name: 'Finals Rules', version_no: 4, definition_id: RULESET },
+      { id: 'no-version', name: 'Without version' },
+    ]);
+    expect([...labels.keys()]).toEqual([RULESET, legacy]);
+    const result = okPreview(named, { namedRulesets: labels });
+    expect(result.stages[1].rulesetLabel).toEqual({ name: 'Finals Rules', version_no: 4 });
+  });
+
+  it('leaves the label out when the caller does not know the ruleset', () => {
+    const result = okPreview(spec('classic-league'));
+    expect(result.stages.every((s) => s.rulesetLabel === undefined)).toBe(true);
+  });
+
+  it('previews rule-preset stages with the preset name and needs no league ruleset for them', () => {
+    const presets = spec('classic-league');
+    presets.stages[0] = { ...presets.stages[0], ruleset: { kind: 'preset', preset: 'gen9ou' } };
+    presets.stages[1] = { ...presets.stages[1], ruleset: { kind: 'preset', preset: 'gen9doublesou' }, doubles: true };
+    const result = okPreview(presets, { seasonRulesetId: null });
+    expect(result.leagueRulesetMissing).toBe(0);
+    expect(result.stages.map((s) => [s.ruleset, s.presetName])).toEqual([
+      ['preset', 'Gen 9 OU'],
+      ['preset', 'Gen 9 Doubles OU'],
+    ]);
+    expect(JSON.stringify(result)).not.toContain('00000000-0000');
+  });
+
+  it('is not planned when a stage names a rule preset the catalog does not know', () => {
+    const unknown = spec('classic-league');
+    unknown.stages[0] = { ...unknown.stages[0], ruleset: { kind: 'preset', preset: 'gen99xx' } };
+    expect(preview(unknown)).toEqual({ ok: false, reason: 'invalid', firstError: 'ruleset_preset_unknown' });
   });
 
   it('never shows the stand-in id the planner needs', () => {

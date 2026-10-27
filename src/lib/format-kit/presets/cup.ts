@@ -2,7 +2,7 @@
  * Preset: a cup. Four groups play a single round robin, the best two of each group advance to an
  * eight-player knockout bracket; the final is a best of five.
  */
-import { ltext } from '../ltext';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { FormatDefinition } from '../types';
 
 export const cup: FormatDefinition = {

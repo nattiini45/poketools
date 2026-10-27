@@ -1,155 +1,86 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  SEASON_DELETE_BLOCKERS,
-  SEASON_DELETE_CASCADES,
+  SEASON_DELETE_DERIVED,
+  SEASON_DELETE_GROUPS,
+  SEASON_DELETE_KEPT,
+  SEASON_DELETE_NOT_RELINKED,
+  SEASON_DELETE_OWNED,
   SEASON_DELETE_UNLINKS,
-  SEASON_DELETE_UNNAMED_CASCADES,
+  SEASON_DELETE_UNNAMED_OWNED,
 } from '../season-delete';
+import { lastFunctionBody, replayForeignKeys } from '@/lib/league-trash/__tests__/fk-replay';
 
 /**
- * Keeps `season-delete.ts` equal to the schema: replays every foreign key of the public migrations (in file
- * order: ADD / DROP CONSTRAINT, inline column references, table-level FOREIGN KEY clauses, DROP TABLE) and
- * derives what a `DELETE FROM seasons` cascades to, what blocks it and what it unlinks.
+ * Keeps `season-delete.ts` (the Danger tab's description of a league delete) equal to the league recycle bin's SQL
+ * inventory: the LAST definition of `league_trash__inventory()` (owned / derived / kept) and `league_trash__pointers()`
+ * (rows outside the league that point into it), read from the migrations without a database.
  */
 
-type OnDelete = 'cascade' | 'set null' | 'set default' | 'restrict' | 'no action';
-interface ForeignKey {
-  child: string;
-  parent: string;
-  onDelete: OnDelete;
-}
+type Cls = 'owned' | 'derived' | 'kept';
 
-const MIGRATIONS = path.resolve(__dirname, '../../../../supabase/migrations');
-
-const IDENT = String.raw`(?:"?public"?\.)?"?([a-z_][a-z0-9_]*)"?`;
-const REFS = new RegExp(String.raw`REFERENCES\s+${IDENT}\s*(?:\([^)]*\))?([^,]*)`, 'i');
-
-function onDeleteOf(tail: string): OnDelete {
-  const m = /ON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)/i.exec(tail);
-  return m ? (m[1].toLowerCase().replace(/\s+/g, ' ') as OnDelete) : 'no action';
-}
-
-/** SQL without comments and without dollar-quoted bodies (functions never declare foreign keys). */
-function strip(sql: string): string {
-  return sql
-    .replace(/\$([a-z_]*)\$[\s\S]*?\$\1\$/gi, ' ')
-    .replace(/--[^\n]*/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '');
-}
-
-/** Splits a parenthesised body at top-level commas. */
-function topLevelItems(body: string): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < body.length; i += 1) {
-    const c = body[i];
-    if (c === '(') depth += 1;
-    else if (c === ')') depth -= 1;
-    else if (c === ',' && depth === 0) {
-      out.push(body.slice(start, i));
-      start = i + 1;
-    }
+function inventory(): Map<string, Cls> {
+  const out = new Map<string, Cls>();
+  for (const m of lastFunctionBody('league_trash__inventory').matchAll(/\(\s*'([a-z_]+)'\s*,\s*'(owned|derived|kept)'\s*,/g)) {
+    out.set(m[1], m[2] as Cls);
   }
-  out.push(body.slice(start));
-  return out.map((s) => s.trim()).filter(Boolean);
+  return out;
 }
 
-function replayForeignKeys(): Map<string, ForeignKey> {
-  const fks = new Map<string, ForeignKey>();
-  const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
-  for (const file of files) {
-    for (const raw of strip(readFileSync(path.join(MIGRATIONS, file), 'utf8')).split(';')) {
-      const stmt = raw.trim();
-      const create = new RegExp(String.raw`^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?${IDENT}\s*\(([\s\S]*)\)\s*$`, 'i').exec(stmt);
-      if (create) {
-        const table = create[1];
-        for (const item of topLevelItems(create[2])) {
-          const refs = REFS.exec(item);
-          if (!refs) continue;
-          const named = /^CONSTRAINT\s+"?([a-z0-9_]+)"?\s+FOREIGN\s+KEY/i.exec(item);
-          const tableLevel = /^FOREIGN\s+KEY\s*\(\s*"?([a-z0-9_]+)"?/i.exec(item);
-          const column = /^"?([a-z0-9_]+)"?\s/i.exec(item);
-          const name = named?.[1] ?? `${table}_${tableLevel?.[1] ?? column?.[1]}_fkey`;
-          fks.set(name, { child: table, parent: refs[1], onDelete: onDeleteOf(refs[2]) });
-        }
-        continue;
-      }
-      const drop = new RegExp(String.raw`^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?${IDENT}`, 'i').exec(stmt);
-      if (drop) {
-        for (const [name, fk] of fks) if (fk.child === drop[1]) fks.delete(name);
-        continue;
-      }
-      const alter = new RegExp(String.raw`^ALTER\s+TABLE\s+(?:ONLY\s+)?(?:IF\s+EXISTS\s+)?${IDENT}([\s\S]*)$`, 'i').exec(stmt);
-      if (!alter) continue;
-      const table = alter[1];
-      for (const action of topLevelItems(alter[2])) {
-        const dropped = /^DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?"?([a-z0-9_]+)"?/i.exec(action);
-        if (dropped) {
-          fks.delete(dropped[1]);
-          continue;
-        }
-        const refs = REFS.exec(action);
-        if (!refs) continue;
-        const named = /^ADD\s+CONSTRAINT\s+"?([a-z0-9_]+)"?\s+FOREIGN\s+KEY/i.exec(action);
-        const column = /^ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?"?([a-z0-9_]+)"?/i.exec(action);
-        if (!named && !column) continue;
-        const name = named?.[1] ?? `${table}_${column?.[1]}_fkey`;
-        fks.set(name, { child: table, parent: refs[1], onDelete: onDeleteOf(refs[2]) });
-      }
-    }
-  }
-  return fks;
-}
-
-function effectsOfSeasonDelete() {
-  const fks = [...replayForeignKeys().values()];
-  const cascaded = new Set<string>();
-  const queue = ['seasons'];
-  while (queue.length > 0) {
-    const parent = queue.shift();
-    for (const fk of fks) {
-      if (fk.parent !== parent || fk.onDelete !== 'cascade' || fk.child === 'seasons' || cascaded.has(fk.child)) continue;
-      cascaded.add(fk.child);
-      queue.push(fk.child);
-    }
-  }
-  const direct = fks.filter((fk) => fk.parent === 'seasons');
-  return {
-    fks,
-    cascaded,
-    blockers: new Set(direct.filter((fk) => fk.onDelete === 'no action' || fk.onDelete === 'restrict').map((fk) => fk.child)),
-    unlinked: new Set(direct.filter((fk) => fk.onDelete === 'set null' || fk.onDelete === 'set default').map((fk) => fk.child)),
-  };
+function pointers(): { rel: string; relink: boolean }[] {
+  return [
+    ...lastFunctionBody('league_trash__pointers').matchAll(
+      /\(\s*'([a-z_]+)'\s*,\s*'[a-z_]+'\s*,\s*'[a-z_]+'\s*,\s*'[^']*'\s*,\s*(true|false)\s*\)/g,
+    ),
+  ].map((m) => ({ rel: m[1], relink: m[2] === 'true' }));
 }
 
 const sorted = (values: Iterable<string>) => [...values].sort();
+const ofClass = (cls: Cls) => [...inventory()].filter(([, c]) => c === cls).map(([rel]) => rel);
 
-describe('season delete effects (from the migrations)', () => {
-  const effects = effectsOfSeasonDelete();
-
-  it('the parser sees the known declarations (sanity)', () => {
-    expect(effects.fks.find((fk) => fk.child === 'season_participants' && fk.parent === 'seasons')?.onDelete).toBe('cascade');
-    expect(effects.fks.find((fk) => fk.child === 'tournaments' && fk.parent === 'seasons')?.onDelete).toBe('no action');
-    // A later migration replaced the baseline constraint (DROP + ADD with CASCADE).
-    expect(effects.fks.find((fk) => fk.child === 'evo_progress_log' && fk.parent === 'seasons')?.onDelete).toBe('cascade');
-    // Reached through another cascaded table, not through seasons directly.
-    expect(effects.cascaded.has('redraft_submissions')).toBe(true);
+describe('season delete description (from the league trash inventory)', () => {
+  it('the parser sees the inventory (sanity)', () => {
+    expect(inventory().get('seasons')).toBe('owned');
+    expect(inventory().get('battle_stats')).toBe('owned');
+    expect(inventory().get('aggregates')).toBe('derived');
+    expect(inventory().get('audit_log')).toBe('kept');
+    expect(pointers().length).toBeGreaterThanOrEqual(7);
   });
 
-  it('every cascaded table is listed exactly once (named groups + unnamed)', () => {
-    const listed = [...Object.values(SEASON_DELETE_CASCADES).flat(), ...SEASON_DELETE_UNNAMED_CASCADES];
+  it('every owned table is listed exactly once (named groups + unnamed)', () => {
+    const listed = [...Object.values(SEASON_DELETE_OWNED).flat(), ...SEASON_DELETE_UNNAMED_OWNED];
     expect(new Set(listed).size).toBe(listed.length);
-    expect(sorted(listed)).toEqual(sorted(effects.cascaded));
+    expect(sorted(listed)).toEqual(sorted(ofClass('owned')));
   });
 
-  it('the blockers are exactly the season keys without a delete action', () => {
-    expect(sorted(Object.values(SEASON_DELETE_BLOCKERS).flat())).toEqual(sorted(effects.blockers));
+  it('the hint groups are exactly the keys of the owned map, and none is empty', () => {
+    expect(sorted(SEASON_DELETE_GROUPS)).toEqual(sorted(Object.keys(SEASON_DELETE_OWNED)));
+    for (const group of SEASON_DELETE_GROUPS) expect(SEASON_DELETE_OWNED[group].length, group).toBeGreaterThan(0);
   });
 
-  it('the unlinked tables are exactly the SET NULL season keys', () => {
-    expect(sorted(Object.values(SEASON_DELETE_UNLINKS).flat())).toEqual(sorted(effects.unlinked));
+  it('the derived and the kept tables are exactly the inventory classes', () => {
+    expect(sorted(SEASON_DELETE_DERIVED)).toEqual(sorted(ofClass('derived')));
+    expect(sorted(SEASON_DELETE_KEPT)).toEqual(sorted(ofClass('kept')));
+  });
+
+  it('the unlinked tables are exactly the tables of the pointers; the not-relinked ones exactly the relink=false pointers', () => {
+    const rels = pointers();
+    expect(sorted(SEASON_DELETE_UNLINKS)).toEqual(sorted(new Set(rels.map((p) => p.rel))));
+    expect(sorted(SEASON_DELETE_NOT_RELINKED)).toEqual(sorted(new Set(rels.filter((p) => !p.relink).map((p) => p.rel))));
+    for (const rel of SEASON_DELETE_NOT_RELINKED) expect(SEASON_DELETE_UNLINKS).toContain(rel);
+  });
+
+  it('no table is both deleted with the league and left behind by it', () => {
+    const owned = new Set(ofClass('owned'));
+    expect(SEASON_DELETE_DERIVED.filter((rel) => owned.has(rel))).toEqual([]);
+    expect(SEASON_DELETE_KEPT.filter((rel) => owned.has(rel))).toEqual([]);
+  });
+
+  it('the replay still sees the foreign keys the trash depends on (the delete is never blocked by them)', () => {
+    // The four former blockers are owned tables now: captured, deleted in order, restored.
+    const fks = replayForeignKeys();
+    for (const table of ['tournaments', 'draft_pools', 'teams', 'season_storylines']) {
+      expect(fks.get(`${table}_season_id_fkey`)?.parent, table).toBe('seasons');
+      expect(ofClass('owned'), table).toContain(table);
+    }
   });
 });

@@ -30,11 +30,14 @@ vi.mock('@/lib/supabase/queries/format-definitions', () => ({
   setFormatVisibility: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/players', () => ({ resolvePlayerNames: vi.fn() }));
+vi.mock('@/lib/format-studio/ruleset-choices', () => ({
+  loadRulesetChoices: vi.fn(async () => [{ id: 'rs-1', name: 'Spring OU', version_no: 2 }]),
+}));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({
   attachSeasonFormat: vi.fn(),
   detachSeasonFormat: vi.fn(),
-  getExistingRulesetIds: vi.fn(),
+  getPublishedRulesetHeads: vi.fn(),
   getSeasonFormat: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
   getSeasonManualPhaseCount: vi.fn(),
@@ -62,14 +65,15 @@ import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import {
   attachSeasonFormat,
   detachSeasonFormat,
-  getExistingRulesetIds,
+  getPublishedRulesetHeads,
   getSeasonFormat,
   getSeasonFormatSummary,
   getSeasonManualPhaseCount,
   getSeasonStartSignals,
 } from '@/lib/supabase/queries/season-formats';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { PRESETS, compile, contentHash, ltext, type FormatDefinition } from '@/lib/format-kit';
+import { PRESETS, compile, contentHash, type FormatDefinition } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { FormatDefinitionMeta, FormatVersion, SeasonFormatSummary } from '@/lib/format-studio/library-types';
 import type { SessionPlayer } from '@/types/auth';
 import type { Season } from '@/types/season';
@@ -329,7 +333,7 @@ describe('cross-owner matrix: attaching to a league', () => {
   beforeEach(() => {
     vi.mocked(getSeasonById).mockResolvedValue(season());
     vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'upcoming', phases: [] });
-    vi.mocked(getExistingRulesetIds).mockResolvedValue(new Set());
+    vi.mocked(getPublishedRulesetHeads).mockResolvedValue(new Map());
     vi.mocked(getSeasonManualPhaseCount).mockResolvedValue(0);
     vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary);
     vi.mocked(getLatestPublishedVersion).mockResolvedValue(storedVersion());
@@ -340,6 +344,7 @@ describe('cross-owner matrix: attaching to a league', () => {
         { id: STAGE_2, key: 'knockout' },
       ],
       removed_stage_ids: [],
+      removed_ruleset_ids: [],
     });
   });
 

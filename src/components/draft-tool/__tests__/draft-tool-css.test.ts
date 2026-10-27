@@ -55,6 +55,26 @@ describe('draft-tool.module.css', () => {
     expect(rules).not.toMatch(/var\(--poke-danger/);
   });
 
+  it('derives the favourite star gold from the palette yellow (both themes), never a literal colour or red', () => {
+    const star = /--draft-star:\s*([^;]+);/.exec(code)?.[1] ?? '';
+    expect(star).toMatch(/^color-mix\(in srgb, var\(--poke-yellow\) \d+%, var\(--poke-yellow-ink\)\)$/);
+    // The footer blob and plate are tinted with neutral/accent mixes (soft, never a dark slab, never the danger palette).
+    for (const selector of ['cardFooterBlob', 'cardFooterPlate']) {
+      const body = new RegExp(String.raw`\n\.${selector} \{([^}]*)\}`).exec(code)?.[1] ?? '';
+      expect(body).toMatch(/background: color-mix\(in srgb, var\(--draft-(?:ink|accent)\)/);
+    }
+  });
+
+  it('tints the team weakness cells amber (weak), green (resist) and neutral (immune), never red', () => {
+    // The last rule of the selector: the shared ink rule lists all four classes, the tint comes after it.
+    const body = (selector: string) => [...code.matchAll(new RegExp(String.raw`
+\.${selector} \{([^}]*)\}`, 'g'))].at(-1)?.[1] ?? '';
+    expect(body('weaknessWeak')).toMatch(/background: color-mix\(in srgb, var\(--poke-yellow\)/);
+    expect(body('weaknessQuad')).toMatch(/background: color-mix\(in srgb, var\(--poke-yellow\)/);
+    expect(body('weaknessResist')).toMatch(/background: color-mix\(in srgb, var\(--poke-green\)/);
+    expect(body('weaknessImmune')).toMatch(/background: var\(--draft-elevated\)/);
+  });
+
   it('shares the tokens with a position-free `.tokens` class for portalled and sibling pieces', () => {
     // Toasts and the players sheet sit outside the screen root; `.root`'s `position: relative` must not reach
     // them (it would beat Tailwind's `fixed` on the sheet).

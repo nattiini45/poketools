@@ -21,9 +21,10 @@ import {
 import { getTeamById } from '@/lib/supabase/queries/teams';
 import { getTournamentById, getStagesBySeasonId } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById, getParticipantCore } from '@/lib/supabase/queries/seasons';
-import { getRulesetById, resolveEffectiveRuleset } from '@/lib/supabase/queries/rulesets';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { getOpponentBattleStatsInTournament } from '@/lib/supabase/queries/games';
-import { renderTeamConstraints } from '@/lib/ai/league-context';
+import { renderAllowlists, renderTeamConstraints } from '@/lib/ai/league-context';
 import type { MatchWithPlayers } from '@/types/match';
 import type { Team } from '@/types/team';
 import type { Ruleset, TeamConstraints } from '@/types/ruleset';
@@ -70,10 +71,11 @@ export interface ContextPackTeam {
 }
 
 /**
- * The active league's effective ruleset + the player's assigned core, so the
+ * The active league's ruleset + the player's assigned core, so the
  * teambuilding assistant builds within the league's rules — not just the base
- * format. Resolved via {@link resolveEffectiveRuleset} so a base-tier ruleset id
- * is upgraded to the league's custom ruleset where one exists.
+ * format. The ruleset is the version the tournament phase pins; a client-supplied
+ * `ruleset_id` is read only through `readExposedRuleset` (shared, or pinned by a
+ * league or phase).
  */
 export interface ContextPackLeague {
   /** The league/season name (its identity for this request), when resolvable. */
@@ -81,11 +83,15 @@ export interface ContextPackLeague {
   /** The league's own prose rules (season + tournament description). */
   description: string | null;
   ruleset_name: string;
+  /** The version of the pinned ruleset the league enforces; null for a ruleset built in code. */
+  ruleset_version: number | null;
   /** The effective ruleset's id — the assistant passes this to buildTeam. */
   ruleset_id: string | null;
   base_format: string;
   clauses: string[];
   bans: Ruleset['bans'];
+  /** Lists in allowlist mode: the only legal entries (null for a list that is not an allowlist). */
+  allow: Ruleset['allow'];
   additions: string[];
   custom_rules: string | null;
   team_constraints: TeamConstraints | null;
@@ -297,16 +303,8 @@ async function resolveLeagueScope(
       const t = tournament;
       season = t.season_id ? await safe('season', () => getSeasonById(t.season_id as string)) : null;
       const s = season;
-      const resolved = await safe('league resolution', () =>
-        resolveEffectiveRuleset({
-          tournamentRulesetId: t.ruleset_id,
-          tournamentBracketType: t.bracket_type,
-          season: s
-            ? { id: s.id, name: s.name, rulesetId: s.ruleset_id, formatType: s.format_type }
-            : null,
-        }),
-      );
-      ruleset = resolved?.ruleset ?? null;
+      // The phase's own pin: an immutable ruleset version.
+      ruleset = await safe('ruleset', () => getRulesetById(t.ruleset_id));
       if (s) {
         playerCore = await safe('participant core', () => getParticipantCore(s.id, playerId));
         const stages = await safe('season stages', () => getStagesBySeasonId(s.id));
@@ -318,7 +316,7 @@ async function resolveLeagueScope(
   // Fallback: trust the client-supplied ruleset id when no match scope resolved one.
   if (hasLeagueContext && !ruleset && context?.ruleset_id) {
     const rid = context.ruleset_id;
-    ruleset = await safe('ruleset', () => getRulesetById(rid));
+    ruleset = await safe('ruleset', () => readExposedRuleset(rid));
   }
 
   return { target, opponent, tournament, season, seasonTournamentIds, ruleset, playerCore };
@@ -375,10 +373,12 @@ function buildLeagueSection(
     league_name: season?.name ?? null,
     description: descriptionParts.length ? descriptionParts.join('\n\n') : null,
     ruleset_name: ruleset?.name ?? 'Custom league ruleset',
+    ruleset_version: ruleset?.version?.version_no ?? null,
     ruleset_id: ruleset?.id ?? null,
     base_format: ruleset?.base_format ?? context.format ?? 'unknown',
     clauses: ruleset?.clauses ?? [],
     bans: ruleset?.bans ?? { pokemon: [], moves: [], items: [], abilities: [] },
+    allow: ruleset?.allow ?? { pokemon: null, moves: null, items: null, abilities: null },
     additions: ruleset?.additions.pokemon ?? [],
     custom_rules: ruleset?.custom_rules_string?.trim() || null,
     team_constraints: ruleset?.team_constraints ?? null,
@@ -544,7 +544,7 @@ export function renderContextPack(pack: ContextPack): string {
       'These are the rules for THIS request. Build only within them — read the description and constraints below and comply with whatever this specific league requires (do not assume a fixed format).',
     );
     lines.push(`- Base format: ${l.base_format}`);
-    lines.push(`- Ruleset: ${l.ruleset_name}`);
+    lines.push(`- Ruleset: ${l.ruleset_name}${l.ruleset_version === null ? '' : `, version ${l.ruleset_version}`}`);
     if (l.ruleset_id) {
       lines.push(`- Ruleset id (pass this exact id as ruleset_id to buildTeam): ${l.ruleset_id}`);
     }
@@ -560,6 +560,7 @@ export function renderContextPack(pack: ContextPack): string {
     banLine('moves', l.bans.moves);
     banLine('items', l.bans.items);
     banLine('abilities', l.bans.abilities);
+    for (const line of renderAllowlists(l.allow)) lines.push(`- ${line}`);
     if (l.additions.length) {
       lines.push(`- Unbanned (additions): ${l.additions.slice(0, 30).join(', ')}`);
     }

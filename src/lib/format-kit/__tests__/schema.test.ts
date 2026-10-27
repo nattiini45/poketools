@@ -11,7 +11,7 @@ import {
   type SchemaIssue,
   type ValidationResult,
 } from '../issues';
-import { canonicalizeJson, inspectJson, utf8ByteLength } from '../json';
+import { canonicalizeJson, inspectJson, utf8ByteLength } from '@/lib/studio-core/json';
 import { MAX_BODY_BYTES } from '../limits';
 import { formatDefinitionSchema, type SchemaMatchesTypes } from '../schema';
 import type { FormatDefinition } from '../types';

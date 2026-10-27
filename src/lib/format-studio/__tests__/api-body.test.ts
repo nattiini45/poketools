@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { MAX_REQUEST_BODY_BYTES } from '@/lib/studio-core/api-body';
 import {
-  MAX_REQUEST_BODY_BYTES,
   assertEnvelopeDocument,
   readBoundedJson,
   readBoundedJsonOrEmpty,

@@ -76,6 +76,7 @@ beforeEach(() => {
     isSiteAdmin: true,
     isAnyAdmin: true,
     isCreator: false,
+    isSuperadmin: false,
   });
 });
 

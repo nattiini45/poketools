@@ -14,9 +14,9 @@ import {
   describeDefinition,
   renderDiagnostic,
   renderSeverity,
-  resolveLText,
   type FormatDefinition,
 } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
 import { describeLegacy } from '@/lib/format-studio/legacy/describe-legacy';
 import { legacyCompileEnv, toFormatView, type FormatView } from '@/lib/format-studio/view';
 import { FIXTURE_LEAGUES } from '@/lib/format-studio/__tests__/fixtures/leagues';

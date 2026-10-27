@@ -10,7 +10,7 @@ import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { byesThroughRound, loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { countByesByPlayer, formatRecord } from '@/lib/tournament/byes';
 import { aggregateTeamFromStats, computePokemonScore, computeQuickStats } from '@/lib/match/aggregation';
-import { parseGenFromFormat } from '../context-builder';
+import { parseGenFromFormat } from '../format';
 import { getSpecies } from '@/lib/pkmn/dex';
 import type { MatchWithPlayers } from '@/types/match';
 import type { TeamVisibility } from '@/types/tournament';

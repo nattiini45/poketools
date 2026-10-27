@@ -3,51 +3,29 @@
  * already run `assertDocument` on it (`assertEnvelopeDocument`), and the kit validates its content at check,
  * publish and attach time, never at save time (a draft may be half built).
  */
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ltextSchema, slugSchema, uuidSchema } from '@/lib/format-kit';
-import { formatZodErrors } from '@/lib/validation';
-import type { ApiResult } from '@/types/api';
-import { FORMAT_KINDS, FORMAT_VISIBILITIES } from './library-types';
+import { isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
+import { ltextSchema, slugSchema, uuidSchema } from '@/lib/studio-core/text-schema';
+import {
+  MAX_REVISION,
+  definitionNameSchema,
+  documentSchema,
+  draftRevSchema,
+  studioListQuerySchema,
+  visibilitySchema,
+} from '@/lib/studio-core/api-schemas';
 
-/** The largest `draft_rev` a client may send (the column is a 32-bit integer). */
-const MAX_REVISION = 2_147_483_646;
-
-/** A plain JSON object, by reference (zod's record parse would copy it and walk its keys). */
-const documentSchema = z.custom<Record<string, unknown>>(
-  (value) => typeof value === 'object' && value !== null && !Array.isArray(value),
-  { message: 'Expected a JSON object' },
-);
-
-/** A UTF-16 surrogate without its partner: JSON text with one is refused by the database (and by `jsonb`). */
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-
-const draftRevSchema = z.number().int().min(1).max(MAX_REVISION);
-
-export const FORMAT_LIST_SCOPES = ['all', 'mine', 'shared', 'gallery'] as const;
+export { validationFailedResponse } from '@/lib/studio-core/api-schemas';
 
 /** `GET /api/formats` query string (values arrive as text). */
-export const formatListQuerySchema = z.strictObject({
-  scope: z.enum(FORMAT_LIST_SCOPES).default('all'),
-  visibility: z.enum(FORMAT_VISIBILITIES).optional(),
-  kind: z.enum(FORMAT_KINDS).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  offset: z.coerce.number().int().min(0).max(100_000).default(0),
-});
+export const formatListQuerySchema = studioListQuerySchema;
 export type FormatListQuery = z.infer<typeof formatListQuerySchema>;
 
 /** `POST /api/formats`: a whole document, or just a name to start from a skeleton. */
 export const formatCreateSchema = z.union([
   z.strictObject({ document: documentSchema, slug: slugSchema.optional() }),
   z.strictObject({
-    name: z
-      .string()
-      .trim()
-      .min(1)
-      .max(120)
-      .refine((value) => !value.includes('\u0000') && !LONE_SURROGATE.test(value), {
-        message: 'Name contains characters that cannot be stored',
-      }),
+    name: definitionNameSchema,
     base_locale: z.enum(['en', 'de']),
     slug: slugSchema.optional(),
   }),
@@ -70,15 +48,25 @@ export type FormatPublishBody = z.infer<typeof formatPublishSchema>;
 
 /** `PATCH /api/formats/[id]` */
 export const formatVisibilitySchema = z.strictObject({
-  visibility: z.enum(FORMAT_VISIBILITIES),
+  visibility: visibilitySchema,
 });
 export type FormatVisibilityBody = z.infer<typeof formatVisibilitySchema>;
 
-/** `POST /api/formats/[id]/fork` and `POST /api/formats/presets/[presetId]/fork` */
+/** `POST /api/formats/[id]/fork` */
 export const formatForkSchema = z.strictObject({
   slug: slugSchema.optional(),
 });
 export type FormatForkBody = z.infer<typeof formatForkSchema>;
+
+/**
+ * `POST /api/formats/presets/[presetId]/fork`: the fork body plus an optional rule preset (a catalog id such as
+ * `gen9ou` or `gen9natdexdraft`) that is pre-picked on every stage of the copy. An id the catalog does not know is
+ * a 400.
+ */
+export const presetForkSchema = formatForkSchema.extend({
+  ruleset_preset: z.string().refine(isRulesetPresetId, { message: 'Unknown rule preset' }).optional(),
+});
+export type PresetForkBody = z.infer<typeof presetForkSchema>;
 
 /** `POST /api/seasons/[id]/format` */
 export const seasonFormatAttachSchema = z.strictObject({
@@ -91,12 +79,3 @@ export type SeasonFormatAttachBody = z.infer<typeof seasonFormatAttachSchema>;
 export const seasonFormatQuerySchema = z.strictObject({
   include: z.enum(['spec']).optional(),
 });
-
-/** The 400 `validation_failed` answer every route gives a rejected envelope. */
-export function validationFailedResponse(error: z.ZodError): NextResponse<ApiResult<never>> {
-  const issues = formatZodErrors(error);
-  return NextResponse.json<ApiResult<never>>(
-    { success: false, error: issues, code: 'validation_failed', params: { issues } },
-    { status: 400 },
-  );
-}

@@ -7,7 +7,7 @@ import 'server-only';
  * One wave of three reads (the attached row, the hand-made phase count, the start signals); the league row comes
  * from the caller. A league of any other format type has no readiness and costs no read.
  */
-import type { LText } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
 import { isSeasonStarted } from '@/lib/season/season-started';
 import { getSeasonFormat, getSeasonManualPhaseCount, getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
 import type { SeasonWithDetails } from '@/types/season';

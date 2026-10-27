@@ -11,7 +11,7 @@ import { useId, type ReactNode } from 'react';
 import { useT } from '@/i18n/client';
 import { draftFinderMessages } from '@/i18n/messages/draft/finder';
 import { cn } from '@/lib/utils/cn';
-import { FOCUS_RING } from './types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 export interface FilterGroupProps {
   title: string;
@@ -58,7 +58,7 @@ export default function FilterGroup({ title, count, summary, open, onToggle, res
               <>
                 <span
                   aria-hidden="true"
-                  className="rounded-full bg-[var(--draft-accent,var(--poke-accent))] px-1.5 text-xs font-semibold tabular-nums text-[var(--poke-surface)]"
+                  className="rounded-full bg-[var(--draft-accent-fill,var(--poke-accent))] px-1.5 text-xs font-semibold tabular-nums text-[var(--poke-surface)]"
                 >
                   {count}
                 </span>

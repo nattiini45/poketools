@@ -2,8 +2,9 @@
 
 import type { ReactNode } from 'react';
 import type { SeasonFormatType } from '@/types/season';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import Input from '@/components/ui/Input';
+import RulesetSelect from '@/components/ruleset/RulesetSelect';
 import Select from '@/components/ui/Select';
 import { useT } from '@/i18n/client';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
@@ -49,15 +50,17 @@ export function LeagueTypeField({ id, label, value, options, onChange, disabled,
 interface LeagueRulesetFieldProps {
   /** A point-buy league has no ruleset choice: the server sets the pack's battle ruleset. */
   isPointBuy: boolean;
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
   value: string;
   onChange: (rulesetId: string) => void;
   /** A hint under the ruleset select (not shown for a point-buy league). */
   hint?: { id: string; text: ReactNode } | null;
+  /** The select cannot be changed (a started league keeps its ruleset; `hint` says where its version moves). */
+  disabled?: boolean;
 }
 
 /** The battle ruleset select, or the note that a point-buy league's ruleset is set automatically. */
-export function LeagueRulesetField({ isPointBuy, rulesets, value, onChange, hint }: LeagueRulesetFieldProps) {
+export function LeagueRulesetField({ isPointBuy, rulesets, value, onChange, hint, disabled = false }: LeagueRulesetFieldProps) {
   const t = useT(leagueAdminMessages);
 
   if (isPointBuy) {
@@ -72,19 +75,17 @@ export function LeagueRulesetField({ isPointBuy, rulesets, value, onChange, hint
   }
 
   const select = (
-    <Select
+    <RulesetSelect
+      id="league-ruleset"
       label={t('form.ruleset')}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={onChange}
+      options={rulesets}
+      placeholder={t('form.noRuleset')}
       aria-describedby={hint?.id}
-    >
-      <option value="">{t('form.noRuleset')}</option>
-      {rulesets.map((r) => (
-        <option key={r.id} value={r.id}>
-          {r.name}
-        </option>
-      ))}
-    </Select>
+      disabled={disabled}
+      studioLink={!disabled}
+    />
   );
   if (!hint) return select;
   return (

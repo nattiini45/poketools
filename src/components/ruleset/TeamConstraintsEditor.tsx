@@ -24,7 +24,7 @@ const TIER_OPTIONS: TierKey[] = [
 ];
 
 /**
- * Step 5 of the RulesetBuilder. Lets admins compose the optional team
+ * The Team constraints section of the Ruleset Studio editor. Lets admins compose the optional team
  * constraints block on a ruleset: type quotas, tera match, evolution stage,
  * and Eviolite tier cap. Renders nothing structured when `value` is null —
  * the master toggle at the top creates an empty constraints object so the

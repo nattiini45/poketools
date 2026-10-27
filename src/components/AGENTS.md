@@ -18,6 +18,11 @@ Module rules for `src/components/` (337 source files). Load when a task touches 
 
 - Per-game inline edit on `GameDetailCard` is gated to site admins + tournament resource admins (`isResourceAdminFor`). It uses `InlinePokemonPicker` (strict typeahead against `@pkmn/data`) with per-row delete and saves via `PATCH /api/admin/games/[id]` (full `battle_stats` replace). The `games.stats_locked` mechanics are owned by [`../lib/AGENTS.md`](../lib/AGENTS.md#stats-locking).
 
+## Tests
+
+- Component tests run in `node` with `renderToStaticMarkup` by default (`renderWithI18n`). Use a DOM when the test has to interact: put `/** @vitest-environment jsdom */` as the first line of the file, `render(withI18n(<Foo />, { locale }))` from `@testing-library/react` and `src/test/i18n.tsx`, and `userEvent.setup()` for clicks, typing, `selectOptions` and `upload`. `src/test/dom-setup.ts` unmounts after each test; there is nothing else to wire. Query by role and accessible name, as a viewer would find the control. Setup and rules: [`docs/dependencies.md`](../../docs/dependencies.md#dom-tests).
+- A component never takes a prop that only a test uses (`initialTab`, `initialStart`, an `initialImportReport`, `initialPlayers`): the test clicks the tab, picks the radio, uploads the file or types the number. Dependency seams that a dev preview route injects (`actions`, `dataSource`, `initialAdminTab` of the draft room) are real API and stay.
+
 ## i18n
 
 Rules: root [`AGENTS.md`](../../AGENTS.md) "Text goes through `src/i18n`"; module doc [`../../docs/i18n.md`](../../docs/i18n.md).

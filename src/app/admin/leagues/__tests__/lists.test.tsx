@@ -46,6 +46,7 @@ vi.mock('@/components/ui/Badge', () => stub('Badge'));
 
 import AdminLeaguesPage from '../page';
 import ArchivedLeaguesPage from '../archived/page';
+import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 
@@ -93,12 +94,13 @@ function league(id: string, name: string, archived = false) {
   };
 }
 
-function access(flags: { isSiteAdmin?: boolean; isAnyAdmin?: boolean }) {
+function access(flags: { isSiteAdmin?: boolean; isAnyAdmin?: boolean; isSuperadmin?: boolean }) {
   return {
     player: { playerId: 'p1' },
     isSiteAdmin: false,
     isAnyAdmin: false,
     isCreator: false,
+    isSuperadmin: false,
     ...flags,
   };
 }
@@ -136,6 +138,17 @@ describe('admin leagues list', () => {
     expect(mocks.listSeasons).not.toHaveBeenCalled();
     expect(text(tree)).toContain('Other League');
     expect(text(tree)).not.toContain('Open League');
+  });
+
+  it('links the league trash for the superadmin only', async () => {
+    const trashLinks = async (live: ReturnType<typeof access>) => {
+      mocks.getLiveAccess.mockResolvedValue(live);
+      return findByType(await AdminLeaguesPage(), Link).filter((link) => link.props.href === '/admin/leagues/trash');
+    };
+    expect(await trashLinks(access({ isSiteAdmin: true, isAnyAdmin: true }))).toHaveLength(0);
+    expect(await trashLinks(access({ isAnyAdmin: true }))).toHaveLength(0);
+    const [link] = await trashLinks(access({ isSiteAdmin: true, isAnyAdmin: true, isSuperadmin: true }));
+    expect(text(link)).toBe('League trash');
   });
 
   it('a resource admin with no assignments sees the empty state', async () => {

@@ -14,7 +14,25 @@ Check this doc before adding or updating any of these packages; check changelogs
 | `@ai-sdk/openai` v3.x | OpenAI-compatible mode: no Responses API, no reasoning detection. See `src/lib/ai/kale/provider.ts` |
 | `zod` v4 | Use `z.iso.date()` for `<input type="date">` payloads hitting Postgres `date` columns; `z.string().datetime()` rejects `YYYY-MM-DD`. See [`src/lib/AGENTS.md`](../src/lib/AGENTS.md) |
 | `@react-three/postprocessing` | Route-world only (`src/components/world/route/PostStack.tsx`). Effects are gated by the quality ladder; never mount it outside the plaza canvas. Decision: [ADR-0001](./adr/0001-sourced-art-and-postprocessing.md) |
+| `@tanstack/react-virtual` 3.14.23 (exact pin) | The Ruleset Studio entry picker's virtualized list (`src/components/ruleset-studio/picker/EntryList.tsx`). Row heights are fixed pixel values that assume the app's 18 px root font size (`src/lib/ruleset-studio/editor/picker/layout.ts`: a card row is as tall as its content, and a row any shorter clips the card's footer), so `measureElement` is never used; do not add dynamic row heights, and change `ROW_HEIGHT` together with any card content change. The table density is a plain paginated table and is not virtualized. Focus stays on the listbox container and the active option is announced with `aria-activedescendant` (virtualized rows come and go, so they cannot hold focus). Pass `initialRect` so server rendering and tests render rows (a zero-size scroller renders none). Pinned to an exact version: bump it deliberately and re-run the picker tests and the manual keyboard and screen-reader pass |
+| `jsdom`, `@testing-library/react`, `@testing-library/dom`, `@testing-library/user-event` (dev) | The DOM test environment. The suite stays on `node`; only a file with a `@vitest-environment jsdom` docblock gets a DOM (see "DOM tests" below). `@testing-library/dom` is a peer of `@testing-library/react`, so it is installed explicitly. `jsdom` 30 needs Node `^22.22.2 || ^24.15.0 || >=26` (`.nvmrc` and CI use 22, which resolves to a new enough 22.x; an older local Node only prints `EBADENGINE` warnings on install) |
 | `@gltf-transform/cli` (dev) | Owns every GLB/KTX2 transform in `scripts/world-assets/`. Do not hand-edit GLBs; re-run the pipeline. KTX2 needs the `toktx` binary (KTX-Software) on PATH |
+
+## DOM tests
+
+`npm run test` runs in the `node` environment (`vitest.config.ts`), so a render test is `renderToStaticMarkup` (`renderWithI18n` in `src/test/i18n.tsx`). A component test that has to click, type, upload a file, move focus or watch state change opts into a DOM per file, with a docblock at the top of the file:
+
+```tsx
+/** @vitest-environment jsdom */
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { withI18n } from '@/test/i18n';
+```
+
+- **Setup.** `src/test/dom-setup.ts` is the only setup file. It registers Testing Library's `cleanup` after each test when the file has a `document`, and does nothing in a node file (it loads nothing there). Do not add DOM globals or matchers to it; nothing in it may change what a node test sees.
+- **Render with the providers.** `render(withI18n(<Foo />, { locale: 'de' }))`; `withI18n` is the same wrapper `renderWithI18n` uses. Query by role and accessible name (`getByRole`, `getByLabelText`), drive with `userEvent.setup()` (`await user.click(...)`, `user.type`, `user.selectOptions`, `user.upload`), and prefer `findBy*` / `waitFor` over timers. `expectUniqueIds`, `expectLabelledControls` and `expectNoLeftovers` from `src/test/markup.ts` take `container.innerHTML`.
+- **Never add a prop so a test can reach a state.** A component does not take an `initialTab`, `initialStart` or a pre-made report for tests: the test clicks the tab, picks the radio or uploads a file. A prop that a page or a dev preview route uses to open a state (`RoomAdminSheet.initialTab` for `/draft-preview`, `InsightsTabs.initialTab` for the `?tab=` of the insights page) is real API and stays.
+- Keep the node default for everything that does not need a DOM: a jsdom file starts slower, and the whole suite would pay for it if the default changed.
 
 ## German Pokémon data after a `@pkmn/dex` upgrade (not npm)
 

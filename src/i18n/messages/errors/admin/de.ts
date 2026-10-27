@@ -37,6 +37,23 @@ export default defineDe<typeof en>()({
     'Das Löschen hat geklappt, aber der anschließende Neuaufbau der Siegesserien ist fehlgeschlagen. Der Fehler wurde protokolliert; ein Site-Admin kann sie mit dem Datenabgleich in den Admin-Datenwerkzeugen reparieren.',
   delete_rebuild_evolution_failed:
     'Das Löschen hat geklappt, aber die anschließende Reparatur des Entwicklungsfortschritts der Liga ist fehlgeschlagen. Der Fehler wurde protokolliert; ein Site-Admin kann ihn mit dem Datenabgleich in den Admin-Datenwerkzeugen reparieren.',
+  restore_rebuild_failed:
+    'Die Liga wurde wiederhergestellt, aber der anschließende Neuaufbau der abgeleiteten Daten (Statistiken, Ratings, Serien) ist fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus.',
+  restore_rebuild_aggregates_failed:
+    'Die Liga wurde wiederhergestellt, aber das anschließende Einrechnen ihrer Spiele in die Nutzungsstatistiken (Aggregate) ist fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus.',
+  restore_rebuild_ratings_failed:
+    'Die Liga wurde wiederhergestellt, aber der anschließende Neuaufbau der Ratings ist fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus.',
+  restore_rebuild_streaks_failed:
+    'Die Liga wurde wiederhergestellt, aber der anschließende Neuaufbau der Siegesserien ist fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus.',
+  restore_rebuild_evolution_failed:
+    'Die Liga wurde wiederhergestellt, aber die anschließende Reparatur des Entwicklungsfortschritts der Liga ist fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus.',
+  restore_rebuild_ratings_unsettled:
+    'Die Liga wurde wiederhergestellt und die Ratings wurden neu aufgebaut, haben sich aber noch nicht ganz eingependelt. Führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus.',
+  restore_rebuild_aggregate_jobs_failed: {
+    one: 'Die Liga wurde wiederhergestellt, aber {count} ihrer Partien konnte nicht in die Nutzungsstatistik gezählt werden: Ihr Aggregat-Job ist bei jedem Versuch fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus, er stellt ihn erneut in die Warteschlange.',
+    other:
+      'Die Liga wurde wiederhergestellt, aber {count} ihrer Partien konnten nicht in die Nutzungsstatistik gezählt werden: Ihre Aggregat-Jobs sind bei jedem Versuch fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus, er stellt sie erneut in die Warteschlange.',
+  },
   test_flag_rating_rebuild_failed:
     'Die Testliga-Einstellung wurde gespeichert, aber der anschließende Neuaufbau der Ratings der Liga-Spieler ist fehlgeschlagen. Der Fehler wurde protokolliert; ein Site-Admin kann sie mit dem Datenabgleich in den Admin-Datenwerkzeugen reparieren und die Reparatur wiederholen, bis ihr Probelauf keine Rating-Abweichung mehr auflistet.',
   test_flag_rating_rebuild_unsettled:
@@ -90,4 +107,41 @@ export default defineDe<typeof en>()({
   },
   format_has_versions: 'Dieses Format hat veröffentlichte Versionen und kann deshalb nicht gelöscht werden.',
   format_version_immutable: 'Eine veröffentlichte Version kann nicht geändert werden.',
+
+  ruleset_forbidden: 'Du kannst dieses Regelwerk nicht verwenden: Es ist privat bei einem anderen Admin oder hat noch keine veröffentlichte Version.',
+  ruleset_slug_taken: 'Diese Regelwerk-Adresse ist bereits vergeben.',
+  ruleset_stale_revision:
+    'Dieses Regelwerk wurde zwischenzeitlich geändert. Lade es neu und wende deine Änderung erneut an.',
+  ruleset_document_not_json: 'Das Regelwerk-Dokument ist kein gültiges JSON.',
+  ruleset_document_not_object: 'Das Regelwerk-Dokument muss ein JSON-Objekt sein.',
+  ruleset_document_too_deep: 'Das Regelwerk-Dokument ist zu tief verschachtelt.',
+  ruleset_document_too_many_nodes: 'Das Regelwerk-Dokument hat zu viele Einträge.',
+  ruleset_document_too_large: 'Das Regelwerk-Dokument ist zu groß (Limit 256 KB).',
+  ruleset_document_too_large_to_store: 'Das Regelwerk-Dokument ist zu groß zum Speichern.',
+  ruleset_document_invalid: {
+    one: 'Dieses Regelwerk hat {count} Fehler und kann nicht veröffentlicht werden. Behebe ihn zuerst.',
+    other: 'Dieses Regelwerk hat {count} Fehler und kann nicht veröffentlicht werden. Behebe sie zuerst.',
+  },
+  ruleset_nothing_to_publish: 'Seit der letzten veröffentlichten Version gibt es keine Änderungen.',
+  ruleset_not_published: 'Dieses Regelwerk hat noch keine veröffentlichte Version.',
+  ruleset_published_locked: 'Ein Regelwerk in der Galerie können nur Site-Admins veröffentlichen.',
+  ruleset_visibility_forbidden:
+    'Nur Site-Admins können ein Regelwerk in die Galerie stellen oder ein Galerie-Regelwerk ändern.',
+  ruleset_preset_locked: 'Regelwerke der Seite können nur Site-Admins ändern.',
+  ruleset_preset_unknown: 'Regel-Vorlage nicht gefunden',
+  ruleset_in_use: {
+    one: 'Dieses Regelwerk wird von {count} Liga oder Phase verwendet und kann nicht gelöscht werden.',
+    other: 'Dieses Regelwerk wird von {count} Ligen oder Phasen verwendet und kann nicht gelöscht werden.',
+  },
+  ruleset_version_immutable: 'Eine veröffentlichte Version kann nicht geändert werden.',
+  ruleset_legacy_editor_unsupported:
+    'Dieses Regelwerk nutzt Funktionen, die der alte Regelwerk-Editor nicht anzeigen kann (eine Vorlage als Basis oder eine Erlaubnisliste). Bearbeite es im Regelwerk-Studio.',
+  ruleset_version_quota_exceeded: 'Ein Regelwerk kann höchstens {max} veröffentlichte Versionen haben.',
+  ruleset_owner_quota_exceeded: 'Du kannst höchstens {max} Regelwerke besitzen. Lösche eines, das du nicht mehr brauchst.',
+  ruleset_pin_mismatch: 'Diese Version gehört nicht zu diesem Regelwerk.',
+  ruleset_pin_locked: 'Diese Liga oder Phase ist abgeschlossen, daher kann ihr Regelwerk nicht mehr geändert werden.',
+  ruleset_pin_started:
+    'Diese Liga oder Phase hat bereits begonnen. Wechsle mit dem Regelwerk-Werkzeug auf eine andere Version; dort musst du bestätigen.',
+  ruleset_pin_confirm_required: 'Diese Liga oder Phase hat bereits begonnen. Bestätige die Änderung für: {targets}.',
+  ruleset_pin_moved: 'Das Regelwerk von {target} wurde während des Verschiebens von jemand anderem geändert. Die Seite zeigt jetzt den aktuellen Stand; prüfe ihn und versuche es erneut. Die davor wurden bereits verschoben.',
 });

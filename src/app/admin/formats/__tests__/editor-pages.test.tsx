@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
-import { ltext } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
 import { presetDoc } from '@/components/format-studio/__tests__/editor/test-helpers';
 
 const mocks = vi.hoisted(() => ({
@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   getLiveAccess: vi.fn(),
   getFormatDefinitionMeta: vi.fn(),
   getFormatDetail: vi.fn(),
-  listRulesets: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -50,7 +49,6 @@ vi.mock('@/i18n/server', async () => {
 vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
 vi.mock('@/lib/supabase/queries/format-definitions', () => ({ getFormatDefinitionMeta: mocks.getFormatDefinitionMeta }));
 vi.mock('@/lib/format-studio/library', () => ({ getFormatDetail: mocks.getFormatDetail }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/shared/ResourceForbidden', () => stub('ResourceForbidden'));
 vi.mock('@/components/format-studio/editor/FormatEditor', () => stub('FormatEditor'));
@@ -111,6 +109,11 @@ function detail(over: Record<string, unknown> = {}) {
     published: null,
     versions: [],
     check: null,
+    // What `loadRulesetChoices` answers: a definition by its own id, and the legacy id a stored document still names.
+    rulesets: [
+      { id: 'rs1', name: 'OU Singles', version_no: 3 },
+      { id: 'legacy-rs1', name: 'OU Singles', version_no: 3, definition_id: 'rs1' },
+    ],
     ...over,
   };
 }
@@ -147,7 +150,7 @@ const html = (tree: ReactNode, locale: Locale = mocks.locale) =>
   );
 
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
-const reads = () => [mocks.getFormatDefinitionMeta, mocks.getFormatDetail, mocks.listRulesets];
+const reads = () => [mocks.getFormatDefinitionMeta, mocks.getFormatDetail];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -155,9 +158,6 @@ beforeEach(() => {
   mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
   mocks.getFormatDefinitionMeta.mockResolvedValue(meta());
   mocks.getFormatDetail.mockResolvedValue(detail());
-  mocks.listRulesets.mockResolvedValue([
-    { id: 'rs1', name: 'OU Singles', created_by: 'p7', clauses: ['x'] },
-  ]);
 });
 
 describe.each([
@@ -196,7 +196,6 @@ describe.each([
     expect(notice).toHaveLength(1);
     expect(html(notice[0].props.children as ReactNode)).toBe('This format is private to its owner.');
     expect(mocks.getFormatDetail).not.toHaveBeenCalled();
-    expect(mocks.listRulesets).not.toHaveBeenCalled();
   });
 
   it('the forbidden notice is in German for a German viewer', async () => {
@@ -230,7 +229,8 @@ describe('edit page', () => {
       initial: { document: presetDoc(), draftRev: 3 },
       published: { versionNo: 2, contentHash: 'hash-2' },
       actor: { playerId: 'p1', isAdmin: false },
-      rulesets: [{ id: 'rs1', name: 'OU Singles' }],
+      // A stage names the DEFINITION id (or a legacy id that resolves to it); the version number labels the option ("OU Singles v3").
+      rulesets: detail().rulesets,
       hasAttachments: false,
     });
     expect(mocks.getFormatDetail).toHaveBeenCalledTimes(1);
@@ -314,6 +314,15 @@ describe('read-only page', () => {
     const tree = await DetailPage(params(ID));
     expect(findByType(tree, FormatDetail)).toHaveLength(0);
     expect(html(tree)).toContain('no published version');
+  });
+
+  it('names the rulesets of the stages by the id the document uses, a legacy id included', async () => {
+    const tree = await DetailPage(params(ID));
+    const view = findByType(tree, FormatDetail)[0].props.view as { rulesets: { id: string; name: string }[] };
+    expect(view.rulesets).toEqual([
+      { id: 'rs1', name: 'OU Singles' },
+      { id: 'legacy-rs1', name: 'OU Singles' },
+    ]);
   });
 
   it('reads the format once and hands the owner over as a name only', async () => {

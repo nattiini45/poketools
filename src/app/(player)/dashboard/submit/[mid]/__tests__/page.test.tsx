@@ -136,7 +136,7 @@ beforeEach(() => {
   ];
   mocks.prepError = null;
   mocks.tournament = {
-    data: { team_visibility: 'hidden_until_match', rulesets: { base_format: 'gen8ou' } },
+    data: { team_visibility: 'hidden_until_match', ruleset: { gen: 8 } },
     error: null,
   };
 });
@@ -156,7 +156,7 @@ describe('submit page roster visibility (spec §7)', () => {
   });
 
   it('an always_public tournament shows both sides', async () => {
-    mocks.tournament = { data: { team_visibility: 'always_public', rulesets: null }, error: null };
+    mocks.tournament = { data: { team_visibility: 'always_public', ruleset: null }, error: null };
     await render();
     expect(prepTeamsProp()).toEqual({ player1: [set('Pikachu')], player2: [set('Garchomp')] });
   });
@@ -184,13 +184,13 @@ describe('submit page roster visibility (spec §7)', () => {
 
   it('reads the tournament visibility and the ruleset in one select', async () => {
     await render();
-    expect(mocks.tournamentSelect).toHaveBeenCalledWith('team_visibility, rulesets(base_format)');
+    expect(mocks.tournamentSelect).toHaveBeenCalledWith('team_visibility, ruleset:ruleset_definition_versions ( gen )');
     expect(mocks.clientProps[0].generation).toBe(8);
   });
 
-  it('defaults to generation 9 when the ruleset names no generation', async () => {
+  it('defaults to generation 9 when the phase has no ruleset version', async () => {
     mocks.tournament = {
-      data: { team_visibility: 'hidden_until_match', rulesets: { base_format: 'vgc2026' } },
+      data: { team_visibility: 'hidden_until_match', ruleset: null },
       error: null,
     };
     await render();

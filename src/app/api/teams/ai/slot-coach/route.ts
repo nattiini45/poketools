@@ -5,10 +5,9 @@ import { complete } from '@/lib/ai/client';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
 import { withOutputLanguage } from '@/lib/ai/language';
 import { getRequestLocale } from '@/i18n/server';
+import { parseFormatId } from '@/lib/pkmn/format-id';
 import type { ApiResult } from '@/types/api';
 import type { PokemonSet } from '@/types/team';
-
-const FORMAT_RE = /^gen[1-9][a-z0-9]*$/;
 
 /**
  * POST /api/teams/ai/slot-coach
@@ -27,7 +26,7 @@ export async function POST(req: NextRequest) {
       generation: number;
     };
 
-    if (!format || typeof format !== 'string' || !FORMAT_RE.test(format)) {
+    if (!format || typeof format !== 'string' || parseFormatId(format) === null) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Invalid format', code: 'ai_coach_format_invalid' },
         { status: 400 },

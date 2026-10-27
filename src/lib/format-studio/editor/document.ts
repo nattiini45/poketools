@@ -8,18 +8,9 @@
  * baseline of "unsaved changes" is the canonical JSON of the normalised document, so opening a draft never starts
  * dirty. Nothing here mutates its input.
  */
-import {
-  JsonError,
-  KEY_PATTERN,
-  LTEXT_MAX_CHARS,
-  canonicalizeJson,
-  ltext,
-  type FormatDefinition,
-  type LText,
-  type LTextValue,
-  type Locale,
-  type Stage,
-} from '@/lib/format-kit/client';
+import { JsonError, KEY_PATTERN, canonicalizeJson, type FormatDefinition, type Stage } from '@/lib/format-kit/client';
+import { LTEXT_MAX_CHARS, ltext, type LText, type LTextValue } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 
 /** Same shape as `FormatDefinition`; values may be invalid. */
 export type DraftDocument = FormatDefinition;

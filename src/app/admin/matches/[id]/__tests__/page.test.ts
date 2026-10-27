@@ -93,6 +93,7 @@ function access(flags: Partial<Omit<LiveAccess, 'player'>>, playerId: string | n
     isSiteAdmin: false,
     isAnyAdmin: false,
     isCreator: false,
+    isSuperadmin: false,
     ...flags,
   };
 }

@@ -8,7 +8,7 @@
  * - Reachability starts at every roster stage. A stage that is neither a roster stage nor reachable can never
  *   receive participants.
  */
-import { toMap } from '../keys';
+import { toMap } from '@/lib/studio-core/keys';
 import type { FormatDefinition } from '../types';
 import { diag, ptr, type Diagnostic } from './diagnostics';
 import { fixUseEdgesSource } from './fixes';

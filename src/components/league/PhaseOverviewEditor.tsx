@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { LeaguePhase } from '@/types/season';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import type { ApiResult } from '@/types/api';
 import PhaseForm, { PhaseSaveError } from '@/components/league/PhaseForm';
 import type { PhaseFormData } from '@/components/league/PhaseForm';
@@ -15,7 +15,7 @@ import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
 interface PhaseOverviewEditorProps {
   seasonId: string;
   phase: LeaguePhase;
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
 }
 
 export default function PhaseOverviewEditor({

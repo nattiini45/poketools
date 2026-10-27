@@ -3,18 +3,10 @@
  * the hand-written types in `../types.ts`: if the two drift, `tsc` fails in this file.
  */
 import type { z } from 'zod';
-import type {
-  AdvanceSelect,
-  Edge,
-  FormatDefinition,
-  LText,
-  Pairing,
-  RankStep,
-  RuleCard,
-  Stage,
-} from '../types';
+import type { AdvanceSelect, Edge, FormatDefinition, Pairing, RankStep, RuleCard, Stage } from '../types';
+import type { LText } from '@/lib/studio-core/ltext';
 import { documentShape } from './document';
-import { ltextSchema } from './common';
+import { ltextSchema } from '@/lib/studio-core/text-schema';
 import {
   advanceSelectSchema,
   edgeSchema,

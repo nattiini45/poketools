@@ -1,5 +1,6 @@
 /**
- * The rating rebuild after a league's test-league flag is set
+ * The rating rebuild after a league's test-league flag is set, and the pass loop
+ * it shares with the restore of a league from the trash
  * (src/lib/rating/test-league-rebuild.ts): whose curves it rewrites, the
  * further passes over every rebuilt player while a pass still changed one
  * (up to the cap, then `settled: false`), and the cache expiry even on failure.
@@ -16,7 +17,7 @@ vi.mock('@/lib/revalidation', () => ({
   expireRatingReads: vi.fn(),
 }));
 
-import { MAX_PASSES, rebuildRatingsAfterTestFlagChange } from '../test-league-rebuild';
+import { MAX_PASSES, rebuildRatingsAfterTestFlagChange, rebuildRatingsSettled } from '../test-league-rebuild';
 import { listSeasonCompletedMatchPlayerIds } from '@/lib/supabase/queries/ratings';
 import { rebuildRatingsForPlayers, type RebuildRatingsResult } from '@/lib/rating/updateRatings';
 import { expireRatingReads } from '@/lib/revalidation';
@@ -156,5 +157,34 @@ describe('rebuildRatingsAfterTestFlagChange', () => {
 
     await expect(rebuildRatingsAfterTestFlagChange('s1', true)).rejects.toBe(error);
     expect(mockRebuild).not.toHaveBeenCalled();
+  });
+});
+
+describe('rebuildRatingsSettled (shared with the restore of a trashed league)', () => {
+  it('rebuilds the requested players in passes until a pass changes nobody, then expires their reads', async () => {
+    mockRebuild
+      .mockResolvedValueOnce([result('p1'), result('healed', { addedToBatch: true })])
+      .mockResolvedValueOnce([unchanged('p1'), unchanged('healed')]);
+
+    const rebuilt = await rebuildRatingsSettled(['p1']);
+
+    expect(mockRebuild.mock.calls).toEqual([[['p1']], [['p1', 'healed']]]);
+    expect(rebuilt).toEqual({ rebuiltPlayerIds: ['p1', 'healed'], passes: 2, settled: true, unratedMatches: 0 });
+    expect(mockExpire).toHaveBeenCalledWith(['p1', 'healed']);
+  });
+
+  it('reports settled false when the pass cap is reached while a pass still changed a player', async () => {
+    mockRebuild.mockResolvedValue([result('p1')]);
+
+    const rebuilt = await rebuildRatingsSettled(['p1']);
+
+    expect(mockRebuild).toHaveBeenCalledTimes(MAX_PASSES + 1);
+    expect(rebuilt).toMatchObject({ passes: MAX_PASSES + 1, settled: false });
+  });
+
+  it('does nothing, and expires nothing, for an empty request', async () => {
+    expect(await rebuildRatingsSettled([])).toEqual({ rebuiltPlayerIds: [], passes: 0, settled: true, unratedMatches: 0 });
+    expect(mockRebuild).not.toHaveBeenCalled();
+    expect(mockExpire).not.toHaveBeenCalled();
   });
 });

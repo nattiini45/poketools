@@ -3,7 +3,8 @@
 import { useT } from '@/i18n/client';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import { createFormatRequest } from '@/lib/format-studio/editor/api';
-import { StartActionButton } from './ForkPresetButton';
+import StartActionButton from '@/components/studio-shell/library/StartActionButton';
+import { formatEditorHref } from '../editor/hrefs';
 
 interface CopyLeagueStructureButtonProps {
   /** The league's structure as a format document (`leagueStructureDocument`, computed on the server). */
@@ -22,6 +23,7 @@ export default function CopyLeagueStructureButton({ definition }: CopyLeagueStru
       variant="secondary"
       hint={t('new.copyHelp')}
       run={() => createFormatRequest({ document: definition })}
+      editorHref={formatEditorHref}
     />
   );
 }

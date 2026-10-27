@@ -4,7 +4,7 @@ import { createTranslator } from '@/i18n/core';
 import { errorsCommon } from '@/i18n/messages/errors';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
-import { ltext } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
 import {
   attachFormatRequest,
   classifyApiError,
@@ -17,9 +17,8 @@ import {
   publishRequest,
   saveDraftRequest,
   visibilityRequest,
-  type ApiErrorKind,
-  type FetchLike,
 } from '../../editor/api';
+import type { ApiErrorKind, FetchLike } from '@/lib/studio-core/request';
 import { FORMAT_ERROR_CODES, FORMAT_ERROR_STATUS } from '../../errors';
 
 interface Call {
@@ -103,13 +102,21 @@ describe('requests', () => {
   it('forkFormatRequest and forkPresetRequest POST without a body', async () => {
     const { f, calls } = fakeFetch(ok({}, 201), ok({}, 201));
     await forkFormatRequest('abc', f);
-    await forkPresetRequest('classic-league', f);
+    await forkPresetRequest('classic-league', undefined, f);
     expect(calls.map((c) => c.url)).toEqual(['/api/formats/abc/fork', '/api/formats/presets/classic-league/fork']);
     for (const call of calls) {
       expect(call.init?.method).toBe('POST');
       expect(call.init?.body).toBeUndefined();
       expect(call.init?.headers).toBeUndefined();
     }
+  });
+
+  it('forkPresetRequest sends the rule preset it was given', async () => {
+    const { f, calls } = fakeFetch(ok({}, 201));
+    await forkPresetRequest('classic-league', 'gen9ou', f);
+    expect(calls[0].url).toBe('/api/formats/presets/classic-league/fork');
+    expect(calls[0].init?.method).toBe('POST');
+    expect(bodyOf(calls[0])).toEqual({ ruleset_preset: 'gen9ou' });
   });
 
   it('createFormatRequest POSTs a document or a name', async () => {
@@ -142,7 +149,7 @@ describe('requests', () => {
     await visibilityRequest(evil, 'private', f);
     await deleteFormatRequest(evil, f);
     await forkFormatRequest(evil, f);
-    await forkPresetRequest(evil, f);
+    await forkPresetRequest(evil, undefined, f);
     await attachFormatRequest(evil, evil, 1, f);
     await detachFormatRequest(evil, f);
     for (const call of calls) {
@@ -267,6 +274,7 @@ describe('classifyApiError', () => {
     format_season_started: 'blocked',
     format_attach_forbidden: 'forbidden',
     format_attach_invalid: 'invalid',
+    format_attach_ruleset_forbidden: 'forbidden',
     format_attach_ruleset_required: 'invalid',
     format_attach_manual_phases: 'blocked',
     format_not_attached: 'blocked',

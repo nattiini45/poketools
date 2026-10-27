@@ -10,7 +10,7 @@ src/
     (public)/           Unauthenticated browse: homepage, tournaments, leagues, insights, wiki, replays, players
     (player)/           Authenticated: dashboard, submit results, teambuilder, match prep
     (broadcast)/        Public overlay pages (match, league, draft, player, wiki, solo)
-    admin/              Admin dashboard (tournaments, matches, players, achievements, rulesets)
+    admin/              Admin dashboard (tournaments, matches, players, achievements, rulesets, league trash)
     creator/            Creator Hub: studio, wiki, overlays
     api/                All API routes (see Domain Modules below)
     auth/               NextAuth pages

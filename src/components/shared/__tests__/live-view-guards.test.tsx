@@ -49,7 +49,7 @@ import AdminLayout from '@/app/admin/layout';
 const ADMIN_SESSION = { player: { id: 'p1', isAdmin: true, isCreator: true } };
 
 function access(flags: Partial<Omit<LiveAccess, 'player'>>): LiveAccess {
-  return { player: null, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, ...flags };
+  return { player: null, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, isSuperadmin: false, ...flags };
 }
 
 /** Depth-first search for the element whose props carry `roles`. */
@@ -138,5 +138,16 @@ describe('admin layout', () => {
     const tree = await AdminLayout({ children: null });
     expect(findRoles(tree)).toEqual({ isSiteAdmin: false, isSuperadmin: false });
     expect(auth.isAdmin).not.toHaveBeenCalled();
+  });
+
+  it('passes the live superadmin flag, whatever the session copy says', async () => {
+    // The session says superadmin; the live row (a revoked admin) says no.
+    auth.isSuperadmin.mockReturnValue(true);
+    auth.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true, isSiteAdmin: false, isSuperadmin: false }));
+    expect(findRoles(await AdminLayout({ children: null }))).toEqual({ isSiteAdmin: false, isSuperadmin: false });
+    expect(auth.isSuperadmin).not.toHaveBeenCalled();
+
+    auth.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true, isSiteAdmin: true, isSuperadmin: true }));
+    expect(findRoles(await AdminLayout({ children: null }))).toEqual({ isSiteAdmin: true, isSuperadmin: true });
   });
 });

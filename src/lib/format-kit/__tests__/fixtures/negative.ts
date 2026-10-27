@@ -10,12 +10,12 @@ import { analyzeDefinition } from '../../engine/core';
 import type { CompileEnv } from '../../engine/env';
 import { CURRENT_ENV } from '../../engine/env';
 import type { Diagnostic, DiagnosticCode, Severity } from '../../engine/diagnostics';
-import type { JsonValue, PatchOp } from '../../patch';
-import { applyPatch } from '../../patch';
+import type { JsonValue, PatchOp } from '@/lib/studio-core/patch';
+import { applyPatch } from '@/lib/studio-core/patch';
 import { classicLeague } from '../../presets/classic-league';
 import { cup } from '../../presets/cup';
 import { swissTopCut } from '../../presets/swiss-top-cut';
-import { ltext } from '../../ltext';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { AdvanceSelect, Edge, FormatDefinition, Stage } from '../../types';
 
 /** A valid stage (a single-elimination stage fed by edges) with any field overridden. */
@@ -341,6 +341,9 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'ruleset-not-found', 'ruleset_not_found', '/stages/0/ruleset/id', mutate(C, [
     { op: 'replace', path: '/stages/0/ruleset', value: { kind: 'ruleset', id: RULESET_ID } },
   ]), { env: envWith({ rulesetIds: NO_RULESETS }), params: { stage: 'league', id: RULESET_ID } }),
+  fx('error', 'ruleset-preset-unknown', 'ruleset_preset_unknown', '/stages/0/ruleset/preset', mutate(C, [
+    { op: 'replace', path: '/stages/0/ruleset', value: { kind: 'preset', preset: 'gen99xx' } },
+  ]), { params: { stage: 'league', preset: 'gen99xx' } }),
   fx('error', 'module-duplicate', 'module_duplicate', '/modules/1/adapter', mutate(C, [
     {
       op: 'replace',

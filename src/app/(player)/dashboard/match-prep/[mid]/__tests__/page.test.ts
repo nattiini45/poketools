@@ -1,6 +1,6 @@
 /**
  * The dashboard match-prep page: every read fails loudly (AGENTS.md rule 5).
- * A failed prep-team, season, ruleset or scouting read reaches the error
+ * A failed prep-team, ruleset or scouting read reaches the error
  * boundary instead of rendering an empty prep form or "no ruleset". The page
  * runs as a plain async function (vitest 'node' env) and its element tree is
  * walked without rendering the child components.
@@ -15,8 +15,7 @@ const mocks = vi.hoisted(() => ({
   isSuperadmin: vi.fn(),
   getMatchById: vi.fn(),
   getTournamentById: vi.fn(),
-  resolveEffectiveRuleset: vi.fn(),
-  getSeasonById: vi.fn(),
+  getRulesetById: vi.fn(),
   getMatchPrepTeam: vi.fn(),
   getMatchPrepAnalysis: vi.fn(),
   resolveContentLocale: vi.fn(),
@@ -49,9 +48,8 @@ vi.mock('@/lib/auth/helpers', () => ({
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: mocks.getMatchById }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: mocks.getTournamentById }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({
-  resolveEffectiveRuleset: mocks.resolveEffectiveRuleset,
+  getRulesetById: mocks.getRulesetById,
 }));
-vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: mocks.getSeasonById }));
 vi.mock('@/lib/supabase/queries/match-prep-teams', () => ({ getMatchPrepTeam: mocks.getMatchPrepTeam }));
 vi.mock('@/lib/supabase/queries/match-prep-analyses', () => ({
   getMatchPrepAnalysis: mocks.getMatchPrepAnalysis,
@@ -106,18 +104,8 @@ beforeEach(() => {
     ruleset_id: 'ruleset-1',
     bracket_type: 'round_robin',
   });
-  mocks.getSeasonById.mockResolvedValue({
-    id: SEASON_ID,
-    name: 'Spring',
-    ruleset_id: 'ruleset-1',
-    format_type: 'standard',
-  });
-  mocks.resolveEffectiveRuleset.mockResolvedValue({
-    ruleset: { id: 'ruleset-1', name: 'Gen 9 OU', base_format: 'gen9ou' },
-    rulesetId: 'ruleset-1',
-    source: 'tournament',
-    fellBack: false,
-  });
+  // The phase's own pin: an immutable ruleset version.
+  mocks.getRulesetById.mockResolvedValue({ id: 'ruleset-1', name: 'Gen 9 OU', base_format: 'gen9ou', gen: 9 });
   mocks.getMatchPrepTeam.mockResolvedValue({ pokemon: [{ species: 'Pikachu' }] });
   mocks.getMatchPrepAnalysis.mockResolvedValue(null);
   mocks.resolveContentLocale.mockResolvedValue('en');
@@ -134,14 +122,13 @@ describe('MatchPrepPage', () => {
       matchId: MATCH_ID,
       rulesetId: 'ruleset-1',
       rulesetName: 'Gen 9 OU',
+      // The generation is the ruleset's own, not parsed from its format key.
+      baseFormat: 'gen9ou',
+      gen: 9,
       opponentName: 'Gary',
       hasExistingPrepTeam: true,
     });
-    expect(mocks.resolveEffectiveRuleset).toHaveBeenCalledWith(
-      expect.objectContaining({
-        season: { id: SEASON_ID, name: 'Spring', rulesetId: 'ruleset-1', formatType: 'standard' },
-      }),
-    );
+    expect(mocks.getRulesetById).toHaveBeenCalledWith('ruleset-1');
   });
 
   it('404s a malformed match id without querying the database', async () => {
@@ -151,8 +138,7 @@ describe('MatchPrepPage', () => {
 
   it.each([
     ['prep-team', () => mocks.getMatchPrepTeam.mockRejectedValueOnce(new Error('prep-team read failed'))],
-    ['season', () => mocks.getSeasonById.mockRejectedValueOnce(new Error('season read failed'))],
-    ['ruleset', () => mocks.resolveEffectiveRuleset.mockRejectedValueOnce(new Error('ruleset read failed'))],
+    ['ruleset', () => mocks.getRulesetById.mockRejectedValueOnce(new Error('ruleset read failed'))],
     ['scouting', () => mocks.getMatchPrepAnalysis.mockRejectedValueOnce(new Error('scouting read failed'))],
   ])('surfaces a failed %s read to the error boundary', async (label, arrange) => {
     arrange();

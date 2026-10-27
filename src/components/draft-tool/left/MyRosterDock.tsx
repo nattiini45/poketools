@@ -4,21 +4,37 @@
  * The viewer's roster (draft-frontend §5.5): one tile per roster slot —
  * owned lines (stage-1 sprite and price; a click pins the line), empty
  * dashed slots, and in a redraft the open slots A/B/C with the real KOs they
- * carry. No team judgement (SPEC:437).
+ * carry. Under the tiles sits the collapsed team weakness overview
+ * (`TeamWeaknessTable`), shown once the viewer owns a line.
+ *
+ * No team judgement (SPEC:437): the tiles and the weakness table are factual
+ * (prices, damage multipliers, counts); nothing here rates or scores a team.
  */
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import { useDataLocale, useT } from '@/i18n/client';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import { draftSharedMessages } from '@/i18n/messages/draft/shared';
+import type { SortStage } from '@/lib/draft-finder/filter-types';
 import type { DraftLineCatalog, DraftLineCatalogEntry } from '@/lib/draft-finder/line-catalog';
 import { pkmnNameResolver } from '@/lib/draft-finder/names-port';
+import type { PreparedIndex } from '@/lib/draft-finder/prepare';
 import type { DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
 import type { LineId } from '@/lib/draft-ui/snapshot-types';
 import styles from '../draft-tool.module.css';
+import TeamWeaknessTable from './TeamWeaknessTable';
 
 export interface MyRosterDockProps {
   vm: DraftViewModel;
   catalog: DraftLineCatalog;
+  /** The prepared search index (the weakness overview reads the types from it); null while it loads. */
+  ix: PreparedIndex | null;
+  /** The index failed to load: the weakness overview is hidden. */
+  indexFailed: boolean;
+  /** The stage (Base | Final) the weakness overview reads. */
+  weaknessStage: SortStage;
+  onWeaknessStage(stage: SortStage): void;
+  /** The weakness overview starts expanded (preview scenarios). */
+  initialWeaknessOpen: boolean;
   onPin(lineId: LineId): void;
 }
 
@@ -43,7 +59,7 @@ export function rosterCounts(vm: DraftViewModel, catalog: DraftLineCatalog): { n
   return layout ? { n: layout.owned.length, total: layout.total } : null;
 }
 
-export default function MyRosterDock({ vm, catalog, onPin }: MyRosterDockProps) {
+export default function MyRosterDock({ vm, catalog, ix, indexFailed, weaknessStage, onWeaknessStage, initialWeaknessOpen, onPin }: MyRosterDockProps) {
   const t = useT(draftScreenMessages);
   const tShared = useT(draftSharedMessages);
   const dl = useDataLocale();
@@ -90,6 +106,17 @@ export default function MyRosterDock({ vm, catalog, onPin }: MyRosterDockProps) 
           </li>
         ))}
       </ul>
+      {owned.length > 0 ? (
+        <TeamWeaknessTable
+          owned={owned}
+          ix={ix}
+          indexFailed={indexFailed}
+          stage={weaknessStage}
+          onStageChange={onWeaknessStage}
+          defaultOpen={initialWeaknessOpen}
+          onPin={onPin}
+        />
+      ) : null}
     </section>
   );
 }

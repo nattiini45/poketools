@@ -15,6 +15,7 @@ import { expirePublicTags, publicTags } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { Player, PublicPlayer } from '@/types/player';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { leagueTrashBlockError } from '@/lib/league-trash/errors';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -174,9 +175,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
     // EvoLiga / EPB history (redrafts, trades, evolution events, token grants,
     // snapshots, rating opponents) references players with ON DELETE NO ACTION
-    // as well; refuse up front with the coded 409 rather than letting the
-    // DELETE fail on the foreign key.
-    if (refs.leagueHistory > 0) {
+    // as well, and so does a league in the recycle bin the player appears in
+    // (its captured rows are restored with the player); refuse up front with
+    // the coded 409 rather than letting the DELETE fail on the foreign key.
+    if (refs.leagueHistory > 0 || refs.trashedLeagues > 0) {
       return NextResponse.json<ApiResult<never>>(
         {
           success: false,
@@ -229,6 +231,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     // Residual FK violation (a NOT NULL ref we intentionally leave blocking, or
     // a row added after the pre-check). Map to a clear 409 instead of an opaque 500.
+    // A league moved to the trash after the pre-check answers the same coded 409.
+    const trashBlock = leagueTrashBlockError(err);
+    if (trashBlock) return safeErrorResponse(trashBlock, 'Failed to delete player');
     if ((err as { code?: string })?.code === '23503') {
       console.error('[players] delete blocked by residual FK reference:', err);
       return NextResponse.json<ApiResult<never>>(

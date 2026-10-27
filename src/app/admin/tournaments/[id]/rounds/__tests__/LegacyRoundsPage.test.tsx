@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   getTournamentWithDetails: vi.fn(),
   getRoundsByTournament: vi.fn(),
   getGroupsByTournament: vi.fn(),
-  listRulesets: vi.fn(),
+  listRulesetOptionsFor: vi.fn(),
+  getRulesetPinInfo: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -37,7 +38,9 @@ vi.mock('@/i18n/server', async () => {
 });
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentWithDetails: mocks.getTournamentWithDetails }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: mocks.getRoundsByTournament }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesetOptionsFor: mocks.listRulesetOptionsFor }));
+vi.mock('@/lib/ruleset-studio/pin-info.server', () => ({ getRulesetPinInfo: mocks.getRulesetPinInfo }));
+vi.mock('@/components/ruleset/RulesetPinCard', () => stub('RulesetPinCard'));
 vi.mock('@/lib/supabase/queries/tournament-groups', () => ({ getGroupsByTournament: mocks.getGroupsByTournament }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
@@ -90,14 +93,15 @@ function tournament(participantCount: number) {
   };
 }
 
-const render = (isSiteAdmin = true) => LegacyRoundsPage({ id: ID, isSiteAdmin });
+const render = (isSiteAdmin = true) => LegacyRoundsPage({ id: ID, playerId: 'admin-1', isSiteAdmin });
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getTournamentWithDetails.mockResolvedValue(tournament(8));
   mocks.getRoundsByTournament.mockResolvedValue([]);
   mocks.getGroupsByTournament.mockResolvedValue([]);
-  mocks.listRulesets.mockResolvedValue([]);
+  mocks.getRulesetPinInfo.mockResolvedValue(null);
+  mocks.listRulesetOptionsFor.mockResolvedValue([]);
 });
 
 describe('standalone tournament page: start-up checklist inputs', () => {

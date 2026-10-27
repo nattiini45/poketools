@@ -9,7 +9,8 @@ import { useT } from '@/i18n/client';
 import { draftFinderMessages } from '@/i18n/messages/draft/finder';
 import { STAT_KEYS, type StatKey } from '@/lib/draft-finder/filter-types';
 import { cn } from '@/lib/utils/cn';
-import { FOCUS_RING, type FilterSectionProps } from './types';
+import { type FilterSectionProps } from './types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 const FIELDS: readonly (StatKey | 'bst')[] = [...STAT_KEYS, 'bst'];
 /** Input bounds: a single base stat is at most 255; a BST stays under 1000. */

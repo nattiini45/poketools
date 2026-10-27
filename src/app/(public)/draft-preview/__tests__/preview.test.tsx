@@ -29,9 +29,11 @@ import {
   PREVIEW_LIST_VERSION_ID,
   PREVIEW_PARTICIPATION_LINE,
   PREVIEW_PRESET_LINES,
+  PREVIEW_ROSTER,
   PREVIEW_SCENARIOS,
   PREVIEW_WALL_MAX_PRICE,
   PREVIEW_WALL_PIN,
+  snapPriceIntoTabs,
   type PreviewScenario,
   type PreviewScreen,
 } from '../fixtures';
@@ -116,11 +118,23 @@ describe('fixture-lines.example.json (make-example-list-fixtures output)', () =>
     expect(PREVIEW_ENTRIES.every((e) => e.list_version_id === PREVIEW_LIST_VERSION_ID)).toBe(true);
   });
 
-  it('prices every line inside one of the example price tabs', () => {
+  it('prices every line inside one of the active pack’s price tabs', () => {
     const price = new Map(PREVIEW_ENTRIES.map((e) => [e.line_id ?? '', e.price]));
     const counts = countByTab(price.keys(), (id) => price.get(id) ?? 0);
     expect(counts.all).toBe(48);
     expect(PRICE_TABS.reduce((sum, t) => sum + counts[t.key], 0)).toBe(48);
+  });
+
+  it('snaps a price outside every tab to the nearest tab edge, also across gaps between tabs', () => {
+    const gapped = [
+      { min: 20, max: 25 },
+      { min: 1, max: 10 },
+    ];
+    expect(snapPriceIntoTabs(14, gapped)).toBe(10);
+    expect(snapPriceIntoTabs(16, gapped)).toBe(20);
+    expect(snapPriceIntoTabs(7, gapped)).toBe(7);
+    expect(snapPriceIntoTabs(30, gapped)).toBe(25);
+    expect(snapPriceIntoTabs(0, gapped)).toBe(1);
   });
 
   it('has the example override applied to the participation line and no prose columns', () => {
@@ -698,7 +712,8 @@ describe('rendering (no network, EN + DE)', () => {
     expect(more.filters.stats).toEqual({ spe: 80, bst: 500 });
     expect(more.filters.utility).toHaveLength(1);
     expect(more.filters.utility[0].members).toHaveLength(1);
-    expect(moreHtml).toContain('Filters (4)');
+    // Two stat thresholds, plus one chip for the picked member (the category chip is not shown beside it).
+    expect(moreHtml).toContain('Filters (3)');
 
     // Presets reach the draft room's client as preview props (no separate harness).
     mounts.list.length = 0;
@@ -736,10 +751,11 @@ describe('rendering (no network, EN + DE)', () => {
   it('live-wall: branched and unbranched cards share one card skeleton under the pinned price tabs', () => {
     for (const locale of ['en', 'de'] as const) {
       const html = render('live-wall', locale);
-      // Mixed lines: cards with a branch row and cards whose branch row is an empty placeholder.
+      // Mixed lines: cards with a footer (the final stage) and cards whose footer slot is an empty placeholder.
       expect(html).toContain('data-branch="true"');
       expect(html).toContain('data-branch="false"');
-      expect(html.split('data-card-row="branch"').length).toBe(html.split('role="option"').length);
+      expect(html.split('data-card-row="footer"').length).toBe(html.split('role="option"').length);
+      expect(html.split('data-card-row="head"').length).toBe(html.split('role="option"').length);
       // The tabs come before the grid (pinned on top), with matching/total counts while the price filter is on.
       const tablist = html.indexOf('role="tablist"');
       expect(tablist).toBeGreaterThan(-1);
@@ -748,6 +764,20 @@ describe('rendering (no network, EN + DE)', () => {
       // The pinned branched line.
       expect(html).toMatch(new RegExp(`aria-selected="true"[^>]*data-line-id="${PREVIEW_WALL_PIN}"`));
     }
+  });
+
+  it('live-roster: the team weakness table is open under My roster, with the Base | Final switch and the counts', () => {
+    expect(build('live-roster').preset?.weaknessOpen).toBe(true);
+    for (const locale of ['en', 'de'] as const) {
+      const html = render('live-roster', locale);
+      expect(html).toMatch(/<details [^>]*\bopen=""[^>]*><summary[^>]*>[^<]+<\/summary>/);
+      expect(html).toContain('weaknessTable');
+      expect(html).toMatch(/role="radiogroup"[^>]*aria-label="(?:Typing of|Typen der)"/);
+      // Dawn's owned lines (her second-to-last pick is on the clock) are the rows; the tally rows close the table.
+      expect(html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1].split('</tr>').filter((r) => r.includes('<tr'))).toHaveLength(PREVIEW_ROSTER - 2);
+    }
+    // Every other pick scenario leaves the overview collapsed.
+    expect(build('live-my-turn').preset).toBeNull();
   });
 });
 

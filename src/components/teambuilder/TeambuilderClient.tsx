@@ -31,6 +31,8 @@ interface TeambuilderClientProps {
   rulesetName?: string;
   /** Base format from ruleset (e.g. 'gen9ou') */
   baseFormat?: string;
+  /** The generation the ruleset is for (`ruleset.gen`); without one it is read from `baseFormat`. */
+  gen?: number;
   /** Season ID (for draft/league context) */
   seasonId?: string | null;
   /** Whether this is a draft league */
@@ -47,11 +49,12 @@ export default function TeambuilderClient({
   lockReason = 'tournament',
   // rulesetName is accepted but unused — kept for API compatibility
   baseFormat,
+  gen,
   seasonId,
   isDraftLeague,
 }: TeambuilderClientProps) {
   const t = useT(teambuilderMessages);
-  const generation = getGenFromBaseFormat(baseFormat ?? 'gen9ou');
+  const generation = gen ?? getGenFromBaseFormat(baseFormat ?? 'gen9ou');
 
   return (
     <div className="flex flex-col h-full">

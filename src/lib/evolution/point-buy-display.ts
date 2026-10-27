@@ -1,10 +1,17 @@
 /**
  * Point-buy price-group display helpers (client-safe, pure): how a stored price group is labelled,
- * coloured and filtered. Labels come from the active format pack (`epb.priceGroups`,
- * `epb.priceTabs`); the components render `enums.priceGroup` for the group these return.
+ * coloured, counted and filtered, and how the #roster table narrows and orders its rows. Labels come
+ * from the active format pack (`epb.priceGroups`, `epb.priceTabs`); the components render
+ * `enums.priceGroup` for the group these return.
+ *
+ * The #roster price-group pills and the table share one filter value: a canonical group key
+ * (`priceGroupFilterOptions`) or `''` for all. `togglePriceGroup` is the pill click,
+ * `priceGroupLineCounts` the number on each pill, `filterAndSortRosterEntries` the rows they leave.
  */
-import type { PriceGroup } from '@/types/point-buy';
+import type { PointBuyListEntry, PriceGroup } from '@/types/point-buy';
 import { epbPack } from '@/lib/format-pack';
+import { speciesSearchKeys } from '@/lib/pkmn/i18n/names/species';
+import { foldForSearch } from '@/lib/pkmn/i18n/search';
 
 /**
  * Price range of each price group (`PriceGroup`, `src/types/point-buy.ts`), from the active format pack
@@ -78,4 +85,83 @@ export function priceGroupMatches(
   epb: PriceGroupConfig = epbPack,
 ): boolean {
   return canonicalPriceGroup(entryGroup, epb) === canonicalPriceGroup(selected, epb);
+}
+
+/** The #roster price-group filter: a canonical group key (`priceGroupFilterOptions`), or `''` for every group. */
+export type PriceGroupFilter = PriceGroup | '';
+
+/**
+ * The filter after a click on the pill of `key`: that group, or every group again when it already
+ * is the selected one (a second click clears). Pure.
+ */
+export function togglePriceGroup(
+  current: PriceGroupFilter,
+  key: PriceGroup,
+  epb: PriceGroupConfig = epbPack,
+): PriceGroupFilter {
+  return current !== '' && priceGroupMatches(current, key, epb) ? '' : key;
+}
+
+/**
+ * Lines per displayed group (`priceGroupFilterOptions` order): stored groups that share a label
+ * count under it, so the numbers on the pills add up to the list. Pure.
+ */
+export function priceGroupLineCounts(
+  entries: readonly Pick<PointBuyListEntry, 'price_group'>[],
+  epb: PriceGroupConfig = epbPack,
+): { group: PriceGroup; count: number }[] {
+  const stored: Partial<Record<PriceGroup, number>> = {};
+  for (const { price_group } of entries) stored[price_group] = (stored[price_group] ?? 0) + 1;
+  return countsByDisplayGroup(stored, epb);
+}
+
+/** How the #roster table orders its rows. */
+export type RosterSortKey = 'line' | 'price-asc' | 'price-desc' | 'kills';
+
+/** What narrows and orders the #roster rows. */
+export interface RosterRowQuery {
+  /** Free text; matched, folded and space-free, against every stage's English and German names. */
+  search: string;
+  priceGroup: PriceGroupFilter;
+  sortKey: RosterSortKey;
+}
+
+/**
+ * The #roster rows for a query: lines in the selected price group (stored groups that share a
+ * label match together) whose base, stage 2 or stage 3 species matches the search, in the chosen
+ * order. Returns a new array; `entries` is untouched. Pure.
+ */
+export function filterAndSortRosterEntries<
+  E extends Pick<
+    PointBuyListEntry,
+    | 'price_group'
+    | 'base_pokemon'
+    | 'stage2_pokemon'
+    | 'stage3_pokemon'
+    | 'price'
+    | 'kills_to_stage2'
+    | 'line_number'
+  >,
+>(entries: readonly E[], { search, priceGroup, sortKey }: RosterRowQuery, epb: PriceGroupConfig = epbPack): E[] {
+  const needle = foldForSearch(search).replace(/ /g, '');
+  const rows = entries.filter((entry) => {
+    if (priceGroup && !priceGroupMatches(entry.price_group, priceGroup, epb)) return false;
+    if (!needle) return true;
+    return [entry.base_pokemon, entry.stage2_pokemon, entry.stage3_pokemon]
+      .filter((name): name is string => Boolean(name))
+      .some((name) => speciesSearchKeys(name).compact.some((key) => key.includes(needle)));
+  });
+
+  return rows.sort((a, b) => {
+    switch (sortKey) {
+      case 'price-asc':
+        return a.price - b.price;
+      case 'price-desc':
+        return b.price - a.price;
+      case 'kills':
+        return a.kills_to_stage2 - b.kills_to_stage2;
+      default:
+        return a.line_number - b.line_number;
+    }
+  });
 }

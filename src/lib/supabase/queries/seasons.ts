@@ -1,5 +1,6 @@
 import { cache } from 'react';
 import { supabase } from '../client';
+import { readBoundedPages } from '../read-bounded-pages';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { toDraftRuleError } from '@/lib/draft/rpc-errors';
 import { mapFormatDbError } from '@/lib/format-studio/errors';
@@ -75,7 +76,7 @@ function toSeason(row: SeasonRow): Season {
  */
 const SEASON_DETAILS_SELECT = `
   *,
-  rulesets ( name ),
+  rulesets:ruleset_definition_versions ( name:name_text ),
   season_participants ( count ),
   tournaments ( count )
 `;
@@ -362,10 +363,12 @@ export async function updateSeason(
 }
 
 /**
- * DELETE of a league that a row still points at through a foreign key without
- * an ON DELETE action (phases = `tournaments`, `draft_pools`, `teams`,
+ * HARD DELETE of a league that a row still points at through a foreign key
+ * without an ON DELETE action (phases = `tournaments`, `draft_pools`, `teams`,
  * `season_storylines`, and a draft pick on one of its redraft slots), SQLSTATE
- * 23503. The statement rolled back, so nothing was deleted. HTTP 409.
+ * 23503. The statement rolled back, so nothing was deleted. HTTP 409. Only the
+ * clone rollback (`rollbackClonedLeague`) can see it now: the league DELETE
+ * route moves a league to the trash instead and is never blocked.
  */
 export class SeasonHasDependentsError extends UserFacingError<'SEASON_HAS_DEPENDENTS'> {
   /** The constraint Postgres named (for the log line; never sent to clients). */
@@ -382,10 +385,15 @@ export class SeasonHasDependentsError extends UserFacingError<'SEASON_HAS_DEPEND
 }
 
 /**
- * Delete a league. Its cascading children (participants, trackers, format
- * rules, ...) go with it; a row that still references it without ON DELETE
- * refuses the whole statement (23503), which answers `SeasonHasDependentsError`
- * (409) naming nothing internal. Every other error propagates as it is.
+ * Hard-delete a league, with no trash entry and no way back. This is the
+ * primitive of the clone rollback only (`rollbackClonedLeague` in
+ * `src/lib/season/clone.ts`, which removes a league it created seconds ago and
+ * never restores it); `DELETE /api/seasons/[id]` calls `trashLeague`
+ * (`src/lib/league-trash`) so that a deleted league stays restorable. Its
+ * cascading children (participants, trackers, format rules, ...) go with it; a
+ * row that still references it without ON DELETE refuses the whole statement
+ * (23503), which answers `SeasonHasDependentsError` (409) naming nothing
+ * internal. Every other error propagates as it is.
  */
 export async function deleteSeason(id: string): Promise<void> {
   const { error } = await supabase.from('seasons').delete().eq('id', id);
@@ -699,6 +707,30 @@ export async function getParticipantCore(
   if (error) throw error;
   if (!data) return null;
   return toCoreTriple(data.core_types);
+}
+
+/**
+ * The assigned Core Liga triples of a whole roster in one read (player id to core, only players that have one), for a
+ * check that validates many teams against rules that depend on the core (`getParticipantCore` is the one-player twin).
+ * Complete under `max_rows`.
+ */
+export async function listParticipantCores(seasonId: string): Promise<Map<string, CoreTriple>> {
+  const { rows } = await readBoundedPages<{ player_id: string; core_types: unknown }>(
+    (from, to) =>
+      supabase
+        .from('season_participants')
+        .select('player_id, core_types')
+        .eq('season_id', seasonId)
+        .order('player_id')
+        .range(from, to),
+    { label: 'listParticipantCores' },
+  );
+  const cores = new Map<string, CoreTriple>();
+  for (const row of rows) {
+    const core = toCoreTriple(row.core_types);
+    if (core) cores.set(row.player_id, core);
+  }
+  return cores;
 }
 
 /**

@@ -136,7 +136,7 @@ There is no monotype tier (never built; `docs/deprecations.md`).
 ### Team validation
 - `POST /api/validate-team` — Validates against ruleset constraints
 - `src/lib/pkmn/validation.ts` — Set legality checking
-- Supports custom league rulesets via `resolveEffectiveRuleset()`
+- Validates against the ruleset the tournament pins (an immutable version, `getRulesetById`); the validator reads only that version's frozen resolved rules (block and allow lists, Species and Item Clause, team constraints)
 
 ## Creator Hub
 

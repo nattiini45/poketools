@@ -14,7 +14,9 @@
  * - Layout: the root wrapper stays `position: relative` (the arrow-key walk measures `offsetTop` /
  *   `offsetLeft` against it); the screen passes `.wallScroll` so it becomes the scroll container from
  *   1024 px, and `focus()` scrolls the focused card into view inside it. Rows have one fixed height
- *   (`.wallGrid`, the `--draft-card-h` token), matching `RosterCard`'s fixed size.
+ *   (`.wallGrid`, the `--draft-card-h` token), matching `RosterCard`'s fixed size. The grid's tracks
+ *   (`--draft-card-min`) and its inline padding (the skewed frames' corner overhang plus the pinned ring,
+ *   `--draft-card-grid-inset`) are CSS, so the slant never adds horizontal scroll range.
  */
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { nextIndexForKey, type GridTile } from '@/components/draft-tool/grid-nav';
@@ -162,7 +164,7 @@ export default function RosterWall({
         }}
         className={cn(
           styles.wallGrid,
-          'grid gap-x-3 gap-y-2 px-3 py-2 [grid-template-columns:repeat(auto-fill,minmax(84px,1fr))] lg:[grid-template-columns:repeat(auto-fill,minmax(104px,1fr))]',
+          'grid gap-x-3 gap-y-2 py-2',
         )}
       >
         {entries.map((entry) => {

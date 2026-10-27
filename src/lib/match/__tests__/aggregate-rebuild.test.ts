@@ -22,7 +22,7 @@ vi.mock('@/lib/revalidation', () => ({
   revalidatePublicPath: vi.fn(),
 }));
 
-import { rebuildAggregatesForScope } from '../aggregate-rebuild';
+import { drainPendingAggregateJobs, rebuildAggregatesForScope } from '../aggregate-rebuild';
 import {
   clearAggregatesForScope,
   updateAggregatesForScope,
@@ -32,7 +32,7 @@ import {
   getNewestGameCreatedAt,
   listGamesForAggregateRebuild,
 } from '@/lib/supabase/queries/games';
-import { listGameIdsWithLiveIncrementJobs } from '@/lib/match/aggregate-queue';
+import { getAggregateJobStats, listGameIdsWithLiveIncrementJobs, processAggregateJobs } from '@/lib/match/aggregate-queue';
 import type { ScopeGameRow } from '@/lib/supabase/queries/games';
 import type { BattleStat } from '@/types/game';
 
@@ -169,5 +169,37 @@ describe('rebuildAggregatesForScope — fence against the aggregate queue', () =
 
     expect(order).toEqual(['clear', 'fence']);
     expect(listGamesForAggregateRebuild).toHaveBeenCalledWith('league', 's1', 0, 100, '2026-10-19T00:00:00Z');
+  });
+});
+
+describe('drainPendingAggregateJobs', () => {
+  const pending = (n: number) => ({ pending: n, processing: 0, completed: 0, failed: 0, cancelled: 0 });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(processAggregateJobs).mockResolvedValue({ processed: 1, failed: 0, reclaimed: 0 });
+  });
+
+  it('runs rounds until nothing is pending', async () => {
+    vi.mocked(getAggregateJobStats)
+      .mockResolvedValueOnce(pending(2)) // before round 1
+      .mockResolvedValueOnce(pending(1)) // after round 1
+      .mockResolvedValueOnce(pending(1)) // before round 2
+      .mockResolvedValueOnce(pending(0)) // after round 2
+      .mockResolvedValue(pending(0));
+
+    const result = await drainPendingAggregateJobs({ batchSize: 1 });
+
+    expect(processAggregateJobs).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ rounds: 2, processed: 2 });
+  });
+
+  it('starts no round once the deadline has passed and leaves the rest to the cron', async () => {
+    vi.mocked(getAggregateJobStats).mockResolvedValue(pending(40));
+
+    const result = await drainPendingAggregateJobs({ deadline: Date.now() - 1 });
+
+    expect(processAggregateJobs).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ rounds: 0, statsAfter: pending(40) });
   });
 });

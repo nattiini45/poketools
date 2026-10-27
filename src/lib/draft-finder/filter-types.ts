@@ -8,10 +8,21 @@ import type { PriceTabKey } from '@/lib/draft/price-tabs';
 import type { TypeId } from './index-types';
 
 export type { PriceTabKey };
-export type StageMode = 'same_stage' | 'anywhere';
+/** How the filters match across a line's stages (FR-6). Also the allowlist of the stored preference. */
+export const STAGE_MODES = ['same_stage', 'anywhere'] as const;
+export type StageMode = (typeof STAGE_MODES)[number];
 /** = `StatKey` of `src/lib/pkmn/i18n/types.ts` (declared here so only `names-port.ts` touches the pkmn layer). */
 export type StatKey = 'hp' | 'atk' | 'def' | 'spa' | 'spd' | 'spe';
-export type SortKey = 'default' | 'alpha' | 'favorites' | 'spe' | 'atk' | 'def' | 'spa' | 'spd' | 'bst';
+/** Every sort of the wall, in the order of the select; also the allowlist of the stored preference. */
+export const SORT_KEYS = ['default', 'alpha', 'favorites', 'spe', 'atk', 'def', 'spa', 'spd', 'bst'] as const;
+export type SortKey = (typeof SORT_KEYS)[number];
+/**
+ * Which stage of a line a stat reading uses: the line's first stage (`base`) or its last (`final`, stage 3, or
+ * stage 2 of a two-stage line). The stat sorts read it from `sortStage`; the team weakness overview from its
+ * own `weaknessStage` preference. Also the allowlist of both stored preferences.
+ */
+export const SORT_STAGES = ['base', 'final'] as const;
+export type SortStage = (typeof SORT_STAGES)[number];
 export type DefenseRelation = 'resists' | 'immune' | 'weak';
 
 /** Stat order of `StatTuple` (index-types.ts). */
@@ -74,6 +85,8 @@ export interface FinderViewState {
   tab: PriceTabKey;
   /** default 'default', persisted */
   sort: SortKey;
+  /** The stage whose stats the stat sorts and BST read; default 'final', persisted. */
+  sortStage: SortStage;
   /** default true (FR-7), persisted */
   showDrafted: boolean;
   pinnedLineId: LineId | null;
@@ -101,13 +114,14 @@ export const EMPTY_FILTERS: FinderFilters = {
 
 /** The default view; `prefs` are the persisted per-viewer preferences and the session's pinned line. */
 export function initialFinderState(
-  prefs?: Partial<Pick<FinderViewState, 'stageMode' | 'sort' | 'showDrafted' | 'pinnedLineId'>>,
+  prefs?: Partial<Pick<FinderViewState, 'stageMode' | 'sort' | 'sortStage' | 'showDrafted' | 'pinnedLineId'>>,
 ): FinderViewState {
   return {
     filters: EMPTY_FILTERS,
     stageMode: prefs?.stageMode ?? 'same_stage',
     tab: 'all',
     sort: prefs?.sort ?? 'default',
+    sortStage: prefs?.sortStage ?? 'final',
     showDrafted: prefs?.showDrafted ?? true,
     pinnedLineId: prefs?.pinnedLineId ?? null,
     compareLineIds: [],
@@ -148,6 +162,7 @@ export type FinderAction =
   | { type: 'setStageMode'; mode: StageMode }
   | { type: 'setTab'; tab: PriceTabKey }
   | { type: 'setSort'; sort: SortKey }
+  | { type: 'setSortStage'; stage: SortStage }
   | { type: 'setShowDrafted'; on: boolean }
   | { type: 'pin'; lineId: LineId | null }
   | { type: 'toggleCompare'; lineId: LineId }

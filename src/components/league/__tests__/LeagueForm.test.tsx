@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
 import { LeagueDateFields } from '../league-form-fields';
 import LeagueForm, { buildLeagueFormPayload, type LeagueFormValues } from '../LeagueForm';
+import { makeRulesetOption } from '@/test/ruleset-fixtures';
 
 const noopSubmit = vi.fn(async () => null);
 
@@ -62,21 +63,11 @@ function leagueTypeSelect(html: string): string {
   return match ? match[0] : '';
 }
 
-const ruleset = {
+const ruleset = makeRulesetOption({
   id: '11111111-1111-4111-8111-111111111111',
   name: 'Gen 9 RU',
   base_format: 'gen9ru',
-  is_doubles: false,
-  clauses: [],
-  bans: { pokemon: [], moves: [], items: [], abilities: [] },
-  additions: { pokemon: [] },
-  custom_rules_string: '',
-  min_shared_type_pct: 0,
-  team_constraints: null,
-  created_by: null,
-  created_at: '',
-  updated_at: '',
-};
+});
 
 describe('LeagueForm league type and battle ruleset (FA-4)', () => {
   it('labels the field League type with form-local options; the point-buy label comes from the pack', () => {

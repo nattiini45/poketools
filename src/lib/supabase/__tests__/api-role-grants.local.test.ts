@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { Database } from '@/types/database';
 import { PRIVATE_MATCH_FIELDS, PUBLIC_MATCH_FIELDS } from '@/lib/match/public-match';
 import { PRIVATE_MATCH_SENTINELS } from '@/lib/match/__tests__/private-match-fields';
+import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 
 // LIVE-LOCAL test: proves the DATABASE refuses schema `public` to the API
 // roles (`anon`, `authenticated`), whatever the app does. The anon key ships
@@ -170,7 +171,7 @@ describe.skipIf(!optIn)('API-role privileges on schema public (local stack)', ()
       const { error } = await op;
       if (error) throw new Error(`[seed ${label}] ${JSON.stringify(error)}`);
     };
-    await seed('rulesets', service.from('rulesets').insert({ id: ids.ruleset, name: `Grants ${RUN} Ruleset` }));
+    await seed('rulesets', insertLocalRuleset(service, { id: ids.ruleset, name: `Grants ${RUN} Ruleset` }));
     await seed(
       'players',
       service.from('players').insert([
@@ -232,7 +233,7 @@ describe.skipIf(!optIn)('API-role privileges on schema public (local stack)', ()
     await del('rounds', service.from('rounds').delete().eq('id', ids.round));
     await del('tournaments', service.from('tournaments').delete().eq('id', ids.tournament));
     await del('players', service.from('players').delete().in('id', [ids.p1, ids.p2]));
-    await del('rulesets', service.from('rulesets').delete().eq('id', ids.ruleset));
+    await del('rulesets', deleteLocalRuleset(service, ids.ruleset));
     if (authUserId) await del('auth user', service.auth.admin.deleteUser(authUserId));
     if (failures.length > 0) throw new Error(`[cleanup] ${failures.join('; ')}`);
   }, 60000);

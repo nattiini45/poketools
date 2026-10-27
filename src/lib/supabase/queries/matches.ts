@@ -799,7 +799,7 @@ export async function listAdminMatchFilterOptions(scope: {
         ),
     readRowsByIds<AdminMatchRulesetOption>(
       tournamentRows.map((row) => row.ruleset_id),
-      (chunk) => supabase.from('rulesets').select('id, name').in('id', chunk).order('id')
+      (chunk) => supabase.from('ruleset_definition_versions').select('id, name:name_text').in('id', chunk).order('id')
     ),
   ]);
 

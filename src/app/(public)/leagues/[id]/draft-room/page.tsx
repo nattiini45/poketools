@@ -50,7 +50,9 @@ function EmptyState({ children }: { children: ReactNode }) {
 /**
  * `/leagues/[id]/draft-room` — the EPB pick screen (draft-frontend §3.1).
  *
- * Public page: spectators see the server seed; signed-in viewers poll.
+ * Public page: spectators see the server seed; signed-in viewers poll. The
+ * title block, the group switch and the redraft notice are handed to the room
+ * as its `header` row, so they sit inside the room's fixed desktop height.
  * The viewer, the pool-admin flag and the admin links come from the LIVE
  * access check (`getLiveAccess` + `isResourceAdminFor`, as `gateDraftAdmin`
  * does), never from the up-to-5-minutes-stale session copy: a revoked admin
@@ -233,37 +235,46 @@ export default async function DraftRoomPage({ params, searchParams }: PageProps)
     };
   }
 
+  // The page header goes INTO the room as its first row (`header`), not above it: on desktop the room is a box of
+  // fixed height (the viewport minus nav and padding), so a header rendered above would make the document scroll
+  // by exactly its height. Its height is dynamic (group switch, notice, German wrapping), which the room's grid
+  // absorbs without measuring it.
+  const header = (
+    <>
+      <div>
+        <h1 className="text-2xl font-bold">{t('page.title', { league: league.name })}</h1>
+        <p className="text-sm text-poke-text-secondary mt-1">
+          {t('page.subtitle', { count: league.participant_count })}
+        </p>
+        {legacyPools.some((p) => p.kind === 'initial') ? (
+          <p className="text-sm text-poke-text-secondary mt-1">
+            {t('page.legacyInitial')}{' '}
+            <Link href={legacyBoardHref(id)} className="text-poke-text-link hover:underline">
+              {t('page.legacyInitialBoard')}
+            </Link>
+          </p>
+        ) : null}
+        {picker ? <GroupPoolPicker options={picker.options} labels={picker.labels} /> : null}
+      </div>
+
+      {reason === 'submissions' ? (
+        // Before the snapshot seeds (failed read), the pool's own phase stands in.
+        <RedraftPhaseNotice
+          phase={snapshot?.redraft?.phase ?? 'submissions'}
+          deadlineAt={snapshot?.redraft?.deadline_at ?? null}
+          links={{ redraft: `/leagues/${id}/redraft` }}
+        />
+      ) : null}
+    </>
+  );
+
   return (
     <WorldShell world={world}>
       <WorldOverrideRedirect />
       <div>
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">{t('page.title', { league: league.name })}</h1>
-          <p className="text-sm text-poke-text-secondary mt-1">
-            {t('page.subtitle', { count: league.participant_count })}
-          </p>
-          {legacyPools.some((p) => p.kind === 'initial') ? (
-            <p className="text-sm text-poke-text-secondary mt-1">
-              {t('page.legacyInitial')}{' '}
-              <Link href={legacyBoardHref(id)} className="text-poke-text-link hover:underline">
-                {t('page.legacyInitialBoard')}
-              </Link>
-            </p>
-          ) : null}
-          {picker ? <GroupPoolPicker options={picker.options} labels={picker.labels} /> : null}
-        </div>
-
-        {reason === 'submissions' ? (
-          // Before the snapshot seeds (failed read), the pool's own phase stands in.
-          <RedraftPhaseNotice
-            phase={snapshot?.redraft?.phase ?? 'submissions'}
-            deadlineAt={snapshot?.redraft?.deadline_at ?? null}
-            links={{ redraft: `/leagues/${id}/redraft` }}
-          />
-        ) : null}
-
         <DraftRoomClient
           key={pool.id}
+          header={header}
           poolId={pool.id}
           seasonId={id}
           seasonGroup={seasonGroupOf(pool.id)}

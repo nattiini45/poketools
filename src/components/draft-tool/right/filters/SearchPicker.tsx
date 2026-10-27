@@ -15,7 +15,8 @@ import type { NameResolver } from '@/lib/draft-finder/names-port';
 import { foldQuery, isEmptyQuery, stageMatchesText } from '@/lib/draft-finder/search';
 import type { SearchKeys } from '@/lib/pkmn/i18n/search';
 import { cn } from '@/lib/utils/cn';
-import { FOCUS_RING, pillClass } from './types';
+import { pillClass } from './types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 export interface PickerEntry {
   /** @pkmn id */

@@ -2,8 +2,9 @@
  * Filter sheet groups (draft-frontend §5.5 `FilterPanel`). Client-safe, pure.
  *
  * Every chip of `buildChips` belongs to exactly one group, so the group counts add up to the chip count
- * (unit-tested): Pokémon = types + maximum price; Moves and abilities; Base stats; Utility = categories
- * plus their picked members; Defensive matchups = relation/type pairs. The search text is no group's.
+ * (unit-tested): Pokémon = types + maximum price; Moves and abilities; Base stats; Utility = one per
+ * category without picked members, otherwise one per picked member; Defensive matchups = relation/type
+ * pairs. The search text is no group's.
  */
 import type { UtilityKey } from '@/types/draft-queue';
 import {
@@ -20,7 +21,7 @@ export function filterGroupCounts(f: FinderFilters): Record<FilterGroupKey, numb
     pokemon: f.types.ids.length + (f.maxPrice === null ? 0 : 1),
     movesAbilities: f.moves.ids.length + f.abilities.ids.length,
     stats: Object.keys(f.stats).length,
-    utility: f.utility.reduce((n, u) => n + 1 + u.members.length, 0),
+    utility: f.utility.reduce((n, u) => n + Math.max(1, u.members.length), 0),
     defense: f.defense.length,
   };
 }

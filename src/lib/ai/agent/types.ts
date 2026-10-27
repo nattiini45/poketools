@@ -52,7 +52,8 @@ export interface AgentContext {
   core_pokemon?: string[];
   /**
    * Active league ruleset id (e.g. the tournament/match-prep ruleset). When
-   * present the orchestrator loads it (via `resolveEffectiveRuleset`) and the
+   * present the orchestrator reads it (through `readExposedRuleset`, so only a
+   * shared ruleset or one pinned by a league or phase) and the
    * player's assigned core, so the assistant builds within the league's bans,
    * clauses, type-quotas and core constraints — not just the base format.
    * Distinct from {@link core_pokemon} (user "build-around" species).

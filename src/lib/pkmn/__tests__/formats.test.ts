@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import {
   FORMAT_DEFAULTS,
+  PRESETS,
+  getPreset,
+  getTierSource,
   GENERATIONS,
-  ALL_CLAUSES,
-  getFormatDefaults,
   getFormatName,
   getValidFormats,
   getTiersForGen,
@@ -11,6 +13,9 @@ import {
   formatDisplayName,
 } from '../formats';
 // Types FormatDefaults and GenerationInfo validated by structural tests below
+import { parseFormatId } from '../format-id';
+import { clauseId } from '../clauses';
+import { SEED_FORMAT_IDS } from '../seed-format-ids';
 
 // ── GENERATIONS metadata ───────────────────────────────────────────
 
@@ -43,6 +48,18 @@ describe('GENERATIONS', () => {
     expect(gen9.tiers).toContain('vgc');
     expect(gen9.tiers).toContain('monotype');
     expect(gen9.tiers).toContain('1v1');
+  });
+
+  it('lists the Smogon draft formats under the generations that have them', () => {
+    expect(GENERATIONS.find((g) => g.num === 9)!.tiers).toEqual(expect.arrayContaining(['draft', 'natdexdraft', 'natdexlcdraft', 'doublesdraft', 'natdexdoublesdraft', 'doubles4draft', 'championsdraft', 'championsnatdexdraft', 'champions4doublesdraft']));
+    expect(GENERATIONS.find((g) => g.num === 8)!.tiers).toEqual(expect.arrayContaining(['draft', 'natdexdraft', 'natdexdoubles4draft']));
+    expect(GENERATIONS.find((g) => g.num === 3)!.tiers).toContain('draft');
+    expect(GENERATIONS.find((g) => g.num === 2)!.tiers).not.toContain('draft');
+    expect(GENERATIONS.find((g) => g.num === 1)!.tiers).toEqual(['ou', 'uu', 'nu', 'lc', 'ubers']);
+  });
+
+  it('keeps the legacy tier order of a generation, with the new formats after the ladder tiers they extend', () => {
+    expect(GENERATIONS.find((g) => g.num === 7)!.tiers.slice(0, 15)).toEqual(['ou', 'uu', 'ru', 'nu', 'pu', 'zu', 'lc', 'nfe', 'ubers', 'ag', 'cap', 'doublesou', 'vgc', 'monotype', '1v1']);
   });
 
   it('Gen 1 does not include VGC or modern tiers', () => {
@@ -133,20 +150,6 @@ describe('FORMAT_DEFAULTS', () => {
     const dou = FORMAT_DEFAULTS['gen9doublesou'];
     expect(dou).toBeDefined();
     expect(dou.is_doubles).toBe(true);
-  });
-});
-
-// ── getFormatDefaults ──────────────────────────────────────────────
-
-describe('getFormatDefaults', () => {
-  it('returns matching format for known format ID', () => {
-    const result = getFormatDefaults('gen9ou');
-    expect(result.name).toBe('Gen 9 OU');
-  });
-
-  it('returns blank for unknown format ID', () => {
-    const result = getFormatDefaults('gen99unknown');
-    expect(result).toEqual(FORMAT_DEFAULTS['blank']);
   });
 });
 
@@ -261,22 +264,6 @@ describe('formatDisplayName', () => {
   });
 });
 
-// ── ALL_CLAUSES ────────────────────────────────────────────────────
-
-describe('ALL_CLAUSES', () => {
-  it('contains standard clauses', () => {
-    expect(ALL_CLAUSES).toContain('Species Clause');
-    expect(ALL_CLAUSES).toContain('Sleep Clause Mod');
-    expect(ALL_CLAUSES).toContain('Endless Battle Clause');
-    expect(ALL_CLAUSES).toContain('Item Clause');
-  });
-
-  it('contains gen-specific clauses', () => {
-    expect(ALL_CLAUSES).toContain('Dynamax Clause');
-    expect(ALL_CLAUSES).toContain('Terastal Clause');
-  });
-});
-
 // ── format-catalog parity (client-safe split) ──────────────────────
 
 describe('format-catalog', () => {
@@ -297,7 +284,141 @@ describe('format-catalog', () => {
   it('formats.ts re-exports the catalog values', async () => {
     const catalog = await import('../format-catalog');
     expect(GENERATIONS).toBe(catalog.GENERATIONS);
-    expect(ALL_CLAUSES).toBe(catalog.ALL_CLAUSES);
     expect(getFormatName).toBe(catalog.getFormatName);
+  });
+});
+
+// ── The preset catalog ─────────────────────────────────────────────
+
+describe('PRESETS', () => {
+  it('has one preset per format id of the catalog, each a valid id with its name, generation and tier', () => {
+    expect(PRESETS.map((preset) => preset.id).sort()).toEqual(getValidFormats().filter((id) => id !== 'blank').sort());
+    for (const preset of PRESETS) {
+      expect(parseFormatId(preset.id), preset.id).toEqual({ gen: preset.gen, key: preset.tier });
+      expect(preset.name, preset.id).toBe(`Gen ${preset.gen} ${preset.tierLabel}`);
+      expect(getPreset(preset.id)).toBe(preset);
+    }
+    expect(getPreset('blank')).toBeUndefined();
+    expect(getPreset(undefined)).toBeUndefined();
+  });
+
+  it('has the 17 Smogon draft formats of Showdown, mod by mod, all off the ladder search', () => {
+    const drafts = PRESETS.filter((preset) => preset.source === 'smogon-draft');
+    expect(drafts.map((preset) => preset.showdownId).sort()).toEqual(
+      [
+        'gen3draft', 'gen4draft', 'gen5draft', 'gen6draft', 'gen7draft', 'gen8draft', 'gen9draft',
+        'gen8natdexdraft', 'gen9natdexdraft', 'gen9natdexlcdraft',
+        'gen96v6doublesdraft', 'gen9natdex6v6doublesdraft', 'gen94v4doublesdraft', 'gen8natdex4v4doublesdraft',
+        'gen9championsdraft', 'gen9championsnatdexdraft', 'gen9champions4v4doublesdraft',
+      ].sort(),
+    );
+    expect(drafts).toHaveLength(17);
+    expect(drafts.every((preset) => !preset.searchShow)).toBe(true);
+    expect(drafts.filter((preset) => preset.mod === 'champions').map((preset) => preset.id)).toEqual([
+      'gen9championsdraft', 'gen9championsnatdexdraft', 'gen9champions4doublesdraft',
+    ]);
+    expect(drafts.filter((preset) => preset.gameType === 'doubles')).toHaveLength(5);
+    // The catalog ids avoid a leading digit in the key where Showdown's own id has one.
+    expect(getPreset('gen9doublesdraft')?.showdownId).toBe('gen96v6doublesdraft');
+    expect(getPreset('gen9doubles4draft')?.showdownId).toBe('gen94v4doublesdraft');
+    expect(getPreset('gen9ou')).toMatchObject({ source: 'showdown', mod: 'gen9', universe: 'standard', showdownId: 'gen9ou', family: 'singles' });
+    expect(getPreset('gen9ag')?.showdownId).toBe('gen9anythinggoes');
+    expect(getPreset('gen9vgc')?.showdownId).toBeNull();
+  });
+
+  it('is Showdown-faithful: the clauses of each draft format are the ones its source defines', () => {
+    const clauses = (id: string) => getPreset(id)!.clauses.map(clauseId);
+    // Standard Draft: no Species Clause, no Moody, no Item Clause, no Terastal Clause.
+    expect(clauses('gen9draft')).toEqual(['nicknameclause', 'sleepclausemod', 'ohkoclause', 'evasionclause', 'endlessbattleclause']);
+    expect(clauses('gen8draft')).toEqual([...clauses('gen9draft'), 'dynamaxclause']);
+    expect(clauses('gen5draft')).toEqual([...clauses('gen9draft'), 'drypassclause', 'gemsclause', 'sleepmovesclause']);
+    // The gen 3 mod replaces Standard Draft with four more clauses.
+    expect(clauses('gen3draft')).toEqual([...clauses('gen9draft'), 'oneboostpasserclause', 'freezeclausemod', 'accuracymovesclause', 'batonpasstrapclause']);
+    // The Champions mod brings the Species Clause and repeals the Item Clause.
+    expect(clauses('gen9championsdraft')).toEqual(['speciesclause', ...clauses('gen9draft')]);
+    expect(clauses('gen9natdexlcdraft')).toEqual([...clauses('gen9draft'), 'itemclause']);
+    expect(getPreset('gen9natdexlcdraft')!.rules).toMatchObject({ itemClauseLimit: 2, littleCup: true, maxLevel: 5 });
+  });
+
+  it('carries the rule facts of the source: team preview, level, team size, source generation', () => {
+    expect(getPreset('gen3draft')!.rules.teamPreview).toBe(false);
+    expect(getPreset('gen4draft')!.rules.teamPreview).toBe(false);
+    expect(getPreset('gen5draft')!.rules.teamPreview).toBe(true);
+    expect(getPreset('gen9draft')!.rules).toMatchObject({ minSourceGen: 9, unmodelled: ['min_source_gen'] });
+    expect(getPreset('gen7draft')!.rules.unmodelled).toEqual(['lgpe_species']);
+    expect(getPreset('gen9doubles4draft')!.rules).toMatchObject({ level: 50, pickedTeamSize: 4, itemClauseLimit: 1 });
+    expect(getPreset('gen9natdexdoublesdraft')!.rules.minSourceGen).toBe(3);
+    expect(getPreset('gen9championsdraft')!.rules).toMatchObject({ level: 50, minTeamSize: 6 });
+    expect(getPreset('gen9ou')!.rules).toMatchObject({ teamPreview: true, level: null, littleCup: false, unmodelled: [] });
+    expect(getPreset('gen4ou')!.rules.teamPreview).toBe(false);
+    expect(getPreset('gen91v1')!.rules.pickedTeamSize).toBe(1);
+  });
+
+  it('flags the three presets with documented Smogon tour extras', () => {
+    expect(PRESETS.filter((preset) => preset.tourOverlay).map((preset) => preset.id)).toEqual(['gen9natdexdraft', 'gen9natdexlcdraft', 'gen9doublesdraft']);
+  });
+
+  it('keeps ban lists out of the dex-free catalog', () => {
+    expect(JSON.stringify(PRESETS)).not.toMatch(/banned_|Last Respects|Koraidon/);
+    for (const preset of PRESETS) {
+      expect(Object.keys(preset.rules).sort()).toEqual([
+        'itemClauseLimit', 'level', 'littleCup', 'maxLevel', 'minSourceGen', 'minTeamSize', 'pickedTeamSize', 'teamPreview', 'unmodelled',
+      ]);
+    }
+  });
+
+  it('knows which source a tier key belongs to', () => {
+    expect(getTierSource('ou')).toBe('showdown');
+    expect(getTierSource('natdexdraft')).toBe('smogon-draft');
+    expect(getTierSource('nope')).toBeUndefined();
+  });
+});
+
+describe('format ids with a digit-led key', () => {
+  it('formatDisplayName and getFallbackFormats read gen91v1 as generation 9', () => {
+    expect(formatDisplayName('gen91v1')).toBe('Gen 9 1v1');
+    expect(formatDisplayName('gen96v6doublesdraft')).toBe('Gen 9 6V6DOUBLESDRAFT');
+    expect(getFallbackFormats('gen91v1')).toContain('gen9ou');
+    expect(getFallbackFormats('gen91v1').every((id) => id.startsWith('gen9'))).toBe(true);
+    expect(getFallbackFormats('gen91v1')).not.toContain('gen911v1');
+  });
+
+  it('gen9 alone is a generation, not a format with a tier', () => {
+    expect(formatDisplayName('gen9')).toBe('gen9');
+    expect(getFallbackFormats('gen9')).toEqual([]);
+  });
+
+  it('a draft format has no usage statistics and so no fallback; a National Dex format falls back to the singles ladder', () => {
+    expect(getFallbackFormats('gen9natdexdraft')).toEqual([]);
+    expect(getFallbackFormats('gen9championsdraft')).toEqual([]);
+    expect(getFallbackFormats('gen9nationaldexuu')).toEqual(expect.arrayContaining(['gen9ou', 'gen9uu']));
+    expect(getFallbackFormats('gen9doublesubers')).toEqual(['gen9doublesou', 'gen9vgc']);
+    expect(getFallbackFormats('gen9doubleslc')).toEqual(['gen9doublesou', 'gen9vgc']);
+  });
+});
+
+describe('the formats that existed before the preset catalog', () => {
+  // A fingerprint of the 86 formats other than the National Dex ones, taken from the code before the catalog was
+  // rebuilt on PRESETS: their names, clauses and bans are unchanged. (The National Dex formats were corrected on
+  // purpose, below.) Changing one of these formats on purpose means recording the new fingerprint with the reason.
+  const LEGACY_FINGERPRINT = '7705cbb62181b54f81a0ec8c00e4cb83bee398959d610e097ce7ec1ac0ad9187';
+
+  it('keeps their clauses and bans', () => {
+    const ids = SEED_FORMAT_IDS.filter((id) => !id.includes('nationaldex')).sort();
+    const rows = ids.map((id) => {
+      const d = FORMAT_DEFAULTS[id];
+      return [id, d.name, d.gen, d.tier, d.is_doubles, d.clauses, d.banned_pokemon, d.banned_moves, d.banned_items];
+    });
+    expect(ids).toHaveLength(86);
+    expect(createHash('sha256').update(JSON.stringify(rows)).digest('hex')).toBe(LEGACY_FINGERPRINT);
+  });
+
+  it('gives the National Dex formats the corrected bans: past species, Assist, Quick Claw, Last Respects, Shed Tail, Moody', () => {
+    const natdex = FORMAT_DEFAULTS['gen9nationaldex'];
+    expect(natdex.banned_pokemon).toEqual(expect.arrayContaining(['Mewtwo-Mega-X', 'Genesect', 'Koraidon']));
+    expect(natdex.banned_moves).toEqual(['Assist', 'Baton Pass', 'Last Respects', 'Shed Tail']);
+    expect(natdex.banned_items).toEqual(["King's Rock", 'Quick Claw', 'Razor Fang']);
+    expect(natdex.banned_abilities).toEqual(['Arena Trap', 'Moody', 'Power Construct', 'Shadow Tag']);
+    expect(FORMAT_DEFAULTS['gen8nationaldex'].banned_moves).toEqual(['Baton Pass']);
   });
 });

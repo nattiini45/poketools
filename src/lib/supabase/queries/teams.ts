@@ -1,10 +1,11 @@
 import { supabase } from '../client';
 import { ilikeAnyOf, postgrestQuoted } from '../postgrest-filter';
+import { readBoundedPages } from '../read-bounded-pages';
 import type { Tables, Json } from '@/types/database';
 import type { AggregateScope } from '@/types/game';
 import type { MatchStatus } from '@/types/match';
 import type { TeamVisibility } from '@/types/tournament';
-import { throwTeamWriteError } from '@/lib/team/completed-match-lock';
+import { isCompletedMatchLocked, throwTeamWriteError } from '@/lib/team/completed-match-lock';
 import type {
   Team,
   TeamFormData,
@@ -829,4 +830,52 @@ export async function forkTeam(source: Team, targetPlayerId: string): Promise<Te
 
   if (error) throw error;
   return toTeam(data);
+}
+
+/** One team row as the ruleset pin check reads it: the roster and whose it is, nothing else. */
+export interface PinImpactTeam {
+  id: string;
+  player_id: string;
+  pokemon: PokemonSet[];
+}
+
+/**
+ * The teams a ruleset pin governs, for the check that counts how many would become invalid when the pin moves
+ * (`src/lib/ruleset-studio/pin-impact.server.ts`): a league's own teams (`season_id`, no phase) or a phase's or standalone
+ * tournament's teams (`tournament_id`). A team that can no longer change is left out: a manually locked row, and a row linked
+ * to a completed match (`isCompletedMatchLocked`), whose roster is history. Reads the roster only (no share or library
+ * columns), in `.range()` pages, and returns at most `limit` teams with `truncated` set when there were more.
+ */
+export async function listTeamsForPinImpact(
+  scope: { kind: 'season' | 'tournament'; id: string },
+  limit: number
+): Promise<{ teams: PinImpactTeam[]; truncated: boolean }> {
+  const pages = Math.max(1, Math.ceil(limit / 1000));
+  const { rows, truncated } = await readBoundedPages<{
+    id: string;
+    player_id: string;
+    pokemon: Json;
+    match: { status: MatchStatus } | null;
+  }>(
+    (from, to) => {
+      const query = supabase
+        .from('teams')
+        .select('id, player_id, pokemon, match:matches!teams_match_id_fkey(status)')
+        .eq('locked', false);
+      const scoped =
+        scope.kind === 'season'
+          ? query.eq('season_id', scope.id).is('tournament_id', null)
+          : query.eq('tournament_id', scope.id);
+      return scoped.order('id').range(from, to) as unknown as PromiseLike<{
+        data: Array<{ id: string; player_id: string; pokemon: Json; match: { status: MatchStatus } | null }> | null;
+        error: unknown;
+      }>;
+    },
+    { label: 'listTeamsForPinImpact', maxPages: pages }
+  );
+  const open = rows.filter((row) => !isCompletedMatchLocked(row.match?.status));
+  return {
+    teams: open.slice(0, limit).map((row) => ({ id: row.id, player_id: row.player_id, pokemon: row.pokemon as unknown as PokemonSet[] })),
+    truncated: truncated || open.length > limit,
+  };
 }

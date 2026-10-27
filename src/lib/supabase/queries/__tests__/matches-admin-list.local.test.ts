@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 
 // LIVE-LOCAL proof of the PostgREST shapes behind the admin match list
 // (`listAdminMatchesPage`) that the mocked unit tests cannot prove:
@@ -102,13 +103,8 @@ describe.skipIf(!optIn)('admin match list: PostgREST shapes (local stack)', () =
       if (error) throw new Error(`[seed ${label}] ${JSON.stringify(error)}`);
     };
 
-    await run(
-      'rulesets',
-      client.from('rulesets').insert([
-        { id: ids.rulesetA, name: `MatchList ${RUN} Ruleset A` },
-        { id: ids.rulesetB, name: `MatchList ${RUN} Ruleset B` },
-      ]),
-    );
+    await run('rulesets A', insertLocalRuleset(client, { id: ids.rulesetA, name: `MatchList ${RUN} Ruleset A` }));
+    await run('rulesets B', insertLocalRuleset(client, { id: ids.rulesetB, name: `MatchList ${RUN} Ruleset B` }));
     await run(
       'players',
       client.from('players').insert(
@@ -203,7 +199,8 @@ describe.skipIf(!optIn)('admin match list: PostgREST shapes (local stack)', () =
     await del('rounds', client.from('rounds').delete().in('tournament_id', allTournaments));
     await del('tournaments', client.from('tournaments').delete().in('id', allTournaments));
     await del('seasons', client.from('seasons').delete().in('id', [ids.seasonLive, ids.seasonTest, ids.seasonArchived]));
-    await del('rulesets', client.from('rulesets').delete().in('id', [ids.rulesetA, ids.rulesetB]));
+    await del('rulesets A', deleteLocalRuleset(client, ids.rulesetA));
+    await del('rulesets B', deleteLocalRuleset(client, ids.rulesetB));
     await del('players', client.from('players').delete().in('id', [ids.pA, ids.pB, ids.pC]));
     if (failures.length > 0) throw new Error(`[cleanup] ${failures.join('; ')}`);
   }, 60000);

@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getLiveAccess: vi.fn(),
   getAdminSeasonIds: vi.fn(),
-  listRulesets: vi.fn(),
+  listRulesetOptionsFor: vi.fn(),
   listCloneSourceOptions: vi.fn(),
 }));
 
@@ -31,7 +31,7 @@ vi.mock('@/i18n/server', async () => {
   };
 });
 vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesets: mocks.listRulesets }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesetOptionsFor: mocks.listRulesetOptionsFor }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ getAdminSeasonIds: mocks.getAdminSeasonIds }));
 vi.mock('@/lib/supabase/queries/season-clone', () => ({ listCloneSourceOptions: mocks.listCloneSourceOptions }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
@@ -79,11 +79,11 @@ const option = {
   participant_count: 9,
 };
 
-const allReads = () => [mocks.getAdminSeasonIds, mocks.listRulesets, mocks.listCloneSourceOptions];
+const allReads = () => [mocks.getAdminSeasonIds, mocks.listRulesetOptionsFor, mocks.listCloneSourceOptions];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.listRulesets.mockResolvedValue([]);
+  mocks.listRulesetOptionsFor.mockResolvedValue([]);
   mocks.listCloneSourceOptions.mockResolvedValue([option]);
   mocks.getAdminSeasonIds.mockResolvedValue(['s2']);
 });
@@ -96,6 +96,9 @@ describe('new league page', () => {
 
     expect(mocks.listCloneSourceOptions).toHaveBeenCalledTimes(1);
     expect(mocks.listCloneSourceOptions).toHaveBeenCalledWith(null);
+    // The ruleset select lists the viewer's own private rulesets next to the shared ones, none that belong to a league, and the
+    // pin of every league that can be a source (a clone takes the pin over, even an older version).
+    expect(mocks.listRulesetOptionsFor).toHaveBeenCalledWith({ actor: { playerId: 'p1', isAdmin: true }, seasonId: null, keep: [option.ruleset_id] });
     expect(mocks.getAdminSeasonIds).not.toHaveBeenCalled();
     const [creator] = findByType(tree, LeagueCreator);
     expect(creator.props.isSiteAdmin).toBe(true);

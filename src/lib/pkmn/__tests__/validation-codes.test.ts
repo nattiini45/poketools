@@ -15,6 +15,7 @@ vi.mock('../dex', () => ({
 
 import { getSpecies, getMove, getItem, getAbility } from '../dex';
 import { validateTeam } from '../validation';
+import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
 
 const EVS: StatSpread = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
 const IVS: StatSpread = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
@@ -36,7 +37,7 @@ function set(overrides?: Partial<PokemonSet>): PokemonSet {
 }
 
 function ruleset(overrides?: Partial<Ruleset>): Ruleset {
-  return {
+  return buildRuleset({
     id: 'r',
     name: 'Gen 9 OU',
     base_format: 'gen9ou',
@@ -51,7 +52,7 @@ function ruleset(overrides?: Partial<Ruleset>): Ruleset {
     created_at: '2025-01-01',
     updated_at: '2025-01-01',
     ...overrides,
-  };
+  });
 }
 
 const en = createTranslator(teambuilderMessages, 'en');
@@ -127,8 +128,8 @@ describe('validation issue codes', () => {
 
 describe('teambuilder.validation.issue catalog', () => {
   const codes: ValidationIssueCode[] = [
-    'unknown_species', 'species_banned', 'min_moves', 'max_moves', 'unknown_move', 'move_banned',
-    'unknown_item', 'item_banned', 'unknown_ability', 'ability_banned', 'ev_total', 'ev_stat_cap',
+    'unknown_species', 'species_banned', 'species_not_allowed', 'min_moves', 'max_moves', 'unknown_move', 'move_banned',
+    'move_not_allowed', 'unknown_item', 'item_banned', 'item_not_allowed', 'unknown_ability', 'ability_banned', 'ability_not_allowed', 'ev_total', 'ev_stat_cap',
     'tera_core_mismatch', 'tera_type_mismatch', 'legendary_phase', 'legendary', 'fe_tier_above_cap',
     'fe_no_tier', 'eviolite_tier_cap', 'epb_stage2_tera', 'epb_stage_tera', 'team_empty', 'team_too_large',
     'species_clause', 'item_clause', 'shared_type', 'type_quota_no_core', 'type_quota',

@@ -11,6 +11,7 @@ import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { resolveActualTeam } from '@/lib/match/aggregation';
 import { decideMatchRosterVisibility, type TeamViewer } from '@/lib/team/visibility';
+import { generationOf } from '@/lib/pkmn/format-id';
 import type { ApiResult } from '@/types/api';
 import type { CastSessionPopulateResult } from '@/types/cast-session';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -114,8 +115,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (ruleset) {
         format = ruleset.base_format;
         // Extract generation number from format string (e.g., 'gen9ou' → 9)
-        const genMatch = ruleset.base_format.match(/^gen(\d)/);
-        generation = genMatch ? parseInt(genMatch[1], 10) : null;
+        generation = generationOf(ruleset.base_format);
       }
     }
 

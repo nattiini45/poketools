@@ -27,8 +27,6 @@ interface PreviewPanelProps {
   rulesetIds: ReadonlySet<string>;
   onEdit: (next: DraftDocument) => void;
   onSelect: (selection: Selection) => void;
-  /** For tests: the tab that starts selected. */
-  initialTab?: PreviewTabId;
 }
 
 /**
@@ -36,9 +34,9 @@ interface PreviewPanelProps {
  * rules text) and Schedule (a table of rounds and matches). An ARIA tab list: one tab stop, arrow keys, Home and
  * End move between the tabs and select them. The chosen tab lives in component state only.
  */
-export default function PreviewPanel({ doc, previewDoc = doc, result, rows, counts, rulesets, rulesetIds, onEdit, onSelect, initialTab = 'issues' }: PreviewPanelProps) {
+export default function PreviewPanel({ doc, previewDoc = doc, result, rows, counts, rulesets, rulesetIds, onEdit, onSelect }: PreviewPanelProps) {
   const t = useT(formatStudioEditorMessages);
-  const [tab, setTab] = useState<PreviewTabId>(initialTab);
+  const [tab, setTab] = useState<PreviewTabId>('issues');
   const refs = useRef<Partial<Record<PreviewTabId, HTMLButtonElement | null>>>({});
 
   const label = (id: PreviewTabId) => {

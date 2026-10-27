@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { Plus } from 'lucide-react';
+import { RULESETS_HREF, rulesetReadOnlyHref } from '@/components/ruleset-studio/hrefs';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { useLocale, useT } from '@/i18n/client';
@@ -18,13 +20,15 @@ import {
   MAX_SWISS_ROUNDS,
   MIN_GROUPS,
   SCORE_ABS_MAX,
+  withRulesetPreset,
   ptr,
-  resolveLText,
   type Diagnostic,
-  type Locale,
   type RankStep,
   type Stage,
 } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
+import { DEFAULT_RULESET_PRESET } from '@/lib/pkmn/ruleset-preset-catalog';
 import {
   GROUP_METHODS,
   HEAD_TO_HEAD_SCOPES,
@@ -36,6 +40,7 @@ import {
   RANK_STEP_KINDS,
   SEEDING_EDGES,
   SEEDING_ROSTER,
+  type RulesetChoice,
 } from '@/lib/format-studio/editor/catalog';
 import type { DraftDocument } from '@/lib/format-studio/editor/document';
 import {
@@ -66,13 +71,17 @@ import LTextField from '../fields/LTextField';
 import NumberField from '../fields/NumberField';
 import ReorderControls, { useMoveFocus } from '../fields/ReorderControls';
 import SelectField, { CheckboxField, type SelectOption } from '../fields/SelectField';
+import RulesetPresetField from '../fields/RulesetPresetField';
+
+/** The value of the ruleset select that stands for a rule preset (a stored ruleset id is a UUID, so it cannot clash). */
+const PRESET_OPTION = 'preset';
 
 interface StageInspectorProps {
   doc: DraftDocument;
   /** The selected stage. */
   index: number;
   diagnostics: readonly Diagnostic[];
-  rulesets: readonly { id: string; name: string }[];
+  rulesets: readonly RulesetChoice[];
   /** The author's language for texts created here (the viewer's language). */
   authorBase: Locale;
   onChange: (next: DraftDocument) => void;
@@ -280,7 +289,10 @@ function UnsupportedScoreRow({ pointer, label, value, reason }: { pointer: strin
 
 /**
  * The form for one stage, as labelled sections: name, participants, groups, pairing, match length, ruleset,
- * scoring and the rank chain. Every edit is one pure operation on the whole document, handed to `onChange`.
+ * scoring and the rank chain. The ruleset is the league default, a stored ruleset (labelled with its newest
+ * version, which attach pins; a link opens it in the Ruleset Studio) or a rule preset; the
+ * preset kind adds a searchable preset picker and sets the doubles setting the preset implies, which stays
+ * editable (attach turns a preset into a ruleset of the league). Every edit is one pure operation on the whole document, handed to `onChange`.
  * Findings of the compiler appear next to the field they are about.
  */
 export default function StageInspector({ doc, index, diagnostics, rulesets, authorBase, onChange }: StageInspectorProps) {
@@ -299,12 +311,30 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
   const eliminationStage = stage.pairing.kind === 'single_elim' || stage.pairing.kind === 'double_elim';
   const seedings = fromRoster ? SEEDING_ROSTER : SEEDING_EDGES;
 
-  const knownRuleset = stage.ruleset.kind === 'season_default' || rulesets.some((r) => r.id === (stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : ''));
+  // A legacy id (an alias of a definition) is offered only while this stage names it, in place of its definition's own
+  // entry, so the same ruleset is never listed twice.
+  const namedId = stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : null;
+  const namedChoice = namedId === null ? undefined : rulesets.find((r) => r.id === namedId);
+  const knownRuleset = stage.ruleset.kind !== 'ruleset' || namedChoice !== undefined;
   const rulesetOptions: SelectOption[] = [
     { value: '', label: t('inspector.stage.rulesetDefault') },
-    ...rulesets.map((r) => ({ value: r.id, label: r.name })),
+    ...rulesets
+      .filter((r) => (r.definition_id === undefined ? r.id !== namedChoice?.definition_id : r.id === namedId))
+      .map((r) => ({
+        value: r.id,
+        label: r.version_no !== undefined && r.version_no > 1 ? t('inspector.stage.rulesetOption', { name: r.name, version: r.version_no }) : r.name,
+      })),
     ...(stage.ruleset.kind === 'ruleset' && !knownRuleset ? [{ value: stage.ruleset.id, label: t('inspector.stage.rulesetUnknown') }] : []),
+    { value: PRESET_OPTION, label: t('inspector.stage.rulesetPreset') },
   ];
+  const rulesetValue = stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : stage.ruleset.kind === 'preset' ? PRESET_OPTION : '';
+  const chooseRuleset = (value: string) =>
+    edit((s) => {
+      if (value === '') return setRuleset(s, { kind: 'season_default' });
+      // Picking the preset kind starts from the newest generation's OU; the preset field below changes it.
+      if (value === PRESET_OPTION) return s.ruleset.kind === 'preset' ? s : withRulesetPreset(s, DEFAULT_RULESET_PRESET);
+      return setRuleset(s, { kind: 'ruleset', id: value });
+    });
 
   const pairing = stage.pairing;
   const rank = stage.rank;
@@ -558,10 +588,28 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
           <SelectField
             pointer={ptr('stages', index, 'ruleset', 'id')}
             label={p('field.ruleset')}
-            value={stage.ruleset.kind === 'ruleset' ? stage.ruleset.id : ''}
+            value={rulesetValue}
             options={rulesetOptions}
-            onChange={(value) => edit((s) => setRuleset(s, value === '' ? { kind: 'season_default' } : { kind: 'ruleset', id: value }))}
+            onChange={chooseRuleset}
           />
+          {stage.ruleset.kind === 'ruleset' && knownRuleset && (
+            <p className="text-sm text-poke-text-muted">{t('inspector.stage.rulesetHelp')}</p>
+          )}
+          {stage.ruleset.kind === 'preset' && (
+            <RulesetPresetField
+              pointer={ptr('stages', index, 'ruleset', 'preset')}
+              label={t('inspector.stage.rulesetPreset')}
+              value={stage.ruleset.preset}
+              hint={t('inspector.stage.presetHelp')}
+              onChange={(value) => edit((s) => withRulesetPreset(s, value))}
+            />
+          )}
+          <Link
+            href={namedChoice !== undefined ? rulesetReadOnlyHref(namedChoice.definition_id ?? namedChoice.id) : RULESETS_HREF}
+            className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
+          >
+            {t('inspector.stage.openStudio')}
+          </Link>
         </Section>
 
         <Section pointer={ptr('stages', index, 'scoring')} legend={p('field.scoring')}>

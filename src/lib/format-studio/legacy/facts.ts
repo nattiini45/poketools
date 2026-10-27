@@ -6,7 +6,8 @@
  *
  * The facts are a read-only picture. The settings themselves stay in the league admin (participants, rules).
  */
-import { MAX_FACTS, ltext, type LegacyFact, type LegacyModule } from '@/lib/format-kit/client';
+import { MAX_FACTS, type LegacyFact, type LegacyModule } from '@/lib/format-kit/client';
+import { ltext } from '@/lib/studio-core/ltext';
 import type { Translator } from '@/i18n/core';
 import type { formatStudioLegacyMessages } from '@/i18n/messages/format-studio/legacy';
 import { effectiveTiebreakerChain } from '@/lib/tournament/standings-rules';

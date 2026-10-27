@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   STATS_FORMATS,
-  extractGenFromFormat,
-  extractTierFromFormat,
   fetchAvailableStatsFormats,
   getImportableFormats,
 } from '../format-registry';
@@ -49,73 +47,6 @@ describe('STATS_FORMATS', () => {
   it('does not contain duplicates', () => {
     const unique = new Set(STATS_FORMATS);
     expect(unique.size).toBe(STATS_FORMATS.length);
-  });
-});
-
-// ─── extractGenFromFormat ───────────────────────────────────────────
-
-describe('extractGenFromFormat', () => {
-  it('extracts gen 9 from gen9ou', () => {
-    expect(extractGenFromFormat('gen9ou')).toBe(9);
-  });
-
-  it('extracts gen 1 from gen1uu', () => {
-    expect(extractGenFromFormat('gen1uu')).toBe(1);
-  });
-
-  it('extracts gen 3 from gen3ubers', () => {
-    expect(extractGenFromFormat('gen3ubers')).toBe(3);
-  });
-
-  it('returns null for non-matching strings', () => {
-    expect(extractGenFromFormat('ou')).toBeNull();
-    expect(extractGenFromFormat('')).toBeNull();
-    expect(extractGenFromFormat('random')).toBeNull();
-  });
-
-  it('extracts from VGC formats', () => {
-    expect(extractGenFromFormat('gen9vgc2025')).toBe(9);
-  });
-
-  it('extracts from monotype formats', () => {
-    expect(extractGenFromFormat('gen7monotype')).toBe(7);
-  });
-});
-
-// ─── extractTierFromFormat ──────────────────────────────────────────
-
-describe('extractTierFromFormat', () => {
-  it('extracts ou from gen9ou', () => {
-    expect(extractTierFromFormat('gen9ou')).toBe('ou');
-  });
-
-  it('extracts uu from gen1uu', () => {
-    expect(extractTierFromFormat('gen1uu')).toBe('uu');
-  });
-
-  it('extracts ubers from gen3ubers', () => {
-    expect(extractTierFromFormat('gen3ubers')).toBe('ubers');
-  });
-
-  it('extracts vgc2025 from gen9vgc2025', () => {
-    expect(extractTierFromFormat('gen9vgc2025')).toBe('vgc2025');
-  });
-
-  it('extracts nationaldex from gen9nationaldex', () => {
-    expect(extractTierFromFormat('gen9nationaldex')).toBe('nationaldex');
-  });
-
-  it('extracts doublesou from gen9doublesou', () => {
-    expect(extractTierFromFormat('gen9doublesou')).toBe('doublesou');
-  });
-
-  it('extracts 1v1 from gen91v1', () => {
-    expect(extractTierFromFormat('gen91v1')).toBe('1v1');
-  });
-
-  it('returns full string if no gen prefix', () => {
-    expect(extractTierFromFormat('ou')).toBe('ou');
-    expect(extractTierFromFormat('')).toBe('');
   });
 });
 

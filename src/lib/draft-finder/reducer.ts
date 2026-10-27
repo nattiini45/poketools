@@ -1,9 +1,10 @@
 /**
  * Finder view reducer (draft-frontend §4.4). Client-safe, pure.
  *
- * Invariants (unit-tested): `setTab`, `clearAll`, `setSort` and every filter action never change
+ * Invariants (unit-tested): `setTab`, `clearAll`, `setSort`, `setSortStage` and every filter action never change
  * `pinnedLineId` or `compareLineIds` (SPEC:198-199, 363); `toggleCompare` past 3 returns the same state;
- * removing the last picked member of a utility category leaves `members: []` (= the whole category).
+ * unticking the last picked member of a utility category in the sheet leaves `members: []` (= the whole
+ * category), whereas removing the last member's chip removes the category.
  * An action that changes nothing returns the same state object.
  *
  * The filter sheet's UI state (`filterSheet`: open groups, utility expanders, defensive relation, picker
@@ -52,10 +53,18 @@ function toggleUtilityMember(f: FinderFilters, key: UtilityKey, id: string): Fin
   };
 }
 
+/**
+ * Removes a picked member via its chip. The last member takes the whole category with it: `members: []`
+ * means "any member of the category", so keeping the entry would widen the filter instead of removing it.
+ */
 function removeUtilityMember(f: FinderFilters, key: UtilityKey, id: string): FinderFilters {
   const existing = f.utility.find((u) => u.key === key);
   if (!existing || !existing.members.includes(id)) return f;
-  return toggleUtilityMember(f, key, id);
+  const members = existing.members.filter((m) => m !== id);
+  return {
+    ...f,
+    utility: members.length === 0 ? f.utility.filter((u) => u.key !== key) : f.utility.map((u) => (u.key === key ? { key, members } : u)),
+  };
 }
 
 function setStat(f: FinderFilters, stat: StatKey | 'bst', value: number | null): FinderFilters {
@@ -180,6 +189,8 @@ export function finderReducer(s: FinderViewState, a: FinderAction): FinderViewSt
       return a.tab === s.tab ? s : { ...s, tab: a.tab };
     case 'setSort':
       return a.sort === s.sort ? s : { ...s, sort: a.sort };
+    case 'setSortStage':
+      return a.stage === s.sortStage ? s : { ...s, sortStage: a.stage };
     case 'setShowDrafted':
       return a.on === s.showDrafted ? s : { ...s, showDrafted: a.on };
     case 'pin':

@@ -361,17 +361,6 @@ export default {
     },
   },
 
-  rulesets: {
-    title: 'Manage Rulesets',
-    newRuleset: '+ New Ruleset',
-    empty: 'No rulesets yet.',
-    doubles: 'Doubles',
-    clauses: { one: '{count} clause', other: '{count} clauses' },
-    bans: { one: '{count} ban', other: '{count} bans' },
-    createTitle: 'Create Ruleset',
-    editTitle: 'Edit Ruleset: {name}',
-  },
-
   social: {
     title: 'Social Integration',
     intro:

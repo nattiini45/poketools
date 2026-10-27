@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { Ruleset } from '@/types/ruleset';
+import { makeRulesetOption } from '@/test/ruleset-fixtures';
 import type { TournamentFormData } from '@/types/tournament';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -14,7 +14,7 @@ import TournamentSettingsEditor, { saveTournamentSettings } from '../TournamentS
 
 const ID = '0b9f1c2e-5d4a-4c3b-9a8e-7f6d5c4b3a21';
 const RULESET_ID = '11111111-1111-4111-8111-111111111111';
-const rulesets = [{ id: RULESET_ID, name: 'Standard Rules' }] as unknown as Ruleset[];
+const rulesets = [makeRulesetOption({ id: RULESET_ID, name: 'Standard Rules' })];
 
 const tournament = {
   id: ID,
@@ -76,7 +76,7 @@ describe('TournamentSettingsEditor render', () => {
       <TournamentSettingsEditor tournament={tournament} rulesets={rulesets} started={false} />,
     );
     expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(false);
-    expect(isDisabled(tagWithId(html, 'ruleset'))).toBe(false);
+    expect(isDisabled(tagWithId(html, 'tournament-ruleset'))).toBe(false);
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(false);
   });
 
@@ -85,7 +85,7 @@ describe('TournamentSettingsEditor render', () => {
       <TournamentSettingsEditor tournament={tournament} rulesets={rulesets} started />,
     );
     expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(true);
-    expect(isDisabled(tagWithId(html, 'ruleset'))).toBe(true);
+    expect(isDisabled(tagWithId(html, 'tournament-ruleset'))).toBe(true);
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(true);
     expect(html.match(/Locked: the tournament has started\./g)).toHaveLength(3);
   });

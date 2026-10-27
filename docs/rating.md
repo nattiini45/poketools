@@ -10,7 +10,7 @@ src/lib/rating/
 ├── glicko2-preview.ts  # Read-only preview of next-game rating deltas
 ├── rating-scope.ts     # Which completed matches count toward ratings (test leagues do not)
 ├── replay-order.ts     # The one chronological replay order
-├── test-league-rebuild.ts # Rating rebuild after the test-league flag is set
+├── test-league-rebuild.ts # Rating rebuild after the test-league flag is set; rebuildRatingsSettled (shared with the league restore)
 ├── tiers.ts            # Pokéball tier classifier + tier metadata
 ├── updateRatings.ts    # Match-driven rating updates + rollback
 └── __tests__/

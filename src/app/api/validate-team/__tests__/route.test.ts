@@ -14,9 +14,13 @@ vi.mock('@/lib/auth/helpers', () => ({
   },
 }));
 
+// The phase's pin is read by id; an id from the request is read through the exposure check.
 vi.mock('@/lib/supabase/queries/rulesets', () => ({
   getRulesetById: vi.fn(),
-  resolveEffectiveRuleset: vi.fn(),
+}));
+
+vi.mock('@/lib/ruleset-studio/exposure', () => ({
+  readExposedRuleset: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({
@@ -48,10 +52,8 @@ vi.mock('@/lib/draft/epb-team-validation', () => ({
 
 import { POST } from '../route';
 import { requirePlayer, AuthError } from '@/lib/auth/helpers';
-import {
-  getRulesetById,
-  resolveEffectiveRuleset,
-} from '@/lib/supabase/queries/rulesets';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { getSeasonById, getParticipantCore } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import {
@@ -130,7 +132,8 @@ describe('POST /api/validate-team', () => {
     // Defaults: no tournament context, no player core, no draft picks.
     vi.mocked(getTournamentById).mockResolvedValue(null);
     vi.mocked(getSeasonById).mockResolvedValue(null);
-    vi.mocked(resolveEffectiveRuleset).mockResolvedValue(null);
+    vi.mocked(getRulesetById).mockResolvedValue(null);
+    vi.mocked(readExposedRuleset).mockResolvedValue(null);
     vi.mocked(getParticipantCore).mockResolvedValue(null);
     vi.mocked(validateEpbTeamForSeason).mockResolvedValue(VALID_RESULT as never);
   });
@@ -173,7 +176,7 @@ describe('POST /api/validate-team', () => {
   });
 
   it('returns 404 when ruleset is not found', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(null);
+    vi.mocked(readExposedRuleset).mockResolvedValue(null);
 
     const res = await POST(makeRequest({ pokemon: POKEMON, ruleset_id: MISSING_RULESET_ID }));
     const body = await res.json();
@@ -187,7 +190,7 @@ describe('POST /api/validate-team', () => {
   // ── Happy path (no draft) ────────────────────────────────────────
 
   it('validates team without draft constraints', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
 
     const res = await POST(makeRequest({ pokemon: POKEMON, ruleset_id: RULESET_ID }));
@@ -205,7 +208,7 @@ describe('POST /api/validate-team', () => {
   // ── Happy path (with draft) ──────────────────────────────────────
 
   it('validates team with draft ownership constraints', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(getDraftPoolBySeason).mockResolvedValue({ id: 'pool-1' } as never as never);
     vi.mocked(getPicksByPlayer).mockResolvedValue([
       { pokemon_name: 'Garchomp' } as never as never,
@@ -229,7 +232,7 @@ describe('POST /api/validate-team', () => {
   });
 
   it('league groups: checks ownership against the caller’s own group’s pool', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(getDraftPoolBySeason).mockRejectedValueOnce(new GroupedLeaguePoolLookupError(SEASON_ID));
     vi.mocked(getSeasonGroupOfPlayer).mockResolvedValueOnce({ id: 'group-b', season_id: SEASON_ID, name: 'Group B', sort_order: 2 });
     vi.mocked(getDraftPoolBySeasonGroup).mockResolvedValueOnce({ id: 'pool-b' } as never);
@@ -244,7 +247,7 @@ describe('POST /api/validate-team', () => {
   });
 
   it('passes empty draftedPokemon when season has no draft pool', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(getDraftPoolBySeason).mockResolvedValue(null);
     vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
 
@@ -263,14 +266,35 @@ describe('POST /api/validate-team', () => {
 
   // ── Tournament context: effective ruleset + playerCore ──────────
 
-  it('resolves the effective ruleset and passes playerCore when tournament_id is provided', async () => {
+  it('follows a pin that was moved: the next check reads the new version, the old one is not read again', async () => {
+    const TOURNAMENT_ID = '00000000-0000-4000-8000-000000000030';
+    const V1 = { ...RULESET, id: '00000000-0000-4000-8000-0000000000a1', name: 'Spring OU' };
+    const V2 = { ...RULESET, id: '00000000-0000-4000-8000-0000000000a2', name: 'Spring OU' };
+    const tournament = { id: TOURNAMENT_ID, ruleset_id: V1.id, season_id: null, bracket_type: 'round_robin' };
+    vi.mocked(getTournamentById).mockResolvedValue(tournament as never);
+    vi.mocked(getRulesetById).mockImplementation((async (id: string) => [V1, V2].find((v) => v.id === id) ?? null) as never);
+    vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
+
+    await POST(makeRequest({ pokemon: POKEMON, ruleset_id: RULESET_ID, tournament_id: TOURNAMENT_ID }));
+    expect(validateTeam).toHaveBeenLastCalledWith(POKEMON, V1, expect.anything());
+
+    // The pins route moves the phase to the next version; nothing else changes.
+    vi.mocked(getTournamentById).mockResolvedValue({ ...tournament, ruleset_id: V2.id } as never);
+    vi.mocked(getRulesetById).mockClear();
+    await POST(makeRequest({ pokemon: POKEMON, ruleset_id: RULESET_ID, tournament_id: TOURNAMENT_ID }));
+    expect(validateTeam).toHaveBeenLastCalledWith(POKEMON, V2, expect.anything());
+    expect(getRulesetById).toHaveBeenCalledTimes(1);
+    expect(getRulesetById).toHaveBeenCalledWith(V2.id);
+  });
+
+  it('enforces the phase\'s pinned ruleset and passes playerCore when tournament_id is provided', async () => {
     const TOURNAMENT_ID = '00000000-0000-4000-8000-000000000020';
     const SEASON_FOR_TOURNEY = '00000000-0000-4000-8000-000000000021';
     const CUSTOM_RULESET = { ...RULESET, id: '00000000-0000-4000-8000-000000000099', name: 'Sample Custom League' };
 
     vi.mocked(getTournamentById).mockResolvedValue({
       id: TOURNAMENT_ID,
-      ruleset_id: RULESET_ID, // incorrectly points at base; resolver should fix
+      ruleset_id: CUSTOM_RULESET.id, // the phase's pin: an immutable ruleset version
       season_id: SEASON_FOR_TOURNEY,
       bracket_type: 'round_robin',
     } as never);
@@ -279,12 +303,7 @@ describe('POST /api/validate-team', () => {
       name: 'Sample Custom League',
       ruleset_id: RULESET_ID,
     } as never);
-    vi.mocked(resolveEffectiveRuleset).mockResolvedValue({
-      ruleset: CUSTOM_RULESET as never,
-      rulesetId: CUSTOM_RULESET.id,
-      source: 'name-match',
-      fellBack: false,
-    });
+    vi.mocked(getRulesetById).mockResolvedValue(CUSTOM_RULESET as never);
     vi.mocked(getParticipantCore).mockResolvedValue(
       ['Fire', 'Water', 'Grass'] as never,
     );
@@ -301,14 +320,8 @@ describe('POST /api/validate-team', () => {
 
     expect(body.success).toBe(true);
 
-    // The resolver MUST have been called with the tournament + season context.
-    expect(resolveEffectiveRuleset).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tournamentRulesetId: RULESET_ID,
-        tournamentBracketType: 'round_robin',
-        season: expect.objectContaining({ id: SEASON_FOR_TOURNEY }),
-      }),
-    );
+    // The phase's own pin is what is read.
+    expect(getRulesetById).toHaveBeenCalledWith(CUSTOM_RULESET.id);
 
     // The validator MUST receive the custom ruleset + the player's core triple.
     expect(validateTeam).toHaveBeenCalledWith(
@@ -320,13 +333,12 @@ describe('POST /api/validate-team', () => {
       }),
     );
 
-    // Never trust the caller's stale ruleset_id alone — must NOT call
-    // getRulesetById for the raw id when tournament_id is present.
-    expect(getRulesetById).not.toHaveBeenCalled();
+    // Never trust the caller's ruleset_id when tournament_id is present.
+    expect(readExposedRuleset).not.toHaveBeenCalled();
   });
 
-  it('does NOT call resolveEffectiveRuleset and passes playerCore=null when only season_id is provided', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+  it('reads the requested ruleset (exposure checked) and passes playerCore=null when only season_id is provided', async () => {
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
 
     const res = await POST(
@@ -335,7 +347,7 @@ describe('POST /api/validate-team', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(resolveEffectiveRuleset).not.toHaveBeenCalled();
+    expect(getRulesetById).not.toHaveBeenCalled();
     expect(validateTeam).toHaveBeenCalledWith(
       POKEMON,
       RULESET,
@@ -346,7 +358,7 @@ describe('POST /api/validate-team', () => {
   // ── EPB format_rules enforcement ──────────────────────────────────
 
   it('EPB season: merges a banned-move EPB issue and marks the team invalid', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(getSeasonById).mockResolvedValue(EPB_SEASON as never);
     vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
     const bannedMoveIssue = {
@@ -373,7 +385,7 @@ describe('POST /api/validate-team', () => {
   });
 
   it('EPB season: merges coded team issues, deduped by text and aligned with team_issues', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(getSeasonById).mockResolvedValue(EPB_SEASON as never);
     const clause = {
       issue: 'Item Clause: duplicate Leftovers (slots 1 and 2)',
@@ -403,7 +415,7 @@ describe('POST /api/validate-team', () => {
   });
 
   it('EPB season: team is valid when both core and EPB validators are clean', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(getSeasonById).mockResolvedValue(EPB_SEASON as never);
     vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
     vi.mocked(validateEpbTeamForSeason).mockResolvedValue(VALID_RESULT as never);
@@ -420,7 +432,7 @@ describe('POST /api/validate-team', () => {
   });
 
   it('non-EPB season: does NOT call validateEpbTeamForSeason and returns the core result unchanged', async () => {
-    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
     vi.mocked(getSeasonById).mockResolvedValue(NON_EPB_SEASON as never);
     vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
 
@@ -453,12 +465,7 @@ describe('POST /api/validate-team', () => {
     // The client-supplied season_id resolves to an EPB season. The OLD code
     // would fetch this via the resolvedSeasonId fallback and apply EPB rules.
     vi.mocked(getSeasonById).mockResolvedValue(EPB_SEASON as never);
-    vi.mocked(resolveEffectiveRuleset).mockResolvedValue({
-      ruleset: RULESET as never,
-      rulesetId: RULESET_ID,
-      source: 'tournament',
-      fellBack: false,
-    });
+    vi.mocked(getRulesetById).mockResolvedValue(RULESET as never);
     vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
 
     const res = await POST(
@@ -478,10 +485,24 @@ describe('POST /api/validate-team', () => {
     expect(validateEpbTeamForSeason).not.toHaveBeenCalled();
   });
 
+  it('answers 404 tournament_not_found for an unknown tournament_id (never validates against another ruleset)', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(null);
+
+    const res = await POST(
+      makeRequest({ pokemon: POKEMON, ruleset_id: RULESET_ID, tournament_id: '00000000-0000-4000-8000-000000000077' }),
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(body.code).toBe('tournament_not_found');
+    expect(readExposedRuleset).not.toHaveBeenCalled();
+    expect(validateTeam).not.toHaveBeenCalled();
+  });
+
   // ── Error path ────────────────────────────────────────────────────
 
   it('returns 500 on unexpected error', async () => {
-    vi.mocked(getRulesetById).mockRejectedValue(new Error('DB down'));
+    vi.mocked(readExposedRuleset).mockRejectedValue(new Error('DB down'));
 
     const res = await POST(makeRequest({ pokemon: POKEMON, ruleset_id: RULESET_ID }));
     const body = await res.json();

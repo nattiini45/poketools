@@ -22,6 +22,15 @@ describe('<TypeBadge>', () => {
     expect(html).toContain('bg-poke-type-fire');
   });
 
+  it('the compact size drops the minimum width and tightens the box; the default keeps the pill metrics', () => {
+    const compact = renderToStaticMarkup(<TypeBadge type="Fire" size="compact" />);
+    expect(compact).toContain('min-w-0');
+    expect(compact).not.toContain('min-w-[4.5rem]');
+    const normal = renderToStaticMarkup(<TypeBadge type="Fire" />);
+    expect(normal).toContain('min-w-[4.5rem]');
+    expect(normal).toContain('tracking-wide');
+  });
+
   it('renders English without a provider', () => {
     const html = renderToStaticMarkup(<TypeBadge type="Fire" />);
     expect(html).toContain('>Fire</span>');

@@ -44,8 +44,18 @@ const API_DIR = path.resolve(__dirname, '../../app/api');
  */
 const TREES = ['tournaments/[id]', 'seasons', 'drafts/[id]', 'formats'];
 
-/** Single routes outside those trees with the same duty (tournament and draft creation, round pairings). */
-const EXTRA_ROUTES = ['tournaments/route.ts', 'generate-round/[tid]/route.ts', 'drafts/route.ts'];
+/**
+ * Single routes outside those trees with the same duty (tournament and draft creation, round pairings, and the league
+ * trash: a restore brings a league back into every read, a pending rebuild rewrites its aggregates and ratings). The
+ * expiry cron is not here: it expires nothing public, the league left every read when it was deleted.
+ */
+const EXTRA_ROUTES = [
+  'tournaments/route.ts',
+  'generate-round/[tid]/route.ts',
+  'drafts/route.ts',
+  'admin/league-trash/[id]/restore/route.ts',
+  'admin/league-trash/[id]/rebuild/route.ts',
+];
 
 /** A call that expires public read-cache tags (directly or through a match pass). */
 const EXPIRE_CALL =
@@ -135,6 +145,9 @@ const REQUIRED = [
   'formats/presets/[presetId]/fork/route.ts#POST',
   'seasons/[id]/format/route.ts#POST',
   'seasons/[id]/format/route.ts#DELETE',
+  // league trash: restore (superadmin) and the pending rebuild after a delete or restore
+  'admin/league-trash/[id]/restore/route.ts#POST',
+  'admin/league-trash/[id]/rebuild/route.ts#POST',
   // redraft routes
   'drafts/[id]/redraft/publish/route.ts#POST',
   'drafts/[id]/redraft/slots/[redraftSlotId]/restore/route.ts#POST',

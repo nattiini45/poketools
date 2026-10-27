@@ -1,15 +1,28 @@
 'use client';
 
 /**
- * The EPB pick screen layout (draft-frontend §5.3, §5.5): clock bar and
- * order strip on top; the left stage (info box, why it matches, staged
- * sprites, cost and the DRAFT button, roster dock, last picks, compare); the
- * roster wall on the right with the finder. Presentational apart from local
+ * The EPB pick screen layout (draft-frontend §5.3, §5.5): the host's page
+ * header (`header`), the clock bar and order strip on top; the left stage (a one-line status strip, info box, why it
+ * matches, the line as one group portrait of its stages, the budget left after
+ * the pick with the DRAFT button, roster dock with its team weakness overview,
+ * last picks, compare); the roster wall on the right with the finder.
+ * Presentational apart from local
  * UI state (players sheet, hover intent): it never fetches, and every write
  * goes through the callbacks of `DraftToolClient`.
  *
- * Phones get the §5.3 order (selected card → wall → roster/picks/compare) and
- * a sticky bottom bar with the DRAFT button; desktop the diagonal split.
+ * The price shows once, in the info box title. The budget left after the pick
+ * sits above the DRAFT button (the phone bottom bar carries it instead of the
+ * dock) and, for an admin picking on behalf, names the player it belongs to.
+ *
+ * Phones get the §5.3 order (header → clock → selected card → wall →
+ * roster/picks/compare) and a sticky bottom bar with the budget left and the
+ * DRAFT button; desktop the diagonal split.
+ *
+ * From 1024 px the screen is a box of fixed height (the viewport minus the nav
+ * and the layout's padding) and the page header is its first grid row, so the
+ * document itself never scrolls: only the left column (`stageScroll`, inside
+ * the diagonal frame `stagePane`) and the roster grid do. Below 1024 px the
+ * page scrolls and the header simply flows first.
  *
  * Pool admins get an Admin button in the clock row (`onOpenAdmin`); the
  * admin sheet itself is owned and lazy-loaded by `DraftToolClient`.
@@ -18,20 +31,18 @@
  * empty, the one place the match count shows), then the price tabs pinned on top (sticky under
  * the site nav while the page scrolls, a fixed row from 1024 px), then the card
  * grid, which is the scroll container from 1024 px. `useStickyOffsets` measures
- * the nav and the clock row for the sticky offsets. The filters open in a
+ * the nav, the clock row and the DRAFT dock (the stage card is capped above it). The filters open in a
  * portalled side sheet (`FilterPanel`), outside the wall pane.
  */
-import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type Ref } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type ReactNode, type Ref } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { WifiOff } from 'lucide-react';
-import { useDataLocale, useFormatter, useT } from '@/i18n/client';
+import { useDataLocale, useT } from '@/i18n/client';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import { draftSharedMessages } from '@/i18n/messages/draft/shared';
 import { glossaryMessages } from '@/i18n/messages/glossary';
 import { compileCriteria, evaluateLine, type FinderResult, type LineEvaluation } from '@/lib/draft-finder/engine';
 import { buildChips } from '@/lib/draft-finder/chips';
-import { hasActiveFilters, type FinderAction, type FinderViewState } from '@/lib/draft-finder/filter-types';
+import { hasActiveFilters, type FinderAction, type FinderViewState, type SortStage } from '@/lib/draft-finder/filter-types';
 import type { DraftLineCatalog, DraftLineCatalogEntry } from '@/lib/draft-finder/line-catalog';
 import { pkmnNameResolver } from '@/lib/draft-finder/names-port';
 import type { PreparedIndex } from '@/lib/draft-finder/prepare';
@@ -48,8 +59,7 @@ import PhoneSection from './layout/PhoneSection';
 import PlayersSheet from './layout/PlayersSheet';
 import UpcomingOrderStrip from './layout/UpcomingOrderStrip';
 import CompareTray from './left/CompareTray';
-import CostConsequence from './left/CostConsequence';
-import { criterionLabel, resultReason, type CriterionLabel, type CriterionTextDeps } from './left/criterion-text';
+import CostConsequence, { RemainingAfterPick } from './left/CostConsequence';
 import { ctaStateOf, type CtaState } from './left/cta-state';
 import DraftButton from './left/DraftButton';
 import InfoBox from './left/InfoBox';
@@ -57,11 +67,13 @@ import LinePreview from './left/LinePreview';
 import MatchExplanation from './left/MatchExplanation';
 import MyRosterDock, { rosterCounts } from './left/MyRosterDock';
 import RecentPicks from './left/RecentPicks';
+import StageStatus from './left/StageStatus';
 import ActiveFilterChips from './right/ActiveFilterChips';
 import FilterPanel, { filterTriggerId } from './right/FilterPanel';
 import FinderBar from './right/FinderBar';
 import HoverDetails from './right/HoverDetails';
 import PriceTabs from './right/PriceTabs';
+import { criterionLabel, useFinderLabelContext, type CriterionLabel } from './right/finder-labels';
 import RosterWall from './right/RosterWall';
 import styles from './draft-tool.module.css';
 
@@ -76,6 +88,12 @@ export interface DraftToolLinks {
 }
 
 export interface DraftToolScreenProps {
+  /**
+   * The host page's header (title, group switch, notices), rendered as the screen's first row so that its
+   * height is part of the screen's fixed desktop height instead of an unmeasured term above it. Omit it when
+   * the host keeps its header outside the screen and lets the page scroll (the dev preview).
+   */
+  header?: ReactNode;
   vm: DraftViewModel;
   catalog: DraftLineCatalog;
   finder: FinderResult | null;
@@ -95,6 +113,11 @@ export interface DraftToolScreenProps {
   ix: PreparedIndex | null;
   /** The search index failed to load: the filters stay disabled, and the wall says why. */
   indexFailed?: boolean;
+  /** The stage (Base | Final) the team weakness overview under "My roster" reads; a persisted preference. */
+  weaknessStage: SortStage;
+  onWeaknessStage(stage: SortStage): void;
+  /** The overview starts expanded (preview scenarios); collapsed by default. */
+  initialWeaknessOpen?: boolean;
   /** The last poll failed: showing the last state. */
   stale?: boolean;
   /** The poll answered 401/403 (spectator mode). */
@@ -119,6 +142,7 @@ export interface DraftToolScreenProps {
 }
 
 export default function DraftToolScreen({
+  header,
   vm,
   catalog,
   finder,
@@ -136,6 +160,9 @@ export default function DraftToolScreen({
   links,
   ix,
   indexFailed = false,
+  weaknessStage,
+  onWeaknessStage,
+  initialWeaknessOpen = false,
   stale = false,
   authBlocked = false,
   makeupSeconds = null,
@@ -151,19 +178,19 @@ export default function DraftToolScreen({
   const t = useT(draftScreenMessages);
   const tShared = useT(draftSharedMessages);
   const tGlossary = useT(glossaryMessages);
-  const f = useFormatter();
+  const labelCtx = useFinderLabelContext(pkmnNameResolver);
   const dl = useDataLocale();
   const headingId = useId();
   const filterPanelId = useId();
   const wallId = useId();
   const barReasonId = useId();
-  const pathname = usePathname();
   const [playersOpen, setPlayersOpen] = useState(false);
   const { intent: hover, onHover } = useHoverIntent<{ lineId: LineId; anchor: HTMLElement | null }>();
   const rootRef = useRef<HTMLDivElement>(null);
   const clockRowRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
   const wallScrollRef = useRef<HTMLDivElement>(null);
-  useStickyOffsets(rootRef, clockRowRef);
+  useStickyOffsets(rootRef, clockRowRef, dockRef);
 
   // A new price tab starts at the top of the grid (desktop scroller; below 1024 px the page scrolls and the
   // tabs stay where they are). Filters and the pinned line are untouched (SPEC:196-199).
@@ -186,16 +213,17 @@ export default function DraftToolScreen({
           : reasonText(tShared, cta.block.reason, vm);
   const showAdminToggle = vm.viewer.isPoolAdmin && vm.activeSlot !== null && !vm.activeSlot.isViewer && vm.status === 'in_progress';
   const spectator = vm.viewer.playerId === null || authBlocked ? 'guest' : !vm.viewer.isParticipant ? 'nonParticipant' : null;
+  // Budget left after the pick: a spectator has none of their own, and an admin picking on behalf sees the
+  // active player's, labelled with the name.
+  const remainingAfter = spectator !== null && cta.variant === 'player' ? null : cta.remainingAfter;
+  const remainingFor = cta.variant === 'admin' ? (cta.target?.name ?? null) : null;
 
-  // Criteria labels and per-criterion reasons for the explanation and the compare tray.
-  const textDeps: CriterionTextDeps = { filters: view.filters, ix, names: pkmnNameResolver, dl, t, tGlossary, f };
+  // The active criteria's labels for the compare tray (the pinned line's explanation labels its own rows).
   const pinnedEvaluation = finder?.pinnedEvaluation ?? null;
   const criteria: CriterionLabel[] = (pinnedEvaluation?.results ?? finder?.rows[0]?.evaluation.results ?? []).map((r) => ({
     id: r.criterionId,
-    label: criterionLabel(r.criterionId, textDeps),
+    label: criterionLabel(r.criterionId, view.filters, ix, labelCtx),
   }));
-  const reasons: Record<string, string | null> = {};
-  for (const r of pinnedEvaluation?.results ?? []) reasons[r.criterionId] = resultReason(r, textDeps);
   const visibleInResults = finder === null || pinned === null || finder.rows.some((r) => r.lineId === pinned.lineId);
   // "Not in the current price tab" only when the tab is the one reason: the line matches, it sits in another
   // tab, and it is not hidden for being drafted while "show drafted" is off.
@@ -236,11 +264,16 @@ export default function DraftToolScreen({
     return map;
   }, [finder, ix, banned, view.compareLineIds, view.filters, view.stageMode]);
   const adminSwitch = showAdminToggle && onAdminOverride !== undefined;
-  const signInHref = pathname ? `/auth/signin?callbackUrl=${encodeURIComponent(pathname)}` : '/auth/signin';
+  // The dock's budget line hides on phones (the bottom bar carries it), so only a verdict or the admin switch
+  // keeps the dock worth showing there.
+  const dockOnPhone = (pinned !== null && cta.lineReason !== null) || adminSwitch;
   const hoverEntry = hover ? (byId.get(hover.lineId) ?? null) : null;
   const roster = rosterCounts(vm, catalog);
 
   const pin = (lineId: LineId | null) => dispatch({ type: 'pin', lineId });
+
+  // `screenWithHeader` gives the desktop grid its extra (first) row.
+  const screenClass = header ? `${styles.root} ${styles.screen} ${styles.screenWithHeader}` : `${styles.root} ${styles.screen}`;
 
   const draftButton = (className?: string) => (
     <DraftButton
@@ -255,7 +288,8 @@ export default function DraftToolScreen({
   );
 
   return (
-    <div ref={rootRef} className={`${styles.root} ${styles.screen}`}>
+    <div ref={rootRef} className={screenClass}>
+      {header ? <div className={styles.screenHeader}>{header}</div> : null}
       <div ref={clockRowRef} className={styles.clockRow}>
         <ClockBar
           vm={vm}
@@ -277,131 +311,112 @@ export default function DraftToolScreen({
       </div>
 
       <div className={styles.stagePane}>
-        <section className={styles.stageCard} aria-labelledby={pinned ? headingId : undefined} aria-label={pinned ? undefined : t('stage.selected')}>
-          {stale ? (
-            <p role="status" className="flex items-center gap-2 rounded-lg border border-[var(--draft-border)] px-3 py-2 text-sm text-[var(--draft-ink-2)]">
-              <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {t('stale')}
-            </p>
-          ) : null}
-          {spectator ? (
-            <p className="rounded-lg border border-[var(--draft-border)] px-3 py-2 text-sm text-[var(--draft-ink-2)]">
-              {spectator === 'guest' ? t('spectator.guest') : t('spectator.nonParticipant')}
-              {spectator === 'guest' ? (
-                <>
-                  {' '}
-                  <Link href={signInHref} className={`${styles.focusable} rounded font-semibold text-[var(--draft-ink)] underline`}>
-                    {t('spectator.signIn')}
-                  </Link>
-                </>
-              ) : null}
-            </p>
-          ) : null}
+        <div className={styles.stageScroll}>
+          <section className={styles.stageCard} aria-labelledby={pinned ? headingId : undefined} aria-label={pinned ? undefined : t('stage.selected')}>
+            <StageStatus stale={stale} spectator={spectator} />
 
-          {pinned ? (
-            <PhoneSection title={t('stage.selected')}>
-              <InfoBox
-                entry={pinned}
-                dl={dl}
-                names={pkmnNameResolver}
-                isFavorite={favorites.has(pinned.lineId)}
-                inCompare={view.compareLineIds.includes(pinned.lineId)}
-                compareFull={view.compareLineIds.length >= 3}
-                onToggleFavorite={() => onToggleFavorite(pinned.lineId)}
-                onToggleCompare={() => dispatch({ type: 'toggleCompare', lineId: pinned.lineId })}
-                canFavorite={canFavorite}
-                headingId={headingId}
-              />
-              {filtersActive ? (
-                <MatchExplanation
-                  evaluation={pinnedEvaluation}
-                  criteria={criteria}
-                  reasons={reasons}
-                  visibleInResults={visibleInResults}
-                  hiddenByTab={hiddenByTab}
+            {pinned ? (
+              <PhoneSection title={t('stage.selected')}>
+                <InfoBox
+                  entry={pinned}
+                  dl={dl}
+                  names={pkmnNameResolver}
+                  isFavorite={favorites.has(pinned.lineId)}
+                  inCompare={view.compareLineIds.includes(pinned.lineId)}
+                  compareFull={view.compareLineIds.length >= 3}
+                  onToggleFavorite={() => onToggleFavorite(pinned.lineId)}
+                  onToggleCompare={() => dispatch({ type: 'toggleCompare', lineId: pinned.lineId })}
+                  canFavorite={canFavorite}
+                  headingId={headingId}
                 />
-              ) : null}
-              <div className={styles.wideOnly}>
+                {filtersActive ? (
+                  <MatchExplanation
+                    evaluation={pinnedEvaluation}
+                    entry={pinned}
+                    filters={view.filters}
+                    ix={ix}
+                    stageMode={view.stageMode}
+                    names={pkmnNameResolver}
+                    visibleInResults={visibleInResults}
+                    hiddenByTab={hiddenByTab}
+                  />
+                ) : null}
                 <LinePreview entry={pinned} />
+              </PhoneSection>
+            ) : (
+              <div className={`${styles.halftone} flex min-h-[8rem] flex-col items-center justify-center gap-1 rounded-lg p-4 text-center`}>
+                <p className="font-semibold">{t('stage.empty')}</p>
+                <p className="text-sm text-[var(--draft-ink-2)]">{t('stage.emptyHint')}</p>
               </div>
-              {/* Phones: 72/88/104 px sprites (§5.3 item 3). */}
-              <div className={styles.phoneOnly}>
-                <LinePreview entry={pinned} compact />
-              </div>
+            )}
+          </section>
+
+          {/* Outside the card, so the sticky dock is bounded by the whole left column (§5.3). */}
+          <div ref={dockRef} className={`${styles.ctaDock} ${dockOnPhone ? '' : styles.ctaDockPhoneEmpty} flex flex-col gap-2`}>
+            {pinned ? <CostConsequence remainingAfter={remainingAfter} forPlayer={remainingFor} reason={cta.lineReason} vm={vm} /> : null}
+            {draftButton(styles.stageCta)}
+            {adminSwitch ? (
+              <label className="flex min-h-[44px] items-center gap-2 text-xs md:min-h-0">
+                <input
+                  ref={adminSwitchRef}
+                  type="checkbox"
+                  role="switch"
+                  checked={adminOverride}
+                  onChange={(e) => onAdminOverride?.(e.target.checked)}
+                  className={`${styles.focusable} h-4 w-4 accent-[var(--draft-ink)]`}
+                />
+                <span className="font-semibold">{tGlossary('draft.adminOverride')}</span>
+                <span className="text-[var(--draft-ink-2)]">{t('cta.adminHint')}</span>
+              </label>
+            ) : null}
+          </div>
+
+          <div className={styles.extras}>
+            {roster ? (
+              <PhoneSection title={t('roster.title', roster)}>
+                <MyRosterDock
+                  vm={vm}
+                  catalog={catalog}
+                  ix={ix}
+                  indexFailed={indexFailed}
+                  weaknessStage={weaknessStage}
+                  onWeaknessStage={onWeaknessStage}
+                  initialWeaknessOpen={initialWeaknessOpen}
+                  onPin={pin}
+                />
+              </PhoneSection>
+            ) : null}
+            <PhoneSection title={t('recent.title')}>
+              <RecentPicks picks={vm.picks} catalog={catalog} onPin={pin} />
             </PhoneSection>
-          ) : (
-            <div className={`${styles.halftone} flex min-h-[8rem] flex-col items-center justify-center gap-1 rounded-lg p-4 text-center`}>
-              <p className="font-semibold">{t('stage.empty')}</p>
-              <p className="text-sm text-[var(--draft-ink-2)]">{t('stage.emptyHint')}</p>
-            </div>
-          )}
-
-        </section>
-
-        {/* Outside the card, so the sticky dock is bounded by the whole left column (§5.3). */}
-        <div className={`${styles.ctaDock} ${pinned || adminSwitch ? '' : styles.ctaDockPhoneEmpty} flex flex-col gap-2`}>
-          {pinned ? (
-            <CostConsequence
-              price={pinned.price}
-              remainingAfter={cta.remainingAfter}
-              reason={cta.lineReason}
-              vm={vm}
-              spectator={spectator !== null && cta.variant === 'player'}
+            <CompareTray
+              lineIds={view.compareLineIds}
+              catalog={catalog}
+              ix={ix}
+              evaluations={evaluations}
+              criteria={filtersActive ? criteria : []}
+              onRemove={(id) => dispatch({ type: 'toggleCompare', lineId: id })}
+              onPin={pin}
             />
-          ) : null}
-          {draftButton(styles.stageCta)}
-          {adminSwitch ? (
-            <label className="flex min-h-[44px] items-center gap-2 text-sm md:min-h-0">
-              <input
-                ref={adminSwitchRef}
-                type="checkbox"
-                role="switch"
-                checked={adminOverride}
-                onChange={(e) => onAdminOverride?.(e.target.checked)}
-                className={`${styles.focusable} h-4 w-4 accent-[var(--draft-ink)]`}
-              />
-              <span className="font-semibold">{tGlossary('draft.adminOverride')}</span>
-              <span className="text-xs text-[var(--draft-ink-2)]">{t('cta.adminHint')}</span>
-            </label>
-          ) : null}
-        </div>
-
-        <div className={styles.extras}>
-          {roster ? (
-            <PhoneSection title={t('roster.title', roster)}>
-              <MyRosterDock vm={vm} catalog={catalog} onPin={pin} />
-            </PhoneSection>
-          ) : null}
-          <PhoneSection title={t('recent.title')}>
-            <RecentPicks picks={vm.picks} catalog={catalog} onPin={pin} />
-          </PhoneSection>
-          <CompareTray
-            lineIds={view.compareLineIds}
-            catalog={catalog}
-            ix={ix}
-            evaluations={evaluations}
-            criteria={filtersActive ? criteria : []}
-            onRemove={(id) => dispatch({ type: 'toggleCompare', lineId: id })}
-            onPin={pin}
-          />
-          <nav aria-label={t('links.navLabel')} className="flex flex-wrap gap-2 text-sm">
-            {vm.kind === 'redraft' || vm.redraft ? (
-              <Link href={links.redraft} className={`${styles.focusable} rounded-lg border border-[var(--draft-border)] px-3 py-1.5 hover:bg-[var(--draft-elevated)]`}>
-                {t('links.redraft')}
+            <nav aria-label={t('links.navLabel')} className="flex flex-wrap gap-2 text-sm">
+              {vm.kind === 'redraft' || vm.redraft ? (
+                <Link href={links.redraft} className={`${styles.focusable} rounded-lg border border-[var(--draft-border)] px-3 py-1.5 hover:bg-[var(--draft-elevated)]`}>
+                  {t('links.redraft')}
+                </Link>
+              ) : null}
+              {vm.viewer.isParticipant ? (
+                <Link href={links.tokens} className={`${styles.focusable} rounded-lg border border-[var(--draft-border)] px-3 py-1.5 hover:bg-[var(--draft-elevated)]`}>
+                  {t('links.tokens')}
+                </Link>
+              ) : null}
+              <Link
+                href={links.trainerCreator}
+                className={`${styles.focusable} rounded-lg border border-[var(--draft-border)] px-3 py-1.5 hover:bg-[var(--draft-elevated)]`}
+              >
+                {t('links.trainerCreator')}
               </Link>
-            ) : null}
-            {vm.viewer.isParticipant ? (
-              <Link href={links.tokens} className={`${styles.focusable} rounded-lg border border-[var(--draft-border)] px-3 py-1.5 hover:bg-[var(--draft-elevated)]`}>
-                {t('links.tokens')}
-              </Link>
-            ) : null}
-            <Link
-              href={links.trainerCreator}
-              className={`${styles.focusable} rounded-lg border border-[var(--draft-border)] px-3 py-1.5 hover:bg-[var(--draft-elevated)]`}
-            >
-              {t('links.trainerCreator')}
-            </Link>
-          </nav>
+            </nav>
+          </div>
         </div>
       </div>
 
@@ -479,20 +494,11 @@ export default function DraftToolScreen({
         />
       ) : null}
 
-      {/* Phone: sticky bottom bar (§5.3 item 7). */}
+      {/* Phone: sticky bottom bar (§5.3 item 7): the budget left after the pick and DRAFT, no price. */}
       <div className={styles.bottomBar}>
         <div className="flex items-center justify-between gap-3">
-          <p className="min-w-0 text-sm">
-            {pinned ? (
-              <>
-                <span className="font-bold">{tShared('points', { n: pinned.price })}</span>
-                {cta.remainingAfter !== null ? (
-                  <span className={`ml-2 ${cta.remainingAfter < 0 ? 'text-[var(--draft-warn-ink)]' : 'text-[var(--draft-ink-2)]'}`}>
-                    {t('cost.remaining', { n: cta.remainingAfter })}
-                  </span>
-                ) : null}
-              </>
-            ) : null}
+          <p className="min-w-0 text-sm font-semibold">
+            {pinned && remainingAfter !== null ? <RemainingAfterPick remaining={remainingAfter} forPlayer={remainingFor} /> : null}
           </p>
           <DraftButton
             ref={draftBarButtonRef}

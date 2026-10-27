@@ -42,7 +42,8 @@ import {
   publishFormatVersion,
 } from '@/lib/supabase/queries/format-definitions';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
-import { PRESETS, contentHash, ltext } from '@/lib/format-kit';
+import { PRESETS, contentHash } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { FormatStudioError } from '@/lib/format-studio/errors';
 import type { FormatDefinitionMeta, FormatVersion } from '@/lib/format-studio/library-types';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';

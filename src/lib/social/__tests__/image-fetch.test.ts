@@ -6,7 +6,7 @@ import {
   SOCIAL_IMAGE_FETCH_MAX_BYTES,
   SOCIAL_IMAGE_FETCH_TIMEOUT_MS,
 } from '../image-fetch';
-import { SOCIAL_IMAGE_BUCKET, SOCIAL_IMAGE_MAX_BYTES } from '@/app/api/matches/[id]/social-image/storage-path';
+import { SOCIAL_IMAGE_BUCKET, SOCIAL_IMAGE_MAX_BYTES } from '@/lib/match/social-image-path';
 
 const ORIGIN = 'https://abcdefghijklmnop.supabase.co';
 const MATCH_ID = '12345678-1234-4123-8123-123456789abc';

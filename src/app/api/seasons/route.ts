@@ -18,6 +18,7 @@ import {
   rollbackClonedLeague,
   type CloneReport,
 } from '@/lib/season/clone';
+import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
 import type { SeasonWithDetails } from '@/types/season';
 
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
     // manual ruleset (docs/evolution-point-buy.md). Any admin who may create a
     // league (requireAnyAdmin) thereby creates or repairs that shared row; its
     // content is fixed server-side, never taken from the request.
+    await assertRulesetUsableForCreate(player, seasonFields.ruleset_id);
     let seasonInput = seasonFields;
     if (isPointBuy && !seasonInput.ruleset_id) {
       const ensured = await ensurePointBuyBattleRuleset(player.playerId);

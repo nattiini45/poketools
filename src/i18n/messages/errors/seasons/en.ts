@@ -52,6 +52,7 @@ export default {
   INVALID_SEASON_ID: 'League not found',
   INVALID_PHASE_ID: 'Phase not found',
   INVALID_GROUP_ID: 'Group not found',
+  INVALID_LEAGUE_TRASH_ID: 'Trashed league not found',
   // League groups editor (api/seasons/[id]/groups/**); database refusals (SEASON_GROUP_LOCKED, ...) are errors/draft codes
   SEASON_GROUP_NOT_FOUND: 'Group not found in this league',
   SEASON_GROUP_NAME_TAKEN: 'Another group of this league already has this name',
@@ -110,6 +111,7 @@ export default {
   format_season_not_custom: 'This league does not use a custom format.',
   format_season_started: 'The league has already started, so its format can no longer be changed.',
   format_attach_forbidden: 'You can only attach formats that you own or that are shared with all admins.',
+  format_attach_ruleset_forbidden: 'You can only use rulesets that you own or that are shared with all admins.',
   format_attach_invalid: 'This version has errors and cannot be attached ({first}).',
   format_attach_ruleset_required: {
     one: "{count} stage uses the league's default ruleset, but the league has none. Set a default ruleset first.",
@@ -125,4 +127,26 @@ export default {
   format_detach_blocked: 'Teams still point to a phase of this format, so it cannot be detached.',
   season_format_type_locked:
     'The league type cannot be switched to or from a custom format while a format is attached or after the league has started.',
+
+  // League trash (src/lib/league-trash/errors.ts): the signals of league_trash_delete / league_trash_restore, the
+  // restore of a league whose delete rebuild is still pending, and the junction blocks. The internal inventory
+  // codes carry no table names (the details stay in the server log).
+  LEAGUE_TRASH_NOT_FOUND: 'This league is not in the trash (it was already restored or removed).',
+  LEAGUE_TRASH_EXPIRED: 'The restore window of this league has ended, so it can no longer be restored.',
+  LEAGUE_TRASH_SEASON_EXISTS: 'A league with the same id exists again, so the trashed league cannot be restored. Nothing was restored.',
+  LEAGUE_TRASH_SCHEMA_DRIFT:
+    'The league cannot be restored: the table {rel} changed after the league was deleted and now needs the columns {columns}, which the saved copy does not have. Nothing was restored.',
+  LEAGUE_TRASH_PARENT_MISSING:
+    'The league cannot be restored: its records in {rel} (column {column}) point to a {parent} that was deleted in the meantime. Nothing was restored.',
+  LEAGUE_TRASH_PLAN_MISMATCH:
+    'The saved copy of this league could not be restored completely, so nothing was restored. The details are in the server log.',
+  LEAGUE_TRASH_INVENTORY_INCOMPLETE:
+    'The league cannot be moved to the trash because the database has tables the trash does not know yet. Nothing was changed. The details are in the server log.',
+  LEAGUE_TRASH_INVENTORY_STALE:
+    'The league cannot be moved to the trash because the trash lists tables the database no longer has. Nothing was changed. The details are in the server log.',
+  LEAGUE_TRASH_BUSY: 'Another change to this league is running. Try again in a moment.',
+  LEAGUE_TRASH_TIMEOUT:
+    'The request took too long, so the result is unknown. Reload the page to see whether it went through.',
+  LEAGUE_TRASH_REBUILD_PENDING:
+    'The statistics and ratings of this deleted league were not rebuilt yet. Run the pending rebuild first, then restore the league.',
 } as const;

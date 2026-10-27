@@ -8,7 +8,8 @@ import type { TypeId } from '@/lib/draft-finder/index-types';
 import { TYPES } from '@/lib/pkmn/type-chart';
 import { cn } from '@/lib/utils/cn';
 import MatchToggle from './MatchToggle';
-import { FOCUS_RING, SECTION_HEADING, type FilterSectionProps } from './types';
+import { SECTION_HEADING, type FilterSectionProps } from './types';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 export const ALL_TYPES: readonly TypeId[] = TYPES;
 

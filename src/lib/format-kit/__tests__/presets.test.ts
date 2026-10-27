@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { collectLTexts } from '../engine/checks-structure';
-import { SLUG_PATTERN } from '../keys';
+import { SLUG_PATTERN } from '@/lib/studio-core/keys';
 import { PRESETS } from '../presets';
 import { describePrimitive } from '../registry/describe';
 import type { PrimitiveKind } from '../registry/kinds';

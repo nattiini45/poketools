@@ -16,7 +16,7 @@ import { buildChips, type FilterChip } from './chips';
 import { STAT_KEYS, type FinderFilters, type FinderViewState, type PriceTabKey, type StageMode, type StatKey } from './filter-types';
 import type { IndexStage, TypeId } from './index-types';
 import type { DraftLineCatalog, DraftLineCatalogEntry } from './line-catalog';
-import { indexAbilityName, indexMoveName, type NameResolver } from './names-port';
+import type { NameResolver } from './names-port';
 import type { PreparedIndex, PreparedLine } from './prepare';
 import { foldQuery, isEmptyQuery, lineMatchesText } from './search';
 import { sortLineIds } from './sort';
@@ -269,27 +269,6 @@ export function evaluateLine(line: PreparedLine, criteria: readonly Criterion[],
   return { lineId: line.lineId, matches, results, simultaneousFromStage };
 }
 
-/**
- * The Pokémon-data subject of a match reason in the data locale: the move, ability (incl. a defensive one),
- * type or stat name. `null` for the typing multiplier, the price and BST, whose wording is UI copy.
- */
-export function viaSubject(via: MatchVia, ix: PreparedIndex, names: NameResolver, dl: Locale): string | null {
-  switch (via.kind) {
-    case 'move':
-      return indexMoveName(ix.raw, via.moveIdx, names, dl);
-    case 'ability':
-    case 'ability-defense':
-      return indexAbilityName(ix.raw, via.abilityIdx, names, dl);
-    case 'type':
-      return names.type(via.type, dl);
-    case 'stat':
-      return via.stat === 'bst' ? null : names.stat(via.stat, dl, 'short');
-    case 'typing':
-    case 'price':
-      return null;
-  }
-}
-
 // ── run ────────────────────────────────────────────────────────────
 
 /**
@@ -297,7 +276,10 @@ export function viaSubject(via: MatchVia, ix: PreparedIndex, names: NameResolver
  * compare tray and the open flag are not among them, so a caller can memoise on these fields alone and a
  * keystroke in a filter picker does not re-run the finder.
  */
-export type FinderQueryView = Pick<FinderViewState, 'filters' | 'stageMode' | 'tab' | 'sort' | 'showDrafted' | 'pinnedLineId'>;
+export type FinderQueryView = Pick<
+  FinderViewState,
+  'filters' | 'stageMode' | 'tab' | 'sort' | 'sortStage' | 'showDrafted' | 'pinnedLineId'
+>;
 
 export interface FinderInput {
   ix: PreparedIndex;
@@ -370,7 +352,14 @@ export function runFinder(input: FinderInput): FinderResult {
   const sortedIds = sortLineIds(
     inTab.map((m) => m.lineId),
     view.sort,
-    { catalog: catalogById, ix, favorites: input.favorites, names: input.names, dataLocale: input.dataLocale },
+    {
+      catalog: catalogById,
+      ix,
+      sortStage: view.sortStage,
+      favorites: input.favorites,
+      names: input.names,
+      dataLocale: input.dataLocale,
+    },
   );
 
   const pinned = view.pinnedLineId;

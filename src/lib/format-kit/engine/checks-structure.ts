@@ -1,12 +1,15 @@
 /**
  * Structural checks: duplicate keys, references to stages that do not exist, repeated legacy modules, unknown
- * rulesets, and the translation coverage of the document's texts.
+ * rulesets (a stored id that does not exist, a rule preset the catalog does not know), and the translation
+ * coverage of the document's texts.
  *
  * Every lookup goes through a Map built with `toMap` (first wins), never object indexing, so keys such as
  * `constructor` behave like any other.
  */
-import { toMap } from '../keys';
-import type { FormatDefinition, LText } from '../types';
+import { toMap } from '@/lib/studio-core/keys';
+import { isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
+import type { FormatDefinition } from '../types';
+import type { LText } from '@/lib/studio-core/ltext';
 import { diag, ptr, type Diagnostic } from './diagnostics';
 import type { CompileEnv } from './env';
 import { fixUseSeasonRuleset } from './fixes';
@@ -77,6 +80,21 @@ export function checkStructure(def: FormatDefinition, env: CompileEnv): Diagnost
       out.push(diag('module_duplicate', ptr('modules', i, 'adapter'), { adapter: module.adapter }));
     }
     adapters.add(module.adapter);
+  });
+
+  // A rule preset must be one the catalog knows. The schema only checks the shape, so a stored document
+  // that names a preset the catalog later dropped still loads, and the editor shows this error instead.
+  def.stages.forEach((stage, i) => {
+    if (stage.ruleset.kind === 'preset' && !isRulesetPresetId(stage.ruleset.preset)) {
+      out.push(
+        diag(
+          'ruleset_preset_unknown',
+          ptr('stages', i, 'ruleset', 'preset'),
+          { stage: stage.key, preset: stage.ruleset.preset },
+          [fixUseSeasonRuleset(i)],
+        ),
+      );
+    }
   });
 
   const rulesetIds = env.rulesetIds;

@@ -1021,7 +1021,7 @@ describe('listAdminMatchFilterOptions', () => {
         tournament({ id: 'w1', name: 'Weekly' }),
       ],
       seasons: [season({ id: 's0', name: 'Aaa archived', archived: true }), season({ id: 's1', name: 'Summer League' })],
-      rulesets: [ruleset('rs1', 'Gen 9 OU')],
+      ruleset_definition_versions: [ruleset('rs1', 'Gen 9 OU')],
     });
 
     const options = await listAdminMatchFilterOptions({ tournamentIds: null, seasonIds: null });
@@ -1041,7 +1041,7 @@ describe('listAdminMatchFilterOptions', () => {
         tournament({ id: 'w1', ruleset_id: 'rs2' }),
       ],
       seasons: [season({ id: 's1' })],
-      rulesets: [ruleset('rs2', 'Zeta rules'), ruleset('rs1', 'Alpha rules'), ruleset('rs9', 'Unused')],
+      ruleset_definition_versions: [ruleset('rs2', 'Zeta rules'), ruleset('rs1', 'Alpha rules'), ruleset('rs9', 'Unused')],
     });
 
     const options = await listAdminMatchFilterOptions({ tournamentIds: null, seasonIds: null });
@@ -1053,8 +1053,9 @@ describe('listAdminMatchFilterOptions', () => {
       { id: 'rs1', name: 'Alpha rules' },
       { id: 'rs2', name: 'Zeta rules' },
     ]);
-    const rulesetRead = callsTo('rulesets')[0];
-    expect(opsOf(rulesetRead, 'select')).toEqual([['id, name']]);
+    // A ruleset is a pinned VERSION: the list reads the version rows (frozen name).
+    const rulesetRead = callsTo('ruleset_definition_versions')[0];
+    expect(opsOf(rulesetRead, 'select')).toEqual([['id, name:name_text']]);
     expect([...(opsOf(rulesetRead, 'in')[0][1] as string[])].sort()).toEqual(['rs1', 'rs2']);
     expect(opsOf(callsTo('tournaments')[0], 'select')[0][0]).toContain('ruleset_id');
   });
@@ -1062,7 +1063,7 @@ describe('listAdminMatchFilterOptions', () => {
   it('pages past the 1000-row PostgREST cap for tournaments and seasons', async () => {
     const full = Array.from({ length: 1000 }, (_, i) => tournament({ id: `t${i}`, season_id: 's1' }));
     const rest = Array.from({ length: 5 }, (_, i) => tournament({ id: `u${i}`, season_id: 's1' }));
-    database({ tournaments: [...full, ...rest], seasons: [season({ id: 's1' })], rulesets: [ruleset('rs1', 'R')] });
+    database({ tournaments: [...full, ...rest], seasons: [season({ id: 's1' })], ruleset_definition_versions: [ruleset('rs1', 'R')] });
 
     const options = await listAdminMatchFilterOptions({ tournamentIds: null, seasonIds: null });
 
@@ -1079,7 +1080,7 @@ describe('listAdminMatchFilterOptions', () => {
         tournament({ id: 'other', season_id: 's3', ruleset_id: 'rs3' }),
       ],
       seasons: [season({ id: 's1' }), season({ id: 's2' }), season({ id: 's3' })],
-      rulesets: [ruleset('rs1', 'One'), ruleset('rs2', 'Two'), ruleset('rs3', 'Three')],
+      ruleset_definition_versions: [ruleset('rs1', 'One'), ruleset('rs2', 'Two'), ruleset('rs3', 'Three')],
     });
 
     const options = await listAdminMatchFilterOptions({ tournamentIds: ['a1', 'w1'], seasonIds: ['s2'] });
@@ -1091,7 +1092,7 @@ describe('listAdminMatchFilterOptions', () => {
     expect(options.leagues.map((l) => l.id).sort()).toEqual(['s1', 's2']);
     expect(options.tournaments.map((t) => t.id)).toEqual(['w1']);
     // The rulesets are those of the scoped tournaments only: not the unscoped tournament's.
-    expect([...(opsOf(callsTo('rulesets')[0], 'in')[0][1] as string[])].sort()).toEqual(['rs1', 'rs2']);
+    expect([...(opsOf(callsTo('ruleset_definition_versions')[0], 'in')[0][1] as string[])].sort()).toEqual(['rs1', 'rs2']);
     expect(options.rulesets.map((r) => r.id)).toEqual(['rs1', 'rs2']);
   });
 
@@ -1113,7 +1114,7 @@ describe('listAdminMatchFilterOptions', () => {
     database({ tournaments: [], seasons: [season({ id: 's1' })] });
     const options = await listAdminMatchFilterOptions({ tournamentIds: null, seasonIds: null });
     expect(options.rulesets).toEqual([]);
-    expect(callsTo('rulesets')).toHaveLength(0);
+    expect(callsTo('ruleset_definition_versions')).toHaveLength(0);
   });
 
   it('throws a database error', async () => {

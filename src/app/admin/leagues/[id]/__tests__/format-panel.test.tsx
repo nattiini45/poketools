@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   loadLeagueFormatState: vi.fn(),
   loadAttachCandidates: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
+  getRulesetPinInfo: vi.fn(),
   otherPanel: vi.fn(),
 }));
 
@@ -50,6 +51,7 @@ vi.mock('@/lib/format-studio/loader', () => ({ loadLeagueFormat: mocks.loadLeagu
 vi.mock('@/lib/format-studio/readiness-loader', () => ({ loadLeagueFormatState: mocks.loadLeagueFormatState }));
 vi.mock('@/lib/format-studio/attach-candidates', () => ({ loadAttachCandidates: mocks.loadAttachCandidates }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonFormatSummary: mocks.getSeasonFormatSummary }));
+vi.mock('@/lib/ruleset-studio/pin-info.server', () => ({ getRulesetPinInfo: mocks.getRulesetPinInfo }));
 vi.mock('@/components/format-studio/FormatDetail', () => stub('FormatDetail'));
 vi.mock('@/components/format-studio/attach/FormatAttachPanel', () => stub('FormatAttachPanel'));
 vi.mock('@/components/format-studio/attach/ReadinessCard', () => stub('ReadinessCard'));
@@ -200,6 +202,7 @@ beforeEach(() => {
   mocks.loadLeagueFormatState.mockResolvedValue(CUSTOM_STATE);
   mocks.loadAttachCandidates.mockResolvedValue({ items: [], capped: false });
   mocks.getSeasonFormatSummary.mockResolvedValue(null);
+  mocks.getRulesetPinInfo.mockResolvedValue(null);
 });
 
 describe('Format tab (?tab=format)', () => {
@@ -380,11 +383,14 @@ describe('Format tab of a custom league', () => {
     mocks.getSeasonWithDetails.mockResolvedValue(custom());
     mocks.loadLeagueFormatState.mockResolvedValue({ ...CUSTOM_STATE, attached: ATTACHED });
     mocks.loadAttachCandidates.mockResolvedValue({ items: [CANDIDATE], capped: true });
+    mocks.getRulesetPinInfo.mockResolvedValue({ definition_id: 'def-1', name: 'Spring OU', version_id: 'rs-1', version_no: 2, update: null, can_view: true });
     const [attach] = findByType(panelOf(await render('format')), FormatAttachPanel);
     expect(attach.props).toEqual({
       seasonId: S1,
       started: false,
       rulesetId: 'rs-1',
+      // The preview names the league's own pin; the labels of the rulesets a format names come with the format's detail.
+      seasonRuleset: { name: 'Spring OU', version_no: 2 },
       seasonLanguage: 'de',
       manualPhaseCount: 0,
       attached: ATTACHED,

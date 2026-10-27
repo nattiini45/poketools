@@ -14,8 +14,9 @@ import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsCommon } from '@/i18n/messages/errors/common';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { formatStudioAttachMessages } from '@/i18n/messages/format-studio/attach';
-import { resolveLText, type Locale } from '@/lib/format-kit/client';
-import { previewAttach, type AttachPreview } from '@/lib/format-studio/editor/attach-preview';
+import { resolveLText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
+import { previewAttach, rulesetLabelsOf, type AttachPreview, type RulesetLabel } from '@/lib/format-studio/editor/attach-preview';
 import {
   attachFormatRequest,
   classifyApiError,
@@ -284,6 +285,8 @@ export interface FormatAttachPanelProps {
   started: boolean;
   /** The league's ruleset; null when it has none. */
   rulesetId: string | null;
+  /** The name and version of the league's ruleset, for the preview's wording. */
+  seasonRuleset?: RulesetLabel | null;
   /** The league's content language: phase names are resolved in it. */
   seasonLanguage: Locale;
   manualPhaseCount: number;
@@ -320,6 +323,7 @@ export default function FormatAttachPanel({
   seasonId,
   started,
   rulesetId,
+  seasonRuleset,
   seasonLanguage,
   manualPhaseCount,
   attached,
@@ -367,6 +371,9 @@ export default function FormatAttachPanel({
         const result = previewAttach({
           spec: published.spec,
           seasonRulesetId: rulesetId,
+          seasonRuleset,
+          // The detail answers with the labels of the rulesets the spec names, legacy ids included.
+          namedRulesets: rulesetLabelsOf(out.data.rulesets),
           seasonLanguage,
           specHash: published.content_hash,
         });
@@ -375,7 +382,7 @@ export default function FormatAttachPanel({
         setPreview({ status: 'failed', id, error: { code: 'unknown_error' } });
       }
     },
-    [rulesetId, seasonLanguage],
+    [rulesetId, seasonRuleset, seasonLanguage],
   );
 
   function select(id: string) {

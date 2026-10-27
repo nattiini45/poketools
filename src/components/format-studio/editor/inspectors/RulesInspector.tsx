@@ -13,11 +13,11 @@ import {
   computeCoverage,
   describeCoverage,
   ptr,
-  resolveLText,
   type Diagnostic,
-  type Locale,
   type RuleCard,
 } from '@/lib/format-kit/client';
+import { resolveLText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 import { RULE_VERIFY_MODES, RULE_WHEN } from '@/lib/format-studio/editor/catalog';
 import type { DraftDocument } from '@/lib/format-studio/editor/document';
 import {

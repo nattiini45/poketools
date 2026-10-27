@@ -37,7 +37,6 @@ export default {
     noList:
       'No point-buy list has been bound to this league yet. The list appears here as soon as the league admins bind it.',
     emptyList: 'The bound point-buy list is still empty.',
-    priceGroups: 'Price groups',
   },
   teams: {
     heading: 'Teams',

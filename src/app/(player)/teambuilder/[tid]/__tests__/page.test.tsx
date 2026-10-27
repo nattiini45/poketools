@@ -34,8 +34,7 @@ vi.mock('@/components/teambuilder/TeambuilderClient', () => ({
 }));
 vi.mock('@/lib/auth/helpers', () => ({ getSessionPlayer: vi.fn(async () => mocks.player) }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn() }));
-vi.mock('@/lib/supabase/queries/rulesets', () => ({ resolveEffectiveRuleset: vi.fn(async () => null) }));
-vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn(async () => null) }));
+vi.mock('@/lib/supabase/queries/rulesets', () => ({ getRulesetById: vi.fn(async () => null) }));
 vi.mock('@/lib/supabase/queries/teams', () => ({ getPlayerTeamForTournament: vi.fn(async () => null) }));
 vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolBySeason: vi.fn(),
@@ -47,6 +46,7 @@ vi.mock('server-only', () => ({}));
 
 import TournamentTeambuilderPage from '../page';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import {
   getDraftPoolBySeason,
   getDraftPoolBySeasonGroup,
@@ -74,6 +74,16 @@ beforeEach(() => {
     ruleset_id: null,
     bracket_type: 'swiss',
   } as never);
+});
+
+describe('teambuilder page: the pinned ruleset', () => {
+  it('hands the editor the pinned version, its name, format key and generation (the ruleset knows its generation)', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({ id: TOURNAMENT_ID, season_id: null, ruleset_id: 'pin-v2', bracket_type: 'swiss' } as never);
+    vi.mocked(getRulesetById).mockResolvedValue({ id: 'pin-v2', name: 'Spring OU', base_format: 'gen9natdexou', gen: 9 } as never);
+    const props = await render();
+    expect(getRulesetById).toHaveBeenCalledWith('pin-v2');
+    expect(props).toMatchObject({ rulesetId: 'pin-v2', rulesetName: 'Spring OU', baseFormat: 'gen9natdexou', gen: 9 });
+  });
 });
 
 describe('teambuilder page: the viewer draft pool (isDraftLeague)', () => {

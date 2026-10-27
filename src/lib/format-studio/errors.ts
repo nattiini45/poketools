@@ -17,6 +17,7 @@ import type { ApiErrorCode, ApiErrorParams } from '@/i18n/messages/errors';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { detailNumber, parseDbError } from '@/lib/studio-core/db-errors';
 
 export const FORMAT_ERROR_CODES = [
   // errors/admin: the library
@@ -44,6 +45,7 @@ export const FORMAT_ERROR_CODES = [
   'format_season_not_custom',
   'format_season_started',
   'format_attach_forbidden',
+  'format_attach_ruleset_forbidden',
   'format_attach_invalid',
   'format_attach_ruleset_required',
   'format_attach_manual_phases',
@@ -80,6 +82,7 @@ export const FORMAT_ERROR_STATUS: { readonly [C in FormatErrorCode]: number } = 
   format_season_not_custom: 409,
   format_season_started: 409,
   format_attach_forbidden: 403,
+  format_attach_ruleset_forbidden: 403,
   format_attach_invalid: 422,
   format_attach_ruleset_required: 409,
   format_attach_manual_phases: 409,
@@ -115,41 +118,6 @@ export class FormatStudioError<C extends FormatErrorCode = FormatErrorCode> exte
   }
 }
 
-/** The fields of a PostgREST error that the mapper reads. */
-interface PostgrestErrorLike {
-  code?: unknown;
-  message?: unknown;
-  details?: unknown;
-}
-
-function asPostgrestError(error: unknown): PostgrestErrorLike | null {
-  return typeof error === 'object' && error !== null ? (error as PostgrestErrorLike) : null;
-}
-
-/** The DETAIL json of a `RAISE EXCEPTION ... USING DETAIL = <json text>`, or an empty object. */
-function detailOf(error: PostgrestErrorLike): Record<string, unknown> {
-  if (typeof error.details !== 'string') return {};
-  try {
-    const parsed: unknown = JSON.parse(error.details);
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function numberOf(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-/** The name in `... violates check constraint "<name>"`, or null. */
-function constraintOf(error: PostgrestErrorLike): string | null {
-  if (typeof error.message !== 'string') return null;
-  const match = /constraint "([^"]+)"/.exec(error.message);
-  return match ? match[1] : null;
-}
-
 const TOO_LARGE_TO_STORE_CONSTRAINTS: ReadonlySet<string> = new Set([
   'format_definitions_draft_size',
   'format_definition_versions_spec_size',
@@ -161,17 +129,15 @@ const TOO_LARGE_TO_STORE_CONSTRAINTS: ReadonlySet<string> = new Set([
  * of the signals below is returned unchanged (the same object), so a caller may always `throw mapFormatDbError(e)`.
  */
 export function mapFormatDbError(error: unknown): unknown {
-  const e = asPostgrestError(error);
+  const e = parseDbError(error);
   if (!e) return error;
 
-  if (e.code === 'P0001' && typeof e.message === 'string') {
+  if (e.code === 'P0001' && e.message !== undefined) {
     switch (e.message) {
       case 'FORMAT_NOT_FOUND':
         return new FormatStudioError('format_not_found');
-      case 'FORMAT_STALE_REVISION': {
-        const draftRev = numberOf(detailOf(e).draft_rev, 0);
-        return new FormatStudioError('format_stale_revision', undefined, { draft_rev: draftRev });
-      }
+      case 'FORMAT_STALE_REVISION':
+        return new FormatStudioError('format_stale_revision', undefined, { draft_rev: detailNumber(e, 'draft_rev', 0) });
       case 'FORMAT_NOTHING_TO_PUBLISH':
         return new FormatStudioError('format_nothing_to_publish');
       case 'FORMAT_VERSION_IMMUTABLE':
@@ -183,7 +149,7 @@ export function mapFormatDbError(error: unknown): unknown {
       case 'FORMAT_SEASON_STARTED':
         return new FormatStudioError('format_season_started');
       case 'FORMAT_SEASON_HAS_MANUAL_PHASES':
-        return new FormatStudioError('format_attach_manual_phases', { count: numberOf(detailOf(e).count, 1) });
+        return new FormatStudioError('format_attach_manual_phases', { count: detailNumber(e, 'count', 1) });
       case 'FORMAT_NOT_ATTACHED':
         return new FormatStudioError('format_not_attached');
       case 'FORMAT_NOTHING_ATTACHED':
@@ -193,7 +159,7 @@ export function mapFormatDbError(error: unknown): unknown {
     }
   }
 
-  const constraint = constraintOf(e);
+  const constraint = e.constraint;
   if (constraint === null) return error;
 
   if (e.code === '23505' && constraint === 'format_definitions_slug_key') {

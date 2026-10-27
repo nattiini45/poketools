@@ -6,7 +6,7 @@
 The Reconcile module recomputes values that are *derived* from raw rows (matches → games → battle_stats) but are not cascade-deleted when those rows are reset or removed. It is the shared repair engine behind three kinds of operations:
 
 1. **Match/round reset** — soft "undo" paths in the game pipeline call the same rebuilders (ratings, aggregates, streaks, EPB evolution) to leave the league as if the games never happened.
-2. **Entity hard-delete** — deleting a tournament or season clears/re-orphans aggregate scopes and rebuilds ratings, streaks, and (when the season survives) EPB evolution state.
+2. **Entity delete and restore** — deleting a tournament or season clears/re-orphans aggregate scopes and rebuilds ratings, streaks, and (when the season survives) EPB evolution state. A deleted league lands in the [league recycle bin](./season.md#league-recycle-bin); restoring it from there queues its games for the aggregate worker and rebuilds ratings, streaks and EPB state again.
 3. **Season audit/repair** — an admin-only dry-run-or-repair orchestrator that diffs stored vs. computed derived data and reports mismatches.
 
 Everything is idempotent and re-runnable: each rebuilder recomputes from authoritative sources (matches, battle_stats, non-match grants) rather than applying deltas.
@@ -28,9 +28,12 @@ src/lib/reconcile/
 
 ### Entity Delete Rebuild
 - **File**: `entity-delete-rebuild.ts`
-- **Purpose**: Rebuild/clear derived data after a tournament or season is hard-deleted
-- **Key Functions**: `rebuildAfterTournamentDelete()`, `rebuildAfterSeasonDelete()`
-- **Result type**: `EntityDeleteRebuildSummary`
+- **Purpose**: Rebuild/clear derived data after a tournament or season is deleted, and after a league is restored from the trash
+- **Key Functions**: `rebuildAfterTournamentDelete()`, `rebuildAfterSeasonDelete({ seasonId, playerIds, phaseIds })`, `rebuildAfterSeasonRestore({ seasonId, playerIds })`
+- **Result types**: `EntityDeleteRebuildSummary`, `EntityRestoreRebuildSummary`
+- **Delete of a league.** The database already removed the league's and its phases' aggregate scope rows in the delete transaction; `rebuildAfterSeasonDelete` clears them again (idempotent, so a re-run of a pending rebuild is self-contained), clears each phase's own tournament scope (hence `phaseIds`), rebuilds `all_time`, ratings and streaks. Evolution state went with the league and needs no repair.
+- **Restore of a league.** `rebuildAfterSeasonRestore` runs four idempotent steps: (1) drain the aggregate queue (the restore queued one increment `aggregate_jobs` row per game with stats and cleared `aggregate_applied_at`; league, phase and `all_time` scopes are counted by the queue's own atomic apply and **never rebuilt globally here**), time-boxed to 90 s (`RESTORE_AGGREGATE_DRAIN_BUDGET_MS`), anything left stays for the `process-aggregates` cron; (2) ratings through `rebuildRatingsSettled` (`src/lib/rating/test-league-rebuild.ts`, extracted so the test-league flag change and the restore share it); (3) `recomputeStreaks` per player (streak pointers are not re-linked); (4) the EPB repair of the restored season.
+- **Confirmation.** The routes confirm each finished rebuild to the database (`markLeagueTrashRebuildDone`, `markLeagueRestoreRebuildDone`); an unconfirmed rebuild comes back as a typed warning, the superadmin re-runs it from the league trash page (`POST /api/admin/league-trash/[id]/rebuild`), the expiry never purges an entry whose delete rebuild is unconfirmed, and the season audit reads `listPendingLeagueRebuilds`. A rebuild failure never fails the delete or the restore.
 
 ### EPB Evolution Rebuild Engine
 - **File**: `evolution-rebuild.ts`
@@ -49,7 +52,7 @@ src/lib/reconcile/
 - **Delete/reset triggers** → rebuild:
   - Match reset (`resetMatch`) / round reset (`resetRound`) → recalculate ratings, aggregates, streaks, EPB evolution (see [Match](./match.md)).
   - Tournament hard-delete → clear `tournament` scope; rebuild or clear `league` scope; rebuild `all_time`; rebuild ratings + streaks; repair EPB evolution if season survives.
-  - Season hard-delete → clear `league` scope; rebuild `all_time`; rebuild ratings + streaks (evolution cascades with the season row).
+  - Season delete (to the trash) → clear the `league` and phase scopes; rebuild `all_time`; rebuild ratings + streaks (evolution goes with the season). Season restore → drain the queued aggregate jobs; rebuild ratings, streaks and EPB evolution.
 - **Reconcile flow** (`reconcileSeasonDerivedData`):
   1. Resolve format_type + players; EPB seasons diff evolution first.
   2. Ratings: compute curve, diff stored vs. computed per player.
@@ -73,6 +76,11 @@ src/lib/reconcile/
 ## API Routes
 ### Admin Reconcile
 - `POST /api/admin/reconcile` — dry-run or `repair` reconcile; `scope` = `season` (needs `season_id`) or `all`
+
+### League trash
+- `DELETE /api/seasons/[id]` — site admin; runs `rebuildAfterSeasonDelete` after the league moved to the trash
+- `POST /api/admin/league-trash/[id]/restore` — superadmin; runs `rebuildAfterSeasonRestore`
+- `POST /api/admin/league-trash/[id]/rebuild` — superadmin; runs the pending rebuild of a delete or a restore again
 
 ### Reset / Repair Triggers
 - `POST /api/admin/matches/[id]/reset` — reset a match to `scheduled`, recalculate derived data

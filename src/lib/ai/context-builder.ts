@@ -15,7 +15,8 @@ import type { BattleStat, Aggregate } from '@/types/game';
 import type { Ruleset } from '@/types/ruleset';
 import type { PokemonSet } from '@/types/team';
 import type { BattleFrame } from '@/types/replay-viewer';
-import { renderTeamConstraints, renderCoreAssignments } from './league-context';
+import { parseGenFromFormat } from './format';
+import { renderAllowlists, renderTeamConstraints, renderCoreAssignments } from './league-context';
 
 // ─── System Prompt ──────────────────────────────────────────────────
 
@@ -701,6 +702,8 @@ export function buildRulesetSection(ruleset: Ruleset | null, isDoubles: boolean,
     `Generation: ${gen}`,
   ];
 
+  // The ruleset is a pinned version: say which one the league enforces.
+  if (ruleset.version) lines.push(`Ruleset: ${ruleset.name}, version ${ruleset.version.version_no}`);
   if (ruleset.clauses.length > 0) {
     lines.push(`Clauses: ${ruleset.clauses.join(', ')}`);
   }
@@ -713,6 +716,10 @@ export function buildRulesetSection(ruleset: Ruleset | null, isDoubles: boolean,
   if (ruleset.bans.items.length > 0) {
     lines.push(`Banned Items: ${ruleset.bans.items.join(', ')}`);
   }
+  if (ruleset.bans.abilities.length > 0) {
+    lines.push(`Banned Abilities: ${ruleset.bans.abilities.join(', ')}`);
+  }
+  lines.push(...renderAllowlists(ruleset.allow));
   if (ruleset.additions.pokemon.length > 0) {
     lines.push(`Unbanned (additions): ${ruleset.additions.pokemon.join(', ')}`);
   }
@@ -947,11 +954,4 @@ function extractSpeciesFromContext(
     }
   }
   return Array.from(species);
-}
-
-/** Parse generation number from base_format string like "gen9ou" → 9 */
-export function parseGenFromFormat(baseFormat?: string): number {
-  if (!baseFormat) return 9;
-  const match = baseFormat.match(/gen(\d)/);
-  return match ? parseInt(match[1], 10) : 9;
 }

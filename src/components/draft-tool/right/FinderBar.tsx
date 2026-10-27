@@ -4,27 +4,35 @@
  * The finder bar above the wall (draft-frontend §5.5 `FinderBar`, §5.3, SPEC:211-232): bilingual search
  * (debounced 120 ms into `setText`), the stage mode ("On the same Pokémon" / "Anywhere in the line", FR-6),
  * the Filters button ("Filters (n)" with the number of active filters; it opens the filter sheet), the sort
- * select and "Show drafted" (FR-7).
+ * select with its Base/Final stage switch and "Show drafted" (FR-7).
+ *
+ * The stage switch picks whose stats the stat sorts and BST read (`sortStage`). It is always rendered so the
+ * bar does not jump, and disabled while the sort is not a stat sort. The select and the switch share one
+ * wrapper, so they wrap onto the next row together.
  *
  * The count of matching lines is not here: `ActiveFilterChips` (always rendered under this bar) shows it once.
  */
 import { useEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent } from 'react';
+import SegmentedControl from '@/components/draft-tool/shared/SegmentedControl';
 import { useT } from '@/i18n/client';
 import { draftFinderMessages } from '@/i18n/messages/draft/finder';
 import { glossaryMessages } from '@/i18n/messages/glossary';
 import { activeFilterCount } from '@/lib/draft-finder/filter-groups';
 import {
   hasActiveFilters,
+  SORT_KEYS,
+  SORT_STAGES,
+  STAGE_MODES,
   type FinderAction,
   type FinderFilters,
   type FinderViewState,
   type SortKey,
-  type StageMode,
-  type StatKey,
 } from '@/lib/draft-finder/filter-types';
 import type { NameResolver } from '@/lib/draft-finder/names-port';
+import { isStatSort } from '@/lib/draft-finder/sort';
 import { cn } from '@/lib/utils/cn';
 import { statLabel, useFinderLabelContext } from './finder-labels';
+import { FOCUS_RING } from '@/components/draft-tool/shared/focus';
 
 export const SEARCH_DEBOUNCE_MS = 120;
 
@@ -89,14 +97,6 @@ export function createTextCommitter(commit: (value: string) => void, delayMs: nu
   };
 }
 
-const STAGE_MODES: readonly StageMode[] = ['same_stage', 'anywhere'];
-const BASE_SORTS: readonly SortKey[] = ['default', 'alpha', 'favorites'];
-/** The stat sorts of `SortKey` (final stage, §4.7 rule 4); HP is not a sort. */
-const STAT_SORTS: readonly Extract<SortKey, StatKey>[] = ['spe', 'atk', 'def', 'spa', 'spd'];
-
-const FOCUS_RING =
-  'outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--poke-focus)]';
-
 export default function FinderBar({
   view,
   dispatch,
@@ -136,22 +136,12 @@ export default function FinderBar({
     if (event.key === 'Enter') committer.flush(text);
   };
 
-  const modeRefs = useRef(new Map<StageMode, HTMLButtonElement>());
-  const onModeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
-    event.preventDefault();
-    const next = view.stageMode === 'same_stage' ? 'anywhere' : 'same_stage';
-    dispatch({ type: 'setStageMode', mode: next });
-    modeRefs.current.get(next)?.focus();
-  };
-
   const activeCount = activeFilterCount(view.filters);
   const filtersLabel = tg('state.filters');
-  const sortOptions: { key: SortKey; label: string }[] = [
-    ...BASE_SORTS.map((key) => ({ key, label: t(`sort.${key as 'default' | 'alpha' | 'favorites'}`) })),
-    ...STAT_SORTS.map((key) => ({ key, label: t('sort.stat', { stat: statLabel(key, ctx, 'long') }) })),
-    { key: 'bst', label: t('sort.stat', { stat: t('sort.bst') }) },
-  ];
+  const sortOptions: { key: SortKey; label: string }[] = SORT_KEYS.map((key) => ({
+    key,
+    label: isStatSort(key) ? statLabel(key, ctx, 'long') : t(`sort.${key}`),
+  }));
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2 px-3 py-2', className)}>
@@ -172,39 +162,12 @@ export default function FinderBar({
         )}
       />
 
-      <div
-        role="radiogroup"
-        aria-label={t('mode.label')}
-        onKeyDown={onModeKeyDown}
-        className="inline-flex shrink-0 overflow-hidden rounded-poke-md border border-[var(--draft-border,var(--poke-border))]"
-      >
-        {STAGE_MODES.map((mode) => {
-          const checked = view.stageMode === mode;
-          return (
-            <button
-              key={mode}
-              ref={(el) => {
-                if (el) modeRefs.current.set(mode, el);
-                else modeRefs.current.delete(mode);
-              }}
-              type="button"
-              role="radio"
-              aria-checked={checked}
-              tabIndex={checked ? 0 : -1}
-              onClick={() => dispatch({ type: 'setStageMode', mode })}
-              className={cn(
-                'min-h-[44px] px-3 text-xs font-semibold md:min-h-0 md:py-1.5',
-                checked
-                  ? 'bg-[var(--draft-accent,var(--poke-accent))] text-[var(--poke-surface)]'
-                  : 'bg-[var(--draft-surface,var(--poke-surface))] text-[var(--draft-ink-2,var(--poke-text-secondary))]',
-                FOCUS_RING,
-              )}
-            >
-              {mode === 'same_stage' ? t('mode.same') : t('mode.anywhere')}
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedControl
+        value={view.stageMode}
+        onChange={(mode) => dispatch({ type: 'setStageMode', mode })}
+        ariaLabel={t('mode.label')}
+        options={STAGE_MODES.map((mode) => ({ value: mode, label: mode === 'same_stage' ? t('mode.same') : t('mode.anywhere') }))}
+      />
 
       <button
         id={filterTriggerId}
@@ -229,23 +192,35 @@ export default function FinderBar({
         {!indexReady && <span className="sr-only">{t('filters.loading')}</span>}
       </button>
 
-      <label className="inline-flex shrink-0 items-center gap-1.5 text-sm text-[var(--draft-ink-2,var(--poke-text-secondary))]">
-        <span>{t('sort.label')}</span>
-        <select
-          value={view.sort}
-          onChange={(e) => dispatch({ type: 'setSort', sort: e.target.value as SortKey })}
-          className={cn(
-            'min-h-[44px] rounded-poke-md border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] px-2 text-sm text-[var(--draft-ink,var(--poke-text-primary))] md:min-h-0 md:py-1',
-            FOCUS_RING,
-          )}
-        >
-          {sortOptions.map((o) => (
-            <option key={o.key} value={o.key}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="inline-flex flex-wrap items-center gap-2">
+        <label className="inline-flex items-center gap-1.5 text-sm text-[var(--draft-ink-2,var(--poke-text-secondary))]">
+          <span>{t('sort.label')}</span>
+          <select
+            value={view.sort}
+            onChange={(e) => dispatch({ type: 'setSort', sort: e.target.value as SortKey })}
+            className={cn(
+              'min-h-[44px] rounded-poke-md border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] px-2 text-sm text-[var(--draft-ink,var(--poke-text-primary))] md:min-h-0 md:py-1',
+              FOCUS_RING,
+            )}
+          >
+            {sortOptions.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="inline-flex items-center gap-1.5 text-sm text-[var(--draft-ink-2,var(--poke-text-secondary))]">
+          <span aria-hidden="true">{t('sort.stage.label')}</span>
+          <SegmentedControl
+            value={view.sortStage}
+            onChange={(stage) => dispatch({ type: 'setSortStage', stage })}
+            ariaLabel={t('sort.stage.label')}
+            disabled={!isStatSort(view.sort)}
+            options={SORT_STAGES.map((stage) => ({ value: stage, label: t(`sort.stage.${stage}`) }))}
+          />
+        </span>
+      </div>
 
       <label className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 text-sm text-[var(--draft-ink,var(--poke-text-primary))] md:min-h-0">
         <input
@@ -256,7 +231,6 @@ export default function FinderBar({
         />
         <span>{tg('state.showDrafted')}</span>
       </label>
-
     </div>
   );
 }

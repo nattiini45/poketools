@@ -84,15 +84,22 @@ export function storageSetJson(which: DraftStorageArea, key: DraftStorageKey, va
   return storageSet(which, key, raw);
 }
 
-// ── Finder preferences (stage mode, sort, show drafted) ────────────────────
+// ── Finder preferences (stage mode, sort, sort stage, show drafted, weakness stage) ──
 
 /** The stored preferences, unvalidated (the finder reducer owns the shape). */
 export function readPrefs(): unknown {
   return storageGetJson('local', PREFS_KEY);
 }
 
-export function writePrefs(prefs: unknown): boolean {
-  return storageSetJson('local', PREFS_KEY, prefs);
+/**
+ * Merges `patch` into the stored preferences (fields it does not name stay, so the independent writers of the
+ * blob - the finder view and the weakness overview - never overwrite each other). Returns false when the blob
+ * could not be stored.
+ */
+export function updatePrefs(patch: Readonly<Record<string, unknown>>): boolean {
+  const current = readPrefs();
+  const base = typeof current === 'object' && current !== null && !Array.isArray(current) ? current : {};
+  return storageSetJson('local', PREFS_KEY, { ...base, ...patch });
 }
 
 // ── Pinned line (per pool, per tab) ─────────────────────────────────────────

@@ -111,11 +111,11 @@ describe('admin tournament rounds page gate', () => {
 
   it('a standalone tournament renders the legacy page with the live site-admin flag', async () => {
     const [site] = findByType(await render(), LegacyRoundsPage);
-    expect(site.props).toEqual({ id: ID, isSiteAdmin: true });
+    expect(site.props).toEqual({ id: ID, playerId: 'admin-1', isSiteAdmin: true });
 
     mocks.gateResourceAdmin.mockResolvedValue({ kind: 'ok', playerId: 'p9', isSiteAdmin: false });
     const [scoped] = findByType(await render(), LegacyRoundsPage);
-    expect(scoped.props).toEqual({ id: ID, isSiteAdmin: false });
+    expect(scoped.props).toEqual({ id: ID, playerId: 'p9', isSiteAdmin: false });
   });
 
   it('a missing tournament is a 404 for an admin the gate passed', async () => {

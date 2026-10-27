@@ -37,6 +37,7 @@ import {
   rebuildAfterTournamentDelete,
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
+import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
 import type { Tournament, TournamentWithDetails } from '@/types/tournament';
 import type { TournamentUpdateInput } from '@/lib/validation';
@@ -154,6 +155,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     assertSeasonPhaseTournamentEditable(before, body);
+
+    // The ruleset is a pin to an immutable version: a new value must be a ruleset the caller may use, and a started league
+    // phase moves it only through the pin route (a started standalone tournament is locked below). Resending the stored value
+    // passes.
+    await assertRulesetChangeAllowed({
+      player: admin,
+      current: before.ruleset_id,
+      requested: body.ruleset_id,
+      started: before.season_id !== null && before.status !== 'upcoming',
+    });
 
     if (before.season_id) {
       // A league phase may not take another phase's name; saving its own

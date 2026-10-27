@@ -12,6 +12,7 @@ function ctx(patch: Partial<SortContext> = {}): SortContext {
   return {
     catalog: new Map(catalog.lines.map((l) => [l.lineId, l])),
     ix,
+    sortStage: 'final',
     favorites: new Set(),
     names: stubNames,
     dataLocale: 'en',
@@ -58,6 +59,35 @@ describe('finder sorting (draft-frontend §4.7 rule 4)', () => {
     expect(sortLineIds(all, 'spe', ctx()).slice(0, 2)).toEqual(['mona--x', 'monb--y']);
     // BST: Ursaluna-Bloodmoon 555; Ursaluna 550 and Mony 550 tie, so the higher price goes first.
     expect(sortLineIds(all, 'bst', ctx()).slice(0, 3)).toEqual(['teddiursa--ursalunabloodmoon', 'teddiursa--ursaluna', 'monb--y']);
+  });
+
+  it('stat sorts read the base stage when asked', () => {
+    const base = ctx({ sortStage: 'base' });
+    // Base speed: Mona 40, every other line 60 (the fixture default), so the 60s keep the default order
+    // (price desc) and Mona, first by final speed, comes last.
+    expect(sortLineIds(all, 'spe', base)).toEqual([...sortLineIds(all, 'default', base).filter((id) => id !== 'mona--x'), 'mona--x']);
+    // The same speed sort at the final stage puts Mona first: the stage changes the order.
+    expect(sortLineIds(all, 'spe', ctx())[0]).toBe('mona--x');
+    // BST at the base stage: Mona 240 against 360 elsewhere.
+    expect(sortLineIds(all, 'bst', base).at(-1)).toBe('mona--x');
+    expect(sortLineIds(all, 'bst', base)[0]).toBe('teddiursa--ursalunabloodmoon');
+  });
+
+  it('the stage only matters for stat sorts, and ties fall back to default at either stage', () => {
+    for (const sort of ['default', 'alpha', 'favorites'] as const) {
+      expect(sortLineIds(all, sort, ctx({ sortStage: 'base' }))).toEqual(sortLineIds(all, sort, ctx({ sortStage: 'final' })));
+    }
+    // Teddiursa lines tie on every base stat (the fixture default): default order decides, not the stage.
+    const teddiursa = ['teddiursa--ursaluna', 'teddiursa--ursalunabloodmoon'];
+    expect(sortLineIds(teddiursa, 'atk', ctx({ sortStage: 'base' }))).toEqual(['teddiursa--ursalunabloodmoon', 'teddiursa--ursaluna']);
+  });
+
+  it('a catalog line missing from the index sorts last in a stat sort, at either stage', () => {
+    const entry = catalog.lines[0];
+    const indexless = new Map([...ctx().catalog, ['ghost--line', { ...entry, lineId: 'ghost--line', price: 99 }]]);
+    for (const sortStage of ['base', 'final'] as const) {
+      expect(sortLineIds(['ghost--line', 'monb--y'], 'spe', ctx({ sortStage, catalog: indexless }))).toEqual(['monb--y', 'ghost--line']);
+    }
   });
 
   it('ids missing from the catalog go last', () => {

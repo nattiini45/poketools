@@ -101,6 +101,9 @@ export default {
 
   // Rulesets and the ruleset seeder
   ruleset_not_found: 'Ruleset not found',
+  // DELETE of a ruleset that a league in the trash still uses (league_trash_rulesets; 409)
+  ruleset_in_trashed_league:
+    'A league in the trash still uses this ruleset, so it was not deleted. Restore or permanently remove that league first.',
   seed_rulesets_admin_required: 'Admin authentication required.',
   seed_rulesets_secret_invalid: 'Invalid or missing bootstrap secret.',
 

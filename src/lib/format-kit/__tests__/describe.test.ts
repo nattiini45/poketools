@@ -69,6 +69,10 @@ describe('describePrimitive: a representative node of every available kind', () 
     expect(d('pairing.single_elim', { kind: 'single_elim', third_place: false })).not.toContain('third-place');
     expect(d('pairing.double_elim', { kind: 'double_elim', bracket_reset: true })).toContain('reset');
     expect(d('team.ruleset', { kind: 'ruleset', id: '123e4567-e89b-42d3-a456-426614174000' })).toBe('Teams follow a specific ruleset.');
+    expect(d('team.ruleset', { kind: 'preset', preset: 'gen9ou' })).toBe('Teams follow the rule preset Gen 9 OU.');
+    expect(d('team.ruleset', { kind: 'preset', preset: 'gen9natdexdraft' })).toBe('Teams follow the rule preset Gen 9 NatDex Draft.');
+    expect(d('team.ruleset', { kind: 'preset', preset: 'gen99xx' })).toBe('Teams follow the rule preset gen99xx.');
+    expect(describePrimitive('team.ruleset', { kind: 'preset', preset: 'gen9doublesou' }, 'de')).toBe('Die Teams folgen dem Regel-Preset Gen 9 Doubles OU.');
     expect(d('advance.manual_list', { kind: 'manual_list' })).toBe('An admin picks the players by hand.');
     expect(d('advance.manual_list', { kind: 'manual_list', count: 1 })).toBe('An admin picks 1 player by hand.');
     expect(d('advance.top_n', { kind: 'top_n', n: 1 })).toBe('The first-placed player advances.');

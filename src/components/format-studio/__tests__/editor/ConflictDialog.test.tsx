@@ -2,12 +2,20 @@
  * The "changed elsewhere" dialog body (static markup): the revision in the message, the three choices, the second
  * step that says a reload discards unsaved changes, and a failed reload.
  */
+import type { ComponentProps } from 'react';
 import { describe, expect, it } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
+import { ConflictDialogBody as ShellConflictDialogBody } from '@/components/studio-shell/dialogs/ConflictDialog';
+import { useShellText } from '@/components/studio-shell/text';
 import type { Locale } from '@/i18n/config';
 import type { ApiErrorLike } from '@/i18n/api-errors';
-import { ConflictDialogBody } from '../../editor/dialogs/ConflictDialog';
+import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import { expectNoLeftovers } from './test-helpers';
+
+/** The shared dialog body with the Format Studio's words. */
+function ConflictDialogBody(props: Omit<ComponentProps<typeof ShellConflictDialogBody>, 'text'>) {
+  return <ShellConflictDialogBody text={useShellText(formatStudioEditorMessages)} {...props} />;
+}
 
 function render(over: { dirty?: boolean; step?: 'choose' | 'confirmReload'; busy?: boolean; error?: ApiErrorLike | null; locale?: Locale } = {}) {
   return renderWithI18n(

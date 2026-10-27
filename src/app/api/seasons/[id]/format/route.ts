@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -88,8 +89,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * POST /api/seasons/[id]/format
  *
  * League admin (or site admin). Attaches a published format version to a custom league that has not started:
- * freezes the spec and creates one phase per format stage. 201 for a first attach, 200 when it replaced an
- * earlier one. `warnings` lists what the engine does not run yet (codes and params).
+ * freezes the spec and creates one phase per format stage (and one ruleset per distinct rule preset the
+ * stages name). 201 for a first attach, 200 when it replaced an earlier one. `warnings` lists what the engine
+ * does not run yet (codes and params).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -109,6 +111,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       versionNo: parsed.data.version_no,
     });
     expireSeasonReads(id, outcome.touched_stage_ids);
+    if (outcome.rulesets_changed) revalidatePath('/admin/rulesets');
 
     logAuditEvent({
       action: 'season.format.attach',
@@ -141,8 +144,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  * DELETE /api/seasons/[id]/format
  *
  * League admin (or site admin). Detaches the format from a league that has not started and removes the phases it
- * created. 404 `format_nothing_attached`, 409 `format_season_started`, 409 `format_detach_blocked` (teams still
- * point at a phase).
+ * created, and the rulesets it created for rule-preset stages that nothing else points at. 404
+ * `format_nothing_attached`, 409 `format_season_started`, 409 `format_detach_blocked` (teams still point at a phase).
  */
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
@@ -152,8 +155,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const rate = await checkRateLimit('format-attach', admin.playerId, ATTACH_LIMIT);
     if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
 
-    const { removed_stage_ids } = await detachFormatFromSeason(id);
+    const { removed_stage_ids, removed_ruleset_ids } = await detachFormatFromSeason(id);
     expireSeasonReads(id, removed_stage_ids);
+    if (removed_ruleset_ids.length > 0) revalidatePath('/admin/rulesets');
 
     logAuditEvent({
       action: 'season.format.detach',
@@ -161,7 +165,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       actor_name: admin.name,
       resource_type: 'season',
       resource_id: id,
-      metadata: { removed_stage_count: removed_stage_ids.length },
+      metadata: { removed_stage_count: removed_stage_ids.length, removed_ruleset_count: removed_ruleset_ids.length },
     });
 
     return NextResponse.json<ApiResult<{ removed_stage_ids: string[] }>>({

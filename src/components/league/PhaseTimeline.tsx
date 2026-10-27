@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { LeaguePhase } from '@/types/season';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import type { ApiResult } from '@/types/api';
 import type { PhaseFormData } from '@/components/league/PhaseForm';
 import PhaseForm, { PhaseSaveError } from '@/components/league/PhaseForm';
@@ -33,7 +33,7 @@ import {
 
 interface PhaseTimelineProps {
   seasonId: string;
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
   canDelete?: boolean;
   /** The league's default ruleset, preselected in the new-phase form. */
   defaultRulesetId?: string | null;

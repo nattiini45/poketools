@@ -4,9 +4,11 @@
  * The pinned line's info box (draft-frontend §5.5, SPEC:375-378): line 1 is
  * the base Pokémon with its price, line 2 the evolution requirements
  * ("4 KOs → Ursaring · +11 KOs → Ursaluna-Bloodmoon"). No role or flavour
- * text. Glass panel, never a dark slab.
+ * text. Glass panel, never a dark slab. The title is the one place the price
+ * shows on the stage (the budget left after the pick sits above DRAFT).
  */
-import { GitCompareArrows, Star } from 'lucide-react';
+import { GitCompareArrows } from 'lucide-react';
+import FavoriteStar from '@/components/draft-tool/shared/FavoriteStar';
 import { useT } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
@@ -67,10 +69,7 @@ export default function InfoBox({
             title={isFavorite ? t('info.unfavorite') : t('info.favorite')}
             className={`${styles.focusable} inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--draft-border)] hover:bg-[var(--draft-elevated)] md:h-9 md:w-9`}
           >
-            <Star
-              className={`h-5 w-5 ${isFavorite ? 'fill-[var(--draft-accent)] text-[var(--draft-accent)]' : 'text-[var(--draft-ink-2)]'}`}
-              aria-hidden="true"
-            />
+            <FavoriteStar filled={isFavorite} className="h-5 w-5" />
           </button>
         ) : null}
         <button

@@ -21,9 +21,10 @@ import { lookupPokemon, getTypeChart } from './pkmn';
 import { getUsageStats, type UsageStatsPokemon } from './smogon';
 import { validateTeam, type ValidateTeamIssue } from './validate';
 import { createPokepaste } from './pokepaste';
-import { parseGenFromFormat } from './format';
+import { parseGenFromFormat } from '../../format';
 import { getSpecies, getLegalAbilities, listMovesForSpecies } from '@/lib/pkmn/dex';
-import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
+import { toID } from '@/lib/pkmn/i18n/id';
 import { exportTeamText } from '@/lib/pkmn/teams';
 import { parseSpread } from '@/lib/pkmn/spread-parser';
 import type { GetTypeChartInput, BuildTeamInput, ValidateTeamInput } from './schemas';
@@ -470,7 +471,8 @@ export async function buildTeam(input: BuildTeamInput): Promise<BuildTeamResult>
   let rulesetLoadFailed = false;
   if (input.ruleset_id) {
     try {
-      ruleset = await getRulesetById(input.ruleset_id);
+      // A model-supplied id is read only when the ruleset is meant to be seen.
+      ruleset = await readExposedRuleset(input.ruleset_id);
       if (!ruleset) rulesetLoadFailed = true;
     } catch {
       rulesetLoadFailed = true;
@@ -483,7 +485,10 @@ export async function buildTeam(input: BuildTeamInput): Promise<BuildTeamResult>
   }
   const playerCore = (input.player_core as CoreTriple | undefined) ?? null;
   const bannedBase = new Set((ruleset?.bans.pokemon ?? []).map((n) => baseKey(n, gen)));
-  const isBanned = (species: string) => bannedBase.has(baseKey(species, gen));
+  // A Pokémon allowlist (a roster) bans everything it does not list.
+  const allowedPokemon = ruleset?.rules.pokemon.mode === 'allow' ? new Set(ruleset.rules.pokemon.ids) : null;
+  const isBanned = (species: string) =>
+    bannedBase.has(baseKey(species, gen)) || (allowedPokemon !== null && !allowedPokemon.has(toID(species)));
   const banned: BannedSets = {
     moves: lowerSet(ruleset?.bans.moves),
     items: lowerSet(ruleset?.bans.items),

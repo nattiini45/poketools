@@ -11,7 +11,16 @@ src/lib/pkmn/
 ├── dex.ts  # Generation/species/move/item lookup + legality helpers; bilingual (EN/DE) ranked name search
 ├── dex-l10n.server.ts  # Server-only `?lang=` wrappers of the dex rich/list functions (German descriptions)
 ├── format-mapping.ts  # Format mapping helpers
-├── formats.ts  # Format definitions/defaults
+├── formats.ts  # Static format defaults in the legacy flat shape (FORMAT_DEFAULTS, derived from the preset catalog); server-side
+├── format-catalog.ts  # The dex-free rule preset catalog (PRESETS, families, generations, tier labels, rule facts); client-safe
+├── format-id.ts  # The one format-id parser (gen + one digit + tier key: gen91v1 is generation 9)
+├── clauses.ts  # Clause catalog by id; which clauses are enforced (Species, Item) and which informational
+├── preset-rules(.server).ts  # The rules a preset resolves to (types; per-mod resolution against the dex)
+├── known-ids.server.ts  # Dex id sets per category, generation and universe (the unknown_entry warning)
+├── seed-format-ids.ts  # The frozen 88 ids POST /api/seed-rulesets seeds
+├── preset-data/  # Transcribed rule tables, the generated Champions roster, the Smogon tour overlay, pin.ts (data pins and PRESET_RULES_VERSION)
+├── catalog-index(.server).ts  # The entry catalog the Ruleset Studio pickers read (rows as short arrays)
+├── sheet-cells.server.ts  # Icon sheet cell numbers from the installed @pkmn/img
 ├── game-pipeline.ts  # Replay/manual game result pipeline helpers
 ├── german-names.ts  # German → English species name map (incl. import aliases), derived from i18n/data/species.de.json
 ├── i18n/  # German/English Pokémon data layer (see Localization below)
@@ -42,6 +51,7 @@ src/lib/pkmn/
 - **File**: `dex.ts`
 - **Purpose**: Unified generation-backed lookup/search/legality helpers
 - **Key Methods**: `getGeneration()`, `getSpecies()`, `getMove()`, `getItem()`, `validateSetLegality()`
+- **Generations rule and its one exception.** Everything goes through `new Generations(Dex)` (`getGeneration`). `listNationalSpecies()`, `listNationalMoves()` and `listNationalItems()` read `Dex.forGen(gen)` instead, because a generation's National Dex universe includes past entries (Mega Evolutions, Primal formes, Z-crystals, moves a generation dropped) that the `Generations` wrapper hides. The ruleset catalog and the preset resolution use them.
 
 ### Stat Calculator
 - **File**: `stat-calc.ts`
@@ -57,6 +67,7 @@ src/lib/pkmn/
 - **File**: `validation.ts`
 - **Purpose**: Ruleset and draft-ownership validation
 - **Key Methods**: `validateTeam()`, `validateDraftOwnership()`
+- **What it enforces.** `validateTeam(team, ruleset, ctx)` reads the ruleset's frozen resolved rules (`ruleset.rules`, see [Ruleset Studio](./ruleset-studio.md)) and nothing else: the four lists in block or allowlist mode, the **Species Clause** and the **Item Clause**, the shared-type share (`min_shared_type_pct`) and `team_constraints`. Every other clause is informational (`clauses.ts`): shown on the rules page, not enforced. The validator needs neither the dex tier data nor the ruleset document, so it validates exactly what the league's pinned version said.
 
 ### Replay binding (one battle, one game)
 - **Files**: `replay-identity.ts`, `replay-binding.ts`; consumer `game-pipeline.ts` (`recordGameResult`)
@@ -72,7 +83,7 @@ src/lib/pkmn/
 - **Translate at display only.** Stored values, URLs, cache keys, Showdown import/export, calc input, `ko_chance`/`description`, AI prompts and API `params` stay English. Components localize when rendering: client `const dl = useDataLocale()` (`@/i18n/client`) then `localizeSpecies(name, dl)` or `<PkmnName kind="species" name={name} />`; server `localizeX(name, await getDataLocale())` (`@/i18n/server`). Pass the canonical English **name**, not an id: `'en'` returns its input unchanged.
 - **Import rule.** A module that needs one kind imports `@/lib/pkmn/i18n/names/<kind>` (`species`, `moves`, `items`, `abilities`, `misc`); the barrel `@/lib/pkmn/i18n/names` loads all five maps and is for code that needs several kinds (`PkmnName`, the draft finder, server code). `id.ts`, `names/**`, `names.ts`, `search.ts`, `types.ts` and `calc-text.ts` import no `@pkmn/*` and are client-safe. `descriptions.server.ts` (`localizeDesc`) starts with `import 'server-only'`; `client-boundary.test.ts` fails if a `'use client'` module reaches it, a `*.desc.de.json` map or `@pkmn/*`.
 - **Search.** `rankedSearch` + `pkmnSearchKeys(kind, englishName)` (`@/lib/pkmn/i18n/search`, `…/names`) match English, German and the umlaut transliteration (ä→ae …), ignoring case and accents, in every locale. The `dex.ts` name searches (`searchSpecies/Moves/Items/Abilities`, the `*Rich` variants, `searchMovesForSpecies`, `searchAbilitiesForSpecies`, `searchBaseFormSpecies`) use it with a lazily built per-`(kind, gen)` index: results are ranked (exact, prefix, word prefix, substring; English name as tie-break) and `limit` applies after ranking. Server listings (`listAllSpeciesRich`, `*NatDex`, `species-list.ts`) stay English-sorted and locale-neutral; clients re-sort with `compareDisplayNames`.
-- **Descriptions.** German game text exists only up to Sword/Shield (PokeAPI has none for Scarlet/Violet): SV-new entries keep the English Showdown text. Descriptions follow the UI locale (`useLocale`), not the Pokémon-terms locale. Routes call the `dex-l10n.server.ts` wrappers with `{ lang }` (read with `isLocale`, absent/invalid = `'en'`): for `'de'` each row's `shortDesc` (`desc` in `getAllItems/getAllAbilities`) becomes German and the row gains `shortDescLang` (`descLang`), so the UI can tag an English fallback with `pkmnMessages.descFallbackTag`. `dex.ts` itself cannot import the description maps: client bundles reach it through `formats.ts` → `tiers.ts`.
+- **Descriptions.** German game text exists only up to Sword/Shield (PokeAPI has none for Scarlet/Violet): SV-new entries keep the English Showdown text. Descriptions follow the UI locale (`useLocale`), not the Pokémon-terms locale. Routes call the `dex-l10n.server.ts` wrappers with `{ lang }` (read with `isLocale`, absent/invalid = `'en'`): for `'de'` each row's `shortDesc` (`desc` in `getAllItems/getAllAbilities`) becomes German and the row gains `shortDescLang` (`descLang`), so the UI can tag an English fallback with `pkmnMessages.descFallbackTag`. `dex.ts` itself cannot import the description maps: client bundles reach it through `tiers.ts` (the catalog the client imports, `format-catalog.ts`, is dex-free; `formats.ts` is server-side).
 - **Stat/nature labels.** `stat-calc.ts` `STAT_LABELS` and `ALL_NATURE_NAMES` stay English (keys, Showdown "252 Atk"); `getNatureLabel(nature, locale = 'en')` delegates to `localizeNatureLabel` ("Hart (+Angr. / -Sp.-Angr.)").
 - **Calc.** `CalcResult.ko` (`KoInfo`, `@/lib/pkmn/i18n/calc-text`) carries the structured KO; render it with `formatKo(r.ko, locale)` and `koLevel`.
 - **Regenerating** after a `@pkmn/dex` upgrade: see [`dependencies.md`](./dependencies.md) ("German Pokémon data after a `@pkmn/dex` upgrade"). `node scripts/pkmn-i18n/generate.mjs --check` verifies the committed data.
@@ -90,7 +101,14 @@ src/lib/pkmn/
   The account value wins over a choice made signed out on that browser (except for a brand-new account, which adopts it). Errors: `sprite_style_invalid` (400), `sprite_style_cross_origin` (403), `rate_limited` (429), `sprite_style_save_failed` (500), `sprite_style_load_failed` (500), in `errors/common`. Deploy order: the `players.sprite_style` migration before the code (see [`supabase-environments.md`](./supabase-environments.md)).
 - **Where it is chosen**: the "Sprite style" card on `/dashboard/settings` (live preview of each style) and the "Pokémon sprites" group in the NavBar language menu and the mobile drawer (the anonymous entry point). Copy: namespace `sprite-style`.
 - **Surfaces that do not follow the viewer**: broadcast overlays, which are viewerless (an OBS browser source): the `(broadcast)` layout wraps every overlay page in its own `SpriteStyleProvider initialPreference="site"`, which shadows the root provider and its `plc_sprite_style` cookie, and `OverlayPokemonSprite` also pins `SITE_DEFAULT_SPRITE_STYLE` and the `full` variant; the overlay API payloads (`siteSpriteUrl`: the site default at full size); the Discord match card (`homeSpriteUrl`: the bundled satori decodes only PNG, APNG, JPEG, GIF and SVG, not WebP; lead decision 2026-10-19 keeps this HOME pin, so the mirror emits no PNG variant); the 3D route-world textures (`homeSpriteUrl` through `/api/proxy-image`, whose allowlist and the world's art direction are HOME-only).
+- **The draft room's line-up picture also does not follow the viewer.** The left stage of the pick screen (`src/components/draft-tool/left/LinePreview.tsx`) pins `SITE_DEFAULT_SPRITE_STYLE` (broadcast renders, HOME where a species has none) and the `full` variant, because it shows the stages at 200 to 300 px, where a pixel or animated sprite would be scaled up blurred. Everything else in the room (the roster cards, the compact chips, the roster dock tiles and the weakness table rows) still follows the viewer's style; see [`draft-room.md`](./draft-room.md#visual-rules-pick-screen).
 - **Mirroring and publishing (maintainers, approval-gated)**: `node scripts/sprites/mirror-broadcast.mjs --download` fetches the source feed and originals once (identifying User-Agent naming the public repository, at most 4 requests in flight, backoff on 429/5xx and on a body that breaks mid-stream) into `scripts/sprites/.cache/broadcast/`, writes the WebP variants into a staging directory, moves them to `public/sprites/broadcast/{version}/` and writes the map; a full run prunes other set versions, schema-1 files and the `.staging-{pid}` directories of crashed runs (a staging directory whose process still runs is left alone) from the mirror, a `--limit` trial never prunes and writes a map only to an explicit `--map` file. Without `--download` it rebuilds from the cache only and refuses when nothing is cached. `node scripts/sprites/upload-supabase.mjs --plan-dir <R1>` is a dry run that checks the mirror hashes to the map's version and writes the plan; `--live --expect-plan <R1>` refuses an existing private bucket, uploads (upsert false, max-age one year), lists every object back, fetches one through its public URL and reports (never deletes) older set versions left in the bucket. Both are maintainer-run only (AGENTS.md: automation never spends the Supabase quota). Captures are pinned to the local mirrors (`captureServerEnv` sets `NEXT_PUBLIC_SPRITES_URL=/sprites`), and the capture bucket guard (`scripts/lib/look-evidence.mjs`) fails a run that reached the `sprites` bucket as well as the `world-assets` one.
+
+### Icon sheet cells and `SheetIcon`
+- **Files**: `sheet-cells.server.ts` (server), `catalog-index.ts` (the `ic` cell of every catalog row), `src/components/shared/SheetIcon.tsx` (draws one cell with CSS).
+- **Why**: the Ruleset Studio picker shows thousands of small icons. The Showdown icon sheets are one image each, so the catalog ships a cell **number** per entry and the browser draws the cell, with no request per icon and no `@pkmn/img` in a client bundle. Pokémon sheet: 12 columns of 40x30; item sheet: 16 columns of 24x24.
+- **Cell 0 is "no art".** `@pkmn/img` answers cell 0 for a name it does not know, which cannot be told from the real first cell, and cell 0 of both sheets is a placeholder: 0 is reported as `null` and the picker draws its own fallback. Known gaps against the installed version: 18 Pokémon and the 16 Legends Z-A Mega Stones have no icon.
+- **After upgrading `@pkmn/img`** re-check the cells: they follow the installed package, so icons drift if Showdown rebuilds a sheet and the package lags. `sheet-cells.server.test.ts` pins a few known cells (Charizard, Leftovers).
 
 ### Pokéball Spritesheet Coords
 - **File**: `ball-sprites.ts`
@@ -122,7 +140,9 @@ src/lib/pkmn/
 - `/api/pkmn/species-info`
 - `/api/pkmn/moves/[species]`
 - `/api/pkmn/stats`
-- `/api/pkmn/format-defaults`
+- `/api/pkmn/catalog/[kind]` (GET, public: the entry catalog of the Ruleset Studio pickers; `kind` species | moves | items | abilities, `gen`, `scope` standard | national, `part` index | text, `lang`, `preset`; rows are short arrays so a 1,400-row National Dex index stays small, shapes in `catalog-index.ts`; ETag and a long cache, built once per process)
+- `/api/pkmn/presets/[id]/rules` (GET, public: the rules a catalog preset implies, resolved for its mod and universe; the browser needs it to compute effective rules exactly as the server does without importing the dex; cacheable for an hour)
+- `/api/pkmn/presets/[id]/tour-overlay` (GET, public: the documented Smogon tour extras of a draft preset, resolved to ids; 404 for a preset without)
 - `/api/pkmn/speed-calc`
 - `/api/pkmn/speed-search`
 - `/api/pkmn/speed-tiers`

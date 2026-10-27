@@ -14,6 +14,7 @@ const INVALID_PATH_ID_MESSAGES: Record<InvalidPathIdCode, string> = {
   INVALID_SEASON_ID: 'League not found',
   INVALID_PHASE_ID: 'Phase not found',
   INVALID_GROUP_ID: 'Group not found',
+  INVALID_LEAGUE_TRASH_ID: 'Trashed league not found',
   INVALID_TOURNAMENT_ID: 'Tournament not found',
   INVALID_RULESET_ID: 'Ruleset not found',
   INVALID_TEAM_ID: 'Team not found',

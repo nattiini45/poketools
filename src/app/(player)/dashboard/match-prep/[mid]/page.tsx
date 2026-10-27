@@ -4,8 +4,7 @@ import AuthGuard from '@/components/shared/AuthGuard';
 import { getSession, isSuperadmin } from '@/lib/auth/helpers';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { resolveEffectiveRuleset } from '@/lib/supabase/queries/rulesets';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getMatchPrepTeam } from '@/lib/supabase/queries/match-prep-teams';
 import { getMatchPrepAnalysis } from '@/lib/supabase/queries/match-prep-analyses';
 import { isValidUuid } from '@/lib/utils/uuid';
@@ -56,28 +55,9 @@ export default async function MatchPrepPage({ params }: PageProps) {
       : Promise.resolve(null),
   ]);
 
-  // Resolve the EFFECTIVE league ruleset (upgrades a base-tier id to the league's
-  // custom ruleset where one exists), so the displayed format and the ruleset id
-  // forwarded to the agent are the real league rules — not the base tier, which
-  // carries none of the type-quota / NFE / custom-ban constraints.
-  const season = tournament?.season_id
-    ? await getSeasonById(tournament.season_id)
-    : null;
-  const resolved = tournament
-    ? await resolveEffectiveRuleset({
-        tournamentRulesetId: tournament.ruleset_id,
-        tournamentBracketType: tournament.bracket_type,
-        season: season
-          ? {
-              id: season.id,
-              name: season.name,
-              rulesetId: season.ruleset_id,
-              formatType: season.format_type,
-            }
-          : null,
-      })
-    : null;
-  const ruleset = resolved?.ruleset ?? null;
+  // The phase's own pin (an immutable ruleset version): the displayed format and the ruleset id forwarded to the
+  // agent are the real league rules.
+  const ruleset = tournament ? await getRulesetById(tournament.ruleset_id) : null;
 
   const isP1 = player.playerId === match.player_1_id;
   const opponentName = isP1 ? match.player_2_name : match.player_1_name;
@@ -103,6 +83,7 @@ export default async function MatchPrepPage({ params }: PageProps) {
           rulesetId={ruleset?.id}
           rulesetName={ruleset?.name}
           baseFormat={ruleset?.base_format}
+          gen={ruleset?.gen}
           opponentName={opponentName}
           initialPokemon={prepTeam?.pokemon}
           scoutingAnalysis={match.status === 'scheduled' ? scoutingAnalysis : null}

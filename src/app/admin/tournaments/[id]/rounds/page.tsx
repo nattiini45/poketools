@@ -34,5 +34,5 @@ export default async function TournamentRoundsPage({ params }: PageProps) {
   }
 
   const { default: LegacyRoundsPage } = await import('./LegacyRoundsPage');
-  return <LegacyRoundsPage id={id} isSiteAdmin={gate.isSiteAdmin} />;
+  return <LegacyRoundsPage id={id} playerId={gate.playerId} isSiteAdmin={gate.isSiteAdmin} />;
 }

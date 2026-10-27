@@ -5,8 +5,9 @@
  * request's "now" so clocks and deadlines are live. Server only in practice (the
  * page builds the scenario and hands the client JSON); no Supabase, no network.
  *
- * The list is always the example list; the numbers (budget, roster size, redraft
- * and token limits, comeback table) come from the active format pack
+ * The list is always the example list (a price outside every price tab of the
+ * active pack snaps into the nearest tab, see `snapPriceIntoTabs`); the numbers (budget, roster size,
+ * redraft and token limits, comeback table) come from the active format pack
  * (`@/lib/format-pack`), and the roster size is capped so the eight fixture
  * players can always fill their rosters from the list.
  *
@@ -32,14 +33,46 @@ import type {
 import { DEFAULT_DRAFT_CONFIG } from '@/lib/draft-ui/snapshot-types';
 import type { DraftAdminRedraftSlot } from '@/types/draft-queue';
 import type { RoomAdminTab } from '@/components/draft-admin/RoomAdminSheet';
-import { comebackEarnWindow, comebackTokensPerProgress, epbPack, lineOverrideFor } from '@/lib/format-pack';
+import {
+  comebackEarnWindow,
+  comebackTokensPerProgress,
+  epbPack,
+  lineOverrideFor,
+  priceGroupForPrice,
+} from '@/lib/format-pack';
 import type { PointBuyListEntry } from '@/types/point-buy';
 import rawLines from './fixture-lines.example.json';
 import { advanceSlot, UPCOMING_SHOWN, withViewerVerdicts, type FakeLine, type FakeSourceInit } from './fake-source';
 
 // ── the list ───────────────────────────────────────────────────────────────
 
-export const PREVIEW_ENTRIES: readonly PointBuyListEntry[] = rawLines as PointBuyListEntry[];
+/**
+ * The nearest price the given price tabs cover. The fixture list is the example pack's, priced for its tabs; a
+ * build with another pack (a maintainer's checkout with a private one) has other tabs, possibly with gaps
+ * between them, and a line priced outside every tab appears only under "all" and makes the finder report it.
+ * A price already in a tab stays; any other snaps to the closest edge of the closest tab.
+ */
+export function snapPriceIntoTabs(price: number, tabs: readonly { min: number; max: number }[]): number {
+  let best = price;
+  let bestDistance = Infinity;
+  for (const tab of tabs) {
+    const snapped = Math.min(Math.max(price, tab.min), tab.max);
+    const distance = Math.abs(snapped - price);
+    if (distance < bestDistance) {
+      best = snapped;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/** A snapped line also takes the price group its new price falls in, so the two never disagree. */
+function inActiveTabs(entry: PointBuyListEntry): PointBuyListEntry {
+  const price = snapPriceIntoTabs(entry.price, epbPack.priceTabs);
+  return price === entry.price ? entry : { ...entry, price, price_group: priceGroupForPrice(price) };
+}
+
+export const PREVIEW_ENTRIES: readonly PointBuyListEntry[] = (rawLines as PointBuyListEntry[]).map(inActiveTabs);
 export const PREVIEW_LIST_VERSION_ID = PREVIEW_ENTRIES[0]?.list_version_id ?? 'preview-list-v1';
 export const PREVIEW_SEASON_ID = 'preview-season';
 export const PREVIEW_LEAGUE_NAME = 'EvoLiga Preview';
@@ -98,8 +131,8 @@ export const PREVIEW_PRESET_LINES = {
 const PRESET_LINES: LineId[] = Object.values(PREVIEW_PRESET_LINES);
 
 /**
- * `live-wall` pins this branched line (the longest branch label in this fixture list: "→ Raichu-Alola", German
- * "→ Alola-Raichu"; real lists have longer ones, e.g. "→ Ursaluna-Bloodmoon", which truncate the same way). Not a
+ * `live-wall` pins this branched line (the longest footer name in this fixture list: "Raichu-Alola", German
+ * "Alola-Raichu"; real lists have longer ones, e.g. "Ursaluna-Bloodmoon", which wrap at the hyphen). Not a
  * reserved preset line: the wall scenario shows whatever state the simulation leaves it in.
  */
 export const PREVIEW_WALL_PIN: LineId = 'pichu--raichualola';
@@ -149,6 +182,7 @@ export const PREVIEW_SCENARIOS = [
   'live-filters',
   'live-confirm',
   'live-wall',
+  'live-roster',
   'live-filters-more',
   'live-index-loading',
   'live-index-failed',
@@ -735,6 +769,8 @@ export interface PreviewPreset {
   dialog?: boolean;
   /** Pool admins: open the room's admin sheet on this tab. */
   adminTab?: RoomAdminTab;
+  /** Expand the team weakness overview under "My roster". */
+  weaknessOpen?: boolean;
 }
 
 /** Which real screen the scenario mounts (the draft room's pick screen unless noted). */
@@ -927,12 +963,17 @@ export function buildPreviewScenario(id: PreviewScenarioId, now: number): Previe
     case 'live-confirm':
       return scenarioOf(id, initialDraft({ now, played: DAWN_TURN, scenarioId: id }), { preset: { pinnedLineId: PREVIEW_PRESET_LINES.confirm, dialog: true } });
     case 'live-wall':
-      // The wall layout: branched and unbranched cards side by side (uniform card grid), drafted / mine /
-      // available states, a long branch label, a scrolling grid under the pinned price tabs with
-      // matching/total counts.
+      // The wall layout: branched cards (with a footer) and unbranched ones (empty footer slot) side by side
+      // (uniform card grid), drafted / mine / available states, a long footer name, a scrolling grid under the
+      // pinned price tabs with matching/total counts.
       return scenarioOf(id, initialDraft({ now, played: DAWN_TURN, scenarioId: id }), {
         preset: { pinnedLineId: PREVIEW_WALL_PIN, filters: filtersOf({ maxPrice: PREVIEW_WALL_MAX_PRICE }) },
       });
+    case 'live-roster':
+      // Dawn's scripted roster of five (Dragon, Fire and Dragon/Ghost lines among them, whose typing changes
+      // between the first and the last stage): "My roster" with the team weakness table expanded, the matrix
+      // (Base | Final toggle) and the Weak / Resist / Immune counts under it.
+      return scenarioOf(id, initialDraft({ now, played: DAWN_TURN, scenarioId: id }), { preset: { weaknessOpen: true } });
     case 'live-filters-more': {
       // The sheet with the other two groups in use: Base stats (header summary "Spe ≥ 80 · BST ≥ 500") and a
       // Utility category with one picked member, its member list expanded.

@@ -1,4 +1,4 @@
-import { KEY_PATTERN } from '../keys';
+import { KEY_PATTERN } from '@/lib/studio-core/keys';
 import type { CollectionType, Expr, ExprIssue, ExprIssueCode, ExprType, TypeEnv } from './ast';
 import { KEYWORDS, LexError, tokenize, type Token } from './lexer';
 import {

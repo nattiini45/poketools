@@ -19,6 +19,8 @@ interface MatchPrepClientProps {
   rulesetName?: string;
   /** Base format from the tournament's ruleset (e.g. 'gen9ou') */
   baseFormat?: string;
+  /** The generation the ruleset is for (`ruleset.gen`); without one it is read from `baseFormat`. */
+  gen?: number;
   opponentName: string;
   initialPokemon?: PokemonSet[];
   scoutingAnalysis?: MatchPrepAnalysis | null;
@@ -35,6 +37,7 @@ export default function MatchPrepClient({
   rulesetId,
   rulesetName,
   baseFormat,
+  gen,
   opponentName,
   initialPokemon,
   scoutingAnalysis = null,
@@ -45,7 +48,7 @@ export default function MatchPrepClient({
   const t = useT(matchAiMessages);
   const tForms = useT(matchFormsMessages);
   const [teamSavedThisSession, setTeamSavedThisSession] = useState(false);
-  const generation = getGenFromBaseFormat(baseFormat ?? 'gen9ou');
+  const generation = gen ?? getGenFromBaseFormat(baseFormat ?? 'gen9ou');
 
   return (
     <div className="space-y-4">

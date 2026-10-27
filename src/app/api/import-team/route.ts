@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { importTeamSchema, formatZodErrors } from '@/lib/validation';
-import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { parseTeamText } from '@/lib/pkmn/teams';
 import { validateTeam } from '@/lib/pkmn/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -112,7 +112,9 @@ export async function POST(request: NextRequest) {
     // Optionally validate against a ruleset
     let validation = null;
     if (body.ruleset_id) {
-      const ruleset = await getRulesetById(body.ruleset_id);
+      // `ruleset_id` is the id of a ruleset version (the pin the team page was opened with), read only when that ruleset
+      // is meant to be seen: the validation here agrees with `POST /api/validate-team` for the same id.
+      const ruleset = await readExposedRuleset(body.ruleset_id);
       if (!ruleset) {
         return NextResponse.json<ApiResult<never>>(
           { success: false, error: 'Ruleset not found', code: 'ruleset_not_found' },

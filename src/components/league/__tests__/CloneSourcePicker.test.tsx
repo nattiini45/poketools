@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import CloneSourcePicker from '../CloneSourcePicker';
 import type { CloneSourceOption } from '@/lib/league-admin/clone-source';
+import { makeRulesetOption } from '@/test/ruleset-fixtures';
 
 function source(overrides: Partial<CloneSourceOption> = {}): CloneSourceOption {
   return {
@@ -42,6 +43,7 @@ function render(
   return renderWithI18n(
     <CloneSourcePicker
       sources={[source(), pointBuy]}
+      rulesets={[]}
       isSiteAdmin={false}
       sourceId={null}
       copyRoster={false}
@@ -125,6 +127,24 @@ describe('CloneSourcePicker', () => {
     expect(html).toMatch(/Not copied:[^<]*point-buy list[^<]*tokens[^<]*draft data/);
     expect(html).toContain('Dates and the name come from this form.');
     expect(html).not.toContain('A point-buy league is set up as usual');
+  });
+
+  it('says which ruleset version the new league starts with, even an older one than the newest', () => {
+    const pinned = makeRulesetOption({ id: 'ou-v2', definition_id: 'def-ou', name: 'Spring OU', version_no: 2 });
+    const newest = makeRulesetOption({ id: 'ou-v3', definition_id: 'def-ou', name: 'Spring OU', version_no: 3 });
+    const withPin = [source({ ruleset_id: 'ou-v2' }), pointBuy];
+
+    const html = render({ sources: withPin, rulesets: [newest, pinned], sourceId: SELECTED });
+    expect(html).toContain('Starts with the same rules as the source: Spring OU, version 2.');
+    expect(render({ sources: withPin, rulesets: [newest, pinned], sourceId: SELECTED }, 'de')).toContain(
+      'Startet mit denselben Regeln wie die Vorlage: Spring OU, Version 2.',
+    );
+  });
+
+  it('prints no ruleset line when the source has no ruleset, or its version is not among the options', () => {
+    const option = makeRulesetOption({ id: 'ou-v2', name: 'Spring OU', version_no: 2 });
+    expect(render({ rulesets: [option], sourceId: SELECTED })).not.toContain('Starts with the same rules');
+    expect(render({ sources: [source({ ruleset_id: 'gone' })], rulesets: [option], sourceId: SELECTED })).not.toContain('Starts with the same rules');
   });
 
   it('adds the point-buy note for a point-buy source', () => {

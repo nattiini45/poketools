@@ -5,11 +5,10 @@
  */
 export * from './types';
 export * from './limits';
-export * from './keys';
-export * from './json';
-export * from './patch';
+export * from '@/lib/studio-core/keys';
+export * from '@/lib/studio-core/json';
+export * from '@/lib/studio-core/patch';
 export * from './issues';
-export * from './ltext';
 export * from './expr';
 export * from './expr/schema';
 export * from './registry';
@@ -26,4 +25,5 @@ export type { CountRange, StagePlan } from './engine/plan';
 export { deriveCapabilities } from './engine/capabilities';
 export { renderDiagnostic, renderFix, renderSeverity } from './engine/render';
 export * from './engine/describe-definition';
+export * from './ruleset-presets';
 export * from './presets';

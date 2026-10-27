@@ -34,6 +34,7 @@ import {
   normalizeTier,
 } from '../tiers';
 import { validateTeam } from '../validation';
+import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
 
 // ── Fixtures ───────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function makeSet(species: string, overrides?: Partial<PokemonSet>): PokemonSet {
 }
 
 function makeRuleset(team_constraints: TeamConstraints | null): Ruleset {
-  return {
+  return buildRuleset({
     id: 'ruleset-1',
     name: 'Core Liga',
     base_format: 'gen9ru',
@@ -73,7 +74,7 @@ function makeRuleset(team_constraints: TeamConstraints | null): Ruleset {
     created_by: null,
     created_at: '2025-01-01',
     updated_at: '2025-01-01',
-  };
+  });
 }
 
 // Dex catalogue used across the constraint tests. Each entry includes the

@@ -25,11 +25,21 @@ const pinned = apply(
 describe('finderReducer (draft-frontend §4.4)', () => {
   it('defaults: same Pokémon, all tab, default sort, drafted shown, count abilities on', () => {
     const s = initialFinderState();
-    expect(s).toMatchObject({ stageMode: 'same_stage', tab: 'all', sort: 'default', showDrafted: true, pinnedLineId: null });
+    expect(s).toMatchObject({
+      stageMode: 'same_stage',
+      tab: 'all',
+      sort: 'default',
+      sortStage: 'final',
+      showDrafted: true,
+      pinnedLineId: null,
+    });
     expect(s.filters.abilityDefense).toBe(true);
-    expect(initialFinderState({ stageMode: 'anywhere', sort: 'spe', showDrafted: false, pinnedLineId: 'x--y' })).toMatchObject({
+    expect(
+      initialFinderState({ stageMode: 'anywhere', sort: 'spe', sortStage: 'base', showDrafted: false, pinnedLineId: 'x--y' }),
+    ).toMatchObject({
       stageMode: 'anywhere',
       sort: 'spe',
+      sortStage: 'base',
       showDrafted: false,
       pinnedLineId: 'x--y',
     });
@@ -38,6 +48,7 @@ describe('finderReducer (draft-frontend §4.4)', () => {
   it.each<FinderAction>([
     { type: 'setTab', tab: '9-1' },
     { type: 'setSort', sort: 'alpha' },
+    { type: 'setSortStage', stage: 'base' },
     { type: 'clearAll' },
     { type: 'setText', text: 'gen' },
     { type: 'toggleType', id: 'Ground' },
@@ -64,6 +75,15 @@ describe('finderReducer (draft-frontend §4.4)', () => {
     expect(next.compareLineIds).toEqual(['monb--y', 'mona--x']);
   });
 
+  it('setSortStage stores the stage and returns the same state when it is unchanged', () => {
+    const s = initialFinderState();
+    const base = finderReducer(s, { type: 'setSortStage', stage: 'base' });
+    expect(base.sortStage).toBe('base');
+    expect(base.sort).toBe(s.sort);
+    expect(finderReducer(base, { type: 'setSortStage', stage: 'base' })).toBe(base);
+    expect(finderReducer(s, { type: 'setSortStage', stage: 'final' })).toBe(s);
+  });
+
   it('compare holds at most 3 lines; a 4th returns the same state', () => {
     const three = apply(pinned, { type: 'toggleCompare', lineId: 'dratini--dragonite' });
     expect(three.compareLineIds).toHaveLength(3);
@@ -81,6 +101,27 @@ describe('finderReducer (draft-frontend §4.4)', () => {
     expect(s.filters.utility).toEqual([{ key: 'recovery', members: [] }]);
     s = finderReducer(s, { type: 'toggleUtilityCategory', key: 'recovery' });
     expect(s.filters.utility).toEqual([]);
+  });
+
+  it('removing a member chip keeps the other members; removing the last one removes the category', () => {
+    let s = apply(
+      initialFinderState(),
+      { type: 'toggleUtilityMember', key: 'pivot', id: 'uturn' },
+      { type: 'toggleUtilityMember', key: 'pivot', id: 'voltswitch' },
+      { type: 'toggleUtilityCategory', key: 'recovery' },
+    );
+    expect(buildChips(s.filters).map((c) => c.id)).toEqual(['utility:pivot:uturn', 'utility:pivot:voltswitch', 'utility:recovery']);
+    s = finderReducer(s, { type: 'removeChip', chipId: 'utility:pivot:uturn' });
+    expect(s.filters.utility).toEqual([
+      { key: 'pivot', members: ['voltswitch'] },
+      { key: 'recovery', members: [] },
+    ]);
+    // The last member takes the category along: `members: []` would silently widen to the whole category.
+    s = finderReducer(s, { type: 'removeChip', chipId: 'utility:pivot:voltswitch' });
+    expect(s.filters.utility).toEqual([{ key: 'recovery', members: [] }]);
+    expect(buildChips(s.filters).map((c) => c.id)).toEqual(['utility:recovery']);
+    // A member that is not picked changes nothing.
+    expect(finderReducer(s, { type: 'removeChip', chipId: 'utility:pivot:uturn' })).toBe(s);
   });
 
   it('removes chips of every kind', () => {
@@ -101,7 +142,6 @@ describe('finderReducer (draft-frontend §4.4)', () => {
       'move:rapidspin',
       'ability:levitate',
       'utility:pivot',
-      'utility:recovery',
       'utility:recovery:roost',
       'stat:bst',
       'price',

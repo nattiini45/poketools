@@ -514,6 +514,55 @@ export async function countFailedAggregateJobs(): Promise<number> {
   return count;
 }
 
+/**
+ * Number of a league's increment jobs that ended `failed` (attempts exhausted). The restore rebuild stays pending
+ * while it is not zero: those games are missing from the league, phase and all-time aggregates. Throws when it fails.
+ */
+export async function countFailedIncrementJobsForSeason(seasonId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('aggregate_jobs')
+    .select('id', { count: 'exact', head: true })
+    .eq('season_id', seasonId)
+    .eq('operation', 'increment')
+    .eq('status', 'failed');
+
+  if (error) {
+    console.error('[aggregate-queue] Season failed-job count error:', error);
+    throw error;
+  }
+  if (count === null) {
+    throw new Error('aggregate_jobs season failed-job count returned no count');
+  }
+  return count;
+}
+
+/**
+ * Puts a league's failed increment jobs back in the queue with fresh attempts, so running a pending restore rebuild
+ * again retries them. Safe against the queue itself (`apply_aggregate_job` is fenced on the game's marker). A scope
+ * rebuild of the league that ran after the failure counted those games without setting the marker, so it would count
+ * them twice; re-running that scope rebuild repairs it, as for its other documented overlaps. Returns how many jobs
+ * were re-queued; throws when the write fails.
+ */
+export async function requeueFailedIncrementJobsForSeason(seasonId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('aggregate_jobs')
+    .update(
+      { status: 'pending', attempts: 0, last_error: null, updated_at: new Date().toISOString() },
+      { count: 'exact' }
+    )
+    .eq('season_id', seasonId)
+    .eq('operation', 'increment')
+    .eq('status', 'failed');
+
+  if (error) {
+    console.error('[aggregate-queue] Season failed-job requeue error:', error);
+    throw new AggregateQueueWriteError(`Failed to re-queue the failed aggregate jobs of season ${seasonId}`, {
+      cause: error,
+    });
+  }
+  return count ?? 0;
+}
+
 // ─── Diagnostics ──────────────────────────────────────────────────
 
 const JOB_STATUSES: readonly AggregateJobStatus[] = [

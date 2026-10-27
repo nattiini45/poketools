@@ -5,20 +5,19 @@ import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { seasonUpdateSchema, formatZodErrors } from '@/lib/validation';
 import { z } from 'zod';
-import { getSeasonWithDetails, updateSeason, deleteSeason, getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
+import { getSeasonWithDetails, updateSeason, getSeasonById } from '@/lib/supabase/queries/seasons';
 import { archiveTournamentsBySeason } from '@/lib/supabase/queries/tournaments';
 import { bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
 import { logAuditEvent, diffField } from '@/lib/audit/log';
 import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
 import { assertFormatChangeAllowed, assertSeasonDateRange } from '@/lib/season/settings-guards';
-import {
-  rebuildAfterSeasonDelete,
-  type EntityDeleteRebuildSummary,
-} from '@/lib/reconcile/entity-delete-rebuild';
-import { expireSeasonReads } from '@/lib/revalidation';
+import { isSeasonStarted } from '@/lib/season/season-started';
+import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
+import { finishLeagueDeleteRebuild, trashLeague } from '@/lib/league-trash/service';
+import { toLeagueTrashError } from '@/lib/league-trash/errors';
+import { expirePublicTags, expireRatingReads, expireSeasonReads, publicTags } from '@/lib/revalidation';
 import { assertFormatTypeChangeAllowed } from '@/lib/format-studio/attach';
 import {
-  toDeleteRebuildWarning,
   toTestFlagRebuildWarning,
   testFlagRebuildUnsettledWarning,
   type DeleteRebuildWarning,
@@ -36,8 +35,8 @@ interface RouteParams {
 }
 
 // The DELETE handler rebuilds all derived data (aggregates, ratings, streaks)
-// after the cascade, and a PATCH of the test-league flag rebuilds the league
-// players' ratings — allow long-running rebuilds.
+// after the league moved to the trash, and a PATCH of the test-league flag
+// rebuilds the league players' ratings — allow long-running rebuilds.
 export const maxDuration = 300;
 
 /**
@@ -144,6 +143,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       assertFormatChangeAllowed(before.format_type, body.format_type, {
         status: before.status,
         phases,
+      });
+    }
+
+    // The league's default ruleset is a pin to an immutable version: a new value must be a ruleset the caller may use, and
+    // once the league has started it moves only through the pin route (which asks for a confirmation). Resending the stored
+    // value passes. Nothing is written when the guard throws.
+    if (body.ruleset_id !== undefined && body.ruleset_id !== before.ruleset_id) {
+      const phases = await getSeasonPhaseStartSignals(id);
+      await assertRulesetChangeAllowed({
+        player: admin,
+        current: before.ruleset_id,
+        requested: body.ruleset_id,
+        started: isSeasonStarted({ status: before.status, phases }),
       });
     }
 
@@ -259,36 +271,37 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
+/**
+ * DELETE /api/seasons/[id]: moves the league to the trash (`src/lib/league-trash`). Nothing blocks it: the database
+ * function freezes running drafts, captures every row the league owns and deletes them in one transaction, and the
+ * superadmin can restore the league until `purge_after` (`LEAGUE_TRASH_RETENTION_DAYS` days). The derived data built
+ * from the league's matches is rebuilt afterwards; that rebuild is confirmed to the database, and a failure of it is
+ * a `rebuild_warning` next to a successful delete (the superadmin runs it again from the trash page).
+ */
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const admin = await requireAdmin();
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
-    const season = await getSeasonById(id);
-    // Capture participants BEFORE the delete: the cascade removes the
-    // participant rows, and they define whose ratings/streaks must be rebuilt.
-    const participants = await getSeasonParticipants(id);
-    await deleteSeason(id);
-    expireSeasonReads(id);
 
-    // Rebuild derived data built from the deleted season's matches. The
-    // delete has already committed, so a rebuild failure must not read as a
-    // failed delete: the response carries it as `rebuild_warning` (the admin
-    // runs the reconcile repair), and the server log and audit record keep it.
-    let rebuild: EntityDeleteRebuildSummary | null = null;
-    let rebuildWarning: DeleteRebuildWarning | null = null;
-    try {
-      rebuild = await rebuildAfterSeasonDelete({
-        seasonId: id,
-        playerIds: participants.map((p) => p.id),
-      });
-    } catch (err) {
-      console.error('season delete derived-data rebuild failed:', err);
-      // Reported to the admin in the response (catalogued code, e.g.
-      // rating_history_incomplete) and kept in the audit record.
-      rebuildWarning = toDeleteRebuildWarning(err);
-    }
+    const trashed = await trashLeague(id, admin.playerId);
+    // The league is gone from every read: its own tag, its phases' tags, the lists and the profiles.
+    expireSeasonReads(id, trashed.phase_ids);
+
+    const { summary: rebuild, warning: rebuildWarning } = await finishLeagueDeleteRebuild({
+      trashId: trashed.trash_id,
+      seasonId: id,
+      playerIds: trashed.player_ids,
+      phaseIds: trashed.phase_ids,
+    });
+    // The rebuild changed the aggregates (league, phases, all-time) and the participants' ratings.
+    expirePublicTags([
+      publicTags.aggregates('league', id),
+      publicTags.aggregates('all_time', null),
+      ...trashed.phase_ids.map((phaseId) => publicTags.aggregates('tournament', phaseId)),
+    ]);
+    expireRatingReads(trashed.player_ids);
 
     logAuditEvent({
       action: 'season.delete',
@@ -296,14 +309,21 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       actor_name: admin.name,
       resource_type: 'season',
       resource_id: id,
-      resource_name: season?.name ?? id,
-      metadata: { rebuild, rebuild_error: rebuildWarning?.code ?? null },
+      resource_name: trashed.season_name,
+      metadata: {
+        trash_id: trashed.trash_id,
+        purge_after: trashed.purge_after,
+        counts: trashed.counts,
+        frozen_pools: trashed.frozen_pools,
+        rebuild,
+        rebuild_error: rebuildWarning?.code ?? null,
+      },
     });
     return NextResponse.json<ApiResult<EntityDeleteResult>>({
       success: true,
-      data: { rebuild_warning: rebuildWarning },
+      data: { rebuild_warning: rebuildWarning, trash: { id: trashed.trash_id, purge_after: trashed.purge_after } },
     });
   } catch (error) {
-    return safeErrorResponse(error, 'Failed to delete league');
+    return safeErrorResponse(toLeagueTrashError(error) ?? error, 'Failed to delete league');
   }
 }

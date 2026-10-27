@@ -119,6 +119,7 @@ export default {
     },
     team_ruleset: 'Teams follow the ruleset of the season.',
     team_ruleset_custom: 'Teams follow a specific ruleset.',
+    team_ruleset_preset: 'Teams follow the rule preset {preset}.',
     score_match: 'Points: win {win}, loss {loss}, bye {bye}.',
     rank_metric: 'Ranked by {metric}, {direction}.',
     rank_head_to_head: 'Ties are broken by head-to-head results ({scope}).',
@@ -204,6 +205,7 @@ export default {
     pairing: 'Pairing',
     series: 'Match length',
     ruleset: 'Ruleset',
+    preset: 'Rule preset',
     doubles: 'Doubles',
     players_per_match: 'Players per match',
     scoring: 'Scoring',
@@ -289,6 +291,7 @@ export default {
     kind_stage: 'One stage',
     kind_season_default: 'Season default',
     kind_ruleset: 'Specific ruleset',
+    kind_preset: 'Rule preset',
   },
   level: {
     auto: 'Automatic',

@@ -2,7 +2,7 @@
  * Client-safe barrel of the format kit: types, limits, keys, JSON and patch helpers, localized text, the
  * expression language (without its zod schema), the registry (manifest and descriptions, not the zod twin),
  * the browser validator, the browser compile entry, diagnostic rendering, the whole-definition renderer, the schedule
- * estimator and the presets.
+ * estimator, the presets and the rule preset catalog view.
  *
  * Nothing here imports zod, `server-only`, `@pkmn`, `next` or React; `__tests__/client-boundary.test.ts`
  * walks the import closure of this file and fails on any of them. Client code imports this file and never the
@@ -11,11 +11,10 @@
  */
 export * from './types';
 export * from './limits';
-export * from './keys';
-export * from './json';
-export * from './patch';
+export * from '@/lib/studio-core/keys';
+export * from '@/lib/studio-core/json';
+export * from '@/lib/studio-core/patch';
 export * from './issues';
-export * from './ltext';
 export * from './expr';
 export * from './registry';
 export { validateFormatDefinition } from './validate.browser';
@@ -30,4 +29,5 @@ export { deriveCapabilities } from './engine/capabilities';
 export * from './engine/schedule';
 export { renderDiagnostic, renderFix, renderSeverity } from './engine/render';
 export * from './engine/describe-definition';
+export * from './ruleset-presets';
 export * from './presets';

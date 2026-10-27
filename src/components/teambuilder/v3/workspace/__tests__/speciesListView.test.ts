@@ -103,6 +103,22 @@ describe('buildSpeciesListView — ruleset overrides', () => {
     expect(items).toHaveLength(0);
   });
 
+  it('an allowlist makes only the listed species legal, whatever the base-format flag says', () => {
+    const list = [mon('Listed', { legal: false }), mon('Other', { legal: true }), mon('Banned', { legal: true })];
+    const { items } = buildSpeciesListView(
+      list,
+      baseOpts({ applyLegality: true, allowOnly: new Set(['listed', 'banned']), extraBans: new Set(['banned']) }),
+    );
+    // The allowlist replaces bans and the legality flag: a ruleset in allowlist mode has no bans of its own.
+    expect(items.map((p) => p.pokemon_name)).toEqual(['Listed', 'Banned']);
+  });
+
+  it('no allowlist (null) leaves the base-format legality alone', () => {
+    const list = [mon('Keep', { legal: true }), mon('Gone', { legal: false })];
+    const { items } = buildSpeciesListView(list, baseOpts({ applyLegality: true, allowOnly: null }));
+    expect(items.map((p) => p.pokemon_name)).toEqual(['Keep']);
+  });
+
   it('overrides are ignored when applyLegality is off', () => {
     const list = [mon('Banned', { legal: true })];
     const { items } = buildSpeciesListView(

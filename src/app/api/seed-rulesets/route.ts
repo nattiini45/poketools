@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase/client';
 import { AuthError, requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
 import { bootstrapEnvSchema, bootstrapModeEnvSchema, readEnv } from '@/lib/env';
+import { ltext } from '@/lib/studio-core/ltext';
+import { logAuditEvent } from '@/lib/audit/log';
 import { FORMAT_DEFAULTS } from '@/lib/pkmn/formats';
+import { newRulesetDocument } from '@/lib/ruleset-studio/document';
+import { createPublished } from '@/lib/ruleset-studio/library';
+import { SEED_FORMAT_IDS } from '@/lib/pkmn/seed-format-ids';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { checkRateLimit, getClientIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
-import type { BaseFormat } from '@/types/ruleset';
+import type { SessionPlayer } from '@/types/auth';
 import type { ApiResult } from '@/types/api';
 
 /** Bootstrap-secret attempts per client IP; the same bucket, cap and fail-closed mode as `POST /api/bootstrap`. */
@@ -20,7 +26,9 @@ const seedBootstrapBodySchema = z.object({ secret: z.string().max(512).optional(
 /**
  * POST /api/seed-rulesets
  *
- * Seeds the rulesets table with standard Smogon formats from FORMAT_DEFAULTS.
+ * Seeds the site rulesets: one `gallery` ruleset definition (kind `preset`) per standard Smogon format of
+ * `SEED_FORMAT_IDS` (88 ids), based on the catalog preset of the same id and published as version 1. The other presets of the catalog (the draft formats, the rest of the National Dex family, the
+ * doubles Ubers and Little Cup formats) are starting points, not site rulesets, and are never seeded.
  * Only inserts formats that don't already exist (matched by name).
  * Requires admin auth. Falls back to BOOTSTRAP_SECRET only when
  * BOOTSTRAP_MODE_ENABLED=true (for first-time setup before any admin exists).
@@ -34,8 +42,9 @@ export async function POST(request: NextRequest) {
   try {
     // Primary auth: admin session
     let authenticated = false;
+    let seeder: SessionPlayer | null = null;
     try {
-      await requireAdmin();
+      seeder = await requireAdmin();
       authenticated = true;
     } catch (err) {
       if (!(err instanceof AuthError)) throw err;
@@ -71,28 +80,15 @@ export async function POST(request: NextRequest) {
     }
     // Get existing ruleset names to avoid duplicates
     const { data: existing, error: fetchError } = await supabase
-      .from('rulesets')
-      .select('name');
+      .from('ruleset_definitions')
+      .select('name_text');
 
     if (fetchError) throw fetchError;
 
-    const existingNames = new Set((existing ?? []).map((r) => r.name));
+    const existingNames = new Set((existing ?? []).map((r) => r.name_text));
 
-    const toInsert = Object.entries(FORMAT_DEFAULTS)
-      .filter(([key]) => key !== 'blank') // Skip the blank/custom template
-      .filter(([, fmt]) => !existingNames.has(fmt.name))
-      .map(([key, fmt]) => ({
-        name: fmt.name,
-        base_format: key as BaseFormat,
-        is_doubles: fmt.is_doubles,
-        clauses: fmt.clauses,
-        banned_pokemon: fmt.banned_pokemon,
-        banned_moves: fmt.banned_moves,
-        banned_items: fmt.banned_items,
-        added_pokemon: [] as string[],
-        custom_rules_string: '',
-        created_by: null,
-      }));
+    const seedable = SEED_FORMAT_IDS.flatMap((key) => (key in FORMAT_DEFAULTS ? [[key, FORMAT_DEFAULTS[key]] as const] : []));
+    const toInsert = seedable.filter(([, fmt]) => !existingNames.has(fmt.name));
 
     if (toInsert.length === 0) {
       return NextResponse.json<ApiResult<{ message: string }>>({
@@ -101,18 +97,37 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { data, error: insertError } = await supabase
-      .from('rulesets')
-      .insert(toInsert)
-      .select();
-
-    if (insertError) throw insertError;
+    // Each site ruleset is a `gallery` definition whose base is the catalog preset and which changes nothing: the effective
+    // rules are the preset's, computed and frozen by the publish of version 1.
+    let count = 0;
+    for (const [key, fmt] of toInsert) {
+      await createPublished({
+        name: ltext('en', fmt.name),
+        slugBase: key,
+        document: newRulesetDocument(fmt.name, 'en', key) as unknown as Record<string, unknown>,
+        ownerId: null,
+        kind: 'preset',
+        visibility: 'gallery',
+        seasonId: null,
+        changelog: ltext('en', 'Seeded from the preset catalog'),
+      });
+      count += 1;
+    }
+    revalidatePath('/admin/rulesets');
+    logAuditEvent({
+      action: 'ruleset.seed',
+      actor_id: seeder?.playerId ?? null,
+      actor_name: seeder?.name ?? 'bootstrap',
+      resource_type: 'ruleset',
+      resource_id: null,
+      metadata: { count },
+    });
 
     return NextResponse.json<ApiResult<{ message: string; count: number }>>({
       success: true,
       data: {
-        message: `Seeded ${data.length} standard Smogon rulesets.`,
-        count: data.length,
+        message: `Seeded ${count} standard Smogon rulesets.`,
+        count,
       },
     }, { status: 201 });
   } catch (error) {

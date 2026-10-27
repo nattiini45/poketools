@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { SeasonFormData, SeasonFormatType, RouteThemeId } from '@/types/season';
-import type { Ruleset } from '@/types/ruleset';
+import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import Input from '@/components/ui/Input';
 import { LeagueDateFields, LeagueRulesetField, LeagueTypeField } from '@/components/league/league-form-fields';
 import Select from '@/components/ui/Select';
@@ -20,7 +20,7 @@ import type { LeagueFormIdentity } from '@/lib/league-admin/clone-source';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 
 interface LeagueFormProps {
-  rulesets: Ruleset[];
+  rulesets: readonly RulesetOption[];
   /**
    * Saves the league. Resolves with the failed API body (`{ error, code, params }`)
    * to show it inline; resolves with nothing on success. A throw is shown too.

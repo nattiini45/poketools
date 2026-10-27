@@ -25,8 +25,6 @@ import {
   type Fix,
   type GroupsSpec,
   type JsonValue,
-  type LText,
-  type Locale,
   type Pairing,
   type RankStep,
   type RuleCard,
@@ -35,6 +33,8 @@ import {
   type Stage,
   type TextSection,
 } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
+import type { Locale } from '@/i18n/config';
 import { LTEXT_LIMIT, defaultStageName, editLText, newStage, uniqueKey, type DraftDocument } from './document';
 import { SEEDING_EDGES, SEEDING_ROSTER } from './catalog';
 

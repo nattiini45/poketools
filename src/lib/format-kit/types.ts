@@ -7,26 +7,14 @@
  * has it. Collections are arrays with key fields, never records, so a user-chosen key such as
  * `constructor` is ordinary data (lookups go through `Map`, see `keys.ts`).
  */
-import type { Locale } from '@/i18n/config';
 import type { Expr } from './expr/ast';
-import type { Key, Slug } from './keys';
+import type { Key, Slug } from '@/lib/studio-core/keys';
+import type { LText, LTextStatus, LTextValue } from '@/lib/studio-core/ltext';
 
-export type { Locale };
-
-export type LTextStatus = 'human' | 'machine' | 'reviewed';
-
-/** One language of a text: 1..4000 chars, no NUL. */
-export interface LTextValue {
-  v: string;
-  s: LTextStatus;
-}
-
-/** A bilingual text. `text[base]` must exist; `base` is the language the author wrote in. */
-export interface LText {
-  en?: LTextValue;
-  de?: LTextValue;
-  base: Locale;
-}
+// The bilingual text types live with the text helpers in the shared studio core (`@/lib/studio-core/ltext`, the one import
+// path for them and for the helpers). `LText` is part of the format document schema (every name, summary, label and
+// text section below is one), so the kit's public types surface keeps the type-only re-export; the values are not re-exported.
+export type { LText, LTextStatus, LTextValue };
 
 export interface FormatDefinition {
   schema_version: 1;
@@ -103,7 +91,14 @@ export interface SeriesOverride {
   best_of: number;
 }
 
-export type RulesetRef = { kind: 'season_default' } | { kind: 'ruleset'; id: string };
+/**
+ * Which ruleset a stage's teams follow: the league's, a stored ruleset by id, or a rule preset of the catalog
+ * (`preset` is its id such as `gen9ou` or `gen9natdexdraft`: a Showdown ladder format or a Smogon draft format).
+ * A preset only pre-picks settings; attaching the format to a league turns it into a normal, editable ruleset owned
+ * by the league. An id the catalog does not know is a compile error, not a schema error, so a stored document stays
+ * loadable.
+ */
+export type RulesetRef = { kind: 'season_default' } | { kind: 'ruleset'; id: string } | { kind: 'preset'; preset: Key };
 
 export interface Scoring {
   win: number;

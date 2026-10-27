@@ -57,8 +57,21 @@ describe('finder preferences', () => {
       showDrafted: false,
     });
     expect(parsePrefs({ stageMode: 'everywhere', sort: 'name', showDrafted: 'yes' })).toEqual({});
+    expect(parsePrefs({ sortStage: 'middle', weaknessStage: 3 })).toEqual({});
     expect(parsePrefs(null)).toEqual({});
     expect(parsePrefs(['anywhere'])).toEqual({});
+  });
+
+  it('reads the sort stage and the weakness stage; a blob without them keeps both at the default', () => {
+    expect(parsePrefs({ sort: 'bst', sortStage: 'base', weaknessStage: 'base' })).toEqual({
+      sort: 'bst',
+      sortStage: 'base',
+      weaknessStage: 'base',
+    });
+    expect(parsePrefs({ sortStage: 'final' })).toEqual({ sortStage: 'final' });
+    // An old blob: both stages stay absent, so the hooks fall back to 'final'.
+    expect(parsePrefs({ stageMode: 'anywhere', sort: 'spe', showDrafted: true })).not.toHaveProperty('sortStage');
+    expect(parsePrefs({ stageMode: 'anywhere', sort: 'spe', showDrafted: true })).not.toHaveProperty('weaknessStage');
   });
 });
 

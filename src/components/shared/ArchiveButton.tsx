@@ -56,7 +56,7 @@ export default function ArchiveButton({ resourceType, resourceId, isArchived }: 
     <button
       onClick={handleClick}
       disabled={loading}
-      className={getButtonClasses(isArchived ? 'secondary' : 'ghost', 'sm')}
+      className={`${getButtonClasses('secondary', 'sm')} min-h-11 sm:min-h-0`}
     >
       {loading ? t('archive.busy') : label}
     </button>

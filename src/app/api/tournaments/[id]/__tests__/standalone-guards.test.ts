@@ -7,6 +7,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
+vi.mock('@/lib/ruleset-studio/pin-change', () => ({
+  assertRulesetChangeAllowed: vi.fn(),
+  assertRulesetUsableForCreate: vi.fn(),
+}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 
 vi.mock('@/lib/auth/helpers', () => ({

@@ -10,6 +10,7 @@ import {
 } from '@/lib/supabase/queries/tournaments';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
 import type { TournamentWithDetails } from '@/types/tournament';
 
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = zodResult.data;
+
+    await assertRulesetUsableForCreate(player, body.ruleset_id);
 
     const tournament = await createTournament(body);
     expireTournamentReads(tournament.id);

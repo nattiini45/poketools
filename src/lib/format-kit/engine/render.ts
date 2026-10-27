@@ -10,8 +10,8 @@ import type { Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioMessages } from '@/i18n/messages/format-studio';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
-import { resolveLText } from '../ltext';
-import type { FormatDefinition, LText } from '../types';
+import { resolveLText, type LText } from '@/lib/studio-core/ltext';
+import type { FormatDefinition } from '../types';
 import type { Diagnostic, DiagnosticCode, Fix, Severity } from './diagnostics';
 
 type Params = Record<string, string | number>;

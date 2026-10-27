@@ -29,6 +29,8 @@
   --draft-ink-2: var(--world-ink-secondary, var(--poke-text-secondary));
   --draft-border: var(--world-border, var(--poke-border));
   --draft-accent: var(--world-accent, var(--poke-accent));
+  /* Fill under text: the site accent, which meets AA against the surface ink; the world accent stays on lines and dots. */
+  --draft-accent-fill: var(--poke-accent);
   --draft-glow: var(--world-glow, var(--poke-glow));
   --draft-wall: color-mix(in srgb, var(--hud-glass, var(--draft-elevated)) 18%, var(--draft-surface));
   --draft-hex-line: color-mix(in srgb, var(--hud-glass-border, var(--draft-border)) 55%, transparent);
@@ -59,21 +61,66 @@
   --draft-clock-h: 0px;
   /*
    * The public layout's `<main>` vertical padding (`py-6`, 1.5rem top and
-   * bottom, src/app/(public)/layout.tsx). The desktop screen subtracts it, so
-   * the page itself does not scroll past the fixed-height screen.
+   * bottom, src/app/(public)/layout.tsx). With the nav it is the only thing
+   * the desktop screen subtracts from the viewport (the page header is the
+   * screen's own first row), so the document ends exactly at the viewport
+   * and only the two panes scroll.
    */
   --draft-page-pad-y: 3rem;
   /*
-   * Roster card geometry: one size and one inner grid on every breakpoint
-   * (sprite / name / owner / branch rows, the last two always reserved).
-   * 1rem top inset for the star and price badge + rows + 0.25rem + the 2px
-   * borders.
+   * The stage column's fit: the line picture's height in percent of its width, the DRAFT dock's height
+   * (the default holds until `useStickyOffsets` has measured the real one) and, on phones, the bottom bar's
+   * (a button of 48px plus its padding). See "Left stage".
    */
-  --draft-card-sprite: 3.5rem;
+  --draft-preview-h: 72;
+  --draft-dock-h: 7.5rem;
+  --draft-bottom-bar-h: 4.5rem;
+  /*
+   * Gold of the favourite star (Pokémon HOME look, both themes). The palette
+   * yellow is too pale for a thin outline on the light surfaces, so it is
+   * mixed toward its ink variant; the dark palettes make both the same gold.
+   */
+  --draft-star: color-mix(in srgb, var(--poke-yellow) 62%, var(--poke-yellow-ink));
+  /*
+   * Roster card geometry: one size and one row skeleton on every card at every
+   * breakpoint: head (star cluster, price pill) / sprite / name / owner /
+   * footer (the final stage of a branched line; the slot is reserved on every
+   * card). The card is the sum of the rows plus the frame's two borders, and
+   * the footer's height follows its sprite.
+   */
+  --draft-card-border: 2px;
+  --draft-card-head: 1.75rem;
+  --draft-card-sprite: 5.5rem;
   --draft-card-name: 1rem;
   --draft-card-meta: 0.875rem;
-  --draft-card-branch: 1.375rem;
-  --draft-card-h: calc(1rem + 3.5rem + 1rem + 0.875rem + 1.375rem + 0.25rem + 4px);
+  --draft-card-footer-sprite: 2.5rem;
+  --draft-card-footer: calc(var(--draft-card-footer-sprite) + 0.5rem);
+  --draft-card-h: calc(
+    var(--draft-card-head) + var(--draft-card-sprite) + var(--draft-card-name) + var(--draft-card-meta) +
+      var(--draft-card-footer) + 2 * var(--draft-card-border)
+  );
+  /* Narrowest card the wall's grid tracks allow (names and the footer need the room). */
+  --draft-card-min: 6.75rem;
+  /*
+   * The one skew of the card frame (negative: the top edge leans right), the
+   * footer plate inside it and the dock tiles. Read it with `tan()`: a row at
+   * distance `d` from the card's centre sits `d * tan(skew)` to the side of the
+   * unskewed cell, which the tokens below turn into lengths (magnitudes).
+   */
+  --draft-card-skew: -6deg;
+  /* The pinned ring's spread (a box-shadow: it needs room but adds no scroll range). */
+  --draft-card-ring: 5px;
+  /* How far the skewed frame leaves its cell at the top-right and bottom-left corners. */
+  --draft-card-overhang: calc(var(--draft-card-h) / 2 * tan(var(--draft-card-skew)) * -1);
+  /* The wall grid's inline padding: the overhang plus the ring, so no corner is clipped or scrolls. */
+  --draft-card-grid-inset: calc(var(--draft-card-overhang) + var(--draft-card-ring));
+  /* The frame's slant at the centre line of the head row (leaning right) and of the footer (leaning left). */
+  --draft-card-head-shift: calc(
+    (var(--draft-card-h) - var(--draft-card-head) - 2 * var(--draft-card-border)) / 2 * tan(var(--draft-card-skew)) * -1
+  );
+  --draft-card-footer-shift: calc(
+    (var(--draft-card-h) - var(--draft-card-footer) - 2 * var(--draft-card-border)) / 2 * tan(var(--draft-card-skew)) * -1
+  );
 
   color: var(--draft-ink);
 }
@@ -81,6 +128,15 @@
 .root {
   background: var(--draft-surface);
   position: relative;
+}
+
+/* Desktop: steeper slant and wider cards (see "Roster card"). */
+@media (min-width: 1024px) {
+  .tokens,
+  .root {
+    --draft-card-skew: -8deg;
+    --draft-card-min: 8.75rem;
+  }
 }
 
 :global([data-theme="dark"]) .tokens,
@@ -109,9 +165,24 @@
   min-width: 0;
 }
 
+.screenHeader,
 .clockRow,
 .orderRow {
   min-width: 0;
+}
+
+/*
+ * The page header the host passes in (title, subtitle, group switch, notices):
+ * the screen's own first row, so its real height, however it wraps or
+ * whichever notices show, comes out of the same box as everything else and
+ * nothing measures it. Sorted ahead of the clock row (`order: 1`); spans both
+ * columns from 768 px.
+ */
+.screenHeader {
+  order: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .stagePane,
@@ -121,11 +192,12 @@
 }
 
 /*
- * Phone: the left column dissolves (`display: contents`) so its parts can be
- * ordered around the wall: selected card → wall → roster/picks/compare →
- * sticky bottom bar (§5.3 phone list).
+ * Phone: the left column dissolves (`display: contents`, the frame and its
+ * scroller both) so its parts can be ordered around the wall: selected card →
+ * wall → roster/picks/compare → sticky bottom bar (§5.3 phone list).
  */
-.stagePane {
+.stagePane,
+.stageScroll {
   display: contents;
 }
 
@@ -161,15 +233,27 @@
   order: 6;
 }
 
+/*
+ * From 768 px the left column is a frame (`.stagePane`: border, fill, from
+ * 1024 px the diagonal clip) around its one scroller (`.stageScroll`), which
+ * holds the padding and the gap. They are two elements because the scrollbar
+ * belongs to the scroller: on the clipped frame itself it would sit under the
+ * diagonal edge, which cuts away the whole right strip toward the bottom.
+ */
 @media (min-width: 768px) {
   .stagePane {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    padding: 0.75rem;
     border: 1px solid var(--draft-border);
     border-radius: 0.75rem;
     background: var(--draft-surface);
+  }
+  .stageScroll {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.75rem;
   }
   .stageCard,
   .extras {
@@ -226,6 +310,7 @@
     grid-template-rows: auto auto minmax(0, 1fr);
     gap: 0.75rem;
   }
+  .screenHeader,
   .clockRow,
   .orderRow {
     grid-column: 1 / -1;
@@ -235,24 +320,63 @@
   }
 }
 
-/* Desktop: the Prompt 9 split with a diagonal edge. */
+/*
+ * Desktop: the Prompt 9 split with a diagonal edge, and a screen of fixed
+ * height: the viewport minus the site nav and the layout's main padding. The
+ * page header is the screen's first row (`.screenWithHeader` adds its track),
+ * so it is inside that height and the document never outgrows the viewport:
+ * only the left column (`.stageScroll`) and the roster grid (`.wallScroll`)
+ * scroll. The floor keeps the panes usable in a very short window; below it
+ * the page scrolls instead, which is the graceful fallback, not a bug.
+ */
 @media (min-width: 1024px) {
   .screen {
     grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr);
     gap: 0;
     row-gap: 0.5rem;
     height: calc(100dvh - var(--nav-h) - var(--draft-page-pad-y));
-    min-height: 640px;
+    min-height: 600px;
+  }
+  .screenWithHeader {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
   }
   .orderRow {
     display: block;
   }
   .stagePane {
-    overflow-y: auto;
     border-radius: 0.75rem 0 0 0.75rem;
     padding-right: 3.75rem;
     clip-path: polygon(0 0, 100% 0, calc(100% - 48px) 100%, 0 100%);
     z-index: 1;
+  }
+  /*
+   * The scroller ends 3.75rem short of the frame's right edge, which the
+   * diagonal (48px at the bottom) never reaches, so its scrollbar is never
+   * clipped. The gutter keeps the content width from jumping when the bar
+   * appears.
+   */
+  .stageScroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-right: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  /*
+   * The stage card never outgrows the scroller minus the dock below it: the dock is sticky at the bottom, so a
+   * taller card would end under it with the base stage cut off. Capped, the card's one flexible item, the line
+   * picture (`.previewArea`), takes the shortfall, and the dock sits in its natural place right under the card
+   * (the scroller's gap is the 0.75rem taken off here). `100%` is the scroller's content height: definite,
+   * because the scroller is a flex item of the fixed-height frame. In a window too short for even the
+   * picture's floor, `min-height: min-content` lets the card keep its content height instead of overflowing
+   * its box (an overflow would stay under the dock at every scroll position): the column scrolls, and once
+   * the card has scrolled past the dock's natural place the stage is whole.
+   */
+  .stageCard {
+    flex: 0 0 auto;
+    min-height: min-content;
+    max-height: calc(100% - var(--draft-dock-h) - 0.75rem);
   }
   .wallPane {
     margin-left: -48px;
@@ -325,37 +449,113 @@
   }
 }
 
-/* Uniform rows: every card has the same height, so every grid row does. */
+/*
+ * Uniform rows and tracks: every card has the same height, so every grid row
+ * does. The inline padding is derived from the card geometry (the skewed
+ * frames' corner overhang plus the pinned ring, see "Roster card"), so the
+ * slant is always inside the scroller and the wall never needs an overflow-x
+ * rule to hide a scrollbar. The track minimum is a token: names and the footer
+ * decide it, not the column count.
+ */
 .wallGrid {
   grid-auto-rows: var(--draft-card-h);
+  grid-template-columns: repeat(auto-fill, minmax(var(--draft-card-min), 1fr));
+  padding-inline: var(--draft-card-grid-inset);
 }
 
 /* ── Roster card ─────────────────────────────────────────────────────── */
 
 /*
- * One size and one inner grid for every card, with or without a branch and
- * whatever its state: sprite, name, owner and branch rows are fixed, and the
- * owner and branch rows are reserved even when empty, so names, sprites and
- * price badges line up across a row. Text rows are one line with an ellipsis.
+ * Construction. `.card` (role="option", the focus, hover and click target) is
+ * a plain UNSKEWED grid cell with one fixed row skeleton: head / sprite / name
+ * / owner / footer, the owner row and the footer always reserved (empty when
+ * unused), so sprites, names and prices line up across a row. ONE decorative
+ * layer, `.cardFrame`, carries the slant (`skewX(var(--draft-card-skew))`): the
+ * border, the state colours, the pinned ring and the focus ring. The content
+ * is ordinary unskewed content above it, so no child anywhere is counter-
+ * skewed (a counter-skewed child would widen the card's scrollable overflow
+ * by about its own overhang again).
+ *
+ * Overflow geometry. A card of height H skewed about its centre leaves its
+ * cell by H/2 * tan(skew) at the top-right and the bottom-left corner
+ * (`--draft-card-overhang`: 14px at the 198px card and 8deg). `.wallGrid`
+ * pads its inline sides by exactly that plus the ring (the ring is a shadow
+ * and adds no scroll range, it only needs the room), so the right-most
+ * column's frame ends inside the scroller's content box: scrollWidth equals
+ * clientWidth and `.wallScroll` shows no horizontal bar, for any card height.
+ * The head row's relative offset (`left`) and the footer's (`right`) stay
+ * inside the same overhang, because they are the slant at their own rows.
+ *
+ * Content follows the slant. A row sits `d * tan(skew)` to the side of the
+ * cell at distance `d` from the card centre, so the head row (near the top)
+ * shifts right by `--draft-card-head-shift` and the footer (near the bottom)
+ * left by `--draft-card-footer-shift`; their paddings are then measured from
+ * the slanted edges, not from the cell. The rows between stay centred (their
+ * slant is a couple of pixels).
  */
 .card {
-  height: var(--draft-card-h);
-  min-width: 0;
-}
-
-.cardBody {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows:
+    var(--draft-card-head)
     var(--draft-card-sprite)
     var(--draft-card-name)
     var(--draft-card-meta)
-    var(--draft-card-branch);
+    var(--draft-card-footer);
   align-content: start;
   justify-items: center;
-  height: 100%;
+  height: var(--draft-card-h);
   min-width: 0;
-  padding: 1rem 0.25rem 0.25rem;
+  padding: var(--draft-card-border) 0;
+  /* The frame sits behind the content (z-index -1) without leaving the card. */
+  isolation: isolate;
+}
+
+.cardFrame {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Width and style only: the colour is the state's (utility classes), a shorthand would reset it. */
+  border-width: var(--draft-card-border);
+  border-style: solid;
+  border-radius: 0.375rem;
+  /* Clips the footer plate to the frame's rounded corners. */
+  overflow: hidden;
+  transform: skewX(var(--draft-card-skew));
+}
+
+/* The keyboard focus ring follows the slant: it is the frame's outline, the option itself has none. */
+.card:focus-visible > .cardFrame {
+  outline: 2px solid var(--poke-focus);
+  outline-offset: 2px;
+}
+
+/* Inside the frame, so it leans exactly like the frame's edges (no transform of its own). */
+.cardFooterPlate {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: var(--draft-card-footer);
+  border-top: 1px solid var(--draft-border);
+  background: color-mix(in srgb, var(--draft-ink) 6%, transparent);
+}
+
+.cardHead {
+  position: relative;
+  left: var(--draft-card-head-shift);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 0.5rem;
+}
+
+.cardHeadGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .cardSprite {
@@ -368,19 +568,15 @@
 }
 
 .cardName,
-.cardMeta,
-.cardBranchLabel {
+.cardMeta {
   display: block;
+  width: 100%;
   min-width: 0;
+  padding-inline: 0.25rem;
   overflow: hidden;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.cardName,
-.cardMeta {
-  width: 100%;
-  text-align: center;
 }
 
 .cardName {
@@ -391,23 +587,44 @@
   line-height: var(--draft-card-meta);
 }
 
-.cardBranch {
+.cardFooter {
+  position: relative;
+  right: var(--draft-card-footer-shift);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.125rem;
+  gap: 0.25rem;
   width: 100%;
   min-width: 0;
-  height: var(--draft-card-branch);
+  padding-inline: 0.375rem;
+}
+
+.cardFooterBlob {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--draft-card-footer-sprite);
+  height: var(--draft-card-footer-sprite);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--draft-accent) 16%, var(--draft-surface));
+}
+
+.cardFooterArrow {
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+/* Two lines at most, broken at the hyphens of form names; the full text is in the card's title. */
+.cardFooterName {
+  display: -webkit-box;
+  min-width: 0;
   overflow: hidden;
-}
-
-.cardBranch > * {
-  flex: 0 0 auto;
-}
-
-.cardBranch > .cardBranchLabel {
-  flex: 0 1 auto;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  text-align: left;
 }
 
 /* ── Left stage ──────────────────────────────────────────────────────── */
@@ -422,7 +639,7 @@
   backdrop-filter: blur(10px) saturate(1.2);
 }
 
-/* Amber halftone behind the staged sprites (never red). */
+/* Amber halftone field behind the staged sprites (never red). */
 .halftone {
   position: relative;
   isolation: isolate;
@@ -434,48 +651,113 @@
   inset: 0;
   z-index: -1;
   background: radial-gradient(var(--draft-dots) 1.4px, transparent 1.6px) 0 0 / 10px 10px;
-  -webkit-mask: radial-gradient(ellipse at 55% 55%, black 20%, transparent 72%);
-  mask: radial-gradient(ellipse at 55% 55%, black 20%, transparent 72%);
+  -webkit-mask: radial-gradient(ellipse at 55% 52%, black 30%, transparent 78%);
+  mask: radial-gradient(ellipse at 55% 52%, black 30%, transparent 78%);
   pointer-events: none;
 }
 
-.previewStage {
+/*
+ * The line as a group portrait (`LinePreview`). `.previewArea` is the halftone
+ * field and a SIZE container: it takes the room the stage column leaves it and
+ * `.previewStage`, the ordered list of the stages, fits inside it by both its
+ * inline and its block size (`--draft-preview-h`: the picture's height in
+ * percent of its width). A short stage column therefore shrinks the picture
+ * instead of letting the base stage run under the sticky DRAFT button, and a
+ * narrow one shrinks it by width, with no pixel size anywhere.
+ *
+ * Where the room comes from. Phones and tablets: the field is as high as the
+ * picture's aspect ratio gives (full width), capped on phones to the window
+ * between the sticky clock row and the bottom bar, so it can always be seen
+ * whole. From 1024 px: the stage card is capped to the scroller minus the
+ * dock (`--draft-dock-h`, measured by `useStickyOffsets`), and the field is the
+ * one flexible item in it, so it shrinks to what the info box and the dock
+ * leave. `min-height` is the floor below which the page scrolls instead.
+ *
+ * The slots are placed in container units of the picture, on one ascending
+ * diagonal: the base smallest in front at the lower left, the final largest at
+ * the back on the upper right. Each box overlaps the next only at its corner (a
+ * little in width, still less in height, because each stage stands higher than
+ * the one before), so every silhouette stays mostly visible, wide ones (a long
+ * final form) included. A two-stage line is the same picture with two slots,
+ * centred as a pair. Keep the sprites inside the list: from 1024 px the pane's
+ * diagonal edge clips whatever reaches the right padding.
+ */
+.previewArea {
+  container-type: size;
   display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  grid-template-rows: auto auto;
-  align-items: end;
-  justify-items: center;
+  place-items: center;
+  aspect-ratio: 100 / var(--draft-preview-h);
+  /* A size container has no content height of its own, so the floor is explicit: a tight flex column never squashes it below it. */
   min-height: 11rem;
-  padding: 0.5rem;
 }
 
-.previewS2 {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  align-self: center;
+.previewStage {
+  position: relative;
+  container-type: inline-size;
+  width: min(100cqi, 30rem, calc(100cqh * 100 / var(--draft-preview-h)));
+  aspect-ratio: 100 / var(--draft-preview-h);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.previewS3 {
-  grid-column: 2;
-  grid-row: 1;
+.previewSlot {
+  position: absolute;
+  aspect-ratio: 1;
 }
 
-.previewS1 {
-  grid-column: 2;
-  grid-row: 2;
-  margin-top: -1.5rem;
+.previewStage[data-stages="3"] > .previewSlot[data-slot="0"] {
+  left: 1cqi;
+  top: 42cqi;
+  width: 30cqi;
+}
+.previewStage[data-stages="3"] > .previewSlot[data-slot="1"] {
+  left: 27cqi;
+  top: 24cqi;
+  width: 38cqi;
+}
+.previewStage[data-stages="3"] > .previewSlot[data-slot="2"] {
+  left: 54cqi;
+  top: 2cqi;
+  width: 46cqi;
 }
 
-.previewCompact {
-  min-height: 7rem;
+.previewStage[data-stages="2"] > .previewSlot[data-slot="0"] {
+  left: 6cqi;
+  top: 34cqi;
+  width: 38cqi;
+}
+.previewStage[data-stages="2"] > .previewSlot[data-slot="1"] {
+  left: 40cqi;
+  top: 6cqi;
+  width: 52cqi;
+}
+
+/* The image fills its slot (the width/height attributes are only the asset's nominal size); a soft shadow separates the overlaps. */
+.previewImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0.4rem 0.5rem color-mix(in srgb, var(--draft-ink) 22%, transparent));
 }
 
 /*
- * Cost, the DRAFT button and the admin switch. A direct child of the stage
- * pane (not of the card), so `sticky` is bounded by the whole left column and
+ * Phones: the picture must fit the window left between the sticky clock row under the nav and the sticky
+ * bottom bar, so it can be seen whole at some scroll position (`min-height` still wins on a very short phone).
+ */
+@media (max-width: 767px) {
+  .previewArea {
+    max-height: calc(100svh - var(--nav-h) - var(--draft-clock-h) - var(--draft-bottom-bar-h) - 1.5rem);
+  }
+}
+
+/*
+ * Budget left after the pick, the DRAFT button and the admin switch. A direct child of the stage
+ * scroller (not of the card), so `sticky` is bounded by the whole left column and
  * the button stays in view while the roster, picks and compare tray scroll
- * (§5.3). At lg+ the pane is its own scroller and the dock also sticks to the
- * top once the card has scrolled away.
+ * (§5.3). At lg+ the column scrolls in `.stageScroll` and the dock also sticks
+ * to the top once the card has scrolled away.
  */
 .ctaDock {
   position: sticky;
@@ -550,7 +832,7 @@
   outline-offset: 2px;
 }
 
-/* Roster dock tiles: slanted like the wall. */
+/* Roster dock tiles: slanted like the wall (the same skew token; the children lean back). */
 .dockTile {
   position: relative;
   display: flex;
@@ -562,16 +844,103 @@
   border: 1px solid var(--draft-border);
   border-radius: 0.375rem;
   background: var(--draft-elevated);
-  transform: skewX(-6deg);
+  transform: skewX(var(--draft-card-skew));
 }
 
 .dockTile > * {
-  transform: skewX(6deg);
+  transform: skewX(calc(var(--draft-card-skew) * -1));
 }
 
 .dockEmpty {
   border-style: dashed;
   background: transparent;
+}
+
+/*
+ * Team weakness table (`TeamWeaknessTable`): Pokémon as rows, the 18 attacking types as columns.
+ *
+ * Width: a type column is 1 rem (18 px at the site's 18 px root; its widest cell text, "¼×", is about 15 px,
+ * and the vertical type pill is as wide as its tight line height) and the first column takes the width of its
+ * widest count label (about 2.75 rem), so the table needs about 21.5 rem (385 px). The desktop left pane is
+ * 450 px wide at 1440 and 385 px at 1280 inside its padding and clip, so all 18 columns show without
+ * scrolling at both (at 1.25 rem the last one,
+ * Fairy, sat half under the pane's edge with nothing hinting at it); a narrower pane or a phone scrolls
+ * `.weaknessScroll` sideways and the Pokémon column stays put (`position: sticky`), which is why the cells
+ * use separate borders (collapsed borders do not travel with a sticky cell).
+ *
+ * Colour: a weakness is amber (a 4× one stronger and ringed), a resistance green, an immunity the neutral
+ * elevated surface, a neutral 1× cell stays blank. Never red (red means "drafted"). The multiplier text is
+ * always there, so colour is only a second signal; ink stays `--draft-ink` on every tint, which holds in both
+ * themes because the tints are mixes into the surface.
+ */
+.weaknessScroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.weaknessTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.weaknessTable th,
+.weaknessTable td {
+  min-width: 1rem;
+  padding: 0;
+  border-right: 1px solid color-mix(in srgb, var(--draft-border) 55%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--draft-border) 55%, transparent);
+}
+
+.weaknessTable .weaknessRowHead {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 2.25rem;
+  white-space: nowrap;
+  background: var(--draft-surface);
+}
+
+.weaknessTable .weaknessTypeCell {
+  padding: 0.125rem 0;
+  vertical-align: bottom;
+}
+
+/* Vertical type names, read bottom to top; every pill has the height of the longest name. */
+.weaknessTypeHead {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  min-height: 4.75rem;
+}
+
+.weaknessWeak,
+.weaknessQuad,
+.weaknessResist,
+.weaknessImmune {
+  color: var(--draft-ink);
+  font-weight: 700;
+}
+
+.weaknessWeak {
+  background: color-mix(in srgb, var(--poke-yellow) 30%, var(--draft-surface));
+}
+
+.weaknessQuad {
+  background: color-mix(in srgb, var(--poke-yellow) 62%, var(--draft-surface));
+  box-shadow: inset 0 0 0 1px var(--draft-warn-ink);
+  font-weight: 800;
+}
+
+.weaknessResist {
+  background: color-mix(in srgb, var(--poke-green) 24%, var(--draft-surface));
+}
+
+.weaknessImmune {
+  background: var(--draft-elevated);
+  color: var(--draft-ink-2);
 }
 
 /* ── Clock ───────────────────────────────────────────────────────────── */
@@ -605,7 +974,8 @@
 .timerTrack {
   position: relative;
   height: 0.5rem;
-  min-width: 6rem;
+  /* Never wider than the line it is on: a fixed 6rem pushed the bar past a 375 px phone's edge. */
+  min-width: min(6rem, 100%);
   flex: 1 1 8rem;
   overflow: hidden;
   border-radius: 9999px;
@@ -700,10 +1070,10 @@
 /* ── Breakpoint variants ─────────────────────────────────────────────── */
 
 /*
- * One of two renderings per breakpoint (the full timer and sprites from
- * 768 px, the compact ones on phones). `display: contents` keeps the wrapper
- * out of the layout; `display: none` also drops the hidden copy from the
- * accessibility tree.
+ * One of two renderings per breakpoint (the full timer from 768 px, the
+ * compact one on phones). `display: contents` keeps the wrapper out of the
+ * layout; `display: none` also drops the hidden copy from the accessibility
+ * tree.
  */
 .wideOnly {
   display: contents;
@@ -807,8 +1177,9 @@
     flex: 0 0 auto;
     padding: 0 1.5rem;
   }
-  /* The bottom bar carries the DRAFT button; cost and the admin switch stay. */
-  .stageCta {
+  /* The bottom bar carries the DRAFT button and the budget left; the verdict and the admin switch stay. */
+  .stageCta,
+  .dockRemaining {
     display: none;
   }
   .ctaDock {
@@ -901,7 +1272,7 @@
     transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
   }
   .dockTile:hover {
-    transform: skewX(-6deg) translateY(-2px);
+    transform: skewX(var(--draft-card-skew)) translateY(-2px);
   }
   .filterSheet[data-state="open"] {
     animation: filterSheetIn 180ms ease-out;

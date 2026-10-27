@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compile } from '@/lib/format-kit';
 import { compile as compileBrowser } from '@/lib/format-kit/compile.browser';
-import { deepFreeze } from '@/lib/format-kit/json';
+import { deepFreeze } from '@/lib/studio-core/json';
 import type { FormatDefinition, Stage } from '@/lib/format-kit/types';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import { describeLegacy } from '../legacy/describe-legacy';

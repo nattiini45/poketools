@@ -15,8 +15,8 @@ const h = vi.hoisted(() => ({
   getStagesBySeasonId: vi.fn(),
   getSeasonById: vi.fn(),
   getParticipantCore: vi.fn(),
-  resolveEffectiveRuleset: vi.fn(),
   getRulesetById: vi.fn(),
+  readExposedRuleset: vi.fn(),
   getOpponentBattleStatsInTournament: vi.fn(),
 }));
 
@@ -55,7 +55,10 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 
 vi.mock('@/lib/supabase/queries/rulesets', () => ({
   getRulesetById: h.getRulesetById,
-  resolveEffectiveRuleset: h.resolveEffectiveRuleset,
+}));
+
+vi.mock('@/lib/ruleset-studio/exposure', () => ({
+  readExposedRuleset: h.readExposedRuleset,
 }));
 
 vi.mock('@/lib/supabase/queries/games', () => ({
@@ -134,7 +137,7 @@ beforeEach(() => {
   h.getTournamentById.mockResolvedValue({
     id: 'T1',
     season_id: 'S1',
-    ruleset_id: 'BASE',
+    ruleset_id: 'CUSTOM',
     bracket_type: 'round_robin',
     description: null,
   });
@@ -144,26 +147,22 @@ beforeEach(() => {
     description: 'Mostly NFE; only 1 fully-evolved from ZU.',
     ruleset_id: 'BASE',
   });
-  h.resolveEffectiveRuleset.mockResolvedValue({
-    ruleset: {
-      id: 'CUSTOM',
-      name: 'Sample Custom League',
-      base_format: 'gen9ru',
-      clauses: [],
-      bans: { pokemon: [], moves: [], items: [], abilities: [] },
-      additions: { pokemon: [] },
-      custom_rules_string: '',
-      team_constraints: {
-        type_quotas: { source: 'player_core', min_per_type: 2, allow_multi_count: true },
-      },
+  // The phase's pin (an immutable ruleset version) is what the pack reads.
+  h.getRulesetById.mockResolvedValue({
+    id: 'CUSTOM',
+    name: 'Sample Custom League',
+    base_format: 'gen9ru',
+    clauses: [],
+    bans: { pokemon: [], moves: [], items: [], abilities: [] },
+    additions: { pokemon: [] },
+    custom_rules_string: '',
+    team_constraints: {
+      type_quotas: { source: 'player_core', min_per_type: 2, allow_multi_count: true },
     },
-    rulesetId: 'CUSTOM',
-    source: 'season',
-    fellBack: false,
   });
   h.getParticipantCore.mockResolvedValue(['Grass', 'Ground', 'Poison']);
   h.getStagesBySeasonId.mockResolvedValue([{ id: 'T1' }, { id: 'T2' }]);
-  h.getRulesetById.mockResolvedValue(null);
+  h.readExposedRuleset.mockResolvedValue(null);
   h.getOpponentBattleStatsInTournament.mockResolvedValue([]);
 });
 
@@ -309,10 +308,12 @@ describe('renderContextPack', () => {
         league_name: 'Summer Monotype Cup',
         description: 'All Pokémon on a team must share a single type.',
         ruleset_name: 'Summer Monotype Cup',
+        ruleset_version: 2,
         ruleset_id: 'rs-monotype',
         base_format: 'gen9ou',
         clauses: ['Species Clause'],
-        bans: { pokemon: ['Kingambit'], moves: [], items: [], abilities: [] },
+        bans: { pokemon: ['Kingambit'], moves: [], items: [], abilities: ['Moody'] },
+        allow: { pokemon: null, moves: ['Surf', 'Ice Beam'], items: null, abilities: null },
         additions: [],
         custom_rules: null,
         team_constraints: {
@@ -324,6 +325,11 @@ describe('renderContextPack', () => {
     expect(md).toContain('Summer Monotype Cup');
     expect(md).toContain('All Pokémon on a team must share a single type');
     expect(md).toContain('Banned Pokémon: Kingambit');
+    // The ruleset is a pinned version: the version, the banned abilities and an allowlist are part of the binding rules.
+    expect(md).toContain('- Ruleset: Summer Monotype Cup, version 2');
+    expect(md).toContain('Banned abilities: Moody');
+    expect(md).toContain('- Allowlist: ONLY these moves are legal (2): Surf, Ice Beam');
+    expect(md).not.toContain('ONLY these Pokémon');
     expect(md).toContain('Type quota');
     // The effective ruleset id is surfaced so the assistant can pass it to buildTeam.
     expect(md).toContain('Ruleset id (pass this exact id as ruleset_id to buildTeam): rs-monotype');
@@ -371,7 +377,7 @@ describe('buildContextPack — league-scoped (plan mode)', () => {
     expect(pack.recent_results?.[0]).toMatchObject({ opponent_name: 'League Foe', result: 'win', score: '2-0' });
   });
 
-  it('surfaces the EFFECTIVE custom ruleset id (not the base) and the assigned core', async () => {
+  it("surfaces the phase's pinned ruleset id and the assigned core", async () => {
     const pack = await buildContextPack(PLAYER, planContext);
     expect(pack.league?.ruleset_id).toBe('CUSTOM');
     expect(pack.league?.player_core).toEqual(['Grass', 'Ground', 'Poison']);

@@ -19,6 +19,10 @@
     {
       "path": "/api/cron/refresh-usage-stats",
       "schedule": "0 6 3 * *"
+    },
+    {
+      "path": "/api/cron/expire-league-trash",
+      "schedule": "40 3 * * *"
     }
   ]
 }

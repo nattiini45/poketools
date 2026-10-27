@@ -2,10 +2,7 @@ import { notFound } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
 import TeambuilderClient from '@/components/teambuilder/TeambuilderClient';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import {
-  resolveEffectiveRuleset,
-} from '@/lib/supabase/queries/rulesets';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import { getSessionPlayer } from '@/lib/auth/helpers';
 import { getPlayerTeamForTournament } from '@/lib/supabase/queries/teams';
@@ -21,34 +18,17 @@ export default async function TournamentTeambuilderPage({ params }: PageProps) {
   const tournament = await getTournamentById(tid);
   if (!tournament) notFound();
 
-  // Load the tournament's season (if any) so the resolver can use the
-  // league name + season.ruleset_id for the custom-over-base precedence
-  // (e.g. resolves the league's own custom ruleset instead of
-  // the base 'Gen 9 RU' ruleset when the tournament's ruleset_id is wrong).
-  const season = tournament.season_id ? await getSeasonById(tournament.season_id) : null;
-
+  // The ruleset is the phase's own pin: an immutable version, so the rules the player builds against are the rules
+  // the league validates against.
   const playerRead = getSessionPlayer();
-  const [resolved, player, draftPool] = await Promise.all([
-    resolveEffectiveRuleset({
-      tournamentRulesetId: tournament.ruleset_id,
-      tournamentBracketType: tournament.bracket_type,
-      season: season
-        ? {
-            id: season.id,
-            name: season.name,
-            rulesetId: season.ruleset_id,
-            formatType: season.format_type,
-          }
-        : null,
-    }),
+  const [ruleset, player, draftPool] = await Promise.all([
+    getRulesetById(tournament.ruleset_id),
     playerRead,
     // The viewer's pool: the season's, or their own group's in a league with groups.
     tournament.season_id
       ? getInitialPoolForPlayer(tournament.season_id, () => playerRead.then((p) => p?.playerId ?? null))
       : Promise.resolve(null),
   ]);
-
-  const ruleset = resolved?.ruleset ?? null;
 
   // Check if the player already has a team for this tournament
   let existingTeam = null;
@@ -60,9 +40,10 @@ export default async function TournamentTeambuilderPage({ params }: PageProps) {
     <AuthGuard>
     <TeambuilderClient
       tournamentId={tid}
-      rulesetId={resolved?.rulesetId}
+      rulesetId={ruleset?.id}
       rulesetName={ruleset?.name}
       baseFormat={ruleset?.base_format}
+      gen={ruleset?.gen}
       seasonId={tournament.season_id ?? undefined}
       isDraftLeague={!!draftPool}
       initialPokemon={existingTeam?.pokemon}

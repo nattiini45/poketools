@@ -3,13 +3,15 @@ import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
 import { getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { listRulesets } from '@/lib/supabase/queries/rulesets';
+import { listRulesetOptionsFor } from '@/lib/supabase/queries/rulesets';
+import { getRulesetPinInfo } from '@/lib/ruleset-studio/pin-info.server';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import RoundManager from '@/components/tournament/RoundManager';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import ResourceAdminManager from '@/components/shared/ResourceAdminManager';
 import TournamentLifecycleActions from '@/components/tournament/TournamentLifecycleActions';
 import TournamentSettingsEditor from '@/components/tournament/TournamentSettingsEditor';
+import RulesetPinCard from '@/components/ruleset/RulesetPinCard';
 import EditableDescription from '@/components/shared/EditableDescription';
 import { notFound } from 'next/navigation';
 import { getT } from '@/i18n/server';
@@ -23,17 +25,22 @@ export const dynamic = 'force-dynamic';
 
 interface LegacyRoundsPageProps {
   id: string;
+  /** The viewing admin's player id, from the page's resource gate. */
+  playerId: string;
   /** Live site-admin flag from the page's resource gate (not the session copy). */
   isSiteAdmin: boolean;
 }
 
-export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRoundsPageProps) {
+export default async function LegacyRoundsPage({ id, playerId, isSiteAdmin }: LegacyRoundsPageProps) {
   const tournament = await getTournamentWithDetails(id);
   if (!tournament) notFound();
 
-  const [rounds, rulesets, groups, t, tc, te] = await Promise.all([
+  const viewer = { playerId, isAdmin: isSiteAdmin };
+  const [rounds, rulesets, pin, groups, t, tc, te] = await Promise.all([
     getRoundsByTournament(id),
-    listRulesets(),
+    // A standalone tournament's own pin stays selectable even when it is not the newest version.
+    listRulesetOptionsFor({ actor: viewer, seasonId: null, keep: [tournament.ruleset_id] }),
+    getRulesetPinInfo(tournament.ruleset_id, viewer),
     getGroupsByTournament(id),
     getT(tournamentsAdminMessages),
     getT(commonMessages),
@@ -81,6 +88,15 @@ export default async function LegacyRoundsPage({ id, isSiteAdmin }: LegacyRounds
             started={started}
             lockReason={tournamentLockReason(startSignals)}
           />
+          {pin !== null && (
+            <div className="mt-4">
+              <RulesetPinCard
+                kind="standalone"
+                target={{ kind: 'tournament', id, name: tournament.name, status: tournament.status }}
+                pin={pin}
+              />
+            </div>
+          )}
         </Section>
 
         <Section title={t('legacy.description')} subtitle={t('legacy.descriptionHint')} collapsible defaultCollapsed>

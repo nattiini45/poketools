@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { PRESETS } from '@/lib/format-kit/client';
 import { documentSignature, normalizeDraft, type DraftDocument } from '../../editor/document';
 import { addStage, setTheme } from '../../editor/ops';
-import { editorReducer, initEditorState, isDirty, type EditorAction, type EditorState } from '../../editor/state';
-import { DEFAULT_SELECTION } from '../../editor/targets';
+import { formatEditor, type EditorAction, type EditorState } from '../../editor/state';
+import { DEFAULT_SELECTION, type Selection } from '../../editor/targets';
+
+const { isDirty, reducer: editorReducer } = formatEditor;
+const initEditorState = (doc: DraftDocument, rev: number, selection: Selection = DEFAULT_SELECTION): EditorState => formatEditor.init(doc, rev, selection);
 
 function preset(id: string): DraftDocument {
   const found = PRESETS.find((entry) => entry.id === id);

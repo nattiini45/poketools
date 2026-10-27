@@ -86,8 +86,7 @@ export default defineDe<typeof en>()({
   deleteResource: {
     label: 'Löschen',
     confirm: {
-      season:
-        'Liga „{name}“ löschen? Sie wird mit allen abhängigen Einträgen entfernt. Das lässt sich nicht rückgängig machen.',
+      season: 'Liga „{name}“ löschen? Sie kommt in den Papierkorb; der Superadmin kann sie {days} Tage lang wiederherstellen.',
       tournament:
         'Turnier „{name}“ löschen? Es wird mit allen abhängigen Einträgen entfernt. Das lässt sich nicht rückgängig machen.',
     },
@@ -96,7 +95,7 @@ export default defineDe<typeof en>()({
       tournament: 'Das Turnier konnte nicht gelöscht werden.',
     },
     deletedWithWarning: {
-      season: 'Liga „{name}“ wurde gelöscht. {warning}',
+      season: 'Liga „{name}“ wurde in den Papierkorb verschoben. {warning}',
       tournament: 'Turnier „{name}“ wurde gelöscht. {warning}',
     },
   },

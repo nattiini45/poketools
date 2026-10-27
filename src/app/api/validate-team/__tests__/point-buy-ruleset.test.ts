@@ -1,7 +1,7 @@
 /**
- * Point-buy leagues share one battle ruleset row (src/lib/season/point-buy-battle-ruleset.ts).
- * The teambuilder's live check resolves that row and ANDs `validateTeam()` against it with the
- * point-buy validator, so the row must not carry bans of its own: a ban the season lifted in
+ * Point-buy leagues share one battle ruleset (src/lib/season/point-buy-battle-ruleset.ts).
+ * The teambuilder's live check reads the version the phase pins and ANDs `validateTeam()` against it with the
+ * point-buy validator, so the ruleset must not carry bans of its own: a ban the season lifted in
  * its `format_rules` must not still reject the team. Both validators run for real here; only
  * the reads are faked.
  */
@@ -15,12 +15,11 @@ vi.mock('@/lib/auth/helpers', () => ({
 
 vi.mock('@/lib/supabase/queries/rulesets', () => ({
   getRulesetById: vi.fn(),
-  resolveEffectiveRuleset: vi.fn(),
-  isCustomLeagueRuleset: vi.fn(() => false),
-  listRulesetsByName: vi.fn(),
-  createRuleset: vi.fn(),
-  updateRuleset: vi.fn(),
+  findHeadRulesetsByName: vi.fn(),
 }));
+
+vi.mock('@/lib/ruleset-studio/exposure', () => ({ readExposedRuleset: vi.fn() }));
+vi.mock('@/lib/ruleset-studio/legacy-bridge', () => ({ createLegacyRuleset: vi.fn(), updateLegacyRuleset: vi.fn() }));
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonById: vi.fn(),
@@ -50,7 +49,7 @@ vi.mock('@/lib/draft/epb-thresholds', () => ({
 
 import { POST } from '../route';
 import { requirePlayer } from '@/lib/auth/helpers';
-import { resolveEffectiveRuleset } from '@/lib/supabase/queries/rulesets';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getParticipantCore, getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getDraftPoolBySeason } from '@/lib/supabase/queries/drafts';
@@ -60,6 +59,7 @@ import { getSeasonLineThresholds } from '@/lib/draft/epb-thresholds';
 import { pointBuyBattleRulesetInput } from '@/lib/season/point-buy-battle-ruleset';
 import { formatPack } from '@/lib/format-pack';
 import { makeRequest } from '@/lib/__tests__/helpers/api-request';
+import { makeRuleset as buildRuleset } from '@/test/ruleset-fixtures';
 
 const RULESET_ID = '00000000-0000-4000-8000-000000000101';
 const SEASON_ID = '00000000-0000-4000-8000-000000000102';
@@ -95,7 +95,7 @@ const TEAM = [
 ];
 
 function asRow(input: RulesetFormData): Ruleset {
-  return {
+  return buildRuleset({
     id: RULESET_ID,
     name: input.name,
     base_format: input.base_format,
@@ -114,16 +114,11 @@ function asRow(input: RulesetFormData): Ruleset {
     created_by: null,
     created_at: '',
     updated_at: '',
-  };
+  });
 }
 
 function mockResolvedRow(row: Ruleset) {
-  vi.mocked(resolveEffectiveRuleset).mockResolvedValue({
-    ruleset: row,
-    rulesetId: row.id,
-    source: 'fallback',
-    fellBack: true,
-  });
+  vi.mocked(getRulesetById).mockResolvedValue(row);
 }
 
 async function validate() {
@@ -171,7 +166,7 @@ describe('POST /api/validate-team: point-buy battle ruleset', () => {
     expect(body.data.valid).toBe(true);
   });
 
-  it('control: a row still carrying the pack ban would reject the team', async () => {
+  it('control: a ruleset still carrying the pack ban would reject the team', async () => {
     const legacy = asRow({ ...pointBuyBattleRulesetInput(), banned_moves: [LIFTED_MOVE] });
     mockResolvedRow(legacy);
 
@@ -181,15 +176,11 @@ describe('POST /api/validate-team: point-buy battle ruleset', () => {
     expect(body.data.issues.some((i) => i.issue.includes(LIFTED_MOVE))).toBe(true);
   });
 
-  it('passes the season format type to the resolver', async () => {
+  it("enforces the phase's own pin, not the id the client sent", async () => {
     mockResolvedRow(asRow(pointBuyBattleRulesetInput()));
 
     await validate();
 
-    expect(resolveEffectiveRuleset).toHaveBeenCalledWith(
-      expect.objectContaining({
-        season: expect.objectContaining({ formatType: 'evolution_point_buy', rulesetId: RULESET_ID }),
-      }),
-    );
+    expect(getRulesetById).toHaveBeenCalledWith(RULESET_ID);
   });
 });

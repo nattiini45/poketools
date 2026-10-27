@@ -31,6 +31,9 @@ vi.mock('@/lib/supabase/queries/format-definitions', () => ({
   deleteFormatDefinition: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/players', () => ({ resolvePlayerNames: vi.fn() }));
+vi.mock('@/lib/format-studio/ruleset-choices', () => ({
+  loadRulesetChoices: vi.fn(async () => [{ id: 'rs-1', name: 'Spring OU', version_no: 2 }]),
+}));
 
 import { revalidateTag } from 'next/cache';
 import { AuthError, requireFormatViewer } from '@/lib/auth/helpers';
@@ -46,7 +49,8 @@ import {
   setFormatVisibility,
 } from '@/lib/supabase/queries/format-definitions';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
-import { PRESETS, compile, ltext, type FormatDefinition } from '@/lib/format-kit';
+import { PRESETS, compile, type FormatDefinition } from '@/lib/format-kit';
+import { ltext } from '@/lib/studio-core/ltext';
 import { FormatStudioError } from '@/lib/format-studio/errors';
 import type { FormatDefinitionMeta, FormatVersion, FormatVersionSummary } from '@/lib/format-studio/library-types';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
@@ -161,6 +165,8 @@ describe('GET /api/formats/[id]', () => {
     expect(body.data.draft.draft_rev).toBe(3);
     expect(body.data.check.ok).toBe(true);
     expect(body.data.versions).toHaveLength(1);
+    // The labels of the rulesets a stage may name, for the attach preview (`loadRulesetChoices` resolves legacy ids too).
+    expect(body.data.rulesets).toEqual([{ id: 'rs-1', name: 'Spring OU', version_no: 2 }]);
     expectNoPrivatePlayerData(body);
   });
 

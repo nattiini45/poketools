@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { compile } from '../compile';
 import { diag, DIAGNOSTIC_CODES, FIX_IDS, type Diagnostic, type DiagnosticCode, type Fix } from '../engine/diagnostics';
 import { renderDiagnostic, renderFix, renderSeverity } from '../engine/render';
-import { ltext } from '../ltext';
+import { ltext } from '@/lib/studio-core/ltext';
 import { describePrimitive } from '../registry/describe';
 import { cup } from '../presets/cup';
 import type { FormatDefinition } from '../types';

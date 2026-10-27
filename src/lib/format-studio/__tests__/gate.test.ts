@@ -24,7 +24,7 @@ function player(id: string): NonNullable<LiveAccess['player']> {
 }
 
 function access(flags: Partial<LiveAccess> & { id?: string }): LiveAccess {
-  return { player: player(flags.id ?? 'viewer'), isSiteAdmin: false, isAnyAdmin: true, isCreator: false, ...flags };
+  return { player: player(flags.id ?? 'viewer'), isSiteAdmin: false, isAnyAdmin: true, isCreator: false, isSuperadmin: false, ...flags };
 }
 
 function meta(over: Partial<FormatDefinitionMeta> = {}): FormatDefinitionMeta {
@@ -75,7 +75,7 @@ describe('gateFormatDefinition', () => {
   });
 
   it('is guard for a banned or suspended admin (the live access gives no admin flag)', async () => {
-    mocks.getLiveAccess.mockResolvedValue({ player: player('owner'), isSiteAdmin: false, isAnyAdmin: false, isCreator: false });
+    mocks.getLiveAccess.mockResolvedValue({ player: player('owner'), isSiteAdmin: false, isAnyAdmin: false, isCreator: false, isSuperadmin: false });
     mocks.getFormatDefinitionMeta.mockResolvedValue(meta());
     expect(await gateFormatDefinition(ID)).toEqual({ kind: 'guard' });
     expect(mocks.getFormatDefinitionMeta).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe('gateFormatDefinition', () => {
 
   it('decides the admin flag from the live access, not from the player\'s own copy', async () => {
     const stale = { ...player('someone-else'), isAdmin: true };
-    mocks.getLiveAccess.mockResolvedValue({ player: stale, isSiteAdmin: false, isAnyAdmin: true, isCreator: false });
+    mocks.getLiveAccess.mockResolvedValue({ player: stale, isSiteAdmin: false, isAnyAdmin: true, isCreator: false, isSuperadmin: false });
     mocks.getFormatDefinitionMeta.mockResolvedValue(meta({ visibility: 'private' }));
     expect(await gateFormatDefinition(ID)).toEqual({ kind: 'forbidden' });
   });

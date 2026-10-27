@@ -48,10 +48,6 @@ vi.mock('@/lib/pkmn/dex', () => ({
   getSpecies: vi.fn(),
 }));
 
-vi.mock('../../context-builder', () => ({
-  parseGenFromFormat: vi.fn().mockReturnValue(9),
-}));
-
 import { computeMarginDescription, buildRecapFactPack, buildForecastFactPack } from '../fact-pack';
 import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';

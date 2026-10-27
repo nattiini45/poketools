@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
+import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 
 // LIVE-LOCAL test: it seeds rows into a LOCAL Supabase stack and runs the real
 // query functions against real PostgREST, to prove the select shapes the unit
@@ -124,7 +125,7 @@ describe.skipIf(!optIn)('PostgREST select shapes (local stack)', () => {
       if (error) throw new Error(`[seed ${label}] ${JSON.stringify(error)}`);
     };
 
-    await run('rulesets', client.from('rulesets').insert({ id: ids.ruleset, name: rulesetName }));
+    await run('rulesets', insertLocalRuleset(client, { id: ids.ruleset, name: rulesetName }));
     await run(
       'players',
       client.from('players').insert([
@@ -248,7 +249,7 @@ describe.skipIf(!optIn)('PostgREST select shapes (local stack)', () => {
     await del('resource_admins', client.from('resource_admins').delete().in('player_id', playerIds));
     await del('tournaments', client.from('tournaments').delete().in('id', tournamentIds));
     await del('seasons', client.from('seasons').delete().in('id', seasonIds));
-    await del('rulesets', client.from('rulesets').delete().eq('id', ids.ruleset));
+    await del('rulesets', deleteLocalRuleset(client, ids.ruleset));
     await del('players', client.from('players').delete().in('id', playerIds));
 
     // Prove nothing seeded survived.
@@ -256,7 +257,7 @@ describe.skipIf(!optIn)('PostgREST select shapes (local stack)', () => {
       client.from('players').select('id', { count: 'exact', head: true }).in('id', playerIds),
       client.from('seasons').select('id', { count: 'exact', head: true }).in('id', seasonIds),
       client.from('tournaments').select('id', { count: 'exact', head: true }).in('id', tournamentIds),
-      client.from('rulesets').select('id', { count: 'exact', head: true }).eq('id', ids.ruleset),
+      client.from('ruleset_definition_versions').select('id', { count: 'exact', head: true }).eq('id', ids.ruleset),
       client.from('games').select('id', { count: 'exact', head: true }).in('id', [ids.g1, ids.g2, ids.g3, ids.g4]),
       client.from('teams').select('id', { count: 'exact', head: true }).in('id', [ids.teamA, ids.teamB, ids.teamC]),
     ]);
@@ -316,7 +317,7 @@ describe.skipIf(!optIn)('PostgREST select shapes (local stack)', () => {
       // Mirror of SEASON_DETAILS_SELECT's embeds (the constant is module-private).
       const raw = await client
         .from('seasons')
-        .select('id, rulesets ( name ), season_participants ( count ), tournaments ( count )')
+        .select('id, rulesets:ruleset_definition_versions ( name:name_text ), season_participants ( count ), tournaments ( count )')
         .in('id', [ids.seasonA, ids.seasonB]);
       expect(raw.error).toBeNull();
       logShape('seasons.select(rulesets(name), season_participants(count), tournaments(count))', raw.data);
@@ -399,7 +400,7 @@ describe.skipIf(!optIn)('PostgREST select shapes (local stack)', () => {
     it('returns [{ count }] embeds on the wire', async () => {
       const raw = await client
         .from('tournaments')
-        .select('id, rulesets ( name ), seasons ( name ), tournament_participants ( count )')
+        .select('id, rulesets:ruleset_definition_versions ( name:name_text ), seasons ( name ), tournament_participants ( count )')
         .in('id', [ids.t1, ids.t2, ids.t3, ids.t4]);
       expect(raw.error).toBeNull();
       logShape('tournaments.select(rulesets(name), seasons(name), tournament_participants(count))', raw.data);

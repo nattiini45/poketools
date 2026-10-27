@@ -32,23 +32,6 @@ export const STATS_FORMATS: string[] = [
 ];
 
 /**
- * Extract the generation number from a format string.
- * e.g. 'gen9ou' → 9, 'gen3ubers' → 3
- */
-export function extractGenFromFormat(format: string): number | null {
-  const match = format.match(/^gen(\d)/);
-  return match ? parseInt(match[1], 10) : null;
-}
-
-/**
- * Extract the tier key from a format string.
- * e.g. 'gen9ou' → 'ou', 'gen9vgc2025' → 'vgc2025'
- */
-export function extractTierFromFormat(format: string): string {
-  return format.replace(/^gen\d/, '');
-}
-
-/**
  * Fetch the available format list from data.pkmn.cc/stats/index.json.
  * Returns an array of format slugs that have data.
  */
