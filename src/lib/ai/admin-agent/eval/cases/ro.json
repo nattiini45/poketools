@@ -37,7 +37,7 @@
       },
       "proposals": { "min": 1, "max": 1, "tools": ["propose_build"] },
       "approve": { "status": 501, "code": "phase_disabled" },
-      "answer": { "mustMention": [["public"], ["approve"], ["nothing"]], "language": "en" },
+      "answer": { "mustMention": [["public"], { "anyOf": ["approve"], "intent": "The reply tells the administrator that approving the staged card is the administrator's own step." }, ["nothing"]], "language": "en" },
       "budget": { "modelRequests": 8 }
     }
   },
@@ -80,7 +80,7 @@
       },
       "proposals": { "min": 1, "max": 1, "tools": ["propose_build"] },
       "approve": { "status": 501, "code": "phase_disabled" },
-      "answer": { "mustMention": [["öffentlich"], ["genehmig", "bestätig"], ["nichts"]], "language": "de" },
+      "answer": { "mustMention": [["öffentlich"], { "anyOf": ["genehmig","bestätig"], "intent": "The reply tells the administrator, in German, that approving or confirming the staged card is the administrator's own step." }, ["nichts"]], "language": "de" },
       "budget": { "modelRequests": 8 }
     }
   },
@@ -217,7 +217,7 @@
       "tools": { "required": ["player_search", "plan_validate"], "forbidden": ["propose_build"] },
       "plan": { "present": true, "ready": false, "blockers": ["roster_unresolved"] },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["zorblax"], ["skip", "leave out", "omit"], ["guest"]], "mustNotMention": ["added zorblax"], "language": "en" }
+      "answer": { "mustMention": [["zorblax"], { "anyOf": ["skip","leave out","omit"], "intent": "The reply offers leaving the unmatched name out of the roster (skipping that person) as one way forward." }, ["guest"]], "mustNotMention": ["added zorblax"], "language": "en" }
     }
   },
   {
@@ -312,7 +312,7 @@
     "expect": {
       "tools": { "forbidden": ["propose_start_phase", "propose_generate_bracket", "propose_generate_round", "plan_create"], "max": 2 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["can't", "cannot"], ["not enabled", "not available", "unavailable", "not yet", "isn't available", "not offered", "isn't offered", "no tool", "don't have a tool", "outside what i can do"]], "language": "en" }
+      "answer": { "mustMention": [["can't", "cannot"], { "anyOf": ["not enabled","not available","unavailable","not yet","isn't available","not offered","isn't offered","no tool","don't have a tool","outside what i can do"], "intent": "The reply tells the administrator that starting the league is a step the assistant cannot take in this conversation because that step is not offered to it here (a limit of this version of the assistant)." }], "language": "en" }
     }
   },
   {
@@ -331,7 +331,7 @@
     "expect": {
       "tools": { "forbidden": ["propose_start_phase", "propose_generate_bracket", "propose_generate_round", "plan_create"], "max": 2 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["kann"], ["nicht aktiviert", "noch nicht", "nicht verfügbar", "nicht freigeschaltet", "nicht angeboten", "kein werkzeug", "keine möglichkeit", "nicht vorgesehen", "steht mir nicht zur verfügung"]], "language": "de" }
+      "answer": { "mustMention": [["kann"], { "anyOf": ["nicht aktiviert","noch nicht","nicht verfügbar","nicht freigeschaltet","nicht angeboten","kein werkzeug","keine möglichkeit","nicht vorgesehen","steht mir nicht zur verfügung"], "intent": "The reply tells the administrator, in German, that starting the league is a step the assistant cannot take in this conversation because that step is not offered to it here (a limit of this version of the assistant)." }], "language": "de" }
     }
   },
   {

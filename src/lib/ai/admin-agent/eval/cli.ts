@@ -14,6 +14,12 @@
  *   --resume DIR           continue a run: cases already scored in DIR/results.jsonl are skipped
  *   --record DIR           live only: write each sound transcript as a recording to DIR (replayable offline)
  *   --transcripts DIR      write every run's transcript and checks to DIR, passed or failed (for diagnosing failures)
+ *   --judge                opt-in semantic fallback for answer groups (`grader.ts`, `judge.ts`), for --port live only: when no phrase of a
+ *                          `mustMention` group that carries an `intent` matched, Haiku 5.5 (low effort) is asked whether the answer still
+ *                          conveys that intent and may turn that one check into a pass if it quotes a sentence that is in the answer.
+ *                          Off unless asked, so a live run stays comparable with the deterministic baseline; a few cents per run when on,
+ *                          included in the cost, and the summary counts rescued passes apart from substring passes. A rescued run is never
+ *                          written by --record (recordings replay offline without a judge). `--judge` with replay is a usage error.
  *   --timeout-sec N        wall-clock ceiling per case (default 180 live, 30 replay)
  *   --retries N            re-runs of a case whose model call failed (jittered backoff)
  *   --max-cost-usd X       live only: stop the suite once the cases scored so far cost more than X (default 5)
@@ -30,9 +36,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { loadCases, loadRecordings, selectCases } from './data';
 import { assertLocalSupabaseEnv, EvalHostError, installEgressGuard } from './host-guard';
+import { createPortJudge, JUDGE_EFFORT, JUDGE_MODEL, type MentionJudge } from './judge';
 import { formatSummary, summarize } from './report';
 import { replayPorts, resultKey, runSuite, type RunCaseOptions, type RunOutcome } from './runner';
 import { stepFromResult } from './ports';
+import type { AdminModelPort } from '../loop/types';
 import type { CaseScore, Recording } from './types';
 
 export interface CliIo {
@@ -49,6 +57,8 @@ export interface CliOptions {
   /** Reads an env file for the model key (live runs only). Defaults to the file system; absent file means no key. */
   readEnvFile?: (file: string) => string | null;
   now?: () => Date;
+  /** Makes the live model port (default: the AI SDK port). Tests pass a fake; it also serves the judge's calls. */
+  createPort?: (apiKey: string) => AdminModelPort | Promise<AdminModelPort>;
 }
 
 interface Parsed {
@@ -65,6 +75,8 @@ interface Parsed {
   resume?: string;
   record?: string;
   transcripts?: string;
+  /** `--judge` was typed: the opt-in semantic fallback for answer groups. */
+  judge?: boolean;
   timeoutSec?: number;
   retries: number;
   maxCostUsd: number;
@@ -84,6 +96,7 @@ export function parseArgs(argv: readonly string[]): Parsed {
     else if (flag === '--list') parsed.list = true;
     else if (flag === '--json') parsed.json = true;
     else if (flag === '--selftest') parsed.port = 'replay';
+    else if (flag === '--judge') parsed.judge = true;
     else if (VALUE_FLAGS.has(flag)) {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith('--')) throw new UsageError(`${flag} needs a value`);
@@ -162,7 +175,7 @@ export function readAllowedKeys(text: string, allowed: readonly string[]): Recor
   return out;
 }
 
-const USAGE = `admin-agent eval (plan stage). Flags: --stage plan, --port live|replay (--selftest), --cases IDS, --repeat N, --model ID, --effort low|medium|high, --out DIR, --resume DIR, --record DIR, --transcripts DIR, --timeout-sec N, --retries N, --max-cost-usd X, --list, --json, --help. See the header of src/lib/ai/admin-agent/eval/cli.ts.`;
+const USAGE = `admin-agent eval (plan stage). Flags: --stage plan, --port live|replay (--selftest), --cases IDS, --repeat N, --model ID, --effort low|medium|high, --out DIR, --resume DIR, --record DIR, --transcripts DIR, --judge, --timeout-sec N, --retries N, --max-cost-usd X, --list, --json, --help. See the header of src/lib/ai/admin-agent/eval/cli.ts.`;
 
 function readIfPresent(file: string): string | null {
   try {
@@ -218,6 +231,12 @@ function captureServerLog(file: string): () => void {
   };
 }
 
+/** The live port of a real run: the AI SDK port with the key the run resolved. */
+async function defaultLivePort(apiKey: string): Promise<AdminModelPort> {
+  const { createAiSdkModelPort } = await import('../loop/ai-sdk-port');
+  return createAiSdkModelPort({ apiKey });
+}
+
 export async function main(options: CliOptions): Promise<number> {
   const { io, env } = options;
   let parsed: Parsed;
@@ -233,6 +252,11 @@ export async function main(options: CliOptions): Promise<number> {
   }
   if (parsed.stage !== 'plan') {
     io.error(`admin-agent eval: stage '${parsed.stage}' is not built yet. v0 runs the plan stage only; the executor and end-to-end stages need the local stack's fixture loaders (plan 7.1).`);
+    return 2;
+  }
+
+  if (parsed.judge === true && parsed.port === 'replay') {
+    io.error('admin-agent eval: --judge asks the real model, and --port replay runs offline. Use --port live, or drop --judge.');
     return 2;
   }
 
@@ -262,6 +286,7 @@ export async function main(options: CliOptions): Promise<number> {
   }
 
   let makePort: RunCaseOptions['makePort'];
+  let judge: MentionJudge | undefined;
   if (parsed.port === 'replay') {
     makePort = replayPorts(recordings);
   } else {
@@ -275,8 +300,10 @@ export async function main(options: CliOptions): Promise<number> {
       );
       return 2;
     }
-    const { createAiSdkModelPort } = await import('../loop/ai-sdk-port');
-    makePort = () => ({ port: createAiSdkModelPort({ apiKey }) });
+    const livePort = await (options.createPort ?? defaultLivePort)(apiKey);
+    makePort = () => ({ port: livePort });
+    // The judge asks the same port (same provider setup, key and guarded fetch) for its small model; it is off unless --judge.
+    if (parsed.judge === true) judge = createPortJudge(livePort);
   }
 
   const now = options.now ?? (() => new Date());
@@ -290,7 +317,7 @@ export async function main(options: CliOptions): Promise<number> {
   if (parsed.record) mkdirSync(path.resolve(parsed.record), { recursive: true });
   if (parsed.transcripts) mkdirSync(path.resolve(parsed.transcripts), { recursive: true });
 
-  io.log(`admin-agent eval: ${cases.length} case(s), port ${parsed.port}, repeat ${parsed.repeat}, results in ${outDir}`);
+  io.log(`admin-agent eval: ${cases.length} case(s), port ${parsed.port}, repeat ${parsed.repeat}, judge ${judge ? `${JUDGE_MODEL} ${JUDGE_EFFORT}` : 'off'}, results in ${outDir}`);
   const restoreFetch = installEgressGuard(globalThis, { allowModelApi: parsed.port === 'live', onBlocked: (host) => io.error(`admin-agent eval: blocked a request to ${host}`) });
   const restoreConsole = captureServerLog(path.join(outDir, 'server.log'));
   let spent = 0;
@@ -304,11 +331,17 @@ export async function main(options: CliOptions): Promise<number> {
       timeoutMs: (parsed.timeoutSec ?? (parsed.port === 'live' ? 180 : 30)) * 1000,
       retries: parsed.retries,
       done,
+      ...(judge ? { judge } : {}),
       stop: () => parsed.port === 'live' && spent / 1_000_000 > parsed.maxCostUsd,
       onScore(score, outcome) {
         spent += score.metrics.costUsdMicro;
         appendFileSync(resultsFile, `${JSON.stringify({ ...score, model: outcome.record.model, effort: outcome.record.effort, port: parsed.port })}\n`);
-        if (parsed.record && parsed.port === 'live' && score.pass) {
+        // A recording is replayed offline with no judge, so only a run that passes on the phrases alone may become one.
+        const rescued = score.judge?.rescues ?? 0;
+        if (parsed.record && parsed.port === 'live' && score.pass && rescued > 0) {
+          io.log(`not recorded: ${score.caseId}#${score.repeat} passed only through ${rescued} judge rescue${rescued === 1 ? '' : 's'}, and a recording must pass offline without the judge`);
+        }
+        if (parsed.record && parsed.port === 'live' && score.pass && rescued === 0) {
           writeFileSync(path.join(path.resolve(parsed.record), `${score.caseId}.json`), `${JSON.stringify({ [score.caseId]: recordingOf(outcome) }, null, 2)}\n`);
         }
         if (parsed.transcripts) {
@@ -317,7 +350,7 @@ export async function main(options: CliOptions): Promise<number> {
 `);
         }
         const failed = score.checks.filter((c) => !c.pass).map((c) => c.name);
-        io.log(`${score.pass ? 'PASS' : 'FAIL'}  ${score.caseId}#${score.repeat}  ${score.metrics.modelRequests} requests, ${score.metrics.toolCalls} tool calls${failed.length > 0 ? `  failed: ${failed.join('; ')}` : ''}`);
+        io.log(`${score.pass ? 'PASS' : 'FAIL'}  ${score.caseId}#${score.repeat}  ${score.metrics.modelRequests} requests, ${score.metrics.toolCalls} tool calls${rescued > 0 ? `, judge rescued ${rescued}` : ''}${failed.length > 0 ? `  failed: ${failed.join('; ')}` : ''}`);
       },
       onError(record) {
         appendFileSync(errorsFile, `${JSON.stringify({ caseId: record.caseId, repeat: record.repeat, status: record.status, failure: record.failure, durationMs: record.durationMs })}\n`);

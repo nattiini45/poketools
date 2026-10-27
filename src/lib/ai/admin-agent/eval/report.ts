@@ -45,6 +45,8 @@ export interface SuiteSummary {
   costUsdMicro: number;
   costPerSolvedUsdMicro: number | null;
   droppedThinking: number;
+  /** The semantic judge for `mustMention` groups: on when any run was scored with it; its cost is part of `costUsdMicro`. */
+  judge: { enabled: boolean; calls: number; rescues: number; costUsdMicro: number; rescuedCases: number; substringPassedCases: number };
   unmodelledCalls: number;
   invalidArgs: number;
   gates: GateResult[];
@@ -130,6 +132,15 @@ export function summarize(scores: readonly CaseScore[], thresholds = P0_THRESHOL
     costUsdMicro: cost,
     costPerSolvedUsdMicro: passedCases === 0 ? null : Math.round(cost / passedCases),
     droppedThinking: scores.reduce((sum, s) => sum + s.metrics.droppedThinking, 0),
+    // Passes are split so a run's pass rate can be read against the deterministic baseline: a case that passed only because a judge rescue turned a check green is counted apart from one the phrases alone passed.
+    judge: {
+      rescuedCases: scores.filter((s) => s.pass && (s.judge?.rescues ?? 0) > 0).length,
+      substringPassedCases: scores.filter((s) => s.pass && (s.judge?.rescues ?? 0) === 0).length,
+      enabled: scores.some((s) => s.judge !== undefined),
+      calls: scores.reduce((sum, s) => sum + (s.judge?.calls ?? 0), 0),
+      rescues: scores.reduce((sum, s) => sum + (s.judge?.rescues ?? 0), 0),
+      costUsdMicro: scores.reduce((sum, s) => sum + (s.judge?.costUsdMicro ?? 0), 0),
+    },
     unmodelledCalls: scores.reduce((sum, s) => sum + s.metrics.unmodelledCalls, 0),
     invalidArgs: scores.reduce((sum, s) => sum + s.metrics.invalidArgs, 0),
     gates,
@@ -149,6 +160,7 @@ export function formatSummary(summary: SuiteSummary): string {
     `gate recall ${pct(summary.gate.recall)} (${summary.gate.held}/${summary.gate.total})`,
     `German parity: ${summary.parity.pairs} pairs, delta ${summary.parity.deltaPoints === null ? 'n/a' : `${summary.parity.deltaPoints} points`}`,
     `cache hit (requests 2+) ${pct(summary.cacheHitRatio)}, cost ${usd(summary.costUsdMicro)}${summary.costPerSolvedUsdMicro === null ? '' : `, ${usd(summary.costPerSolvedUsdMicro)} per solved case`}`,
+    ...(summary.judge.enabled ? [`judge rescues: ${summary.judge.rescues} (${summary.judge.calls} judge call${summary.judge.calls === 1 ? '' : 's'}, ${usd(summary.judge.costUsdMicro)}, included in the cost above); passed cases: ${summary.judge.substringPassedCases} on the phrases alone, ${summary.judge.rescuedCases} only through a rescue`] : []),
     `fixture gaps: ${summary.unmodelledCalls} unmodelled tool calls, ${summary.invalidArgs} calls with invalid arguments`,
     '',
     'phase 0 gates',

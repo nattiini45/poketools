@@ -17,7 +17,8 @@ import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from '../prompts';
 import { buildToolSet } from '../registry';
 import type { ProposalSummary } from '../store/types';
 import { FixtureToolRuntime } from './fixture-tools';
-import { scoreRun } from './grader';
+import { rescueMentions, scoreRun } from './grader';
+import type { MentionJudge } from './judge';
 import { EvalClock, EvalMemoryStore, evalConversation } from './memory-store';
 import { ReplayPort, RecordingExhaustedError, TallyPort } from './ports';
 import type { Json } from '../store/types';
@@ -353,6 +354,8 @@ export interface SuiteOptions extends RunCaseOptions {
   onError?(record: RunRecord): void | Promise<void>;
   /** Checked before each case; true ends the suite early (the dollar ceiling of a live run). */
   stop?(): boolean;
+  /** The semantic fallback for `mustMention` groups (live runs). Absent, scoring is the pure substring grader and calls no model. */
+  judge?: MentionJudge;
 }
 
 export const resultKey = (caseId: string, repeat: number): string => `${caseId}#${repeat}`;
@@ -376,7 +379,8 @@ export async function runSuite(options: SuiteOptions): Promise<CaseScore[]> {
         outcome = await runCase(testCase, { ...options, repeat });
       }
       if (outcome.record.status !== 'ok') await options.onError?.(outcome.record);
-      const score = scoreRun(testCase, outcome.record, outcome.world);
+      const substringScore = scoreRun(testCase, outcome.record, outcome.world);
+      const score = options.judge ? await rescueMentions(testCase, outcome.record, outcome.world, substringScore, options.judge) : substringScore;
       scores.push(score);
       await options.onScore?.(score, outcome);
     }

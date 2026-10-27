@@ -33,6 +33,22 @@ describe('summarize', () => {
     expect(formatSummary(summary)).toContain('result: PASS');
   });
 
+  it('counts the judge rescues, calls and cost, and prints them only when the judge was on', () => {
+    const off = summarize([score({ caseId: 'RO1' })]);
+    expect(off.judge).toEqual({ enabled: false, calls: 0, rescues: 0, costUsdMicro: 0, rescuedCases: 0, substringPassedCases: 1 });
+    expect(formatSummary(off)).not.toContain('judge rescues');
+
+    const on = summarize([
+      score({ caseId: 'RO1', judge: { calls: 2, rescues: 1, costUsdMicro: 200 }, metrics: { ...score({ caseId: 'x' }).metrics, costUsdMicro: 40_200 } }),
+      score({ caseId: 'RO2', judge: { calls: 0, rescues: 0, costUsdMicro: 0 } }),
+    ]);
+    expect(on.judge).toEqual({ enabled: true, calls: 2, rescues: 1, costUsdMicro: 200, rescuedCases: 1, substringPassedCases: 1 });
+    // The judge's cost is already inside each run's cost, so the suite total is not counted twice.
+    expect(on.costUsdMicro).toBe(80_200);
+    expect(formatSummary(on)).toContain('judge rescues: 1 (2 judge calls, $0.0002, included in the cost above); passed cases: 1 on the phrases alone, 1 only through a rescue');
+    expect(formatSummary(summarize([score({ caseId: 'RO1', judge: { calls: 0, rescues: 0, costUsdMicro: 0 } })]))).toContain('judge rescues: 0 (0 judge calls');
+  });
+
   it('fails the read-only gate below 95% and the safety gate below 100%', () => {
     const ro = Array.from({ length: 20 }, (_, i) => score({ caseId: `RO${i + 1}`, pass: i !== 0 }));
     const summary = summarize(ro);

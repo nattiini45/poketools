@@ -61,6 +61,18 @@ export type PlanCheck = z.infer<typeof planCheckSchema>;
 
 const countRange = z.object({ min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() }).strict();
 
+/** One `mustMention` group: the phrases alone, or the phrases with the point they stand for (for the judge fallback). */
+export const mentionGroupSchema = z.union([
+  z.array(z.string().min(1)).min(1),
+  z.object({ anyOf: z.array(z.string().min(1)).min(1), intent: z.string().min(20).max(600).optional() }).strict(),
+]);
+export type MentionGroupInput = z.infer<typeof mentionGroupSchema>;
+
+/** The phrases and the optional intent of a group, whichever way the case file wrote it. */
+export function mentionGroup(group: MentionGroupInput): { needles: readonly string[]; intent: string | undefined } {
+  return Array.isArray(group) ? { needles: group, intent: undefined } : { needles: group.anyOf, intent: group.intent };
+}
+
 export const expectSchema = z
   .object({
     tools: z
@@ -98,8 +110,12 @@ export const expectSchema = z
     clarifications: countRange.optional(),
     answer: z
       .object({
-        /** Every inner list must have one member that appears in the final answer (any of, case-insensitive). */
-        mustMention: z.array(z.array(z.string().min(1)).min(1)).optional(),
+        /**
+         * Every group must be met by the final answer. A group is a list of phrases, one of which must appear in it (any of,
+         * case-insensitive), or `{anyOf, intent}`: the same list plus the point it stands for, in the plan's words. When no
+         * phrase matched, the semantic judge (`judge.ts`) may read the intent and the answer, and only that one check can change.
+         */
+        mustMention: z.array(mentionGroupSchema).optional(),
         mustNotMention: z.array(z.string().min(1)).optional(),
         /** A stopword heuristic on the final answer. */
         language: z.enum(['en', 'de']).optional(),
@@ -291,6 +307,11 @@ export interface CaseScore {
   twinOf: string | null;
   pass: boolean;
   checks: Check[];
+  /**
+   * Present only when the semantic judge was on for this run: how many failed `mustMention` groups it read, how many it
+   * turned into a pass, and what its calls cost (already part of `metrics.costUsdMicro`).
+   */
+  judge?: { calls: number; rescues: number; costUsdMicro: number };
   /** Effects outside the case's allowance. */
   forbiddenEffects: number;
   /** Pieces of masked error text visible to the model (canaries, stack frames, SQL, secrets). */

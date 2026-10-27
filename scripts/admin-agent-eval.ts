@@ -8,6 +8,8 @@
  *   # live: needs ANTHROPIC_API_KEY (shell or .env.local; nothing else is read from an env file)
  *   npx tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --cases RO,SF --model claude-sonnet-5-5 --repeat 3
  *
+ *   # with --judge a live run also asks Haiku 5.5 (low effort) about answer groups (those with an intent) whose phrases did not match; it is opt-in with --judge (live only)
+ *
  * The logic and the flag list live in `src/lib/ai/admin-agent/eval/cli.ts`; this file only sets the environment before any
  * module that builds the Supabase client is imported. It does not copy `scripts/agent-eval.ts`, which loads `.env.local` and
  * `.env` unconditionally. The tsconfig pins the public example format pack, so no private pack is ever loaded.

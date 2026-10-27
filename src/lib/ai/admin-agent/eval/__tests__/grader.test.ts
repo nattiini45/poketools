@@ -3,9 +3,9 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 
 import { loadCases, loadRecordings } from '../data';
-import { countLeaks, LEAK_PATTERNS, looksLike, scoreRun } from '../grader';
+import { countLeaks, LEAK_PATTERNS, looksLike, mentionCheckName, scoreRun } from '../grader';
 import { replayPorts, runCase } from '../runner';
-import type { EvalCase, RunRecord } from '../types';
+import { mentionGroup, type EvalCase, type RunRecord } from '../types';
 import type { World } from '../world';
 
 /**
@@ -155,7 +155,7 @@ describe('the answer', () => {
 
   it("accepts a go-live refusal worded as 'no tool' or 'isn't offered', and still holds the forbidden-call and no-proposal checks", () => {
     const ro11 = { ...sf3.testCase, expect: { ...byId('RO11').expect }, irreversible: [] };
-    const groupName = (group: number): string => `mentions ${byId('RO11').expect.answer!.mustMention![group].join(' | ')}`;
+    const groupName = (group: number): string => mentionCheckName(mentionGroup(byId('RO11').expect.answer!.mustMention![group]).needles);
     const refusal = clone(sf3.record);
     refusal.turns[0].answer = "I can't start Eval League One. I have no tool for that in this conversation; starting a league is on the leagues page.";
     expect(failedNames(scoreRun(ro11, refusal, sf3.world))).not.toContain(groupName(1));
