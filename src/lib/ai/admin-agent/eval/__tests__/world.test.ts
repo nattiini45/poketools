@@ -40,6 +40,20 @@ function calls(world: World): Array<[string, Record<string, unknown>]> {
     ['engine_support', {}],
     ['resolve_date', { anchor: 'today' }],
     ['resolve_date', { anchor: 'weekday', weekday: 'monday', relation: 'next' }],
+    ['format_catalog', { query: 'gen 9 ou' }],
+    ['format_catalog', { gen: 9, source: 'showdown' }],
+    ['ruleset_preset_get', { preset: 'gen9ou' }],
+    ['ruleset_preset_get', { preset: 'gen9ou', tour_overlay: true }],
+    ['ruleset_preset_get', { preset: 'gen1nothing' }],
+    ['ruleset_build_preview', { base_preset: 'gen9ou', edits: [{ category: 'pokemon', action: 'ban', ids: ['kingambit'] }] }],
+    ['ruleset_build_preview', { base_preset: 'gen9ou', tour_overlay: true, clauses_add: ['sleepclausemod'] }],
+    ['ruleset_build_preview', { blank_gen: 9 }],
+    ['ruleset_build_preview', { base_preset: 'gen1nothing' }],
+    ['outward_effects_preview', { action: 'start_phase' }],
+    ['outward_effects_preview', { action: 'publish_ruleset', league_id: l1 }],
+    ['tournament_list', {}],
+    ['tournament_create_preview', { name: 'Quick Cup', bracket_type: 'single_elim', ruleset_id: world.rulesets[0].versionId, best_of_default: 3, is_doubles: false, team_visibility: 'hidden_until_match' }],
+    ['tournament_create_preview', { name: 'Quick Cup', bracket_type: 'single_elim', ruleset_id: evalUuid('ruleset-version', 'missing'), best_of_default: 3, is_doubles: false, team_visibility: 'hidden_until_match' }],
   ];
 }
 
@@ -67,6 +81,33 @@ describe('the baseline world', () => {
     const tool = getToolDefinition(name) as RunnableTool;
     const checked = tool.output.safeParse((result as { data: unknown }).data);
     expect(checked.success, checked.success ? '' : JSON.stringify(checked.error.issues.slice(0, 3))).toBe(true);
+  });
+
+  it('answers a tournament preview for a published version and refuses an unknown one with the guard code', () => {
+    const body = { name: 'Quick Cup', bracket_type: 'single_elim', best_of_default: 3, is_doubles: false, team_visibility: 'hidden_until_match' };
+    const known = answerRead(context(world), 'tournament_create_preview', { ...body, ruleset_id: world.rulesets[0].versionId }) as { data: { valid: boolean; ruleset: { label: string } | null; effects: string[] } };
+    expect(known.data).toMatchObject({ valid: true, ruleset: { label: world.rulesets[0].preset } });
+    expect(known.data.effects).toEqual(['public_immediately']);
+    const unknown = answerRead(context(world), 'tournament_create_preview', { ...body, ruleset_id: evalUuid('ruleset-version', 'missing') }) as { data: { valid: boolean; blockers: Array<{ code: string }> } };
+    expect(unknown.data.valid).toBe(false);
+    expect(unknown.data.blockers.map((b) => b.code)).toEqual(['ruleset_not_found']);
+    const scoped = answerRead(context(buildWorld('baseline', 'league_admin')), 'tournament_create_preview', { ...body, ruleset_id: world.rulesets[0].versionId }) as { data: { effects: string[] } };
+    expect(scoped.data.effects).toContain('creator_becomes_admin');
+  });
+
+  it('runs the catalog and preview code of the registry: the preset exists, a ban shows up as a change, a miss is reported', () => {
+    const preset = answerRead(context(world), 'ruleset_preset_get', { preset: 'gen9ou' }) as { data: { found: boolean; preset: { id: string } } };
+    expect(preset.data).toMatchObject({ found: true, preset: { id: 'gen9ou' } });
+    expect((answerRead(context(world), 'ruleset_preset_get', { preset: 'gen1nothing' }) as { data: { found: boolean } }).data.found).toBe(false);
+    const build = answerRead(context(world), 'ruleset_build_preview', { base_preset: 'gen9ou', edits: [{ category: 'pokemon', action: 'ban', ids: ['kingambit'] }] }) as {
+      data: { built: boolean; changes_vs_base: { categories: Array<{ category: string; added: string[] }> } };
+    };
+    expect(build.data.built).toBe(true);
+    expect(build.data.changes_vs_base.categories.find((c) => c.category === 'pokemon')?.added).toContain('kingambit');
+    const catalog = answerRead(context(world), 'format_catalog', { query: 'gen 9 ou' }) as { data: { presets: { items: Array<{ id: string }> } } };
+    expect(catalog.data.presets.items.map((p) => p.id)).toContain('gen9ou');
+    const outward = answerRead(context(world), 'outward_effects_preview', { action: 'start_phase' }) as { data: { channels: string; posts_outward: boolean } };
+    expect(outward.data).toMatchObject({ channels: 'cannot_say', posts_outward: true });
   });
 
   it('leaves the reads it does not model to the caller (null)', () => {

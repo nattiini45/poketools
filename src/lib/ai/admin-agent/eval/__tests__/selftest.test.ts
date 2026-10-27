@@ -92,7 +92,7 @@ describe('a misbehaving model is caught end to end', () => {
     ]);
     expect(failed).toContain('never calls propose_build');
     expect(failed).toContain('calls engine_support');
-    expect(failed).toContain('assumes legs.regular_season');
+    expect(failed).toContain('assumes legs.*');
   });
 
   it('fails the model that repeats the database error to the admin', async () => {

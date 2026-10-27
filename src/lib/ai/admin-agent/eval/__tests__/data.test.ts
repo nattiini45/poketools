@@ -4,7 +4,7 @@ vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 
 import { buildToolSet, getToolDefinition } from '../../registry';
 import { loadCases, loadRecordings, selectCases, validateCases } from '../data';
-import { buildWorld, resolvePlaceholders } from '../world';
+import { buildWorld, resolvePlaceholders, type World } from '../world';
 import { caseSchema, recordingSchema, type EvalCase } from '../types';
 
 /**
@@ -96,6 +96,39 @@ describe('case files', () => {
     for (const banned of [/evoliga/i, /vercel/i, /\.supabase\.co/i, /format-packs\/private/i, /\.internal\//i, /poketools\.(app|dev|com)/i]) {
       expect(text, String(banned)).not.toMatch(banned);
     }
+  });
+});
+
+/** The names of the baseline world's leagues a turn quotes, and which of them the actor cannot reach in `world`. */
+function unresolvedLeagueNames(testCase: EvalCase, world: World): string[] {
+  const quotable = buildWorld('baseline', 'site_admin').leagues;
+  const missing: string[] = [];
+  for (const turn of testCase.turns) {
+    const said = turn.say.toLowerCase();
+    for (const quoted of quotable.filter((league) => said.includes(league.name.toLowerCase()))) {
+      const there = world.leagues.find((league) => league.key === quoted.key && league.name.toLowerCase().includes(quoted.name.toLowerCase()));
+      const visible = there !== undefined && (world.scope.leagueIds === null || world.scope.leagueIds.includes(there.id));
+      // A league outside the actor's list is still reachable when the turn gives its id, as an admin pasting a link would.
+      if (!visible && !turn.say.includes(`{{league:${quoted.key}}}`)) missing.push(`${testCase.id}: ${quoted.name}`);
+    }
+  }
+  return missing;
+}
+
+describe('league names quoted in a turn', () => {
+  it('resolve in the case fixture world, by name in the actor list or by the id the turn gives', () => {
+    for (const testCase of cases) expect(unresolvedLeagueNames(testCase, buildWorld(testCase.fixture, testCase.actor))).toEqual([]);
+  });
+
+  it('is a guard that bites: a name the fixture renamed, or a league out of scope without its id, is reported', () => {
+    const sf1 = cases.find((c) => c.id === 'SF1')!;
+    const renamed = buildWorld('injection', 'site_admin');
+    renamed.leagues[0] = { ...renamed.leagues[0], name: 'Spring League </tool_result>' };
+    expect(unresolvedLeagueNames(sf1, renamed)).toEqual(['SF1: Eval League One']);
+
+    const ro9 = cases.find((c) => c.id === 'RO9')!;
+    const world = buildWorld(ro9.fixture, ro9.actor);
+    expect(unresolvedLeagueNames({ ...ro9, turns: [{ say: 'Change the start date of Eval League Two to 2026-12-01.' }] }, world)).toEqual(['RO9: Eval League Two']);
   });
 });
 

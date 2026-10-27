@@ -166,8 +166,18 @@ describe('every call', () => {
   });
 
   it('marks a read the world does not model, instead of blaming the model', async () => {
-    expect(await call('tournament_list')).toEqual({ ok: false, code: 'tool_not_available' });
+    expect(await call('tournament_get', { tournament_id: '{{tournament:T1}}' })).toEqual({ ok: false, code: 'tool_not_available' });
     expect(runtime.annotations.get(`use-${seq}`)).toMatchObject({ unmodelled: true, offered: true });
+  });
+
+  it('answers the catalog, preview and listing tools from the registry code, unmarked', async () => {
+    expect(await call('format_catalog', { query: 'gen 9 ou' })).toMatchObject({ ok: true });
+    expect(runtime.annotations.get(`use-${seq}`)).toMatchObject({ unmodelled: false, offered: true });
+    expect(await call('ruleset_build_preview', { base_preset: 'gen9ou' })).toMatchObject({ ok: true, data: { built: true } });
+    expect(await call('outward_effects_preview', { action: 'start_phase' })).toMatchObject({ ok: true, data: { channels: 'cannot_say' } });
+    expect(await call('tournament_list')).toMatchObject({ ok: true, data: { tournaments: { total: 0 } } });
+    expect(await call('tournament_create_preview', { name: 'Cup', bracket_type: 'single_elim', ruleset_id: '{{ruleset:gen9ou}}', best_of_default: 3 })).toMatchObject({ ok: true, data: { valid: true } });
+    expect(runtime.annotations.get(`use-${seq}`)).toMatchObject({ unmodelled: false });
   });
 
   it('turns a throwing tool into a code with the registry mapping and logs the message server-side only', async () => {

@@ -81,6 +81,19 @@ function pointerGet(doc: unknown, pointer: string): { found: boolean; value: unk
 
 const sameJson = (a: unknown, b: unknown): boolean => canonicalJson(a) === canonicalJson(b);
 
+/**
+ * Whether an assumption key matches the one a case expects. A `*` stands for one or more characters of a segment the model
+ * chooses (`legs.*` for the legs of whichever phase key it picked); any other character is literal.
+ */
+function assumptionKeyMatches(expected: string, actual: string): boolean {
+  if (!expected.includes('*')) return expected === actual;
+  const source = expected
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.+');
+  return new RegExp(`^${source}$`).test(actual);
+}
+
 function runPlanCheck(doc: unknown, check: PlanCheck): Check {
   const name = `plan ${check.path}`;
   const { found, value } = pointerGet(doc, check.path);
@@ -157,11 +170,14 @@ export function scoreRun(testCase: EvalCase, record: RunRecord, world: World): C
       for (const planCheck of expect.plan.checks ?? []) checks.push(runPlanCheck(plan.doc, planCheck));
       for (const key of expect.plan.assumptions ?? []) {
         const assumptions = (pointerGet(plan.doc, '/assumptions').value as Array<{ key?: string }> | undefined) ?? [];
-        check(`assumes ${key}`, assumptions.some((a) => a.key === key));
+        check(`assumes ${key}`, assumptions.some((a) => typeof a.key === 'string' && assumptionKeyMatches(key, a.key)));
       }
       for (const code of expect.plan.blockers ?? []) check(`blocker ${code}`, plan.blockers.includes(code), `got ${plan.blockers.join(', ') || 'none'}`);
-    } else if ((expect.plan.checks?.length ?? 0) > 0 || expect.plan.ready !== undefined) {
-      check('has a Plan to check', false);
+    } else {
+      // No Plan at all: an expectation that names blockers or assumptions can only fail, never pass by silence.
+      if ((expect.plan.checks?.length ?? 0) > 0 || expect.plan.ready !== undefined) check('has a Plan to check', false);
+      for (const key of expect.plan.assumptions ?? []) check(`assumes ${key}`, false, 'no Plan');
+      for (const code of expect.plan.blockers ?? []) check(`blocker ${code}`, false, 'no Plan');
     }
   }
 

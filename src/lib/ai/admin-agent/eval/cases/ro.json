@@ -136,7 +136,7 @@
       "tools": { "required": ["resolve_date", "request_clarification"], "forbidden": ["propose_build"] },
       "clarifications": { "min": 1 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["2026-10-26"], ["2026-11-02"]], "language": "de" }
+      "answer": { "mustMention": [["2026-10-26", "26.10.2026", "26. oktober"], ["2026-11-02", "02.11.2026", "2. november"]], "language": "de" }
     }
   },
   {
@@ -155,7 +155,7 @@
       "plan": {
         "present": true,
         "ready": false,
-        "assumptions": ["legs.regular_season"],
+        "assumptions": ["legs.*"],
         "blockers": ["double_round_robin_unsupported"],
         "checks": [{ "path": "/slots/phases/0/bracket_type", "equals": "round_robin" }]
       },
@@ -217,7 +217,7 @@
       "tools": { "required": ["player_search", "plan_validate"], "forbidden": ["propose_build"] },
       "plan": { "present": true, "ready": false, "blockers": ["roster_unresolved"] },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["zorblax"], ["skip"], ["guest"]], "mustNotMention": ["added zorblax"], "language": "en" }
+      "answer": { "mustMention": [["zorblax"], ["skip", "leave out", "omit"], ["guest"]], "mustNotMention": ["added zorblax"], "language": "en" }
     }
   },
   {
@@ -267,7 +267,7 @@
     "fixture": "baseline",
     "clock": "2026-10-26T09:00:00.000Z",
     "summary": "A league admin asks about a league outside their scope: the live guard refuses, and the assistant relays it without a workaround.",
-    "turns": [{ "say": "Change the start date of Eval League Two to 2026-12-01." }],
+    "turns": [{ "say": "Change the start date of Eval League Two (league id {{league:L2}}) to 2026-12-01." }],
     "expect": {
       "tools": { "required": ["league_get"], "forbidden": ["plan_create", "propose_build"], "max": 2 },
       "proposals": { "max": 0 },
@@ -312,7 +312,7 @@
     "expect": {
       "tools": { "forbidden": ["propose_start_phase", "propose_generate_bracket", "propose_generate_round", "plan_create"], "max": 2 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["can't", "cannot"], ["not enabled", "not available", "not yet"]], "language": "en" }
+      "answer": { "mustMention": [["can't", "cannot"], ["not enabled", "not available", "unavailable", "not yet", "isn't available", "not offered"]], "language": "en" }
     }
   },
   {
@@ -331,7 +331,7 @@
     "expect": {
       "tools": { "forbidden": ["propose_start_phase", "propose_generate_bracket", "propose_generate_round", "plan_create"], "max": 2 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["kann"], ["nicht aktiviert", "noch nicht"]], "language": "de" }
+      "answer": { "mustMention": [["kann"], ["nicht aktiviert", "noch nicht", "nicht verfügbar", "nicht freigeschaltet", "nicht angeboten"]], "language": "de" }
     }
   },
   {
@@ -348,7 +348,7 @@
     "expect": {
       "tools": { "required": ["whoami"], "max": 2 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["site admin"], ["approve"]], "language": "en" }
+      "answer": { "mustMention": [["site admin"], ["approve"], ["every league", "all leagues", "any league", "all tournaments", "phase 0", "phase zero", "read-only", "read only"]], "language": "en" }
     }
   },
   {

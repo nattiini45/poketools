@@ -93,6 +93,26 @@ describe('plan and proposals', () => {
     expect(failedNames(scoreRun(ro1.testCase, blocked, ro1.world))).toContain('Plan ready is true');
   });
 
+  it('fails an expected blocker or assumption when there is no Plan at all, instead of passing by silence', () => {
+    const none = clone(ro1.record);
+    none.plan = null;
+    const wanting: EvalCase = { ...ro1.testCase, expect: { ...ro1.testCase.expect, plan: { blockers: ['roster_unresolved'], assumptions: ['legs.*'] } } };
+    expect(failedNames(scoreRun(wanting, none, ro1.world))).toEqual(expect.arrayContaining(['blocker roster_unresolved', 'assumes legs.*']));
+  });
+
+  it('matches an assumption key with a * wildcard for the segment the model chose, and only then', () => {
+    const record = clone(ro1.record);
+    const doc = record.plan!.doc as { assumptions?: Array<{ key: string }> };
+    doc.assumptions = [{ key: 'legs.regular_season' }];
+    const expecting = (key: string): EvalCase => ({ ...ro1.testCase, expect: { ...ro1.testCase.expect, plan: { assumptions: [key] } } });
+    expect(failedNames(scoreRun(expecting('legs.*'), record, ro1.world))).not.toContain('assumes legs.*');
+    expect(failedNames(scoreRun(expecting('legs.regular_season'), record, ro1.world))).not.toContain('assumes legs.regular_season');
+    expect(failedNames(scoreRun(expecting('legs.playoffs'), record, ro1.world))).toContain('assumes legs.playoffs');
+    expect(failedNames(scoreRun(expecting('rounds.*'), record, ro1.world))).toContain('assumes rounds.*');
+    doc.assumptions = [{ key: 'legsXregular' }];
+    expect(failedNames(scoreRun(expecting('legs.*'), record, ro1.world))).toContain('assumes legs.*');
+  });
+
   it('resolves world placeholders in the expectations before it compares', () => {
     const record = clone(ro1.record);
     (record.plan!.doc as { slots: { ruleset: { version_id: string } } }).slots.ruleset.version_id = ro1.world.rulesets[1].versionId;
