@@ -475,7 +475,7 @@ export default function DraftToolClient({
         ix={ix}
         stale={snap.stale}
         authBlocked={snap.authBlocked}
-        makeupSeconds={dto?.config.makeup_seconds ?? null}
+        makeupSeconds={dto?.pool.mode === 'live' ? dto.config.makeup_seconds : null}
         extensionBusy={extensionBusy}
         draftButtonRef={draftButtonRef}
         draftBarButtonRef={draftBarButtonRef}

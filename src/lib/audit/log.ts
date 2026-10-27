@@ -116,6 +116,8 @@ export type AuditAction =
   | 'point_buy_list.deactivate'
   | 'draft.pick.on_behalf'
   | 'draft.pick_order.free'
+  | 'draft.pool.delete'
+  | 'draft.order.roll'
   // Actions of a pack extension's own routes (docs/format-packs.md, "Pack extensions"). They have
   // no `auditActions` label: the extension labels them (`auditActionLabels`, localized), and the
   // audit log humanizes any it leaves out (`auditActionLabel`).

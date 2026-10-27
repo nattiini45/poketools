@@ -52,6 +52,11 @@ export default {
     noLines: 'You have no lines yet.',
     confirmTitle: 'Buy a Draft Kill Token for {line}?',
     confirmBody: '{cost} points are spent permanently. +1 evolution progress, never a KO.',
+    /** A participation line: its one token counts as several against the player's limit. */
+    confirmBodyMulti:
+      '{cost} points are spent permanently, and this token counts as {tokens} tokens against your limit. +1 evolution progress, never a KO.',
+    countsAs: 'Counts as {tokens} tokens against your limit.',
+    allowanceShort: 'Counts as {tokens} tokens, but you only have {left} left.',
     confirm: 'Buy token',
   },
   /** Why a line cannot get a Draft Kill Token right now (`draft_kill.lines[].reason`). */

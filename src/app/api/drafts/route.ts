@@ -8,9 +8,17 @@ import { draftErrorResponse } from '@/lib/draft/http';
 import { getDefaultRounds } from '@/lib/draft/engine';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import { defaultPickOrder, isPickOrderAllowed, isTurnEnforced } from '@/lib/draft/pool-format';
+import { seasonRosterIds } from '@/lib/draft/pool-roster';
 import { computeRedraftSeats } from '@/lib/draft/redraft-order';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
-import { createQueueDraftSchema, uuidSchema } from '@/lib/draft/schemas';
+import { drawSeatOrder } from '@/lib/draft/seat-draw';
+import {
+  createQueueDraftSchema,
+  DRAFT_CONFIG_LIMITS,
+  invalidDraftConfigField,
+  uuidSchema,
+  type DraftConfigCore,
+} from '@/lib/draft/schemas';
 import { defaultRedraftDeadline, isValidQuietHours } from '@/lib/draft/time';
 import { draftQuietHours } from '@/lib/format-pack';
 import { expireDraftReads } from '@/lib/revalidation';
@@ -29,7 +37,7 @@ import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { getGroupFirstHalfTables } from '@/lib/tournament/group-first-half';
 import type { ApiResponse, ApiResult } from '@/types/api';
 import type { DraftPool, DraftPoolWithDetails } from '@/types/draft';
-import type { AdminPoolSummary } from '@/types/draft-queue';
+import { DEFAULT_DRAFT_CONFIG, DEFAULT_SLOW_PICK_SECONDS, type AdminPoolSummary, type DraftConfigInput } from '@/types/draft-queue';
 import { draftPoolCreateSchema, formatZodErrors } from '@/lib/validation';
 import type { SeasonGroupWithMembers } from '@/types/season-group';
 
@@ -164,27 +172,64 @@ function packQuietHoursConfig(): { start_hour: number; end_hour: number; time_zo
 }
 
 /**
+ * The pool's clock settings as the request leaves them: a slow draft that names no pick time gets the slow default,
+ * because the SQL default (300 s) is below the slow minimum (`DRAFT_CONFIG_LIMITS.pick_seconds.slow`).
+ */
+function withSlowPickDefault(config: DraftConfigInput): DraftConfigInput {
+  return config.mode === 'slow' && config.pick_seconds === undefined
+    ? { ...config, pick_seconds: DEFAULT_SLOW_PICK_SECONDS }
+    : config;
+}
+
+/**
+ * The fields of the request that depend on each other, as the new pool will hold them. Only what the request names is
+ * judged: the engine defaults for the clock (live 300 s, slow 43 200 s) stand in for an omitted pick time, while an
+ * omitted roster size, budget or make-up time cannot be refused (the roster size and budget default from the season's
+ * format rules in SQL, which this route does not load), and a Redraft line cap is checked against the roster size only
+ * when the request names both. `PATCH /api/drafts/[id]/config` checks the stored config the same way
+ * (`invalidDraftConfigField`).
+ */
+function createdCore(config: DraftConfigInput): DraftConfigCore {
+  const mode = config.mode ?? DEFAULT_DRAFT_CONFIG.mode;
+  const pick = config.pick_seconds ?? DEFAULT_DRAFT_CONFIG.pick_seconds;
+  return {
+    mode,
+    // In-range stand-ins for what the request omits: they never decide the outcome.
+    roster_size: config.roster_size ?? DRAFT_CONFIG_LIMITS.roster_size.max,
+    budget: config.budget ?? DRAFT_CONFIG_LIMITS.budget.min,
+    pick_seconds: pick,
+    makeup_seconds: config.makeup_seconds ?? Math.min(DEFAULT_DRAFT_CONFIG.makeup_seconds, pick),
+    slow_ladder_seconds: config.slow_ladder_seconds ?? [...DEFAULT_DRAFT_CONFIG.slow_ladder_seconds],
+    redraft_max_lines: config.roster_size === undefined ? null : (config.redraft_max_lines ?? null),
+  };
+}
+
+/**
  * Queue-engine creation (EPB seasons): `draft_create_pool` freezes config and
  * seats and logs `draft_configured` (actor + new state). The pool's quiet hours
  * come from the format pack (`packQuietHoursConfig`), for initial and redraft pools.
+ * The config is checked as a whole before anything is written (`INVALID_CONFIG {field}`), and an Initial pool
+ * without an admin order is seated by a random draw (`drawSeatOrder`), not in database row order.
  */
 async function createQueuePool(
   input: CreateGroupQueueDraftInput,
   actorId: string,
   group: SeasonGroupWithMembers | null,
 ): Promise<NextResponse> {
-  const { participant_order: order, ...config } = input.config ?? {};
+  const { participant_order: order, ...requested } = input.config ?? {};
+  const config = { ...withSlowPickDefault(requested) };
+  const invalidField = invalidDraftConfigField(createdCore(config));
+  if (invalidField) throw new DraftRuleError('INVALID_CONFIG', { field: invalidField });
+
   const groupMembers = group ? new Set(group.player_ids) : null;
-  /** The seats' roster: the season's participants, or the group's members in the season's roster order. */
-  const rosterIds = async (): Promise<string[]> => {
-    const ids = (await getSeasonParticipants(input.season_id)).map((p) => p.id);
-    return groupMembers ? ids.filter((id) => groupMembers.has(id)) : ids;
-  };
+  /** The seats' roster: the season's participants, or the group's members (the group is already loaded). */
+  const rosterIds = (): Promise<string[]> => seasonRosterIds(input.season_id, groupMembers);
   let seats: Seat[];
 
   if (input.kind === 'initial') {
     const ids = await rosterIds();
-    seats = order ? seatsFromOrder(new Set(ids), order) : ids.map((player_id, index) => ({ player_id, seat: index + 1 }));
+    // An admin order wins; otherwise the opening order is drawn (a group's pool draws within the group).
+    seats = seatsFromOrder(new Set(ids), order ?? drawSeatOrder(ids));
   } else {
     if (order) {
       seats = seatsFromOrder(new Set(await rosterIds()), order);

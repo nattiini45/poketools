@@ -24,7 +24,10 @@ const TEAM_ROLE_CATEGORIES = [
 ] as const;
 const POWER_TIERS = ['S', 'A', 'B', 'C'] as const;
 const COMEBACK_EARN_WINDOWS = ['season', 'first_half'] as const satisfies readonly ComebackEarnWindow[];
-/** Upper bound of `participationPoints.comebackTokensPerProgress` (a sanity cap, not a league value). */
+/**
+ * Upper bound of `participationPoints.comebackTokensPerProgress` and `participationPoints.draftKillTokensPerProgress`
+ * (a sanity cap, not a league value).
+ */
 const MAX_COMEBACK_TOKENS_PER_PROGRESS = 10;
 /** The singles tier hierarchy (`TierKey`, src/types/ruleset.ts). */
 const TIER_KEYS = ['ZU', 'PU', 'PUBL', 'NU', 'NUBL', 'RU', 'RUBL', 'UU', 'UUBL', 'OU', 'Uber', 'AG'] as const satisfies readonly TierKey[];
@@ -205,6 +208,7 @@ const formatPackSchema = z
             locksRedraft: z.boolean(),
             awardNote: nonEmpty,
             comebackTokensPerProgress: z.number().int().min(1).max(MAX_COMEBACK_TOKENS_PER_PROGRESS),
+            draftKillTokensPerProgress: z.number().int().min(1).max(MAX_COMEBACK_TOKENS_PER_PROGRESS).optional(),
           })
           .strict(),
         draftClock: z.object({ quietHours: quietHours.nullable() }).strict(),

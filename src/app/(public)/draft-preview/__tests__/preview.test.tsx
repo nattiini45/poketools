@@ -555,6 +555,20 @@ describe('fake AdminDraftActions (in memory, bumps state_version)', () => {
     expect(overview.ok && overview.data.comeback.spend_open).toBe(true);
   });
 
+  it('rolls the seat order: the same seats, handed out again, with a new state version', async () => {
+    const admin = build('admin-panel');
+    const src = createFakeDataSource({ ...admin.init, latencyMs: 0 });
+    const before = await src.fetchSnapshot(null, signal);
+    if (before.kind !== 'full') throw new Error('no snapshot');
+    const rolled = await src.rollOrder();
+    expect(rolled.ok && rolled.data.state_version).toBeGreaterThan(before.dto.state_version);
+    const after = await src.fetchSnapshot(null, signal);
+    if (after.kind !== 'full') throw new Error('no snapshot');
+    const seats = (dto: typeof before.dto) => dto.participants.map((p) => p.seat).sort((a, b) => a - b);
+    expect(seats(after.dto)).toEqual(seats(before.dto));
+    expect(after.dto.participants.map((p) => p.player_id).sort()).toEqual(before.dto.participants.map((p) => p.player_id).sort());
+  });
+
   it('answers the audit query from the fixture rows', async () => {
     const s = build('admin-audit');
     const entries = s.init.audit ?? [];

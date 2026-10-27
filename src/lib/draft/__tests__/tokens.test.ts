@@ -95,6 +95,7 @@ describe('draftKillLineRefusal (SQL order of epb_purchase_draft_token)', () => {
     window: 'open' as const,
     owned: 0,
     max: 2,
+    tokensUsed: 1,
     lineHasToken: false,
     unspentPoints: 5,
     cost: 5,
@@ -111,6 +112,7 @@ describe('draftKillLineRefusal (SQL order of epb_purchase_draft_token)', () => {
       window: 'closed' as const,
       owned: 2,
       max: 2,
+      tokensUsed: 1,
       lineHasToken: true,
       unspentPoints: 2,
       cost: 5,
@@ -133,6 +135,34 @@ describe('draftKillLineRefusal (SQL order of epb_purchase_draft_token)', () => {
     const max = epbPack.defaults.tokenMax;
     expect(draftKillLineRefusal({ ...eligible, max, owned: max - 1 })).toBeNull();
     expect(draftKillLineRefusal({ ...eligible, max, owned: max })).toBe('TOKEN_PLAYER_LIMIT');
+  });
+
+  describe('a participation line (its one token counts as several and costs several times the price)', () => {
+    // Pack-agnostic: a line at rate 2 and base price 3 (cost 6), against a player cap of 2.
+    const line = { ...eligible, max: 2, tokensUsed: 2, cost: 6, unspentPoints: 6 };
+
+    it('is eligible with the whole allowance and the scaled price to spare', () => {
+      expect(draftKillLineRefusal(line)).toBeNull();
+    });
+
+    it('counts tokensUsed against the allowance: one token left is not enough for a 2-token line', () => {
+      expect(draftKillLineRefusal({ ...line, owned: 1 })).toBe('TOKEN_PLAYER_LIMIT');
+      expect(draftKillLineRefusal({ ...eligible, max: 2, owned: 1 })).toBeNull();
+    });
+
+    it('checks the scaled price against the unspent points', () => {
+      expect(draftKillLineRefusal({ ...line, unspentPoints: 5 })).toBe('TOKEN_POINTS_SHORT');
+      expect(draftKillLineRefusal({ ...line, unspentPoints: 6 })).toBeNull();
+    });
+
+    it('keeps the refusal order: allowance before the one-token-per-line rule before points', () => {
+      expect(draftKillLineRefusal({ ...line, owned: 1, lineHasToken: true, unspentPoints: 0 })).toBe('TOKEN_PLAYER_LIMIT');
+      expect(draftKillLineRefusal({ ...line, lineHasToken: true, unspentPoints: 0 })).toBe('TOKEN_LINE_LIMIT');
+    });
+
+    it('still never evolves a line (progress is +1 whatever the weight)', () => {
+      expect(draftKillLineRefusal({ ...line, totalProgress: 1, nextThreshold: 2 })).toBe('TOKEN_WOULD_EVOLVE');
+    });
   });
 });
 

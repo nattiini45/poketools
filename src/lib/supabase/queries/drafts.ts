@@ -20,7 +20,9 @@ import type {
   DraftPhase,
   PauseReason,
 } from '@/types/draft-queue';
+import { DELETABLE_QUEUE_PHASES, isDeletableQueuePhase } from '@/types/draft-queue';
 import type { GroupedPoolSummary } from '@/types/season-group';
+import { DraftRuleError } from '@/lib/draft/errors';
 
 type DraftPoolRow = Tables<'draft_pools'>;
 type DraftPickRow = Tables<'draft_picks'>;
@@ -396,27 +398,57 @@ export async function switchDraftPoolToFreeOrder(id: string): Promise<DraftPool 
 }
 
 /**
- * Legacy pools: only while pending. Queue-engine pools: only in phase
+ * Legacy pools: only while pending (the DELETE filters on the status too). Queue-engine pools: only in phase
  * `setup` or `cancelled` (design decision); `draft_cancel` writes
  * status 'complete' with phase 'cancelled', so the phase decides, not the status.
+ *
+ * The read is only a fast refusal. The DELETE filters on the phase (queue) or the status (legacy) itself and counts the
+ * rows it removed, so a Start that lands between the read and the DELETE (a second admin, a double click) deletes
+ * nothing and answers `409 POOL_NOT_DELETABLE` (queue: with the phase as re-read); without the filter it would
+ * cascade a started draft's picks and slots away.
  */
 export async function deleteDraftPool(id: string): Promise<void> {
   const pool = await getDraftPoolById(id);
   if (!pool) throw new Error('Draft pool not found');
   if (pool.engine === 'queue') {
-    if (pool.phase !== 'setup' && pool.phase !== 'cancelled') {
-      throw new Error('Can only delete queue draft pools in setup or cancelled phase');
+    if (!isDeletableQueuePhase(pool.phase)) {
+      // A Start between the route's read and this one: the same catalogued 409 as the filtered DELETE below.
+      throw new DraftRuleError('POOL_NOT_DELETABLE', undefined, { phase: pool.phase });
     }
-  } else if (pool.status !== 'pending') {
-    throw new Error('Can only delete draft pools in pending status');
+    const { data, error } = await supabase
+      .from('draft_pools')
+      .delete()
+      .eq('id', id)
+      .in('phase', [...DELETABLE_QUEUE_PHASES])
+      .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) await refuseLostDeleteRace(id, true);
+    return;
+  }
+  if (pool.status !== 'pending') {
+    throw new DraftRuleError('POOL_NOT_DELETABLE');
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('draft_pools')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('id');
 
   if (error) throw error;
+  if (!data || data.length === 0) await refuseLostDeleteRace(id, false);
+}
+
+/**
+ * The DELETE removed no row: the pool was started (or deleted) after `deleteDraftPool` read it. Re-reads the pool and
+ * refuses with `POOL_NOT_FOUND` if it is gone, otherwise with `POOL_NOT_DELETABLE`. Only a queue pool's phase is
+ * rendered as `detail.phase`; a legacy pool carries the column default there, so it is left out.
+ */
+async function refuseLostDeleteRace(id: string, queue: boolean): Promise<never> {
+  const current = await getDraftPoolById(id);
+  if (!current) throw new DraftRuleError('POOL_NOT_FOUND');
+  throw new DraftRuleError('POOL_NOT_DELETABLE', undefined, queue ? { phase: current.phase } : undefined);
 }
 
 // ─── Draft Picks ────────────────────────────────────────────────────

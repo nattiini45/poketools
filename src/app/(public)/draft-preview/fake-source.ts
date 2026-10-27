@@ -505,22 +505,25 @@ export function createFakeDataSource(init: FakeSourceInit): FakeDataSource {
       const dk = current.draft_kill;
       const row = dk.lines.find((l) => l.line_id === lineId);
       if (dk.window !== 'open') return wait<ApiCall<TokenOverviewDTO>>({ ok: false, error: fail('TOKEN_WINDOW_CLOSED') });
-      if (dk.owned >= dk.max) return wait<ApiCall<TokenOverviewDTO>>({ ok: false, error: fail('TOKEN_PLAYER_LIMIT', { max: dk.max }) });
+      // A participation line's token counts as several against the limit and costs that many times the price.
+      const tokensUsed = row?.tokens_used ?? 1;
+      const cost = row?.cost ?? dk.cost;
+      if (dk.owned + tokensUsed > dk.max) return wait<ApiCall<TokenOverviewDTO>>({ ok: false, error: fail('TOKEN_PLAYER_LIMIT', { max: dk.max }) });
       if (!row || !row.eligible) {
         return wait<ApiCall<TokenOverviewDTO>>({ ok: false, error: fail(row?.reason ?? 'TOKEN_LINE_LIMIT') });
       }
-      if (dk.unspent_points < dk.cost) {
+      if (dk.unspent_points < cost) {
         return wait<ApiCall<TokenOverviewDTO>>({
           ok: false,
-          error: fail('TOKEN_POINTS_SHORT', { needed: dk.cost, remaining: dk.unspent_points }),
+          error: fail('TOKEN_POINTS_SHORT', { needed: cost, remaining: dk.unspent_points }),
         });
       }
       tokens = {
         ...current,
         draft_kill: {
           ...dk,
-          owned: dk.owned + 1,
-          unspent_points: dk.unspent_points - dk.cost,
+          owned: dk.owned + tokensUsed,
+          unspent_points: dk.unspent_points - cost,
           lines: dk.lines.map((l) =>
             l.line_id === lineId ? { ...l, has_token: true, progress: l.progress + 1, eligible: false, reason: 'TOKEN_LINE_LIMIT' } : l,
           ),
@@ -808,6 +811,23 @@ export function createFakeDataSource(init: FakeSourceInit): FakeDataSource {
 
     audit(query: AuditQuery): Promise<ApiCall<AuditPage>> {
       return wait<ApiCall<AuditPage>>({ ok: true, data: { entries: filterAudit(audit, query), next_cursor: null } });
+    },
+
+    // The preview has no pool to remove: it answers like the route does (`{ success: true, data: null }`).
+    deletePool(): Promise<ApiCall<null>> {
+      return wait<ApiCall<null>>({ ok: true, data: null });
+    },
+
+    // The preview draws in the browser (the route draws on the server): the same seats, handed out in a new order.
+    rollOrder() {
+      return write((d) => {
+        const seats = d.participants.map((p) => p.seat).sort((a, b) => a - b);
+        for (let i = seats.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [seats[i], seats[j]] = [seats[j], seats[i]];
+        }
+        return { ...d, participants: d.participants.map((p, i) => ({ ...p, seat: seats[i] })) };
+      });
     },
   };
 }

@@ -13,7 +13,9 @@
  *   token per progress point); the stepper moves in whole progress points.
  * - `visibleRefusal`: which Draft Kill Token refusal a line row shows; the
  *   window and the per-player limit are shown once on the card instead, and a
- *   line that already has its token shows a badge.
+ *   line that already has its token shows a badge. A line whose token counts as
+ *   several (`tokens_used` > 1) shows the allowance refusal itself while the
+ *   player still has some tokens left, because the card-level note does not apply.
  */
 import type { DraftLineCatalog, DraftLineCatalogEntry } from '@/lib/draft-finder/line-catalog';
 import type { LineId, TokenOverviewDTO, TokenRefusalCode } from '@/types/draft-queue';
@@ -158,24 +160,38 @@ export function maxForLine(counts: ReadonlyMap<LineId, number>, lineId: LineId, 
 
 /**
  * The refusal a Draft Kill Token row shows, or null. The window states and
- * the per-player limit are card-level messages, so the rows do not repeat them.
+ * the per-player limit are card-level messages, so the rows do not repeat them,
+ * except a line whose token counts as several: it can exceed the allowance while
+ * the player still owns fewer than `max` (the card shows no limit note then).
  */
-export function visibleRefusal(line: DraftKillLine): TokenRefusalCode | null {
+export function visibleRefusal(
+  line: DraftKillLine,
+  dk?: Pick<TokenOverviewDTO['draft_kill'], 'owned' | 'max'>,
+): TokenRefusalCode | null {
   if (line.eligible || line.reason === null || line.has_token) return null;
-  if (line.reason === 'TOKEN_WINDOW_CLOSED' || line.reason === 'TOKEN_PLAYER_LIMIT') return null;
+  if (line.reason === 'TOKEN_WINDOW_CLOSED') return null;
+  if (line.reason === 'TOKEN_PLAYER_LIMIT') {
+    return dk !== undefined && line.tokens_used > 1 && dk.owned < dk.max ? line.reason : null;
+  }
   return line.reason;
 }
 
-/** Params for `draft/tokens.reason.<code>`, all from the DTO. */
+/**
+ * Params for `draft/tokens.reason.<code>`, all from the DTO. `cost` is the line's own price (a
+ * participation line costs several times the base price), `tokens` what its token counts as and
+ * `left` the tokens the player may still use.
+ */
 export function refusalParams(
   line: DraftKillLine,
-  dk: Pick<TokenOverviewDTO['draft_kill'], 'cost' | 'max' | 'unspent_points'>,
-): { progress: number; next: number; max: number; cost: number; unspent: number } {
+  dk: Pick<TokenOverviewDTO['draft_kill'], 'max' | 'owned' | 'unspent_points'>,
+): { progress: number; next: number; max: number; cost: number; unspent: number; tokens: number; left: number } {
   return {
     progress: line.progress,
     next: line.next_threshold ?? line.progress,
     max: dk.max,
-    cost: dk.cost,
+    cost: line.cost,
     unspent: dk.unspent_points,
+    tokens: line.tokens_used,
+    left: Math.max(0, dk.max - dk.owned),
   };
 }

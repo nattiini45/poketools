@@ -16,6 +16,7 @@ import {
   comebackTokensFromTable,
   comebackTokensPerProgress,
   definePackEn,
+  draftKillTokensPerProgress,
   draftQuietHours,
   epbLineRuleForBase,
   formatPack,
@@ -166,6 +167,9 @@ describe('schema rules reject broken packs', () => {
     ['fractional tokens per progress', ['epb', 'participationPoints', 'comebackTokensPerProgress'], 1.5, 'epb.participationPoints.comebackTokensPerProgress'],
     ['tokens per progress above the cap', ['epb', 'participationPoints', 'comebackTokensPerProgress'], 11, 'epb.participationPoints.comebackTokensPerProgress'],
     ['missing tokens per progress', ['epb', 'participationPoints', 'comebackTokensPerProgress'], DELETE, 'epb.participationPoints.comebackTokensPerProgress'],
+    ['zero draft kill tokens per progress', ['epb', 'participationPoints', 'draftKillTokensPerProgress'], 0, 'epb.participationPoints.draftKillTokensPerProgress'],
+    ['fractional draft kill tokens per progress', ['epb', 'participationPoints', 'draftKillTokensPerProgress'], 1.5, 'epb.participationPoints.draftKillTokensPerProgress'],
+    ['draft kill tokens per progress above the cap', ['epb', 'participationPoints', 'draftKillTokensPerProgress'], 11, 'epb.participationPoints.draftKillTokensPerProgress'],
     ['missing draft clock', ['epb', 'draftClock'], DELETE, 'epb.draftClock'],
     ['missing quiet hours (null is required for "off")', ['epb', 'draftClock', 'quietHours'], DELETE, 'epb.draftClock.quietHours'],
     ['empty quiet window', ['epb', 'draftClock', 'quietHours'], { startHour: 6, endHour: 6, timeZone: 'Europe/Berlin' }, 'epb.draftClock.quietHours.endHour'],
@@ -223,6 +227,9 @@ describe('schema accepts the new pack fields', () => {
   it.each([
     ['first-half comeback window', ['epb', 'comeback', 'earnWindow'], 'first_half'],
     ['2 tokens per progress', ['epb', 'participationPoints', 'comebackTokensPerProgress'], 2],
+    ['2 draft kill tokens per progress', ['epb', 'participationPoints', 'draftKillTokensPerProgress'], 2],
+    ['10 draft kill tokens per progress (the cap)', ['epb', 'participationPoints', 'draftKillTokensPerProgress'], 10],
+    ['no draft kill rate (falls back to the comeback rate)', ['epb', 'participationPoints', 'draftKillTokensPerProgress'], DELETE],
     ['a quiet window', ['epb', 'draftClock', 'quietHours'], { startHour: 0, endHour: 6, timeZone: 'Europe/Berlin' }],
     ['a quiet window up to midnight', ['epb', 'draftClock', 'quietHours'], { startHour: 23, endHour: 24, timeZone: 'UTC' }],
     ['the longest quiet window (23 h)', ['epb', 'draftClock', 'quietHours'], { startHour: 1, endHour: 24, timeZone: 'UTC' }],
@@ -259,6 +266,12 @@ describe('accessors (example pack values)', () => {
     expect(comebackTokensPerProgress(true)).toBe(1);
     expect(comebackTokensPerProgress(false)).toBe(1);
     expect(draftQuietHours()).toBeNull();
+  });
+
+  it('draft kill tokens per progress: the pack value (comeback rate when unset) on a participation line, else 1', () => {
+    const pp = formatPack.epb.participationPoints;
+    expect(draftKillTokensPerProgress(false)).toBe(1);
+    expect(draftKillTokensPerProgress(true)).toBe(pp.draftKillTokensPerProgress ?? pp.comebackTokensPerProgress);
   });
 
   it('utility labels fall back to English, then to the key', () => {

@@ -66,6 +66,7 @@ export default defineDe<typeof en>()({
     you: 'Du',
     pickAria: 'Pick {pick}: {player}',
     makeupAria: 'Nachhol-Pick {pick}: {player}, {time}',
+    makeupAriaNoTime: 'Nachhol-Pick {pick}: {player}',
     roundBreak: 'Runde {round}',
   },
   players: {

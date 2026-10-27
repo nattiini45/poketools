@@ -53,9 +53,9 @@ function draftKill(overrides: Partial<DraftKill> = {}): DraftKill {
     owned: 0,
     unspent_points: 7,
     lines: [
-      { line_id: CHAR, has_token: false, progress: 2, next_threshold: 3, eligible: false, reason: 'TOKEN_WOULD_EVOLVE' },
-      { line_id: GASTLY, has_token: false, progress: 0, next_threshold: 3, eligible: true, reason: null },
-      { line_id: PARTICIPATION, has_token: true, progress: 4, next_threshold: 5, eligible: false, reason: 'TOKEN_LINE_LIMIT' },
+      { line_id: CHAR, has_token: false, tokens_used: 1, cost: 5, progress: 2, next_threshold: 3, eligible: false, reason: 'TOKEN_WOULD_EVOLVE' },
+      { line_id: GASTLY, has_token: false, tokens_used: 1, cost: 5, progress: 0, next_threshold: 3, eligible: true, reason: null },
+      { line_id: PARTICIPATION, has_token: true, tokens_used: 1, cost: 5, progress: 4, next_threshold: 5, eligible: false, reason: 'TOKEN_LINE_LIMIT' },
     ],
     ...overrides,
   };
@@ -168,6 +168,8 @@ describe('DraftKillTokenCard', () => {
       lines: codes.map((reason, i) => ({
         line_id: `l${i}--x` as LineId,
         has_token: false,
+        tokens_used: 1,
+        cost: 5,
         progress: 2,
         next_threshold: 3,
         eligible: false,
@@ -192,6 +194,57 @@ describe('DraftKillTokenCard', () => {
 
     const limit = plain(renderWithI18n(<DraftKillTokenCard data={draftKill({ owned: 1 })} catalog={CATALOG} readOnly={false} onBuy={noop} />));
     expect(limit).toContain('Maximum of 1 per player reached.');
+  });
+
+  describe('a participation line whose token counts as 2 tokens at twice the price', () => {
+    const doubled = (overrides: Partial<DraftKill['lines'][number]> = {}, card: Partial<DraftKill> = {}) =>
+      draftKill({
+        max: 2,
+        unspent_points: 20,
+        lines: [
+          { line_id: GASTLY, has_token: false, tokens_used: 1, cost: 5, progress: 0, next_threshold: 3, eligible: true, reason: null },
+          { line_id: PARTICIPATION, has_token: false, tokens_used: 2, cost: 10, progress: 0, next_threshold: 5, eligible: true, reason: null, ...overrides },
+        ],
+        ...card,
+      });
+
+    it('shows the doubled price on its button and says it counts as 2 tokens (EN)', () => {
+      const html = plain(renderWithI18n(<DraftKillTokenCard data={doubled()} catalog={CATALOG} readOnly={false} onBuy={noop} />));
+      expect(html).toContain('Buy for 10 P');
+      expect(html).toContain('Buy for 5 P');
+      expect(html).toContain('Counts as 2 tokens against your limit.');
+      expect(html.match(/Counts as 2 tokens/g)).toHaveLength(1);
+    });
+
+    it('says it in German too', () => {
+      const html = plain(
+        renderWithI18n(<DraftKillTokenCard data={doubled()} catalog={CATALOG} readOnly={false} onBuy={noop} />, { locale: 'de' }),
+      );
+      expect(html).toContain('Für 10 P kaufen');
+      expect(html).toContain('Zählt als 2 Tokens auf dein Limit.');
+    });
+
+    it('with one token left it shows why that line cannot be bought (the card-level limit note is not there yet)', () => {
+      const data = doubled({ eligible: false, reason: 'TOKEN_PLAYER_LIMIT' }, { owned: 1 });
+      const html = renderWithI18n(<DraftKillTokenCard data={data} catalog={CATALOG} readOnly={false} onBuy={noop} />);
+      expect(html).toContain('data-reason="TOKEN_PLAYER_LIMIT"');
+      expect(plain(html)).toContain('Counts as 2 tokens, but you only have 1 left.');
+      expect(plain(html)).not.toContain('Maximum of 2 per player reached.');
+      const de = plain(renderWithI18n(<DraftKillTokenCard data={data} catalog={CATALOG} readOnly={false} onBuy={noop} />, { locale: 'de' }));
+      expect(de).toContain('Zählt als 2 Tokens, aber du hast nur noch 1 übrig.');
+    });
+
+    it('at the cap the limit is said once on the card, not on the row', () => {
+      const data = doubled({ eligible: false, reason: 'TOKEN_PLAYER_LIMIT' }, { owned: 2 });
+      const html = renderWithI18n(<DraftKillTokenCard data={data} catalog={CATALOG} readOnly={false} onBuy={noop} />);
+      expect(html).not.toContain('data-reason="TOKEN_PLAYER_LIMIT"');
+      expect(plain(html)).toContain('Maximum of 2 per player reached.');
+    });
+
+    it('a line that is not doubled shows no "counts as" note', () => {
+      const html = plain(renderWithI18n(<DraftKillTokenCard data={draftKill()} catalog={CATALOG} readOnly={false} onBuy={noop} />));
+      expect(html).not.toContain('Counts as');
+    });
   });
 
   it('the read-only admin view has no buy buttons', () => {

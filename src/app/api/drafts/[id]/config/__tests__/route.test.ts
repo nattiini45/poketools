@@ -89,6 +89,19 @@ describe('PATCH /api/drafts/[id]/config', () => {
     expect(await res.json()).toMatchObject({ code: 'INVALID_CONFIG', params: { field: 'makeup_seconds' } });
   });
 
+  it('does not hold a slow draft to the make-up rules: the ladder times every slot', async () => {
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...storedPool, mode: 'slow', pick_seconds: 43_200, makeup_seconds: 20 } as never);
+    const res = await patch({ roster_size: 8 });
+    expect(res.status).toBe(200);
+    expect(callDraftRpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('still checks the pick time of a slow draft', async () => {
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...storedPool, mode: 'slow', pick_seconds: 300 } as never);
+    const res = await patch({ roster_size: 8 });
+    expect(await res.json()).toMatchObject({ code: 'INVALID_CONFIG', params: { field: 'pick_seconds' } });
+  });
+
   it('maps participant_order to seats (only player ids) and leaves it out of the patch', async () => {
     await patch({ participant_order: [B, A] });
 

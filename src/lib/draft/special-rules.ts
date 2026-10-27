@@ -9,7 +9,7 @@
  * are DB data and keep their names (`STORED_FLAG`).
  */
 
-import { comebackTokensPerProgress, epbLineRuleForBase, epbPack } from '@/lib/format-pack';
+import { comebackTokensPerProgress, draftKillTokensPerProgress, epbLineRuleForBase, epbPack } from '@/lib/format-pack';
 import type { SpecialRules } from '@/types/point-buy';
 
 // ── Line Identification ───────────────────────────────────────────
@@ -112,8 +112,9 @@ export function handleInstantFinalStage(
 // A participation line earns participation tokens, `participationPoints.perMatchday` per
 // matchday the line was brought, i.e. in the player's registered team or in the match's battle
 // data (progress-engine awardCosmoPoint). Comeback Tokens convert to its progress at the
-// pack's `participationPoints.comebackTokensPerProgress`; every other source, and every
-// other line, is 1:1.
+// pack's `participationPoints.comebackTokensPerProgress`, and its one Draft Kill Token counts
+// as (and costs) `participationPoints.draftKillTokensPerProgress` tokens for +1 progress
+// (default: the comeback rate); every other source, and every other line, is 1:1.
 
 /**
  * Comeback Tokens one progress point costs on a line: the pack's participation-line rate for a
@@ -122,6 +123,16 @@ export function handleInstantFinalStage(
  */
 export function comebackTokensPerProgressOf(entryOrBase: string | CosmogLineRef): number {
   return comebackTokensPerProgress(isCosmogLine(entryOrBase));
+}
+
+/**
+ * Draft Kill Tokens one progress point costs on a line: the pack's participation-line rate for a
+ * participation line (`isCosmogLine`), else 1. The purchase counts as this many tokens against the
+ * player's allowance and costs this many times the point price; it still adds +1 progress. The
+ * only TS source of the rate; the purchase RPC receives it per request.
+ */
+export function draftKillTokensPerProgressOf(entryOrBase: string | CosmogLineRef): number {
+  return draftKillTokensPerProgress(isCosmogLine(entryOrBase));
 }
 
 /**

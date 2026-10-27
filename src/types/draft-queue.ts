@@ -22,6 +22,17 @@ export type DraftKind = 'initial' | 'redraft';
 export type DraftMode = 'live' | 'slow';
 export type DraftPhase = 'setup' | 'submissions' | 'drafting' | 'complete' | 'cancelled';
 export type PoolStatus = 'pending' | 'in_progress' | 'complete';
+
+/**
+ * Queue-engine phases in which a pool may still be deleted (design decision). The one list behind
+ * `DELETE /api/drafts/[id]`, `deleteDraftPool` (pre-check and DELETE filter) and the admin UI's `draftDeletable`.
+ */
+export const DELETABLE_QUEUE_PHASES = ['setup', 'cancelled'] as const satisfies readonly DraftPhase[];
+
+/** True for a queue-pool phase in `DELETABLE_QUEUE_PHASES`. */
+export function isDeletableQueuePhase(phase: DraftPhase): boolean {
+  return (DELETABLE_QUEUE_PHASES as readonly DraftPhase[]).includes(phase);
+}
 export type SlotKind = 'normal' | 'makeup';
 export type SlotStatus = 'pending' | 'active' | 'done' | 'timed_out' | 'blocked' | 'forfeited';
 export type ExtensionKind = 'plus120' | 'plus60';
@@ -138,6 +149,9 @@ export type DraftConfigDefaults = Readonly<
     extension_seconds: readonly [number, number];
   }
 >;
+/** A slow draft's default pick time (12 h, §7.1). The live default (`DEFAULT_DRAFT_CONFIG.pick_seconds`) is below the slow minimum. */
+export const DEFAULT_SLOW_PICK_SECONDS = 43_200;
+
 /** Deep-frozen (DC-0): the arrays are shared, so copy them (`[...x]`) before handing one out. */
 export const DEFAULT_DRAFT_CONFIG: DraftConfigDefaults = Object.freeze({
   mode: 'live',
@@ -374,15 +388,23 @@ export interface TokenOverviewDTO {
   draft_kill: {
     window: 'before' | 'open' | 'closed';
     cutoff_at: string | null;
-    /** 3 */
+    /** Points per Draft Kill Token (3); a participation line costs `lines[].tokens_used` times this. */
     cost: number;
     /** 2 */
     max: number;
+    /** Tokens used against `max`: the sum of the purchases' `tokens_used`, plus legacy grant tokens. */
     owned: number;
     unspent_points: number;
     lines: {
       line_id: LineId;
       has_token: boolean;
+      /**
+       * Tokens this line's one purchase counts as against `max` (1; the pack's rate on a participation line). A line
+       * that holds a token reports the stored purchase's `tokens_used`; a line without one, the pack's current rate.
+       */
+      tokens_used: number;
+      /** Points this line's purchase costs (`tokens_used` times `draft_kill.cost`); a held line: the stored `points_spent`. */
+      cost: number;
       progress: number;
       next_threshold: number | null;
       eligible: boolean;

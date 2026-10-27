@@ -36,6 +36,7 @@ import type { RoomAdminTab } from '@/components/draft-admin/RoomAdminSheet';
 import {
   comebackEarnWindow,
   comebackTokensPerProgress,
+  draftKillTokensPerProgress,
   epbPack,
   lineOverrideFor,
   priceGroupForPrice,
@@ -709,9 +710,12 @@ function tokenOverview(now: number, window: 'before' | 'open' | 'closed', comeba
       lines: own.map((p, i) => {
         const participates = p.line_id === participation;
         const hasToken = firstHasToken && i === 0;
+        const tokensUsed = draftKillTokensPerProgress(participates);
         return {
           line_id: p.line_id,
           has_token: hasToken,
+          tokens_used: tokensUsed,
+          cost: tokensUsed * tokenRatio,
           progress: hasToken ? 1 : 0,
           next_threshold: nextThreshold(p.line_id),
           eligible: window === 'open' && !hasToken && !participates,

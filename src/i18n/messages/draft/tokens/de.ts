@@ -40,6 +40,10 @@ export default defineDe<typeof en>()({
     noLines: 'Du hast noch keine Linien.',
     confirmTitle: 'Draft-Kill-Token für {line} kaufen?',
     confirmBody: '{cost} Punkte werden dauerhaft ausgegeben. +1 Entwicklungsfortschritt, nie ein KO.',
+    confirmBodyMulti:
+      '{cost} Punkte werden dauerhaft ausgegeben, und dieses Token zählt als {tokens} Tokens auf dein Limit. +1 Entwicklungsfortschritt, nie ein KO.',
+    countsAs: 'Zählt als {tokens} Tokens auf dein Limit.',
+    allowanceShort: 'Zählt als {tokens} Tokens, aber du hast nur noch {left} übrig.',
     confirm: 'Token kaufen',
   },
   reason: {

@@ -75,6 +75,16 @@ export interface AdminDraftActions {
   setComebackOpen(open: boolean): Promise<ApiCall<{ open: boolean }>>;
   /** BE #15 (read). */
   audit(query: AuditQuery): Promise<ApiCall<AuditPage>>;
+  /**
+   * `DELETE /api/drafts/[id]`: removes a pool that has not started (initial draft in `setup`, or a cancelled one).
+   * The route answers `{ success: true, data: null }`; a pool that started meanwhile answers `409 POOL_NOT_DELETABLE`.
+   */
+  deletePool(): Promise<ApiCall<null>>;
+  /**
+   * `POST /api/drafts/[id]/roll-order`: the server draws a new random seat order for an Initial draft in setup and
+   * saves it (no body, no input). Callers `refresh()` to read the new seats.
+   */
+  rollOrder(): Promise<ApiCall<StateVersion>>;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -104,7 +114,7 @@ type Accept<T> = (data: unknown) => data is T;
 /** Sends one request; `{ success: true, data }` + 2xx + a matching shape is the only success. */
 export async function adminCall<T>(
   url: string,
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   body: unknown,
   accept: Accept<T>,
 ): Promise<ApiCall<T>> {
@@ -140,6 +150,11 @@ function isPublishResult(v: unknown): v is StateVersion & { drops: number } {
 
 function isPoolCreated(v: unknown): v is { pool_id: string } {
   return isRecord(v) && typeof v.pool_id === 'string';
+}
+
+/** A route that answers `{ success: true, data: null }` (e.g. the pool DELETE). */
+function isNullResult(v: unknown): v is null {
+  return v === null;
 }
 
 function isOpenResult(v: unknown): v is { open: boolean } {
@@ -262,6 +277,12 @@ export function createAdminDraftActions(
     },
     audit(query) {
       return adminCall(`${base}/audit?${auditQueryString(query)}`, 'GET', undefined, isAuditPage);
+    },
+    deletePool() {
+      return adminCall(base, 'DELETE', undefined, isNullResult);
+    },
+    rollOrder() {
+      return post(`${base}/roll-order`, {}, isStateVersion);
     },
   };
 }

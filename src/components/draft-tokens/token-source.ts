@@ -56,6 +56,8 @@ function isDraftKill(v: unknown): v is TokenOverviewDTO['draft_kill'] {
         isRecord(l) &&
         typeof l.line_id === 'string' &&
         typeof l.has_token === 'boolean' &&
+        isPositiveInt(l.tokens_used) &&
+        isNumber(l.cost) &&
         isNumber(l.progress) &&
         isNullableNumber(l.next_threshold) &&
         typeof l.eligible === 'boolean' &&

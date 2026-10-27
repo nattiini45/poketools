@@ -27,7 +27,8 @@ export default defineDe<typeof en>()({
       'Diese Teilnehmer sind nach dem Aufteilen dazugekommen. Die Liga hat schon Runden, deshalb können sie keiner Gruppe mehr beitreten.',
     minSizeHint: 'Eine Gruppe behält mindestens {min} Trainer, deshalb kann hier niemand wechseln.',
     lockedBadge: 'Hat einen Draft',
-    lockedHint: 'Diese Gruppe hat einen Draft: Niemand kommt hinzu oder wechselt heraus, außer der Draft wird abgebrochen.',
+    lockedHint:
+      'Diese Gruppe hat einen Draft: Niemand kommt hinzu oder wechselt heraus, außer der Draft wird gelöscht (solange er noch nicht gestartet ist) oder abgebrochen.',
     members: { one: '{count} Trainer', other: '{count} Trainer' },
     noMembers: 'Noch keine Trainer.',
     seed: '#{seed}',

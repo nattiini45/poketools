@@ -27,6 +27,7 @@ vi.mock('@/lib/supabase/queries/drafts', () => ({
 }));
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 
 // ─── Imports (after mocks) ──────────────────────────────────────────
 
@@ -40,6 +41,10 @@ import {
 } from '@/lib/supabase/queries/drafts';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { revalidateTag } from 'next/cache';
+import { logAuditEvent } from '@/lib/audit/log';
+import { DraftRuleError } from '@/lib/draft/errors';
+
+const ADMIN = { playerId: 'admin-1', name: 'Misty', isAdmin: true };
 
 // ─── Helpers ─���──────────────────────────────────────────────────────
 
@@ -232,7 +237,7 @@ describe('DELETE /api/drafts/[id]', () => {
   });
 
   it('deletes pool successfully', async () => {
-    vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getDraftPoolById).mockResolvedValue(mockPool as never);
     vi.mocked(deleteDraftPool).mockResolvedValue(undefined as never);
 
@@ -260,7 +265,7 @@ describe('DELETE /api/drafts/[id]', () => {
   it.each(['submissions', 'drafting', 'complete'])(
     'refuses a queue pool in phase %s with 409 POOL_NOT_DELETABLE',
     async (phase) => {
-      vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
       vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'queue', phase } as never);
 
       const res = await DELETE({} as NextRequest, routeParams);
@@ -278,7 +283,7 @@ describe('DELETE /api/drafts/[id]', () => {
   // Route-level: deleteDraftPool is mocked here; its own queue rule (setup or
   // cancelled, whatever the status) is tested in queries/__tests__/drafts.test.ts.
   it.each(['setup', 'cancelled'])('deletes a queue pool in phase %s', async (phase) => {
-    vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'queue', phase } as never);
     vi.mocked(deleteDraftPool).mockResolvedValue(undefined as never);
 
@@ -290,7 +295,7 @@ describe('DELETE /api/drafts/[id]', () => {
   });
 
   it('keeps the legacy behaviour for a legacy pool whatever its phase column says', async () => {
-    vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', phase: 'drafting' } as never);
     vi.mocked(deleteDraftPool).mockResolvedValue(undefined as never);
 
@@ -309,7 +314,7 @@ describe('DELETE /api/drafts/[id]', () => {
   }
 
   it('maps a redraft-child foreign-key violation (23503) to 409 POOL_HAS_REDRAFT', async () => {
-    vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'queue', phase: 'cancelled' } as never);
     vi.mocked(deleteDraftPool).mockRejectedValue(fkViolation('draft_pools_parent_pool_id_fkey', 'draft_pools'));
 
@@ -322,7 +327,7 @@ describe('DELETE /api/drafts/[id]', () => {
   });
 
   it('maps a teams-linked pool (fk_teams_draft_pool, 23503) to 409 POOL_HAS_TEAMS, not POOL_HAS_REDRAFT', async () => {
-    vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', status: 'pending' } as never);
     vi.mocked(deleteDraftPool).mockRejectedValue(fkViolation('fk_teams_draft_pool', 'teams'));
 
@@ -335,7 +340,7 @@ describe('DELETE /api/drafts/[id]', () => {
   });
 
   it('does not map a 23503 from an unknown constraint to a refusal code', async () => {
-    vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'queue', phase: 'cancelled' } as never);
     vi.mocked(deleteDraftPool).mockRejectedValue(fkViolation('some_future_fkey', 'some_table'));
 
@@ -348,8 +353,75 @@ describe('DELETE /api/drafts/[id]', () => {
     expect(revalidateTag).not.toHaveBeenCalled();
   });
 
+  it('audits a successful delete as draft.pool.delete with the pool’s league, group, phase and kind', async () => {
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getDraftPoolById).mockResolvedValue({
+      ...mockPool,
+      engine: 'queue',
+      phase: 'setup',
+      kind: 'initial',
+      season_group_id: 'group-1',
+    } as never);
+    vi.mocked(deleteDraftPool).mockResolvedValue(undefined as never);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect(res.status).toBe(200);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledWith({
+      actor_id: 'admin-1',
+      actor_name: 'Misty',
+      action: 'draft.pool.delete',
+      resource_type: 'draft_pool',
+      resource_id: 'pool-1',
+      metadata: { season_id: 'season-1', season_group_id: 'group-1', phase: 'setup', kind: 'initial' },
+    });
+  });
+
+  it('records a null group for a pool without one', async () => {
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'queue', phase: 'cancelled', kind: 'initial' } as never);
+    vi.mocked(deleteDraftPool).mockResolvedValue(undefined as never);
+
+    await DELETE({} as NextRequest, routeParams);
+
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ season_group_id: null, phase: 'cancelled' }) }),
+    );
+  });
+
+  it('writes no audit entry when the delete is refused (phase on read, or a refusing foreign key)', async () => {
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'queue', phase: 'drafting' } as never);
+    await DELETE({} as NextRequest, routeParams);
+
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'queue', phase: 'setup' } as never);
+    vi.mocked(deleteDraftPool).mockRejectedValue(
+      Object.assign(new Error('violates foreign key constraint "fk_teams_draft_pool" on table "teams"'), { code: '23503' }),
+    );
+    await DELETE({} as NextRequest, routeParams);
+
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  // The race: the read said `setup`, then Start landed before the DELETE. The query's phase-filtered DELETE removes
+  // nothing and throws the catalogued refusal, which the route answers as 409 without audit or cache expiry.
+  it('answers 409 POOL_NOT_DELETABLE with the new phase when the phase changed between the read and the delete', async () => {
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'queue', phase: 'setup', kind: 'initial' } as never);
+    vi.mocked(deleteDraftPool).mockRejectedValue(new DraftRuleError('POOL_NOT_DELETABLE', undefined, { phase: 'drafting' }));
+
+    const res = await DELETE({} as NextRequest, routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json).toMatchObject({ success: false, code: 'POOL_NOT_DELETABLE', detail: { phase: 'drafting' } });
+    expect(logAuditEvent).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
   it('returns safe fallback on delete failure', async () => {
-    vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireDraftAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(deleteDraftPool).mockRejectedValue(new Error('Pool has existing picks'));
 
     const res = await DELETE({} as NextRequest, routeParams);

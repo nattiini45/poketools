@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { DraftRuleError } from '@/lib/draft/errors';
 
 // ── Supabase mock ──────────────────────────────────────────────────
 const chainMethods = [
@@ -468,12 +469,8 @@ describe('queries/drafts — pools', () => {
     it('deletes a pending pool', async () => {
       // getDraftPoolById chain: .from.select.eq.maybeSingle
       mockBuilder.maybeSingle.mockResolvedValueOnce({ data: draftPoolRow, error: null });
-      // delete chain: .from.delete.eq — use mockReturnValueOnce so
-      // the first .eq (in getDraftPoolById) returns mockBuilder for chaining,
-      // and the second .eq (in the delete) returns { error: null }.
-      mockBuilder.eq
-        .mockReturnValueOnce(mockBuilder)       // getDraftPoolById .eq('id', id) -> chain
-        .mockReturnValueOnce({ error: null });   // delete .eq('id', id) -> terminal
+      // delete chain: .from.delete.eq('id').eq('status').select('id'); select #1 is getDraftPoolById's
+      mockBuilder.select.mockReturnValueOnce(mockBuilder).mockReturnValueOnce({ data: [{ id: 'dp-1' }], error: null });
 
       await expect(deleteDraftPool('dp-1')).resolves.toBeUndefined();
     });
@@ -488,34 +485,133 @@ describe('queries/drafts — pools', () => {
         data: { ...draftPoolRow, status: 'in_progress' },
         error: null,
       });
-      await expect(deleteDraftPool('dp-1')).rejects.toThrow('pending status');
+      // A Start between the route's read and this one: the catalogued 409, not a bare Error (a 500).
+      const err = await deleteDraftPool('dp-1').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(DraftRuleError);
+      expect(err).toMatchObject({ code: 'POOL_NOT_DELETABLE', statusCode: 409 });
+      expect(mockBuilder.delete).not.toHaveBeenCalled();
     });
+
+    it.each(['submissions', 'drafting', 'complete'] as const)(
+      'refuses a queue pool that moved to %s before this read with POOL_NOT_DELETABLE and its phase, deleting nothing',
+      async (phase) => {
+        mockBuilder.maybeSingle.mockResolvedValueOnce({
+          data: { ...draftPoolRow, engine: 'queue', phase, status: 'in_progress' },
+          error: null,
+        });
+
+        const err = await deleteDraftPool('dp-1').catch((e: unknown) => e);
+
+        expect(err).toBeInstanceOf(DraftRuleError);
+        expect(err).toMatchObject({ code: 'POOL_NOT_DELETABLE', statusCode: 409, detail: { phase } });
+        expect(mockBuilder.delete).not.toHaveBeenCalled();
+      },
+    );
 
     it('deletes a cancelled queue pool even though draft_cancel set its status to complete', async () => {
       mockBuilder.maybeSingle.mockResolvedValueOnce({
         data: { ...draftPoolRow, engine: 'queue', phase: 'cancelled', status: 'complete' },
         error: null,
       });
-      mockBuilder.eq
-        .mockReturnValueOnce(mockBuilder)
-        .mockReturnValueOnce({ error: null });
+      // select #1 is getDraftPoolById's; select #2 ends the DELETE ... RETURNING chain
+      mockBuilder.select.mockReturnValueOnce(mockBuilder).mockReturnValueOnce({ data: [{ id: 'dp-1' }], error: null });
       await expect(deleteDraftPool('dp-1')).resolves.toBeUndefined();
     });
 
-    it('refuses a queue pool that is drafting', async () => {
+    it('a queue pool’s DELETE filters on the deletable phases itself and returns the rows it removed', async () => {
       mockBuilder.maybeSingle.mockResolvedValueOnce({
-        data: { ...draftPoolRow, engine: 'queue', phase: 'drafting', status: 'in_progress' },
+        data: { ...draftPoolRow, engine: 'queue', phase: 'setup', status: 'pending' },
         error: null,
       });
-      await expect(deleteDraftPool('dp-1')).rejects.toThrow('setup or cancelled');
+      mockBuilder.select.mockReturnValueOnce(mockBuilder).mockReturnValueOnce({ data: [{ id: 'dp-1' }], error: null });
+
+      await deleteDraftPool('dp-1');
+
+      expect(mockBuilder.delete).toHaveBeenCalledTimes(1);
+      expect(mockBuilder.in).toHaveBeenCalledWith('phase', ['setup', 'cancelled']);
+      expect(mockBuilder.select).toHaveBeenLastCalledWith('id');
+    });
+
+    it('a Start that lands between the read and the DELETE removes nothing: 409 POOL_NOT_DELETABLE with the new phase', async () => {
+      // The first read says setup; the DELETE (phase filter) matches no row; the re-read says drafting.
+      mockBuilder.maybeSingle
+        .mockResolvedValueOnce({ data: { ...draftPoolRow, engine: 'queue', phase: 'setup', status: 'pending' }, error: null })
+        .mockResolvedValueOnce({ data: { ...draftPoolRow, engine: 'queue', phase: 'drafting', status: 'in_progress' }, error: null });
+      mockBuilder.select
+        .mockReturnValueOnce(mockBuilder)
+        .mockReturnValueOnce({ data: [], error: null })
+        .mockReturnValueOnce(mockBuilder);
+
+      const err = await deleteDraftPool('dp-1').catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(DraftRuleError);
+      expect(err).toMatchObject({ code: 'POOL_NOT_DELETABLE', statusCode: 409, detail: { phase: 'drafting' } });
+    });
+
+    it('a pool deleted by someone else between the read and the DELETE answers POOL_NOT_FOUND', async () => {
+      mockBuilder.maybeSingle
+        .mockResolvedValueOnce({ data: { ...draftPoolRow, engine: 'queue', phase: 'setup', status: 'pending' }, error: null })
+        .mockResolvedValueOnce({ data: null, error: null });
+      mockBuilder.select
+        .mockReturnValueOnce(mockBuilder)
+        .mockReturnValueOnce({ data: [], error: null })
+        .mockReturnValueOnce(mockBuilder);
+
+      await expect(deleteDraftPool('dp-1')).rejects.toMatchObject({ code: 'POOL_NOT_FOUND' });
+    });
+
+    it('throws a queue DELETE error as is', async () => {
+      mockBuilder.maybeSingle.mockResolvedValueOnce({
+        data: { ...draftPoolRow, engine: 'queue', phase: 'setup', status: 'pending' },
+        error: null,
+      });
+      mockBuilder.select.mockReturnValueOnce(mockBuilder).mockReturnValueOnce({ data: null, error: new Error('fk') });
+      await expect(deleteDraftPool('dp-1')).rejects.toThrow('fk');
+    });
+
+    it('a legacy pool’s DELETE filters on the pending status itself and returns the rows it removed', async () => {
+      mockBuilder.maybeSingle.mockResolvedValueOnce({ data: draftPoolRow, error: null });
+      mockBuilder.select.mockReturnValueOnce(mockBuilder).mockReturnValueOnce({ data: [{ id: 'dp-1' }], error: null });
+
+      await deleteDraftPool('dp-1');
+
+      expect(mockBuilder.in).not.toHaveBeenCalled();
+      expect(mockBuilder.delete).toHaveBeenCalledTimes(1);
+      expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'pending');
+      expect(mockBuilder.select).toHaveBeenLastCalledWith('id');
+    });
+
+    it('a legacy pool started between the read and the DELETE removes nothing: 409 POOL_NOT_DELETABLE', async () => {
+      // The first read says pending; the DELETE (status filter) matches no row; the re-read says in progress.
+      mockBuilder.maybeSingle
+        .mockResolvedValueOnce({ data: draftPoolRow, error: null })
+        .mockResolvedValueOnce({ data: { ...draftPoolRow, status: 'in_progress' }, error: null });
+      mockBuilder.select
+        .mockReturnValueOnce(mockBuilder)
+        .mockReturnValueOnce({ data: [], error: null })
+        .mockReturnValueOnce(mockBuilder);
+
+      const err = await deleteDraftPool('dp-1').catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(DraftRuleError);
+      expect(err).toMatchObject({ code: 'POOL_NOT_DELETABLE', statusCode: 409 });
+    });
+
+    it('a legacy pool deleted by someone else between the read and the DELETE answers POOL_NOT_FOUND', async () => {
+      mockBuilder.maybeSingle
+        .mockResolvedValueOnce({ data: draftPoolRow, error: null })
+        .mockResolvedValueOnce({ data: null, error: null });
+      mockBuilder.select
+        .mockReturnValueOnce(mockBuilder)
+        .mockReturnValueOnce({ data: [], error: null })
+        .mockReturnValueOnce(mockBuilder);
+
+      await expect(deleteDraftPool('dp-1')).rejects.toMatchObject({ code: 'POOL_NOT_FOUND' });
     });
 
     it('throws on delete error', async () => {
       mockBuilder.maybeSingle.mockResolvedValueOnce({ data: draftPoolRow, error: null });
-      // First .eq (in getDraftPoolById) returns mockBuilder, second (in delete) returns error
-      mockBuilder.eq
-        .mockReturnValueOnce(mockBuilder)
-        .mockReturnValueOnce({ error: new Error('fk') });
+      mockBuilder.select.mockReturnValueOnce(mockBuilder).mockReturnValueOnce({ data: null, error: new Error('fk') });
       await expect(deleteDraftPool('dp-1')).rejects.toThrow('fk');
     });
   });

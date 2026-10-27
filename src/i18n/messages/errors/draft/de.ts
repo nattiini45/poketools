@@ -81,7 +81,7 @@ export default defineDe<typeof en>()({
   SEASON_GROUP_REQUIRED: 'Diese Liga hat Gruppen: Leg den Draft für eine ihrer Gruppen an.',
   SEASON_GROUP_INVALID: 'Diese Gruppe gehört nicht zu dieser Liga.',
   SEASON_GROUP_LOCKED:
-    'Die Gruppen lassen sich nicht ändern, solange eine Gruppe einen Draft hat. Brich diesen Draft zuerst ab und lösch ihn.',
+    'Die Gruppen lassen sich nicht ändern, solange eine Gruppe einen Draft hat. Einen Draft, der noch nicht gestartet ist, kannst du in seiner Draft-Steuerung löschen; danach lassen sich die Gruppen wieder ändern. Ein gestarteter Draft muss zuerst abgebrochen werden.',
   SEASON_GROUPS_AFTER_DRAFT:
     'Diese Liga hat schon ohne Gruppen gedraftet. Gruppen lassen sich nur vor dem ersten Draft einrichten.',
   SEASON_GROUP_MEMBERS_INVALID: 'Jedes Gruppenmitglied muss an dieser Liga teilnehmen und in genau einer Gruppe sein.',
@@ -93,11 +93,11 @@ export default defineDe<typeof en>()({
   SEASON_GROUP_SUBSTITUTION_LOCKED:
     'Die Gruppe dieses Trainers hat einen laufenden Draft (Redraft-Abgaben oder Picks), deshalb lässt er sich erst ersetzen, wenn dieser Draft abgeschlossen oder abgebrochen ist.',
   SEASON_GROUP_SEATS_STALE:
-    'Die Trainer dieser Gruppe haben sich seit dem Einrichten des Drafts geändert, deshalb passen seine Plätze nicht mehr zur Gruppe. Setze die Plätze aus den Trainern der Gruppe neu, oder lösche den Draft und lege ihn neu an.',
+    'Die Trainer dieser Gruppe haben sich seit dem Einrichten des Drafts geändert, deshalb passen seine Plätze nicht mehr zur Gruppe. Lösche den Draft, der noch nicht gestartet ist, und lege ihn neu an.',
   SEATS_INVALID: 'Die Draft-Reihenfolge ist ungültig.',
   INVALID_CONFIG: 'Ungültige Einstellung: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft-Kill-Tokens kannst du gerade nicht kaufen.',
-  TOKEN_PLAYER_LIMIT: 'Du hast bereits das Maximum von {max} Draft-Kill-Tokens.',
+  TOKEN_PLAYER_LIMIT: 'Das würde dein Limit von {max} Draft-Kill-Tokens überschreiten.',
   TOKEN_LINE_LIMIT: 'Diese Linie hat bereits ein Draft-Kill-Token.',
   TOKEN_POINTS_SHORT: 'Du brauchst {needed} freie Punkte ({remaining} übrig).',
   TOKEN_WOULD_EVOLVE:

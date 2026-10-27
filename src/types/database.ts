@@ -1602,6 +1602,7 @@ export type Database = {
           player_id: string
           points_spent: number
           season_id: string
+          tokens_used: number
           tracker_id: string | null
         }
         Insert: {
@@ -1613,6 +1614,7 @@ export type Database = {
           player_id: string
           points_spent: number
           season_id: string
+          tokens_used?: number
           tracker_id?: string | null
         }
         Update: {
@@ -1624,6 +1626,7 @@ export type Database = {
           player_id?: string
           points_spent?: number
           season_id?: string
+          tokens_used?: number
           tracker_id?: string | null
         }
         Relationships: [
@@ -5692,6 +5695,7 @@ export type Database = {
           p_next_threshold: number
           p_player_id: string
           p_season_id: string
+          p_tokens_per_progress?: number
         }
         Returns: Json
       }

@@ -156,6 +156,24 @@ describe('settings form', () => {
     expect(invalidConfigField({ ...form, redraft_max_lines: '12' }, [43_200])).toBe('redraft_max_lines');
     expect(invalidConfigField({ ...form, mode: 'slow', pick_seconds: '300' }, [43_200])).toBe('pick_seconds');
   });
+
+  it('a slow draft takes no make-up time: any value passes, the pick time still counts', () => {
+    const slow = { ...configFormFromSnapshot(dto), mode: 'slow' as const, pick_seconds: '43200' };
+    expect(invalidConfigField({ ...slow, makeup_seconds: '10' }, [43_200])).toBeNull();
+    expect(invalidConfigField({ ...slow, makeup_seconds: '' }, [43_200])).toBeNull();
+    expect(invalidConfigField({ ...slow, makeup_seconds: '10', pick_seconds: '300' }, [43_200])).toBe('pick_seconds');
+    expect(invalidConfigField({ ...slow, mode: 'live', makeup_seconds: '10' }, [43_200])).toBe('makeup_seconds');
+  });
+
+  it('a make-up value edited in live mode is not sent once the form is switched to slow', () => {
+    const initial = configFormFromSnapshot(dto);
+    for (const makeup of ['10', '', '400000']) {
+      const slow = { ...initial, mode: 'slow' as const, pick_seconds: '43200', makeup_seconds: makeup };
+      expect(configChanges(initial, slow, 'initial').config).toEqual({ mode: 'slow', pick_seconds: 43_200 });
+    }
+    // Still sent while the field is visible (live mode).
+    expect(configChanges(initial, { ...initial, makeup_seconds: '120' }, 'initial').config).toEqual({ makeup_seconds: 120 });
+  });
 });
 
 describe('availableLineIds', () => {

@@ -142,7 +142,7 @@ export default defineDe<typeof en>()({
     epbCreate: {
       intro: 'Mit dem Draft-Raum wird dieser Draft angelegt:',
       orderLabel: 'Draft-Reihenfolge',
-      order: 'Snake. Die Reihenfolge kehrt sich jede Runde um.',
+      order: 'Die Anfangsreihenfolge wird zufällig ausgelost, danach Snake: Runde 2 läuft rückwärts. Ab Runde 3 wird die Reihenfolge alle zwei Runden neu ausgelost; eine ungerade letzte Runde läuft vorwärts.',
       seatsLabel: 'Plätze',
       seats: 'Einer pro Teilnehmer.',
       pricesLabel: 'Preise',
@@ -155,8 +155,13 @@ export default defineDe<typeof en>()({
       rosterDefault: { one: '{count} Pick pro Spieler (Standardwert).', other: '{count} Picks pro Spieler (Standardwert).' },
       modeLabel: 'Modus',
       mode: { one: 'Live-Draft, {count} Minute pro Pick.', other: 'Live-Draft, {count} Minuten pro Pick.' },
+      modeSlow: {
+        one: 'Slow-Draft, anfangs {count} Stunde pro Pick; jeder verpasste Pick verkürzt die Zeit.',
+        other: 'Slow-Draft, anfangs {count} Stunden pro Pick; jeder verpasste Pick verkürzt die Zeit.',
+      },
+      modeChoiceLabel: 'Draft-Modus',
       editHint:
-        'Bis der Draft startet, kannst du Draft-Reihenfolge, Budget, Kadergröße, Modus und Timer in der Draft-Steuerung ändern.',
+        'Bis der Draft startet, kannst du Draft-Reihenfolge, Budget, Kadergröße, Modus und Timer in der Draft-Steuerung ändern; dort kannst du die Reihenfolge auch erneut auslosen. Die Plätze werden beim Erstellen aus den Trainern (bei Gruppen: der Gruppe) übernommen; um die Gruppen danach zu ändern, lösche den Draft, der noch nicht gestartet ist, und lege ihn neu an.',
       create: 'Draft-Raum erstellen',
       createFailed: 'Der Draft-Raum konnte nicht erstellt werden.',
     },

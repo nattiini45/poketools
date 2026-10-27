@@ -6,8 +6,9 @@
  * the only number shown as kills and used in public kill rankings),
  * `transferred_evo_progress`, Draft Kill Tokens (`draft_tokens`), Comeback
  * Tokens (`kill_tokens`) and Participation Tokens (`cosmo_points`). Every source is
- * 1:1 progress, except Comeback Tokens on a participation line, which cost the pack's
- * `participationPoints.comebackTokensPerProgress` tokens per progress point.
+ * 1:1 progress, except on a participation line: Comeback Tokens cost the pack's
+ * `participationPoints.comebackTokensPerProgress` tokens per progress point, and its one Draft Kill Token
+ * counts as (and costs) `participationPoints.draftKillTokensPerProgress` tokens for +1 progress.
  * League tuning (participation amount, comeback table and earn window, stage lock) comes
  * from the format pack (`@/lib/format-pack`).
  */
@@ -47,7 +48,12 @@ import {
 import { getCosmoMatchdays } from '@/lib/supabase/queries/progress-log';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { DraftRuleError } from '@/lib/draft/errors';
-import { comebackTokensPerProgressOf, isCosmogLine, shouldAwardCosmoPoint } from '@/lib/draft/special-rules';
+import {
+  comebackTokensPerProgressOf,
+  draftKillTokensPerProgressOf,
+  isCosmogLine,
+  shouldAwardCosmoPoint,
+} from '@/lib/draft/special-rules';
 import { computeKillTokens, shouldSuspend, suspensionEndMatchday } from '@/lib/draft/point-buy-engine';
 import { comebackEarnWindow, epbPack } from '@/lib/format-pack';
 import { hasLineupEvidence, isLineBrought, type MatchLineupEvidence } from '@/lib/draft/epb-team-validation';
@@ -143,18 +149,35 @@ export async function applyProgress(
 // ── Draft Kill Tokens ─────────────────────────────────────────────
 
 /**
+ * Draft Kill Tokens the line's one purchase counts as: the season's point-buy list entry (its stored
+ * participation flag), else the pack's line rule for the tracker's base (the token overview's resolution).
+ */
+async function draftKillRateOf(pointBuyListId: string | null, lineId: string, trackerBase: string): Promise<number> {
+  if (pointBuyListId) {
+    const entry = (await getListEntries(pointBuyListId)).find((e) => lineIdOfEntry(e) === lineId);
+    if (entry) return draftKillTokensPerProgressOf(entry);
+  }
+  return draftKillTokensPerProgressOf(trackerBase);
+}
+
+/**
  * Buy one Draft Kill Token for an owned line:
  * +1 progress for the season's token ratio in points, within the per-player and
- * per-line limits, never triggers an evolution, points never come back. The rules
- * are re-checked by the `epb_purchase_draft_token` RPC under the season lock; this
- * wrapper supplies the line's next cumulative threshold (league overrides of the
- * format pack applied). A purchase never evolves a line, so no stage recheck.
+ * per-line limits, never triggers an evolution, points never come back. On a
+ * participation line the token counts as (and costs) the pack's
+ * `draftKillTokensPerProgress` tokens (default: the comeback rate): the same
+ * line resolution as the token overview (the season's list entry, else the base of
+ * the player's tracker). The rules are re-checked by the `epb_purchase_draft_token`
+ * RPC under the season lock; this wrapper supplies the line's next cumulative
+ * threshold (league overrides of the format pack applied) and that rate. A purchase
+ * never evolves a line, so no stage recheck.
  *
  * Rule refusals propagate as the RPC's PostgREST error (P0001 + `errors/draft`
  * code); the route maps them with `rpc-errors.ts`.
  */
 export async function purchaseDraftKillToken(
   seasonId: string,
+  pointBuyListId: string | null,
   playerId: string,
   lineId: string,
   requestId: string,
@@ -167,7 +190,9 @@ export async function purchaseDraftKillToken(
 
   // No owned tracker: the RPC refuses with TRACKER_NOT_OWNED before it reads the threshold.
   let nextThreshold: number | null = null;
+  let tokensPerProgress = 1;
   if (tracker) {
+    tokensPerProgress = await draftKillRateOf(pointBuyListId, lineId, tracker.base_pokemon);
     const line = lineLookup(lines)(tracker);
     if (!line) {
       throw new Error(`No thresholds for line ${lineId} in season ${seasonId}`);
@@ -182,6 +207,7 @@ export async function purchaseDraftKillToken(
     lineId,
     nextThreshold,
     clientRequestId: requestId,
+    tokensPerProgress,
   });
 }
 

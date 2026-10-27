@@ -58,3 +58,85 @@ describe('createAdminDraftActions().createRedraft', () => {
     expect(sentBody(fetchMock)).toEqual({ season_id: SEASON, kind: 'redraft', force: true, season_group_id: GROUP });
   });
 });
+
+describe('createAdminDraftActions().deletePool', () => {
+  it('sends DELETE /api/drafts/[id] without a body and accepts the route’s null data', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ success: true, data: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await createAdminDraftActions(POOL, SEASON, GROUP).deletePool();
+
+    expect(res).toEqual({ ok: true, data: null });
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(call[0]).toBe(`/api/drafts/${POOL}`);
+    expect(call[1].method).toBe('DELETE');
+    expect(call[1].body).toBeUndefined();
+  });
+
+  it('a 409 POOL_NOT_DELETABLE (the draft started meanwhile) is a failure carrying the code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({ success: false, error: 'not deletable', code: 'POOL_NOT_DELETABLE', detail: { phase: 'drafting' } }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+
+    const res = await createAdminDraftActions(POOL, SEASON).deletePool();
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('POOL_NOT_DELETABLE');
+  });
+
+  it('a success without the null data is not accepted as a delete', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ success: true, data: { state_version: 1 } }), { status: 200 })),
+    );
+    expect((await createAdminDraftActions(POOL, SEASON).deletePool()).ok).toBe(false);
+  });
+});
+
+describe('createAdminDraftActions().rollOrder', () => {
+  it('sends POST /api/drafts/[id]/roll-order with an empty body and accepts the state version', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ success: true, data: { state_version: 7 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await createAdminDraftActions(POOL, SEASON, GROUP).rollOrder();
+
+    expect(res).toEqual({ ok: true, data: { state_version: 7 } });
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(call[0]).toBe(`/api/drafts/${POOL}/roll-order`);
+    expect(call[1].method).toBe('POST');
+    expect(JSON.parse(String(call[1].body))).toEqual({});
+  });
+
+  it('a 409 DRAFT_ALREADY_STARTED (the draft started meanwhile) is a failure carrying the code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(JSON.stringify({ success: false, error: 'started', code: 'DRAFT_ALREADY_STARTED' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+
+    const res = await createAdminDraftActions(POOL, SEASON).rollOrder();
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('DRAFT_ALREADY_STARTED');
+  });
+});

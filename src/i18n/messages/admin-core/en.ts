@@ -123,6 +123,8 @@ const auditActions = {
   point_buy_list__deactivate: 'Point-buy list deactivated',
   draft__pick__on_behalf: 'Draft pick made for a player',
   draft__pick_order__free: 'Draft switched to free order',
+  draft__pool__delete: 'Draft deleted before it started',
+  draft__order__roll: 'Draft order rolled',
 } as const satisfies Record<AuditActionKey, string>;
 
 export default {

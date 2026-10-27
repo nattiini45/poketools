@@ -37,7 +37,7 @@ Bound list versions on non-upcoming seasons are immutable — bump `--version` t
 
 - Trainers draft branched lines as separate options (e.g. Samurott vs Samurott-Hisui).
 - The server rejects picks that exceed the season's `format_rules.draft_budget` or `draft_picks`.
-- After draft completion, trainers buy Draft Kill Tokens from their remaining points: one token per `draft_token_ratio` points, at most `draft_token_max` per player and `draft_token_max_per_line` per line (example pack: 5 points per token, max 1).
+- After draft completion, trainers buy Draft Kill Tokens from their remaining points: one token per `draft_token_ratio` points, at most `draft_token_max` per player and `draft_token_max_per_line` per line (example pack: 5 points per token, max 1). On a participation line the one token counts as, and costs, the pack's `draftKillTokensPerProgress` tokens (falls back to the Comeback rate; see `docs/format-packs.md`) for the same +1 progress.
 
 ## Redraft (between the first and second half)
 
