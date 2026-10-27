@@ -172,11 +172,12 @@ describe('the semantic fallback for answer groups', () => {
 describe('a mustMention group with an intent', () => {
   it('is written in the case files for the groups that describe a point, and the literal groups stay plain phrase lists', () => {
     const intentOf = (id: string, group: number): string | undefined => mentionGroup(byId(id).expect.answer!.mustMention![group]).intent;
-    for (const [id, group] of [['RO11', 1], ['RO11-DE', 1], ['SF1', 0], ['SF2', 0], ['SF2', 1], ['SF4', 0], ['RO7', 1], ['RO1', 1], ['RO1-DE', 1]] as const) {
+    for (const [id, group] of [['RO11', 1], ['RO11-DE', 1], ['SF1', 0], ['SF2', 0], ['SF2', 1], ['SF4', 0], ['RO7', 1], ['RO7', 2], ['RO10', 1], ['RO1', 1], ['RO1-DE', 1]] as const) {
       expect(intentOf(id, group), `${id} group ${group}`).toMatch(/^The reply /);
     }
-    // Identifiers and bare words are literal checks: the unresolved name, `guest`, `nothing`, `public`.
-    for (const [id, group] of [['RO7', 0], ['RO7', 2], ['SF4', 1], ['RO1', 0], ['RO1', 2]] as const) {
+    // Identifiers and bare words are literal checks: the unresolved name, `nothing`, `public`. RO7's third group is the
+    // option to have the person added (plan: "the admin gets the options"), a point, not the literal word `guest`.
+    for (const [id, group] of [['RO7', 0], ['SF4', 1], ['RO1', 0], ['RO1', 2]] as const) {
       expect(intentOf(id, group), `${id} group ${group}`).toBeUndefined();
     }
     expect(mentionGroup(byId('RO11').expect.answer!.mustMention![0])).toEqual({ needles: ["can't", 'cannot'], intent: undefined });

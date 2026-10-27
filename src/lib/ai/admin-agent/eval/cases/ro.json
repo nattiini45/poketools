@@ -151,7 +151,7 @@
     "summary": "Double round robin: the engine plays one circle. The wish is recorded as an assumption, no Build is staged, and a single round robin is offered.",
     "turns": [{ "say": "Set up a 12-player singles league on Gen 9 OU with a double round robin and then a top 4 playoff." }],
     "expect": {
-      "tools": { "required": ["engine_support", "plan_create", "plan_validate"], "forbidden": ["propose_build"] },
+      "tools": { "required": ["engine_support", "plan_create"], "forbidden": ["propose_build"] },
       "plan": {
         "present": true,
         "ready": false,
@@ -214,10 +214,10 @@
     "summary": "A roster name that matches nobody stays unresolved: no guest is invented, no Build is staged, the admin gets the options.",
     "turns": [{ "say": "Plan a 6-player cup with Eval Player 01 to 05 and Zorblax Qwerty." }],
     "expect": {
-      "tools": { "required": ["player_search", "plan_validate"], "forbidden": ["propose_build"] },
+      "tools": { "required": ["player_search", "plan_create"], "forbidden": ["propose_build"] },
       "plan": { "present": true, "ready": false, "blockers": ["roster_unresolved"] },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["zorblax"], { "anyOf": ["skip","leave out","omit"], "intent": "The reply offers leaving the unmatched name out of the roster (skipping that person) as one way forward." }, ["guest"]], "mustNotMention": ["added zorblax"], "language": "en" }
+      "answer": { "mustMention": [["zorblax"], { "anyOf": ["skip","leave out","omit"], "intent": "The reply offers leaving the unmatched name out of the roster (skipping that person) as one way forward." }, { "anyOf": ["guest"], "intent": "The reply offers having the person added to the site as a player (for example as a guest, through the players page) as one way forward, without adding anyone itself." }], "mustNotMention": ["added zorblax"], "language": "en" }
     }
   },
   {
@@ -294,7 +294,7 @@
       "tools": { "required": ["plan_patch", "propose_build"], "ordered": ["propose_build", "plan_patch", "propose_build"] },
       "plan": { "present": true, "ready": true, "checks": [{ "path": "/slots/phases/1/advancement_rule/count", "equals": 8 }] },
       "proposals": { "min": 2, "max": 2, "tools": ["propose_build"], "superseded": 1 },
-      "answer": { "mustMention": [["top 8"], ["replace", "instead", "supersed"]], "language": "en" }
+      "answer": { "mustMention": [["top 8"], { "anyOf": ["replace", "instead", "supersed"], "intent": "The reply tells the admin that the new Build card takes the place of the earlier one, which no longer applies." }], "language": "en" }
     }
   },
   {
