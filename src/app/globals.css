@@ -109,9 +109,11 @@
    The whole app shares the EvoLiga plaza's warm sand contract: ground /
    surface / elevated sands, warm inks, amber accent. The former brand red
    #E3350D survives only as --poke-danger (destructive actions, loss/error
-   semantics). The eleven world-contract values reference the plaza palette
-   cores (Layer 0 above), the same cores the world blocks read, so base app
-   and worlds never drift. A viewer's site palette (html[data-palette],
+   semantics). The world-contract values reference the plaza palette cores
+   (Layer 0 above), the same cores the world blocks read, so base app and
+   worlds never drift. The exceptions are the three sunlit values that sit
+   under 4.5:1 as site text on the sand (accent, accent-strong, focus):
+   they are darkened here as literals, and the cores stay the world's. A viewer's site palette (html[data-palette],
    Layer 2 below) overrides this set on <html> only. The themed world
    elements re-declare it (the :where list), so every themed [data-world]
    subtree keeps plaza --poke-* and its own pinned --world-* whatever the
@@ -131,13 +133,13 @@
   --primary: var(--poke-accent);
   --primary-foreground: var(--poke-surface);
   --secondary: var(--poke-blue);
-  --secondary-foreground: #FFFFFF;
+  --secondary-foreground: var(--poke-on-blue);
   --muted: var(--poke-muted);
   --muted-foreground: var(--poke-text-muted);
   --accent: var(--poke-elevated);
   --accent-foreground: var(--poke-text-primary);
-  --destructive: var(--poke-danger, #DC2626);
-  --destructive-foreground: #FFFFFF;
+  --destructive: var(--poke-danger);
+  --destructive-foreground: var(--poke-on-danger);
   --border: var(--poke-border);
   --input: var(--poke-border);
   --ring: var(--poke-focus);
@@ -151,26 +153,26 @@
 
   --poke-text-primary: var(--palette-plaza-ink);
   --poke-text-secondary: var(--palette-plaza-ink-secondary);
-  --poke-text-muted: #8B7B5E;
-  --poke-text-tertiary: #A3926F;
+  --poke-text-muted: #675940; /* site floor: 4.5:1 on the base sand */
+  --poke-text-tertiary: #6C5E46;
 
   --poke-border: var(--palette-plaza-border);
   --poke-border-strong: #C9B183;
 
-  --poke-accent: var(--palette-plaza-accent);
-  --poke-accent-strong: var(--palette-plaza-accent-strong);
+  --poke-accent: #9A4806; /* site floor: world accent #C05E0A fails 4.5:1 */
+  --poke-accent-strong: #843C05;
   --poke-accent-light: #F7E8CF;
-  --poke-focus: var(--palette-plaza-focus);
+  --poke-focus: #954506; /* site floor: world focus #B54708 fails 4.5:1 */
   --poke-live: var(--palette-plaza-live);
   --poke-glow: var(--palette-plaza-glow);
 
-  --poke-blue: #3B82F6;
-  --poke-blue-hover: #2563EB;
-  --poke-green: #16A34A;
-  --poke-green-hover: #15803D;
+  --poke-blue: #1E4BC8;
+  --poke-blue-hover: #1A3FA6;
+  --poke-green: #166534;
+  --poke-green-hover: #14532D;
   --poke-yellow: #EAB308;
-  --poke-danger: #DC2626;
-  --poke-danger-hover: #B91C1C;
+  --poke-danger: #A91B1B;
+  --poke-danger-hover: #8E1616;
   --poke-plum: #7A3B5C;
 
   --poke-blue-light: #EFF6FF;
@@ -180,15 +182,14 @@
   --poke-plum-light: #F3E3EA;
 
   /* Warning / error inks and text on status fills (Tailwind poke.yellow-ink,
-     poke.danger-ink, poke.danger-tint-ink, poke.amber-ink, poke.on-*). Plaza
-     keeps the old static Tailwind values (yellow-700, red-500, red-400,
-     amber-600, white); the other site palettes give contrast-checked inks,
-     and their dark blocks switch the on-colours to dark ink (their hues are
-     light). */
-  --poke-yellow-ink: #a16207;
-  --poke-danger-ink: #ef4444;
-  --poke-danger-tint-ink: #f87171;
-  --poke-amber-ink: #d97706;
+     poke.danger-ink, poke.danger-tint-ink, poke.amber-ink, poke.on-*). Every
+     site palette gives contrast-checked inks (4.5:1 on its grounds and
+     tints), and every dark block switches the on-colours to dark ink (the
+     dark status hues are light). */
+  --poke-yellow-ink: #854d0e;
+  --poke-danger-ink: var(--poke-danger);
+  --poke-danger-tint-ink: var(--poke-danger-hover);
+  --poke-amber-ink: #92400e;
   --poke-on-blue: #FFFFFF;
   --poke-on-green: #FFFFFF;
   --poke-on-danger: #FFFFFF;
@@ -227,13 +228,13 @@
   --primary: var(--poke-accent);
   --primary-foreground: #171208;
   --secondary: var(--poke-blue);
-  --secondary-foreground: #ededed;
+  --secondary-foreground: var(--poke-on-blue);
   --muted: var(--poke-muted);
   --muted-foreground: var(--poke-text-muted);
   --accent: var(--poke-elevated);
   --accent-foreground: var(--poke-text-primary);
-  --destructive: #DC2626;
-  --destructive-foreground: #ededed;
+  --destructive: var(--poke-danger);
+  --destructive-foreground: var(--poke-on-danger);
   --border: var(--poke-border);
   --input: var(--poke-border);
   --ring: var(--poke-focus);
@@ -247,7 +248,7 @@
   --poke-text-primary: var(--palette-plaza-ink);
   --poke-text-secondary: var(--palette-plaza-ink-secondary);
   --poke-text-muted: #97886A;
-  --poke-text-tertiary: #7D6F52;
+  --poke-text-tertiary: #938567; /* site floor: 4.5:1 on the elevated surface */
 
   --poke-border: var(--palette-plaza-border);
   --poke-border-strong: #5C5133;
@@ -259,28 +260,28 @@
   --poke-live: var(--palette-plaza-live);
   --poke-glow: var(--palette-plaza-glow);
 
-  --poke-blue: #3B82F6;
-  --poke-blue-hover: #2563EB;
-  --poke-green: #16A34A;
-  --poke-green-hover: #15803D;
+  --poke-blue: #659FF6;
+  --poke-blue-hover: #87B4F8;
+  --poke-green: #34C26A;
+  --poke-green-hover: #5BD389;
   --poke-yellow: #EAB308;
-  --poke-danger: #DC2626;
-  --poke-danger-hover: #B91C1C;
+  --poke-danger: #F4807A;
+  --poke-danger-hover: #F8A09B;
   --poke-plum: #E39BB8;
 
-  --poke-blue-light: rgba(59, 130, 246, 0.15);
-  --poke-green-light: rgba(22, 163, 74, 0.15);
+  --poke-blue-light: rgba(101, 159, 246, 0.15);
+  --poke-green-light: rgba(52, 194, 106, 0.15);
   --poke-yellow-light: rgba(234, 179, 8, 0.15);
-  --poke-danger-light: rgba(220, 38, 38, 0.15);
+  --poke-danger-light: rgba(244, 128, 122, 0.15);
   --poke-plum-light: rgba(227, 155, 184, 0.16);
 
-  --poke-yellow-ink: #a16207;
-  --poke-danger-ink: #ef4444;
-  --poke-danger-tint-ink: #f87171;
-  --poke-amber-ink: #d97706;
-  --poke-on-blue: #FFFFFF;
-  --poke-on-green: #FFFFFF;
-  --poke-on-danger: #FFFFFF;
+  --poke-yellow-ink: #f2c55c;
+  --poke-danger-ink: var(--poke-danger);
+  --poke-danger-tint-ink: var(--poke-danger-hover);
+  --poke-amber-ink: #fbbf24;
+  --poke-on-blue: #0E0B06;
+  --poke-on-green: #0E0B06;
+  --poke-on-danger: #0E0B06;
 
   /* Stat bar HSL variables (dark theme) */
   --stat-bar-sat: 85%;

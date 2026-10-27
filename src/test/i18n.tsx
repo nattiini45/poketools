@@ -1,6 +1,8 @@
 /**
  * i18n test helpers (i18n-core §8.1). Tests run in `node` with
- * `renderToStaticMarkup`; there is no @testing-library.
+ * `renderToStaticMarkup` (`renderWithI18n`). A test that has to interact opts into
+ * jsdom per file and renders with Testing Library through `withI18n`
+ * (docs/dependencies.md, "DOM tests").
  *
  * Defaults: locale 'en', dataLocale = locale, timeZone 'UTC',
  * requestTime Date.UTC(2026, 9, 9, 12).

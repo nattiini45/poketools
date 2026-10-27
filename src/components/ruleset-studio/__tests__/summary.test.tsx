@@ -1,142 +1,29 @@
 /**
- * The live summary column, the diagnostic sentences and the compact list editor in static markup, in both languages: the
- * four tabs, the issue rows with their fixes, the change list with revert buttons, the rules text in English and German, and
- * the chips of the list editor. A small harness runs the real editor hook so the panel reads a real compile.
+ * The diagnostic sentences, the list-edit rules and the compact list editor in static markup, in both languages: every
+ * diagnostic code has a sentence with its placeholders filled, and the chips of the list editor. The summary column that
+ * uses them is `SummaryPanel.test.tsx` (a DOM).
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
-import { expectLabelledControls, expectNoLeftovers, expectUniqueIds } from '@/test/markup';
+import { expectLabelledControls } from '@/test/markup';
 import { createTranslator } from '@/i18n/core';
 import { rulesetStudioDiagnosticsMessages } from '@/i18n/messages/ruleset-studio/diagnostics';
 import type { CatalogIndex } from '@/lib/pkmn/catalog-index';
-import type { PresetRules } from '@/lib/pkmn/preset-rules';
 import { RULESET_DIAGNOSTIC_SEVERITY, type RulesetDiagnostic } from '@/lib/ruleset-kit/compile';
-import { banEntries, setClause } from '@/lib/ruleset-kit/ops';
-import { newRulesetDocument } from '@/lib/ruleset-studio/document';
 import { clearCatalogCache, fetchEntryIndex } from '@/lib/ruleset-studio/editor/catalog-client';
 import { SPECIES_ROWS } from '@/lib/ruleset-studio/__tests__/editor/picker/fixtures';
 import { applyListAction } from '@/lib/ruleset-studio/editor/picker/list-edit';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
-
 import EntryListEditor from '../EntryListEditor';
-import { useRulesetEditor } from '../editor/useRulesetEditor';
-import SummaryPanel, { type SummaryTab } from '../summary/SummaryPanel';
 import { diagnosticText, fixKey } from '../summary/diagnostic-text';
-
-const PRESET: PresetRules = {
-  id: 'gen9ou',
-  name: 'Gen 9 OU',
-  gen: 9,
-  mod: 'gen9',
-  universe: 'standard',
-  doubles: false,
-  source: 'showdown',
-  clauses: ['speciesclause', 'sleepclausemod'],
-  pokemon: { mode: 'block', ids: ['koraidon', 'miraidon'] },
-  moves: { mode: 'block', ids: ['lastrespects'] },
-  items: { mode: 'block', ids: [] },
-  abilities: { mode: 'block', ids: ['moody'] },
-  facts: { unmodelled: [] } as unknown as PresetRules['facts'],
-  combination_bans: [],
-  catalog_version: 'test',
-};
 
 const response = (data: unknown) => Promise.resolve(new Response(JSON.stringify({ success: true, data }), { status: 200 }));
 
-async function seed(): Promise<void> {
-  const index: CatalogIndex<'species'> = { v: 1, kind: 'species', gen: 9, scope: 'standard', preset: null, rows: SPECIES_ROWS };
-  await fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: () => response(index) });
-}
-
-function Harness({ doc, tab }: { doc: ReturnType<typeof newRulesetDocument>; tab: SummaryTab }) {
-  const model = useRulesetEditor({ definitionId: 'r1', initialDoc: doc, initialRev: 1, initialPreset: PRESET });
-  return <SummaryPanel model={model} initialTab={tab} onSelectSection={() => undefined} onApplyFix={() => undefined} />;
-}
-
-const edited = () => {
-  let d = newRulesetDocument('Spring OU', 'en', 'gen9ou');
-  d = banEntries(d, 'pokemon', ['garchomp'], PRESET.pokemon).doc;
-  d = banEntries(d, 'moves', ['spore'], PRESET.moves).doc;
-  return setClause(d, 'sleepclausemod', false, PRESET.clauses);
-};
-
-const broken = () => {
-  const d = newRulesetDocument('Broken', 'en', 'gen9ou');
-  return { ...d, pokemon: { ban: ['garchomp', 'garchomp'], unban: ['garchomp'], allow: null } };
-};
-
+// The chips read their names from the entry index; seed it so no request is made.
 beforeEach(async () => {
   clearCatalogCache();
-  await seed();
-});
-
-describe('SummaryPanel', () => {
-  it.each(['en', 'de'] as const)('has the four tabs as a tablist with the selected one controlling its panel (%s)', (locale) => {
-    const html = renderWithI18n(<Harness doc={edited()} tab="summary" />, { locale });
-    expect(html).toContain('role="tablist"');
-    expect([...html.matchAll(/role="tab"/g)]).toHaveLength(4);
-    expect(html).toContain('aria-selected="true"');
-    expect(html).toMatch(/role="tabpanel"[^>]*aria-labelledby="[^"]*-tab-summary"/);
-    expectUniqueIds(html);
-    expectNoLeftovers(html);
-    expectLabelledControls(html);
-  });
-
-  it('the summary tab compares with the preset and counts what is in effect', () => {
-    const html = renderWithI18n(<Harness doc={edited()} tab="summary" />);
-    expect(html).toContain('Compared with Gen 9 OU');
-    expect(html).toContain('2 banned, 0 unbanned');
-    expect(html).toContain('3 Pokémon banned');
-    expect(html).toContain('2 moves banned');
-    expect(html).toContain('2 from the preset');
-    expect(html).toContain('1 clause');
-  });
-
-  it('says so when nothing differs from the base', () => {
-    expect(renderWithI18n(<Harness doc={newRulesetDocument('Plain', 'en', 'gen9ou')} tab="summary" />)).toContain('No changes against the base yet.');
-  });
-
-  it('the changes tab lists every entry with a revert button named after it, and clause switches', () => {
-    const html = renderWithI18n(<Harness doc={edited()} tab="changes" />);
-    expect(html).toContain('Your changes');
-    expect(html).toContain('aria-label="Revert garchomp"'.replace('garchomp', 'garchomp'));
-    expect(html).toContain('Banned: ');
-    expect(html).toContain('Clause removed: ');
-    expect(html).toContain('Sleep Clause Mod');
-  });
-
-  it('the issues tab names each problem in words, with its severity, a way to the field and a one-click fix', () => {
-    const html = renderWithI18n(<Harness doc={broken()} tab="issues" />);
-    expect(html).toContain('is listed twice in Pokémon');
-    expect(html).toContain('is both banned and unbanned in Pokémon');
-    expect(html).toContain('Error');
-    expect(html).toContain('Go to the field');
-    expect(html).toContain('Fix: Remove the entry');
-    expectNoLeftovers(html);
-  });
-
-  it('the issues tab of a clean ruleset says there is nothing to fix; informational clauses show as notes', () => {
-    expect(renderWithI18n(<Harness doc={newRulesetDocument('Plain', 'en')} tab="issues" />)).toContain('No problems found.');
-    const note = renderWithI18n(<Harness doc={newRulesetDocument('Plain', 'en', 'gen9ou')} tab="issues" />);
-    expect(note).toContain('Note');
-    expect(note).toContain('Sleep Clause Mod is shown on the rules page but the team validator does not check it.');
-  });
-
-  it("the rules text opens in the viewer's language and is marked with it", () => {
-    const english = renderWithI18n(<Harness doc={edited()} tab="rules" />);
-    expect(english).toContain('lang="en"');
-    expect(english).toContain('Starts from the rule preset Gen 9 OU.');
-    expect(english).toContain('aria-pressed="true"');
-    const german = renderWithI18n(<Harness doc={edited()} tab="rules" />, { locale: 'de' });
-    expect(german).toContain('lang="de"');
-    expect(german).toContain('Startet vom Regel-Preset Gen 9 OU.');
-    expect(german).toContain('Pokémon sind gebannt');
-  });
-
-  it('the rules text waits for a ruleset without errors', () => {
-    expect(renderWithI18n(<Harness doc={broken()} tab="rules" />)).toContain('The rules text appears when the ruleset has no errors.');
-  });
+  const index: CatalogIndex<'species'> = { v: 1, kind: 'species', gen: 9, scope: 'standard', preset: null, rows: SPECIES_ROWS };
+  await fetchEntryIndex({ kind: 'species', gen: 9, scope: 'standard' }, { fetch: () => response(index) });
 });
 
 describe('diagnostic sentences', () => {

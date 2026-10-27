@@ -33,12 +33,6 @@ export interface NewRulesetData {
 interface NewRulesetFormProps {
   data: NewRulesetData;
   onCancel?: () => void;
-  /** For tests: start on this panel. */
-  initialStart?: StartKind;
-  /** For tests: the preset the picker starts on. */
-  initialPreset?: string;
-  /** For tests: an import report as if a file had been chosen. */
-  initialImportReport?: ImportReport;
 }
 
 const REPORT_LIST_MAX = 20;
@@ -77,19 +71,19 @@ function ImportReportView({ report }: { report: ImportReport }) {
  * shows its message in the viewer's language and the form stays usable for another try. A file is only parsed, never
  * evaluated, and a file with problems is not imported.
  */
-export function NewRulesetForm({ data, onCancel, initialStart = 'blank', initialPreset = DEFAULT_RULESET_PRESET, initialImportReport }: NewRulesetFormProps) {
+export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
   const t = useT(rulesetStudioMessages);
   const locale = useLocale();
   const router = useRouter();
   const errorText = useApiErrorText(errorsAdmin, errorsCommon);
 
-  const [start, setStart] = useState<StartKind>(initialStart);
+  const [start, setStart] = useState<StartKind>('blank');
   const [name, setName] = useState('');
   const [language, setLanguage] = useState<Locale>(locale);
-  const [preset, setPreset] = useState(initialPreset);
+  const [preset, setPreset] = useState(DEFAULT_RULESET_PRESET);
   const [tourOverlay, setTourOverlay] = useState(false);
   const [forkId, setForkId] = useState(data.shared[0]?.id ?? '');
-  const [report, setReport] = useState<ImportReport | null>(initialImportReport ?? null);
+  const [report, setReport] = useState<ImportReport | null>(null);
   const [importFailure, setImportFailure] = useState<ImportFailure | null>(null);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);

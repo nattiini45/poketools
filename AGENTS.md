@@ -222,6 +222,11 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
 - Follow branch instructions in the task; if a task defines a required branch name, use that exact name. If a task depends on an unmerged branch, branch from that branch rather than from `main`. Do not merge your own pull request unless the task explicitly asks you to.
 - Typical loop: implement → `npm run build` → stage specific files → commit `feat: <description>` → push only when the task says to.
 
+## Tests
+
+- The suite runs in the `node` environment: a render test is `renderToStaticMarkup` (`renderWithI18n`, `src/test/i18n.tsx`). A component test that needs a real DOM (clicking, typing, uploading a file, focus, state changes after an event) opts in per file with a `/** @vitest-environment jsdom */` docblock at the top and uses Testing Library (`render(withI18n(ui))`, `screen`, `userEvent.setup()`). Never switch the default environment or the project to jsdom. Details and the setup file: [`docs/dependencies.md`](./docs/dependencies.md#dom-tests).
+- Never add a prop to a component only so a test can reach a state (`initialTab`, `initialStart`, a pre-made report): drive the real UI with Testing Library instead. A prop that a page or a dev preview route uses is real API.
+
 ## Before Marking Work Complete
 
 Applies to every change — `src/`, `scripts/`, config, tooling, and docs-adjacent code alike.

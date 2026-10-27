@@ -331,10 +331,10 @@ describe('resolveTourOverlay', () => {
     const lc = resolveTourOverlay('gen9natdexlcdraft');
     expect(lc?.clausesRemove).toEqual(['itemclause']);
     expect(lc?.moves).toEqual(['batonpass', 'grassyglide', 'hiddenpower']);
-    // "Razor Claw" on the thread is left to the admin (unresolved), neither it nor Razor Fang is applied.
+    // The thread bans Razor Claw (as written, settled with the maintainers), not Razor Fang.
+    expect(lc?.items).toContain('razorclaw');
     expect(lc?.items).not.toContain('razorfang');
-    expect(lc?.items).not.toContain('razorclaw');
-    expect(lc?.unresolved.join(' ')).toContain('Razor Claw');
+    expect(lc?.unresolved).toEqual([]);
     const doubles = resolveTourOverlay('gen9doublesdraft');
     expect(doubles?.clausesAdd).toEqual(['speciesclause', 'gravitysleepclause', 'teratypepreview']);
     expect(doubles?.moves).toEqual(['darkvoid', 'doubleteam', 'lastrespects', 'minimize']);

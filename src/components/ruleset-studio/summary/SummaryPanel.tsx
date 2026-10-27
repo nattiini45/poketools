@@ -24,8 +24,6 @@ const TABS: readonly SummaryTab[] = ['summary', 'changes', 'issues', 'rules'];
 
 interface SummaryPanelProps {
   model: RulesetEditorModel;
-  /** The tab that opens first; the static-markup tests (no DOM to click in) render the other tabs through it. */
-  initialTab?: SummaryTab;
   onSelectSection: (section: EditorSection) => void;
   onApplyFix: (diagnostic: RulesetDiagnostic) => void;
 }
@@ -42,10 +40,10 @@ const JUMP =
  * English or German. The numbers come from the same compile that gates the publish, so the column never claims more or
  * less than the server will accept.
  */
-export default function SummaryPanel({ model, initialTab = 'summary', onSelectSection, onApplyFix }: SummaryPanelProps) {
+export default function SummaryPanel({ model, onSelectSection, onApplyFix }: SummaryPanelProps) {
   const t = useT(rulesetStudioSummaryMessages);
   const tDiag = useT(rulesetStudioDiagnosticsMessages);
-  const [tab, setTab] = useState<SummaryTab>(initialTab);
+  const [tab, setTab] = useState<SummaryTab>('summary');
   // The rules text opens in the viewer's language; the toggle writes it in the other one.
   const viewerLocale = useLocale();
   const [rulesLocale, setRulesLocale] = useState<Locale>(viewerLocale);

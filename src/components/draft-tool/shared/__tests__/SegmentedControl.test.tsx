@@ -73,7 +73,7 @@ describe('SegmentedControl markup', () => {
 
   it('fills the checked option with the accent, gives phones a 44 px target and the shared focus ring', () => {
     const html = render();
-    expect(html).toMatch(/aria-checked="true"[^>]*class="[^"]*bg-\[var\(--draft-accent,var\(--poke-accent\)\)\]/);
+    expect(html).toMatch(/aria-checked="true"[^>]*class="[^"]*bg-\[var\(--draft-accent-fill,var\(--poke-accent\)\)\]/);
     expect(html).toMatch(/aria-checked="false"[^>]*class="[^"]*bg-\[var\(--draft-surface,var\(--poke-surface\)\)\]/);
     expect(html).toContain('min-h-[44px]');
     expect(html).toContain('md:min-h-0');

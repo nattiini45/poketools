@@ -208,7 +208,7 @@ export default function RosterCard({
               <LockGlyph />
             </span>
           )}
-          <span className="rounded-full bg-[var(--draft-accent,var(--poke-accent))] px-2 text-[11px] font-bold leading-5 text-[var(--poke-surface)]">
+          <span className="rounded-full bg-[var(--draft-accent-fill,var(--poke-accent))] px-2 text-[11px] font-bold leading-5 text-[var(--poke-surface)]">
             {ts('points', { n: entry.price })}
           </span>
         </span>

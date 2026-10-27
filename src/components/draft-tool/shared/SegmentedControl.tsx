@@ -103,7 +103,7 @@ export default function SegmentedControl<V extends string>({
             className={cn(
               'min-h-[44px] px-3 text-xs font-semibold md:min-h-0 md:py-1.5',
               checked
-                ? 'bg-[var(--draft-accent,var(--poke-accent))] text-[var(--poke-surface)]'
+                ? 'bg-[var(--draft-accent-fill,var(--poke-accent))] text-[var(--poke-surface)]'
                 : 'bg-[var(--draft-surface,var(--poke-surface))] text-[var(--draft-ink-2,var(--poke-text-secondary))]',
               (disabled || option.disabled) && 'cursor-not-allowed',
               FOCUS_RING,

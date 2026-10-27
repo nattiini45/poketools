@@ -25,4 +25,4 @@ export const PRESET_DATA_PIN = {
  * bans are read from (`@pkmn/dex`): a change to that code, or an upgrade of `@pkmn/dex` that moves a tier, changes the
  * resolved rules under an unchanged version, so it bumps this by hand.
  */
-export const PRESET_RULES_VERSION = '2026-10-27.1';
+export const PRESET_RULES_VERSION = '2026-10-27.2';

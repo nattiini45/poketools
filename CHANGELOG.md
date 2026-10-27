@@ -310,6 +310,14 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Changed
 
+- Colour contrast meets WCAG AA in every site palette and theme: the Plaza text, accent and status tokens are darker in
+  light mode and lighter in dark mode, the dark warning ink is readable, and a test checks every documented text and
+  background pair. Text on an accent fill in the draft room uses the site accent.
+- Component tests can render in a DOM: `jsdom` and Testing Library are dev dependencies, and a test file opts in with
+  `/** @vitest-environment jsdom */` (the suite stays on `node`). Props that existed only so markup tests could reach a
+  state are gone.
+- The NatDex LC Draft tour overlay also bans Razor Claw, as its tournament thread lists (preset data version
+  2026-10-27.2).
 - **A league delete is a move to the trash.** `DELETE /api/seasons/[id]` is never blocked by phases, draft pools, teams or
   storylines (`SEASON_HAS_DEPENDENTS` is gone), answers `data.trash { id, purge_after }` and, when the rebuild of derived
   data failed, `data.rebuild_warning` next to the successful delete. The Danger tab and the delete confirmation say what

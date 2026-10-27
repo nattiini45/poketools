@@ -70,7 +70,7 @@ A draft preset is Showdown-faithful: it enforces exactly what the Showdown forma
 - The editor applies the overlay on request (`applyTourOverlay`, `GET /api/pkmn/presets/[id]/tour-overlay`); a new ruleset can start with it (`tour_overlay` in the create and preset fork bodies, applied on the server). The entries become ordinary, editable bans: nothing is locked, and the overlay bans no Pokémon. Entries that change nothing (an id the preset already bans, a clause it already has) are left out.
 - Presets with an overlay: NatDex Draft (Gen 9), NatDex LC Draft, 6v6 Doubles Draft. The other draft presets have no documented extras and no overlay.
 - Sources were read through a page summariser and verified by a second pass, so confidence is medium; each overlay names its threads.
-- Open questions for the maintainers: a thread names "Razor Claw" among the NatDex LC bans, almost certainly Razor Fang (neither is applied); and the Evasion handling of the 6v6 doubles tour (Showdown repeals the Evasion Clause for the format, the threads still ban Double Team and Minimize, which is what is applied).
+- Settled with the maintainers: the NatDex LC thread's "Razor Claw" ban is meant as written and is applied; the 6v6 doubles tour keeps its threads' Double Team and Minimize bans, whatever Showdown does with the Evasion Clause for that format.
 
 ## Refreshing the data
 

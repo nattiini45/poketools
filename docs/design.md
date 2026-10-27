@@ -56,33 +56,35 @@ and clouds variants re-ink the red, purple and blue moment chips
 | `poke-surface` | Card / panel fill | `#FFF8E9` | `#171208` |
 | `poke-elevated` | Raised surfaces, table headers | `#FAEED6` | `#241C0E` |
 | `poke-muted` | Subtle backgrounds, hover states | `#F1E4C8` | `#1D160A` |
-| `poke-text-primary` / `-secondary` / `-muted` / `-tertiary` | Four-tier text hierarchy | `#241A0C` / `#5C4E37` / `#8B7B5E` / `#A3926F` | `#F5EDDD` / `#C4B596` / `#97886A` / `#7D6F52` |
+| `poke-text-primary` / `-secondary` / `-muted` / `-tertiary` | Four-tier text hierarchy | `#241A0C` / `#5C4E37` / `#675940` / `#6C5E46` | `#F5EDDD` / `#C4B596` / `#97886A` / `#938567` |
 | `poke-border` / `-border-strong` | Default + emphasized dividers | `#E3D2AC` / `#C9B183` | `#453C24` / `#5C5133` |
-| `poke-accent` / `-accent-strong` / `-accent-light` | Global amber accent (CTAs, active tabs, links-of-honor) | `#C05E0A` / `#8F4206` / `#F7E8CF` | `#F5B84B` / `#FFD166` / tint |
-| `poke-focus` | Focus rings, link text | `#B54708` | `#FB923C` |
+| `poke-accent` / `-accent-strong` / `-accent-light` | Global amber accent (CTAs, active tabs, links-of-honor) | `#9A4806` / `#843C05` / `#F7E8CF` | `#F5B84B` / `#FFD166` / tint |
+| `poke-focus` | Focus rings, link text | `#954506` | `#FB923C` |
 | `poke-live` | Live/active state signals | `#166534` | `#4ADE80` |
 | `poke-glow` | Accent halo wash (rgba) | accent @ 0.28 | accent @ 0.15 |
-| `poke-blue` / `green` / `yellow` | Status hues (variable-backed, palette-dependent; opacity modifiers such as `/20` work) | `#3B82F6` / `#16A34A` / `#EAB308` | same |
-| `poke-danger` (+ `-danger-light`) | Destructive / loss / error — the ONLY red in the system | `#DC2626` | same |
-| `poke-blue-hover` / `green-hover` / `danger-hover` | Hover fill of a solid status button | `#2563EB` / `#15803D` / `#B91C1C` | same |
-| `poke-on-blue` / `on-green` / `on-danger` | Text ON a solid status fill (never `text-white`: the moonlit site palettes use light status hues, so their on-colour is the dark ground) | `#FFFFFF` | same |
-| `poke-yellow-ink` | Warning text (`Alert` `warning`, legality warnings, draw cells, MVP labels on the yellow tint) | `#a16207` | same |
-| `poke-danger-ink` | Inline error line on a surface (never static `text-red-500`) | `#ef4444` | same |
-| `poke-danger-tint-ink` | Text inside a `bg-red-500/10` or `/20` error box or chip (never static `text-red-400`) | `#f87171` | same |
-| `poke-amber-ink` | Text on a `bg-amber-500/15` flag chip (never static `text-amber-600`) | `#d97706` | same |
+| `poke-blue` / `green` / `yellow` | Status hues (variable-backed, palette-dependent; opacity modifiers such as `/20` work) | `#1E4BC8` / `#166534` / `#EAB308` | `#659FF6` / `#34C26A` / `#EAB308` |
+| `poke-danger` (+ `-danger-light`) | Destructive / loss / error — the ONLY red in the system | `#A91B1B` | `#F4807A` |
+| `poke-blue-hover` / `green-hover` / `danger-hover` | Hover fill of a solid status button | `#1A3FA6` / `#14532D` / `#8E1616` | `#87B4F8` / `#5BD389` / `#F8A09B` |
+| `poke-on-blue` / `on-green` / `on-danger` | Text ON a solid status fill (never `text-white`: the moonlit status hues are light in every palette, so their on-colour is the dark ground) | `#FFFFFF` | `#0E0B06` |
+| `poke-yellow-ink` | Warning text (`Alert` `warning`, legality warnings, draw cells, MVP labels on the yellow tint) | `#854d0e` | `#f2c55c` |
+| `poke-danger-ink` | Inline error line on a surface (never static `text-red-500`) | `#A91B1B` (= `poke-danger`) | `#F4807A` (= `poke-danger`) |
+| `poke-danger-tint-ink` | Text inside a `bg-red-500/10` or `/20` error box or chip (never static `text-red-400`) | `#8E1616` (= `poke-danger-hover`) | `#F8A09B` (= `poke-danger-hover`) |
+| `poke-amber-ink` | Text on a `bg-amber-500/15` flag chip (never static `text-amber-600`) | `#92400e` | `#fbbf24` |
 | `poke-*-light` | Tinted backgrounds for badges / callouts | | |
 | `poke-moment-*` | Highlight-moment palette used by broadcast moments | | |
 
 Ink tokens meet WCAG AA (≥ 4.5:1) against base / surface / elevated in both
-variants. Text placed ON a filled `poke-accent` background must use
+variants, in every site palette, plaza included (the sunlit text tokens are
+dark enough for the darkest ground, `poke-base`, so the same value reads on
+every card). Text placed ON a filled `poke-accent` background must use
 `text-poke-surface` (never `text-white` — moonlit accent is bright gold).
 Text placed ON a filled `poke-blue` / `poke-green` / `poke-danger` uses
 `text-poke-on-blue` / `-on-green` / `-on-danger`, for the same reason.
 Warning and error text uses the ink tokens above, never a static Tailwind
-`text-red-*` / `text-amber-*` / `text-yellow-*`: those were tuned against
-plaza's near-black dark surfaces and fall under 4.5:1 on the lighter dusk
-surfaces of the other palettes. Plaza keeps the old static values, so
-switching a component to a token changes no plaza pixel.
+`text-red-*` / `text-amber-*` / `text-yellow-*` (or `text-blue-*` on a
+badge): a static shade is tuned against one surface and falls under 4.5:1 on
+the others. The moonlit status hues are light, so a solid status fill carries
+dark ink (`poke-on-*`) there and white in the sunlit variant.
 
 The seven status tokens `poke-blue`, `-blue-hover`, `-green`, `-green-hover`,
 `-yellow`, `-danger` and `-danger-hover` are built with `tokenColor()` in
@@ -355,14 +357,22 @@ Layer 3  world blocks    [data-world="<ns>"]            --world-* = var(--palett
   back afterwards, unless the viewer picked a palette meanwhile. The local
   download (`ExportCardButton`) keeps the viewer's palette. The image still
   follows the admin's light/dark mode, as before.
-- **Contrast policy.** Every non-plaza palette meets WCAG 2.x in both modes:
-  text ≥ 4.5:1 and non-text UI ≥ 3:1 over every pair the app relies on
-  (ink tiers, accent, status text and fills, translucent status tints and
-  hovers, badges, alerts, moment chips, navbar glass, the picker rows, and
-  the component warning / error inks on their tints). Plaza
-  keeps today's values; its pre-existing sub-floor pairs are pinned as
-  `KNOWN_PLAZA_FAILURES` in `src/lib/design/__tests__/site-palettes.test.ts`,
-  so the list can only shrink. Fixing them is a separate product decision.
+- **Contrast policy.** Every palette, plaza included, meets WCAG 2.x AA in
+  both modes: text ≥ 4.5:1 and large text / non-text UI ≥ 3:1 over every pair
+  the app relies on (ink tiers, accent, status text and fills, translucent
+  status tints and hovers, badges, alerts, moment chips, navbar glass, the
+  picker rows, and the component warning / error inks on their tints).
+  `src/lib/design/__tests__/site-palettes.test.ts` computes the ratio of each
+  documented pair for every palette x mode and fails on any pair under its
+  floor; there is no allow-list, so a new token value or component pairing
+  that drops under AA fails the suite. Tune a failing text token by darkening
+  the ink (sunlit) or lightening it (moonlit), never by changing a ground.
+  Plaza's sunlit `poke-accent`, `-accent-strong` and `-focus` are therefore
+  darker than the plaza cores (`--palette-plaza-accent` `#C05E0A` and
+  friends): the cores stay the EvoLiga world's, the site base set carries
+  literals (the same pattern as sakura). The art statics (`art.*`) and the
+  `border` tokens are not text and are not gated; a form control's border is
+  decorative today (its fill and label carry the component).
 - **Not palette-driven (yet).** `<meta name="theme-color">` and the web
   manifest stay plaza.
 

@@ -29,6 +29,8 @@
   --draft-ink-2: var(--world-ink-secondary, var(--poke-text-secondary));
   --draft-border: var(--world-border, var(--poke-border));
   --draft-accent: var(--world-accent, var(--poke-accent));
+  /* Fill under text: the site accent, which meets AA against the surface ink; the world accent stays on lines and dots. */
+  --draft-accent-fill: var(--poke-accent);
   --draft-glow: var(--world-glow, var(--poke-glow));
   --draft-wall: color-mix(in srgb, var(--hud-glass, var(--draft-elevated)) 18%, var(--draft-surface));
   --draft-hex-line: color-mix(in srgb, var(--hud-glass-border, var(--draft-border)) 55%, transparent);

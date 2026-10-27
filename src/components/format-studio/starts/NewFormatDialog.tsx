@@ -41,10 +41,6 @@ export interface NewFormatData {
 interface NewFormatFormProps {
   data: NewFormatData;
   onCancel?: () => void;
-  /** For tests: start on this panel. */
-  initialStart?: StartKind;
-  /** For tests: an import report as if a file had been chosen. */
-  initialImportReport?: ImportReport;
 }
 
 const REPORT_LIST_MAX = 20;
@@ -106,22 +102,22 @@ function ImportReportView({ report, strip, onStrip }: { report: ImportReport; st
  * its message in the viewer's language and the form stays usable for another try. A file is only parsed, never
  * evaluated.
  */
-export function NewFormatForm({ data, onCancel, initialStart = 'blank', initialImportReport }: NewFormatFormProps) {
+export function NewFormatForm({ data, onCancel }: NewFormatFormProps) {
   const t = useT(formatStudioEditorMessages);
   const locale = useLocale();
   const router = useRouter();
   const errorText = useApiErrorText(errorsAdmin, errorsCommon);
 
-  const [start, setStart] = useState<StartKind>(initialStart);
+  const [start, setStart] = useState<StartKind>('blank');
   const [name, setName] = useState('');
   const [language, setLanguage] = useState<Locale>(locale);
   const [example, setExample] = useState(() => (data.examples[0] !== undefined ? `preset:${data.examples[0].id}` : ''));
   // A rule preset id, or '' for none; offered for a blank format and for a shipped example.
   const [rulesetPreset, setRulesetPreset] = useState('');
   const [leagueId, setLeagueId] = useState(data.leagues[0]?.id ?? '');
-  const [report, setReport] = useState<ImportReport | null>(initialImportReport ?? null);
+  const [report, setReport] = useState<ImportReport | null>(null);
   const [importFailure, setImportFailure] = useState<ImportFailure | null>(null);
-  const [strip, setStrip] = useState(initialImportReport !== undefined && (initialImportReport.unknownFields.length > 0 || initialImportReport.reserved.length > 0));
+  const [strip, setStrip] = useState(false);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiErrorLike | null>(null);

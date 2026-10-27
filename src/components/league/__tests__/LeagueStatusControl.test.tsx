@@ -21,7 +21,7 @@ const OTHER_BADGE = (variant: string, text: string) =>
 const GRAY = 'border-poke-border bg-poke-muted text-poke-text-muted';
 const GREEN = 'border-poke-green/30 bg-poke-green-light text-poke-green';
 const BLUE =
-  'border-poke-blue/30 bg-poke-blue-light text-poke-blue dark:border-poke-blue/40 dark:bg-poke-blue-light dark:text-blue-300';
+  'border-poke-blue/30 bg-poke-blue-light text-poke-blue dark:border-poke-blue/40';
 
 /** The render of an upcoming league before the `blocked` prop was added. */
 const UPCOMING_BEFORE =

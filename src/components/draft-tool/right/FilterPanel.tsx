@@ -211,7 +211,7 @@ export function FilterSheetBody({ view, dispatch, ix, names, dl, banned, count, 
           type="button"
           onClick={onClose}
           className={cn(
-            'ml-auto min-h-[44px] rounded-poke-md bg-[var(--draft-accent,var(--poke-accent))] px-4 text-sm font-semibold text-[var(--poke-surface)] hover:brightness-110',
+            'ml-auto min-h-[44px] rounded-poke-md bg-[var(--draft-accent-fill,var(--poke-accent))] px-4 text-sm font-semibold text-[var(--poke-surface)] hover:brightness-110',
             FOCUS_RING,
           )}
         >

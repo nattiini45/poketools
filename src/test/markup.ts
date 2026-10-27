@@ -1,5 +1,5 @@
 /**
- * Helpers for static-markup component tests (no DOM). They read the HTML string the way a screen reader's tree would:
+ * Helpers for component tests that read an HTML string: static markup, or `container.innerHTML` of a Testing Library render. They read the HTML string the way a screen reader's tree would:
  * every control needs a name, no template placeholder may be left in the text, every id is used once. Shared by the
  * Format Studio, the Ruleset Studio and the studio shell tests.
  */

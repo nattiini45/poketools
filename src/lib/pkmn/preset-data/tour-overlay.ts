@@ -19,7 +19,7 @@
  *    rule set; its page also lists Moody as a banned ability.
  *  - NatDex LC II signups, https://www.smogon.com/forums/threads/natdex-lc-ii-signups.3772680/ (2025-10-19):
  *    `NatDex LC Draft`; the Item Clause is not enforced; moves Grassy Glide, Hidden Power, Baton Pass, Dragon Rage,
- *    Sonic Boom; Z-crystals, non-Normal Gems, Berserk Gene, Quick Claw, King's Rock banned; Z and Tera banned.
+ *    Sonic Boom; Z-crystals, non-Normal Gems, Berserk Gene, Quick Claw, King's Rock, Razor Claw banned; Z and Tera banned.
  *  - 6v6 Doubles Draft signups, https://www.smogon.com/forums/threads/6v6-doubles-draft-signups.3772315/ (2025-10-11)
  *    and format discussion, https://www.smogon.com/forums/threads/6v6-doubles-draft-format-discussion.3764012/
  *    (2025-04-28 onward): tour code `gen96v6doublesdraft@@@teratypepreview, -last respects, -dark void`; Species
@@ -78,13 +78,13 @@ export const TOUR_OVERLAYS: Readonly<Record<string, TourOverlay>> = {
     bans: {
       ...NO_POKEMON,
       moves: ['Baton Pass', 'Grassy Glide', 'Hidden Power'],
-      items: ['Berserk Gene', "King's Rock", 'Quick Claw'],
+      items: ['Berserk Gene', "King's Rock", 'Quick Claw', 'Razor Claw'],
       abilities: ['Moody'],
     },
     itemGroups: ['z-crystals', 'gems-except-normal'],
     sources: ['https://www.smogon.com/forums/threads/natdex-lc-ii-signups.3772680/'],
     skipped: ['Dynamax Clause (Dynamax does not exist in Gen 9)'],
-    unresolved: ['The thread names the item "Razor Claw" among the bans, almost certainly Razor Fang (as in the NatDex threads); neither is applied'],
+    unresolved: [],
   },
   gen9doublesdraft: {
     clausesAdd: ['Species Clause', 'Gravity Sleep Clause', 'Tera Type Preview'],
@@ -101,7 +101,7 @@ export const TOUR_OVERLAYS: Readonly<Record<string, TourOverlay>> = {
       'https://www.smogon.com/forums/threads/6v6-doubles-draft-format-discussion.3764012/',
     ],
     skipped: ['A Pokémon banned in that league\'s own tiering update (Archaludon)'],
-    unresolved: ['Showdown repeals the Evasion Clause for this format; the threads still ban Double Team and Minimize, which is what is applied'],
+    unresolved: [],
   },
 };
 

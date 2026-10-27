@@ -23,7 +23,7 @@ export function pillClass(pressed: boolean): string {
   return [
     'inline-flex min-h-[44px] md:min-h-[32px] items-center gap-1 rounded-full border px-2.5 text-xs font-semibold',
     pressed
-      ? 'border-[var(--draft-accent,var(--poke-accent))] bg-[var(--draft-accent,var(--poke-accent))] text-[var(--poke-surface)]'
+      ? 'border-[var(--draft-accent,var(--poke-accent))] bg-[var(--draft-accent-fill,var(--poke-accent))] text-[var(--poke-surface)]'
       : 'border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] text-[var(--draft-ink,var(--poke-text-primary))]',
     FOCUS_RING,
   ].join(' ');

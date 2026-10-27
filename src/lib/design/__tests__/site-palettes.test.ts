@@ -26,10 +26,8 @@ import { contrastRatio, over, withAlpha } from './wcag';
  * Site palettes (docs/design.md § Site palettes): the shared interface, the
  * plaza identity lock, completeness, and the contrast floor.
  *
- * Contrast: every non-plaza pair meets its floor (text 4.5:1, non-text UI
- * 3:1). Plaza keeps today's values, so its failures must equal
- * KNOWN_PLAZA_FAILURES exactly — the list can only shrink (by an owner
- * decision that changes plaza), never grow.
+ * Contrast: every pair of every palette, plaza included, meets its floor
+ * (text 4.5:1, large text and non-text UI 3:1) in light and dark.
  */
 
 describe('site palette interface', () => {
@@ -70,11 +68,11 @@ describe('site palette interface', () => {
   });
 });
 
-/** Today's plaza values (globals.css@1eecc4eb, both modes). The ten tokens
- *  this work added carry the old static Tailwind values (blue-hover
- *  #2563EB, green-700, red-700, white on-colours, yellow-700 ink, and the
- *  component inks red-500 / red-400 / amber-600). */
-const PLAZA_TODAY = {
+/** The plaza values, both modes. The sunlit text tokens (muted, tertiary,
+ *  accent, accent-strong, focus), the status hues and the warning / error
+ *  inks are the AA values; the grounds, the primary inks and the light
+ *  tints are the arena-sand originals. */
+const PLAZA_PINNED = {
   light: {
     '--background': '#E8D9B5',
     '--foreground': '#241A0C',
@@ -85,39 +83,39 @@ const PLAZA_TODAY = {
     '--poke-inverse': '#241A0C',
     '--poke-text-primary': '#241A0C',
     '--poke-text-secondary': '#5C4E37',
-    '--poke-text-muted': '#8B7B5E',
-    '--poke-text-tertiary': '#A3926F',
+    '--poke-text-muted': '#675940',
+    '--poke-text-tertiary': '#6C5E46',
     '--poke-border': '#E3D2AC',
     '--poke-border-strong': '#C9B183',
-    '--poke-accent': '#C05E0A',
-    '--poke-accent-strong': '#8F4206',
+    '--poke-accent': '#9A4806',
+    '--poke-accent-strong': '#843C05',
     '--poke-accent-light': '#F7E8CF',
-    '--poke-focus': '#B54708',
+    '--poke-focus': '#954506',
     '--poke-live': '#166534',
     '--poke-glow': 'rgba(192, 94, 10, 0.28)',
-    '--poke-blue': '#3B82F6',
-    '--poke-blue-hover': '#2563EB',
-    '--poke-green': '#16A34A',
-    '--poke-green-hover': '#15803D',
+    '--poke-blue': '#1E4BC8',
+    '--poke-blue-hover': '#1A3FA6',
+    '--poke-green': '#166534',
+    '--poke-green-hover': '#14532D',
     '--poke-yellow': '#EAB308',
-    '--poke-danger': '#DC2626',
-    '--poke-danger-hover': '#B91C1C',
+    '--poke-danger': '#A91B1B',
+    '--poke-danger-hover': '#8E1616',
     '--poke-plum': '#7A3B5C',
     '--poke-blue-light': '#EFF6FF',
     '--poke-green-light': '#F0FDF4',
     '--poke-yellow-light': '#FEFCE8',
     '--poke-danger-light': '#FEF2F2',
     '--poke-plum-light': '#F3E3EA',
-    '--poke-yellow-ink': '#a16207',
-    '--poke-danger-ink': '#ef4444',
-    '--poke-danger-tint-ink': '#f87171',
-    '--poke-amber-ink': '#d97706',
+    '--poke-yellow-ink': '#854d0e',
+    '--poke-danger-ink': '#A91B1B',
+    '--poke-danger-tint-ink': '#8E1616',
+    '--poke-amber-ink': '#92400e',
     '--poke-on-blue': '#FFFFFF',
     '--poke-on-green': '#FFFFFF',
     '--poke-on-danger': '#FFFFFF',
     '--primary-foreground': '#FFF8E9',
     '--secondary-foreground': '#FFFFFF',
-    '--destructive': '#DC2626',
+    '--destructive': '#A91B1B',
     '--destructive-foreground': '#FFFFFF',
   },
   dark: {
@@ -131,7 +129,7 @@ const PLAZA_TODAY = {
     '--poke-text-primary': '#F5EDDD',
     '--poke-text-secondary': '#C4B596',
     '--poke-text-muted': '#97886A',
-    '--poke-text-tertiary': '#7D6F52',
+    '--poke-text-tertiary': '#938567',
     '--poke-border': '#453C24',
     '--poke-border-strong': '#5C5133',
     '--poke-accent': '#F5B84B',
@@ -140,36 +138,36 @@ const PLAZA_TODAY = {
     '--poke-focus': '#FB923C',
     '--poke-live': '#4ADE80',
     '--poke-glow': 'rgba(245, 184, 75, 0.15)',
-    '--poke-blue': '#3B82F6',
-    '--poke-blue-hover': '#2563EB',
-    '--poke-green': '#16A34A',
-    '--poke-green-hover': '#15803D',
+    '--poke-blue': '#659FF6',
+    '--poke-blue-hover': '#87B4F8',
+    '--poke-green': '#34C26A',
+    '--poke-green-hover': '#5BD389',
     '--poke-yellow': '#EAB308',
-    '--poke-danger': '#DC2626',
-    '--poke-danger-hover': '#B91C1C',
+    '--poke-danger': '#F4807A',
+    '--poke-danger-hover': '#F8A09B',
     '--poke-plum': '#E39BB8',
-    '--poke-blue-light': 'rgba(59, 130, 246, 0.15)',
-    '--poke-green-light': 'rgba(22, 163, 74, 0.15)',
+    '--poke-blue-light': 'rgba(101, 159, 246, 0.15)',
+    '--poke-green-light': 'rgba(52, 194, 106, 0.15)',
     '--poke-yellow-light': 'rgba(234, 179, 8, 0.15)',
-    '--poke-danger-light': 'rgba(220, 38, 38, 0.15)',
+    '--poke-danger-light': 'rgba(244, 128, 122, 0.15)',
     '--poke-plum-light': 'rgba(227, 155, 184, 0.16)',
-    '--poke-yellow-ink': '#a16207',
-    '--poke-danger-ink': '#ef4444',
-    '--poke-danger-tint-ink': '#f87171',
-    '--poke-amber-ink': '#d97706',
-    '--poke-on-blue': '#FFFFFF',
-    '--poke-on-green': '#FFFFFF',
-    '--poke-on-danger': '#FFFFFF',
+    '--poke-yellow-ink': '#f2c55c',
+    '--poke-danger-ink': '#F4807A',
+    '--poke-danger-tint-ink': '#F8A09B',
+    '--poke-amber-ink': '#fbbf24',
+    '--poke-on-blue': '#0E0B06',
+    '--poke-on-green': '#0E0B06',
+    '--poke-on-danger': '#0E0B06',
     '--primary-foreground': '#171208',
-    '--secondary-foreground': '#ededed',
-    '--destructive': '#DC2626',
-    '--destructive-foreground': '#ededed',
+    '--secondary-foreground': '#0E0B06',
+    '--destructive': '#F4807A',
+    '--destructive-foreground': '#0E0B06',
   },
 } as const;
 
 describe('plaza identity (I1)', () => {
   it('the plaza token set equals today\'s values in both modes', () => {
-    expect(SITE_PALETTE_TOKENS.plaza).toEqual(PLAZA_TODAY);
+    expect(SITE_PALETTE_TOKENS.plaza).toEqual(PLAZA_PINNED);
   });
 });
 
@@ -193,9 +191,6 @@ describe('completeness', () => {
 });
 
 // ─── Contrast floor ────────────────────────────────────────────────────────
-
-const YELLOW_700 = '#a16207'; // Badge.tsx light-mode yellow ink (static Tailwind)
-const BLUE_300 = '#93c5fd'; // Badge.tsx dark-mode blue ink override (static Tailwind)
 
 /** Moment chips (Layer 1 in globals.css, locked to the CSS by site-palette-css.test.ts). */
 const MOMENTS = (mode: SitePaletteMode): ReadonlyArray<readonly [string, string, string]> =>
@@ -258,18 +253,11 @@ function pairs(id: SitePaletteId, mode: SitePaletteMode): Pair[] {
   // below, and component inks). Add a pair here when a component puts text on it.
 
   add('badge', 'accent', v('--poke-accent'), 'accent-light/surface', tint(v('--poke-accent-light')), 4.5);
-  add('badge', 'blue', mode === 'dark' ? BLUE_300 : v('--poke-blue'), 'blue-light/surface', tint(v('--poke-blue-light')), 4.5);
+  add('badge', 'blue', v('--poke-blue'), 'blue-light/surface', tint(v('--poke-blue-light')), 4.5);
   add('badge', 'green', v('--poke-green'), 'green-light/surface', tint(v('--poke-green-light')), 4.5);
   add('badge', 'danger', v('--poke-danger'), 'danger-light/surface', tint(v('--poke-danger-light')), 4.5);
   add('badge', 'plum', v('--poke-plum'), 'plum-light/surface', tint(v('--poke-plum-light')), 4.5);
-  add(
-    'badge',
-    mode === 'light' ? 'yellow-700 (static)' : 'yellow',
-    mode === 'light' ? YELLOW_700 : v('--poke-yellow'),
-    'yellow-light/surface',
-    tint(v('--poke-yellow-light')),
-    4.5,
-  );
+  add('badge', 'yellow-ink', v('--poke-yellow-ink'), 'yellow-light/surface', tint(v('--poke-yellow-light')), 4.5);
 
   const overrides: Record<string, string> = SITE_PALETTE_DARK_MOMENT_OVERRIDES;
   for (const [name, fg0, bg] of MOMENTS(mode)) {
@@ -327,83 +315,6 @@ function failures(id: SitePaletteId): string[] {
   return out;
 }
 
-/** Plaza pairs under their floor today (unchanged by this work; fixing them
- *  changes plaza and is a separate product decision). Remove an entry when it
- *  is fixed; never add one. */
-const KNOWN_PLAZA_FAILURES = [
-  'light text-muted on base',
-  'light text-muted on surface',
-  'light text-muted on elevated',
-  'light text-muted on muted',
-  'light text-tertiary on base',
-  'dark text-tertiary on base',
-  'light text-tertiary on surface',
-  'dark text-tertiary on surface',
-  'light text-tertiary on elevated',
-  'dark text-tertiary on elevated',
-  'light text-tertiary on muted',
-  'dark text-tertiary on muted',
-  'light accent (text) on base',
-  'light accent (text) on surface',
-  'light accent (text) on elevated',
-  'light focus / link text on base',
-  'light primary-foreground on accent',
-  'light blue (text) on base',
-  'light blue (text) on surface',
-  'light blue (text) on elevated',
-  'light green (text) on base',
-  'light green (text) on surface',
-  'light green (text) on elevated',
-  'light danger (text) on base',
-  'dark danger (text) on base',
-  'dark danger (text) on surface',
-  'light danger (text) on elevated',
-  'dark danger (text) on elevated',
-  'light on-blue on blue',
-  'dark on-blue on blue',
-  'light on-green on green',
-  'dark on-green on green',
-  'light secondary-foreground on secondary (blue)',
-  'dark secondary-foreground on secondary (blue)',
-  'dark destructive-foreground on destructive',
-  'light accent on accent-light/surface',
-  'light blue on blue-light/surface',
-  'light green on green-light/surface',
-  'light danger on danger-light/surface',
-  'dark danger on danger-light/surface',
-  'light blue (text) on blue/10/surface',
-  'light blue (text) on blue/15/surface',
-  'dark blue (text) on blue/15/surface',
-  'light blue (text) on blue/20/surface',
-  'dark blue (text) on blue/20/surface',
-  'light blue (text) on blue/10/elevated',
-  'dark blue (text) on blue/10/elevated',
-  'light blue (text) on blue/15/elevated',
-  'dark blue (text) on blue/15/elevated',
-  'light blue (text) on blue/20/elevated',
-  'dark blue (text) on blue/20/elevated',
-  'light green (text) on green/10/surface',
-  'light green (text) on green/15/surface',
-  'light green (text) on green/20/surface',
-  'dark green (text) on green/20/surface',
-  'light green (text) on green/10/elevated',
-  'light green (text) on green/15/elevated',
-  'dark green (text) on green/15/elevated',
-  'light green (text) on green/20/elevated',
-  'dark green (text) on green/20/elevated',
-  'light on-blue on blue/80/surface (hover)',
-  'light on-blue on blue/90/surface (hover)',
-  'dark on-blue on blue/90/surface (hover)',
-  'light on-blue on blue/80/elevated (hover)',
-  'light on-blue on blue/90/elevated (hover)',
-  'dark on-blue on blue/90/elevated (hover)',
-  'light on-green on green/90/surface (hover)',
-  'dark on-green on green/90/surface (hover)',
-  'light on-green on green/90/elevated (hover)',
-  'dark on-green on green/90/elevated (hover)',
-  'dark yellow-ink (Alert warning) on yellow-light/surface',
-];
-
 describe('contrast floor (I4)', () => {
   it('models the same pair list in both modes', () => {
     for (const id of SITE_PALETTE_IDS) {
@@ -416,20 +327,16 @@ describe('contrast floor (I4)', () => {
     }
   });
 
-  for (const id of SITE_PALETTE_IDS.filter((p) => p !== 'plaza')) {
+  for (const id of SITE_PALETTE_IDS) {
     it(`${id}: every pair meets its floor in light and dark`, () => {
       expect(failures(id)).toEqual([]);
     });
   }
 
-  it('plaza: failures equal KNOWN_PLAZA_FAILURES exactly (71, pre-existing)', () => {
-    expect(KNOWN_PLAZA_FAILURES).toHaveLength(71);
-    expect(failures('plaza').sort()).toEqual([...KNOWN_PLAZA_FAILURES].sort());
-  });
-
   it('spot-checks the ratio helper against the spec table', () => {
     const t = SITE_PALETTE_TOKENS;
-    expect(contrastRatio(t.plaza.light['--poke-text-muted'], t.plaza.light['--poke-base'])).toBeCloseTo(2.95, 2);
+    // The pre-AA plaza muted ink on the sand: the audit's 2.95:1.
+    expect(contrastRatio('#8B7B5E', t.plaza.light['--poke-base'])).toBeCloseTo(2.95, 2);
     expect(contrastRatio(t.sakura.light['--poke-accent'], t.sakura.light['--poke-base'])).toBeCloseTo(4.53, 2);
     expect(contrastRatio(t.sakura.light['--poke-text-primary'], t.sakura.light['--poke-base'])).toBeCloseTo(11.33, 2);
   });
@@ -481,39 +388,10 @@ function componentInkFailures(id: SitePaletteId): string[] {
   return out;
 }
 
-/** Plaza component-ink pairs under 4.5:1 at 1eecc4eb (the static Tailwind
- *  values, unchanged: plaza keeps today's pixels). Same rule as
- *  KNOWN_PLAZA_FAILURES: remove an entry when it is fixed; never add one. */
-const KNOWN_PLAZA_COMPONENT_INK_FAILURES = [
-  'dark amber-ink (flag chip) on amber-500/15/elevated',
-  'dark danger-ink (error line) on elevated',
-  'dark yellow-ink (on yellow tint) on yellow-light/elevated',
-  'dark yellow-ink (on yellow tint) on yellow-light/surface',
-  'dark yellow-ink (warning text) on base',
-  'dark yellow-ink (warning text) on elevated',
-  'dark yellow-ink (warning text) on surface',
-  'light amber-ink (flag chip) on amber-500/15/elevated',
-  'light amber-ink (flag chip) on amber-500/15/surface',
-  'light danger-ink (error line) on base',
-  'light danger-ink (error line) on elevated',
-  'light danger-ink (error line) on surface',
-  'light danger-tint-ink (error box) on red-500/10/elevated',
-  'light danger-tint-ink (error box) on red-500/10/surface',
-  'light danger-tint-ink (error box) on red-500/20/elevated',
-  'light danger-tint-ink (error box) on red-500/20/surface',
-  'light yellow-ink (warning text) on base',
-  'light yellow-ink (warning text) on elevated',
-];
-
-describe('component inks (review fix: static Tailwind inks on the dusk surfaces)', () => {
-  for (const id of SITE_PALETTE_IDS.filter((p) => p !== 'plaza')) {
+describe('component inks (warning / error text on its own tint)', () => {
+  for (const id of SITE_PALETTE_IDS) {
     it(`${id}: every component ink meets 4.5:1 in light and dark`, () => {
       expect(componentInkFailures(id)).toEqual([]);
     });
   }
-
-  it('plaza: failures equal KNOWN_PLAZA_COMPONENT_INK_FAILURES exactly (18, pre-existing)', () => {
-    expect(KNOWN_PLAZA_COMPONENT_INK_FAILURES).toHaveLength(18);
-    expect(componentInkFailures('plaza').sort()).toEqual([...KNOWN_PLAZA_COMPONENT_INK_FAILURES].sort());
-  });
 });
