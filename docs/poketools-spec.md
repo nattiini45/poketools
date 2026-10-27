@@ -2274,13 +2274,14 @@ route       per step: ledger row → preconditions → dispatch as the verified 
 
 ### 18.8 Undo, concurrency and drift
 
-**Undo is compensating and never a hard delete.** The only carve-out is a private, unpublished, unattached format draft created in the same conversation. Each ledger row stores its `reversibility` and an `undo` recipe, and `undoability()` is re-evaluated live when Undo is clicked; the button shows the catalogued reason when it cannot run. "Undo build" is an `undo` proposal and the one multi-step G kind (up to 20 steps, in reverse order, each with its own after-state precondition). It lists what will be undone, what cannot be and why, and which entities are "left alone: edited outside chat"; it never touches what the ledger did not create. What remains (phases, pools, rulesets of an archived league) is listed on the card as archived residue.
+**Undo is compensating and never a hard delete.** The only carve-outs are a private, unpublished, unattached format draft and a private ruleset definition with no published version, each created in the same conversation. Each ledger row stores its `reversibility` and an `undo` recipe, and `undoability()` is re-evaluated live when Undo is clicked; the button shows the catalogued reason when it cannot run. "Undo build" is an `undo` proposal and the one multi-step G kind (up to 20 steps, in reverse order, each with its own after-state precondition). It lists what will be undone, what cannot be and why, and which entities are "left alone: edited outside chat"; it never touches what the ledger did not create. What remains (phases, pools, rulesets of an archived league) is listed on the card as archived residue.
 
 | Ledger entry | Undo |
 |---|---|
 | Plan edit | restore the previous revision |
 | Format or ruleset draft save | write back the previous document from `admin_agent_snapshots` (30 days), if the `draft_rev` is still ours; otherwise a conflict card with "restore anyway (overwrites your edits)" as an explicit choice |
 | Format create or fork | delete the private row (the carve-out), only while it has no versions and no attachment |
+| Ruleset draft create or fork | delete the definition through `DELETE /api/ruleset-definitions/[id]` (the carve-out), only while it has no published version; once published it is residue, because a version may already be pinned |
 | Format or ruleset publish | none: versions are immutable (reverse by publishing another version and moving pins) |
 | Pin move | a pin move back (G); refused for a completed target |
 | Format attach, re-attach, detach | detach, re-attach the previous version, re-attach; league not started |
