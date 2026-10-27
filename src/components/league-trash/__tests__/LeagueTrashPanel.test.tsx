@@ -231,6 +231,7 @@ describe('the notices', () => {
           { code: 'parent_missing_nulled', rel: 'teams', column: 'ruleset_id', count: 3 },
           { code: 'replay_hash_released', count: 1 },
           { code: 'columns_ignored', rel: 'games', columns: ['legacy_a', 'legacy_b'] },
+          { code: 'pointer_unknown', rel: 'cast_sessions', column: 'match_id', count: 2 },
         ],
       }),
     );
@@ -241,6 +242,7 @@ describe('the notices', () => {
       '3 records in teams referred to something that was deleted while the league was in the trash. The reference ruleset_id was cleared.',
       '1 restored game used a replay that another game uses now.',
       'The table games no longer has the columns legacy_a and legacy_b.',
+      '2 records in cast_sessions pointed into the league through match_id, a reference that no longer exists after an update.',
     ])
       expect(en).toContain(part);
     const de = render({ rows: [], state }, 'de');
@@ -249,6 +251,7 @@ describe('the notices', () => {
       'Bitte lesen',
       '3 Einträge in teams verwiesen auf etwas, das gelöscht wurde',
       'Die Tabelle games hat die Spalten legacy_a und legacy_b nicht mehr.',
+      '2 Einträge in cast_sessions verwiesen über match_id auf die Liga',
       'Liga „Summer League S3“ wurde wiederhergestellt.',
     ])
       expect(de).toContain(part);

@@ -115,6 +115,13 @@ describe('compileRuleset', () => {
     expect(warned).toEqual([expect.objectContaining({ severity: 'warning', path: '/pokemon/ban/1', params: { id: 'garchmop', category: 'pokemon' } })]);
   });
 
+  it('an allowlist preset warns about an unban of an id already on its list, not of one it rules out', () => {
+    const roster: PresetRules = { ...PRESET, pokemon: { mode: 'allow', ids: ['garchomp', 'pikachu'] } };
+    const input = doc({ pokemon: { ban: [], unban: ['pikachu', 'koraidon'], allow: null } });
+    const warned = compileRuleset(input, { preset: roster }).diagnostics.filter((d) => d.code === 'unban_not_banned');
+    expect(warned.map((d) => d.path)).toEqual(['/pokemon/unban/0']);
+  });
+
   it('a blank base warns about an unban of a move, an item or an ability (the base bans nothing)', () => {
     const input = doc({ base: { kind: 'blank', gen: 9, doubles: false, universe: 'standard' }, moves: { ban: [], unban: ['x'], allow: null } });
     expect(codes(input, { preset: null })).toContain('unban_not_banned');

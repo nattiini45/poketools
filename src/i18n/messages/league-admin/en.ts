@@ -117,6 +117,12 @@ export default {
           one: 'The table {rel} no longer has the column {columns}. The saved values of this column were not restored.',
           other: 'The table {rel} no longer has the columns {columns}. The saved values of these columns were not restored.',
         },
+        /** A reference the recycle bin no longer knows after a schema change (table `{rel}`, column `{column}`). */
+        pointer_unknown: {
+          one: '{count} record in {rel} pointed into the league through {column}, a reference that no longer exists after an update. It was not linked again.',
+          other:
+            '{count} records in {rel} pointed into the league through {column}, a reference that no longer exists after an update. They were not linked again.',
+        },
       },
       /** `{name}` = the league. */
       rebuilt: 'The rebuild of league "{name}" finished.',

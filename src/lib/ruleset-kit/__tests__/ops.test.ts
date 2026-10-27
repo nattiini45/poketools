@@ -4,7 +4,7 @@ import { newRulesetDocument } from '@/lib/ruleset-studio/document';
 import { compileRuleset } from '../compile';
 import { categoryCounts, documentCounts, listChanges } from '../changes';
 import { computeEffective, diffResolved } from '../effective';
-import { entryState, isLegalState, presetRulesOut } from '../entry-state';
+import { entryState, isLegalState, presetRulesOut, unbanIsRedundant } from '../entry-state';
 import { MAX_IDS_PER_LIST } from '../limits';
 import {
   allowEntries,
@@ -65,6 +65,16 @@ describe('entryState', () => {
     expect(presetRulesOut(ROSTER.pokemon, 'pikachu')).toBe(false);
     expect(entryState({ ban: ['pikachu'], unban: ['mewtwo'], allow: null }, ROSTER.pokemon, 'pikachu')).toBe('you_banned');
     expect(entryState({ ban: ['pikachu'], unban: ['mewtwo'], allow: null }, ROSTER.pokemon, 'mewtwo')).toBe('you_unbanned');
+  });
+
+  it('a redundant unban (the preset does not rule the id out) shows the preset answer, not a change of the document', () => {
+    expect(entryState({ ban: [], unban: ['pikachu'], allow: null }, PRESET.pokemon, 'pikachu')).toBe('legal');
+    expect(entryState({ ban: [], unban: ['pikachu'], allow: null }, ROSTER.pokemon, 'pikachu')).toBe('legal');
+    expect(unbanIsRedundant(PRESET.pokemon, 'pikachu')).toBe(true);
+    expect(unbanIsRedundant(PRESET.pokemon, 'koraidon')).toBe(false);
+    expect(unbanIsRedundant(ROSTER.pokemon, 'mewtwo')).toBe(false);
+    expect(unbanIsRedundant(null, 'pikachu')).toBe(false);
+    expect(entryState({ ban: [], unban: ['pikachu'], allow: null }, null, 'pikachu')).toBe('you_unbanned');
   });
 
   it('allowlist mode only knows allowed and not allowed', () => {

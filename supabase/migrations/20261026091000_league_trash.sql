@@ -122,6 +122,7 @@ CREATE TABLE public.league_trash (
   unlinked        jsonb NOT NULL DEFAULT '[]'::jsonb,  -- [{rel, col, id, old}] outside rows to re-link on restore
   schema_version  text,                                -- highest applied migration at delete time ("schema changed since delete")
   rebuild_pending boolean NOT NULL DEFAULT true,       -- the app's derived-data rebuild after the delete has not finished
+  frozen_pools    integer NOT NULL DEFAULT 0,          -- running queue drafts the delete paused (a restore reports these)
   CONSTRAINT league_trash_window CHECK (purge_after > deleted_at)
 );
 CREATE UNIQUE INDEX uq_league_trash_season ON public.league_trash (season_id);
@@ -528,9 +529,9 @@ BEGIN
   END LOOP;
 
   SELECT name INTO v_actor_name FROM public.players WHERE id = p_actor;
-  INSERT INTO public.league_trash (id, season_id, season_name, format_type, deleted_at, deleted_by, deleted_by_name, purge_after, schema_version)
+  INSERT INTO public.league_trash (id, season_id, season_name, format_type, deleted_at, deleted_by, deleted_by_name, purge_after, schema_version, frozen_pools)
   VALUES (v_trash, p_season_id, v_season.name, v_season.format_type::text, v_now, p_actor, v_actor_name,
-          v_now + make_interval(days => p_retention_days), v_version);
+          v_now + make_interval(days => p_retention_days), v_version, v_frozen);
   v_unlinked := public.league_trash__capture(p_season_id, v_trash);
   PERFORM public.league_trash__protect(v_trash);
   SELECT jsonb_object_agg(rel, n) INTO v_counts FROM public.league_trash_tables WHERE trash_id = v_trash;
@@ -624,7 +625,7 @@ END $$;
 CREATE OR REPLACE FUNCTION public.league_trash_restore(p_trash_id uuid, p_now timestamptz DEFAULT now())
 RETURNS jsonb LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
-  t public.league_trash; p record; f record; e jsonb; v_rows jsonb; v_colsj jsonb; v_miss text[]; v_sql text; v_parent text;
+  t public.league_trash; p record; f record; e jsonb; v_rows jsonb; v_colsj jsonb; v_miss text[]; v_sql text; v_parent text; v_lost jsonb := '[]';
   v_n bigint; v_shift interval; v_restored jsonb := '{}'::jsonb; v_warn jsonb := '[]'::jsonb; v_ids uuid[]; v_released bigint;
   v_sid uuid; v_queue uuid[] := '{}'; v_bad jsonb; v_jobs bigint := 0;
 BEGIN
@@ -751,12 +752,22 @@ BEGIN
     RAISE EXCEPTION 'LEAGUE_TRASH_PLAN_MISMATCH' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('mismatched', v_bad)::text;
   END IF;
 
-  -- Re-link the outside rows that were unlinked (only when the row still exists and its column is still NULL).
+  -- Re-link the outside rows that were unlinked (only when the row still exists and its column is still NULL). A
+  -- pointer a later migration removed from league_trash__pointers() (no row: v_parent NULL) is not re-linked; it is
+  -- reported as a pointer_unknown warning instead of failing the restore.
   FOR e IN SELECT x FROM jsonb_array_elements(t.unlinked) x LOOP
     SELECT pt.parent INTO v_parent FROM public.league_trash__pointers() pt WHERE pt.rel = e ->> 'rel' AND pt.col = e ->> 'col';
+    IF v_parent IS NULL THEN
+      v_lost := v_lost || jsonb_build_array(e);
+      CONTINUE;
+    END IF;
     EXECUTE format('UPDATE public.%I SET %I = $1 WHERE id = $2 AND %I IS NULL AND EXISTS (SELECT 1 FROM public.%I WHERE id = $1)',
                    e ->> 'rel', e ->> 'col', e ->> 'col', v_parent) USING (e ->> 'old')::uuid, (e ->> 'id')::uuid;
   END LOOP;
+
+  v_warn := v_warn || coalesce((
+    SELECT jsonb_agg(jsonb_build_object('code', 'pointer_unknown', 'rel', s.rel, 'column', s.col, 'count', s.n) ORDER BY s.rel, s.col)
+      FROM (SELECT x ->> 'rel' AS rel, x ->> 'col' AS col, count(*) AS n FROM jsonb_array_elements(v_lost) x GROUP BY 1, 2) s), '[]');
 
   INSERT INTO public.league_trash_restore_rebuilds (season_id, trash_id, season_name, restored_at, phase_ids, player_ids)
   VALUES (t.season_id, t.id, t.season_name, p_now, t.phase_ids, t.player_ids)
@@ -767,7 +778,7 @@ BEGIN
   RETURN jsonb_build_object(
     'season_id', t.season_id, 'season_name', t.season_name, 'restored', v_restored,
     'shift_seconds', extract(epoch FROM v_shift), 'player_ids', to_jsonb(t.player_ids), 'phase_ids', to_jsonb(t.phase_ids),
-    'paused_pools', (SELECT count(*) FROM public.draft_pools WHERE season_id = t.season_id AND engine = 'queue' AND phase = 'drafting' AND paused_at IS NOT NULL),
+    'paused_pools', t.frozen_pools,   -- the drafts the delete paused; one an admin had paused before stays out of it
     'queued_aggregate_jobs', v_jobs, 'schema_version_at_delete', t.schema_version, 'warnings', v_warn);
 END $$;
 

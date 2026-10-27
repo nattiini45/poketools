@@ -10,6 +10,10 @@
  *   you_unbanned   the document makes it legal although the preset rules it out
  *   legal          nothing rules it out
  *
+ * An unban of an id the preset does not rule out changes nothing (`unbanIsRedundant`; the compile warns
+ * `unban_not_banned` and offers to remove it), so the entry shows `legal`, not `you_unbanned`. Without a preset list
+ * (a blank base) an unban is always the document's own: a blank base's Pokémon unban overrides the format's tier.
+ *
  * A preset whose own list is an allowlist (a Champions roster, Little Cup) "rules out" every id NOT on its list; the
  * same four states apply. In ALLOW mode (the document's `allow` is non-null) only the listed ids are legal:
  *
@@ -22,11 +26,19 @@ import type { CategoryRules } from './types';
 export const ENTRY_STATES = ['preset_banned', 'you_banned', 'you_unbanned', 'legal', 'allowed', 'not_allowed'] as const;
 export type EntryState = (typeof ENTRY_STATES)[number];
 
+/** Whether a preset list rules out an id, given whether the id is on the list. The one copy of the rule. */
+function rulesOut(base: PresetList, listed: boolean): boolean {
+  return base.mode === 'block' ? listed : !listed;
+}
+
 /** Whether the preset itself rules `id` out (before the document's changes). */
 export function presetRulesOut(base: PresetList | null, id: string): boolean {
-  if (base === null) return false;
-  const listed = base.ids.includes(id);
-  return base.mode === 'block' ? listed : !listed;
+  return base !== null && rulesOut(base, base.ids.includes(id));
+}
+
+/** Whether an unban of `id` changes nothing: there is a preset list and it does not rule `id` out. */
+export function unbanIsRedundant(base: PresetList | null, id: string): boolean {
+  return base !== null && !presetRulesOut(base, id);
 }
 
 /** A lookup that does not scan the list for every entry: the picker asks for thousands of ids. */
@@ -43,8 +55,9 @@ export function stateLookup(rules: CategoryRules, base: PresetList | null): Stat
   return {
     stateOf(id) {
       if (allow !== null) return allow.has(id) ? 'allowed' : 'not_allowed';
-      const ruledOut = baseIds === null || base === null ? false : base.mode === 'block' ? baseIds.has(id) : !baseIds.has(id);
-      if (unban.has(id)) return 'you_unbanned';
+      const ruledOut = base !== null && baseIds !== null && rulesOut(base, baseIds.has(id));
+      // A redundant unban (the preset does not rule the id out) is no change of the document's.
+      if (unban.has(id) && (ruledOut || base === null)) return 'you_unbanned';
       if (ban.has(id)) return ruledOut ? 'preset_banned' : 'you_banned';
       return ruledOut ? 'preset_banned' : 'legal';
     },

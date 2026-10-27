@@ -88,6 +88,8 @@ function warningText(t: T, f: Formatter, warning: LeagueTrashRestoreWarning): st
       return t('trash.notice.warnings.replay_hash_released', { count: warning.count });
     case 'columns_ignored':
       return t('trash.notice.warnings.columns_ignored', { count: warning.columns.length, rel: warning.rel, columns: f.list(warning.columns) });
+    case 'pointer_unknown':
+      return t('trash.notice.warnings.pointer_unknown', { count: warning.count, rel: warning.rel, column: warning.column });
   }
 }
 

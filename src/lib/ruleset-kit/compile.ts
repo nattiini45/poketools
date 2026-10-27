@@ -21,6 +21,7 @@ import { getClause, isEnforcedClause } from '@/lib/pkmn/clauses';
 import { parseFormatId } from '@/lib/pkmn/format-id';
 import type { PresetRules } from '@/lib/pkmn/preset-rules';
 import { computeEffective } from './effective';
+import { unbanIsRedundant } from './entry-state';
 import { validateRulesetDocument } from './validate';
 import {
   RULESET_CATEGORIES,
@@ -161,14 +162,17 @@ function checkList(
     }
   });
 
-  // Redundancy against the base is only meaningful for a block-mode preset list.
-  if (base !== null && base.mode === 'block') {
-    const baseIds = new Set(base.ids);
-    rules.ban.forEach((id, index) => {
-      if (baseIds.has(id) && !unbanned.has(id)) out.push(diag('ban_redundant', `/${category}/ban/${index}`, { id, category }, [{ op: 'remove', path: `/${category}/ban/${index}` }]));
-    });
+  // Redundancy against the base: a ban the block list already has, and (block or allow list) an unban of an id the
+  // list does not rule out, the same rule the picker's chip follows (`unbanIsRedundant`).
+  if (base !== null) {
+    if (base.mode === 'block') {
+      const baseIds = new Set(base.ids);
+      rules.ban.forEach((id, index) => {
+        if (baseIds.has(id) && !unbanned.has(id)) out.push(diag('ban_redundant', `/${category}/ban/${index}`, { id, category }, [{ op: 'remove', path: `/${category}/ban/${index}` }]));
+      });
+    }
     rules.unban.forEach((id, index) => {
-      if (!baseIds.has(id)) out.push(diag('unban_not_banned', `/${category}/unban/${index}`, { id, category }, [{ op: 'remove', path: `/${category}/unban/${index}` }]));
+      if (unbanIsRedundant(base, id)) out.push(diag('unban_not_banned', `/${category}/unban/${index}`, { id, category }, [{ op: 'remove', path: `/${category}/unban/${index}` }]));
     });
   } else if (doc.base.kind === 'blank' && category !== 'pokemon') {
     // A blank base bans nothing, so only the Pokémon unban means something (legal despite the format key's tier).

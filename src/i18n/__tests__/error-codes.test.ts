@@ -37,7 +37,7 @@ const KEY = /^[A-Za-z0-9_]+$/;
  *   reconciliation report (a Markdown/JSON report field, never an HTTP error
  *   body); they belong to the report's own namespace, not to `errors/*`.
  * - `lib/league-trash/restore-warnings.ts`: the `warnings` of a league restore
- *   (`parent_missing_nulled`, `replay_hash_released`, `columns_ignored`). They
+ *   (`parent_missing_nulled`, `replay_hash_released`, `columns_ignored`, `pointer_unknown`). They
  *   are data the restore function reports next to a SUCCESSFUL restore, parsed
  *   once here for the server and the trash page, rendered from the page's own
  *   messages, and never an HTTP error body.

@@ -95,6 +95,11 @@ export default defineDe<typeof en>()({
           one: 'Die Tabelle {rel} hat die Spalte {columns} nicht mehr. Die gespeicherten Werte dieser Spalte wurden nicht wiederhergestellt.',
           other: 'Die Tabelle {rel} hat die Spalten {columns} nicht mehr. Die gespeicherten Werte dieser Spalten wurden nicht wiederhergestellt.',
         },
+        pointer_unknown: {
+          one: '{count} Eintrag in {rel} verwies über {column} auf die Liga, einen Verweis, den es nach einem Update nicht mehr gibt. Er wurde nicht wieder verknüpft.',
+          other:
+            '{count} Einträge in {rel} verwiesen über {column} auf die Liga, einen Verweis, den es nach einem Update nicht mehr gibt. Sie wurden nicht wieder verknüpft.',
+        },
       },
       rebuilt: 'Der Neuaufbau der Liga „{name}“ ist fertig.',
       rebuildIncomplete: 'Der Neuaufbau wurde nicht abgeschlossen:',

@@ -303,6 +303,16 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       expect(await q.markLeagueTrashRebuildDone(trash.trash_id)).toBe(true);
       expect(await q.getPendingLeagueRebuild(trash.trash_id)).toBeNull();
 
+      // An unlinked outside row whose pointer a later migration removed from league_trash__pointers(): the restore
+      // skips its re-link and reports it instead of failing on an empty table name.
+      const entry = await admin.from('league_trash').select('unlinked').eq('id', trash.trash_id).single();
+      const ghost = { rel: 'removed_table', col: 'league_ref', id: league.seasonId, old: league.seasonId };
+      const injected = await admin
+        .from('league_trash')
+        .update({ unlinked: [...((entry.data?.unlinked ?? []) as unknown[]), ghost, ghost] as never })
+        .eq('id', trash.trash_id);
+      expect(injected.error).toBeNull();
+
       const restoreNow = new Date(Date.now() + 30 * DAY).toISOString();
       const t0 = Date.now();
       const restored = await rpc<{
@@ -318,7 +328,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       const result = restored.data as NonNullable<typeof restored.data>;
       restoreShiftSeconds = result.shift_seconds;
       expect(result.season_id).toBe(league.seasonId);
-      expect(result.warnings).toEqual([]);
+      expect(result.warnings).toEqual([{ code: 'pointer_unknown', rel: 'removed_table', column: 'league_ref', count: 2 }]);
       expect(result.restored).toEqual(Object.fromEntries(Object.entries(trash.counts).filter(([, n]) => n > 0)));
       expect(result.paused_pools).toBe(1);
       expect(result.queued_aggregate_jobs).toBe(league.counts.games);

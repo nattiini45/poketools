@@ -425,6 +425,12 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **League restore.** A restore whose answer is lost to a request timeout is settled by its rebuild tombstone and
   reported as a success (the trash page says its details are unknown) instead of a plain failure. The rebuild after a
   restore stays pending while aggregate jobs of the league failed for good; running it again re-queues them.
+- **League restore notice.** "N running drafts came back paused" now counts only the drafts the delete paused, not
+  one an admin had paused before. A restore no longer fails when a later update removed a reference the recycle bin
+  re-links; those rows stay unlinked and the notice says so.
+- **Ruleset Studio chips.** An unban of an entry the preset does not rule out no longer shows the "you unbanned" chip
+  with a Reset button; the entry shows as legal, and the editor warns about the redundant unban, also for allowlist
+  presets.
 - **Studio documents.** A text with a lone UTF-16 surrogate half is refused by every check before the database (it used
   to fail the jsonb write with a 500), and the Ruleset Studio reads a document's name with the ruleset kit's own text rule,
   so an imported file the editor accepts is no longer refused by the API.

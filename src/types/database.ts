@@ -2280,6 +2280,7 @@ export type Database = {
           deleted_by: string | null
           deleted_by_name: string | null
           format_type: string
+          frozen_pools: number
           id: string
           phase_ids: string[]
           player_ids: string[]
@@ -2296,6 +2297,7 @@ export type Database = {
           deleted_by?: string | null
           deleted_by_name?: string | null
           format_type: string
+          frozen_pools?: number
           id?: string
           phase_ids?: string[]
           player_ids?: string[]
@@ -2312,6 +2314,7 @@ export type Database = {
           deleted_by?: string | null
           deleted_by_name?: string | null
           format_type?: string
+          frozen_pools?: number
           id?: string
           phase_ids?: string[]
           player_ids?: string[]
