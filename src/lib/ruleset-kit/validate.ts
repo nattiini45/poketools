@@ -6,14 +6,14 @@
  * (`src/lib/ruleset-studio/api-schemas.ts`).
  *
  * Safety: every read is an own-property read (`__proto__`, `constructor` and inherited members are never consulted),
- * the keys of the result are taken from this file and never from the input, strings are checked for NUL (Postgres jsonb
- * refuses it) and every list is length-bounded BEFORE it is copied. Semantic checks (a ban that is also an unban, an id
+ * the keys of the result are taken from this file and never from the input, strings are checked for NUL and lone UTF-16
+ * surrogate halves (Postgres jsonb refuses both; `isStorableText`) and every list is length-bounded BEFORE it is copied. Semantic checks (a ban that is also an unban, an id
  * the dex does not know) belong to `compile` (./compile.ts); this file only decides whether the shape is a document.
  *
  * The result is a copy: the input is never mutated and shares no array with the output.
  */
 import { SINGLES_TIER_ORDER } from '@/lib/pkmn/tier-constants';
-import { hasOwn } from '@/lib/studio-core/keys';
+import { hasOwn, isStorableText } from '@/lib/studio-core/keys';
 import type { LText } from '@/lib/studio-core/ltext';
 import type { TeamConstraints, TierKey } from '@/types/ruleset';
 import {
@@ -84,8 +84,8 @@ function own(record: Record<string, unknown>, key: string): unknown {
   return hasOwn(record, key) ? record[key] : undefined;
 }
 
-function hasNul(text: string): boolean {
-  return text.includes('\u0000');
+function unstorable(text: string): boolean {
+  return !isStorableText(text);
 }
 
 /** Keys of `record` that are not in `allowed` (own enumerable keys only). */
@@ -124,7 +124,7 @@ function parseText(value: unknown, path: string, max: number, out: Collector): L
     if (entry === undefined) continue;
     const v = isRecord(entry) ? own(entry, 'v') : undefined;
     const s = isRecord(entry) ? own(entry, 's') : undefined;
-    if (!isRecord(entry) || typeof v !== 'string' || v.trim() === '' || v.length > max || hasNul(v)) {
+    if (!isRecord(entry) || typeof v !== 'string' || v.trim() === '' || v.length > max || unstorable(v)) {
       out.add('bad_text', `${path}/${locale}`);
       ok = false;
       continue;
@@ -178,7 +178,7 @@ function parseIdentity(value: unknown, out: Collector): RulesetIdentity | null {
   const basedOnRaw = own(value, 'based_on');
   let basedOn: string | undefined;
   if (basedOnRaw !== undefined) {
-    if (typeof basedOnRaw !== 'string' || basedOnRaw === '' || basedOnRaw.length > MAX_BASED_ON_CHARS || hasNul(basedOnRaw)) {
+    if (typeof basedOnRaw !== 'string' || basedOnRaw === '' || basedOnRaw.length > MAX_BASED_ON_CHARS || unstorable(basedOnRaw)) {
       out.add('bad_based_on', '/identity/based_on');
     } else {
       basedOn = basedOnRaw;
@@ -275,7 +275,7 @@ function parseTeamConstraints(value: unknown, out: Collector): TeamConstraints |
       const multi = own(quotas, 'allow_multi_count');
       const fixedOk =
         fixed === undefined ||
-        (Array.isArray(fixed) && fixed.length <= 18 && fixed.every((t) => typeof t === 'string' && t.length <= 20 && !hasNul(t)));
+        (Array.isArray(fixed) && fixed.length <= 18 && fixed.every((t) => typeof t === 'string' && t.length <= 20 && !unstorable(t)));
       if ((source !== 'player_core' && source !== 'fixed') || !fixedOk || !intInRange(min, 0, 6) || typeof multi !== 'boolean') {
         fail('type_quotas');
       } else {
@@ -327,6 +327,23 @@ function parseTeamConstraints(value: unknown, out: Collector): TeamConstraints |
   return ok ? result : undefined;
 }
 
+/**
+ * `identity.name` and `identity.summary` of a document read with the validator's own text rule, each null when absent or
+ * not a valid text. The Ruleset Studio's list columns follow these, so a document this validator accepts always yields
+ * a name (and the stored column gets the normalized text, `s` defaulted to `human`). Lenient on the rest: a half-built
+ * draft still yields its texts.
+ */
+export function readRulesetIdentityTexts(document: unknown): { name: LText | null; description: LText | null } {
+  const identity = isRecord(document) ? own(document, 'identity') : undefined;
+  if (!isRecord(identity)) return { name: null, description: null };
+  const scratch = new Collector();
+  const summary = own(identity, 'summary');
+  return {
+    name: parseText(own(identity, 'name'), '/identity/name', MAX_NAME_CHARS, scratch),
+    description: summary === undefined ? null : parseText(summary, '/identity/summary', LTEXT_MAX, scratch),
+  };
+}
+
 /** Validates the SHAPE of a ruleset document and returns a normalized copy, or every structural issue found. */
 export function validateRulesetDocument(input: unknown): ValidateResult {
   const out = new Collector();
@@ -358,7 +375,7 @@ export function validateRulesetDocument(input: unknown): ValidateResult {
   if (!intInRange(pct, 0, 100)) out.add('bad_percent', '/min_shared_type_pct');
   const constraints = parseTeamConstraints(own(input, 'team_constraints'), out);
   const rules = own(input, 'custom_rules');
-  if (typeof rules !== 'string' || rules.length > MAX_CUSTOM_RULES_CHARS || hasNul(rules)) out.add('bad_custom_rules', '/custom_rules');
+  if (typeof rules !== 'string' || rules.length > MAX_CUSTOM_RULES_CHARS || unstorable(rules)) out.add('bad_custom_rules', '/custom_rules');
 
   if (
     out.issues.length > 0 ||

@@ -24,6 +24,7 @@ vi.mock('@/lib/supabase/queries/league-trash', () => ({
   markLeagueTrashRebuildDone: vi.fn(),
   moveLeagueToTrash: vi.fn(),
   getLeagueTrashBySeason: vi.fn(),
+  getPendingLeagueRebuild: vi.fn(),
 }));
 
 vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
@@ -36,6 +37,7 @@ vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 import { POST } from '@/app/api/admin/league-trash/[id]/restore/route';
 import { requireSuperadmin, AuthError } from '@/lib/auth/helpers';
 import {
+  getPendingLeagueRebuild,
   markLeagueRestoreRebuildDone,
   restoreLeagueFromTrash,
   type LeagueTrashRestoreResult,
@@ -78,7 +80,7 @@ const restored: LeagueTrashRestoreResult = {
 const rebuilt = {
   scope: 'season_restore' as const,
   playerIds: PLAYERS,
-  aggregateJobs: { processed: 30, failed: 0, remaining: 0 },
+  aggregateJobs: { requeued: 0, processed: 30, failed: 0, remaining: 0, failedForGood: 0 },
   ratingsRebuilt: 2,
   ratingPasses: 2,
   ratingsSettled: true,
@@ -94,6 +96,7 @@ beforeEach(() => {
   vi.mocked(restoreLeagueFromTrash).mockResolvedValue(restored);
   vi.mocked(rebuildAfterSeasonRestore).mockResolvedValue(rebuilt);
   vi.mocked(markLeagueRestoreRebuildDone).mockResolvedValue(true);
+  vi.mocked(getPendingLeagueRebuild).mockResolvedValue(null);
 });
 
 describe('POST /api/admin/league-trash/[id]/restore', () => {
@@ -235,6 +238,50 @@ describe('POST /api/admin/league-trash/[id]/restore', () => {
 
     expect(body.data.rebuild_warning).toMatchObject({ code: 'restore_rebuild_ratings_unsettled' });
     expect(markLeagueRestoreRebuildDone).not.toHaveBeenCalled();
+  });
+
+  it('warns about aggregate jobs that failed for good and leaves the rebuild pending', async () => {
+    vi.mocked(rebuildAfterSeasonRestore).mockResolvedValue({
+      ...rebuilt,
+      aggregateJobs: { ...rebuilt.aggregateJobs, failed: 3, failedForGood: 1 },
+    });
+
+    const body = await (await call()).json();
+
+    expect(body.data.rebuild_warning).toMatchObject({ code: 'restore_rebuild_aggregate_jobs_failed', params: { count: 1 } });
+    expect(markLeagueRestoreRebuildDone).not.toHaveBeenCalled();
+  });
+
+  it('settles a restore that committed behind a request deadline: a success with the details unknown', async () => {
+    vi.mocked(restoreLeagueFromTrash).mockRejectedValue(new LeagueTrashDbError('LEAGUE_TRASH_TIMEOUT'));
+    vi.mocked(getPendingLeagueRebuild).mockResolvedValue({
+      kind: 'restore',
+      trash_id: TRASH_ID,
+      season_id: SEASON_ID,
+      season_name: 'Season One',
+      at: '2026-10-27T10:00:00.000Z',
+      phase_ids: PHASES,
+      player_ids: ['p1', 'p2'],
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const response = await call();
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.data).toMatchObject({ season_id: SEASON_ID, paused_pools: null, warnings: [], rebuild_warning: null });
+      expect(rebuildAfterSeasonRestore).toHaveBeenCalledWith({ seasonId: SEASON_ID, playerIds: ['p1', 'p2'] });
+      expect(markLeagueRestoreRebuildDone).toHaveBeenCalledWith(SEASON_ID);
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'season.restore',
+          metadata: expect.objectContaining({ settled_after_timeout: true, paused_pools: null }),
+        }),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('keeps a catalogued refusal of a rebuild step as its own warning code', async () => {

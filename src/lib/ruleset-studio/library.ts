@@ -11,10 +11,11 @@ import 'server-only';
 
 import { resolveLText, type LText } from '@/lib/studio-core/ltext';
 import { applyTourOverlay } from '@/lib/ruleset-kit/overlay';
+import { readRulesetIdentityTexts } from '@/lib/ruleset-kit/validate';
 import type { RulesetDocument } from '@/lib/ruleset-kit/types';
 import { resolvePresetRules, resolveTourOverlay } from '@/lib/pkmn/preset-rules.server';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { extractIdentity, hasSummary } from '@/lib/studio-core/identity';
+import { hasSummary } from '@/lib/studio-core/identity';
 import { newRulesetDocument, withBasedOnDefault } from '@/lib/ruleset-studio/document';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import { insertWithSlug as insertWithSlugCore, type SlugRequest } from '@/lib/studio-core/insert-with-slug.server';
@@ -207,7 +208,7 @@ export async function createFromBody(actor: SessionPlayer, body: RulesetCreateBo
   let description: LText | null = null;
   if ('document' in body) {
     document = body.document;
-    const identity = extractIdentity(document);
+    const identity = readRulesetIdentityTexts(document);
     if (identity.name === null) throw new RulesetStudioError('ruleset_document_invalid', { count: 1 });
     name = identity.name;
     description = identity.description;
@@ -215,7 +216,7 @@ export async function createFromBody(actor: SessionPlayer, body: RulesetCreateBo
   } else {
     const fresh = newRulesetDocument(body.name, body.base_locale, body.preset);
     document = (body.tour_overlay === true && body.preset !== undefined ? withTourOverlay(fresh, body.preset) : fresh) as unknown as Record<string, unknown>;
-    const identity = extractIdentity(document);
+    const identity = readRulesetIdentityTexts(document);
     if (identity.name === null) throw new RulesetStudioError('ruleset_document_invalid', { count: 1 });
     name = identity.name;
     slugSource = body.name;
@@ -248,7 +249,7 @@ export async function forkDefinition(
     base = draft.document;
   }
   const document = withBasedOnDefault(base, source.slug);
-  const identity = extractIdentity(document);
+  const identity = readRulesetIdentityTexts(document);
   const meta = await insertWithSlug(
     {
       name: identity.name ?? source.name,
@@ -287,7 +288,7 @@ export async function forkPreset(
   await assertOwnerQuota(actor.playerId);
   const fresh = newRulesetDocument(preset.name, 'en', preset.id);
   const document = (options.tourOverlay === true ? withTourOverlay(fresh, preset.id) : fresh) as unknown as Record<string, unknown>;
-  const identity = extractIdentity(document);
+  const identity = readRulesetIdentityTexts(document);
   const meta = await insertWithSlug(
     { name: identity.name as LText, description: null, ownerId: actor.playerId, forkedFrom: null, document },
     options.slug !== undefined ? { explicit: options.slug } : { base: slugFromName(preset.id) },
@@ -339,7 +340,7 @@ export async function saveDraft(
   meta: RulesetDefinitionMeta,
   input: { draftRev: number; document: Record<string, unknown> },
 ): Promise<SavedDraft> {
-  const identity = extractIdentity(input.document);
+  const identity = readRulesetIdentityTexts(input.document);
   const followsIdentity = meta.visibility === 'private';
   const description = followsIdentity ? (identity.description ?? (hasSummary(input.document) ? undefined : null)) : undefined;
   const saved = await saveRulesetDraft({

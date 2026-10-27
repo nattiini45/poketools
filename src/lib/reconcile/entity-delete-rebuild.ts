@@ -40,6 +40,10 @@
 import { clearAggregatesForScope } from '@/lib/supabase/queries/aggregates';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { drainPendingAggregateJobs, rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
+import {
+  countFailedIncrementJobsForSeason,
+  requeueFailedIncrementJobsForSeason,
+} from '@/lib/match/aggregate-queue';
 import { rebuildRatingsForPlayers } from '@/lib/rating/updateRatings';
 import { rebuildRatingsSettled } from '@/lib/rating/test-league-rebuild';
 import { recomputeStreaks } from '@/lib/gamification/streaks';
@@ -246,8 +250,11 @@ const RESTORE_AGGREGATE_BATCH_SIZE = 50;
 export interface EntityRestoreRebuildSummary {
   scope: 'season_restore';
   playerIds: string[];
-  /** The aggregate queue drain: jobs applied and failed this run, and how many are still queued for the cron. */
-  aggregateJobs: { processed: number; failed: number; remaining: number };
+  /**
+   * The aggregate queue drain: failed jobs of the league re-queued before it, jobs applied and failed attempts this
+   * run, how many are still queued for the cron, and how many of the league's jobs ended failed for good.
+   */
+  aggregateJobs: { requeued: number; processed: number; failed: number; remaining: number; failedForGood: number };
   ratingsRebuilt: number;
   ratingPasses: number;
   /** False when the settle loop hit its pass cap while a pass still changed ratings. */
@@ -260,8 +267,10 @@ export interface EntityRestoreRebuildSummary {
  * Rebuild derived data after a league was restored from the trash. Call AFTER
  * the restore committed; `playerIds` come from the restore itself. Each step is
  * idempotent, so the pending rebuild can run it again after a failure:
- *   1. aggregates: drain the aggregate queue (the restore queued one increment
- *      job per game with stats). League, tournament and all_time scopes are
+ *   1. aggregates: re-queue the league's increment jobs that failed for good
+ *      (a run before this one), drain the aggregate queue (the restore queued
+ *      one increment job per game with stats) and count the league's jobs that
+ *      failed for good again. League, tournament and all_time scopes are
  *      counted by the queue's own atomic apply, never rebuilt globally here.
  *   2. ratings: the settle loop of the test-league rebuild over the players.
  *   3. streaks: `recomputeStreaks` per player (the restored matches' streak
@@ -274,12 +283,14 @@ export async function rebuildAfterSeasonRestore(input: {
 }): Promise<EntityRestoreRebuildSummary> {
   const { seasonId, playerIds } = input;
 
-  const drained = await step('aggregates', () =>
-    drainPendingAggregateJobs({
+  const { requeued, drained, failedForGood } = await step('aggregates', async () => {
+    const requeued = await requeueFailedIncrementJobsForSeason(seasonId);
+    const drained = await drainPendingAggregateJobs({
       batchSize: RESTORE_AGGREGATE_BATCH_SIZE,
       deadline: Date.now() + RESTORE_AGGREGATE_DRAIN_BUDGET_MS,
-    })
-  );
+    });
+    return { requeued, drained, failedForGood: await countFailedIncrementJobsForSeason(seasonId) };
+  });
 
   const ratings = await step('ratings', () => rebuildRatingsSettled(playerIds));
 
@@ -295,9 +306,11 @@ export async function rebuildAfterSeasonRestore(input: {
     scope: 'season_restore',
     playerIds,
     aggregateJobs: {
+      requeued,
       processed: drained.processed,
       failed: drained.failed,
       remaining: drained.statsAfter.pending + drained.statsAfter.processing,
+      failedForGood,
     },
     ratingsRebuilt: ratings.rebuiltPlayerIds.length,
     ratingPasses: ratings.passes,

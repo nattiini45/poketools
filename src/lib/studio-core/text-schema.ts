@@ -1,6 +1,6 @@
 /**
  * Zod schemas of the text shapes both kits and both studios share (server side; the browser reads the same shapes
- * through the format kit's Spec interpreter): a bounded string, a NUL-free text string, a slug, a UUID and the bilingual `LText`.
+ * through the format kit's Spec interpreter): a bounded string, a storable text string (`isStorableText`), a slug, a UUID and the bilingual `LText`.
  * The `LText` types and helpers live in `ltext.ts`; the `Expect<Same<...>>` check in the format kit's
  * `schema/index.ts` keeps this schema and that type in step.
  */
@@ -26,7 +26,7 @@ export const slugSchema = z.string().regex(SLUG_PATTERN);
 /** A row id. */
 export const uuidSchema = z.string().regex(UUID_PATTERN);
 
-/** A string without NUL, `min..max` characters. */
+/** A string jsonb can store (no NUL, no lone surrogate half), `min..max` characters. */
 export function textString(min: number, max: number) {
   return boundedString(min, max).regex(TEXT_PATTERN);
 }

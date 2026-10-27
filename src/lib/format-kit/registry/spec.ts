@@ -12,7 +12,7 @@ import type { ExprType } from '../expr/ast';
 
 export type JsonDefault = JsonValue;
 
-/** `text` is any string without NUL (U+0000), which Postgres jsonb cannot store. */
+/** `text` is any string Postgres jsonb can store (`isStorableText`: no NUL, no lone surrogate half). */
 export type StrPattern = 'key' | 'slug' | 'uuid' | 'kind' | 'text';
 
 const PATTERNS: ReadonlyMap<StrPattern, RegExp> = new Map<StrPattern, RegExp>([

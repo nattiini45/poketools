@@ -18,6 +18,11 @@ vi.mock('@/lib/match/aggregate-rebuild', () => ({
   drainPendingAggregateJobs: vi.fn(),
 }));
 
+vi.mock('@/lib/match/aggregate-queue', () => ({
+  requeueFailedIncrementJobsForSeason: vi.fn(),
+  countFailedIncrementJobsForSeason: vi.fn(),
+}));
+
 vi.mock('@/lib/rating/updateRatings', () => ({
   rebuildRatingsForPlayers: vi.fn(),
 }));
@@ -49,6 +54,10 @@ import {
 import { clearAggregatesForScope } from '@/lib/supabase/queries/aggregates';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { drainPendingAggregateJobs, rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
+import {
+  countFailedIncrementJobsForSeason,
+  requeueFailedIncrementJobsForSeason,
+} from '@/lib/match/aggregate-queue';
 import { rebuildRatingsForPlayers } from '@/lib/rating/updateRatings';
 import { rebuildRatingsSettled } from '@/lib/rating/test-league-rebuild';
 import { recomputeStreaks } from '@/lib/gamification/streaks';
@@ -67,6 +76,8 @@ const mockRebuildScope = vi.mocked(rebuildAggregatesForScope);
 const mockRebuildRatings = vi.mocked(rebuildRatingsForPlayers);
 const mockRatingsSettled = vi.mocked(rebuildRatingsSettled);
 const mockDrain = vi.mocked(drainPendingAggregateJobs);
+const mockRequeueFailed = vi.mocked(requeueFailedIncrementJobsForSeason);
+const mockCountFailed = vi.mocked(countFailedIncrementJobsForSeason);
 const mockRecomputeStreaks = vi.mocked(recomputeStreaks);
 const mockIsEpb = vi.mocked(isEvolutionPointBuy);
 const mockRepairEvolution = vi.mocked(repairSeasonEvolution);
@@ -88,6 +99,8 @@ function ranAfter(inner: number, outer: number): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockRequeueFailed.mockResolvedValue(0);
+  mockCountFailed.mockResolvedValue(0);
   mockClear.mockResolvedValue({ aggregatesDeleted: 0, playerAggregatesDeleted: 0 });
   mockGetSeasonById.mockResolvedValue(seasonOf('singles') as never);
   mockIsEpb.mockReturnValue(false);
@@ -317,7 +330,7 @@ describe('rebuildAfterSeasonRestore', () => {
     expect(summary).toEqual({
       scope: 'season_restore',
       playerIds: PLAYERS,
-      aggregateJobs: { processed: 4, failed: 0, remaining: 0 },
+      aggregateJobs: { requeued: 0, processed: 4, failed: 0, remaining: 0, failedForGood: 0 },
       ratingsRebuilt: 2,
       ratingPasses: 2,
       ratingsSettled: true,
@@ -358,8 +371,21 @@ describe('rebuildAfterSeasonRestore', () => {
 
     const summary = await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS });
 
-    expect(summary.aggregateJobs).toEqual({ processed: 50, failed: 1, remaining: 32 });
+    expect(summary.aggregateJobs).toEqual({ requeued: 0, processed: 50, failed: 1, remaining: 32, failedForGood: 0 });
     expect(summary).toMatchObject({ ratingsSettled: false, ratingPasses: 9 });
+  });
+
+  it("re-queues the league's failed jobs before the drain and counts the ones that failed for good after it", async () => {
+    mockRequeueFailed.mockResolvedValue(2);
+    mockCountFailed.mockResolvedValue(1);
+
+    const summary = await rebuildAfterSeasonRestore({ seasonId: SEASON_ID, playerIds: PLAYERS });
+
+    expect(mockRequeueFailed).toHaveBeenCalledWith(SEASON_ID);
+    expect(mockCountFailed).toHaveBeenCalledWith(SEASON_ID);
+    expect(mockRequeueFailed.mock.invocationCallOrder[0]).toBeLessThan(mockDrain.mock.invocationCallOrder[0]);
+    expect(mockDrain.mock.invocationCallOrder[0]).toBeLessThan(mockCountFailed.mock.invocationCallOrder[0]);
+    expect(summary.aggregateJobs).toMatchObject({ requeued: 2, failedForGood: 1 });
   });
 
   it('skips the evolution repair for a non-EPB league', async () => {
@@ -371,6 +397,7 @@ describe('rebuildAfterSeasonRestore', () => {
 
   it.each([
     ['aggregates', () => mockDrain.mockRejectedValueOnce(new Error('drain failed')), 'restore_rebuild_aggregates_failed'],
+    ['aggregates', () => mockRequeueFailed.mockRejectedValueOnce(new Error('requeue failed')), 'restore_rebuild_aggregates_failed'],
     ['ratings', () => mockRatingsSettled.mockRejectedValueOnce(new Error('ratings failed')), 'restore_rebuild_ratings_failed'],
     ['streaks', () => mockRecomputeStreaks.mockRejectedValueOnce(new Error('streaks failed')), 'restore_rebuild_streaks_failed'],
   ] as const)('a failed %s step names the step and stops the later ones', async (stepName, arrange, code) => {

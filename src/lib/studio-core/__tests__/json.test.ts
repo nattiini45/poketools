@@ -125,6 +125,13 @@ describe('inspectJson', () => {
     expect(inspectJson({ a: 'tab\t' }).ok).toBe(true);
   });
 
+  it('rejects strings and keys with a lone surrogate half (jsonb refuses the escape), keeps surrogate pairs', () => {
+    expect(inspectJson({ a: 'x\uD800' })).toEqual({ ok: false, reason: 'not_json', pointer: '/a' });
+    expect(inspectJson({ a: '\uDC00x' })).toEqual({ ok: false, reason: 'not_json', pointer: '/a' });
+    expect(inspectJson({ ['k\uDBFF']: 1 })).toMatchObject({ ok: false, reason: 'not_json' });
+    expect(inspectJson({ a: 'Fire \u{1F525}' }).ok).toBe(true);
+  });
+
   it('rejects cycles through the depth bound', () => {
     const a: Record<string, unknown> = { name: 'a' };
     a.self = a;

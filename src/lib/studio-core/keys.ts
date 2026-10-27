@@ -18,8 +18,16 @@ export const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 /** A UUID in any version, lower- or upper-case hex. */
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Any string without NUL (U+0000), which Postgres jsonb cannot store. */
-export const TEXT_PATTERN = /^[^\u0000]*$/;
+/**
+ * Any string Postgres jsonb can store: no NUL (U+0000) and no UTF-16 surrogate half without its partner (jsonb refuses
+ * the `\ud800` escape that JSON.stringify writes for one). Surrogate pairs (emoji, ...) are fine.
+ */
+export const TEXT_PATTERN = /^(?:[^\u0000\uD800-\uDFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF])*$/;
+
+/** Whether `s` can be stored in a jsonb document (`TEXT_PATTERN`). Every text gate before the database uses it. */
+export function isStorableText(s: string): boolean {
+  return TEXT_PATTERN.test(s);
+}
 
 export type Key = string;
 export type Slug = string;

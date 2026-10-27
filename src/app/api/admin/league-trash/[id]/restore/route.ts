@@ -6,8 +6,7 @@ import type { DeleteRebuildWarning } from '@/lib/api/delete-rebuild-warning';
 import { logAuditEvent } from '@/lib/audit/log';
 import { toLeagueTrashError } from '@/lib/league-trash/errors';
 import type { LeagueTrashRestoreWarning } from '@/lib/league-trash/restore-warnings';
-import { finishLeagueRestoreRebuild } from '@/lib/league-trash/service';
-import { restoreLeagueFromTrash } from '@/lib/supabase/queries/league-trash';
+import { finishLeagueRestoreRebuild, restoreLeague } from '@/lib/league-trash/service';
 import { expirePublicTags, expireRatingReads, expireSeasonReads, publicTags } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 
@@ -23,8 +22,11 @@ interface RouteParams {
 export interface LeagueRestoreResult {
   season_id: string;
   season_name: string;
-  /** Queue drafts that came back paused: an admin resumes them from the league's draft panel. */
-  paused_pools: number;
+  /**
+   * Queue drafts that came back paused: an admin resumes them from the league's draft panel. Null when the restore was
+   * settled after a request deadline (it committed, its answer was lost): then neither this nor `warnings` is known.
+   */
+  paused_pools: number | null;
   /** Things the restore did that the superadmin should read (outside rows that lost their parent, ignored columns, ...). */
   warnings: LeagueTrashRestoreWarning[];
   /** Null when the rebuild after the restore finished. Otherwise the rebuild stays pending on the trash page. */
@@ -39,7 +41,8 @@ export interface LeagueRestoreResult {
  * nothing is restored when anything fails. The rebuild after it (aggregate queue, ratings, streaks, EPB repair) is
  * confirmed to the database; a failure of it is a `rebuild_warning` next to a successful restore. A deleted league
  * whose own delete rebuild is still pending is refused by the database (409 `LEAGUE_TRASH_REBUILD_PENDING`): its
- * statistics would be counted twice.
+ * statistics would be counted twice. A restore whose answer was lost to a request deadline is settled by its rebuild
+ * tombstone (`restoreLeague`): when it committed, the route carries on as a success with `paused_pools` null.
  */
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   try {
@@ -48,7 +51,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_LEAGUE_TRASH_ID');
     if (invalidId) return invalidId;
 
-    const restored = await restoreLeagueFromTrash(id);
+    const restored = await restoreLeague(id);
     // The league is back in every read: its own tag, its phases' tags, the lists and the profiles.
     expireSeasonReads(restored.season_id, restored.phase_ids);
 
@@ -78,6 +81,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         paused_pools: restored.paused_pools,
         queued_aggregate_jobs: restored.queued_aggregate_jobs,
         schema_version_at_delete: restored.schema_version_at_delete,
+        settled_after_timeout: restored.settled_after_timeout,
         warnings: restored.warnings,
         rebuild,
         rebuild_error: rebuildWarning?.code ?? null,

@@ -78,6 +78,8 @@ export default defineDe<typeof en>()({
         one: '{count} laufender Draft kam pausiert zurück. Setze ihn im Draft-Bereich der Liga fort.',
         other: '{count} laufende Drafts kamen pausiert zurück. Setze sie im Draft-Bereich der Liga fort.',
       },
+      detailsUnknown:
+        'Die Wiederherstellung hat erst nach Ablauf der Anfragezeit geantwortet, ihre Details sind daher unbekannt: Prüfe im Draft-Bereich der Liga, ob Drafts pausiert zurückkamen.',
       warningsTitle: 'Bitte lesen',
       warnings: {
         parent_missing_nulled: {

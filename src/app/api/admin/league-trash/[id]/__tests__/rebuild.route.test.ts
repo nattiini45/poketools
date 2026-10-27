@@ -72,7 +72,7 @@ const pendingRestore: PendingLeagueRebuild = { ...pendingDelete, kind: 'restore'
 const restoreSummary = {
   scope: 'season_restore' as const,
   playerIds: PLAYERS,
-  aggregateJobs: { processed: 3, failed: 0, remaining: 0 },
+  aggregateJobs: { requeued: 0, processed: 3, failed: 0, remaining: 0, failedForGood: 0 },
   ratingsRebuilt: 2,
   ratingPasses: 1,
   ratingsSettled: true,

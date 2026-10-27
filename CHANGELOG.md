@@ -422,6 +422,12 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ### Fixed
 
+- **League restore.** A restore whose answer is lost to a request timeout is settled by its rebuild tombstone and
+  reported as a success (the trash page says its details are unknown) instead of a plain failure. The rebuild after a
+  restore stays pending while aggregate jobs of the league failed for good; running it again re-queues them.
+- **Studio documents.** A text with a lone UTF-16 surrogate half is refused by every check before the database (it used
+  to fail the jsonb write with a 500), and the Ruleset Studio reads a document's name with the ruleset kit's own text rule,
+  so an imported file the editor accepts is no longer refused by the API.
 - **Ruleset picker.** Entries no longer overlap in the grid (row heights follow the 18 px root size), the list uses the
   columns the pane has (the width was never measured, so it always showed one column), items sorted by name no longer
   repeat group headers or produce duplicate keys, compact rows keep the entry name visible, and toolbar buttons and

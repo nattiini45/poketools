@@ -197,7 +197,7 @@ describe('the pending rebuilds', () => {
 });
 
 describe('the notices', () => {
-  const restoreEvent = (over: Partial<{ pausedPools: number; warnings: never[] | object[]; rebuildWarning: object | null }> = {}) =>
+  const restoreEvent = (over: Partial<{ pausedPools: number | null; warnings: never[] | object[]; rebuildWarning: object | null }> = {}) =>
     ({
       type: 'restored',
       trashId: 't1',
@@ -211,6 +211,16 @@ describe('the notices', () => {
     expect(html).toContain('Open league');
     expect(html).toContain('data-trash-notice="restored"');
     expect(html).toContain('Dismiss');
+  });
+
+  it('a restore settled after a request deadline: a warning that its details are unknown', () => {
+    const state = withNotices(restoreEvent({ pausedPools: null }));
+    const en = render({ rows: [], state });
+    expect(en).toContain('data-trash-notice="restored"');
+    expect(en).toContain('The restore answered after the request deadline, so its details are unknown');
+    expect(en).not.toMatch(/\d+ running drafts? came back paused/);
+    expect(en).toContain('bg-poke-yellow-light');
+    expect(render({ rows: [], state }, 'de')).toContain('ihre Details sind daher unbekannt');
   });
 
   it('shows the paused drafts and every kind of restore warning, in English and German', () => {

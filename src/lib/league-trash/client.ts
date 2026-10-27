@@ -83,8 +83,8 @@ export function pendingKey(kind: 'delete' | 'restore', trashId: string): string 
 export interface LeagueRestoreView {
   seasonId: string;
   seasonName: string;
-  /** Running drafts that came back paused. */
-  pausedPools: number;
+  /** Running drafts that came back paused; null when the restore was settled after a request deadline (unknown). */
+  pausedPools: number | null;
   warnings: LeagueTrashRestoreWarning[];
   /** Null when the rebuild after the restore finished; otherwise it stays pending. */
   rebuildWarning: ApiErrorLike | null;
@@ -149,7 +149,7 @@ export async function requestLeagueRestore(
     value: {
       seasonId: data.season_id,
       seasonName: typeof data.season_name === 'string' ? data.season_name : '',
-      pausedPools: typeof data.paused_pools === 'number' ? data.paused_pools : 0,
+      pausedPools: typeof data.paused_pools === 'number' ? data.paused_pools : null,
       warnings: parseRestoreWarnings(data.warnings),
       rebuildWarning: rebuildWarningOf(data),
     },

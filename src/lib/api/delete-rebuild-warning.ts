@@ -184,3 +184,19 @@ export function toRestoreRebuildWarning(err: unknown): DeleteRebuildWarning {
 export function restoreRebuildUnsettledWarning(): DeleteRebuildWarning {
   return { code: 'restore_rebuild_ratings_unsettled', error: RESTORE_UNSETTLED_MESSAGE };
 }
+
+const RESTORE_AGGREGATE_JOBS_FAILED_MESSAGE =
+  'The league was restored, but {count} of its games could not be counted into the usage statistics: their aggregate jobs failed on every attempt. The failure was logged; run the pending rebuild on the trash page again, which queues them once more.';
+
+/**
+ * The warning of a restore rebuild that left aggregate jobs of the league failed for good (attempts exhausted): those
+ * games are missing from the league, phase and all-time statistics, so the rebuild stays pending. `count` fills the
+ * message's placeholder.
+ */
+export function restoreRebuildAggregateJobsFailedWarning(count: number): DeleteRebuildWarning {
+  return {
+    code: 'restore_rebuild_aggregate_jobs_failed',
+    error: RESTORE_AGGREGATE_JOBS_FAILED_MESSAGE.replace('{count}', String(count)),
+    params: { count },
+  };
+}

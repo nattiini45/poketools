@@ -4,15 +4,12 @@
  * `definitionNameSchema` from `DEFINITION_NAME_MAX` and `isStorableName`. Pure and client-safe.
  */
 
+import { isStorableText } from './keys';
+
 export const DEFINITION_NAME_MAX = 120;
 
-// NUL, and a surrogate half that has no partner: neither belongs in a name.
-const NAME_FORBIDDEN = /\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-
-/** Whether `name` holds only characters that can be stored (no NUL, no lone surrogate half). */
-export function isStorableName(name: string): boolean {
-  return !NAME_FORBIDDEN.test(name);
-}
+/** Whether `name` holds only characters that can be stored (no NUL, no lone surrogate half): the shared text rule. */
+export const isStorableName: (name: string) => boolean = isStorableText;
 
 export type NameProblem = 'required' | 'invalid' | null;
 

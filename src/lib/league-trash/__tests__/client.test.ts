@@ -94,6 +94,14 @@ describe('requestLeagueRestore', () => {
     expect(outcome).toEqual({ kind: 'ok', value: { seasonId: 's1', seasonName: 'X', pausedPools: 0, warnings: [], rebuildWarning: null } });
   });
 
+  it('a restore settled after a request deadline keeps the unknown paused drafts as null', async () => {
+    const outcome = await requestLeagueRestore(
+      't1',
+      fakeFetch(200, { success: true, data: { season_id: 's1', season_name: 'X', paused_pools: null, warnings: [], rebuild_warning: null } }),
+    );
+    expect(outcome).toMatchObject({ kind: 'ok', value: { pausedPools: null } });
+  });
+
   it.each([
     ['LEAGUE_TRASH_EXPIRED', 410, 'The restore window of this league has ended', 'Die Frist zum Wiederherstellen'],
     ['LEAGUE_TRASH_REBUILD_PENDING', 409, 'Run the pending rebuild first', 'Neuaufbau'],

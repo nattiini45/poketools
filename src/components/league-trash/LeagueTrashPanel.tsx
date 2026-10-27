@@ -145,13 +145,19 @@ function NoticeView({
   }
 
   const { restore } = notice;
-  const needsReading = restore.warnings.length > 0 || restore.pausedPools > 0 || restore.rebuildWarning !== null;
+  // pausedPools null: the restore answered after the request deadline, so its paused drafts and warnings are unknown.
+  const detailsUnknown = restore.pausedPools === null;
+  const needsReading =
+    detailsUnknown || restore.warnings.length > 0 || (restore.pausedPools ?? 0) > 0 || restore.rebuildWarning !== null;
   return (
     <Alert variant={needsReading ? 'warning' : 'success'} data-trash-notice="restored">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-2">
           <p className="font-semibold">{t('trash.notice.restored', { name: restore.seasonName })}</p>
-          {restore.pausedPools > 0 && <p>{t('trash.notice.pausedPools', { count: restore.pausedPools })}</p>}
+          {detailsUnknown && <p>{t('trash.notice.detailsUnknown')}</p>}
+          {restore.pausedPools !== null && restore.pausedPools > 0 && (
+            <p>{t('trash.notice.pausedPools', { count: restore.pausedPools })}</p>
+          )}
           {restore.warnings.length > 0 && (
             <div className="space-y-1">
               <p className="font-semibold">{t('trash.notice.warningsTitle')}</p>

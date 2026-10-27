@@ -77,6 +77,10 @@ export default {
     "The league was restored, but repairing the league's evolution progress afterwards failed. The failure was logged; run the pending rebuild on the trash page again.",
   restore_rebuild_ratings_unsettled:
     'The league was restored and the ratings were rebuilt, but they had not fully settled. Run the pending rebuild on the trash page again.',
+  restore_rebuild_aggregate_jobs_failed: {
+    one: 'The league was restored, but {count} of its games could not be counted into the usage statistics: its aggregate job failed on every attempt. The failure was logged; run the pending rebuild on the trash page again, which queues it once more.',
+    other: 'The league was restored, but {count} of its games could not be counted into the usage statistics: their aggregate jobs failed on every attempt. The failure was logged; run the pending rebuild on the trash page again, which queues them once more.',
+  },
 
   // Test-league flag warning (sent with a 200 in data.rebuild_warning by PATCH /api/seasons/[id]): the flag is
   // saved, the rating rebuild of the league's players after it failed (details in the server log and the audit record).

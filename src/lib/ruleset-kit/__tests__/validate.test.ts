@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ltext } from '@/lib/studio-core/ltext';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
 import { MAX_IDS_PER_LIST, MAX_CUSTOM_RULES_CHARS } from '../limits';
-import { validateRulesetDocument } from '../validate';
+import { readRulesetIdentityTexts, validateRulesetDocument } from '../validate';
 
 const valid = () => structuredClone(newRulesetDocument('Spring OU', 'en', 'gen9ou')) as unknown as Record<string, unknown>;
 
@@ -97,6 +97,16 @@ describe('validateRulesetDocument', () => {
     expect(issuesOf(doc)).toEqual(['bad_custom_rules@/custom_rules']);
   });
 
+  it('refuses a lone UTF-16 surrogate half in any text (jsonb cannot store it), keeps surrogate pairs', () => {
+    const doc = valid();
+    doc.custom_rules = 'a\uD800b';
+    (doc.identity as Record<string, unknown>).name = { en: { v: 'Name \uDC00', s: 'human' }, base: 'en' };
+    expect(issuesOf(doc).sort()).toEqual(['bad_custom_rules@/custom_rules', 'bad_text@/identity/name/en']);
+    doc.custom_rules = 'Fire \u{1F525}';
+    (doc.identity as Record<string, unknown>).name = ltext('en', 'Fire \u{1F525}');
+    expect(issuesOf(doc)).toEqual([]);
+  });
+
   it('refuses unknown team constraint members and out-of-range values', () => {
     const doc = valid();
     doc.team_constraints = { nope: true, tera_match: 'sometimes', type_quotas: { source: 'fixed', min_per_type: 9, allow_multi_count: true } };
@@ -112,5 +122,53 @@ describe('validateRulesetDocument', () => {
     const snapshot = JSON.stringify(input);
     validateRulesetDocument(input);
     expect(JSON.stringify(input)).toBe(snapshot);
+  });
+});
+
+describe('readRulesetIdentityTexts', () => {
+  it('reads the texts the validator accepts, normalized (a missing `s` is human)', () => {
+    const doc = valid();
+    (doc.identity as Record<string, unknown>).name = { en: { v: 'Spring OU' }, base: 'en' };
+    (doc.identity as Record<string, unknown>).summary = ltext('en', 'A summary');
+    expect(validateRulesetDocument(doc).ok).toBe(true);
+    expect(readRulesetIdentityTexts(doc)).toEqual({
+      name: { en: { v: 'Spring OU', s: 'human' }, base: 'en' },
+      description: ltext('en', 'A summary'),
+    });
+  });
+
+  it.each([
+    ['a blank name', { en: { v: '   ', s: 'human' }, base: 'en' }],
+    ['a name with a lone surrogate half', { en: { v: 'x\uD800', s: 'human' }, base: 'en' }],
+    ['a name without its base language', { de: { v: 'Frühling', s: 'human' }, base: 'en' }],
+  ])('gives no name for %s, exactly when the validator refuses it', (_label, name) => {
+    const doc = valid();
+    (doc.identity as Record<string, unknown>).name = name;
+    expect(validateRulesetDocument(doc).ok).toBe(false);
+    expect(readRulesetIdentityTexts(doc).name).toBeNull();
+  });
+
+  it('parity: every document the validator accepts yields a name', () => {
+    const names: unknown[] = [
+      ltext('en', 'Spring OU'),
+      { de: { v: 'Frühling', s: 'human' }, base: 'de' },
+      { en: { v: 'No status' }, base: 'en' },
+      { en: { v: 'Machine', s: 'machine' }, de: { v: 'Maschine', s: 'reviewed' }, base: 'de' },
+      { en: { v: '  padded  ', s: 'human' }, base: 'en' },
+      ltext('en', 'Fire \u{1F525}'),
+    ];
+    for (const name of names) {
+      const doc = valid();
+      (doc.identity as Record<string, unknown>).name = name;
+      if (validateRulesetDocument(doc).ok) expect(readRulesetIdentityTexts(doc).name).not.toBeNull();
+    }
+  });
+
+  it('is lenient on a half-built document', () => {
+    expect(readRulesetIdentityTexts(null)).toEqual({ name: null, description: null });
+    expect(readRulesetIdentityTexts({ identity: { name: ltext('en', 'Only a name') } })).toEqual({
+      name: ltext('en', 'Only a name'),
+      description: null,
+    });
   });
 });

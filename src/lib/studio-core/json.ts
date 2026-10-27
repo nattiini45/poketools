@@ -8,7 +8,9 @@
  * browser and on the server and produces the same hash.
  */
 
-export type JsonValue = null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue };
+import { isStorableText } from './keys';
+
+export type JsonValue =null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue };
 
 export interface InspectLimits {
   /** Maximum container nesting (scalars add no depth). */
@@ -77,7 +79,7 @@ function isPlainObject(value: object): boolean {
  *
  * Not JSON: undefined, functions, symbols, bigint, NaN/Infinity, Date/Map/Set/class instances (only
  * plain objects and arrays are accepted), sparse arrays, accessor properties, symbol keys, strings
- * containing U+0000 (Postgres jsonb cannot store them) and cycles (they exceed the depth bound).
+ * or keys Postgres jsonb cannot store (U+0000, a lone surrogate half: `isStorableText`) and cycles (they exceed the depth bound).
  * `bytes` is the size of the canonical encoding (see `canonicalizeJson`).
  */
 export function inspectJson(value: unknown, limits: Partial<InspectLimits> = {}): InspectResult {
@@ -110,7 +112,7 @@ export function inspectJson(value: unknown, limits: Partial<InspectLimits> = {})
         if (!Number.isFinite(v)) return fail('not_json', frame);
         bytes += JSON.stringify(v).length;
       } else if (typeof v === 'string') {
-        if (v.includes('\u0000')) return fail('not_json', frame);
+        if (!isStorableText(v)) return fail('not_json', frame);
         // A UTF-16 code unit encodes to at least one byte, so this rejects a giant string cheaply.
         if (bytes + v.length > maxBytes) return fail('bytes', frame);
         bytes += utf8ByteLength(JSON.stringify(v));
@@ -139,7 +141,7 @@ export function inspectJson(value: unknown, limits: Partial<InspectLimits> = {})
             const descriptor = Object.getOwnPropertyDescriptor(v, key);
             const child: Frame = { value: descriptor?.value, parent: frame, segment: key };
             if (descriptor === undefined || descriptor.get !== undefined || descriptor.set !== undefined) return fail('not_json', child);
-            if (key.includes('\u0000')) return fail('not_json', child);
+            if (!isStorableText(key)) return fail('not_json', child);
             if (bytes + key.length > maxBytes) return fail('bytes', child);
             bytes += utf8ByteLength(JSON.stringify(key)) + 1;
             nodes += 1;

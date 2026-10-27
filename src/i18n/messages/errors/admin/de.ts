@@ -49,6 +49,11 @@ export default defineDe<typeof en>()({
     'Die Liga wurde wiederhergestellt, aber die anschließende Reparatur des Entwicklungsfortschritts der Liga ist fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus.',
   restore_rebuild_ratings_unsettled:
     'Die Liga wurde wiederhergestellt und die Ratings wurden neu aufgebaut, haben sich aber noch nicht ganz eingependelt. Führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus.',
+  restore_rebuild_aggregate_jobs_failed: {
+    one: 'Die Liga wurde wiederhergestellt, aber {count} ihrer Partien konnte nicht in die Nutzungsstatistik gezählt werden: Ihr Aggregat-Job ist bei jedem Versuch fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus, er stellt ihn erneut in die Warteschlange.',
+    other:
+      'Die Liga wurde wiederhergestellt, aber {count} ihrer Partien konnten nicht in die Nutzungsstatistik gezählt werden: Ihre Aggregat-Jobs sind bei jedem Versuch fehlgeschlagen. Der Fehler wurde protokolliert; führe den ausstehenden Neuaufbau auf der Papierkorb-Seite noch einmal aus, er stellt sie erneut in die Warteschlange.',
+  },
   test_flag_rating_rebuild_failed:
     'Die Testliga-Einstellung wurde gespeichert, aber der anschließende Neuaufbau der Ratings der Liga-Spieler ist fehlgeschlagen. Der Fehler wurde protokolliert; ein Site-Admin kann sie mit dem Datenabgleich in den Admin-Datenwerkzeugen reparieren und die Reparatur wiederholen, bis ihr Probelauf keine Rating-Abweichung mehr auflistet.',
   test_flag_rating_rebuild_unsettled:

@@ -97,6 +97,9 @@ export default {
         one: '{count} running draft came back paused. Resume it from the draft panel of the league.',
         other: '{count} running drafts came back paused. Resume them from the draft panel of the league.',
       },
+      /** The restore committed but answered after the request deadline, so its details were lost. */
+      detailsUnknown:
+        "The restore answered after the request deadline, so its details are unknown: check the league's draft panel for drafts that came back paused.",
       warningsTitle: 'Please read',
       warnings: {
         /** `{count}` records of table `{rel}` pointed (column `{column}`) to something that was deleted in the meantime. */

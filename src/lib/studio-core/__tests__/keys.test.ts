@@ -9,9 +9,25 @@ import {
   isKind,
   isRefName,
   isSlug,
+  isStorableText,
   isUuid,
   toMap,
 } from '../keys';
+
+describe('isStorableText (what Postgres jsonb can store)', () => {
+  it.each([
+    ['', true],
+    ['plain text', true],
+    ['tab\t and newline\n', true],
+    ['Fire \u{1F525}', true], // a surrogate pair
+    ['a\u0000b', false],
+    ['lone high \uD800', false],
+    ['\uDC00 lone low', false],
+    ['reversed \uDC00\uD800', false],
+  ])('%j -> %s', (input, ok) => {
+    expect(isStorableText(input)).toBe(ok);
+  });
+});
 
 describe('Key pattern', () => {
   it.each([
