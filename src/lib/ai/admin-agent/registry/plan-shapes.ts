@@ -83,6 +83,6 @@ export const PLAN_PATCH_DESCRIPTION = [
   'Change part of the Plan with RFC 6901 operations (add, replace, remove) given as JSON text in ops_json.',
   'Paths start at the Plan root and may touch /title, /assumptions and /slots/<slot>, for example',
   `${json(PLAN_PATCH_EXAMPLES.replace)} or ${json(PLAN_PATCH_EXAMPLES.assumption)} (an assumption has key, value, source admin, default or inferred, and confirmed).`,
-  'A request for a double round robin is recorded as the assumption legs.<phase key> with value 2.',
+  'A double round robin is the assumption legs.<phase key> = the number 2, on an existing phase.',
   'A refused operation comes back with its reason and nothing is applied. The Plan is re-validated and its readiness recomputed after each patch.',
 ].join(' ');

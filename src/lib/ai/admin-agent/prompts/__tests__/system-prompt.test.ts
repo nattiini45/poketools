@@ -12,7 +12,7 @@ import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from '../index';
  * version it started with, and an edit sends every open conversation to "continue in a new conversation". Change the
  * prompt on purpose, then update this constant in the same commit.
  */
-const COMMITTED_VERSION = '95f08e25c587309b';
+const COMMITTED_VERSION = '25691357a12abbc9';
 
 describe('the frozen system prompt', () => {
   it('is versioned by the hash of its exact text', () => {
@@ -147,6 +147,34 @@ describe('the working style and refusal rules', () => {
     expect(text).toContain('stage the Build in that same turn');
     // The name of the league itself stays the administrator's to give.
     expect(text).toContain('the name of the league or tournament, a ruleset, a format, a player match, a date, a count');
+  });
+
+  it('validates before it reports readiness or blockers, stages without asking again once asked to set up with every pick confirmed, and re-stages after a change', () => {
+    expect(text).toContain('Before you tell the administrator that the Plan is ready, or what still blocks it, call plan_validate in that turn');
+    expect(text).toContain('plan_set and plan_patch show only part of the blockers');
+    // Staging needs the Plan ready AND every pick from or confirmed by the administrator AND a request to set it up; a question about what would happen is not one.
+    expect(text).toContain('every pick came from the administrator or was confirmed by them, and they asked you to set it up (to set up, create or prepare it; a question about what would happen, or a request to wait, is not such a request)');
+    expect(text).toContain('without asking again whether you may; their final go-ahead is approving the card');
+    expect(text).toContain('never stage a Build on values only you picked: the administrator confirms them first');
+    // "Plan" is the assistant's own rehearsal vocabulary, so the bare verb is not in the list of staging requests.
+    expect(text).not.toContain('to plan, set up');
+    // A change after a card makes that card stale: validate and stage again for the new revision, and report what changed (no wording is prescribed).
+    expect(text).toContain('that card no longer matches it: validate and stage the Build again for the new revision in that same turn, unless they asked you to wait, and report what changed');
+    expect(text).not.toContain('replaces the old one');
+    expect(text).not.toContain('wrap-up says so');
+  });
+
+  it('puts the round-robin phase in the Plan before the double-round-robin assumption, and reads the engine table before denying', () => {
+    expect(text).toContain("put the round-robin phase in the Plan's phases slot");
+    expect(text).toContain("where <phase key> is that phase's own key; value the number 2");
+    expect(text).toContain('so that the Plan shows the engine limit as a blocker');
+    expect(text).toContain('a summary that can lag behind the code');
+    expect(text).toContain('read the engine support tool, and let its answer win if it differs');
+  });
+
+  it('treats an offer of help as a promise: only what a tool in the list does', () => {
+    expect(text).toContain('An offer of help is a promise: offer only what a tool in your list does');
+    expect(text).toContain('do not offer to do part of such a step, to set up what it needs, or to guide the administrator through it');
   });
 
   it('offers the options for an unresolved name without creating a player or picking a fuzzy match', () => {
