@@ -389,8 +389,14 @@ Draft Kill Token never triggers an evolution.
   and writes `points_spent = rate x draft_token_ratio` and `tokens_used = rate`
   to the ledger. The budget readers keep summing `points_spent`.
 - The overview (`/api/seasons/[id]/tokens`) reports `draft_kill.owned` as the
-  sum of `tokens_used` and per line `tokens_used` and `cost`; the TS pre-check
-  `draftKillLineRefusal` takes the same weights, so it matches the RPC.
+  sum of `tokens_used` and per line `tokens_used` and `cost`. A line that already
+  holds a token reports the stored `tokens_used` and `points_spent` of its
+  purchase (a later change of the pack's rate does not rewrite it); a line
+  without one reports the pack's current rate. The TS pre-check
+  `draftKillLineRefusal` takes its reason inputs like the RPC does: the current
+  rate for the player-limit check, which comes before the line-limit check even
+  for a held line (a line bought at 1 token that the pack now rates at 2 reads
+  `TOKEN_PLAYER_LIMIT` when the allowance cannot take the 2).
 - The Draft Kill Token card shows the line's price on its button, a "counts as 2
   tokens" note, and the matching confirmation text. Copy says progress, never
   kills.

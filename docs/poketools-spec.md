@@ -316,7 +316,7 @@ One row per Pokémon per player per game: unique index `battle_stats_game_player
 > `epb.draftClock.quietHours`; a client never sends it) and cannot be patched. TS mirror: `src/lib/draft/time.ts`.
 >
 > **Initial pool setup.** The admin chooses `live` or `slow` when creating the pool; a slow pool that names no pick time
-> gets 43 200 s. Make-up time applies to live mode only (the slow clock uses the ladder for every slot). Without an admin
+> gets 43 200 s. Make-up time applies to live mode only (the slow clock uses the ladder for every slot): the form hides it and does not send it, and the merged-config check (`invalidDraftConfigField`) skips it in slow mode, while the API body schema still bounds it (30 s minimum, not above `pick_seconds`). Without an admin
 > `participant_order` the seats are a random draw of the roster (a group's pool: of the group); an admin can draw again
 > while the pool is in `setup` (`POST /api/drafts/[id]/roll-order`). A queue pool in `setup` or `cancelled` can be deleted
 > (`DELETE /api/drafts/[id]`, phase-filtered), which frees its league group; both writes are audited.

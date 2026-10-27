@@ -8,6 +8,7 @@ import { draftErrorResponse } from '@/lib/draft/http';
 import { getDefaultRounds } from '@/lib/draft/engine';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import { defaultPickOrder, isPickOrderAllowed, isTurnEnforced } from '@/lib/draft/pool-format';
+import { seasonRosterIds } from '@/lib/draft/pool-roster';
 import { computeRedraftSeats } from '@/lib/draft/redraft-order';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
 import { drawSeatOrder } from '@/lib/draft/seat-draw';
@@ -221,11 +222,8 @@ async function createQueuePool(
   if (invalidField) throw new DraftRuleError('INVALID_CONFIG', { field: invalidField });
 
   const groupMembers = group ? new Set(group.player_ids) : null;
-  /** The seats' roster: the season's participants, or the group's members. */
-  const rosterIds = async (): Promise<string[]> => {
-    const ids = (await getSeasonParticipants(input.season_id)).map((p) => p.id);
-    return groupMembers ? ids.filter((id) => groupMembers.has(id)) : ids;
-  };
+  /** The seats' roster: the season's participants, or the group's members (the group is already loaded). */
+  const rosterIds = (): Promise<string[]> => seasonRosterIds(input.season_id, groupMembers);
   let seats: Seat[];
 
   if (input.kind === 'initial') {

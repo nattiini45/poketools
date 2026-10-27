@@ -485,8 +485,28 @@ describe('queries/drafts — pools', () => {
         data: { ...draftPoolRow, status: 'in_progress' },
         error: null,
       });
-      await expect(deleteDraftPool('dp-1')).rejects.toThrow('pending status');
+      // A Start between the route's read and this one: the catalogued 409, not a bare Error (a 500).
+      const err = await deleteDraftPool('dp-1').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(DraftRuleError);
+      expect(err).toMatchObject({ code: 'POOL_NOT_DELETABLE', statusCode: 409 });
+      expect(mockBuilder.delete).not.toHaveBeenCalled();
     });
+
+    it.each(['submissions', 'drafting', 'complete'] as const)(
+      'refuses a queue pool that moved to %s before this read with POOL_NOT_DELETABLE and its phase, deleting nothing',
+      async (phase) => {
+        mockBuilder.maybeSingle.mockResolvedValueOnce({
+          data: { ...draftPoolRow, engine: 'queue', phase, status: 'in_progress' },
+          error: null,
+        });
+
+        const err = await deleteDraftPool('dp-1').catch((e: unknown) => e);
+
+        expect(err).toBeInstanceOf(DraftRuleError);
+        expect(err).toMatchObject({ code: 'POOL_NOT_DELETABLE', statusCode: 409, detail: { phase } });
+        expect(mockBuilder.delete).not.toHaveBeenCalled();
+      },
+    );
 
     it('deletes a cancelled queue pool even though draft_cancel set its status to complete', async () => {
       mockBuilder.maybeSingle.mockResolvedValueOnce({
@@ -587,14 +607,6 @@ describe('queries/drafts — pools', () => {
         .mockReturnValueOnce(mockBuilder);
 
       await expect(deleteDraftPool('dp-1')).rejects.toMatchObject({ code: 'POOL_NOT_FOUND' });
-    });
-
-    it('refuses a queue pool that is drafting', async () => {
-      mockBuilder.maybeSingle.mockResolvedValueOnce({
-        data: { ...draftPoolRow, engine: 'queue', phase: 'drafting', status: 'in_progress' },
-        error: null,
-      });
-      await expect(deleteDraftPool('dp-1')).rejects.toThrow('setup or cancelled');
     });
 
     it('throws on delete error', async () => {

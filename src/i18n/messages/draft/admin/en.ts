@@ -97,6 +97,7 @@ export default {
     orderRedraftHint: 'Prefilled from the first-half standings, worst first. Editable until the draft starts.',
     rollOrder: 'Roll order',
     rollOrderHint: 'Draws a new random order and saves it right away. You can still move players by hand afterwards.',
+    rollOrderUnsaved: 'You moved players by hand and have not saved yet. Save the order or move the players back before you draw a new one.',
     rolled: 'The order was drawn at random.',
     seat: 'Seat {n}',
     standing: 'Place {rank}',

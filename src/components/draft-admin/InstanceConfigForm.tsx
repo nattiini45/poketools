@@ -98,6 +98,9 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
 
   const editable = configEditable(vm);
   const disabled = !editable || call.busy;
+  // The roll replaces the seats on the server and the sync above then overwrites the form's order: with hand edits
+  // not yet saved that would silently throw them away, so the roll waits until the order is saved (or moved back).
+  const orderUnsaved = form.participant_order.join(',') !== baseline.participant_order.join(',');
   const kind = vm.kind;
   const invalid = editable ? invalidConfigField(form, vm.ladderSeconds) : null;
   const names = new Map(vm.participants.map((p) => [p.player_id, p]));
@@ -290,10 +293,16 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
           <p className={HINT}>{kind === 'redraft' ? t('config.orderRedraftHint') : t('config.orderHint')}</p>
           {kind === 'initial' ? (
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={() => void rollOrder()}>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={disabled || orderUnsaved}
+                onClick={() => void rollOrder()}
+              >
                 {t('config.rollOrder')}
               </Button>
-              <span className={HINT}>{t('config.rollOrderHint')}</span>
+              <span className={HINT}>{orderUnsaved ? t('config.rollOrderUnsaved') : t('config.rollOrderHint')}</span>
             </div>
           ) : null}
           <ol className="space-y-1">

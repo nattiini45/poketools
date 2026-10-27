@@ -7,6 +7,8 @@
  * `legacySeatOrder` (`engine.ts`) is not a substitute: it is a deterministic hash of the pool id and would give the
  * same "roll" on every request.
  */
+import 'server-only';
+
 import { randomInt as cryptoRandomInt } from 'node:crypto';
 
 /** `randomInt(maxExclusive)` = an integer in `[0, maxExclusive)`; the injection point for tests. */

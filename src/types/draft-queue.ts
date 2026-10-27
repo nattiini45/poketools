@@ -22,6 +22,17 @@ export type DraftKind = 'initial' | 'redraft';
 export type DraftMode = 'live' | 'slow';
 export type DraftPhase = 'setup' | 'submissions' | 'drafting' | 'complete' | 'cancelled';
 export type PoolStatus = 'pending' | 'in_progress' | 'complete';
+
+/**
+ * Queue-engine phases in which a pool may still be deleted (design decision). The one list behind
+ * `DELETE /api/drafts/[id]`, `deleteDraftPool` (pre-check and DELETE filter) and the admin UI's `draftDeletable`.
+ */
+export const DELETABLE_QUEUE_PHASES = ['setup', 'cancelled'] as const satisfies readonly DraftPhase[];
+
+/** True for a queue-pool phase in `DELETABLE_QUEUE_PHASES`. */
+export function isDeletableQueuePhase(phase: DraftPhase): boolean {
+  return (DELETABLE_QUEUE_PHASES as readonly DraftPhase[]).includes(phase);
+}
 export type SlotKind = 'normal' | 'makeup';
 export type SlotStatus = 'pending' | 'active' | 'done' | 'timed_out' | 'blocked' | 'forfeited';
 export type ExtensionKind = 'plus120' | 'plus60';
@@ -387,9 +398,12 @@ export interface TokenOverviewDTO {
     lines: {
       line_id: LineId;
       has_token: boolean;
-      /** Tokens this line's one purchase counts as against `max` (1; the pack's rate on a participation line). */
+      /**
+       * Tokens this line's one purchase counts as against `max` (1; the pack's rate on a participation line). A line
+       * that holds a token reports the stored purchase's `tokens_used`; a line without one, the pack's current rate.
+       */
       tokens_used: number;
-      /** Points this line's purchase costs (`tokens_used` times `draft_kill.cost`). */
+      /** Points this line's purchase costs (`tokens_used` times `draft_kill.cost`); a held line: the stored `points_spent`. */
       cost: number;
       progress: number;
       next_threshold: number | null;

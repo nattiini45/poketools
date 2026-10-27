@@ -20,11 +20,9 @@ import type {
   DraftPhase,
   PauseReason,
 } from '@/types/draft-queue';
+import { DELETABLE_QUEUE_PHASES, isDeletableQueuePhase } from '@/types/draft-queue';
 import type { GroupedPoolSummary } from '@/types/season-group';
 import { DraftRuleError } from '@/lib/draft/errors';
-
-/** Queue-engine phases in which a pool may still be deleted (design decision). */
-const DELETABLE_QUEUE_PHASES: readonly DraftPhase[] = ['setup', 'cancelled'];
 
 type DraftPoolRow = Tables<'draft_pools'>;
 type DraftPickRow = Tables<'draft_picks'>;
@@ -413,8 +411,9 @@ export async function deleteDraftPool(id: string): Promise<void> {
   const pool = await getDraftPoolById(id);
   if (!pool) throw new Error('Draft pool not found');
   if (pool.engine === 'queue') {
-    if (pool.phase !== 'setup' && pool.phase !== 'cancelled') {
-      throw new Error('Can only delete queue draft pools in setup or cancelled phase');
+    if (!isDeletableQueuePhase(pool.phase)) {
+      // A Start between the route's read and this one: the same catalogued 409 as the filtered DELETE below.
+      throw new DraftRuleError('POOL_NOT_DELETABLE', undefined, { phase: pool.phase });
     }
     const { data, error } = await supabase
       .from('draft_pools')
@@ -427,7 +426,7 @@ export async function deleteDraftPool(id: string): Promise<void> {
     return;
   }
   if (pool.status !== 'pending') {
-    throw new Error('Can only delete draft pools in pending status');
+    throw new DraftRuleError('POOL_NOT_DELETABLE');
   }
 
   const { data, error } = await supabase

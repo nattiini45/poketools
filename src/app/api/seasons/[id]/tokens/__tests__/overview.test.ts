@@ -291,6 +291,28 @@ describe('buildTokenOverview — Draft Kill Tokens', () => {
       expect(lineOf(dto, OV_ID)).toMatchObject({ has_token: true, reason: 'TOKEN_LINE_LIMIT' });
     });
 
+    it('a held line shows what its purchase was charged, not the pack’s current rate (stored tokens_used / points_spent)', () => {
+      // Bought at 1 token / 1 x ratio; the pack now rates the line at RATE (2). owned 1 of max 2.
+      const dto = buildTokenOverview(withParticipation({ purchases: [purchase(OV_ID, 1)], max: 2 }), P1, NOW);
+      expect(dto.draft_kill.owned).toBe(1);
+      // The display keeps the stored purchase (1 token, 1 x ratio); the reason follows the SQL, which checks the
+      // incoming (current) rate first: 1 + 2 > 2 = TOKEN_PLAYER_LIMIT, before the line limit.
+      expect(lineOf(dto, OV_ID)).toMatchObject({
+        has_token: true,
+        tokens_used: 1,
+        cost: ratio,
+        reason: 'TOKEN_PLAYER_LIMIT',
+      });
+      // A line without a purchase still shows the current rate.
+      expect(lineOf(dto, 'chikorita--meganium')).toMatchObject({ has_token: false, tokens_used: 1, cost: ratio });
+    });
+
+    it('a held line keeps the SQL refusal order: at the allowance it reads TOKEN_PLAYER_LIMIT before TOKEN_LINE_LIMIT', () => {
+      const dto = buildTokenOverview(withParticipation({ purchases: [purchase(OV_ID, RATE)], max: RATE }), P1, NOW);
+      expect(dto.draft_kill.owned).toBe(RATE);
+      expect(lineOf(dto, OV_ID)).toMatchObject({ tokens_used: RATE, cost: RATE * ratio, reason: 'TOKEN_PLAYER_LIMIT' });
+    });
+
     it('one token left in the allowance → the 2-token line is refused TOKEN_PLAYER_LIMIT, a normal line is not', () => {
       const dto = buildTokenOverview(withParticipation({ max: 2, ledger: ledgerFor({ [P1]: 10 }, { [P1]: 1 }) }), P1, NOW);
       expect(dto.draft_kill.owned).toBe(1);

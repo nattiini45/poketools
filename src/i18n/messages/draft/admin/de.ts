@@ -83,6 +83,7 @@ export default defineDe<typeof en>()({
     orderRedraftHint: 'Vorbelegt nach der Hinrundentabelle, der Tabellenletzte zuerst. Änderbar bis zum Draft-Start.',
     rollOrder: 'Reihenfolge auslosen',
     rollOrderHint: 'Lost eine neue Reihenfolge aus und speichert sie sofort. Danach kannst du die Spieler noch von Hand verschieben.',
+    rollOrderUnsaved: 'Du hast Spieler von Hand verschoben und noch nicht gespeichert. Speichere die Reihenfolge oder verschiebe die Spieler zurück, bevor du neu auslost.',
     rolled: 'Die Reihenfolge wurde ausgelost.',
     seat: 'Platz {n}',
     standing: 'Tabellenplatz {rank}',

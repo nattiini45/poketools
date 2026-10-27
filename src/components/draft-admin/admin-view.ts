@@ -11,6 +11,7 @@ import type { DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
 import {
   DEFAULT_DRAFT_CONFIG,
   DEFAULT_SLOW_PICK_SECONDS,
+  isDeletableQueuePhase,
   type DraftConfigInput,
   type DraftKind,
   type DraftMode,
@@ -45,7 +46,7 @@ export function configEditable(vm: Pick<DraftViewModel, 'kind' | 'phase'>): bool
  * filters on the phase itself); this decides where the "Delete draft" control shows.
  */
 export function draftDeletable(pool: { kind: DraftKind; phase: DraftPhase }): boolean {
-  return pool.kind === 'initial' && (pool.phase === 'setup' || pool.phase === 'cancelled');
+  return pool.kind === 'initial' && isDeletableQueuePhase(pool.phase);
 }
 
 /** The penalty select's options: one per ladder stage, `0..ladder.length − 1`. */

@@ -160,7 +160,13 @@ describe('POST /api/drafts/[id]/roll-order', () => {
     const extra = await roll(JSON.stringify({ participant_order: [A, B] }));
     expect(extra.status).toBe(400);
     expect((await extra.json()).code).toBe('validation_failed');
-    const malformed = await roll('{not json');
-    expect(malformed.status).toBe(400);
+  });
+
+  it('a malformed JSON body answers the catalogued 400 invalid_json (not validation_failed) and logs the parse failure', async () => {
+    const res = await roll('{not json');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'invalid_json' });
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('malformed JSON body'), expect.any(SyntaxError));
+    expect(callDraftRpc).not.toHaveBeenCalled();
   });
 });

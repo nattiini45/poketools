@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import { toDraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
 import { snapshot } from '@/lib/draft-ui/__tests__/fixtures';
-import type { DraftSnapshotDTO } from '@/types/draft-queue';
+import { DELETABLE_QUEUE_PHASES, isDeletableQueuePhase, type DraftPhase, type DraftSnapshotDTO } from '@/types/draft-queue';
 import LiveControls from '../LiveControls';
 import { draftDeletable } from '../admin-view';
 
@@ -69,5 +69,15 @@ describe('draftDeletable', () => {
     }
     expect(draftDeletable({ kind: 'redraft', phase: 'setup' })).toBe(false);
     expect(draftDeletable({ kind: 'redraft', phase: 'cancelled' })).toBe(false);
+  });
+
+  it('reads the one shared list of deletable queue phases (route, pre-check, DELETE filter and this gate)', () => {
+    expect([...DELETABLE_QUEUE_PHASES]).toEqual(['setup', 'cancelled']);
+    const all: DraftPhase[] = ['setup', 'submissions', 'drafting', 'complete', 'cancelled'];
+    for (const phase of all) {
+      const listed = (DELETABLE_QUEUE_PHASES as readonly DraftPhase[]).includes(phase);
+      expect(isDeletableQueuePhase(phase)).toBe(listed);
+      expect(draftDeletable({ kind: 'initial', phase })).toBe(listed);
+    }
   });
 });

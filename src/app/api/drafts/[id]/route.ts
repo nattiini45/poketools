@@ -16,7 +16,7 @@ import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { expireDraftReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { DraftPool, DraftPoolWithDetails } from '@/types/draft';
-import type { DraftPhase } from '@/types/draft-queue';
+import { isDeletableQueuePhase } from '@/types/draft-queue';
 import { draftPoolUpdateSchema, formatZodErrors } from '@/lib/validation';
 
 interface RouteParams {
@@ -110,9 +110,6 @@ function refusingPoolFkCode(err: unknown): 'POOL_HAS_REDRAFT' | 'POOL_HAS_TEAMS'
     : null;
 }
 
-/** Queue-engine phases in which a pool may still be deleted (design decision). */
-const DELETABLE_QUEUE_PHASES: ReadonlySet<DraftPhase> = new Set<DraftPhase>(['setup', 'cancelled']);
-
 /**
  * DELETE /api/drafts/[id] — delete a pending draft pool (admin only)
  * Queue-engine pools: only in phase `setup` or `cancelled`; any other phase
@@ -134,7 +131,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const admin = await requireDraftAdmin(id);
     // Read first: the league it belonged to is expired after the delete.
     const pool = await getDraftPoolById(id);
-    if (pool?.engine === 'queue' && !DELETABLE_QUEUE_PHASES.has(pool.phase)) {
+    if (pool?.engine === 'queue' && !isDeletableQueuePhase(pool.phase)) {
       throw new DraftRuleError('POOL_NOT_DELETABLE', undefined, { phase: pool.phase });
     }
     try {

@@ -285,7 +285,16 @@ export function buildTokenOverview(ctx: TokenSeasonContext, playerId: string, no
     .reduce((sum, g) => sum + g.token_count, 0);
   // Tokens used, not purchases: a participation line's purchase counts as several (`tokens_used`).
   const owned = purchases.reduce((sum, p) => sum + p.tokens_used, 0) + legacyGrantTokens;
-  const tokenLines = new Set(purchases.map((p) => p.line_id));
+  // What each held line was actually charged (the ledger rows), keyed by line: a later change of the pack's rate
+  // must not rewrite a purchase that already happened.
+  const purchaseByLine = new Map<string, { tokensUsed: number; cost: number }>();
+  for (const p of purchases) {
+    const prior = purchaseByLine.get(p.line_id);
+    purchaseByLine.set(p.line_id, {
+      tokensUsed: (prior?.tokensUsed ?? 0) + p.tokens_used,
+      cost: (prior?.cost ?? 0) + p.points_spent,
+    });
+  }
   const unspentPoints = computeRemainingPointsFromLedger(ctx.ledger, playerId, ctx.budget, ctx.cost);
 
   const draftKillLines: TokenOverviewDTO['draft_kill']['lines'] = [];
@@ -302,18 +311,27 @@ export function buildTokenOverview(ctx: TokenSeasonContext, playerId: string, no
     const entry = ctx.entriesByLine.get(lineId);
     const nextThreshold = entry ? nextThresholdFor(effectiveThresholds(entry), tracker.current_stage) : null;
     const sources = progressSourcesOf(tracker);
-    const hasToken = tokenLines.has(lineId);
-    // A participation line's one token counts as (and costs) `tokensUsed` tokens' worth, for the same +1 progress.
-    const tokensUsed = draftKillTokensPerProgressOf(entry ?? tracker.base_pokemon);
-    const lineCost = tokensUsed * ctx.cost;
+    const held = purchaseByLine.get(lineId);
+    const hasToken = held !== undefined;
+    // What the line shows and what its refusal is judged by are two things. A line that already holds a token shows
+    // what that purchase was charged (the stored `tokens_used` / `points_spent`); only a line without a purchase shows
+    // the pack's current rate. The refusal reason, though, uses the current rate like the SQL does
+    // (`epb_purchase_draft_token` checks `owned + p_tokens_per_progress > max` with the incoming rate, before the
+    // line-limit check, even for a line that already holds a token). A participation line's one token counts as (and
+    // costs) `currentRate` tokens' worth, for the same +1 progress.
+    const currentRate = draftKillTokensPerProgressOf(entry ?? tracker.base_pokemon);
+    const tokensUsed = held ? held.tokensUsed : currentRate;
+    const lineCost = held ? held.cost : currentRate * ctx.cost;
     // The SQL compares `tracker.total_kos` (= the five-source total, M4 invariant).
     const progress = tracker.total_kos;
 
+    // The refusal order and inputs are the SQL's (`epb_purchase_draft_token`: window, player limit at the current rate,
+    // line limit, points, ...).
     const reason = draftKillLineRefusal({
       window,
       owned,
       max: ctx.max,
-      tokensUsed,
+      tokensUsed: currentRate,
       lineHasToken: hasToken,
       unspentPoints,
       cost: lineCost,

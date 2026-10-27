@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { requireDraftAdmin } from '@/lib/auth/helpers';
 import { logAuditEvent } from '@/lib/audit/log';
 import { DraftRuleError } from '@/lib/draft/errors';
@@ -15,14 +16,15 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-/** The body is optional: empty → `{}`; malformed JSON → `null` (a 400 from the schema). */
+/** The body is optional: empty → `{}`; malformed JSON → the catalogued `400 invalid_json` (as `readJsonBody`). */
 async function optionalJsonBody(request: Request): Promise<unknown> {
   const text = await request.text();
   if (text.trim() === '') return {};
   try {
     return JSON.parse(text) as unknown;
-  } catch {
-    return null;
+  } catch (err) {
+    console.error('[api/drafts/roll-order] malformed JSON body:', err);
+    throw new UserFacingError('Invalid JSON body', { code: 'invalid_json', status: 400 });
   }
 }
 

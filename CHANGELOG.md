@@ -24,7 +24,8 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 - **Delete a draft that has not started.** An Initial draft in setup (or a cancelled one) can be deleted from its draft
   panel and from the league group card, so the groups can change again and the draft can be created afresh. The
   delete is audited (`draft.pool.delete`) and filters on the phase itself, so a Start that lands at the same moment
-  deletes nothing (409).
+  deletes nothing (409). The button is the UI's rule (Initial drafts only); `DELETE /api/drafts/[id]` itself accepts
+  any queue pool in `setup` or `cancelled`.
 - **Live or slow when creating a draft.** A slow draft without a pick time gets the 12-hour default; the merged
   settings are checked like an edit in the control panel.
 - **Random draft order.** A new Initial draft seats its trainers in a random order (server-side, cryptographic RNG)
@@ -35,12 +36,15 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
   orders are logged when the draft starts. Redrafts keep the standings order with a plain snake.
 - **Draft Kill Tokens on a participation line** cost and count as many tokens as that line's token rate (new optional
   pack field `participationPoints.draftKillTokensPerProgress`, which falls back to `comebackTokensPerProgress`), for
-  +1 progress. Other lines are unchanged.
+  +1 progress. Other lines are unchanged. A line that already holds a token keeps showing what its purchase was
+  charged (the stored tokens and points); its refusal reason still follows the database, which checks the player
+  allowance at the pack's current rate first.
 
 ### Changed
 
-- The make-up pick time is a live-draft setting only: in a slow draft it is hidden and not validated, because every
-  pick uses the ladder stage there; make-up chips show no clock in slow mode.
+- The make-up pick time is a live-draft setting only: in a slow draft the form hides and does not send it and the
+  merged-config check skips it, because every pick uses the ladder stage there; make-up chips show no clock in slow
+  mode. The API body schema still bounds the field (at least 30 s, not above `pick_seconds`) in every mode.
 - Deleting a legacy draft pool also filters on its status, closing the same race.
 
 ## [0.4.0] - 2026-10-26
