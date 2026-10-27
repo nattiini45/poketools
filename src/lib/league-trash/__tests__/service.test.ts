@@ -137,6 +137,17 @@ describe('trashLeague', () => {
       await expect(trashLeague(SEASON, 'admin-1')).rejects.toBe(timeout);
     });
 
+    it('keeps the timeout when the trash read fails (the outcome stays unknown)', async () => {
+      vi.mocked(getLeagueTrashBySeason).mockRejectedValue(new Error('PostgREST down'));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        await expect(trashLeague(SEASON, 'admin-1')).rejects.toBe(timeout);
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
     it('settles as committed and takes the name and the rebuild inputs from the trash entry', async () => {
       vi.mocked(getLeagueTrashBySeason).mockResolvedValue(trashEntry);
 
@@ -207,6 +218,18 @@ describe('restoreLeague', () => {
 
       await expect(restoreLeague(TRASH)).rejects.toBe(timeout);
       expect(getPendingLeagueRebuild).toHaveBeenCalledWith(TRASH);
+    });
+
+    it('keeps the timeout when the tombstone read fails (the outcome stays unknown)', async () => {
+      vi.mocked(getPendingLeagueRebuild).mockRejectedValue(new Error('PostgREST down'));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        await expect(restoreLeague(TRASH)).rejects.toBe(timeout);
+        expect(errorSpy).toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
     });
 
     it('settles as committed from the restore tombstone, with the lost details as null', async () => {

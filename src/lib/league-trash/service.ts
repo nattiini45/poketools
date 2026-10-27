@@ -79,9 +79,22 @@ export async function trashLeague(seasonId: string, actorId: string): Promise<Tr
   }
 }
 
+/**
+ * The settle read after a lost answer. A read that fails leaves the outcome unknown, so the caller keeps the timeout
+ * (504, "the result is unknown, reload") instead of reporting an action that may have committed as a plain failure.
+ */
+async function settleRead<T>(what: string, read: () => Promise<T>, timeout: LeagueTrashDbError): Promise<T> {
+  try {
+    return await read();
+  } catch (readError) {
+    console.error(`[league-trash] ${what} settle read failed; the result stays unknown`, readError);
+    throw timeout;
+  }
+}
+
 /** A delete whose answer was lost: committed when the league's trash entry exists, otherwise it did not happen. */
 async function settleTimedOutDelete(seasonId: string, timeout: LeagueTrashDbError): Promise<TrashedLeague> {
-  const entry = await getLeagueTrashBySeason(seasonId);
+  const entry = await settleRead('delete', () => getLeagueTrashBySeason(seasonId), timeout);
   if (!entry) throw timeout;
   return {
     trash_id: entry.id,
@@ -123,7 +136,7 @@ export async function restoreLeague(trashId: string): Promise<RestoredLeague> {
 
 /** A restore whose answer was lost: committed when its rebuild tombstone (keyed by this trash id) exists. */
 async function settleTimedOutRestore(trashId: string, timeout: LeagueTrashDbError): Promise<RestoredLeague> {
-  const pending = await getPendingLeagueRebuild(trashId);
+  const pending = await settleRead('restore', () => getPendingLeagueRebuild(trashId), timeout);
   if (pending?.kind !== 'restore') throw timeout;
   console.error(`league restore of trash ${trashId} answered after the request deadline; settled by its tombstone`);
   return {
