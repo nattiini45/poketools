@@ -78,6 +78,7 @@ vi.mock('@/lib/season/epb-phase', () => ({
 const packMocks = vi.hoisted(() => ({
   earnWindow: null as 'season' | 'first_half' | null,
   participationRate: null as number | null,
+  draftKillRate: null as number | null,
 }));
 vi.mock('@/lib/format-pack', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/format-pack')>();
@@ -88,6 +89,10 @@ vi.mock('@/lib/format-pack', async (importOriginal) => {
       isParticipationLine && packMocks.participationRate !== null
         ? packMocks.participationRate
         : actual.comebackTokensPerProgress(isParticipationLine),
+    draftKillTokensPerProgress: (isParticipationLine: boolean) =>
+      isParticipationLine && packMocks.draftKillRate !== null
+        ? packMocks.draftKillRate
+        : actual.draftKillTokensPerProgress(isParticipationLine),
   };
 });
 
@@ -214,6 +219,7 @@ beforeEach(() => {
   mockGetPlayerTrackers.mockResolvedValue([]);
   packMocks.earnWindow = null;
   packMocks.participationRate = null;
+  packMocks.draftKillRate = null;
 });
 
 // ─── applyProgress ─────────────────────────────────────────────────
@@ -489,6 +495,7 @@ describe('purchaseDraftKillToken', () => {
       tracker_id: 't-chiko',
       line_id: 'chikorita--meganium',
       points_spent: 3,
+      tokens_used: 1,
       progress: 1,
       remaining_points: 4,
       replay: false,
@@ -500,7 +507,7 @@ describe('purchaseDraftKillToken', () => {
       makeTracker({ id: 't-chiko', base_pokemon: 'Chikorita', line_id: 'chikorita--meganium', current_stage: 2, total_kos: 3 })
     );
 
-    const result = await purchaseDraftKillToken('s1', 'p1', 'chikorita--meganium', 'req-1', 'p1');
+    const result = await purchaseDraftKillToken('s1', null, 'p1', 'chikorita--meganium', 'req-1', 'p1');
 
     expect(mockGetTrackerByLine).toHaveBeenCalledWith('s1', 'p1', 'chikorita--meganium');
     expect(mockPurchaseRpc).toHaveBeenCalledWith({
@@ -510,6 +517,7 @@ describe('purchaseDraftKillToken', () => {
       lineId: 'chikorita--meganium',
       nextThreshold: 7,
       clientRequestId: 'req-1',
+      tokensPerProgress: 1,
     });
     expect(result.purchase_id).toBe('pur-1');
     // A purchase never evolves a line: no stage recheck.
@@ -519,7 +527,7 @@ describe('purchaseDraftKillToken', () => {
   it('passes a null threshold when the player owns no tracker (the RPC refuses TRACKER_NOT_OWNED)', async () => {
     mockGetTrackerByLine.mockResolvedValue(null);
 
-    await purchaseDraftKillToken('s1', 'p1', 'chikorita--meganium', 'req-1', 'admin-1');
+    await purchaseDraftKillToken('s1', null, 'p1', 'chikorita--meganium', 'req-1', 'admin-1');
 
     expect(mockPurchaseRpc).toHaveBeenCalledWith(expect.objectContaining({ nextThreshold: null, actorId: 'admin-1' }));
   });
@@ -531,7 +539,77 @@ describe('purchaseDraftKillToken', () => {
     const rpcError = { code: 'P0001', message: 'TOKEN_WOULD_EVOLVE', details: '{"next":2,"progress":1}' };
     mockPurchaseRpc.mockRejectedValue(rpcError);
 
-    await expect(purchaseDraftKillToken('s1', 'p1', 'chikorita--meganium', 'req-1', 'p1')).rejects.toBe(rpcError);
+    await expect(purchaseDraftKillToken('s1', null, 'p1', 'chikorita--meganium', 'req-1', 'p1')).rejects.toBe(rpcError);
+  });
+
+  describe('participation line (pack rate mocked to 2)', () => {
+    const DRATINI = 'dratini--dragonite';
+    beforeEach(() => {
+      packMocks.draftKillRate = 2;
+      mockGetSeasonLineThresholds.mockResolvedValue([
+        { line_id: 'chikorita--meganium', base_pokemon: 'Chikorita', stage2_pokemon: 'Bayleef', stage3_pokemon: 'Meganium', stage2_kos: 2, stage3_kos: 7 },
+        { line_id: DRATINI, base_pokemon: 'Dratini', stage2_pokemon: 'Dragonair', stage3_pokemon: 'Dragonite', stage2_kos: 5, stage3_kos: 12 },
+      ]);
+      mockGetListEntries.mockResolvedValue([
+        listEntry('Chikorita', 'Bayleef', 'Meganium'),
+        listEntry('Dratini', 'Dragonair', 'Dragonite', { cosmog: true }),
+      ]);
+    });
+
+    it('sends rate 2 for the participation line, resolved from the list entry', async () => {
+      mockGetTrackerByLine.mockResolvedValue(makeTracker({ id: 't-d', base_pokemon: 'Dratini', line_id: DRATINI, current_stage: 1, total_kos: 1 }));
+
+      await purchaseDraftKillToken('s1', 'list-1', 'p1', DRATINI, 'req-1', 'p1');
+
+      expect(mockGetListEntries).toHaveBeenCalledWith('list-1');
+      expect(mockPurchaseRpc).toHaveBeenCalledWith(
+        expect.objectContaining({ lineId: DRATINI, nextThreshold: 5, tokensPerProgress: 2 }),
+      );
+      expect(mockRecheck).not.toHaveBeenCalled();
+    });
+
+    it('sends rate 1 for every other line', async () => {
+      mockGetTrackerByLine.mockResolvedValue(makeTracker({ id: 't-chiko', base_pokemon: 'Chikorita', line_id: 'chikorita--meganium', total_kos: 0 }));
+
+      await purchaseDraftKillToken('s1', 'list-1', 'p1', 'chikorita--meganium', 'req-1', 'p1');
+
+      expect(mockPurchaseRpc).toHaveBeenCalledWith(expect.objectContaining({ tokensPerProgress: 1 }));
+    });
+
+    it('the stored participation flag of the list entry decides, like the overview (a base the pack does not flag)', async () => {
+      mockGetListEntries.mockResolvedValue([listEntry('Chikorita', 'Bayleef', 'Meganium', { cosmog: true })]);
+      mockGetTrackerByLine.mockResolvedValue(makeTracker({ id: 't-chiko', base_pokemon: 'Chikorita', line_id: 'chikorita--meganium', total_kos: 0 }));
+
+      await purchaseDraftKillToken('s1', 'list-1', 'p1', 'chikorita--meganium', 'req-1', 'p1');
+
+      expect(mockPurchaseRpc).toHaveBeenCalledWith(expect.objectContaining({ tokensPerProgress: 2 }));
+    });
+
+    it('without a list entry the tracker base decides (the pack line rule)', async () => {
+      mockGetListEntries.mockResolvedValue([]);
+      mockGetTrackerByLine.mockResolvedValue(makeTracker({ id: 't-d', base_pokemon: 'Dratini', line_id: DRATINI, total_kos: 1 }));
+
+      await purchaseDraftKillToken('s1', 'list-1', 'p1', DRATINI, 'req-1', 'p1');
+
+      expect(mockPurchaseRpc).toHaveBeenCalledWith(expect.objectContaining({ tokensPerProgress: 2 }));
+    });
+
+    it('a season without a point-buy list reads no entries and falls back to the tracker base', async () => {
+      mockGetTrackerByLine.mockResolvedValue(makeTracker({ id: 't-d', base_pokemon: 'Dratini', line_id: DRATINI, total_kos: 1 }));
+
+      await purchaseDraftKillToken('s1', null, 'p1', DRATINI, 'req-1', 'p1');
+
+      expect(mockGetListEntries).not.toHaveBeenCalled();
+      expect(mockPurchaseRpc).toHaveBeenCalledWith(expect.objectContaining({ tokensPerProgress: 2 }));
+    });
+
+    it('no owned tracker: the RPC refuses TRACKER_NOT_OWNED, the rate stays 1', async () => {
+      mockGetTrackerByLine.mockResolvedValue(null);
+
+      await purchaseDraftKillToken('s1', 'list-1', 'p1', DRATINI, 'req-1', 'p1');
+
+      expect(mockPurchaseRpc).toHaveBeenCalledWith(expect.objectContaining({ nextThreshold: null, tokensPerProgress: 1 }));
+    });
   });
 });
 

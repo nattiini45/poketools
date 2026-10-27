@@ -2,9 +2,10 @@
  * The random opening order of a queue draft (server only: it draws with Node's CSPRNG).
  *
  * `drawSeatOrder` is a Fisher-Yates shuffle over a copy of the ids, so the caller's array is untouched. The draw
- * is what the seats become (seat 1 first); the snake then runs from them, so this is the only random step of a
- * queue draft's order. `legacySeatOrder` (`engine.ts`) is not a substitute: it is a deterministic hash of the pool
- * id and would give the same "roll" on every request.
+ * is what the seats become (seat 1 first); rounds 1 and 2 of an Initial draft run from them (forward, then
+ * reversed), and `draft_start` draws the order of every later pair of rounds in SQL, once, at Start.
+ * `legacySeatOrder` (`engine.ts`) is not a substitute: it is a deterministic hash of the pool id and would give the
+ * same "roll" on every request.
  */
 import { randomInt as cryptoRandomInt } from 'node:crypto';
 

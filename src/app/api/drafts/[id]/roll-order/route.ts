@@ -32,8 +32,9 @@ async function optionalJsonBody(request: Request): Promise<unknown> {
  * Body: `{}`. The server shuffles the pool's roster (the season's participants, or a league group's members) with
  * a cryptographic RNG (`drawSeatOrder`) and seats them through the existing `draft_configure` (seats only). The RPC
  * enforces setup-only (`DRAFT_ALREADY_STARTED` otherwise), checks the seat set and logs `seats_changed` with the
- * previous and the new seats; the roll is also audited as `draft.order.roll`. Every call draws again. The snake
- * runs from the drawn order when the draft starts. A Redraft is seated by standings, never drawn.
+ * previous and the new seats; the roll is also audited as `draft.order.roll`. Every call draws again. Rounds 1 and 2
+ * run from the drawn order when the draft starts (forward, then reversed); `draft_start` draws the later pairs of
+ * rounds itself. A Redraft is seated by standings, never drawn.
  */
 export async function POST(request: Request, { params }: RouteParams) {
   try {

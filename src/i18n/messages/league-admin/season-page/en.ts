@@ -166,7 +166,7 @@ export default {
       intro: 'Creating the Draft Room sets up this draft:',
       /** Same term as the draft control panel's `config.order` (draft/admin), where it is edited. */
       orderLabel: 'Draft order',
-      order: 'The opening order is drawn at random, then snake: the order reverses every round.',
+      order: 'The opening order is drawn at random, then snake: round 2 runs in reverse. From round 3 on, the order is drawn again every two rounds; an odd last round runs forward.',
       seatsLabel: 'Seats',
       seats: 'One per participant.',
       pricesLabel: 'Prices',

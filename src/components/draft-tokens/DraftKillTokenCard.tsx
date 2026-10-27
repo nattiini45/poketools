@@ -9,6 +9,10 @@
  * a token (`draft/tokens.reason.<CODE>`, params from the DTO). Buying goes
  * through `ArmedConfirmDialog`; the `client_request_id` is minted when the
  * dialog opens and reused for retries of that dialog (idempotent, BE #26).
+ *
+ * A participation line's token counts as several against the limit and costs that many times the
+ * price (`lines[].tokens_used` / `cost`, from the format pack): its row, button and confirmation
+ * dialog say so.
  */
 import { useState } from 'react';
 import { useT } from '@/i18n/client';
@@ -65,6 +69,7 @@ export default function DraftKillTokenCard({ data, catalog, readOnly, onBuy }: D
   const [error, setError] = useState<ApiErrorLike | null>(null);
 
   const atLimit = data.owned >= data.max;
+  const pendingLine = pending ? data.lines.find((l) => l.line_id === pending.lineId) : undefined;
   const canBuy = !readOnly && data.window === 'open';
 
   const open = (lineId: LineId) => {
@@ -104,7 +109,7 @@ export default function DraftKillTokenCard({ data, catalog, readOnly, onBuy }: D
         <ul className="flex flex-col divide-y divide-poke-border">
           {data.lines.map((line) => {
             const label = text.label(line.line_id);
-            const refusal = visibleRefusal(line);
+            const refusal = visibleRefusal(line, data);
             return (
               <li key={line.line_id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <div className="min-w-0">
@@ -114,9 +119,16 @@ export default function DraftKillTokenCard({ data, catalog, readOnly, onBuy }: D
                       ? t('dk.progressMax', { progress: line.progress })
                       : t('dk.progress', { progress: line.progress, next: line.next_threshold })}
                   </p>
+                  {line.tokens_used > 1 && !line.has_token && data.window !== 'closed' ? (
+                    <p className="text-xs text-poke-text-secondary" data-counts-as={line.tokens_used}>
+                      {t('dk.countsAs', { tokens: line.tokens_used })}
+                    </p>
+                  ) : null}
                   {refusal ? (
                     <p className="text-xs text-poke-amber-ink" data-reason={refusal}>
-                      {t(`reason.${refusal}`, refusalParams(line, data))}
+                      {refusal === 'TOKEN_PLAYER_LIMIT'
+                        ? t('dk.allowanceShort', refusalParams(line, data))
+                        : t(`reason.${refusal}`, refusalParams(line, data))}
                     </p>
                   ) : null}
                 </div>
@@ -132,7 +144,7 @@ export default function DraftKillTokenCard({ data, catalog, readOnly, onBuy }: D
                     onClick={() => open(line.line_id)}
                     aria-label={t('dk.buyFor', { line: label })}
                   >
-                    {t('dk.buy', { cost: data.cost })}
+                    {t('dk.buy', { cost: line.cost })}
                   </Button>
                 ) : null}
               </li>
@@ -144,7 +156,11 @@ export default function DraftKillTokenCard({ data, catalog, readOnly, onBuy }: D
       <ArmedConfirmDialog
         open={pending !== null}
         title={pending ? t('dk.confirmTitle', { line: text.label(pending.lineId) }) : ''}
-        body={t('dk.confirmBody', { cost: data.cost })}
+        body={
+          pendingLine && pendingLine.tokens_used > 1
+            ? t('dk.confirmBodyMulti', { cost: pendingLine.cost, tokens: pendingLine.tokens_used })
+            : t('dk.confirmBody', { cost: pendingLine?.cost ?? data.cost })
+        }
         confirmLabel={t('dk.confirm')}
         onConfirm={() => void confirm()}
         onCancel={() => setPending(null)}

@@ -142,7 +142,7 @@ export default defineDe<typeof en>()({
     epbCreate: {
       intro: 'Mit dem Draft-Raum wird dieser Draft angelegt:',
       orderLabel: 'Draft-Reihenfolge',
-      order: 'Die Anfangsreihenfolge wird zufällig ausgelost, danach Snake: Die Reihenfolge kehrt sich jede Runde um.',
+      order: 'Die Anfangsreihenfolge wird zufällig ausgelost, danach Snake: Runde 2 läuft rückwärts. Ab Runde 3 wird die Reihenfolge alle zwei Runden neu ausgelost; eine ungerade letzte Runde läuft vorwärts.',
       seatsLabel: 'Plätze',
       seats: 'Einer pro Teilnehmer.',
       pricesLabel: 'Preise',

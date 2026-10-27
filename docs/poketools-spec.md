@@ -321,6 +321,17 @@ One row per Pokémon per player per game: unique index `battle_stats_game_player
 > while the pool is in `setup` (`POST /api/drafts/[id]/roll-order`). A queue pool in `setup` or `cancelled` can be deleted
 > (`DELETE /api/drafts/[id]`, phase-filtered), which frees its league group; both writes are audited.
 >
+> **Pick order of an Initial draft** (`20261027190000_draft_start_reroll_every_two_rounds.sql`). The order is drawn again
+> every two rounds. Rounds 1-2 use the seats as they are at Start (round 1 forward, round 2 reversed); each following pair
+> of rounds gets a new random permutation of the participants, forward in its first round and reversed in its second; an
+> odd roster size leaves a lone last round with its own fresh permutation, forward only. `draft_start` (same signature, no
+> parameter: the behaviour is the pool kind's) draws everything once in its own transaction and materialises all slots up
+> front (`sort_key` = `nominal_pick_number` = running index, as before), so makeup, requeue, void, timeout and the
+> completability gate see the same queue shape. One permutation is materialised per pair (one random key per participant
+> and pair, never per slot), so both rounds of a pair share it. The pair orders go into the `draft_started` audit row
+> (`order_mode: 'snake_reroll'`, `pair_orders`: one array of participant ids per pair; pool admins only). A Redraft is not
+> affected: it starts at publish, in standings order (worst first), then a plain snake.
+>
 > **Completability** (`20261018140200_draft_pool_completability.sql`). A drafting queue pool is always completable:
 > every participant can fill every open roster slot at once with distinct free lines it may take, within its remaining
 > budget. So the player on the clock always has a legal pick, and no slot is ever blocked or forfeited. `draft_start`

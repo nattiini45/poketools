@@ -20,7 +20,8 @@ interface RouteParams {
  *
  * Body `{ line_id, client_request_id }`. A Draft Kill Token costs `draft_token_ratio` unspent
  * points and adds +1 progress; at most `draft_token_max` per player and `draft_token_max_per_line`
- * per line; it never triggers an evolution; the points never come back. Every rule is re-checked by `epb_purchase_draft_token` under the season lock and comes
+ * per line; on a participation line it counts as (and costs) the pack's `draftKillTokensPerProgress`
+ * tokens; it never triggers an evolution; the points never come back. Every rule is re-checked by `epb_purchase_draft_token` under the season lock and comes
  * back as its `errors/draft` code (`TOKEN_WINDOW_CLOSED`, `TOKEN_PLAYER_LIMIT`, ...). A repeated
  * `client_request_id` replays the first purchase. Players buy only for themselves.
  * Responds with the player's fresh `TokenOverviewDTO`.
@@ -35,7 +36,14 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const season = await getEpbSeason(id);
     try {
-      await purchaseDraftKillToken(id, player.playerId, body.line_id, body.client_request_id, player.playerId);
+      await purchaseDraftKillToken(
+        id,
+        season.point_buy_list_id,
+        player.playerId,
+        body.line_id,
+        body.client_request_id,
+        player.playerId
+      );
     } catch (err) {
       throw toDraftRuleError(err) ?? err;
     }

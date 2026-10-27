@@ -1,6 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/client', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
+// The pack's Draft Kill Token rate of a participation line, switchable per test (default: the active pack's).
+const packMocks = vi.hoisted(() => ({ draftKillRate: null as number | null }));
+vi.mock('@/lib/format-pack', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/format-pack')>();
+  return {
+    ...actual,
+    draftKillTokensPerProgress: (isParticipationLine: boolean) =>
+      isParticipationLine && packMocks.draftKillRate !== null
+        ? packMocks.draftKillRate
+        : actual.draftKillTokensPerProgress(isParticipationLine),
+  };
+});
 vi.mock('@/lib/supabase/queries/format-rules', () => ({ getFormatRules: vi.fn() }));
 vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolBySeasonGroup: vi.fn(),
@@ -215,6 +227,7 @@ describe('buildTokenOverview — Draft Kill Tokens', () => {
         line_id: 'chikorita--meganium',
         tracker_id: 't-chiko',
         points_spent: epbPack.defaults.tokenRatio,
+        tokens_used: 1,
         client_request_id: 'r1',
         created_by: P1,
         created_at: '2026-10-02T00:00:00Z',
@@ -232,6 +245,76 @@ describe('buildTokenOverview — Draft Kill Tokens', () => {
     );
     expect(limit.draft_kill.owned).toBe(2);
     expect(lineOf(limit, 'chikorita--meganium')?.reason).toBe('TOKEN_PLAYER_LIMIT');
+  });
+
+  describe('participation line (its one token counts as several and costs several times the price)', () => {
+    const RATE = 2;
+    const ratio = epbPack.defaults.tokenRatio;
+    const partTracker = () => tracker('t-part', P1, OV_ID, OV.base_pokemon);
+    const withParticipation = (over: Partial<TokenSeasonContext> = {}) =>
+      ctx({
+        trackers: [partTracker(), tracker('t-chiko', P1, 'chikorita--meganium', 'Chikorita')],
+        // The example pack allows one token per player; the 2-token line needs a larger allowance.
+        max: 2,
+        ...over,
+      });
+    const purchase = (lineId: string, tokensUsed: number) => ({
+      id: `pu-${lineId}`,
+      season_id: SEASON,
+      player_id: P1,
+      line_id: lineId,
+      tracker_id: null,
+      points_spent: tokensUsed * ratio,
+      tokens_used: tokensUsed,
+      client_request_id: `r-${lineId}`,
+      created_by: P1,
+      created_at: '2026-10-02T00:00:00Z',
+    });
+
+    beforeEach(() => {
+      packMocks.draftKillRate = RATE;
+    });
+    afterEach(() => {
+      packMocks.draftKillRate = null;
+    });
+
+    it('carries tokens_used and the scaled cost on that line only', () => {
+      const dto = buildTokenOverview(withParticipation(), P1, NOW);
+      expect(lineOf(dto, OV_ID)).toMatchObject({ tokens_used: RATE, cost: RATE * ratio, eligible: true });
+      expect(lineOf(dto, 'chikorita--meganium')).toMatchObject({ tokens_used: 1, cost: ratio });
+      expect(dto.draft_kill.cost).toBe(ratio);
+    });
+
+    it('owned sums tokens_used, not purchases', () => {
+      const dto = buildTokenOverview(withParticipation({ purchases: [purchase(OV_ID, RATE)], max: 4 }), P1, NOW);
+      expect(dto.draft_kill.owned).toBe(RATE);
+      expect(lineOf(dto, OV_ID)).toMatchObject({ has_token: true, reason: 'TOKEN_LINE_LIMIT' });
+    });
+
+    it('one token left in the allowance → the 2-token line is refused TOKEN_PLAYER_LIMIT, a normal line is not', () => {
+      const dto = buildTokenOverview(withParticipation({ max: 2, ledger: ledgerFor({ [P1]: 10 }, { [P1]: 1 }) }), P1, NOW);
+      expect(dto.draft_kill.owned).toBe(1);
+      expect(lineOf(dto, OV_ID)).toMatchObject({ eligible: false, reason: 'TOKEN_PLAYER_LIMIT' });
+      expect(lineOf(dto, 'chikorita--meganium')).toMatchObject({ eligible: true, reason: null });
+    });
+
+    it('checks the scaled price against the unspent points', () => {
+      const short = buildTokenOverview(
+        withParticipation({ ledger: ledgerFor({ [P1]: epbPack.defaults.draftBudget - (RATE * ratio - 1) }) }),
+        P1,
+        NOW,
+      );
+      expect(short.draft_kill.unspent_points).toBe(RATE * ratio - 1);
+      expect(lineOf(short, OV_ID)?.reason).toBe('TOKEN_POINTS_SHORT');
+      // The same balance still buys a normal line.
+      expect(lineOf(short, 'chikorita--meganium')?.eligible).toBe(true);
+    });
+
+    it('a pack without its own rate falls back to the Comeback rate', () => {
+      packMocks.draftKillRate = null;
+      const dto = buildTokenOverview(withParticipation(), P1, NOW);
+      expect(lineOf(dto, OV_ID)?.tokens_used).toBe(epbPack.participationPoints.comebackTokensPerProgress);
+    });
   });
 
   it('too few unspent points → TOKEN_POINTS_SHORT; stage 3 → LINE_FULLY_EVOLVED', () => {

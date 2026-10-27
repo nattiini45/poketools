@@ -69,6 +69,16 @@ export function comebackTokensPerProgress(isParticipationLine: boolean): number 
   return isParticipationLine ? formatPack.epb.participationPoints.comebackTokensPerProgress : 1;
 }
 
+/**
+ * Draft Kill Tokens per 1 progress point on a line: the pack's `draftKillTokensPerProgress` for a participation
+ * line (falling back to `comebackTokensPerProgress` when the pack does not set it), else 1.
+ */
+export function draftKillTokensPerProgress(isParticipationLine: boolean): number {
+  if (!isParticipationLine) return 1;
+  const pp = formatPack.epb.participationPoints;
+  return pp.draftKillTokensPerProgress ?? pp.comebackTokensPerProgress;
+}
+
 /** The pick clock's daily quiet window (`epb.draftClock.quietHours`); null when the pack has none. */
 export function draftQuietHours(): QuietHours | null {
   return formatPack.epb.draftClock.quietHours;

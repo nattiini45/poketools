@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { epbPack } from '@/lib/format-pack';
 import {
   comebackTokensPerProgressOf,
+  draftKillTokensPerProgressOf,
   isCosmogLine,
   isScatterbugLine,
   isNoCocoonLine,
@@ -139,6 +140,21 @@ describe('comebackTokensPerProgressOf', () => {
   it('a list entry is decided like isCosmogLine (stored flag, then base)', () => {
     expect(comebackTokensPerProgressOf({ base_pokemon: 'Dragonair', special_rules: { cosmog: true } })).toBe(rate);
     expect(comebackTokensPerProgressOf({ base_pokemon: 'Pikachu', special_rules: null })).toBe(1);
+  });
+});
+
+describe('draftKillTokensPerProgressOf', () => {
+  const pp = epbPack.participationPoints;
+  const rate = pp.draftKillTokensPerProgress ?? pp.comebackTokensPerProgress;
+
+  it('a participation line counts as the pack rate (comeback rate when unset); every other line 1', () => {
+    expect(draftKillTokensPerProgressOf('Dratini')).toBe(rate);
+    expect(draftKillTokensPerProgressOf('Pikachu')).toBe(1);
+  });
+
+  it('a list entry is decided like isCosmogLine (stored flag, then base)', () => {
+    expect(draftKillTokensPerProgressOf({ base_pokemon: 'Dragonair', special_rules: { cosmog: true } })).toBe(rate);
+    expect(draftKillTokensPerProgressOf({ base_pokemon: 'Pikachu', special_rules: null })).toBe(1);
   });
 });
 

@@ -4,7 +4,9 @@
  *
  * Three separate token kinds, never one generic "kill token":
  * - Draft Kill Token: bought with unspent points after the initial draft (`format_rules` token
- *   ratio and caps), +1 progress, never triggers an evolution (`epb_purchase_draft_token`).
+ *   ratio and caps), +1 progress, never triggers an evolution (`epb_purchase_draft_token`). A
+ *   participation line's one token counts as (and costs) the pack's `draftKillTokensPerProgress`
+ *   tokens (`draft_kill.lines[].tokens_used` / `cost`); `draft_kill.owned` sums the tokens used.
  * - Comeback Token: earned by shutout losses (the format pack's `epb.comeback.table`, inside its
  *   `epb.comeback.earnWindow`), spent on own lines once the redraft is complete or the admin opened
  *   spending (`epb_spend_comeback_tokens`). A participation line needs the pack's
@@ -31,7 +33,7 @@ import {
   type EarnedComebackTokens,
 } from '@/lib/draft/progress-engine';
 import { progressSourcesOf, totalEligibleProgress } from '@/lib/draft/progress-sources';
-import { comebackTokensPerProgressOf, isCosmogLine } from '@/lib/draft/special-rules';
+import { comebackTokensPerProgressOf, draftKillTokensPerProgressOf, isCosmogLine } from '@/lib/draft/special-rules';
 import {
   comebackBalance,
   comebackSpendOpen,
@@ -281,7 +283,8 @@ export function buildTokenOverview(ctx: TokenSeasonContext, playerId: string, no
   const legacyGrantTokens = ctx.ledger.draftGrants
     .filter((g) => g.player_id === playerId)
     .reduce((sum, g) => sum + g.token_count, 0);
-  const owned = purchases.length + legacyGrantTokens;
+  // Tokens used, not purchases: a participation line's purchase counts as several (`tokens_used`).
+  const owned = purchases.reduce((sum, p) => sum + p.tokens_used, 0) + legacyGrantTokens;
   const tokenLines = new Set(purchases.map((p) => p.line_id));
   const unspentPoints = computeRemainingPointsFromLedger(ctx.ledger, playerId, ctx.budget, ctx.cost);
 
@@ -300,6 +303,9 @@ export function buildTokenOverview(ctx: TokenSeasonContext, playerId: string, no
     const nextThreshold = entry ? nextThresholdFor(effectiveThresholds(entry), tracker.current_stage) : null;
     const sources = progressSourcesOf(tracker);
     const hasToken = tokenLines.has(lineId);
+    // A participation line's one token counts as (and costs) `tokensUsed` tokens' worth, for the same +1 progress.
+    const tokensUsed = draftKillTokensPerProgressOf(entry ?? tracker.base_pokemon);
+    const lineCost = tokensUsed * ctx.cost;
     // The SQL compares `tracker.total_kos` (= the five-source total, M4 invariant).
     const progress = tracker.total_kos;
 
@@ -307,15 +313,18 @@ export function buildTokenOverview(ctx: TokenSeasonContext, playerId: string, no
       window,
       owned,
       max: ctx.max,
+      tokensUsed,
       lineHasToken: hasToken,
       unspentPoints,
-      cost: ctx.cost,
+      cost: lineCost,
       totalProgress: progress,
       nextThreshold,
     });
     draftKillLines.push({
       line_id: lineId,
       has_token: hasToken,
+      tokens_used: tokensUsed,
+      cost: lineCost,
       progress,
       next_threshold: nextThreshold,
       eligible: reason === null,

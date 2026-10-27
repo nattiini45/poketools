@@ -377,15 +377,20 @@ export interface TokenOverviewDTO {
   draft_kill: {
     window: 'before' | 'open' | 'closed';
     cutoff_at: string | null;
-    /** 3 */
+    /** Points per Draft Kill Token (3); a participation line costs `lines[].tokens_used` times this. */
     cost: number;
     /** 2 */
     max: number;
+    /** Tokens used against `max`: the sum of the purchases' `tokens_used`, plus legacy grant tokens. */
     owned: number;
     unspent_points: number;
     lines: {
       line_id: LineId;
       has_token: boolean;
+      /** Tokens this line's one purchase counts as against `max` (1; the pack's rate on a participation line). */
+      tokens_used: number;
+      /** Points this line's purchase costs (`tokens_used` times `draft_kill.cost`). */
+      cost: number;
       progress: number;
       next_threshold: number | null;
       eligible: boolean;

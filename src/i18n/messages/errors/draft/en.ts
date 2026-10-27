@@ -116,7 +116,7 @@ export default {
   SEATS_INVALID: 'The draft order is invalid.',
   INVALID_CONFIG: 'Invalid setting: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft Kill Tokens cannot be bought now.',
-  TOKEN_PLAYER_LIMIT: 'You already own the maximum of {max} Draft Kill Tokens.',
+  TOKEN_PLAYER_LIMIT: 'This would go over your limit of {max} Draft Kill Tokens.',
   TOKEN_LINE_LIMIT: 'This line already has a Draft Kill Token.',
   TOKEN_POINTS_SHORT: 'You need {needed} unspent points ({remaining} left).',
   TOKEN_WOULD_EVOLVE: 'A Draft Kill Token cannot trigger an evolution (progress {progress}, next at {next}).',

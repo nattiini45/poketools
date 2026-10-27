@@ -149,6 +149,8 @@ describe('Draft Kill Token refusals', () => {
     return {
       line_id: 'a--a' as LineId,
       has_token: false,
+      tokens_used: 1,
+      cost: 3,
       progress: 2,
       next_threshold: 3,
       eligible: false,
@@ -168,12 +170,33 @@ describe('Draft Kill Token refusals', () => {
   });
 
   it('params come from the DTO', () => {
-    expect(refusalParams(dkLine({}), { cost: 3, max: 2, unspent_points: 1 })).toEqual({
+    expect(refusalParams(dkLine({}), { max: 2, owned: 0, unspent_points: 1 })).toEqual({
       progress: 2,
       next: 3,
       max: 2,
       cost: 3,
       unspent: 1,
+      tokens: 1,
+      left: 2,
+    });
+  });
+
+  it('a participation line shows the allowance refusal while the player still owns fewer than max', () => {
+    const two = dkLine({ reason: 'TOKEN_PLAYER_LIMIT', tokens_used: 2, cost: 6 });
+    expect(visibleRefusal(two, { owned: 1, max: 2 })).toBe('TOKEN_PLAYER_LIMIT');
+    // At the cap the card-level note says it once.
+    expect(visibleRefusal(two, { owned: 2, max: 2 })).toBeNull();
+    // A one-token line never repeats the card-level limit, and without the card context neither does a 2-token one.
+    expect(visibleRefusal(dkLine({ reason: 'TOKEN_PLAYER_LIMIT' }), { owned: 1, max: 2 })).toBeNull();
+    expect(visibleRefusal(two)).toBeNull();
+  });
+
+  it('params use the line own price and weight, and the tokens left in the allowance', () => {
+    expect(refusalParams(dkLine({ tokens_used: 2, cost: 6 }), { max: 2, owned: 1, unspent_points: 4 })).toMatchObject({
+      cost: 6,
+      tokens: 2,
+      left: 1,
+      unspent: 4,
     });
   });
 });

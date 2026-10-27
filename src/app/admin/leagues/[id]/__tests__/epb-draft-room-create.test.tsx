@@ -101,7 +101,7 @@ describe('EpbDraftRoomCreate summary', () => {
   it('summarises the draft the RPC creates, with no draft-type picker', () => {
     const en = renderToStaticMarkup(element);
     expect(en).toContain('Draft order');
-    expect(en).toContain('The opening order is drawn at random, then snake: the order reverses every round.');
+    expect(en).toContain('The opening order is drawn at random, then snake: round 2 runs in reverse. From round 3 on, the order is drawn again every two rounds; an odd last round runs forward.');
     expect(en).toContain('From the bound point-buy list.');
     expect(en).toContain('100 points per player (format rules).');
     expect(en).toContain('6 picks per player (format rules).');

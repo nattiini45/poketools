@@ -57,7 +57,7 @@ Format gates:
 | `evo_progress_log` | Progress audit log (one row per applied amount) |
 | `evolution_events` | Development-event log: every stage transition (old/new form + stage, matchday, auto vs. `is_manual`) |
 | `epb_token_grants` | Legacy one-shot gate per (season, player, grant_type); still counted in the points ledger |
-| `epb_draft_token_purchases` | Draft Kill Token purchases, one row per token (append-only; points never come back) |
+| `epb_draft_token_purchases` | Draft Kill Token purchases, one row per purchase (append-only; points never come back); `tokens_used` is how many tokens the purchase counted for against the player's allowance (1, or the pack's rate on a participation line) |
 | `epb_comeback_token_spends` | Comeback Token spends, one row per line per request (append-only) |
 | `redraft_slots` | Published secret drops: dropped line, its price (refunded), frozen real kills (transferred) |
 | `redraft_history` | Redraft audit trail (`secret_drop` rows; retired `trade`/`free_swap` rows kept as history) |
@@ -154,7 +154,11 @@ The progress sources stay separate (SPEC Prompt 7; spec names in
 | Participation Token | `cosmo_points` | `awardCosmoPoint` (match finalize), rebuild | no |
 
 `total_kos` is total evolution progress and is never labelled kills. Every
-source is 1:1 progress. The column and function names (`cosmo_points`,
+source is 1:1 progress by default; a participation line converts at the pack's
+rates instead (`epb.participationPoints`): a Comeback Token spend needs
+`comebackTokensPerProgress` tokens per progress point, and the line's one Draft
+Kill Token counts as (and costs) `draftKillTokensPerProgress` tokens for +1
+progress (see "Token Ledger"). The column and function names (`cosmo_points`,
 `awardCosmoPoint`) are stored names and keep them; the user-facing token name
 comes from the pack's messages.
 
@@ -359,6 +363,39 @@ tokens × ratio − Draft Kill Token purchases − legacy redraft spends + redra
 refunds. `computeRemainingPoints` / `loadDraftTokenLedger` +
 `computeRemainingPointsFromLedger` (`progress-engine.ts`) read it once per
 season.
+
+### Draft Kill Tokens on a participation line
+
+A Draft Kill Token normally counts as one token against the player's allowance
+(`format_rules.draft_token_max`) and costs `draft_token_ratio` points for +1
+progress, one purchase per line. On a participation line (`isCosmogLine`) the
+exchange follows the pack's rate N: the one purchase for that line
+counts as `participationPoints.draftKillTokensPerProgress` tokens against the
+allowance and costs that many times `draft_token_ratio`, and it still adds
+exactly +1 progress. The pack field is optional and falls back to
+`comebackTokensPerProgress`, so a pack whose Comeback Tokens convert N:1 gets
+the same N here without a second entry (with N = 3, the purchase counts as 3
+tokens and costs 3 x the price). Every other line is unchanged (1 token, 1 x
+the price, +1), and so are the per-line limit, the window and the rule that a
+Draft Kill Token never triggers an evolution.
+
+- `purchaseDraftKillToken` resolves the line like the token overview does (the
+  season list entry's stored flag, else the base of the player's tracker) and
+  passes the rate to `epb_purchase_draft_token(..., p_tokens_per_progress)`
+  (default 1, validated 1..10, `service_role` only). The RPC checks
+  `Σ tokens_used + legacy grant tokens + rate <= draft_token_max`
+  (`TOKEN_PLAYER_LIMIT`: a player with one token left cannot buy the 2-token
+  line) and `unspent points >= rate x draft_token_ratio` (`TOKEN_POINTS_SHORT`),
+  and writes `points_spent = rate x draft_token_ratio` and `tokens_used = rate`
+  to the ledger. The budget readers keep summing `points_spent`.
+- The overview (`/api/seasons/[id]/tokens`) reports `draft_kill.owned` as the
+  sum of `tokens_used` and per line `tokens_used` and `cost`; the TS pre-check
+  `draftKillLineRefusal` takes the same weights, so it matches the RPC.
+- The Draft Kill Token card shows the line's price on its button, a "counts as 2
+  tokens" note, and the matching confirmation text. Copy says progress, never
+  kills.
+- Existing purchases carry `tokens_used = 1` (column default), so nothing
+  already bought changes.
 
 ### Legacy one-shot grants
 

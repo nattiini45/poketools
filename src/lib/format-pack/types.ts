@@ -232,6 +232,12 @@ export interface FormatPack {
        * other line). Spends on a participation line must be a multiple of it.
        */
       comebackTokensPerProgress: number;
+      /**
+       * Optional. Draft Kill Tokens one progress point costs on a participation line (1..10): the one purchase
+       * counts as this many tokens against the player's allowance and costs this many times the normal point
+       * price, for +1 progress. Unset = `comebackTokensPerProgress`. Every other line is 1.
+       */
+      draftKillTokensPerProgress?: number;
     };
     /** The pick clock of the queue draft (live, slow and redraft pick phases). */
     draftClock: {

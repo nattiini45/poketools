@@ -93,7 +93,7 @@ export default {
     redraftMaxLines: 'Lines each player may drop in the Redraft',
     redraftMaxLinesHint: 'Empty = the default of 3 lines.',
     order: 'Draft order',
-    orderHint: 'Seat 1 picks first; the order snakes every round.',
+    orderHint: 'Seat 1 picks first, then round 2 runs in reverse. From round 3 on, the order is drawn again every two rounds; an odd last round runs forward.',
     orderRedraftHint: 'Prefilled from the first-half standings, worst first. Editable until the draft starts.',
     rollOrder: 'Roll order',
     rollOrderHint: 'Draws a new random order and saves it right away. You can still move players by hand afterwards.',

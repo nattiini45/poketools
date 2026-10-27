@@ -18,6 +18,8 @@ export interface DraftTokenPurchase {
   /** Null once the line's tracker was deleted (the purchase stays spent). */
   tracker_id: string | null;
   points_spent: number;
+  /** Tokens the purchase counted for against the player's allowance (1; the pack's rate on a participation line). */
+  tokens_used: number;
   client_request_id: string;
   created_by: string | null;
   created_at: string;
@@ -31,6 +33,7 @@ function toPurchase(row: PurchaseRow): DraftTokenPurchase {
     line_id: row.line_id,
     tracker_id: row.tracker_id,
     points_spent: row.points_spent,
+    tokens_used: row.tokens_used,
     client_request_id: row.client_request_id,
     created_by: row.created_by,
     created_at: row.created_at,
@@ -60,6 +63,7 @@ export interface DraftTokenPurchaseResult {
   tracker_id: string | null;
   line_id: string;
   points_spent: number;
+  tokens_used: number;
   progress?: number;
   remaining_points?: number;
   replay: boolean;
@@ -78,6 +82,7 @@ function toPurchaseResult(data: Json): DraftTokenPurchaseResult {
     tracker_id: typeof data.tracker_id === 'string' ? data.tracker_id : null,
     line_id: data.line_id,
     points_spent: typeof data.points_spent === 'number' ? data.points_spent : 0,
+    tokens_used: typeof data.tokens_used === 'number' ? data.tokens_used : 1,
     ...(typeof data.progress === 'number' ? { progress: data.progress } : {}),
     ...(typeof data.remaining_points === 'number' ? { remaining_points: data.remaining_points } : {}),
     replay: data.replay === true,
@@ -88,7 +93,10 @@ function toPurchaseResult(data: Json): DraftTokenPurchaseResult {
  * Buy one Draft Kill Token for a line (RPC). `nextThreshold` is the line's next
  * cumulative threshold from TS (`nextThresholdFor(effectiveThresholds(entry), stage)`,
  * null when fully evolved); the RPC refuses a purchase that would trigger an
- * evolution. Rule refusals arrive as PostgREST errors (P0001, message = the
+ * evolution. `tokensPerProgress` is the line's rate (`draftKillTokensPerProgressOf`: 1, or the
+ * pack's rate on a participation line): the purchase counts as that many tokens against the
+ * player's allowance and costs that many times the point price, for +1 progress. Never client
+ * input. Rule refusals arrive as PostgREST errors (P0001, message = the
  * `errors/draft` code, DETAIL = params); the caller maps them (`rpc-errors.ts`).
  */
 export async function purchaseDraftTokenRpc(input: {
@@ -98,6 +106,7 @@ export async function purchaseDraftTokenRpc(input: {
   lineId: string;
   nextThreshold: number | null;
   clientRequestId: string;
+  tokensPerProgress: number;
 }): Promise<DraftTokenPurchaseResult> {
   const { data, error } = await supabase.rpc('epb_purchase_draft_token', {
     p_season_id: input.seasonId,
@@ -108,6 +117,7 @@ export async function purchaseDraftTokenRpc(input: {
     // non-default parameter as non-null.
     p_next_threshold: input.nextThreshold as number,
     p_client_request_id: input.clientRequestId,
+    p_tokens_per_progress: input.tokensPerProgress,
   });
 
   if (error) throw error;

@@ -79,7 +79,7 @@ export default defineDe<typeof en>()({
     redraftMaxLines: 'Linien, die jeder Spieler im Redraft abgeben darf',
     redraftMaxLinesHint: 'Leer = Standard von 3 Linien.',
     order: 'Draft-Reihenfolge',
-    orderHint: 'Platz 1 pickt zuerst; jede Runde dreht sich die Reihenfolge um (Snake).',
+    orderHint: 'Platz 1 pickt zuerst, danach läuft Runde 2 rückwärts. Ab Runde 3 wird die Reihenfolge alle zwei Runden neu ausgelost; eine ungerade letzte Runde läuft vorwärts.',
     orderRedraftHint: 'Vorbelegt nach der Hinrundentabelle, der Tabellenletzte zuerst. Änderbar bis zum Draft-Start.',
     rollOrder: 'Reihenfolge auslosen',
     rollOrderHint: 'Lost eine neue Reihenfolge aus und speichert sie sofort. Danach kannst du die Spieler noch von Hand verschieben.',

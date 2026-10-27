@@ -97,7 +97,7 @@ export default defineDe<typeof en>()({
   SEATS_INVALID: 'Die Draft-Reihenfolge ist ungültig.',
   INVALID_CONFIG: 'Ungültige Einstellung: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft-Kill-Tokens kannst du gerade nicht kaufen.',
-  TOKEN_PLAYER_LIMIT: 'Du hast bereits das Maximum von {max} Draft-Kill-Tokens.',
+  TOKEN_PLAYER_LIMIT: 'Das würde dein Limit von {max} Draft-Kill-Tokens überschreiten.',
   TOKEN_LINE_LIMIT: 'Diese Linie hat bereits ein Draft-Kill-Token.',
   TOKEN_POINTS_SHORT: 'Du brauchst {needed} freie Punkte ({remaining} übrig).',
   TOKEN_WOULD_EVOLVE:

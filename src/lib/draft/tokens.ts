@@ -62,20 +62,26 @@ export function draftKillTokenWindow(i: {
  * window → player limit → line limit → unspent points → fully evolved → would evolve.
  * (`TRACKER_NOT_OWNED` sits between points and fully evolved in SQL; callers only ask
  * for lines the player owns.) Null = eligible.
+ *
+ * A participation line weighs `tokensUsed` > 1: its one token counts as that many against the
+ * player's allowance and `cost` is already the scaled price (`tokensUsed` × the point price).
  */
 export function draftKillLineRefusal(i: {
   window: DraftKillWindow;
-  /** Draft Kill Tokens the player already owns (purchases + legacy grant tokens). */
+  /** Draft Kill Tokens the player already owns (purchases weighted by `tokens_used` + legacy grant tokens). */
   owned: number;
   max: number;
+  /** Tokens this line's purchase counts as (1 on a normal line, the pack's rate on a participation line). */
+  tokensUsed: number;
   lineHasToken: boolean;
   unspentPoints: number;
+  /** Points this line's purchase costs (`tokensUsed` × the season's point price). */
   cost: number;
   totalProgress: number;
   nextThreshold: number | null;
 }): TokenRefusalCode | null {
   if (i.window !== 'open') return 'TOKEN_WINDOW_CLOSED';
-  if (i.owned >= i.max) return 'TOKEN_PLAYER_LIMIT';
+  if (i.owned + i.tokensUsed > i.max) return 'TOKEN_PLAYER_LIMIT';
   if (i.lineHasToken) return 'TOKEN_LINE_LIMIT';
   if (i.unspentPoints < i.cost) return 'TOKEN_POINTS_SHORT';
   const check = draftKillTokenCheck({ totalProgress: i.totalProgress, nextThreshold: i.nextThreshold });

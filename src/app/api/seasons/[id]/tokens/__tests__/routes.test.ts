@@ -172,11 +172,12 @@ describe('POST /api/seasons/[id]/draft-kill-tokens (#26)', () => {
       tracker_id: 't1',
       line_id: LINE,
       points_spent: 3,
+      tokens_used: 1,
       replay: false,
     });
     const res = await buyDraftKillToken(makeRequest(body), { params });
     expect(res.status).toBe(200);
-    expect(purchaseDraftKillToken).toHaveBeenCalledWith(SEASON, P1, LINE, REQ, P1);
+    expect(purchaseDraftKillToken).toHaveBeenCalledWith(SEASON, season.point_buy_list_id, P1, LINE, REQ, P1);
     expect(expireSeasonReads).toHaveBeenCalledWith(SEASON);
     expect(loadTokenSeasonContext).toHaveBeenCalledWith(season, P1);
     expect((await res.json()).data).toEqual(overviewFor(P1));

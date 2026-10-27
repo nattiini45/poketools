@@ -14,7 +14,9 @@ const OVERVIEW: TokenOverviewDTO = {
     max: 2,
     owned: 0,
     unspent_points: 5,
-    lines: [{ line_id: 'a--a' as LineId, has_token: false, progress: 1, next_threshold: 3, eligible: true, reason: null }],
+    lines: [
+      { line_id: 'a--a' as LineId, has_token: false, tokens_used: 1, cost: 3, progress: 1, next_threshold: 3, eligible: true, reason: null },
+    ],
   },
   comeback: {
     earned: 2,
@@ -68,6 +70,17 @@ describe('isTokenOverview', () => {
     const { comeback_tokens_per_progress: _dropped, ...withoutRate } = line;
     void _dropped;
     expect(isTokenOverview({ ...OVERVIEW, lines: [withoutRate] })).toBe(false);
+  });
+
+  it('checks each Draft Kill line tokens_used (a positive integer) and cost', () => {
+    const dkLine = OVERVIEW.draft_kill.lines[0];
+    const withLine = (l: unknown) => ({ ...OVERVIEW, draft_kill: { ...OVERVIEW.draft_kill, lines: [l] } });
+    expect(isTokenOverview(withLine({ ...dkLine, tokens_used: 2, cost: 6 }))).toBe(true);
+    for (const bad of [0, 1.5, -1, '2', null]) expect(isTokenOverview(withLine({ ...dkLine, tokens_used: bad }))).toBe(false);
+    for (const bad of ['6', null]) expect(isTokenOverview(withLine({ ...dkLine, cost: bad }))).toBe(false);
+    const { tokens_used: _dropped, ...withoutWeight } = dkLine;
+    void _dropped;
+    expect(isTokenOverview(withLine(withoutWeight))).toBe(false);
   });
 });
 
