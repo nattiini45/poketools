@@ -13,7 +13,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 
@@ -60,6 +60,11 @@ function offenders(pattern: RegExp, allowed: (rel: string) => boolean): string[]
     .filter(([rel, text]) => pattern.test(text) && !allowed(rel))
     .map(([rel]) => rel);
 }
+
+// One repo-wide read up front, with room for a loaded machine; every test below reads the cache.
+beforeAll(() => {
+  sourceFiles();
+}, 60_000);
 
 describe('the scan itself', () => {
   it('sees the override module, helpers.ts and a test-free tree', () => {

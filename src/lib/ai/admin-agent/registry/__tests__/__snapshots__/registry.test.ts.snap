@@ -27,7 +27,7 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
   "plan_patch": "7ce89daad4e1245a",
   "plan_revert": "355208bca1af775b",
   "plan_set": "2c162bb5b8e0c451",
-  "plan_validate": "fadee895e54289e8",
+  "plan_validate": "4622bc710ce09582",
   "player_search": "ff8039d46f171b27",
   "pointbuy_list_get": "26db03fce2d16202",
   "pool_template_list": "33b381ecb702c8ae",
@@ -78,51 +78,51 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
 {
   "scoped:0": {
     "tools": 34,
-    "version": "54a9d3210739d0fd",
+    "version": "b3881ccd897fd316",
   },
   "scoped:1": {
     "tools": 41,
-    "version": "f05f03406a42226c",
+    "version": "0f62bc625524dc73",
   },
   "scoped:2": {
     "tools": 48,
-    "version": "cf8f3a5ab640f711",
+    "version": "4d15604b97784be3",
   },
   "scoped:3": {
     "tools": 60,
-    "version": "20ccc524a486ee0a",
+    "version": "42bd59b627bc5c18",
   },
   "scoped:4": {
     "tools": 68,
-    "version": "c87469da9596168c",
+    "version": "f999bc6b4241cf84",
   },
   "scoped:5": {
     "tools": 68,
-    "version": "c87469da9596168c",
+    "version": "f999bc6b4241cf84",
   },
   "site:0": {
     "tools": 34,
-    "version": "54a9d3210739d0fd",
+    "version": "b3881ccd897fd316",
   },
   "site:1": {
     "tools": 41,
-    "version": "f05f03406a42226c",
+    "version": "0f62bc625524dc73",
   },
   "site:2": {
     "tools": 49,
-    "version": "d373dde0b710ed9e",
+    "version": "fdfca3a4c94bdfd3",
   },
   "site:3": {
     "tools": 61,
-    "version": "931b2e07756c8f0b",
+    "version": "36f0be7a5d814c20",
   },
   "site:4": {
     "tools": 69,
-    "version": "d90012f543fce587",
+    "version": "752c33c390f3b36c",
   },
   "site:5": {
     "tools": 69,
-    "version": "d90012f543fce587",
+    "version": "752c33c390f3b36c",
   },
 }
 `;

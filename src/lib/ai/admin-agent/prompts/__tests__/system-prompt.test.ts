@@ -12,7 +12,7 @@ import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from '../index';
  * version it started with, and an edit sends every open conversation to "continue in a new conversation". Change the
  * prompt on purpose, then update this constant in the same commit.
  */
-const COMMITTED_VERSION = 'a9d41289bea89914';
+const COMMITTED_VERSION = '95f08e25c587309b';
 
 describe('the frozen system prompt', () => {
   it('is versioned by the hash of its exact text', () => {
@@ -134,6 +134,30 @@ describe('the working style and refusal rules', () => {
     expect(text).toContain('stays unresolved in the roster');
     expect(text).toContain('never stage a Build on values only you picked');
     expect(text).toContain('before the call that records it has succeeded');
+  });
+
+  it('separates a pick that changes what is built (ask first) from a label the request left open (record it and stage)', () => {
+    expect(text).toContain('A pick is a value the request left open that changes what gets created or how it is played');
+    expect(text).toContain('is not a pick: record it as an assumption, name it in your wrap-up, and stage');
+    // The carve-out states the principle only: it names no particular label, structure or setting.
+    expect(text).toContain('changes neither what is created nor how it is played is not a pick');
+    expect(text).not.toContain('a name for a stage');
+    expect(text).not.toContain('no groups when none were mentioned');
+    expect(text).toContain('While the Plan has a blocker or a pick is open, ask and do not stage');
+    expect(text).toContain('stage the Build in that same turn');
+    // The name of the league itself stays the administrator's to give.
+    expect(text).toContain('the name of the league or tournament, a ruleset, a format, a player match, a date, a count');
+  });
+
+  it('offers the options for an unresolved name without creating a player or picking a fuzzy match', () => {
+    expect(text).toContain('search again, skip it, or have a site administrator add the person from the players page');
+    expect(text).toContain('You never create a player yourself and never pick a fuzzy match');
+  });
+
+  it('reads an entity the administrator gave by id before it answers, even when it cannot make the change', () => {
+    expect(text).toContain('read that one with its read tool before you answer, even if the change they want is one you cannot make');
+    expect(text).toContain('If the read is refused, relay the refusal and who can act');
+    expect(text).toContain('that follows the read described above, it does not replace it');
   });
 
   it('refuses a step that is not offered by saying so and naming the page, then carries on', () => {
