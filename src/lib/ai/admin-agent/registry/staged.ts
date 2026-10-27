@@ -18,6 +18,7 @@ import { PLAN_SLOT_NAMES } from '../plans/schema';
 import { defineStaged, type StagedTool } from './define';
 import { intArg, textArg, uuidArg } from './atoms';
 import { OUTWARD } from './outward-effects';
+import { PLAN_PATCH_DESCRIPTION, PLAN_SET_DESCRIPTION } from './plan-shapes';
 import type { RouteRef } from './types';
 
 const route = (method: RouteRef['method'], path: string): RouteRef => ({ method, path });
@@ -34,7 +35,7 @@ const planCreate = defineStaged({
   name: 'plan_create',
   class: 'D',
   description:
-    'Start the Plan of this conversation. mode "create" is a new setup; "amend" seeds the Plan from an existing league or tournament (pass entity_kind and entity_id) so changes are made to it instead of creating a second one. The Plan is a draft the admin can see and edit; it changes no public data.',
+    'Start the Plan of this conversation: call it as soon as there is something to set up, then fill the slots with plan_set. mode "create" is a new setup; "amend" seeds the Plan from an existing league or tournament (pass entity_kind and entity_id), may answer not available in this version, and never edits that league: changing an existing league needs propose_change, which is not offered before phase 2. title is a working label for the Plan, not the league name (that goes in the league slot). The Plan is a draft the admin can see and edit; it changes no public data.',
   args: z.strictObject({
     mode: z.enum(['create', 'amend']),
     title: textArg('Short title of what is being set up', 120),
@@ -49,7 +50,7 @@ const planSet = defineStaged({
   name: 'plan_set',
   class: 'D',
   description:
-    'Replace one slot of the Plan wholesale: ruleset, format, league, phases, roster, groups, draft or tournament. value_json is the slot value as JSON text. It is checked against the real route schemas and the Plan readiness is recomputed. Use plan_patch for a small change.',
+    PLAN_SET_DESCRIPTION,
   args: z.strictObject({
     slot: z.enum(PLAN_SLOTS),
     value_json: z.string().min(2).max(20_000).describe('JSON text of the slot value, up to 20,000 characters'),
@@ -62,7 +63,7 @@ const planPatch = defineStaged({
   name: 'plan_patch',
   class: 'D',
   description:
-    'Change part of the Plan with RFC 6901 operations (add, replace, remove) given as JSON text in ops_json. A refused operation comes back with its reason. The Plan is re-validated and its readiness recomputed after each patch.',
+    PLAN_PATCH_DESCRIPTION,
   args: z.strictObject({ ops_json: z.string().min(2).max(20_000).describe('JSON array of patch operations, up to 20,000 characters') }),
   phase: 0,
   reversal: 'plan_revert',
@@ -81,7 +82,7 @@ const requestClarification = defineStaged({
   name: 'request_clarification',
   class: 'D',
   description:
-    'Ask the admin a structured question instead of guessing: a choice, several choices, free text, a date, a player pick or a number. The answer returns as this tool\'s result, so free text cannot pose as an approval. Ask when two readings are possible (for example "next Monday" said on a Monday) or when something needed was not given.',
+    'Ask the admin a structured question instead of guessing: a choice, several choices, free text, a date, a player pick or a number. The answer returns as this tool\'s result, so free text cannot pose as an approval. Ask when two readings are possible (for example "next Monday" said on a Monday) or when something needed was not given, even if the admin said not to ask: a missing value is not yours to pick. For choice and multi always pass options, with your likely default as one of them.',
   args: z.strictObject({
     question: textArg('The question', 300),
     kind: z.enum(['choice', 'multi', 'text', 'date', 'player_pick', 'number']),
@@ -113,7 +114,7 @@ export const BUILD_ROUTES: readonly RouteRef[] = [
 const proposeBuild = defineStaged({
   name: 'propose_build',
   class: 'B',
-  description: `Stage the Build for a Plan that is ready: the league or tournament, its roster and its phases, created in a fixed order by the server from the Plan (you do not write the steps). Call plan_validate first. A league or tournament is public the moment it exists, and the card says so. Build never publishes a ruleset, attaches a format or starts anything: those are separate cards. ${NOTE_STAGED}`,
+  description: `Stage the Build for a Plan that is ready: the league or tournament, its roster and its phases, created in a fixed order by the server from the Plan (you do not write the steps). Call plan_validate first. Ready means well-formed, not chosen by the admin: do not call this while the ruleset, bracket, best-of or participants are values only you picked. A league or tournament is public the moment it exists, and the card says so. Build never publishes a ruleset, attaches a format or starts anything: those are separate cards. ${NOTE_STAGED}`,
   args: z.strictObject({ plan_revision: intArg('Revision of the Plan this Build is for', 1, 1_000_000) }),
   phase: 0,
   routes: BUILD_ROUTES,

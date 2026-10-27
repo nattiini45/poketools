@@ -187,6 +187,24 @@ function checkBoOverrides(bracketType: string, json: string | undefined, expecte
   return { overrides, findings };
 }
 
+export type TournamentPreviewArgs = z.output<typeof tournamentArgs>;
+export type PreviewRuleset = z.infer<typeof rulesetOut>;
+
+/**
+ * The tournament preview from its inputs: the ruleset check's outcome is the caller's (the route guard in production, the
+ * fixture world's rulesets in the plan-stage eval), the rest is pure. One code path, so the eval cannot drift from it.
+ */
+export function assembleTournamentPreview(args: TournamentPreviewArgs, isSiteAdmin: boolean, ruleset: PreviewRuleset | null, rulesetBlocker: Finding | null) {
+  const blockers: Finding[] = [];
+  const effects = new Set<Effect>(['public_immediately']);
+  if (!isSiteAdmin) effects.add('creator_becomes_admin');
+  if (rulesetBlocker) blockers.push(rulesetBlocker);
+  if (ruleset?.visibility === 'private') effects.add('private_ruleset_becomes_public');
+  const overrides = checkBoOverrides(args.bracket_type, args.bo_overrides_json, args.expected_participants);
+  blockers.push(...overrides.findings);
+  return { valid: blockers.length === 0, blockers, effects: EFFECTS.filter((effect) => effects.has(effect)), ruleset };
+}
+
 export const tournamentCreatePreview = defineRunnable('any', {
   name: 'tournament_create_preview',
   class: 'P',
@@ -202,15 +220,8 @@ export const tournamentCreatePreview = defineRunnable('any', {
     ruleset: rulesetOut.nullable(),
   }),
   async execute(args, guarded) {
-    const blockers: Finding[] = [];
-    const effects = new Set<Effect>(['public_immediately']);
-    if (!guarded.player.isAdmin) effects.add('creator_becomes_admin');
     const { ruleset, blocker } = await resolveRuleset(args.ruleset_id);
-    if (blocker) blockers.push(blocker);
-    if (ruleset?.visibility === 'private') effects.add('private_ruleset_becomes_public');
-    const overrides = checkBoOverrides(args.bracket_type, args.bo_overrides_json, args.expected_participants);
-    blockers.push(...overrides.findings);
-    return { valid: blockers.length === 0, blockers, effects: EFFECTS.filter((effect) => effects.has(effect)), ruleset };
+    return assembleTournamentPreview(args, guarded.player.isAdmin, ruleset, blocker);
   },
 });
 

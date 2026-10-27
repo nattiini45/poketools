@@ -139,7 +139,7 @@ A **phase** is stored as a `tournaments` row with `season_id` set. League admin 
 | name | Title | Clean phase name (no "{League} - " prefix stored) |
 | season_id | Relation → Seasons | nullable; non-null ⇒ league phase |
 | stage_order | Number | Order within the league (reorderable while `upcoming`) |
-| advancement_rule | JSONB | `{ type: 'top_n', count, per_group }` — who advances into the *next* phase |
+| advancement_rule | JSONB | `{ type: 'top_n', count, per_group }` — who advances into THIS phase from the one before it. It is stored on the receiving phase (read by `enrollment-sync` when that phase is filled from the standings), so the first phase never has one; the Admin Assistant's Plan refuses a rule on its first phase (`advancement_rule_on_first_phase`) |
 | enrollment_source | JSONB | Auto-enrollment sync: `{ type: 'standings' \| 'roster', source_phase_id, synced_at, frozen }`. Unfrozen phases silently re-sync from the source table until the first manual seed/participant edit or bracket generation. Re-sync and `POST /api/seasons/[id]/advance` refuse when frozen or rounds exist unless `{ force: true }` (`ENROLLMENT_FROZEN`, `ENROLLMENT_ROUNDS_EXIST`). Standings use EPB-aware `computeStandingsForSeason`. |
 | format_stage_key | Text | nullable; the format stage a phase was created from when a Format Studio format is attached to a custom league (`^[a-z][a-z0-9_]{0,31}$`, unique per league, CHECK needs `season_id`); null for hand-made phases. Not mapped into `Tournament` objects |
 | stage_spec | JSONB | nullable; frozen copy of that stage (`{ v: 1, spec_hash, stage, mapped_bracket_type }`, an object up to 262,144 bytes of jsonb text). Not mapped into `Tournament` objects. A later engine change reads it |

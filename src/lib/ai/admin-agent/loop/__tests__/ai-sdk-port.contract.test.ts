@@ -214,6 +214,21 @@ describe('the request the default port builds', () => {
     expect(calls[0].body.messages[2].content[0]?.text).toBe('[harness_event] resume');
   });
 
+  it('never sends a system message that is followed by a user message: a limit event waits behind the admin message that follows it', async () => {
+    const { calls, port: p } = port({}, () => sseResponse(TOOL_TURN));
+    const toolUse: TranscriptEntry = { role: 'assistant', kind: 'chat', seq: 2, blocks: [{ type: 'tool_use', id: 't1', name: 'league_get', input: {} }] };
+    const results: TranscriptEntry = { role: 'user', kind: 'tool_results', seq: 3, blocks: [{ type: 'tool_result', tool_use_id: 't1', content: '{}' }] };
+    await p.step(input([user(1, 'build it'), toolUse, results, event(4, 'turn_limit'), user(5, 'make it top 8')]));
+    const messages = calls[0].body.messages;
+    expect(messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'system']);
+    expect(messages[2].content.at(-1)?.text).toBe('make it top 8');
+    messages.forEach((m, i) => {
+      if (m.role !== 'system') return;
+      expect(messages[i - 1]?.role).toBe('user');
+      expect(['assistant', undefined]).toContain(messages[i + 1]?.role);
+    });
+  });
+
   it('honours the adapter switches: sentinel channel, no strict, no reasoning replay, 5 m cache', async () => {
     const { calls, port: p } = port({ stateChannel: 'sentinel-user', strictTools: false, sendReasoning: false, cacheTtl: '5m' }, () => sseResponse(TOOL_TURN));
     const assistant: TranscriptEntry = {

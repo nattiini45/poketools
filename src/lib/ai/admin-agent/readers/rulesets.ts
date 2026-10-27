@@ -94,7 +94,7 @@ export const rulesetList = defineRunnable('any', {
   name: 'ruleset_list',
   class: 'R',
   description:
-    'List the rulesets the admin may see: their own, and those shared with all admins; a site admin sees every one. Each has a current published version id, which is what a league, phase or tournament pins. A ruleset with no current version is a draft that cannot be pinned yet. Paged: pass offset to continue; the result says when more rows follow. scope is all, mine, shared or gallery.',
+    'List the rulesets the admin may see: their own, and those shared with all admins; a site admin sees every one. Each has a current published version id, which is what a league, phase or tournament pins. A ruleset with no current version is a draft that cannot be pinned yet. Paged: pass offset to continue; the result says when more rows follow. scope is all, mine, shared or gallery. There is no name filter: narrow with kind and scope, then match the label yourself.',
   args: z.strictObject({
     scope: z.enum(['all', 'mine', 'shared', 'gallery']).optional(),
     visibility: z.enum(['private', 'league', 'gallery']).optional(),

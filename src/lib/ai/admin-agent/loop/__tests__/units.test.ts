@@ -234,6 +234,14 @@ describe('codes', () => {
     expect(plainParams(null)).toBeUndefined();
     expect(plainParams({ c: {} })).toBeUndefined();
   });
+
+  it('keeps more of the issues param than of any other, and still clips it', () => {
+    const issues = 'phases.0.ruleset: invalid_union; '.repeat(40);
+    expect(issues.length).toBeGreaterThan(600);
+    expect(plainParams({ issues })).toEqual({ issues: `${issues.slice(0, 600)}…` });
+    expect(plainParams({ issues: 'z'.repeat(600) })).toEqual({ issues: 'z'.repeat(600) });
+    expect(plainParams({ other: 'z'.repeat(250) })).toEqual({ other: `${'z'.repeat(200)}…` });
+  });
 });
 
 describe('titles', () => {

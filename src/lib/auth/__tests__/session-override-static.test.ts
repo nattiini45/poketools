@@ -29,8 +29,11 @@ function isTestFile(rel: string): boolean {
   return /(^|\/)(__tests__|test)\//.test(rel) || /\.(test|spec)\.tsx?$/.test(rel);
 }
 
-/** Every non-test source file under `src/` as [path relative to src with forward slashes, text]. */
+let cachedSources: Array<[string, string]> | undefined;
+
+/** Every non-test source file under `src/` as [path relative to src with forward slashes, text]; read once per run. */
 function sourceFiles(): Array<[string, string]> {
+  if (cachedSources) return cachedSources;
   const files: Array<[string, string]> = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -47,6 +50,7 @@ function sourceFiles(): Array<[string, string]> {
     }
   };
   walk(SRC_DIR);
+  cachedSources = files;
   return files;
 }
 

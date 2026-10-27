@@ -91,13 +91,20 @@ export class AdminAgentLoopError extends UserFacingError {
   }
 }
 
+const PARAM_MAX_CHARS = 200;
+/** The `issues` param is the model's only hint about what a refused edit got wrong, so it keeps more than the other params. */
+const PARAM_MAX_CHARS_BY_KEY: Readonly<Record<string, number>> = { issues: 600 };
+
 /** Keeps only plain string and number params, short: model-facing and stream-facing params stay small. */
 export function plainParams(params: unknown): Readonly<Record<string, string | number>> | undefined {
   if (typeof params !== 'object' || params === null) return undefined;
   const out: Record<string, string | number> = {};
   for (const [key, value] of Object.entries(params)) {
     if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
-    else if (typeof value === 'string') out[key] = value.length > 200 ? `${value.slice(0, 200)}…` : value;
+    else if (typeof value === 'string') {
+      const max = PARAM_MAX_CHARS_BY_KEY[key] ?? PARAM_MAX_CHARS;
+      out[key] = value.length > max ? `${value.slice(0, max)}…` : value;
+    }
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }

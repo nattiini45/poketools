@@ -51,6 +51,69 @@ describe('renderTranscript: the state channel switch', () => {
   });
 });
 
+const toolResults = (seq: number, id: string): TranscriptEntry => ({ role: 'user', kind: 'tool_results', seq, blocks: [{ type: 'tool_result', tool_use_id: id, content: '{}' }] });
+const toolTurn = (seq: number, id: string): TranscriptEntry[] => [assistant(seq, [{ type: 'tool_use', id, name: 'league_get', input: {} }]), toolResults(seq + 1, id)];
+
+/**
+ * The placement rule for a mid-conversation system message (spike S2 and the live 400 "role system must precede an
+ * assistant message or end the array"): a run of system messages directly follows a user-role message (`user` or `tool`)
+ * and is followed by an assistant message or ends the request.
+ */
+function systemPlacementViolations(messages: readonly { role: string }[]): number[] {
+  const bad: number[] = [];
+  messages.forEach((message, i) => {
+    if (message.role !== 'system') return;
+    const previous = messages[i - 1]?.role;
+    const next = messages[i + 1]?.role;
+    if (previous !== 'user' && previous !== 'tool' && previous !== 'system') bad.push(i);
+    if (next !== undefined && next !== 'assistant' && next !== 'system') bad.push(i);
+  });
+  return bad;
+}
+
+describe('renderTranscript: where a system message may sit', () => {
+  const mixed: Record<string, TranscriptEntry[]> = {
+    'a turn that stopped on a limit, then a normal admin message': [user(1, 'go'), ...toolTurn(2, 'a'), event(4, 'turn_limit'), user(5, 'make it top 8')],
+    'the same, then the model answers and a second event arrives': [user(1, 'go'), ...toolTurn(2, 'a'), event(4, 'turn_limit'), user(5, 'again'), assistant(6, [{ type: 'text', text: 'ok' }]), event(7, 'proposal_approved')],
+    'an event right after the first user message, then a tool turn': [user(1, 'go'), event(2, 'state_refresh'), ...toolTurn(3, 'a'), assistant(5, [{ type: 'text', text: 'done' }])],
+    'events after an assistant message, then the next user message': [user(1, 'go'), assistant(2, [{ type: 'text', text: 'staged' }]), event(3, 'proposal_approved'), event(4, 'state_refresh'), user(5, 'thanks'), assistant(6, [{ type: 'text', text: 'welcome' }])],
+    'events between tool results and the next assistant step': [user(1, 'go'), ...toolTurn(2, 'a'), event(4, 'turn_deadline'), assistant(5, [{ type: 'text', text: 'late' }])],
+    'an interrupted turn followed by several admin messages': [user(1, 'go'), ...toolTurn(2, 'a'), event(4, 'turn_interrupted'), user(5, 'hello?'), user(6, 'anyone there')],
+    'events with no user message in front of them': [event(1, 'state_refresh'), assistant(2, [{ type: 'text', text: 'hi' }])],
+  };
+
+  for (const [name, entries] of Object.entries(mixed)) {
+    it(`every system message directly follows a user-role message and precedes an assistant message or the end: ${name}`, () => {
+      const out = renderTranscript(entries, base);
+      expect(systemPlacementViolations(out)).toEqual([]);
+      expect(out.filter((m) => m.role === 'system')).toHaveLength(entries.filter((e) => e.role === 'event').length);
+    });
+  }
+
+  it('holds a limit event back until after the admin message that follows it', () => {
+    const out = renderTranscript([user(1, 'go'), ...toolTurn(2, 'a'), event(4, 'turn_limit'), user(5, 'make it top 8')], base);
+    expect(out.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'user', 'system']);
+    expect(out[3]).toEqual({ role: 'user', content: [{ type: 'text', text: 'make it top 8' }] });
+    expect(out[4]).toEqual({ role: 'system', content: harnessEventText('turn_limit', {}) });
+  });
+
+  it('writes a held event before the assistant message that follows it, without an anchor', () => {
+    const out = renderTranscript([user(1, 'go'), ...toolTurn(2, 'a'), event(4, 'turn_deadline'), assistant(5, [{ type: 'text', text: 'late' }])], base);
+    expect(out.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'system', 'assistant']);
+  });
+
+  it('keeps events in order and anchors only when the held events would follow an assistant message', () => {
+    const out = renderTranscript([user(1, 'go'), assistant(2, [{ type: 'text', text: 'staged' }]), event(3, 'proposal_approved'), event(4, 'state_refresh')], base);
+    expect(out.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'system', 'system']);
+    expect(out.slice(3).map((m) => m.content)).toEqual([harnessEventText('proposal_approved', {}), harnessEventText('state_refresh', {})]);
+  });
+
+  it('the sentinel channel keeps events in place and never emits a system message', () => {
+    const out = renderTranscript([user(1, 'go'), ...toolTurn(2, 'a'), event(4, 'turn_limit'), user(5, 'again')], { adapter: { ...DEFAULT_ADAPTER, stateChannel: 'sentinel-user' }, sentinel: 'abc123' });
+    expect(out.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'user', 'user']);
+  });
+});
+
 describe('renderTranscript: blocks', () => {
   it('replays thinking with its signature, redacted thinking, text and tool calls in order', () => {
     const out = renderTranscript(

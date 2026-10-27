@@ -30,16 +30,33 @@ const channelOut = z.strictObject({
   truncated: z.boolean(),
 });
 
+const outwardEffectsArgs = z.strictObject({
+  action: z.enum(OUTWARD_ACTIONS),
+  league_id: uuidArg('League id').optional(),
+  tournament_id: uuidArg('Tournament id').optional(),
+});
+export type OutwardEffectsAction = z.output<typeof outwardEffectsArgs>['action'];
+
+function outwardEffectsBase(action: OutwardEffectsAction) {
+  const events = (OUTWARD[action] ?? []).map((effect) => ({ key: effect.key, summary: effect.summary }));
+  return { action, events, posts_outward: POSTING_ACTIONS.has(action) };
+}
+
+/**
+ * What `outward_effects_preview` answers when the app cannot say which channels would receive the post: the fixed table of
+ * effects and no channel names. Pure and port-free, so the plan-stage eval world (which has no recipients port) runs the
+ * very same code.
+ */
+export function outwardEffectsWithoutChannels(action: OutwardEffectsAction) {
+  return { ...outwardEffectsBase(action), channels: 'cannot_say' as const, discord: null, social: null };
+}
+
 export const outwardEffectsPreview = defineRunnable('any', {
   name: 'outward_effects_preview',
   class: 'R',
   description:
-    'Say what a Go-live action would post to the outside world (Discord webhooks and social accounts), before the card is staged. Site admins also get the masked names and the count of matching channels when the app can tell; everyone else, and site admins when it cannot, are told that the app cannot say which channels will receive it. Pass league_id or tournament_id to scope the channel count. Never composes outward text.',
-  args: z.strictObject({
-    action: z.enum(OUTWARD_ACTIONS),
-    league_id: uuidArg('League id').optional(),
-    tournament_id: uuidArg('Tournament id').optional(),
-  }),
+    'Say what a Go-live action would post to the outside world (Discord webhooks and social accounts), before the card is staged. Site admins also get the masked names and the count of matching channels when the app can tell; everyone else, and site admins when it cannot, are told that the app cannot say which channels will receive it. Pass league_id or tournament_id to scope the channel count. Use it only for an action you can stage, never to explain a refusal. Never composes outward text.',
+  args: outwardEffectsArgs,
   phase: 0,
   guard: () => ({ kind: 'any' }),
   output: z.strictObject({
@@ -51,11 +68,9 @@ export const outwardEffectsPreview = defineRunnable('any', {
     social: channelOut.nullable(),
   }),
   async execute(args, guarded, ctx) {
-    const events = (OUTWARD[args.action] ?? []).map((effect) => ({ key: effect.key, summary: effect.summary }));
-    const posts = POSTING_ACTIONS.has(args.action);
-    const base = { action: args.action, events, posts_outward: posts };
-    if (!posts || !guarded.player.isAdmin || ctx.ports.recipients === undefined) {
-      return { ...base, channels: 'cannot_say' as const, discord: null, social: null };
+    const base = outwardEffectsBase(args.action);
+    if (!base.posts_outward || !guarded.player.isAdmin || ctx.ports.recipients === undefined) {
+      return outwardEffectsWithoutChannels(args.action);
     }
     // The channel count is scoped by the resource, whose guard runs here as it would in the route.
     if (args.league_id) await guardFor({ kind: 'season', id: args.league_id });

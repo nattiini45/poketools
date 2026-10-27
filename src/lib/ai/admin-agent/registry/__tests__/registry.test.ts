@@ -298,9 +298,9 @@ describe('the frozen tool set', () => {
   });
 
   it('holds each set under its token budget (bytes over 3.5): a visible diff when the prompt prefix grows', () => {
-    // Budgets are the measured size with about 10 percent headroom; raise one only on purpose (plan 3.9 test 7). The full
+    // Budgets are the measured size with about 10 percent headroom; raise one only on purpose (plan 3.9 test 7). Phases 0 and 1 were raised for the Plan slot-shape cheat-sheet in plan_set and plan_patch (about 850 tokens: three eval cases spent the whole step budget guessing shapes). The full
     // set is about 14,000 tokens, under the 17,000 at which plan 3.6 would start deferring tools (spike S4).
-    const budget: Record<number, number> = { 0: 8_700, 1: 10_600, 2: 12_100, 3: 14_500, 4: 15_700, 5: 15_700 };
+    const budget: Record<number, number> = { 0: 9_700, 1: 11_600, 2: 12_100, 3: 14_500, 4: 15_700, 5: 15_700 };
     for (const maxPhase of ADMIN_AGENT_PHASES) {
       const tokens = estimateToolTokens(buildToolSet({ role: 'site', maxPhase }));
       expect(tokens, `phase ${maxPhase}: ${tokens} tokens`).toBeLessThanOrEqual(budget[maxPhase]);

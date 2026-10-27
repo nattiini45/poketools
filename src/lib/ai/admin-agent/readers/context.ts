@@ -24,7 +24,7 @@ export const whoami = defineRunnable('any', {
   name: 'whoami',
   class: 'R',
   description:
-    'Report who is asking: the admin tier (site admin or league/tournament admin), which leagues and tournaments they may manage, the assistant phase, and which tools are offered in this conversation. Call it when the answer depends on what the admin is allowed to do.',
+    'Report who is asking: the admin tier (site admin or league/tournament admin), which leagues and tournaments they may manage, the assistant phase, and which tools are offered in this conversation. Call it first whenever the admin asks what you can do or may manage, or the answer depends on what they are allowed to do, and base the answer on tier, max_phase and offered_tools.',
   args: z.strictObject({}),
   phase: 0,
   guard: () => ({ kind: 'any' }),
@@ -167,17 +167,47 @@ export const dexLookup = defineRunnable('any', {
 const CATALOG_CAP = 60;
 const FAMILY_KEYS = PRESET_FAMILIES.map((family) => family.key) as [string, ...string[]];
 
+const formatCatalogArgs = z.strictObject({
+  query: z.string().trim().max(60).optional().describe('Words to match, each against the start of a name or tier word (up to 60 characters)'),
+  gen: intArg('Generation', 1, 9).optional(),
+  source: z.enum(['showdown', 'smogon-draft']).optional(),
+  family: z.enum(FAMILY_KEYS).optional(),
+});
+export type FormatCatalogArgs = z.output<typeof formatCatalogArgs>;
+
+/** What `format_catalog` answers. Pure and port-free, so the plan-stage eval world runs the very same code. */
+export function formatCatalogView(args: FormatCatalogArgs) {
+  let entries = args.query !== undefined && args.query !== '' ? filterRulesetPresets(args.query) : listRulesetPresets();
+  if (args.gen !== undefined) entries = entries.filter((entry) => entry.gen === args.gen);
+  if (args.source !== undefined) entries = entries.filter((entry) => entry.source === args.source);
+  if (args.family !== undefined) entries = entries.filter((entry) => entry.family === args.family);
+  const items = entries.slice(0, CATALOG_CAP).map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    gen: entry.gen,
+    source: entry.source,
+    family: entry.family,
+    tier: entry.tier,
+    doubles: entry.doubles,
+    tour_overlay: entry.tourOverlay,
+  }));
+  return {
+    presets: { items, total: entries.length, truncated: entries.length > CATALOG_CAP, cap: CATALOG_CAP },
+    provenance: {
+      preset_data_repo: PRESET_DATA_PIN.repo,
+      preset_data_sha: PRESET_DATA_PIN.sha,
+      champions_roster_sha: CHAMPIONS_ROSTER_PIN.sha,
+      preset_rules_version: PRESET_RULES_VERSION,
+    },
+  };
+}
+
 export const formatCatalog = defineRunnable('any', {
   name: 'format_catalog',
   class: 'R',
   description:
     'Search the catalog of rule presets: every Showdown ladder format for generations 1 to 9 and the Smogon draft formats. Presets are discovered here, never recalled from memory; use the returned id when creating a ruleset or forking a preset. Filter by words (for example "gen 9 ou", "doubles", "draft"), generation, source or family. Returns at most 60 presets and says when the list was cut. The provenance block names the data pins the catalog was built from.',
-  args: z.strictObject({
-    query: z.string().trim().max(60).optional().describe('Words to match, each against the start of a name or tier word (up to 60 characters)'),
-    gen: intArg('Generation', 1, 9).optional(),
-    source: z.enum(['showdown', 'smogon-draft']).optional(),
-    family: z.enum(FAMILY_KEYS).optional(),
-  }),
+  args: formatCatalogArgs,
   phase: 0,
   guard: () => ({ kind: 'any' }),
   output: z.strictObject({
@@ -201,29 +231,7 @@ export const formatCatalog = defineRunnable('any', {
     }),
   }),
   async execute(args) {
-    let entries = args.query !== undefined && args.query !== '' ? filterRulesetPresets(args.query) : listRulesetPresets();
-    if (args.gen !== undefined) entries = entries.filter((entry) => entry.gen === args.gen);
-    if (args.source !== undefined) entries = entries.filter((entry) => entry.source === args.source);
-    if (args.family !== undefined) entries = entries.filter((entry) => entry.family === args.family);
-    const items = entries.slice(0, CATALOG_CAP).map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      gen: entry.gen,
-      source: entry.source,
-      family: entry.family,
-      tier: entry.tier,
-      doubles: entry.doubles,
-      tour_overlay: entry.tourOverlay,
-    }));
-    return {
-      presets: { items, total: entries.length, truncated: entries.length > CATALOG_CAP, cap: CATALOG_CAP },
-      provenance: {
-        preset_data_repo: PRESET_DATA_PIN.repo,
-        preset_data_sha: PRESET_DATA_PIN.sha,
-        champions_roster_sha: CHAMPIONS_ROSTER_PIN.sha,
-        preset_rules_version: PRESET_RULES_VERSION,
-      },
-    };
+    return formatCatalogView(args);
   },
 });
 
@@ -245,15 +253,73 @@ const toListOut = (list: { mode: 'block' | 'allow'; ids: readonly string[] }) =>
   truncated: list.ids.length > LIST_CAP,
 });
 
+const rulesetPresetArgs = z.strictObject({
+  preset: textArg('Catalog preset id such as gen9ou', 60),
+  tour_overlay: z.boolean().optional().describe('Include the Smogon tour extras of the preset when it has any'),
+});
+export type RulesetPresetArgs = z.output<typeof rulesetPresetArgs>;
+
+/** What `ruleset_preset_get` answers. Pure and port-free, so the plan-stage eval world runs the very same code. */
+export function rulesetPresetView(args: RulesetPresetArgs) {
+  if (!isRulesetPresetId(args.preset) || getPreset(args.preset) === undefined) {
+    return { found: false, preset: null, tour_overlay: null };
+  }
+  const rules = resolvePresetRules(args.preset);
+  if (rules === null) return { found: false, preset: null, tour_overlay: null };
+  const entry = getRulesetPreset(args.preset);
+  const facts = rules.facts;
+  const overlay = args.tour_overlay === true ? resolveTourOverlay(args.preset) : null;
+  const asList = (ids: readonly string[]) => toListOut({ mode: 'block', ids });
+  return {
+    found: true,
+    preset: {
+      id: rules.id,
+      name: entry?.name ?? rules.name,
+      gen: rules.gen,
+      source: rules.source,
+      universe: rules.universe,
+      doubles: rules.doubles,
+      clauses: rules.clauses,
+      pokemon: toListOut(rules.pokemon),
+      moves: toListOut(rules.moves),
+      items: toListOut(rules.items),
+      abilities: toListOut(rules.abilities),
+      facts: {
+        team_preview: facts.teamPreview,
+        level: facts.level,
+        max_level: facts.maxLevel,
+        picked_team_size: facts.pickedTeamSize,
+        min_team_size: facts.minTeamSize,
+        item_clause_limit: facts.itemClauseLimit,
+        min_source_gen: facts.minSourceGen,
+        little_cup: facts.littleCup,
+        unmodelled: [...facts.unmodelled],
+      },
+      combination_bans: rules.combination_bans,
+      catalog_version: rules.catalog_version,
+    },
+    tour_overlay:
+      args.tour_overlay !== true
+        ? null
+        : overlay === null
+          ? { available: false, clauses_add: [], clauses_remove: [], moves: asList([]), items: asList([]), abilities: asList([]) }
+          : {
+              available: true,
+              clauses_add: overlay.clausesAdd,
+              clauses_remove: overlay.clausesRemove,
+              moves: asList(overlay.moves),
+              items: asList(overlay.items),
+              abilities: asList(overlay.abilities),
+            },
+  };
+}
+
 export const rulesetPresetGet = defineRunnable('any', {
   name: 'ruleset_preset_get',
   class: 'R',
   description:
     'Get what one rule preset implies: clauses, the ban or allow list per category (as dex ids, cut at 150 per list with a count), rule facts such as level and team size, and what the app does not model. Use the preset id from format_catalog. Set tour_overlay to also get the documented Smogon tournament extras that "add tour bans" would apply. An unknown id is reported, never replaced by a blank preset.',
-  args: z.strictObject({
-    preset: textArg('Catalog preset id such as gen9ou', 60),
-    tour_overlay: z.boolean().optional().describe('Include the Smogon tour extras of the preset when it has any'),
-  }),
+  args: rulesetPresetArgs,
   phase: 0,
   guard: () => ({ kind: 'any' }),
   output: z.strictObject({
@@ -298,57 +364,7 @@ export const rulesetPresetGet = defineRunnable('any', {
       .nullable(),
   }),
   async execute(args) {
-    if (!isRulesetPresetId(args.preset) || getPreset(args.preset) === undefined) {
-      return { found: false, preset: null, tour_overlay: null };
-    }
-    const rules = resolvePresetRules(args.preset);
-    if (rules === null) return { found: false, preset: null, tour_overlay: null };
-    const entry = getRulesetPreset(args.preset);
-    const facts = rules.facts;
-    const overlay = args.tour_overlay === true ? resolveTourOverlay(args.preset) : null;
-    const asList = (ids: readonly string[]) => toListOut({ mode: 'block', ids });
-    return {
-      found: true,
-      preset: {
-        id: rules.id,
-        name: entry?.name ?? rules.name,
-        gen: rules.gen,
-        source: rules.source,
-        universe: rules.universe,
-        doubles: rules.doubles,
-        clauses: rules.clauses,
-        pokemon: toListOut(rules.pokemon),
-        moves: toListOut(rules.moves),
-        items: toListOut(rules.items),
-        abilities: toListOut(rules.abilities),
-        facts: {
-          team_preview: facts.teamPreview,
-          level: facts.level,
-          max_level: facts.maxLevel,
-          picked_team_size: facts.pickedTeamSize,
-          min_team_size: facts.minTeamSize,
-          item_clause_limit: facts.itemClauseLimit,
-          min_source_gen: facts.minSourceGen,
-          little_cup: facts.littleCup,
-          unmodelled: [...facts.unmodelled],
-        },
-        combination_bans: rules.combination_bans,
-        catalog_version: rules.catalog_version,
-      },
-      tour_overlay:
-        args.tour_overlay !== true
-          ? null
-          : overlay === null
-            ? { available: false, clauses_add: [], clauses_remove: [], moves: asList([]), items: asList([]), abilities: asList([]) }
-            : {
-                available: true,
-                clauses_add: overlay.clausesAdd,
-                clauses_remove: overlay.clausesRemove,
-                moves: asList(overlay.moves),
-                items: asList(overlay.items),
-                abilities: asList(overlay.abilities),
-              },
-    };
+    return rulesetPresetView(args);
   },
 });
 

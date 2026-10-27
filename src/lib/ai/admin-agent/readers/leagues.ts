@@ -55,7 +55,7 @@ export const leagueList = defineRunnable('any', {
   name: 'league_list',
   class: 'R',
   description:
-    'List the leagues the admin may manage (all of them for a site admin), newest first, real leagues before test leagues. Archived leagues are not listed. The read stops at 100 rows and the result says when it was cut. Test leagues are labelled with is_test_season; pass include_test_leagues false to leave them out. Use name_contains to narrow by name.',
+    'List the leagues the admin may manage (all of them for a site admin), newest first, real leagues before test leagues. Archived leagues are not listed. The read stops at 100 rows and the result says when it was cut. Test leagues are labelled with is_test_season; pass include_test_leagues false to leave them out. Use name_contains to narrow by name; an empty filtered result does not prove the league is missing, so list without the filter before saying so.',
   args: z.strictObject({
     include_test_leagues: z.boolean().optional().describe('Default true'),
     name_contains: textArg('Part of a league name', 60).optional(),

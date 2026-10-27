@@ -26,6 +26,7 @@ import {
   PLAN_SLOT_SCHEMAS,
   jsonClone,
   parsePlanDocument,
+  planIssueHints,
   toPlanIssues,
   type PlanDocument,
   type PlanIssue,
@@ -182,7 +183,11 @@ export function applyPlanRevert(current: PlanDocument, previous: PlanDocument): 
 
 /** A short, plain description of a refusal for the model: kinds, indices and paths, never a zod message. */
 export function describePlanEditError(error: PlanEditError): string {
-  if ('issues' in error) return error.issues.slice(0, 6).map((issue) => `${issue.path || '/'}: ${issue.code}`).join('; ');
+  if ('issues' in error) {
+    const shown = error.issues.slice(0, 6);
+    const hints = planIssueHints(shown);
+    return shown.map((issue) => `${issue.path || '/'}: ${issue.code}${hints.has(issue) ? ` (${hints.get(issue)})` : ''}`).join('; ');
+  }
   if (error.kind === 'plan_patch_failed') return `op ${error.index}: ${error.reason}`;
   if (error.kind === 'plan_patch_path_forbidden') return `op ${error.index}: ${error.kind} ${error.path}`;
   if (error.kind === 'plan_slot_unknown') return `${error.kind} ${error.slot}`;

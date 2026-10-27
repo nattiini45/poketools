@@ -40,9 +40,29 @@ export function sentinelText(text: string, sentinel: string): string {
   return text.startsWith(HARNESS_MARKER) ? `${HARNESS_MARKER.slice(0, -1)}:${sentinel}]${text.slice(HARNESS_MARKER.length)}` : `[harness_event:${sentinel}] ${text}`;
 }
 
+/**
+ * The Messages API places two constraints on a mid-conversation `system` message (spike S2 and a live 400,
+ * "role system must precede an assistant message or end the array"): it must directly follow a user-role message (a tool
+ * result is one), and it must be followed by an assistant message or end the request. So `renderTranscript` never emits a
+ * harness event where it sits in the transcript: it holds events back and writes them just before the next assistant
+ * entry or at the end, where the previous message is a user-role one. A turn that stopped on a limit leaves its event
+ * after the last tool results, and the admin's next message then lands before the event instead of after it.
+ */
 export function renderTranscript(entries: readonly TranscriptEntry[], options: RenderOptions): ModelMessage[] {
   const out: ModelMessage[] = [];
   let lastAssistantTools = new Map<string, string>();
+  const pendingEvents: string[] = [];
+  const systemChannel = options.adapter.stateChannel !== 'sentinel-user';
+
+  const flushEvents = (): void => {
+    if (pendingEvents.length === 0) return;
+    const previous = out[out.length - 1];
+    if (options.adapter.systemAnchor === 'auto' && (previous === undefined || previous.role === 'assistant')) {
+      out.push({ role: 'user', content: [{ type: 'text', text: ANCHOR_TEXT }] });
+    }
+    for (const text of pendingEvents) out.push({ role: 'system', content: text });
+    pendingEvents.length = 0;
+  };
 
   for (const entry of entries) {
     switch (entry.role) {
@@ -63,6 +83,7 @@ export function renderTranscript(entries: readonly TranscriptEntry[], options: R
         break;
       }
       case 'assistant': {
+        flushEvents();
         lastAssistantTools = new Map();
         const parts: Extract<ModelMessage, { role: 'assistant' }>['content'] = [];
         for (const block of entry.blocks) {
@@ -80,19 +101,13 @@ export function renderTranscript(entries: readonly TranscriptEntry[], options: R
         break;
       }
       case 'event': {
-        if (options.adapter.stateChannel === 'sentinel-user') {
-          out.push({ role: 'user', content: [{ type: 'text', text: sentinelText(entry.text, options.sentinel) }] });
-        } else {
-          const previous = out[out.length - 1];
-          if (options.adapter.systemAnchor === 'auto' && previous?.role === 'assistant') {
-            out.push({ role: 'user', content: [{ type: 'text', text: ANCHOR_TEXT }] });
-          }
-          out.push({ role: 'system', content: entry.text });
-        }
+        if (systemChannel) pendingEvents.push(entry.text);
+        else out.push({ role: 'user', content: [{ type: 'text', text: sentinelText(entry.text, options.sentinel) }] });
         break;
       }
     }
   }
+  flushEvents();
   return out;
 }
 

@@ -503,6 +503,64 @@ export function toPlanIssues(error: z.ZodError, pathPrefix: readonly (string | n
   return out;
 }
 
+// ─── Hints for the model ─────────────────────────────────────────────
+
+const keysOf = (schema: { shape: Record<string, unknown> }): string => Object.keys(schema.shape).join(', ');
+
+/**
+ * What an `unrecognized_keys` issue may name instead, by the (index-free) path of the object that got the stray key.
+ * Static text built from the schemas' own key lists, so it cannot drift from them; a value the admin or the model sent
+ * is never in it. Objects whose keys depend on a `mode` / `state` list every branch.
+ */
+const ALLOWED_KEYS: Readonly<Record<string, string>> = {
+  '': keysOf(planDocumentSchema),
+  '/slots': keysOf(planSlotsSchema),
+  '/slots/ruleset': 'by mode: existing {version_id}; draft {definition_id, draft_rev}; new {name, base_locale, preset, tour_overlay, delta}; fork {from_definition_id, name, delta}; auto_epb {}',
+  '/slots/format': 'by mode: none {}; existing {definition_id, version_no}; draft {definition_id}',
+  '/slots/league': keysOf(planLeagueSchema),
+  '/slots/league/clone_from': 'season_id, copy_roster, copy_admins',
+  '/slots/phases/*': keysOf(planPhaseSchema),
+  '/slots/phases/*/advancement_rule': 'type, count, per_group',
+  '/slots/roster': keysOf(planRosterSchema),
+  '/slots/roster/entries/*': 'by state: resolved {input, player_id}; candidates {input, player_ids}; unresolved {input}; skipped {input}',
+  '/slots/groups': keysOf(planGroupsSchema),
+  '/slots/draft/*': keysOf(planDraftEntrySchema),
+  '/slots/tournament': keysOf(planTournamentSchema),
+  '/assumptions/*': keysOf(planAssumptionSchema),
+};
+
+/** What an `invalid_union` issue wants instead, by the (index-free) path the issue points at. */
+const UNION_EXPECTED: Readonly<Record<string, string>> = {
+  '/slots/ruleset/mode': 'mode is one of existing, draft, new, fork, auto_epb',
+  '/slots/format/mode': 'mode is one of none, existing, draft',
+  '/slots/roster/entries/*/state': 'state is one of resolved, candidates, unresolved, skipped',
+  '/slots/phases/*/ruleset': 'ruleset is "plan" or {"id": <published ruleset version id>}',
+  '/slots/tournament/ruleset': 'ruleset is "plan" or {"id": <published ruleset version id>}',
+};
+
+const indexFree = (pointer: string): string => pointer.split('/').map((segment) => (/^\d+$/.test(segment) ? '*' : segment)).join('/');
+
+/** For the issues of one refusal, the distinct static hints that make an `invalid_union` or `unrecognized_keys` issue actionable. */
+export function planIssueHints(issues: readonly PlanIssue[]): Map<PlanIssue, string> {
+  const out = new Map<PlanIssue, string>();
+  const used = new Set<string>();
+  for (const issue of issues) {
+    let hint: string | undefined;
+    if (issue.code === 'invalid_union') {
+      const expected = UNION_EXPECTED[indexFree(issue.path)];
+      if (expected) hint = `expected ${expected}`;
+    } else if (issue.code === 'unrecognized_keys') {
+      const parent = indexFree(issue.path.slice(0, Math.max(issue.path.lastIndexOf('/'), 0)));
+      const allowed = ALLOWED_KEYS[parent];
+      if (allowed) hint = `${parent || '/'} takes only ${allowed}`;
+    }
+    if (hint === undefined || used.has(hint)) continue;
+    used.add(hint);
+    out.set(issue, hint);
+  }
+  return out;
+}
+
 /** Drop `undefined` members so the document is plain JSON (hashable, storable). */
 export function jsonClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;

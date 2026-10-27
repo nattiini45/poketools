@@ -66,23 +66,135 @@ function listOfCategory(preset: ReturnType<typeof resolvePresetRules>, category:
   return preset === null ? null : preset[category];
 }
 
+const rulesetBuildPreviewArgs = z.strictObject({
+  name: textArg('Working title', 80).optional(),
+  base_preset: textArg('Catalog preset id such as gen9ou; leave out for a blank base', 60).optional(),
+  blank_gen: intArg('Generation of a blank base', 1, 9).optional(),
+  blank_doubles: z.boolean().optional(),
+  blank_universe: z.enum(['standard', 'national']).optional(),
+  tour_overlay: z.boolean().optional().describe('Add the preset\'s documented Smogon tour clauses and bans'),
+  edits: z.array(editSchema).max(24).optional(),
+  clauses_add: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+  clauses_remove: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+  min_shared_type_pct: intArg('Minimum share of the team that must share a type', 0, 100).optional(),
+});
+export type RulesetBuildPreviewArgs = z.output<typeof rulesetBuildPreviewArgs>;
+
+/**
+ * What `ruleset_build_preview` answers. Pure and port-free (the kit's edit operations and the server compile, nothing
+ * that reads or writes), so the plan-stage eval world runs the very same code.
+ */
+export function buildRulesetPreview(args: RulesetBuildPreviewArgs, locale: 'en' | 'de') {
+  const empty = {
+    built: false,
+    blockers: [] as Array<z.infer<typeof finding>>,
+    base: { kind: 'blank' as const, preset: null, gen: null, doubles: null, universe: null },
+    check: null,
+    informational_clauses: [] as string[],
+    sections: { items: [], total: 0, truncated: false, cap: SECTION_CAP },
+    coverage: null,
+    changes_vs_base: { categories: [], clauses_added: [], clauses_removed: [], other_changed: false },
+  };
+
+  if (args.base_preset !== undefined && !isRulesetPresetId(args.base_preset)) {
+    return { ...empty, blockers: [finder('base_format_unknown', { preset: args.base_preset })] };
+  }
+  const presetId = args.base_preset;
+  const preset = presetId === undefined ? null : resolvePresetRules(presetId);
+  if (presetId !== undefined && preset === null) {
+    return { ...empty, blockers: [finder('base_format_unknown', { preset: presetId })] };
+  }
+
+  let doc: RulesetDocument = newRulesetDocument(args.name ?? 'Preview', locale, presetId);
+  if (presetId === undefined) {
+    doc = { ...doc, base: { kind: 'blank', gen: args.blank_gen ?? 9, doubles: args.blank_doubles ?? false, universe: args.blank_universe ?? 'standard' } };
+  }
+  const baseline = doc;
+
+  const blockers: Array<z.infer<typeof finding>> = [];
+  if (args.tour_overlay === true) {
+    const overlay = presetId === undefined ? null : resolveTourOverlay(presetId);
+    if (overlay === null || preset === null) blockers.push(finder('ruleset_preset_unknown'));
+    else doc = applyTourOverlay(doc, overlay, preset).document;
+  }
+  for (const edit of args.edits ?? []) {
+    const ids = edit.ids.map(toID).filter((entry) => entry !== '');
+    const base = listOfCategory(preset, edit.category);
+    if (edit.action === 'ban') doc = banEntries(doc, edit.category, ids, base).doc;
+    else if (edit.action === 'unban') doc = allowEntries(doc, edit.category, ids, base).doc;
+    else if (edit.action === 'reset') doc = resetEntries(doc, edit.category, ids, base).doc;
+    else doc = setMode(doc, edit.category, 'allow', ids);
+  }
+  const presetClauses = preset?.clauses ?? [];
+  for (const clause of args.clauses_add ?? []) doc = setClause(doc, toID(clause), true, presetClauses);
+  for (const clause of args.clauses_remove ?? []) doc = setClause(doc, toID(clause), false, presetClauses);
+  if (args.min_shared_type_pct !== undefined) doc = { ...doc, min_shared_type_pct: args.min_shared_type_pct };
+
+  const { result } = compileDocument(doc);
+  for (const diagnostic of result.diagnostics) {
+    if (diagnostic.code === 'unknown_entry') {
+      blockers.push(finder('ban_name_unresolved', { path: diagnostic.path, ...(diagnostic.params ?? {}) }));
+    }
+  }
+  const informational = result.diagnostics
+    .filter((d) => d.code === 'clause_informational')
+    .map((d) => String(d.params?.id ?? ''))
+    .filter((entry) => /^[a-z0-9]{1,60}$/.test(entry));
+
+  const baseKind = doc.base.kind === 'preset' ? ('preset' as const) : ('blank' as const);
+  const described =
+    result.resolved === null ? null : describeResolved(result.resolved, locale, presetId === undefined ? null : (getPreset(presetId)?.name ?? presetId));
+  const baselineRules = result.resolved === null ? null : computeEffective(baseline, preset);
+  const diff = result.resolved === null || baselineRules === null ? null : diffResolved(baselineRules, result.resolved);
+
+  return {
+    built: result.ok,
+    blockers,
+    base: {
+      kind: baseKind,
+      preset: doc.base.kind === 'preset' ? doc.base.preset : null,
+      gen: result.resolved?.gen ?? (doc.base.kind === 'blank' ? doc.base.gen : null),
+      doubles: result.resolved?.doubles ?? null,
+      universe: result.resolved?.universe ?? null,
+    },
+    check: toCheckOut(result),
+    informational_clauses: informational,
+    sections: {
+      items: (described?.sections ?? []).slice(0, SECTION_CAP).map((section) => ({
+        id: section.id,
+        heading: section.heading,
+        lines: section.lines.map((line) => fenceText(line)),
+      })),
+      total: described?.sections.length ?? 0,
+      truncated: (described?.sections.length ?? 0) > SECTION_CAP,
+      cap: SECTION_CAP,
+    },
+    coverage: described === null ? null : described.coverage,
+    changes_vs_base:
+      diff === null
+        ? empty.changes_vs_base
+        : {
+            categories: RULESET_CATEGORIES.map((category) => ({
+              category,
+              mode_changed: diff[category].modeChanged,
+              added_count: diff[category].added.length,
+              removed_count: diff[category].removed.length,
+              added: diff[category].added.slice(0, CHANGE_IDS_CAP),
+              removed: diff[category].removed.slice(0, CHANGE_IDS_CAP),
+            })),
+            clauses_added: diff.clausesAdded,
+            clauses_removed: diff.clausesRemoved,
+            other_changed: diff.otherChanged,
+          },
+  };
+}
+
 export const rulesetBuildPreview = defineRunnable('any', {
   name: 'ruleset_build_preview',
   class: 'P',
   description:
     'Preview a ruleset without saving anything: start from a catalog preset (base_preset) or a blank base (blank_gen, blank_doubles, blank_universe), optionally add the Smogon tour extras, then apply edits (ban, unban, allow_only, reset per category) and clause changes. Returns the compile diagnostics exactly as a publish would see them, bans that match no dex entry as blockers, which clauses are only informational (shown, not enforced), the rules as sentences, and what changed against the base. Use dex ids or exact names from dex_lookup; banning a base species does not ban its other formes.',
-  args: z.strictObject({
-    name: textArg('Working title', 80).optional(),
-    base_preset: textArg('Catalog preset id such as gen9ou; leave out for a blank base', 60).optional(),
-    blank_gen: intArg('Generation of a blank base', 1, 9).optional(),
-    blank_doubles: z.boolean().optional(),
-    blank_universe: z.enum(['standard', 'national']).optional(),
-    tour_overlay: z.boolean().optional().describe('Add the preset\'s documented Smogon tour clauses and bans'),
-    edits: z.array(editSchema).max(24).optional(),
-    clauses_add: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
-    clauses_remove: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
-    min_shared_type_pct: intArg('Minimum share of the team that must share a type', 0, 100).optional(),
-  }),
+  args: rulesetBuildPreviewArgs,
   phase: 0,
   guard: () => ({ kind: 'any' }),
   output: z.strictObject({
@@ -101,108 +213,7 @@ export const rulesetBuildPreview = defineRunnable('any', {
     }),
   }),
   async execute(args, _guarded, ctx) {
-    const empty = {
-      built: false,
-      blockers: [] as Array<z.infer<typeof finding>>,
-      base: { kind: 'blank' as const, preset: null, gen: null, doubles: null, universe: null },
-      check: null,
-      informational_clauses: [] as string[],
-      sections: { items: [], total: 0, truncated: false, cap: SECTION_CAP },
-      coverage: null,
-      changes_vs_base: { categories: [], clauses_added: [], clauses_removed: [], other_changed: false },
-    };
-
-    if (args.base_preset !== undefined && !isRulesetPresetId(args.base_preset)) {
-      return { ...empty, blockers: [finder('base_format_unknown', { preset: args.base_preset })] };
-    }
-    const presetId = args.base_preset;
-    const preset = presetId === undefined ? null : resolvePresetRules(presetId);
-    if (presetId !== undefined && preset === null) {
-      return { ...empty, blockers: [finder('base_format_unknown', { preset: presetId })] };
-    }
-
-    let doc: RulesetDocument = newRulesetDocument(args.name ?? 'Preview', ctx.locale, presetId);
-    if (presetId === undefined) {
-      doc = { ...doc, base: { kind: 'blank', gen: args.blank_gen ?? 9, doubles: args.blank_doubles ?? false, universe: args.blank_universe ?? 'standard' } };
-    }
-    const baseline = doc;
-
-    const blockers: Array<z.infer<typeof finding>> = [];
-    if (args.tour_overlay === true) {
-      const overlay = presetId === undefined ? null : resolveTourOverlay(presetId);
-      if (overlay === null || preset === null) blockers.push(finder('ruleset_preset_unknown'));
-      else doc = applyTourOverlay(doc, overlay, preset).document;
-    }
-    for (const edit of args.edits ?? []) {
-      const ids = edit.ids.map(toID).filter((entry) => entry !== '');
-      const base = listOfCategory(preset, edit.category);
-      if (edit.action === 'ban') doc = banEntries(doc, edit.category, ids, base).doc;
-      else if (edit.action === 'unban') doc = allowEntries(doc, edit.category, ids, base).doc;
-      else if (edit.action === 'reset') doc = resetEntries(doc, edit.category, ids, base).doc;
-      else doc = setMode(doc, edit.category, 'allow', ids);
-    }
-    const presetClauses = preset?.clauses ?? [];
-    for (const clause of args.clauses_add ?? []) doc = setClause(doc, toID(clause), true, presetClauses);
-    for (const clause of args.clauses_remove ?? []) doc = setClause(doc, toID(clause), false, presetClauses);
-    if (args.min_shared_type_pct !== undefined) doc = { ...doc, min_shared_type_pct: args.min_shared_type_pct };
-
-    const { result } = compileDocument(doc);
-    for (const diagnostic of result.diagnostics) {
-      if (diagnostic.code === 'unknown_entry') {
-        blockers.push(finder('ban_name_unresolved', { path: diagnostic.path, ...(diagnostic.params ?? {}) }));
-      }
-    }
-    const informational = result.diagnostics
-      .filter((d) => d.code === 'clause_informational')
-      .map((d) => String(d.params?.id ?? ''))
-      .filter((entry) => /^[a-z0-9]{1,60}$/.test(entry));
-
-    const baseKind = doc.base.kind === 'preset' ? ('preset' as const) : ('blank' as const);
-    const described =
-      result.resolved === null ? null : describeResolved(result.resolved, ctx.locale, presetId === undefined ? null : (getPreset(presetId)?.name ?? presetId));
-    const baselineRules = result.resolved === null ? null : computeEffective(baseline, preset);
-    const diff = result.resolved === null || baselineRules === null ? null : diffResolved(baselineRules, result.resolved);
-
-    return {
-      built: result.ok,
-      blockers,
-      base: {
-        kind: baseKind,
-        preset: doc.base.kind === 'preset' ? doc.base.preset : null,
-        gen: result.resolved?.gen ?? (doc.base.kind === 'blank' ? doc.base.gen : null),
-        doubles: result.resolved?.doubles ?? null,
-        universe: result.resolved?.universe ?? null,
-      },
-      check: toCheckOut(result),
-      informational_clauses: informational,
-      sections: {
-        items: (described?.sections ?? []).slice(0, SECTION_CAP).map((section) => ({
-          id: section.id,
-          heading: section.heading,
-          lines: section.lines.map((line) => fenceText(line)),
-        })),
-        total: described?.sections.length ?? 0,
-        truncated: (described?.sections.length ?? 0) > SECTION_CAP,
-        cap: SECTION_CAP,
-      },
-      coverage: described === null ? null : described.coverage,
-      changes_vs_base:
-        diff === null
-          ? empty.changes_vs_base
-          : {
-              categories: RULESET_CATEGORIES.map((category) => ({
-                category,
-                mode_changed: diff[category].modeChanged,
-                added_count: diff[category].added.length,
-                removed_count: diff[category].removed.length,
-                added: diff[category].added.slice(0, CHANGE_IDS_CAP),
-                removed: diff[category].removed.slice(0, CHANGE_IDS_CAP),
-              })),
-              clauses_added: diff.clausesAdded,
-              clauses_removed: diff.clausesRemoved,
-              other_changed: diff.otherChanged,
-            },
-    };
+    return buildRulesetPreview(args, ctx.locale);
   },
 });
 

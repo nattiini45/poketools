@@ -124,7 +124,7 @@ describe('lazy imports are literal', () => {
  */
 const ALLOWED_LAYER_EDGES: Record<string, readonly string[]> = {
   // The harness sits on top of everything and nothing imports it.
-  eval: ['loop', 'plans', 'prompts', 'readers', 'registry', 'root', 'store'],
+  eval: ['loop', 'plans', 'previews', 'prompts', 'readers', 'registry', 'root', 'store'],
   // The loop knows the store's pure pieces (errors, ids, payload guard) and nothing else: tools, staging and dispatch are injected.
   loop: ['store'],
   previews: ['registry'],
