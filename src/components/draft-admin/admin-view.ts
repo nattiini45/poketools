@@ -10,8 +10,11 @@ import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
 import type { DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
 import {
   DEFAULT_DRAFT_CONFIG,
+  DEFAULT_SLOW_PICK_SECONDS,
   type DraftConfigInput,
+  type DraftKind,
   type DraftMode,
+  type DraftPhase,
   type DraftSnapshotDTO,
   type LineId,
 } from '@/types/draft-queue';
@@ -34,6 +37,15 @@ export function correctionsAllowed(vm: Pick<DraftViewModel, 'paused' | 'status'>
 /** The settings form is editable in setup (initial) or in the redraft's submission phase. */
 export function configEditable(vm: Pick<DraftViewModel, 'kind' | 'phase'>): boolean {
   return vm.kind === 'initial' ? vm.phase === 'setup' : vm.phase === 'submissions';
+}
+
+/**
+ * An Initial draft that has not started, or was cancelled, can be deleted (and created again): deleting it frees
+ * the group, which a cancelled draft otherwise keeps locked. The server is the authority (`DELETE /api/drafts/[id]`
+ * filters on the phase itself); this decides where the "Delete draft" control shows.
+ */
+export function draftDeletable(pool: { kind: DraftKind; phase: DraftPhase }): boolean {
+  return pool.kind === 'initial' && (pool.phase === 'setup' || pool.phase === 'cancelled');
 }
 
 /** The penalty select's options: one per ladder stage, `0..ladder.length − 1`. */
@@ -108,7 +120,7 @@ export interface ConfigFormState {
 
 /** Live default 300 s, slow default 43 200 s (§7.1). */
 export function defaultPickSeconds(mode: DraftMode): number {
-  return mode === 'slow' ? 43_200 : DEFAULT_DRAFT_CONFIG.pick_seconds;
+  return mode === 'slow' ? DEFAULT_SLOW_PICK_SECONDS : DEFAULT_DRAFT_CONFIG.pick_seconds;
 }
 
 /**
@@ -174,7 +186,11 @@ export function configChanges(
   if (form.roster_size !== initial.roster_size) config.roster_size = toInt(form.roster_size);
   if (form.budget !== initial.budget) config.budget = toInt(form.budget);
   if (form.pick_seconds !== initial.pick_seconds) config.pick_seconds = toInt(form.pick_seconds);
-  if (form.makeup_seconds !== initial.makeup_seconds) config.makeup_seconds = toInt(form.makeup_seconds);
+  // Make-up time is hidden and ignored in slow mode (`invalidDraftConfigField` skips it): a value edited in live mode
+  // and left behind by a switch to slow must not reach the PATCH, where the body schema would refuse it unseen.
+  if (form.mode === 'live' && form.makeup_seconds !== initial.makeup_seconds) {
+    config.makeup_seconds = toInt(form.makeup_seconds);
+  }
   if (form.extensions_enabled !== initial.extensions_enabled) config.extensions_enabled = form.extensions_enabled;
 
   const maxChanged = form.redraft_max_lines !== initial.redraft_max_lines;

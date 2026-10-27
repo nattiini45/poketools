@@ -161,12 +161,12 @@ export default {
     /** EPB: the draft control panel (`/admin/leagues/[id]/draft`). */
     openPanel: 'Open the draft control panel',
     openPanelHint: 'Start, pause and correct the draft, run the Redraft and read the audit trail.',
-    /** EPB: what `draft_create_pool` sets up when the admin creates the Initial draft without a config. */
+    /** EPB: what `draft_create_pool` sets up when the admin creates the Initial draft (the form only sends the mode and its pick time). */
     epbCreate: {
       intro: 'Creating the Draft Room sets up this draft:',
       /** Same term as the draft control panel's `config.order` (draft/admin), where it is edited. */
       orderLabel: 'Draft order',
-      order: 'Snake. The order reverses every round.',
+      order: 'The opening order is drawn at random, then snake: the order reverses every round.',
       seatsLabel: 'Seats',
       seats: 'One per participant.',
       pricesLabel: 'Prices',
@@ -183,8 +183,15 @@ export default {
       modeLabel: 'Mode',
       /** `{count}` = the default pick time in minutes. */
       mode: { one: 'Live draft, {count} minute per pick.', other: 'Live draft, {count} minutes per pick.' },
+      /** `{count}` = the slow draft's first pick time in hours (the time shortens after each missed pick). */
+      modeSlow: {
+        one: 'Slow draft, {count} hour per pick at first; every missed pick shortens it.',
+        other: 'Slow draft, {count} hours per pick at first; every missed pick shortens it.',
+      },
+      /** Label of the live / slow select; the options are the glossary terms. */
+      modeChoiceLabel: 'Draft mode',
       editHint:
-        'Until the draft starts, you can change the draft order, budget, roster size, mode and timers in the draft control panel.',
+        'Until the draft starts, you can change the draft order, budget, roster size, mode and timers in the draft control panel; there you can also roll the order again. The seats are copied from the trainers (of the group, in a league with groups) when you create the draft; to change the groups afterwards, delete the draft that has not started and create it again.',
       create: 'Create Draft Room',
       createFailed: 'Failed to create the Draft Room',
     },

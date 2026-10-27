@@ -159,6 +159,11 @@ export interface PoolAdminSectionProps {
    * The room's sheet passes nothing: its Redraft tab shows the refusal from that read.
    */
   publishRefusedAt?: string | null;
+  /**
+   * Live section: called once "Delete draft" succeeded (the pool is gone, so the caller navigates away). Omitted =
+   * the live controls offer no delete.
+   */
+  onDeleted?(): void;
 }
 
 function RedraftSection({
@@ -206,13 +211,27 @@ export function PoolAdminSectionView(props: PoolAdminSectionProps) {
           vm={vm}
           catalog={catalog}
           serverOffsetMs={serverOffsetMs}
-          makeupSeconds={dto.config.makeup_seconds}
+          makeupSeconds={dto.pool.mode === 'live' ? dto.config.makeup_seconds : null}
           pickFor={pickFor}
           deadline={deadline}
           showClock={showClock}
           onPause={(paused, reason) => run(actions.pause(paused, reason))}
           onStart={() => run(actions.start())}
           onEnd={(reason) => run(actions.end(reason))}
+          onDelete={
+            props.onDeleted
+              ? async () => {
+                  // Not `run`: a refresh would poll the pool that no longer exists.
+                  const res = await actions.deletePool();
+                  if (res.ok) {
+                    props.onDeleted?.();
+                    return null;
+                  }
+                  if (res.snapshot) snap.applySnapshot(res.snapshot);
+                  return res.error;
+                }
+              : undefined
+          }
         />
       );
     case 'redraft':
@@ -233,6 +252,7 @@ export function PoolAdminSectionView(props: PoolAdminSectionProps) {
           dto={dto}
           onSaveConfig={(input) => run(actions.saveConfig(input))}
           onPatchRedraft={(body) => run(actions.patchRedraft(body))}
+          onRollOrder={() => run(actions.rollOrder())}
         />
       );
     case 'picks':

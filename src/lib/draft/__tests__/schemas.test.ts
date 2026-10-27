@@ -137,6 +137,21 @@ describe('invalidDraftConfigField (merged stored + patched config)', () => {
     expect(invalidDraftConfigField({ ...valid, slow_ladder_seconds: [600, 700] })).toBe('slow_ladder_seconds');
     expect(invalidDraftConfigField({ ...valid, redraft_max_lines: 10 })).toBe('redraft_max_lines');
   });
+
+  it('live checks the make-up time: at least 30 s, at most the pick time', () => {
+    expect(invalidDraftConfigField({ ...valid, makeup_seconds: 29 })).toBe('makeup_seconds');
+    expect(invalidDraftConfigField({ ...valid, makeup_seconds: 30 })).toBeNull();
+    expect(invalidDraftConfigField({ ...valid, makeup_seconds: 300 })).toBeNull();
+  });
+
+  it('slow ignores the make-up time (the ladder times every slot) but still checks the pick time', () => {
+    const slow = { ...valid, mode: 'slow' as const, pick_seconds: 43_200 };
+    expect(invalidDraftConfigField(slow)).toBeNull();
+    expect(invalidDraftConfigField({ ...slow, makeup_seconds: 10 })).toBeNull();
+    expect(invalidDraftConfigField({ ...slow, makeup_seconds: 400_000 })).toBeNull();
+    expect(invalidDraftConfigField({ ...slow, makeup_seconds: 10, pick_seconds: 300 })).toBe('pick_seconds');
+    expect(invalidDraftConfigField({ ...slow, makeup_seconds: 10, slow_ladder_seconds: [600, 700] })).toBe('slow_ladder_seconds');
+  });
 });
 
 describe('draft route bodies', () => {

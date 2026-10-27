@@ -39,7 +39,8 @@ export default {
     /** `{min}` = smallest group size. A move would leave the group too small. */
     minSizeHint: 'A group keeps at least {min} trainers, so nobody can leave this one.',
     lockedBadge: 'Has a draft',
-    lockedHint: 'This group has a draft: nobody joins or leaves it unless that draft is cancelled.',
+    lockedHint:
+      'This group has a draft: nobody joins or leaves it unless that draft is deleted (while it has not started) or cancelled.',
     /** `{count}` = trainers in the group. */
     members: { one: '{count} trainer', other: '{count} trainers' },
     noMembers: 'No trainers yet.',

@@ -43,6 +43,8 @@ export interface InstanceConfigFormProps {
   dto: DraftSnapshotDTO;
   onSaveConfig(input: DraftConfigInput): AdminResult;
   onPatchRedraft(body: RedraftPatch): AdminResult;
+  /** Draws a new random seat order on the server and saves it (Initial draft in setup); the panel has refreshed on success. */
+  onRollOrder(): AdminResult;
 }
 
 function Field({ id, label, hint, children }: { id: string; label: string; hint?: ReactNode; children: ReactNode }) {
@@ -61,7 +63,7 @@ function secondsOf(text: string): number | null {
   return /^\d+$/.test(text.trim()) ? Number(text.trim()) : null;
 }
 
-export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedraft }: InstanceConfigFormProps) {
+export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedraft, onRollOrder }: InstanceConfigFormProps) {
   const t = useT(draftAdminMessages);
   const primary = usePrimaryButton();
   const tShared = useT(draftSharedMessages);
@@ -81,7 +83,18 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
 
   const [baseline, setBaseline] = useState<ConfigFormState>(() => configFormFromSnapshot(dto));
   const [form, setForm] = useState<ConfigFormState>(baseline);
-  const [notice, setNotice] = useState<'saved' | 'noChanges' | null>(null);
+  const [notice, setNotice] = useState<'saved' | 'noChanges' | 'rolled' | null>(null);
+
+  // The seats are the server's: a roll (or another admin's re-seat) replaces the order the form shows, but leaves
+  // the other fields the admin is editing alone. The adjustment happens in render (React's "derived state" pattern).
+  const serverOrder = configFormFromSnapshot(dto).participant_order;
+  const serverOrderKey = serverOrder.join(',');
+  const [syncedOrderKey, setSyncedOrderKey] = useState(serverOrderKey);
+  if (serverOrderKey !== syncedOrderKey) {
+    setSyncedOrderKey(serverOrderKey);
+    setBaseline((prev) => ({ ...prev, participant_order: serverOrder }));
+    setForm((prev) => ({ ...prev, participant_order: serverOrder }));
+  }
 
   const editable = configEditable(vm);
   const disabled = !editable || call.busy;
@@ -127,6 +140,12 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
       setBaseline(form);
       setNotice('saved');
     }
+  };
+
+  const rollOrder = async () => {
+    setNotice(null);
+    const ok = await call.run(() => onRollOrder());
+    if (ok) setNotice('rolled');
   };
 
   const cutoffIso = localInputToIso(form.token_purchase_closes_at);
@@ -188,17 +207,19 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
             className={FIELD}
           />
         </Field>
-        <Field id={ids.makeup} label={t('config.makeupSeconds')} hint={durationHint(form.makeup_seconds)}>
-          <input
-            id={ids.makeup}
-            type="number"
-            inputMode="numeric"
-            min={30}
-            value={form.makeup_seconds}
-            onChange={(e) => set('makeup_seconds', e.target.value)}
-            className={FIELD}
-          />
-        </Field>
+        {form.mode === 'live' ? (
+          <Field id={ids.makeup} label={t('config.makeupSeconds')} hint={durationHint(form.makeup_seconds)}>
+            <input
+              id={ids.makeup}
+              type="number"
+              inputMode="numeric"
+              min={30}
+              value={form.makeup_seconds}
+              onChange={(e) => set('makeup_seconds', e.target.value)}
+              className={FIELD}
+            />
+          </Field>
+        ) : null}
         <Field
           id={ids.max}
           label={t('config.redraftMaxLines')}
@@ -237,6 +258,7 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
               ))}
             </ul>
             <p className={HINT}>{t('config.ladderHint')}</p>
+            <p className={HINT}>{t('config.makeupSlowHint')}</p>
           </div>
         )}
 
@@ -266,6 +288,14 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
         <div className="space-y-1 sm:col-span-2">
           <p className={LABEL}>{t('config.order')}</p>
           <p className={HINT}>{kind === 'redraft' ? t('config.orderRedraftHint') : t('config.orderHint')}</p>
+          {kind === 'initial' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={() => void rollOrder()}>
+                {t('config.rollOrder')}
+              </Button>
+              <span className={HINT}>{t('config.rollOrderHint')}</span>
+            </div>
+          ) : null}
           <ol className="space-y-1">
             {form.participant_order.map((playerId, index) => {
               const p = names.get(playerId);
@@ -309,7 +339,17 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
 
       <InlineError text={invalid ? t(`config.invalid.${invalid}`) : null} />
       <InlineError text={call.error ? errorText(call.error) : null} />
-      <InlineNotice text={notice === 'saved' ? t('config.saved') : notice === 'noChanges' ? t('config.noChanges') : null} />
+      <InlineNotice
+        text={
+          notice === 'saved'
+            ? t('config.saved')
+            : notice === 'noChanges'
+              ? t('config.noChanges')
+              : notice === 'rolled'
+                ? t('config.rolled')
+                : null
+        }
+      />
       {editable ? (
         <Button type="submit" variant={primary.variant} className={primary.className} disabled={disabled || invalid !== null}>
           {t('config.save')}

@@ -44,6 +44,8 @@ vi.mock('@/lib/season/epb-phase', () => ({ getEpbPhaseStatus: vi.fn() }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getCompletedMatchRecords: vi.fn(async () => []) }));
 vi.mock('@/lib/tournament/season-standings', () => ({ computeStandingsForSeason: vi.fn() }));
 vi.mock('@/lib/tournament/group-first-half', () => ({ getGroupFirstHalfTables: vi.fn(async () => null) }));
+// A fixed "draw": the roster reversed, so a passing test proves the seats come from the draw, not the database order.
+vi.mock('@/lib/draft/seat-draw', () => ({ drawSeatOrder: vi.fn((ids: readonly string[]) => [...ids].reverse()) }));
 vi.mock('@/lib/draft/rpc-errors', async () => {
   const actual = await vi.importActual<typeof import('@/lib/draft/rpc-errors')>('@/lib/draft/rpc-errors');
   return { ...actual, callDraftRpc: vi.fn() };
@@ -76,6 +78,7 @@ import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { getGroupFirstHalfTables } from '@/lib/tournament/group-first-half';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
+import { drawSeatOrder } from '@/lib/draft/seat-draw';
 import { draftQuietHours } from '@/lib/format-pack';
 import { DraftRuleError } from '@/lib/draft/errors';
 import { LEGACY_POINTS_MAX } from '@/lib/draft/points-limits';
@@ -664,10 +667,65 @@ describe('POST /api/drafts (queue engine, EPB seasons)', () => {
       p_kind: 'initial',
       p_actor_id: 'admin-1',
       p_config: { mode: 'slow', pick_seconds: 3600, quiet_hours: null },
-      p_seats: [{ player_id: A, seat: 1 }, { player_id: B, seat: 2 }],
+      p_seats: [{ player_id: B, seat: 1 }, { player_id: A, seat: 2 }],
     });
     expect(expireDraftReads).toHaveBeenCalledWith(SEASON);
     expect(createDraftPool).not.toHaveBeenCalled();
+  });
+
+  it('seats an initial pool by a random draw of the roster, not in database row order', async () => {
+    await post({ season_id: SEASON, kind: 'initial' });
+    expect(drawSeatOrder).toHaveBeenCalledWith([A, B]);
+    expect(vi.mocked(callDraftRpc).mock.calls[0][1]).toMatchObject({
+      p_seats: [{ player_id: B, seat: 1 }, { player_id: A, seat: 2 }],
+    });
+  });
+
+  it('an admin order takes precedence over the draw', async () => {
+    await post({ season_id: SEASON, kind: 'initial', config: { participant_order: [A, B] } });
+    expect(drawSeatOrder).not.toHaveBeenCalled();
+    expect(vi.mocked(callDraftRpc).mock.calls[0][1]).toMatchObject({
+      p_seats: [{ player_id: A, seat: 1 }, { player_id: B, seat: 2 }],
+    });
+  });
+
+  it('a slow draft without a pick time gets the slow default (12 h), not the SQL default of 300 s', async () => {
+    const response = await post({ season_id: SEASON, kind: 'initial', config: { mode: 'slow' } });
+    expect(response.status).toBe(201);
+    expect(vi.mocked(callDraftRpc).mock.calls[0][1]).toMatchObject({
+      p_config: { mode: 'slow', pick_seconds: 43_200, quiet_hours: null },
+    });
+  });
+
+  it('a live draft without a pick time leaves the default to the SQL (unchanged call)', async () => {
+    await post({ season_id: SEASON, kind: 'initial', config: { mode: 'live' } });
+    expect(vi.mocked(callDraftRpc).mock.calls[0][1]).toMatchObject({ p_config: { mode: 'live', quiet_hours: null } });
+    expect((vi.mocked(callDraftRpc).mock.calls[0][1] as { p_config: object }).p_config).not.toHaveProperty('pick_seconds');
+  });
+
+  it('an explicit slow pick time is kept', async () => {
+    await post({ season_id: SEASON, kind: 'initial', config: { mode: 'slow', pick_seconds: 7200 } });
+    expect(vi.mocked(callDraftRpc).mock.calls[0][1]).toMatchObject({ p_config: { mode: 'slow', pick_seconds: 7200 } });
+  });
+
+  it('checks the clock the request names like the PATCH route: a make-up time above the (default) 300 s live pick is refused', async () => {
+    const response = await post({ season_id: SEASON, kind: 'initial', config: { makeup_seconds: 400 } });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: 'INVALID_CONFIG', params: { field: 'makeup_seconds' } });
+    expect(callDraftRpc).not.toHaveBeenCalled();
+    expect(expireDraftReads).not.toHaveBeenCalled();
+  });
+
+  it('refuses nothing the request does not name: a 100 s live pick leaves the make-up time to the SQL default', async () => {
+    const response = await post({ season_id: SEASON, kind: 'initial', config: { pick_seconds: 100 } });
+    expect(response.status).toBe(201);
+    expect(vi.mocked(callDraftRpc).mock.calls[0][1]).toMatchObject({ p_config: { pick_seconds: 100 } });
+  });
+
+  it('a Redraft line cap is not judged against a roster size the request omits (the season’s rules decide it)', async () => {
+    const response = await post({ season_id: SEASON, kind: 'initial', config: { redraft_max_lines: 15 } });
+    expect(response.status).toBe(201);
+    expect(vi.mocked(callDraftRpc).mock.calls[0][1]).toMatchObject({ p_config: { redraft_max_lines: 15 } });
   });
 
   it('uses participant_order as the seat order and keeps it out of the config', async () => {
@@ -849,7 +907,7 @@ describe('/api/drafts in a league with groups', () => {
     vi.mocked(getSeasonGroupOfPlayer).mockResolvedValue(null);
   });
 
-  it('creates the group’s initial pool: seats are exactly its members, in roster order, and the group is named', async () => {
+  it('creates the group’s initial pool: seats are exactly its members, drawn within the group, and the group is named', async () => {
     const response = await post({ season_id: SEASON, kind: 'initial', season_group_id: G1 });
     expect(response.status).toBe(201);
     expect(callDraftRpc).toHaveBeenCalledWith('draft_create_pool', {
@@ -857,7 +915,7 @@ describe('/api/drafts in a league with groups', () => {
       p_kind: 'initial',
       p_actor_id: 'admin-1',
       p_config: { quiet_hours: null },
-      p_seats: [{ player_id: A, seat: 1 }, { player_id: D, seat: 2 }],
+      p_seats: [{ player_id: D, seat: 1 }, { player_id: A, seat: 2 }],
       p_season_group_id: G1,
     });
     expect(expireDraftReads).toHaveBeenCalledWith(SEASON);

@@ -142,6 +142,8 @@ export default defineDe<typeof en>()({
     point_buy_list__deactivate: 'Point-Buy-Liste deaktiviert',
     draft__pick__on_behalf: 'Draft-Pick für einen Spieler gemacht',
     draft__pick_order__free: 'Draft auf freie Reihenfolge umgestellt',
+    draft__pool__delete: 'Draft vor dem Start gelöscht',
+    draft__order__roll: 'Draft-Reihenfolge ausgelost',
   },
   error: {
     title: 'Fehler im Adminbereich',

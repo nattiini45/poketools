@@ -30,12 +30,14 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import styles from '@/components/draft-tool/draft-tool.module.css';
 import { useT } from '@/i18n/client';
 import { draftAdminMessages } from '@/i18n/messages/draft/admin';
 import { glossaryMessages } from '@/i18n/messages/glossary';
 import { uiMessages } from '@/i18n/messages/ui';
 import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
+import { leagueAdminHref } from '@/lib/league-admin/tabs';
 import { createAdminDraftActions, type AdminDraftActions } from './admin-actions';
 import { AdminSurfaceProvider, InlineError } from './admin-ui';
 import CreateRedraft from './CreateRedraft';
@@ -104,6 +106,7 @@ export default function RoomAdminSheet({
   const tUi = useT(uiMessages);
   const baseId = useId();
   const deadlineFieldId = useId();
+  const router = useRouter();
   // One writer per mounted sheet; the room keys its client by pool id, so a pool switch remounts it.
   const [actions] = useState<AdminDraftActions>(
     () => injected ?? createAdminDraftActions(poolId, seasonId, seasonGroupId),
@@ -251,6 +254,7 @@ export default function RoomAdminSheet({
                   },
                 }}
                 showClock={false}
+                onDeleted={() => router.push(leagueAdminHref(seasonId, 'draft'))}
               />
               {tab === 'live' && vm.kind === 'initial' && vm.phase === 'complete' ? <CreateRedraft actions={actions} groupName={seasonGroupName} /> : null}
             </div>

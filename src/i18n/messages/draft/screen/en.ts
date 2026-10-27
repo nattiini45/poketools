@@ -81,6 +81,7 @@ export default {
     you: 'You',
     pickAria: 'Pick {pick}: {player}',
     makeupAria: 'Make-up pick {pick}: {player}, {time}',
+    makeupAriaNoTime: 'Make-up pick {pick}: {player}',
     roundBreak: 'Round {round}',
   },
   players: {

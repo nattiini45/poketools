@@ -1,14 +1,15 @@
 /**
  * EpbDraftRoomCreate: EPB seasons get a summary of what `draft_create_pool`
- * sets up (no draft-type picker) and one button. The body is the queue shape,
- * with no config, so the RPC takes budget and roster size from the format rules.
+ * sets up (no draft-type picker), a live / slow choice and one button. The body is the queue shape with
+ * `config: { mode, pick_seconds }` only, so the RPC still takes budget and roster size from the format rules.
  *
  * Node + static markup: `Button` records its props and its `onClick` is called
  * after the render (setState after a server render is a no-op). `Target` runs
  * the component body inside `scope`, and only there does the `react` mock step
  * in: the component's `false` state is `loading` (each set recorded), its
  * `null` state the create error (seeded by `scope.errorSeed`, each set
- * recorded). Hooks of anything the component renders run outside the scope.
+ * recorded), its `'live'` state the chosen mode (seeded by `scope.modeSeed`, standing in for a
+ * pick in the select). Hooks of anything the component renders run outside the scope.
  * The request paths themselves are unit-tested in
  * `src/lib/draft-ui/__tests__/create-pool.test.ts`.
  */
@@ -23,6 +24,7 @@ const buttons = vi.hoisted(() => [] as { onClick?: () => Promise<void>; loading?
 const scope = vi.hoisted(() => ({
   active: false,
   errorSeed: null as unknown,
+  modeSeed: null as 'live' | 'slow' | null,
   errorSets: [] as unknown[],
   loadingSets: [] as unknown[],
 }));
@@ -38,6 +40,7 @@ vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
   const useState = <T,>(initial: T | (() => T)) => {
     const [value, set] = actual.useState(initial);
+    if (scope.active && initial === 'live' && scope.modeSeed !== null) return [scope.modeSeed as T, set] as const;
     if (!scope.active || (initial !== false && initial !== null)) return [value, set] as const;
     const sets = initial === false ? scope.loadingSets : scope.errorSets;
     const record = (next: unknown) => {
@@ -81,6 +84,7 @@ async function create(): Promise<void> {
 beforeEach(() => {
   buttons.length = 0;
   scope.errorSeed = null;
+  scope.modeSeed = null;
   scope.errorSets.length = 0;
   scope.loadingSets.length = 0;
   router.refresh.mockClear();
@@ -97,11 +101,14 @@ describe('EpbDraftRoomCreate summary', () => {
   it('summarises the draft the RPC creates, with no draft-type picker', () => {
     const en = renderToStaticMarkup(element);
     expect(en).toContain('Draft order');
-    expect(en).toContain('Snake. The order reverses every round.');
+    expect(en).toContain('The opening order is drawn at random, then snake: the order reverses every round.');
     expect(en).toContain('From the bound point-buy list.');
     expect(en).toContain('100 points per player (format rules).');
     expect(en).toContain('6 picks per player (format rules).');
     expect(en).toContain('Live draft, 5 minutes per pick.');
+    // The live / slow choice, live selected by default.
+    expect(en).toContain('Draft mode');
+    expect(en).toMatch(/<option value="live" selected="">Live draft<\/option><option value="slow">Slow draft<\/option>/);
     expect(en).toContain('you can change the draft order, budget, roster size, mode and timers in the draft control panel');
     expect(en).toContain('Create Draft Room');
     expect(en).not.toMatch(/Auction|Budget Draft|Snake Draft|seat order|Pick order/);
@@ -117,7 +124,20 @@ describe('EpbDraftRoomCreate summary', () => {
     expect(de).toContain('100 Punkte pro Spieler (Formatregeln).');
     expect(de).toContain('6 Picks pro Spieler (Formatregeln).');
     expect(de).toContain('Live-Draft, 5 Minuten pro Pick.');
+    expect(de).toContain('Die Anfangsreihenfolge wird zufällig ausgelost, danach Snake');
+    expect(de).toContain('Draft-Modus');
     expect(de).toContain('Draft-Raum erstellen');
+  });
+
+  it('a slow draft summarises the slow pick time instead of the live one', () => {
+    scope.modeSeed = 'slow';
+    const en = renderToStaticMarkup(element);
+    expect(en).toContain('Slow draft, 12 hours per pick at first; every missed pick shortens it.');
+    expect(en).not.toContain('Live draft, 5 minutes per pick.');
+    expect(en).toMatch(/<option value="live">Live draft<\/option><option value="slow" selected="">Slow draft<\/option>/);
+    expect(renderWithI18n(element, { locale: 'de' })).toContain(
+      'Slow-Draft, anfangs 12 Stunden pro Pick; jeder verpasste Pick verkürzt die Zeit.',
+    );
   });
 
   it('without a format rules row, names the numbers as defaults, not format rules', () => {
@@ -137,18 +157,42 @@ describe('EpbDraftRoomCreate summary', () => {
 });
 
 describe('EpbDraftRoomCreate create', () => {
-  it('posts the queue-engine initial pool without a config and refreshes the page', async () => {
+  it('posts the queue-engine initial pool as a live draft with the live pick time and refreshes the page', async () => {
     await create();
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/drafts');
     const body: unknown = JSON.parse(String(init.body));
-    expect(body).toEqual({ season_id: SEASON, kind: 'initial' });
+    expect(body).toEqual({ season_id: SEASON, kind: 'initial', config: { mode: 'live', pick_seconds: 300 } });
     // The route's strict queue schema accepts it as is.
-    expect(createQueueDraftSchema.parse(body)).toEqual({ season_id: SEASON, kind: 'initial' });
+    expect(createQueueDraftSchema.parse(body)).toEqual(body);
     expect(router.refresh).toHaveBeenCalledTimes(1);
     expect(scope.errorSets).toEqual([null]);
     expect(scope.loadingSets).toEqual([true, false]);
+  });
+
+  it('a slow draft posts mode slow with the 12 h slow pick time', async () => {
+    scope.modeSeed = 'slow';
+    await create();
+
+    const body: unknown = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
+    expect(body).toEqual({ season_id: SEASON, kind: 'initial', config: { mode: 'slow', pick_seconds: 43_200 } });
+    expect(createQueueDraftSchema.parse(body)).toEqual(body);
+  });
+
+  it("a league group's draft also names the group", async () => {
+    const GROUP = '00000000-0000-4000-a000-0000000000a1';
+    buttons.length = 0;
+    renderToStaticMarkup(<Target seasonId={SEASON} budget={100} rosterSize={6} fromFormatRules seasonGroupId={GROUP} />);
+    await buttons[0].onClick?.();
+
+    const body: unknown = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
+    expect(body).toEqual({
+      season_id: SEASON,
+      kind: 'initial',
+      season_group_id: GROUP,
+      config: { mode: 'live', pick_seconds: 300 },
+    });
   });
 
   it('a refusal sets the API error, re-enables the button and does not refresh', async () => {

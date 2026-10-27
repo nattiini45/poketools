@@ -20,7 +20,9 @@ import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import type { DraftPhase } from '@/types/draft-queue';
 import type { GroupedPoolSummary, SeasonGroupWithMembers } from '@/types/season-group';
+import { draftDeletable } from '@/components/draft-admin/admin-view';
 import EpbDraftRoomCreate from '../EpbDraftRoomCreate';
+import GroupDraftDelete from '../GroupDraftDelete';
 import { loadPublishRefusals } from '../../draft/_lib/load';
 import { groupDraftGate, type GroupDraftGate } from './DraftGroupGate';
 import type { LeagueAdminPanelContext } from './context';
@@ -39,7 +41,8 @@ const WARNING = 'rounded-poke-md border border-poke-amber-ink px-3 py-2 text-sm 
  * `draftPanel`'s own branch, untouched.
  *
  * Evolution Point Buy: one card per group with its members, its pools (Initial draft, Redraft; phase, control
- * panel and draft room links, the Redraft's "auto-publish refused at" admin line from `publish_refused_at`) and,
+ * panel and draft room links, "Delete draft" while the Initial draft has not started, the Redraft's
+ * "auto-publish refused at" admin line from `publish_refused_at`) and,
  * while it has no Initial draft, the create form behind the seat gates and the completability check. Other formats
  * cannot draft per group (`POST /api/drafts` refuses a legacy pool in a league with groups): the Draft Room says so.
  *
@@ -147,6 +150,9 @@ export async function groupedDraftPanel(
           <Link href={`/leagues/${id}/draft-room?pool=${encodeURIComponent(pool.id)}`} className={LINK}>
             {tGroups('draft.openRoom')}
           </Link>
+          {draftDeletable(pool) && pool.season_group_id ? (
+            <GroupDraftDelete seasonId={id} poolId={pool.id} seasonGroupId={pool.season_group_id} />
+          ) : null}
         </div>
       </li>
     );

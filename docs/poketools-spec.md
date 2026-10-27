@@ -315,6 +315,12 @@ One row per Pokémon per player per game: unique index `battle_stats_game_player
 > window is fixed when the pool is created (`POST /api/drafts` copies it from the active format pack's
 > `epb.draftClock.quietHours`; a client never sends it) and cannot be patched. TS mirror: `src/lib/draft/time.ts`.
 >
+> **Initial pool setup.** The admin chooses `live` or `slow` when creating the pool; a slow pool that names no pick time
+> gets 43 200 s. Make-up time applies to live mode only (the slow clock uses the ladder for every slot). Without an admin
+> `participant_order` the seats are a random draw of the roster (a group's pool: of the group); an admin can draw again
+> while the pool is in `setup` (`POST /api/drafts/[id]/roll-order`). A queue pool in `setup` or `cancelled` can be deleted
+> (`DELETE /api/drafts/[id]`, phase-filtered), which frees its league group; both writes are audited.
+>
 > **Completability** (`20261018140200_draft_pool_completability.sql`). A drafting queue pool is always completable:
 > every participant can fill every open roster slot at once with distinct free lines it may take, within its remaining
 > budget. So the player on the clock always has a legal pick, and no slot is ever blocked or forfeited. `draft_start`
@@ -929,9 +935,10 @@ POST /api/drafts/[id]/picks     Confirm a pick (a rule error returns a code and 
 POST /api/drafts/[id]/extensions  Use a pick-clock extension
 POST /api/drafts/[id]/free-order  Legacy pools, admins: switch a running snake/linear draft to free order (audited)
 GET/PUT /api/drafts/[id]/redraft/submission  Own secret-drop submission
-POST /api/drafts; PATCH …/config; POST …/{start,end,pause}; POST …/picks/[pickId]/{void,correct};
+POST /api/drafts; PATCH …/config; POST …/{start,end,pause,roll-order}; POST …/picks/[pickId]/{void,correct};
 POST …/participants/[playerId]/penalty; GET …/audit;
 PATCH …/redraft; POST …/redraft/publish   Admin draft controls (audited in draft_action_log)
+DELETE /api/drafts/[id]          Delete a pool: queue pools in setup or cancelled only, legacy pools while pending (audited: draft.pool.delete; roll-order: draft.order.roll)
 GET  /api/seasons/[id]/tokens/me  Token overview; POST …/draft-kill-tokens, …/comeback-tokens/spend
 GET  /api/point-buy-lists/[id]/search-index  Draft finder search index (immutable per list hash)
 GET  /api/cron/draft-ticks      Cron (10 min): slow-draft timeouts, redraft auto-publish, Discord pings

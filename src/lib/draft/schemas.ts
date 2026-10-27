@@ -75,7 +75,8 @@ export function invalidDraftConfigField(c: DraftConfigCore): keyof DraftConfigCo
   if (!intIn(c.budget, L.budget.min, L.budget.max)) return 'budget';
   const pick = L.pick_seconds[c.mode];
   if (!intIn(c.pick_seconds, pick.min, pick.max)) return 'pick_seconds';
-  if (!intIn(c.makeup_seconds, L.makeup_seconds.min, c.pick_seconds)) return 'makeup_seconds';
+  // The make-up time only drives the live clock: a slow draft takes every slot's time from the ladder.
+  if (c.mode === 'live' && !intIn(c.makeup_seconds, L.makeup_seconds.min, c.pick_seconds)) return 'makeup_seconds';
   if (!slowLadderSchema.safeParse(c.slow_ladder_seconds).success) return 'slow_ladder_seconds';
   if (c.redraft_max_lines !== null && !intIn(c.redraft_max_lines, L.redraft_max_lines.min, c.roster_size)) {
     return 'redraft_max_lines';
@@ -140,6 +141,9 @@ export const draftConfigPatchSchema = draftConfigInputSchema;
 
 /** #4 `POST /api/drafts/[id]/start`. */
 export const startDraftSchema = z.object({}).strict();
+
+/** `POST /api/drafts/[id]/roll-order`: no input, the server draws. */
+export const rollOrderSchema = z.object({}).strict();
 
 /** #5 `POST /api/drafts/[id]/end`. */
 export const endDraftSchema = z.object({ reason: reasonSchema }).strict();

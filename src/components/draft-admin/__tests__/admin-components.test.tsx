@@ -106,8 +106,12 @@ describe('admin draft strings (no blocked slot, no forfeit)', () => {
     expect(de('live.endBody')).not.toMatch(/bleiben leer|verfallen/i);
   });
   it('the setup hint that replaces the abort button exists in both languages', () => {
-    expect(en('live.endSetupHint')).toBe('Nothing to abort yet: the draft has not started.');
-    expect(de('live.endSetupHint')).toBe('Es gibt noch nichts abzubrechen: Der Draft hat noch nicht begonnen.');
+    expect(en('live.endSetupHint')).toBe(
+      'Nothing to abort yet: the draft has not started. You can delete it instead and create it again.',
+    );
+    expect(de('live.endSetupHint')).toBe(
+      'Es gibt noch nichts abzubrechen: Der Draft hat noch nicht begonnen. Du kannst ihn stattdessen löschen und neu anlegen.',
+    );
   });
   it('the blocked-pick strings are gone in both languages', () => {
     for (const locale of ['en', 'de'] as const) {
@@ -241,19 +245,87 @@ describe('InstanceConfigForm', () => {
   it('is editable in setup and locked after the start', () => {
     const setupDto = snapshot({ pool: { ...snapshot().pool, phase: 'setup', status: 'pending' } });
     const setup = renderWithI18n(
-      <InstanceConfigForm vm={toDraftViewModel(setupDto)} dto={setupDto} onSaveConfig={noop} onPatchRedraft={noop} />,
+      <InstanceConfigForm
+        vm={toDraftViewModel(setupDto)}
+        dto={setupDto}
+        onSaveConfig={noop}
+        onPatchRedraft={noop}
+        onRollOrder={noop}
+      />,
     );
     expect(setup).toContain('Save settings');
     expect(setup).toContain('Seat 1');
     expect(setup).toContain('Move Dawn down');
+    expect(setup).toMatch(/<button class="[^"]*" type="button">Roll order<\/button>/);
 
     const runningDto = snapshot();
     const running = renderWithI18n(
-      <InstanceConfigForm vm={toDraftViewModel(runningDto)} dto={runningDto} onSaveConfig={noop} onPatchRedraft={noop} />,
+      <InstanceConfigForm
+        vm={toDraftViewModel(runningDto)}
+        dto={runningDto}
+        onSaveConfig={noop}
+        onPatchRedraft={noop}
+        onRollOrder={noop}
+      />,
     );
     expect(running).toContain('The settings are locked once the draft has started.');
     expect(running).not.toContain('Save settings');
     expect(running).toMatch(/<fieldset disabled=""/);
+    // The roll is disabled once the draft has started.
+    expect(running).toMatch(/<button disabled="" [^>]*>Roll order<\/button>/);
+  });
+
+  it('offers the roll for an Initial draft only: a Redraft is seated by the standings', () => {
+    const redraftDto = snapshot({ pool: { ...snapshot().pool, kind: 'redraft', phase: 'submissions', status: 'pending' } });
+    const html = renderWithI18n(
+      <InstanceConfigForm
+        vm={toDraftViewModel(redraftDto)}
+        dto={redraftDto}
+        onSaveConfig={noop}
+        onPatchRedraft={noop}
+        onRollOrder={noop}
+      />,
+    );
+    expect(html).toContain('Seat 1');
+    expect(html).not.toContain('Roll order');
+  });
+
+  it('asks for the make-up pick time in a live draft only; a slow draft explains that the ladder times every pick', () => {
+    const render = (mode: 'live' | 'slow', locale?: 'de') => {
+      const dto = snapshot({ pool: { ...snapshot().pool, mode, phase: 'setup', status: 'pending' } });
+      return renderWithI18n(
+        <InstanceConfigForm vm={toDraftViewModel(dto)} dto={dto} onSaveConfig={noop} onPatchRedraft={noop} onRollOrder={noop} />,
+        locale ? { locale } : undefined,
+      );
+    };
+    const live = render('live');
+    expect(live).toContain('Make-up pick time in the live draft (seconds)');
+    expect(live).not.toContain('Every pick, including make-up picks, uses the stage time of the ladder.');
+
+    const slow = render('slow');
+    expect(slow).not.toContain('Make-up pick time');
+    expect(slow).toContain('Every pick, including make-up picks, uses the stage time of the ladder.');
+    expect(slow).toContain('Pick time (seconds)');
+
+    const slowDe = render('slow', 'de');
+    expect(slowDe).not.toContain('Zeit für Nachhol-Picks');
+    expect(slowDe).toContain('Jeder Pick, auch ein Nachhol-Pick, nutzt die Zeit der jeweiligen Stufe.');
+    expect(render('live', 'de')).toContain('Zeit für Nachhol-Picks im Live-Draft (Sekunden)');
+  });
+
+  it('speaks German', () => {
+    const setupDto = snapshot({ pool: { ...snapshot().pool, phase: 'setup', status: 'pending' } });
+    const de = renderWithI18n(
+      <InstanceConfigForm
+        vm={toDraftViewModel(setupDto)}
+        dto={setupDto}
+        onSaveConfig={noop}
+        onPatchRedraft={noop}
+        onRollOrder={noop}
+      />,
+      { locale: 'de' },
+    );
+    expect(de).toContain('Reihenfolge auslosen');
   });
 });
 

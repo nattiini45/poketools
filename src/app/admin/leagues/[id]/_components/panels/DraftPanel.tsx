@@ -68,7 +68,7 @@ async function ungroupedDraftPanel({ id, league, caps, t, tabLink }: LeagueAdmin
   // Only `{ id, name }` crosses into client components (AGENTS.md: never raw players rows).
   const playerRefs = participants.map(toPublicPlayerRef);
   const panelHref = `/admin/leagues/${id}/draft`;
-  // The numbers `draft_create_pool` takes when the Initial draft is created without a config
+  // The numbers `draft_create_pool` takes when the Initial draft's config names no budget or roster size
   // (format rules, else the format pack's defaults; every EPB season gets a format_rules row at
   // creation, so the SQL fallbacks are never reached); only these reach the client summary.
   const epbDraftDefaults = {

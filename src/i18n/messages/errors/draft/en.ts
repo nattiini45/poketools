@@ -98,7 +98,8 @@ export default {
   /** League groups (20261018180000): a league with groups drafts per group. */
   SEASON_GROUP_REQUIRED: 'This league has groups: create the draft for one of its groups.',
   SEASON_GROUP_INVALID: 'This group does not belong to this league.',
-  SEASON_GROUP_LOCKED: 'The groups cannot change while a group has a draft. Cancel and delete that draft first.',
+  SEASON_GROUP_LOCKED:
+    'The groups cannot change while a group has a draft. A draft that has not started can be deleted in its draft panel, then the groups can change again. A started draft has to be cancelled first.',
   SEASON_GROUPS_AFTER_DRAFT:
     'This league already drafted without groups. Groups can only be set up before the first draft.',
   SEASON_GROUP_MEMBERS_INVALID: 'Every group member must be a participant of this league, in exactly one group.',
@@ -111,7 +112,7 @@ export default {
     'This trainer’s group has a draft under way (Redraft submissions or picks), so the trainer cannot be substituted until that draft is complete or cancelled.',
   /** A group pool going live whose seats are not exactly the group's members (20261018202000, trigger on draft_pools). */
   SEASON_GROUP_SEATS_STALE:
-    'This group’s trainers changed since the draft was set up, so its seats no longer match the group. Re-seat the draft from the group’s trainers, or delete it and create it again.',
+    'This group’s trainers changed since the draft was set up, so its seats no longer match the group. Delete the draft that has not started and create it again.',
   SEATS_INVALID: 'The draft order is invalid.',
   INVALID_CONFIG: 'Invalid setting: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft Kill Tokens cannot be bought now.',

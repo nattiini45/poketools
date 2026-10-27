@@ -9,6 +9,9 @@
  * sheet it switches the room's admin override on (§5.10), so the pick itself
  * always goes through the room's DRAFT button and confirm dialog.
  *
+ * An Initial draft that has not started also gets "Delete draft" (`DeleteDraftButton`, only when the caller passes
+ * `onDelete`): it frees the group so the groups can change and the draft can be created again.
+ *
  * `showClock` is off in the room's admin sheet: the room's own clock bar and
  * its banners (paused, blocked) stay visible there.
  */
@@ -29,7 +32,8 @@ import { glossaryMessages } from '@/i18n/messages/glossary';
 import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
 import type { DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
 import { FIELD, HINT, InlineError, LABEL, ReasonField, useDestructiveButton, usePrimaryButton } from './admin-ui';
-import { reasonValid } from './admin-view';
+import DeleteDraftButton from './DeleteDraftButton';
+import { draftDeletable, reasonValid } from './admin-view';
 import { useAdminCall, type AdminResult } from './use-admin-call';
 
 /** "Pick for the active player": a link to the room (control page) or the room's own override switch (admin sheet). */
@@ -50,6 +54,8 @@ export interface LiveControlsProps {
   onPause(paused: boolean, reason?: string): AdminResult;
   onStart(): AdminResult;
   onEnd(reason: string): AdminResult;
+  /** Deletes the pool (setup, Initial draft only); the caller leaves the page once it succeeds. Omitted = no button. */
+  onDelete?(): AdminResult;
 }
 
 function noop() {}
@@ -94,6 +100,7 @@ export default function LiveControls({
   onPause,
   onStart,
   onEnd,
+  onDelete,
 }: LiveControlsProps) {
   const t = useT(draftAdminMessages);
   const tGlossary = useT(glossaryMessages);
@@ -196,6 +203,7 @@ export default function LiveControls({
             {t('live.pickFor')}
           </Button>
         ) : null}
+        {onDelete && draftDeletable(vm) ? <DeleteDraftButton onDelete={onDelete} /> : null}
         {canEnd ? (
           <Button variant={destructive.variant} className={destructive.className} onClick={() => setDialog('end')}>
             {t('live.end')}

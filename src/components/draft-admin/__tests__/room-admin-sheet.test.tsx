@@ -82,6 +82,8 @@ function fakeActions(): AdminDraftActions & { calls: string[] } {
     restoreDrop: ok('restoreDrop'),
     setComebackOpen: async () => ({ ok: true, data: { open: true } }),
     audit: async () => ({ ok: true, data: { entries: [], next_cursor: null } }),
+    deletePool: async () => ({ ok: true, data: null }),
+    rollOrder: ok('rollOrder'),
   };
 }
 

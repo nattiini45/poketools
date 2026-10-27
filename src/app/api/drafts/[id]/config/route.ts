@@ -2,13 +2,12 @@ import { NextResponse } from 'next/server';
 import { requireDraftAdmin } from '@/lib/auth/helpers';
 import { DraftRuleError } from '@/lib/draft/errors';
 import { draftErrorResponse } from '@/lib/draft/http';
+import { poolRosterIds } from '@/lib/draft/pool-roster';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
 import { draftConfigPatchSchema, invalidDraftConfigField, type DraftConfigCore } from '@/lib/draft/schemas';
 import { epbPack } from '@/lib/format-pack';
 import { expireDraftReads } from '@/lib/revalidation';
 import { getQueuePool } from '@/lib/supabase/queries/drafts-queue';
-import { getSeasonGroupMemberIds } from '@/lib/supabase/queries/season-groups';
-import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import type { ApiResult } from '@/types/api';
 import type { DraftPool } from '@/types/draft';
 import { DEFAULT_DRAFT_CONFIG, type DraftConfigInput } from '@/types/draft-queue';
@@ -52,9 +51,7 @@ function mergedCore(pool: DraftPool, patch: DraftConfigInput): DraftConfigCore {
  * Only player ids are read.
  */
 async function seatsFromOrder(pool: DraftPool, order: readonly string[]) {
-  const participants = await getSeasonParticipants(pool.season_id);
-  const groupMembers = pool.season_group_id ? await getSeasonGroupMemberIds(pool.season_group_id) : null;
-  const ids = new Set(participants.map((p) => p.id).filter((id) => !groupMembers || groupMembers.has(id)));
+  const ids = new Set(await poolRosterIds(pool));
   if (order.length !== ids.size || order.some((pid) => !ids.has(pid))) throw new DraftRuleError('SEATS_INVALID');
   return order.map((player_id, index) => ({ player_id, seat: index + 1 }));
 }

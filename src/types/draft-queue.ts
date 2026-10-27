@@ -138,6 +138,9 @@ export type DraftConfigDefaults = Readonly<
     extension_seconds: readonly [number, number];
   }
 >;
+/** A slow draft's default pick time (12 h, §7.1). The live default (`DEFAULT_DRAFT_CONFIG.pick_seconds`) is below the slow minimum. */
+export const DEFAULT_SLOW_PICK_SECONDS = 43_200;
+
 /** Deep-frozen (DC-0): the arrays are shared, so copy them (`[...x]`) before handing one out. */
 export const DEFAULT_DRAFT_CONFIG: DraftConfigDefaults = Object.freeze({
   mode: 'live',

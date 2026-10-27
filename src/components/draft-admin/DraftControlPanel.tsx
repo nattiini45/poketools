@@ -29,6 +29,7 @@
  */
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createHttpDataSource, type DraftDataSource } from '@/components/draft-tool/data-source';
 import { useDraftSnapshot } from '@/components/draft-tool/hooks/use-draft-snapshot';
 import { useT } from '@/i18n/client';
@@ -108,6 +109,7 @@ function PoolPanel({
 }) {
   const t = useT(draftAdminMessages);
   const deadlineFieldId = useId();
+  const router = useRouter();
   // Created once per mounted pool tab (the panel keys `PoolPanel` by pool id),
   // so an inline `dataSourceFor` does not restart the poll on every render.
   const [source] = useState<DraftDataSource>(() => dataSourceFor?.(pool.id) ?? createHttpDataSource(pool.id, seasonId));
@@ -140,6 +142,7 @@ function PoolPanel({
             pickFor={{ kind: 'link', href: roomHref }}
             deadline={{ kind: 'anchor', href: `#${deadlineFieldId}` }}
             publishRefusedAt={publishRefusedAt}
+            onDeleted={() => router.push(leagueAdminHref(seasonId, 'draft'))}
           />
         </PanelCard>
       ))}

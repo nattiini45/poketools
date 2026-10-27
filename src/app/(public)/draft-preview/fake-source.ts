@@ -809,6 +809,23 @@ export function createFakeDataSource(init: FakeSourceInit): FakeDataSource {
     audit(query: AuditQuery): Promise<ApiCall<AuditPage>> {
       return wait<ApiCall<AuditPage>>({ ok: true, data: { entries: filterAudit(audit, query), next_cursor: null } });
     },
+
+    // The preview has no pool to remove: it answers like the route does (`{ success: true, data: null }`).
+    deletePool(): Promise<ApiCall<null>> {
+      return wait<ApiCall<null>>({ ok: true, data: null });
+    },
+
+    // The preview draws in the browser (the route draws on the server): the same seats, handed out in a new order.
+    rollOrder() {
+      return write((d) => {
+        const seats = d.participants.map((p) => p.seat).sort((a, b) => a - b);
+        for (let i = seats.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [seats[i], seats[j]] = [seats[j], seats[i]];
+        }
+        return { ...d, participants: d.participants.map((p, i) => ({ ...p, seat: seats[i] })) };
+      });
+    },
   };
 }
 

@@ -17,7 +17,7 @@ export const UPCOMING_CHIPS = 10;
 export interface UpcomingOrderStripProps {
   items: UpcomingVM[];
   activeSlot: ActiveSlotVM | null;
-  /** `config.makeup_seconds`, shown on make-up chips. */
+  /** `config.makeup_seconds`, shown on make-up chips; null in a slow draft, whose slots all use the ladder time. */
   makeupSeconds?: number | null;
   /** How many chips to show (default 10; the tablet clock bar shows 5). */
   limit?: number;
@@ -36,9 +36,11 @@ export default function UpcomingOrderStrip({ items, activeSlot, makeupSeconds = 
         const breakBefore = item.roundBreakBefore && (i > 0 || activeSlot !== null);
         const name = item.isViewer ? t('order.you') : item.name;
         const aria =
-          item.kind === 'makeup'
-            ? t('order.makeupAria', { pick: item.pickNumber, player: item.name, time: makeupTime ?? '' })
-            : t('order.pickAria', { pick: item.pickNumber, player: item.name });
+          item.kind !== 'makeup'
+            ? t('order.pickAria', { pick: item.pickNumber, player: item.name })
+            : makeupTime
+              ? t('order.makeupAria', { pick: item.pickNumber, player: item.name, time: makeupTime })
+              : t('order.makeupAriaNoTime', { pick: item.pickNumber, player: item.name });
         return (
           <Fragment key={item.slotId}>
             {breakBefore ? (

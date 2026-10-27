@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireDraftAdmin, requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logAuditEvent } from '@/lib/audit/log';
 import { DraftRuleError } from '@/lib/draft/errors';
 import { draftErrorResponse } from '@/lib/draft/http';
 import {
@@ -118,7 +119,9 @@ const DELETABLE_QUEUE_PHASES: ReadonlySet<DraftPhase> = new Set<DraftPhase>(['se
  * answers `409 POOL_NOT_DELETABLE` with `detail.phase` (machine data, never
  * rendered: a raw phase code has no German text) — cancel the draft first.
  * Legacy pools keep the pending-only rule of `deleteDraftPool`, which also
- * re-checks the queue rule.
+ * re-checks the queue rule. The queue DELETE itself filters on the phase, so a Start that lands between the read
+ * and the DELETE answers the same 409 instead of deleting a started draft.
+ * A successful delete is audited as `draft.pool.delete` (who deleted which pool, in which phase).
  * Two foreign keys into draft_pools have no ON DELETE action and refuse the DELETE with
  * SQLSTATE 23503: a redraft pool's `parent_pool_id` answers `409 POOL_HAS_REDRAFT`, a team's
  * `draft_pool_id` (`fk_teams_draft_pool`) answers `409 POOL_HAS_TEAMS`. The rows of the
@@ -128,7 +131,7 @@ const DELETABLE_QUEUE_PHASES: ReadonlySet<DraftPhase> = new Set<DraftPhase>(['se
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireDraftAdmin(id);
+    const admin = await requireDraftAdmin(id);
     // Read first: the league it belonged to is expired after the delete.
     const pool = await getDraftPoolById(id);
     if (pool?.engine === 'queue' && !DELETABLE_QUEUE_PHASES.has(pool.phase)) {
@@ -141,7 +144,22 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       if (refusal) throw new DraftRuleError(refusal);
       throw deleteErr;
     }
-    if (pool) expireDraftReads(pool.season_id);
+    if (pool) {
+      logAuditEvent({
+        actor_id: admin.playerId,
+        actor_name: admin.name,
+        action: 'draft.pool.delete',
+        resource_type: 'draft_pool',
+        resource_id: id,
+        metadata: {
+          season_id: pool.season_id,
+          season_group_id: pool.season_group_id ?? null,
+          phase: pool.phase,
+          kind: pool.kind,
+        },
+      });
+      expireDraftReads(pool.season_id);
+    }
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });
   } catch (err) {
     return draftErrorResponse(err, 'Failed to delete draft pool');
