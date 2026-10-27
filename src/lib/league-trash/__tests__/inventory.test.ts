@@ -284,3 +284,48 @@ describe('owned tables service_role cannot write', () => {
     expect(replayInsertRevokes('service_role').has('redraft_trade_requests')).toBe(true);
   });
 });
+
+describe('the Admin Assistant tables stay outside the recycle bin', () => {
+  /**
+   * `admin_agent_*` (`20261027100000_admin_agent_tables.sql`, spec 4.14) are neither captured, nor deleted, nor
+   * restored with a league, and they are not in the inventory: the ledger names a league only through the plain uuid
+   * `admin_agent_actions.entity_id`. That is the rule of AGENTS.md ("A league delete is a move to the recycle bin") read
+   * the other way round: a foreign key from one of them into the league subtree would have to be classified here, and
+   * until then `league_trash__assert_inventory()` would abort every league delete. So the test pins the absence.
+   * The runtime twin (a league trashed and restored while ledger rows name it) is `admin-agent-tables.local.test.ts`.
+   */
+  const ASSISTANT_FKS = FK_LIST.filter((fk) => fk.child.startsWith('admin_agent_'));
+  const assistantTables = sorted(new Set(FK_LIST.flatMap((fk) => [fk.child, fk.parent]).filter((table) => table.startsWith('admin_agent_'))));
+
+  it('the replay sees the assistant tables and their keys (sanity)', () => {
+    expect(assistantTables.length).toBeGreaterThanOrEqual(8);
+    expect(FKS.get('admin_agent_actions_admin_id_fkey')).toEqual({ child: 'admin_agent_actions', parent: 'players', onDelete: 'set null' });
+    expect(FKS.get('admin_agent_messages_conversation_id_fkey')?.parent).toBe('admin_agent_conversations');
+  });
+
+  it('they reference only players and each other', () => {
+    const outside = ASSISTANT_FKS.filter((fk) => fk.parent !== 'players' && !fk.parent.startsWith('admin_agent_')).map((fk) => `${fk.name} -> ${fk.parent}`);
+    expect(outside).toEqual([]);
+  });
+
+  it('no foreign-key path from seasons reaches one of them, and nothing league-owned references them', () => {
+    expect(sorted([...reachedFromSeasons()].filter((table) => table.startsWith('admin_agent_')))).toEqual([]);
+    expect(FK_LIST.filter((fk) => fk.parent.startsWith('admin_agent_') && !fk.child.startsWith('admin_agent_')).map((fk) => fk.name)).toEqual([]);
+  });
+
+  it('none of them is inventoried, a pointer or an external parent: the delete neither sees nor needs them', () => {
+    for (const table of assistantTables) {
+      expect(INVENTORY.has(table), table).toBe(false);
+      expect(POINTERS.some((p) => p.rel === table || p.parent === table), table).toBe(false);
+      expect(EXTERNAL.some((e) => e.parent === table), table).toBe(false);
+      expect(PLAN.some((p) => p.rel === table), table).toBe(false);
+    }
+  });
+
+  it('the ledger names an entity with a plain uuid: no key on entity_id, nor on any column named after a league parent', () => {
+    expect(sorted([...declaredColumns(/^entity_id$/).keys()]).filter((table) => table.startsWith('admin_agent_'))).toEqual(['admin_agent_actions']);
+    expect(ASSISTANT_FKS.filter((fk) => /entity/.test(fk.name))).toEqual([]);
+    const leagueColumns = declaredColumns(/^(?:season|tournament|match|game|draft_pool|phase|league)_id$/);
+    expect(sorted([...leagueColumns.keys()].filter((table) => table.startsWith('admin_agent_')))).toEqual([]);
+  });
+});

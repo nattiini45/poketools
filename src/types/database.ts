@@ -51,6 +51,626 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_agent_actions: {
+        Row: {
+          admin_id: string | null
+          admin_name: string
+          after: Json | null
+          after_fingerprint: string | null
+          args: Json
+          args_hash: string
+          before: Json | null
+          class: string
+          conversation_id: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          http_status: number | null
+          id: string
+          method: string | null
+          outcome_kind: string | null
+          path: string | null
+          proposal_id: string | null
+          result: Json | null
+          reversibility: string | null
+          status: string
+          step_key: string | null
+          tool_name: string
+          tool_use_id: string | null
+          undo: Json | null
+          verify: Json | null
+        }
+        Insert: {
+          admin_id?: string | null
+          admin_name: string
+          after?: Json | null
+          after_fingerprint?: string | null
+          args?: Json
+          args_hash: string
+          before?: Json | null
+          class: string
+          conversation_id: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          http_status?: number | null
+          id?: string
+          method?: string | null
+          outcome_kind?: string | null
+          path?: string | null
+          proposal_id?: string | null
+          result?: Json | null
+          reversibility?: string | null
+          status?: string
+          step_key?: string | null
+          tool_name: string
+          tool_use_id?: string | null
+          undo?: Json | null
+          verify?: Json | null
+        }
+        Update: {
+          admin_id?: string | null
+          admin_name?: string
+          after?: Json | null
+          after_fingerprint?: string | null
+          args?: Json
+          args_hash?: string
+          before?: Json | null
+          class?: string
+          conversation_id?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          http_status?: number | null
+          id?: string
+          method?: string | null
+          outcome_kind?: string | null
+          path?: string | null
+          proposal_id?: string | null
+          result?: Json | null
+          reversibility?: string | null
+          status?: string
+          step_key?: string | null
+          tool_name?: string
+          tool_use_id?: string | null
+          undo?: Json | null
+          verify?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_actions_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_agent_actions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_agent_actions_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_agent_conversations: {
+        Row: {
+          active_plan_id: string | null
+          admin_id: string | null
+          admin_name: string
+          blast_format_creates: number
+          blast_golive_executions: number
+          blast_league_creates: number
+          blast_pin_targets: number
+          blast_ruleset_creates: number
+          blast_tournament_creates: number
+          context: Json
+          created_at: string
+          effort: string
+          id: string
+          last_message_at: string
+          model: string
+          seq_head: number
+          status: string
+          system_prompt_version: string
+          title: string | null
+          tool_registry_version: string
+          tool_set: string
+          turn_lease_until: string | null
+          ui_locale: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          active_plan_id?: string | null
+          admin_id?: string | null
+          admin_name: string
+          blast_format_creates?: number
+          blast_golive_executions?: number
+          blast_league_creates?: number
+          blast_pin_targets?: number
+          blast_ruleset_creates?: number
+          blast_tournament_creates?: number
+          context?: Json
+          created_at?: string
+          effort: string
+          id?: string
+          last_message_at?: string
+          model: string
+          seq_head?: number
+          status?: string
+          system_prompt_version: string
+          title?: string | null
+          tool_registry_version: string
+          tool_set: string
+          turn_lease_until?: string | null
+          ui_locale: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          active_plan_id?: string | null
+          admin_id?: string | null
+          admin_name?: string
+          blast_format_creates?: number
+          blast_golive_executions?: number
+          blast_league_creates?: number
+          blast_pin_targets?: number
+          blast_ruleset_creates?: number
+          blast_tournament_creates?: number
+          context?: Json
+          created_at?: string
+          effort?: string
+          id?: string
+          last_message_at?: string
+          model?: string
+          seq_head?: number
+          status?: string
+          system_prompt_version?: string
+          title?: string | null
+          tool_registry_version?: string
+          tool_set?: string
+          turn_lease_until?: string | null
+          ui_locale?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_conversations_active_plan_id_fkey"
+            columns: ["active_plan_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_agent_conversations_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_agent_messages: {
+        Row: {
+          client_msg_id: string | null
+          content: Json | null
+          content_purged_at: string | null
+          conversation_id: string
+          created_at: string
+          kind: string
+          model: string | null
+          role: string
+          seq: number
+          stop_reason: string | null
+          ui: Json | null
+          usage: Json | null
+        }
+        Insert: {
+          client_msg_id?: string | null
+          content?: Json | null
+          content_purged_at?: string | null
+          conversation_id: string
+          created_at?: string
+          kind: string
+          model?: string | null
+          role: string
+          seq: number
+          stop_reason?: string | null
+          ui?: Json | null
+          usage?: Json | null
+        }
+        Update: {
+          client_msg_id?: string | null
+          content?: Json | null
+          content_purged_at?: string | null
+          conversation_id?: string
+          created_at?: string
+          kind?: string
+          model?: string | null
+          role?: string
+          seq?: number
+          stop_reason?: string | null
+          ui?: Json | null
+          usage?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_agent_plan_revisions: {
+        Row: {
+          author: string
+          created_at: string
+          doc: Json
+          patch: Json | null
+          plan_id: string
+          revision: number
+        }
+        Insert: {
+          author: string
+          created_at?: string
+          doc: Json
+          patch?: Json | null
+          plan_id: string
+          revision: number
+        }
+        Update: {
+          author?: string
+          created_at?: string
+          doc?: Json
+          patch?: Json | null
+          plan_id?: string
+          revision?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_plan_revisions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_agent_plans: {
+        Row: {
+          admin_id: string | null
+          admin_name: string
+          build_finished_at: string | null
+          build_started_at: string | null
+          conversation_id: string
+          created_at: string
+          doc: Json
+          doc_hash: string
+          id: string
+          mode: string
+          revision: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_id?: string | null
+          admin_name: string
+          build_finished_at?: string | null
+          build_started_at?: string | null
+          conversation_id: string
+          created_at?: string
+          doc: Json
+          doc_hash: string
+          id?: string
+          mode: string
+          revision?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: string | null
+          admin_name?: string
+          build_finished_at?: string | null
+          build_started_at?: string | null
+          conversation_id?: string
+          created_at?: string
+          doc?: Json
+          doc_hash?: string
+          id?: string
+          mode?: string
+          revision?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_plans_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_agent_plans_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_agent_proposals: {
+        Row: {
+          acks_required: Json
+          admin_id: string | null
+          admin_name: string
+          approved_at: string | null
+          approved_by: string | null
+          approved_ip_hash: string | null
+          approved_user_agent: string | null
+          class: string
+          conversation_id: string
+          created_at: string
+          executing_started_at: string | null
+          expires_at: string
+          finished_at: string | null
+          id: string
+          kind: string
+          locale: string
+          plan_id: string | null
+          plan_revision: number | null
+          preview: Json
+          preview_hash: string
+          proposal_hash: string
+          status: string
+          steps: Json
+          supersede_key: string | null
+          token_hash: string
+          tool_registry_version: string
+        }
+        Insert: {
+          acks_required?: Json
+          admin_id?: string | null
+          admin_name: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_ip_hash?: string | null
+          approved_user_agent?: string | null
+          class: string
+          conversation_id: string
+          created_at?: string
+          executing_started_at?: string | null
+          expires_at: string
+          finished_at?: string | null
+          id?: string
+          kind: string
+          locale: string
+          plan_id?: string | null
+          plan_revision?: number | null
+          preview: Json
+          preview_hash: string
+          proposal_hash: string
+          status?: string
+          steps: Json
+          supersede_key?: string | null
+          token_hash: string
+          tool_registry_version: string
+        }
+        Update: {
+          acks_required?: Json
+          admin_id?: string | null
+          admin_name?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_ip_hash?: string | null
+          approved_user_agent?: string | null
+          class?: string
+          conversation_id?: string
+          created_at?: string
+          executing_started_at?: string | null
+          expires_at?: string
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          locale?: string
+          plan_id?: string | null
+          plan_revision?: number | null
+          preview?: Json
+          preview_hash?: string
+          proposal_hash?: string
+          status?: string
+          steps?: Json
+          supersede_key?: string | null
+          token_hash?: string
+          tool_registry_version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_proposals_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_agent_proposals_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_agent_proposals_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_agent_proposals_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_agent_refs: {
+        Row: {
+          conversation_id: string
+          label: string | null
+          ref_id: string
+          ref_kind: string
+          seen_at: string
+          source: string
+        }
+        Insert: {
+          conversation_id: string
+          label?: string | null
+          ref_id: string
+          ref_kind: string
+          seen_at?: string
+          source: string
+        }
+        Update: {
+          conversation_id?: string
+          label?: string | null
+          ref_id?: string
+          ref_kind?: string
+          seen_at?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_refs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_agent_snapshots: {
+        Row: {
+          action_id: string
+          created_at: string
+          doc_hash: string
+          document: Json
+          expires_at: string
+          id: string
+        }
+        Insert: {
+          action_id: string
+          created_at?: string
+          doc_hash: string
+          document: Json
+          expires_at?: string
+          id?: string
+        }
+        Update: {
+          action_id?: string
+          created_at?: string
+          doc_hash?: string
+          document?: Json
+          expires_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_snapshots_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: true
+            referencedRelation: "admin_agent_actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_agent_usage: {
+        Row: {
+          admin_id: string | null
+          admin_name: string
+          cache_read_tokens: number
+          cache_write_1h_tokens: number
+          cache_write_5m_tokens: number
+          conversation_id: string | null
+          cost_usd_micro: number
+          created_at: string
+          id: string
+          input_tokens: number
+          model: string
+          output_tokens: number
+          purpose: string
+          reserved_usd_micro: number
+          settled_at: string | null
+          stop_reason: string | null
+        }
+        Insert: {
+          admin_id?: string | null
+          admin_name: string
+          cache_read_tokens?: number
+          cache_write_1h_tokens?: number
+          cache_write_5m_tokens?: number
+          conversation_id?: string | null
+          cost_usd_micro?: number
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model: string
+          output_tokens?: number
+          purpose: string
+          reserved_usd_micro?: number
+          settled_at?: string | null
+          stop_reason?: string | null
+        }
+        Update: {
+          admin_id?: string | null
+          admin_name?: string
+          cache_read_tokens?: number
+          cache_write_1h_tokens?: number
+          cache_write_5m_tokens?: number
+          conversation_id?: string | null
+          cost_usd_micro?: number
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model?: string
+          output_tokens?: number
+          purpose?: string
+          reserved_usd_micro?: number
+          settled_at?: string | null
+          stop_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_agent_usage_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_agent_usage_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "admin_agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_export_limits: {
         Row: {
           player_id: string
@@ -5242,6 +5862,76 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_agent__purging: { Args: never; Returns: boolean }
+      admin_agent_acquire_turn_lease: {
+        Args: {
+          p_admin_id: string
+          p_conversation_id: string
+          p_lease_seconds?: number
+        }
+        Returns: {
+          out_busy: string
+          out_lease_until: string
+        }[]
+      }
+      admin_agent_claim_budget: {
+        Args: { p_claims: Json; p_conversation_id: string }
+        Returns: {
+          out_cap: number
+          out_counter: string
+          out_ok: boolean
+          out_value: number
+        }[]
+      }
+      admin_agent_release_turn_lease: {
+        Args: { p_conversation_id: string; p_lease_until: string }
+        Returns: boolean
+      }
+      admin_agent_reserve_usage: {
+        Args: {
+          p_admin_id: string
+          p_admin_name: string
+          p_cap_admin_day: number
+          p_cap_admin_month: number
+          p_cap_conversation: number
+          p_cap_global_day: number
+          p_conversation_id: string
+          p_day_since: string
+          p_estimate_usd_micro: number
+          p_model: string
+          p_month_since: string
+          p_purpose: string
+        }
+        Returns: {
+          out_cap: number
+          out_exceeded: string
+          out_usage_id: string
+          out_used: number
+        }[]
+      }
+      admin_agent_retention_purge: {
+        Args: {
+          p_approval_days?: number
+          p_audit_days?: number
+          p_limit?: number
+          p_message_days?: number
+          p_now?: string
+        }
+        Returns: Json
+      }
+      admin_agent_settle_usage: {
+        Args: {
+          p_cache_read_tokens: number
+          p_cache_write_1h_tokens: number
+          p_cache_write_5m_tokens: number
+          p_cost_usd_micro: number
+          p_input_tokens: number
+          p_output_tokens: number
+          p_stop_reason: string
+          p_usage_id: string
+        }
+        Returns: undefined
+      }
       aggregate_job_health: {
         Args: never
         Returns: {

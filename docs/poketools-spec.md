@@ -530,6 +530,15 @@ A deleted league is captured here and deleted from the live tables in one transa
 | `agent_conversations` | AI agent conversations |
 | `agent_suggestions` | Teams the agent proposed and the player's answer |
 | `user_agent_profile` | Per-player agent preferences |
+| `admin_agent_conversations` | Admin Assistant chats: pinned versions, active plan, turn lease, blast-radius counters (§4.14) |
+| `admin_agent_messages` | Append-only Admin Assistant transcript |
+| `admin_agent_plans` | Plan document of an Admin Assistant chat |
+| `admin_agent_plan_revisions` | Append-only plan history |
+| `admin_agent_proposals` | Hash-bound confirmation proposals and their approvals |
+| `admin_agent_actions` | Ledger of every write the assistant dispatched |
+| `admin_agent_snapshots` | Previous draft documents kept 30 days for undo |
+| `admin_agent_refs` | Ids a chat has seen (provenance of staged writes) |
+| `admin_agent_usage` | One row per model call: tokens, cost, reservation |
 
 **Broadcast, community and avatars**
 
@@ -548,7 +557,7 @@ A deleted league is captured here and deleted from the live tables in one transa
 
 ### 4.14 Admin Assistant tables (planned)
 
-> **Planned: none of these tables exists yet.** They belong to the Admin Assistant (§18). The P0 migration creates them, regenerates `src/types/database.ts` and adds them to the AI group of 4.13 (that index lists only tables that exist). Exact column types and indexes are fixed in that migration; the field tables below name the columns the design depends on, with coarse types in this section's notation; the remaining bookkeeping columns (timestamps, version counters) are fixed there too.
+> **Created by `20261027100000_admin_agent_tables.sql`.** They belong to the Admin Assistant (§18), which is still planned; only the tables exist, listed in the AI group of 4.13. Exact column types and indexes are fixed in that migration; the field tables below name the columns the design depends on, with coarse types in this section's notation; the remaining bookkeeping columns (timestamps, version counters) are fixed there too.
 
 The Admin Assistant keeps its own tables. It does **not** extend `agent_conversations` (the player agent's single JSONB blob, §18.2).
 
