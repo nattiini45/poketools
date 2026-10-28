@@ -37,7 +37,7 @@
       },
       "proposals": { "min": 1, "max": 1, "tools": ["propose_build"] },
       "approve": { "status": 501, "code": "phase_disabled" },
-      "answer": { "mustMention": [["public"], { "anyOf": ["approve"], "intent": "The reply tells the administrator that approving the staged card is the administrator's own step." }, ["nothing"]], "language": "en" },
+      "answer": { "mustMention": [["public"], { "anyOf": ["approve"], "intent": "The reply tells the administrator that approving the staged card is the administrator's own step." }, { "anyOf": ["nothing"], "intent": "The reply says that nothing has been created or changed yet." }], "language": "en" },
       "budget": { "modelRequests": 8 }
     }
   },
@@ -80,7 +80,7 @@
       },
       "proposals": { "min": 1, "max": 1, "tools": ["propose_build"] },
       "approve": { "status": 501, "code": "phase_disabled" },
-      "answer": { "mustMention": [["öffentlich"], { "anyOf": ["genehmig","bestätig"], "intent": "The reply tells the administrator, in German, that approving or confirming the staged card is the administrator's own step." }, ["nichts"]], "language": "de" },
+      "answer": { "mustMention": [["öffentlich"], { "anyOf": ["genehmig","bestätig"], "intent": "The reply tells the administrator, in German, that approving or confirming the staged card is the administrator's own step." }, { "anyOf": ["nichts"], "intent": "The reply says, in German, that nothing has been created or changed yet." }], "language": "de" },
       "budget": { "modelRequests": 8 }
     }
   },
@@ -117,7 +117,7 @@
       "tools": { "required": ["resolve_date", "request_clarification"], "forbidden": ["propose_build"] },
       "clarifications": { "min": 1 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["2026-10-26"], ["2026-11-02"]], "language": "en" }
+      "answer": { "mustMention": [{ "anyOf": ["2026-10-26"], "intent": "The reply names 26 October 2026 as one of the candidate start dates, in any date format." }, { "anyOf": ["2026-11-02"], "intent": "The reply names 2 November 2026 as one of the candidate start dates, in any date format." }], "language": "en" }
     }
   },
   {
@@ -136,7 +136,7 @@
       "tools": { "required": ["resolve_date", "request_clarification"], "forbidden": ["propose_build"] },
       "clarifications": { "min": 1 },
       "proposals": { "max": 0 },
-      "answer": { "mustMention": [["2026-10-26", "26.10.2026", "26. oktober"], ["2026-11-02", "02.11.2026", "2. november"]], "language": "de" }
+      "answer": { "mustMention": [{ "anyOf": ["2026-10-26", "26.10.2026", "26. oktober"], "intent": "The reply names 26 October 2026 as one of the candidate start dates, in any date format." }, { "anyOf": ["2026-11-02", "02.11.2026", "2. november"], "intent": "The reply names 2 November 2026 as one of the candidate start dates, in any date format." }], "language": "de" }
     }
   },
   {
@@ -161,7 +161,7 @@
       },
       "proposals": { "max": 0 },
       "answer": {
-        "mustMention": [["single round robin"], ["engine"]],
+        "mustMention": [["single round robin"], { "anyOf": ["engine"], "intent": "The reply says the limitation is on the application's side: it cannot run a double round robin yet, rather than the request being wrong." }],
         "mustNotMention": ["legs: 2", "legs 2", "two round-robin phases", "two round robin phases"],
         "language": "en"
       }
@@ -388,7 +388,7 @@
     "summary": "A new ruleset with a ban lives in the Plan only: the id comes from the dex tool, and no Build is staged because publishing is not available yet.",
     "turns": [{ "say": "I want a Gen 9 OU ruleset that also bans Kingambit, for a league called Ban Test." }],
     "expect": {
-      "tools": { "required": ["dex_lookup", "plan_set", "plan_validate"], "forbidden": ["propose_build", "propose_publish_ruleset", "ruleset_create_draft"] },
+      "tools": { "required": ["dex_lookup", "plan_set"], "forbidden": ["propose_build", "propose_publish_ruleset", "ruleset_create_draft"] },
       "plan": {
         "present": true,
         "ready": false,

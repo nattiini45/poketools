@@ -12,7 +12,7 @@ import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from '../index';
  * version it started with, and an edit sends every open conversation to "continue in a new conversation". Change the
  * prompt on purpose, then update this constant in the same commit.
  */
-const COMMITTED_VERSION = '25691357a12abbc9';
+const COMMITTED_VERSION = '6fd938ca7dc50ffa';
 
 describe('the frozen system prompt', () => {
   it('is versioned by the hash of its exact text', () => {
