@@ -14,7 +14,7 @@ const STATUS_COMMAND = 'npx supabase status -o json';
 
 function readStatusText(): string {
   // `npx` is a .cmd shim on Windows, which `spawn` cannot start without a shell; the command is fixed.
-  const result = spawnSync(STATUS_COMMAND, { shell: true, encoding: 'utf8', timeout: 90_000, windowsHide: true });
+  const result = spawnSync(STATUS_COMMAND, { shell: true, encoding: 'utf8', timeout: 90_000, windowsHide: true }); // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
   if (result.error || typeof result.stdout !== 'string' || result.stdout.trim() === '') {
     throw new EvalHostError('admin-agent eval: could not run `npx supabase status` (is the local stack running? `npx supabase start`).');
   }

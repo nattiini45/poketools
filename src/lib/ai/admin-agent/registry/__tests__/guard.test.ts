@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -120,10 +120,10 @@ describe('the token', () => {
     const root = path.join(process.cwd(), 'src/lib/ai/admin-agent');
     const hits: string[] = [];
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = path.join(dir, entry);
-        if (statSync(full).isDirectory()) {
-          if (entry !== '__tests__' && entry !== 'node_modules') walk(full);
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== '__tests__' && entry.name !== 'node_modules') walk(full);
         } else if (full.endsWith('.ts')) {
           const source = readFileSync(full, 'utf8');
           if (/new\s+Guarded\b|new\s*\(\s*Guarded\b/.test(source)) hits.push(path.relative(root, full).replaceAll('\\', '/'));

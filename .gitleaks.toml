@@ -65,3 +65,23 @@ condition = "AND"
 paths = ['''^src/app/api/teams/shared/\[token\]/__tests__/route\.test\.ts$''']
 regexes = ['''^3f2b8c1e-9a4d-4e6f-8b2a-7c5d1e0f9a3b$''']
 targetRules = ["generic-api-key"]
+
+# Admin Assistant redaction test. The jwt rule fires on a sample token the grader must redact (5e4012ea): header
+# {"alg":"HS256"}, payload {"sub":"1234567890"}, signature "abcdefghijk", not a credential. Pinned to the test file and
+# the exact value so a real token there still fires.
+[[allowlists]]
+description = "Sample JWT in the Admin Assistant grader redaction test"
+condition = "AND"
+paths = ['''^src/lib/ai/admin-agent/eval/__tests__/grader\.test\.ts$''']
+regexes = ['''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.abcdefghijk$''']
+targetRules = ["jwt"]
+
+# Admin Assistant test helper. generic-api-key fires on `TOKEN_SECRET = '<value>'` (5e4012ea): a made-up HMAC key the
+# tests derive approval tokens with, never a deployment secret (the app uses the server's session secret). Pinned to the
+# helper file and the exact value so a real secret there still fires.
+[[allowlists]]
+description = "Synthetic approval-token secret in the Admin Assistant proposal test helpers"
+condition = "AND"
+paths = ['''^src/lib/ai/admin-agent/proposals/__tests__/helpers\.ts$''']
+regexes = ['''^test-secret-with-enough-length-0123456789$''']
+targetRules = ["generic-api-key"]

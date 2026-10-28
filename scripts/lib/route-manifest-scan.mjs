@@ -379,7 +379,7 @@ export function createProject({ files, readFile, pathAliases = [], untracked = [
       if (captured === null) continue;
       matched = true;
       for (const target of targets) {
-        const file = resolveFileBase(target.replace('*', captured));
+        const file = resolveFileBase(target.replaceAll('*', captured));
         if (file) return { kind: 'file', file };
       }
     }
