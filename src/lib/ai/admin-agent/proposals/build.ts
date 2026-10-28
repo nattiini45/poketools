@@ -32,6 +32,20 @@ export const BUILD_OP_ROUTES: Readonly<Record<PlanOp, OpRoute>> = Object.freeze(
   tournament_create: { method: 'POST', routeTemplate: '/api/tournaments' },
 }) satisfies Record<PlanOp, { method: HttpMethod; routeTemplate: string }>;
 
+/**
+ * The rollout phase whose approve can run each op (spec §18.4). Staging shows a card at phase 0 (approve refuses it then
+ * without consuming it); once approve runs, a Build with an op above the cap is refused here instead of being staged and
+ * then consumed as `proposal_stale` at approve.
+ */
+export const BUILD_OP_PHASE: Readonly<Record<PlanOp, number>> = Object.freeze({
+  league_create: 1,
+  roster_add: 1,
+  phase_create: 1,
+  groups_set: 2,
+  draft_pool_create: 4,
+  tournament_create: 1,
+});
+
 /** A Plan in one of these states may be built (`partial`: a fresh Build for the remainder, plan 4.4). */
 const BUILDABLE = new Set(['drafting', 'ready', 'partial']);
 
@@ -160,6 +174,9 @@ export async function prepareBuild(ctx: PrepareContext, args: { plan_revision: n
   if (steps.length > maxSteps || summary.creating > maxCreates) {
     throw new StageRefusal('plan_not_ready', { blockers: 1 }, [{ code: 'build_too_large', section: 'plan', path: '', params: { steps: steps.length, creating: summary.creating } }]);
   }
+
+  const early = cfg.maxPhase >= 1 ? steps.find((step) => BUILD_OP_PHASE[step.op] > cfg.maxPhase) : undefined;
+  if (early !== undefined) throw new StageRefusal('phase_disabled', { op: early.op });
 
   // 6. Every body against the real route schema (placeholders for `$ref`s).
   const bodyIssues = validateStepBodies(steps);

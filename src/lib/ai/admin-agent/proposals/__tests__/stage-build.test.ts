@@ -263,6 +263,25 @@ describe('propose_build: refusals, each a catalogued code and nothing written', 
     expect(result).toMatchObject({ code: 'PHASE_NAME_TAKEN', params: { name: 'Regular season' } });
   });
 
+  it('refuses a Build with an op above the cap once approve runs, and still shows the card at phase 0', async () => {
+    const withGroups = parsePlanDocument({ ...workedExample(), slots: { ...workedExample().slots, groups: { mode: 'serpentine', count: 2 } } });
+    if (!withGroups.ok) throw new Error('fixture');
+    const atPhase1 = makeHarness({ env: { ADMIN_AGENT_MAX_PHASE: '1' } });
+    atPhase1.store.setPlan(withGroups.plan);
+    atPhase1.store.see(CONVERSATION_ID, RULESET_VERSION, ...PLAYERS);
+    expect(refused(await atPhase1.stage('propose_build', { plan_revision: 1 }))).toMatchObject({ code: 'phase_disabled', params: { op: 'groups_set' } });
+
+    const atPhase2 = makeHarness({ env: { ADMIN_AGENT_MAX_PHASE: '2' } });
+    atPhase2.store.setPlan(withGroups.plan);
+    atPhase2.store.see(CONVERSATION_ID, RULESET_VERSION, ...PLAYERS);
+    staged(await atPhase2.stage('propose_build', { plan_revision: 1 }));
+
+    const atPhase0 = makeHarness({ env: { ADMIN_AGENT_MAX_PHASE: '0' } });
+    atPhase0.store.setPlan(withGroups.plan);
+    atPhase0.store.see(CONVERSATION_ID, RULESET_VERSION, ...PLAYERS);
+    staged(await atPhase0.stage('propose_build', { plan_revision: 1 }));
+  });
+
   it('refuses a Build over the configured size', async () => {
     const h = makeHarness({ env: { ADMIN_AGENT_MAX_BUILD_STEPS: '3' } });
     seeWorkedExample(h);
