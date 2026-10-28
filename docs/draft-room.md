@@ -62,9 +62,8 @@ src/lib/draft-ui/                     # Pick-screen view logic (pure, tested)
 ├── clock.ts                          # computeClock, bands (ok/warn/low), formatCountdown
 ├── reasons.ts                        # ReasonDTO → draft/shared.reasons key + params
 ├── armed-confirm.ts                  # Confirm dialog arming (1200 ms) reducer
-├── notify-schedule.ts                # Turn alert + slow reminders (8/4/1 h), deduped per slot
 ├── progress-display.ts / progress-labels.ts  # Progress-source breakdown (Kills / Draft Kill / Comeback / Participation)
-├── storage.ts                        # Safe local/session storage (prefs, pin, notify opt-in, dedupe)
+├── storage.ts                        # Safe local/session storage (prefs, pin; clears the old local-alert keys)
 └── constants.ts                      # Poll cadences, hover delay, arm delay
 
 src/components/draft-tool/            # The pick screen
@@ -184,9 +183,9 @@ In a league that drafts per group, the draft room and the redraft page show a gr
   - A 401 or 403 stops the poll and switches to the spectator view. Anonymous viewers therefore see the server seed.
   - A failed read keeps the last state and marks it `stale`.
 - **Turn watch.** `useTurnWatch` calls `GET /api/drafts/[id]/my-turn` every 60 s, and only while the tab is hidden. This is the single sanctioned exception to D37.
-  - It raises browser notifications when the viewer opted in for that pool and permission is granted.
-  - Alerts are deduped per slot across tabs through `storage.ts`.
-- **Discord notifications** (server side, `src/lib/draft/notify.ts`, embeds in `src/lib/discord/draft-embeds.ts`, texts in `draft/discord` in the league's webhook language).
+  - It raises no notification itself. The request lets the server resolve a due timeout, which claims the next slot's alerts and sends them (Discord and Web Push).
+- **Push alerts (Web Push).** The bell (`usePushAlerts`, `NotifyToggle`) subscribes THIS browser to Web Push, per device and not per pool; the server then sends the turn ping and the slow-draft reminders to the slot player's devices, and the redraft publication to every participant, with no page open. Permission is asked only on the click. iPhone and iPad need PokéTools on the Home Screen first (the bell says so); a blocked permission shows how to unblock it. Devices are listed and removable on `/dashboard/settings`. Setup, API, states, allow-list and privacy: [Push](./push.md).
+- **Discord notifications** (server side, `src/lib/draft/notify.ts`; the same claims also go out as Web Push, see [Push](./push.md); embeds in `src/lib/discord/draft-embeds.ts`, texts in `draft/discord` in the league's webhook language).
   - **Turn ping, live and slow.** When a slot becomes active, the player is @mentioned once (email-only players get the embed without the mention). A live draft's embed names the pick time in minutes (`timer_seconds`; seconds when the timer is not whole minutes). A slow draft's embed names the deadline as Discord timestamps plus the league time.
   - **Reminders, slow only.** 8 h, 4 h and 1 h before the deadline; thresholds a slot started past are never sent. Live drafts get no reminders.
   - **Exactly once.** `draft_claim_notifications` claims each event under a marker on the slot (`notified_turn_at`, `reminder_mask`, `alert_notified_at`) or the pool (`publish_notified_at`) with `FOR UPDATE SKIP LOCKED`, so concurrent callers never send one event twice. A paused pool's slot is claimed after the resume.
@@ -340,7 +339,7 @@ Backend-owned. All routes use the `{ success, data } | { success: false, error, 
 
 ## Tests
 - `src/lib/draft-finder/__tests__/`: the engine vectors, search, the reducer, tabs and sort, the real index, the ability ids, and client-safe imports.
-- `src/lib/draft-ui/__tests__/`: the clock, the notification schedule, the snapshot adapter, reasons, the progress display and armed confirm.
+- `src/lib/draft-ui/__tests__/`: the clock, the snapshot adapter, reasons, the progress display and armed confirm.
 - `src/components/draft-tool/__tests__/`: the turn watch, the confirm dialog, screen rendering in EN and DE, the CSS hex whitelist, and `admin-gating.test.tsx` (no Admin button and no admin chunk for players, the lazy load on open, the chunk-failure notices, no runtime `draft-admin` import, the same number of snapshot hooks in the room for a pool admin as for a player, focus after "Pick for").
 - `src/components/draft-admin/__tests__/room-admin-sheet.test.tsx`: the sheet's tabs per pool kind and mode, only the open tab mounted (and only it carries `aria-controls`), the sheet's single-poller guard ("RoomAdminSheet: one poller": it never calls `useDraftSnapshot`), the Redraft tab's submissions/refusal read rules, the override hand-off, amber destructive actions, nested dialogs inside the sheet (handler shape only, in static markup: focus return and Escape across the stack are checked in the browser pass, or in a jsdom test per [`dependencies.md`](./dependencies.md#dom-tests)).
 - `src/components/draft-{redraft,tokens,admin}/__tests__/`, the page tests under `draft-room`, `redraft`, `tokens` and `admin/leagues/[id]/draft`, and `src/components/broadcast/overlays/__tests__/draft-overlays.test.tsx`.

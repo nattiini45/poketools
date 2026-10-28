@@ -3,7 +3,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { getRequestLocale } from '@/i18n/server';
 import { readPushConfig } from '@/lib/push/config';
-import { isAllowedPushEndpoint } from '@/lib/push/endpoint';
+import { isAllowedPushEndpoint, pushEndpointHost } from '@/lib/push/endpoint';
 import { deviceLabelFromUserAgent } from '@/lib/push/user-agent';
 import { PUSH_BODY_MAX_BYTES, subscribeBodySchema, unsubscribeBodySchema } from '@/lib/push/validation';
 import {
@@ -103,7 +103,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
 
     // A distinct code per cause: a valid-looking subscription on a push service we do not accept is not "invalid".
     if (!isAllowedPushEndpoint(body.endpoint) || (body.replaces !== undefined && !isAllowedPushEndpoint(body.replaces))) {
-      console.error('[api/push/subscriptions] push service not on the allow-list was refused');
+      console.error(
+        '[api/push/subscriptions] push service not on the allow-list was refused:',
+        pushEndpointHost(body.endpoint),
+      );
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'This browser’s push service is not supported.', code: 'push_endpoint_not_allowed' },
         { status: 400 },
