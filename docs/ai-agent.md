@@ -6,6 +6,8 @@ The AI Agent is PokéTools' multi-persona, tool-using competitive assistant. Unl
 
 It is server-side only (Anthropic SDK + OpenAI-compatible providers), per the AI hard rule in `CLAUDE.md`.
 
+The **Admin Assistant** (`src/lib/ai/admin-agent/`, spec section 18 of [the PokéTools spec](./poketools-spec.md)) is a separate system with its own loop, registry and tables; it reuses nothing of this agent.
+
 ### File Structure
 
 - **Main Entry Point**: `src/lib/ai/agent/orchestrator.ts` (`runAgent`)
