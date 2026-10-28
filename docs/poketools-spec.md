@@ -414,6 +414,7 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `admin_export_limits` | Daily budget of the admin data export |
 | `player_claim_disposable_refs` | Tables whose rows about a player are disposable per-viewer state: a guest claim deletes them with the source account instead of refusing (`claim_guest_player`) |
 | `rate_limit_buckets` | Durable request rate limiter: one fixed window per hashed key (`rate_limit_hit`) |
+| `push_subscriptions` | Web Push endpoints and keys of a player's devices (draft turn alerts; service-role only, cascade on player delete, at most 10 per player; `docs/push.md`) |
 | `audit_log` | Append-only audit trail of privileged operations |
 
 **Leagues, tournaments and matches**
@@ -940,6 +941,8 @@ POST /api/teams/ai/team-coach   Player: AI commentary on the whole team (free te
 
 POST /api/locale                Public: set the language cookies ({ locale?, pkmnTerms? }; §17)
 
+GET/POST/DELETE /api/push/subscriptions  Player: my Web Push devices / subscribe or refresh this browser / remove a device (docs/push.md)
+
 GET  /api/drafts/[id]/state     Draft snapshot (?since=state_version short-circuits)
 GET  /api/drafts/[id]/my-turn   Turn watch (60 s, also while the draft-room tab is hidden)
 POST /api/drafts/[id]/picks     Confirm a pick (a rule error returns a code and a fresh snapshot)
@@ -952,7 +955,7 @@ PATCH …/redraft; POST …/redraft/publish   Admin draft controls (audited in d
 DELETE /api/drafts/[id]          Delete a pool: queue pools in setup or cancelled only, legacy pools while pending (audited: draft.pool.delete; roll-order: draft.order.roll)
 GET  /api/seasons/[id]/tokens/me  Token overview; POST …/draft-kill-tokens, …/comeback-tokens/spend
 GET  /api/point-buy-lists/[id]/search-index  Draft finder search index (immutable per list hash)
-GET  /api/cron/draft-ticks      Cron (10 min): slow-draft timeouts, redraft auto-publish, Discord pings
+GET  /api/cron/draft-ticks      Cron (10 min): slow-draft timeouts, redraft auto-publish, Discord pings and Web Push alerts
                                 (a failing pool is logged and skipped)
 GET  /api/cron/auto-confirm     Cron (15 min): confirms due pending_confirmation matches (compare-and-set),
                                 then heals completed matches whose finalize did not finish
@@ -1765,7 +1768,7 @@ Rules:
       lock, `state_version` polling), live and slow modes, pick-clock extensions, admin pause, make-up slots, quiet hours, pool completability (no blocked or forfeited slot),
       pick void/correct, audit trail, `/api/cron/draft-ticks`
 - [x] Redraft with secret drop (`/leagues/[id]/redraft`) and the token centre (Draft Kill Tokens, Comeback Tokens; `/leagues/[id]/tokens`)
-- [x] Turn alerts (in-page notifications, Discord draft events) and broadcast draft overlays
+- [x] Turn alerts (Web Push to the player's devices, Discord draft events) and broadcast draft overlays
 - [ ] Ownership constraints in teambuilder
 - [ ] Draft-aware stats views
 

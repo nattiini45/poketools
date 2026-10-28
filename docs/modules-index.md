@@ -33,6 +33,7 @@ This is the central documentation index for all major PokéTools modules.
 - **Gamification** — Achievements, streaks, signatures. See [Gamification](./gamification.md).
 - **Social** — X/Threads/Bluesky publishing. See [Social](./social.md).
 - **Discord** — Webhook and embed notification system. See [Discord](./discord.md).
+- **Web Push** — Draft turn alerts on the player's devices: src/lib/push (VAPID configuration, endpoint allow-list, payloads, sender, claim mapping, browser layer), /api/push/subscriptions, src/lib/supabase/queries/push-subscriptions.ts, the push handlers in public/sw.js, the draft room's bell and the settings card. See [Push](./push.md).
 - **AI (legacy single-shot)** — Pre-agent match/tournament analysis routes; soft-deprecated, kept as rollback. See [AI](./ai.md) and [Deprecations](./deprecations.md#legacy-ai-paths-single-shot--agent-replacements-flagged-cutover-pending).
 - **AI Agent** — Multi-persona, tool-using agent (chat, match analysis, tournament report); model router with live-verified fallback, per-player memory, eval harness. Replaces the legacy AI paths on most surfaces. See [AI Agent](./ai-agent.md).
 - **Feature Flags / Deprecations** — Runtime gates and sunset policies. See [Feature Flags](./feature-flags.md), [Deprecations](./deprecations.md).

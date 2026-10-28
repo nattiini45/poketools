@@ -193,6 +193,7 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
 | Draft clock and quiet hours (TS mirror of the SQL clock) | `src/lib/draft/time.ts` |
 | Backups, restore drill, migration lock safety | `docs/operations-backup.md` |
 | Social credential encryption | `src/lib/social/encryption.ts` |
+| Web Push (config, endpoint allow-list, payloads, sender, browser layer; devices API `/api/push/subscriptions`; module doc `docs/push.md`) | `src/lib/push/`, `src/lib/supabase/queries/push-subscriptions.ts` |
 | Database types | `src/types/database.ts` |
 | API response types | `src/types/api.ts` |
 | Env var template | `.env.example` |

@@ -8,6 +8,52 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
+Version 0.5.0 (`package.json`, `package-lock.json`); rename this section to `[0.5.0]` with the release date when it ships.
+
+### Upgrade notes
+
+- **Apply `20261028120000_push_subscriptions.sql` BEFORE deploying the code.** It adds the `push_subscriptions` table
+  (service-role only). It is backwards compatible with 0.4.1 code, and the new code does not touch the table until a
+  player turns push alerts on.
+- **Web Push is off until the deployment has a key pair.** Run `npx web-push generate-vapid-keys` once and set
+  `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (before the build: it is baked into the client bundle), `VAPID_PRIVATE_KEY` (secret)
+  and `VAPID_SUBJECT` (`mailto:` or https). Without all three valid the server sends nothing, the push endpoint
+  answers `503 push_disabled` and the draft room hides the bell. See [docs/push.md](docs/push.md).
+- **The draft room no longer raises local browser notifications.** Players who had turned the old alerts on will see
+  "Turn on push alerts" and must enable it once per device (the old per-pool opt-in was never carried over).
+
+### Added
+
+- **Web Push for draft turn alerts.** A player's devices get "your pick" and the 8 h / 4 h / 1 h reminders of a slow
+  draft, and the redraft publication, even when no PokéTools page is open. Works on Chrome, Edge, Firefox and Safari
+  (desktop), on Chrome for Android (tab or installed app) and on iPhone/iPad 16.4+ once PokéTools is on the Home
+  Screen (the bell says so). The pushes ride the existing `draft_claim_notifications` claims, so each goes out exactly
+  once, in the language stored with the device, alongside the unchanged Discord pings.
+- `/api/push/subscriptions` (`GET` my devices, `POST` subscribe or refresh, `DELETE` remove): live player guard,
+  same-origin check, rate limit, a push-service host allow-list, catalogued English and German error codes.
+- A "Push alerts" card on the settings page lists the devices (label, added, last alert) and removes them, with the
+  privacy note.
+- The service worker handles `push`, `notificationclick` and `pushsubscriptionchange`. With the PWA flag off but push
+  configured it is registered as `/sw.js?mode=push`, which caches nothing.
+
+### Changed
+
+- The draft room's bell is now "Push alerts on this device" (per device, not per pool). It never prompts on its own,
+  shows the Home Screen hint on iPhone/iPad tabs and how to unblock a blocked permission.
+- The hidden-tab my-turn watch no longer shows notifications; it only keeps the server resolving due timeouts.
+- `public/sw.js` cache version `v1` to `v2`.
+
+### Removed
+
+- The local `new Notification(...)` alerts of the draft room (they threw "Illegal constructor" on Android), their
+  per-pool opt-in and cross-tab dedupe keys in `localStorage` (cleaned up on the next visit), and
+  `src/lib/draft-ui/notify-schedule.ts`.
+
+### Security
+
+- A subscription endpoint is a URL the server requests later, so only `https` URLs on the browser vendors' push
+  services are accepted (`src/lib/push/endpoint.ts`); the device list never returns keys or endpoints.
+
 ## [0.4.1] - 2026-10-27
 
 ### Upgrade notes

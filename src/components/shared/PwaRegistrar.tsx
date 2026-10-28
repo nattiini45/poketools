@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { pushRegistersServiceWorker, swScriptUrl } from '@/lib/push/client';
 
 const PWA_ENABLED = process.env.NEXT_PUBLIC_PWA_ENABLED === 'true';
 
@@ -52,12 +53,14 @@ export default function PwaRegistrar() {
     }
 
     const syncServiceWorker = async () => {
-      if (!PWA_ENABLED) {
+      // Web Push needs the worker even when the offline shell is off (docs/push.md): it then registers in
+      // `?mode=push` form, which handles push only and caches nothing.
+      if (!PWA_ENABLED && !pushRegistersServiceWorker()) {
         await unregisterPwaWorker();
         return;
       }
 
-      await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.register(swScriptUrl());
     };
 
     void syncServiceWorker();

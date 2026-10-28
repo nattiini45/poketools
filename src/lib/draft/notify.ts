@@ -11,7 +11,10 @@
  * drafts; the 8h/4h/1h reminders are slow-only. This module turns the
  * claims into language-neutral payloads (§11.3: no locale, canonical English
  * Pokémon names) and fires each with `void emitDiscordEvent(...)`; the
- * language is chosen per webhook inside `emitAsync`.
+ * language is chosen per webhook inside `emitAsync`. The same claims also go
+ * out as Web Push (`src/lib/push/draft-alerts.ts`, docs/push.md): turn pings
+ * and reminders to the slot's player, the redraft publication to every
+ * participant, in each device's stored language.
  *
  * The narrow reads it needs live in the query modules: `listTickablePools`
  * (`drafts-queue`, re-exported for the cron route) and `getPublishedDrops`
@@ -22,6 +25,7 @@ import 'server-only';
 import { after } from 'next/server';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
+import { pushDraftClaims } from '@/lib/push/draft-alerts';
 import { listTickablePools } from '@/lib/supabase/queries/drafts-queue';
 import { getPublishedDrops, type PublishedDrop } from '@/lib/supabase/queries/drafts-redraft';
 import { getPlayersByIds } from '@/lib/supabase/queries/players';
@@ -243,6 +247,14 @@ export async function dispatchDraftNotifications(rawClaims: unknown): Promise<nu
       }
       void emitDiscordEvent(payload);
       sent += 1;
+    }
+    // Web Push (docs/push.md): the same claims, the same exactly-once guarantee, the slot's player (or the pool).
+    // Awaited so the sends finish before the function is frozen (this runs in `after()` or the cron); it never
+    // throws, and a deployment without a VAPID configuration returns before any read.
+    try {
+      await pushDraftClaims(claims, (seasonId) => seasonName.get(seasonId) ?? '');
+    } catch (err) {
+      console.error('[draft/notify] dispatching push alerts failed:', err);
     }
     return sent;
   } catch (err) {

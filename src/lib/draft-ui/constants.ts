@@ -12,8 +12,5 @@ export const SNAPSHOT_POLL_MS = 3000;
 /** The my-turn watch cadence; it also runs in hidden tabs (product decision, draft-frontend §5.8). */
 export const TURN_WATCH_INTERVAL_MS = 60_000;
 
-/** Notification dedupe entries older than this are pruned on load (draft-frontend §5.8). */
-export const NOTIFY_DEDUPE_TTL_MS = 3 * 24 * 3600 * 1000;
-
 /** How many picks the "last picks" strip shows, newest first. */
 export const RECENT_PICKS_COUNT = 3;

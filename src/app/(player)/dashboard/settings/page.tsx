@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth/helpers';
 import { packExtensions } from '@/lib/pack-extensions';
 import PageContainer from '@/components/ui/PageContainer';
 import AgentSettingsForm from '@/components/player/AgentSettingsForm';
+import PushDevicesCard from '@/components/player/PushDevicesCard';
 import AccountSecuritySection from '@/components/player/AccountSecuritySection';
 import WorldExperienceSection from '@/components/player/WorldExperienceSection';
 import { LanguageSettingsSection } from '@/components/shared/LanguagePicker';
@@ -30,6 +31,7 @@ export default async function SettingsPage() {
       {ExtensionSettingsSection && <ExtensionSettingsSection />}
       <LanguageSettingsSection />
       <SpriteStyleSettingsSection />
+      <PushDevicesCard />
       <AgentSettingsForm />
     </PageContainer>
   );

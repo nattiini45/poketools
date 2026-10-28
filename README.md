@@ -173,6 +173,7 @@ PokéTools includes an installable PWA shell with a service worker and offline f
 Notes:
 - The current PWA scope covers app-shell caching and offline fallback only — no API caching or offline writes.
 - Service worker can be disabled instantly by setting `NEXT_PUBLIC_PWA_ENABLED=false`.
+- Web Push for draft turn alerts is configured separately (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`; see [docs/push.md](docs/push.md)). With push configured the service worker is registered even when `NEXT_PUBLIC_PWA_ENABLED=false`, in a mode that caches nothing.
 
 ## Contributing
 

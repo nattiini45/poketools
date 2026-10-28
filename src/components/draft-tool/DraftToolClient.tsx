@@ -17,10 +17,9 @@
  * holds keys and data, never translated text (i18n-core §1.7).
  */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { useDataLocale, useFormatter, useT } from '@/i18n/client';
+import { useDataLocale, useT } from '@/i18n/client';
 import { commonMessages } from '@/i18n/messages/common';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
-import { draftSharedMessages } from '@/i18n/messages/draft/shared';
 import { timeMessages } from '@/i18n/messages/time';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { runFinder, type FinderResult } from '@/lib/draft-finder/engine';
@@ -29,10 +28,8 @@ import type { DraftSearchIndex } from '@/lib/draft-finder/index-types';
 import type { DraftLineCatalog, DraftLineCatalogEntry } from '@/lib/draft-finder/line-catalog';
 import { pkmnNameResolver } from '@/lib/draft-finder/names-port';
 import { finderReducer } from '@/lib/draft-finder/reducer';
-import { formatCountdown } from '@/lib/draft-ui/clock';
-import type { NotifyKind } from '@/lib/draft-ui/notify-schedule';
 import type { DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
-import type { DraftSnapshotDTO, ExtensionKind, LineId, MyTurnDTO } from '@/lib/draft-ui/snapshot-types';
+import type { DraftSnapshotDTO, ExtensionKind, LineId } from '@/lib/draft-ui/snapshot-types';
 import type { AdminDraftActions } from '@/components/draft-admin/admin-actions';
 import type { RoomAdminTab } from '@/components/draft-admin/RoomAdminSheet';
 import AdminSheetBoundary, { AdminSheetLoading } from './AdminSheetBoundary';
@@ -62,7 +59,7 @@ import {
   type PickInput,
 } from './hooks/pick-flow';
 import { useSearchIndex } from './hooks/use-search-index';
-import { myTurnRemainingMs, useNotifyPermission, useTurnWatch } from './hooks/use-turn-watch';
+import { usePushAlerts, useTurnWatch } from './hooks/use-turn-watch';
 import { ctaStateOf } from './left/cta-state';
 import { redraftSlotsForPick } from './redraft-slots';
 import DraftToolScreen, { type DraftToolLinks } from './DraftToolScreen';
@@ -82,6 +79,7 @@ export interface DraftToolClientProps {
    * Redraft). Absent or null in a league without groups.
    */
   seasonGroup?: { id: string; name: string } | null;
+  /** The league's name. The room itself no longer reads it (push alert text is built on the server); callers still pass it. */
   leagueName: string;
   /** One row per list line, narrow (no rationale, history or sources prose). */
   catalog: DraftLineCatalog;
@@ -156,7 +154,6 @@ export default function DraftToolClient({
   poolId,
   seasonId,
   seasonGroup = null,
-  leagueName,
   catalog,
   initialSnapshot,
   indexUrl,
@@ -172,10 +169,8 @@ export default function DraftToolClient({
   initialWeaknessOpen,
 }: DraftToolClientProps) {
   const t = useT(draftScreenMessages);
-  const tShared = useT(draftSharedMessages);
   const tTime = useT(timeMessages);
   const tCommon = useT(commonMessages);
-  const f = useFormatter();
   const dl = useDataLocale();
 
   const source = useMemo<DraftDataSource<DraftSearchIndex>>(
@@ -232,24 +227,15 @@ export default function DraftToolClient({
 
   const clock = useClock(vm?.activeSlot ?? null, vm?.serverNow ?? 0, snap.serverOffsetMs);
 
-  // ── turn alerts ─────────────────────────────────────────────────────
-  const { state: notify, toggle: toggleNotify } = useNotifyPermission(poolId);
+  // ── turn alerts (Web Push, docs/push.md) ─────────────────────────────
+  // The bell subscribes THIS browser; the server sends the alerts. The hidden-tab watch below only keeps the
+  // server resolving due timeouts while no other request does.
+  const { state: notify, toggle: toggleNotify } = usePushAlerts();
   const me = vm?.participants.find((p) => p.isViewer);
   const watchEnabled =
     vm !== null && vm.viewer.isParticipant && me !== undefined && !me.done && (vm.status === 'pending' || vm.status === 'in_progress');
   const fetchMyTurn = useCallback((signal: AbortSignal) => source.fetchMyTurn(signal), [source]);
-  const buildAlert = useCallback(
-    (kind: NotifyKind, turn: MyTurnDTO) => {
-      const remaining = myTurnRemainingMs(turn) ?? 0;
-      const time = formatCountdown(remaining, turn.mode, f, tShared);
-      return {
-        title: t('notify.turnTitle', { league: turn.league_name || leagueName }),
-        body: kind === 'turn' ? t('notify.turnBody', { time }) : t('notify.remindBody', { time }),
-      };
-    },
-    [f, t, tShared, leagueName],
-  );
-  useTurnWatch({ fetchMyTurn, enabled: watchEnabled, poolId, buildAlert });
+  useTurnWatch({ fetchMyTurn, enabled: watchEnabled });
 
   // ── admin override (resets when the active slot changes, §5.10) ────
   const [adminOverride, setAdminOverride] = useState(false);
