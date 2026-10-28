@@ -106,6 +106,9 @@ const deferredSession = (name: string, discordId: string): Session => ({
 
 const asJsonRow = (row: Row): Record<string, Json> => JSON.parse(JSON.stringify(row)) as Record<string, Json>;
 
+/** The id an expectation gets for an entity the run never created: a valid uuid that matches no row. */
+const NO_ENTITY = '00000000-0000-0000-0000-000000000000';
+
 /** Text of the assistant messages stored after `seq`, in order. */
 function assistantTextsAfter(messages: readonly MessageRecord[], seq: number): string[] {
   return messages.flatMap((message) => {
@@ -404,6 +407,8 @@ export function createStackHarness(options: StackHarnessOptions = {}): StackHarn
     // The ids the ledger filed the case's entities under, for `{{ledger:league_create}}` in an expectation.
     const finalLedger: Record<string, string> = {};
     for (const row of actionRows) if (row.entity_id !== null) finalLedger[row.tool_name] = row.entity_id;
+    // An entity the run never created matches no row: its expectations fail, and the suite goes on to the next case.
+    for (const [, tool] of JSON.stringify(testCase.expect).matchAll(/\{\{ledger:([A-Za-z0-9_.-]+)\}\}/g)) finalLedger[tool] ??= NO_ENTITY;
     world.dynamic.ledger = finalLedger;
 
     // Rows the case asked to read, by their case-id names.

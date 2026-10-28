@@ -7,7 +7,7 @@
  */
 import { record } from './recorders';
 
-export function revalidatePath(path: string): void {
+export function revalidatePath(path: string, _type?: 'layout' | 'page'): void {
   record({ channel: 'cache', name: `path:${path}` });
 }
 
