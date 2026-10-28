@@ -128,7 +128,7 @@ const rulesetCreateDraft = defineStaged({
   name: 'ruleset_create_draft',
   class: 'D',
   description:
-    'Create a PRIVATE ruleset draft owned by the admin; it cannot be pinned until it is published. mode "new" starts from a name (and optionally a catalog base_preset, with tour_overlay for the Smogon tour extras); "fork_preset" copies a catalog preset (preset_id); "fork_ruleset" copies a ruleset (source_id). Returns the draft id and its draft_rev. Entries in rulesets are dex ids. The admin owns at most 200 rulesets, and creating shares an hourly limit with the admin pages.',
+    'Create a PRIVATE ruleset draft owned by the admin; it cannot be pinned until it is published. mode "new" needs a name and base_locale (the language the name is written in) and may start from a catalog base_preset, with tour_overlay for the Smogon tour extras; "fork_preset" copies a catalog preset (preset_id); "fork_ruleset" copies a ruleset (source_id). Returns the draft id and its draft_rev. Entries in rulesets are dex ids. The admin owns at most 200 rulesets, and creating shares an hourly limit with the admin pages.',
   args: z
     .strictObject({
       mode: z.enum(['new', 'fork_preset', 'fork_ruleset']),
