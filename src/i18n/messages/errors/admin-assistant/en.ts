@@ -50,6 +50,7 @@ export default {
   tool_not_available: 'The assistant cannot do this with your role.',
   unknown_reference: 'This refers to something the assistant has not looked up in this conversation.',
   text_not_allowed: 'This text contains characters or links that are not allowed.',
+  draft_too_large: 'This ruleset draft is too large for the assistant to change, because the previous version could not be kept for an undo. Edit it in the ruleset editor.',
 
   // Proposals (the confirmation protocol)
   proposal_not_found: 'Proposal not found.',

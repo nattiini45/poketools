@@ -6,20 +6,22 @@
  *  - `propose_build` and the `propose_*` tools stage a proposal through `proposals/stage.ts`;
  *  - `request_clarification` returns the structured question for the panel.
  *
- * The D tools that dispatch an existing route (private ruleset and format drafts) arrive with the route bindings
- * (`dispatch/`); until a binding exists they answer `tool_not_available`, exactly as an unbound tool does.
+ * The D tools that dispatch an existing route (private ruleset drafts; format drafts arrive in phase 3) run through
+ * `draft-tools.ts` with the bindings injected as `deps.drafts`; without them, or for a tool with no binding yet, they answer
+ * `tool_not_available`, exactly as an unbound tool does.
  *
  * Nothing here can approve or execute a proposal, read an approval token or call a route.
  */
 import { describeIssues } from '../registry/define';
 import { toolError, toolErrorFromThrown } from '../registry/errors';
 import type { StagedToolRunner } from '../loop/tool-runtime';
+import { rulesetCreateDraft, rulesetPatchDraft } from './draft-tools';
 import { planCreate, planPatch, planRevert, planSet } from './plan-tools';
 import { requestClarification, stageTool } from './stage-tools';
 import type { StagedRunnerDeps } from './types';
 
 export { createPlanPorts, validationReport } from './ports';
-export type { StagedRunnerDeps, StagedRunnerStore } from './types';
+export type { DraftToolDeps, StagedRunnerDeps, StagedRunnerStore } from './types';
 
 export function createStagedRunner(deps: StagedRunnerDeps): StagedToolRunner {
   return async (tool, input, ctx) => {
@@ -39,6 +41,10 @@ export function createStagedRunner(deps: StagedRunnerDeps): StagedToolRunner {
           return await planPatch(deps, args, ctx);
         case 'plan_revert':
           return await planRevert(deps, ctx);
+        case 'ruleset_create_draft':
+          return await rulesetCreateDraft(deps, tool, args, ctx);
+        case 'ruleset_patch_draft':
+          return await rulesetPatchDraft(deps, tool, args, ctx);
         case 'request_clarification':
           return requestClarification(args);
         default:

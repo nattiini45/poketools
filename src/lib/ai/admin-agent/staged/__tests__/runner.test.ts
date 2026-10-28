@@ -142,7 +142,7 @@ describe('createStagedRunner', () => {
     spy.mockRestore();
   });
 
-  it('answers a D tool that has no binding yet with tool_not_available', async () => {
+  it('answers a draft tool with tool_not_available when no draft bindings were injected (the ops/d tests cover the wired runner)', async () => {
     const result = await createStagedRunner(deps())(tool('ruleset_create_draft'), { mode: 'fork_preset', preset_id: 'gen9ou' }, context());
     expect(result).toEqual({ ok: false, code: 'tool_not_available' });
   });

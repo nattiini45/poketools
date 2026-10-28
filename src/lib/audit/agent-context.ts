@@ -19,17 +19,19 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 /**
  * The fields land in `audit_log.metadata` under exactly these keys, next to
  * `via: 'agent'`. The first four identify the proposal and its approver; the
- * rest tie an outcome to the prompt and registry versions behind it.
+ * rest tie an outcome to the prompt and registry versions behind it. A private
+ * draft write (class D) is never approved: it carries the conversation and the
+ * tool, and no proposal, step or approver.
  */
 export interface AgentAuditContext {
   /** The assistant conversation the write belongs to. */
   agent_conversation_id: string;
-  /** The approved proposal the step is part of. */
-  agent_proposal_id: string;
-  /** The step's key inside the proposal. */
-  agent_step: string;
-  /** The admin who approved the proposal (the accountable human). */
-  approved_by: string;
+  /** The approved proposal the step is part of (absent for a class D draft write). */
+  agent_proposal_id?: string;
+  /** The step's key inside the proposal (absent for a class D draft write). */
+  agent_step?: string;
+  /** The admin who approved the proposal, the accountable human (absent for a class D draft write). */
+  approved_by?: string;
   agent_tool?: string;
   approved_at?: string;
   plan_code?: string;

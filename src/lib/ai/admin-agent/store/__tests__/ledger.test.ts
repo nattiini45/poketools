@@ -214,4 +214,35 @@ describe('snapshots', () => {
     expect(await snapshots.getSnapshot(admin, ACTION)).toEqual({ id: 's' });
     expect(hasStep(db.to('admin_agent_snapshots')[0], 'gt', 'expires_at', NOW.toISOString())).toBe(true);
   });
+
+  it('lets a later undo find a draft write by conversation and definition: the ledger row names the entity and the recipe, the snapshot hangs off its id', async () => {
+    const { db, actions, snapshots } = setup();
+    ownsConversation(db);
+    const DEFINITION = '33333333-cccc-4ccc-8ccc-cccccccccccc';
+    const write = action({
+      tool_name: 'ruleset_patch_draft',
+      class: 'D',
+      status: 'ok',
+      entity_type: 'ruleset',
+      entity_id: DEFINITION,
+      before: { ruleset_id: DEFINITION, draft_rev: 3, doc_hash: HASH },
+      after: { ruleset_id: DEFINITION, draft_rev: 4, doc_hash: HASH },
+      undo: { kind: 'restore_draft_snapshot', ruleset_id: DEFINITION, draft_rev_after: 4 },
+    });
+    const decoy = action({ id: '99999999-9999-4999-8999-999999999999', tool_name: 'ruleset_create_draft', entity_type: 'ruleset', entity_id: REF_A });
+    db.on('admin_agent_actions', 'select', (call) => (hasStep(call, 'limit', 200) ? { data: [decoy, write] } : { data: { id: ACTION } }));
+    db.on('admin_agent_snapshots', 'select', { data: { id: 's', action_id: ACTION, document: { rules: ['a'] }, doc_hash: HASH } });
+
+    // By conversation: the admin's ledger, then the row for this definition.
+    const ledger = await actions.listActions(admin, CONVERSATION);
+    const found = ledger.find((row) => row.entity_type === 'ruleset' && row.entity_id === DEFINITION && row.tool_name === 'ruleset_patch_draft');
+    expect(found?.undo).toEqual({ kind: 'restore_draft_snapshot', ruleset_id: DEFINITION, draft_rev_after: 4 });
+    // By ledger row: the previous document, with the hash the recipe is checked against.
+    const snapshot = await snapshots.getSnapshot(admin, found!.id);
+    expect(snapshot).toEqual({ id: 's', action_id: ACTION, document: { rules: ['a'] }, doc_hash: HASH });
+    expect(eqOf(db.to('admin_agent_snapshots')[0], 'action_id')).toBe(ACTION);
+    // Both reads are scoped to the admin's own ledger rows.
+    expect(eqOf(db.to('admin_agent_actions').find((call) => hasStep(call, 'limit', 200))!, 'admin_id')).toBe(ADMIN);
+    expect(eqOf(db.to('admin_agent_actions').at(-1)!, 'admin_id')).toBe(ADMIN);
+  });
 });

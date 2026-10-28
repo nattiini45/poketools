@@ -125,6 +125,61 @@ describe('the chat side cannot reach the executor, the _ops/g bindings or the ap
   }, 30_000);
 });
 
+describe('the private draft writes (_ops/d and the draft runner) are chat-side and stay unprivileged', () => {
+  const draftOps = routeFiles.filter((file) => relFromRepo(file).startsWith(`${ROUTES_REL}/_ops/d/`));
+  const draftRunner = [`${AGENT_REL}/staged/index.ts`, `${AGENT_REL}/staged/draft-tools.ts`, `${AGENT_REL}/staged/draft-patch.ts`].map(abs);
+
+  it('finds the D bindings', () => {
+    expect(draftOps.map(relFromRepo).sort()).toEqual(
+      ['index.ts', 'ruleset-create.ts', 'ruleset-patch.ts', 'schemas.ts'].map((name) => `${ROUTES_REL}/_ops/d/${name}`),
+    );
+  });
+
+  it('is reached by the chat route through the shared agent wiring (the chat route may reach _ops/d)', () => {
+    const entry = abs(`${ROUTES_REL}/conversations/[id]/messages/route.ts`);
+    const chain = findPath(buildGraph([entry]), [entry], (file) => relFromRepo(file) === `${ROUTES_REL}/_ops/d/index.ts`);
+    expect(chain?.map(relFromRepo)).toEqual([`${ROUTES_REL}/conversations/[id]/messages/route.ts`, `${ROUTES_REL}/_lib/agent.ts`, `${ROUTES_REL}/_ops/d/index.ts`]);
+  });
+
+  it('reaches no privileged file from _ops/d, from any single binding either', () => {
+    const graph = buildGraph(draftOps);
+    expect(findPath(graph, draftOps, (file) => isPrivileged(relFromRepo(file)))?.map(relFromRepo)).toBeUndefined();
+    for (const entry of draftOps) {
+      expect(findPath(buildGraph([entry]), [entry], (file) => isPrivileged(relFromRepo(file)))?.map(relFromRepo), relFromRepo(entry)).toBeUndefined();
+    }
+  }, 30_000);
+
+  it('reaches no _ops/g binding, no executor and no approve wiring from the draft runner', () => {
+    const graph = buildGraph(draftRunner);
+    expect(findPath(graph, draftRunner, (file) => isPrivileged(relFromRepo(file)))?.map(relFromRepo)).toBeUndefined();
+    const importers = agentFiles.concat(routeFiles).filter((file) => relFromRepo(file).startsWith(`${AGENT_REL}/staged/`) || relFromRepo(file).startsWith(`${ROUTES_REL}/_ops/d/`));
+    for (const file of importers) {
+      const { specifiers, typeSpecifiers } = parseImports(readFileSync(file, 'utf8'));
+      for (const specifier of [...specifiers, ...typeSpecifiers]) expect(specifier, relFromRepo(file)).not.toMatch(/_ops\/g|executor|_lib\/approve/);
+    }
+  }, 30_000);
+
+  it('keeps _ops/d away from the other binding directory in both directions', () => {
+    const gFiles = routeFiles.filter((file) => relFromRepo(file).startsWith(`${ROUTES_REL}/_ops/g/`));
+    for (const file of gFiles) {
+      const { specifiers } = parseImports(readFileSync(file, 'utf8'));
+      for (const specifier of specifiers) expect(specifier, relFromRepo(file)).not.toMatch(/_ops\/d|\.\.\/d(\/|$)/);
+    }
+  });
+});
+
+describe('src/lib never imports src/app', () => {
+  it('has no import, type import or lazy import of an app file in any lib source', () => {
+    const libFiles = walkFiles(path.join(SRC_ROOT, 'lib'), (rel) => /\.tsx?$/.test(rel) && !isTestPath(rel));
+    expect(libFiles.length).toBeGreaterThan(500);
+    const offenders = libFiles.flatMap((file) => {
+      const { specifiers, typeSpecifiers } = parseImports(readFileSync(file, 'utf8'));
+      return [...specifiers, ...typeSpecifiers].filter((specifier) => /^@\/app\//.test(specifier)).map((specifier) => `${relFromRepo(file)} -> ${specifier}`);
+    });
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('the reaper is the one part of the executor job the chat turn shares', () => {
   const reaper = `${AGENT_REL}/proposals/reaper.ts`;
 
@@ -170,7 +225,7 @@ describe('lazy imports are literal', () => {
     // Vacuous until the bindings are written; the day they are, their lazy imports are in the graph above.
     for (const file of ops) expect(buildGraph([file]).nonLiteral.has(file)).toBe(false);
     expect(!existsSync(abs(`${ROUTES_REL}/_ops`)) || ops.length > 0).toBe(true);
-  });
+  }, 60_000); // one graph per binding file: slow on a loaded machine
 });
 
 // ─── The layer matrix ────────────────────────────────────────────────
@@ -191,8 +246,9 @@ const ALLOWED_LAYER_EDGES: Record<string, readonly string[]> = {
   readers: ['plans', 'registry'],
   registry: ['plans', 'previews', 'readers'],
   root: ['loop', 'prompts', 'registry', 'store'],
-  // The stage-only tools (Plan tools, staging, clarification): wired in by the route layer, never imported by the core.
-  staged: ['plans', 'proposals', 'registry'],
+  // The stage-only tools (Plan tools, staging, clarification, the private draft writes): wired in by the route layer, never imported by the
+  // core. The draft runner dispatches through `dispatch/` (`checkCall`, `invokeRoute`); its bindings are injected, never imported.
+  staged: ['dispatch', 'plans', 'proposals', 'registry'],
   store: ['root'],
   // Leaves.
   dispatch: [],

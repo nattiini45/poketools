@@ -47,6 +47,7 @@ export type {
   ToolCallContext,
   ToolRunResult,
   ToolRuntime,
+  TurnDispatch,
   TurnInput,
   TurnOutcome,
   TurnRequest,

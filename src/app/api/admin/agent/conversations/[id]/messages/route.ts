@@ -80,6 +80,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       locale: getRequestLocale(request),
       timeZone: isTimeZone(zone) ? zone : DEFAULT_TIME_ZONE,
       role: auth.role,
+      // The recorded session and this request, for the D tools that run a route as this admin. Without a session (nobody
+      // signed in cannot get here, but the recorded one is optional by type) the turn still runs: the D tools answer
+      // `agent_harness_error` and write nothing, the reads and the Plan tools work.
+      ...(auth.session === null ? {} : { dispatch: { session: auth.session, inbound: request } }),
     });
     // The completion promise never rejects. `after()` keeps the invocation alive until the turn has persisted its last
     // step and released the lease.

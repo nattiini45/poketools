@@ -114,7 +114,8 @@ describe('the chat route', () => {
     // `approve.ts` is the approve side's wiring (it imports the executor on purpose); only approve and resume import it.
     for (const file of [chat, ...libFiles.filter((f) => !/views\.ts$|plan-view\.ts$|seed\.ts$|approve\.ts$/.test(f))]) {
       for (const specifier of importsOf(file)) {
-        expect(specifier, rel(file)).not.toMatch(/proposals\/serve|executor|_ops/);
+        // `_ops/d` (the private draft bindings) is the one binding directory the chat side may reach; `_ops/g` stays out.
+        expect(specifier, rel(file)).not.toMatch(/proposals\/serve|executor|_ops(?!\/d(\/|$))/);
       }
     }
   });

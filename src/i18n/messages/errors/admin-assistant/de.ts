@@ -36,6 +36,8 @@ export default defineDe<typeof en>()({
   tool_not_available: 'Der Assistent kann das mit deiner Rolle nicht tun.',
   unknown_reference: 'Das bezieht sich auf etwas, das der Assistent in dieser Unterhaltung nicht nachgeschlagen hat.',
   text_not_allowed: 'Dieser Text enthält Zeichen oder Links, die nicht erlaubt sind.',
+  draft_too_large:
+    'Dieser Regelwerk-Entwurf ist zu groß, als dass der Assistent ihn ändern könnte, weil die vorherige Fassung nicht für ein Rückgängigmachen gesichert werden kann. Bearbeite ihn im Regelwerk-Editor.',
 
   proposal_not_found: 'Vorschlag nicht gefunden.',
   proposal_not_pending: 'Dieser Vorschlag wurde schon bearbeitet.',

@@ -4,6 +4,7 @@
  * runs under test with a fake port and an in-memory store.
  */
 import type { AuditLogEntry } from '@/lib/audit/log';
+import type { DispatchContext } from '../dispatch/types';
 import type { AdminAgentConfig, AdminAgentEffort, AdminAgentPhase } from '../env';
 import type { ToolResult, ToolRole, ToolSet, WireTool } from '../registry';
 import type { AdminAgentStore } from '../store/create';
@@ -183,6 +184,14 @@ export interface ToolRunExtras {
 
 export type ToolRunResult = ToolResult & ToolRunExtras;
 
+/**
+ * What a D tool needs to run a route as the admin who sent THIS request (plan 3.3, spike S1): the session that
+ * `authAndRecord()` returned on the chat request, and the inbound request for its client-address headers. Carried by
+ * reference from the route to the tool runner and nowhere else: never logged, persisted, put in a message, an event, a
+ * usage row or the model port.
+ */
+export type TurnDispatch = Pick<DispatchContext, 'session' | 'inbound'>;
+
 export interface ToolCallContext {
   adminId: AdminId;
   adminName: string;
@@ -201,6 +210,8 @@ export interface ToolCallContext {
   toolRegistryVersion: string;
   /** 16 hex characters of the SHA-256 of the admin message this turn answers (the audit's `user_text_hash`). */
   userTextHash: string | null;
+  /** The request's verified session and inbound request, for a D tool that dispatches a route. Absent: such a tool writes nothing. */
+  dispatch?: TurnDispatch;
 }
 
 /**
@@ -264,6 +275,8 @@ export interface TurnRequest {
   timeZone: string;
   /** The tool registry the live admin tier selects (`site` or `scoped`). A conversation made for the other one is read-only. */
   role: ToolRole;
+  /** The recorded session and inbound request of the chat request (see `TurnDispatch`); absent when no session was recorded. */
+  dispatch?: TurnDispatch;
 }
 
 export interface TurnOutcome {

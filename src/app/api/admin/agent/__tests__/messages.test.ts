@@ -45,6 +45,8 @@ import { REAPER_AGE_MS } from '@/lib/ai/admin-agent/proposals/reaper';
 import { CONVERSATION, ME, SAME_SITE, conversation, message, params, player, post, proposal } from './support';
 
 const URL = `/api/admin/agent/conversations/${CONVERSATION}/messages`;
+/** The session `authAndRecord()` returns; the turn carries this very object (by reference) to the D tools. */
+const SESSION = { expires: '2099-01-01T00:00:00.000Z' };
 const GOOD = { text: 'Set up a 12-player league', client_msg_id: 'msg-12345678' };
 
 function startedTurn(events = 'data: {"type":"done","reason":"completed","resumable":false}\n\n') {
@@ -66,7 +68,7 @@ beforeEach(() => {
   // The route gate refuses a hosted database outside a production build; the suites run against mocks.
   vi.stubEnv('ADMIN_AGENT_ALLOW_HOSTED', 'true');
   mocks.requireAnyAdmin.mockResolvedValue(player());
-  mocks.authAndRecord.mockResolvedValue({ expires: '2099-01-01T00:00:00.000Z' });
+  mocks.authAndRecord.mockResolvedValue(SESSION);
   mocks.checkRateLimit.mockResolvedValue({ allowed: true, remaining: 30, retryAfterSeconds: 0 });
   mocks.store.conversations.getConversation.mockResolvedValue(conversation());
   mocks.store.proposals.reapExecutingProposals.mockResolvedValue([]);
@@ -97,9 +99,26 @@ describe('POST /api/admin/agent/conversations/[id]/messages', () => {
       locale: 'de',
       timeZone: 'America/New_York',
       role: 'site',
+      dispatch: { session: SESSION, inbound: expect.anything() },
     });
+    expect(mocks.startTurn.mock.calls[0][0].dispatch.session).toBe(SESSION);
     // Spike S7: the loop outlives the connection because its completion is given to after().
     expect(mocks.after).toHaveBeenCalledWith(started.completion);
+  });
+
+  it('hands the recorded session and this request to the turn, for the D tools that run a route as this admin', async () => {
+    await call(GOOD, { ...SAME_SITE, 'x-forwarded-for': '203.0.113.7' });
+    const { dispatch } = mocks.startTurn.mock.calls[0][0];
+    expect(dispatch.session).toBe(SESSION);
+    expect(dispatch.inbound.headers.get('x-forwarded-for')).toBe('203.0.113.7');
+  });
+
+  it('still runs the turn when no session was recorded: the dispatch is omitted, so only the D tools are cut off', async () => {
+    mocks.authAndRecord.mockResolvedValue(null);
+    const res = await call(GOOD);
+    expect(res.status).toBe(200);
+    expect(mocks.startTurn).toHaveBeenCalledOnce();
+    expect(Object.keys(mocks.startTurn.mock.calls[0][0])).not.toContain('dispatch');
   });
 
   it('never wires the turn to the request: the start call carries no signal', async () => {

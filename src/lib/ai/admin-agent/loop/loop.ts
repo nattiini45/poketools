@@ -568,6 +568,8 @@ async function runCall(run: TurnRun, call: ToolUseBlock, cls: CallClass, invalid
       systemPromptVersion: conversation.system_prompt_version,
       toolRegistryVersion: conversation.tool_registry_version,
       userTextHash: run.userTextHash ?? null,
+      // By reference only: the session is never copied, logged or stored.
+      ...(request.dispatch === undefined ? {} : { dispatch: request.dispatch }),
     };
     try {
       result = await deps.tools.run(toolSet, { name: call.name, input: call.input }, ctx);
