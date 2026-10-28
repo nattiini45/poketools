@@ -19,7 +19,7 @@ import {
   toWireTool,
   type StagedTool,
 } from '../index';
-import { canonicalJson, type JsonValue } from '../wire-schema';
+import { canonicalWireJson, type JsonValue } from '../wire-schema';
 import { STAGED_TOOLS } from '../staged';
 
 /**
@@ -256,7 +256,7 @@ describe('the frozen tool set', () => {
     expect(second).toBe(first);
     expect(first.names).toEqual([...first.names].sort());
     expect(first.registryVersion).toMatch(/^[0-9a-f]{16}$/);
-    expect(first.wireBytes).toBe(canonicalJson(first.tools as unknown as JsonValue));
+    expect(first.wireBytes).toBe(canonicalWireJson(first.tools as unknown as JsonValue));
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.tools)).toBe(true);
     expect(() => (first.names as string[]).push('x')).toThrow();

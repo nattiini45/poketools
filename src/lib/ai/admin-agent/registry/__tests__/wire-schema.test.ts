@@ -44,6 +44,16 @@ describe('toWireSchema', () => {
     expect(((wire.properties as Record<string, { items: { additionalProperties: unknown } }>).list).items.additionalProperties).toBe(false);
   });
 
+  it('keeps the declared order of property names (strict decoding follows it) and sorts every other key', () => {
+    const schema = toWireSchema(
+      'ordered',
+      z.strictObject({ mode: z.enum(['new', 'fork']), name: z.string().optional().describe('Name'), base_locale: z.enum(['en', 'de']).optional() }),
+    );
+    expect(Object.keys(schema)).toEqual(['additionalProperties', 'properties', 'required', 'type']);
+    expect(Object.keys(schema.properties as object)).toEqual(['mode', 'name', 'base_locale']);
+    expect(Object.keys((schema.properties as Record<string, object>).name)).toEqual(['description', 'type']);
+  });
+
   it('accepts an object with no arguments', () => {
     expect(toWireSchema('empty', z.strictObject({}))).toEqual({ additionalProperties: false, properties: {}, type: 'object' });
   });

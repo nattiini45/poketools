@@ -12,7 +12,10 @@
  * a `*_json` string argument that the tool parses and validates itself.
  *
  * The output is canonical (keys sorted, no insignificant whitespace) so the bytes, and the hash over them, change only
- * when a tool's text or shape really changes.
+ * when a tool's text or shape really changes. One exception: the names inside a `properties` object keep the order the
+ * Zod object declares them in. A strict tool's arguments are decoded in that order, so a field sorted before the one the
+ * model writes first could never be written (`base_locale` before `mode`); declared order puts the leading field first.
+ * It is still deterministic: the order comes from the code.
  */
 import { z } from 'zod';
 import type { ArgsSchema } from './types';
@@ -110,7 +113,22 @@ export function toWireSchema(toolName: string, args: ArgsSchema): JsonObject {
   }
   const converted = convert(raw as JsonValue, '$', toolName);
   if (!isObject(converted)) throw new WireSchemaError(toolName, 'the argument schema is not an object');
-  return sortKeys(converted) as JsonObject;
+  return sortSchemaKeys(converted) as JsonObject;
+}
+
+/** `sortKeys` for a wire schema or a tool block: every key sorted except the property names of a schema object. */
+export function sortSchemaKeys(value: JsonValue, keepOrder = false): JsonValue {
+  if (Array.isArray(value)) return value.map((item) => sortSchemaKeys(item));
+  if (!isObject(value)) return value;
+  const out: JsonObject = {};
+  const keys = keepOrder ? Object.keys(value) : Object.keys(value).sort();
+  for (const key of keys) out[key] = sortSchemaKeys(value[key], !keepOrder && key === 'properties');
+  return out;
+}
+
+/** Canonical JSON text of a wire schema or tool block (property names in declared order, see the header). */
+export function canonicalWireJson(value: JsonValue): string {
+  return JSON.stringify(sortSchemaKeys(value));
 }
 
 /** Canonical JSON text of any value: sorted keys, no whitespace. */

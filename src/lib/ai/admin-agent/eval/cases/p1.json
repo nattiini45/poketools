@@ -461,7 +461,7 @@
     "summary": "A single elimination tournament on the Gen 9 OU version with its eight players: one tournament, upcoming, eight participants resolved to the fixture players, no rounds and no events.",
     "turns": [
       {
-        "say": "Set up an 8-player single elimination tournament called TN1 Spring Cup {{run:tag}} on the Gen 9 OU ruleset, best of 3. The players are Eval Player 01, Eval Player 02, Eval Player 03, Eval Player 04, Eval Player 05, Eval Player 06, Eval Player 07, Eval Player 08.",
+        "say": "Set up an 8-player single elimination tournament called TN1 Spring Cup {{run:tag}} on the Gen 9 OU ruleset, best of 3, teams hidden until each match. The players are Eval Player 01, Eval Player 02, Eval Player 03, Eval Player 04, Eval Player 05, Eval Player 06, Eval Player 07, Eval Player 08.",
         "then": "approve"
       }
     ],

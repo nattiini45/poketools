@@ -25,7 +25,7 @@ import { STAGED_TOOLS } from './staged';
 import { DEFERRED_TOOLS } from './deferred';
 import type { ToolContext, ToolResult, ToolRole } from './types';
 import { chooseStrictTools } from './strict-budget';
-import { canonicalJson, toWireSchema, type JsonValue } from './wire-schema';
+import { canonicalWireJson, toWireSchema, type JsonValue } from './wire-schema';
 
 export type { RunnableTool, StagedTool, ToolDefinition } from './define';
 export type { ToolContext, ToolResult, ToolError, ToolRole, ToolClass, DeferredTool } from './types';
@@ -91,7 +91,7 @@ export function toWireTool(tool: ToolDefinition, strict = true): WireTool {
 
 /** SHA-256 (16 hex) of one tool's canonical wire bytes: the per-tool line of the snapshot. */
 export function toolHash(tool: ToolDefinition): string {
-  return createHash('sha256').update(canonicalJson(toWireTool(tool) as unknown as JsonValue)).digest('hex').slice(0, 16);
+  return createHash('sha256').update(canonicalWireJson(toWireTool(tool) as unknown as JsonValue)).digest('hex').slice(0, 16);
 }
 
 /** Whether a tool is in the registry of `role` at `maxPhase`. */
@@ -111,7 +111,7 @@ export function buildToolSet(input: { role: ToolRole; maxPhase: AdminAgentPhase 
   const schemas = offered.map((tool) => toWireSchema(tool.name, tool.args));
   const strict = chooseStrictTools(offered.map((tool, i) => ({ name: tool.name, class: tool.class, inputSchema: schemas[i] })));
   const wire = offered.map((tool) => toWireTool(tool, strict.has(tool.name)));
-  const wireBytes = canonicalJson(wire as unknown as JsonValue);
+  const wireBytes = canonicalWireJson(wire as unknown as JsonValue);
   const set: ToolSet = Object.freeze({
     role: input.role,
     maxPhase: input.maxPhase,
