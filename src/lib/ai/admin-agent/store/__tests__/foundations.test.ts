@@ -109,6 +109,10 @@ describe('payload hygiene', () => {
     expect(findForbiddenPayload({ note: 'see https://discord.com/api/webhooks/1/abc' })?.kind).toBe('webhook_url');
     expect(findForbiddenPayload({ note: 'https://discordapp.com/api/v10/webhooks/1/abc' })?.kind).toBe('webhook_url');
     expect(findForbiddenPayload('https://hooks.slack.com/services/T/B/X')?.kind).toBe('webhook_url');
+    // Case does not hide one, a second mention of the host further on is still found, and a host alone is not a webhook.
+    expect(findForbiddenPayload({ note: 'HTTPS://Discord.com/API/Webhooks/1/abc' })?.kind).toBe('webhook_url');
+    expect(findForbiddenPayload({ note: 'discord.com is fine, but discord.com/api/v9/webhooks/2/x is not' })?.kind).toBe('webhook_url');
+    expect(findForbiddenPayload({ note: 'join us on discord.com/invite/abc' })).toBeNull();
     expect(findForbiddenPayload({ text: '{"id":"1","discord_id":"99"}' })).toEqual({ path: 'text', kind: 'private_field_in_text' });
     expect(findForbiddenPayload({ text: '{"discordId" : "99"}' })?.kind).toBe('private_field_in_text');
   });

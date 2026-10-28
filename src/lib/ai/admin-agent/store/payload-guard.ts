@@ -66,7 +66,20 @@ const PRIVATE_KEY_IN_TEXT = (() => {
   return new RegExp(`"(?:${[...names, ...camel].join('|')})"\\s*:`, 'i');
 })();
 
-const WEBHOOK_URL = /discord(?:app)?\.com\/api(?:\/v\d+)?\/webhooks\/|hooks\.slack\.com\/services\//i;
+/**
+ * Whether a string contains a Discord or Slack webhook URL ANYWHERE in it (a pasted URL inside a sentence too): this is a
+ * deny-list detector, so it looks for the host and then the webhook path right after it, and never anchors to the start.
+ */
+function containsWebhookUrl(value: string): boolean {
+  const text = value.toLowerCase();
+  if (text.includes('hooks.slack.com/services/')) return true;
+  for (const host of ['discord.com', 'discordapp.com']) {
+    for (let at = text.indexOf(host); at !== -1; at = text.indexOf(host, at + 1)) {
+      if (/^\/api(?:\/v\d+)?\/webhooks\//.test(text.slice(at + host.length))) return true;
+    }
+  }
+  return false;
+}
 
 export type PayloadViolationKind = 'forbidden_key' | 'webhook_url' | 'private_field_in_text';
 
@@ -82,7 +95,7 @@ const MAX_NODES = 250_000;
 function scan(value: unknown, path: string, depth: number, budget: { nodes: number }, textKeys: boolean): PayloadViolation | null {
   if (budget.nodes-- <= 0 || depth > MAX_DEPTH) return null;
   if (typeof value === 'string') {
-    if (WEBHOOK_URL.test(value)) return { path, kind: 'webhook_url' };
+    if (containsWebhookUrl(value)) return { path, kind: 'webhook_url' };
     if (textKeys && PRIVATE_KEY_IN_TEXT.test(value)) return { path, kind: 'private_field_in_text' };
     return null;
   }
