@@ -384,6 +384,9 @@ describe('order, references and failures', () => {
     expect(world.store.action('league')).toMatchObject({ status: 'failed', http_status: 409, outcome_kind: 'conflict', error_code: 'step_failed' });
     expect(world.store.actions.map((row) => row.status)).toEqual(['failed', 'skipped', 'skipped', 'skipped']);
     expect(world.audits.map((entry) => entry.action)).toEqual(['agent.approve', 'agent.step.fail']);
+    // A refused Build step is not read back: only a Go-live conflict is (a pin move can fail half done).
+    expect(world.verifies).toEqual([]);
+    expect(world.store.action('league')?.verify).toBeNull();
   });
 
   it('keeps the earlier steps when a later one fails (partial) and carries the route\'s catalogued code', async () => {
@@ -721,6 +724,38 @@ describe('a Go-live proposal', () => {
     expect(world.store.budgetClaims[0]).toContainEqual({ counter: 'golive_executions', amount: 1, cap: 6 });
   });
 
+  it('reads a write back that the route refused with a conflict, and keeps the verdict beside the failure (a pin move can fail half done)', async () => {
+    world.script.league_create = () => json(409, { success: false, error: 'A pin moved', code: 'ruleset_pin_moved', params: { target: 'Phase' } });
+    world.verify.league_create = () => ({ status: 'unknown', detail: { moved: 1, expected: 2 } });
+    const result = await world.approve();
+    expect(result.steps[0]).toEqual({ key: 'league', status: 'failed', code: 'ruleset_pin_moved' });
+    expect(world.verifies).toEqual([{ op: 'league_create', outcomeKind: 'conflict' }]);
+    expect(world.store.action('league')).toMatchObject({ status: 'failed', http_status: 409, outcome_kind: 'conflict', error_code: 'ruleset_pin_moved', verify: { status: 'unknown', moved: 1, expected: 2 } });
+    expect(world.sleeps).toEqual([]);
+    expect(result.status).toBe('failed');
+  });
+
+  it('does not read back any other refusal: a validation failure, a lock or a missing right wrote nothing', async () => {
+    const replies = [() => json(422, { success: false, error: 'invalid', code: 'ruleset_document_invalid' }), () => json(409, { success: false, error: 'locked', code: 'ruleset_pin_locked' }), () => json(403, { success: false, error: 'no', code: 'forbidden' })];
+    for (const reply of replies) {
+      const fresh = await makeWorld();
+      reseal(
+        fresh,
+        (steps) => {
+          for (const step of steps) step.class = 'G';
+        },
+        (row) => {
+          row.class = 'G';
+        },
+      );
+      for (const op of ['league_create', 'roster_add', 'phase_create']) fresh.bindingOverrides[op] = { class: 'G', outwardEffects: [] };
+      fresh.script.league_create = reply;
+      await fresh.approve();
+      expect(fresh.verifies).toEqual([]);
+      expect(fresh.store.action('league')?.verify).toBeNull();
+    }
+  });
+
   it('is refused before the claim when the Go-live flag is off', async () => {
     world.configEnv.ADMIN_AGENT_GOLIVE = '0';
     expect(await refusal(world.approve())).toMatchObject({ code: 'agent_golive_disabled' });
@@ -966,6 +1001,20 @@ describe('what the executor exports', () => {
     ]);
     expect(blastClaims({ class: 'B' }, [step('roster_add')], caps)).toEqual([]);
     expect(blastClaims({ class: 'G' }, [step('start_phase')], caps)).toEqual([{ counter: 'golive_executions', amount: 1, cap: 6 }]);
+    // A pin move claims one per league or phase it names (the ruleset itself is not a target), then the Go-live execution.
+    const pin = {
+      op: 'move_pin',
+      targets: [
+        { kind: 'ruleset', id: 'r' },
+        { kind: 'season', id: 's' },
+        { kind: 'tournament', id: 't1' },
+        { kind: 'tournament', id: 't2' },
+      ],
+    } as unknown as StoredStep;
+    expect(blastClaims({ class: 'G' }, [pin], caps)).toEqual([
+      { counter: 'pin_targets', amount: 3, cap: 50 },
+      { counter: 'golive_executions', amount: 1, cap: 6 },
+    ]);
   });
 });
 

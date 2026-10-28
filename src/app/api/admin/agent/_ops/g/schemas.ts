@@ -9,7 +9,9 @@
  * validates on its own; this is the second lock.
  */
 import { z } from 'zod';
+import { rulesetPinsSchema, rulesetPublishSchema } from '@/lib/ruleset-studio/api-schemas';
 import {
+  generateRoundOptionsSchema,
   phaseCreateSchema,
   seasonCloneOptionsSchema,
   seasonCreateRequestSchema,
@@ -28,6 +30,8 @@ const id = z.uuid();
 export const idParams = z.strictObject({ id });
 /** `/api/seasons/[id]/phases/[phaseId]/...`. */
 export const phaseParams = z.strictObject({ id, phaseId: id });
+/** `/api/generate-round/[tid]`: the tournament id under the name that route gives it. */
+export const tidParams = z.strictObject({ tid: id });
 
 // ─── Bodies ──────────────────────────────────────────────────────────────────
 
@@ -57,3 +61,26 @@ export const leagueArchiveBody = seasonUpdateSchema.pick({ archived: true }).ext
 
 /** `PATCH /api/tournaments/[id]`: archive, and nothing else. */
 export const tournamentArchiveBody = tournamentUpdateSchema.pick({ archived: true }).extend({ archived: z.literal(true) }).strict();
+
+// ─── Go-live bodies (spec §18.8): one exact call each, as `proposals/golive.ts` stores it ────────────────────────────────
+
+/** `POST /api/ruleset-definitions/[id]/publish`: the route's own strict object (`draft_rev`, an optional changelog). */
+export const publishRulesetBody = rulesetPublishSchema.strict();
+
+/**
+ * `POST /api/ruleset-definitions/[id]/pins`: the route's own strict object. Staging puts only the ids of started targets into
+ * `confirm_started`, so an id that names no target of the call is refused here (the route would ignore it).
+ */
+export const movePinBody = rulesetPinsSchema.strict().refine(
+  (body) => {
+    const ids = new Set(body.targets.map((target) => target.id.toLowerCase()));
+    return (body.confirm_started ?? []).every((started) => ids.has(started.toLowerCase()));
+  },
+  { path: ['confirm_started'], message: 'confirm_started names a target that is not in the call' },
+);
+
+/** `POST /api/generate-round/[tid]`: nothing, or `{ start_round: true }` (staging never sends `false`). */
+export const startPhaseBody = generateRoundOptionsSchema.extend({ start_round: z.literal(true).optional() }).strict();
+
+/** `POST /api/tournaments/[id]/generate-bracket`: staging stores `{}`; the route's `start_round` is not offered. */
+export const generateBracketBody = z.strictObject({});

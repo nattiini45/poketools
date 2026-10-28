@@ -386,13 +386,15 @@ async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: Propos
 
 // ─── Blast-radius counters ───────────────────────────────────────────────────
 
-/** The counters a proposal claims when it is claimed (spec §18.10). Pin targets are claimed by the pin-move bindings' slice. */
+/** The counters a proposal claims when it is claimed (spec §18.10). A pin move claims one per league or phase it names. */
 export function blastClaims(proposal: Pick<ProposalRecord, 'class'>, steps: readonly StoredStep[], caps: AdminAgentConfig['caps']): BlastClaim[] {
   const claims: BlastClaim[] = [];
   const leagues = steps.filter((step) => step.op === 'league_create').length;
   const tournaments = steps.filter((step) => step.op === 'tournament_create').length;
   if (leagues > 0) claims.push({ counter: 'league_creates', amount: leagues, cap: caps.leagueCreates });
   if (tournaments > 0) claims.push({ counter: 'tournament_creates', amount: tournaments, cap: caps.tournamentCreates });
+  const pinTargets = steps.filter((step) => step.op === 'move_pin').reduce((sum, step) => sum + step.targets.filter((target) => target.kind === 'season' || target.kind === 'tournament').length, 0);
+  if (pinTargets > 0) claims.push({ counter: 'pin_targets', amount: pinTargets, cap: caps.pinTargets });
   if (proposal.class === 'G') claims.push({ counter: 'golive_executions', amount: 1, cap: caps.golive });
   return claims;
 }
@@ -728,7 +730,15 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
     run = await concludeReconcile(ctx, step, action, verdict, outcome);
     return { run };
   } else {
-    run = await settleStep(ctx, step, action, { status: 'failed', code: outcomeCode(outcome) ?? 'step_failed', outcome });
+    // A Go-live write the route refused with a conflict may still have done part of its work (a pin move stops at the first pin
+    // that moved meanwhile and keeps the moves before it). The binding's read-back says how far it got; it is recorded beside the
+    // failure and changes neither the status nor the code.
+    let verify: Json | undefined;
+    if (binding.class === 'G' && outcome.kind === 'conflict') {
+      const verdict = await verifyStep(ctx, step, binding, call, outcome);
+      verify = { status: verdict.status, ...(verdict.detail ?? {}) } as Json;
+    }
+    run = await settleStep(ctx, step, action, { status: 'failed', code: outcomeCode(outcome) ?? 'step_failed', outcome, ...(verify !== undefined ? { verify } : {}) });
   }
   auditStep(ctx, step, run);
   return { run };
