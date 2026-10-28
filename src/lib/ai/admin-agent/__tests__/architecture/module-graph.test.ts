@@ -177,7 +177,7 @@ describe('src/lib never imports src/app', () => {
       return [...specifiers, ...typeSpecifiers].filter((specifier) => /^@\/app\//.test(specifier)).map((specifier) => `${relFromRepo(file)} -> ${specifier}`);
     });
     expect(offenders).toEqual([]);
-  });
+  }, 30_000); // scans every lib source: slow on a loaded machine
 });
 
 describe('the reaper is the one part of the executor job the chat turn shares', () => {
@@ -212,7 +212,7 @@ describe('lazy imports are literal', () => {
     const graph = buildGraph(files);
     const offenders = [...graph.nonLiteral.keys()].filter((file) => files.includes(file)).map(relFromRepo);
     expect(offenders).toEqual([]);
-  });
+  }, 30_000); // scans the core, the routes and the bindings: slow on a loaded machine
 
   it('has no dynamic import at all under dispatch/ (the bindings, not the dispatcher, hold the lazy route imports)', () => {
     for (const file of agentFiles.filter((f) => relFromRepo(f).startsWith(`${AGENT_REL}/dispatch/`))) {
