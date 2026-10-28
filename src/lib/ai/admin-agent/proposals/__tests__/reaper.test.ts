@@ -13,6 +13,7 @@ import { uid } from '../../plans/__tests__/fixtures';
 import type { ProposalRecord } from '../../store/types';
 import { REAPER_AGE_MS, RESULT_EVENT, ROUTE_MAX_DURATION_SECONDS, reapOverdueProposals, type ReaperDeps } from '../reaper';
 import * as executor from '../executor';
+import { RESUME_WINDOW_MS } from '../types';
 import { ADMIN } from './helpers';
 
 const NOW = new Date('2026-10-28T10:00:00.000Z');
@@ -41,16 +42,19 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('reapOverdueProposals', () => {
-  it('reaps what is older than twice maxDuration for this admin and tells each conversation, with the same event the executor appends', async () => {
+  it('reaps what is older than the reaper age for this admin and tells each conversation, with the same event the executor appends', async () => {
     const { built, events, reap } = deps();
     await reapOverdueProposals(built, ADMIN);
 
     expect(reap).toHaveBeenCalledWith(ADMIN, new Date(NOW.getTime() - REAPER_AGE_MS));
-    expect(REAPER_AGE_MS).toBe(2 * ROUTE_MAX_DURATION_SECONDS * 1000);
     expect(events).toEqual([
       { conversationId: uid(11), event: RESULT_EVENT, data: { proposal_id: uid(1), plan_code: 'ab12cd34', status: 'unknown', reaped: true } },
       { conversationId: uid(12), event: RESULT_EVENT, data: { proposal_id: uid(2), plan_code: 'ab12cd34', status: 'unknown', reaped: true } },
     ]);
+  });
+
+  it('waits longer than a resume can run: the window plus one whole request, so a live resume is never reaped', () => {
+    expect(REAPER_AGE_MS).toBeGreaterThanOrEqual(RESUME_WINDOW_MS + ROUTE_MAX_DURATION_SECONDS * 1000);
   });
 
   it('says nothing when nothing is overdue', async () => {

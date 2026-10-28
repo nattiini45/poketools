@@ -88,6 +88,7 @@ export interface ApproveBody {
   readonly proposal_hash: string;
   readonly preview_hash: string;
   readonly acks: readonly string[];
+  readonly typed?: Readonly<Record<string, string>>;
 }
 
 /** `POST /proposals/[id]/approve`: claim, recheck and run. Answers the structured result (JSON, not a stream, in slice 1). */
@@ -98,6 +99,7 @@ export function approveProposal(options: { auth: AgentAuth; request: NextRequest
     proposalHash: body.proposal_hash,
     previewHash: body.preview_hash,
     acks: body.acks,
+    ...(body.typed === undefined ? {} : { typed: body.typed }),
     ipHash: hashClientIp(request),
     userAgent: request.headers.get('user-agent'),
   });

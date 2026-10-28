@@ -21,7 +21,7 @@ import { AdminAgentLoopError, loopCode } from './codes';
 import { createEventStream, safeSink } from './events';
 import { harnessEventMessage, LOOP_EVENTS, neutralizeAdminText } from './harness';
 import { appendEntry, runSteps, type TurnRun } from './loop';
-import { composeDynamicState, stateData, storedStateHash } from './state';
+import { composeDynamicState, stateData, storedStateHash, type UnavailableState } from './state';
 import { danglingRepairMessage } from './repair';
 import { generateTitle } from './titles';
 import { danglingToolUses, entryOf, firstPairingViolation, rebuildTranscript, type TranscriptEntry } from './transcript';
@@ -204,19 +204,22 @@ async function repairDanglingToolCalls(run: TurnRun): Promise<void> {
 /** Persists a `state_refresh` event when the server state differs from the last one the model saw. */
 async function refreshState(run: TurnRun): Promise<void> {
   const { deps, request, conversation } = run;
+  // A read that fails does not stop the turn, and it is not an answer either: the state names it `unavailable` so the model is
+  // not told there is no Plan, nothing pending or no outside change when the server merely could not look.
+  const unavailable: UnavailableState[] = [];
+  const attempt = async <T>(part: UnavailableState, fallback: T, read: () => Promise<T>): Promise<T> => {
+    try {
+      return await read();
+    } catch (error) {
+      console.error(`[admin-agent] could not read the ${part} for the state refresh`, error);
+      unavailable.push(part);
+      return fallback;
+    }
+  };
   const [plan, pending, drift] = await Promise.all([
-    deps.store.plans.getActivePlan(request.adminId, conversation.id).catch((error: unknown) => {
-      console.error('[admin-agent] could not read the active plan for the state refresh', error);
-      return null;
-    }),
-    deps.store.proposals.listPendingProposals(request.adminId, conversation.id).catch((error: unknown) => {
-      console.error('[admin-agent] could not read the pending proposals for the state refresh', error);
-      return [];
-    }),
-    (deps.drift?.({ adminId: request.adminId, conversationId: conversation.id }) ?? Promise.resolve([])).catch((error: unknown) => {
-      console.error('[admin-agent] could not compute drift for the state refresh', error);
-      return [] as readonly string[];
-    }),
+    attempt('plan', null, () => deps.store.plans.getActivePlan(request.adminId, conversation.id)),
+    attempt('pending', [], () => deps.store.proposals.listPendingProposals(request.adminId, conversation.id)),
+    attempt<readonly string[]>('drift', [], async () => (await deps.drift?.({ adminId: request.adminId, conversationId: conversation.id })) ?? []),
   ]);
   const state = composeDynamicState({
     now: deps.now(),
@@ -225,6 +228,7 @@ async function refreshState(run: TurnRun): Promise<void> {
     plan: plan ? { revision: plan.revision, status: plan.status } : null,
     pending,
     drift,
+    unavailable,
   });
   const data = stateData(state);
   let last: string | null = null;

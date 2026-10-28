@@ -52,6 +52,7 @@ import type { FingerprintSource, PreconditionEntry } from './fingerprints';
 import { REAPER_AGE_MS, RESULT_EVENT, ROUTE_MAX_DURATION_SECONDS, reapOverdueProposals } from './reaper';
 import { storedStepSchema, stepHashMatches } from './steps';
 import type { StoredStep } from './steps';
+import { normalizeTypedName } from './text';
 import { approvalTokenHash } from './token';
 import { RESUME_WINDOW_MS } from './types';
 
@@ -149,6 +150,8 @@ export interface ApprovalInput {
   readonly proposalHash: string;
   readonly previewHash: string;
   readonly acks: readonly string[];
+  /** What the admin typed for each `typed_name` acknowledgement of the card, by acknowledgement id (spec §18.6 step 4). */
+  readonly typed?: Readonly<Record<string, string>>;
   /** Keyed hash of the client IP and the truncated user agent, stamped on the claim. */
   readonly ipHash?: string | null;
   readonly userAgent?: string | null;
@@ -292,7 +295,8 @@ interface StepRun {
   result?: Record<string, JsonValue> | null;
 }
 
-type StopReason = 'failed' | 'unknown' | 'stale' | 'deadline';
+/** `reaped`: the proposal is no longer `executing` (the reaper moved it): nothing more is dispatched and nothing else is written for it. */
+type StopReason = 'failed' | 'unknown' | 'stale' | 'deadline' | 'reaped';
 
 interface RunContext {
   readonly deps: ExecutorDeps;
@@ -424,6 +428,14 @@ async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: Propos
     if (input.approval.proposalHash !== proposal.proposal_hash || input.approval.previewHash !== proposal.preview_hash) return { code: 'proposal_hash_mismatch', reason: 'request_hash' };
     const given = new Set(input.approval.acks);
     if (!acksRequired.every((ack) => given.has(ack))) return { code: 'proposal_ack_missing', reason: 'acks' };
+    // The friction gate is the server's too: every typed-name acknowledgement of the shown card needs the typed text on the wire,
+    // equal to the expected one once cleaned the way the expected text was. The ids come from the stored card (covered by the
+    // preview hash), never from the request.
+    for (const ack of card.data.acks) {
+      if (ack.kind !== 'typed_name') continue;
+      const typed = input.approval.typed?.[ack.id];
+      if (ack.expected === undefined || typed === undefined || normalizeTypedName(typed) !== ack.expected.text) return { code: 'proposal_ack_missing', reason: 'typed_name' };
+    }
   }
   return null;
 }
@@ -821,6 +833,17 @@ async function runStep(ctx: RunContext, step: StoredStep): Promise<{ run: StepRu
   }
   if (nowMs(ctx) - ctx.startedAt >= STEP_DEADLINE_MS) return { run: { status: 'pending' }, stop: 'deadline' };
 
+  // The proposal still has to be the one this request is running: the reaper may have taken it (a request that outlived the
+  // reaper's age) and the conversation's slot is free for another claim, so a write dispatched now would run unowned. An unreadable
+  // status counts as no answer: nothing new starts and the Build stays open for a resume.
+  try {
+    const current = await ctx.deps.store.proposals.getProposal(ctx.input.adminId, ctx.proposal.id);
+    if (current === null || current.status !== 'executing') return { run: { status: 'pending' }, stop: 'reaped' };
+  } catch (error) {
+    console.error(`${logTag}: the proposal status could not be read before ${step.key}`, error);
+    return { run: { status: 'pending' }, stop: 'deadline' };
+  }
+
   // a. A dependency that is not `ok`.
   if (step.blocked_by.some((key) => ctx.runs.get(key)?.status !== 'ok')) return { run: await recordSkipped(ctx, step, 'step_failed'), stop: 'failed' };
 
@@ -868,6 +891,7 @@ function summarize(steps: readonly StoredStep[], runs: ReadonlyMap<string, StepR
 function finalStatusOf(proposal: ProposalRecord, summaries: readonly StepSummary[], stop: StopReason | null): ProposalResult['status'] {
   const count = (status: StepResultStatus) => summaries.filter((step) => step.status === status).length;
   if (stop === 'stale') return 'stale';
+  if (stop === 'reaped') return 'unknown';
   // A write that may have happened: a Build stays open so the admin's Resume reconciles it; a Go-live proposal ends `unknown`.
   if (count('unknown') > 0) return proposal.class === 'G' ? 'unknown' : 'executing';
   if (count('failed') > 0 || count('skipped') > 0) return count('ok') > 0 ? 'partial' : 'failed';
@@ -1002,7 +1026,8 @@ export async function executeProposal(deps: ExecutorDeps, input: ExecuteInput): 
     if (stop !== null) {
       // After a failure or a stale precondition nothing else will run: the rest is recorded. After an unknown outcome or the
       // deadline a Build keeps them pending for the Resume; a Go-live proposal never resumes.
-      if (stop === 'failed' || stop === 'stale' || proposal.class === 'G') ctx.runs.set(step.key, await recordSkipped(ctx, step));
+      if (stop === 'reaped') ctx.runs.set(step.key, { status: 'pending' });
+      else if (stop === 'failed' || stop === 'stale' || proposal.class === 'G') ctx.runs.set(step.key, await recordSkipped(ctx, step));
       continue;
     }
     const { run, stop: reason } = await runStep(ctx, step);
@@ -1014,7 +1039,8 @@ export async function executeProposal(deps: ExecutorDeps, input: ExecuteInput): 
   const summaries = summarize(steps, ctx.runs);
   if (proposal.kind === 'undo') await markUndone(ctx, summaries);
   const status = finalStatusOf(proposal, summaries, stop);
-  if (status !== 'executing') {
+  // A reaped proposal was already ended by the reaper (and the conversation told); finishing it again would only fail.
+  if (status !== 'executing' && stop !== 'reaped') {
     try {
       await store.proposals.finishProposal(input.adminId, proposal.id, status);
     } catch (error) {

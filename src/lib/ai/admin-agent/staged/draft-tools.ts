@@ -39,6 +39,8 @@ import { jsonbTextBytes, parsePatchOps, patchDocument, SNAPSHOT_MAX_BYTES } from
 import type { DraftToolDeps, StagedRunnerDeps } from './types';
 
 const RE_READ = { re_read: 'ruleset_get' } as const;
+/** What the model reads when a draft write succeeded but its ledger row could not be completed. */
+const LEDGER_UNAVAILABLE_NOTE = 'The change was made, but the assistant could not record it, so it cannot be undone from this chat. Tell the admin; the draft can still be edited by hand.';
 
 export interface CreateDraftArgs {
   mode: 'new' | 'fork_preset' | 'fork_ruleset';
@@ -164,13 +166,18 @@ async function writeDraft(drafts: DraftToolDeps, dispatch: NonNullable<StagedToo
     return toolError('ledger_unavailable');
   }
 
-  const complete = async (outcome: Parameters<DraftToolDeps['store']['actions']['completeAction']>[2]): Promise<void> => {
-    try {
-      await drafts.store.actions.completeAction(adminId, actionId, outcome);
-    } catch (error) {
-      // The write (if any) is done; a ledger row left `executing` is closed by the reaper. The model still gets the truth.
-      console.error(`[admin-agent] ${tool.name}: the ledger row could not be completed`, error);
+  // Once more on an error (a blip must not cost the admin the Undo of a write that happened), then given up and reported: a row
+  // that stays `executing` is never offered to an undo, so the caller must tell the model when it was the write's own row.
+  const complete = async (outcome: Parameters<DraftToolDeps['store']['actions']['completeAction']>[2]): Promise<boolean> => {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        await drafts.store.actions.completeAction(adminId, actionId, outcome);
+        return true;
+      } catch (error) {
+        if (attempt === 2) console.error(`[admin-agent] ${tool.name}: the ledger row could not be completed`, error);
+      }
     }
+    return false;
   };
   const before: Json | null = spec.before === null ? null : { ruleset_id: spec.knownRulesetId, draft_rev: spec.before.draft_rev, doc_hash: spec.before.doc_hash };
 
@@ -217,7 +224,7 @@ async function writeDraft(drafts: DraftToolDeps, dispatch: NonNullable<StagedToo
   const rulesetId = created?.ruleset_id ?? spec.knownRulesetId;
   const revAfter = created?.draft_rev ?? null;
   const { recipe, reversibility } = spec.undo(rulesetId, revAfter);
-  await complete({
+  const recorded = await complete({
     status: created !== null ? 'ok' : unknown ? 'unknown' : 'failed',
     httpStatus: outcome.kind === 'ok' ? outcome.httpStatus : 'httpStatus' in outcome ? outcome.httpStatus : null,
     outcomeKind: outcome.kind,
@@ -240,7 +247,13 @@ async function writeDraft(drafts: DraftToolDeps, dispatch: NonNullable<StagedToo
   if (created !== null) {
     return {
       ok: true,
-      data: { ruleset_id: created.ruleset_id, draft_rev: created.draft_rev, ...(created.slug === undefined ? {} : { slug: created.slug }) },
+      data: {
+        ruleset_id: created.ruleset_id,
+        draft_rev: created.draft_rev,
+        ...(created.slug === undefined ? {} : { slug: created.slug }),
+        // The write happened and its ledger row could not be closed: no Undo exists for it. The model says so instead of promising one.
+        ...(recorded ? {} : { ledger_unavailable: true, undo_available: false, note: LEDGER_UNAVAILABLE_NOTE }),
+      },
       // The conversation has now seen this definition: a later `propose_publish_ruleset` passes provenance (plan 6.3).
       refs: [{ kind: 'ruleset', id: created.ruleset_id, label: created.slug ?? null, source: 'tool_result' }],
     };

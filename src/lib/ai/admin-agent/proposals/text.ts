@@ -57,3 +57,15 @@ export function sanitizeCardText(raw: string, max: number = CARD_TEXT_MAX): Card
   const points = [...collapsed];
   return { text: points.length > max ? `${points.slice(0, max - 1).join('')}…` : collapsed, hidden };
 }
+
+/** The longest typed confirmation the approve request carries (UTF-16 units); a card's expected text is at most `CARD_TEXT_MAX` characters. */
+export const TYPED_NAME_WIRE_MAX = 400;
+
+/**
+ * A typed confirmation as it is compared with a card's `expected.text`: the same cleaning the expected text went through
+ * (hidden and control characters removed, NFC, whitespace collapsed) and never truncated, so a typed text longer than the
+ * expected one can never match it.
+ */
+export function normalizeTypedName(raw: string): string {
+  return sanitizeCardText(raw, TYPED_NAME_WIRE_MAX).text;
+}

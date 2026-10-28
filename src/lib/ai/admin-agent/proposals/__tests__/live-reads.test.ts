@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 vi.mock('@/lib/tournament/startup-checklist.server', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/tournament/startup-checklist.server')>()), loadStartupInput: vi.fn() }));
 vi.mock('@/lib/admin/outward-recipients', () => ({ previewRecipients: vi.fn() }));
+vi.mock('@/lib/supabase/queries/drafts', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/supabase/queries/drafts')>()), getDraftPoolsBySeason: vi.fn() }));
 vi.mock('@/lib/supabase/queries/tournaments', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/queries/tournaments')>()),
   getTournamentById: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock('@/lib/supabase/queries/tournaments', async (importOriginal) => ({
 }));
 
 import { previewRecipients } from '@/lib/admin/outward-recipients';
+import { getDraftPoolsBySeason } from '@/lib/supabase/queries/drafts';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { loadStartupInput } from '@/lib/tournament/startup-checklist.server';
 import { hashJson } from '../../plans/hash';
@@ -140,5 +142,26 @@ describe('the source', () => {
       social: { count: 1, names: ['x s1'] },
     });
     expect(await liveSource.recipients!({ eventType: 'round_generated', tournamentId: null, seasonId: null })).toEqual({ discord: { count: 0, names: [] }, social: { count: 0, names: [] } });
+  });
+});
+
+describe('the draft pool of a built league (plan facts)', () => {
+  const plan = { v: 1, title: 'x', intent: '', contentLocale: 'en', assumptions: [], slots: {}, refs: { 'draft.all': { entity_type: 'draft_pool', entity_id: SEASON } } } as never;
+  const refState = async () => (await liveSource.loadPlanFacts({ admin: { id: '00000000-0000-4000-8000-000000000001' as never, isSiteAdmin: true }, plan })).refs?.['draft.all'];
+
+  it('reads a league with pools as live and one without as gone', async () => {
+    vi.mocked(getDraftPoolsBySeason).mockResolvedValue([{ id: 'p' }] as never);
+    expect(await refState()).toBe('live');
+    vi.mocked(getDraftPoolsBySeason).mockResolvedValue([]);
+    expect(await refState()).toBe('gone');
+  });
+
+  it('does not report a pool as gone when the read itself failed: the error propagates and is logged', async () => {
+    const failure = new Error('database unreachable');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(getDraftPoolsBySeason).mockRejectedValue(failure);
+    await expect(refState()).rejects.toBe(failure);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('draft pool read failed'), failure);
+    log.mockRestore();
   });
 });

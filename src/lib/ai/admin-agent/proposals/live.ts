@@ -100,8 +100,15 @@ async function refFact(refKey: string, entityType: string, entityId: string): Pr
     return (await codeOf(() => guardFor({ kind: 'tournament', id: entityId }), 'ref tournament')) === null ? 'live' : 'no_access';
   }
   if (entityType === 'draft_pool') {
-    const pools = await getDraftPoolsBySeason(entityId).catch(() => []);
-    void refKey;
+    // A read that fails says nothing about the pool: it propagates (the staging refusal mapping logs and answers a harness error)
+    // instead of reading as an empty list, which would tell the admin the pool he built is gone.
+    let pools: Awaited<ReturnType<typeof getDraftPoolsBySeason>>;
+    try {
+      pools = await getDraftPoolsBySeason(entityId);
+    } catch (error) {
+      console.error(`[admin-agent] ref fact ${refKey}: the draft pool read failed`, error);
+      throw error;
+    }
     return pools.length > 0 ? 'live' : 'gone';
   }
   // season, season_roster, season_groups: all hang off the league.

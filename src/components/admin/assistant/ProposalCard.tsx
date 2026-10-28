@@ -380,8 +380,17 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
     setBusy('approve');
     setActionError(null);
     try {
-      const chosen = acks.filter((ack) => (ack.kind === 'checkbox' ? ticked.has(ack.id) : ack.expected !== undefined && NFC(typed) === NFC(ack.expected.text))).map((ack) => ack.id);
-      const result = await approveProposal(proposalId, { token: detail.token, proposal_hash: card.proposalHash, preview_hash: card.previewHash, acks: chosen });
+      const chosenAcks = acks.filter((ack) => (ack.kind === 'checkbox' ? ticked.has(ack.id) : ack.expected !== undefined && NFC(typed) === NFC(ack.expected.text)));
+      const chosen = chosenAcks.map((ack) => ack.id);
+      // The typed text goes with the request: the server compares it with the card too, the box here is only the friction.
+      const typedNames = Object.fromEntries(chosenAcks.filter((ack) => ack.kind === 'typed_name').map((ack) => [ack.id, NFC(typed)]));
+      const result = await approveProposal(proposalId, {
+        token: detail.token,
+        proposal_hash: card.proposalHash,
+        preview_hash: card.previewHash,
+        acks: chosen,
+        ...(Object.keys(typedNames).length > 0 ? { typed: typedNames } : {}),
+      });
       if (!result.ok) {
         setActionError(result.error);
         return;

@@ -290,7 +290,7 @@ export function proposalRepository(ctx: StoreContext) {
     },
 
     /**
-     * The reaper: this admin's `executing` proposals that started before `olderThan` (2x `maxDuration`) become
+     * The reaper: this admin's `executing` proposals that started before `olderThan` (the resume window plus one request) become
      * `unknown`, so a crash between the claim and the first ledger row cannot hold the one-executing-proposal index.
      * Returns the reaped ids (the caller appends the harness event).
      */

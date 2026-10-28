@@ -1,7 +1,7 @@
 import 'server-only';
 /**
- * The reaper (spec §18.7): a proposal left `executing` for longer than twice `maxDuration` belongs to a request that died, so
- * it moves to `unknown` and its conversation is told. Without it one crashed approve would hold the admin's conversation for
+ * The reaper (spec §18.7): a proposal left `executing` for longer than the resume window plus one request belongs to a request
+ * that died, so it moves to `unknown` and its conversation is told. Without it one crashed approve would hold the admin's conversation for
  * good (the executing-proposal index refuses a second claim).
  *
  * It runs for one admin at two points: on every approve (the executor, before the claim) and at the start of every chat turn
@@ -15,11 +15,18 @@ import { planCode } from '../plans/hash';
 import type { ProposalRepository } from '../store/proposals';
 import type { AdminId } from '../store/ids';
 import type { Json } from '../store/types';
+import { RESUME_WINDOW_MS } from './types';
 
 /** `maxDuration` of the approve and resume routes. */
 export const ROUTE_MAX_DURATION_SECONDS = 300;
-/** The reaper: an `executing` proposal older than twice `maxDuration` is `unknown`, so a crash cannot hold the conversation. */
-export const REAPER_AGE_MS = 2 * ROUTE_MAX_DURATION_SECONDS * 1000;
+/**
+ * The reaper: an `executing` proposal whose claim is older than this is `unknown`, so a crash cannot hold the conversation. The age is
+ * measured from the claim, and a Build may be resumed until `RESUME_WINDOW_MS` after it: a resume started at the end of that window
+ * still runs for one whole request. The reaper therefore waits for the window plus `maxDuration` (plus a minute of slack), so it
+ * never takes a proposal that a live resume is still working on. The stamp is not refreshed on a resume: that would let a Build be
+ * resumed for ever.
+ */
+export const REAPER_AGE_MS = RESUME_WINDOW_MS + ROUTE_MAX_DURATION_SECONDS * 1000 + 60_000;
 
 /** The event the executor appends to the conversation when a proposal ran (the UI catalog already labels it). */
 export const RESULT_EVENT = 'proposal_executed';

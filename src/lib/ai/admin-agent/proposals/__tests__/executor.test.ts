@@ -16,7 +16,7 @@ import { stripComments } from '../../__tests__/architecture/graph';
 import type { VerifyContext } from '../../dispatch';
 import { uid } from '../../plans/__tests__/fixtures';
 import { AdminAgentStoreError } from '../../store/errors';
-import { EXECUTION_ERROR_STATUS, blastClaims, extractStepResult, ProposalExecutionError, REAPER_AGE_MS, RESUME_WINDOW_MS, SETTLE_MS, STEP_DEADLINE_MS, executeProposal } from '../executor';
+import { EXECUTION_ERROR_STATUS, blastClaims, extractStepResult, ProposalExecutionError, REAPER_AGE_MS, RESUME_WINDOW_MS, ROUTE_MAX_DURATION_SECONDS, SETTLE_MS, STEP_DEADLINE_MS, executeProposal } from '../executor';
 import type { StoredStep } from '../steps';
 import { ADMIN, OTHER_ADMIN } from './helpers';
 import { LEAGUE_ID, PHASE_IDS, RULESET_ID, makeWorld, okReply, rejection, reseal, statusesOf, type World } from './executor-helpers';
@@ -309,6 +309,65 @@ describe('the recheck after the claim consumes the proposal', () => {
     expect(await refusal(world.approve())).toMatchObject({ code: 'agent_golive_disabled', status: 403 });
     expect(world.row.status).toBe('proposed');
     expect(world.store.log).not.toContain('claim');
+  });
+});
+
+describe("the typed-name friction gate is the server's too", () => {
+  const EXPECTED = 'Gen 9 OU League';
+
+  /** The worked example with a typed-league-name box added to its card, the way a Go-live start card carries one. */
+  function withTypedBox(expected: string = EXPECTED): void {
+    reseal(
+      world,
+      () => {},
+      (row) => {
+        row.acks_required = ['visible_publicly', 'typed_name'];
+        (row.preview as unknown as { acks: unknown[] }).acks.push({ id: 'typed_name', kind: 'typed_name', of: 'league', expected: { text: expected, hidden: 0 } });
+      },
+    );
+  }
+  const approveWith = (typed: Record<string, string> | undefined, acks: string[] = ['visible_publicly', 'typed_name']) =>
+    world.approve({ approval: { token: world.token, proposalHash: world.row.proposal_hash, previewHash: world.row.preview_hash, acks, ...(typed === undefined ? {} : { typed }) } });
+
+  async function expectConsumed(promise: Promise<unknown>): Promise<void> {
+    expect(await refusal(promise)).toMatchObject({ code: 'proposal_ack_missing', status: 409, reason: 'typed_name' });
+    expect(world.row.status).toBe('stale');
+    expectNothingRan();
+  }
+
+  it('runs when the typed text equals the expected one', async () => {
+    withTypedBox();
+    expect((await approveWith({ typed_name: EXPECTED })).status).toBe('completed');
+  });
+
+  it('compares what was typed the way the expected text was cleaned: Unicode-normalised, hidden characters and edge spaces removed', async () => {
+    withTypedBox('Café Liga');
+    // "e" + combining acute accent, a zero-width space inside, spaces around.
+    expect((await approveWith({ typed_name: '  Café​ Liga ' })).status).toBe('completed');
+  });
+
+  it('refuses a box ticked without the text on the wire: the ack id alone is not the friction', async () => {
+    withTypedBox();
+    await expectConsumed(approveWith(undefined));
+  });
+
+  it('refuses a different text, a text under another ack id, a longer text and an empty one', async () => {
+    const wrong: Array<Record<string, string>> = [{ typed_name: 'gen 9 ou league' }, { other: EXPECTED }, { typed_name: `${EXPECTED} 2` }, { typed_name: '' }];
+    for (const typed of wrong) {
+      world = await makeWorld();
+      withTypedBox();
+      await expectConsumed(approveWith(typed));
+    }
+  });
+
+  it('takes the box from the stored card, not from the required list or the request', async () => {
+    withTypedBox();
+    reseal(world, () => {}, (row) => void (row.acks_required = ['visible_publicly']));
+    await expectConsumed(approveWith(undefined, ['visible_publicly']));
+  });
+
+  it('asks nothing of a card without a typed-name box', async () => {
+    expect((await world.approve()).status).toBe('completed');
   });
 });
 
@@ -827,6 +886,68 @@ describe('the reaper', () => {
     expect(world.store.log.indexOf('reap')).toBeGreaterThan(-1);
     expect(world.store.log.indexOf('reap')).toBeLessThan(world.store.log.indexOf('claim'));
     expect(world.events[0]).toMatchObject({ event: 'proposal_executed', data: { proposal_id: uid(9997), status: 'unknown', reaped: true } });
+  });
+
+  /** A Build stopped by the step deadline after its league: executing, with the rest pending for a resume. */
+  async function stoppedAtTheDeadline(): Promise<void> {
+    world.script.league_create = (call) => {
+      world.clock.ms += STEP_DEADLINE_MS + 1000;
+      return okReply('league_create', call);
+    };
+    expect((await world.approve()).status).toBe('executing');
+    delete world.script.league_create;
+  }
+
+  it('does not reap a resume that started at the end of the window: it still has a whole request to run', async () => {
+    await stoppedAtTheDeadline();
+    // The last moment a resume is allowed; its first step runs for a full route duration, and another request reaps meanwhile.
+    world.clock.ms = Date.parse(world.row.executing_started_at as string) + RESUME_WINDOW_MS - 1000;
+    let reapedDuringTheResume: string[] | null = null;
+    world.script.roster_add = async (call) => {
+      world.clock.ms += ROUTE_MAX_DURATION_SECONDS * 1000;
+      reapedDuringTheResume = await world.store.proposals.reapExecutingProposals(ADMIN, new Date(world.clock.ms - REAPER_AGE_MS));
+      return okReply('roster_add', call);
+    };
+    const result = await world.resume();
+    expect(reapedDuringTheResume).toEqual([]);
+    // The long step used up the request's own deadline, so the rest waits for another resume; the proposal is still executing.
+    expect(statusesOf(result).slice(0, 2)).toEqual(['league:ok', 'roster.1:ok']);
+    expect(result.status).toBe('executing');
+    expect(world.row.status).toBe('executing');
+  });
+
+  it('stops dispatching once the proposal is no longer executing (the reaper took it): no further write, no second finish', async () => {
+    await stoppedAtTheDeadline();
+    world.clock.ms += 2 * MINUTE;
+    world.script.roster_add = (call) => {
+      // Another request reaped the proposal while this step ran.
+      world.row.status = 'unknown';
+      return okReply('roster_add', call);
+    };
+    const result = await world.resume();
+    expect(world.calledOps()).toEqual(['league_create', 'roster_add']);
+    expect(statusesOf(result)).toEqual(['league:ok', 'roster.1:ok', 'phase.regular_season:pending', 'phase.playoffs:pending']);
+    expect(result.status).toBe('unknown');
+    expect(world.row.status).toBe('unknown');
+    expect(world.store.log.filter((entry) => entry.startsWith('finish:'))).toEqual([]);
+    // The ledger holds no row for the steps that did not run.
+    expect(world.store.action('phase.regular_season')).toBeUndefined();
+  });
+
+  it('starts no new step when the status of the proposal cannot be read, and leaves the Build open for a resume', async () => {
+    await stoppedAtTheDeadline();
+    world.clock.ms += 2 * MINUTE;
+    const read = world.store.proposals.getProposal;
+    world.store.proposals.getProposal = async () => {
+      throw new Error('connection reset (secret detail)');
+    };
+    const result = await world.resume();
+    expect(result.status).toBe('executing');
+    expect(world.calledOps()).toEqual(['league_create']);
+    expect(JSON.stringify(result)).not.toContain('secret detail');
+
+    world.store.proposals.getProposal = read;
+    expect((await world.resume()).status).toBe('completed');
   });
 
   it('leaves a younger executing proposal alone (it may be running): the claim is refused instead', async () => {

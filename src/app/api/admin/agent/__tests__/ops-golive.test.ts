@@ -222,6 +222,7 @@ import { parseAdminAgentEnv } from '@/lib/ai/admin-agent/env';
 import { executeProposal, type ExecutorDeps, type ProposalResult } from '@/lib/ai/admin-agent/proposals/executor';
 import { ADMIN, CONVERSATION_ID, DEFINITION_ID, NOW, SEASON_ID, TOKEN_SECRET, TOURNAMENT_ID, makeHarness, type HarnessOptions } from '@/lib/ai/admin-agent/proposals/__tests__/helpers';
 import { ExecStore, recordedSession, reseal, statusesOf, type World } from '@/lib/ai/admin-agent/proposals/__tests__/executor-helpers';
+import { proposalCardSchema } from '@/lib/ai/admin-agent/proposals/card';
 import { deriveApprovalToken } from '@/lib/ai/admin-agent/proposals/token';
 import type { StoredStep } from '@/lib/ai/admin-agent/proposals/steps';
 import type { StageStaged } from '@/lib/ai/admin-agent/proposals/types';
@@ -337,10 +338,14 @@ async function stageGoLive(tool: string, args: unknown, see: string[], options: 
         session: await recordedSession(),
         inbound: { headers: new Headers({ 'x-forwarded-for': '203.0.113.7' }) },
         proposalId: staged.proposal_id,
-        approval: { token, proposalHash: row.proposal_hash, previewHash: row.preview_hash, acks: row.acks_required as string[] },
+        approval: { token, proposalHash: row.proposal_hash, previewHash: row.preview_hash, acks: row.acks_required as string[], typed: typedAnswers(row.preview) },
       }),
   };
 }
+
+/** What an admin types for each typed-name box of the card: its expected text. */
+const typedAnswers = (preview: unknown): Record<string, string> =>
+  Object.fromEntries(proposalCardSchema.parse(preview).acks.flatMap((ack) => (ack.kind === 'typed_name' && ack.expected ? [[ack.id, ack.expected.text] as const] : [])));
 
 const publishWorld = (options?: HarnessOptions) => stageGoLive('propose_publish_ruleset', { ruleset_id: DEFINITION_ID, draft_rev: 3 }, [DEFINITION_ID], options);
 const PIN_TARGETS = [

@@ -317,6 +317,8 @@ describe('ProposalCard: confirming', () => {
     await user.click(confirm);
     await waitFor(() => expect(calls.approve).toHaveLength(1));
     expect((calls.approve[0] as { acks: string[] }).acks).toEqual(['round_generated', 'typed_name']);
+    // The typed text travels with the request: the server compares it with the card, so the box is not only a client-side friction.
+    expect((calls.approve[0] as { typed?: Record<string, string> }).typed).toEqual({ typed_name: 'Café Liga'.normalize('NFC') });
   });
 
   it('shows the server\'s refusal in the viewer\'s language and leaves the card as it was', async () => {

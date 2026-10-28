@@ -96,6 +96,8 @@ interface World {
   audits: Array<{ entry: Record<string, unknown>; context: unknown }>;
   routeAudits: Array<{ entry: Record<string, unknown>; context: unknown }>;
   failInsert: boolean;
+  /** The next completeAction calls that throw (the ledger update fails). */
+  failCompletes: number;
 }
 
 let world: World;
@@ -124,6 +126,10 @@ function deps(registry = getDraftBindingRegistry()): StagedRunnerDeps {
           }),
           completeAction: vi.fn(async (_admin: unknown, id: string, outcome: Record<string, unknown>) => {
             world.log.push('action.complete');
+            if (world.failCompletes > 0) {
+              world.failCompletes -= 1;
+              throw new Error('ledger update failed (secret detail)');
+            }
             world.completions.push(outcome);
             Object.assign(world.rows.get(id) ?? {}, outcome);
             return world.rows.get(id);
@@ -183,7 +189,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   maxPhase = 1;
-  world = { log: [], rows: new Map(), completions: [], snapshots: [], audits: [], routeAudits: [], failInsert: false };
+  world = { log: [], rows: new Map(), completions: [], snapshots: [], audits: [], routeAudits: [], failInsert: false, failCompletes: 0 };
   vi.mocked(requireAnyAdmin).mockResolvedValue(player());
   vi.mocked(requireRulesetViewer).mockResolvedValue(access());
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, remaining: 10, retryAfterSeconds: 0 } as never);
@@ -347,6 +353,37 @@ describe('ruleset_create_draft', () => {
     const result = await createStagedRunner(deps())(tool('ruleset_create_draft'), { mode: 'new', name: 'Spring OU', base_locale: 'en' }, await context());
     expect(result).toEqual({ ok: false, code: 'ledger_unavailable' });
     expect(createFromBody).not.toHaveBeenCalled();
+  });
+});
+
+// ─── The ledger row of a write ───────────────────────────────────────────────
+
+describe('a ledger row that cannot be completed', () => {
+  const create = async () => createStagedRunner(deps())(tool('ruleset_create_draft'), { mode: 'new', name: 'Spring OU', base_locale: 'en' }, await context());
+
+  it('is retried once: a blip costs the admin nothing and the answer is the plain success', async () => {
+    world.failCompletes = 1;
+    const result = await create();
+    expect(result).toEqual({ ok: true, data: { ruleset_id: NEW_DEF, draft_rev: 1, slug: 'spring-ou' }, refs: expect.any(Array) });
+    expect([...world.rows.values()][0]).toMatchObject({ status: 'ok' });
+    expect(world.log.filter((entry) => entry === 'action.complete')).toHaveLength(2);
+  });
+
+  it('tells the model when it still fails: the change was made, the row stays executing, and no Undo can exist', async () => {
+    world.failCompletes = 2;
+    const result = await create();
+    expect(result).toMatchObject({ ok: true, data: { ruleset_id: NEW_DEF, draft_rev: 1, ledger_unavailable: true, undo_available: false, note: expect.stringContaining('cannot be undone') } });
+    expect(JSON.stringify(result)).not.toContain('secret detail');
+    expect([...world.rows.values()][0]).toMatchObject({ status: 'executing' });
+    // The write is still audited: it happened.
+    expect(world.audits).toHaveLength(1);
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it('gives a patch the same signal', async () => {
+    world.failCompletes = 2;
+    const result = await createStagedRunner(deps())(tool('ruleset_patch_draft'), patchArgs(), await context());
+    expect(result).toMatchObject({ ok: true, data: { draft_rev: 4, ledger_unavailable: true, undo_available: false } });
   });
 });
 

@@ -143,6 +143,15 @@ describe('server state', () => {
     expect(storedStateHash({ nothing: true })).toBeNull();
   });
 
+  it('adds the unavailable marker only when a read failed, and a failed read changes the hash', () => {
+    const input = { now: new Date('2026-10-27T10:00:00Z'), timeZone: 'Europe/Berlin', locale: 'en' as const, plan: null, pending: [] };
+    const healthy = stateData(composeDynamicState(input));
+    expect(healthy).not.toHaveProperty('state_unavailable');
+    const failed = stateData(composeDynamicState({ ...input, unavailable: ['pending', 'plan', 'pending'] }));
+    expect(failed.state_unavailable).toEqual(['pending', 'plan']);
+    expect(failed.hash).not.toBe(healthy.hash);
+  });
+
   it('bounds the lists', () => {
     const pending = Array.from({ length: 30 }, (_, i) => ({ id: `p${String(i).padStart(2, '0')}`, kind: 'build', class: 'B', expires_at: 'x' }));
     const state = composeDynamicState({ now: new Date(), timeZone: 'Europe/Berlin', locale: 'en', plan: null, pending, drift: Array.from({ length: 50 }, (_, i) => `d${i}`) });

@@ -209,6 +209,16 @@ describe('POST /api/admin/agent/proposals/[id]/approve', () => {
     expect(mocks.store.proposals.getProposalOrThrow).not.toHaveBeenCalled();
   });
 
+  it('takes the typed confirmation on the wire as a short strict map by acknowledgement id, and nothing else', async () => {
+    for (const typed of ['League', ['League'], { typed_name: 1 }, { typed_name: 'x'.repeat(401) }, { '': 'League' }, { a: 'x', b: 'x', c: 'x', d: 'x', e: 'x' }]) {
+      expect((await call({ ...APPROVE_BODY, typed })).status, JSON.stringify(typed).slice(0, 40)).toBe(400);
+    }
+    expect(mocks.store.proposals.getProposalOrThrow).not.toHaveBeenCalled();
+    // A well-formed map reaches the executor's own checks (phase 0 answers 501 there).
+    expect((await call({ ...APPROVE_BODY, typed: { typed_name: 'Spring OU' } })).status).toBe(501);
+    expect(mocks.store.proposals.getProposalOrThrow).toHaveBeenCalled();
+  });
+
   it('keeps the routes\' own import graph small: the executor, the dispatcher and the registry come in through the wiring file only', () => {
     for (const name of ['approve', 'resume']) {
       const source = readFileSync(path.join(__dirname, '..', 'proposals', '[id]', name, 'route.ts'), 'utf8');

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminAgentStoreError } from '../../store/errors';
 import { AdminAgentLoopError, loopCode } from '../codes';
 import { harnessEventMessage } from '../harness';
@@ -274,6 +274,68 @@ describe('the state refresh', () => {
       { id: 'p-2', kind: 'build', tier: 'B', expires_at: '2026-10-27T11:00:00.000Z' },
     ]);
     expect(data.drift).toEqual(['league.end_date:changed_outside']);
+  });
+});
+
+describe('a state read that fails is reported, never presented as an empty answer', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const refreshes = (h: ReturnType<typeof harness>) => h.fake.messages.filter((m) => (m.ui as { event?: string } | null)?.event === 'state_refresh');
+  const dataOf = (message: { ui?: unknown }) => (message.ui as { data: Record<string, unknown> }).data;
+
+  it('names the plan, the pending proposals and the drift that could not be read, and says what that means', async () => {
+    const h = harness();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.fake.plan = { revision: 4, status: 'drafting' };
+    h.deps.store.plans.getActivePlan = async () => {
+      throw new Error('plans down (secret detail)');
+    };
+    h.deps.store.proposals.listPendingProposals = async () => {
+      throw new Error('proposals down (secret detail)');
+    };
+    h.deps.drift = async () => {
+      throw new Error('drift down (secret detail)');
+    };
+    h.port.script(textStep('ok'));
+    await turn(h);
+
+    const [state] = refreshes(h);
+    expect(dataOf(state)).toMatchObject({ plan: null, pending_proposals: [], drift: [], state_unavailable: ['drift', 'pending', 'plan'] });
+    expect(String(dataOf(state).state_unavailable_note)).toContain('state_unavailable');
+    // The model reads the marker in the text of the server message, and never the cause.
+    const text = (state.content as Array<{ text: string }>)[0].text;
+    expect(text).toContain('"state_unavailable":["drift","pending","plan"]');
+    expect(text).not.toContain('secret detail');
+  });
+
+  it('marks only the read that failed, and stores a fresh state once the read works again', async () => {
+    const h = harness();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.fake.plan = { revision: 4, status: 'drafting' };
+    const read = h.deps.store.plans.getActivePlan;
+    h.deps.store.plans.getActivePlan = async () => {
+      throw new Error('plans down');
+    };
+    h.port.script(textStep('one'), textStep('two'), textStep('three'));
+    await turn(h, { kind: 'message', text: 'a', clientMsgId: 'a' });
+    expect(dataOf(refreshes(h)[0])).toMatchObject({ plan: null, state_unavailable: ['plan'] });
+
+    // Still down: the same state, not stored again.
+    await turn(h, { kind: 'message', text: 'b', clientMsgId: 'b' });
+    expect(refreshes(h)).toHaveLength(1);
+
+    // Back: the marker is gone and the real plan replaces the false "none".
+    h.deps.store.plans.getActivePlan = read;
+    await turn(h, { kind: 'message', text: 'c', clientMsgId: 'c' });
+    expect(refreshes(h)).toHaveLength(2);
+    expect(dataOf(refreshes(h)[1])).toMatchObject({ plan: { revision: 4, status: 'drafting' } });
+    expect(dataOf(refreshes(h)[1])).not.toHaveProperty('state_unavailable');
+  });
+
+  it('leaves a healthy state exactly as it was: no marker, no note', async () => {
+    const h = harness();
+    h.port.script(textStep('ok'));
+    await turn(h);
+    expect(Object.keys(dataOf(refreshes(h)[0])).sort()).toEqual(['date', 'drift', 'hash', 'pending_proposals', 'plan', 'reply_language', 'time_zone', 'weekday']);
   });
 });
 

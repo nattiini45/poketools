@@ -70,6 +70,8 @@ export interface ApproveBody {
   proposal_hash: string;
   preview_hash: string;
   acks: string[];
+  /** What was typed for each typed-name acknowledgement, by acknowledgement id; the server compares it with the card. */
+  typed?: Record<string, string>;
 }
 
 export function approveProposal(id: string, body: ApproveBody) {

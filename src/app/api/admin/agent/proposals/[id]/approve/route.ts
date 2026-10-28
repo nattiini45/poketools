@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
+import { TYPED_NAME_WIRE_MAX } from '@/lib/ai/admin-agent/proposals/text';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { approveProposal } from '../../../_lib/approve';
@@ -20,6 +21,11 @@ const bodySchema = z.strictObject({
   preview_hash: sha256Hex,
   /** The acknowledgement ids the card required, ticked by the admin. */
   acks: z.array(z.string().min(1).max(64)).max(12),
+  /** What the admin typed for each typed-name acknowledgement of the card, by acknowledgement id (the executor compares it with the card). */
+  typed: z
+    .record(z.string().min(1).max(64), z.string().max(TYPED_NAME_WIRE_MAX))
+    .refine((value) => Object.keys(value).length <= 4)
+    .optional(),
 });
 
 /**

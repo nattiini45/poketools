@@ -23,9 +23,16 @@ export interface DynamicState {
   plan: { revision: number; status: string } | null;
   pendingProposals: ReadonlyArray<{ id: string; kind: string; tier: string; expiresAt: string }>;
   drift: readonly string[];
+  /** The parts of this state the server could not read this time: what the model sees for them is not an answer. */
+  unavailable: readonly UnavailableState[];
 }
 
+/** The three reads of the state that can fail on their own. */
+export type UnavailableState = 'plan' | 'pending' | 'drift';
+
 const FALLBACK_ZONE = 'Europe/Berlin';
+/** What the model reads beside `state_unavailable`: the server's own sentence, not stored text. */
+const UNAVAILABLE_NOTE = 'The server could not read the parts of the state named in state_unavailable. Their values here are not known to be empty: do not say there is no Plan, nothing pending or no outside changes; read the live state with a tool or tell the administrator you cannot check.';
 const MAX_PENDING = 10;
 const MAX_DRIFT = 20;
 
@@ -55,6 +62,8 @@ export interface StateInputs {
   plan: { revision: number; status: string } | null;
   pending: ReadonlyArray<{ id: string; kind: string; class: string; expires_at: string }>;
   drift?: readonly string[];
+  /** Reads that failed: the state says so instead of presenting their fallback (no Plan, nothing pending, no drift) as the truth. */
+  unavailable?: readonly UnavailableState[];
 }
 
 export function composeDynamicState(input: StateInputs): DynamicState {
@@ -70,12 +79,13 @@ export function composeDynamicState(input: StateInputs): DynamicState {
       .slice(0, MAX_PENDING)
       .map((p) => ({ id: p.id, kind: p.kind, tier: p.class, expiresAt: p.expires_at })),
     drift: [...(input.drift ?? [])].slice(0, MAX_DRIFT),
+    unavailable: [...new Set(input.unavailable ?? [])].sort(),
   };
 }
 
 /** The state as event data (`Json`), with a hash of itself so the loop can tell whether it changed. */
 export function stateData(state: DynamicState): Record<string, Json> {
-  const body = {
+  const body: Record<string, Json> = {
     date: state.date,
     weekday: state.weekday,
     time_zone: state.timeZone,
@@ -84,6 +94,11 @@ export function stateData(state: DynamicState): Record<string, Json> {
     pending_proposals: state.pendingProposals.map((p) => ({ id: p.id, kind: p.kind, tier: p.tier, expires_at: p.expiresAt })),
     drift: [...state.drift],
   };
+  // Only when a read failed (a healthy state is byte-identical to before): the fields name what the model must not take as empty.
+  if (state.unavailable.length > 0) {
+    body.state_unavailable = [...state.unavailable];
+    body.state_unavailable_note = UNAVAILABLE_NOTE;
+  }
   const hash = createHash('sha256').update(stableStringify(body)).digest('hex').slice(0, 16);
   return { ...body, hash } as Record<string, Json>;
 }

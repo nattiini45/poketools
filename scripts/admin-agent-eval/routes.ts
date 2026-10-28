@@ -51,23 +51,28 @@ export interface CardAnswer {
   proposalHash: string | null;
   previewHash: string | null;
   acksRequired: string[];
+  /** The text a typed-name acknowledgement of the card expects, by acknowledgement id (what an admin would type). */
+  typed: Record<string, string>;
 }
 
 export async function readCard(proposalId: string): Promise<CardAnswer> {
   const answer = await answerOf(await cardRoute(request(`/api/admin/agent/proposals/${proposalId}`, 'GET'), withId(proposalId)));
-  const data = (answer.body?.data ?? null) as { card?: { proposalHash?: string; previewHash?: string; acksRequired?: string[] }; token?: string | null } | null;
+  const data = (answer.body?.data ?? null) as { card?: { proposalHash?: string; previewHash?: string; acksRequired?: string[]; card?: { acks?: { id?: string; kind?: string; expected?: { text?: string } }[] } }; token?: string | null } | null;
   return {
     answer,
     token: typeof data?.token === 'string' ? data.token : null,
     proposalHash: data?.card?.proposalHash ?? null,
     previewHash: data?.card?.previewHash ?? null,
     acksRequired: Array.isArray(data?.card?.acksRequired) ? data.card.acksRequired : [],
+    typed: Object.fromEntries(
+      (data?.card?.card?.acks ?? []).flatMap((ack) => (ack.kind === 'typed_name' && typeof ack.id === 'string' && typeof ack.expected?.text === 'string' ? [[ack.id, ack.expected.text] as const] : [])),
+    ),
   };
 }
 
 /** `POST /approve` with the token and hashes of the card the admin was shown; `ack` false ticks no acknowledgement box. */
 export async function approve(proposalId: string, card: CardAnswer, ack: boolean): Promise<RouteAnswer> {
-  const body = { token: card.token ?? '0'.repeat(64), proposal_hash: card.proposalHash ?? '0'.repeat(64), preview_hash: card.previewHash ?? '0'.repeat(64), acks: ack ? card.acksRequired : [] };
+  const body = { token: card.token ?? '0'.repeat(64), proposal_hash: card.proposalHash ?? '0'.repeat(64), preview_hash: card.previewHash ?? '0'.repeat(64), acks: ack ? card.acksRequired : [], ...(ack && Object.keys(card.typed).length > 0 ? { typed: card.typed } : {}) };
   return answerOf(await approveRoute(request(`/api/admin/agent/proposals/${proposalId}/approve`, 'POST', body), withId(proposalId)));
 }
 
