@@ -130,6 +130,7 @@ export default defineDe<typeof en>()({
     ops: {
       league_create: 'Liga',
       roster_add: 'Kader',
+      tournament_participant_add: 'Turnierteilnehmer',
       tournament_create: 'Turnier',
       phase_create: 'Phase',
       start_phase: 'Start einer Phase',
@@ -156,6 +157,7 @@ export default defineDe<typeof en>()({
       locked_started: 'Die Liga ist gestartet.',
       locked_rounds: 'Es gibt Runden, daher ist der Kader gesperrt.',
       locked_groups: 'Die Gruppen haben eine geplante Runde.',
+      locked_tournament: 'Das Turnier hat begonnen, daher ist die Teilnehmerliste gesperrt.',
       locked_in_progress: 'Der Pool läuft gerade.',
       format_in_use: 'Das Format wird verwendet.',
       pin_locked: 'Eine beendete Liga oder Phase behält ihr Regelwerk.',
@@ -242,6 +244,7 @@ export default defineDe<typeof en>()({
     },
     add: {
       roster: 'Spieler hinzufügen',
+      player: 'Spieler zum Turnier hinzufügen',
     },
     set: {
       groups: 'Gruppen einrichten',
@@ -262,6 +265,7 @@ export default defineDe<typeof en>()({
     },
     remove: {
       roster: 'Aus dem Kader entfernen',
+      player: 'Spieler aus dem Turnier entfernen',
     },
     restore_draft: {
       ruleset: 'Vorherigen Entwurf wiederherstellen',
@@ -303,6 +307,7 @@ export default defineDe<typeof en>()({
     ruleset_changes_live_rules: 'Ändert die Live-Regeln der unten genannten Ligen und Phasen.',
     draft_unsaved_changes: 'Der Regelwerk-Entwurf hat Änderungen, die hier nicht enthalten sind.',
     archived_stays_reachable: 'Wird nicht mehr aufgelistet, ist aber weiter über den Link erreichbar.',
+    startup_unseeded: '{unseeded} von {count} Spielern haben noch keinen Seed (Seeding ist optional).',
   },
 
   blockers: {
@@ -339,6 +344,7 @@ export default defineDe<typeof en>()({
     player_not_found: 'Ein Spieler im Kader wurde nicht gefunden.',
     player_not_eligible: 'Ein Spieler im Kader kann nicht hinzugefügt werden: Das Konto ist gebannt, gesperrt oder ein Testkonto.',
     participant_already_enrolled: 'Ein Spieler im Kader ist schon in der Liga.',
+    tournament_participant_add_locked: 'Das Turnier hat schon begonnen, daher können keine Spieler mehr hinzugefügt werden.',
     SEASON_GROUPS_TOO_MANY: 'Für {participants} Spieler sind das zu viele Gruppen.',
     draft_not_supported_for_format: 'Dieses Ligaformat kann keinen Draft durchführen.',
     draft_engine_mismatch: 'Die gewählte Draft-Engine passt nicht zu diesem Ligatyp.',

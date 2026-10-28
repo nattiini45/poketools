@@ -138,6 +138,7 @@ export default {
     ops: {
       league_create: 'League',
       roster_add: 'Roster',
+      tournament_participant_add: 'Tournament player',
       tournament_create: 'Tournament',
       phase_create: 'Phase',
       start_phase: 'Start of a phase',
@@ -164,6 +165,7 @@ export default {
       locked_started: 'The league has started.',
       locked_rounds: 'Rounds exist, so the roster is locked.',
       locked_groups: 'The groups have a scheduled round.',
+      locked_tournament: 'The tournament has started, so its roster is locked.',
       locked_in_progress: 'The pool is in progress.',
       format_in_use: 'The format is in use.',
       pin_locked: 'A finished league or phase keeps its ruleset.',
@@ -250,6 +252,7 @@ export default {
     },
     add: {
       roster: 'Add players',
+      player: 'Add player to the tournament',
     },
     set: {
       groups: 'Set up groups',
@@ -270,6 +273,7 @@ export default {
     },
     remove: {
       roster: 'Remove from the roster',
+      player: 'Remove player from the tournament',
     },
     restore_draft: {
       ruleset: 'Restore the previous draft',
@@ -311,6 +315,7 @@ export default {
     ruleset_changes_live_rules: 'Changes the live rules of the leagues and phases below.',
     draft_unsaved_changes: 'The ruleset draft has changes that are not part of this.',
     archived_stays_reachable: 'No longer listed, but still reachable by link.',
+    startup_unseeded: '{unseeded} of {count} players have no seed yet (seeding is optional).',
   },
 
   blockers: {
@@ -347,6 +352,7 @@ export default {
     player_not_found: 'A player in the roster was not found.',
     player_not_eligible: 'A player in the roster cannot be added: the account is banned, suspended or a test account.',
     participant_already_enrolled: 'A player in the roster is already in the league.',
+    tournament_participant_add_locked: 'The tournament has already started, so players can no longer be added.',
     SEASON_GROUPS_TOO_MANY: 'There are too many groups for {participants} players.',
     draft_not_supported_for_format: 'This league format cannot run a draft.',
     draft_engine_mismatch: 'The chosen draft engine does not fit this league type.',

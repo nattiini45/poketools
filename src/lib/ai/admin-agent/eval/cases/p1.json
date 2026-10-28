@@ -458,7 +458,7 @@
     "actor": "site_admin",
     "fixture": "baseline",
     "clock": "2026-10-26T09:00:00.000Z",
-    "summary": "A single elimination tournament on the Gen 9 OU version: one tournament, upcoming, no rounds and no events; the Build cannot add the eight players and the assistant says so.",
+    "summary": "A single elimination tournament on the Gen 9 OU version with its eight players: one tournament, upcoming, eight participants resolved to the fixture players, no rounds and no events.",
     "turns": [
       {
         "say": "Set up an 8-player single elimination tournament called TN1 Spring Cup {{run:tag}} on the Gen 9 OU ruleset, best of 3. The players are Eval Player 01, Eval Player 02, Eval Player 03, Eval Player 04, Eval Player 05, Eval Player 06, Eval Player 07, Eval Player 08.",
@@ -499,7 +499,10 @@
       ],
       "db": {
         "counts": {
-          "tournaments": 1
+          "tournaments": 1,
+          "tournament_participants": 8,
+          "rounds": 0,
+          "matches": 0
         },
         "rows": [
           {
@@ -524,6 +527,11 @@
             "op": "tournament_create",
             "status": "ok",
             "count": 1
+          },
+          {
+            "op": "tournament_participant_add",
+            "status": "ok",
+            "count": 8
           }
         ]
       },
@@ -548,16 +556,10 @@
           ],
           {
             "anyOf": [
-              "add the players",
-              "add them",
-              "add the participants",
-              "cannot add",
-              "can't add",
-              "not able to add",
-              "afterwards",
-              "yourself"
+              "eight",
+              "8"
             ],
-            "intent": "The reply says the eight players are not part of the Build and still have to be added to the tournament afterwards by the admin, because the assistant cannot add participants to a standalone tournament yet."
+            "intent": "The reply says the eight players are part of the Build card and are added to the tournament once the card is approved, and that nothing has been created yet."
           }
         ],
         "language": "en"
@@ -579,7 +581,6 @@
     "seed": [
       "ready_tournament"
     ],
-    "blockedBy": "A first-round start or a bracket cannot be staged yet: the live source fails closed on the startup_checklist and channel_set reads (proposals/live.ts, waiting for the startup-input and recipient-matcher exports of the platform PR5), so staging answers tool_not_available.",
     "summary": "Generate the bracket of a ready 8-player tournament, then approve: nothing before the click, one round_generated event after it.",
     "turns": [
       {
@@ -668,7 +669,6 @@
     "seed": [
       "ready_tournament"
     ],
-    "blockedBy": "A first-round start or a bracket cannot be staged yet: the live source fails closed on the startup_checklist and channel_set reads (proposals/live.ts, waiting for the startup-input and recipient-matcher exports of the platform PR5), so staging answers tool_not_available.",
     "summary": "The decline variant of TN2: declining the bracket card leaves no round, no event and no ledger row.",
     "turns": [
       {
@@ -744,7 +744,6 @@
     "seed": [
       "ready_league"
     ],
-    "blockedBy": "A first-round start or a bracket cannot be staged yet: the live source fails closed on the startup_checklist and channel_set reads (proposals/live.ts, waiting for the startup-input and recipient-matcher exports of the platform PR5), so staging answers tool_not_available.",
     "summary": "Start a ready league: the card is a start_phase via generate-round only; an approve without the acknowledgements is refused, then the real approve starts it.",
     "turns": [
       {

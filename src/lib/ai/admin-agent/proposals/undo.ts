@@ -17,7 +17,7 @@
  */
 import { hashJson } from '../plans/hash';
 import { deriveUndoPlan, hasReversal, UNDO_MAX_STEPS, type LedgerEntryView, type UndoEntryNote, type UndoPlan, type UndoReason, type UndoStep } from '../plans/undo';
-import { deleteDraftCall, idOfLedgerResult, leagueArchiveCall, pinBackCall, restoreDraftCall, rosterRemoveCalls, tournamentArchiveCall, UNDO_ROUTES, uuidOf, type UndoOperation } from '../plans/undo-recipes';
+import { deleteDraftCall, idOfLedgerResult, leagueArchiveCall, pinBackCall, restoreDraftCall, rosterRemoveCalls, tournamentArchiveCall, tournamentParticipantRemoveCall, UNDO_ROUTES, uuidOf, type UndoOperation } from '../plans/undo-recipes';
 import type { JsonValue } from '@/lib/studio-core/json';
 import type { ActionRecord } from '../store/types';
 import { draftLifeState, pinTargetsState, rosterMembersState, sortedIds, stateHash } from './after-state';
@@ -55,6 +55,7 @@ export function hasUndoableRows(actions: ReadonlyArray<Pick<ActionRecord, 'tool_
 const ENTITY_OF_OP: Readonly<Record<string, CardEntity>> = {
   league_create: 'league',
   roster_add: 'roster',
+  tournament_participant_add: 'player',
   phase_create: 'phase',
   tournament_create: 'tournament',
   start_phase: 'tournament',
@@ -131,6 +132,8 @@ interface Facts {
   readonly entityId: string | null;
   /** The league a roster add went to. */
   readonly leagueId: string | null;
+  /** The standalone tournament a participant add went to. */
+  readonly tournamentId: string | null;
   readonly players: string[];
   readonly targets: Array<{ kind: 'season' | 'tournament'; id: string }>;
   readonly name: string | null;
@@ -152,7 +155,11 @@ function factsOf(subject: Subject, row: Row): Facts {
   const params = rec(args.path_params);
   const idParam = params.id;
   const paramId = typeof idParam === 'string' ? uuidOf(idParam) : isRecord(idParam) && typeof idParam.$ref === 'string' ? resolveRef(subject, idParam.$ref) : null;
-  const players = Array.isArray(body.player_ids) ? sortedIds(body.player_ids.filter((id): id is string => typeof id === 'string')) : [];
+  const players = Array.isArray(body.player_ids)
+    ? sortedIds(body.player_ids.filter((id): id is string => typeof id === 'string'))
+    : typeof body.player_id === 'string'
+      ? sortedIds([body.player_id])
+      : [];
   const targets = Array.isArray(body.targets)
     ? body.targets.flatMap((target): Array<{ kind: 'season' | 'tournament'; id: string }> => {
         const t = rec(target);
@@ -163,6 +170,7 @@ function factsOf(subject: Subject, row: Row): Facts {
   return {
     entityId: uuidOf(row.record.entity_id) ?? idOfLedgerResult(row.record.result) ?? paramId,
     leagueId: row.tool === 'roster_add' ? paramId : null,
+    tournamentId: row.tool === 'tournament_participant_add' ? paramId : null,
     players,
     targets,
     name: typeof body.name === 'string' ? body.name : null,
@@ -198,6 +206,7 @@ export async function prepareUndo(ctx: PrepareContext, args: UndoArgs): Promise<
     if (row.tool === 'league_create' && f.entityId !== null) await once(`season:${f.entityId}`, () => deps.guard({ kind: 'season', id: f.entityId as string }));
     if (row.tool === 'roster_add' && f.leagueId !== null) await once(`season:${f.leagueId}`, () => deps.guard({ kind: 'season', id: f.leagueId as string }));
     if (row.tool === 'tournament_create' && f.entityId !== null) await once(`tournament:${f.entityId}`, () => deps.guard({ kind: 'tournament', id: f.entityId as string }));
+    if (row.tool === 'tournament_participant_add' && f.tournamentId !== null) await once(`tournament:${f.tournamentId}`, () => deps.guard({ kind: 'tournament', id: f.tournamentId as string }));
     if (row.tool === 'move_pin' && f.entityId !== null) {
       await once(`rulesetViewer:${f.entityId}`, () => deps.guard({ kind: 'rulesetViewer', id: f.entityId as string }));
       for (const target of f.targets) await once(`${target.kind}:${target.id}`, () => deps.guard({ kind: target.kind, id: target.id }));
@@ -233,6 +242,7 @@ export async function prepareUndo(ctx: PrepareContext, args: UndoArgs): Promise<
       if (row.tool === 'league_create' && f.entityId !== null) await readLive(row, 'league_after', { kind: 'id', id: f.entityId });
       else if (row.tool === 'tournament_create' && f.entityId !== null) await readLive(row, 'tournament_after', { kind: 'id', id: f.entityId });
       else if (row.tool === 'roster_add' && f.leagueId !== null && f.players.length > 0) await readLive(row, 'roster_members', { kind: 'params', params: { season_id: f.leagueId, player_ids: f.players } });
+      else if (row.tool === 'tournament_participant_add' && f.tournamentId !== null && f.players.length > 0) await readLive(row, 'tournament_members', { kind: 'params', params: { tournament_id: f.tournamentId, player_ids: f.players } });
       else if (row.tool === 'move_pin' && f.targets.length > 0) await readLive(row, 'pin_targets', { kind: 'params', params: { targets: f.targets } });
       else if (row.tool === 'ruleset_patch_draft' && f.entityId !== null) await readLive(row, 'ruleset_draft_doc', { kind: 'id', id: f.entityId });
       else if (row.tool === 'ruleset_create_draft' && f.entityId !== null) {
@@ -248,7 +258,7 @@ export async function prepareUndo(ctx: PrepareContext, args: UndoArgs): Promise<
         stored = stateHash(draftLifeState(lastChatRev, false));
       }
     }
-    const needsFingerprint = ['league_create', 'tournament_create', 'roster_add', 'move_pin', 'ruleset_patch_draft', 'ruleset_create_draft'].includes(row.tool);
+    const needsFingerprint = ['league_create', 'tournament_create', 'roster_add', 'tournament_participant_add', 'move_pin', 'ruleset_patch_draft', 'ruleset_create_draft'].includes(row.tool);
     entries.push({
       actionId: record.id,
       seq: row.seq,
@@ -261,8 +271,9 @@ export async function prepareUndo(ctx: PrepareContext, args: UndoArgs): Promise<
   }
 
   const leagueIds = [...new Set(subject.rows.flatMap((row) => [fact(row).leagueId, row.tool === 'league_create' ? fact(row).entityId : null]).filter((id): id is string => id !== null))];
-  const playerIds = [...new Set(subject.rows.flatMap((row) => (row.tool === 'roster_add' ? fact(row).players : [])))];
-  const undoFacts = await source.undoFacts({ leagueIds, playerIds });
+  const tournamentIds = [...new Set(subject.rows.flatMap((row) => (row.tool === 'tournament_participant_add' ? [fact(row).tournamentId] : [])).filter((id): id is string => id !== null))];
+  const playerIds = [...new Set(subject.rows.flatMap((row) => (row.tool === 'roster_add' || row.tool === 'tournament_participant_add' ? fact(row).players : [])))];
+  const undoFacts = await source.undoFacts({ leagueIds, playerIds, ...(tournamentIds.length > 0 ? { tournamentIds } : {}) });
   const pinRows = subject.rows.filter((row) => row.tool === 'move_pin' && row.record.status === 'ok');
   const pinTargets = pinRows.length === 0 ? [] : await source.pinTargets(pinRows.flatMap((row) => fact(row).targets));
   const created = subject.rows.find((row) => row.tool === 'ruleset_create_draft');
@@ -442,6 +453,23 @@ async function expand(ctx: PrepareContext, subject: Subject, row: Row, planStep:
         cards.push({ key: stepKey, op: 'roster_remove', action: 'remove', target: { entity: 'roster', id: fact.leagueId, name: cardName(env.playerNames[player]) }, items: [], lines: [] });
       });
       return { steps, cards };
+    }
+
+    case 'remove_tournament_participant': {
+      // One add step is one player, so one row is one removal.
+      if (fact.tournamentId === null || fact.players.length !== 1) return { reason: 'before_missing' };
+      const player = fact.players[0];
+      const call = tournamentParticipantRemoveCall(fact.tournamentId, player);
+      return {
+        steps: [
+          prepared(
+            'tournament_participant_remove',
+            { key, op: 'tournament_participant_remove', entity_type: 'tournament_roster', path_params: call.params, body_template: call.body, targets: [{ kind: 'tournament', id: fact.tournamentId }] },
+            { read: 'tournament_members', target: { kind: 'params', params: { tournament_id: fact.tournamentId, player_ids: [player] } }, fingerprint: stateHash(rosterMembersState([player])) },
+          ),
+        ],
+        cards: [{ key, op: 'tournament_participant_remove', action: 'remove', target: { entity: 'player', id: player, name: cardName(env.playerNames[player]) }, items: [], lines: [] }],
+      };
     }
 
     case 'pin_back': {

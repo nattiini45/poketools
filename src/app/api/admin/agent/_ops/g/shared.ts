@@ -6,7 +6,7 @@
 import type { Outcome } from '@/lib/ai/admin-agent/dispatch';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { listSeasons, listSeasonsByIds, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
-import { getStagesBySeasonId, getTournamentById, listAllTournaments } from '@/lib/supabase/queries/tournaments';
+import { getParticipants, getStagesBySeasonId, getTournamentById, listAllTournaments } from '@/lib/supabase/queries/tournaments';
 import { isValidUuid } from '@/lib/utils/uuid';
 
 export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -50,6 +50,11 @@ export const readLiveLeagues = () => listSeasons({ includeTestSeasons: true });
 /** The lower-cased player ids on a league's roster. */
 export async function readRosterIds(seasonId: string): Promise<Set<string>> {
   return new Set((await getSeasonParticipants(seasonId)).map((participant) => participant.id.toLowerCase()));
+}
+
+/** The lower-cased player ids on a standalone tournament's roster. */
+export async function readTournamentRosterIds(tournamentId: string): Promise<Set<string>> {
+  return new Set((await getParticipants(tournamentId)).map((participant) => participant.id.toLowerCase()));
 }
 
 /** A league's phases, with their enrollment source and participant count. */

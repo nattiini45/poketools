@@ -33,7 +33,8 @@ export interface RulesetPresetFact {
 export type DexFact = 'ok' | 'unknown' | 'forme_expansion_needed';
 
 export type PlayerFact =
-  | { status: 'ok'; isGuest?: boolean }
+  /** `name` is the stored display name, for card lines only (never an input of a check). */
+  | { status: 'ok'; isGuest?: boolean; name?: string }
   | { status: 'not_found' }
   | { status: 'banned' | 'suspended' | 'test' };
 
@@ -75,6 +76,8 @@ export interface PlanFacts {
   epbActiveListAvailable?: boolean;
   /** By `plan.refs` key. */
   refs?: Record<string, RefFact>;
+  /** The status of the standalone tournament this Plan built earlier, when its roster is still to be added. */
+  tournamentStatus?: string;
 }
 
 export const dexFactKey = (category: RulesetDeltaCategory, id: string): string => `${category}:${id}`;

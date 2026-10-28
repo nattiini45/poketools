@@ -291,6 +291,101 @@ describe('propose_build: refusals, each a catalogued code and nothing written', 
   });
 });
 
+describe('propose_build: a standalone tournament with its roster', () => {
+  const cup = (refs: Record<string, unknown> = {}, count = 4) =>
+    parseOrThrow({
+      v: 1, title: 'Friday Cup', intent: 'tournament', contentLocale: 'en', assumptions: [], refs,
+      slots: {
+        ruleset: { mode: 'existing', version_id: RULESET_VERSION },
+        tournament: { name: 'Friday Cup', bracket_type: 'single_elim', best_of: 3, is_doubles: false, team_visibility: 'hidden_until_match', ruleset: 'plan' },
+        roster: { entries: PLAYERS.slice(0, count).map((player_id, i) => ({ input: `Typed ${i + 1}`, state: 'resolved' as const, player_id })), target_count: count },
+      },
+    });
+  const names = (plan: ReturnType<typeof cup>) =>
+    okFacts(plan, { players: Object.fromEntries(PLAYERS.map((id, i) => [id, { status: 'ok' as const, name: `Real Player ${i + 1}` }])) });
+
+  it('stages the tournament and one add step per player, each addressed to the new tournament by reference', async () => {
+    const h = makeHarness({ source: { facts: (plan) => names(plan as ReturnType<typeof cup>) } });
+    h.store.setPlan(cup());
+    h.store.see(CONVERSATION_ID, RULESET_VERSION, ...PLAYERS);
+    const result = staged(await h.stage('propose_build', { plan_revision: 1 }));
+    expect(result.kind).toBe('build');
+    const row = h.store.proposals[0];
+    const steps = storedStepSchema.array().parse(row.steps);
+    expect(steps.map((s) => [s.key, s.op, s.method, s.route_template, s.ref_key])).toEqual([
+      ['tournament', 'tournament_create', 'POST', '/api/tournaments', 'tournament'],
+      ['roster.1', 'tournament_participant_add', 'POST', '/api/tournaments/[id]/participants', null],
+      ['roster.2', 'tournament_participant_add', 'POST', '/api/tournaments/[id]/participants', null],
+      ['roster.3', 'tournament_participant_add', 'POST', '/api/tournaments/[id]/participants', null],
+      ['roster.4', 'tournament_participant_add', 'POST', '/api/tournaments/[id]/participants', 'roster'],
+    ]);
+    expect(steps[1].path_params).toEqual({ id: { $ref: 'tournament.id' } });
+    expect(steps[1].body_template).toEqual({ player_id: PLAYERS[0] });
+    // The tournament does not exist yet: the player steps' reads are evaluated by the step that creates it.
+    expect(steps[1].preconditions).toEqual([{ read: 'tournament_roster_hash', target: { kind: 'ref', ref: 'tournament.id' }, fingerprint: null }]);
+    expect(row.acks_required).toEqual(['visible_publicly']);
+
+    // The card has one line per player with the stored name (never the typed text), and counts one creating step.
+    const card = proposalCardSchema.parse(row.preview);
+    expect(card.summary).toEqual({ steps: 5, creates: 1 });
+    expect(card.steps.slice(1).map((s) => [s.op, s.action, s.target.entity, s.target.id, s.target.name?.text])).toEqual(PLAYERS.slice(0, 4).map((id, i) => ['tournament_participant_add', 'add', 'player', id, `Real Player ${i + 1}`]));
+  });
+
+  it('shows no name for a player the facts have none for, and sends no body but the player id', async () => {
+    const h = makeHarness();
+    h.store.setPlan(cup({}, 2));
+    h.store.see(CONVERSATION_ID, RULESET_VERSION, ...PLAYERS);
+    staged(await h.stage('propose_build', { plan_revision: 1 }));
+    const card = proposalCardSchema.parse(h.store.proposals[0].preview);
+    expect(card.steps.slice(1).every((s) => s.target.name === null)).toBe(true);
+  });
+
+  it('adds the remaining players to a tournament built earlier, fingerprinting its roster once', async () => {
+    const live = uid(7700);
+    const plan = cup({ tournament: { entity_type: 'tournament', entity_id: live } }, 3);
+    const h = makeHarness({ source: { facts: (p) => okFacts(p, { refs: { tournament: 'live' }, tournamentStatus: 'upcoming', enrolledPlayerIds: [] }) } });
+    h.store.setPlan(plan);
+    h.store.see(CONVERSATION_ID, RULESET_VERSION, ...PLAYERS);
+    staged(await h.stage('propose_build', { plan_revision: 1 }));
+    const steps = storedStepSchema.array().parse(h.store.proposals[0].steps);
+    expect(steps.map((s) => s.key)).toEqual(['roster.1', 'roster.2', 'roster.3']);
+    expect(steps[0].path_params).toEqual({ id: live });
+    expect(steps[0].targets).toEqual([{ kind: 'tournament', id: live }]);
+    expect(h.guards).toContainEqual({ kind: 'tournament', id: live, versionId: undefined });
+    expect(steps[0].preconditions.map((p) => [p.read, p.fingerprint === null])).toEqual([['tournament_roster_hash', false]]);
+    // The later players change the same roster: their read is evaluated by the first.
+    expect(steps[1].preconditions.every((p) => p.fingerprint === null)).toBe(true);
+  });
+
+  it('refuses a tournament that has started, a player already on it and an unseen player id', async () => {
+    const live = uid(7700);
+    const plan = cup({ tournament: { entity_type: 'tournament', entity_id: live } }, 2);
+    const started = makeHarness({ source: { facts: (p) => okFacts(p, { refs: { tournament: 'live' }, tournamentStatus: 'active' }) } });
+    started.store.setPlan(plan);
+    started.store.see(CONVERSATION_ID, RULESET_VERSION, ...PLAYERS);
+    const closed = refused(await started.stage('propose_build', { plan_revision: 1 }));
+    expect(closed).toMatchObject({ code: 'plan_not_ready', findings: [{ code: 'tournament_participant_add_locked', section: 'roster' }] });
+
+    const twice = makeHarness({ source: { facts: (p) => okFacts(p, { refs: { tournament: 'live' }, tournamentStatus: 'upcoming', enrolledPlayerIds: [PLAYERS[0]] }) } });
+    twice.store.setPlan(plan);
+    twice.store.see(CONVERSATION_ID, RULESET_VERSION, ...PLAYERS);
+    expect(refused(await twice.stage('propose_build', { plan_revision: 1 }))).toMatchObject({ findings: [{ code: 'participant_already_enrolled' }] });
+
+    const unseen = makeHarness();
+    unseen.store.setPlan(cup({}, 2));
+    unseen.store.see(CONVERSATION_ID, RULESET_VERSION);
+    expect(refused(await unseen.stage('propose_build', { plan_revision: 1 }))).toMatchObject({ code: 'unknown_reference', params: { id: PLAYERS[0] } });
+  });
+
+  it('refuses a roster that would make the Build too large', async () => {
+    const h = makeHarness();
+    const big = cup({}, 1);
+    h.store.setPlan(parseOrThrow({ ...big, slots: { ...big.slots, roster: { entries: Array.from({ length: 40 }, (_, i) => ({ input: `P${i}`, state: 'resolved' as const, player_id: uid(5000 + i) })) } } }));
+    h.store.see(CONVERSATION_ID, RULESET_VERSION);
+    expect(refused(await h.stage('propose_build', { plan_revision: 1 })).code).toBe('plan_not_ready');
+  });
+});
+
 describe('propose_build: what the card says about rulesets and who creates', () => {
   it('says a private ruleset becomes publicly readable when a league pins it (plan 3.5 rule 7)', async () => {
     const h = makeHarness({ visibility: 'private' });

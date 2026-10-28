@@ -7,6 +7,7 @@
  */
 import type { ApiErrorCode } from '@/i18n/messages/errors';
 import type { JsonValue } from '@/lib/studio-core/json';
+import type { StartupChecklist } from '@/lib/tournament/startup-checklist';
 import type { AdminAgentConfig } from '../env';
 import type { PlanDocument } from '../plans/schema';
 import type { PlanFacts } from '../plans/facts';
@@ -155,7 +156,9 @@ export interface StagingSource {
   /** The pin impact count; throws a coded `rate_limited` when the shared hourly bucket is spent. */
   pinImpact(input: { definitionId: string; toVersionNo: number; targets: ReadonlyArray<{ kind: 'season' | 'tournament'; id: string }> }): Promise<PinImpactFact>;
   phaseStart(tournamentId: string): Promise<PhaseStartFact | null>;
-  /** Masked counts of the channels an event would reach (PR5). Absent: the card says the app cannot tell. */
+  /** The start-up checklist of a tournament or league phase (`buildStartupChecklist` over `loadStartupInput`); `null` when it does not exist. */
+  startupChecklist(tournamentId: string): Promise<StartupChecklist | null>;
+  /** Masked counts of the channels an event would reach (`previewRecipients`). Absent: the card says the app cannot tell. */
   recipients?(input: { eventType: string; tournamentId: string | null; seasonId: string | null }): Promise<{
     discord: { count: number; names: readonly string[] };
     social: { count: number; names: readonly string[] };
@@ -164,7 +167,7 @@ export interface StagingSource {
    * What an undo needs beyond fingerprints: the lock facts of the leagues it would touch (a round exists, the league started) and
    * the names of the players a roster undo removes.
    */
-  undoFacts(input: { leagueIds: readonly string[]; playerIds: readonly string[] }): Promise<{ locks: UndoLockFacts; playerNames: Readonly<Record<string, string>> }>;
+  undoFacts(input: { leagueIds: readonly string[]; playerIds: readonly string[]; tournamentIds?: readonly string[] }): Promise<{ locks: UndoLockFacts; playerNames: Readonly<Record<string, string>> }>;
   /** The state reads behind the precondition fingerprints (shared with the approve route's recheck). */
   fingerprints: FingerprintSource;
 }

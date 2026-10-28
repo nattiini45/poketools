@@ -7,9 +7,9 @@ import 'server-only';
  * The same `liveFingerprints` is what the approve route's precondition recheck uses, so staging and execution cannot
  * disagree about what a read returns.
  *
- * Two reads are not available yet and fail closed with `ReadUnavailable` (staging answers `tool_not_available`):
- * `startup_checklist` and `channel_set` wait for the startup-input and recipient-matcher exports of the platform PR
- * (plan PR5). A first-round start or a bracket cannot be staged until then, by design.
+ * `startup_checklist` and `channel_set` (the two reads a start or a bracket is guarded by) answer from `loadStartupInput` with
+ * the pure `buildStartupChecklist`, and from `previewRecipients` over the senders' own matchers. A read the app cannot answer
+ * still fails closed with `ReadUnavailable` (staging answers `tool_not_available`).
  */
 import { requireEnv } from '@/lib/env';
 import { requireAnyAdmin } from '@/lib/auth/helpers';
@@ -37,7 +37,11 @@ import {
 import { getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
 import { getSeasonById, getSeasonParticipants, listSeasons, listSeasonsByIds } from '@/lib/supabase/queries/seasons';
 import { getParticipants, getStagesBySeasonId, getTournamentById, listAllTournaments } from '@/lib/supabase/queries/tournaments';
+import { previewRecipients } from '@/lib/admin/outward-recipients';
 import { buildBracketStructureForParticipants } from '@/lib/tournament/bracket-structure';
+import { buildStartupChecklist } from '@/lib/tournament/startup-checklist';
+import { loadStartupInput, startupChecklistState } from '@/lib/tournament/startup-checklist.server';
+import type { DiscordEventType } from '@/types/discord';
 import type { JsonValue } from '@/lib/studio-core/json';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -49,7 +53,7 @@ import { toolErrorFromThrown } from '../registry/errors';
 import { STAGED_TOOLS } from '../registry/staged';
 import { adminAgentStore } from '../store';
 import { draftDocState, draftLifeState, leagueAfterState, pinTargetsState, rosterMembersState, tournamentAfterState, type StepFacts } from './after-state';
-import { ReadUnavailable, type FingerprintSource, type ReadName, type ReadTarget } from './fingerprints';
+import type { FingerprintSource, ReadName, ReadTarget } from './fingerprints';
 import { createProposalStager } from './stage';
 import type { EpbBattleRulesetHead, StagerDeps, StagingSource } from './types';
 
@@ -87,11 +91,11 @@ function playerFact(player: Awaited<ReturnType<typeof getPlayersByIds>> extends 
   if (player.status === 'banned') return { status: 'banned' };
   if (player.status === 'suspended' && (player.suspended_until === null || new Date(player.suspended_until).getTime() > now)) return { status: 'suspended' };
   if (player.is_test_account) return { status: 'test' };
-  return { status: 'ok', isGuest: player.is_guest };
+  return { status: 'ok', isGuest: player.is_guest, name: player.name };
 }
 
 async function refFact(refKey: string, entityType: string, entityId: string): Promise<RefFact> {
-  if (entityType === 'tournament') {
+  if (entityType === 'tournament' || entityType === 'tournament_roster') {
     if ((await getTournamentById(entityId)) === null) return 'gone';
     return (await codeOf(() => guardFor({ kind: 'tournament', id: entityId }), 'ref tournament')) === null ? 'live' : 'no_access';
   }
@@ -190,6 +194,15 @@ async function loadPlanFacts(input: Parameters<StagingSource['loadPlanFacts']>[0
     facts.enrolledPlayerIds = roster.map((participant) => participant.id.toLowerCase());
     facts.liveRosterCount = roster.length;
   }
+  // The roster of a standalone tournament built earlier: its status (players join while it is `upcoming`) and who is already in.
+  const builtTournament = plan.slots.league === undefined ? plan.refs.tournament?.entity_id : undefined;
+  if (builtTournament !== undefined && plan.slots.roster !== undefined) {
+    const [row, participants] = await Promise.all([getTournamentById(builtTournament), getParticipants(builtTournament)]);
+    if (row !== null) {
+      facts.tournamentStatus = row.status;
+      facts.enrolledPlayerIds = participants.map((participant) => participant.id.toLowerCase());
+    }
+  }
   return facts;
 }
 
@@ -234,6 +247,8 @@ export const liveFingerprints: FingerprintSource = {
       }
       case 'roster_hash':
         return sorted((await getSeasonParticipants(idOf(target))).map((p) => p.id.toLowerCase()), (id) => id);
+      case 'tournament_roster_hash':
+        return sorted((await getParticipants(idOf(target))).map((p) => p.id.toLowerCase()), (id) => id);
       case 'draft_pool_state': {
         const pools = await getDraftPoolsBySeason(idOf(target));
         return sorted(pools.map((pool) => ({ id: pool.id, engine: pool.engine, kind: pool.kind, phase: pool.phase, status: pool.status })), (p) => p.id);
@@ -299,6 +314,12 @@ export const liveFingerprints: FingerprintSource = {
         const roster = new Set((await getSeasonParticipants(String(params.season_id))).map((participant) => participant.id.toLowerCase()));
         return rosterMembersState(wanted.filter((id) => roster.has(id.toLowerCase())));
       }
+      case 'tournament_members': {
+        const params = paramsOf(target);
+        const wanted = Array.isArray(params.player_ids) ? params.player_ids.filter((id): id is string => typeof id === 'string') : [];
+        const roster = new Set((await getParticipants(String(params.tournament_id))).map((participant) => participant.id.toLowerCase()));
+        return rosterMembersState(wanted.filter((id) => roster.has(id.toLowerCase())));
+      }
       case 'pin_targets': {
         const targets = (paramsOf(target).targets as Array<{ kind: 'season' | 'tournament'; id: string }>) ?? [];
         const states = await getPinTargetStates(
@@ -316,10 +337,25 @@ export const liveFingerprints: FingerprintSource = {
         const draft = definition === null ? null : await getRulesetDefinitionDraft(definition.id);
         return definition === null || draft === null ? null : draftLifeState(draft.draft_rev, definition.current_version_id !== null);
       }
-      case 'startup_checklist':
-      case 'channel_set':
-        // The startup input and the webhook and social matchers are not exported yet (plan PR5): fail closed.
-        throw new ReadUnavailable(read);
+      case 'startup_checklist': {
+        // The state of the checklist the round manager would show for this phase (never a write: no roster sync).
+        const input = await loadStartupInput(idOf(target));
+        return input === null ? null : startupChecklistState(buildStartupChecklist(input));
+      }
+      case 'channel_set': {
+        // The channels each posting event would reach: row ids only, so a webhook or integration added, removed, disabled or
+        // re-filtered between the card and the click makes the card stale. Names and URLs are not part of it.
+        const params = paramsOf(target);
+        const tournament = await getTournamentById(String(params.tournament_id ?? ''));
+        if (tournament === null) return null;
+        const events = Array.isArray(params.events) ? params.events.filter((event): event is string => typeof event === 'string').sort() : [];
+        const out: Record<string, JsonValue> = {};
+        for (const eventType of events) {
+          const reach = await previewRecipients({ eventType: eventType as DiscordEventType, tournamentId: tournament.id, seasonId: tournament.season_id });
+          out[eventType] = { discord: [...reach.discord.ids], social: [...reach.social.ids] };
+        }
+        return out;
+      }
     }
   },
 };
@@ -410,7 +446,19 @@ export const liveSource: StagingSource = {
     };
   },
 
-  async undoFacts({ leagueIds, playerIds }) {
+  async startupChecklist(tournamentId) {
+    const input = await loadStartupInput(tournamentId);
+    return input === null ? null : buildStartupChecklist(input);
+  },
+
+  async recipients({ eventType, tournamentId, seasonId }) {
+    // Masked names and counts only; the ids are for the fingerprint (`channel_set`) and stay here.
+    if (tournamentId === null) return { discord: { count: 0, names: [] }, social: { count: 0, names: [] } };
+    const reach = await previewRecipients({ eventType: eventType as DiscordEventType, tournamentId, seasonId });
+    return { discord: { count: reach.discord.ids.length, names: reach.discord.names }, social: { count: reach.social.ids.length, names: reach.social.names } };
+  },
+
+  async undoFacts({ leagueIds, playerIds, tournamentIds = [] }) {
     // A round in any phase of a league locks the roster; a league that left `upcoming` has started.
     let roundsExist = false;
     let leagueStarted = false;
@@ -429,7 +477,13 @@ export const liveSource: StagingSource = {
         if (player !== undefined) playerNames[id.toLowerCase()] = player.name;
       }
     }
-    return { locks: { roundsExist, leagueStarted: leagueStarted || roundsExist }, playerNames };
+    // A tournament takes and loses players only while it is `upcoming` (and, for an elimination bracket, before its rounds).
+    let tournamentStarted = false;
+    for (const tournamentId of tournamentIds) {
+      const [tournament, rounds] = await Promise.all([getTournamentById(tournamentId), getRoundsByTournament(tournamentId)]);
+      if ((tournament !== null && tournament.status !== 'upcoming') || rounds.length > 0) tournamentStarted = true;
+    }
+    return { locks: { roundsExist, leagueStarted: leagueStarted || roundsExist, ...(tournamentIds.length > 0 ? { tournamentStarted } : {}) }, playerNames };
   },
 
   fingerprints: liveFingerprints,

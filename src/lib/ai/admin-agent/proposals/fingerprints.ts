@@ -25,6 +25,7 @@ export const READ_NAMES = [
   'season_state',
   'phase_stage_order',
   'roster_hash',
+  'tournament_roster_hash',
   'draft_pool_state',
   // Go-live
   'ruleset_draft',
@@ -36,6 +37,7 @@ export const READ_NAMES = [
   'league_after',
   'tournament_after',
   'roster_members',
+  'tournament_members',
   'pin_targets',
   'ruleset_draft_doc',
   'ruleset_draft_state',

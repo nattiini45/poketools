@@ -2,7 +2,7 @@
  * `deriveSteps(plan)`: the Build saga as data (plan 4.4). The model never writes the step list; this function does,
  * in the order decided by code:
  *
- *   league -> roster -> phases -> groups -> draft setup (-> a standalone tournament)
+ *   league -> roster -> phases -> groups -> draft setup (-> a standalone tournament -> its roster, one player per step)
  *
  * Roster comes before the phases because the first phase enrolls the roster at creation; groups come after the phases
  * so the split seeds from the first phase; draft pools are created pending, one per group, and never started. Private
@@ -30,6 +30,7 @@ import {
   toPhaseCreateBody,
   toRosterAddBody,
   toTournamentCreateBody,
+  toTournamentParticipantAddBody,
   type PlanRefObject,
 } from './route-bodies';
 import { draftRefKey, phaseRefKey, type PlanDocument } from './schema';
@@ -234,21 +235,37 @@ export function deriveSteps(plan: PlanDocument): PlanStep[] {
     }
   }
 
+  let tournamentKey: string | null = null;
   if (tournament && !built('tournament')) {
-    steps.push(
-      makeStep(
-        'tournament',
-        'tournament_create',
-        'tournament',
-        { body: toTournamentCreateBody(plan, tournament) },
-        [],
-        [
-          { kind: 'visible_publicly', entity: 'tournament' },
-          { kind: 'creator_becomes_admin' },
-          { kind: 'pins_ruleset', source: tournament.ruleset === 'plan' ? 'plan' : 'explicit' },
-        ],
-      ),
+    const step = makeStep(
+      'tournament',
+      'tournament_create',
+      'tournament',
+      { body: toTournamentCreateBody(plan, tournament) },
+      [],
+      [
+        { kind: 'visible_publicly', entity: 'tournament' },
+        { kind: 'creator_becomes_admin' },
+        { kind: 'pins_ruleset', source: tournament.ruleset === 'plan' ? 'plan' : 'explicit' },
+      ],
     );
+    steps.push(step);
+    tournamentKey = step.key;
+  }
+
+  // The roster of a standalone tournament (a Plan without a league): one step per player, because the route takes one. The
+  // last one carries the `roster` ref, so a roster that stopped half way stays unbuilt and a follow-up Build adds the rest.
+  if (tournament && !league && roster && !built('roster')) {
+    const tournamentId: string | PlanRefObject = plan.refs.tournament ? plan.refs.tournament.entity_id : refTo('tournament.id');
+    const ids = resolvedRosterIds(plan);
+    let previousKey: string | null = null;
+    ids.forEach((playerId, index) => {
+      const key = `roster.${index + 1}`;
+      steps.push(
+        makeStep(key, 'tournament_participant_add', index === ids.length - 1 ? 'roster' : null, { path: { id: tournamentId }, body: toTournamentParticipantAddBody(playerId) }, after(tournamentKey, previousKey), []),
+      );
+      previousKey = key;
+    });
   }
 
   return steps;

@@ -35,6 +35,8 @@ const SAMPLES: Record<string, { params: Record<string, string>; body: unknown }>
   roster_add: { params: { id: ID }, body: { player_ids: [uid(100)] } },
   phase_create: { params: { id: ID }, body: { name: 'Phase', bracket_type: 'round_robin', ruleset_id: RULESET, best_of_default: 1, is_doubles: false, team_visibility: 'hidden_until_match' } },
   tournament_create: { params: {}, body: { name: 'Cup', bracket_type: 'single_elim', ruleset_id: RULESET, best_of_default: 3, is_doubles: false, team_visibility: 'hidden_until_match' } },
+  tournament_participant_add: { params: { id: ID }, body: { player_id: uid(100) } },
+  tournament_participant_remove: { params: { id: ID }, body: { player_id: uid(100) } },
   league_archive: { params: { id: ID }, body: { archived: true } },
   roster_remove: { params: { id: ID }, body: { player_id: uid(100) } },
   tournament_archive: { params: { id: ID }, body: { archived: true } },
@@ -52,21 +54,23 @@ const SAMPLES: Record<string, { params: Record<string, string>; body: unknown }>
 const manifest = (JSON.parse(readFileSync(path.join(REPO_ROOT, 'scripts/data/route-manifest-bindings.json'), 'utf8')) as { bindings: Array<{ method: string; path: string; class: string; phase: string }> }).bindings;
 
 describe('the registry', () => {
-  it('holds the four Build operations of phase 1, the three compensating calls they declare and the four stageable Go-live operations', () => {
+  it('holds the five Build operations of phase 1, the four compensating calls they declare and the four stageable Go-live operations', () => {
     expect(registry.all().map((binding) => binding.operation)).toEqual([
       'league_create',
       'roster_add',
       'phase_create',
       'tournament_create',
+      'tournament_participant_add',
       'league_archive',
       'roster_remove',
       'tournament_archive',
+      'tournament_participant_remove',
       ...GOLIVE_OPS,
       'ruleset_restore_draft',
       'ruleset_delete_draft',
     ]);
     expect(OP_BINDINGS).toHaveLength(registry.all().length);
-    expect(BUILD_BINDINGS).toHaveLength(7);
+    expect(BUILD_BINDINGS).toHaveLength(9);
     expect(UNDO_BINDINGS.map((binding) => binding.operation)).toEqual(Object.keys(UNDO_ONLY_OPS));
     expect(GOLIVE_BINDINGS.map((binding) => binding.operation)).toEqual(GOLIVE_OPS);
   });
@@ -79,7 +83,7 @@ describe('the registry', () => {
     expect(registry.has('groups_set')).toBe(false);
     expect(registry.has('draft_pool_create')).toBe(false);
     const bound = PLAN_OPS.filter((op) => registry.has(op));
-    expect(bound).toEqual(['league_create', 'roster_add', 'phase_create', 'tournament_create']);
+    expect(bound).toEqual(['league_create', 'roster_add', 'phase_create', 'tournament_create', 'tournament_participant_add']);
     // The Go-live tools staging does not stage yet have no binding either.
     for (const op of ['generate_round', 'start_round', 'complete_round', 'advance_phase', 'complete_tournament', 'league_status', 'league_trash', 'undo']) {
       expect(registry.has(op), op).toBe(false);

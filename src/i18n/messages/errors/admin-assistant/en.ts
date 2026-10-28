@@ -86,5 +86,9 @@ export default {
   pool_entry_duplicate: '{name} is listed more than once in the pool.',
   tier_label_mismatch: 'The tier {label} does not match any tier of the list; labels are case-sensitive.',
   draft_not_supported_for_format: 'This league format cannot run a draft.',
+  startup_not_ready: 'The start-up checklist of this phase is not complete: {blocked} item(s) still block it.',
+  startup_ruleset_missing: 'No ruleset is set for this phase.',
+  startup_best_of_invalid: 'The default best-of of this phase is not a positive whole number.',
+  startup_groups_unplaced: '{count} player(s) are not placed in a league group yet.',
   created_but_unadministrable: 'The tournament was created, but you were not made an admin of it. Ask a site admin.',
 } as const;

@@ -211,6 +211,7 @@ const ENTITY_PARAM: Readonly<Record<string, string>> = {
   league_archive: 'id',
   tournament_archive: 'id',
   roster_remove: 'id',
+  tournament_participant_remove: 'id',
   ruleset_restore_draft: 'id',
   ruleset_delete_draft: 'id',
 };
@@ -228,10 +229,10 @@ export function ledgerEntityId(op: string, call: Pick<StepCall, 'params'> | unde
 // ─── Symbolic references (spec §18.6) ────────────────────────────────────────
 
 /** The step op that may fill each `$ref` root. The path patterns are the Plan's (`REF_PATH_PATTERN`). */
-const REF_PRODUCERS: Readonly<Record<string, PlanOp>> = { league: 'league_create', groups: 'groups_set' };
+const REF_PRODUCERS: Readonly<Record<string, PlanOp>> = { league: 'league_create', tournament: 'tournament_create', groups: 'groups_set' };
 
 /** Ledger result fields (ids only) per op; every other op keeps `id`. */
-const RESULT_FIELDS: Readonly<Partial<Record<string, readonly string[]>>> = { league_create: ['id', 'ruleset_id'], roster_add: [] };
+const RESULT_FIELDS: Readonly<Partial<Record<string, readonly string[]>>> = { league_create: ['id', 'ruleset_id'], roster_add: [], tournament_participant_add: [] };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const uuidOrNull = (value: unknown): string | null => (typeof value === 'string' && isValidUuid(value) ? value.toLowerCase() : null);

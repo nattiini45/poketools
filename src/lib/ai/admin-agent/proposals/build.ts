@@ -30,6 +30,7 @@ export const BUILD_OP_ROUTES: Readonly<Record<PlanOp, OpRoute>> = Object.freeze(
   groups_set: { method: 'PUT', routeTemplate: '/api/seasons/[id]/groups' },
   draft_pool_create: { method: 'POST', routeTemplate: '/api/drafts' },
   tournament_create: { method: 'POST', routeTemplate: '/api/tournaments' },
+  tournament_participant_add: { method: 'POST', routeTemplate: '/api/tournaments/[id]/participants' },
 }) satisfies Record<PlanOp, { method: HttpMethod; routeTemplate: string }>;
 
 /**
@@ -44,6 +45,7 @@ export const BUILD_OP_PHASE: Readonly<Record<PlanOp, number>> = Object.freeze({
   groups_set: 2,
   draft_pool_create: 4,
   tournament_create: 1,
+  tournament_participant_add: 1,
 });
 
 /** A Plan in one of these states may be built (`partial`: a fresh Build for the remainder, plan 4.4). */
@@ -109,7 +111,10 @@ function preparedStep(step: PlanStep): PreparedStep {
     reversal: step.reversal,
     preconditions: [],
     outward_effects: [],
-    targets: season !== null && season.target.kind === 'id' && step.op !== 'draft_pool_create' ? [{ kind: 'season', id: season.target.id }] : [],
+    targets:
+      season !== null && season.target.kind === 'id' && step.op !== 'draft_pool_create'
+        ? [{ kind: step.op === 'tournament_participant_add' ? 'tournament' : 'season', id: season.target.id }]
+        : [],
   };
   return { step: draft, specs, touches };
 }
@@ -225,6 +230,8 @@ export async function prepareBuild(ctx: PrepareContext, args: { plan_revision: n
   // Card inputs that need one more read.
   const needsEpbHead = steps.some((step) => step.effects.some((effect) => effect.kind === 'ensures_battle_ruleset'));
   const epbHead = needsEpbHead ? await deps.source.epbBattleRulesetHead() : null;
+  const playerNames: Record<string, string> = {};
+  for (const [id, fact] of Object.entries(facts.players ?? {})) if (fact.status === 'ok' && fact.name !== undefined) playerNames[id.toLowerCase()] = fact.name;
 
   return {
     kind: 'build',
@@ -243,7 +250,7 @@ export async function prepareBuild(ctx: PrepareContext, args: { plan_revision: n
     supersedeKey: `build:${record.id}`,
     ttl: 'build',
     card: (planCode) => ({
-      ...buildBuildCard({ plan, planId: record.id, planRevision: record.revision, steps, summary, rulesets, epbHead, warnings: readiness.warnings, admin }),
+      ...buildBuildCard({ plan, planId: record.id, planRevision: record.revision, steps, summary, rulesets, epbHead, warnings: readiness.warnings, admin, playerNames }),
       planCode,
     }),
   };

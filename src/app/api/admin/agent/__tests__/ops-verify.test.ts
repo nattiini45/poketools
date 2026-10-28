@@ -7,14 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ listSeasons: vi.fn(), listSeasonsByIds: vi.fn(), getSeasonParticipants: vi.fn() }));
-vi.mock('@/lib/supabase/queries/tournaments', () => ({ getStagesBySeasonId: vi.fn(), getTournamentById: vi.fn(), listAllTournaments: vi.fn() }));
+vi.mock('@/lib/supabase/queries/tournaments', () => ({ getStagesBySeasonId: vi.fn(), getTournamentById: vi.fn(), listAllTournaments: vi.fn(), getParticipants: vi.fn() }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: vi.fn() }));
 
 import { harnessError, mapRouteResponse, type Outcome, type VerifyCall, type VerifyContext } from '@/lib/ai/admin-agent/dispatch';
 import { uid } from '@/lib/ai/admin-agent/plans/__tests__/fixtures';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getSeasonParticipants, listSeasons, listSeasonsByIds } from '@/lib/supabase/queries/seasons';
-import { getStagesBySeasonId, getTournamentById, listAllTournaments } from '@/lib/supabase/queries/tournaments';
+import { getParticipants, getStagesBySeasonId, getTournamentById, listAllTournaments } from '@/lib/supabase/queries/tournaments';
 import { CLOCK_SKEW_MS } from '../_ops/g/shared';
 import { leagueArchive } from '../_ops/g/league-archive';
 import { leagueCreate } from '../_ops/g/league-create';
@@ -23,6 +23,8 @@ import { rosterAdd } from '../_ops/g/roster-add';
 import { rosterRemove } from '../_ops/g/roster-remove';
 import { tournamentArchive } from '../_ops/g/tournament-archive';
 import { tournamentCreate } from '../_ops/g/tournament-create';
+import { tournamentParticipantAdd } from '../_ops/g/tournament-participant-add';
+import { tournamentParticipantRemove } from '../_ops/g/tournament-participant-remove';
 
 const LEAGUE = uid(7001);
 const RULESET = uid(9001);
@@ -147,6 +149,30 @@ describe('roster_add', () => {
   });
 });
 
+describe('tournament_participant_add', () => {
+  const body = { player_id: PLAYERS[0] };
+  const verify = () => tournamentParticipantAdd.verify!(call('tournament_participant_add', body, { id: TOURNAMENT }), created(null), ctx());
+  const roster = (...ids: string[]) => vi.mocked(getParticipants).mockResolvedValue(ids.map((id) => ({ id })) as never);
+
+  it('confirms a player who is on the tournament, comparing ids in lower case', async () => {
+    roster(PLAYERS[0].toUpperCase(), uid(200));
+    expect(await verify()).toEqual({ status: 'confirmed', detail: { present: 1, expected: 1 } });
+    expect(getParticipants).toHaveBeenCalledWith(TOURNAMENT);
+  });
+
+  it('answers absent when he is not, and unknown when the body does not parse', async () => {
+    roster(PLAYERS[1]);
+    expect(await verify()).toEqual({ status: 'absent', detail: { present: 0, expected: 1 } });
+    expect(await tournamentParticipantAdd.verify!(call('tournament_participant_add', { ...body, extra: 1 }, { id: TOURNAMENT }), created(null), ctx())).toEqual({ status: 'unknown' });
+  });
+
+  it('declares the removal of the same player as its compensating call', () => {
+    const reversal = tournamentParticipantAdd.reversal as Extract<NonNullable<typeof tournamentParticipantAdd.reversal>, { kind: 'compensating' }>;
+    expect(reversal.operation).toBe('tournament_participant_remove');
+    expect(reversal.buildInput(call('tournament_participant_add', body, { id: TOURNAMENT }), null)).toEqual({ params: { id: TOURNAMENT }, body: { player_id: PLAYERS[0] } });
+  });
+});
+
 describe('phase_create', () => {
   const body = { name: 'Regular season', bracket_type: 'round_robin', best_of_default: 1, is_doubles: false, team_visibility: 'hidden_until_match', ruleset_id: RULESET };
   const phase = (overrides: Record<string, unknown> = {}) =>
@@ -244,6 +270,14 @@ describe('tournament_create', () => {
 });
 
 describe('the reversal bindings', () => {
+  it('tournament_participant_remove confirms a player who is gone from the tournament', async () => {
+    const verify = () => tournamentParticipantRemove.verify!(call('tournament_participant_remove', { player_id: PLAYERS[0] }, { id: TOURNAMENT }), created(null), ctx());
+    vi.mocked(getParticipants).mockResolvedValue([{ id: PLAYERS[1] }] as never);
+    expect(await verify()).toEqual({ status: 'confirmed', detail: { removed: 1 } });
+    vi.mocked(getParticipants).mockResolvedValue([{ id: PLAYERS[0] }] as never);
+    expect(await verify()).toEqual({ status: 'absent' });
+  });
+
   it('league_archive confirms an archived league and not a live one', async () => {
     const verify = () => leagueArchive.verify!(call('league_archive', { archived: true }, { id: LEAGUE }), created({}), ctx());
     vi.mocked(listSeasonsByIds).mockResolvedValue([league({ archived: true })]);

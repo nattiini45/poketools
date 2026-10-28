@@ -347,6 +347,51 @@ describe('planReadiness: draft setup (all blockers BEFORE Build)', () => {
   });
 });
 
+describe('planReadiness: the roster of a standalone tournament', () => {
+  const cup = (count = 8, refs: Record<string, unknown> = {}) =>
+    parseOrThrow({
+      v: 1, title: 'Cup', intent: 'tournament', contentLocale: 'en', assumptions: [], refs,
+      slots: {
+        ruleset: { mode: 'existing', version_id: RULESET_VERSION },
+        tournament: { name: 'Friday Cup', bracket_type: 'single_elim', best_of: 3, is_doubles: false, team_visibility: 'hidden_until_match', ruleset: 'plan' },
+        roster: resolvedRoster(count),
+      },
+    });
+
+  it('needs no league: the roster belongs to the tournament', () => {
+    const plan = cup();
+    expect(codes(plan)).toEqual([]);
+    expect(planReadiness(plan, okFacts(plan)).sections.roster).toMatchObject({ state: 'ready', resolved: 8, target: 8 });
+  });
+
+  it('still wants a league (or a tournament) for a roster that has neither', () => {
+    const plan = parseOrThrow({ v: 1, title: 'T', intent: 'mixed', contentLocale: 'en', assumptions: [], refs: {}, slots: { roster: resolvedRoster(2) } });
+    expect(find(planReadiness(plan, okFacts(plan)), 'plan_incomplete')?.params.missing).toBe('league');
+  });
+
+  it('applies the player checks: a banned player, an unknown one, a repeat and a count that does not match', () => {
+    const plan = cup(3);
+    const facts = okFacts(plan, { players: { [PLAYERS[0]]: { status: 'banned' }, [PLAYERS[1]]: { status: 'not_found' }, [PLAYERS[2]]: { status: 'ok' } } });
+    expect(codes(plan, facts)).toEqual(['player_not_eligible', 'player_not_found']);
+    const twice = parseOrThrow({ ...plan, slots: { ...plan.slots, roster: { entries: [plan.slots.roster!.entries[0], plan.slots.roster!.entries[0]], target_count: 2 } } });
+    expect(codes(twice)).toContain('roster_duplicate');
+  });
+
+  it('refuses a player already on a tournament built earlier, and a tournament that left upcoming', () => {
+    const plan = cup(2, { tournament: { entity_type: 'tournament', entity_id: uid(7700) } });
+    expect(codes(plan, okFacts(plan, { tournamentStatus: 'upcoming', enrolledPlayerIds: [PLAYERS[1]] }))).toEqual(['participant_already_enrolled']);
+    expect(find(planReadiness(plan, okFacts(plan, { tournamentStatus: 'active' })), 'tournament_participant_add_locked')).toMatchObject({ section: 'roster', params: { status: 'active' } });
+    const unknown = okFacts(plan);
+    expect(find(planReadiness(plan, unknown), 'fact_unavailable')).toMatchObject({ params: { kind: 'tournament_status' } });
+  });
+
+  it('does not ask for the status of a tournament the Build creates, or of a roster that is built', () => {
+    expect(codes(cup())).toEqual([]);
+    const built = cup(2, { tournament: { entity_type: 'tournament', entity_id: uid(7700) }, roster: { entity_type: 'tournament_roster', entity_id: uid(7700) } });
+    expect(find(planReadiness(built, okFacts(built, { tournamentStatus: 'active' })), 'tournament_participant_add_locked')).toBeUndefined();
+  });
+});
+
 describe('planReadiness: shape, text and size', () => {
   it('asks for the slots the intent needs', () => {
     const league = parseOrThrow({ v: 1, title: 'T', intent: 'league', contentLocale: 'en', assumptions: [], slots: {}, refs: {} });

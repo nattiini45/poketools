@@ -3,6 +3,7 @@ import { resolveContentLocale } from '@/i18n/content-locale';
 import { DEFAULT_CONTENT_LOCALE, type Locale } from '@/i18n/config';
 import { buildEmbed } from './embeds';
 import { generateMatchCardImage } from './match-card-image';
+import { matchesFilter, matchesFormatOptions } from './matchers';
 import type { DiscordEventPayload, DiscordWebhook, WebhookLanguage } from '@/types/discord';
 
 /**
@@ -85,12 +86,6 @@ async function emitAsync(payload: DiscordEventPayload): Promise<void> {
   }
 }
 
-function matchesFilter(webhook: DiscordWebhook, eventType: string): boolean {
-  // Empty filter = all events
-  if (webhook.event_filter.length === 0) return true;
-  return webhook.event_filter.includes(eventType as DiscordWebhook['event_filter'][number]);
-}
-
 function followsLeague(language: WebhookLanguage | undefined): boolean {
   return language === undefined || language === 'league';
 }
@@ -102,19 +97,6 @@ function followsLeague(language: WebhookLanguage | undefined): boolean {
 export function webhookLanguage(language: WebhookLanguage | undefined, contentLocale: Locale | null): Locale {
   if (language === 'de' || language === 'en') return language;
   return contentLocale ?? DEFAULT_CONTENT_LOCALE;
-}
-
-function matchesFormatOptions(webhook: DiscordWebhook, payload: DiscordEventPayload): boolean {
-  if (payload.data.kind === 'achievement_unlocked') {
-    return webhook.format_options.show_achievements;
-  }
-  if (payload.data.kind === 'streak_milestone' || payload.data.kind === 'streak_broken') {
-    return webhook.format_options.show_streaks;
-  }
-  if (payload.data.kind === 'rating_milestone') {
-    return webhook.format_options.show_ratings;
-  }
-  return true;
 }
 
 // ── Discord API ─────────────────────────────────────────────────────

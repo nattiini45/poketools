@@ -254,6 +254,72 @@ describe('deriveSteps: clone and tournament', () => {
   });
 });
 
+describe('deriveSteps: the roster of a standalone tournament', () => {
+  const tournamentPlan = (count = 8) =>
+    parseOrThrow({
+      v: 1, title: 'Cup', intent: 'tournament', contentLocale: 'en', assumptions: [], refs: {},
+      slots: {
+        ruleset: { mode: 'existing', version_id: RULESET_VERSION },
+        tournament: { name: 'Friday Cup', bracket_type: 'single_elim', best_of: 3, is_doubles: false, team_visibility: 'hidden_until_match', ruleset: 'plan' },
+        roster: resolvedRoster(count),
+      },
+    });
+
+  it('adds one step per player after the tournament, each blocked behind the one before', () => {
+    const steps = deriveSteps(tournamentPlan(3));
+    expect(keys(steps)).toEqual(['tournament', 'roster.1', 'roster.2', 'roster.3']);
+    expect(steps.map((step) => step.blockedBy)).toEqual([[], ['tournament'], ['tournament', 'roster.1'], ['tournament', 'roster.2']]);
+    expect(steps[1]).toMatchObject({
+      op: 'tournament_participant_add',
+      class: 'B',
+      guard: 'requireResourceAdmin',
+      entityType: 'tournament_roster',
+      creates: false,
+      verify: 'tournament_participant_present',
+      reversal: 'remove_tournament_participant',
+      reads: ['tournament_roster_hash'],
+    });
+    expect(steps[1].args).toEqual({ path: { id: refTo('tournament.id') }, query: {}, body: { player_id: PLAYERS[0] } });
+    expect(validateStepBodies(steps)).toEqual([]);
+  });
+
+  it('lets only the LAST player step fill the roster ref, so a half-added roster stays unbuilt', () => {
+    expect(deriveSteps(tournamentPlan(3)).map((step) => step.refKey)).toEqual(['tournament', null, null, 'roster']);
+  });
+
+  it('skips a built tournament and addresses it by its live id; skips a built roster', () => {
+    const live = uid(7700);
+    const built = setPlanRef(tournamentPlan(2), 'tournament', { entity_type: 'tournament', entity_id: live });
+    if (!built.ok) throw new Error('ref');
+    const steps = deriveSteps(built.plan);
+    expect(keys(steps)).toEqual(['roster.1', 'roster.2']);
+    expect(steps[0].args.path).toEqual({ id: live });
+    expect(steps[0].blockedBy).toEqual([]);
+    const done = setPlanRef(built.plan, 'roster', { entity_type: 'tournament_roster', entity_id: live });
+    if (!done.ok) throw new Error('ref');
+    expect(deriveSteps(done.plan)).toEqual([]);
+  });
+
+  it('leaves the roster to the league when the Plan has one (a mixed plan)', () => {
+    const plan = edit(workedExample(), { tournament: { name: 'Cup', bracket_type: 'single_elim', best_of: 1, is_doubles: false, team_visibility: 'hidden_until_match', ruleset: 'plan' } });
+    expect(deriveSteps(plan).filter((step) => step.op === 'tournament_participant_add')).toEqual([]);
+  });
+
+  it('knows the ref path and counts no creating step for a player', () => {
+    expect(REF_PATH_PATTERN.test('tournament.id')).toBe(true);
+    expect(REF_PATH_PATTERN.test('tournament.ruleset_id')).toBe(false);
+    expect(summarizeBuild(deriveSteps(tournamentPlan(8)))).toEqual({ steps: 9, creating: 1, acks: ['visible_publicly'], overLimit: [] });
+    // The cap of 40 steps: the tournament and 39 players fit, a fortieth player does not.
+    const many = (count: number): PlanDocument => {
+      const plan = tournamentPlan(1);
+      const entries = Array.from({ length: count }, (_, i) => ({ input: `P${i}`, state: 'resolved' as const, player_id: uid(5000 + i) }));
+      return parseOrThrow({ ...plan, slots: { ...plan.slots, roster: { entries } } });
+    };
+    expect(summarizeBuild(deriveSteps(many(39))).overLimit).toEqual([]);
+    expect(summarizeBuild(deriveSteps(many(40))).overLimit).toEqual(['steps']);
+  });
+});
+
 describe('deriveSteps: unpublished ruleset', () => {
   it('leaves ruleset_id out instead of inventing one (the route schema then refuses it, as readiness does)', () => {
     const plan = edit(workedExample(), { ruleset: { mode: 'new', name: 'N', base_locale: 'en' } });

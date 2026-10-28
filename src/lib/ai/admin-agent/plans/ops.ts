@@ -7,7 +7,7 @@
  * registry and `_ops/g`; the executor resolves each `op` there and never trusts a stored step as logic.
  */
 
-export const PLAN_OPS = ['league_create', 'roster_add', 'phase_create', 'groups_set', 'draft_pool_create', 'tournament_create'] as const;
+export const PLAN_OPS = ['league_create', 'roster_add', 'phase_create', 'groups_set', 'draft_pool_create', 'tournament_create', 'tournament_participant_add'] as const;
 export type PlanOp = (typeof PLAN_OPS)[number];
 
 /** What undo can do for an op (compensating only; nothing here hard-deletes, plan 4.7). */
@@ -15,6 +15,7 @@ export type ReversalKind =
   | 'archive_league'
   | 'archive_tournament'
   | 'remove_roster'
+  | 'remove_tournament_participant'
   | 'clear_groups'
   /** No reversal: the row stays behind as "archived residue" of an archived league. */
   | 'none';
@@ -31,10 +32,11 @@ export const READ_STATE_DOMAIN: Readonly<Record<string, PlanStateDomain>> = Obje
   season_state: 'state',
   phase_stage_order: 'phases',
   roster_hash: 'roster',
+  tournament_roster_hash: 'roster',
   draft_pool_state: 'drafts',
 });
 
-export type PlanEntityType = 'season' | 'tournament' | 'draft_pool' | 'season_roster' | 'season_groups';
+export type PlanEntityType = 'season' | 'tournament' | 'draft_pool' | 'season_roster' | 'tournament_roster' | 'season_groups';
 
 export interface PlanOpInfo {
   /** The guard the route runs first (the vocabulary of the route-manifest test). */
@@ -110,6 +112,16 @@ export const PLAN_OP_INFO: Readonly<Record<PlanOp, PlanOpInfo>> = Object.freeze(
     // The creator-admin grant is best-effort in the route: the read-back is `created_but_unadministrable` otherwise.
     verify: 'tournament_administrable',
     reversal: 'archive_tournament',
+  },
+  // One player per call (the route takes one). The tournament must be `upcoming`; the removal is refused once it has started.
+  tournament_participant_add: {
+    guard: 'requireResourceAdmin',
+    entityType: 'tournament_roster',
+    creates: false,
+    reads: ['tournament_roster_hash'],
+    changes: ['roster'],
+    verify: 'tournament_participant_present',
+    reversal: 'remove_tournament_participant',
   },
 });
 

@@ -42,6 +42,8 @@ export interface UndoLockFacts {
   groupsScheduled?: boolean;
   /** The league started (status, a phase left `upcoming`, or a round exists). */
   leagueStarted?: boolean;
+  /** A standalone tournament left `upcoming`, or has a round: its roster is locked. */
+  tournamentStarted?: boolean;
   formatAttached?: boolean;
   formatHasVersions?: boolean;
   /** A pinned ruleset target is completed. */
@@ -77,6 +79,7 @@ export type UndoReason =
   | 'locked_started'
   | 'locked_rounds'
   | 'locked_groups'
+  | 'locked_tournament'
   | 'locked_in_progress'
   | 'format_in_use'
   | 'pin_locked'
@@ -98,6 +101,7 @@ export type UndoAction =
   | 'archive_league'
   | 'archive_tournament'
   | 'remove_roster'
+  | 'remove_tournament_participant'
   | 'clear_groups'
   | 'inverse_patch'
   | 'reattach_previous_format'
@@ -148,6 +152,8 @@ const RULES: Readonly<Record<string, Rule>> = Object.freeze({
     tier: 'B',
     unless: { groupsScheduled: 'locked_groups', roundsExist: 'locked_rounds' },
   },
+  // The route refuses a removal once the tournament has started (status, or the rounds of an elimination bracket).
+  tournament_participant_add: { kind: 'reversal', action: 'remove_tournament_participant', tier: 'B', unless: { tournamentStarted: 'locked_tournament' } },
   // Phases are archived with the league; delete is not a tool.
   phase_create: { kind: 'none', reason: 'residue' },
   groups_set: { kind: 'reversal', action: 'clear_groups', tier: 'B', unless: { roundsExist: 'locked_rounds' } },
@@ -180,7 +186,7 @@ export const UNDO_MAX_STEPS = 20;
 /** Every reason a catalog must word (the card shows them). */
 export const UNDO_REASONS: readonly UndoReason[] = Object.freeze([
   'unknown_op', 'immutable', 'outward_effect', 'separate_card', 'not_offered', 'needs_superadmin', 'residue', 'already_undone', 'not_completed',
-  'edited_outside', 'entity_gone', 'fingerprint_unavailable', 'locked_started', 'locked_rounds', 'locked_groups', 'locked_in_progress',
+  'edited_outside', 'entity_gone', 'fingerprint_unavailable', 'locked_started', 'locked_rounds', 'locked_groups', 'locked_tournament', 'locked_in_progress',
   'format_in_use', 'pin_locked', 'ruleset_published', 'superseded', 'too_many_steps', 'snapshot_unavailable', 'before_missing',
 ]);
 

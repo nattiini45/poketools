@@ -13,6 +13,7 @@ import {
   draftPoolCreateSchema,
   phaseCreateSchema,
   seasonCreateRequestSchema,
+  seasonParticipantAddSchema,
   seasonParticipantBulkAddSchema,
   tournamentCreateSchema,
 } from '@/lib/validation/schemas';
@@ -46,6 +47,8 @@ function schemaFor(op: PlanOp, body: Record<string, JsonValue>): z.ZodType {
       return body.kind === undefined ? draftPoolCreateSchema : queueDraftBodySchema;
     case 'tournament_create':
       return tournamentCreateSchema;
+    case 'tournament_participant_add':
+      return seasonParticipantAddSchema;
   }
 }
 

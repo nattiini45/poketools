@@ -22,6 +22,7 @@ const db = vi.hoisted(() => ({
   audit: [] as Array<Record<string, unknown>>,
   added: [] as Array<[string, string]>,
   syncs: [] as string[],
+  cup: [] as string[],
 }));
 
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
@@ -125,6 +126,13 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentWithDetails: vi.fn(async (id: string) => db.phases.find((row) => row.id === id) ?? null),
   getTournamentById: vi.fn(async (id: string) => db.phases.find((row) => row.id === id) ?? null),
   listAllTournaments: vi.fn(async () => db.phases),
+  getParticipants: vi.fn(async () => db.cup.map((id) => ({ id }))),
+  addParticipant: vi.fn(async (_tournamentId: string, playerId: string) => {
+    db.cup.push(playerId);
+  }),
+  removeParticipant: vi.fn(async (_tournamentId: string, playerId: string) => {
+    db.cup = db.cup.filter((id) => id !== playerId);
+  }),
 }));
 
 vi.mock('@/lib/tournament/enrollment-sync', () => ({
@@ -139,7 +147,7 @@ vi.mock('@/lib/tournament/enrollment-sync', () => ({
 }));
 
 import { createSeason, addSeasonParticipant } from '@/lib/supabase/queries/seasons';
-import { createTournament } from '@/lib/supabase/queries/tournaments';
+import { addParticipant, createTournament } from '@/lib/supabase/queries/tournaments';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { invokeRoute } from '@/lib/ai/admin-agent/dispatch';
 import { executeProposal } from '@/lib/ai/admin-agent/proposals/executor';
@@ -147,13 +155,15 @@ import { PLAYERS, RULESET_VERSION } from '@/lib/ai/admin-agent/plans/__tests__/f
 import { LEAGUE_ID, PHASE_IDS, makeWorld, reseal, statusesOf, type World } from '@/lib/ai/admin-agent/proposals/__tests__/executor-helpers';
 import { getBindingRegistry } from '../_ops/g';
 import { tournamentCreate } from '../_ops/g/tournament-create';
+import { tournamentParticipantAdd } from '../_ops/g/tournament-participant-add';
+import { tournamentParticipantRemove } from '../_ops/g/tournament-participant-remove';
 
 let world: World;
 
 beforeEach(async () => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
-  Object.assign(db, { seasons: [], roster: [], phases: [], audit: [], added: [], syncs: [] });
+  Object.assign(db, { seasons: [], roster: [], phases: [], audit: [], added: [], syncs: [], cup: [] });
   world = await makeWorld();
 });
 
@@ -346,5 +356,42 @@ describe('a standalone tournament', () => {
       resource_name: 'Summer Cup',
       metadata: { via: 'agent', agent_step: 'tournament', agent_tool: 'tournament_create', agent_proposal_id: world.proposalId, bracket_type: 'single_elim' },
     });
+  });
+});
+
+describe('a player of a standalone tournament', () => {
+  const CUP = '00000000-0000-4000-8000-000000007800';
+  const cup = (overrides: Record<string, unknown> = {}) => ({ id: CUP, name: 'Friday Cup', season_id: null, bracket_type: 'single_elim', status: 'upcoming', ...overrides });
+
+  async function call(binding: typeof tournamentParticipantAdd | typeof tournamentParticipantRemove, playerId: string) {
+    const input = await world.input();
+    return invokeRoute(binding, { params: { id: CUP }, body: { player_id: playerId } }, { session: input.session, inbound: input.inbound, audit: { agent_conversation_id: world.row.conversation_id, agent_proposal_id: world.proposalId, agent_step: 'roster.1', approved_by: input.adminId } });
+  }
+
+  it('is added by the route as the same session, and the read-back sees him', async () => {
+    db.phases.push(cup());
+    const outcome = await call(tournamentParticipantAdd, PLAYERS[0]);
+    expect(outcome).toMatchObject({ kind: 'ok', httpStatus: 201 });
+    expect(vi.mocked(addParticipant).mock.calls).toEqual([[CUP, PLAYERS[0]]]);
+    expect(db.cup).toEqual([PLAYERS[0]]);
+    const verdict = await tournamentParticipantAdd.verify!({ step: { key: 'roster.1', op: 'tournament_participant_add', entity_type: 'tournament_roster', targets: [] }, params: { id: CUP }, query: {}, body: { player_id: PLAYERS[0] } }, outcome, { adminId: '00000000-0000-4000-8000-000000000001', isSiteAdmin: true });
+    expect(verdict).toEqual({ status: 'confirmed', detail: { present: 1, expected: 1 } });
+  });
+
+  it('is refused by the route once the tournament has started, with its own typed code', async () => {
+    db.phases.push(cup({ status: 'active' }));
+    const outcome = await call(tournamentParticipantAdd, PLAYERS[0]);
+    expect(outcome).toMatchObject({ kind: 'locked', httpStatus: 400, code: 'tournament_participant_add_locked' });
+    expect(addParticipant).not.toHaveBeenCalled();
+  });
+
+  it('is removed by the compensating route, which refuses the same way once started', async () => {
+    db.phases.push(cup());
+    db.cup.push(PLAYERS[0], PLAYERS[1]);
+    expect(await call(tournamentParticipantRemove, PLAYERS[0])).toMatchObject({ kind: 'ok', httpStatus: 200 });
+    expect(db.cup).toEqual([PLAYERS[1]]);
+    db.phases[0].status = 'active';
+    expect(await call(tournamentParticipantRemove, PLAYERS[1])).toMatchObject({ kind: 'locked', code: 'tournament_participant_remove_locked' });
+    expect(db.cup).toEqual([PLAYERS[1]]);
   });
 });

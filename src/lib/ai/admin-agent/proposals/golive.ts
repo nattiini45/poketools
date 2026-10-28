@@ -17,7 +17,8 @@ import { line, text, type CardAck, type CardEffect, type CardEntity, type CardLi
 import type { PreconditionSpec } from './fingerprints';
 import { StageRefusal, type PrepareContext, type Prepared } from './prepare';
 import type { StepDraft } from './steps';
-import type { PhaseStartFact, PinTargetFact } from './types';
+import type { StartupChecklist, StartupItemId } from '@/lib/tournament/startup-checklist';
+import type { PhaseStartFact, PinTargetFact, StageFinding } from './types';
 
 export const GOLIVE_STAGEABLE = ['propose_publish_ruleset', 'propose_move_pin', 'propose_start_phase', 'propose_generate_bracket'] as const;
 export type GoLiveToolName = (typeof GOLIVE_STAGEABLE)[number];
@@ -56,6 +57,8 @@ interface GoLiveCardParts {
   /** Effect groups to acknowledge; a subset of the tool's declared outward effects. */
   effectKeys: string[];
   ids: { tournamentId: string | null; seasonId: string | null };
+  /** Card-level notes that do not block (an `attention` item of the start-up checklist). */
+  warnings?: CardLine[];
 }
 
 async function effectsOf(ctx: PrepareContext, keys: readonly string[], ids: GoLiveCardParts['ids']): Promise<CardEffect[]> {
@@ -114,7 +117,7 @@ async function prepared(
       summary: { steps: 1, creates: 0 },
       steps: [{ key: draft.key, op: draft.op, ...parts.step }],
       lines: [],
-      warnings: [],
+      warnings: parts.warnings ?? [],
       assumptions: [],
       acks,
       outwardEffects: outward,
@@ -258,12 +261,42 @@ function phaseFindings(fact: PhaseStartFact, op: 'start_phase' | 'generate_brack
   if (fact.seasonFormatType === 'custom' && !fact.formatAttached) throw new StageRefusal('format_not_attached');
 }
 
+/**
+ * The catalogued reason of each start-up checklist item that can block: the route's own code where the generate routes
+ * answer one, the assistant's own otherwise (`errors/admin-assistant`).
+ */
+const STARTUP_BLOCK_CODE: Readonly<Record<Exclude<StartupItemId, 'seeding'>, string>> = {
+  participants: 'tournament_participants_too_few',
+  ruleset: 'startup_ruleset_missing',
+  bestOf: 'startup_best_of_invalid',
+  groups: 'startup_groups_unplaced',
+  previousRound: 'tournament_current_round_incomplete',
+  roundsRemaining: 'rounds_all_generated',
+};
+
+/** A checklist that blocks refuses the card, listing every blocked item as a finding (the checklist's own ids and values). */
+function startupFindings(checklist: StartupChecklist): void {
+  const blocked = checklist.items.filter((item) => item.state === 'blocked');
+  if (blocked.length === 0) return;
+  // The seeding item never blocks (the checklist marks it `attention` at most).
+  const findings: StageFinding[] = blocked.map((item) => ({ code: item.id === 'seeding' ? 'startup_not_ready' : STARTUP_BLOCK_CODE[item.id], section: item.id, params: item.params }));
+  throw new StageRefusal('startup_not_ready', { blocked: blocked.length }, findings);
+}
+
 async function prepareStartOrBracket(ctx: PrepareContext, op: 'start_phase' | 'generate_bracket', args: { tournament_id: string; start_round?: boolean }): Promise<Prepared> {
   const { deps } = ctx;
   await deps.guard({ kind: 'tournament', id: args.tournament_id });
   const fact = await deps.source.phaseStart(args.tournament_id);
   if (fact === null) throw new StageRefusal('forbidden');
   phaseFindings(fact, op);
+  // What the round manager's "Before you generate" list says: a blocked item is refused here, as the generate route would at
+  // approve; an item that only needs attention (players without a seed) is listed on the card.
+  const checklist = await deps.source.startupChecklist(args.tournament_id);
+  if (checklist === null) throw new StageRefusal('forbidden');
+  startupFindings(checklist);
+  const warnings: CardLine[] = checklist.items
+    .filter((item) => item.state === 'attention' && item.id === 'seeding')
+    .map((item) => line('startup_unseeded', { unseeded: Number(item.params.unseeded ?? 0), count: Number(item.params.count ?? 0) }));
 
   const route = op === 'start_phase' ? { method: 'POST' as const, routeTemplate: '/api/generate-round/[tid]' } : { method: 'POST' as const, routeTemplate: '/api/tournaments/[id]/generate-bracket' };
   const pathKey = op === 'start_phase' ? 'tid' : 'id';
@@ -281,11 +314,15 @@ async function prepareStartOrBracket(ctx: PrepareContext, op: 'start_phase' | 'g
     outward_effects: [],
     preconditions: [],
   };
+  const effectKeys = declaredEffects(ctx.tool);
   const target = { kind: 'id' as const, id: fact.tournamentId };
+  // The channels the posting effects of this card would reach: the events are the card's own, so a bracket (one event) and a
+  // start (two) fingerprint what they would post.
+  const events = effectKeys.filter((key) => POSTING_EFFECTS.has(key)).sort();
   const specs: PreconditionSpec[] = [
     { read: 'phase_start_state', target },
     { read: 'startup_checklist', target },
-    { read: 'channel_set', target },
+    { read: 'channel_set', target: { kind: 'params', params: asJson({ tournament_id: fact.tournamentId, events }) } },
   ];
   const typed: CardAck | undefined =
     ctx.tool.typedName === 'league' ? { id: 'typed_name', kind: 'typed_name', of: 'league', expected: text(leagueName) } : undefined;
@@ -303,8 +340,9 @@ async function prepareStartOrBracket(ctx: PrepareContext, op: 'start_phase' | 'g
       reversal: 'started',
       existingEntity: !(await ctx.createdInChat([fact.seasonId ?? fact.tournamentId])),
       ack: typed,
-      effectKeys: declaredEffects(ctx.tool),
+      effectKeys,
       ids: { tournamentId: fact.tournamentId, seasonId: fact.seasonId },
+      warnings,
     },
     `${ctx.tool.name}:${fact.tournamentId}`,
   );

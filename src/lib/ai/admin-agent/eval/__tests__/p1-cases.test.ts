@@ -114,12 +114,16 @@ describe('selecting by stage and phase', () => {
     expect(casesForStage(all, 'plan', 1).map((c) => c.id)).toEqual([...loadCases().map((c) => c.id), 'LG1', 'LG4']);
   });
 
-  it('leaves a blocked case out of a run with no --cases, and runs it when it is named', () => {
-    const blocked = p1.filter((c) => c.blockedBy !== undefined).map((c) => c.id).sort();
-    expect(blocked).toEqual(['LG6', 'TN2', 'TN3']);
-    for (const id of blocked) expect(byId(id).blockedBy, id).toMatch(/startup_checklist/);
-    expect(casesForStage(all, 'e2e', 1).map((c) => c.id).sort()).toEqual(['LG2', 'RS1', 'RS3', 'TN1']);
+  it('blocks no P1 case any more: the start and the bracket read the startup checklist and the channels', () => {
+    expect(p1.filter((c) => c.blockedBy !== undefined).map((c) => c.id)).toEqual([]);
+    expect(casesForStage(all, 'e2e', 1).map((c) => c.id).sort()).toEqual(['LG2', 'LG6', 'RS1', 'RS3', 'TN1', 'TN2', 'TN3']);
     expect(casesForStage(all, 'exec', 1).map((c) => c.id).sort()).toEqual(['LG10', 'LG9', 'UN1']);
+  });
+
+  it('leaves a blocked case out of a run with no --cases, and runs it when it is named', () => {
+    const synthetic = [...all, { ...byId('TN2'), id: 'TN8', blockedBy: 'Waiting for something that does not exist yet.' }];
+    expect(casesForStage(synthetic, 'e2e', 1).map((c) => c.id)).not.toContain('TN8');
+    expect(selectCases(synthetic, ['TN8']).map((c) => c.id)).toEqual(['TN8']);
     expect(selectCases(all, ['TN2']).map((c) => c.id)).toEqual(['TN2']);
     expect(selectCases(all, ['LG']).map((c) => c.id).sort()).toEqual(['LG1', 'LG10', 'LG2', 'LG4', 'LG6', 'LG9']);
   });

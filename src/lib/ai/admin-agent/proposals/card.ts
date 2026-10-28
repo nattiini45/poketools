@@ -38,6 +38,7 @@ export const CARD_LINE_KINDS = [
   'ruleset_changes_live_rules',
   'draft_unsaved_changes',
   'archived_stays_reachable',
+  'startup_unseeded',
 ] as const;
 export type CardLineKind = (typeof CARD_LINE_KINDS)[number];
 
@@ -63,9 +64,10 @@ export const CARD_TEXT_KEYS: Readonly<Record<CardLineKind, string | null>> = {
   ruleset_changes_live_rules: null,
   draft_unsaved_changes: null,
   archived_stays_reachable: null,
+  startup_unseeded: null,
 };
 
-export const CARD_ENTITIES = ['league', 'roster', 'phase', 'groups', 'draft_pool', 'tournament', 'ruleset'] as const;
+export const CARD_ENTITIES = ['league', 'roster', 'phase', 'groups', 'draft_pool', 'tournament', 'ruleset', 'player'] as const;
 export type CardEntity = (typeof CARD_ENTITIES)[number];
 
 export const CARD_ACTIONS = ['create', 'add', 'set', 'publish', 'move_pin', 'start', 'generate_bracket', 'archive', 'remove', 'restore_draft', 'delete_draft'] as const;
@@ -222,6 +224,8 @@ export interface BuildCardInput {
   epbHead: EpbBattleRulesetHead | null;
   warnings: readonly PlanBlocker[];
   admin: StagingAdmin;
+  /** By lower-case player id: the stored display names, for the lines of a tournament roster. A player without one shows no name. */
+  playerNames?: Readonly<Record<string, string>>;
 }
 
 type Body = Record<string, unknown>;
@@ -229,7 +233,7 @@ type Body = Record<string, unknown>;
 const bodyOf = (step: PlanStep): Body => (typeof step.args.body === 'object' && step.args.body !== null && !Array.isArray(step.args.body) ? (step.args.body as Body) : {});
 const str = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 
-function stepTarget(step: PlanStep): { action: CardAction; target: CardTarget } {
+function stepTarget(step: PlanStep, playerNames: Readonly<Record<string, string>> = {}): { action: CardAction; target: CardTarget } {
   const body = bodyOf(step);
   switch (step.op) {
     case 'league_create':
@@ -247,6 +251,11 @@ function stepTarget(step: PlanStep): { action: CardAction; target: CardTarget } 
       return { action: 'create', target: { entity: 'draft_pool', id: null, name: null } };
     case 'tournament_create':
       return { action: 'create', target: { entity: 'tournament', id: null, name: text(str(body.name) ?? '') } };
+    case 'tournament_participant_add': {
+      const playerId = str(body.player_id);
+      const name = playerId === null ? undefined : playerNames[playerId.toLowerCase()];
+      return { action: 'add', target: { entity: 'player', id: playerId, name: name === undefined ? null : text(name, 120) } };
+    }
   }
 }
 
@@ -334,7 +343,7 @@ export function buildBuildCard(input: BuildCardInput): Omit<ProposalCard, 'planC
     },
     summary: { steps: input.summary.steps, creates: input.summary.creating },
     steps: steps.map((step) => {
-      const { action, target } = stepTarget(step);
+      const { action, target } = stepTarget(step, input.playerNames);
       return { key: step.key, op: step.op, action, target, items: [], lines: effectLines(step, input) };
     }),
     lines,

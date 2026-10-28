@@ -77,6 +77,10 @@ export default defineDe<typeof en>()({
   tier_label_mismatch:
     'Die Tier-Bezeichnung {label} passt zu keinem Tier der Liste; Groß- und Kleinschreibung zählt.',
   draft_not_supported_for_format: 'Dieses Ligaformat kann keinen Draft ausführen.',
+  startup_not_ready: 'Die Startcheckliste dieser Phase ist nicht vollständig: {blocked} Punkt(e) blockieren sie noch.',
+  startup_ruleset_missing: 'Für diese Phase ist kein Regelwerk gesetzt.',
+  startup_best_of_invalid: 'Das Standard-Best-of dieser Phase ist keine positive ganze Zahl.',
+  startup_groups_unplaced: '{count} Spieler sind noch keiner Ligagruppe zugeordnet.',
   created_but_unadministrable:
     'Das Turnier wurde erstellt, aber du bist nicht als Admin eingetragen. Wende dich an einen Site-Admin.',
 });

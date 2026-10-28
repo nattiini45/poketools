@@ -6,6 +6,7 @@ import { uid } from '../../plans/__tests__/fixtures';
 import { proposalCardSchema } from '../card';
 import { storedStepSchema } from '../steps';
 import { ADMIN, CONVERSATION_ID, DEFINITION_ID, SEASON_ID, TOURNAMENT_ID, forbidden, ledgerAction, makeHarness } from './helpers';
+import type { StartupChecklist } from '@/lib/tournament/startup-checklist';
 import type { StageRefused, StageStaged } from '../types';
 
 const staged = (result: unknown): StageStaged => {
@@ -266,6 +267,64 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
         expect(refused(await h.stage('propose_start_phase', args)).code).toBe('tool_not_available');
         expect(h.store.proposals).toHaveLength(0);
       }
+    });
+
+    it('fingerprints the channels of the card\'s own posting events: a start names two, a bracket one', async () => {
+      const start = makeHarness();
+      seeIt(start);
+      staged(await start.stage('propose_start_phase', args));
+      const bracket = makeHarness();
+      seeIt(bracket);
+      staged(await bracket.stage('propose_generate_bracket', args));
+      const channelTarget = (h: ReturnType<typeof makeHarness>) => lastRow(h).step.preconditions.find((p) => p.read === 'channel_set')?.target;
+      expect(channelTarget(start)).toEqual({ kind: 'params', params: { tournament_id: TOURNAMENT_ID, events: ['round_generated', 'tournament_started'] } });
+      expect(channelTarget(bracket)).toEqual({ kind: 'params', params: { tournament_id: TOURNAMENT_ID, events: ['round_generated'] } });
+      expect(lastRow(start).step.preconditions.find((p) => p.read === 'startup_checklist')?.target).toEqual({ kind: 'id', id: TOURNAMENT_ID });
+    });
+
+    it('refuses a start the checklist blocks, with every blocked item as a finding, and writes nothing', async () => {
+      const blocked: StartupChecklist = {
+        blocked: true,
+        roundRobin: null,
+        items: [
+          { id: 'participants', state: 'blocked', params: { count: 1, min: 2 } },
+          { id: 'ruleset', state: 'done', params: {} },
+          { id: 'groups', state: 'blocked', params: { count: 3 } },
+        ],
+      };
+      for (const tool of ['propose_start_phase', 'propose_generate_bracket']) {
+        const h = makeHarness({ source: { startup: blocked } });
+        seeIt(h);
+        const result = refused(await h.stage(tool, args));
+        expect(result).toMatchObject({ code: 'startup_not_ready', params: { blocked: 2 } });
+        expect(result.findings).toEqual([
+          { code: 'tournament_participants_too_few', section: 'participants', params: { count: 1, min: 2 } },
+          { code: 'startup_groups_unplaced', section: 'groups', params: { count: 3 } },
+        ]);
+        expect(h.store.proposals).toHaveLength(0);
+      }
+    });
+
+    it('lists an unseeded roster on the card as a warning without blocking', async () => {
+      const attention = { blocked: false, roundRobin: null, items: [{ id: 'seeding' as const, state: 'attention' as const, params: { unseeded: 5, count: 8 } }] };
+      const h = makeHarness({ source: { startup: attention } });
+      seeIt(h);
+      staged(await h.stage('propose_generate_bracket', args));
+      expect(lastRow(h).card.warnings).toEqual([{ kind: 'startup_unseeded', params: { unseeded: 5, count: 8 } }]);
+      const none = makeHarness();
+      seeIt(none);
+      staged(await none.stage('propose_generate_bracket', args));
+      expect(lastRow(none).card.warnings).toEqual([]);
+    });
+
+    it('checks the rounds and the format before the checklist, and a phase that vanished is forbidden', async () => {
+      const blocked = { blocked: true, roundRobin: null, items: [{ id: 'participants' as const, state: 'blocked' as const, params: { count: 0, min: 2 } }] };
+      const written = makeHarness({ source: { phase: { roundCount: 1 }, startup: blocked } });
+      seeIt(written);
+      expect(refused(await written.stage('propose_start_phase', args)).code).toBe('rounds_round_already_written');
+      const gone = makeHarness({ source: { startup: null } });
+      seeIt(gone);
+      expect(refused(await gone.stage('propose_start_phase', args)).code).toBe('forbidden');
     });
 
     it('stages the bracket with its own route and no typed name', async () => {

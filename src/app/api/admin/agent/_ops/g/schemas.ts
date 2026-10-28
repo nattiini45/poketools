@@ -15,6 +15,7 @@ import {
   phaseCreateSchema,
   seasonCloneOptionsSchema,
   seasonCreateRequestSchema,
+  seasonParticipantAddSchema,
   seasonParticipantBulkAddSchema,
   seasonParticipantRemoveSchema,
   seasonUpdateSchema,
@@ -46,6 +47,12 @@ export const rosterAddBody = seasonParticipantBulkAddSchema.strict();
 
 /** `DELETE /api/seasons/[id]/participants`: one player. */
 export const rosterRemoveBody = seasonParticipantRemoveSchema.strict();
+
+/** `POST /api/tournaments/[id]/participants`: one player (seeds are a separate route the Build does not call). */
+export const tournamentParticipantAddBody = seasonParticipantAddSchema.strict();
+
+/** `DELETE /api/tournaments/[id]/participants`: one player. */
+export const tournamentParticipantRemoveBody = seasonParticipantRemoveSchema.strict();
 
 /** `POST /api/seasons/[id]/phases`. The position (`insert_at`, `stage_order`) is never the model's. */
 export const phaseCreateBody = phaseCreateSchema.omit({ insert_at: true, stage_order: true }).strict();

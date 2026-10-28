@@ -74,6 +74,7 @@ export const PLAN_BLOCKERS = {
   player_not_found: { kind: 'invalid', catalog: 'todo' },
   player_not_eligible: { kind: 'invalid', catalog: 'catalog' },
   participant_already_enrolled: { kind: 'invalid', catalog: 'catalog' },
+  tournament_participant_add_locked: { kind: 'invalid', catalog: 'catalog' },
   // Groups
   SEASON_GROUPS_TOO_MANY: { kind: 'invalid', catalog: 'catalog' },
   // Draft
@@ -154,7 +155,8 @@ export function planReadiness(plan: PlanDocument, facts: PlanFacts = {}): PlanRe
   if (plan.intent === 'tournament') need('tournament', tournament !== undefined);
   if (plan.intent === 'mixed') need('league', league !== undefined || tournament !== undefined);
   if ((phases?.length ?? 0) > 0) need('league', league !== undefined);
-  if (roster !== undefined) need('league', league !== undefined);
+  // A roster belongs to the league; a Plan without a league but with a standalone tournament has the tournament's roster.
+  if (roster !== undefined) need('league', league !== undefined || tournament !== undefined);
   if (groups?.mode === 'serpentine') need('league', league !== undefined);
   if ((draft?.length ?? 0) > 0) need('league', league !== undefined);
 
@@ -284,6 +286,11 @@ export function planReadiness(plan: PlanDocument, facts: PlanFacts = {}): PlanRe
     if (open === 0 && roster.target_count !== undefined && resolvedIds.length !== roster.target_count) {
       add('roster_count_mismatch', 'roster', '/slots/roster/target_count', { target: roster.target_count, resolved: resolvedIds.length });
     }
+  }
+  // A tournament built earlier takes players only while it is `upcoming` (the route answers tournament_participant_add_locked).
+  if (roster && league === undefined && tournament !== undefined && plan.refs.tournament !== undefined && plan.refs.roster === undefined) {
+    if (facts.tournamentStatus === undefined) missingFact('roster', '/slots/roster', 'tournament_status', 'tournament');
+    else if (facts.tournamentStatus !== 'upcoming') add('tournament_participant_add_locked', 'roster', '/slots/roster', { status: facts.tournamentStatus });
   }
   const rosterKnown = roster !== undefined && open === 0;
   const participants = resolvedIds.length + (facts.liveRosterCount ?? 0);

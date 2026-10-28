@@ -421,6 +421,13 @@
               "input": {
                 "scope": "gallery"
               }
+            },
+            {
+              "name": "player_search",
+              "input": {
+                "query": "Eval Player 0",
+                "limit": 20
+              }
             }
           ]
         },
@@ -450,6 +457,13 @@
                 "slot": "tournament",
                 "value_json": "{\"name\":\"TN1 Spring Cup {{run:tag}}\",\"bracket_type\":\"single_elim\",\"best_of\":3,\"is_doubles\":false,\"team_visibility\":\"hidden_until_match\",\"ruleset\":\"plan\"}"
               }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "roster",
+                "value_json": "{\"entries\":[{\"input\":\"Eval Player 01\",\"state\":\"resolved\",\"player_id\":\"{{player:01}}\"},{\"input\":\"Eval Player 02\",\"state\":\"resolved\",\"player_id\":\"{{player:02}}\"},{\"input\":\"Eval Player 03\",\"state\":\"resolved\",\"player_id\":\"{{player:03}}\"},{\"input\":\"Eval Player 04\",\"state\":\"resolved\",\"player_id\":\"{{player:04}}\"},{\"input\":\"Eval Player 05\",\"state\":\"resolved\",\"player_id\":\"{{player:05}}\"},{\"input\":\"Eval Player 06\",\"state\":\"resolved\",\"player_id\":\"{{player:06}}\"},{\"input\":\"Eval Player 07\",\"state\":\"resolved\",\"player_id\":\"{{player:07}}\"},{\"input\":\"Eval Player 08\",\"state\":\"resolved\",\"player_id\":\"{{player:08}}\"}],\"target_count\":8}"
+              }
             }
           ]
         },
@@ -466,13 +480,13 @@
             {
               "name": "propose_build",
               "input": {
-                "plan_revision": 3
+                "plan_revision": 4
               }
             }
           ]
         },
         {
-          "text": "I prepared a Build card for TN1 Spring Cup {{run:tag}}: a single elimination tournament on Gen 9 OU, best of 3. A tournament is public the moment it exists, and nothing has been created yet. The Build cannot add the eight players: you will need to add them to the tournament yourself afterwards."
+          "text": "I prepared a Build card for TN1 Spring Cup {{run:tag}}: a single elimination tournament on Gen 9 OU, best of 3, with the eight players Eval Player 01 to 08 added to it. A tournament is public the moment it exists, and nothing has been created yet."
         }
       ]
     ]

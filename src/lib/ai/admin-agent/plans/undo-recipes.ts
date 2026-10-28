@@ -9,7 +9,7 @@
  */
 import type { JsonValue } from '@/lib/studio-core/json';
 
-export type UndoOperation = 'league_archive' | 'tournament_archive' | 'roster_remove' | 'move_pin' | 'ruleset_restore_draft' | 'ruleset_delete_draft';
+export type UndoOperation = 'league_archive' | 'tournament_archive' | 'roster_remove' | 'tournament_participant_remove' | 'move_pin' | 'ruleset_restore_draft' | 'ruleset_delete_draft';
 
 export interface UndoRoute {
   readonly method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -23,6 +23,7 @@ export const UNDO_ROUTES: Readonly<Record<UndoOperation, UndoRoute>> = Object.fr
   league_archive: { method: 'PATCH', routeTemplate: '/api/seasons/[id]', class: 'B', pathParam: 'id' },
   tournament_archive: { method: 'PATCH', routeTemplate: '/api/tournaments/[id]', class: 'B', pathParam: 'id' },
   roster_remove: { method: 'DELETE', routeTemplate: '/api/seasons/[id]/participants', class: 'B', pathParam: 'id' },
+  tournament_participant_remove: { method: 'DELETE', routeTemplate: '/api/tournaments/[id]/participants', class: 'B', pathParam: 'id' },
   move_pin: { method: 'POST', routeTemplate: '/api/ruleset-definitions/[id]/pins', class: 'G', pathParam: 'id' },
   ruleset_restore_draft: { method: 'PUT', routeTemplate: '/api/ruleset-definitions/[id]/draft', class: 'D', pathParam: 'id' },
   ruleset_delete_draft: { method: 'DELETE', routeTemplate: '/api/ruleset-definitions/[id]', class: 'G', pathParam: 'id' },
@@ -63,6 +64,11 @@ export function tournamentArchiveCall(result: unknown): UndoCall {
 /** One call per player: the remove route takes one. */
 export function rosterRemoveCalls(leagueId: string, playerIds: readonly string[]): UndoCall[] {
   return playerIds.map((playerId) => ({ params: { id: leagueId }, body: { player_id: playerId } }));
+}
+
+/** One player leaves a standalone tournament (the route takes one; it refuses once the tournament has started). */
+export function tournamentParticipantRemoveCall(tournamentId: string, playerId: string): UndoCall {
+  return { params: { id: tournamentId }, body: { player_id: playerId } };
 }
 
 /** Moves the given targets back to `versionNo` of the ruleset. `started` are the ids that have started (they need `confirm_started`). */

@@ -167,11 +167,10 @@ describe('main: the stack stages', () => {
     expect(out.filter((line) => /^PASS /.test(line))).toHaveLength(2);
   });
 
-  it('lists a blocked case with its reason, and runs it when it is named', async () => {
+  it('lists the start and bracket cases with the rest of the e2e set, none of them blocked', async () => {
     expect(await run(['--stage', 'e2e', '--list'], { stack: fakeStack().stack })).toBe(0);
-    expect(out.join('\n')).not.toContain('TN2 ');
-    out = [];
-    expect(await run(['--stage', 'e2e', '--cases', 'TN2', '--list'], { stack: fakeStack().stack })).toBe(0);
-    expect(out.join('\n')).toMatch(/TN2 .*\[blocked: .*startup_checklist/);
+    const listing = out.join('\n');
+    for (const id of ['TN1', 'TN2', 'TN3', 'LG6']) expect(listing).toContain(`${id} `);
+    expect(listing).not.toContain('[blocked');
   });
 });

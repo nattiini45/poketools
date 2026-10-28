@@ -3,8 +3,9 @@
  * Only the approve and resume routes import this file (a module-graph test keeps the chat route away from it).
  *
  * Phase 1, slice 2 binds the Build operations of the thin vertical, one file per operation: league, roster, phases and a
- * standalone tournament (`BUILD_OP_ROUTES` names the same methods and paths; the executor's recheck compares them). The three
- * compensating calls they declare as reversals (archive a league or a tournament, remove a roster row) are bound too, and
+ * standalone tournament, plus (slice 8) one player added to a standalone tournament (`BUILD_OP_ROUTES` names the same methods
+ * and paths; the executor's recheck compares them). The compensating calls they declare as reversals (archive a league or a
+ * tournament, remove a roster row or a tournament player) are bound too, and
  * staging cannot reach them yet: an undo proposal is a later slice. `groups_set` (phase 2) and `draft_pool_create` (phase 4)
  * have no binding, so a stored step that names them is `proposal_stale` (unknown op).
  *
@@ -31,9 +32,21 @@ import { rulesetRestoreDraft } from './ruleset-restore-draft';
 import { startPhase } from './start-phase';
 import { tournamentArchive } from './tournament-archive';
 import { tournamentCreate } from './tournament-create';
+import { tournamentParticipantAdd } from './tournament-participant-add';
+import { tournamentParticipantRemove } from './tournament-participant-remove';
 
 /** In the order the Build runs them, then the reversals. */
-export const BUILD_BINDINGS: readonly RouteBinding[] = [leagueCreate, rosterAdd, phaseCreate, tournamentCreate, leagueArchive, rosterRemove, tournamentArchive];
+export const BUILD_BINDINGS: readonly RouteBinding[] = [
+  leagueCreate,
+  rosterAdd,
+  phaseCreate,
+  tournamentCreate,
+  tournamentParticipantAdd,
+  leagueArchive,
+  rosterRemove,
+  tournamentArchive,
+  tournamentParticipantRemove,
+];
 
 /** The stageable Go-live operations, in the order of `GOLIVE_STAGEABLE`. */
 export const GOLIVE_BINDINGS: readonly RouteBinding[] = [publishRuleset, movePin, startPhase, generateBracket];

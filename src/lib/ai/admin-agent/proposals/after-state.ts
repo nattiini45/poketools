@@ -127,6 +127,11 @@ export function afterRead(facts: StepFacts): { read: ReadName; target: ReadTarge
       const players = Array.isArray(body.player_ids) ? body.player_ids.filter((id): id is string => typeof id === 'string') : [];
       return seasonId === null || players.length === 0 ? null : { read: 'roster_members', target: { kind: 'params', params: { season_id: seasonId, player_ids: sortedIds(players) } } };
     }
+    case 'tournament_participant_add': {
+      const tournamentId = uuidOf(facts.call?.params.id);
+      const player = typeof body.player_id === 'string' ? body.player_id : null;
+      return tournamentId === null || player === null ? null : { read: 'tournament_members', target: { kind: 'params', params: { tournament_id: tournamentId, player_ids: sortedIds([player]) } } };
+    }
     case 'move_pin': {
       const targets = Array.isArray(body.targets) ? body.targets.filter((t): t is TargetRef => isRecord(t) && typeof t.id === 'string' && (t.kind === 'season' || t.kind === 'tournament')) : [];
       return targets.length === 0 ? null : { read: 'pin_targets', target: { kind: 'params', params: { targets: targets.map((t) => ({ kind: t.kind, id: t.id.toLowerCase() })) } } };

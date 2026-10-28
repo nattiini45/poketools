@@ -15,7 +15,7 @@ import type { PlanDocument, PlanDraftEntry, PlanLeague, PlanPhase, PlanRulesetRe
 export type PlanRefObject = { $ref: string };
 
 /** The paths a `$ref` may name (whitelisted per operation in the executor; the Plan only ever emits these). */
-export const REF_PATH_PATTERN = /^(?:league\.(?:id|ruleset_id)|groups\.[A-Z]\.id)$/;
+export const REF_PATH_PATTERN = /^(?:league\.(?:id|ruleset_id)|tournament\.id|groups\.[A-Z]\.id)$/;
 
 export const refTo = (path: string): PlanRefObject => ({ $ref: path });
 export const isRefObject = (value: unknown): value is PlanRefObject =>
@@ -63,6 +63,11 @@ export function toLeagueCreateBody(plan: PlanDocument, league: PlanLeague): Body
 export const ROSTER_CHUNK = 50;
 export function toRosterAddBody(playerIds: readonly string[]): Body {
   return { player_ids: [...playerIds] };
+}
+
+/** `POST /api/tournaments/[id]/participants`: `seasonParticipantAddSchema`, ONE player per call. Seeds are not sent. */
+export function toTournamentParticipantAddBody(playerId: string): Body {
+  return { player_id: playerId };
 }
 
 /** `POST /api/seasons/[id]/phases`: `phaseCreateSchema`. `insert_at` and `stage_order` are never sent. */

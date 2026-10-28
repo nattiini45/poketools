@@ -192,6 +192,7 @@ export interface SourceScript {
   impact?: { checked: number; wouldBreak: number; truncated: boolean };
   phase?: Partial<PhaseStartFact> | null;
   recipients?: StagingSource['recipients'];
+  startup?: Awaited<ReturnType<StagingSource['startupChecklist']>>;
   undo?: Awaited<ReturnType<StagingSource['undoFacts']>>;
 }
 
@@ -248,6 +249,7 @@ export function makeSource(script: SourceScript = {}, world = new FingerprintWor
             participantCount: 12,
             ...script.phase,
           },
+    startupChecklist: async () => (script.startup === undefined ? { items: [], blocked: false, roundRobin: null } : script.startup),
     undoFacts: async () => script.undo ?? { locks: {}, playerNames: {} },
     ...(script.recipients === undefined ? {} : { recipients: script.recipients }),
     fingerprints: world,

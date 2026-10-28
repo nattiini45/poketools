@@ -7,7 +7,7 @@
 import type { DeferredTool } from './types';
 
 export const DEFERRED_TOOLS: readonly DeferredTool[] = [
-  { name: 'start_preview', class: 'P', phase: 1, blockedBy: 'PR5: loadStartupInput does not exist yet (buildStartupChecklist is pure and needs a server loader and a parity test)' },
+  { name: 'start_preview', class: 'P', phase: 1, blockedBy: 'the tool itself: loadStartupInput (src/lib/tournament/startup-checklist.server.ts) and the checklist state exist, but the model-facing preview is not registered yet' },
   { name: 'group_split_preview', class: 'P', phase: 2, blockedBy: 'PR5: plannedGroups lives under src/app/api/seasons/[id]/groups/_lib and must move under src/lib before a lib module may import it' },
   { name: 'format_check', class: 'P', phase: 3, blockedBy: 'phase 3: Format Studio compile with the live ruleset id set' },
   { name: 'format_apply_patch_preview', class: 'P', phase: 3, blockedBy: 'phase 3: Format Studio patch preview' },

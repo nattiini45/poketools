@@ -21,6 +21,16 @@ describe('undoability (plan 4.7 table)', () => {
     }
   });
 
+  it('removes a tournament player, and refuses once the tournament has started', () => {
+    const e = entry('tournament_participant_add', { entityType: 'tournament_roster' });
+    expect(undoability(e, unchanged([e]))).toEqual({ available: true, action: 'remove_tournament_participant', tier: 'B' });
+    expect(undoability(e, unchanged([e], { tournamentStarted: true }))).toEqual({ available: false, reason: 'locked_tournament' });
+    // A started LEAGUE does not lock a tournament player, and a started tournament does not lock a league roster.
+    expect(undoability(e, unchanged([e], { leagueStarted: true, roundsExist: true }))).toMatchObject({ available: true });
+    const r = entry('roster_add');
+    expect(undoability(r, unchanged([r], { tournamentStarted: true }))).toMatchObject({ available: true });
+  });
+
   it('leaves phases and draft pools as residue of an archived league', () => {
     for (const op of ['phase_create', 'draft_pool_create']) {
       const e = entry(op);
