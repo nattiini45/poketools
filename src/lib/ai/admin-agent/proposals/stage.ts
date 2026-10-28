@@ -35,6 +35,7 @@ import { proposalCardSchema, type ProposalCard } from './card';
 import { escalateClass } from './class';
 import { buildPreconditions, preconditionsHash, ReadUnavailable } from './fingerprints';
 import { isStageableGoLive, prepareGoLive } from './golive';
+import { prepareUndo, UNDO_TOOL } from './undo';
 import { StageRefusal, type PrepareContext } from './prepare';
 import { collectUuids, unknownReferences } from './provenance';
 import { sealStep, storedStepSchema, type StoredStep } from './steps';
@@ -42,6 +43,13 @@ import { scanStagedText } from './text';
 import { approvalTokenHash, deriveApprovalToken } from './token';
 import { checkTurnStaging, recordTurnStaging } from './turn';
 import { STAGED_NOTE, type StageInput, type StageRefused, type StageResult, type StagerDeps } from './types';
+
+/**
+ * The ledger tools whose entity the conversation CREATED. "Created in this chat" (plan 3.5 rule 4) counts only these: a row that
+ * merely changed or started something (a pin move, a start, a draft patch) files the entity under its id too, and must not make
+ * an existing league or ruleset look like one this chat made.
+ */
+const CREATING_TOOLS: ReadonlySet<string> = new Set(['league_create', 'tournament_create', 'phase_create', 'draft_pool_create', 'ruleset_create_draft', 'format_create', 'format_fork', 'format_fork_preset']);
 
 /** At most this many proposals wait for the admin in one conversation (plan 4.5). */
 export const MAX_PENDING_PROPOSALS = 2;
@@ -147,7 +155,7 @@ export function createProposalStager(deps: StagerDeps) {
     if ((role === 'site' || tool.audience === 'site') && !admin.isSiteAdmin) throw new StageRefusal('forbidden');
     const cls = tool.class;
     if (cls === 'G' && !cfg.golive) throw new StageRefusal('agent_golive_disabled');
-    if (cls === 'G' && !isStageableGoLive(tool.name)) throw new StageRefusal('phase_disabled');
+    if (cls === 'G' && !isStageableGoLive(tool.name) && tool.name !== UNDO_TOOL) throw new StageRefusal('phase_disabled');
     if (cls === 'B' && tool.name !== 'propose_build') throw new StageRefusal('tool_not_available');
 
     // 2. Per-turn limits.
@@ -178,22 +186,28 @@ export function createProposalStager(deps: StagerDeps) {
       cfg,
       createdInChat: async (ids) => {
         createdIds ??= deps.store.actions.listActions(admin.id, conversation.id).then(
-          (actions) => new Set(actions.filter((action) => action.status === 'ok' && action.entity_id !== null).map((action) => (action.entity_id as string).toLowerCase())),
+          (actions) => new Set(actions.filter((action) => action.status === 'ok' && action.entity_id !== null && CREATING_TOOLS.has(action.tool_name)).map((action) => (action.entity_id as string).toLowerCase())),
         );
         const created = await createdIds;
         return ids.length > 0 && ids.every((id) => created.has(id.toLowerCase()));
       },
     };
-    const prepared = tool.name === 'propose_build' ? await prepareBuild(ctx, args as { plan_revision: number }) : await prepareGoLive(ctx, args);
+    const prepared =
+      tool.name === 'propose_build'
+        ? await prepareBuild(ctx, args as { plan_revision: number })
+        : tool.name === UNDO_TOOL
+          ? await prepareUndo(ctx, args as Parameters<typeof prepareUndo>[1])
+          : await prepareGoLive(ctx, args);
 
     // 7. Ids, hashes, token, expiry.
     const proposalId = deps.newId();
     const ids = { adminId: admin.id, conversationId: conversation.id, proposalId };
-    const entries = await buildPreconditions(
+    const evaluated = await buildPreconditions(
       deps.source.fingerprints,
-      prepared.steps.map((entry) => ({ specs: entry.specs, touches: entry.touches })),
+      prepared.steps.map((entry) => ({ specs: entry.fixed === undefined ? entry.specs : [], touches: entry.touches })),
       prepared.scopeOf,
     );
+    const entries = evaluated.map((list, index) => prepared.steps[index].fixed ?? list);
     const steps: StoredStep[] = prepared.steps.map((entry, index) => sealStep({ ...entry.step, preconditions: entries[index] }, ids));
     for (const step of steps) {
       const checked = storedStepSchema.safeParse(step);

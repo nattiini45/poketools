@@ -12,6 +12,8 @@
  * generate a bracket. Each is class G and ONE exact route call; `method` and `path` equal what `proposals/golive.ts` stores.
  * The other Go-live tools have no binding until they are staged.
  *
+ * Slice 5 adds the two reversals that only an undo holds (`UNDO_BINDINGS`); `propose_undo` is staged from the ledger.
+ *
  * Every binding declares a strict body schema and, for a path with parameters, a params schema (`schemas.ts`); the executor
  * parses the resolved request with them before it dispatches.
  */
@@ -24,6 +26,8 @@ import { phaseCreate } from './phase-create';
 import { publishRuleset } from './publish-ruleset';
 import { rosterAdd } from './roster-add';
 import { rosterRemove } from './roster-remove';
+import { rulesetDeleteDraft } from './ruleset-delete-draft';
+import { rulesetRestoreDraft } from './ruleset-restore-draft';
 import { startPhase } from './start-phase';
 import { tournamentArchive } from './tournament-archive';
 import { tournamentCreate } from './tournament-create';
@@ -34,8 +38,14 @@ export const BUILD_BINDINGS: readonly RouteBinding[] = [leagueCreate, rosterAdd,
 /** The stageable Go-live operations, in the order of `GOLIVE_STAGEABLE`. */
 export const GOLIVE_BINDINGS: readonly RouteBinding[] = [publishRuleset, movePin, startPhase, generateBracket];
 
+/**
+ * The reversals only an undo proposal holds (slice 5): restoring a ruleset draft and deleting one that was never published.
+ * The archives and the roster remove are in `BUILD_BINDINGS`; a pin moved back is the `move_pin` binding again.
+ */
+export const UNDO_BINDINGS: readonly RouteBinding[] = [rulesetRestoreDraft, rulesetDeleteDraft];
+
 /** Every binding the approve and resume routes can dispatch. */
-export const OP_BINDINGS: readonly RouteBinding[] = [...BUILD_BINDINGS, ...GOLIVE_BINDINGS];
+export const OP_BINDINGS: readonly RouteBinding[] = [...BUILD_BINDINGS, ...GOLIVE_BINDINGS, ...UNDO_BINDINGS];
 
 let registry: BindingRegistry | undefined;
 

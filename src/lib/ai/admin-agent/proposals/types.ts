@@ -15,6 +15,7 @@ import type { StagedTool } from '../registry/define';
 import type { AdminAgentStore } from '../store/create';
 import type { AdminId } from '../store/ids';
 import type { ConversationRecord } from '../store/types';
+import type { UndoLockFacts } from '../plans/undo';
 import type { FingerprintSource } from './fingerprints';
 
 /** The live admin who staged the call (from `requireAnyAdmin()` at the chat request, never the model or the client). */
@@ -55,7 +56,7 @@ export interface StageFinding {
 export interface StageStaged {
   readonly status: 'staged';
   readonly proposal_id: string;
-  readonly kind: 'build' | 'action';
+  readonly kind: 'build' | 'action' | 'undo';
   readonly class: 'B' | 'G';
   /** The 8-hex code the card shows. */
   readonly plan_code: string;
@@ -156,11 +157,16 @@ export interface StagingSource {
     discord: { count: number; names: readonly string[] };
     social: { count: number; names: readonly string[] };
   }>;
+  /**
+   * What an undo needs beyond fingerprints: the lock facts of the leagues it would touch (a round exists, the league started) and
+   * the names of the players a roster undo removes.
+   */
+  undoFacts(input: { leagueIds: readonly string[]; playerIds: readonly string[] }): Promise<{ locks: UndoLockFacts; playerNames: Readonly<Record<string, string>> }>;
   /** The state reads behind the precondition fingerprints (shared with the approve route's recheck). */
   fingerprints: FingerprintSource;
 }
 
-export type StagerStore = Pick<AdminAgentStore, 'proposals' | 'plans' | 'refs' | 'actions'>;
+export type StagerStore = Pick<AdminAgentStore, 'proposals' | 'plans' | 'refs' | 'actions' | 'snapshots'>;
 
 export interface StagerDeps {
   readonly store: StagerStore;

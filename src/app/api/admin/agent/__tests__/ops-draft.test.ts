@@ -6,6 +6,8 @@
  * in-memory fake that records the ORDER of everything (the ledger row and the snapshot exist before the route runs).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { hashJson } from '@/lib/ai/admin-agent/plans/hash';
+import { draftDocState, draftLifeState } from '@/lib/ai/admin-agent/proposals/after-state';
 import type { Session } from 'next-auth';
 import { z } from 'zod';
 
@@ -262,6 +264,10 @@ describe('ruleset_create_draft', () => {
       result: { ruleset_id: NEW_DEF, draft_rev: 1, slug: 'spring-ou' },
       after: { ruleset_id: NEW_DEF, draft_rev: 1 },
       undo: { kind: 'delete_draft', ruleset_id: NEW_DEF },
+      // Owner decision 2026-10-28: deletable by an undo only while it has never been published (read live at undo time).
+      reversibility: 'delete_while_unpublished',
+      // The state the write left: revision 1, no version. An undo compares the live draft with it.
+      afterFingerprint: hashJson(draftLifeState(1, false)),
     });
 
     expect(world.audits).toHaveLength(1);
@@ -377,6 +383,9 @@ describe('ruleset_patch_draft', () => {
       undo: { kind: 'restore_draft_snapshot', ruleset_id: DEF, draft_rev_after: 4 },
       reversibility: 'snapshot',
     });
+    // The fingerprint of the draft as the save left it: its revision and the hash of the document it sent.
+    const savedAfter = world.completions[0].after as { draft_rev: number; doc_hash: string };
+    expect(world.completions[0].afterFingerprint).toBe(hashJson(draftDocState(4, savedAfter.doc_hash)));
     expect(world.audits[0].entry).toMatchObject({
       action: 'agent.draft.write',
       resource_id: DEF,

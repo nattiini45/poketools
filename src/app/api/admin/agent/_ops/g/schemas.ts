@@ -9,7 +9,7 @@
  * validates on its own; this is the second lock.
  */
 import { z } from 'zod';
-import { rulesetPinsSchema, rulesetPublishSchema } from '@/lib/ruleset-studio/api-schemas';
+import { rulesetDraftSchema, rulesetPinsSchema, rulesetPublishSchema } from '@/lib/ruleset-studio/api-schemas';
 import {
   generateRoundOptionsSchema,
   phaseCreateSchema,
@@ -84,3 +84,8 @@ export const startPhaseBody = generateRoundOptionsSchema.extend({ start_round: z
 
 /** `POST /api/tournaments/[id]/generate-bracket`: staging stores `{}`; the route's `start_round` is not offered. */
 export const generateBracketBody = z.strictObject({});
+
+// ─── Undo bodies (spec §18.8) ────────────────────────────────────────────────────────────────────────────────────────
+
+/** `PUT /api/ruleset-definitions/[id]/draft`: the route's own strict object, the previous document and the revision it is written at. */
+export const restoreDraftBody = rulesetDraftSchema;

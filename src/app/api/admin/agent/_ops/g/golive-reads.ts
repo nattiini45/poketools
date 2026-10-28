@@ -6,7 +6,7 @@
  * query modules.
  */
 import type { PinTarget } from '@/lib/ruleset-studio/api-schemas';
-import { getPinTargetStates, listRulesetVersions } from '@/lib/supabase/queries/ruleset-definitions';
+import { getPinTargetStates, getRulesetDefinitionDraft, getRulesetDefinitionMeta, listRulesetVersions } from '@/lib/supabase/queries/ruleset-definitions';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { isRecord, uuidOrNull } from './shared';
@@ -37,3 +37,9 @@ export function publishedVersionId(outcome: Outcome): string | null {
   if (outcome.kind !== 'ok' || !isRecord(outcome.data) || !isRecord(outcome.data.version)) return null;
   return uuidOrNull(outcome.data.version.id);
 }
+
+/** The working draft of a definition and its revision (`null`: no such definition). */
+export const readDraft = (definitionId: string) => getRulesetDefinitionDraft(definitionId);
+
+/** The definition's metadata (`null`: no such definition). */
+export const readDefinition = (definitionId: string) => getRulesetDefinitionMeta(definitionId);

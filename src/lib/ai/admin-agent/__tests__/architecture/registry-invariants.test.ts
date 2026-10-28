@@ -85,11 +85,12 @@ describe('the bound routes', () => {
   it('bind no route the N list sends to an admin page (no delete, restore, webhook or generate-all route)', () => {
     const forbidden = [/\/trash\//, /\/webhooks?/, /\/social/, /generate-all-rounds/, /\/restore/, /\/rebuild/, /\/reset/, /\/regenerate/];
     for (const binding of bindings) for (const pattern of forbidden) expect(binding.path, key(binding)).not.toMatch(pattern);
-    for (const binding of bindings) expect(binding.method === 'DELETE' ? binding.path : '', key(binding)).toMatch(/^(\/api\/(?:seasons|tournaments)\/\[id\]\/participants)?$/);
+    for (const binding of bindings) expect(binding.method === 'DELETE' ? binding.path : '', key(binding)).toMatch(/^(\/api\/(?:seasons|tournaments)\/\[id\]\/participants|\/api\/ruleset-definitions\/\[id\])?$/); // plus the one delete of an undo: a ruleset draft created here and never published
   });
 
-  it('keep the Go-live bindings to exactly the four the plan names for phase 1', () => {
+  it('keep the Go-live bindings to exactly the four the plan names for phase 1, and the delete an undo may make', () => {
     expect(bindings.filter((b) => b.class === 'G').map(key).sort()).toEqual([
+      'DELETE /api/ruleset-definitions/[id]',
       'POST /api/generate-round/[tid]',
       'POST /api/ruleset-definitions/[id]/pins',
       'POST /api/ruleset-definitions/[id]/publish',

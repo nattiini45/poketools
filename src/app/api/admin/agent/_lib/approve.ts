@@ -9,7 +9,8 @@
  */
 import { createHmac } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
-import { liveFingerprints } from '@/lib/ai/admin-agent/proposals/live';
+import { afterFingerprintFor } from '@/lib/ai/admin-agent/proposals/after-state';
+import { liveBeforeState, liveFingerprints } from '@/lib/ai/admin-agent/proposals/live';
 import {
   executeProposal,
   ProposalExecutionError,
@@ -48,6 +49,9 @@ function liveDeps(auth: AgentAuth): ExecutorDeps {
     store: adminAgentStore,
     bindings: getBindingRegistry(),
     fingerprints: liveFingerprints,
+    // The state each undoable step leaves, and the pins a move starts from: what a later `propose_undo` is built on.
+    afterFingerprint: afterFingerprintFor(liveFingerprints),
+    beforeState: liveBeforeState,
     config: () => auth.config,
     registryVersion: (toolSet) => buildToolSet({ role: toolSet === 'site' ? 'site' : 'scoped', maxPhase: auth.config.maxPhase }).registryVersion,
     rateLimit: (identity, options) => checkRateLimit('admin-agent-write', identity, { ...options, failMode: 'closed' }),

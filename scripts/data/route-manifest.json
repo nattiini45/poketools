@@ -1,6 +1,32 @@
 {
   "version": 1,
   "routes": {
+    "DELETE /api/ruleset-definitions/[id]": {
+      "file": "src/app/api/ruleset-definitions/[id]/route.ts",
+      "guards": ["requireRulesetViewer"],
+      "schemas": [],
+      "rateLimits": ["ruleset-write"],
+      "expires": ["revalidatePath"],
+      "audit": ["ruleset.delete"],
+      "emits": [],
+      "importFingerprint": "81e9d1d4035ec7e1",
+      "importFiles": 142,
+      "imports": {
+        "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "fd7707284f8e638e", "files": 4 },
+        "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
+        "src/lib/league-trash/errors.ts": { "names": ["leagueTrashBlockError"], "closure": "6ff105536466cb1b", "files": 18 },
+        "src/lib/ruleset-studio/api-body.ts": { "names": ["readBoundedJson"], "closure": "30a24c6e69a82d8c", "files": 20 },
+        "src/lib/ruleset-studio/api-schemas.ts": { "names": ["rulesetVisibilitySchema", "validationFailedResponse"], "closure": "3123bdea784a4665", "files": 34 },
+        "src/lib/ruleset-studio/guards.ts": { "names": ["requireRulesetViewer"], "closure": "39f8e0cf3a571746", "files": 59 },
+        "src/lib/ruleset-studio/library.ts": {
+          "names": ["assertCanEditDraft", "changeVisibility", "getRulesetDetail", "removeDefinition"],
+          "closure": "249d6f8612bcd62b",
+          "files": 96
+        },
+        "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
+      },
+      "packages": ["next/cache", "next/server"]
+    },
     "DELETE /api/seasons/[id]/participants": {
       "file": "src/app/api/seasons/[id]/participants/route.ts",
       "guards": ["requireResourceAdmin"],

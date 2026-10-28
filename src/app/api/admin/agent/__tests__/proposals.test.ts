@@ -41,7 +41,7 @@ vi.mock('@/lib/auth/session-override', () => ({ authAndRecord: mocks.authAndReco
 vi.mock('@/lib/ai/admin-agent/store', () => ({ adminAgentStore: mocks.store }));
 vi.mock('@/lib/ai/admin-agent/proposals/serve', () => ({ getCard: mocks.getCard, getApprovalToken: mocks.getApprovalToken }));
 // The approve side wires the live reads and the registry; neither is under test here (the executor has its own suites).
-vi.mock('@/lib/ai/admin-agent/proposals/live', () => ({ liveFingerprints: { read: vi.fn() } }));
+vi.mock('@/lib/ai/admin-agent/proposals/live', () => ({ liveFingerprints: { read: vi.fn() }, liveBeforeState: vi.fn() }));
 vi.mock('@/lib/ai/admin-agent/registry', () => ({ buildToolSet: () => ({ registryVersion: 'registry-secret-version' }) }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: mocks.logAuditEvent }));
 vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({

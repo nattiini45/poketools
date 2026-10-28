@@ -224,9 +224,18 @@ const proposeGenerateBracket = defineStaged({
 const proposeUndo = defineStaged({
   name: 'propose_undo',
   class: 'G',
-  description: `Stage undoing what this conversation built or changed: compensating changes only, each with its own precondition (archive instead of delete, remove roster rows, clear groups, unbind, move a pin back). It never hard-deletes a league, phase, ruleset or pool. The server works out what can be undone; say which change to undo. ${NOTE_STAGED}`,
-  args: z.strictObject({ proposal_id: uuidArg('Id of the executed proposal to undo') }),
+  description: `Stage undoing what this conversation built or changed: compensating changes only, each with its own precondition (archive instead of delete, remove roster rows, move a pin back); the server works out what can be undone. Pass proposal_id for an executed proposal, or ruleset_id for a ruleset draft written here (with draft_rev from a save: restore the draft as before it; without: delete a never-published draft created here). ${NOTE_STAGED}`,
+  args: z
+    .strictObject({
+      proposal_id: uuidArg('Executed proposal to undo').optional(),
+      ruleset_id: uuidArg('Ruleset draft written here').optional(),
+      draft_rev: intArg('Revision a save returned', 1, 2_147_483_646).optional(),
+    })
+    .refine((a) => (a.proposal_id !== undefined) !== (a.ruleset_id !== undefined), { message: 'name either proposal_id or ruleset_id', path: ['proposal_id'] })
+    .refine((a) => a.draft_rev === undefined || a.ruleset_id !== undefined, { message: 'draft_rev goes with ruleset_id', path: ['draft_rev'] }),
   phase: 1,
+  // The one delete an undo makes: a ruleset draft created in this conversation and never published (the other undo calls are Build routes).
+  routes: [route('DELETE', '/api/ruleset-definitions/[id]')],
   outwardEffects: OUTWARD.undo,
   verify: 'undo_read_back',
 });

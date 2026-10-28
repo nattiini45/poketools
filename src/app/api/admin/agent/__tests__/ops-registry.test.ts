@@ -19,13 +19,15 @@ import { BUILD_OP_ROUTES } from '@/lib/ai/admin-agent/proposals/build';
 import { GOLIVE_STAGEABLE } from '@/lib/ai/admin-agent/proposals/golive';
 import { OUTWARD } from '@/lib/ai/admin-agent/registry/outward-effects';
 import { REPO_ROOT } from '@/lib/ai/admin-agent/__tests__/architecture/graph';
-import { BUILD_BINDINGS, GOLIVE_BINDINGS, OP_BINDINGS, getBindingRegistry } from '../_ops/g';
+import { BUILD_BINDINGS, GOLIVE_BINDINGS, OP_BINDINGS, UNDO_BINDINGS, getBindingRegistry } from '../_ops/g';
 
 const registry = getBindingRegistry();
 const ID = uid(7001);
 const RULESET = uid(9001);
 const PHASE = uid(7101);
 const GOLIVE_OPS = ['publish_ruleset', 'move_pin', 'start_phase', 'generate_bracket'];
+/** The two reversals only an undo holds (slice 5), with the class of their route: a draft restore is D, the delete of a never-published draft G. */
+const UNDO_ONLY_OPS = { ruleset_restore_draft: 'D', ruleset_delete_draft: 'G' } as const;
 
 /** A body each binding accepts, and the path params it needs. */
 const SAMPLES: Record<string, { params: Record<string, string>; body: unknown }> = {
@@ -43,6 +45,8 @@ const SAMPLES: Record<string, { params: Record<string, string>; body: unknown }>
   },
   start_phase: { params: { tid: PHASE }, body: {} },
   generate_bracket: { params: { id: PHASE }, body: {} },
+  ruleset_restore_draft: { params: { id: RULESET }, body: { draft_rev: 4, document: { schema_version: 1 } } },
+  ruleset_delete_draft: { params: { id: RULESET }, body: null },
 };
 
 const manifest = (JSON.parse(readFileSync(path.join(REPO_ROOT, 'scripts/data/route-manifest-bindings.json'), 'utf8')) as { bindings: Array<{ method: string; path: string; class: string; phase: string }> }).bindings;
@@ -58,9 +62,12 @@ describe('the registry', () => {
       'roster_remove',
       'tournament_archive',
       ...GOLIVE_OPS,
+      'ruleset_restore_draft',
+      'ruleset_delete_draft',
     ]);
     expect(OP_BINDINGS).toHaveLength(registry.all().length);
     expect(BUILD_BINDINGS).toHaveLength(7);
+    expect(UNDO_BINDINGS.map((binding) => binding.operation)).toEqual(Object.keys(UNDO_ONLY_OPS));
     expect(GOLIVE_BINDINGS.map((binding) => binding.operation)).toEqual(GOLIVE_OPS);
   });
 
@@ -89,7 +96,7 @@ describe('the registry', () => {
 
   it('is phase 1, with a read-back and a declared reversal, for every binding: class B for a Build op, class G for a Go-live op', () => {
     for (const binding of registry.all()) {
-      expect(binding.class, binding.operation).toBe(GOLIVE_OPS.includes(binding.operation) ? 'G' : 'B');
+      expect(binding.class, binding.operation).toBe(binding.operation in UNDO_ONLY_OPS ? UNDO_ONLY_OPS[binding.operation as keyof typeof UNDO_ONLY_OPS] : GOLIVE_OPS.includes(binding.operation) ? 'G' : 'B');
       expect(binding.phase, binding.operation).toBe(1);
       expect(typeof binding.verify, binding.operation).toBe('function');
       expect(binding.reversal, binding.operation).toBeDefined();
@@ -99,6 +106,12 @@ describe('the registry', () => {
 
   it('declares the outward effects of every Go-live binding, group for group as the tool does, and none for a Build op', () => {
     for (const binding of registry.all()) {
+      if (binding.operation === 'ruleset_delete_draft') {
+        // The undo card's own group: nothing is posted, and the card's acknowledgement is the one of `propose_undo`.
+        expect(binding.outwardEffects, binding.operation).toEqual([{ group: 'compensating_changes', events: [] }]);
+        expect(OUTWARD.undo.map((effect) => effect.key)).toEqual(['compensating_changes']);
+        continue;
+      }
       if (!GOLIVE_OPS.includes(binding.operation)) {
         expect(binding.outwardEffects, binding.operation).toBeUndefined();
         continue;

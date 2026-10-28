@@ -1,6 +1,7 @@
 import { defineBinding, type VerifyCall, type VerifyResult } from '@/lib/ai/admin-agent/dispatch';
+import { tournamentArchiveCall } from '@/lib/ai/admin-agent/plans/undo-recipes';
 import { tournamentCreateBody } from './schemas';
-import { canAdministerTournament, createdSince, idOfOutcome, idOfResult, nameKey, readNewestTournaments, readTournament } from './shared';
+import { canAdministerTournament, createdSince, idOfOutcome, nameKey, readNewestTournaments, readTournament } from './shared';
 
 /**
  * `tournament_create`: `POST /api/tournaments`, a standalone tournament, public the moment it exists. The route grants the
@@ -23,11 +24,7 @@ export const tournamentCreate = defineBinding<VerifyCall>({
   reversal: {
     kind: 'compensating',
     operation: 'tournament_archive',
-    buildInput: (_call, result) => {
-      const id = idOfResult(result);
-      if (id === null) throw new Error('tournament_create left no tournament id to archive');
-      return { params: { id }, body: { archived: true } };
-    },
+    buildInput: (_call, result) => tournamentArchiveCall(result),
   },
   async verify(call, outcome, ctx): Promise<VerifyResult> {
     let id = idOfOutcome(outcome);

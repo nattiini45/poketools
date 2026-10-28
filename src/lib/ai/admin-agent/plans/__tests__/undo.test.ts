@@ -33,7 +33,7 @@ describe('undoability (plan 4.7 table)', () => {
       ['format_publish', 'immutable'], ['ruleset_publish', 'immutable'],
       ['generate_round', 'outward_effect'], ['generate_bracket', 'outward_effect'], ['start_phase', 'outward_effect'],
       ['advance_phase', 'outward_effect'], ['complete_round', 'outward_effect'], ['complete_tournament', 'outward_effect'], ['draft_start', 'outward_effect'],
-      ['league_trash', 'needs_superadmin'], ['format_attach', 'separate_card'], ['ruleset_create_draft', 'owner_decision_pending'],
+      ['league_trash', 'needs_superadmin'], ['format_attach', 'separate_card'],
     ] as const) {
       const e = entry(op);
       expect(undoability(e, unchanged([e])), op).toEqual({ available: false, reason });
@@ -122,6 +122,33 @@ describe('undoability (plan 4.7 table)', () => {
 
   it('knows every op the Plan derives', () => {
     for (const op of PLAN_OPS) expect(UNDO_OPS).toContain(op);
+  });
+});
+
+describe('a ruleset draft created in the conversation (the second carve-out, owner decision 2026-10-28)', () => {
+  it('is deleted by an undo while it has never been published', () => {
+    const e = entry('ruleset_create_draft');
+    expect(undoability(e, unchanged([e]))).toEqual({ available: true, action: 'delete_ruleset_draft', tier: 'G' });
+  });
+
+  it('is residue once any version exists: not offered, and listed as residue', () => {
+    const e = entry('ruleset_create_draft');
+    expect(undoability(e, unchanged([e], { rulesetPublished: true }))).toEqual({ available: false, reason: 'ruleset_published' });
+    const plan = deriveUndoPlan([e], unchanged([e], { rulesetPublished: true }));
+    expect(plan.steps).toEqual([]);
+    expect(plan.residue).toEqual([expect.objectContaining({ op: 'ruleset_create_draft', reason: 'ruleset_published' })]);
+  });
+
+  it('is left alone when it was saved by somebody else after the last chat write', () => {
+    const e = entry('ruleset_create_draft');
+    const plan = deriveUndoPlan([e], { fingerprints: { [e.actionId]: 'saved-by-a-human' } });
+    expect(plan.steps).toEqual([]);
+    expect(plan.leftAlone).toEqual([expect.objectContaining({ op: 'ruleset_create_draft', reason: 'edited_outside' })]);
+  });
+
+  it('is gone, not deleted twice, once the definition no longer exists', () => {
+    const e = entry('ruleset_create_draft');
+    expect(undoability(e, { fingerprints: { [e.actionId]: null } })).toEqual({ available: false, reason: 'entity_gone' });
   });
 });
 

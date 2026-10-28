@@ -410,7 +410,7 @@ describe('publish_ruleset through the real route', () => {
     const world = await publishWorld();
     const result = await world.approve();
 
-    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'publish_ruleset', status: 'ok', entity_id: V3 }] });
+    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'publish_ruleset', status: 'ok', entity_id: DEFINITION_ID }] });
     expect(vi.mocked(publish)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(publish).mock.calls[0][2]).toEqual({ draftRev: 3, changelog: null });
     expect(world.store.action('publish_ruleset')).toMatchObject({
@@ -418,7 +418,7 @@ describe('publish_ruleset through the real route', () => {
       http_status: 201,
       outcome_kind: 'ok',
       entity_type: 'ruleset',
-      entity_id: V3,
+      entity_id: DEFINITION_ID,
       result: { id: V3 },
       verify: { status: 'confirmed', id: V3, version_no: 3 },
     });
@@ -467,7 +467,7 @@ describe('publish_ruleset through the real route', () => {
     const world = await publishWorld();
     const result = await world.approve();
 
-    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'publish_ruleset', status: 'ok', entity_id: V3 }] });
+    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'publish_ruleset', status: 'ok', entity_id: DEFINITION_ID }] });
     expect(world.store.action('publish_ruleset')).toMatchObject({ status: 'ok', outcome_kind: 'masked_server_error', verify: { status: 'confirmed', id: V3, version_no: 3 } });
     expect(JSON.stringify(world.store.actions)).not.toContain('secret detail');
     expect(vi.mocked(publish)).toHaveBeenCalledTimes(1);
@@ -513,7 +513,7 @@ describe('move_pin through the real route', () => {
     const world = await pinWorld();
     const result = await world.approve();
 
-    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'move_pin', status: 'ok', entity_id: V3 }] });
+    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'move_pin', status: 'ok', entity_id: DEFINITION_ID }] });
     expect(vi.mocked(movePins)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(movePins).mock.calls[0][0]).toMatchObject({ toVersionNo: 3, targets: PIN_TARGETS, confirmStarted: [] });
     expect(db.pins).toEqual({ [`season:${SEASON_ID}`]: V3, [`tournament:${TOURNAMENT_ID}`]: V3 });
@@ -521,7 +521,7 @@ describe('move_pin through the real route', () => {
       status: 'ok',
       http_status: 200,
       entity_type: 'ruleset',
-      entity_id: V3,
+      entity_id: DEFINITION_ID,
       result: { id: V3 },
       verify: { status: 'confirmed', id: V3, version_no: 3, moved: 2, expected: 2 },
     });
@@ -604,7 +604,7 @@ describe('move_pin through the real route', () => {
       throw new Error('connection reset (secret detail)');
     });
     const adopted = await pinWorld();
-    expect(await adopted.approve()).toMatchObject({ status: 'completed', steps: [{ key: 'move_pin', status: 'ok', entity_id: V3 }] });
+    expect(await adopted.approve()).toMatchObject({ status: 'completed', steps: [{ key: 'move_pin', status: 'ok', entity_id: DEFINITION_ID }] });
     expect(adopted.store.action('move_pin')).toMatchObject({ outcome_kind: 'masked_server_error', verify: { status: 'confirmed', moved: 2, expected: 2 } });
 
     db.pinFailure = { at: 0, error: 'crash' };
@@ -636,11 +636,11 @@ describe('start_phase through the real route', () => {
     const world = await startWorld({ start_round: true });
     const result = await world.approve();
 
-    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'start_phase', status: 'ok', entity_id: ROUND_ID }] });
+    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'start_phase', status: 'ok', entity_id: TOURNAMENT_ID }] });
     expect(world.store.action('start_phase')).toMatchObject({
       status: 'ok',
       http_status: 201,
-      entity_id: ROUND_ID,
+      entity_id: TOURNAMENT_ID,
       result: { id: ROUND_ID },
       verify: { status: 'confirmed', id: ROUND_ID, round_number: 1, started: true },
     });
@@ -724,7 +724,7 @@ describe('start_phase through the real route', () => {
     const world = await startWorld({ start_round: true });
     const result = await world.approve();
 
-    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'start_phase', status: 'ok', entity_id: ROUND_ID }] });
+    expect(result).toMatchObject({ status: 'completed', steps: [{ key: 'start_phase', status: 'ok', entity_id: TOURNAMENT_ID }] });
     expect(world.store.action('start_phase')).toMatchObject({ outcome_kind: 'masked_server_error', verify: { status: 'confirmed', id: ROUND_ID, started: true } });
     // The read-back reads; it did not run the route again, so no round was written twice and no post was repeated.
     expect(db.rounds).toHaveLength(1);

@@ -220,6 +220,36 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
     );
   };
 
+  /** What an undo leaves alone, leaves behind or cannot do, each with its reason (spec §18.8). All words come from the catalog. */
+  const undoNotes = (undo: NonNullable<StoredCard['undo']>) => {
+    const groups = [
+      ['leftAlone', undo.leftAlone],
+      ['residue', undo.residue],
+      ['notUndoable', undo.notUndoable],
+    ] as const;
+    return (
+      <div className="space-y-2">
+        {groups.map(([group, notes]) =>
+          notes.length === 0 ? null : (
+            <div key={group}>
+              <h4 className="font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-muted">{cards.dynamic(`undo.${group}`, undefined, '')}</h4>
+              <ul className="list-disc space-y-0.5 pl-5 text-sm text-poke-text-secondary">
+                {notes.map((note, index) => (
+                  <li key={`${note.op}-${note.id ?? 'x'}-${index}`}>
+                    <span className="font-semibold">{cards.dynamic(`undo.ops.${note.op}`, undefined, cards('undo.ops.generic'))}</span>
+                    {note.name !== null && <> {note.name.text}</>}
+                    {': '}
+                    {cards.dynamic(`undo.reasons.${note.reason}`, undefined, '')}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ),
+        )}
+        {undo.truncated && <p className="text-xs text-poke-text-muted">{cards('undo.truncated')}</p>}
+      </div>
+    );
+  };
   const decline = async () => {
     setBusy('decline');
     setActionError(null);
@@ -258,7 +288,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
       <header className="flex flex-wrap items-center gap-2">
         <Badge variant={stored.class === 'G' ? 'accent' : 'default'}>{stored.class === 'G' ? cards('classes.goLive') : cards('classes.change')}</Badge>
         <h3 id={headingId} className="font-heading text-sm font-bold text-poke-text-primary">
-          {stored.kind === 'go_live' ? cards('titles.goLive') : cards('titles.build')}
+          {stored.kind === 'go_live' ? cards('titles.goLive') : stored.kind === 'undo' ? cards('titles.undo') : cards('titles.build')}
         </h3>
         <Badge variant={STATUS_VARIANT[status]}>{cards(`status.${status}`)}</Badge>
         <span className="ml-auto text-xs text-poke-text-muted">
@@ -307,6 +337,8 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
               );
             })}
           </ol>
+
+          {stored.undo !== undefined && undoNotes(stored.undo)}
 
           {stored.lines.length > 0 && <ul className="list-disc space-y-0.5 pl-5 text-sm text-poke-text-secondary">{stored.lines.map(lineView)}</ul>}
           {stored.warnings.length > 0 && (

@@ -34,6 +34,7 @@ import type { StagedToolContext } from '../loop/tool-runtime';
 import type { ToolRunResult } from '../loop/types';
 import type { AdminId } from '../store/ids';
 import type { Json } from '../store/types';
+import { draftDocState, draftLifeState, stateHash } from '../proposals/after-state';
 import { jsonbTextBytes, parsePatchOps, patchDocument, SNAPSHOT_MAX_BYTES } from './draft-patch';
 import type { DraftToolDeps, StagedRunnerDeps } from './types';
 
@@ -103,6 +104,11 @@ interface WriteSpec {
   read(data: unknown): Created | null;
   /** The compensating recipe stored with the ledger row. */
   undo(rulesetId: string | null, draftRevAfter: number | null): { recipe: Json; reversibility: string };
+  /**
+   * The state the write left the draft in, hashed (`after_fingerprint`): what an undo compares the live draft with to tell
+   * whether anybody else saved since. `null` when it cannot be told (the document could not be hashed).
+   */
+  afterFingerprint(draftRevAfter: number | null): string | null;
 }
 
 /** The model's answer for an outcome that did not succeed: the route's own catalogued code, never its message. */
@@ -221,6 +227,7 @@ async function writeDraft(drafts: DraftToolDeps, dispatch: NonNullable<StagedToo
     after: created === null ? null : { ruleset_id: created.ruleset_id, draft_rev: created.draft_rev, doc_hash: spec.docHashAfter },
     undo: recipe,
     reversibility,
+    ...(created !== null ? { afterFingerprint: spec.afterFingerprint(revAfter) } : {}),
     entityType: 'ruleset',
     entityId: rulesetId,
   });
@@ -318,9 +325,12 @@ export async function rulesetCreateDraft(deps: StagedRunnerDeps, tool: StagedToo
     docHashAfter: null,
     read: readCreated,
     undo: (rulesetId) => ({
+      // Owner decision 2026-10-28: deleted by an undo only while it has never been published (read live when the undo is staged).
       recipe: { kind: 'delete_draft', ruleset_id: rulesetId },
-      reversibility: 'delete_while_unpinned',
+      reversibility: 'delete_while_unpublished',
     }),
+    // A fresh draft has no version: revision and "unpublished".
+    afterFingerprint: (rev) => (rev === null ? null : stateHash(draftLifeState(rev, false))),
   });
 }
 
@@ -403,5 +413,7 @@ export async function rulesetPatchDraft(deps: StagedRunnerDeps, tool: StagedTool
       recipe: { kind: 'restore_draft_snapshot', ruleset_id: rulesetId, draft_rev_after: revAfter },
       reversibility: 'snapshot',
     }),
+    // Revision plus the hash of the document the save sent (the route stores it as sent).
+    afterFingerprint: (rev) => (rev === null || docHashAfter === null ? null : stateHash(draftDocState(rev, docHashAfter))),
   });
 }

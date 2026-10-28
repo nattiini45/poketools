@@ -52,6 +52,7 @@ export default defineDe<typeof en>()({
   proposal_conflict_executing: 'In dieser Unterhaltung läuft noch ein anderer Vorschlag.',
   proposal_not_resumable: 'Dieser Vorschlag lässt sich nicht fortsetzen.',
   undo_unavailable: 'Das lässt sich nicht rückgängig machen.',
+  nothing_to_undo: 'Hier gibt es nichts mehr rückgängig zu machen: Es wurde schon zurückgenommen, außerhalb des Chats bearbeitet oder lässt sich nicht rückgängig machen.',
 
   step_failed: 'Ein Schritt ist fehlgeschlagen.',
   agent_build_step_failed:

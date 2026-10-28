@@ -7,13 +7,18 @@ import type { Locale } from '@/i18n/config';
 import { adminAssistantMessages } from '@/i18n/messages/admin-assistant';
 import { adminAssistantCardsMessages } from '@/i18n/messages/admin-assistant-cards';
 import { LOOP_EVENTS } from '@/lib/ai/admin-agent/loop/harness';
-import { CARD_LINE_KINDS, type CardLine } from '@/lib/ai/admin-agent/proposals/card';
+import { UNDO_REASONS } from '@/lib/ai/admin-agent/plans/undo';
+import { CARD_ACTIONS, CARD_LINE_KINDS, type CardLine } from '@/lib/ai/admin-agent/proposals/card';
 import { ALL_TOOLS } from '@/lib/ai/admin-agent/registry';
 import { OUTWARD } from '@/lib/ai/admin-agent/registry/outward-effects';
 import { lineMessage } from '../ProposalCard';
 import { toolGroup } from '../tool-group';
 
 const LOCALES: Locale[] = ['en', 'de'];
+
+/** The entities a verb of the catalog (`steps.<action>`) is written for. */
+const cardsTree = (cards: { has(key: string): boolean }, action: string): Record<string, true> =>
+  Object.fromEntries(['league', 'roster', 'phase', 'groups', 'draft_pool', 'tournament', 'ruleset'].filter((entity) => cards.has(`steps.${action}.${entity}`)).map((entity) => [entity, true as const]));
 
 /**
  * The cards are structured data; every kind, effect, group and event the server can send has to have a sentence in both
@@ -57,7 +62,7 @@ describe.each(LOCALES)('the assistant catalogs (%s)', (locale) => {
   });
 
   it('has a sentence for every outward effect the stageable Go-live cards declare', () => {
-    for (const op of ['publish_ruleset', 'move_pin', 'start_phase', 'generate_bracket']) {
+    for (const op of ['publish_ruleset', 'move_pin', 'start_phase', 'generate_bracket', 'undo']) {
       for (const effect of OUTWARD[op]) expect(cards.has(`effects.keys.${effect.key}`), `${op}/${effect.key}`).toBe(true);
     }
   });
@@ -74,12 +79,28 @@ describe.each(LOCALES)('the assistant catalogs (%s)', (locale) => {
       ['move_pin', 'ruleset'],
       ['start', 'tournament'],
       ['generate_bracket', 'tournament'],
+      // The undo card (slice 5).
+      ['archive', 'league'],
+      ['archive', 'tournament'],
+      ['remove', 'roster'],
+      ['restore_draft', 'ruleset'],
+      ['delete_draft', 'ruleset'],
     ];
     for (const [action, entity] of steps) expect(cards.has(`steps.${action}.${entity}`), `${action}.${entity}`).toBe(true);
   });
 
   it('names the reason a card cannot be undone', () => {
-    for (const reason of ['immutable_version', 'posted_outward', 'changes_live_rules', 'started']) expect(cards.has(`reversibility.reasons.${reason}`)).toBe(true);
+    for (const reason of ['immutable_version', 'posted_outward', 'changes_live_rules', 'started', 'compensating']) expect(cards.has(`reversibility.reasons.${reason}`)).toBe(true);
+  });
+
+  it('words every reason an undo can give for an entry it does not run, every ledger op it can list, and every card action', () => {
+    for (const reason of UNDO_REASONS) expect(cards.has(`undo.reasons.${reason}`), reason).toBe(true);
+    for (const op of ['league_create', 'roster_add', 'tournament_create', 'phase_create', 'start_phase', 'generate_bracket', 'move_pin', 'publish_ruleset', 'ruleset_create_draft', 'ruleset_patch_draft']) {
+      expect(cards.has(`undo.ops.${op}`), op).toBe(true);
+    }
+    for (const group of ['leftAlone', 'residue', 'notUndoable']) expect(cards.has(`undo.${group}`), group).toBe(true);
+    // Every action a card step can carry has a verb for at least one entity.
+    for (const action of CARD_ACTIONS) expect(Object.keys(cardsTree(cards, action)).length, action).toBeGreaterThan(0);
   });
 
   it('has a status line noun for every group a tool can belong to, and every tool has a group', () => {

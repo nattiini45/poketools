@@ -37,6 +37,8 @@ import type { AdminAgentConfig } from '../env';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
 import { isRefObject, REF_PATH_PATTERN } from '../plans/route-bodies';
 import { PLAN_OPS, type PlanOp } from '../plans/ops';
+import { UNDO_MAX_STEPS } from '../plans/undo';
+import { isUndoOperation } from '../plans/undo-recipes';
 import type { ActionRepository } from '../store/actions';
 import type { ConversationRepository } from '../store/conversations';
 import { AdminAgentStoreError } from '../store/errors';
@@ -44,6 +46,7 @@ import type { AdminId } from '../store/ids';
 import type { ProposalRepository } from '../store/proposals';
 import type { ActionRecord, BlastClaim, Json, ProposalFinalStatus, ProposalRecord } from '../store/types';
 import { proposalCardSchema } from './card';
+import type { StepFacts } from './after-state';
 import { changedPreconditions, preconditionsHash } from './fingerprints';
 import type { FingerprintSource, PreconditionEntry } from './fingerprints';
 import { REAPER_AGE_MS, RESULT_EVENT, ROUTE_MAX_DURATION_SECONDS, reapOverdueProposals } from './reaper';
@@ -104,7 +107,7 @@ export class ProposalExecutionError extends UserFacingError<ProposalExecutionErr
 /** The slice of the store the executor uses; `adminAgentStore` satisfies it, the tests pass an in-memory one. */
 export interface ExecutorStore {
   readonly proposals: Pick<ProposalRepository, 'getProposalOrThrow' | 'getProposal' | 'claimProposal' | 'finishProposal' | 'reapExecutingProposals'>;
-  readonly actions: Pick<ActionRepository, 'insertAction' | 'completeAction' | 'listProposalActions'>;
+  readonly actions: Pick<ActionRepository, 'insertAction' | 'completeAction' | 'listProposalActions' | 'getAction'>;
   readonly conversations: Pick<ConversationRepository, 'getConversation' | 'claimBudget'>;
 }
 
@@ -124,8 +127,16 @@ export interface ExecutorDeps {
   readonly recordEvent: (adminId: AdminId, conversationId: string, event: string, data: Readonly<Record<string, Json | undefined>>) => Promise<void>;
   /** Fire-and-forget audit writer (`logAuditEvent`): never awaited into a step result. */
   readonly audit: (entry: AuditLogEntry) => void;
-  /** The state of an entity right after a step wrote it, for the ledger's `after_fingerprint`; absent: `null` is stored. */
-  readonly afterFingerprint?: (step: StoredStep, entityId: string | null) => Promise<string | null>;
+  /**
+   * The state of an entity right after a step wrote it, for the ledger's `after_fingerprint` (an undo compares against it);
+   * absent: `null` is stored. Only called for a step that ended `ok`.
+   */
+  readonly afterFingerprint?: (facts: StepFacts) => Promise<string | null>;
+  /**
+   * What a reversal needs and the route's answer will not say, read right before the dispatch and stored as the ledger's
+   * `before` (the version each target of a pin move pinned). Absent or `null`: nothing is stored.
+   */
+  readonly beforeState?: (facts: Pick<StepFacts, 'step' | 'call'>) => Promise<Json | null>;
   readonly now: () => Date;
   /** The settle wait of the reconcile; tests pass a recorder. */
   readonly sleep: (ms: number) => Promise<void>;
@@ -185,6 +196,32 @@ export interface StepCall {
   readonly params: Readonly<Record<string, string>>;
   readonly query: DispatchQuery;
   readonly body: unknown;
+}
+
+/** The key of an undo step: `undo.<ledger row>` or `undo.<ledger row>.<n>`. The row it names is the one marked `undone`. */
+const UNDO_KEY = /^undo\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\.\d{1,3})?$/;
+
+/** The path parameter that names the entity of an op whose ledger entity is not the id in its answer (spec §18.8: what an undo acts on). */
+const ENTITY_PARAM: Readonly<Record<string, string>> = {
+  start_phase: 'tid',
+  generate_bracket: 'id',
+  publish_ruleset: 'id',
+  move_pin: 'id',
+  league_archive: 'id',
+  tournament_archive: 'id',
+  roster_remove: 'id',
+  ruleset_restore_draft: 'id',
+  ruleset_delete_draft: 'id',
+};
+
+/**
+ * The entity a ledger row is filed under: the tournament a start or a bracket runs on, the ruleset definition a publish or a pin
+ * move belongs to (the version stays in `result`), the entity an undo step acted on; otherwise the id the route answered with.
+ */
+export function ledgerEntityId(op: string, call: Pick<StepCall, 'params'> | undefined, result: Record<string, JsonValue> | null): string | null {
+  const param = ENTITY_PARAM[op];
+  if (param !== undefined) return uuidOrNull(call?.params[param]);
+  return result ? uuidOrNull(result.id) : null;
 }
 
 // ─── Symbolic references (spec §18.6) ────────────────────────────────────────
@@ -338,6 +375,8 @@ async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: Propos
   if (conversation === null) return { code: 'proposal_stale', reason: 'conversation_gone' };
   if (deps.registryVersion(conversation.tool_set) !== proposal.tool_registry_version) return { code: 'proposal_stale', reason: 'registry_version_changed' };
 
+  if (proposal.kind === 'undo' && (proposal.class !== 'G' || steps.length > UNDO_MAX_STEPS)) return { code: 'proposal_stale', reason: 'undo_shape' };
+
   const keys = new Set<string>();
   for (const step of steps) {
     if (keys.has(step.key)) return { code: 'proposal_stale', reason: `duplicate_step_key:${step.key}` };
@@ -345,10 +384,13 @@ async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: Propos
     const binding = deps.bindings.get(step.op);
     if (binding === undefined) return { code: 'proposal_stale', reason: `unknown_op:${step.op}` };
     if (binding.class !== step.class || binding.method !== step.method || binding.path !== step.route_template) return { code: 'proposal_stale', reason: `binding_differs:${step.op}` };
-    // A Build never holds a Go-live step, and a Go-live proposal never a Build step.
-    if (step.class !== proposal.class) return { code: 'proposal_stale', reason: `class_differs:${step.key}` };
+    // A Build never holds a Go-live step, and a Go-live proposal never a Build step. The one exception is an undo: a G proposal
+    // whose steps are the compensating calls, each in the class of its own binding (checked above: step.class equals the binding's).
+    if (proposal.kind !== 'undo' && step.class !== proposal.class) return { code: 'proposal_stale', reason: `class_differs:${step.key}` };
     // The registry also holds the compensating calls (archive a league, remove a roster row): staging derives only the Plan's ops.
     if (proposal.kind === 'build' && !(PLAN_OPS as readonly string[]).includes(step.op)) return { code: 'proposal_stale', reason: `op_not_buildable:${step.op}` };
+    // And an undo holds nothing but those: the allow-list is the one the recipes declare, whatever the registry also binds.
+    if (proposal.kind === 'undo' && (!isUndoOperation(step.op) || !UNDO_KEY.test(step.key))) return { code: 'proposal_stale', reason: `op_not_undoable:${step.op}` };
     if ((binding.phase ?? 5) > cfg.maxPhase) return { code: 'proposal_stale', reason: `phase_above_cap:${step.op}` };
     for (const template of [step.path_params, step.query, step.body_template]) {
       for (const ref of collectRefs(template as JsonValue)) {
@@ -534,13 +576,23 @@ async function settleStep(
     outcome?: Outcome;
     result?: Record<string, JsonValue> | null;
     verify?: Json | null;
+    /** The resolved request the step was sent with, when this settle follows a dispatch. */
+    call?: StepCall;
+    /** What the reversal needs, read before the dispatch. */
+    before?: Json | null;
   },
 ): Promise<StepRun> {
-  const entityId = end.result ? uuidOrNull(end.result.id) : null;
+  // Only a step that wrote is filed under the entity it acted on; a failed or unknown one keeps the id its answer carried (if any).
+  const entityId = end.status === 'ok' ? ledgerEntityId(step.op, end.call, end.result ?? null) : end.result ? uuidOrNull(end.result.id) : null;
   let afterFingerprint: string | null = null;
   if (end.status === 'ok' && ctx.deps.afterFingerprint) {
     try {
-      afterFingerprint = await ctx.deps.afterFingerprint(step, entityId);
+      afterFingerprint = await ctx.deps.afterFingerprint({
+        step: { key: step.key, op: step.op },
+        ...(end.call ? { call: { params: end.call.params, body: end.call.body } } : {}),
+        result: end.result ?? null,
+        entityId,
+      });
     } catch (error) {
       console.error(`${logTag}: after-fingerprint failed for ${step.key}`, error);
     }
@@ -556,6 +608,7 @@ async function settleStep(
       afterFingerprint,
       reversibility: step.reversal,
       ...(end.verify !== undefined ? { verify: end.verify } : {}),
+      ...(end.before !== undefined && end.before !== null ? { before: end.before } : {}),
       entityType: step.entity_type,
       entityId,
     });
@@ -634,7 +687,7 @@ async function adoptRow(ctx: RunContext, step: StoredStep, row: ActionRecord): P
   if (row.status === 'executing' && !(age >= (binding.timeoutMs ?? DEFAULT_ROUTE_TIMEOUT_MS) + SETTLE_MS)) return { status: 'unknown', code: 'unknown_outcome' };
   const young = age < SETTLE_MS;
   const verdict = await reconcile(ctx, step, binding, resolved.call, harnessError('step_timeout', { write: true, ran: true }), young);
-  return concludeReconcile(ctx, step, row, verdict, null);
+  return concludeReconcile(ctx, step, row, verdict, null, { call: resolved.call });
 }
 
 /** `confirmed` adopts the write as the step's result; anything else leaves it unknown (an ambiguous match says so). */
@@ -644,23 +697,24 @@ async function concludeReconcile(
   action: ActionRecord,
   verdict: VerifyResult & { ambiguous: boolean },
   outcome: Outcome | null,
+  extra: { call?: StepCall; before?: Json | null } = {},
 ): Promise<StepRun> {
   const verify = { status: verdict.status, ...(verdict.detail ?? {}) } as Json;
   if (verdict.status === 'confirmed') {
     const result = extractStepResult(step.op, verdict.detail ?? {});
-    const run = await settleStep(ctx, step, action, { status: 'ok', ...(outcome ? { outcome } : {}), result, verify });
+    const run = await settleStep(ctx, step, action, { status: 'ok', ...(outcome ? { outcome } : {}), result, verify, ...extra });
     auditStep(ctx, step, run);
     return run;
   }
   if (verdict.status === 'failed') {
     // The write is there and the step still did not succeed (a tournament its creator cannot administer): the ledger keeps the id.
     const result = extractStepResult(step.op, verdict.detail ?? {});
-    const run = await settleStep(ctx, step, action, { status: 'failed', code: verdict.code ?? 'step_failed', ...(outcome ? { outcome } : {}), result, verify });
+    const run = await settleStep(ctx, step, action, { status: 'failed', code: verdict.code ?? 'step_failed', ...(outcome ? { outcome } : {}), result, verify, ...extra });
     auditStep(ctx, step, run);
     return run;
   }
   const code = verdict.ambiguous ? 'reconcile_ambiguous' : 'unknown_outcome';
-  const run = await settleStep(ctx, step, action, { status: 'unknown', code, ...(outcome ? { outcome } : {}), verify });
+  const run = await settleStep(ctx, step, action, { status: 'unknown', code, ...(outcome ? { outcome } : {}), verify, ...extra });
   auditStep(ctx, step, run);
   return run;
 }
@@ -701,6 +755,18 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
     return { run };
   }
 
+  // d3. What the reversal will need and the answer will not say (the version a pin pinned before it moves). A read that fails
+  // stores nothing: the write still runs, and the reversal then reports the missing fact instead of guessing.
+  let before: Json | null = null;
+  if (ctx.deps.beforeState) {
+    try {
+      before = await ctx.deps.beforeState({ step: { key: step.key, op: step.op }, call: { params: call.params, body: call.body } });
+    } catch (error) {
+      console.error(`${logTag}: the before-state read failed for ${step.key}`, error);
+    }
+  }
+  const extra = { call, before };
+
   // e. Dispatch as the verified session. `invokeRoute` never rejects. A route that takes no body is sent none.
   const outcome = await invokeRoute(
     binding,
@@ -714,20 +780,20 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
     const verdict = await verifyStep(ctx, step, binding, call, outcome);
     if (verdict.status === 'confirmed') {
       const result = extractStepResult(step.op, outcome.data) ?? extractStepResult(step.op, verdict.detail ?? {});
-      run = await settleStep(ctx, step, action, { status: 'ok', outcome, result, verify: { status: verdict.status, ...(verdict.detail ?? {}) } as Json });
+      run = await settleStep(ctx, step, action, { status: 'ok', outcome, result, verify: { status: verdict.status, ...(verdict.detail ?? {}) } as Json, ...extra });
     } else if (verdict.status === 'failed') {
       const result = extractStepResult(step.op, outcome.data) ?? extractStepResult(step.op, verdict.detail ?? {});
-      run = await settleStep(ctx, step, action, { status: 'failed', code: verdict.code ?? 'step_failed', outcome, result, verify: { status: verdict.status, ...(verdict.detail ?? {}) } as Json });
+      run = await settleStep(ctx, step, action, { status: 'failed', code: verdict.code ?? 'step_failed', outcome, result, verify: { status: verdict.status, ...(verdict.detail ?? {}) } as Json, ...extra });
     } else {
       // The route said 2xx and the read-back cannot find it: unknown, to be reconciled by a resume.
       const code = verdict.ambiguous ? 'reconcile_ambiguous' : 'unknown_outcome';
-      run = await settleStep(ctx, step, action, { status: 'unknown', code, outcome, verify: { status: verdict.status, ...(verdict.detail ?? {}) } as Json });
+      run = await settleStep(ctx, step, action, { status: 'unknown', code, outcome, verify: { status: verdict.status, ...(verdict.detail ?? {}) } as Json, ...extra });
     }
   } else if (isUnknownOutcome(outcome)) {
     // A masked 500, a 504 or a step timeout: the write may have committed (or still be running). Read it back; adopt it
     // if it is there; otherwise it stays unknown. Never retried in this request.
     const verdict = await reconcile(ctx, step, binding, call, outcome, true);
-    run = await concludeReconcile(ctx, step, action, verdict, outcome);
+    run = await concludeReconcile(ctx, step, action, verdict, outcome, extra);
     return { run };
   } else {
     // A Go-live write the route refused with a conflict may still have done part of its work (a pin move stops at the first pin
@@ -738,7 +804,7 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
       const verdict = await verifyStep(ctx, step, binding, call, outcome);
       verify = { status: verdict.status, ...(verdict.detail ?? {}) } as Json;
     }
-    run = await settleStep(ctx, step, action, { status: 'failed', code: outcomeCode(outcome) ?? 'step_failed', outcome, ...(verify !== undefined ? { verify } : {}) });
+    run = await settleStep(ctx, step, action, { status: 'failed', code: outcomeCode(outcome) ?? 'step_failed', outcome, ...(verify !== undefined ? { verify } : {}), ...extra });
   }
   auditStep(ctx, step, run);
   return { run };
@@ -805,6 +871,29 @@ function finalStatusOf(proposal: ProposalRecord, summaries: readonly StepSummary
   if (count('failed') > 0 || count('skipped') > 0) return count('ok') > 0 ? 'partial' : 'failed';
   if (count('pending') > 0) return 'executing';
   return 'completed';
+}
+
+/**
+ * An undo marks the ledger rows it reversed `undone`: a row whose steps all ended `ok` (a roster add has one step per player;
+ * a partly removed roster stays `ok`). The row named by the step key must be this admin's, of this conversation and `ok`.
+ * Best effort: the entities are changed either way, and a row left `ok` only means a second undo finds its fingerprint changed.
+ */
+async function markUndone(ctx: RunContext, summaries: readonly StepSummary[]): Promise<void> {
+  const byRow = new Map<string, StepResultStatus[]>();
+  for (const summary of summaries) {
+    const row = UNDO_KEY.exec(summary.key)?.[1];
+    if (row !== undefined) byRow.set(row, [...(byRow.get(row) ?? []), summary.status]);
+  }
+  for (const [rowId, statuses] of byRow) {
+    if (!statuses.every((status) => status === 'ok')) continue;
+    try {
+      const forward = await ctx.deps.store.actions.getAction(ctx.input.adminId, rowId);
+      if (forward === null || forward.conversation_id !== ctx.proposal.conversation_id || forward.status !== 'ok') continue;
+      await ctx.deps.store.actions.completeAction(ctx.input.adminId, forward.id, { status: 'undone' });
+    } catch (error) {
+      console.error(`${logTag}: could not mark the ledger row ${rowId} undone`, error);
+    }
+  }
 }
 
 async function announce(deps: ExecutorDeps, adminId: AdminId, proposal: ProposalRecord, result: ProposalResult): Promise<void> {
@@ -921,6 +1010,7 @@ export async function executeProposal(deps: ExecutorDeps, input: ExecuteInput): 
 
   // 5. The end of the proposal and the event the model learns it from.
   const summaries = summarize(steps, ctx.runs);
+  if (proposal.kind === 'undo') await markUndone(ctx, summaries);
   const status = finalStatusOf(proposal, summaries, stop);
   if (status !== 'executing') {
     try {

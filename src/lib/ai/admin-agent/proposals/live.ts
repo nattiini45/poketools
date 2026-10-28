@@ -35,7 +35,7 @@ import {
   getRulesetVersion,
 } from '@/lib/supabase/queries/ruleset-definitions';
 import { getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
-import { getSeasonById, getSeasonParticipants, listSeasons } from '@/lib/supabase/queries/seasons';
+import { getSeasonById, getSeasonParticipants, listSeasons, listSeasonsByIds } from '@/lib/supabase/queries/seasons';
 import { getParticipants, getStagesBySeasonId, getTournamentById, listAllTournaments } from '@/lib/supabase/queries/tournaments';
 import { buildBracketStructureForParticipants } from '@/lib/tournament/bracket-structure';
 import type { JsonValue } from '@/lib/studio-core/json';
@@ -43,10 +43,12 @@ import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { parseAdminAgentEnv } from '../env';
 import { planFactNeeds, dexFactKey, type PlanFacts, type PlayerFact, type RefFact } from '../plans/facts';
+import { hashJson } from '../plans/hash';
 import { guardFor } from '../registry/guard';
 import { toolErrorFromThrown } from '../registry/errors';
 import { STAGED_TOOLS } from '../registry/staged';
 import { adminAgentStore } from '../store';
+import { draftDocState, draftLifeState, pinTargetsState, rosterMembersState, type StepFacts } from './after-state';
 import { ReadUnavailable, type FingerprintSource, type ReadName, type ReadTarget } from './fingerprints';
 import { createProposalStager } from './stage';
 import type { EpbBattleRulesetHead, StagerDeps, StagingSource } from './types';
@@ -281,6 +283,60 @@ export const liveFingerprints: FingerprintSource = {
           participants: sorted(participants.map((p) => `${p.id.toLowerCase()}:${p.seed ?? ''}`), (entry) => entry),
         };
       }
+      // The state a chat write left an entity in (slice 5): what an undo compares against. A missing entity reads `null`.
+      case 'league_after': {
+        const [season] = await listSeasonsByIds([idOf(target)]);
+        if (season === undefined) return null;
+        return {
+          name: season.name,
+          description: season.description,
+          format_type: season.format_type,
+          status: season.status,
+          archived: season.archived,
+          start_date: season.start_date,
+          end_date: season.end_date,
+          ruleset_id: season.ruleset_id,
+          language: season.language ?? null,
+        };
+      }
+      case 'tournament_after': {
+        const tournament = await getTournamentById(idOf(target));
+        if (tournament === null) return null;
+        return {
+          name: tournament.name,
+          description: tournament.description,
+          season_id: tournament.season_id,
+          bracket_type: tournament.bracket_type,
+          ruleset_id: tournament.ruleset_id,
+          best_of_default: tournament.best_of_default,
+          status: tournament.status,
+          archived: tournament.archived,
+          stage_order: tournament.stage_order,
+        };
+      }
+      case 'roster_members': {
+        const params = paramsOf(target);
+        const wanted = Array.isArray(params.player_ids) ? params.player_ids.filter((id): id is string => typeof id === 'string') : [];
+        const roster = new Set((await getSeasonParticipants(String(params.season_id))).map((participant) => participant.id.toLowerCase()));
+        return rosterMembersState(wanted.filter((id) => roster.has(id.toLowerCase())));
+      }
+      case 'pin_targets': {
+        const targets = (paramsOf(target).targets as Array<{ kind: 'season' | 'tournament'; id: string }>) ?? [];
+        const states = await getPinTargetStates(
+          targets.filter((t) => t.kind === 'season').map((t) => t.id),
+          targets.filter((t) => t.kind === 'tournament').map((t) => t.id),
+        );
+        return pinTargetsState(states.map((state) => ({ kind: state.kind, id: state.id, ruleset_id: state.ruleset_id })));
+      }
+      case 'ruleset_draft_doc': {
+        const draft = await getRulesetDefinitionDraft(idOf(target));
+        return draft === null ? null : draftDocState(draft.draft_rev, hashJson(draft.document));
+      }
+      case 'ruleset_draft_state': {
+        const definition = await getRulesetDefinitionMeta(idOf(target));
+        const draft = definition === null ? null : await getRulesetDefinitionDraft(definition.id);
+        return definition === null || draft === null ? null : draftLifeState(draft.draft_rev, definition.current_version_id !== null);
+      }
       case 'startup_checklist':
       case 'channel_set':
         // The startup input and the webhook and social matchers are not exported yet (plan PR5): fail closed.
@@ -375,8 +431,52 @@ export const liveSource: StagingSource = {
     };
   },
 
+  async undoFacts({ leagueIds, playerIds }) {
+    // A round in any phase of a league locks the roster; a league that left `upcoming` has started.
+    let roundsExist = false;
+    let leagueStarted = false;
+    for (const leagueId of leagueIds) {
+      const [season, stages] = await Promise.all([getSeasonById(leagueId), getStagesBySeasonId(leagueId)]);
+      if (season !== null && season.status !== 'upcoming') leagueStarted = true;
+      for (const stage of stages) {
+        if ((await getRoundsByTournament(stage.id)).length > 0) roundsExist = true;
+      }
+    }
+    const playerNames: Record<string, string> = {};
+    if (playerIds.length > 0) {
+      const found = await getPlayersByIds([...playerIds]);
+      for (const id of playerIds) {
+        const player = found.get(id) ?? [...found.values()].find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
+        if (player !== undefined) playerNames[id.toLowerCase()] = player.name;
+      }
+    }
+    return { locks: { roundsExist, leagueStarted: leagueStarted || roundsExist }, playerNames };
+  },
+
   fingerprints: liveFingerprints,
 };
+
+/**
+ * The ledger's `before` for the steps that need one (slice 5): the version each target of a pin move pins right before the move,
+ * with its number, so the undo moves each target back to the version it had. Read after the step's preconditions passed, so it
+ * is the state staging showed. Other ops store nothing.
+ */
+export async function liveBeforeState(facts: Pick<StepFacts, 'step' | 'call'>) {
+  if (facts.step.op !== 'move_pin') return null;
+  const body = typeof facts.call?.body === 'object' && facts.call.body !== null ? (facts.call.body as { targets?: Array<{ kind: 'season' | 'tournament'; id: string }> }) : {};
+  const targets = body.targets ?? [];
+  const states = await getPinTargetStates(
+    targets.filter((t) => t.kind === 'season').map((t) => t.id),
+    targets.filter((t) => t.kind === 'tournament').map((t) => t.id),
+  );
+  const numbers = new Map<string, number | null>();
+  for (const state of states) {
+    if (state.ruleset_id !== null && !numbers.has(state.ruleset_id)) numbers.set(state.ruleset_id, (await getDefinitionOfVersion(state.ruleset_id))?.version_no ?? null);
+  }
+  return {
+    pins: states.map((state) => ({ kind: state.kind, id: state.id.toLowerCase(), version_id: state.ruleset_id, version_no: state.ruleset_id === null ? null : (numbers.get(state.ruleset_id) ?? null) })),
+  };
+}
 
 /** The bound dependencies of the chat loop's `stageProposal` and of the card and token routes. */
 export function liveStagerDeps(): StagerDeps {

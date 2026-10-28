@@ -64,6 +64,7 @@ export default {
   proposal_conflict_executing: 'Another proposal is still running in this conversation.',
   proposal_not_resumable: 'This proposal cannot be resumed.',
   undo_unavailable: 'This cannot be undone.',
+  nothing_to_undo: 'There is nothing left to undo here: it was already undone, was edited outside the chat, or cannot be undone.',
 
   // Execution outcomes
   step_failed: 'A step failed.',

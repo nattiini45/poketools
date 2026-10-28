@@ -51,7 +51,7 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
   "propose_set_format_visibility": "7ee7794eff6e7f99",
   "propose_start_phase": "c68ab46014e8a914",
   "propose_start_round": "983af23cb53ec513",
-  "propose_undo": "8454de331070c076",
+  "propose_undo": "b3fd6f7b2de6e29d",
   "request_clarification": "2508aadd5bac8f7d",
   "resolve_date": "e6850fb73f455d0c",
   "round_schedule_preview": "8930178491339a22",
@@ -82,23 +82,23 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
   },
   "scoped:1": {
     "tools": 41,
-    "version": "3e5d361b80c027a3",
+    "version": "dddc517315f1100f",
   },
   "scoped:2": {
     "tools": 48,
-    "version": "ec4f73320a744ce4",
+    "version": "88e0328dc67e1820",
   },
   "scoped:3": {
     "tools": 60,
-    "version": "72e7fa394263713b",
+    "version": "180e854c0c67ae5c",
   },
   "scoped:4": {
     "tools": 68,
-    "version": "ae980ee9dcbbe70d",
+    "version": "5bdee73a11b2930b",
   },
   "scoped:5": {
     "tools": 68,
-    "version": "ae980ee9dcbbe70d",
+    "version": "5bdee73a11b2930b",
   },
   "site:0": {
     "tools": 34,
@@ -106,23 +106,23 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
   },
   "site:1": {
     "tools": 41,
-    "version": "3e5d361b80c027a3",
+    "version": "dddc517315f1100f",
   },
   "site:2": {
     "tools": 49,
-    "version": "8039428a5cea28ea",
+    "version": "94450ef5209decaa",
   },
   "site:3": {
     "tools": 61,
-    "version": "5cbf615a784b680b",
+    "version": "fb31029531bde8b8",
   },
   "site:4": {
     "tools": 69,
-    "version": "eec55ad218fc732b",
+    "version": "297a78d1ac0bd07e",
   },
   "site:5": {
     "tools": 69,
-    "version": "eec55ad218fc732b",
+    "version": "297a78d1ac0bd07e",
   },
 }
 `;

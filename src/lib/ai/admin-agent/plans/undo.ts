@@ -9,8 +9,9 @@
  *   - `leftAlone`    changed outside the chat since the assistant wrote it ("left alone: edited outside chat"),
  *   - `residue`      kept on purpose (phases, pools of an archived league) and listed on the card,
  *   - `notUndoable`  with the reason (immutable, outward effect, locked, unknown op).
- * It never includes an entry the ledger did not create, and undo is compensating only: nothing here hard-deletes
- * (the single carve-out is a private, unpublished, unattached format draft created in this conversation, Q24).
+ * It never includes an entry the ledger did not create, and undo is compensating only: nothing here hard-deletes. There
+ * are two carve-outs, both private drafts created in this conversation: a format draft that is unpublished and unattached
+ * (Q24), and a ruleset draft that has never been published (owner decision 2026-10-28: any version makes it residue).
  *
  * Pure: the caller supplies the ledger rows and the live state it read. The route bindings that execute a reversal
  * live in `_ops/g` and are reachable from the executor with a ledger row as input only.
@@ -47,6 +48,8 @@ export interface UndoLockFacts {
   pinLocked?: boolean;
   /** The pool is in progress (the server has no status guard, so the assistant checks). */
   poolInProgress?: boolean;
+  /** The ruleset definition has (or had) a published version, read live: it can no longer be deleted by an undo. */
+  rulesetPublished?: boolean;
 }
 
 export interface UndoLiveState {
@@ -64,7 +67,6 @@ export type UndoReason =
   | 'outward_effect'
   | 'separate_card'
   | 'not_offered'
-  | 'owner_decision_pending'
   | 'needs_superadmin'
   | 'residue'
   | 'already_undone'
@@ -77,7 +79,14 @@ export type UndoReason =
   | 'locked_groups'
   | 'locked_in_progress'
   | 'format_in_use'
-  | 'pin_locked';
+  | 'pin_locked'
+  | 'ruleset_published'
+  /** A ruleset restore that a delete of the same draft replaces. */
+  | 'superseded'
+  | 'too_many_steps'
+  | 'snapshot_unavailable'
+  /** The ledger row lacks what the reversal is built from (an old row, or a recipe that was not recorded). */
+  | 'before_missing';
 
 export type UndoAction =
   | 'restore_plan_revision'
@@ -85,6 +94,7 @@ export type UndoAction =
   | 'format_draft_restore'
   | 'format_make_private'
   | 'ruleset_draft_restore'
+  | 'delete_ruleset_draft'
   | 'archive_league'
   | 'archive_tournament'
   | 'remove_roster'
@@ -123,8 +133,9 @@ const RULES: Readonly<Record<string, Rule>> = Object.freeze({
   format_attach: { kind: 'none', reason: 'separate_card' },
   format_reattach: { kind: 'reversal', action: 'reattach_previous_format', tier: 'G', unless: { leagueStarted: 'locked_started' } },
   format_detach: { kind: 'reversal', action: 'reattach_previous_format', tier: 'G', unless: { leagueStarted: 'locked_started' } },
-  // Deleting a ruleset draft would extend the Q24 carve-out; until the owner decides there is no undo row.
-  ruleset_create_draft: { kind: 'none', reason: 'owner_decision_pending' },
+  // The second carve-out (owner decision 2026-10-28): a ruleset created in this conversation is deleted while it has never
+  // been published. Any version makes it residue (a version may already be pinned).
+  ruleset_create_draft: { kind: 'reversal', action: 'delete_ruleset_draft', tier: 'G', unless: { rulesetPublished: 'ruleset_published' } },
   ruleset_patch_draft: { kind: 'reversal', action: 'ruleset_draft_restore', tier: 'D' },
   ruleset_publish: { kind: 'none', reason: 'immutable' },
   ruleset_move_pin: { kind: 'reversal', action: 'pin_back', tier: 'G', unless: { pinLocked: 'pin_locked' } },
@@ -160,6 +171,13 @@ export const UNDO_OPS: readonly string[] = Object.freeze(Object.keys(RULES));
 
 /** At most this many steps in one undo proposal. */
 export const UNDO_MAX_STEPS = 20;
+
+/** Every reason a catalog must word (the card shows them). */
+export const UNDO_REASONS: readonly UndoReason[] = Object.freeze([
+  'unknown_op', 'immutable', 'outward_effect', 'separate_card', 'not_offered', 'needs_superadmin', 'residue', 'already_undone', 'not_completed',
+  'edited_outside', 'entity_gone', 'fingerprint_unavailable', 'locked_started', 'locked_rounds', 'locked_groups', 'locked_in_progress',
+  'format_in_use', 'pin_locked', 'ruleset_published', 'superseded', 'too_many_steps', 'snapshot_unavailable', 'before_missing',
+]);
 
 export type Undoability =
   | { available: true; action: UndoAction; tier: 'D' | 'B' | 'G' }
@@ -253,7 +271,7 @@ export function deriveUndoPlan(entries: readonly LedgerEntryView[], live: UndoLi
         afterFingerprint: entry.afterFingerprint,
       });
     } else if (result.reason === 'edited_outside') plan.leftAlone.push(note(entry, result.reason));
-    else if (result.reason === 'residue') plan.residue.push(note(entry, result.reason));
+    else if (result.reason === 'residue' || result.reason === 'ruleset_published') plan.residue.push(note(entry, result.reason));
     else plan.notUndoable.push(note(entry, result.reason));
   }
   return plan;

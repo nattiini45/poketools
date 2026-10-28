@@ -60,6 +60,8 @@ export class MemoryStore {
   actions: ActionRecord[] = [];
   plan: PlanRecord | null = null;
   recorded: Array<{ kind: string; id: string }> = [];
+  /** The previous drafts kept for the draft-save undo, by ledger row id. */
+  snapshots = new Map<string, { document: unknown; doc_hash: string }>();
 
   /** Ids this conversation has seen (provenance). */
   see(conversationId: string, ...ids: string[]): void {
@@ -98,6 +100,9 @@ export class MemoryStore {
           this.recorded.push(...refs.map((ref) => ({ kind: ref.kind, id: ref.id })));
           return refs.length;
         },
+      },
+      snapshots: {
+        getSnapshot: async (_admin: string, actionId: string) => this.snapshots.get(actionId) ?? null,
       },
       actions: {
         listActions: async () => this.actions,
@@ -144,6 +149,12 @@ export class MemoryStore {
           const { token_hash: _hidden, ...record } = row;
           return record as ProposalRecord;
         },
+        getProposal: async (adminId: string, proposalId: string) => {
+          const row = this.proposals.find((entry) => entry.id === proposalId && entry.admin_id === adminId);
+          if (row === undefined) return null;
+          const { token_hash: _hidden, ...record } = row;
+          return record as ProposalRecord;
+        },
         getProposalOrThrow: async (adminId: string, proposalId: string) => {
           const row = this.proposals.find((entry) => entry.id === proposalId && entry.admin_id === adminId);
           if (row === undefined) throw new AdminAgentStoreError('proposal_not_found');
@@ -181,6 +192,7 @@ export interface SourceScript {
   impact?: { checked: number; wouldBreak: number; truncated: boolean };
   phase?: Partial<PhaseStartFact> | null;
   recipients?: StagingSource['recipients'];
+  undo?: Awaited<ReturnType<StagingSource['undoFacts']>>;
 }
 
 /** A mutable world the fingerprint reads look at: change `world.value` between staging and recheck to simulate drift. */
@@ -236,6 +248,7 @@ export function makeSource(script: SourceScript = {}, world = new FingerprintWor
             participantCount: 12,
             ...script.phase,
           },
+    undoFacts: async () => script.undo ?? { locks: {}, playerNames: {} },
     ...(script.recipients === undefined ? {} : { recipients: script.recipients }),
     fingerprints: world,
   };

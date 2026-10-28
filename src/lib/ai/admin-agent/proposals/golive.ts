@@ -6,9 +6,9 @@
  * fingerprints, every word on the card) is derived here from live state. The checks are the routes' own shared functions
  * and typed codes, so a card is refused at staging for what the route would refuse at approve; the route stays the authority.
  *
- * Not stageable yet (they answer `phase_disabled`): the later-phase G tools, and `propose_undo`, whose steps come from the
- * ledger (plan 4.7) and are built with the undo lane. `GOLIVE_NOT_STAGEABLE` lists them, and a test keeps that list and the
- * registry in step so a new G tool is a conscious decision.
+ * Not stageable yet (they answer `phase_disabled`): the later-phase G tools. `GOLIVE_NOT_STAGEABLE` lists them, and a test keeps
+ * that list and the registry in step so a new G tool is a conscious decision. `propose_undo` is staged by `undo.ts`: its steps
+ * come from the ledger (plan 4.7), not from one exact call.
  */
 import { ltext } from '@/lib/studio-core/ltext';
 import type { JsonValue } from '@/lib/studio-core/json';
@@ -24,7 +24,6 @@ export type GoLiveToolName = (typeof GOLIVE_STAGEABLE)[number];
 
 /** G tools the registry lists that this module does not stage. Anything that is neither here nor stageable fails the registry test. */
 export const GOLIVE_NOT_STAGEABLE: readonly string[] = [
-  'propose_undo',
   'propose_generate_round',
   'propose_league_status',
   'propose_advance_phase',

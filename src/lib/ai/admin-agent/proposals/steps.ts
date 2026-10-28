@@ -38,8 +38,8 @@ const target = z.discriminatedUnion('kind', [
 export const storedStepSchema = z.strictObject({
   key: z.string().min(1).max(64),
   op: z.string().min(1).max(64),
-  /** Build steps are B; a Go-live step is G. */
-  class: z.enum(['B', 'G']),
+  /** Build steps are B; a Go-live step is G. An undo step carries its binding's class, so it can also be D (a draft restore). */
+  class: z.enum(['B', 'G', 'D']),
   method: z.enum(HTTP_METHODS),
   route_template: z.string().min(1).max(200),
   path_params: z.record(z.string(), json),

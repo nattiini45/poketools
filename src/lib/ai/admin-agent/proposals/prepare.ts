@@ -6,7 +6,7 @@
 import type { ApiErrorCode } from '@/i18n/messages/errors';
 import type { StagedTool } from '../registry/define';
 import type { ProposalCard } from './card';
-import type { PreconditionSpec } from './fingerprints';
+import type { PreconditionEntry, PreconditionSpec } from './fingerprints';
 import type { StepDraft } from './steps';
 import type { StageFinding, StageInput, StagerDeps } from './types';
 
@@ -35,12 +35,17 @@ export interface PrepareContext {
 export interface PreparedStep {
   step: StepDraft;
   specs: PreconditionSpec[];
+  /**
+   * Preconditions fixed by the preparer (an undo step: the state the chat's write left, taken from the ledger). Used as they are
+   * instead of reading `specs` again; the step's own `preconditions` field is filled in by staging.
+   */
+  fixed?: PreconditionEntry[];
   /** Keys of the entities the step creates or changes (`season:<id>`); later steps then skip those fingerprints. */
   touches: string[];
 }
 
 export interface Prepared {
-  kind: 'build' | 'action';
+  kind: 'build' | 'action' | 'undo';
   class: 'B' | 'G';
   planId: string | null;
   planRevision: number | null;

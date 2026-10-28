@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import type { PlanDocument } from '../plans/schema';
 import type { PlanBlocker } from '../plans/readiness';
+import { UNDO_REASONS, type UndoReason } from '../plans/undo';
 import type { BuildSummary, PlanEffect, PlanStep } from '../plans/steps';
 import { sanitizeCardText, type CardText } from './text';
 import type { EpbBattleRulesetHead, StagingAdmin } from './types';
@@ -36,6 +37,7 @@ export const CARD_LINE_KINDS = [
   'pin_started_targets',
   'ruleset_changes_live_rules',
   'draft_unsaved_changes',
+  'archived_stays_reachable',
 ] as const;
 export type CardLineKind = (typeof CARD_LINE_KINDS)[number];
 
@@ -60,12 +62,13 @@ export const CARD_TEXT_KEYS: Readonly<Record<CardLineKind, string | null>> = {
   pin_started_targets: null,
   ruleset_changes_live_rules: null,
   draft_unsaved_changes: null,
+  archived_stays_reachable: null,
 };
 
 export const CARD_ENTITIES = ['league', 'roster', 'phase', 'groups', 'draft_pool', 'tournament', 'ruleset'] as const;
 export type CardEntity = (typeof CARD_ENTITIES)[number];
 
-export const CARD_ACTIONS = ['create', 'add', 'set', 'publish', 'move_pin', 'start', 'generate_bracket'] as const;
+export const CARD_ACTIONS = ['create', 'add', 'set', 'publish', 'move_pin', 'start', 'generate_bracket', 'archive', 'remove', 'restore_draft', 'delete_draft'] as const;
 export type CardAction = (typeof CARD_ACTIONS)[number];
 
 const cardText = z.strictObject({ text: z.string().max(400), hidden: z.number().int().min(0) });
@@ -124,9 +127,19 @@ export type CardEffect = z.infer<typeof cardEffect>;
 
 export const CARD_VERSION = 1 as const;
 
+/** One ledger entry an undo does not run, with the catalogued reason (the card words it). */
+const undoNote = z.strictObject({
+  op: z.string().max(64),
+  entity: z.enum(CARD_ENTITIES).nullable(),
+  id: z.string().nullable(),
+  name: cardText.nullable(),
+  reason: z.enum(UNDO_REASONS as unknown as [UndoReason, ...UndoReason[]]),
+});
+export type UndoNote = z.infer<typeof undoNote>;
+
 export const proposalCardSchema = z.strictObject({
   v: z.literal(CARD_VERSION),
-  kind: z.enum(['build', 'go_live']),
+  kind: z.enum(['build', 'go_live', 'undo']),
   class: z.enum(['B', 'G']),
   tool: z.string().max(64),
   /** The first 8 hex of the proposal hash. */
@@ -162,11 +175,21 @@ export const proposalCardSchema = z.strictObject({
     z.strictObject({ kind: z.literal('undoable') }),
     z.strictObject({
       kind: z.literal('irreversible'),
-      reason: z.enum(['immutable_version', 'posted_outward', 'changes_live_rules', 'started']),
+      reason: z.enum(['immutable_version', 'posted_outward', 'changes_live_rules', 'started', 'compensating']),
     }),
   ]),
   /** G only: "existing league, not created in this chat" (plan 3.5 rule 5). */
   existingEntity: z.boolean(),
+  /** Undo only: what the undo leaves alone, leaves behind or cannot do (spec §18.8), each with its reason. */
+  undo: z
+    .strictObject({
+      leftAlone: z.array(undoNote).max(60),
+      residue: z.array(undoNote).max(60),
+      notUndoable: z.array(undoNote).max(60),
+      /** More could be undone than fits one proposal; ask again for the rest. */
+      truncated: z.boolean(),
+    })
+    .optional(),
 });
 export type ProposalCard = z.infer<typeof proposalCardSchema>;
 

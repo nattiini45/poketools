@@ -1,7 +1,8 @@
 import { defineBinding, type VerifyCall, type VerifyResult } from '@/lib/ai/admin-agent/dispatch';
+import { leagueArchiveCall } from '@/lib/ai/admin-agent/plans/undo-recipes';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { leagueCreateBody } from './schemas';
-import { createdSince, idOfOutcome, idOfResult, nameKey, readLeague, readLiveLeagues } from './shared';
+import { createdSince, idOfOutcome, nameKey, readLeague, readLiveLeagues } from './shared';
 
 /**
  * `league_create`: `POST /api/seasons`. Public the moment it exists. The route pins the ruleset, creates a Point Buy league's
@@ -22,11 +23,7 @@ export const leagueCreate = defineBinding<VerifyCall>({
   reversal: {
     kind: 'compensating',
     operation: 'league_archive',
-    buildInput: (_call, result) => {
-      const id = idOfResult(result);
-      if (id === null) throw new Error('league_create left no league id to archive');
-      return { params: { id }, body: { archived: true } };
-    },
+    buildInput: (_call, result) => leagueArchiveCall(result),
   },
   async verify(call, outcome, ctx): Promise<VerifyResult> {
     const knownId = idOfOutcome(outcome);

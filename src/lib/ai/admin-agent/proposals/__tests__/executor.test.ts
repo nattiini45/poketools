@@ -154,7 +154,7 @@ describe('a clean approve', () => {
   });
 
   it('can store an after-fingerprint when the deps provide one', async () => {
-    const deps = { ...world.deps, afterFingerprint: async (step: StoredStep) => `fp:${step.key}` };
+    const deps = { ...world.deps, afterFingerprint: async (facts: { step: { key: string } }) => `fp:${facts.step.key}` };
     await executeProposal(deps, await world.input());
     expect(world.store.action('league')?.after_fingerprint).toBe('fp:league');
     expect(world.store.action('phase.playoffs')?.after_fingerprint).toBe('fp:phase.playoffs');

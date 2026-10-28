@@ -33,7 +33,7 @@ describe('every B and G tool of the registry is accounted for', () => {
   const staged = STAGED_TOOLS.filter((tool) => tool.class === 'B' || tool.class === 'G').map((tool) => tool.name);
 
   it('is stageable here, or listed as not stageable yet: a new tool is a conscious decision', () => {
-    const known = new Set<string>(['propose_build', ...GOLIVE_STAGEABLE, ...GOLIVE_NOT_STAGEABLE]);
+    const known = new Set<string>(['propose_build', 'propose_undo', ...GOLIVE_STAGEABLE, ...GOLIVE_NOT_STAGEABLE]);
     expect(staged.filter((name) => !known.has(name))).toEqual([]);
     expect([...known].filter((name) => !staged.includes(name))).toEqual([]);
     expect(GOLIVE_STAGEABLE.filter((name) => (GOLIVE_NOT_STAGEABLE as readonly string[]).includes(name))).toEqual([]);

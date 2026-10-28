@@ -169,6 +169,7 @@ export class ExecStore {
       if (outcome.errorCode !== undefined) row.error_code = outcome.errorCode;
       if (outcome.result !== undefined) row.result = outcome.result;
       if (outcome.afterFingerprint !== undefined) row.after_fingerprint = outcome.afterFingerprint;
+      if (outcome.before !== undefined) row.before = outcome.before;
       if (outcome.reversibility !== undefined) row.reversibility = outcome.reversibility;
       if (outcome.verify !== undefined) row.verify = outcome.verify;
       if (outcome.entityType !== undefined) row.entity_type = outcome.entityType;
@@ -177,6 +178,10 @@ export class ExecStore {
       return structuredClone(row);
     },
     listProposalActions: async (_adminId, proposalId) => this.actions.filter((row) => row.proposal_id === proposalId).map((row) => structuredClone(row)),
+    getAction: async (_adminId, actionId) => {
+      const row = this.actions.find((candidate) => candidate.id === actionId);
+      return row === undefined ? null : structuredClone(row);
+    },
   };
 
   conversations: ExecutorStore['conversations'] = {

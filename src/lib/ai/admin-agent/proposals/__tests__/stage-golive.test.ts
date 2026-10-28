@@ -106,7 +106,7 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
     it('says whether the ruleset was created in this chat from the ledger', async () => {
       const h = makeHarness();
       h.store.see(CONVERSATION_ID, DEFINITION_ID);
-      h.store.actions.push(ledgerAction({ entity_id: DEFINITION_ID, entity_type: 'ruleset_definition' }));
+      h.store.actions.push(ledgerAction({ entity_id: DEFINITION_ID, entity_type: 'ruleset', tool_name: 'ruleset_create_draft' }));
       staged(await h.stage('propose_publish_ruleset', args));
       expect(lastRow(h).card.existingEntity).toBe(false);
     });
@@ -294,7 +294,6 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
       const h = makeHarness();
       h.store.see(CONVERSATION_ID, TOURNAMENT_ID);
       for (const [tool, args] of [
-        ['propose_undo', { proposal_id: uid(4000) }],
         ['propose_generate_round', { tournament_id: TOURNAMENT_ID }],
         ['propose_advance_phase', { league_id: SEASON_ID }],
       ] as const) {

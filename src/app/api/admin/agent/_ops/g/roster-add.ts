@@ -1,4 +1,5 @@
 import { defineBinding, type VerifyCall, type VerifyResult } from '@/lib/ai/admin-agent/dispatch';
+import { rosterRemoveCalls } from '@/lib/ai/admin-agent/plans/undo-recipes';
 import { idParams, rosterAddBody } from './schemas';
 import { readRosterIds } from './shared';
 
@@ -24,7 +25,7 @@ export const rosterAdd = defineBinding<VerifyCall>({
     // The remove route takes one player per call.
     buildInput: (call, _result) => {
       const body = rosterAddBody.parse(call.body);
-      return body.player_ids.map((playerId) => ({ params: { id: call.params.id }, body: { player_id: playerId } }));
+      return rosterRemoveCalls(call.params.id, body.player_ids);
     },
   },
   async verify(call): Promise<VerifyResult> {

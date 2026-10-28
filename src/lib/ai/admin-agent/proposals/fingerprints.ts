@@ -32,6 +32,13 @@ export const READ_NAMES = [
   'phase_start_state',
   'startup_checklist',
   'channel_set',
+  // Undo (slice 5): the state an entity was left in by a chat write, so an undo can tell "edited outside the chat".
+  'league_after',
+  'tournament_after',
+  'roster_members',
+  'pin_targets',
+  'ruleset_draft_doc',
+  'ruleset_draft_state',
 ] as const;
 export type ReadName = (typeof READ_NAMES)[number];
 

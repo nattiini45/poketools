@@ -24,6 +24,7 @@
     {"method": "POST", "path": "/api/tournaments/[id]/generate-bracket", "class": "G", "phase": "P1", "operation": "propose_generate_bracket"},
     {"method": "POST", "path": "/api/ruleset-definitions/[id]/publish", "class": "G", "phase": "P1", "operation": "propose_publish_ruleset"},
     {"method": "POST", "path": "/api/ruleset-definitions/[id]/pins", "class": "G", "phase": "P1", "operation": "propose_move_pin"},
+    {"method": "DELETE", "path": "/api/ruleset-definitions/[id]", "class": "G", "phase": "P1", "operation": "propose_undo (delete a never-published ruleset draft)"},
     {"method": "POST", "path": "/api/ruleset-definitions/[id]/pins/impact", "class": "P", "phase": "P1", "operation": "ruleset_pin_impact_preview"}
   ]
 }
