@@ -10,8 +10,11 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { buildGraph, findPath, isTestPath, parseImports, REPO_ROOT, relFromRepo, SRC_ROOT, stripComments, walkFiles } from './graph';
+
+// Every test here walks an import graph; in a full parallel run the file takes about 90 s, so 5 s per test is not enough.
+vi.setConfig({ testTimeout: 60_000 });
 
 const AGENT_DIR = path.join(SRC_ROOT, 'lib/ai/admin-agent');
 const ROUTES_DIR = path.join(SRC_ROOT, 'app/api/admin/agent');
