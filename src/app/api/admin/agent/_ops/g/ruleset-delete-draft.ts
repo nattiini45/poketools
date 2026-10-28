@@ -4,7 +4,7 @@ import { idParams } from './schemas';
 
 /**
  * `ruleset_delete_draft`: `DELETE /api/ruleset-definitions/[id]`. The undo of a ruleset draft created in the chat, the second
- * carve-out to "undo never hard-deletes" (owner decision 2026-10-28): staging offers it only while the definition has never
+ * carve-out to "undo never hard-deletes" (spec §18.8): staging offers it only while the definition has never
  * been published, and the card's precondition checks that again at the step. The route itself refuses a definition that a league
  * or phase pins (409 `ruleset_in_use`), which maps to a failed step as usual. It takes no body.
  *

@@ -264,7 +264,7 @@ describe('ruleset_create_draft', () => {
       result: { ruleset_id: NEW_DEF, draft_rev: 1, slug: 'spring-ou' },
       after: { ruleset_id: NEW_DEF, draft_rev: 1 },
       undo: { kind: 'delete_draft', ruleset_id: NEW_DEF },
-      // Owner decision 2026-10-28: deletable by an undo only while it has never been published (read live at undo time).
+      // Spec §18.8: deletable by an undo only while it has never been published (read live at undo time).
       reversibility: 'delete_while_unpublished',
       // The state the write left: revision 1, no version. An undo compares the live draft with it.
       afterFingerprint: hashJson(draftLifeState(1, false)),

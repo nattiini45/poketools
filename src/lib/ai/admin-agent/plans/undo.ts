@@ -11,7 +11,7 @@
  *   - `notUndoable`  with the reason (immutable, outward effect, locked, unknown op).
  * It never includes an entry the ledger did not create, and undo is compensating only: nothing here hard-deletes. There
  * are two carve-outs, both private drafts created in this conversation: a format draft that is unpublished and unattached
- * (Q24), and a ruleset draft that has never been published (owner decision 2026-10-28: any version makes it residue).
+ * (Q24), and a ruleset draft that has never been published (spec §18.8: any version makes it residue).
  *
  * Pure: the caller supplies the ledger rows and the live state it read. The route bindings that execute a reversal
  * live in `_ops/g` and are reachable from the executor with a ledger row as input only.
@@ -133,7 +133,7 @@ const RULES: Readonly<Record<string, Rule>> = Object.freeze({
   format_attach: { kind: 'none', reason: 'separate_card' },
   format_reattach: { kind: 'reversal', action: 'reattach_previous_format', tier: 'G', unless: { leagueStarted: 'locked_started' } },
   format_detach: { kind: 'reversal', action: 'reattach_previous_format', tier: 'G', unless: { leagueStarted: 'locked_started' } },
-  // The second carve-out (owner decision 2026-10-28): a ruleset created in this conversation is deleted while it has never
+  // The second carve-out (spec §18.8): a ruleset created in this conversation is deleted while it has never
   // been published. Any version makes it residue (a version may already be pinned).
   ruleset_create_draft: { kind: 'reversal', action: 'delete_ruleset_draft', tier: 'G', unless: { rulesetPublished: 'ruleset_published' } },
   ruleset_patch_draft: { kind: 'reversal', action: 'ruleset_draft_restore', tier: 'D' },

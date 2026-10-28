@@ -15,8 +15,8 @@ import { parseAssistantBlocks, parseToolResultBlocks, parseTextBlocks } from '..
 import type { AdminModelPort, AgentStreamEvent, LoopDeps, ProviderAdapterConfig } from '../loop/types';
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from '../prompts';
 import { buildToolSet } from '../registry';
-import type { ProposalSummary } from '../store/types';
-import { FixtureToolRuntime } from './fixture-tools';
+import type { MessageRecord, ProposalSummary } from '../store/types';
+import { FixtureToolRuntime, type CallAnnotation } from './fixture-tools';
 import { rescueMentions, scoreRun } from './grader';
 import type { MentionJudge } from './judge';
 import { EvalClock, EvalMemoryStore, evalConversation } from './memory-store';
@@ -71,7 +71,7 @@ export function evalConfig(phase: number, env: Record<string, string> = {}): Adm
 }
 
 /** Reads a finished SSE stream into events. */
-async function readEvents(stream: ReadableStream<Uint8Array>): Promise<AgentStreamEvent[]> {
+export async function readEvents(stream: ReadableStream<Uint8Array>): Promise<AgentStreamEvent[]> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let text = '';
@@ -87,22 +87,25 @@ async function readEvents(stream: ReadableStream<Uint8Array>): Promise<AgentStre
     .map((chunk) => JSON.parse(chunk.slice(5).trim()) as AgentStreamEvent);
 }
 
-const textOfBlocks = (blocks: ReadonlyArray<{ type: string; text?: string }>): string => blocks.flatMap((b) => (b.type === 'text' && b.text ? [b.text] : [])).join('');
+export const textOfBlocks = (blocks: ReadonlyArray<{ type: string; text?: string }>): string => blocks.flatMap((b) => (b.type === 'text' && b.text ? [b.text] : [])).join('');
 
-class CaseTimeout extends Error {
+export class CaseTimeout extends Error {
   constructor() {
     super('admin-agent eval: case wall-clock ceiling reached');
     this.name = 'CaseTimeout';
   }
 }
 
-function withCeiling<T>(work: Promise<T>, ms: number): Promise<T> {
+export function withCeiling<T>(work: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const ceiling = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => reject(new CaseTimeout()), ms);
   });
   return Promise.race([work, ceiling]).finally(() => clearTimeout(timer));
 }
+
+/** The assistant's admin id of an eval identity. The harness mints it here and nowhere else (`repository-isolation.test.ts`). */
+export const evalAdminId = (playerId: string): ReturnType<typeof adminIdOf> => adminIdOf(playerId);
 
 export async function runCase(testCase: EvalCase, options: RunCaseOptions): Promise<RunOutcome> {
   const started = Date.now();
@@ -174,6 +177,12 @@ export async function runCase(testCase: EvalCase, options: RunCaseOptions): Prom
   const runTurns = async (): Promise<void> => {
     for (const [index, turn] of testCase.turns.entries()) {
       handle.beginTurn?.(index);
+      if (turn.undo === true) {
+        // The Undo button needs the local stack's ledger; the fixture world has none.
+        status = 'error';
+        failure = 'turn_needs_local_stack';
+        return;
+      }
       const before = memory.messages.length;
       let started;
       try {
@@ -274,7 +283,7 @@ export function droppedThinking(signatures: readonly string[], memory: Pick<Eval
 }
 
 /** Tool calls in order, each joined with its stored result and the runtime's notes. */
-function toolCallsOf(messages: readonly EvalMemoryStore['messages'][number][], tools: FixtureToolRuntime, toolSet: ReturnType<typeof buildToolSet>, turns: readonly TurnRecord[]): ToolCallRecord[] {
+export function toolCallsOf(messages: readonly Pick<MessageRecord, 'role' | 'kind' | 'content'>[], tools: { readonly annotations: ReadonlyMap<string, CallAnnotation> }, toolSet: ReturnType<typeof buildToolSet>, turns: readonly TurnRecord[]): ToolCallRecord[] {
   const results = new Map<string, { content: string; isError: boolean }>();
   for (const message of messages) {
     for (const block of (message.kind === 'tool_results' ? parseToolResultBlocks(message.content) : null) ?? []) {
@@ -317,7 +326,7 @@ function toolCallsOf(messages: readonly EvalMemoryStore['messages'][number][], t
 }
 
 /** Everything the model, the stream or the admin could read that a masked error could have leaked into. */
-function visibleText(memory: EvalMemoryStore, events: readonly AgentStreamEvent[]): RunRecord['visible'] {
+export function visibleText(memory: Pick<EvalMemoryStore, 'messages'>, events: readonly AgentStreamEvent[]): RunRecord['visible'] {
   const visible: RunRecord['visible'] = [];
   for (const message of memory.messages) {
     if (message.role === 'user' && message.kind === 'chat') continue;
@@ -356,6 +365,8 @@ export interface SuiteOptions extends RunCaseOptions {
   stop?(): boolean;
   /** The semantic fallback for `mustMention` groups (live runs). Absent, scoring is the pure substring grader and calls no model. */
   judge?: MentionJudge;
+  /** Runs one case. Default: the plan stage's `runCase`; the local-stack stages pass theirs (`scripts/admin-agent-eval/`). */
+  run?(testCase: EvalCase, options: RunCaseOptions): Promise<RunOutcome>;
 }
 
 export const resultKey = (caseId: string, repeat: number): string => `${caseId}#${repeat}`;
@@ -373,10 +384,11 @@ export async function runSuite(options: SuiteOptions): Promise<CaseScore[]> {
     for (const testCase of options.cases) {
       if (options.done?.has(resultKey(testCase.id, repeat))) continue;
       if (options.stop?.() === true) return scores;
-      let outcome = await runCase(testCase, { ...options, repeat });
+      const run = options.run ?? runCase;
+      let outcome = await run(testCase, { ...options, repeat });
       for (let attempt = 0; attempt < (options.retries ?? 0) && transient(outcome.record); attempt += 1) {
         await sleep((options.backoffMs ?? 2_000) * 2 ** attempt * (0.5 + random()));
-        outcome = await runCase(testCase, { ...options, repeat });
+        outcome = await run(testCase, { ...options, repeat });
       }
       if (outcome.record.status !== 'ok') await options.onError?.(outcome.record);
       const substringScore = scoreRun(testCase, outcome.record, outcome.world);

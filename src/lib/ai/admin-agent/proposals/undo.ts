@@ -13,7 +13,7 @@
  *     chat's write left, taken from the ledger and not read again.
  *
  * Nothing the ledger did not create is touched. Nothing is hard-deleted except a ruleset draft the chat created that has never
- * been published (the second carve-out, owner decision 2026-10-28). Phases, pools and the like are listed on the card as residue.
+ * been published (the second carve-out, spec §18.8). Phases, pools and the like are listed on the card as residue.
  */
 import { hashJson } from '../plans/hash';
 import { deriveUndoPlan, hasReversal, UNDO_MAX_STEPS, type LedgerEntryView, type UndoEntryNote, type UndoPlan, type UndoReason, type UndoStep } from '../plans/undo';

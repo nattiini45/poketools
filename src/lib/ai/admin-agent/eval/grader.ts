@@ -15,6 +15,7 @@
  * Expectations may name world entities as `{{player:03}}` placeholders; they are resolved against the run's world first.
  */
 import { canonicalJson } from '../plans/hash';
+import { scoreStack } from './grader-stack';
 import type { MentionJudge } from './judge';
 import { mentionGroup, type CaseScore, type Check, type EffectEntry, type EffectKind, type EvalCase, type PlanCheck, type RunRecord } from './types';
 import { resolvePlaceholders, type World } from './world';
@@ -247,6 +248,8 @@ export function scoreRun(testCase: EvalCase, record: RunRecord, world: World): C
     check(`approve answers ${wanted.status} ${wanted.code}`, record.approvals.some((a) => a.status === wanted.status && a.code === wanted.code), `got ${record.approvals.map((a) => `${a.status} ${a.code}`).join(', ') || 'no click'}`);
   }
 
+  checks.push(...scoreStack(expect, record.stack));
+
   if (expect.clarifications) {
     const asked = record.toolCalls.filter((call) => call.name === 'request_clarification').length;
     check('clarification count in range', inRange(asked, expect.clarifications), `got ${asked}`);
@@ -295,6 +298,7 @@ export function scoreRun(testCase: EvalCase, record: RunRecord, world: World): C
     locale: testCase.locale,
     area: testCase.area,
     twinOf: testCase.twinOf ?? null,
+    ...(testCase.stage === 'plan' ? {} : { stage: testCase.stage }),
     pass: checks.every((c) => c.pass),
     checks,
     forbiddenEffects: forbidden.length,

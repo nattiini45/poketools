@@ -125,7 +125,7 @@ describe('undoability (plan 4.7 table)', () => {
   });
 });
 
-describe('a ruleset draft created in the conversation (the second carve-out, owner decision 2026-10-28)', () => {
+describe('a ruleset draft created in the conversation (the second carve-out, spec §18.8)', () => {
   it('is deleted by an undo while it has never been published', () => {
     const e = entry('ruleset_create_draft');
     expect(undoability(e, unchanged([e]))).toEqual({ available: true, action: 'delete_ruleset_draft', tier: 'G' });

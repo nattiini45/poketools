@@ -141,3 +141,80 @@ export function prepareEvalEnv(env: Record<string, string | undefined>): string[
   }
   return set;
 }
+
+// ─── The local-stack stages (`--stage exec|e2e`) ─────────────────────
+
+/** What the stack stages need from `supabase status -o json`: the API address and the service-role key. */
+export interface LocalStackStatus {
+  readonly apiUrl: string;
+  readonly serviceRoleKey: string;
+}
+
+/**
+ * Reads `supabase status -o json` (text, as the CLI printed it; warnings may come before and after the JSON object). The
+ * address must be this machine, or the run is refused before a key is looked at. The error names no value. The stack's keys
+ * are the only database credentials a run uses: nothing is read from an env file.
+ */
+export function parseLocalStackStatus(text: string): LocalStackStatus {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(start === -1 || end < start ? '' : text.slice(start, end + 1));
+  } catch {
+    throw new EvalHostError('admin-agent eval: could not read the local Supabase stack (run `npx supabase start`, then try again).');
+  }
+  const row = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<string, unknown>;
+  const apiUrl = typeof row.API_URL === 'string' ? row.API_URL.trim() : '';
+  const key = typeof row.SERVICE_ROLE_KEY === 'string' ? row.SERVICE_ROLE_KEY.trim() : typeof row.SECRET_KEY === 'string' ? row.SECRET_KEY.trim() : '';
+  if (apiUrl === '' || key === '') {
+    throw new EvalHostError('admin-agent eval: the local Supabase stack did not report its API address and service key (is it running? `npx supabase start`).');
+  }
+  if (!isLocalUrl(apiUrl)) {
+    throw new EvalHostError('admin-agent eval: refusing to run, the Supabase API address of this checkout does not point at this machine. The stack stages run against the local stack only.');
+  }
+  return { apiUrl, serviceRoleKey: key };
+}
+
+/** The approval-token secret of a run. It exists only for the harness (a derived token needs a server secret of at least 16 characters). */
+export const EVAL_TOKEN_SECRET = 'admin-agent-eval-local-token-secret';
+
+/**
+ * Sets the process environment of an `exec` or `e2e` run, before any module that builds the Supabase client is imported:
+ * the local stack's address and key (replacing whatever the shell held), the assistant switched on at phase 1 with the
+ * Go-live flag, the audience wide open, and nothing that could reach a hosted project or a paid forecast. Refuses a
+ * production build and the hosted-database override. Returns the keys it set.
+ */
+export function applyStackEnv(env: Record<string, string | undefined>, status: LocalStackStatus): string[] {
+  assertLocalSupabaseEnv(env);
+  if (env.NODE_ENV === 'production') throw new EvalHostError('admin-agent eval: refusing to run with NODE_ENV=production (a production build skips the hosted-database guard).');
+  if (['1', 'true'].includes((env.ADMIN_AGENT_ALLOW_HOSTED ?? '').trim().toLowerCase())) {
+    throw new EvalHostError('admin-agent eval: refusing to run with ADMIN_AGENT_ALLOW_HOSTED set; the stack stages never reach a hosted project.');
+  }
+  const values: Record<string, string> = {
+    NEXT_PUBLIC_SUPABASE_URL: status.apiUrl,
+    SUPABASE_SERVICE_ROLE_KEY: status.serviceRoleKey,
+    NEXTAUTH_SECRET: EVAL_TOKEN_SECRET,
+    NEXT_PUBLIC_ENABLE_KALE_CABBAGE: 'false',
+    ADMIN_AGENT_ENABLED: '1',
+    ADMIN_AGENT_MAX_PHASE: '1',
+    ADMIN_AGENT_GOLIVE: '1',
+    ADMIN_AGENT_ROLES: 'any',
+    ADMIN_AGENT_BUDGET_CONVERSATION_USD: '5',
+    // The usage ledger and the limiters outlive a run (the database is reused until it is reset): a suite of many cases must not
+    // meet yesterday's spend or the hourly limits. The run's own dollar ceiling is `--max-cost-usd`.
+    ADMIN_AGENT_BUDGET_ADMIN_DAY_USD: '10000',
+    ADMIN_AGENT_BUDGET_ADMIN_MONTH_USD: '100000',
+    ADMIN_AGENT_BUDGET_GLOBAL_DAY_USD: '100000',
+    ADMIN_AGENT_TURNS_PER_HOUR: '1000',
+    ADMIN_AGENT_WRITES_PER_HOUR: '1000',
+  };
+  const set: string[] = [];
+  for (const [key, value] of Object.entries(values)) {
+    env[key] = value;
+    set.push(key);
+  }
+  // A shell that carries an allow-list or a hosted-looking database variable must not shape the run.
+  delete env.ADMIN_AGENT_ALLOWED_PLAYER_IDS;
+  return set;
+}

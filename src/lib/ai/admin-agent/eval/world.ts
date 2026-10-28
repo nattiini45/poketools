@@ -74,6 +74,15 @@ export interface World {
   rulesets: WorldRuleset[];
   /** The league and tournament ids the actor manages, or null for all of them. */
   scope: { leagueIds: string[] | null; tournamentIds: string[] | null };
+  /**
+   * Ids and names that exist only while a local-stack run goes on, filled in by the stack runner: `{{proposal:last}}` is the newest
+   * proposal of the conversation (so a recorded model can undo what an earlier turn built); `{{seed:ready_league}}` and
+   * `{{seedname:ready_league}}` are the id and name of an entity the case's `seed` created, `{{seed:ready_league.phase1}}` its first
+   * phase; `{{ledger:ruleset_create_draft}}` is the entity the newest ledger row of that tool is filed under (the draft a recorded model
+   * just created); `{{run:tag}}` is the tag of this run and repeat, which the names a case creates carry so a rerun on the same database finds only its own rows.
+   * Absent in the plan stage.
+   */
+  dynamic?: { proposalLast?: string; runTag?: string; ledger?: Record<string, string>; computed?: Record<string, unknown>; seeded?: Record<string, { id: string; name: string; phaseIds?: string[]; rulesetDefinitionId?: string; rulesetVersionId?: string; rulesetName?: string }> };
 }
 
 /** The preset ids the world publishes as site-catalog rulesets. A test checks each is a real catalog id. */
@@ -163,24 +172,53 @@ export function buildWorld(fixture: EvalFixture, actor: EvalActor): World {
 
 /**
  * Recordings and expectations name world entities with `{{kind:key}}` tokens so they carry no literal uuid:
- * `{{player:03}}`, `{{league:L1}}`, `{{ruleset:gen9ou}}` (the VERSION id) and `{{rulesetdef:gen9ou}}` (the definition id).
+ * `{{player:03}}`, `{{league:L1}}`, `{{tournament:T1}}`, `{{phase:L1-1}}` (a phase of the local stack's league L1), `{{ruleset:gen9ou}}` (the VERSION id)
+ * and `{{rulesetdef:gen9ou}}` (the definition id).
  */
 export function resolveToken(world: World, kind: string, key: string): string {
   let found: string | undefined;
   if (kind === 'player') found = world.players.find((p) => p.name === `Eval Player ${key}`)?.id ?? (/^\d{2}$/.test(key) ? world.players[Number(key) - 1]?.id : undefined);
   else if (kind === 'league') found = world.leagues.find((l) => l.key === key)?.id;
   else if (kind === 'tournament') found = key === 'T1' ? evalUuid('tournament', 'T1') : undefined;
+  else if (kind === 'phase') found = key === 'L1-1' || key === 'L1-2' ? evalUuid('phase', key) : undefined;
+  else if (kind === 'proposal') found = key === 'last' ? world.dynamic?.proposalLast : undefined;
+  else if (kind === 'ledger') found = world.dynamic?.ledger?.[key];
+  else if (kind === 'run') found = key === 'tag' ? world.dynamic?.runTag : undefined;
+  else if (kind === 'seed' || kind === 'seedname') {
+    const [seedKind, part] = key.split('.');
+    const seeded = world.dynamic?.seeded?.[seedKind];
+    if (seeded !== undefined) {
+      if (kind === 'seedname') found = part === undefined ? seeded.name : part === 'ruleset' ? seeded.rulesetName : undefined;
+      else if (part === undefined) found = seeded.id;
+      else if (part === 'phase1') found = seeded.phaseIds?.[0];
+      else if (part === 'phase2') found = seeded.phaseIds?.[1];
+      else if (part === 'definition') found = seeded.rulesetDefinitionId;
+      else if (part === 'version') found = seeded.rulesetVersionId;
+    }
+  }
   else if (kind === 'ruleset') found = world.rulesets.find((r) => r.preset === key)?.versionId;
   else if (kind === 'rulesetdef') found = world.rulesets.find((r) => r.preset === key)?.definitionId;
   if (found === undefined) throw new Error(`eval: unknown placeholder {{${kind}:${key}}}`);
   return found;
 }
 
+/** A whole string that is one computed value. */
+export const COMPUTED = /^\{\{computed:([A-Za-z0-9_.+-]+)\}\}$/;
+
 const TOKEN = /\{\{([a-z]+):([A-Za-z0-9_.-]+)\}\}/g;
 
 /** `value` with every placeholder replaced by the world's id. Works on any JSON, including JSON text inside a string. */
 export function resolvePlaceholders<T>(world: World, value: T): T {
-  if (typeof value === 'string') return value.replace(TOKEN, (_all, kind: string, key: string) => resolveToken(world, kind, key)) as T;
+  if (typeof value === 'string') {
+    // A value computed by code (`{{computed:preset_pokemon.gen9ou+kingambit}}`) is a whole JSON value, so it replaces the whole string.
+    const computed = COMPUTED.exec(value);
+    if (computed !== null) {
+      const found = world.dynamic?.computed?.[computed[1]];
+      if (found === undefined) throw new Error(`eval: unknown placeholder ${value}`);
+      return found as T;
+    }
+    return value.replace(TOKEN, (_all, kind: string, key: string) => resolveToken(world, kind, key)) as T;
+  }
   if (Array.isArray(value)) return value.map((item) => resolvePlaceholders(world, item)) as T;
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolvePlaceholders(world, item)])) as T;

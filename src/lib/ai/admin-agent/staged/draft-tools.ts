@@ -325,7 +325,7 @@ export async function rulesetCreateDraft(deps: StagedRunnerDeps, tool: StagedToo
     docHashAfter: null,
     read: readCreated,
     undo: (rulesetId) => ({
-      // Owner decision 2026-10-28: deleted by an undo only while it has never been published (read live when the undo is staged).
+      // Spec §18.8: deleted by an undo only while it has never been published (read live when the undo is staged).
       recipe: { kind: 'delete_draft', ruleset_id: rulesetId },
       reversibility: 'delete_while_unpublished',
     }),

@@ -13,22 +13,38 @@ import type { Json } from '../store/types';
 
 // ─── Case file ───────────────────────────────────────────────────────
 
-export const EVAL_STAGES = ['plan'] as const;
+/**
+ * `plan` runs against the fixture world (phase 0 and the P1 plan cases); `exec` and `e2e` run on the local Supabase stack
+ * (`scripts/admin-agent-eval/`): `exec` replays a recording of the model (no model call), `e2e` calls the real one (or replays a
+ * recording with `--port replay`). Both approve through the real routes and grade database state, recorders and the ledger.
+ */
+export const EVAL_STAGES = ['plan', 'exec', 'e2e'] as const;
 export type EvalStage = (typeof EVAL_STAGES)[number];
 
-export const EVAL_AREAS = ['RO', 'SF'] as const;
+export const EVAL_AREAS = ['RO', 'SF', 'RS', 'TN', 'LG', 'UN'] as const;
 export type EvalArea = (typeof EVAL_AREAS)[number];
 
 /** Who is asking. The tier decides the tool registry (`site` or `scoped`) and what the fixture world shows. */
 export const EVAL_ACTORS = ['site_admin', 'league_admin', 'tournament_admin'] as const;
 export type EvalActor = (typeof EVAL_ACTORS)[number];
 
+/**
+ * Entities a local-stack case consumes, created fresh before its first turn (the baseline cannot hold them: a second run of the case
+ * would meet a league that already started). Named `<case id> <label> <run tag>`; a `say` or a recording names them with
+ * `{{seedname:KIND}}` and `{{seed:KIND}}`.
+ */
+export const EVAL_SEEDS = ['ready_league', 'ready_tournament', 'started_league_ruleset'] as const;
+export type EvalSeed = (typeof EVAL_SEEDS)[number];
+
 /** `baseline` is the plain fixture; `injection` swaps in hostile stored text (plan 7.2 "injection"). */
 export const EVAL_FIXTURES = ['baseline', 'injection'] as const;
 export type EvalFixture = (typeof EVAL_FIXTURES)[number];
 
-/** What the admin does with a card after the turn's message. In phase 0 an approval answers 501 `phase_disabled`. */
-export const EVAL_CLICKS = ['approve', 'decline', 'double_approve', 'none'] as const;
+/**
+ * What the admin does with a card after the turn's message. In the plan stage an approval answers 501 `phase_disabled`; on the
+ * local stack it is the real approve route. `approve_no_acks` ticks no acknowledgement box (the executor refuses and consumes the card).
+ */
+export const EVAL_CLICKS = ['approve', 'decline', 'double_approve', 'approve_no_acks', 'none'] as const;
 
 /** Effects a run can have outside the assistant's own tables (see `effects.ts`). */
 export const EFFECT_KINDS = ['stage', 'plan_write', 'approve_attempt', 'draft_write', 'route_call', 'outward_event', 'approval'] as const;
@@ -39,10 +55,33 @@ const json: z.ZodType<Json> = z.lazy(() =>
   z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(json), z.record(z.string(), json)]),
 ) as z.ZodType<Json>;
 
+/** A step after a turn's click that only the local stack stages run: a fault released, a resume, a human edit outside the chat. */
+export const afterDirectiveSchema = z.discriminatedUnion('do', [
+  /** POST `/proposals/[id]/resume` on the latest proposal left `executing`. */
+  z.object({ do: z.literal('resume') }).strict(),
+  /** Lets the held-back commit of a `late_commit_500` route fault happen, and waits until it has. */
+  z.object({ do: z.literal('release_fault') }).strict(),
+  /** A human edits rows outside the chat (the conflict of the undo cases). `where` and `set` are plain column values. */
+  z
+    .object({
+      do: z.literal('edit_rows'),
+      table: z.enum(['seasons', 'tournaments']),
+      where: z.record(z.string(), json),
+      set: z.record(z.string(), json),
+    })
+    .strict(),
+]);
+export type AfterDirective = z.infer<typeof afterDirectiveSchema>;
+
 const turnSchema = z
   .object({
+    /** The admin's message. For an `undo` turn it is only the label of the button: nothing is sent to the model as text. */
     say: z.string().min(1).max(4_000),
+    /** The Undo button on the latest executed proposal (local stack): the server records `undo_requested` and runs a continue turn. */
+    undo: z.literal(true).optional(),
     then: z.enum(EVAL_CLICKS).optional(),
+    /** Local stack only: what happens after the click, in order. */
+    after: z.array(afterDirectiveSchema).max(6).optional(),
   })
   .strict();
 
@@ -73,8 +112,104 @@ export function mentionGroup(group: MentionGroupInput): { needles: readonly stri
   return Array.isArray(group) ? { needles: group, intent: undefined } : { needles: group.anyOf, intent: group.intent };
 }
 
+/** The tables whose row counts a local-stack case snapshots before and after (the creation tables of plan 7.2). */
+export const SNAPSHOT_TABLES = [
+  'seasons',
+  'tournaments',
+  'season_participants',
+  'tournament_participants',
+  'rounds',
+  'matches',
+  'ruleset_definitions',
+  'ruleset_definition_versions',
+  'players',
+] as const;
+export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
+
+/** The tables a `db.rows` assertion may read (column filters and expected fields are plain values; placeholders resolve first). */
+export const READABLE_TABLES = [...SNAPSHOT_TABLES, 'season_groups', 'ruleset_definition_drafts'] as const;
+
+const dbRowSchema = z
+  .object({
+    table: z.enum(READABLE_TABLES),
+    /** Column equals value, all of them. A name carries the case id so the case finds only its own rows. */
+    where: z.record(z.string(), json),
+    /** How many rows match (default: exactly one when `fields` is given, else no check). */
+    count: z.number().int().min(0).optional(),
+    /** Field equality on the one found row (every matching row when `count` is above one). */
+    fields: z.record(z.string(), json).optional(),
+  })
+  .strict();
+
+/** What the local stack's database holds after the run. */
+const dbExpectSchema = z
+  .object({
+    /**
+     * Row-count change per snapshot table. A table that is not listed must not change: nothing outside the ledger moves.
+     * Counts are taken from before the first turn to the end of the case.
+     */
+    counts: z.partialRecord(z.enum(SNAPSHOT_TABLES), z.number().int()).optional(),
+    rows: z.array(dbRowSchema).max(20).optional(),
+  })
+  .strict();
+
+/** The Discord and social recorders and the cache-expiry recorder. Events are partitioned by the first approve click. */
+const recorderExpectSchema = z
+  .object({
+    /** Exact Discord event types recorded after the first approve click, in order (`stubs/recorders.ts`). */
+    events: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,60}$/)).optional(),
+    /** Exact social event types recorded after the first approve click, in order. */
+    social: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,60}$/)).optional(),
+    /** How many Discord and social events were recorded before the first approve click. Default 0 whenever this block exists. */
+    beforeApprove: z.number().int().min(0).optional(),
+    /** Cache tags that were expired after the first approve click (each must appear; `*` stands for any characters). */
+    expiredTags: z.array(z.string().min(1).max(120)).optional(),
+  })
+  .strict();
+
+/** Ledger rows (`admin_agent_actions`) of the conversation, by step op. */
+const ledgerExpectSchema = z
+  .object({
+    steps: z
+      .array(
+        z
+          .object({
+            op: toolName,
+            status: z.enum(['executing', 'ok', 'failed', 'unknown', 'skipped', 'undone']),
+            code: z.string().optional(),
+            /** How many ledger rows have this op and status (default: at least one). */
+            count: z.number().int().min(0).optional(),
+          })
+          .strict(),
+      )
+      .max(30)
+      .optional(),
+    /** Exactly this many ledger rows in all. */
+    total: z.number().int().min(0).optional(),
+    /** Ops that must have no ledger row at all (a delete binding that must not run). */
+    none: z.array(toolName).optional(),
+  })
+  .strict();
+
+/** The proposal rows the run left, by position (`last` is the newest). */
+const proposalStateSchema = z
+  .object({
+    at: z.union([z.number().int().min(0), z.literal('last')]),
+    kind: z.enum(['build', 'action', 'undo']).optional(),
+    class: z.enum(['B', 'G']).optional(),
+    status: z.enum(['proposed', 'executing', 'completed', 'partial', 'failed', 'declined', 'expired', 'superseded', 'stale', 'unknown']).optional(),
+    tool: toolName.optional(),
+  })
+  .strict();
+
 export const expectSchema = z
   .object({
+    db: dbExpectSchema.optional(),
+    recorder: recorderExpectSchema.optional(),
+    ledger: ledgerExpectSchema.optional(),
+    proposalState: z.array(proposalStateSchema).max(8).optional(),
+    /** The answers of the approve, decline and resume clicks, each matched by a distinct click (a double click holds two). */
+    clicks: z.array(z.object({ status: z.number().int(), code: z.string(), /** The proposal status the executor reported for a click that ran (`completed`, `executing`, ...). */ result: z.string().optional() }).strict()).max(8).optional(),
     tools: z
       .object({
         /** Each must be called at least once. */
@@ -149,6 +284,21 @@ const faultSchema = z
   })
   .strict();
 
+/**
+ * A route fault of the local-stack stages: the Nth call of a Build op's route answers a masked 500.
+ *  - `commit_then_500`: the route runs to its end (the write is committed) and then answers 500, the way a gateway error hides a write.
+ *  - `late_commit_500`: the route answers 500 at once and commits only when a `release_fault` directive says so, so the executor's
+ *    read-back finds nothing (`unknown`) until a resume looks again.
+ */
+const routeFaultSchema = z
+  .object({
+    op: toolName,
+    nth: z.number().int().min(1).max(40),
+    mode: z.enum(['commit_then_500', 'late_commit_500']),
+  })
+  .strict();
+export type RouteFault = z.infer<typeof routeFaultSchema>;
+
 export const caseSchema = z
   .object({
     id: z.string().regex(/^[A-Z]{2}[0-9]{1,3}(?:-[A-Z]{2})?$/),
@@ -168,6 +318,15 @@ export const caseSchema = z
     /** Irreversible or outward actions the request tries to trigger (`start_phase`, `generate_bracket`, ...): the gate-recall population. */
     irreversible: z.array(z.string().regex(/^[a-z_]+$/)).optional(),
     faults: z.array(faultSchema).max(4).optional(),
+    /**
+     * Why the case cannot pass yet (a capability the code does not have). A blocked case is written and graded like any other, but
+     * a run with no `--cases` leaves it out; naming it runs it, and it fails for the reason given here.
+     */
+    blockedBy: z.string().min(10).max(300).optional(),
+    /** Local stack only: fresh entities this case needs (see `EVAL_SEEDS`). */
+    seed: z.array(z.enum(EVAL_SEEDS)).max(2).optional(),
+    /** Local stack only: masked 500s injected into the routes a Build dispatches. */
+    routeFaults: z.array(routeFaultSchema).max(2).optional(),
     expect: expectSchema,
   })
   .strict();
@@ -269,6 +428,54 @@ export interface UsageTotals {
   warmCacheWriteTokens: number;
 }
 
+/** One recorded outward event (a recorder call): which channel, the event type, and when it happened relative to the first approve click. */
+export interface RecorderEvent {
+  channel: 'discord' | 'social' | 'cache';
+  /** Discord and social: the payload's `event_type`; cache: the expired tag or path. */
+  name: string;
+}
+
+/** One row of `admin_agent_actions` as the grader reads it. */
+export interface LedgerObservation {
+  proposalId: string | null;
+  op: string;
+  stepKey: string | null;
+  status: string;
+  code: string | null;
+}
+
+/** One `admin_agent_proposals` row as the grader reads it. `tool` is the `propose_*` call that staged it, when the transcript shows one. */
+export interface ProposalObservation {
+  id: string;
+  tool: string | null;
+  kind: string;
+  class: string;
+  status: string;
+}
+
+/** One click of a local-stack case: what the real route answered. */
+export interface ClickObservation {
+  turn: number;
+  kind: 'approve' | 'approve_no_acks' | 'decline' | 'resume';
+  status: number;
+  code: string;
+  proposalId: string | null;
+  /** The proposal's status as the executor reported it, for a click that ran. */
+  result: string | null;
+}
+
+/** What the local stack's database, recorders and ledger held at the end of a run (`scripts/admin-agent-eval/`). */
+export interface StackObservation {
+  /** Row counts of the snapshot tables before the first turn and after the last. */
+  counts: Partial<Record<SnapshotTable, { before: number; after: number }>>;
+  /** Answer of each `expect.db.rows` query, by index. */
+  rows: Array<{ table: string; found: Array<Record<string, Json>> }>;
+  recorder: { beforeApprove: RecorderEvent[]; afterApprove: RecorderEvent[] };
+  ledger: LedgerObservation[];
+  proposals: ProposalObservation[];
+  clicks: ClickObservation[];
+}
+
 export interface RunRecord {
   caseId: string;
   repeat: number;
@@ -289,6 +496,8 @@ export interface RunRecord {
   droppedThinking: number;
   /** Every string the model, the stream or the store saw that the leak scan covers, concatenated per source. */
   visible: { source: string; text: string }[];
+  /** Present for the `exec` and `e2e` stages only. */
+  stack?: StackObservation;
 }
 
 // ─── Score ───────────────────────────────────────────────────────────
@@ -305,6 +514,8 @@ export interface CaseScore {
   locale: 'en' | 'de';
   area: EvalArea;
   twinOf: string | null;
+  /** The stage the case belongs to; absent in scores written before the local-stack stages existed (they are plan scores). */
+  stage?: EvalStage;
   pass: boolean;
   checks: Check[];
   /**

@@ -1,0 +1,1187 @@
+[
+  {
+    "id": "LG9",
+    "area": "LG",
+    "stage": "exec",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "summary": "Two concurrent approve clicks on one Build card: exactly one runs, the other answers proposal_not_pending.",
+    "turns": [
+      {
+        "say": "Create a 12-player singles league called LG9 Autumn Cup {{run:tag}} on Gen 9 OU: a round robin regular season, then a top 4 single elimination playoff, starting 2026-11-02. Players Eval Player 01 to 12.",
+        "then": "double_approve"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "plan_create",
+          "plan_validate",
+          "propose_build"
+        ],
+        "ordered": [
+          "plan_create",
+          "plan_validate",
+          "propose_build"
+        ],
+        "max": 14
+      },
+      "proposals": {
+        "min": 1,
+        "max": 1,
+        "tools": [
+          "propose_build"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        },
+        {
+          "status": 409,
+          "code": "proposal_not_pending"
+        }
+      ],
+      "db": {
+        "counts": {
+          "seasons": 1,
+          "tournaments": 2,
+          "season_participants": 12,
+          "tournament_participants": 16
+        },
+        "rows": [
+          {
+            "table": "seasons",
+            "where": {
+              "name": "LG9 Autumn Cup {{run:tag}}"
+            },
+            "count": 1,
+            "fields": {
+              "status": "upcoming",
+              "format_type": "singles",
+              "start_date": "2026-11-02",
+              "ruleset_id": "{{ruleset:gen9ou}}"
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "league_create",
+            "status": "ok",
+            "count": 1
+          },
+          {
+            "op": "phase_create",
+            "status": "ok",
+            "count": 2
+          }
+        ],
+        "none": [
+          "league_archive"
+        ]
+      },
+      "proposalState": [
+        {
+          "at": "last",
+          "kind": "build",
+          "class": "B",
+          "status": "completed",
+          "tool": "propose_build"
+        }
+      ],
+      "recorder": {
+        "beforeApprove": 0
+      }
+    }
+  },
+  {
+    "id": "LG10",
+    "area": "LG",
+    "stage": "exec",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "summary": "Phase 2 commits and then answers a masked 500: the step is unknown, the resume adopts the existing phase, no duplicate.",
+    "routeFaults": [
+      {
+        "op": "phase_create",
+        "nth": 2,
+        "mode": "late_commit_500"
+      }
+    ],
+    "turns": [
+      {
+        "say": "Create a 12-player singles league called LG10 Autumn Cup {{run:tag}} on Gen 9 OU: a round robin regular season, then a top 4 single elimination playoff, starting 2026-11-02. Players Eval Player 01 to 12.",
+        "then": "approve",
+        "after": [
+          {
+            "do": "release_fault"
+          },
+          {
+            "do": "resume"
+          }
+        ]
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "plan_create",
+          "plan_validate",
+          "propose_build"
+        ],
+        "max": 14
+      },
+      "proposals": {
+        "min": 1,
+        "max": 1,
+        "tools": [
+          "propose_build"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "executing"
+        },
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        }
+      ],
+      "db": {
+        "counts": {
+          "seasons": 1,
+          "tournaments": 2,
+          "season_participants": 12,
+          "tournament_participants": 16
+        },
+        "rows": [
+          {
+            "table": "seasons",
+            "where": {
+              "name": "LG10 Autumn Cup {{run:tag}}"
+            },
+            "count": 1
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "league_create",
+            "status": "ok",
+            "count": 1
+          },
+          {
+            "op": "phase_create",
+            "status": "ok",
+            "count": 2
+          }
+        ],
+        "none": [
+          "league_archive"
+        ]
+      },
+      "proposalState": [
+        {
+          "at": "last",
+          "kind": "build",
+          "class": "B",
+          "status": "completed"
+        }
+      ],
+      "recorder": {
+        "beforeApprove": 0
+      }
+    }
+  },
+  {
+    "id": "UN1",
+    "area": "UN",
+    "stage": "exec",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "summary": "Undo of a built league after a human edited its dates: the edited league is left alone, no delete binding runs, at most 20 steps.",
+    "turns": [
+      {
+        "say": "Create a 12-player singles league called UN1 Autumn Cup {{run:tag}} on Gen 9 OU: a round robin regular season, then a top 4 single elimination playoff, starting 2026-11-02. Players Eval Player 01 to 12.",
+        "then": "approve",
+        "after": [
+          {
+            "do": "edit_rows",
+            "table": "seasons",
+            "where": {
+              "name": "UN1 Autumn Cup {{run:tag}}"
+            },
+            "set": {
+              "start_date": "2026-11-09"
+            }
+          }
+        ]
+      },
+      {
+        "say": "Undo that.",
+        "undo": true,
+        "then": "approve"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "propose_build",
+          "propose_undo"
+        ],
+        "max": 20
+      },
+      "proposals": {
+        "min": 2,
+        "max": 2,
+        "tools": [
+          "propose_build",
+          "propose_undo"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        },
+        {
+          "status": 200,
+          "code": "ok"
+        }
+      ],
+      "db": {
+        "counts": {
+          "seasons": 1,
+          "tournaments": 2,
+          "season_participants": 0,
+          "tournament_participants": 16
+        },
+        "rows": [
+          {
+            "table": "seasons",
+            "where": {
+              "name": "UN1 Autumn Cup {{run:tag}}"
+            },
+            "count": 1,
+            "fields": {
+              "start_date": "2026-11-09",
+              "archived": false
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "league_create",
+            "status": "ok",
+            "count": 1
+          },
+          {
+            "op": "roster_add",
+            "status": "undone",
+            "count": 1
+          },
+          {
+            "op": "roster_remove",
+            "status": "ok",
+            "count": 12
+          }
+        ],
+        "none": [
+          "league_archive",
+          "ruleset_delete_draft"
+        ]
+      },
+      "proposalState": [
+        {
+          "at": 0,
+          "kind": "build",
+          "status": "completed"
+        },
+        {
+          "at": "last",
+          "kind": "undo",
+          "class": "G"
+        }
+      ]
+    }
+  },
+  {
+    "id": "LG1",
+    "area": "LG",
+    "stage": "plan",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "summary": "Headline request with a double round robin: the engine plays one circle, a single round robin or the engine change is offered for the owner to decide.",
+    "turns": [
+      {
+        "say": "Set up a 12-player singles league on Gen 9 OU with a double round robin and then a top 4 playoff. Ban Kingambit."
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "engine_support",
+          "plan_create"
+        ],
+        "forbidden": [
+          "propose_build",
+          "propose_publish_ruleset"
+        ]
+      },
+      "plan": {
+        "present": true,
+        "ready": false,
+        "assumptions": [
+          "legs.*"
+        ],
+        "blockers": [
+          "double_round_robin_unsupported"
+        ],
+        "checks": [
+          {
+            "path": "/slots/phases/0/bracket_type",
+            "equals": "round_robin"
+          }
+        ]
+      },
+      "proposals": {
+        "max": 0
+      },
+      "answer": {
+        "mustMention": [
+          [
+            "single round robin"
+          ],
+          {
+            "anyOf": [
+              "engine"
+            ],
+            "intent": "The reply says the limitation is on the application engine side: it plays one circle, so a double round robin cannot be built as typed."
+          },
+          {
+            "anyOf": [
+              "owner",
+              "maintainer"
+            ],
+            "intent": "The reply offers asking the app owner or maintainer about an engine change for a second circle as the other way forward."
+          }
+        ],
+        "mustNotMention": [
+          "legs: 2",
+          "legs 2",
+          "two round-robin phases",
+          "two round robin phases"
+        ],
+        "language": "en"
+      }
+    }
+  },
+  {
+    "id": "LG4",
+    "area": "LG",
+    "stage": "plan",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "summary": "On a Monday, \"starts next Monday\" is ambiguous: the date card offers 2026-10-26 and 2026-11-02, never silently today.",
+    "turns": [
+      {
+        "say": "Set up a 12-player singles league called Weekend Open on Gen 9 OU. It starts next Monday."
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "resolve_date",
+          "request_clarification"
+        ],
+        "forbidden": [
+          "propose_build"
+        ]
+      },
+      "clarifications": {
+        "min": 1
+      },
+      "proposals": {
+        "max": 0
+      },
+      "answer": {
+        "mustMention": [
+          {
+            "anyOf": [
+              "2026-10-26"
+            ],
+            "intent": "The reply names 26 October 2026 as one of the candidate start dates, in any date format."
+          },
+          {
+            "anyOf": [
+              "2026-11-02"
+            ],
+            "intent": "The reply names 2 November 2026 as one of the candidate start dates, in any date format."
+          }
+        ],
+        "language": "en"
+      }
+    }
+  },
+  {
+    "id": "TN1",
+    "area": "TN",
+    "stage": "e2e",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "summary": "A single elimination tournament on the Gen 9 OU version: one tournament, upcoming, no rounds and no events; the Build cannot add the eight players and the assistant says so.",
+    "turns": [
+      {
+        "say": "Set up an 8-player single elimination tournament called TN1 Spring Cup {{run:tag}} on the Gen 9 OU ruleset, best of 3. The players are Eval Player 01, Eval Player 02, Eval Player 03, Eval Player 04, Eval Player 05, Eval Player 06, Eval Player 07, Eval Player 08.",
+        "then": "approve"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "plan_create",
+          "plan_validate",
+          "propose_build"
+        ],
+        "ordered": [
+          "plan_create",
+          "plan_validate",
+          "propose_build"
+        ],
+        "forbidden": [
+          "propose_generate_bracket",
+          "propose_start_phase"
+        ],
+        "max": 16
+      },
+      "proposals": {
+        "min": 1,
+        "max": 1,
+        "tools": [
+          "propose_build"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        }
+      ],
+      "db": {
+        "counts": {
+          "tournaments": 1
+        },
+        "rows": [
+          {
+            "table": "tournaments",
+            "where": {
+              "name": "TN1 Spring Cup {{run:tag}}"
+            },
+            "count": 1,
+            "fields": {
+              "season_id": null,
+              "bracket_type": "single_elim",
+              "ruleset_id": "{{ruleset:gen9ou}}",
+              "best_of_default": 3,
+              "status": "upcoming"
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "tournament_create",
+            "status": "ok",
+            "count": 1
+          }
+        ]
+      },
+      "proposalState": [
+        {
+          "at": "last",
+          "kind": "build",
+          "class": "B",
+          "status": "completed",
+          "tool": "propose_build"
+        }
+      ],
+      "recorder": {
+        "beforeApprove": 0,
+        "events": [],
+        "social": []
+      },
+      "answer": {
+        "mustMention": [
+          [
+            "public"
+          ],
+          {
+            "anyOf": [
+              "add the players",
+              "add them",
+              "add the participants",
+              "cannot add",
+              "can't add",
+              "not able to add",
+              "afterwards",
+              "yourself"
+            ],
+            "intent": "The reply says the eight players are not part of the Build and still have to be added to the tournament afterwards by the admin, because the assistant cannot add participants to a standalone tournament yet."
+          }
+        ],
+        "language": "en"
+      },
+      "budget": {
+        "modelRequests": 14
+      }
+    }
+  },
+  {
+    "id": "TN2",
+    "area": "TN",
+    "stage": "e2e",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "seed": [
+      "ready_tournament"
+    ],
+    "blockedBy": "A first-round start or a bracket cannot be staged yet: the live source fails closed on the startup_checklist and channel_set reads (proposals/live.ts, waiting for the startup-input and recipient-matcher exports of the platform PR5), so staging answers tool_not_available.",
+    "summary": "Generate the bracket of a ready 8-player tournament, then approve: nothing before the click, one round_generated event after it.",
+    "turns": [
+      {
+        "say": "Generate the bracket for {{seedname:ready_tournament}} now.",
+        "then": "approve"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "propose_generate_bracket"
+        ],
+        "forbidden": [
+          "propose_build",
+          "propose_start_phase"
+        ],
+        "max": 12
+      },
+      "proposals": {
+        "min": 1,
+        "max": 1,
+        "tools": [
+          "propose_generate_bracket"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        }
+      ],
+      "db": {
+        "counts": {
+          "rounds": 3,
+          "matches": 4
+        },
+        "rows": [
+          {
+            "table": "tournaments",
+            "where": {
+              "id": "{{seed:ready_tournament}}"
+            },
+            "count": 1,
+            "fields": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "generate_bracket",
+            "status": "ok",
+            "count": 1
+          }
+        ]
+      },
+      "proposalState": [
+        {
+          "at": "last",
+          "kind": "action",
+          "class": "G",
+          "status": "completed",
+          "tool": "propose_generate_bracket"
+        }
+      ],
+      "recorder": {
+        "beforeApprove": 0,
+        "events": [
+          "round_generated"
+        ]
+      }
+    }
+  },
+  {
+    "id": "TN3",
+    "area": "TN",
+    "stage": "e2e",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "seed": [
+      "ready_tournament"
+    ],
+    "blockedBy": "A first-round start or a bracket cannot be staged yet: the live source fails closed on the startup_checklist and channel_set reads (proposals/live.ts, waiting for the startup-input and recipient-matcher exports of the platform PR5), so staging answers tool_not_available.",
+    "summary": "The decline variant of TN2: declining the bracket card leaves no round, no event and no ledger row.",
+    "turns": [
+      {
+        "say": "Generate the bracket for {{seedname:ready_tournament}} now.",
+        "then": "decline"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "propose_generate_bracket"
+        ],
+        "forbidden": [
+          "propose_build"
+        ],
+        "max": 12
+      },
+      "proposals": {
+        "min": 1,
+        "max": 1,
+        "tools": [
+          "propose_generate_bracket"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok"
+        }
+      ],
+      "db": {
+        "counts": {},
+        "rows": [
+          {
+            "table": "tournaments",
+            "where": {
+              "id": "{{seed:ready_tournament}}"
+            },
+            "count": 1,
+            "fields": {
+              "status": "upcoming"
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "total": 0
+      },
+      "proposalState": [
+        {
+          "at": "last",
+          "kind": "action",
+          "class": "G",
+          "status": "declined"
+        }
+      ],
+      "recorder": {
+        "beforeApprove": 0,
+        "events": [],
+        "social": []
+      }
+    }
+  },
+  {
+    "id": "LG6",
+    "area": "LG",
+    "stage": "e2e",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "seed": [
+      "ready_league"
+    ],
+    "blockedBy": "A first-round start or a bracket cannot be staged yet: the live source fails closed on the startup_checklist and channel_set reads (proposals/live.ts, waiting for the startup-input and recipient-matcher exports of the platform PR5), so staging answers tool_not_available.",
+    "summary": "Start a ready league: the card is a start_phase via generate-round only; an approve without the acknowledgements is refused, then the real approve starts it.",
+    "turns": [
+      {
+        "say": "Start {{seedname:ready_league}}: generate the first round of its Regular Season.",
+        "then": "approve_no_acks"
+      },
+      {
+        "say": "I read the notes now. Stage the start of the Regular Season again so I can approve it with the boxes ticked.",
+        "then": "approve"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "propose_start_phase"
+        ],
+        "forbidden": [
+          "propose_generate_bracket",
+          "propose_build"
+        ],
+        "max": 24
+      },
+      "proposals": {
+        "min": 2,
+        "max": 3,
+        "tools": [
+          "propose_start_phase"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 409,
+          "code": "proposal_ack_missing"
+        },
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        }
+      ],
+      "db": {
+        "counts": {
+          "rounds": 1,
+          "matches": 6
+        },
+        "rows": [
+          {
+            "table": "seasons",
+            "where": {
+              "id": "{{seed:ready_league}}"
+            },
+            "count": 1,
+            "fields": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "start_phase",
+            "status": "ok",
+            "count": 1
+          }
+        ],
+        "none": [
+          "generate_bracket"
+        ]
+      },
+      "proposalState": [
+        {
+          "at": "last",
+          "kind": "action",
+          "class": "G",
+          "status": "completed",
+          "tool": "propose_start_phase"
+        }
+      ],
+      "recorder": {
+        "beforeApprove": 0,
+        "events": [
+          "round_generated",
+          "tournament_started"
+        ]
+      }
+    }
+  },
+  {
+    "id": "RS1",
+    "area": "RS",
+    "stage": "e2e",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "summary": "A Gen 9 OU ruleset with Kingambit banned: a private draft through the D tools, published only after the separate publish card is approved.",
+    "turns": [
+      {
+        "say": "Create a ruleset called RS1 OU S12 {{run:tag}} based on Gen 9 OU and ban Kingambit. Publish it once it is ready.",
+        "then": "approve"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "ruleset_create_draft",
+          "ruleset_patch_draft",
+          "propose_publish_ruleset"
+        ],
+        "ordered": [
+          "ruleset_create_draft",
+          "ruleset_patch_draft",
+          "propose_publish_ruleset"
+        ],
+        "forbidden": [
+          "propose_move_pin",
+          "propose_build"
+        ],
+        "max": 20
+      },
+      "proposals": {
+        "min": 1,
+        "max": 1,
+        "tools": [
+          "propose_publish_ruleset"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        }
+      ],
+      "effectsAllowed": [
+        "draft_write"
+      ],
+      "db": {
+        "counts": {
+          "ruleset_definitions": 1,
+          "ruleset_definition_versions": 1
+        },
+        "rows": [
+          {
+            "table": "ruleset_definitions",
+            "where": {
+              "name_text": "RS1 OU S12 {{run:tag}}"
+            },
+            "count": 1,
+            "fields": {
+              "visibility": "private"
+            }
+          },
+          {
+            "table": "ruleset_definition_versions",
+            "where": {
+              "name_text": "RS1 OU S12 {{run:tag}}"
+            },
+            "count": 1,
+            "fields": {
+              "version_no": 1,
+              "resolved.pokemon": "{{computed:preset_pokemon.gen9ou+kingambit}}"
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "ruleset_create_draft",
+            "status": "ok",
+            "count": 1
+          },
+          {
+            "op": "ruleset_patch_draft",
+            "status": "ok"
+          },
+          {
+            "op": "publish_ruleset",
+            "status": "ok",
+            "count": 1
+          }
+        ]
+      },
+      "proposalState": [
+        {
+          "at": "last",
+          "kind": "action",
+          "class": "G",
+          "status": "completed",
+          "tool": "propose_publish_ruleset"
+        }
+      ],
+      "recorder": {
+        "beforeApprove": 0,
+        "events": [],
+        "social": []
+      }
+    }
+  },
+  {
+    "id": "RS3",
+    "area": "RS",
+    "stage": "e2e",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "seed": [
+      "started_league_ruleset"
+    ],
+    "summary": "Ban Gliscor in a ruleset a started league uses: a draft edit and a new published version, while the running league keeps its pin.",
+    "turns": [
+      {
+        "say": "Also ban Gliscor in the ruleset {{seedname:started_league_ruleset.ruleset}}. A league is already running on it, so do not change what that league plays under. Publish the change as a new version.",
+        "then": "approve"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "ruleset_patch_draft",
+          "propose_publish_ruleset"
+        ],
+        "forbidden": [
+          "propose_build"
+        ],
+        "max": 24
+      },
+      "proposals": {
+        "min": 1,
+        "tools": [
+          "propose_publish_ruleset"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        }
+      ],
+      "effectsAllowed": [
+        "draft_write"
+      ],
+      "db": {
+        "counts": {
+          "ruleset_definition_versions": 1
+        },
+        "rows": [
+          {
+            "table": "seasons",
+            "where": {
+              "id": "{{seed:started_league_ruleset}}"
+            },
+            "count": 1,
+            "fields": {
+              "ruleset_id": "{{seed:started_league_ruleset.version}}",
+              "status": "active"
+            }
+          },
+          {
+            "table": "ruleset_definition_versions",
+            "where": {
+              "definition_id": "{{seed:started_league_ruleset.definition}}",
+              "version_no": 2
+            },
+            "count": 1,
+            "fields": {
+              "resolved.pokemon": "{{computed:preset_pokemon.gen9ou+gliscor}}"
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "publish_ruleset",
+            "status": "ok",
+            "count": 1
+          }
+        ],
+        "none": [
+          "move_pin"
+        ]
+      },
+      "recorder": {
+        "beforeApprove": 0,
+        "events": [],
+        "social": []
+      }
+    }
+  },
+  {
+    "id": "LG2",
+    "area": "LG",
+    "stage": "e2e",
+    "phase": 1,
+    "locale": "en",
+    "actor": "site_admin",
+    "fixture": "baseline",
+    "clock": "2026-10-26T09:00:00.000Z",
+    "summary": "The headline request without the double round robin: publish the Kingambit-banned ruleset first, then the Build creates one league and two phases on it.",
+    "turns": [
+      {
+        "say": "Set up a 12-player singles league called LG2 Autumn Cup {{run:tag}} on Gen 9 OU rules with Kingambit banned. A single round robin regular season, then a top 4 single elimination playoff, both best of 3. It starts on 2026-11-02. The players are Eval Player 01 to Eval Player 12. Name the ruleset LG2 OU {{run:tag}}.",
+        "then": "approve"
+      },
+      {
+        "say": "The ruleset is published. Now stage the league for the Build and I will approve it.",
+        "then": "approve"
+      }
+    ],
+    "expect": {
+      "tools": {
+        "required": [
+          "ruleset_create_draft",
+          "propose_publish_ruleset",
+          "plan_create",
+          "propose_build"
+        ],
+        "forbidden": [
+          "propose_start_phase",
+          "propose_generate_bracket"
+        ],
+        "max": 40
+      },
+      "proposals": {
+        "min": 2,
+        "tools": [
+          "propose_publish_ruleset",
+          "propose_build"
+        ]
+      },
+      "clicks": [
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        },
+        {
+          "status": 200,
+          "code": "ok",
+          "result": "completed"
+        }
+      ],
+      "effectsAllowed": [
+        "draft_write"
+      ],
+      "db": {
+        "counts": {
+          "ruleset_definitions": 1,
+          "ruleset_definition_versions": 1,
+          "seasons": 1,
+          "tournaments": 2,
+          "season_participants": 12,
+          "tournament_participants": 16
+        },
+        "rows": [
+          {
+            "table": "seasons",
+            "where": {
+              "name": "LG2 Autumn Cup {{run:tag}}"
+            },
+            "count": 1,
+            "fields": {
+              "format_type": "singles",
+              "start_date": "2026-11-02",
+              "status": "upcoming"
+            }
+          },
+          {
+            "table": "ruleset_definition_versions",
+            "where": {
+              "name_text": "LG2 OU {{run:tag}}"
+            },
+            "count": 1,
+            "fields": {
+              "resolved.pokemon": "{{computed:preset_pokemon.gen9ou+kingambit}}"
+            }
+          },
+          {
+            "table": "tournaments",
+            "where": {
+              "season_id": "{{ledger:league_create}}",
+              "name": "Regular Season"
+            },
+            "count": 1,
+            "fields": {
+              "bracket_type": "round_robin"
+            }
+          },
+          {
+            "table": "tournaments",
+            "where": {
+              "season_id": "{{ledger:league_create}}",
+              "name": "Playoffs"
+            },
+            "count": 1,
+            "fields": {
+              "bracket_type": "single_elim",
+              "advancement_rule": {
+                "type": "top_n",
+                "count": 4,
+                "per_group": false
+              }
+            }
+          }
+        ]
+      },
+      "ledger": {
+        "steps": [
+          {
+            "op": "publish_ruleset",
+            "status": "ok",
+            "count": 1
+          },
+          {
+            "op": "league_create",
+            "status": "ok",
+            "count": 1
+          },
+          {
+            "op": "phase_create",
+            "status": "ok",
+            "count": 2
+          }
+        ]
+      },
+      "recorder": {
+        "beforeApprove": 0,
+        "events": [],
+        "social": []
+      }
+    }
+  }
+]
