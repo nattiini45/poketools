@@ -12,6 +12,9 @@ import type { AgentAuditContext } from '@/lib/audit/agent-context';
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
+/** The delivery phases of `ADMIN_AGENT_MAX_PHASE` (kept local: this layer imports no other assistant module). */
+export type BindingPhase = 0 | 1 | 2 | 3 | 4 | 5;
+
 /** Plan 3.5: read, pure preview, private write, live reversible write, outward or irreversible write. */
 export const ACTION_CLASSES = ['R', 'P', 'D', 'B', 'G'] as const;
 export type ActionClass = (typeof ACTION_CLASSES)[number];
@@ -85,6 +88,11 @@ export interface RouteBinding<TArgs = unknown> {
   /** Path pattern as the route file is laid out, with `[name]` segments: `/api/seasons/[id]/phases`. No catch-alls. */
   readonly path: string;
   readonly class: ActionClass;
+  /**
+   * Delivery phase (`ADMIN_AGENT_MAX_PHASE`, spec §18.17) the operation ships in. The executor refuses a stored step whose
+   * binding is above the configured cap; a binding that does not say is treated as the last phase (5), never as phase 0.
+   */
+  readonly phase?: BindingPhase;
   /** Lazy import of the route module, with a literal specifier: `() => import('@/app/api/seasons/route')`. */
   load(): Promise<RouteModule>;
   /**

@@ -16,6 +16,7 @@ export {
 } from './types';
 export type {
   ActionClass,
+  BindingPhase,
   BindingReversal,
   DispatchContext,
   DispatchInput,

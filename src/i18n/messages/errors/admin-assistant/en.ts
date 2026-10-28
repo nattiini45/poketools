@@ -61,12 +61,14 @@ export default {
   proposal_forbidden: 'Your role no longer allows this proposal.',
   proposal_ack_missing: 'Tick every confirmation box first.',
   proposal_conflict_executing: 'Another proposal is still running in this conversation.',
+  proposal_not_resumable: 'This proposal cannot be resumed.',
   undo_unavailable: 'This cannot be undone.',
 
   // Execution outcomes
   step_failed: 'A step failed.',
   agent_build_step_failed: 'The build stopped at a step that failed. Earlier steps were kept.',
   unknown_outcome: 'It is not known whether this step went through. Check before trying again.',
+  reconcile_ambiguous: 'More than one existing item matches this step. Check them before continuing.',
   ledger_unavailable: 'Nothing was done because the assistant could not record it.',
   agent_harness_error: 'The assistant ran into an internal error. Nothing was retried.',
 

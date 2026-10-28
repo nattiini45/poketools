@@ -102,9 +102,9 @@ describe('only store/ writes', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('lets the audit writer into the root only (the loop gets it injected)', () => {
+  it('lets the audit writer into the root and the approve wiring only (the loop and the executor get it injected)', () => {
     const importers = scanned.filter((file) => parseImports(readFileSync(file, 'utf8')).specifiers.includes('@/lib/audit/log')).map(relFromRepo);
-    expect(importers.filter((rel) => rel !== `${AGENT}/index.ts`)).toEqual([]);
+    expect(importers.sort()).toEqual([`${ROUTES}/_lib/approve.ts`, `${AGENT}/index.ts`].sort());
   });
 
   it('keeps writes out of the harness too: it reads the fixture world, never a table', () => {

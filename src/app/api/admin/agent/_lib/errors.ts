@@ -22,8 +22,5 @@ export function agentError(code: ApiErrorCode, status: number, params?: AgentRou
 /** A switched-off assistant, an audience that excludes the viewer, or an invalid configuration: 404, and it never says which. */
 export const agentUnavailable = (): UserFacingError => agentError('agent_disabled', 404);
 
-/** Approve and resume exist so the card and the UI are complete, but nothing executes in phase 0. */
-export const phaseDisabled = (): UserFacingError => agentError('phase_disabled', 501);
-
 export const conversationNotFound = (): UserFacingError => agentError('conversation_not_found', 404);
 export const proposalNotFound = (): UserFacingError => agentError('proposal_not_found', 404);

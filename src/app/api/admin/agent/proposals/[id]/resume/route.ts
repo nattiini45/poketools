@@ -1,17 +1,20 @@
 import { NextRequest } from 'next/server';
-import { adminAgentStore } from '@/lib/ai/admin-agent/store';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { resumeProposal } from '../../../_lib/approve';
 import { authorizeAgent } from '../../../_lib/auth';
-import { phaseDisabled } from '../../../_lib/errors';
 import { assertSameOriginRequest } from '../../../_lib/request';
+
+/** Like approve, a resume runs steps in this request. */
+export const maxDuration = 300;
 
 /**
  * POST /api/admin/agent/proposals/[id]/resume
  *
  * Resumes a Build left `executing` within 10 minutes under the same approval (spec §18.6; a Go-live proposal never
- * resumes). Phase 0 executes nothing, so after the live guard, the origin rule, the path id and the same-admin check
- * (another admin's proposal is 404) this answers 501 `phase_disabled`. The body is empty.
+ * resumes, `409 proposal_not_resumable`). After the live guard, the origin rule and the path id the executor repeats the
+ * live checks and the binding recheck, reconciles any step whose outcome was unknown, and continues after the last `ok`
+ * step. The body is empty. Another admin's proposal is 404.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,9 +23,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const invalid = rejectInvalidPathId(id, 'INVALID_PROPOSAL_ID');
     if (invalid) return invalid;
-    await adminAgentStore.proposals.getProposalOrThrow(auth.adminId, id);
 
-    throw phaseDisabled();
+    return await resumeProposal({ auth, request, proposalId: id });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to resume the proposal');
   }

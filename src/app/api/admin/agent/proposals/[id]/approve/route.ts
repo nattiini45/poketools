@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { adminAgentStore } from '@/lib/ai/admin-agent/store';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { approveProposal } from '../../../_lib/approve';
 import { authorizeAgent } from '../../../_lib/auth';
-import { phaseDisabled } from '../../../_lib/errors';
 import { assertSameOriginRequest, readAgentJson } from '../../../_lib/request';
+
+/** An approve runs the whole Build in this request; the executor stops starting steps after 240 s (spec §18.6). */
+export const maxDuration = 300;
 
 /** The body is four short fields; 16 KiB is far above any honest request. */
 const MAX_BODY_BYTES = 16 * 1024;
@@ -23,13 +25,10 @@ const bodySchema = z.strictObject({
 /**
  * POST /api/admin/agent/proposals/[id]/approve
  *
- * Phase 0: the route exists so the card and the client are complete, and it answers 501 `phase_disabled` after the same
- * checks the executing route will make first (spec §18.6 steps 1 and 2): the live `requireAnyAdmin` and the audience,
- * the browser-origin rule, the path id, the bounded body, and "the proposal is this admin's" (another admin's proposal
- * is 404, so existence is not confirmed). Nothing is claimed, nothing runs, nothing is written.
- *
- * Phase 1 continues here: live eligibility, the atomic claim, the binding and hash recheck, then the executor. This
- * module deliberately imports no executor.
+ * The first checks are the request's (spec §18.6 steps 1 and 2): the live `requireAnyAdmin` and the audience, the
+ * browser-origin rule, the path id and the bounded body. Everything after that is the executor's (`_lib/approve.ts`): "the
+ * proposal is this admin's" (another admin's is 404, so existence is not confirmed), the live eligibility, the atomic claim,
+ * the binding and hash recheck, and the steps. The answer is the structured result as JSON (not a stream, in this slice).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -38,11 +37,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const invalid = rejectInvalidPathId(id, 'INVALID_PROPOSAL_ID');
     if (invalid) return invalid;
-    await readAgentJson(request, bodySchema, MAX_BODY_BYTES);
+    const body = await readAgentJson(request, bodySchema, MAX_BODY_BYTES);
 
-    await adminAgentStore.proposals.getProposalOrThrow(auth.adminId, id);
-
-    throw phaseDisabled();
+    return await approveProposal({ auth, request, proposalId: id, body });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to approve the proposal');
   }

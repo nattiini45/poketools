@@ -24,9 +24,16 @@ const routeFiles = walkFiles(ROUTES_DIR, (rel) => /\.tsx?$/.test(rel) && !isTest
 
 // ─── What may not be reached from the chat side ──────────────────────
 
-/** The executor (the saga that dispatches approved steps), the Go-live/Build bindings and the approve route itself. */
+/**
+ * The executor (the saga that dispatches approved steps), the Go-live/Build bindings, and the approve side that wires them:
+ * the approve and resume routes and `_lib/approve.ts`, which builds the executor's dependencies.
+ */
 const isPrivileged = (rel: string): boolean =>
-  new RegExp(`^${AGENT_REL}/proposals/executor(\\.tsx?$|/)`).test(rel) || rel.startsWith(`${ROUTES_REL}/_ops/g/`) || rel.startsWith(`${ROUTES_REL}/proposals/[id]/approve/`);
+  new RegExp(`^${AGENT_REL}/proposals/executor(\\.tsx?$|/)`).test(rel) ||
+  rel.startsWith(`${ROUTES_REL}/_ops/g/`) ||
+  rel.startsWith(`${ROUTES_REL}/proposals/[id]/approve/`) ||
+  rel.startsWith(`${ROUTES_REL}/proposals/[id]/resume/`) ||
+  rel === `${ROUTES_REL}/_lib/approve.ts`;
 
 /** The approval-token reader and card server: the approve and card routes import it, the chat side never does. */
 const isTokenSide = (rel: string): boolean => rel === `${AGENT_REL}/proposals/serve.ts`;
@@ -84,10 +91,38 @@ describe('the chat side cannot reach the executor, the _ops/g bindings or the ap
   });
 
   it('has an approve side that may reach what the chat side may not (the rule is one-way)', () => {
-    // Nothing imports the executor except the approve route, once both exist.
+    // Nothing imports the executor except the approve wiring (`_lib/approve.ts`), which only the approve and resume routes import.
     const importers = agentFiles.concat(routeFiles).filter((file) => parseImports(readFileSync(file, 'utf8')).specifiers.some((specifier) => /executor/.test(specifier)));
-    for (const file of importers) expect(relFromRepo(file), relFromRepo(file)).toMatch(/^src\/app\/api\/admin\/agent\/proposals\/\[id\]\/approve\//);
+    expect(importers.map(relFromRepo)).toEqual([`${ROUTES_REL}/_lib/approve.ts`]);
+    const wiring = agentFiles.concat(routeFiles).filter((file) => parseImports(readFileSync(file, 'utf8')).specifiers.some((specifier) => /_lib\/approve$/.test(specifier)));
+    expect(wiring.map(relFromRepo).sort()).toEqual([`${ROUTES_REL}/proposals/[id]/approve/route.ts`, `${ROUTES_REL}/proposals/[id]/resume/route.ts`]);
   });
+
+  it('reaches the executor from the approve and resume routes through the wiring file', () => {
+    const approveSide = routeFiles.filter((file) => /proposals\/\[id\]\/(approve|resume)\/route\.ts$/.test(file.split(path.sep).join('/')));
+    expect(approveSide).toHaveLength(2);
+    for (const entry of approveSide) {
+      const chain = findPath(buildGraph([entry]), [entry], (file) => relFromRepo(file) === `${AGENT_REL}/proposals/executor.ts`);
+      expect(chain?.map(relFromRepo), relFromRepo(entry)).toContain(`${ROUTES_REL}/_lib/approve.ts`);
+    }
+  }, 30_000);
+
+  it('keeps the executor out of the chat route, the conversation routes, the card and decline routes, the shared agent and the proposals barrel', () => {
+    for (const rel of [
+      `${ROUTES_REL}/conversations/[id]/messages/route.ts`,
+      `${ROUTES_REL}/conversations/[id]/route.ts`,
+      `${ROUTES_REL}/conversations/route.ts`,
+      `${ROUTES_REL}/proposals/[id]/route.ts`,
+      `${ROUTES_REL}/proposals/[id]/decline/route.ts`,
+      `${ROUTES_REL}/_lib/agent.ts`,
+      `${AGENT_REL}/proposals/index.ts`,
+    ]) {
+      const entry = abs(rel);
+      const chain = findPath(buildGraph([entry]), [entry], (file) => relFromRepo(file) === `${AGENT_REL}/proposals/executor.ts`);
+      expect(chain?.map(relFromRepo), rel).toBeUndefined();
+    }
+    expect(source(abs(`${ROUTES_REL}/_lib/agent.ts`))).not.toMatch(/executor|_ops\/g|\/approve['"]/);
+  }, 30_000);
 });
 
 /** A file's code without comments. */
@@ -128,7 +163,8 @@ const ALLOWED_LAYER_EDGES: Record<string, readonly string[]> = {
   // The loop knows the store's pure pieces (errors, ids, payload guard) and nothing else: tools, staging and dispatch are injected.
   loop: ['store'],
   previews: ['registry'],
-  proposals: ['plans', 'registry', 'root', 'store'],
+  // The executor dispatches approved steps through `dispatch/`; staging imports nothing from it.
+  proposals: ['dispatch', 'plans', 'registry', 'root', 'store'],
   readers: ['plans', 'registry'],
   registry: ['plans', 'previews', 'readers'],
   root: ['loop', 'prompts', 'registry', 'store'],
@@ -247,6 +283,10 @@ describe('the checker', () => {
     expect(isPrivileged(`${AGENT_REL}/proposals/executor/saga.ts`)).toBe(true);
     expect(isPrivileged(`${ROUTES_REL}/_ops/g/publish.ts`)).toBe(true);
     expect(isPrivileged(`${ROUTES_REL}/proposals/[id]/approve/route.ts`)).toBe(true);
+    expect(isPrivileged(`${ROUTES_REL}/proposals/[id]/resume/route.ts`)).toBe(true);
+    expect(isPrivileged(`${ROUTES_REL}/_lib/approve.ts`)).toBe(true);
+    expect(isPrivileged(`${ROUTES_REL}/_lib/agent.ts`)).toBe(false);
+    expect(isPrivileged(`${ROUTES_REL}/proposals/[id]/decline/route.ts`)).toBe(false);
     expect(isPrivileged(`${ROUTES_REL}/_ops/d/format.ts`)).toBe(false);
     expect(isPrivileged(`${AGENT_REL}/proposals/executor-notes.ts`)).toBe(false);
     expect(isPrivileged(`${AGENT_REL}/proposals/stage.ts`)).toBe(false);

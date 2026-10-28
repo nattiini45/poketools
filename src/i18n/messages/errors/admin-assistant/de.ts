@@ -48,6 +48,7 @@ export default defineDe<typeof en>()({
   proposal_forbidden: 'Deine Rolle erlaubt diesen Vorschlag nicht mehr.',
   proposal_ack_missing: 'Setz zuerst alle Bestätigungshäkchen.',
   proposal_conflict_executing: 'In dieser Unterhaltung läuft noch ein anderer Vorschlag.',
+  proposal_not_resumable: 'Dieser Vorschlag lässt sich nicht fortsetzen.',
   undo_unavailable: 'Das lässt sich nicht rückgängig machen.',
 
   step_failed: 'Ein Schritt ist fehlgeschlagen.',
@@ -55,6 +56,7 @@ export default defineDe<typeof en>()({
     'Das Bauen wurde bei einem fehlgeschlagenen Schritt angehalten. Frühere Schritte bleiben erhalten.',
   unknown_outcome:
     'Es ist nicht bekannt, ob dieser Schritt durchgegangen ist. Prüf das, bevor du es noch einmal versuchst.',
+  reconcile_ambiguous: 'Mehrere vorhandene Einträge passen zu diesem Schritt. Prüf sie, bevor du weitermachst.',
   ledger_unavailable: 'Es wurde nichts getan, weil der Assistent es nicht aufzeichnen konnte.',
   agent_harness_error: 'Beim Assistenten ist ein interner Fehler aufgetreten. Es wurde nichts wiederholt.',
 

@@ -79,20 +79,24 @@ describe('the route table', () => {
 
   it('names every limiter bucket within the limiter\'s pattern and fails closed', () => {
     const buckets: string[] = [];
-    for (const file of routeFiles) {
+    for (const file of [...routeFiles, path.join(ROUTES, '_lib/approve.ts')]) {
       for (const match of code(file).matchAll(/checkRateLimit\(\s*'([^']+)'[\s\S]*?\)/g)) {
         buckets.push(match[1]);
         expect(match[0], `${rel(file)} ${match[1]}`).toContain("failMode: 'closed'");
       }
     }
-    expect(buckets.sort()).toEqual(['admin-agent-decline', 'admin-agent-new', 'admin-agent-turn']);
+    expect(buckets.sort()).toEqual(['admin-agent-decline', 'admin-agent-new', 'admin-agent-turn', 'admin-agent-write']);
     for (const bucket of buckets) expect(bucket).toMatch(/^[a-z0-9][a-z0-9:_-]{0,63}$/);
   });
 
-  it('only the chat route sets a duration, and it is 300 seconds', () => {
+  it('only the chat route and the two routes that run steps set a duration, and it is 300 seconds', () => {
     const withDuration = routeFiles.filter((file) => /export const maxDuration/.test(code(file)));
-    expect(withDuration.map(rel)).toEqual(['src/app/api/admin/agent/conversations/[id]/messages/route.ts']);
-    expect(code(withDuration[0])).toContain('export const maxDuration = 300;');
+    expect(withDuration.map(rel).sort()).toEqual([
+      'src/app/api/admin/agent/conversations/[id]/messages/route.ts',
+      'src/app/api/admin/agent/proposals/[id]/approve/route.ts',
+      'src/app/api/admin/agent/proposals/[id]/resume/route.ts',
+    ]);
+    for (const file of withDuration) expect(code(file)).toContain('export const maxDuration = 300;');
   });
 });
 
@@ -107,7 +111,8 @@ describe('the chat route', () => {
   });
 
   it('cannot reach an approval token or an executor, directly or through the files it shares', () => {
-    for (const file of [chat, ...libFiles.filter((f) => !/views\.ts$|plan-view\.ts$|seed\.ts$/.test(f))]) {
+    // `approve.ts` is the approve side's wiring (it imports the executor on purpose); only approve and resume import it.
+    for (const file of [chat, ...libFiles.filter((f) => !/views\.ts$|plan-view\.ts$|seed\.ts$|approve\.ts$/.test(f))]) {
       for (const specifier of importsOf(file)) {
         expect(specifier, rel(file)).not.toMatch(/proposals\/serve|executor|_ops/);
       }

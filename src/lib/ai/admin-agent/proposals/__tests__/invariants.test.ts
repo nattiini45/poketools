@@ -17,8 +17,9 @@ import { deriveSteps } from '../../plans/steps';
 
 const ROOT = process.cwd();
 const DIR = path.join(ROOT, 'src/lib/ai/admin-agent/proposals');
+/** The staging side. `executor.ts` is the approve side (it dispatches); its own boundaries are checked in `executor.test.ts`. */
 const sources = readdirSync(DIR)
-  .filter((file) => file.endsWith('.ts'))
+  .filter((file) => file.endsWith('.ts') && file !== 'executor.ts')
   .map((file) => ({ file, text: readFileSync(path.join(DIR, file), 'utf8') }));
 
 interface Binding {
