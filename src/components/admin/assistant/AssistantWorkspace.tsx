@@ -118,6 +118,7 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
           approveEnabled={detail.capabilities.approve}
           onChanged={() => void conv.refresh()}
           onAnswer={composerDisabled || conv.sending ? undefined : (text) => void conv.send(text)}
+          onUndo={composerDisabled || conv.sending ? undefined : (proposalId) => void conv.requestUndo(proposalId)}
         />
         {busyElsewhere && (
           <p className="text-xs text-poke-text-muted" role="status">

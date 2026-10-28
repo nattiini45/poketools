@@ -24,6 +24,8 @@ export interface AssistantConversation {
   /** Sends a message. `onAccepted` runs as soon as the server has taken it (before the answer streams), so the composer can clear. */
   send(text: string, onAccepted?: () => void): Promise<boolean>;
   continueTurn(): Promise<void>;
+  /** Asks the server to start a turn in which the assistant stages the undo of an executed proposal. */
+  requestUndo(proposalId: string): Promise<void>;
   refresh(): Promise<void>;
   dismissErrors(): void;
 }
@@ -141,6 +143,13 @@ export function useAssistantConversation(conversationId: string): AssistantConve
     await run({ continue: true }, null);
   }, [run]);
 
+  const requestUndo = useCallback(
+    async (proposalId: string) => {
+      await run({ undo: { proposal_id: proposalId } }, null);
+    },
+    [run],
+  );
+
   // A turn that runs in another tab (or before a reload) is followed by re-reading while the lease is held.
   const busyElsewhere = detail?.conversation.busy === true && !sending;
   useEffect(() => {
@@ -159,5 +168,5 @@ export function useAssistantConversation(conversationId: string): AssistantConve
     setTurnErrors([]);
   }, []);
 
-  return { status, detail, loadError, live, pendingText, sending, sendError, turnErrors, usage, send, continueTurn, refresh: load, dismissErrors };
+  return { status, detail, loadError, live, pendingText, sending, sendError, turnErrors, usage, send, continueTurn, requestUndo, refresh: load, dismissErrors };
 }

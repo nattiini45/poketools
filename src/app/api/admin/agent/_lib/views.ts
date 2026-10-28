@@ -200,7 +200,7 @@ export function toLimits(config: AdminAgentConfig): ConversationDetail['limits']
   };
 }
 
-/** The approve route executes from phase 1, and the executor does not exist in phase 0, so the UI offers no Approve yet. */
+/** The approve route executes from phase 1 (phase 0 answers 501 `phase_disabled`), so the UI offers Confirm from phase 1 on. */
 export function toCapabilities(config: AdminAgentConfig): ConversationDetail['capabilities'] {
-  return { approve: false, maxPhase: config.maxPhase };
+  return { approve: config.maxPhase >= 1, maxPhase: config.maxPhase };
 }

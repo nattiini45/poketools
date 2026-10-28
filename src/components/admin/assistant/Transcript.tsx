@@ -68,6 +68,8 @@ export interface TranscriptProps {
   onChanged: () => void;
   /** Sends an answer to a question of the assistant as the admin's next message; absent while no message can be sent. */
   onAnswer?: (text: string) => void;
+  /** Starts the turn in which the assistant stages the undo of an executed proposal; absent while no turn can start. */
+  onUndo?: (proposalId: string) => void;
 }
 
 /**
@@ -75,7 +77,7 @@ export interface TranscriptProps {
  * proposal cards inline where the assistant staged them, and the turn that is streaming right now under them. Cards that
  * are not tied to a tool result (a reload mid-turn) come after the messages, oldest first.
  */
-export default function Transcript({ items, proposals, live, pendingText, truncated, approveEnabled, onChanged, onAnswer }: TranscriptProps) {
+export default function Transcript({ items, proposals, live, pendingText, truncated, approveEnabled, onChanged, onAnswer, onUndo }: TranscriptProps) {
   const t = useT(adminAssistantMessages);
 
   const placed = new Set<string>();
@@ -85,7 +87,7 @@ export default function Transcript({ items, proposals, live, pendingText, trunca
   // Cards the stream announced; the re-read after the turn lists them with the others.
   const announced = live?.proposalIds ?? [];
 
-  const card = (id: string) => <ProposalCard key={`card-${id}`} proposalId={id} approveEnabled={approveEnabled} onChanged={onChanged} />;
+  const card = (id: string) => <ProposalCard key={`card-${id}`} proposalId={id} approveEnabled={approveEnabled} onChanged={onChanged} onUndo={onUndo} />;
 
   return (
     <ol className="space-y-3" aria-label={t('page.transcript')}>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import Link from 'next/link';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -13,8 +14,10 @@ import { adminAssistantMessages } from '@/i18n/messages/admin-assistant';
 import { adminAssistantCardsMessages } from '@/i18n/messages/admin-assistant-cards';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import type { CardLine, CardStep, CardTarget, ProposalCard as StoredCard } from '@/lib/ai/admin-agent/proposals/card';
-import { approveProposal, declineProposal, getProposal } from './api';
-import type { CardView, ProposalDetail } from './types';
+import { approveProposal, declineProposal, getProposal, resumeProposal } from './api';
+import type { CardView, ProposalDetail, ProposalResultView } from './types';
+
+type StepView = CardView['steps'][number];
 
 type CardParam = NonNullable<CardLine['params']>[string];
 type StatusKey = 'notExecuted' | 'executing' | 'executed' | 'failed' | 'unknown' | 'stale' | 'declined' | 'expired' | 'superseded' | 'skipped' | 'partial' | 'undone';
@@ -58,6 +61,50 @@ const STATUS_VARIANT: Record<StatusKey, BadgeVariant> = {
   partial: 'yellow',
   undone: 'gray',
 };
+
+/** How often a card whose steps are running is re-read, so the step chips follow the run. */
+const PROGRESS_POLL_MS = 3000;
+
+/** The statuses that get a result headline: the proposal ran, or is running. */
+const RESULT_STATUSES: ReadonlySet<CardView['effectiveStatus']> = new Set(['completed', 'partial', 'failed', 'stale', 'unknown', 'executing']);
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The app route for the entity a finished step made or acted on, only for an id the server served from the ledger. A league goes
+ * to its admin page, a tournament to its public page, a ruleset (a publish or a pin move) to its editor page.
+ */
+export function entityLink(op: string, entityId: string | null): { key: 'league' | 'tournament' | 'ruleset'; href: string } | null {
+  if (entityId === null || !UUID.test(entityId)) return null;
+  const id = entityId.toLowerCase();
+  switch (op) {
+    case 'league_create':
+      return { key: 'league', href: `/admin/leagues/${id}` };
+    case 'tournament_create':
+      return { key: 'tournament', href: `/tournaments/${id}` };
+    case 'publish_ruleset':
+    case 'move_pin':
+      return { key: 'ruleset', href: `/admin/rulesets/${id}` };
+    default:
+      return null;
+  }
+}
+
+/** The approve or resume answer laid over the card it came from, until the stored state is read again. */
+function withResult(card: CardView, result: ProposalResultView): CardView {
+  const byKey = new Map(result.steps.map((step) => [step.key, step]));
+  return {
+    ...card,
+    status: result.status,
+    effectiveStatus: result.status,
+    actionable: false,
+    secondsLeft: null,
+    steps: card.steps.map((step) => {
+      const summary = byKey.get(step.key);
+      return summary === undefined ? step : { ...step, status: summary.status, errorCode: summary.code ?? null, entityId: summary.entity_id ?? step.entityId };
+    }),
+  };
+}
 
 const NFC = (value: string): string => value.normalize('NFC').trim();
 const paramValue = (param: CardParam | undefined): string | number => {
@@ -103,6 +150,8 @@ export interface ProposalCardProps {
   approveEnabled: boolean;
   /** Called after a decline or an approve, so the conversation re-reads the transcript and the proposal list. */
   onChanged?: () => void;
+  /** Asks the assistant to stage the undo of this executed proposal (the conversation starts the turn). Absent: no Undo button. */
+  onUndo?: (proposalId: string) => void;
 }
 
 /**
@@ -110,7 +159,7 @@ export interface ProposalCardProps {
  * viewer's language with live status chips. Nothing the model wrote reaches it. Confirm stays disabled until every
  * acknowledgement is ticked (and the typed name matches), takes no default focus and never submits by itself.
  */
-export default function ProposalCard({ proposalId, approveEnabled, onChanged }: ProposalCardProps) {
+export default function ProposalCard({ proposalId, approveEnabled, onChanged, onUndo }: ProposalCardProps) {
   const t = useT(adminAssistantMessages);
   const cards = useT(adminAssistantCardsMessages);
   const formatter = useFormatter();
@@ -120,7 +169,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
   const [detail, setDetail] = useState<ProposalDetail | null>(null);
   const [loadError, setLoadError] = useState<ApiErrorLike | null>(null);
   const [actionError, setActionError] = useState<ApiErrorLike | null>(null);
-  const [busy, setBusy] = useState<'approve' | 'decline' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'decline' | 'resume' | null>(null);
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [typed, setTyped] = useState('');
   const [open, setOpen] = useState<boolean | null>(null);
@@ -140,6 +189,23 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
   }, [load]);
 
   const card = detail?.card ?? null;
+  // While the steps run (this tab's approve or resume, or a Build left open inside its window) the stored ledger is re-read.
+  const polling = busy === 'approve' || busy === 'resume' || (card?.effectiveStatus === 'executing' && card.resume?.eligible === true);
+  useEffect(() => {
+    if (!polling) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    const tick = async () => {
+      if (typeof document === 'undefined' || !document.hidden) await load();
+      if (!stopped) timer = setTimeout(() => void tick(), PROGRESS_POLL_MS);
+    };
+    timer = setTimeout(() => void tick(), PROGRESS_POLL_MS);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [polling, load]);
+
   const actionable = card?.actionable === true;
   const now = useNow(actionable);
   const secondsLeft = card === null ? 0 : Math.max(0, Math.ceil((Date.parse(card.expiresAt) - now) / 1000));
@@ -176,6 +242,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
   const status = CARD_STATUS[card.effectiveStatus];
   const expanded = open ?? (card.effectiveStatus === 'proposed' || card.effectiveStatus === 'executing');
   const stored: StoredCard = card.card;
+  const resultStatus = RESULT_STATUSES.has(card.effectiveStatus) ? card.effectiveStatus : null;
   const stepStatus = new Map(card.steps.map((step) => [step.key, step]));
   const canApprove = live && approveEnabled && detail.token !== null && acksSatisfied && busy === null;
 
@@ -250,6 +317,43 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
       </div>
     );
   };
+  /** One step of the result: its chip, what went wrong in a catalogued sentence, and a link to what it made. Nothing the model wrote. */
+  const resultStep = (step: CardStep) => {
+    const progress: StepView | undefined = stepStatus.get(step.key);
+    const chip = progress === undefined ? 'notExecuted' : STEP_STATUS[progress.status];
+    const code = progress?.errorCode ?? null;
+    const counts = step.op === 'roster_add' && progress?.status !== 'ok' ? progress?.verify ?? null : null;
+    const link = progress === undefined || progress.status === 'undone' ? null : entityLink(step.op, progress.entityId);
+    let note: string | null = null;
+    if (progress?.status === 'unknown') {
+      note = code === 'ledger_unavailable' ? errorText({ code }) : code === 'reconcile_ambiguous' ? cards('result.step.ambiguous') : cards('result.step.unknown');
+    } else if ((progress?.status === 'failed' || progress?.status === 'skipped') && code !== null) {
+      note = errorText({ code });
+    }
+    return (
+      <li key={step.key} className={`${PANEL_INSET} p-2 text-sm`} data-step={step.key} data-step-status={progress?.status ?? 'pending'}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-heading font-semibold">{stepTitle(step)}</span>
+          {targetName(step.target)}
+          <Badge variant={STATUS_VARIANT[chip]} size="xs">
+            {cards(`status.${chip}`)}
+          </Badge>
+        </div>
+        {note !== null && <p className={`mt-1 text-xs ${progress?.status === 'unknown' ? 'text-poke-text-secondary' : 'text-poke-danger-ink'}`}>{note}</p>}
+        {counts !== null && counts.present > 0 && counts.present < counts.expected && (
+          <p className="mt-1 text-xs text-poke-text-secondary">{cards('result.step.rosterPartial', { present: counts.present, count: counts.expected })}</p>
+        )}
+        {link !== null && (
+          <p className="mt-1 text-xs">
+            <Link href={link.href} className="font-semibold text-poke-focus underline-offset-2 hover:underline">
+              {cards(`result.links.${link.key}`)}
+            </Link>
+          </p>
+        )}
+      </li>
+    );
+  };
+
   const decline = async () => {
     setBusy('decline');
     setActionError(null);
@@ -259,6 +363,14 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
       setActionError(result.error);
       return;
     }
+    await load();
+    onChanged?.();
+  };
+
+  /** Shows the structured answer at once, then the stored state (the same ledger) replaces it. */
+  const settle = async (result: ProposalResultView) => {
+    // The answer is the server's; a shape that is not a result is left to the re-read below.
+    if (Array.isArray(result.steps)) setDetail((current) => (current === null ? current : { ...current, card: withResult(current.card, result), token: null }));
     await load();
     onChanged?.();
   };
@@ -274,8 +386,26 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
         setActionError(result.error);
         return;
       }
-      await load();
-      onChanged?.();
+      await settle(result.data);
+    } catch (error) {
+      setActionError(toApiErrorLike(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const resume = async () => {
+    setBusy('resume');
+    setActionError(null);
+    try {
+      const result = await resumeProposal(proposalId);
+      if (!result.ok) {
+        setActionError(result.error);
+        // A refusal (the window is over, the proposal moved on) changes what the card offers: read it again.
+        await load();
+        return;
+      }
+      await settle(result.data);
     } catch (error) {
       setActionError(toApiErrorLike(error));
     } finally {
@@ -296,6 +426,39 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
         </span>
       </header>
 
+      {actionError !== null && <Alert variant="error">{errorText(actionError)}</Alert>}
+
+      {resultStatus !== null && (
+        <div className="space-y-2" data-result={resultStatus} aria-busy={resultStatus === 'executing' && busy !== null}>
+          <div>
+            <h4 className="font-heading text-sm font-semibold text-poke-text-primary">{cards.dynamic(`result.headline.${resultStatus}`, undefined, '')}</h4>
+            <p className="text-xs text-poke-text-secondary">{cards.dynamic(`result.explain.${resultStatus}`, undefined, '')}</p>
+          </div>
+          <ol className="space-y-2" aria-label={cards('result.heading')}>
+            {stored.steps.map(resultStep)}
+          </ol>
+          {card.resume !== null &&
+            (card.resume.eligible ? (
+              <div className="space-y-1">
+                <p className="text-xs text-poke-text-secondary">{cards('result.resume.explain', { time: formatter.instant(card.resume.deadline, 'time') })}</p>
+                <Button variant="primary" size="sm" disabled={!approveEnabled || busy !== null} loading={busy === 'resume'} onClick={() => void resume()}>
+                  {cards('actions.resume')}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-poke-text-secondary">{cards('result.resume.over')}</p>
+            ))}
+          {card.undoable && onUndo !== undefined && (
+            <div className="space-y-1">
+              <p className="text-xs text-poke-text-secondary">{cards('result.undoHint')}</p>
+              <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => onUndo(card.id)}>
+                {cards('actions.undo')}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {!expanded ? (
         <Button size="sm" variant="ghost" aria-expanded={false} onClick={() => setOpen(true)}>
           {cards('card.show')}
@@ -315,16 +478,12 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
 
           <ol className="space-y-2" aria-label={cards('card.steps')}>
             {stored.steps.map((step) => {
-              const progress = stepStatus.get(step.key);
-              const stepStatusKey = progress === undefined ? null : STEP_STATUS[progress.status];
               return (
                 <li key={step.key} className={`${PANEL_INSET} p-2 text-sm`}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-heading font-semibold">{stepTitle(step)}</span>
                     {targetName(step.target)}
-                    {stepStatusKey !== null && progress?.status !== 'pending' && <Badge variant={STATUS_VARIANT[stepStatusKey]} size="xs">{cards(`status.${stepStatusKey}`)}</Badge>}
                   </div>
-                  {progress?.errorCode && <p className="mt-1 text-xs text-poke-danger-ink">{errorText({ code: progress.errorCode })}</p>}
                   {step.items.length > 0 && (
                     <ul className="mt-1 list-disc pl-5 text-xs text-poke-text-secondary" aria-label={cards('card.items')}>
                       {step.items.map((item, index) => (
@@ -414,8 +573,6 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged }: 
           {live && <p className="text-xs text-poke-text-muted">{cards('expiry.expiresIn', { time: formatter.clock(secondsLeft) })}</p>}
           {actionable && secondsLeft === 0 && <p className="text-xs text-poke-text-muted">{cards('expiry.expired')}</p>}
           {live && !approveEnabled && <p className="text-xs text-poke-text-muted">{t('states.phaseOnly')}</p>}
-          {actionError !== null && <Alert variant="error">{errorText(actionError)}</Alert>}
-
           {live && (
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" size="sm" disabled={!canApprove} loading={busy === 'approve'} onClick={() => void approve()}>

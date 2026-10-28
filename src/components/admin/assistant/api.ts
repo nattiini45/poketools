@@ -5,7 +5,7 @@
  */
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import type { ApiResult } from '@/types/api';
-import type { ConversationDetail, ConversationList, ConversationSeed, ConversationSummary, ProposalDetail, ProposalSummaryView } from './types';
+import type { ConversationDetail, ConversationList, ConversationSeed, ConversationSummary, ProposalDetail, ProposalResultView, ProposalSummaryView } from './types';
 
 const BASE = '/api/admin/agent';
 
@@ -73,10 +73,16 @@ export interface ApproveBody {
 }
 
 export function approveProposal(id: string, body: ApproveBody) {
-  return call<unknown>(`/proposals/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify(body) });
+  return call<ProposalResultView>(`/proposals/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify(body) });
 }
 
-export type MessageBody = { text: string; client_msg_id: string } | { continue: true };
+/** Continues a Build left `executing` within its window, under the same approval. The body is empty. */
+export function resumeProposal(id: string) {
+  return call<ProposalResultView>(`/proposals/${encodeURIComponent(id)}/resume`, { method: 'POST' });
+}
+
+/** `undo`: the card's Undo button. The server writes the event the model reads; no text is sent from here. */
+export type MessageBody = { text: string; client_msg_id: string } | { continue: true } | { undo: { proposal_id: string } };
 
 /**
  * Posts a turn and hands back the raw response so the caller can read its event stream. A refusal that arrives before the

@@ -16,7 +16,7 @@
  * been published (the second carve-out, owner decision 2026-10-28). Phases, pools and the like are listed on the card as residue.
  */
 import { hashJson } from '../plans/hash';
-import { deriveUndoPlan, UNDO_MAX_STEPS, type LedgerEntryView, type UndoEntryNote, type UndoPlan, type UndoReason, type UndoStep } from '../plans/undo';
+import { deriveUndoPlan, hasReversal, UNDO_MAX_STEPS, type LedgerEntryView, type UndoEntryNote, type UndoPlan, type UndoReason, type UndoStep } from '../plans/undo';
 import { deleteDraftCall, idOfLedgerResult, leagueArchiveCall, pinBackCall, restoreDraftCall, rosterRemoveCalls, tournamentArchiveCall, UNDO_ROUTES, uuidOf, type UndoOperation } from '../plans/undo-recipes';
 import type { JsonValue } from '@/lib/studio-core/json';
 import type { ActionRecord } from '../store/types';
@@ -44,6 +44,14 @@ const rec = (value: unknown): Record<string, unknown> => (isRecord(value) ? valu
 
 /** The ledger op as `plans/undo.ts` names it (two Go-live ops are filed under their step name). */
 const UNDO_OP_NAME: Readonly<Record<string, string>> = { move_pin: 'ruleset_move_pin', publish_ruleset: 'ruleset_publish' };
+/**
+ * Whether an executed proposal's ledger holds a finished row that has a reversal in the 4.7 table. A pure, static answer for the
+ * card's Undo button and the request's pre-check: the live checks (an outside edit, a lock) are `propose_undo`'s, at click time.
+ */
+export function hasUndoableRows(actions: ReadonlyArray<Pick<ActionRecord, 'tool_name' | 'status'>>): boolean {
+  return actions.some((record) => record.status === 'ok' && hasReversal(UNDO_OP_NAME[record.tool_name] ?? record.tool_name));
+}
+
 const ENTITY_OF_OP: Readonly<Record<string, CardEntity>> = {
   league_create: 'league',
   roster_add: 'roster',

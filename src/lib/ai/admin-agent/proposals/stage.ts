@@ -29,20 +29,20 @@ import type { JsonValue } from '@/lib/studio-core/json';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
 import { toolErrorFromThrown } from '../registry/errors';
 import type { AdminId } from '../store/ids';
-import type { ProposalStatus } from '../store/types';
+import type { ProposalRecord, ProposalStatus } from '../store/types';
 import { prepareBuild } from './build';
 import { proposalCardSchema, type ProposalCard } from './card';
 import { escalateClass } from './class';
 import { buildPreconditions, preconditionsHash, ReadUnavailable } from './fingerprints';
 import { isStageableGoLive, prepareGoLive } from './golive';
-import { prepareUndo, UNDO_TOOL } from './undo';
+import { hasUndoableRows, prepareUndo, UNDO_TOOL } from './undo';
 import { StageRefusal, type PrepareContext } from './prepare';
 import { collectUuids, unknownReferences } from './provenance';
 import { sealStep, storedStepSchema, type StoredStep } from './steps';
 import { scanStagedText } from './text';
 import { approvalTokenHash, deriveApprovalToken } from './token';
 import { checkTurnStaging, recordTurnStaging } from './turn';
-import { STAGED_NOTE, type StageInput, type StageRefused, type StageResult, type StagerDeps } from './types';
+import { RESUME_WINDOW_MS, STAGED_NOTE, type StageInput, type StageRefused, type StageResult, type StagerDeps } from './types';
 
 /**
  * The ledger tools whose entity the conversation CREATED. "Created in this chat" (plan 3.5 rule 4) counts only these: a row that
@@ -61,6 +61,11 @@ export interface StepStatusView {
   errorCode: string | null;
   httpStatus: number | null;
   actionId: string | null;
+  /** The ledger's `entity_type` and entity id (ids only, never `args`, results or documents): what the step made or acted on. */
+  entityType: string | null;
+  entityId: string | null;
+  /** A partly done roster add: how many of the players are on the roster (`{present, expected}` of the read-back). */
+  verify: { present: number; expected: number } | null;
 }
 
 export interface StepDetail {
@@ -99,6 +104,22 @@ export interface CardView {
   steps: StepStatusView[];
   /** The collapsible "technical details": exactly what would be sent. */
   details: StepDetail[];
+  /**
+   * A Build left `executing` by this admin: whether Resume is offered NOW (the server's clock, within the window of its claim)
+   * and when the window ends. `null` for everything else; a Go-live or undo proposal never resumes.
+   */
+  resume: { eligible: boolean; deadline: string } | null;
+  /** The ledger holds finished rows the 4.7 table can reverse: the card offers Undo (a click only asks the assistant to stage it). */
+  undoable: boolean;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** The read-back counts of a ledger row's `verify`: two non-negative integers or nothing. */
+function verifyCounts(verify: unknown): StepStatusView['verify'] {
+  if (!isRecord(verify)) return null;
+  const { present, expected } = verify;
+  return Number.isInteger(present) && Number.isInteger(expected) && (present as number) >= 0 && (expected as number) >= 0 ? { present: present as number, expected: expected as number } : null;
 }
 
 /** `path: message` for each issue, at most 300 characters: paths and our own messages, never values. */
@@ -292,6 +313,15 @@ export function createProposalStager(deps: StagerDeps) {
     }
   }
 
+  /** Resume is a Build's, by the admin who approved it, within `RESUME_WINDOW_MS` of the claim; the server's clock decides. */
+  function resumeOf(proposal: ProposalRecord, adminId: AdminId, now: number): CardView['resume'] {
+    if (proposal.kind !== 'build' || proposal.class !== 'B' || proposal.status !== 'executing') return null;
+    if (proposal.approved_by === null || proposal.approved_by.toLowerCase() !== adminId) return null;
+    const started = proposal.executing_started_at === null ? Number.NaN : Date.parse(proposal.executing_started_at);
+    if (!Number.isFinite(started)) return { eligible: false, deadline: new Date(now).toISOString() };
+    return { eligible: now - started <= RESUME_WINDOW_MS, deadline: new Date(started + RESUME_WINDOW_MS).toISOString() };
+  }
+
   /** The card of one of the admin's own proposals: the frozen preview plus the live status. Another admin's is `proposal_not_found`. */
   async function getCard(proposalId: string, adminId: AdminId): Promise<CardView> {
     const proposal = await deps.store.proposals.getProposalOrThrow(adminId, proposalId);
@@ -337,8 +367,13 @@ export function createProposalStager(deps: StagerDeps) {
           errorCode: action?.error_code ?? null,
           httpStatus: action?.http_status ?? null,
           actionId: action?.id ?? null,
+          entityType: action?.entity_type ?? null,
+          entityId: action?.entity_id ?? null,
+          verify: verifyCounts(action?.verify),
         };
       }),
+      resume: resumeOf(proposal, adminId, now),
+      undoable: proposal.kind !== 'undo' && (status === 'completed' || status === 'partial') && hasUndoableRows(actions),
       details: steps.data.map((step) => ({
         key: step.key,
         method: step.method,

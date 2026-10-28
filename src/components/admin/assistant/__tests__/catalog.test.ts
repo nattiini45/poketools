@@ -103,6 +103,18 @@ describe.each(LOCALES)('the assistant catalogs (%s)', (locale) => {
     for (const action of CARD_ACTIONS) expect(Object.keys(cardsTree(cards, action)).length, action).toBeGreaterThan(0);
   });
 
+  it('words the result of every final status, the unclear steps, Resume and the links (slice 6)', () => {
+    for (const status of ['completed', 'partial', 'failed', 'stale', 'unknown', 'executing']) {
+      expect(cards.has(`result.headline.${status}`), `headline ${status}`).toBe(true);
+      expect(cards.has(`result.explain.${status}`), `explain ${status}`).toBe(true);
+    }
+    for (const key of ['result.step.unknown', 'result.step.ambiguous', 'result.step.rosterPartial', 'result.resume.explain', 'result.resume.over', 'result.undoHint', 'result.links.league', 'result.links.tournament', 'result.links.ruleset', 'actions.resume', 'actions.undo']) {
+      expect(cards.has(key), key).toBe(true);
+    }
+    expect(cards('result.step.rosterPartial', { present: 5, count: 12 })).toMatch(/5/);
+    expect(cards('result.step.rosterPartial', { present: 5, count: 12 })).toMatch(/12/);
+  });
+
   it('has a status line noun for every group a tool can belong to, and every tool has a group', () => {
     for (const tool of ALL_TOOLS) {
       const group = toolGroup(tool.name);
@@ -114,6 +126,6 @@ describe.each(LOCALES)('the assistant catalogs (%s)', (locale) => {
 
   it('words the harness events an admin sees', () => {
     for (const event of Object.values(LOOP_EVENTS).filter((name) => name !== LOOP_EVENTS.stateRefresh)) expect(chrome.has(`events.${event}`), event).toBe(true);
-    for (const event of ['proposal_declined', 'proposal_approved', 'proposal_executed']) expect(chrome.has(`events.${event}`), event).toBe(true);
+    for (const event of ['proposal_declined', 'proposal_approved', 'proposal_executed', 'undo_requested']) expect(chrome.has(`events.${event}`), event).toBe(true);
   });
 });

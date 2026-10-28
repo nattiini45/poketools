@@ -53,13 +53,14 @@ import { REAPER_AGE_MS, RESULT_EVENT, ROUTE_MAX_DURATION_SECONDS, reapOverduePro
 import { storedStepSchema, stepHashMatches } from './steps';
 import type { StoredStep } from './steps';
 import { approvalTokenHash } from './token';
+import { RESUME_WINDOW_MS } from './types';
 
 // ─── Timing (spec §18.6, §18.7) ──────────────────────────────────────────────
 
 // The reaper's constants live with the reaper: the chat turn reaps too and must not import this file.
 export { REAPER_AGE_MS, RESULT_EVENT, ROUTE_MAX_DURATION_SECONDS };
-/** A Build left `executing` can be resumed this long after its claim, under the same approval. */
-export const RESUME_WINDOW_MS = 10 * 60 * 1000;
+// The resume window lives in `types.ts`: the card the chat side serves needs it to say whether a Resume is offered.
+export { RESUME_WINDOW_MS };
 /** No new step starts after this much wall clock of one request; the proposal stays `executing` for a resume. */
 export const STEP_DEADLINE_MS = 240_000;
 /** Reconcile waits this long and reads again before it says a write that may still be running is absent. */

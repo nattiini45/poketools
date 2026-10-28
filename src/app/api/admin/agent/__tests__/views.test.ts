@@ -5,7 +5,8 @@ vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 import { PLAN_BLOCKER_CODES } from '@/lib/ai/admin-agent/plans/readiness';
 import { workedExample, workedExampleUnpublished } from '@/lib/ai/admin-agent/plans/__tests__/fixtures';
 import { toPlanView } from '../_lib/plan-view';
-import { awaitsContinue, projectTranscript, readSeed, toConversationSummary, toProposalSummaryView } from '../_lib/views';
+import { parseAdminAgentEnv } from '@/lib/ai/admin-agent/env';
+import { awaitsContinue, projectTranscript, readSeed, toCapabilities, toConversationSummary, toProposalSummaryView } from '../_lib/views';
 import { CONVERSATION, conversation, message, plan, proposal } from './support';
 
 const msg = (seq: number, role: 'user' | 'assistant' | 'system', kind: 'chat' | 'tool_results' | 'harness_event', rest: Record<string, unknown> = {}) =>
@@ -218,5 +219,14 @@ describe('toPlanView', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(toPlanView(plan({ doc: { v: 9 } as never }))).toBeNull();
     log.mockRestore();
+  });
+});
+
+describe('toCapabilities', () => {
+  it('offers Confirm from phase 1 on, because the approve and resume routes execute then', () => {
+    const config = (phase: string) => parseAdminAgentEnv({ ADMIN_AGENT_ENABLED: 'true', ADMIN_AGENT_MAX_PHASE: phase });
+    expect(toCapabilities(config('0'))).toEqual({ approve: false, maxPhase: 0 });
+    expect(toCapabilities(config('1'))).toEqual({ approve: true, maxPhase: 1 });
+    expect(toCapabilities(config('2'))).toEqual({ approve: true, maxPhase: 2 });
   });
 });

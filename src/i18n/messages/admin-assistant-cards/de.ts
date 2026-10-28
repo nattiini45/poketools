@@ -167,6 +167,41 @@ export default defineDe<typeof en>()({
     },
   },
 
+  result: {
+    heading: 'Ergebnis',
+    headline: {
+      completed: 'Erledigt',
+      partial: 'Teilweise erledigt',
+      failed: 'Fehlgeschlagen',
+      stale: 'Gestoppt: veraltet',
+      unknown: 'Ausgang unbekannt',
+      executing: 'Läuft',
+    },
+    explain: {
+      completed: 'Jeder Schritt wurde ausgeführt und bestätigt.',
+      partial: 'Einige Schritte wurden ausgeführt, die übrigen nicht. Was lief, bleibt bestehen; nichts wurde zurückgerollt.',
+      failed: 'Kein Schritt wurde abgeschlossen. Diese Karte hat nichts geändert.',
+      stale: 'Seit die Karte angezeigt wurde, hat sich etwas geändert, deshalb wurde vor dem nächsten Schritt gestoppt. Bereits ausgeführte Schritte bleiben erledigt.',
+      unknown: 'Der Ausgang konnte nicht bestätigt werden. Es wurde nichts erneut versucht. Prüfe die Schritte unten, bevor du etwas erneut verlangst.',
+      executing: 'Die Schritte laufen oder wurden vor dem Ende angehalten. Diese Karte zeigt, wo sie stehen.',
+    },
+    step: {
+      unknown: 'Der Ausgang konnte nicht bestätigt werden. Es wurde nichts erneut versucht.',
+      ambiguous: 'Es wurden mehrere passende Einträge gefunden und keiner wurde übernommen. Es wurde nichts erneut versucht.',
+      rosterPartial: { one: '{present} von {count} Spieler hinzugefügt', other: '{present} von {count} Spielern hinzugefügt' },
+    },
+    resume: {
+      explain: 'Dieser Build wurde vor dem Ende angehalten. Beim Fortsetzen wird zuerst der unklare Schritt geprüft, dann geht es nach dem letzten erledigten weiter. Möglich bis {time}.',
+      over: 'Dieser Build kann nicht mehr fortgesetzt werden. Bitte den Assistenten um einen neuen Build für den Rest.',
+    },
+    undoHint: 'Bittet den Assistenten, eine Karte vorzubereiten, die das rückgängig macht. Erst wenn du diese Karte bestätigst, wird etwas rückgängig gemacht.',
+    links: {
+      league: 'Liga öffnen',
+      tournament: 'Turnier öffnen',
+      ruleset: 'Regelwerk öffnen',
+    },
+  },
+
   expiry: {
     expiresIn: 'Läuft ab in {time}',
     expired: 'Abgelaufen',

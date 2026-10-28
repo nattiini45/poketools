@@ -51,6 +51,65 @@ export const draftDocState = (draftRev: number, docHash: string): JsonValue => (
 /** `ruleset_draft_state`: the revision and whether any version exists. The state a freshly created draft is in. */
 export const draftLifeState = (draftRev: number, published: boolean): JsonValue => ({ draft_rev: draftRev, published });
 
+/**
+ * `league_after`: what an admin EDITS about a league, and nothing the league does by itself.
+ *
+ * The undo compares this state with the one right after the chat's write, so a field in it is a field whose change reads
+ * "edited outside the chat" and leaves the league alone. A field that the assistant's own later steps or normal play change
+ * would make the chat's own work look like somebody else's edit; that is why `status` is NOT here: the league goes
+ * `upcoming` -> `active` when its first round is generated (a Go-live card of this very chat), and an undo of the Build must
+ * still be able to archive it afterwards. The same goes for counters and timestamps (`updated_at`), which are not listed.
+ *
+ * Listed: the name, the description, the format, `archived`, the dates and the language. The ruleset pin is NOT listed: the
+ * chat's own `move_pin` card changes it, and a pin move is undone by its own card, which compares the pins themselves
+ * (`pin_targets`); archiving the league does not depend on which version it pins.
+ */
+export function leagueAfterState(season: {
+  name: string;
+  description: string | null;
+  format_type: string;
+  archived: boolean;
+  start_date: string | null;
+  end_date: string | null;
+  language?: string | null;
+}): JsonValue {
+  return {
+    name: season.name,
+    description: season.description,
+    format_type: season.format_type,
+    archived: season.archived,
+    start_date: season.start_date,
+    end_date: season.end_date,
+    language: season.language ?? null,
+  };
+}
+
+/**
+ * `tournament_after`: what an admin edits about a standalone tournament or a phase, without its lifecycle. `status` is not
+ * listed (starting it is a Go-live card of the chat or the site's normal play), nor are rounds, participants or timestamps,
+ * nor the ruleset pin (as for a league: a pin move has its own undo). Listed: the name, the description, the league it
+ * belongs to, the bracket type, the default best-of, `archived` and the phase order.
+ */
+export function tournamentAfterState(tournament: {
+  name: string;
+  description: string | null;
+  season_id: string | null;
+  bracket_type: string;
+  best_of_default: number;
+  archived: boolean;
+  stage_order: number | null;
+}): JsonValue {
+  return {
+    name: tournament.name,
+    description: tournament.description,
+    season_id: tournament.season_id,
+    bracket_type: tournament.bracket_type,
+    best_of_default: tournament.best_of_default,
+    archived: tournament.archived,
+    stage_order: tournament.stage_order,
+  };
+}
+
 /** The hash a state stores as, the same one `fingerprintOf` gives a read that returns it. */
 export const stateHash = (state: JsonValue): string => hashJson(state);
 

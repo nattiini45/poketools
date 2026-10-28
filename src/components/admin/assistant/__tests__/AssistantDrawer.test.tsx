@@ -475,6 +475,30 @@ describe('the conversation: sending and following a turn', () => {
     expect(log.innerHTML).not.toContain('evil.example');
   });
 
+  it('asks for an undo from an executed card with a structured request: the proposal id, no text', async () => {
+    const executed = { ...cardView(), status: 'completed' as const, effectiveStatus: 'completed' as const, actionable: false, undoable: true };
+    server.proposals.set(P1, { token: null, card: executed });
+    const { user } = await open(summary(C1), {
+      items: [{ type: 'tool', seq: 2, id: 't', name: 'propose_build', status: 'ok', code: null, proposalId: P1 }],
+      proposals: [{ id: P1, kind: 'build', class: 'B', status: 'completed', effectiveStatus: 'completed', planCode: 'abcdef12', createdAt: '2026-10-27T10:00:00.000Z', expiresAt: '2099-01-01T00:00:00.000Z' }],
+    });
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(server.sent).toHaveLength(1));
+    expect(server.sent[0].conversation).toBe(C1);
+    expect(server.sent[0].body).toEqual({ undo: { proposal_id: P1 } });
+  });
+
+  it('offers no Undo while the conversation is read-only', async () => {
+    const executed = { ...cardView(), status: 'completed' as const, effectiveStatus: 'completed' as const, actionable: false, undoable: true };
+    server.proposals.set(P1, { token: null, card: executed });
+    await open(summary(C1, { readOnly: true }), {
+      items: [{ type: 'tool', seq: 2, id: 't', name: 'propose_build', status: 'ok', code: null, proposalId: P1 }],
+      proposals: [{ id: P1, kind: 'build', class: 'B', status: 'completed', effectiveStatus: 'completed', planCode: 'abcdef12', createdAt: '2026-10-27T10:00:00.000Z', expiresAt: '2099-01-01T00:00:00.000Z' }],
+    });
+    await screen.findByRole('region', { name: 'Build' });
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
   it('shows a removed message as removed, and says older messages are not shown', async () => {
     await open(summary(C1), {
       truncated: true,
@@ -577,7 +601,9 @@ function cardView(): ProposalDetail['card'] {
       reversibility: { kind: 'undoable' },
       existingEntity: false,
     },
-    steps: [{ key: 'league', status: 'pending', errorCode: null, httpStatus: null, actionId: null }],
+    steps: [{ key: 'league', status: 'pending', errorCode: null, httpStatus: null, actionId: null, entityType: null, entityId: null, verify: null }],
     details: [],
+    resume: null,
+    undoable: false,
   };
 }

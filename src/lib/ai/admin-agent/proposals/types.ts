@@ -18,6 +18,9 @@ import type { ConversationRecord } from '../store/types';
 import type { UndoLockFacts } from '../plans/undo';
 import type { FingerprintSource } from './fingerprints';
 
+/** A Build left `executing` can be resumed this long after its claim, under the same approval (spec §18.6). */
+export const RESUME_WINDOW_MS = 10 * 60 * 1000;
+
 /** The live admin who staged the call (from `requireAnyAdmin()` at the chat request, never the model or the client). */
 export interface StagingAdmin {
   readonly id: AdminId;

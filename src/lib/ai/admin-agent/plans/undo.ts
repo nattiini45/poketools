@@ -169,6 +169,11 @@ const RULES: Readonly<Record<string, Rule>> = Object.freeze({
 /** The ops this module knows a rule for (a test pins this list against the registry's ledger ops). */
 export const UNDO_OPS: readonly string[] = Object.freeze(Object.keys(RULES));
 
+/** Whether the 4.7 table has a reversal for this op (before any live check: a lock or an outside edit can still say no later). */
+export function hasReversal(op: string): boolean {
+  return RULES[op]?.kind === 'reversal';
+}
+
 /** At most this many steps in one undo proposal. */
 export const UNDO_MAX_STEPS = 20;
 

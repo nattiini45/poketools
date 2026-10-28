@@ -175,6 +175,41 @@ export default {
     },
   },
 
+  result: {
+    heading: 'Result',
+    headline: {
+      completed: 'Done',
+      partial: 'Partly done',
+      failed: 'Failed',
+      stale: 'Stopped: out of date',
+      unknown: 'Outcome unknown',
+      executing: 'Running',
+    },
+    explain: {
+      completed: 'Every step ran and was confirmed.',
+      partial: 'Some steps ran and the rest did not. What ran stays as it is; nothing was rolled back.',
+      failed: 'No step was completed. Nothing was changed by this card.',
+      stale: 'Things changed since this card was shown, so it stopped before the next step. Steps that already ran stay done.',
+      unknown: 'The outcome could not be confirmed. Nothing was retried. Check the steps below before you ask for anything again.',
+      executing: 'The steps are running, or stopped before the end. This card shows where they stand.',
+    },
+    step: {
+      unknown: 'The outcome could not be confirmed. Nothing was retried.',
+      ambiguous: 'Several matching items were found and none was adopted. Nothing was retried.',
+      rosterPartial: { one: '{present} of {count} player added', other: '{present} of {count} players added' },
+    },
+    resume: {
+      explain: 'This Build stopped before the end. Resuming checks the unclear step first and then continues after the last finished one. Available until {time}.',
+      over: 'This Build can no longer be resumed. Ask the assistant for a fresh Build for the rest.',
+    },
+    undoHint: 'Asks the assistant to prepare a card that undoes this. Nothing is undone until you confirm that card.',
+    links: {
+      league: 'Open the league',
+      tournament: 'Open the tournament',
+      ruleset: 'Open the ruleset',
+    },
+  },
+
   expiry: {
     expiresIn: 'Expires in {time}',
     expired: 'Expired',

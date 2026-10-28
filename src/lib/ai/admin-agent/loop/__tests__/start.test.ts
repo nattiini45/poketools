@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AdminAgentStoreError } from '../../store/errors';
 import { AdminAgentLoopError, loopCode } from '../codes';
+import { harnessEventMessage } from '../harness';
 import { startTurn } from '../start';
 import type { TurnInput, TurnRequest } from '../types';
 import { ADMIN, CONVERSATION_ID, OTHER_ADMIN, harness, readEvents, textStep, toolStep, type Harness } from './fakes';
@@ -208,6 +209,21 @@ describe('harness events and continue', () => {
     expect(outcome.reason).toBe('completed');
     const seen = h.port.inputs[0].transcript.map((e) => `${e.role}:${e.kind}`);
     expect(seen).toEqual(['user:chat', 'assistant:chat', 'event:harness_event', 'event:harness_event']);
+  });
+
+  it('a continue after the undo request shows the model the server message, with the proposal and its plan code', async () => {
+    const h = harness();
+    const proposalId = '44444444-4444-4444-8444-444444444444';
+    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'build it' }] });
+    h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'Built.' }] });
+    const message = harnessEventMessage('undo_requested', { proposal_id: proposalId, plan_code: '01234567' });
+    h.fake.seed(message);
+    h.port.script(textStep('Staged the undo.'));
+    const { outcome } = await turn(h, { kind: 'continue' });
+    expect(outcome.reason).toBe('completed');
+    const event = h.port.inputs[0].transcript.find((entry) => entry.role === 'event' && entry.event === 'undo_requested');
+    expect(event).toMatchObject({ role: 'event', kind: 'harness_event', data: { proposal_id: proposalId, plan_code: '01234567' } });
+    expect((event as { text: string }).text).toBe(`[harness_event] undo_requested\n{"plan_code":"01234567","proposal_id":"${proposalId}"}`);
   });
 
   it('defuses the harness marker in admin text', async () => {

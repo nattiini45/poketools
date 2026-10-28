@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     conversations: { getConversation: vi.fn(), withTurnLease: vi.fn() },
     messages: { loadTail: vi.fn(), appendMessage: vi.fn() },
     proposals: { reapExecutingProposals: vi.fn(), getProposal: vi.fn() },
+    actions: { listProposalActions: vi.fn() },
   },
 }));
 
@@ -292,5 +293,123 @@ describe('POST /api/admin/agent/conversations/[id]/messages', () => {
     expect(res.status).toBe(500);
     const text = JSON.stringify(await res.json());
     expect(text).not.toMatch(/ECONNREFUSED|10\.0\.0\.5|secret/);
+  });
+});
+
+describe('POST /api/admin/agent/conversations/[id]/messages: { undo: { proposal_id } }', () => {
+  const executed = (overrides: Parameters<typeof proposal>[0] = {}) => proposal({ status: 'completed', kind: 'build', ...overrides });
+  const LEAGUE_ROW = { tool_name: 'league_create', status: 'ok' };
+  const body = (id: string = proposal().id) => ({ undo: { proposal_id: id } });
+
+  beforeEach(() => {
+    mocks.store.proposals.getProposal.mockResolvedValue(executed());
+    mocks.store.actions.listProposalActions.mockResolvedValue([LEAGUE_ROW]);
+    mocks.store.messages.loadTail.mockResolvedValue([]);
+  });
+
+  it('appends the harness event undo_requested and runs a continue turn, charging the limiter first', async () => {
+    const res = await call(body());
+    expect(res.status).toBe(200);
+    expect(mocks.store.proposals.getProposal).toHaveBeenCalledWith(ME, proposal().id);
+    expect(mocks.store.conversations.withTurnLease).toHaveBeenCalledWith(ME, CONVERSATION, expect.any(Function), 30);
+    expect(mocks.store.messages.appendMessage).toHaveBeenCalledWith(
+      ME,
+      CONVERSATION,
+      expect.objectContaining({
+        role: 'system',
+        kind: 'harness_event',
+        ui: { event: 'undo_requested', data: { proposal_id: proposal().id, plan_code: '01234567' } },
+        content: [{ type: 'text', text: expect.stringMatching(/^\[harness_event\] undo_requested\n/) }],
+      }),
+    );
+    // No text is synthesized for the model: the turn is a plain continue.
+    expect(mocks.startTurn.mock.calls[0][0].input).toEqual({ kind: 'continue' });
+    const order = (mock: { mock: { invocationCallOrder: number[] } }) => mock.mock.invocationCallOrder[0];
+    expect(order(mocks.checkRateLimit)).toBeLessThan(order(mocks.store.conversations.withTurnLease));
+    expect(order(mocks.store.conversations.withTurnLease)).toBeLessThan(order(mocks.startTurn));
+    expect(mocks.checkRateLimit).toHaveBeenCalledWith('admin-agent-turn', ME, expect.objectContaining({ failMode: 'closed' }));
+  });
+
+  it('takes a partly executed proposal and an upper-case id', async () => {
+    mocks.store.proposals.getProposal.mockResolvedValue(executed({ status: 'partial' }));
+    expect((await call(body(proposal().id.toUpperCase()))).status).toBe(200);
+    expect(mocks.store.proposals.getProposal).toHaveBeenCalledWith(ME, proposal().id);
+  });
+
+  it('reads another admin\'s, an unknown and another conversation\'s proposal the same: 404, before the limiter and without an event', async () => {
+    mocks.store.proposals.getProposal.mockResolvedValue(null);
+    const unknown = await call(body());
+    expect(unknown.status).toBe(404);
+    expect((await unknown.json()).code).toBe('proposal_not_found');
+
+    mocks.store.proposals.getProposal.mockResolvedValue(executed({ conversation_id: '99999999-9999-4999-8999-999999999999' }));
+    const other = await call(body());
+    expect(other.status).toBe(404);
+    expect((await other.json()).code).toBe('proposal_not_found');
+
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+    expect(mocks.store.messages.appendMessage).not.toHaveBeenCalled();
+    expect(mocks.startTurn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['one that was not executed', { status: 'proposed' }],
+    ['one that was declined', { status: 'declined' }],
+    ['one that is still running', { status: 'executing' }],
+    ['an undo itself', { kind: 'undo' }],
+  ] as const)('refuses %s with undo_unavailable', async (_name, overrides) => {
+    mocks.store.proposals.getProposal.mockResolvedValue(executed(overrides));
+    const res = await call(body());
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('undo_unavailable');
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+    expect(mocks.startTurn).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the ledger holds nothing a reversal exists for (already undone, or only posts)', async () => {
+    mocks.store.actions.listProposalActions.mockResolvedValue([
+      { tool_name: 'league_create', status: 'undone' },
+      { tool_name: 'start_phase', status: 'ok' },
+      { tool_name: 'phase_create', status: 'ok' },
+    ]);
+    const res = await call(body());
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('nothing_to_undo');
+    expect(mocks.store.messages.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it('answers 429 and appends nothing when the limit is spent', async () => {
+    mocks.checkRateLimit.mockResolvedValue({ allowed: false, remaining: 0, retryAfterSeconds: 30 });
+    const res = await call(body());
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('30');
+    expect(mocks.store.messages.appendMessage).not.toHaveBeenCalled();
+    expect(mocks.startTurn).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 when the conversation is busy: the event is not appended and no turn starts', async () => {
+    mocks.store.conversations.withTurnLease.mockRejectedValue(new AdminAgentStoreError('agent_conversation_busy'));
+    const res = await call(body());
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('agent_conversation_busy');
+    expect(mocks.startTurn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an id that is not a uuid', { undo: { proposal_id: 'not-a-uuid' } }],
+    ['no id', { undo: {} }],
+    ['an extra key inside', { undo: { proposal_id: proposal().id, text: 'please' } }],
+    ['text next to it', { undo: { proposal_id: proposal().id }, text: 'x', client_msg_id: 'msg-12345678' }],
+    ['an array', { undo: [proposal().id] }],
+    ['a string', { undo: proposal().id }],
+  ])('rejects %s with a 400 before any work', async (_name, bad) => {
+    expect((await call(bad)).status).toBe(400);
+    expect(mocks.store.conversations.getConversation).not.toHaveBeenCalled();
+    expect(mocks.store.proposals.getProposal).not.toHaveBeenCalled();
+  });
+
+  it('refuses a cross-site request like every other body', async () => {
+    expect((await call(body(), { ...SAME_SITE, origin: 'https://evil.example' })).status).toBe(403);
+    expect(mocks.store.proposals.getProposal).not.toHaveBeenCalled();
   });
 });

@@ -181,6 +181,19 @@ export interface ProposalDetail {
   token: string | null;
 }
 
+/**
+ * What the approve and resume routes answer (the executor's `ProposalResult`): structured, server-built, never free text. The
+ * card renders it at once and then re-reads the stored proposal, which holds the same ledger state.
+ */
+export interface ProposalResultView {
+  kind: 'proposal_result';
+  proposal_id: string;
+  plan_code: string;
+  /** `executing`: not finished; a Build can be resumed within ten minutes. */
+  status: 'completed' | 'partial' | 'failed' | 'stale' | 'unknown' | 'executing';
+  steps: Array<{ key: string; status: 'ok' | 'failed' | 'unknown' | 'skipped' | 'pending'; code?: string; entity_id?: string }>;
+}
+
 /** The stream events of the chat route, as the client reads them (mirrors `AgentStreamEvent` of the loop). */
 export type AgentEvent =
   | { type: 'text.delta'; step: number; delta: string }

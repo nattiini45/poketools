@@ -105,6 +105,105 @@ describe('getCard: the frozen preview plus live status', () => {
   });
 });
 
+describe('getCard: the progress card additions', () => {
+  const LEAGUE = '55555555-5555-4555-8555-555555555555';
+
+  it('serves the ledger entity (ids only) and the roster read-back counts, never args or results', async () => {
+    const { h, id } = await stagedBuild();
+    h.store.actions.push(
+      ledgerAction({ id: 'a1', proposal_id: id, step_key: 'league', status: 'ok', entity_type: 'season', entity_id: LEAGUE, args: { body_template: { name: 'SECRET' } } as never, result: { id: LEAGUE } as never }),
+      ledgerAction({ id: 'a2', proposal_id: id, step_key: 'roster.1', status: 'unknown', error_code: 'unknown_outcome', verify: { status: 'unknown', present: 5, expected: 12, junk: 'x' } as never }),
+      ledgerAction({ id: 'a3', proposal_id: id, step_key: 'phase.playoffs', status: 'ok', verify: { status: 'confirmed', present: -1, expected: 'many' } as never }),
+    );
+    const view = await h.stager.getCard(id, ADMIN);
+    expect(view.steps[0]).toEqual({ key: 'league', status: 'ok', errorCode: null, httpStatus: null, actionId: 'a1', entityType: 'season', entityId: LEAGUE, verify: null });
+    expect(view.steps[1]).toMatchObject({ key: 'roster.1', status: 'unknown', errorCode: 'unknown_outcome', verify: { present: 5, expected: 12 } });
+    expect(Object.keys(view.steps[1].verify ?? {}).sort()).toEqual(['expected', 'present']);
+    expect(view.steps[3].verify).toBeNull();
+    expect(JSON.stringify(view)).not.toContain('SECRET');
+  });
+
+  describe('resume: the server decides, from its own clock', () => {
+    const WINDOW = 10 * 60_000;
+    async function executing(startedAgoMs: number, overrides: Record<string, unknown> = {}) {
+      const { h, id } = await stagedBuild();
+      Object.assign(h.store.proposals[0], { status: 'executing', approved_by: ADMIN, executing_started_at: new Date(h.deps.now().getTime() - startedAgoMs).toISOString(), ...overrides });
+      return { h, id };
+    }
+
+    it('is null for everything that is not an executing Build', async () => {
+      const { h, id } = await stagedBuild();
+      expect((await h.stager.getCard(id, ADMIN)).resume).toBeNull();
+      h.store.proposals[0].status = 'completed';
+      expect((await h.stager.getCard(id, ADMIN)).resume).toBeNull();
+    });
+
+    it('is eligible inside the window with its deadline, and not one millisecond after', async () => {
+      const { h, id } = await executing(2 * 60_000);
+      const inside = (await h.stager.getCard(id, ADMIN)).resume;
+      expect(inside?.eligible).toBe(true);
+      expect(Date.parse(inside?.deadline ?? '') - h.deps.now().getTime()).toBe(WINDOW - 2 * 60_000);
+      h.advance(WINDOW - 2 * 60_000);
+      expect((await h.stager.getCard(id, ADMIN)).resume?.eligible).toBe(true);
+      h.advance(1);
+      expect((await h.stager.getCard(id, ADMIN)).resume).toMatchObject({ eligible: false });
+    });
+
+    it('is not eligible after the window, but is still reported so the card can say so', async () => {
+      const { h, id } = await executing(WINDOW + 1);
+      expect((await h.stager.getCard(id, ADMIN)).resume).toMatchObject({ eligible: false });
+    });
+
+    it('is null when somebody else approved it, and never offered for a Go-live proposal', async () => {
+      const { h, id } = await executing(1000, { approved_by: OTHER_ADMIN });
+      expect((await h.stager.getCard(id, ADMIN)).resume).toBeNull();
+      Object.assign(h.store.proposals[0], { approved_by: ADMIN, class: 'G', kind: 'action' });
+      expect((await h.stager.getCard(id, ADMIN)).resume).toBeNull();
+    });
+  });
+
+  describe('undoable: the ledger holds something the table can reverse', () => {
+    it('is true for a completed or partial proposal with a finished league row', async () => {
+      const { h, id } = await stagedBuild();
+      h.store.proposals[0].status = 'completed';
+      h.store.actions.push(ledgerAction({ id: 'a1', proposal_id: id, step_key: 'league', tool_name: 'league_create', status: 'ok' } as never));
+      expect((await h.stager.getCard(id, ADMIN)).undoable).toBe(true);
+      h.store.proposals[0].status = 'partial';
+      expect((await h.stager.getCard(id, ADMIN)).undoable).toBe(true);
+    });
+
+    it('is false before it ran, after it was undone, for failed ones, and when only posts or residue ran', async () => {
+      const { h, id } = await stagedBuild();
+      h.store.actions.push(ledgerAction({ id: 'a1', proposal_id: id, step_key: 'league', tool_name: 'league_create', status: 'ok' } as never));
+      expect((await h.stager.getCard(id, ADMIN)).undoable).toBe(false);
+      h.store.proposals[0].status = 'failed';
+      expect((await h.stager.getCard(id, ADMIN)).undoable).toBe(false);
+      h.store.proposals[0].status = 'completed';
+      h.store.actions[0].status = 'undone';
+      expect((await h.stager.getCard(id, ADMIN)).undoable).toBe(false);
+      h.store.actions.push(
+        ledgerAction({ id: 'a2', proposal_id: id, step_key: 'start', tool_name: 'start_phase', status: 'ok' } as never),
+        ledgerAction({ id: 'a3', proposal_id: id, step_key: 'phase.playoffs', tool_name: 'phase_create', status: 'ok' } as never),
+      );
+      expect((await h.stager.getCard(id, ADMIN)).undoable).toBe(false);
+    });
+
+    it('counts the two Go-live ops filed under their step name (a pin move)', async () => {
+      const { h, id } = await stagedBuild();
+      h.store.proposals[0].status = 'completed';
+      h.store.actions.push(ledgerAction({ id: 'a1', proposal_id: id, step_key: 'move', tool_name: 'move_pin', status: 'ok' } as never));
+      expect((await h.stager.getCard(id, ADMIN)).undoable).toBe(true);
+    });
+
+    it('is never true for an undo proposal', async () => {
+      const { h, id } = await stagedBuild();
+      Object.assign(h.store.proposals[0], { kind: 'undo', status: 'completed' });
+      h.store.actions.push(ledgerAction({ id: 'a1', proposal_id: id, step_key: 'u', tool_name: 'league_archive', status: 'ok' } as never));
+      expect((await h.stager.getCard(id, ADMIN)).undoable).toBe(false);
+    });
+  });
+});
+
 function uid2(): string {
   return 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 }

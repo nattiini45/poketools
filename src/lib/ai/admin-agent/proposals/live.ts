@@ -48,7 +48,7 @@ import { guardFor } from '../registry/guard';
 import { toolErrorFromThrown } from '../registry/errors';
 import { STAGED_TOOLS } from '../registry/staged';
 import { adminAgentStore } from '../store';
-import { draftDocState, draftLifeState, pinTargetsState, rosterMembersState, type StepFacts } from './after-state';
+import { draftDocState, draftLifeState, leagueAfterState, pinTargetsState, rosterMembersState, tournamentAfterState, type StepFacts } from './after-state';
 import { ReadUnavailable, type FingerprintSource, type ReadName, type ReadTarget } from './fingerprints';
 import { createProposalStager } from './stage';
 import type { EpbBattleRulesetHead, StagerDeps, StagingSource } from './types';
@@ -286,33 +286,12 @@ export const liveFingerprints: FingerprintSource = {
       // The state a chat write left an entity in (slice 5): what an undo compares against. A missing entity reads `null`.
       case 'league_after': {
         const [season] = await listSeasonsByIds([idOf(target)]);
-        if (season === undefined) return null;
-        return {
-          name: season.name,
-          description: season.description,
-          format_type: season.format_type,
-          status: season.status,
-          archived: season.archived,
-          start_date: season.start_date,
-          end_date: season.end_date,
-          ruleset_id: season.ruleset_id,
-          language: season.language ?? null,
-        };
+        // Only what an admin edits (`leagueAfterState`): a start by the chat or the site's normal play must not look like an edit.
+        return season === undefined ? null : leagueAfterState(season);
       }
       case 'tournament_after': {
         const tournament = await getTournamentById(idOf(target));
-        if (tournament === null) return null;
-        return {
-          name: tournament.name,
-          description: tournament.description,
-          season_id: tournament.season_id,
-          bracket_type: tournament.bracket_type,
-          ruleset_id: tournament.ruleset_id,
-          best_of_default: tournament.best_of_default,
-          status: tournament.status,
-          archived: tournament.archived,
-          stage_order: tournament.stage_order,
-        };
+        return tournament === null ? null : tournamentAfterState(tournament);
       }
       case 'roster_members': {
         const params = paramsOf(target);

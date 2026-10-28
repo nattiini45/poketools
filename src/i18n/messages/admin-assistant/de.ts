@@ -189,6 +189,7 @@ export default defineDe<typeof en>()({
     proposal_declined: 'Du hast eine Karte abgelehnt.',
     proposal_approved: 'Du hast eine Karte bestätigt.',
     proposal_executed: 'Eine bestätigte Karte wurde ausgeführt.',
+    undo_requested: 'Du hast darum gebeten, eine Karte rückgängig zu machen.',
     turn_deadline: 'Der Assistent hat pausiert, weil die Nachricht zu lange gedauert hat.',
     turn_limit: 'Der Assistent hat pausiert, weil die Nachricht ihr Limit an Schritten erreicht hat.',
     turn_interrupted: 'Die Nachricht wurde unterbrochen.',

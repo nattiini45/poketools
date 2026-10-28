@@ -162,6 +162,7 @@ import { deriveApprovalToken } from '@/lib/ai/admin-agent/proposals/token';
 import type { StageStaged } from '@/lib/ai/admin-agent/proposals/types';
 import { PLAYERS } from '@/lib/ai/admin-agent/plans/__tests__/fixtures';
 import { ADMIN, CONVERSATION_ID, TOKEN_SECRET } from '@/lib/ai/admin-agent/proposals/__tests__/helpers';
+import { ledgerRow } from '@/lib/ai/admin-agent/proposals/__tests__/undo-helpers';
 import { makeWorld, recordedSession, statusesOf, type World } from '@/lib/ai/admin-agent/proposals/__tests__/executor-helpers';
 import { getBindingRegistry } from '../_ops/g';
 
@@ -284,6 +285,40 @@ describe('"undo that" through the real routes', () => {
     expect(db.seasons[0]).toMatchObject({ archived: false, name: 'Renamed by a human' });
     expect(db.roster).toEqual([]);
     expect(world.store.actions.find((action) => action.step_key === 'league')?.status).toBe('ok');
+  });
+
+  it('still offers the archive after the league was started: its status is not part of the fingerprint, and the start is listed as something that cannot be taken back', async () => {
+    await runBuild();
+    const before = await liveFingerprints.read('league_after', { kind: 'id', id: ids.league });
+    // The league goes active when its first round is generated (a Go-live card of this chat, or the site's normal play), and a
+    // start is recorded in the ledger next to the Build's rows.
+    db.seasons[0].status = 'active';
+    db.seasons[0].updated_at = '2026-10-28T09:00:00.000Z';
+    world.store.actions.push(
+      ledgerRow({ id: '00000000-0000-4000-8000-00000000a001', proposal_id: world.proposalId, step_key: 'start', tool_name: 'start_phase', class: 'G', status: 'ok', entity_type: 'tournament', entity_id: ids.phaseRegular }),
+    );
+    expect(await liveFingerprints.read('league_after', { kind: 'id', id: ids.league })).toEqual(before);
+
+    const { staged, row } = await stageUndo();
+    expect(staged).toMatchObject({ status: 'staged' });
+    expect(row?.steps).toHaveLength(13);
+    const undo = (row?.preview as { undo: { leftAlone: unknown[]; notUndoable: Array<{ op: string; reason: string }> } }).undo;
+    expect(undo.leftAlone).toEqual([]);
+    expect(undo.notUndoable).toEqual([expect.objectContaining({ op: 'start_phase', reason: 'outward_effect' })]);
+
+    const result = await approveUndo((staged as StageStaged).proposal_id);
+    expect(result.status).toBe('completed');
+    expect(db.seasons[0]).toMatchObject({ archived: true, status: 'active' });
+  });
+
+  it('still leaves a league alone that a human renamed after it was started', async () => {
+    await runBuild();
+    db.seasons[0].status = 'active';
+    db.seasons[0].name = 'Renamed by a human';
+    const { staged, row } = await stageUndo();
+    expect(staged).toMatchObject({ status: 'staged' });
+    expect(row?.steps).toHaveLength(12);
+    expect((row?.preview as { undo: { leftAlone: unknown[] } }).undo.leftAlone).toEqual([expect.objectContaining({ op: 'league_create', reason: 'edited_outside' })]);
   });
 
   it('refuses the roster removes once the roster changed in between (a player added by a human)', async () => {

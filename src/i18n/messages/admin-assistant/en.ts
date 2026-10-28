@@ -195,6 +195,7 @@ export default {
     proposal_declined: 'You declined a card.',
     proposal_approved: 'You confirmed a card.',
     proposal_executed: 'A confirmed card was run.',
+    undo_requested: 'You asked to undo a card.',
     turn_deadline: 'The assistant paused because the message took too long.',
     turn_limit: 'The assistant paused because the message reached its limit of steps.',
     turn_interrupted: 'The message was interrupted.',
