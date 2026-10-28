@@ -250,13 +250,19 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
       seeIt(written);
       expect(refused(await written.stage('propose_start_phase', args))).toMatchObject({ code: 'rounds_round_already_written' });
 
-      const custom = makeHarness({ source: { phase: { seasonFormatType: 'custom', formatAttached: false } } });
+      const custom = makeHarness({ source: { phase: { seasonFormatType: 'custom', formatAttached: false, bracketType: 'single_elim' } } });
       seeIt(custom);
       expect(refused(await custom.stage('propose_generate_bracket', args)).code).toBe('format_not_attached');
 
-      const attached = makeHarness({ source: { phase: { seasonFormatType: 'custom', formatAttached: true } } });
+      const attached = makeHarness({ source: { phase: { seasonFormatType: 'custom', formatAttached: true, bracketType: 'single_elim' } } });
       seeIt(attached);
       staged(await attached.stage('propose_generate_bracket', args));
+
+      // The full bracket exists only for elimination formats.
+      const robin = makeHarness();
+      seeIt(robin);
+      expect(refused(await robin.stage('propose_generate_bracket', args)).code).toBe('bracket_generate_elim_only');
+      expect(robin.store.proposals).toHaveLength(0);
     });
 
     it('fails closed when the app cannot fingerprint the startup checklist or the channel set', async () => {
@@ -273,7 +279,7 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
       const start = makeHarness();
       seeIt(start);
       staged(await start.stage('propose_start_phase', args));
-      const bracket = makeHarness();
+      const bracket = makeHarness({ source: { phase: { bracketType: 'single_elim' } } });
       seeIt(bracket);
       staged(await bracket.stage('propose_generate_bracket', args));
       const channelTarget = (h: ReturnType<typeof makeHarness>) => lastRow(h).step.preconditions.find((p) => p.read === 'channel_set')?.target;
@@ -293,7 +299,7 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
         ],
       };
       for (const tool of ['propose_start_phase', 'propose_generate_bracket']) {
-        const h = makeHarness({ source: { startup: blocked } });
+        const h = makeHarness({ source: { startup: blocked, phase: { bracketType: 'single_elim' } } });
         seeIt(h);
         const result = refused(await h.stage(tool, args));
         expect(result).toMatchObject({ code: 'startup_not_ready', params: { blocked: 2 } });
@@ -307,11 +313,11 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
 
     it('lists an unseeded roster on the card as a warning without blocking', async () => {
       const attention = { blocked: false, roundRobin: null, items: [{ id: 'seeding' as const, state: 'attention' as const, params: { unseeded: 5, count: 8 } }] };
-      const h = makeHarness({ source: { startup: attention } });
+      const h = makeHarness({ source: { startup: attention, phase: { bracketType: 'single_elim' } } });
       seeIt(h);
       staged(await h.stage('propose_generate_bracket', args));
       expect(lastRow(h).card.warnings).toEqual([{ kind: 'startup_unseeded', params: { unseeded: 5, count: 8 } }]);
-      const none = makeHarness();
+      const none = makeHarness({ source: { phase: { bracketType: 'single_elim' } } });
       seeIt(none);
       staged(await none.stage('propose_generate_bracket', args));
       expect(lastRow(none).card.warnings).toEqual([]);
@@ -328,7 +334,7 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
     });
 
     it('stages the bracket with its own route and no typed name', async () => {
-      const h = makeHarness();
+      const h = makeHarness({ source: { phase: { bracketType: 'single_elim' } } });
       seeIt(h);
       staged(await h.stage('propose_generate_bracket', args));
       const { row, step } = lastRow(h);
@@ -339,7 +345,7 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
 
   describe('one Go-live card per assistant turn', () => {
     it('refuses a second Go-live proposal in the same turn, and allows it in the next', async () => {
-      const h = makeHarness();
+      const h = makeHarness({ source: { phase: { bracketType: 'single_elim' } } });
       h.store.see(CONVERSATION_ID, TOURNAMENT_ID, DEFINITION_ID);
       staged(await h.stage('propose_generate_bracket', { tournament_id: TOURNAMENT_ID }));
       const second = refused(await h.stage('propose_publish_ruleset', { ruleset_id: DEFINITION_ID, draft_rev: 3 }));

@@ -259,6 +259,8 @@ function phaseFindings(fact: PhaseStartFact, op: 'start_phase' | 'generate_brack
   // The same causes the routes name (3.3): rounds already written, a custom league without an attached format.
   if (fact.roundCount > 0) throw new StageRefusal('rounds_round_already_written', { round: op === 'start_phase' ? 'Round 1' : 'The bracket' });
   if (fact.seasonFormatType === 'custom' && !fact.formatAttached) throw new StageRefusal('format_not_attached');
+  // The full bracket exists only for elimination formats; the route answers the same code.
+  if (op === 'generate_bracket' && fact.bracketType !== 'single_elim' && fact.bracketType !== 'double_elim') throw new StageRefusal('bracket_generate_elim_only');
 }
 
 /**

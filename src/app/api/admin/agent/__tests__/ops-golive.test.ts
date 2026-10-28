@@ -350,7 +350,9 @@ const PIN_TARGETS = [
 const pinWorld = (options?: HarnessOptions) =>
   stageGoLive('propose_move_pin', { ruleset_id: DEFINITION_ID, to_version_no: 3, targets: PIN_TARGETS }, [DEFINITION_ID, SEASON_ID, TOURNAMENT_ID], options);
 const startWorld = (args: Record<string, unknown> = {}, options?: HarnessOptions) => stageGoLive('propose_start_phase', { tournament_id: TOURNAMENT_ID, ...args }, [TOURNAMENT_ID], options);
-const bracketWorld = (options?: HarnessOptions) => stageGoLive('propose_generate_bracket', { tournament_id: TOURNAMENT_ID }, [TOURNAMENT_ID], options);
+// The full bracket is for elimination formats only (staging refuses it otherwise, like the route).
+const bracketWorld = (options: HarnessOptions = {}) =>
+  stageGoLive('propose_generate_bracket', { tournament_id: TOURNAMENT_ID }, [TOURNAMENT_ID], { ...options, source: { ...options.source, phase: { bracketType: 'single_elim', ...options.source?.phase } } });
 
 /** The version 3 a publish or a pin move works with, as the database holds it once the publish happened. */
 const publishedV3 = () => db.versions.unshift({ id: V3, version_no: 3, definition_id: DEFINITION_ID, created_at: WRITTEN_AT, created_by: ADMIN });
