@@ -57,6 +57,13 @@ export async function isPoolParticipant(poolId: string, playerId: string): Promi
   return data !== null;
 }
 
+/** Every player seated in the pool (one narrow read; push alerts for a published redraft go to them). */
+export async function listPoolParticipantIds(poolId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('draft_participants').select('player_id').eq('draft_pool_id', poolId);
+  if (error) throw error;
+  return [...new Set((data ?? []).map((row) => row.player_id))];
+}
+
 /** ONE player's secret drop list (sorted line ids; `updated_at` = newest row, null when empty). */
 export async function getOwnRedraftSubmission(poolId: string, playerId: string): Promise<OwnSubmission> {
   const { data, error } = await supabase

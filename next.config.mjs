@@ -123,6 +123,9 @@ const apiHeaders = [
 
 const nextConfig = {
   poweredByHeader: false,
+  // Web Push sender (src/lib/push/send.ts, docs/push.md): a Node-only CommonJS package with native `crypto`/`https`
+  // use. It stays an external require on the server instead of being bundled; it never reaches a client bundle.
+  serverExternalPackages: ['web-push'],
   turbopack: {
     resolveAlias: {
       '@format-pack': FORMAT_PACK_ENTRY,

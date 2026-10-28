@@ -3,7 +3,7 @@ import { createVisiblePoller } from '@/lib/draft/use-visible-poll';
 import { TURN_WATCH_INTERVAL_MS } from '@/lib/draft-ui/constants';
 import type { MyTurnDTO } from '@/lib/draft-ui/snapshot-types';
 import { createHttpDataSource, type MyTurnResult } from '@/components/draft-tool/data-source';
-import { alertsFor, createTurnWatchTick, myTurnRemainingMs } from '../hooks/use-turn-watch';
+import { createTurnWatchTick } from '../hooks/use-turn-watch';
 
 function myTurn(overrides: Partial<MyTurnDTO> = {}): MyTurnDTO {
   return {
@@ -133,54 +133,28 @@ describe('turn watch (draft-frontend §5.8)', () => {
     await vi.advanceTimersByTimeAsync(TURN_WATCH_INTERVAL_MS * 3);
     expect(fetchMyTurn).toHaveBeenCalledTimes(1);
   });
-});
 
-describe('turn alerts', () => {
-  it('computes the remaining time on the server clock, frozen while paused', () => {
-    expect(myTurnRemainingMs(myTurn())).toBe(240_000);
-    expect(myTurnRemainingMs(myTurn({ deadline_at: null, remaining_ms_at_pause: 83_000, paused: true }))).toBe(83_000);
-    expect(myTurnRemainingMs(myTurn({ deadline_at: null }))).toBeNull();
-  });
-
-  it('alerts the turn once per slot and nothing while paused or off the clock', () => {
-    const sent = new Set<string>();
-    const already = (slot: string, kind: string) => sent.has(`${slot}:${kind}`);
-    expect(alertsFor(myTurn(), 'pool-1', already)).toEqual(['turn']);
-    sent.add('slot-3:turn');
-    expect(alertsFor(myTurn(), 'pool-1', already)).toEqual([]);
-    expect(alertsFor(myTurn({ slot_id: 'slot-9' }), 'pool-1', already)).toEqual(['turn']);
-    expect(alertsFor(myTurn({ paused: true }), 'pool-1', () => false)).toEqual([]);
-    expect(alertsFor(myTurn({ on_clock: false }), 'pool-1', () => false)).toEqual([]);
-  });
-
-  describe('quiet hours', () => {
-    const quiet_hours = { startHour: 0, endHour: 6, timeZone: 'Europe/Berlin' };
-    // 01:00 Berlin; deadline 06:15 Berlin = 15 running minutes left, although 5 h 15 min of wall time.
-    const night = myTurn({
-      mode: 'slow',
-      server_now: '2026-10-17T23:00:00.000Z',
-      deadline_at: '2026-10-18T04:15:00.000Z',
-      quiet_hours,
-    });
-
-    it('counts running time only', () => {
-      expect(myTurnRemainingMs(night)).toBe(900_000);
-      expect(myTurnRemainingMs({ ...night, quiet_hours: null })).toBe(18_900_000);
-    });
-
-    it('sends no browser alert inside the window and the turn + most urgent reminder after it', () => {
-      expect(alertsFor(night, 'pool-1', () => false)).toEqual([]);
-      const morning = { ...night, server_now: '2026-10-18T04:01:00.000Z' };
-      expect(alertsFor(morning, 'pool-1', () => false)).toEqual(['turn', 'remind-1h']);
-    });
-
-    it('a paused answer is never "held" (paused already sends nothing)', () => {
-      expect(alertsFor({ ...night, paused: true, deadline_at: null, remaining_ms_at_pause: 1000 }, 'pool-1', () => false)).toEqual([]);
-    });
-  });
-
-  it('adds the most urgent slow-draft reminder only', () => {
-    const slow = myTurn({ mode: 'slow', deadline_at: '2026-10-09T12:50:00.000Z' });
-    expect(alertsFor(slow, 'pool-1', () => false)).toEqual(['turn', 'remind-1h']);
+  it('raises no browser notification itself: alerts are Web Push messages sent by the server', async () => {
+    const NotificationSpy = vi.fn();
+    vi.stubGlobal('Notification', Object.assign(NotificationSpy, { permission: 'granted' }));
+    try {
+      const fetchMyTurn = vi.fn(async (): Promise<MyTurnResult> => ({ kind: 'ok', dto: myTurn() }));
+      const poller = createVisiblePoller(
+        createTurnWatchTick({ fetchMyTurn, isVisible: () => false }),
+        { liveIntervalMs: TURN_WATCH_INTERVAL_MS, completeIntervalMs: null },
+        { visibility: null },
+      );
+      poller.start();
+      await vi.advanceTimersByTimeAsync(TURN_WATCH_INTERVAL_MS * 2);
+      // The request itself (it lets the server resolve a due timeout) still happens every minute ...
+      expect(fetchMyTurn).toHaveBeenCalledTimes(3);
+      // ... but nothing is shown locally.
+      expect(NotificationSpy).not.toHaveBeenCalled();
+      poller.stop();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
+
+

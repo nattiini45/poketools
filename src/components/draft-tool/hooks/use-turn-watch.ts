@@ -1,82 +1,57 @@
 'use client';
 
 /**
- * The 60 s my-turn watch and browser turn alerts (draft-frontend §5.8).
+ * The 60 s my-turn watch and the push control (draft-frontend §5.8, docs/push.md).
  *
- * - Its own poller: `createVisiblePoller(tick, { liveIntervalMs: 60_000,
+ * - The watch is its own poller: `createVisiblePoller(tick, { liveIntervalMs: 60_000,
  *   completeIntervalMs: null }, { visibility: null })`, so it keeps running in
  *   hidden tabs. This is the single sanctioned D37 exception (AGENTS.md "Live
  *   draft screens"); it lives in the draft room only (FR-15).
  * - The tick skips the request while the tab is visible: the 3 s snapshot
- *   poll covers that case. Only hidden tabs call `GET /my-turn`.
+ *   poll covers that case. Only hidden tabs call `GET /my-turn`, and the
+ *   server resolves a due timeout there (which claims and sends the next
+ *   slot's alerts). The watch no longer raises notifications itself: turn
+ *   alerts and reminders are Web Push messages sent by the server to every
+ *   device the player enabled (`src/lib/push/draft-alerts.ts`), so they
+ *   arrive with no page open and never twice.
  * - A `stop` answer (401/403/404/409) halts the watch; network errors and
  *   5xx keep it alive for the next tick.
- * - Alerts are deduped across tabs through `storage.ts` and delivered only
- *   with `Notification.permission === 'granted'` and the per-pool opt-in.
- *   Visible tabs show the in-app state instead (banner, toast, title).
+ * - `usePushAlerts` drives the bell: it reads this browser's push state and
+ *   subscribes or unsubscribes it on a click. It never prompts on its own.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocale } from '@/i18n/client';
+import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { createVisiblePoller, type PollOutcome, type PollTick } from '@/lib/draft/use-visible-poll';
 import { TURN_WATCH_INTERVAL_MS } from '@/lib/draft-ui/constants';
-import { quietWindowEnd, runningMsBetween } from '@/lib/draft/time';
-import { dueNotifications, type NotifyKind } from '@/lib/draft-ui/notify-schedule';
 import type { MyTurnDTO } from '@/lib/draft-ui/snapshot-types';
 import type { MyTurnResult } from '@/components/draft-tool/data-source';
-import {
-  hasNotified,
-  isNotifyOptedIn,
-  markNotified,
-  pruneNotified,
-  setNotifyOptIn,
-} from '@/lib/draft-ui/storage';
+import { clearLegacyNotifyKeys } from '@/lib/draft-ui/storage';
+import { disablePush, enablePush, readPushState } from '@/lib/push/client';
 
-export type NotifySupport = 'unsupported' | 'default' | 'granted' | 'denied';
+export type NotifySupport = 'unsupported' | 'install-required' | 'default' | 'granted' | 'denied';
 
 export interface NotifyState {
+  /**
+   * `unsupported` hides the control; `install-required` (iOS/iPadOS in a browser tab) shows the Home Screen hint;
+   * `denied` shows the browser-settings hint; `default` can ask for permission; `granted` can switch this device on/off.
+   */
   support: NotifySupport;
-  /** The per-pool opt-in (`localStorage['draft:notify:<pool>']`). */
+  /** This device holds a push subscription. */
   optedIn: boolean;
+  /** A subscribe or unsubscribe is running. */
+  busy?: boolean;
+  /** The last switch failed (shown next to the control). */
+  error?: ApiErrorLike | null;
 }
 
 export const NOTIFY_UNSUPPORTED: NotifyState = Object.freeze({ support: 'unsupported', optedIn: false });
-
-/**
- * Remaining pick time of a my-turn answer on the server clock; null without a running slot. With quiet hours it is
- * the running time left (held time excluded), as on the server.
- */
-export function myTurnRemainingMs(dto: MyTurnDTO): number | null {
-  if (dto.remaining_ms_at_pause !== null) return Math.max(0, dto.remaining_ms_at_pause);
-  if (dto.deadline_at === null) return null;
-  const deadline = Date.parse(dto.deadline_at);
-  const now = Date.parse(dto.server_now);
-  return Number.isFinite(deadline) && Number.isFinite(now) ? runningMsBetween(now, deadline, dto.quiet_hours) : null;
-}
-
-/** A quiet window holds this answer's clock at `server_now` (never while paused or without a deadline). */
-export function myTurnHeld(dto: MyTurnDTO): boolean {
-  if (dto.paused || dto.deadline_at === null) return false;
-  const now = Date.parse(dto.server_now);
-  return Number.isFinite(now) && quietWindowEnd(now, dto.quiet_hours) !== null;
-}
-
-/** The alerts this answer makes due for `poolId`, after the cross-tab dedupe. */
-export function alertsFor(dto: MyTurnDTO, poolId: string, alreadySent = (slotId: string, kind: NotifyKind) => hasNotified(poolId, slotId, kind)): NotifyKind[] {
-  return dueNotifications({
-    onClock: dto.on_clock && dto.status === 'in_progress',
-    slotId: dto.slot_id,
-    mode: dto.mode,
-    paused: dto.paused,
-    held: myTurnHeld(dto),
-    remainingMs: myTurnRemainingMs(dto),
-    alreadySent,
-  });
-}
 
 export interface TurnWatchTickDeps {
   fetchMyTurn(signal: AbortSignal): Promise<MyTurnResult>;
   /** true while the page is visible (the snapshot poll is active then). */
   isVisible(): boolean;
-  onResult(dto: MyTurnDTO): void;
+  onResult?(dto: MyTurnDTO): void;
 }
 
 /** The watch's tick (unit-tested with fake timers). */
@@ -89,65 +64,29 @@ export function createTurnWatchTick(deps: TurnWatchTickDeps): PollTick {
     if (result.kind === 'stop') return 'stop';
     if (result.kind === 'error') return 'live';
     const dto = result.dto;
-    deps.onResult(dto);
+    deps.onResult?.(dto);
     return dto.status === 'complete' ? 'complete' : 'live';
   };
-}
-
-function permission(): NotifySupport {
-  if (typeof window === 'undefined' || typeof Notification === 'undefined') return 'unsupported';
-  return Notification.permission === 'granted' ? 'granted' : Notification.permission === 'denied' ? 'denied' : 'default';
-}
-
-export interface TurnAlertText {
-  title: string;
-  body: string;
 }
 
 export interface UseTurnWatchOptions {
   fetchMyTurn(signal: AbortSignal): Promise<MyTurnResult>;
   /** A participant with open slots in a pending or running pool. */
   enabled: boolean;
-  poolId: string;
-  /** Builds the notification text (translated by the caller at delivery time). */
-  buildAlert(kind: NotifyKind, dto: MyTurnDTO): TurnAlertText;
 }
 
-/** Runs the watch while `enabled`; delivers due alerts as system notifications. */
-export function useTurnWatch({ fetchMyTurn, enabled, poolId, buildAlert }: UseTurnWatchOptions): void {
+/** Runs the hidden-tab watch while `enabled` (the server resolves due timeouts and sends the push alerts). */
+export function useTurnWatch({ fetchMyTurn, enabled }: UseTurnWatchOptions): void {
   const fetchRef = useRef(fetchMyTurn);
-  const buildRef = useRef(buildAlert);
   useEffect(() => {
     fetchRef.current = fetchMyTurn;
-    buildRef.current = buildAlert;
-  }, [fetchMyTurn, buildAlert]);
+  }, [fetchMyTurn]);
 
   useEffect(() => {
     if (!enabled) return;
-    pruneNotified(Date.now());
     const tick = createTurnWatchTick({
       fetchMyTurn: (signal) => fetchRef.current(signal),
       isVisible: () => typeof document !== 'undefined' && document.visibilityState === 'visible',
-      onResult: (dto) => {
-        if (permission() !== 'granted' || !isNotifyOptedIn(poolId) || dto.slot_id === null) return;
-        const slotId = dto.slot_id;
-        for (const kind of alertsFor(dto, poolId)) {
-          try {
-            const { title, body } = buildRef.current(kind, dto);
-            // `renotify` (§5.8) re-alerts when a reminder replaces an earlier one with the same tag. The DOM
-            // lib typing lacks it, so it is declared here; browsers without it ignore the field.
-            const options: NotificationOptions & { renotify: boolean } = { body, tag: `draft-${poolId}`, renotify: true };
-            const n = new Notification(title, options);
-            n.onclick = () => {
-              window.focus();
-              n.close();
-            };
-          } catch (err) {
-            console.error('[draft-tool] turn notification failed:', err);
-          }
-          markNotified(poolId, slotId, kind, Date.now());
-        }
-      },
     });
     const poller = createVisiblePoller(
       tick,
@@ -156,39 +95,78 @@ export function useTurnWatch({ fetchMyTurn, enabled, poolId, buildAlert }: UseTu
     );
     poller.start();
     return () => poller.stop();
-  }, [enabled, poolId]);
+  }, [enabled]);
 }
 
-/** The bell's state and its click (never prompts on its own, §5.8). */
-export function useNotifyPermission(poolId: string): { state: NotifyState; toggle(): void } {
+/** The bell's state and its click (never prompts on its own, §5.8): subscribes or unsubscribes THIS browser. */
+export function usePushAlerts(): { state: NotifyState; toggle(): void } {
+  const locale = useLocale();
   const [state, setState] = useState<NotifyState>(NOTIFY_UNSUPPORTED);
-
-  // Permission and opt-in are browser-only: read after mount so server and client markup agree.
+  const stateRef = useRef(state);
   useEffect(() => {
-    const support = permission();
-    const optedIn = support === 'granted' && isNotifyOptedIn(poolId);
-    const id = setTimeout(() => setState({ support, optedIn }), 0);
-    return () => clearTimeout(id);
-  }, [poolId]);
+    stateRef.current = state;
+  }, [state]);
+
+  // Push support, permission and the subscription are browser-only: read after mount so server and client markup agree.
+  useEffect(() => {
+    let cancelled = false;
+    clearLegacyNotifyKeys();
+    void readPushState(locale)
+      .then((push) => {
+        if (cancelled) return;
+        const support: NotifySupport =
+          push.support === 'available' ? (push.askable ? 'default' : 'granted') : push.support;
+        setState({ support, optedIn: push.subscribed });
+      })
+      .catch((err: unknown) => {
+        console.error('[draft-tool] reading the push state failed:', err);
+        if (!cancelled) setState(NOTIFY_UNSUPPORTED);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [locale]);
 
   const toggle = useCallback(() => {
-    const support = permission();
-    if (support === 'unsupported' || support === 'denied') {
-      setState({ support, optedIn: false });
+    const current = stateRef.current;
+    if (current.busy || current.support === 'unsupported' || current.support === 'denied' || current.support === 'install-required') return;
+    setState({ ...current, busy: true, error: null });
+
+    if (current.optedIn) {
+      void disablePush().then((result) => {
+        setState(
+          result.ok
+            ? { support: 'granted', optedIn: false }
+            : { ...current, busy: false, error: result.failure?.error ?? { code: 'push_unsubscribe_failed' } },
+        );
+      });
       return;
     }
-    if (support === 'granted') {
-      const optedIn = !isNotifyOptedIn(poolId);
-      setNotifyOptIn(poolId, optedIn);
-      setState({ support, optedIn });
-      return;
-    }
-    void Notification.requestPermission().then((result) => {
-      const granted = result === 'granted';
-      if (granted) setNotifyOptIn(poolId, true);
-      setState({ support: granted ? 'granted' : result === 'denied' ? 'denied' : 'default', optedIn: granted });
-    });
-  }, [poolId]);
+
+    void enablePush(locale)
+      .then((result) => {
+        if (result.ok) {
+          setState({ support: 'granted', optedIn: true });
+        } else if (result.reason === 'denied') {
+          setState({ support: 'denied', optedIn: false });
+        } else if (result.reason === 'dismissed') {
+          setState({ support: 'default', optedIn: false });
+        } else if (result.reason === 'failed') {
+          setState({
+            ...current,
+            busy: false,
+            // `push_disabled` hides the control (NotifyToggle); any other failure stays retryable.
+            error: result.failure?.error ?? { code: 'push_subscribe_failed' },
+          });
+        } else {
+          setState(NOTIFY_UNSUPPORTED);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error('[draft-tool] turning push alerts on failed:', err);
+        setState({ ...current, busy: false, error: toApiErrorLike(err) });
+      });
+  }, [locale]);
 
   return { state, toggle };
 }

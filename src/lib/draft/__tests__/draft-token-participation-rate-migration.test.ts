@@ -43,8 +43,12 @@ describe('20261027193000_draft_token_participation_rate.sql', () => {
       .filter((f) => f.endsWith('.sql') && /FUNCTION public\.epb_purchase_draft_token\(/.test(read(f)))
       .sort();
     expect(definers.at(-1)).toBe(FILE);
-    // Sorts after every other file (20261027100000 lives on another branch).
-    expect(readdirSync(DIR).filter((f) => f.endsWith('.sql') && f > FILE)).toEqual([]);
+    // No later file redefines it (a later migration of another subject may exist; it must not touch this function).
+    expect(
+      readdirSync(DIR).filter(
+        (f) => f.endsWith('.sql') && f > FILE && /FUNCTION public\.epb_purchase_draft_token\(/.test(read(f)),
+      ),
+    ).toEqual([]);
   });
 
   it('adds tokens_used to the ledger: smallint, NOT NULL, default 1, CHECK 1..10', () => {

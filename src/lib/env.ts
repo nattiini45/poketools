@@ -62,6 +62,18 @@ export const rateLimitEnvSchema = z.object({
 });
 
 /**
+ * Read by Web Push (`src/lib/push/config.ts`): the VAPID key pair and the contact subject. All three optional on
+ * purpose: unset, partial or invalid means push is DISABLED (the server sends nothing and logs one warning), never a
+ * boot failure, because most deployments run without it. `config.ts` validates the values themselves (key lengths,
+ * that the private key matches the public one, a `mailto:` or https subject) and never logs one.
+ */
+export const pushEnvSchema = z.object({
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: optionalTrimmed(z.string()),
+  VAPID_PRIVATE_KEY: optionalTrimmed(z.string()),
+  VAPID_SUBJECT: optionalTrimmed(z.string()),
+});
+
+/**
  * The optional variables whose INVALID value must stop the server at boot
  * (lead ruling round 5): `src/instrumentation.ts` runs `assertBootEnv()` when
  * a Node.js server instance starts, so a bad value fails the deployment once,

@@ -67,4 +67,13 @@ export default {
   bootstrap_player_missing: 'Your player profile was not found. Sign out and back in, then try again.',
   INVALID_GALLERY_ITEM_ID: 'Gallery item not found',
   INVALID_ACHIEVEMENT_ID: 'Achievement not found',
+  // Web Push device registration (docs/push.md)
+  push_disabled: 'Push alerts are not set up on this site.',
+  push_cross_origin: 'Cross-origin push subscription change refused.',
+  push_subscription_invalid: 'The push subscription is invalid.',
+  push_endpoint_not_allowed: 'This browser’s push service is not supported.',
+  push_device_not_found: 'Push device not found',
+  push_list_failed: 'Failed to load push devices',
+  push_subscribe_failed: 'Failed to save the push subscription',
+  push_unsubscribe_failed: 'Failed to remove the push device',
 } as const;

@@ -1,13 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  hasNotified,
-  isNotifyOptedIn,
-  markNotified,
-  notifiedKey,
-  pruneNotified,
+  clearLegacyNotifyKeys,
   readPinned,
   readPrefs,
-  setNotifyOptIn,
   storageGet,
   storageSet,
   updatePrefs,
@@ -49,7 +44,7 @@ describe('draft-ui storage', () => {
     expect(storageGet('local', 'draft:prefs:v1')).toBeNull();
     expect(storageSet('local', 'draft:prefs:v1', '{}')).toBe(false);
     expect(readPinned('pool-1')).toBeNull();
-    expect(pruneNotified(Date.now())).toBe(0);
+    expect(clearLegacyNotifyKeys()).toBe(0);
   });
 
   it('survives storage that throws', () => {
@@ -60,10 +55,13 @@ describe('draft-ui storage', () => {
     broken.setItem = () => {
       throw new Error('QuotaExceededError');
     };
+    broken.removeItem = () => {
+      throw new Error('SecurityError');
+    };
     installWindow(broken);
     expect(storageGet('local', 'draft:prefs:v1')).toBeNull();
     expect(updatePrefs({ sort: 'price' })).toBe(false);
-    expect(isNotifyOptedIn('pool-1')).toBe(false);
+    expect(clearLegacyNotifyKeys()).toBe(0);
   });
 
   it('round-trips prefs as JSON and ignores garbage', () => {
@@ -97,29 +95,21 @@ describe('draft-ui storage', () => {
     expect(readPinned('pool-1')).toBeNull();
   });
 
-  it('stores the notification opt-in per pool', () => {
-    installWindow(new MemoryStorage());
-    expect(isNotifyOptedIn('pool-1')).toBe(false);
-    setNotifyOptIn('pool-1', true);
-    expect(isNotifyOptedIn('pool-1')).toBe(true);
-    setNotifyOptIn('pool-1', false);
-    expect(isNotifyOptedIn('pool-1')).toBe(false);
-  });
-
-  it('dedupes notifications and prunes entries older than three days', () => {
+  it('removes the keys the old local turn alerts left behind, and nothing else', () => {
     const local = new MemoryStorage();
     installWindow(local);
-    const now = Date.parse('2026-10-09T12:00:00.000Z');
-    markNotified('pool-1', 'slot-1', 'turn', now - 4 * 24 * 3600e3);
-    markNotified('pool-1', 'slot-2', 'remind-1h', now - 3600e3);
-    local.setItem('draft:notified:pool-1:slot-3:turn', 'garbage');
+    local.setItem('draft:notify:pool-1', '1');
+    local.setItem('draft:notify:pool-2', '0');
+    local.setItem('draft:notified:pool-1:slot-1:turn', '1760000000000');
+    local.setItem('draft:notified:pool-1:slot-2:remind-1h', 'garbage');
     local.setItem('draft:prefs:v1', '{}');
-    expect(notifiedKey('pool-1', 'slot-2', 'remind-1h')).toBe('draft:notified:pool-1:slot-2:remind-1h');
-    expect(hasNotified('pool-1', 'slot-1', 'turn')).toBe(true);
+    local.setItem('push:locale:v1', 'de');
 
-    expect(pruneNotified(now)).toBe(2);
-    expect(hasNotified('pool-1', 'slot-1', 'turn')).toBe(false);
-    expect(hasNotified('pool-1', 'slot-2', 'remind-1h')).toBe(true);
+    expect(clearLegacyNotifyKeys()).toBe(4);
+    expect(local.getItem('draft:notify:pool-1')).toBeNull();
+    expect(local.getItem('draft:notified:pool-1:slot-1:turn')).toBeNull();
     expect(local.getItem('draft:prefs:v1')).toBe('{}');
+    expect(local.getItem('push:locale:v1')).toBe('de');
+    expect(clearLegacyNotifyKeys()).toBe(0);
   });
 });

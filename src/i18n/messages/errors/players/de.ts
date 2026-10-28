@@ -63,4 +63,12 @@ export default defineDe<typeof en>()({
   bootstrap_player_missing: 'Dein Spielerprofil wurde nicht gefunden. Melde dich ab und wieder an und versuche es dann noch einmal.',
   INVALID_GALLERY_ITEM_ID: 'Galeriebild nicht gefunden.',
   INVALID_ACHIEVEMENT_ID: 'Erfolgsdefinition nicht gefunden.',
+  push_disabled: 'Push-Benachrichtigungen sind auf dieser Seite nicht eingerichtet.',
+  push_cross_origin: 'Änderung des Push-Abos von einer fremden Website abgelehnt.',
+  push_subscription_invalid: 'Das Push-Abo ist ungültig.',
+  push_endpoint_not_allowed: 'Der Push-Dienst dieses Browsers wird nicht unterstützt.',
+  push_device_not_found: 'Push-Gerät nicht gefunden.',
+  push_list_failed: 'Die Push-Geräte konnten nicht geladen werden.',
+  push_subscribe_failed: 'Das Push-Abo konnte nicht gespeichert werden.',
+  push_unsubscribe_failed: 'Das Push-Gerät konnte nicht entfernt werden.',
 });
