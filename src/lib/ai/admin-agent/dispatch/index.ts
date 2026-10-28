@@ -2,8 +2,8 @@
  * Dispatch layer of the Admin Assistant (plan 3.3): route-faithful in-process calls with typed outcomes.
  * `runAsVerifiedSession` may be imported only from this directory (static test); nothing here re-exports it.
  */
-export { bindingInput, createBindingRegistry, defineBinding, pathParamNames, validateBinding } from './binding';
-export type { BindingRegistry } from './binding';
+export { bindingInput, checkCall, createBindingRegistry, defineBinding, pathParamNames, validateBinding } from './binding';
+export type { BindingRegistry, CallCheck } from './binding';
 export { invokeRoute } from './invoke';
 export { LOCK_CODE, harnessError, isCatalogCode, isUnknownOutcome, mapRouteResponse, outcomeCode, parseBody } from './outcome';
 export type { RouteResponseParts } from './outcome';
@@ -32,6 +32,7 @@ export type {
   RouteBinding,
   RouteHandler,
   RouteModule,
+  VerifyCall,
   VerifyContext,
   VerifyResult,
 } from './types';

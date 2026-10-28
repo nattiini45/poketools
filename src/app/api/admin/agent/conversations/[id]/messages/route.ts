@@ -11,6 +11,7 @@ import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { getAdminAgent } from '../../../_lib/agent';
 import { authorizeAgent } from '../../../_lib/auth';
 import { agentError, conversationNotFound } from '../../../_lib/errors';
+import { reapOverdueFor } from '../../../_lib/events';
 import { agentRateLimited, assertSameOriginRequest, readAgentJson } from '../../../_lib/request';
 
 /**
@@ -32,8 +33,8 @@ const bodySchema = z.union([
  *
  * One user turn `{ text, client_msg_id }`, or `{ continue: true }` after a harness event. Order (plan 3.1): live
  * `requireAnyAdmin` and the audience check, the origin rule, the bounded body, ownership of the conversation, the text
- * checks, the limiter (charged only once the request is known to be valid and the admin's own), then the turn lease and
- * the loop. The response is a server-sent event stream; the history is loaded by id on the server, never from the client.
+ * checks, the limiter (charged only once the request is known to be valid and the admin's own), the reaper for the admin's
+ * overdue executions, then the turn lease and the loop. The response is a server-sent event stream; the history is loaded by id on the server, never from the client.
  *
  * Nothing here listens to `request.signal`: a closed tab ends the stream, not the turn, which persists every step and
  * releases the lease when it finishes.
@@ -66,6 +67,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       failMode: 'closed',
     });
     if (!rate.allowed) return agentRateLimited(rate.retryAfterSeconds);
+
+    // A proposal left `executing` by a request that died would hold this admin's conversations: it ends `unknown` before the turn starts.
+    await reapOverdueFor(auth.adminId);
 
     const zone = request.cookies.get(TZ_COOKIE)?.value;
     const started = await getAdminAgent().startTurn({

@@ -10,8 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { ERROR_CATALOGS } from '@/i18n/messages/errors';
 import { stripComments } from '../../__tests__/architecture/graph';
+import type { VerifyContext } from '../../dispatch';
 import { uid } from '../../plans/__tests__/fixtures';
 import { AdminAgentStoreError } from '../../store/errors';
 import { EXECUTION_ERROR_STATUS, blastClaims, extractStepResult, ProposalExecutionError, REAPER_AGE_MS, RESUME_WINDOW_MS, SETTLE_MS, STEP_DEADLINE_MS, executeProposal } from '../executor';
@@ -811,6 +813,124 @@ describe('the reaper', () => {
       throw new Error('reap failed');
     };
     expect((await world.approve()).status).toBe('completed');
+  });
+});
+
+describe("the second lock: the resolved request is parsed with the binding's schemas before it is sent", () => {
+  const strictLeague = z.strictObject({ name: z.string(), format_type: z.string(), language: z.string(), start_date: z.string(), ruleset_id: z.string() });
+  const idParams = z.strictObject({ id: z.uuid() });
+
+  it('sends the step whose request fits, with the body as the template resolved it', async () => {
+    world.bindingOverrides = { league_create: { bodySchema: strictLeague }, roster_add: { paramsSchema: idParams } };
+    expect((await world.approve()).status).toBe('completed');
+    expect(world.calls[1].params).toEqual({ id: LEAGUE_ID });
+  });
+
+  it('does not send a body that gained a key after staging: the step fails agent_harness_error, the ledger row has no http status', async () => {
+    world.bindingOverrides = { league_create: { bodySchema: strictLeague.omit({ start_date: true }) } };
+    const result = await world.approve();
+    expect(statusesOf(result)).toEqual(['league:failed', 'roster.1:skipped', 'phase.regular_season:skipped', 'phase.playoffs:skipped']);
+    expect(result.steps[0].code).toBe('agent_harness_error');
+    expect(world.store.action('league')).toMatchObject({ status: 'failed', error_code: 'agent_harness_error', http_status: null, outcome_kind: null });
+    expect(world.calls).toEqual([]);
+    expect(world.audits.map((entry) => entry.action)).toContain('agent.step.fail');
+  });
+
+  it('refuses a literal path id that is not a uuid, after the steps before it ran', async () => {
+    world.bindingOverrides = { roster_add: { paramsSchema: idParams } };
+    reseal(world, (steps) => {
+      steps[1].path_params = { id: '../admin' };
+    });
+    const result = await world.approve();
+    expect(statusesOf(result)).toEqual(['league:ok', 'roster.1:failed', 'phase.regular_season:skipped', 'phase.playoffs:skipped']);
+    expect(result.steps[1].code).toBe('agent_harness_error');
+    expect(world.calledOps()).toEqual(['league_create']);
+  });
+
+  it('fails closed on a binding that declares no body schema', async () => {
+    world.bindingOverrides = { league_create: { bodySchema: undefined } };
+    expect(statusesOf(await world.approve())[0]).toBe('league:failed');
+    expect(world.calls).toEqual([]);
+  });
+
+  it('fails closed on a path with parameters and no params schema', async () => {
+    world.bindingOverrides = { roster_add: { paramsSchema: undefined } };
+    expect(statusesOf(await world.approve()).slice(0, 2)).toEqual(['league:ok', 'roster.1:failed']);
+    expect(world.calledOps()).toEqual(['league_create']);
+  });
+
+  it('logs only the issue paths and codes of a refused request, never the values', async () => {
+    world.bindingOverrides = { league_create: { bodySchema: z.strictObject({ name: z.string().max(3) }) } };
+    await world.approve();
+    const logged = vi.mocked(console.error).mock.calls.map((args) => args.map(String).join(' ')).join('\n');
+    expect(logged).toContain('was refused before dispatch (body: body.name:too_big, body:unrecognized_keys)');
+    expect(logged).not.toContain('Gen 9 OU League');
+  });
+
+  it('sends no body to a route that takes none (bodySchema null), and refuses a step that carries one anyway', async () => {
+    world.bindingOverrides = { roster_add: { bodySchema: null } };
+    await world.approve();
+    expect(world.store.action('roster.1')).toMatchObject({ status: 'failed', error_code: 'agent_harness_error' });
+    expect(world.calledOps()).toEqual(['league_create']);
+
+    // A stored null body is how an empty-body step is kept; the route is sent none.
+    const second = await makeWorld();
+    reseal(second, (steps) => {
+      steps[1].body_template = null;
+    });
+    second.bindingOverrides = { roster_add: { bodySchema: null } };
+    await second.approve();
+    expect(second.calls.find((call) => call.op === 'roster_add')?.body).toBeUndefined();
+  });
+
+  it('gives a resume no read-back for a request that no longer parses', async () => {
+    world.script.league_create = MASKED_500;
+    world.verify.league_create = () => ({ status: 'absent' });
+    await world.approve();
+    world.bindingOverrides = { league_create: { bodySchema: z.strictObject({ name: z.string().max(3) }) } };
+    world.verifies.length = 0;
+    world.clock.ms += 20 * 1000 + 60 * 1000;
+    const result = await world.resume();
+    expect(result.steps[0]).toMatchObject({ status: 'unknown', code: 'unknown_outcome' });
+    expect(world.verifies).toEqual([]);
+  });
+});
+
+describe('what the read-back is given and may answer', () => {
+  it('gets the approval time, whether the admin is a site admin and the context the step was dispatched with', async () => {
+    const seen: VerifyContext[] = [];
+    world.bindingOverrides = {
+      league_create: {
+        verify: async (_call, _outcome, ctx) => {
+          seen.push(ctx);
+          return { status: 'confirmed', detail: { id: LEAGUE_ID, ruleset_id: RULESET_ID } };
+        },
+      },
+    };
+    const input = await world.input();
+    await world.run(input);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ adminId: ADMIN, isSiteAdmin: true, approvedAt: world.row.approved_at });
+    expect(seen[0].dispatch?.session).toBe(input.session);
+    expect(seen[0].dispatch?.audit).toMatchObject({ agent_step: 'league', agent_tool: 'league_create', approved_by: ADMIN });
+  });
+
+  it('may answer failed with a catalogued code: the step is failed, the ledger keeps the code and the id of what exists', async () => {
+    world.verify.league_create = () => ({ status: 'failed', code: 'created_but_unadministrable', detail: { id: LEAGUE_ID } });
+    const result = await world.approve();
+    expect(statusesOf(result)).toEqual(['league:failed', 'roster.1:skipped', 'phase.regular_season:skipped', 'phase.playoffs:skipped']);
+    expect(result.steps[0]).toMatchObject({ code: 'created_but_unadministrable', entity_id: LEAGUE_ID });
+    expect(world.store.action('league')).toMatchObject({ status: 'failed', error_code: 'created_but_unadministrable', entity_id: LEAGUE_ID, http_status: 201, verify: { status: 'failed', id: LEAGUE_ID } });
+    expect(world.audits.find((entry) => entry.action === 'agent.step.fail')).toMatchObject({ metadata: { code: 'created_but_unadministrable' } });
+    expect(result.status).toBe('failed');
+  });
+
+  it('adopts a failed verdict after an unknown outcome as a failed step, without waiting for the settle window', async () => {
+    world.script.league_create = MASKED_500;
+    world.verify.league_create = () => ({ status: 'failed', code: 'created_but_unadministrable', detail: { id: LEAGUE_ID } });
+    const result = await world.approve();
+    expect(result.steps[0]).toMatchObject({ status: 'failed', code: 'created_but_unadministrable', entity_id: LEAGUE_ID });
+    expect(world.sleeps).toEqual([]);
   });
 });
 

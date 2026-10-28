@@ -9,7 +9,6 @@
  */
 import { createHmac } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
-import { appendHarnessEvent } from '@/lib/ai/admin-agent/loop/repair';
 import { liveFingerprints } from '@/lib/ai/admin-agent/proposals/live';
 import {
   executeProposal,
@@ -27,10 +26,8 @@ import type { ApiResult } from '@/types/api';
 import { getBindingRegistry } from '../_ops/g';
 import type { AgentAuth } from './auth';
 import { agentError } from './errors';
+import { recordHarnessEvent } from './events';
 import { agentRateLimited } from './request';
-
-/** The harness event is appended under the conversation's turn lease, held only while the append runs. */
-const EVENT_LEASE_SECONDS = 30;
 
 /** A keyed hash of the client address for the claim's stamp: the address itself is never stored. */
 function hashClientIp(request: NextRequest): string | null {
@@ -54,13 +51,7 @@ function liveDeps(auth: AgentAuth): ExecutorDeps {
     config: () => auth.config,
     registryVersion: (toolSet) => buildToolSet({ role: toolSet === 'site' ? 'site' : 'scoped', maxPhase: auth.config.maxPhase }).registryVersion,
     rateLimit: (identity, options) => checkRateLimit('admin-agent-write', identity, { ...options, failMode: 'closed' }),
-    recordEvent: (adminId, conversationId, event, data) =>
-      adminAgentStore.conversations.withTurnLease(
-        adminId,
-        conversationId,
-        () => appendHarnessEvent(adminAgentStore, adminId, conversationId, event, data),
-        EVENT_LEASE_SECONDS,
-      ),
+    recordEvent: recordHarnessEvent,
     audit: logAuditEvent,
     now: () => new Date(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),

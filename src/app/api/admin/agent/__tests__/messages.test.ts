@@ -6,7 +6,11 @@ const mocks = vi.hoisted(() => ({
   checkRateLimit: vi.fn(),
   startTurn: vi.fn(),
   after: vi.fn(),
-  store: { conversations: { getConversation: vi.fn() }, messages: { loadTail: vi.fn() } },
+  store: {
+    conversations: { getConversation: vi.fn(), withTurnLease: vi.fn() },
+    messages: { loadTail: vi.fn(), appendMessage: vi.fn() },
+    proposals: { reapExecutingProposals: vi.fn(), getProposal: vi.fn() },
+  },
 }));
 
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
@@ -37,7 +41,8 @@ vi.mock('../_lib/agent', () => ({ getAdminAgent: () => ({ startTurn: mocks.start
 import { AuthError } from '@/lib/auth/helpers';
 import { AdminAgentStoreError } from '@/lib/ai/admin-agent/store/errors';
 import * as route from '../conversations/[id]/messages/route';
-import { CONVERSATION, ME, SAME_SITE, conversation, message, params, player, post } from './support';
+import { REAPER_AGE_MS } from '@/lib/ai/admin-agent/proposals/reaper';
+import { CONVERSATION, ME, SAME_SITE, conversation, message, params, player, post, proposal } from './support';
 
 const URL = `/api/admin/agent/conversations/${CONVERSATION}/messages`;
 const GOOD = { text: 'Set up a 12-player league', client_msg_id: 'msg-12345678' };
@@ -64,6 +69,8 @@ beforeEach(() => {
   mocks.authAndRecord.mockResolvedValue({ expires: '2099-01-01T00:00:00.000Z' });
   mocks.checkRateLimit.mockResolvedValue({ allowed: true, remaining: 30, retryAfterSeconds: 0 });
   mocks.store.conversations.getConversation.mockResolvedValue(conversation());
+  mocks.store.proposals.reapExecutingProposals.mockResolvedValue([]);
+  mocks.store.conversations.withTurnLease.mockImplementation(async (_admin: string, _conversation: string, work: () => Promise<unknown>) => work());
   mocks.startTurn.mockResolvedValue(startedTurn());
 });
 
@@ -188,6 +195,54 @@ describe('POST /api/admin/agent/conversations/[id]/messages', () => {
     expect(mocks.checkRateLimit).toHaveBeenCalledWith('admin-agent-turn', ME, { limit: 40, windowSeconds: 3600, failMode: 'closed' });
     expect(mocks.checkRateLimit.mock.invocationCallOrder[0]).toBeLessThan(mocks.startTurn.mock.invocationCallOrder[0]);
     expect(mocks.checkRateLimit.mock.invocationCallOrder[0]).toBeGreaterThan(mocks.store.conversations.getConversation.mock.invocationCallOrder[0]);
+  });
+
+  describe('the reaper', () => {
+    it('reaps the overdue executions of the admin after the limiter and before the loop starts, and tells the conversation', async () => {
+      mocks.store.proposals.reapExecutingProposals.mockResolvedValue([proposal().id]);
+      mocks.store.proposals.getProposal.mockResolvedValue(proposal());
+      mocks.store.messages.loadTail.mockResolvedValue([]);
+
+      const before = Date.now();
+      expect((await call(GOOD)).status).toBe(200);
+
+      const [adminId, olderThan] = mocks.store.proposals.reapExecutingProposals.mock.calls[0] as [string, Date];
+      expect(adminId).toBe(ME);
+      expect(Math.abs(before - REAPER_AGE_MS - olderThan.getTime())).toBeLessThan(5000);
+      expect(mocks.store.conversations.withTurnLease).toHaveBeenCalledWith(ME, CONVERSATION, expect.any(Function), 30);
+      expect(mocks.store.messages.appendMessage).toHaveBeenCalledWith(
+        ME,
+        CONVERSATION,
+        expect.objectContaining({ role: 'system', kind: 'harness_event', ui: { event: 'proposal_executed', data: expect.objectContaining({ proposal_id: proposal().id, status: 'unknown', reaped: true }) } }),
+      );
+      const order = (mock: { mock: { invocationCallOrder: number[] } }) => mock.mock.invocationCallOrder[0];
+      expect(order(mocks.checkRateLimit)).toBeLessThan(order(mocks.store.proposals.reapExecutingProposals));
+      expect(order(mocks.store.proposals.reapExecutingProposals)).toBeLessThan(order(mocks.store.conversations.withTurnLease));
+      expect(order(mocks.store.conversations.withTurnLease)).toBeLessThan(order(mocks.startTurn));
+    });
+
+    it('also runs on a continue turn', async () => {
+      mocks.store.messages.loadTail.mockResolvedValue([message({ seq: 5, role: 'system', kind: 'harness_event' })]);
+      await call({ continue: true });
+      expect(mocks.store.proposals.reapExecutingProposals).toHaveBeenCalledOnce();
+    });
+
+    it('does not run for a request that was refused (a conversation of another admin, a spent limit)', async () => {
+      mocks.store.conversations.getConversation.mockResolvedValue(null);
+      await call(GOOD);
+      mocks.store.conversations.getConversation.mockResolvedValue(conversation());
+      mocks.checkRateLimit.mockResolvedValue({ allowed: false, remaining: 0, retryAfterSeconds: 30 });
+      await call(GOOD);
+      expect(mocks.store.proposals.reapExecutingProposals).not.toHaveBeenCalled();
+    });
+
+    it('never stops the turn: a failing reap is logged and the turn starts', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mocks.store.proposals.reapExecutingProposals.mockRejectedValue(new Error('db down'));
+      expect((await call(GOOD)).status).toBe(200);
+      expect(mocks.startTurn).toHaveBeenCalledOnce();
+      log.mockRestore();
+    });
   });
 
   it('answers 429 with Retry-After and starts nothing when the limit is spent', async () => {

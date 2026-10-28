@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { Session } from 'next-auth';
 import { vi, type Mock } from 'vitest';
+import { z } from 'zod';
 import { auth } from '@/auth';
 import { getAgentAuditContext, type AgentAuditContext } from '@/lib/audit/agent-context';
 import { authAndRecord } from '@/lib/auth/session-override';
@@ -363,6 +364,9 @@ export async function makeWorld(options: { phase?: number } = {}): Promise<World
             phase: 1 as BindingPhase,
             load: async () => ({ [route.method]: handler }),
             reversal: { kind: 'none' },
+            // Loose on purpose: the executor's own checks are tested here; the real strict schemas are the bindings' tests.
+            bodySchema: z.looseObject({}),
+            ...(route.routeTemplate.includes('[') ? { paramsSchema: z.looseObject({}) } : {}),
             verify: async (call, outcome) => {
               verifies.push({ op, outcomeKind: outcome.kind });
               const custom = world.verify[op];

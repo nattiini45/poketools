@@ -125,6 +125,29 @@ describe('the chat side cannot reach the executor, the _ops/g bindings or the ap
   }, 30_000);
 });
 
+describe('the reaper is the one part of the executor job the chat turn shares', () => {
+  const reaper = `${AGENT_REL}/proposals/reaper.ts`;
+
+  it('is reached by the chat route (it reaps at the start of a turn) through the shared event wiring, not through the executor', () => {
+    const entry = abs(`${ROUTES_REL}/conversations/[id]/messages/route.ts`);
+    const chain = findPath(buildGraph([entry]), [entry], (file) => relFromRepo(file) === reaper);
+    expect(chain?.map(relFromRepo)).toEqual([`${ROUTES_REL}/conversations/[id]/messages/route.ts`, `${ROUTES_REL}/_lib/events.ts`, reaper]);
+  });
+
+  it('is imported by the executor too, so the two cannot disagree on the age or the event', () => {
+    const entry = abs(`${AGENT_REL}/proposals/executor.ts`);
+    expect([...(buildGraph([entry]).edges.get(entry) ?? [])].includes(abs(reaper))).toBe(true);
+  });
+
+  it('reaches no executor, no binding and no approve code from the reaper or the shared event wiring', () => {
+    for (const rel of [reaper, `${ROUTES_REL}/_lib/events.ts`]) {
+      const entry = abs(rel);
+      const chain = findPath(buildGraph([entry]), [entry], (file) => isPrivileged(relFromRepo(file)));
+      expect(chain?.map(relFromRepo), rel).toBeUndefined();
+    }
+  }, 30_000);
+});
+
 /** A file's code without comments. */
 const source = (file: string): string => stripComments(readFileSync(file, 'utf8'));
 

@@ -16,7 +16,8 @@ import 'server-only';
  *     and repeats the live checks, the recheck and the steps against the ledger rows that already exist.
  *
  * Each step: ledger row first (awaited; a failed insert dispatches nothing), preconditions, symbolic references from the
- * ledger results of `ok` steps, `invokeRoute`, outcome mapping, the binding's read-back, the ledger update, a fire-and-forget
+ * ledger results of `ok` steps, the resolved path params and body parsed with the binding's own strict schemas (a request that
+ * no longer fits is not sent), `invokeRoute`, outcome mapping, the binding's read-back, the ledger update, a fire-and-forget
  * `agent.step.*` audit event. A step that is not `ok` stops the run. A write whose outcome is unknown (masked 500, 504,
  * step timeout) is read back and reconciled, never retried: nothing here dispatches a step twice.
  *
@@ -30,12 +31,12 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { AuditLogEntry } from '@/lib/audit/log';
 import type { JsonValue } from '@/lib/studio-core/json';
 import { isValidUuid } from '@/lib/utils/uuid';
-import { DEFAULT_ROUTE_TIMEOUT_MS, harnessError, invokeRoute, isUnknownOutcome, outcomeCode } from '../dispatch';
-import type { BindingRegistry, DispatchQuery, Outcome, QueryValue, RouteBinding, VerifyResult } from '../dispatch';
+import { DEFAULT_ROUTE_TIMEOUT_MS, checkCall, harnessError, invokeRoute, isUnknownOutcome, outcomeCode } from '../dispatch';
+import type { BindingRegistry, DispatchContext, DispatchQuery, Outcome, QueryValue, RouteBinding, VerifyContext, VerifyResult } from '../dispatch';
 import type { AdminAgentConfig } from '../env';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
 import { isRefObject, REF_PATH_PATTERN } from '../plans/route-bodies';
-import type { PlanOp } from '../plans/ops';
+import { PLAN_OPS, type PlanOp } from '../plans/ops';
 import type { ActionRepository } from '../store/actions';
 import type { ConversationRepository } from '../store/conversations';
 import { AdminAgentStoreError } from '../store/errors';
@@ -45,16 +46,15 @@ import type { ActionRecord, BlastClaim, Json, ProposalFinalStatus, ProposalRecor
 import { proposalCardSchema } from './card';
 import { changedPreconditions, preconditionsHash } from './fingerprints';
 import type { FingerprintSource, PreconditionEntry } from './fingerprints';
+import { REAPER_AGE_MS, RESULT_EVENT, ROUTE_MAX_DURATION_SECONDS, reapOverdueProposals } from './reaper';
 import { storedStepSchema, stepHashMatches } from './steps';
 import type { StoredStep } from './steps';
 import { approvalTokenHash } from './token';
 
 // ─── Timing (spec §18.6, §18.7) ──────────────────────────────────────────────
 
-/** `maxDuration` of the approve and resume routes. */
-export const ROUTE_MAX_DURATION_SECONDS = 300;
-/** The reaper: an `executing` proposal older than twice `maxDuration` is `unknown`, so a crash cannot hold the conversation. */
-export const REAPER_AGE_MS = 2 * ROUTE_MAX_DURATION_SECONDS * 1000;
+// The reaper's constants live with the reaper: the chat turn reaps too and must not import this file.
+export { REAPER_AGE_MS, RESULT_EVENT, ROUTE_MAX_DURATION_SECONDS };
 /** A Build left `executing` can be resumed this long after its claim, under the same approval. */
 export const RESUME_WINDOW_MS = 10 * 60 * 1000;
 /** No new step starts after this much wall clock of one request; the proposal stays `executing` for a resume. */
@@ -63,9 +63,6 @@ export const STEP_DEADLINE_MS = 240_000;
 export const SETTLE_MS = 15_000;
 /** The write limiter: one hit per approve or resume (spec §18.10 "Executed writes"). */
 const WRITE_LIMIT_WINDOW_SECONDS = 60 * 60;
-
-/** The event the executor appends to the conversation when a proposal ran (the UI catalog already labels it). */
-export const RESULT_EVENT = 'proposal_executed';
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
@@ -322,31 +319,6 @@ async function assertEligible(deps: ExecutorDeps, input: ExecuteInput, proposal:
   }
 }
 
-// ─── The reaper ──────────────────────────────────────────────────────────────
-
-/**
- * Moves this admin's overdue `executing` proposals to `unknown` and tells their conversations. Best effort: a failure here
- * is logged and the claim that follows says what is wrong (the executing-proposal index refuses a second claim).
- */
-async function reapOverdue(deps: ExecutorDeps, adminId: AdminId): Promise<void> {
-  let ids: string[];
-  try {
-    ids = await deps.store.proposals.reapExecutingProposals(adminId, new Date(deps.now().getTime() - REAPER_AGE_MS));
-  } catch (error) {
-    console.error(`${logTag}: the reaper failed`, error);
-    return;
-  }
-  for (const id of ids) {
-    try {
-      const reaped = await deps.store.proposals.getProposal(adminId, id);
-      if (reaped === null) continue;
-      await deps.recordEvent(adminId, reaped.conversation_id, RESULT_EVENT, { proposal_id: reaped.id, plan_code: planCode(reaped.proposal_hash), status: 'unknown', reaped: true });
-    } catch (error) {
-      console.error(`${logTag}: could not tell the conversation about a reaped proposal`, error);
-    }
-  }
-}
-
 // ─── The recheck (after the claim) ───────────────────────────────────────────
 
 interface Refusal {
@@ -375,6 +347,8 @@ async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: Propos
     if (binding.class !== step.class || binding.method !== step.method || binding.path !== step.route_template) return { code: 'proposal_stale', reason: `binding_differs:${step.op}` };
     // A Build never holds a Go-live step, and a Go-live proposal never a Build step.
     if (step.class !== proposal.class) return { code: 'proposal_stale', reason: `class_differs:${step.key}` };
+    // The registry also holds the compensating calls (archive a league, remove a roster row): staging derives only the Plan's ops.
+    if (proposal.kind === 'build' && !(PLAN_OPS as readonly string[]).includes(step.op)) return { code: 'proposal_stale', reason: `op_not_buildable:${step.op}` };
     if ((binding.phase ?? 5) > cfg.maxPhase) return { code: 'proposal_stale', reason: `phase_above_cap:${step.op}` };
     for (const template of [step.path_params, step.query, step.body_template]) {
       for (const ref of collectRefs(template as JsonValue)) {
@@ -498,10 +472,38 @@ function resolveStep(ctx: RunContext, step: StoredStep): Resolved {
   return { ok: true, call: { step: { key: step.key, op: step.op, entity_type: step.entity_type, targets: step.targets }, params, query, body } };
 }
 
-async function verifyStep(binding: RouteBinding, call: StepCall, outcome: Outcome, adminId: AdminId): Promise<VerifyResult & { ambiguous: boolean }> {
+/** How a step is dispatched, as the verified session of this request. The read-back gets it too, for a repair it runs itself. */
+function dispatchContextOf(ctx: RunContext, step: StoredStep): DispatchContext {
+  return {
+    session: ctx.input.session,
+    inbound: ctx.input.inbound,
+    audit: {
+      agent_conversation_id: ctx.proposal.conversation_id,
+      agent_proposal_id: ctx.proposal.id,
+      agent_step: step.key,
+      agent_tool: step.op,
+      approved_by: ctx.input.adminId,
+      ...(ctx.proposal.approved_at ? { approved_at: ctx.proposal.approved_at } : {}),
+      plan_code: planCode(ctx.proposal.proposal_hash),
+      args_hash: step.args_hash,
+      tool_registry_version: ctx.proposal.tool_registry_version,
+    },
+  };
+}
+
+function verifyContextOf(ctx: RunContext, step: StoredStep): VerifyContext {
+  return {
+    adminId: ctx.input.adminId,
+    isSiteAdmin: ctx.input.isSiteAdmin,
+    ...(ctx.proposal.approved_at ? { approvedAt: ctx.proposal.approved_at } : {}),
+    dispatch: dispatchContextOf(ctx, step),
+  };
+}
+
+async function verifyStep(ctx: RunContext, step: StoredStep, binding: RouteBinding, call: StepCall, outcome: Outcome): Promise<VerifyResult & { ambiguous: boolean }> {
   if (typeof binding.verify !== 'function') return { status: 'unknown', ambiguous: false };
   try {
-    const verdict = await binding.verify(call, outcome, { adminId });
+    const verdict = await binding.verify(call, outcome, verifyContextOf(ctx, step));
     return { ...verdict, ambiguous: verdict.detail?.ambiguous === true };
   } catch (error) {
     // The read-back could not run. The step stays unknown; the cause is in the log, never in the result.
@@ -511,11 +513,11 @@ async function verifyStep(binding: RouteBinding, call: StepCall, outcome: Outcom
 }
 
 /** `verify`, and for a write that may still be running one more read after the settle window. */
-async function reconcile(ctx: RunContext, binding: RouteBinding, call: StepCall, outcome: Outcome, settle: boolean): Promise<VerifyResult & { ambiguous: boolean }> {
-  let verdict = await verifyStep(binding, call, outcome, ctx.input.adminId);
-  if (verdict.status === 'confirmed' || verdict.ambiguous || !settle) return verdict;
+async function reconcile(ctx: RunContext, step: StoredStep, binding: RouteBinding, call: StepCall, outcome: Outcome, settle: boolean): Promise<VerifyResult & { ambiguous: boolean }> {
+  let verdict = await verifyStep(ctx, step, binding, call, outcome);
+  if (verdict.status === 'confirmed' || verdict.status === 'failed' || verdict.ambiguous || !settle) return verdict;
   await ctx.deps.sleep(SETTLE_MS);
-  verdict = await verifyStep(binding, call, outcome, ctx.input.adminId);
+  verdict = await verifyStep(ctx, step, binding, call, outcome);
   return verdict;
 }
 
@@ -622,12 +624,14 @@ async function adoptRow(ctx: RunContext, step: StoredStep, row: ActionRecord): P
   const binding = ctx.deps.bindings.get(step.op);
   const resolved = resolveStep(ctx, step);
   if (binding === undefined || !resolved.ok) return { status: 'unknown', code: 'unknown_outcome' };
+  // Nothing is dispatched here, but the read-back builds its queries from the same request: it gets only one that still parses.
+  if (!checkCall(binding, resolved.call).ok) return { status: 'unknown', code: 'unknown_outcome' };
   const age = nowMs(ctx) - Date.parse(row.created_at);
   // An `executing` row this young may belong to a request that is still dispatching it (a resume racing the approve).
   // Leave the row to that request: no read-back, no ledger write; the proposal stays open for a later resume.
   if (row.status === 'executing' && !(age >= (binding.timeoutMs ?? DEFAULT_ROUTE_TIMEOUT_MS) + SETTLE_MS)) return { status: 'unknown', code: 'unknown_outcome' };
   const young = age < SETTLE_MS;
-  const verdict = await reconcile(ctx, binding, resolved.call, harnessError('step_timeout', { write: true, ran: true }), young);
+  const verdict = await reconcile(ctx, step, binding, resolved.call, harnessError('step_timeout', { write: true, ran: true }), young);
   return concludeReconcile(ctx, step, row, verdict, null);
 }
 
@@ -643,6 +647,13 @@ async function concludeReconcile(
   if (verdict.status === 'confirmed') {
     const result = extractStepResult(step.op, verdict.detail ?? {});
     const run = await settleStep(ctx, step, action, { status: 'ok', ...(outcome ? { outcome } : {}), result, verify });
+    auditStep(ctx, step, run);
+    return run;
+  }
+  if (verdict.status === 'failed') {
+    // The write is there and the step still did not succeed (a tournament its creator cannot administer): the ledger keeps the id.
+    const result = extractStepResult(step.op, verdict.detail ?? {});
+    const run = await settleStep(ctx, step, action, { status: 'failed', code: verdict.code ?? 'step_failed', ...(outcome ? { outcome } : {}), result, verify });
     auditStep(ctx, step, run);
     return run;
   }
@@ -678,34 +689,33 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
   }
   const { call } = resolved;
 
-  // e. Dispatch as the verified session. `invokeRoute` never rejects.
+  // d2. The resolved request against the binding's strict schemas. A step is data: a body or an id that no longer fits what the
+  // binding allows is not sent. Only the zod issue paths are logged, never the values.
+  const check = checkCall(binding, call);
+  if (!check.ok) {
+    console.error(`${logTag}: the resolved request of ${step.key} was refused before dispatch (${check.reason}: ${check.issues.join(', ')})`);
+    const run = await settleStep(ctx, step, action, { status: 'failed', code: 'agent_harness_error' });
+    auditStep(ctx, step, run);
+    return { run };
+  }
+
+  // e. Dispatch as the verified session. `invokeRoute` never rejects. A route that takes no body is sent none.
   const outcome = await invokeRoute(
     binding,
-    { params: call.params, query: call.query, body: call.body },
-    {
-      session: ctx.input.session,
-      inbound: ctx.input.inbound,
-      audit: {
-        agent_conversation_id: ctx.proposal.conversation_id,
-        agent_proposal_id: ctx.proposal.id,
-        agent_step: step.key,
-        agent_tool: step.op,
-        approved_by: ctx.input.adminId,
-        ...(ctx.proposal.approved_at ? { approved_at: ctx.proposal.approved_at } : {}),
-        plan_code: planCode(ctx.proposal.proposal_hash),
-        args_hash: step.args_hash,
-        tool_registry_version: ctx.proposal.tool_registry_version,
-      },
-    },
+    { params: call.params, query: call.query, body: binding.bodySchema === null ? undefined : call.body },
+    dispatchContextOf(ctx, step),
   );
 
   // f. Outcome to step state.
   let run: StepRun;
   if (outcome.kind === 'ok') {
-    const verdict = await verifyStep(binding, call, outcome, ctx.input.adminId);
+    const verdict = await verifyStep(ctx, step, binding, call, outcome);
     if (verdict.status === 'confirmed') {
       const result = extractStepResult(step.op, outcome.data) ?? extractStepResult(step.op, verdict.detail ?? {});
       run = await settleStep(ctx, step, action, { status: 'ok', outcome, result, verify: { status: verdict.status, ...(verdict.detail ?? {}) } as Json });
+    } else if (verdict.status === 'failed') {
+      const result = extractStepResult(step.op, outcome.data) ?? extractStepResult(step.op, verdict.detail ?? {});
+      run = await settleStep(ctx, step, action, { status: 'failed', code: verdict.code ?? 'step_failed', outcome, result, verify: { status: verdict.status, ...(verdict.detail ?? {}) } as Json });
     } else {
       // The route said 2xx and the read-back cannot find it: unknown, to be reconciled by a resume.
       const code = verdict.ambiguous ? 'reconcile_ambiguous' : 'unknown_outcome';
@@ -714,7 +724,7 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
   } else if (isUnknownOutcome(outcome)) {
     // A masked 500, a 504 or a step timeout: the write may have committed (or still be running). Read it back; adopt it
     // if it is there; otherwise it stays unknown. Never retried in this request.
-    const verdict = await reconcile(ctx, binding, call, outcome, true);
+    const verdict = await reconcile(ctx, step, binding, call, outcome, true);
     run = await concludeReconcile(ctx, step, action, verdict, outcome);
     return { run };
   } else {
@@ -831,9 +841,9 @@ export async function executeProposal(deps: ExecutorDeps, input: ExecuteInput): 
   const preSteps = stepsOf(proposal);
   await assertEligible(deps, input, proposal, preSteps);
 
-  // 2. The reaper, then the atomic claim: the single statement that makes a replay impossible.
+  // 2. The reaper (this admin's overdue executions), then the atomic claim: the single statement that makes a replay impossible.
   if (input.mode === 'approve') {
-    await reapOverdue(deps, input.adminId);
+    await reapOverdueProposals({ proposals: deps.store.proposals, recordEvent: deps.recordEvent, now: deps.now }, input.adminId);
     proposal = await store.proposals.claimProposal(input.adminId, proposal.id, {
       tokenHash: approvalTokenHash(input.approval.token),
       ipHash: input.approval.ipHash ?? null,

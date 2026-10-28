@@ -7,6 +7,7 @@
  */
 import type { Session } from 'next-auth';
 import type { NextRequest } from 'next/server';
+import type { ZodType } from 'zod';
 import type { AgentAuditContext } from '@/lib/audit/agent-context';
 
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
@@ -57,21 +58,52 @@ export type BindingReversal<TArgs> =
       readonly kind: 'compensating';
       /** The `operation` of the binding that reverses it. */
       readonly operation: string;
-      /** The call that reverses this one, built from the step's args and the `data` its route answered. */
-      buildInput(args: TArgs, result: unknown): DispatchInput;
+      /**
+       * The call that reverses this one, built from the step's args and the `data` its route answered. A step that touched
+       * several entities (a roster add) returns one call per entity.
+       */
+      buildInput(args: TArgs, result: unknown): DispatchInput | readonly DispatchInput[];
     };
 
 /** What a `verify` read-back concluded (plan 3.3, 4.5 step f). */
 export interface VerifyResult {
-  /** `confirmed`: the write is visible; `absent`: it is not; `unknown`: the read could not tell. */
-  readonly status: 'confirmed' | 'absent' | 'unknown';
+  /**
+   * `confirmed`: the write is visible; `absent`: it is not; `unknown`: the read could not tell (a natural-key match of more
+   * than one row says `detail.ambiguous: true`); `failed`: the write is visible and the step still did not succeed, for the
+   * catalogued `code` (the tournament exists and its creator cannot administer it).
+   */
+  readonly status: 'confirmed' | 'absent' | 'unknown' | 'failed';
   /** Small, allow-listed facts for the ledger (ids, counts). Never free text from the model. */
   readonly detail?: Readonly<Record<string, string | number | boolean | null>>;
+  /** A catalogued code, for `failed`. */
+  readonly code?: string;
+}
+
+/** The resolved request a step was sent with (what the executor hands to `verify`): params, query and body as dispatched. */
+export interface VerifyCall {
+  readonly step: {
+    readonly key: string;
+    readonly op: string;
+    readonly entity_type: string;
+    readonly targets: ReadonlyArray<{ readonly kind: string; readonly id: string }>;
+  };
+  readonly params: Readonly<Record<string, string>>;
+  readonly query: DispatchQuery;
+  readonly body: unknown;
 }
 
 export interface VerifyContext {
   /** The admin the step runs for; a verify read goes through the same guards as any reader. */
   readonly adminId: string;
+  /** From the live `requireAnyAdmin()`: a site admin holds no per-resource grant, so a grant check is for the others. */
+  readonly isSiteAdmin?: boolean;
+  /** When the proposal was approved (ISO). A natural-key lookup of a row the step may have created only looks at rows created from then on. */
+  readonly approvedAt?: string;
+  /**
+   * The context the step was dispatched with, for a repair the read-back runs itself through `invokeRoute` (re-running an
+   * enrollment sync the phase route did not finish). Absent: the read-back repairs nothing.
+   */
+  readonly dispatch?: DispatchContext;
 }
 
 /**
@@ -100,6 +132,17 @@ export interface RouteBinding<TArgs = unknown> {
    * that minus a margin (`league_trash`).
    */
   readonly timeoutMs?: number;
+  /**
+   * The request body a step may send, as a zod schema the executor parses the RESOLVED body with before it dispatches (a
+   * body that does not parse is not sent). Derive it from the route's own schema and make it strict. `null` says the route
+   * takes no body. Required for a binding the executor dispatches (class B and G): a missing one refuses the step.
+   */
+  readonly bodySchema?: ZodType | null;
+  /**
+   * The path parameters of a step, parsed the same way; ids must parse as uuids. Required when `path` has `[name]`
+   * segments.
+   */
+  readonly paramsSchema?: ZodType;
   /** Builders from the step's validated args to the call, so the executor rebuilds the request from stored fields. */
   buildParams?(args: TArgs): Readonly<Record<string, string>>;
   buildQuery?(args: TArgs): DispatchQuery;

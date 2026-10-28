@@ -5,6 +5,7 @@
  * Nothing here imports a route. A binding carries its own lazy `load()`; the registry only indexes bindings by
  * `operation`, so the core stays testable without Next.
  */
+import type { ZodError } from 'zod';
 import {
   ACTION_CLASSES,
   HTTP_METHODS,
@@ -80,6 +81,38 @@ export function validateBinding(binding: RouteBinding): string[] {
     fail('a compensating reversal must declare buildInput');
   }
   return problems;
+}
+
+/** Why a resolved request was not dispatched: no schema to check it with, or the `params` or `body` did not parse. */
+export type CallCheck =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'no_schema' | 'params' | 'body';
+      /** The zod issue paths and codes (`body.name:too_big`), never the values. */
+      readonly issues: readonly string[];
+    };
+
+/**
+ * Whether the RESOLVED path params and body of a stored step still fit what the binding allows (spec §18.6). The executor
+ * calls this before every dispatch: a step is data, and data that no longer parses with the binding's strict schemas (a key
+ * added after staging, a path id that is not a uuid) is not sent. A binding that declares no schema for something the step
+ * carries is refused too (fail closed). The route re-validates on its own; this is the second lock.
+ */
+export function checkCall(binding: RouteBinding, call: { readonly params: Readonly<Record<string, string>>; readonly body: unknown }): CallCheck {
+  const issuesOf = (area: string, error: ZodError): string[] => error.issues.slice(0, 8).map((issue) => `${[area, ...issue.path.map(String)].join('.')}:${issue.code}`);
+
+  if (pathParamNames(binding.path).length > 0) {
+    if (binding.paramsSchema === undefined) return { ok: false, reason: 'no_schema', issues: ['params'] };
+    const params = binding.paramsSchema.safeParse(call.params);
+    if (!params.success) return { ok: false, reason: 'params', issues: issuesOf('params', params.error) };
+  }
+
+  if (binding.bodySchema === undefined) return { ok: false, reason: 'no_schema', issues: ['body'] };
+  // An empty body is `undefined` or the stored `null`; anything else sent to a route that takes none is refused.
+  if (binding.bodySchema === null) return call.body === undefined || call.body === null ? { ok: true } : { ok: false, reason: 'body', issues: ['body:not_empty'] };
+  const body = binding.bodySchema.safeParse(call.body);
+  return body.success ? { ok: true } : { ok: false, reason: 'body', issues: issuesOf('body', body.error) };
 }
 
 /** The call a step's args produce through the binding's builders (each is optional). */
