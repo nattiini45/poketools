@@ -15,7 +15,8 @@ vi.mock('@/lib/auth/helpers', () => ({
   },
 }));
 
-vi.mock('@/lib/ai/constants', () => ({
+vi.mock('@/lib/ai/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/constants')>()),
   AI_ANALYSIS_STALE_MS: 300_000,
 }));
 
@@ -60,6 +61,7 @@ import {
 } from '@/lib/supabase/queries/match-prep-analyses';
 import { buildMatchPrepPrompt } from '@/lib/ai/context-builder';
 import { completeStreaming } from '@/lib/ai/client';
+import { OutputCapError, RefusalError, ModelRejectedError } from '@/lib/ai/errors';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -446,5 +448,110 @@ describe('POST /api/ai/match-prep-analysis — error codes and output language (
     });
 
     errorSpy.mockRestore();
+  });
+});
+
+// ─── Stored model, failure mapping and safe sends ───────────────────
+
+describe('POST /api/ai/match-prep-analysis — hardening', () => {
+  const scoutingJson = JSON.stringify({
+    opponent_profile: 'A patient balance player.',
+    signature_pokemon: [],
+    tendencies: {},
+    recommendations: {},
+  });
+
+  function arrange() {
+    vi.mocked(requireAuth).mockResolvedValue(mockSession as never);
+    vi.mocked(getMatchById).mockResolvedValue(mockMatch as never);
+    vi.mocked(getMatchPrepAnalysis).mockResolvedValue(null);
+    vi.mocked(buildMatchPrepPrompt).mockResolvedValue({ systemPrompt: 'system', userPrompt: 'user', hasUserTeam: false });
+    vi.mocked(createMatchPrepAnalysis).mockResolvedValue({ id: 'new-analysis' } as never);
+    vi.mocked(checkAndRecordAiGeneration).mockResolvedValue({ allowed: true, limit: 10, remaining: 9, used: 1 });
+  }
+
+  function lastFrame(text: string) {
+    return JSON.parse(text.split('\n\n').filter(Boolean).at(-1)!.replace(/^data: /, ''));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(updateMatchPrepAnalysis).mockResolvedValue(undefined);
+  });
+
+  it('asks for JSON output and stores the model that actually answered', async () => {
+    arrange();
+    vi.mocked(completeStreaming).mockResolvedValue({
+      content: scoutingJson,
+      model: 'claude-haiku-4-5-20251001',
+      prompt_tokens: 100,
+      completion_tokens: 200,
+      fallback_used: true,
+    });
+
+    expect(await readStream(await POST(makeRequest({ match_id: UUID_MATCH })))).toContain('"status":"done"');
+
+    expect(vi.mocked(completeStreaming).mock.calls[0][4]).toMatchObject({ jsonOutput: true });
+    expect(createMatchPrepAnalysis).toHaveBeenCalledWith(UUID_MATCH, 'player-1', expect.any(String), false);
+    expect(updateMatchPrepAnalysis).toHaveBeenCalledWith(
+      'new-analysis',
+      expect.objectContaining({ status: 'completed', model_id: 'claude-haiku-4-5-20251001' }),
+    );
+  });
+
+  it.each([
+    [
+      'a truncated answer',
+      () => new OutputCapError('claude-sonnet-4-6', 4096),
+      { code: 'ai_output_truncated', stored: 'ai_output_truncated: max_tokens 4096 on claude-sonnet-4-6' },
+    ],
+    [
+      'a refusal',
+      () => new RefusalError('claude-sonnet-4-6'),
+      { code: 'ai_output_refused', stored: 'ai_output_refused: refusal on claude-sonnet-4-6' },
+    ],
+    [
+      'a rejected request',
+      () => new ModelRejectedError('claude-sonnet-4-6', 401, 'authentication_error'),
+      { code: 'ai_service_unavailable', stored: 'ai_service_unavailable: HTTP 401 authentication_error on claude-sonnet-4-6' },
+    ],
+  ])('maps %s to its own code, safe message and stable stored error', async (_label, makeError, expected) => {
+    arrange();
+    vi.mocked(completeStreaming).mockRejectedValue(makeError());
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const frame = lastFrame(await readStream(await POST(makeRequest({ match_id: UUID_MATCH }))));
+
+    expect(frame).toMatchObject({ status: 'failed', code: expected.code });
+    expect(updateMatchPrepAnalysis).toHaveBeenCalledWith(
+      'new-analysis',
+      expect.objectContaining({ status: 'failed', error: expected.stored }),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it('keeps a stored report completed when the client has already left', async () => {
+    arrange();
+    let release: () => void = () => {};
+    vi.mocked(completeStreaming).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ content: scoutingJson, model: 'test-model', prompt_tokens: 1, completion_tokens: 1 });
+        }),
+    );
+
+    const res = await POST(makeRequest({ match_id: UUID_MATCH }));
+    const reader = res.body!.getReader();
+    await reader.read(); // the first heartbeat
+    await reader.cancel(); // the browser goes away; the next enqueue and the close would throw
+    await vi.waitFor(() => expect(completeStreaming).toHaveBeenCalled());
+    release();
+    await vi.waitFor(() => expect(updateMatchPrepAnalysis).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const calls = vi.mocked(updateMatchPrepAnalysis).mock.calls;
+    expect(calls.some(([, patch]) => patch.status === 'completed')).toBe(true);
+    expect(calls.some(([, patch]) => patch.status === 'failed')).toBe(false);
   });
 });
