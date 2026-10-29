@@ -1,0 +1,658 @@
+{
+  "LG9": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "ruleset_list",
+              "input": {
+                "scope": "gallery"
+              }
+            },
+            {
+              "name": "player_search",
+              "input": {
+                "query": "Eval Player 0",
+                "limit": 20
+              }
+            },
+            {
+              "name": "player_search",
+              "input": {
+                "query": "Eval Player 1",
+                "limit": 20
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_create",
+              "input": {
+                "mode": "create",
+                "title": "LG9 Autumn Cup {{run:tag}}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "ruleset",
+                "value_json": "{\"mode\":\"existing\",\"version_id\":\"{{ruleset:gen9ou}}\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "league",
+                "value_json": "{\"name\":\"LG9 Autumn Cup {{run:tag}}\",\"format_type\":\"singles\",\"start_date\":\"2026-11-02\",\"language\":\"en\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "phases",
+                "value_json": "[{\"key\":\"regular_season\",\"name\":\"Regular Season\",\"bracket_type\":\"round_robin\",\"best_of\":3,\"is_doubles\":false,\"ruleset\":\"plan\"},{\"key\":\"playoffs\",\"name\":\"Playoffs\",\"bracket_type\":\"single_elim\",\"best_of\":3,\"is_doubles\":false,\"ruleset\":\"plan\",\"advancement_rule\":{\"type\":\"top_n\",\"count\":4}}]"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "roster",
+                "value_json": "{\"entries\":[{\"input\":\"Eval Player 01\",\"state\":\"resolved\",\"player_id\":\"{{player:01}}\"},{\"input\":\"Eval Player 02\",\"state\":\"resolved\",\"player_id\":\"{{player:02}}\"},{\"input\":\"Eval Player 03\",\"state\":\"resolved\",\"player_id\":\"{{player:03}}\"},{\"input\":\"Eval Player 04\",\"state\":\"resolved\",\"player_id\":\"{{player:04}}\"},{\"input\":\"Eval Player 05\",\"state\":\"resolved\",\"player_id\":\"{{player:05}}\"},{\"input\":\"Eval Player 06\",\"state\":\"resolved\",\"player_id\":\"{{player:06}}\"},{\"input\":\"Eval Player 07\",\"state\":\"resolved\",\"player_id\":\"{{player:07}}\"},{\"input\":\"Eval Player 08\",\"state\":\"resolved\",\"player_id\":\"{{player:08}}\"},{\"input\":\"Eval Player 09\",\"state\":\"resolved\",\"player_id\":\"{{player:09}}\"},{\"input\":\"Eval Player 10\",\"state\":\"resolved\",\"player_id\":\"{{player:10}}\"},{\"input\":\"Eval Player 11\",\"state\":\"resolved\",\"player_id\":\"{{player:11}}\"},{\"input\":\"Eval Player 12\",\"state\":\"resolved\",\"player_id\":\"{{player:12}}\"}],\"target_count\":12}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_validate",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "propose_build",
+              "input": {
+                "plan_revision": 5
+              }
+            }
+          ]
+        },
+        {
+          "text": "I prepared a Build card for LG9 Autumn Cup {{run:tag}}: a singles league on Gen 9 OU with a round robin regular season and a top 4 single elimination playoff, starting 2026-11-02, with Eval Player 01 to 12 on the roster. Check the card before you approve it: a league is public the moment it exists, and nothing has been created yet."
+        }
+      ]
+    ]
+  },
+  "LG10": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "ruleset_list",
+              "input": {
+                "scope": "gallery"
+              }
+            },
+            {
+              "name": "player_search",
+              "input": {
+                "query": "Eval Player 0",
+                "limit": 20
+              }
+            },
+            {
+              "name": "player_search",
+              "input": {
+                "query": "Eval Player 1",
+                "limit": 20
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_create",
+              "input": {
+                "mode": "create",
+                "title": "LG10 Autumn Cup {{run:tag}}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "ruleset",
+                "value_json": "{\"mode\":\"existing\",\"version_id\":\"{{ruleset:gen9ou}}\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "league",
+                "value_json": "{\"name\":\"LG10 Autumn Cup {{run:tag}}\",\"format_type\":\"singles\",\"start_date\":\"2026-11-02\",\"language\":\"en\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "phases",
+                "value_json": "[{\"key\":\"regular_season\",\"name\":\"Regular Season\",\"bracket_type\":\"round_robin\",\"best_of\":3,\"is_doubles\":false,\"ruleset\":\"plan\"},{\"key\":\"playoffs\",\"name\":\"Playoffs\",\"bracket_type\":\"single_elim\",\"best_of\":3,\"is_doubles\":false,\"ruleset\":\"plan\",\"advancement_rule\":{\"type\":\"top_n\",\"count\":4}}]"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "roster",
+                "value_json": "{\"entries\":[{\"input\":\"Eval Player 01\",\"state\":\"resolved\",\"player_id\":\"{{player:01}}\"},{\"input\":\"Eval Player 02\",\"state\":\"resolved\",\"player_id\":\"{{player:02}}\"},{\"input\":\"Eval Player 03\",\"state\":\"resolved\",\"player_id\":\"{{player:03}}\"},{\"input\":\"Eval Player 04\",\"state\":\"resolved\",\"player_id\":\"{{player:04}}\"},{\"input\":\"Eval Player 05\",\"state\":\"resolved\",\"player_id\":\"{{player:05}}\"},{\"input\":\"Eval Player 06\",\"state\":\"resolved\",\"player_id\":\"{{player:06}}\"},{\"input\":\"Eval Player 07\",\"state\":\"resolved\",\"player_id\":\"{{player:07}}\"},{\"input\":\"Eval Player 08\",\"state\":\"resolved\",\"player_id\":\"{{player:08}}\"},{\"input\":\"Eval Player 09\",\"state\":\"resolved\",\"player_id\":\"{{player:09}}\"},{\"input\":\"Eval Player 10\",\"state\":\"resolved\",\"player_id\":\"{{player:10}}\"},{\"input\":\"Eval Player 11\",\"state\":\"resolved\",\"player_id\":\"{{player:11}}\"},{\"input\":\"Eval Player 12\",\"state\":\"resolved\",\"player_id\":\"{{player:12}}\"}],\"target_count\":12}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_validate",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "propose_build",
+              "input": {
+                "plan_revision": 5
+              }
+            }
+          ]
+        },
+        {
+          "text": "I prepared a Build card for LG10 Autumn Cup {{run:tag}}: a singles league on Gen 9 OU with a round robin regular season and a top 4 single elimination playoff, starting 2026-11-02, with Eval Player 01 to 12 on the roster. Check the card before you approve it: a league is public the moment it exists, and nothing has been created yet."
+        }
+      ]
+    ]
+  },
+  "UN1": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "ruleset_list",
+              "input": {
+                "scope": "gallery"
+              }
+            },
+            {
+              "name": "player_search",
+              "input": {
+                "query": "Eval Player 0",
+                "limit": 20
+              }
+            },
+            {
+              "name": "player_search",
+              "input": {
+                "query": "Eval Player 1",
+                "limit": 20
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_create",
+              "input": {
+                "mode": "create",
+                "title": "UN1 Autumn Cup {{run:tag}}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "ruleset",
+                "value_json": "{\"mode\":\"existing\",\"version_id\":\"{{ruleset:gen9ou}}\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "league",
+                "value_json": "{\"name\":\"UN1 Autumn Cup {{run:tag}}\",\"format_type\":\"singles\",\"start_date\":\"2026-11-02\",\"language\":\"en\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "phases",
+                "value_json": "[{\"key\":\"regular_season\",\"name\":\"Regular Season\",\"bracket_type\":\"round_robin\",\"best_of\":3,\"is_doubles\":false,\"ruleset\":\"plan\"},{\"key\":\"playoffs\",\"name\":\"Playoffs\",\"bracket_type\":\"single_elim\",\"best_of\":3,\"is_doubles\":false,\"ruleset\":\"plan\",\"advancement_rule\":{\"type\":\"top_n\",\"count\":4}}]"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "roster",
+                "value_json": "{\"entries\":[{\"input\":\"Eval Player 01\",\"state\":\"resolved\",\"player_id\":\"{{player:01}}\"},{\"input\":\"Eval Player 02\",\"state\":\"resolved\",\"player_id\":\"{{player:02}}\"},{\"input\":\"Eval Player 03\",\"state\":\"resolved\",\"player_id\":\"{{player:03}}\"},{\"input\":\"Eval Player 04\",\"state\":\"resolved\",\"player_id\":\"{{player:04}}\"},{\"input\":\"Eval Player 05\",\"state\":\"resolved\",\"player_id\":\"{{player:05}}\"},{\"input\":\"Eval Player 06\",\"state\":\"resolved\",\"player_id\":\"{{player:06}}\"},{\"input\":\"Eval Player 07\",\"state\":\"resolved\",\"player_id\":\"{{player:07}}\"},{\"input\":\"Eval Player 08\",\"state\":\"resolved\",\"player_id\":\"{{player:08}}\"},{\"input\":\"Eval Player 09\",\"state\":\"resolved\",\"player_id\":\"{{player:09}}\"},{\"input\":\"Eval Player 10\",\"state\":\"resolved\",\"player_id\":\"{{player:10}}\"},{\"input\":\"Eval Player 11\",\"state\":\"resolved\",\"player_id\":\"{{player:11}}\"},{\"input\":\"Eval Player 12\",\"state\":\"resolved\",\"player_id\":\"{{player:12}}\"}],\"target_count\":12}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_validate",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "propose_build",
+              "input": {
+                "plan_revision": 5
+              }
+            }
+          ]
+        },
+        {
+          "text": "I prepared a Build card for UN1 Autumn Cup {{run:tag}}: a singles league on Gen 9 OU with a round robin regular season and a top 4 single elimination playoff, starting 2026-11-02, with Eval Player 01 to 12 on the roster. Check the card before you approve it: a league is public the moment it exists, and nothing has been created yet."
+        }
+      ],
+      [
+        {
+          "calls": [
+            {
+              "name": "propose_undo",
+              "input": {
+                "proposal_id": "{{proposal:last}}"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I prepared an undo card. The league dates were edited outside the chat, so I left the league itself alone and only reverse what is still as I left it. Nothing changes until you approve."
+        }
+      ]
+    ]
+  },
+  "LG1": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "engine_support",
+              "input": {}
+            },
+            {
+              "name": "ruleset_list",
+              "input": {
+                "scope": "gallery"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_create",
+              "input": {
+                "mode": "create",
+                "title": "Double round robin league"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "ruleset",
+                "value_json": "{\"mode\":\"existing\",\"version_id\":\"{{ruleset:gen9ou}}\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "league",
+                "value_json": "{\"name\":\"Double Round Robin League\",\"format_type\":\"singles\",\"language\":\"en\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "phases",
+                "value_json": "[{\"key\":\"regular_season\",\"name\":\"Regular Season\",\"bracket_type\":\"round_robin\",\"best_of\":3,\"is_doubles\":false,\"ruleset\":\"plan\"},{\"key\":\"playoffs\",\"name\":\"Playoffs\",\"bracket_type\":\"single_elim\",\"best_of\":3,\"is_doubles\":false,\"ruleset\":\"plan\",\"advancement_rule\":{\"type\":\"top_n\",\"count\":4}}]"
+              }
+            },
+            {
+              "name": "plan_patch",
+              "input": {
+                "ops_json": "[{\"op\":\"add\",\"path\":\"/assumptions/-\",\"value\":{\"key\":\"legs.regular_season\",\"value\":2,\"source\":\"admin\",\"confirmed\":false}}]"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_validate",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "The engine plays only one round-robin circle, so a double round robin cannot be built as you typed it. I recorded your wish in the Plan as an assumption and staged nothing. You can choose a single round robin, or ask the app owner whether an engine change for a second circle is planned. The Kingambit ban would be a separate private ruleset draft that you publish first. Which way do you want to go?"
+        }
+      ]
+    ]
+  },
+  "LG4": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "resolve_date",
+              "input": {
+                "anchor": "weekday",
+                "weekday": "monday",
+                "relation": "next"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "request_clarification",
+              "input": {
+                "question": "Today is Monday 2026-10-26. Which Monday should Weekend Open start on?",
+                "kind": "choice",
+                "options": [
+                  {
+                    "value": "2026-10-26",
+                    "label": "Today, 2026-10-26"
+                  },
+                  {
+                    "value": "2026-11-02",
+                    "label": "Next week, 2026-11-02"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "text": "Today is a Monday, so \"next Monday\" could mean today, 2026-10-26, or a week later, 2026-11-02. Which one do you want? I will record your pick as the start date; nothing starts by itself on that day."
+        }
+      ]
+    ]
+  },
+  "TN1": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "ruleset_list",
+              "input": {
+                "scope": "gallery"
+              }
+            },
+            {
+              "name": "player_search",
+              "input": {
+                "query": "Eval Player 0",
+                "limit": 20
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_create",
+              "input": {
+                "mode": "create",
+                "title": "TN1 Spring Cup {{run:tag}}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "ruleset",
+                "value_json": "{\"mode\":\"existing\",\"version_id\":\"{{ruleset:gen9ou}}\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "tournament",
+                "value_json": "{\"name\":\"TN1 Spring Cup {{run:tag}}\",\"bracket_type\":\"single_elim\",\"best_of\":3,\"is_doubles\":false,\"team_visibility\":\"hidden_until_match\",\"ruleset\":\"plan\"}"
+              }
+            },
+            {
+              "name": "plan_set",
+              "input": {
+                "slot": "roster",
+                "value_json": "{\"entries\":[{\"input\":\"Eval Player 01\",\"state\":\"resolved\",\"player_id\":\"{{player:01}}\"},{\"input\":\"Eval Player 02\",\"state\":\"resolved\",\"player_id\":\"{{player:02}}\"},{\"input\":\"Eval Player 03\",\"state\":\"resolved\",\"player_id\":\"{{player:03}}\"},{\"input\":\"Eval Player 04\",\"state\":\"resolved\",\"player_id\":\"{{player:04}}\"},{\"input\":\"Eval Player 05\",\"state\":\"resolved\",\"player_id\":\"{{player:05}}\"},{\"input\":\"Eval Player 06\",\"state\":\"resolved\",\"player_id\":\"{{player:06}}\"},{\"input\":\"Eval Player 07\",\"state\":\"resolved\",\"player_id\":\"{{player:07}}\"},{\"input\":\"Eval Player 08\",\"state\":\"resolved\",\"player_id\":\"{{player:08}}\"}],\"target_count\":8}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "plan_validate",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "propose_build",
+              "input": {
+                "plan_revision": 4
+              }
+            }
+          ]
+        },
+        {
+          "text": "I prepared a Build card for TN1 Spring Cup {{run:tag}}: a single elimination tournament on Gen 9 OU, best of 3, with the eight players Eval Player 01 to 08 added to it. A tournament is public the moment it exists, and nothing has been created yet."
+        }
+      ]
+    ]
+  },
+  "TN2": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "tournament_list",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "propose_generate_bracket",
+              "input": {
+                "tournament_id": "{{seed:ready_tournament}}"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I prepared a card to generate the full bracket. It posts the bracket to Discord and social channels and freezes the enrollment. Nothing has happened yet; approve the card if you want it."
+        }
+      ]
+    ]
+  },
+  "TN3": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "tournament_list",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "propose_generate_bracket",
+              "input": {
+                "tournament_id": "{{seed:ready_tournament}}"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I prepared a card to generate the full bracket. Nothing has happened yet; approve or decline the card."
+        }
+      ]
+    ]
+  },
+  "LG6": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "league_list",
+              "input": {
+                "name_contains": "{{seedname:ready_league}}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "league_get",
+              "input": {
+                "league_id": "{{seed:ready_league}}"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "propose_start_phase",
+              "input": {
+                "tournament_id": "{{seed:ready_league.phase1}}"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I prepared a card to start the Regular Season: it generates round 1, posts the pairings to Discord and social, and makes the league active. Nothing has happened yet; tick the acknowledgements and type the league name to approve."
+        }
+      ],
+      [
+        {
+          "calls": [
+            {
+              "name": "propose_start_phase",
+              "input": {
+                "tournament_id": "{{seed:ready_league.phase1}}"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I staged the start of the Regular Season again. Tick the acknowledgements, type the league name and approve it."
+        }
+      ]
+    ]
+  },
+  "RS1": {
+    "turns": [
+      [
+        {
+          "calls": [
+            {
+              "name": "dex_lookup",
+              "input": {
+                "kind": "species",
+                "query": "Kingambit"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "ruleset_create_draft",
+              "input": {
+                "mode": "new",
+                "name": "RS1 OU S12 {{run:tag}}",
+                "base_locale": "en",
+                "base_preset": "gen9ou"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "ruleset_patch_draft",
+              "input": {
+                "ruleset_id": "{{ledger:ruleset_create_draft}}",
+                "draft_rev": 1,
+                "ops_json": "[{\"op\":\"add\",\"path\":\"/pokemon/ban/-\",\"value\":\"kingambit\"}]"
+              }
+            }
+          ]
+        },
+        {
+          "calls": [
+            {
+              "name": "propose_publish_ruleset",
+              "input": {
+                "ruleset_id": "{{ledger:ruleset_create_draft}}",
+                "draft_rev": 2
+              }
+            }
+          ]
+        },
+        {
+          "text": "I created the private draft RS1 OU S12 on top of Gen 9 OU with Kingambit banned. Publishing is a separate card and it is final: it cannot be edited afterwards. Nothing is published until you approve the card."
+        }
+      ]
+    ]
+  }
+}

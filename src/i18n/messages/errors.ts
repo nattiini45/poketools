@@ -13,6 +13,7 @@
  */
 import type { MessageTree, Namespace, ParamNames, PluralForms } from '@/i18n/types';
 import type adminEn from './errors/admin/en';
+import type adminAssistantEn from './errors/admin-assistant/en';
 import type aiEn from './errors/ai/en';
 import type authEn from './errors/auth/en';
 import type broadcastEn from './errors/broadcast/en';
@@ -26,6 +27,7 @@ import type statsEn from './errors/stats/en';
 import type teamsEn from './errors/teams/en';
 import type tournamentsEn from './errors/tournaments/en';
 import { errorsAdmin } from './errors/admin';
+import { errorsAdminAssistant } from './errors/admin-assistant';
 import { errorsAi } from './errors/ai';
 import { errorsAuth } from './errors/auth';
 import { errorsBroadcast } from './errors/broadcast';
@@ -41,6 +43,7 @@ import { errorsTournaments } from './errors/tournaments';
 
 export {
   errorsAdmin,
+  errorsAdminAssistant,
   errorsAi,
   errorsAuth,
   errorsBroadcast,
@@ -65,6 +68,7 @@ export const ERROR_CATALOGS = {
   matches: errorsMatches,
   seasons: errorsSeasons,
   admin: errorsAdmin,
+  adminAssistant: errorsAdminAssistant,
   ai: errorsAi,
   broadcast: errorsBroadcast,
   stats: errorsStats,
@@ -80,6 +84,7 @@ type AllErrorMessages = typeof commonEn &
   typeof matchesEn &
   typeof seasonsEn &
   typeof adminEn &
+  typeof adminAssistantEn &
   typeof aiEn &
   typeof broadcastEn &
   typeof statsEn &

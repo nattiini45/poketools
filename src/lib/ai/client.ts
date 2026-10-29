@@ -1,10 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { initLogger, wrapAnthropic } from 'braintrust';
 import { logger } from '@/lib/logger';
+import { anthropicApiKey } from './api-key';
 
 // ─── Configuration ──────────────────────────────────────────────────
 
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY ?? '';
 const DEFAULT_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
 const FALLBACK_MODEL = process.env.CLAUDE_FALLBACK_MODEL ?? 'claude-haiku-4-5-20251001';
 const BRAINTRUST_API_KEY = process.env.BRAINTRUST_API_KEY ?? '';
@@ -30,10 +30,11 @@ let _client: Anthropic | null = null;
 
 function getClient(): Anthropic {
   if (!_client) {
-    if (!CLAUDE_API_KEY) {
-      throw new Error('CLAUDE_API_KEY environment variable is required');
+    const apiKey = anthropicApiKey();
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is required');
     }
-    const anthropic = new Anthropic({ apiKey: CLAUDE_API_KEY });
+    const anthropic = new Anthropic({ apiKey });
     _client = BRAINTRUST_API_KEY ? wrapAnthropic(anthropic) : anthropic;
   }
   return _client;

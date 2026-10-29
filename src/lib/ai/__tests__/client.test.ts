@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ─── Set env before module loads ───────────────────────────────────
 
 vi.hoisted(() => {
-  process.env.CLAUDE_API_KEY = 'test-key';
+  process.env.ANTHROPIC_API_KEY = 'test-key';
 });
 
 // ─── Mocks ─────────────────────────────────────────────────────────

@@ -55,6 +55,7 @@ export default {
       matches: 'Matches',
       rulesets: 'Rulesets',
       formats: 'Formats',
+      assistant: 'Assistant',
       players: 'Player roster',
       achievements: 'Achievements',
       wiki: 'Wiki moderation',

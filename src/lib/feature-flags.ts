@@ -29,3 +29,11 @@ export const ENABLE_AGENT_MATCH_ANALYSIS =
  */
 export const ENABLE_AGENT_POST_MATCH =
   process.env.NEXT_PUBLIC_AGENT_POST_MATCH === 'true';
+
+/**
+ * Show the Admin Assistant UI (admin nav item, drawer, `/admin/assistant`).
+ * Default disabled. This only hides UI: the server switch `ADMIN_AGENT_ENABLED`
+ * and the route guards are the real gate (`src/lib/ai/admin-agent/env.ts`).
+ */
+export const ENABLE_ADMIN_ASSISTANT =
+  process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT === 'true';

@@ -18,6 +18,30 @@ describe('auditActionLabel', () => {
     expect(auditActionLabel(de, 'match.auto_confirm')).toBe('Spiel automatisch bestätigt');
   });
 
+  it('labels the Admin Assistant actions and the league creation in both languages', () => {
+    const agentActions = [
+      'agent.propose',
+      'agent.approve',
+      'agent.decline',
+      'agent.expire',
+      'agent.step.execute',
+      'agent.step.fail',
+      'agent.step.unknown',
+      'agent.draft.write',
+      'agent.budget.block',
+      'season.create',
+    ];
+    for (const action of agentActions) {
+      // A label, not the humanized raw action the fallback would return.
+      const humanized = action.replace(/\./g, ' ').replace(/_/g, ' ');
+      expect(auditActionLabel(en, action)).not.toBe(humanized);
+      expect(auditActionLabel(de, action)).not.toBe(humanized);
+    }
+    expect(auditActionLabel(en, 'agent.step.fail')).toBe('Assistant step failed');
+    expect(auditActionLabel(de, 'agent.step.fail')).toBe('Schritt des Assistenten fehlgeschlagen');
+    expect(auditActionLabel(de, 'season.create')).toBe('Liga angelegt');
+  });
+
   it('falls back to the humanized raw action for unknown or odd values', () => {
     expect(auditActionLabel(de, 'draft.pick_admin_override')).toBe('draft pick admin override');
     expect(auditActionLabel(en, 'player')).toBe('player');

@@ -53,7 +53,9 @@ function access(flags: Partial<Omit<LiveAccess, 'player'>>): LiveAccess {
 }
 
 /** Depth-first search for the element whose props carry `roles`. */
-function findRoles(node: ReactNode): { isSiteAdmin: boolean; isSuperadmin: boolean } | null {
+type AdminRolesProp = { isSiteAdmin: boolean; isSuperadmin: boolean; assistantEnabled?: boolean };
+
+function findRoles(node: ReactNode): AdminRolesProp | null {
   if (Array.isArray(node)) {
     for (const child of node) {
       const hit = findRoles(child);
@@ -62,7 +64,7 @@ function findRoles(node: ReactNode): { isSiteAdmin: boolean; isSuperadmin: boole
     return null;
   }
   if (!isValidElement(node)) return null;
-  const props = node.props as { roles?: { isSiteAdmin: boolean; isSuperadmin: boolean }; children?: ReactNode };
+  const props = node.props as { roles?: AdminRolesProp; children?: ReactNode };
   if (props.roles) return props.roles;
   return findRoles(props.children);
 }
@@ -136,7 +138,7 @@ describe('admin layout', () => {
   it('passes the live site-admin flag to the sidebar, not the session copy', async () => {
     auth.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true, isSiteAdmin: false }));
     const tree = await AdminLayout({ children: null });
-    expect(findRoles(tree)).toEqual({ isSiteAdmin: false, isSuperadmin: false });
+    expect(findRoles(tree)).toMatchObject({ isSiteAdmin: false, isSuperadmin: false });
     expect(auth.isAdmin).not.toHaveBeenCalled();
   });
 
@@ -144,10 +146,10 @@ describe('admin layout', () => {
     // The session says superadmin; the live row (a revoked admin) says no.
     auth.isSuperadmin.mockReturnValue(true);
     auth.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true, isSiteAdmin: false, isSuperadmin: false }));
-    expect(findRoles(await AdminLayout({ children: null }))).toEqual({ isSiteAdmin: false, isSuperadmin: false });
+    expect(findRoles(await AdminLayout({ children: null }))).toMatchObject({ isSiteAdmin: false, isSuperadmin: false });
     expect(auth.isSuperadmin).not.toHaveBeenCalled();
 
     auth.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true, isSiteAdmin: true, isSuperadmin: true }));
-    expect(findRoles(await AdminLayout({ children: null }))).toEqual({ isSiteAdmin: true, isSuperadmin: true });
+    expect(findRoles(await AdminLayout({ children: null }))).toMatchObject({ isSiteAdmin: true, isSuperadmin: true });
   });
 });

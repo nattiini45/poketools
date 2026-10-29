@@ -9,6 +9,7 @@ import {
   createTournament,
 } from '@/lib/supabase/queries/tournaments';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
+import { logAuditEvent } from '@/lib/audit/log';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
@@ -73,6 +74,19 @@ export async function POST(request: NextRequest) {
 
     const tournament = await createTournament(body);
     expireTournamentReads(tournament.id);
+
+    logAuditEvent({
+      actor_id: player.playerId,
+      actor_name: player.name,
+      action: 'tournament.create',
+      resource_type: 'tournament',
+      resource_id: tournament.id,
+      resource_name: tournament.name,
+      metadata: {
+        bracket_type: tournament.bracket_type,
+        ruleset_id: tournament.ruleset_id ?? null,
+      },
+    });
 
     // Auto-assign resource admin for non-site-admins (best-effort — don't fail the request)
     if (!player.isAdmin) {
