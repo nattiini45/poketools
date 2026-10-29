@@ -116,24 +116,30 @@ describe('model configuration', () => {
   });
 });
 
-describe('CLAUDE_EFFORT', () => {
+describe('CLAUDE_API_EFFORT', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
   it.each(['low', 'medium', 'high', 'xhigh', 'max'])('accepts %s', (level) => {
-    vi.stubEnv('CLAUDE_EFFORT', level);
+    vi.stubEnv('CLAUDE_API_EFFORT', level);
     expect(getClaudeEffort()).toBe(level);
   });
 
   it('defaults to medium when unset or empty, without a warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.stubEnv('CLAUDE_EFFORT', '');
+    vi.stubEnv('CLAUDE_API_EFFORT', '');
     expect(getClaudeEffort()).toBe('medium');
     expect(CLAUDE_DEFAULT_EFFORT).toBe('medium');
     expect(parseClaudeEffort(undefined)).toBe('medium');
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('ignores CLAUDE_EFFORT, which belongs to the Claude Code CLI', () => {
+    vi.stubEnv('CLAUDE_EFFORT', 'max');
+    vi.stubEnv('CLAUDE_API_EFFORT', '');
+    expect(getClaudeEffort()).toBe('medium');
   });
 
   it('ignores case and surrounding whitespace', () => {
@@ -145,7 +151,7 @@ describe('CLAUDE_EFFORT', () => {
     expect(parseClaudeEffort('turbo-effort')).toBe('medium');
     expect(parseClaudeEffort('turbo-effort')).toBe('medium');
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).toContain('CLAUDE_EFFORT');
+    expect(String(warn.mock.calls[0][0])).toContain('CLAUDE_API_EFFORT');
   });
 });
 

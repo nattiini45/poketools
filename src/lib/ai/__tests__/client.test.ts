@@ -116,10 +116,10 @@ describe('ai/client', () => {
     mockStream.mockReset();
     vi.unstubAllEnvs();
     // The defaults under test must not depend on the machine that runs them (a shell can export
-    // CLAUDE_EFFORT or CLAUDE_MODEL). An empty value means unset.
+    // CLAUDE_API_EFFORT or CLAUDE_MODEL). An empty value means unset.
     vi.stubEnv('CLAUDE_MODEL', '');
     vi.stubEnv('CLAUDE_FALLBACK_MODEL', '');
-    vi.stubEnv('CLAUDE_EFFORT', '');
+    vi.stubEnv('CLAUDE_API_EFFORT', '');
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});

@@ -34,14 +34,14 @@ export const CLAUDE_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as
 
 export type ClaudeEffort = (typeof CLAUDE_EFFORT_LEVELS)[number];
 
-/** Code default for `CLAUDE_EFFORT`. */
+/** Code default for `CLAUDE_API_EFFORT`. */
 export const CLAUDE_DEFAULT_EFFORT: ClaudeEffort = 'medium';
 
-/** Invalid `CLAUDE_EFFORT` values already warned about, so a bad setting warns once, not per call. */
+/** Invalid `CLAUDE_API_EFFORT` values already warned about, so a bad setting warns once, not per call. */
 const warnedEffortValues = new Set<string>();
 
 /**
- * Parse a `CLAUDE_EFFORT` value. Unset or empty means the default; an unrecognised value warns
+ * Parse a `CLAUDE_API_EFFORT` value. Unset or empty means the default; an unrecognised value warns
  * (once per distinct value) and also means the default, so a typo never reaches the API as a 400.
  */
 export function parseClaudeEffort(raw: string | undefined): ClaudeEffort {
@@ -52,16 +52,16 @@ export function parseClaudeEffort(raw: string | undefined): ClaudeEffort {
     warnedEffortValues.add(value);
     logger.warn(
       'ai/constants',
-      `Unknown CLAUDE_EFFORT, using "${CLAUDE_DEFAULT_EFFORT}" (expected one of ${CLAUDE_EFFORT_LEVELS.join(', ')})`,
+      `Unknown CLAUDE_API_EFFORT, using "${CLAUDE_DEFAULT_EFFORT}" (expected one of ${CLAUDE_EFFORT_LEVELS.join(', ')})`,
       { value: value.slice(0, 40) }
     );
   }
   return CLAUDE_DEFAULT_EFFORT;
 }
 
-/** The effort every text surface asks for (`CLAUDE_EFFORT`, default `medium`). */
+/** The effort every text surface asks for (`CLAUDE_API_EFFORT`, default `medium`). */
 export function getClaudeEffort(): ClaudeEffort {
-  return parseClaudeEffort(process.env.CLAUDE_EFFORT);
+  return parseClaudeEffort(process.env.CLAUDE_API_EFFORT);
 }
 
 // ─── Output caps ────────────────────────────────────────────────────

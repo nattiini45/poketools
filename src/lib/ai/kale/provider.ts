@@ -19,7 +19,7 @@ import { logAiUsage, normalizeAiSdkUsage } from '../usage-log';
 // ─── Configuration ──────────────────────────────────────────────────
 //
 // Kale uses Claude only, with the same model, fallback model and effort as every other text
-// surface (`CLAUDE_MODEL`, `CLAUDE_FALLBACK_MODEL`, `CLAUDE_EFFORT`, `ANTHROPIC_API_KEY`). There is
+// surface (`CLAUDE_MODEL`, `CLAUDE_FALLBACK_MODEL`, `CLAUDE_API_EFFORT`, `ANTHROPIC_API_KEY`). There is
 // no Kale-specific model or provider setting.
 
 function getApiKey(): string {

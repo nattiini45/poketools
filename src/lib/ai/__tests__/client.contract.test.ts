@@ -152,10 +152,10 @@ let client: ClientModule;
 beforeEach(async () => {
   recorded.length = 0;
   // The defaults under test must not depend on the machine that runs them (a shell can export
-  // CLAUDE_EFFORT or CLAUDE_MODEL). An empty value means unset.
+  // CLAUDE_API_EFFORT or CLAUDE_MODEL). An empty value means unset.
   vi.stubEnv('CLAUDE_MODEL', '');
   vi.stubEnv('CLAUDE_FALLBACK_MODEL', '');
-  vi.stubEnv('CLAUDE_EFFORT', '');
+  vi.stubEnv('CLAUDE_API_EFFORT', '');
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -287,9 +287,9 @@ describe('ai/client request contract (recorded fetch)', () => {
     });
   });
 
-  describe('CLAUDE_EFFORT', () => {
+  describe('CLAUDE_API_EFFORT', () => {
     it.each(['low', 'medium', 'high', 'xhigh', 'max'])('sends %s to a model that supports effort', async (effort) => {
-      vi.stubEnv('CLAUDE_EFFORT', effort);
+      vi.stubEnv('CLAUDE_API_EFFORT', effort);
       respond = (request) => messageJson(String(request.body.model), 'ok');
 
       await client.complete('sys', 'user');
@@ -298,17 +298,17 @@ describe('ai/client request contract (recorded fetch)', () => {
     });
 
     it('falls back to medium and warns for an invalid value', async () => {
-      vi.stubEnv('CLAUDE_EFFORT', 'ludicrous');
+      vi.stubEnv('CLAUDE_API_EFFORT', 'ludicrous');
       respond = (request) => messageJson(String(request.body.model), 'ok');
 
       await client.complete('sys', 'user');
 
       expect(recorded[0].body.output_config).toEqual({ effort: 'medium' });
-      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('CLAUDE_EFFORT'));
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('CLAUDE_API_EFFORT'));
     });
 
     it('does not send effort to Haiku 4.5, whatever the setting', async () => {
-      vi.stubEnv('CLAUDE_EFFORT', 'max');
+      vi.stubEnv('CLAUDE_API_EFFORT', 'max');
       respond = (request) => messageJson(String(request.body.model), 'ok');
 
       await client.complete('sys', 'user', { model: 'claude-haiku-4-5-20251001' });
@@ -317,7 +317,7 @@ describe('ai/client request contract (recorded fetch)', () => {
     });
 
     it('lets one call override the setting', async () => {
-      vi.stubEnv('CLAUDE_EFFORT', 'high');
+      vi.stubEnv('CLAUDE_API_EFFORT', 'high');
       respond = (request) => messageJson(String(request.body.model), 'ok');
 
       await client.complete('sys', 'user', { effort: 'low' });
@@ -326,7 +326,7 @@ describe('ai/client request contract (recorded fetch)', () => {
     });
 
     it('sends the same effort to the fallback model (Haiku 5.5 supports it)', async () => {
-      vi.stubEnv('CLAUDE_EFFORT', 'high');
+      vi.stubEnv('CLAUDE_API_EFFORT', 'high');
       respond = (request, call) =>
         call === 1 ? errorJson(529, 'overloaded_error') : messageJson(String(request.body.model), 'fallback');
 

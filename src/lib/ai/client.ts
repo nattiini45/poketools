@@ -88,7 +88,7 @@ export interface AiCompletionResult {
 export interface AiCallOptions {
   /** Ask this model first instead of `CLAUDE_MODEL`. The fallback model is unchanged. */
   model?: string;
-  /** `output_config.effort` for this call instead of `CLAUDE_EFFORT`; sent only to models that support it. */
+  /** `output_config.effort` for this call instead of `CLAUDE_API_EFFORT`; sent only to models that support it. */
   effort?: ClaudeEffort;
   /** Output cap. Takes precedence over the positional `maxTokens` of `completeStreaming`. */
   maxTokens?: number;

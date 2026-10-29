@@ -114,10 +114,10 @@ function sse(model: string, text: string, stopReason = 'end_turn'): Response {
 beforeEach(() => {
   recorded.length = 0;
   // The defaults under test must not depend on the machine that runs them (a shell can export
-  // CLAUDE_EFFORT or CLAUDE_MODEL). An empty value means unset.
+  // CLAUDE_API_EFFORT or CLAUDE_MODEL). An empty value means unset.
   vi.stubEnv('CLAUDE_MODEL', '');
   vi.stubEnv('CLAUDE_FALLBACK_MODEL', '');
-  vi.stubEnv('CLAUDE_EFFORT', '');
+  vi.stubEnv('CLAUDE_API_EFFORT', '');
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -207,19 +207,19 @@ describe('kale/provider Anthropic request contract (recorded fetch)', () => {
     });
   });
 
-  it('sends CLAUDE_EFFORT as the effort, and medium when the value is invalid', async () => {
-    vi.stubEnv('CLAUDE_EFFORT', 'high');
+  it('sends CLAUDE_API_EFFORT as the effort, and medium when the value is invalid', async () => {
+    vi.stubEnv('CLAUDE_API_EFFORT', 'high');
     respond = (request) => messageJson(String(request.body.model), 'ok');
     await kaleGenerateText('sys', 'user');
     expect(recorded[0].body.output_config).toEqual({ effort: 'high' });
 
-    vi.stubEnv('CLAUDE_EFFORT', 'bogus-level');
+    vi.stubEnv('CLAUDE_API_EFFORT', 'bogus-level');
     await kaleGenerateText('sys', 'user');
     expect(recorded[1].body.output_config).toEqual({ effort: 'medium' });
   });
 
   it('asks the fallback model with the same effort and no sampling parameters', async () => {
-    vi.stubEnv('CLAUDE_EFFORT', 'low');
+    vi.stubEnv('CLAUDE_API_EFFORT', 'low');
     respond = (request, call) =>
       call === 1 ? errorJson(529, 'overloaded_error') : messageJson(String(request.body.model), 'from fallback');
 

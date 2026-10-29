@@ -80,10 +80,10 @@ describe('kale/provider', () => {
     mockAnthropicModel.mockClear();
     vi.unstubAllEnvs();
     // The defaults under test must not depend on the machine that runs them (a shell can export
-    // CLAUDE_EFFORT or CLAUDE_MODEL). An empty value means unset.
+    // CLAUDE_API_EFFORT or CLAUDE_MODEL). An empty value means unset.
     vi.stubEnv('CLAUDE_MODEL', '');
     vi.stubEnv('CLAUDE_FALLBACK_MODEL', '');
-    vi.stubEnv('CLAUDE_EFFORT', '');
+    vi.stubEnv('CLAUDE_API_EFFORT', '');
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -223,20 +223,20 @@ describe('kale/provider', () => {
         expect(JSON.stringify(call.providerOptions ?? {})).not.toContain('thinking');
       });
 
-      it('sends CLAUDE_EFFORT as the effort, and medium when it is invalid', async () => {
-        vi.stubEnv('CLAUDE_EFFORT', 'xhigh');
+      it('sends CLAUDE_API_EFFORT as the effort, and medium when it is invalid', async () => {
+        vi.stubEnv('CLAUDE_API_EFFORT', 'xhigh');
         mockGenerateText.mockResolvedValueOnce(makeGenerateResult('ok'));
         await kaleGenerateText('sys', 'user');
         expect(mockGenerateText.mock.calls[0][0].providerOptions).toEqual({ anthropic: { effort: 'xhigh' } });
 
-        vi.stubEnv('CLAUDE_EFFORT', 'not-a-level');
+        vi.stubEnv('CLAUDE_API_EFFORT', 'not-a-level');
         mockGenerateText.mockResolvedValueOnce(makeGenerateResult('ok'));
         await kaleGenerateText('sys', 'user');
         expect(mockGenerateText.mock.calls[1][0].providerOptions).toEqual({ anthropic: { effort: 'medium' } });
       });
 
       it('sends the same effort to the fallback model', async () => {
-        vi.stubEnv('CLAUDE_EFFORT', 'high');
+        vi.stubEnv('CLAUDE_API_EFFORT', 'high');
         mockGenerateText
           .mockRejectedValueOnce(apiCallError(529))
           .mockResolvedValueOnce(makeGenerateResult('fallback answer', 'claude-haiku-5-5'));
