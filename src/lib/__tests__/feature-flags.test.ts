@@ -127,3 +127,48 @@ describe('ENABLE_AGENT_POST_MATCH', () => {
     expect(ENABLE_AGENT_MATCH_ANALYSIS).toBe(false);
   });
 });
+
+describe('ENABLE_ADMIN_ASSISTANT', () => {
+  const originalEnv = process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT;
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT;
+    } else {
+      process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT = originalEnv;
+    }
+    vi.resetModules();
+  });
+
+  it('is true when env var is "true"', async () => {
+    process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT = 'true';
+    vi.resetModules();
+    const { ENABLE_ADMIN_ASSISTANT } = await import('../feature-flags');
+    expect(ENABLE_ADMIN_ASSISTANT).toBe(true);
+  });
+
+  it('defaults OFF when env var is undefined (the assistant UI stays hidden)', async () => {
+    delete process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT;
+    vi.resetModules();
+    const { ENABLE_ADMIN_ASSISTANT } = await import('../feature-flags');
+    expect(ENABLE_ADMIN_ASSISTANT).toBe(false);
+  });
+
+  it('is false for "false", empty, "TRUE" and "1" (exact "true" only)', async () => {
+    for (const value of ['false', '', 'TRUE', '1']) {
+      process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT = value;
+      vi.resetModules();
+      const { ENABLE_ADMIN_ASSISTANT } = await import('../feature-flags');
+      expect(ENABLE_ADMIN_ASSISTANT, value).toBe(false);
+    }
+  });
+
+  it('is independent of the server switch ADMIN_AGENT_ENABLED', async () => {
+    process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT = 'true';
+    vi.stubEnv('ADMIN_AGENT_ENABLED', 'false');
+    vi.resetModules();
+    const { ENABLE_ADMIN_ASSISTANT } = await import('../feature-flags');
+    expect(ENABLE_ADMIN_ASSISTANT).toBe(true);
+    vi.unstubAllEnvs();
+  });
+});

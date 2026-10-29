@@ -8,7 +8,44 @@ contain breaking changes; they are listed under **Changed** or **Removed** with 
 
 ## [Unreleased]
 
-Version 0.5.0 (`package.json`, `package-lock.json`); rename this section to `[0.5.0]` with the release date when it ships.
+Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.6.0]` with the release date when it ships.
+
+### Upgrade notes
+
+- **Apply `20261027100000_admin_agent_tables.sql` BEFORE deploying the code.** It adds the Admin Assistant's own tables
+  (conversations, messages, plans and their revisions, proposals, the action ledger, snapshots, references, usage),
+  service-role only. Nothing else reads them, and the assistant stays off until it is switched on.
+- **The Admin Assistant is off by default and fails closed.** It needs `ADMIN_AGENT_ENABLED` on the server and
+  `NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT` for the UI; `ADMIN_AGENT_MAX_PHASE` (default `0`) decides what it may execute,
+  `ADMIN_AGENT_GOLIVE` gates Go-live cards, and the model needs `ANTHROPIC_API_KEY`. Every setting and its default is in
+  [docs/feature-flags.md](docs/feature-flags.md).
+
+### Added
+
+- **Admin Assistant (preview; spec section 18).** A chat for site admins at `/admin/assistant` and as a drawer that
+  plans a league, a standalone tournament or a ruleset with the admin and then sets it up through the site's own routes,
+  only after the admin approves a card the server writes:
+  - **Plan:** the assistant fills a Plan the admin can see and edit, resolves names and dates with tools, asks about every
+    value it would otherwise pick, and states the engine's limits plainly (for example a double round robin).
+  - **Build card (phase 1):** creates the league, its roster and phases, or a standalone tournament and its players, in a
+    fixed order derived by code. Every step writes a ledger row first, is re-checked against the route's own schema, and
+    is read back afterwards; an unclear outcome is reconciled, never retried, and an interrupted Build can be resumed for
+    10 minutes.
+  - **Go-live cards:** publish a ruleset version, move a ruleset pin, start a phase, generate a bracket. One exact call
+    per card, one acknowledgement per outward effect (the card lists the Discord and social channels it will post to),
+    never resumed.
+  - **Private ruleset drafts** created and edited in the chat; each edit keeps the previous document so it can be undone.
+  - **Undo** of what a conversation built: archive a league or tournament, remove added players, move pins back, restore a
+    draft, or delete a never-published ruleset created in that chat. Anything edited outside the chat is left alone, and
+    the card lists what stays and why.
+  - **Progress card** with each step's result, links to what was created, Resume and Undo.
+  - **Audit:** `agent.*` events, and the routes' own events carry the conversation, step, tool and approving admin.
+  - **Caps:** per-turn limits, rate limits, dollar budgets reserved before each model call, and per-conversation limits on
+    leagues, tournaments, rulesets, Go-live executions and pin targets.
+- Evaluation harness `scripts/admin-agent-eval.ts`: plan, executor and end-to-end stages, the last two against a local
+  Supabase stack only.
+
+## [0.5.0] - 2026-10-28
 
 ### Upgrade notes
 

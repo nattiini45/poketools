@@ -19,6 +19,7 @@ describe('triggerTournamentReport', () => {
 
   it('does nothing when no AI key is configured', () => {
     delete process.env.KALE_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_API_KEY;
 
     triggerTournamentReport('t-1', 'r-1', 'round_recap');
@@ -28,6 +29,7 @@ describe('triggerTournamentReport', () => {
 
   it('calls generateTournamentReportAsync when KALE_API_KEY is set', () => {
     process.env.KALE_API_KEY = 'kale-key';
+    delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_API_KEY;
     mockGenerateReport.mockResolvedValue(undefined as never);
 
@@ -36,9 +38,9 @@ describe('triggerTournamentReport', () => {
     expect(mockGenerateReport).toHaveBeenCalledWith('t-1', 'r-1', 'round_recap');
   });
 
-  it('calls generateTournamentReportAsync when CLAUDE_API_KEY is set', () => {
+  it('calls generateTournamentReportAsync when ANTHROPIC_API_KEY is set', () => {
     delete process.env.KALE_API_KEY;
-    process.env.CLAUDE_API_KEY = 'claude-key';
+    process.env.ANTHROPIC_API_KEY = 'claude-key';
     mockGenerateReport.mockResolvedValue(undefined as never);
 
     triggerTournamentReport('t-1', 'r-1', 'round_forecast');
@@ -47,7 +49,7 @@ describe('triggerTournamentReport', () => {
   });
 
   it('swallows errors from the async generator (fire-and-forget)', async () => {
-    process.env.CLAUDE_API_KEY = 'claude-key';
+    process.env.ANTHROPIC_API_KEY = 'claude-key';
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockGenerateReport.mockRejectedValue(new Error('Generation failed'));
 
@@ -71,7 +73,8 @@ describe('triggerMatchAnalysis', () => {
     process.env = { ...originalEnv };
   });
 
-  it('does nothing when CLAUDE_API_KEY is not set', () => {
+  it('does nothing when ANTHROPIC_API_KEY is not set', () => {
+    delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_API_KEY;
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
@@ -81,8 +84,8 @@ describe('triggerMatchAnalysis', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('fires fetch to match-analysis endpoint when CLAUDE_API_KEY is set', () => {
-    process.env.CLAUDE_API_KEY = 'claude-key';
+  it('fires fetch to match-analysis endpoint when ANTHROPIC_API_KEY is set', () => {
+    process.env.ANTHROPIC_API_KEY = 'claude-key';
     process.env.NEXTAUTH_URL = 'https://poketools.example';
 
     const fetchSpy = vi.fn().mockResolvedValue({
@@ -107,7 +110,7 @@ describe('triggerMatchAnalysis', () => {
   });
 
   it('uses VERCEL_URL when NEXTAUTH_URL is not set', () => {
-    process.env.CLAUDE_API_KEY = 'claude-key';
+    process.env.ANTHROPIC_API_KEY = 'claude-key';
     delete process.env.NEXTAUTH_URL;
     process.env.VERCEL_URL = 'my-app.vercel.app';
 
@@ -125,7 +128,7 @@ describe('triggerMatchAnalysis', () => {
   });
 
   it('falls back to localhost when no URL env vars are set', () => {
-    process.env.CLAUDE_API_KEY = 'claude-key';
+    process.env.ANTHROPIC_API_KEY = 'claude-key';
     delete process.env.NEXTAUTH_URL;
     delete process.env.VERCEL_URL;
 
@@ -143,7 +146,7 @@ describe('triggerMatchAnalysis', () => {
   });
 
   it('does not include cookie header when cookie is null', () => {
-    process.env.CLAUDE_API_KEY = 'claude-key';
+    process.env.ANTHROPIC_API_KEY = 'claude-key';
     process.env.NEXTAUTH_URL = 'https://poketools.example';
 
     const fetchSpy = vi.fn().mockResolvedValue({
@@ -159,7 +162,7 @@ describe('triggerMatchAnalysis', () => {
   });
 
   it('logs error but does not throw when fetch fails', async () => {
-    process.env.CLAUDE_API_KEY = 'claude-key';
+    process.env.ANTHROPIC_API_KEY = 'claude-key';
     process.env.NEXTAUTH_URL = 'https://poketools.example';
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -178,7 +181,7 @@ describe('triggerMatchAnalysis', () => {
   });
 
   it('logs error when analysis endpoint returns non-ok', async () => {
-    process.env.CLAUDE_API_KEY = 'claude-key';
+    process.env.ANTHROPIC_API_KEY = 'claude-key';
     process.env.NEXTAUTH_URL = 'https://poketools.example';
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

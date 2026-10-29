@@ -194,6 +194,22 @@ export async function POST(request: NextRequest) {
       await rollbackClonedLeague(cloneTracker, err);
     }
 
+    // Logged here, past the clone rollback (which throws), so a league that was removed again
+    // leaves no creation event.
+    logAuditEvent({
+      actor_id: player.playerId,
+      actor_name: player.name,
+      action: 'season.create',
+      resource_type: 'season',
+      resource_id: season.id,
+      resource_name: season.name,
+      metadata: {
+        format_type: season.format_type,
+        ruleset_id: season.ruleset_id ?? null,
+        clone_from: cloneSource?.id ?? null,
+      },
+    });
+
     // The new league shows in the season list on the next view.
     expireSeasonReads(season.id);
 
