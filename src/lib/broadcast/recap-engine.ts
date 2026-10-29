@@ -451,7 +451,7 @@ async function generateRecapNarrative(
       locale,
     );
     const userPrompt = buildNarrativePrompt(input);
-    const result = await complete(systemPrompt, userPrompt);
+    const result = await complete(systemPrompt, userPrompt, { surface: 'recap' });
 
     return result.content ?? undefined;
   } catch {

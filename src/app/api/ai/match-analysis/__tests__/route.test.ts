@@ -14,7 +14,8 @@ vi.mock('@/lib/auth/helpers', () => ({
   },
 }));
 
-vi.mock('@/lib/ai/constants', () => ({
+vi.mock('@/lib/ai/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/constants')>()),
   AI_ANALYSIS_STALE_MS: 300_000,
 }));
 
@@ -63,6 +64,8 @@ import {
 } from '@/lib/supabase/queries/match-analyses';
 import { buildMatchAnalysisPrompt } from '@/lib/ai/context-builder';
 import { completeStreaming } from '@/lib/ai/client';
+import { OutputCapError, RefusalError, ModelRejectedError } from '@/lib/ai/errors';
+import { revalidateMatchPages } from '@/lib/revalidation';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -484,6 +487,150 @@ describe('POST /api/ai/match-analysis — error codes and output language (i18n)
       code: 'ai_analysis_failed',
     });
 
+    errorSpy.mockRestore();
+  });
+});
+
+// ─── Stored model, failure mapping and safe sends ───────────────────
+
+describe('POST /api/ai/match-analysis — hardening', () => {
+  const analysisJson = JSON.stringify({
+    summary: 'Great match',
+    mvp: { pokemon: 'Pikachu', player: 'Ash', reasoning: 'Carried' },
+    game_breakdowns: [],
+  });
+
+  function arrange() {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getMatchById).mockResolvedValue(mockMatch as never);
+    vi.mocked(getMatchAnalysis).mockResolvedValue(null);
+    vi.mocked(createMatchAnalysis).mockResolvedValue({ id: 'new-analysis' } as never);
+    vi.mocked(buildMatchAnalysisPrompt).mockResolvedValue({ systemPrompt: 'system', userPrompt: 'user' });
+    vi.mocked(checkAndRecordAiGeneration).mockResolvedValue({ allowed: true, limit: 10, remaining: 9, used: 1 });
+  }
+
+  function lastFrame(text: string) {
+    return JSON.parse(text.split('\n\n').filter(Boolean).at(-1)!.replace(/^data: /, ''));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(updateMatchAnalysis).mockResolvedValue(undefined);
+  });
+
+  it('asks for JSON output and stores the model that actually answered', async () => {
+    arrange();
+    vi.mocked(completeStreaming).mockResolvedValue({
+      content: analysisJson,
+      model: 'claude-haiku-4-5-20251001',
+      prompt_tokens: 100,
+      completion_tokens: 200,
+      fallback_used: true,
+    });
+
+    expect(await readStream(await POST(makeRequest({ match_id: UUID_MATCH })))).toContain('"status":"done"');
+
+    expect(vi.mocked(completeStreaming).mock.calls[0][4]).toMatchObject({ jsonOutput: true });
+    // The row is created with the model that was asked, then updated to the responder.
+    expect(createMatchAnalysis).toHaveBeenCalledWith(UUID_MATCH, expect.any(String));
+    expect(updateMatchAnalysis).toHaveBeenCalledWith(
+      'new-analysis',
+      expect.objectContaining({ status: 'completed', model_id: 'claude-haiku-4-5-20251001' }),
+    );
+  });
+
+  it.each([
+    [
+      'a truncated answer',
+      () => new OutputCapError('claude-sonnet-4-6', 4096),
+      { code: 'ai_output_truncated', stored: 'ai_output_truncated: max_tokens 4096 on claude-sonnet-4-6' },
+    ],
+    [
+      'a refusal',
+      () => new RefusalError('claude-sonnet-4-6', 'cyber'),
+      { code: 'ai_output_refused', stored: 'ai_output_refused: cyber on claude-sonnet-4-6' },
+    ],
+    [
+      'a rejected request',
+      () => new ModelRejectedError('claude-sonnet-4-6', 400, 'invalid_request_error'),
+      { code: 'ai_request_rejected', stored: 'ai_request_rejected: HTTP 400 invalid_request_error on claude-sonnet-4-6' },
+    ],
+  ])('maps %s to its own code, safe message and stable stored error', async (_label, makeError, expected) => {
+    arrange();
+    vi.mocked(completeStreaming).mockRejectedValue(makeError());
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const frame = lastFrame(await readStream(await POST(makeRequest({ match_id: UUID_MATCH }))));
+
+    expect(frame).toMatchObject({ status: 'failed', code: expected.code });
+    expect(typeof frame.error).toBe('string');
+    expect(updateMatchAnalysis).toHaveBeenCalledWith(
+      'new-analysis',
+      expect.objectContaining({ status: 'failed', error: expected.stored }),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it('stores a stable code and short cause, never the provider message, for other failures', async () => {
+    arrange();
+    const upstream = Object.assign(new Error('529 {"error":{"message":"private provider text"}}'), { status: 529 });
+    vi.mocked(completeStreaming).mockRejectedValue(upstream);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const frame = lastFrame(await readStream(await POST(makeRequest({ match_id: UUID_MATCH }))));
+
+    expect(frame).toEqual({
+      status: 'failed',
+      error: 'Analysis failed — please try again later.',
+      code: 'ai_analysis_failed',
+    });
+    expect(updateMatchAnalysis).toHaveBeenCalledWith(
+      'new-analysis',
+      expect.objectContaining({ status: 'failed', error: 'ai_analysis_failed: upstream HTTP 529' }),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it('keeps a stored analysis completed when the client has already left', async () => {
+    arrange();
+    let release: () => void = () => {};
+    vi.mocked(completeStreaming).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ content: analysisJson, model: 'test-model', prompt_tokens: 1, completion_tokens: 1 });
+        }),
+    );
+
+    const res = await POST(makeRequest({ match_id: UUID_MATCH }));
+    const reader = res.body!.getReader();
+    await reader.read(); // the first heartbeat
+    await reader.cancel(); // the browser goes away; the next enqueue and the close would throw
+    await vi.waitFor(() => expect(completeStreaming).toHaveBeenCalled());
+    release();
+    await vi.waitFor(() => expect(updateMatchAnalysis).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const calls = vi.mocked(updateMatchAnalysis).mock.calls;
+    expect(calls.some(([, patch]) => patch.status === 'completed')).toBe(true);
+    expect(calls.some(([, patch]) => patch.status === 'failed')).toBe(false);
+  });
+
+  it('keeps a stored analysis completed when page revalidation fails afterwards', async () => {
+    arrange();
+    vi.mocked(completeStreaming).mockResolvedValue({
+      content: analysisJson,
+      model: 'test-model',
+      prompt_tokens: 1,
+      completion_tokens: 1,
+    });
+    vi.mocked(revalidateMatchPages).mockRejectedValueOnce(new Error('cache down'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const text = await readStream(await POST(makeRequest({ match_id: UUID_MATCH })));
+
+    expect(text).toContain('"status":"done"');
+    expect(vi.mocked(updateMatchAnalysis).mock.calls.some(([, patch]) => patch.status === 'failed')).toBe(false);
     errorSpy.mockRestore();
   });
 });

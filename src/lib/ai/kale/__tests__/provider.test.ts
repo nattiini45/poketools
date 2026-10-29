@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─── Set env before module loads ───────────────────────────────────
 
@@ -12,6 +12,7 @@ vi.hoisted(() => {
 
 const mockGenerateText = vi.fn();
 const mockStreamText = vi.fn();
+const mockAnthropicModel = vi.fn().mockReturnValue('anthropic-model');
 
 vi.mock('ai', () => ({
   generateText: (...args: unknown[]) => mockGenerateText(...args),
@@ -19,7 +20,7 @@ vi.mock('ai', () => ({
 }));
 
 vi.mock('@ai-sdk/anthropic', () => ({
-  createAnthropic: vi.fn().mockReturnValue(vi.fn().mockReturnValue('anthropic-model')),
+  createAnthropic: vi.fn(() => mockAnthropicModel),
 }));
 
 vi.mock('@ai-sdk/openai', () => {
@@ -31,32 +32,67 @@ vi.mock('@ai-sdk/openai', () => {
 // ─── Import after mocks ────────────────────────────────────────────
 
 import { isKaleConfigured, kaleGenerateText, kaleStreamText } from '../provider';
+import { OutputCapError, RefusalError, ModelRejectedError } from '../../errors';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-function makeGenerateResult(text: string, modelId = 'test-model') {
+function makeGenerateResult(text: string, modelId = 'test-model', extra: Record<string, unknown> = {}) {
   return {
     text,
     response: { modelId },
     usage: { inputTokens: 10, outputTokens: 20 },
     finishReason: 'stop',
     reasoningText: undefined,
+    ...extra,
   };
 }
 
-function makeStreamResult(text: string, modelId = 'test-model') {
+function makeStreamResult(text: string, modelId = 'test-model', extra: Record<string, unknown> = {}) {
   return {
     text: Promise.resolve(text),
     usage: Promise.resolve({ inputTokens: 10, outputTokens: 20 }),
     response: Promise.resolve({ modelId }),
+    finishReason: Promise.resolve('stop'),
+    providerMetadata: Promise.resolve(undefined),
+    ...extra,
   };
 }
+
+/** An AI SDK `APICallError` look-alike: the provider classifies by fields, not by class. */
+function apiCallError(statusCode: number | undefined, extra: Record<string, unknown> = {}) {
+  return Object.assign(new Error(`HTTP ${statusCode} secret provider text`), {
+    name: 'AI_APICallError',
+    statusCode,
+    ...extra,
+  });
+}
+
+/** `streamText` result whose `text` rejects and whose `onError` reported `error`, as the SDK does. */
+function failingStream(error: unknown) {
+  return (opts: Record<string, unknown>) => {
+    (opts.onError as ((event: { error: unknown }) => void) | undefined)?.({ error });
+    return { text: Promise.reject(new Error('No output generated.')) };
+  };
+}
+
+let errorSpy: ReturnType<typeof vi.spyOn>;
+let infoSpy: ReturnType<typeof vi.spyOn>;
 
 // ─── Tests ─────────────────────────────────────────────────────────
 
 describe('kale/provider', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockGenerateText.mockReset();
+    mockStreamText.mockReset();
+    mockAnthropicModel.mockClear();
+    vi.unstubAllEnvs();
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('isKaleConfigured', () => {
@@ -75,22 +111,55 @@ describe('kale/provider', () => {
       expect(result.model).toBe('test-model');
       expect(result.prompt_tokens).toBe(10);
       expect(result.completion_tokens).toBe(20);
+      expect(result.stop_reason).toBe('stop');
     });
 
-    it('falls back to fallback model when primary fails', async () => {
+    it('reads cache tokens from the usage details and logs one counts-only line', async () => {
+      mockGenerateText.mockResolvedValueOnce(
+        makeGenerateResult('private model output', 'test-model', {
+          usage: { inputTokens: 1000, outputTokens: 20, inputTokenDetails: { cacheReadTokens: 900, cacheWriteTokens: 50 } },
+        }),
+      );
+
+      const result = await kaleGenerateText('secret system prompt', 'secret user prompt');
+
+      expect(result.prompt_tokens).toBe(1000);
+      expect(result.cache_read_input_tokens).toBe(900);
+      expect(result.cache_creation_input_tokens).toBe(50);
+
+      const lines = infoSpy.mock.calls.map((call: unknown[]) => String(call[0])).filter((line: string) => line.includes('"tag":"ai/usage"'));
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        surface: 'kale',
+        input_tokens: 1000,
+        cache_read_tokens: 900,
+        cache_write_tokens: 50,
+        output_tokens: 20,
+        stop_reason: 'stop',
+        fallback_used: false,
+      });
+      expect(lines[0]).not.toContain('secret');
+      expect(lines[0]).not.toContain('private');
+    });
+
+    it('reports which rung answered in the result and in the usage line', async () => {
       vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
       mockGenerateText
-        .mockRejectedValueOnce(new Error('Primary fail'))
-        .mockResolvedValueOnce(makeGenerateResult('Fallback text', 'fallback-model'));
+        .mockResolvedValueOnce(makeGenerateResult('primary answer'))
+        .mockRejectedValueOnce(apiCallError(529))
+        .mockResolvedValueOnce(makeGenerateResult('fallback answer', 'fallback-model'));
 
-      const result = await kaleGenerateText('sys', 'user');
-      expect(result.content).toBe('Fallback text');
-    });
+      const primary = await kaleGenerateText('sys', 'user');
+      const fallback = await kaleGenerateText('sys', 'user');
 
-    it('throws when all attempts fail', async () => {
-      mockGenerateText.mockRejectedValue(new Error('All fail'));
-
-      await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('All Kale model attempts failed');
+      expect(primary.fallback_used).toBe(false);
+      expect(fallback.fallback_used).toBe(true);
+      const usage = infoSpy.mock.calls
+        .map((call: unknown[]) => String(call[0]))
+        .filter((line: string) => line.includes('"tag":"ai/usage"'))
+        .map((line: string) => JSON.parse(line));
+      expect(usage.map((entry: { fallback_used: boolean }) => entry.fallback_used)).toEqual([false, true]);
+      expect(usage[1]).toMatchObject({ requested_model: 'fallback-model' });
     });
 
     it('uses reasoningText when text is empty', async () => {
@@ -130,6 +199,214 @@ describe('kale/provider', () => {
         })
       );
     });
+
+    describe('fallback ladder', () => {
+      beforeEach(() => {
+        vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+      });
+
+      it.each([
+        ['a 529', () => apiCallError(529)],
+        ['a 429', () => apiCallError(429)],
+        ['a 500', () => apiCallError(500)],
+        ['a network failure the SDK marks retryable', () => apiCallError(undefined, { isRetryable: true })],
+        ['an aborted attempt (our deadline)', () => Object.assign(new Error('aborted'), { name: 'AbortError' })],
+      ])('falls back to the fallback model after %s', async (_label, makeError) => {
+        mockGenerateText
+          .mockRejectedValueOnce(makeError())
+          .mockResolvedValueOnce(makeGenerateResult('Fallback text', 'fallback-model'));
+
+        const result = await kaleGenerateText('sys', 'user');
+
+        expect(result.content).toBe('Fallback text');
+        expect(result.fallback_used).toBe(true);
+        expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('falls back after a failed body read the AI SDK wrapped as a retryable status-200 APICallError', async () => {
+        mockGenerateText
+          .mockRejectedValueOnce(apiCallError(200, { isRetryable: true, cause: new TypeError('terminated') }))
+          .mockResolvedValueOnce(makeGenerateResult('Fallback text', 'fallback-model'));
+
+        const result = await kaleGenerateText('sys', 'user');
+        expect(result.fallback_used).toBe(true);
+      });
+
+      it('does not fall back for a status-200 processing failure that is not a network error', async () => {
+        mockGenerateText.mockRejectedValueOnce(apiCallError(200, { isRetryable: false, cause: new SyntaxError('bad json') }));
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('HTTP 200');
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      });
+
+      it.each([
+        ['400', () => apiCallError(400)],
+        ['401', () => apiCallError(401)],
+        ['404', () => apiCallError(404)],
+      ])('surfaces a %s with one call, no fallback and no provider text', async (_label, makeError) => {
+        mockGenerateText.mockRejectedValueOnce(makeError());
+
+        const failure = await kaleGenerateText('sys', 'user').catch((e: unknown) => e);
+
+        expect(failure).toBeInstanceOf(ModelRejectedError);
+        expect((failure as Error).message).not.toContain('secret provider text');
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      });
+
+      it('surfaces a non-transient failure of the fallback model too', async () => {
+        mockGenerateText
+          .mockRejectedValueOnce(apiCallError(529))
+          .mockRejectedValueOnce(apiCallError(400));
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toBeInstanceOf(ModelRejectedError);
+        expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('throws when every rung fails transiently', async () => {
+        mockGenerateText.mockRejectedValue(apiCallError(529));
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('All Kale model attempts failed');
+        // Primary + fallback, nothing more: no blocking replay.
+        expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('surfaces an unclassified error instead of walking the ladder', async () => {
+        mockGenerateText.mockRejectedValueOnce(new TypeError('boom'));
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('boom');
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('Anthropic last resort for another primary provider', () => {
+      beforeEach(() => {
+        vi.stubEnv('KALE_PROVIDER', 'openai');
+        vi.stubEnv('KALE_DISABLE_FALLBACK', 'false');
+        vi.stubEnv('CLAUDE_API_KEY', 'claude-key');
+        vi.stubEnv('KALE_MODEL', 'gpt-test');
+        vi.stubEnv('CLAUDE_MODEL', 'claude-sonnet-5-5');
+      });
+
+      it('tries Anthropic with the resolved Claude model after a transient failure', async () => {
+        mockGenerateText
+          .mockRejectedValueOnce(apiCallError(503))
+          .mockResolvedValueOnce(makeGenerateResult('from anthropic', 'claude-sonnet-5-5'));
+
+        const result = await kaleGenerateText('sys', 'user');
+
+        expect(result.content).toBe('from anthropic');
+        expect(result.fallback_used).toBe(true);
+        expect(mockAnthropicModel).toHaveBeenCalledWith('claude-sonnet-5-5');
+        expect(mockGenerateText.mock.calls[1][0].model).toBe('anthropic-model');
+      });
+
+      it.each([
+        ['a 401', () => apiCallError(401)],
+        ['a 402', () => apiCallError(402)],
+        ['a 404', () => apiCallError(404)],
+        ['a 400', () => apiCallError(400)],
+      ])('still tries Anthropic after %s from the primary provider (a different provider can answer)', async (_label, makeError) => {
+        mockGenerateText
+          .mockRejectedValueOnce(makeError())
+          .mockResolvedValueOnce(makeGenerateResult('from anthropic', 'claude-sonnet-5-5'));
+
+        const result = await kaleGenerateText('sys', 'user');
+
+        expect(result).toMatchObject({ content: 'from anthropic', fallback_used: true });
+        expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('tries Anthropic when the primary provider is misconfigured (no base URL)', async () => {
+        vi.stubEnv('KALE_PROVIDER', 'openai-compatible');
+        vi.stubEnv('KALE_BASE_URL', '');
+        mockGenerateText.mockResolvedValueOnce(makeGenerateResult('from anthropic', 'claude-sonnet-5-5'));
+
+        const result = await kaleGenerateText('sys', 'user');
+
+        expect(result).toMatchObject({ content: 'from anthropic', fallback_used: true });
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+        expect(mockGenerateText.mock.calls[0][0].model).toBe('anthropic-model');
+      });
+
+      it('surfaces a 4xx of the Anthropic rung itself, after exactly two calls', async () => {
+        mockGenerateText.mockRejectedValueOnce(apiCallError(401)).mockRejectedValueOnce(apiCallError(401));
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toBeInstanceOf(ModelRejectedError);
+        expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('does not try Anthropic after a truncated or refused answer', async () => {
+        mockGenerateText.mockResolvedValueOnce(makeGenerateResult('Half a sente', 'gpt-test', { finishReason: 'length' }));
+        await expect(kaleGenerateText('sys', 'user', { maxTokens: 100 })).rejects.toBeInstanceOf(OutputCapError);
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not try Anthropic when the last resort is disabled', async () => {
+        vi.stubEnv('KALE_DISABLE_FALLBACK', 'true');
+        mockGenerateText.mockRejectedValueOnce(apiCallError(401));
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toBeInstanceOf(ModelRejectedError);
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('stop reasons', () => {
+      it('throws OutputCapError when the answer stopped at the output cap, without a retry call', async () => {
+        vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+        mockGenerateText.mockResolvedValueOnce(makeGenerateResult('Half a sente', 'test-model', { finishReason: 'length' }));
+
+        const failure = await kaleGenerateText('sys', 'user', { maxTokens: 150 }).catch((e: unknown) => e);
+
+        expect(failure).toBeInstanceOf(OutputCapError);
+        expect((failure as OutputCapError).maxTokens).toBe(150);
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      });
+
+      it('throws RefusalError on an Anthropic content-filter finish, reading the category when present', async () => {
+        mockGenerateText.mockResolvedValueOnce(
+          makeGenerateResult('', 'test-model', {
+            finishReason: 'content-filter',
+            providerMetadata: { anthropic: { stopDetails: { type: 'refusal', category: 'cyber' } } },
+          }),
+        );
+
+        const failure = await kaleGenerateText('sys', 'user').catch((e: unknown) => e);
+
+        expect(failure).toBeInstanceOf(RefusalError);
+        expect((failure as RefusalError).category).toBe('cyber');
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      });
+
+      it('branches on the finish reason when the refusal carries no stop details', async () => {
+        mockGenerateText.mockResolvedValueOnce(
+          makeGenerateResult('', 'test-model', { finishReason: 'content-filter', providerMetadata: {} }),
+        );
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toBeInstanceOf(RefusalError);
+      });
+
+      it('does not read an OpenAI-style content-filter finish as a refusal', async () => {
+        vi.stubEnv('KALE_PROVIDER', 'openai');
+        mockGenerateText.mockResolvedValueOnce(
+          makeGenerateResult('Moderated but present', 'test-model', { finishReason: 'content-filter' }),
+        );
+
+        const result = await kaleGenerateText('sys', 'user');
+        expect(result.content).toBe('Moderated but present');
+      });
+    });
+
+    describe('model resolution', () => {
+      it('treats an empty KALE_MODEL as unset and falls back to CLAUDE_MODEL', async () => {
+        vi.stubEnv('KALE_MODEL', '');
+        vi.stubEnv('CLAUDE_MODEL', 'claude-sonnet-5-5');
+        mockGenerateText.mockResolvedValueOnce(makeGenerateResult('ok'));
+
+        await kaleGenerateText('sys', 'user');
+
+        expect(mockAnthropicModel).toHaveBeenCalledWith('claude-sonnet-5-5');
+      });
+    });
   });
 
   describe('kaleStreamText', () => {
@@ -140,27 +417,83 @@ describe('kale/provider', () => {
 
       expect(result.content).toBe('Streamed text');
       expect(result.prompt_tokens).toBe(10);
+      expect(result.stop_reason).toBe('stop');
     });
 
-    it('falls back to fallback model streaming on primary failure', async () => {
+    it('falls back to fallback model streaming on a transient primary failure', async () => {
       vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
       mockStreamText
-        .mockReturnValueOnce({ text: Promise.reject(new Error('Stream fail')) })
+        .mockImplementationOnce(failingStream(apiCallError(529)))
+        .mockReturnValueOnce(makeStreamResult('Fallback stream'));
+
+      const result = await kaleStreamText('sys', 'user');
+      expect(result.content).toBe('Fallback stream');
+      expect(result.fallback_used).toBe(true);
+    });
+
+    it('falls back on a mid-stream provider error event of a transient type', async () => {
+      vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+      mockStreamText
+        .mockImplementationOnce(failingStream({ type: 'overloaded_error', message: 'Overloaded' }))
         .mockReturnValueOnce(makeStreamResult('Fallback stream'));
 
       const result = await kaleStreamText('sys', 'user');
       expect(result.content).toBe('Fallback stream');
     });
 
-    it('falls back to blocking kaleGenerateText when all streaming fails', async () => {
-      mockStreamText.mockReturnValue({
-        text: Promise.reject(new Error('All streams fail')),
-      });
+    it('surfaces a mid-stream invalid-request event and a 400 without a fallback', async () => {
+      vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+      mockStreamText.mockImplementationOnce(failingStream(apiCallError(400)));
 
-      mockGenerateText.mockResolvedValueOnce(makeGenerateResult('Blocking fallback'));
+      await expect(kaleStreamText('sys', 'user')).rejects.toBeInstanceOf(ModelRejectedError);
+      expect(mockStreamText).toHaveBeenCalledTimes(1);
+
+      mockStreamText.mockImplementationOnce(failingStream({ type: 'invalid_request_error', message: 'no' }));
+      await expect(kaleStreamText('sys', 'user')).rejects.toThrow();
+      expect(mockStreamText).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back after undici drops the response body mid-stream (bare TypeError terminated)', async () => {
+      vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+      const terminated = Object.assign(new TypeError('terminated'), {
+        cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }),
+      });
+      mockStreamText
+        .mockImplementationOnce(failingStream(terminated))
+        .mockReturnValueOnce(makeStreamResult('Fallback stream'));
 
       const result = await kaleStreamText('sys', 'user');
-      expect(result.content).toBe('Blocking fallback');
+      expect(result).toMatchObject({ content: 'Fallback stream', fallback_used: true });
+    });
+
+    it('does not fall back for a plain programming TypeError in the stream', async () => {
+      vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+      mockStreamText.mockImplementationOnce(failingStream(new TypeError('boom')));
+
+      await expect(kaleStreamText('sys', 'user')).rejects.toThrow('boom');
+      expect(mockStreamText).toHaveBeenCalledTimes(1);
+    });
+
+    it('has no blocking replay when every stream fails', async () => {
+      mockStreamText.mockImplementation(failingStream(apiCallError(529)));
+
+      await expect(kaleStreamText('sys', 'user')).rejects.toThrow('All Kale model attempts failed');
+      expect(mockGenerateText).not.toHaveBeenCalled();
+    });
+
+    it('throws OutputCapError and RefusalError from the finish reason', async () => {
+      mockStreamText.mockReturnValueOnce(makeStreamResult('Half a sente', 'test-model', { finishReason: Promise.resolve('length') }));
+      await expect(kaleStreamText('sys', 'user', undefined, { maxTokens: 120 })).rejects.toBeInstanceOf(OutputCapError);
+
+      mockStreamText.mockReturnValueOnce(
+        makeStreamResult('', 'test-model', {
+          finishReason: Promise.resolve('content-filter'),
+          providerMetadata: Promise.resolve({ anthropic: { stopDetails: { type: 'refusal', category: 'bio' } } }),
+        }),
+      );
+      const failure = await kaleStreamText('sys', 'user').catch((e: unknown) => e);
+      expect(failure).toBeInstanceOf(RefusalError);
+      expect((failure as RefusalError).category).toBe('bio');
     });
 
     it('calls onChunk callback via streamText options', async () => {
@@ -172,7 +505,8 @@ describe('kale/provider', () => {
 
       const onChunk = vi.fn();
       await kaleStreamText('sys', 'user', onChunk);
-      expect(mockStreamText).toHaveBeenCalled();
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(errorSpy).not.toHaveBeenCalled();
     });
   });
 });

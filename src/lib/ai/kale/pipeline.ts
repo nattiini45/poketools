@@ -1,6 +1,7 @@
 import { kaleGenerateText } from './provider';
 import { getReportDefinition } from './registry';
 import { getPipelineMode } from './prompts';
+import { isDeterministicModelError } from '../errors';
 import type {
   PromptTask,
   TaskResult,
@@ -202,6 +203,23 @@ async function executeWithRetry(
       }
     } catch (err) {
       console.error(`[kale/pipeline] Task "${task.id}" failed:`, err instanceof Error ? err.message : err);
+      // A truncated or refused answer, or a request the provider rejected, would come back the
+      // same way: go straight to the assembler's fallback text instead of paying for more tries.
+      if (isDeterministicModelError(err)) {
+        return {
+          taskId: task.id,
+          text: '',
+          promptTokens: 0,
+          completionTokens: 0,
+          validationErrors: [{
+            type: 'structural',
+            detail: `Task "${task.id}" failed: ${err.message}`,
+            severity: 'error',
+          }],
+          retries,
+          model: '',
+        };
+      }
       if (attempt === maxRetries) {
         // Return empty string — assembler will use fallback
         return {

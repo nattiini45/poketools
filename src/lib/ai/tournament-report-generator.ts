@@ -18,9 +18,7 @@ import type {
   RoundForecastContent,
 } from '@/types/tournament-report';
 import type { RoundRecapPublishedData, RoundForecastPublishedData } from '@/types/discord';
-import { AI_ANALYSIS_STALE_MS } from './constants';
-
-const DEFAULT_MODEL = process.env.KALE_MODEL ?? process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
+import { AI_ANALYSIS_STALE_MS, getKaleModelId } from './constants';
 
 /**
  * Generate a tournament report asynchronously (fire-and-forget).
@@ -47,7 +45,7 @@ export async function generateTournamentReportAsync(
       await deleteTournamentReport(tournamentId, roundId, reportType);
     }
 
-    const record = await createTournamentReport(tournamentId, roundId, reportType, DEFAULT_MODEL);
+    const record = await createTournamentReport(tournamentId, roundId, reportType, getKaleModelId());
 
     // Run the Kale 2.0 pipeline (registry resolves the correct report definition)
     const pipelineResult = await runPipeline(reportType, { tournamentId, roundId });
@@ -58,6 +56,8 @@ export async function generateTournamentReportAsync(
 
     await updateTournamentReport(record.id, {
       content: pipelineResult.content,
+      // The model that answered, not the one that was asked ('unknown' = no task finished).
+      ...(pipelineResult.modelUsed && pipelineResult.modelUsed !== 'unknown' && { model_id: pipelineResult.modelUsed }),
       prompt_tokens: pipelineResult.promptTokens,
       completion_tokens: pipelineResult.completionTokens,
       generation_time_ms: pipelineResult.generationTimeMs,

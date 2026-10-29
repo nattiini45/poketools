@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { aiMatchAnalysisSchema, formatZodErrors } from '@/lib/validation';
-import { AI_ANALYSIS_STALE_MS } from '@/lib/ai/constants';
+import { AI_ANALYSIS_STALE_MS, getClaudeModelId } from '@/lib/ai/constants';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import {
   getMatchAnalysis,
@@ -16,6 +16,8 @@ import { completeStreaming } from '@/lib/ai/client';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { checkAndRecordAiGeneration, type AiRateLimitResult } from '@/lib/ai/rate-limit';
 import { withOutputLanguage } from '@/lib/ai/language';
+import { describeAiFailure } from '@/lib/ai/failure';
+import { createSafeSseSender } from '@/lib/ai/sse';
 import { resolveContentLocale } from '@/i18n/content-locale';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorCode } from '@/i18n/messages/errors';
@@ -24,10 +26,10 @@ import type { MatchWithPlayers } from '@/types/match';
 
 export const maxDuration = 300;
 
-const DEFAULT_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
 const HEARTBEAT_INTERVAL_MS = 5_000;
 /** Code of the SSE `failed` frame (`errors/ai`). */
 const FAILED_CODE: ApiErrorCode = 'ai_analysis_failed';
+const FAILED_MESSAGE = 'Analysis failed — please try again later.';
 
 // ─── POST: Trigger analysis for a match ─────────────────────────────
 
@@ -164,26 +166,25 @@ export async function POST(request: NextRequest) {
   // the Hobby plan, vs 60s for buffered responses. Heartbeat chunks
   // every 5s prevent idle-timeout during the LLM's thinking phase.
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
+  const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Every frame goes through the safe sender: a browser that left must not turn a stored
+      // analysis into a failed one.
+      const sse = createSafeSseSender(controller);
+
       // Chunk-driven heartbeat: emit a thinking event whenever 5s
       // elapse between LLM chunks, keeping the Vercel connection alive.
       let lastHeartbeat = Date.now();
       function emitHeartbeatIfNeeded() {
         const now = Date.now();
         if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
-          try {
-            controller.enqueue(encoder.encode('data: {"status":"thinking"}\n\n'));
-          } catch { /* stream closed */ }
+          sse.send({ status: 'thinking' });
           lastHeartbeat = now;
         }
       }
 
       // Send an initial heartbeat immediately so the client knows the stream is alive
-      try {
-        controller.enqueue(encoder.encode('data: {"status":"thinking"}\n\n'));
-      } catch { /* stream closed */ }
+      sse.send({ status: 'thinking' });
 
       // Safety-net interval: if the LLM blocks without sending chunks
       // (e.g. a long initial thinking phase), this keeps Vercel alive.
@@ -197,8 +198,11 @@ export async function POST(request: NextRequest) {
           await deleteMatchAnalysis(matchId);
         }
 
-        const record = await createMatchAnalysis(matchId, DEFAULT_MODEL);
+        // The row starts with the model we ask for; a completed row is updated to the model
+        // that actually answered (a fallback answer must not be labelled with the primary).
+        const record = await createMatchAnalysis(matchId, getClaudeModelId());
         const startTime = Date.now();
+        let stored = false;
 
         try {
           const [{ systemPrompt, userPrompt }, contentLocale] = await Promise.all([
@@ -212,6 +216,9 @@ export async function POST(request: NextRequest) {
             withOutputLanguage(systemPrompt, contentLocale),
             userPrompt,
             emitHeartbeatIfNeeded,
+            undefined,
+            // The answer is parsed as JSON, so one cut off at the output cap is a failure.
+            { jsonOutput: true, surface: 'match-analysis' },
           );
           const generationTime = Date.now() - startTime;
 
@@ -219,43 +226,48 @@ export async function POST(request: NextRequest) {
 
           await updateMatchAnalysis(record.id, {
             analysis,
+            model_id: result.model || undefined,
             prompt_tokens: result.prompt_tokens,
             completion_tokens: result.completion_tokens,
             generation_time_ms: generationTime,
             status: 'completed',
             error: null,
           });
-
-          await revalidateMatchPages(match.tournament_id, match.id);
-
-          controller.enqueue(
-            encoder.encode(`data: {"status":"done"}\n\n`)
-          );
+          stored = true;
         } catch (llmError) {
           const errorMessage = llmError instanceof Error ? llmError.message : 'Unknown LLM error';
           console.error('[ai/match-analysis] LLM error:', errorMessage);
 
+          const failure = describeAiFailure(llmError, { code: FAILED_CODE, message: FAILED_MESSAGE });
           await updateMatchAnalysis(record.id, {
             status: 'failed',
-            error: errorMessage,
+            error: failure.stored,
             generation_time_ms: Date.now() - startTime,
           });
 
-          const safeMessage = 'Analysis failed — please try again later.';
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ status: 'failed', error: safeMessage, code: FAILED_CODE })}\n\n`)
-          );
+          sse.send({ status: 'failed', error: failure.message, code: failure.code });
+        }
+
+        if (stored) {
+          // The analysis is saved as completed. Nothing after this point (page revalidation, a
+          // closed stream) may flip it to failed.
+          try {
+            await revalidateMatchPages(match.tournament_id, match.id);
+          } catch (revalidateError) {
+            console.error(
+              '[ai/match-analysis] Revalidation failed after the analysis was stored:',
+              revalidateError instanceof Error ? revalidateError.message : revalidateError,
+            );
+          }
+          sse.send({ status: 'done' });
         }
       } catch (setupError) {
         const message = setupError instanceof Error ? setupError.message : 'Internal error';
         console.error('[ai/match-analysis] Setup error:', message);
-        const safeMessage = 'Analysis failed — please try again later.';
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ status: 'failed', error: safeMessage, code: FAILED_CODE })}\n\n`)
-        );
+        sse.send({ status: 'failed', error: FAILED_MESSAGE, code: FAILED_CODE });
       } finally {
         clearInterval(fallbackHeartbeat);
-        controller.close();
+        sse.close();
       }
     },
   });

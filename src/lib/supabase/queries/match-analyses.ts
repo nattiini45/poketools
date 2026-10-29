@@ -72,12 +72,15 @@ export async function updateMatchAnalysis(
     generation_time_ms?: number;
     status?: MatchAnalysisStatus;
     error?: string | null;
+    /** The model that actually answered (the row is created with the requested one). */
+    model_id?: string;
   }
 ): Promise<void> {
   const { error } = await supabase
     .from('match_analyses')
     .update({
       ...(updates.analysis !== undefined && { analysis: updates.analysis as unknown as Json }),
+      ...(updates.model_id !== undefined && { model_id: updates.model_id }),
       ...(updates.prompt_tokens !== undefined && { prompt_tokens: updates.prompt_tokens }),
       ...(updates.completion_tokens !== undefined && { completion_tokens: updates.completion_tokens }),
       ...(updates.generation_time_ms !== undefined && { generation_time_ms: updates.generation_time_ms }),

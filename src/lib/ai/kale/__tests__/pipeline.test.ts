@@ -22,6 +22,7 @@ import { runRecapPipeline, runForecastPipeline } from '../pipeline';
 import { kaleGenerateText } from '../provider';
 import { buildRecapFactPack, buildForecastFactPack } from '../fact-pack';
 import type { RecapFactPack, ForecastFactPack } from '../types';
+import { ModelRejectedError, OutputCapError, RefusalError } from '../../errors';
 
 const mockGenerateText = vi.mocked(kaleGenerateText);
 const mockBuildRecapFactPack = vi.mocked(buildRecapFactPack);
@@ -336,5 +337,30 @@ describe('pipeline — LLM failure handling', () => {
     expect(content.match_summaries[0].one_liner).toBe(recapFactPack.matches[0].preWrittenOneLiner);
     // Validation errors should be reported
     expect(result.validationErrors.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['a truncated answer', () => new OutputCapError('m', 150)],
+    ['a refusal', () => new RefusalError('m', 'cyber')],
+    ['a rejected request', () => new ModelRejectedError('m', 400, 'invalid_request_error')],
+  ])('makes exactly one call per task after %s, then uses the fallback text', async (_label, makeError) => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // A generic failure is retried (3 attempts per task): this gives the number of tasks.
+    mockGenerateText.mockRejectedValue(new Error('API down'));
+    await runRecapPipeline('t1', 'r1');
+    const attemptsWithRetries = mockGenerateText.mock.calls.length;
+    const tasks = attemptsWithRetries / 3;
+    expect(Number.isInteger(tasks) && tasks > 0).toBe(true);
+
+    mockGenerateText.mockReset();
+    mockGenerateText.mockRejectedValue(makeError());
+    const result = await runRecapPipeline('t1', 'r1');
+    const content = result.content as import('@/types/tournament-report').RoundRecapContent;
+
+    expect(mockGenerateText).toHaveBeenCalledTimes(tasks);
+    expect(content.match_summaries[0].one_liner).toBe(recapFactPack.matches[0].preWrittenOneLiner);
+    expect(result.validationErrors.some((e) => e.severity === 'error')).toBe(true);
+    errorSpy.mockRestore();
   });
 });
