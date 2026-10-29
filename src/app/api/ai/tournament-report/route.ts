@@ -16,6 +16,8 @@ import { runPipeline } from '@/lib/ai/kale/pipeline';
 import '@/lib/ai/kale/registry';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { checkAndRecordAiGeneration, type AiRateLimitResult } from '@/lib/ai/rate-limit';
+import { describeAiFailure } from '@/lib/ai/failure';
+import { createSafeSseSender } from '@/lib/ai/sse';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorCode } from '@/i18n/messages/errors';
 import type { TournamentReport } from '@/types/tournament-report';
@@ -27,6 +29,7 @@ export const maxDuration = 300;
 const HEARTBEAT_INTERVAL_MS = 5_000;
 /** Code of the SSE `failed` frame (`errors/ai`). */
 const FAILED_CODE: ApiErrorCode = 'ai_report_failed';
+const FAILED_MESSAGE = 'Report generation failed — please try again later.';
 
 // ─── POST: Generate or regenerate a tournament report ────────────────
 
@@ -142,23 +145,22 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Stream with heartbeats ─────────────────────────────────────────
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
+  const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Every frame goes through the safe sender: a browser that left must not turn a stored
+      // report into a failed one.
+      const sse = createSafeSseSender(controller);
+
       let lastHeartbeat = Date.now();
       function emitHeartbeatIfNeeded() {
         const now = Date.now();
         if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
-          try {
-            controller.enqueue(encoder.encode('data: {"status":"thinking"}\n\n'));
-          } catch { /* stream closed */ }
+          sse.send({ status: 'thinking' });
           lastHeartbeat = now;
         }
       }
 
-      try {
-        controller.enqueue(encoder.encode('data: {"status":"thinking"}\n\n'));
-      } catch { /* stream closed */ }
+      sse.send({ status: 'thinking' });
 
       const fallbackHeartbeat = setInterval(() => {
         emitHeartbeatIfNeeded();
@@ -170,10 +172,11 @@ export async function POST(request: NextRequest) {
         }
 
         const record = await createTournamentReport(tournamentId, roundId, reportType, getKaleModelId());
+        let pipelineResult: Awaited<ReturnType<typeof runPipeline>> | null = null;
 
         try {
           // Run the Kale 2.0 pipeline with heartbeat callback
-          const pipelineResult = await runPipeline(
+          pipelineResult = await runPipeline(
             reportType,
             { tournamentId, roundId, playerId: zodResult.data.player_id },
             emitHeartbeatIfNeeded
@@ -193,35 +196,41 @@ export async function POST(request: NextRequest) {
             status: 'completed',
             error: validationErrorLog,
           });
-
-          await revalidateMatchPages(tournamentId);
-
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'done', model: pipelineResult.modelUsed })}\n\n`));
         } catch (pipelineError) {
+          pipelineResult = null;
           const errorMessage = pipelineError instanceof Error ? pipelineError.message : 'Unknown pipeline error';
           console.error('[ai/tournament-report] Pipeline error:', errorMessage);
 
+          const failure = describeAiFailure(pipelineError, { code: FAILED_CODE, message: FAILED_MESSAGE });
           await updateTournamentReport(record.id, {
             status: 'failed',
-            error: errorMessage,
+            error: failure.stored,
             generation_time_ms: 0,
           });
 
-          const safeMessage = 'Report generation failed — please try again later.';
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ status: 'failed', error: safeMessage, code: FAILED_CODE })}\n\n`)
-          );
+          sse.send({ status: 'failed', error: failure.message, code: failure.code });
+        }
+
+        if (pipelineResult) {
+          // The report is saved as completed. Nothing after this point (page revalidation, a
+          // closed stream) may flip it to failed.
+          try {
+            await revalidateMatchPages(tournamentId);
+          } catch (revalidateError) {
+            console.error(
+              '[ai/tournament-report] Revalidation failed after the report was stored:',
+              revalidateError instanceof Error ? revalidateError.message : revalidateError,
+            );
+          }
+          sse.send({ status: 'done', model: pipelineResult.modelUsed });
         }
       } catch (setupError) {
         const message = setupError instanceof Error ? setupError.message : 'Internal error';
         console.error('[ai/tournament-report] Setup error:', message);
-        const safeMessage = 'Report generation failed — please try again later.';
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ status: 'failed', error: safeMessage, code: FAILED_CODE })}\n\n`)
-        );
+        sse.send({ status: 'failed', error: FAILED_MESSAGE, code: FAILED_CODE });
       } finally {
         clearInterval(fallbackHeartbeat);
-        controller.close();
+        sse.close();
       }
     },
   });
