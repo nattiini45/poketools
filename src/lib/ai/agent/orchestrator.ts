@@ -187,6 +187,12 @@ export function applyToolOverrides(
     return base;
   }
 
+  if (name === 'getMatchAnalysisContext') {
+    // The tool answers only for a match the authenticated player may see; the model cannot name another requester.
+    base.requesterId = overrides.userId;
+    return base;
+  }
+
   if (name === 'getMatchHistory' || name === 'getUpcomingMatches') {
     if (base.playerId == null || base.playerId === '') base.playerId = overrides.userId;
     return base;

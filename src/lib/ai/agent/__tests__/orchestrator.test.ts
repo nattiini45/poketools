@@ -415,4 +415,9 @@ describe('applyToolOverrides', () => {
     const input = { species: 'Garchomp' };
     expect(applyToolOverrides('lookupPokemon', input, overrides)).toBe(input);
   });
+
+  it('sets the requester of getMatchAnalysisContext to the authenticated player, overwriting the model', () => {
+    const out = applyToolOverrides('getMatchAnalysisContext', { matchId: 'm-1', requesterId: 'an-admin' }, overrides) as Record<string, unknown>;
+    expect(out).toEqual({ matchId: 'm-1', requesterId: 'me' });
+  });
 });

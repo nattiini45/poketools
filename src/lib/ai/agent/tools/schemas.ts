@@ -203,6 +203,9 @@ export type GetUpcomingMatchesInput = z.infer<typeof GetUpcomingMatchesInput>;
 /** Fetch the full battle context (stats, teams, rules, turn-by-turn) for one match. */
 export const GetMatchAnalysisContextInput = z.object({
   matchId: z.string().uuid(),
+  // Set by the server (`applyToolOverrides`) to the authenticated player; whatever the model puts here is overwritten.
+  // The tool answers only for a match this player may see, and refuses a call that carries no requester.
+  requesterId: z.string().uuid().optional().describe('Set by the server. Leave empty.'),
 });
 export type GetMatchAnalysisContextInput = z.infer<typeof GetMatchAnalysisContextInput>;
 
