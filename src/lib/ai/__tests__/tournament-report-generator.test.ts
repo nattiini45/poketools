@@ -131,6 +131,45 @@ describe('tournament-report-generator', () => {
       expect(mockRevalidate).toHaveBeenCalledWith('t1');
     });
 
+    it('stores the model that answered, not the one that was asked', async () => {
+      mockGetReport.mockResolvedValue(null as never);
+      mockCreateReport.mockResolvedValue({ id: 'report-1' } as never);
+      mockRunPipeline.mockResolvedValue({
+        content: { headline: 'Test' },
+        promptTokens: 100,
+        completionTokens: 200,
+        generationTimeMs: 5000,
+        validationErrors: [],
+        retryCount: 0,
+        modelUsed: 'claude-haiku-4-5-20251001',
+      } as never);
+
+      await generateTournamentReportAsync('t1', 'r1', 'player_profile');
+
+      expect(mockUpdateReport).toHaveBeenCalledWith(
+        'report-1',
+        expect.objectContaining({ status: 'completed', model_id: 'claude-haiku-4-5-20251001' }),
+      );
+    });
+
+    it('keeps the requested model label when no task finished (modelUsed unknown)', async () => {
+      mockGetReport.mockResolvedValue(null as never);
+      mockCreateReport.mockResolvedValue({ id: 'report-1' } as never);
+      mockRunPipeline.mockResolvedValue({
+        content: { headline: 'Test' },
+        promptTokens: 0,
+        completionTokens: 0,
+        generationTimeMs: 5000,
+        validationErrors: [],
+        retryCount: 0,
+        modelUsed: 'unknown',
+      } as never);
+
+      await generateTournamentReportAsync('t1', 'r1', 'player_profile');
+
+      expect(mockUpdateReport.mock.calls[0][1]).not.toHaveProperty('model_id');
+    });
+
     it('logs validation errors in report update', async () => {
       mockGetReport.mockResolvedValue(null as never);
       mockCreateReport.mockResolvedValue({ id: 'report-1' } as never);

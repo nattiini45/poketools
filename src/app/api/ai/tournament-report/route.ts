@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { aiTournamentReportSchema, formatZodErrors } from '@/lib/validation';
-import { AI_ANALYSIS_STALE_MS } from '@/lib/ai/constants';
+import { AI_ANALYSIS_STALE_MS, getKaleModelId } from '@/lib/ai/constants';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import {
@@ -24,7 +24,6 @@ import type { Round } from '@/types/round';
 
 export const maxDuration = 300;
 
-const DEFAULT_MODEL = process.env.KALE_MODEL ?? process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
 const HEARTBEAT_INTERVAL_MS = 5_000;
 /** Code of the SSE `failed` frame (`errors/ai`). */
 const FAILED_CODE: ApiErrorCode = 'ai_report_failed';
@@ -170,7 +169,7 @@ export async function POST(request: NextRequest) {
           await deleteTournamentReport(tournamentId, roundId, reportType);
         }
 
-        const record = await createTournamentReport(tournamentId, roundId, reportType, DEFAULT_MODEL);
+        const record = await createTournamentReport(tournamentId, roundId, reportType, getKaleModelId());
 
         try {
           // Run the Kale 2.0 pipeline with heartbeat callback
@@ -186,6 +185,8 @@ export async function POST(request: NextRequest) {
 
           await updateTournamentReport(record.id, {
             content: pipelineResult.content,
+            // The model that answered, not the one that was asked ('unknown' = no task finished).
+            ...(pipelineResult.modelUsed && pipelineResult.modelUsed !== 'unknown' && { model_id: pipelineResult.modelUsed }),
             prompt_tokens: pipelineResult.promptTokens,
             completion_tokens: pipelineResult.completionTokens,
             generation_time_ms: pipelineResult.generationTimeMs,

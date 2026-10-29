@@ -14,7 +14,8 @@ vi.mock('@/lib/auth/helpers', () => ({
   },
 }));
 
-vi.mock('@/lib/ai/constants', () => ({
+vi.mock('@/lib/ai/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/constants')>()),
   AI_ANALYSIS_STALE_MS: 300_000,
 }));
 
@@ -322,6 +323,11 @@ describe('POST /api/ai/tournament-report', () => {
 
     const streamText = await readStream(res);
     expect(streamText).toContain('"status":"done"');
+    // The row keeps the model the pipeline reports as having answered.
+    expect(updateTournamentReport).toHaveBeenCalledWith(
+      'new-report',
+      expect.objectContaining({ status: 'completed', model_id: 'claude-sonnet-4-6' }),
+    );
   });
 
   it('marks stale pending record as failed', async () => {
