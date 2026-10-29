@@ -226,6 +226,23 @@ describe('main: a live run with a fake model', () => {
     expect(rowsOf(dir).map((r) => `${r.caseId}#${r.repeat}`)).toEqual(['slot-coach-1#1', 'slot-coach-2#1', 'slot-coach-3#1', 'slot-coach-1#2', 'slot-coach-2#2', 'slot-coach-3#2']);
   });
 
+  it('covers every flow once before any flow twice, so a stopped run still has a full first pass', async () => {
+    const dir = tmp();
+    const h = harness(['--flow', 'slot-coach,recap', '--per-flow', '2', '--repeat', '2', '--out', dir, '--concurrency', '1']);
+    await main(h.options);
+    expect(rowsOf(dir).map((r) => `${r.flow}#${r.repeat}`)).toEqual(['slot-coach#1', 'slot-coach#1', 'recap#1', 'recap#1', 'slot-coach#2', 'slot-coach#2', 'recap#2', 'recap#2']);
+
+    // each call really costs $0.10; a $0.5 cap stops inside the second pass, after both flows ran once
+    const capped = tmp();
+    const g = harness(['--flow', 'slot-coach,recap', '--per-flow', '2', '--repeat', '2', '--max-cost-usd', '0.5', '--out', capped, '--concurrency', '1'], {
+      caller: async (request) => respond(request, { completionTokens: 10000 }),
+    });
+    await main(g.options);
+    const done = rowsOf(capped).filter((r) => !r.incomplete);
+    expect(done.filter((r) => r.repeat === 1)).toHaveLength(4);
+    expect(done.filter((r) => r.repeat === 2).length).toBeLessThan(4);
+    expect(JSON.parse(readFileSync(path.join(capped, 'summary.json'), 'utf8')).meta.stoppedByCap).toBe(true);
+  });
   it('runs Kale stage by stage and hands the one-liners to the narrative', async () => {
     const dir = tmp();
     const order: string[] = [];

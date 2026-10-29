@@ -1,7 +1,8 @@
 /**
- * The suite runner of the AI flow eval: runs the selected cases flow by flow (repeat-major inside a
- * flow, so a run stopped by the cost cap still covers every case once before it covers one twice),
- * hands every finished run to `onRow` for persistence, and skips what a resumed run already has.
+ * The suite runner of the AI flow eval: runs the selected cases in passes, one pass per repeat and
+ * the flows in order inside a pass, so a run stopped by the cost cap has covered every flow once
+ * before it covers any flow twice. Every finished run goes to `onRow` for persistence; what a
+ * resumed run already has is skipped.
  */
 
 import { executeCase, type ExecContext, type ExecResult } from './flows';
@@ -54,10 +55,9 @@ export function buildRow(flow: FlowId, caseId: string, repeat: number, result: E
 
 export function workOrder(cases: readonly LoadedCase[], repeat: number): WorkItem[] {
   const items: WorkItem[] = [];
-  for (const flow of FLOW_IDS) {
-    const ofFlow = cases.filter((c) => c.flow === flow);
-    for (let r = 1; r <= repeat; r += 1) {
-      for (const loaded of ofFlow) {
+  for (let r = 1; r <= repeat; r += 1) {
+    for (const flow of FLOW_IDS) {
+      for (const loaded of cases.filter((c) => c.flow === flow)) {
         items.push({ flow, loaded, repeat: r, key: rowKey(flow, loaded.case.id, r) });
       }
     }
@@ -92,11 +92,16 @@ export async function runSuite(options: SuiteOptions): Promise<SuiteResult> {
   const resumed = all.filter((item) => done.has(item.key)).map((item) => item.key);
   const rows: RunRow[] = [];
 
-  // Flows run one after the other, in order; the runs inside a flow run `concurrency` at a time.
+  // Passes (repeats) run one after the other, and inside a pass the flows in order; the runs of
+  // one flow in one pass run `concurrency` at a time.
   const notRun: string[] = [];
-  for (const flow of FLOW_IDS) {
-    const ofFlow = todo.filter((item) => item.flow === flow);
-    if (ofFlow.length === 0) continue;
+  const passes: { flow: FlowId; repeat: number; items: WorkItem[] }[] = [];
+  for (const item of todo) {
+    const last = passes[passes.length - 1];
+    if (last && last.flow === item.flow && last.repeat === item.repeat) last.items.push(item);
+    else passes.push({ flow: item.flow, repeat: item.repeat, items: [item] });
+  }
+  for (const { flow, items: ofFlow } of passes) {
     const skipped = await pool(
       ofFlow,
       options.concurrency,
