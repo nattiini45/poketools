@@ -142,6 +142,26 @@ describe('kale/provider', () => {
       expect(lines[0]).not.toContain('private');
     });
 
+    it('reports which rung answered in the result and in the usage line', async () => {
+      vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+      mockGenerateText
+        .mockResolvedValueOnce(makeGenerateResult('primary answer'))
+        .mockRejectedValueOnce(apiCallError(529))
+        .mockResolvedValueOnce(makeGenerateResult('fallback answer', 'fallback-model'));
+
+      const primary = await kaleGenerateText('sys', 'user');
+      const fallback = await kaleGenerateText('sys', 'user');
+
+      expect(primary.fallback_used).toBe(false);
+      expect(fallback.fallback_used).toBe(true);
+      const usage = infoSpy.mock.calls
+        .map((call: unknown[]) => String(call[0]))
+        .filter((line: string) => line.includes('"tag":"ai/usage"'))
+        .map((line: string) => JSON.parse(line));
+      expect(usage.map((entry: { fallback_used: boolean }) => entry.fallback_used)).toEqual([false, true]);
+      expect(usage[1]).toMatchObject({ requested_model: 'fallback-model' });
+    });
+
     it('uses reasoningText when text is empty', async () => {
       mockGenerateText.mockResolvedValueOnce({
         text: '',
@@ -201,6 +221,22 @@ describe('kale/provider', () => {
         expect(result.content).toBe('Fallback text');
         expect(result.fallback_used).toBe(true);
         expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('falls back after a failed body read the AI SDK wrapped as a retryable status-200 APICallError', async () => {
+        mockGenerateText
+          .mockRejectedValueOnce(apiCallError(200, { isRetryable: true, cause: new TypeError('terminated') }))
+          .mockResolvedValueOnce(makeGenerateResult('Fallback text', 'fallback-model'));
+
+        const result = await kaleGenerateText('sys', 'user');
+        expect(result.fallback_used).toBe(true);
+      });
+
+      it('does not fall back for a status-200 processing failure that is not a network error', async () => {
+        mockGenerateText.mockRejectedValueOnce(apiCallError(200, { isRetryable: false, cause: new SyntaxError('bad json') }));
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('HTTP 200');
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
       });
 
       it.each([
@@ -264,8 +300,50 @@ describe('kale/provider', () => {
         expect(mockGenerateText.mock.calls[1][0].model).toBe('anthropic-model');
       });
 
-      it('does not try Anthropic after a 400 from the primary provider', async () => {
-        mockGenerateText.mockRejectedValueOnce(apiCallError(400));
+      it.each([
+        ['a 401', () => apiCallError(401)],
+        ['a 402', () => apiCallError(402)],
+        ['a 404', () => apiCallError(404)],
+        ['a 400', () => apiCallError(400)],
+      ])('still tries Anthropic after %s from the primary provider (a different provider can answer)', async (_label, makeError) => {
+        mockGenerateText
+          .mockRejectedValueOnce(makeError())
+          .mockResolvedValueOnce(makeGenerateResult('from anthropic', 'claude-sonnet-5-5'));
+
+        const result = await kaleGenerateText('sys', 'user');
+
+        expect(result).toMatchObject({ content: 'from anthropic', fallback_used: true });
+        expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('tries Anthropic when the primary provider is misconfigured (no base URL)', async () => {
+        vi.stubEnv('KALE_PROVIDER', 'openai-compatible');
+        vi.stubEnv('KALE_BASE_URL', '');
+        mockGenerateText.mockResolvedValueOnce(makeGenerateResult('from anthropic', 'claude-sonnet-5-5'));
+
+        const result = await kaleGenerateText('sys', 'user');
+
+        expect(result).toMatchObject({ content: 'from anthropic', fallback_used: true });
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+        expect(mockGenerateText.mock.calls[0][0].model).toBe('anthropic-model');
+      });
+
+      it('surfaces a 4xx of the Anthropic rung itself, after exactly two calls', async () => {
+        mockGenerateText.mockRejectedValueOnce(apiCallError(401)).mockRejectedValueOnce(apiCallError(401));
+
+        await expect(kaleGenerateText('sys', 'user')).rejects.toBeInstanceOf(ModelRejectedError);
+        expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('does not try Anthropic after a truncated or refused answer', async () => {
+        mockGenerateText.mockResolvedValueOnce(makeGenerateResult('Half a sente', 'gpt-test', { finishReason: 'length' }));
+        await expect(kaleGenerateText('sys', 'user', { maxTokens: 100 })).rejects.toBeInstanceOf(OutputCapError);
+        expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not try Anthropic when the last resort is disabled', async () => {
+        vi.stubEnv('KALE_DISABLE_FALLBACK', 'true');
+        mockGenerateText.mockRejectedValueOnce(apiCallError(401));
 
         await expect(kaleGenerateText('sys', 'user')).rejects.toBeInstanceOf(ModelRejectedError);
         expect(mockGenerateText).toHaveBeenCalledTimes(1);
@@ -373,6 +451,27 @@ describe('kale/provider', () => {
       mockStreamText.mockImplementationOnce(failingStream({ type: 'invalid_request_error', message: 'no' }));
       await expect(kaleStreamText('sys', 'user')).rejects.toThrow();
       expect(mockStreamText).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back after undici drops the response body mid-stream (bare TypeError terminated)', async () => {
+      vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+      const terminated = Object.assign(new TypeError('terminated'), {
+        cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }),
+      });
+      mockStreamText
+        .mockImplementationOnce(failingStream(terminated))
+        .mockReturnValueOnce(makeStreamResult('Fallback stream'));
+
+      const result = await kaleStreamText('sys', 'user');
+      expect(result).toMatchObject({ content: 'Fallback stream', fallback_used: true });
+    });
+
+    it('does not fall back for a plain programming TypeError in the stream', async () => {
+      vi.stubEnv('KALE_FALLBACK_MODEL', 'fallback-model');
+      mockStreamText.mockImplementationOnce(failingStream(new TypeError('boom')));
+
+      await expect(kaleStreamText('sys', 'user')).rejects.toThrow('boom');
+      expect(mockStreamText).toHaveBeenCalledTimes(1);
     });
 
     it('has no blocking replay when every stream fails', async () => {

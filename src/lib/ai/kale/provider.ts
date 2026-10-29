@@ -11,6 +11,7 @@ import {
   OutputCapError,
   RefusalError,
   isDeterministicModelError,
+  isNetworkFailure,
 } from '../errors';
 import { logAiUsage, normalizeAiSdkUsage } from '../usage-log';
 
@@ -156,16 +157,20 @@ interface KaleTarget {
   modelId: string;
   /** True for the Anthropic API, where a `content-filter` finish means a refusal. */
   anthropic: boolean;
+  /** True for every rung after the first: the answer comes from a fallback model. */
+  fallback: boolean;
 }
 
 function getPrimaryTarget(): KaleTarget {
   const modelId = getModelId();
-  return { model: buildModel(modelId), modelId, anthropic: getProvider() === 'anthropic' };
+  return { model: buildModel(modelId), modelId, anthropic: getProvider() === 'anthropic', fallback: false };
 }
 
 function getFallbackTarget(): KaleTarget | null {
   const modelId = getFallbackModelId();
-  return modelId ? { model: buildModel(modelId), modelId, anthropic: getProvider() === 'anthropic' } : null;
+  return modelId
+    ? { model: buildModel(modelId), modelId, anthropic: getProvider() === 'anthropic', fallback: true }
+    : null;
 }
 
 // ─── Error classification ───────────────────────────────────────────
@@ -227,10 +232,14 @@ function isTransientKaleError(err: unknown): boolean {
   if (err instanceof EmptyModelResponseError || err instanceof KaleDeadlineError) return true;
   const fields = errorFields(err);
   if (fields.name === 'AbortError' || fields.name === 'TimeoutError') return true;
+  // A body that dies mid-stream: undici's bare `TypeError('terminated')` reaches `onError` as is,
+  // and a failed non-streaming body read arrives as an APICallError (status 200) wrapping it.
+  if (isNetworkFailure(err)) return true;
+  // An AI SDK APICallError knows whether a retry helps; a network failure has no status at all.
+  if (fields.name === 'AI_APICallError' && fields.isRetryable === true) return true;
   const status = statusOf(err);
   if (status !== null) return isTransientStatus(status);
-  // An AI SDK APICallError without a status is a network failure; it knows whether a retry helps.
-  if (fields.name === 'AI_APICallError') return fields.isRetryable === true;
+  if (fields.name === 'AI_APICallError') return false;
   const type = providerTypeOf(err);
   return type !== null && TRANSIENT_STREAM_ERROR_TYPES.has(type);
 }
@@ -246,7 +255,7 @@ function errorSummary(err: unknown): string {
 function surfaceKaleError(err: unknown, modelId: string): unknown {
   if (isDeterministicModelError(err)) return err;
   const status = statusOf(err);
-  if (status !== null) {
+  if (status !== null && status >= 400) {
     return new ModelRejectedError(modelId, status, providerTypeOf(err), err);
   }
   return err;
@@ -289,12 +298,28 @@ type KaleCall = (target: KaleTarget, timeoutMs: number) => Promise<AiCompletionR
 
 /**
  * Primary model, then the configured fallback model, then (for a non-Anthropic primary provider)
- * Anthropic as a last resort. A rung is tried only after a transient failure of the one before;
- * anything else is thrown at once, so one bad request costs one call, not five.
+ * Anthropic as a last resort. After a transient failure the next rung is tried. After a
+ * non-transient one (a provider 4xx, a missing key or base URL) the ladder only carries on when
+ * the Anthropic last resort is available, because that is a different provider and can still
+ * answer; otherwise it throws at once, so one bad request costs one call, not five. A truncated
+ * or refused answer is terminal everywhere: another model would get the same prompt.
  */
 async function runLadder(mode: 'blocking' | 'streaming', call: KaleCall): Promise<AiCompletionResult> {
   const tag = mode === 'streaming' ? 'streaming ' : '';
   let lastError = 'unknown';
+
+  // Last resort: if primary provider wasn't Anthropic and CLAUDE_API_KEY exists, try Anthropic
+  // Set KALE_DISABLE_FALLBACK=true to skip this (useful during testing to avoid Anthropic costs)
+  const claudeKey = process.env.CLAUDE_API_KEY;
+  const fallbackDisabled = process.env.KALE_DISABLE_FALLBACK === 'true';
+  const anthropicRescue = !fallbackDisabled && getProvider() !== 'anthropic' && Boolean(claudeKey);
+
+  /** Decide after a failed rung: return to carry on with the next one, or throw. */
+  function carryOnOrThrow(err: unknown, modelId: string): void {
+    if (isTransientKaleError(err)) return;
+    const terminal = err instanceof OutputCapError || err instanceof RefusalError;
+    if (terminal || !anthropicRescue) throw surfaceKaleError(err, modelId);
+  }
 
   // Primary model
   const primaryId = getModelId();
@@ -303,7 +328,7 @@ async function runLadder(mode: 'blocking' | 'streaming', call: KaleCall): Promis
   } catch (primaryError) {
     lastError = errorSummary(primaryError);
     console.error(`[kale/provider] Primary ${tag}model (${getProvider()}/${primaryId}) failed: ${lastError}`);
-    if (!isTransientKaleError(primaryError)) throw surfaceKaleError(primaryError, primaryId);
+    carryOnOrThrow(primaryError, primaryId);
   }
 
   // Explicit fallback model (same provider)
@@ -311,26 +336,23 @@ async function runLadder(mode: 'blocking' | 'streaming', call: KaleCall): Promis
   if (fallbackId) {
     try {
       logger.warn('kale/provider', `Trying fallback model: ${fallbackId}${mode === 'streaming' ? ' (streaming)' : ''}`);
-      const result = await call(getFallbackTarget()!, getFallbackTimeoutMs());
-      return { ...result, fallback_used: true };
+      return await call(getFallbackTarget()!, getFallbackTimeoutMs());
     } catch (fallbackError) {
       lastError = errorSummary(fallbackError);
       console.error(`[kale/provider] Fallback ${tag}model failed: ${lastError}`);
-      if (!isTransientKaleError(fallbackError)) throw surfaceKaleError(fallbackError, fallbackId);
+      carryOnOrThrow(fallbackError, fallbackId);
     }
   }
 
-  // Last resort: if primary provider wasn't Anthropic and CLAUDE_API_KEY exists, try Anthropic
-  // Set KALE_DISABLE_FALLBACK=true to skip this (useful during testing to avoid Anthropic costs)
-  const claudeKey = process.env.CLAUDE_API_KEY;
-  const fallbackDisabled = process.env.KALE_DISABLE_FALLBACK === 'true';
-  if (!fallbackDisabled && getProvider() !== 'anthropic' && claudeKey) {
+  if (anthropicRescue) {
     const claudeModel = getClaudeModelId();
     try {
       logger.warn('kale/provider', `Primary provider failed, falling back to Anthropic (${claudeModel})`);
-      const anthropicModel = createAnthropic({ apiKey: claudeKey })(claudeModel);
-      const result = await call({ model: anthropicModel, modelId: claudeModel, anthropic: true }, getFallbackTimeoutMs());
-      return { ...result, fallback_used: true };
+      const anthropicModel = createAnthropic({ apiKey: claudeKey! })(claudeModel);
+      return await call(
+        { model: anthropicModel, modelId: claudeModel, anthropic: true, fallback: true },
+        getFallbackTimeoutMs()
+      );
     } catch (claudeError) {
       lastError = errorSummary(claudeError);
       console.error(`[kale/provider] Anthropic fallback also failed: ${lastError}`);
@@ -462,7 +484,7 @@ function finishResult(
     outputTokens: usage.completionTokens,
     stopReason,
     ms: Date.now() - startedAt,
-    fallbackUsed: false,
+    fallbackUsed: target.fallback,
   });
   return {
     content,
@@ -473,6 +495,7 @@ function finishResult(
     stop_category: stopCategoryOf(finished.providerMetadata),
     cache_creation_input_tokens: usage.cacheWriteTokens,
     cache_read_input_tokens: usage.cacheReadTokens,
+    fallback_used: target.fallback,
   };
 }
 

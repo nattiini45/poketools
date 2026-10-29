@@ -253,6 +253,71 @@ describe('kale/provider against the real AI SDK error and stop-reason handling',
     expect(result).toMatchObject({ content: 'after reconnect', fallback_used: true });
   });
 
+  it('streaming: asks the fallback after the connection drops mid-stream', async () => {
+    vi.stubEnv('KALE_FALLBACK_MODEL', 'claude-haiku-4-5-20251001');
+    respond = (request, call) => {
+      if (call !== 1) return sse(String(request.body.model), 'complete answer');
+      // The first response: headers, the start of the message, then the socket dies.
+      const encoder = new TextEncoder();
+      const start = {
+        type: 'message_start',
+        message: {
+          id: 'msg_test',
+          type: 'message',
+          role: 'assistant',
+          model: request.body.model,
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 12, output_tokens: 1 },
+        },
+      };
+      let sent = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!sent) {
+            sent = true;
+            controller.enqueue(encoder.encode(`event: message_start\ndata: ${JSON.stringify(start)}\n\n`));
+            return;
+          }
+          controller.error(
+            Object.assign(new TypeError('terminated'), {
+              cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }),
+            }),
+          );
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    };
+
+    const result = await kaleStreamText('sys', 'user');
+
+    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+    expect(result).toMatchObject({ content: 'complete answer', fallback_used: true });
+  });
+
+  it('blocking: asks the fallback after the response body dies while being read', async () => {
+    vi.stubEnv('KALE_FALLBACK_MODEL', 'claude-haiku-4-5-20251001');
+    respond = (request, call) => {
+      if (call !== 1) return messageJson(String(request.body.model), 'complete answer');
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.error(
+            Object.assign(new TypeError('terminated'), {
+              cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }),
+            }),
+          );
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+
+    const result = await kaleGenerateText('sys', 'user');
+
+    expect(recorded).toHaveLength(2);
+    expect(result).toMatchObject({ content: 'complete answer', fallback_used: true });
+  });
+
   it('abandons an attempt at its deadline and asks the fallback model', async () => {
     vi.useFakeTimers();
     vi.stubEnv('KALE_TIMEOUT_MS', '1000');
