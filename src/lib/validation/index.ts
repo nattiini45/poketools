@@ -202,6 +202,8 @@ export {
   teamForkSchema,
   teamLibraryListQuerySchema,
   teamCoachSchema,
+  coachPokemonSetSchema,
+  slotCoachSetsSchema,
 
   // Types
   type PlayerCreateInput,
@@ -304,6 +306,7 @@ export {
   type TeamShareDeleteInput,
   type TeamForkInput,
   type TeamCoachInput,
+  type CoachPokemonSet,
 
   // Helpers
   formatZodErrors,

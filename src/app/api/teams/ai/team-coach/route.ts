@@ -3,12 +3,11 @@ import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { complete } from '@/lib/ai/client';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
-import { teamCoachSchema, formatZodErrors } from '@/lib/validation';
+import { teamCoachSchema, formatZodErrors, type CoachPokemonSet } from '@/lib/validation';
 import { withOutputLanguage } from '@/lib/ai/language';
 import { getRequestLocale } from '@/i18n/server';
 import { parseFormatId } from '@/lib/pkmn/format-id';
 import type { ApiResult } from '@/types/api';
-import type { PokemonSet } from '@/types/team';
 
 /**
  * POST /api/teams/ai/team-coach
@@ -37,7 +36,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const filledTeam = (team as PokemonSet[]).filter((t: PokemonSet) => t.species);
+    const filledTeam = team.filter((t) => t.species);
     if (filledTeam.length === 0) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'At least one Pokémon is required', code: 'ai_coach_team_empty' },
@@ -62,7 +61,7 @@ export async function POST(req: NextRequest) {
     const systemPrompt = withOutputLanguage(buildTeamCoachSystemPrompt(), getRequestLocale(req));
     const userPrompt = buildTeamCoachUserPrompt(filledTeam, format, generation);
 
-    const result = await complete(systemPrompt, userPrompt);
+    const result = await complete(systemPrompt, userPrompt, { surface: 'team-coach' });
     return NextResponse.json({ success: true, content: result.content });
   } catch (error) {
     return safeErrorResponse(error, 'AI team coach failed');
@@ -85,7 +84,7 @@ Rules:
 }
 
 function buildTeamCoachUserPrompt(
-  team: PokemonSet[],
+  team: CoachPokemonSet[],
   format: string,
   generation: number,
 ): string {

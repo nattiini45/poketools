@@ -27,6 +27,7 @@ vi.mock('@/lib/ai/rate-limit', () => ({
 import { POST } from '@/app/api/teams/ai/slot-coach/route';
 import { requirePlayer, AuthError } from '@/lib/auth/helpers';
 import { complete } from '@/lib/ai/client';
+import { RefusalError, ModelRejectedError } from '@/lib/ai/errors';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
 import { outputLanguageInstruction } from '@/lib/ai/language';
 
@@ -112,5 +113,71 @@ describe('POST /api/teams/ai/slot-coach', () => {
 
     await POST(makeRequest(validBody));
     expect(vi.mocked(complete).mock.calls[1][0].endsWith(`\n\n${outputLanguageInstruction('en')}`)).toBe(true);
+  });
+});
+
+describe('POST /api/teams/ai/slot-coach — input validation and failures', () => {
+  const longName = 'x'.repeat(101);
+
+  it.each([
+    ['a null teammate', { team: [garchomp, null] }],
+    ['a missing team', { team: undefined }],
+    ['more than six teammates', { team: Array.from({ length: 7 }, () => garchomp) }],
+    ['a set with an oversized item', { set: { ...garchomp, item: longName } }],
+    ['a teammate with an oversized nickname', { team: [{ ...garchomp, name: longName }] }],
+    ['a set with more than four moves', { set: { ...garchomp, moves: ['a', 'b', 'c', 'd', 'e'] } }],
+    ['an EV value out of range', { set: { ...garchomp, evs: { hp: 100000 } } }],
+    ['EVs that are not an object of numbers', { set: { ...garchomp, evs: { hp: 'lots' } } }],
+  ])('rejects %s with validation_failed and never charges a generation', async (_label, patch) => {
+    const res = await POST(makeRequest({ ...validBody, ...patch }));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ success: false, code: 'validation_failed' });
+    expect(checkAndRecordAiGeneration).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('keeps the pinned codes ahead of the structural check, and for a non-object body', async () => {
+    const res = await POST(makeRequest(null));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'ai_coach_format_invalid' });
+
+    const noSet = await POST(makeRequest({ ...validBody, set: undefined }));
+    expect(await noSet.json()).toMatchObject({ code: 'ai_coach_species_required' });
+    expect(checkAndRecordAiGeneration).not.toHaveBeenCalled();
+  });
+
+  it('accepts a lenient set (blank teammates, missing optional fields, null optionals)', async () => {
+    const res = await POST(
+      makeRequest({
+        ...validBody,
+        set: { species: 'Garchomp', item: null, moves: ['Earthquake', '', '', ''], evs: { hp: 4, atk: 252 } },
+        team: [{ species: '' }, { item: 'Leftovers' }, garchomp],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(checkAndRecordAiGeneration).toHaveBeenCalledTimes(1);
+    const [, user] = vi.mocked(complete).mock.calls[0];
+    expect(user).toContain('- EVs: 4 hp / 252 atk');
+  });
+
+  it('asks for the slot-coach usage surface', async () => {
+    await POST(makeRequest(validBody));
+    expect(vi.mocked(complete).mock.calls[0][2]).toMatchObject({ surface: 'slot-coach' });
+  });
+
+  it.each([
+    ['a refusal', () => new RefusalError('claude-sonnet-4-6'), 422, 'ai_output_refused'],
+    ['a rejected request', () => new ModelRejectedError('claude-sonnet-4-6', 400, 'invalid_request_error'), 502, 'ai_service_unavailable'],
+  ])('answers %s with its own status and code', async (_label, makeError, status, code) => {
+    vi.mocked(complete).mockRejectedValue(makeError());
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(status);
+    expect(await res.json()).toMatchObject({ success: false, code });
+    errorSpy.mockRestore();
   });
 });
