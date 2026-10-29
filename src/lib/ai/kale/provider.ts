@@ -4,6 +4,15 @@ import { createOpenAI } from '@ai-sdk/openai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiCompletionResult } from '../client';
 import { logger } from '@/lib/logger';
+import { getClaudeModelId, getKaleModelId } from '../constants';
+import {
+  EmptyModelResponseError,
+  ModelRejectedError,
+  OutputCapError,
+  RefusalError,
+  isDeterministicModelError,
+} from '../errors';
+import { logAiUsage, normalizeAiSdkUsage } from '../usage-log';
 
 // ─── Configuration ──────────────────────────────────────────────────
 
@@ -21,7 +30,7 @@ function getApiKey(): string {
 }
 
 function getModelId(): string {
-  return process.env.KALE_MODEL || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+  return getKaleModelId();
 }
 
 function getFallbackModelId(): string | null {
@@ -139,20 +148,204 @@ function getProviderOptions(): ProviderOptions | undefined {
   return undefined;
 }
 
-function getPrimaryModel(): LanguageModel {
-  return buildModel(getModelId());
+// ─── Targets ────────────────────────────────────────────────────────
+
+/** One model a call can be sent to, with what the stop-reason checks need to know about it. */
+interface KaleTarget {
+  model: LanguageModel;
+  modelId: string;
+  /** True for the Anthropic API, where a `content-filter` finish means a refusal. */
+  anthropic: boolean;
 }
 
-function getFallbackModel(): LanguageModel | null {
-  const id = getFallbackModelId();
-  return id ? buildModel(id) : null;
+function getPrimaryTarget(): KaleTarget {
+  const modelId = getModelId();
+  return { model: buildModel(modelId), modelId, anthropic: getProvider() === 'anthropic' };
+}
+
+function getFallbackTarget(): KaleTarget | null {
+  const modelId = getFallbackModelId();
+  return modelId ? { model: buildModel(modelId), modelId, anthropic: getProvider() === 'anthropic' } : null;
+}
+
+// ─── Error classification ───────────────────────────────────────────
+
+/** `error.type` values of a mid-stream provider `error` event that a later attempt can survive. */
+const TRANSIENT_STREAM_ERROR_TYPES = new Set([
+  'overloaded_error',
+  'api_error',
+  'rate_limit_error',
+  'timeout_error',
+]);
+
+/** The wall-clock deadline of one attempt passed. Transient: the next rung may be faster. */
+class KaleDeadlineError extends Error {
+  constructor(modelId: string, timeoutMs: number) {
+    super(`Model ${modelId} exceeded its ${timeoutMs / 1000}s deadline`);
+    this.name = 'TimeoutError';
+  }
+}
+
+interface ErrorFields {
+  name?: unknown;
+  statusCode?: unknown;
+  status?: unknown;
+  isRetryable?: unknown;
+  type?: unknown;
+  error?: { type?: unknown } | null;
+}
+
+function errorFields(err: unknown): ErrorFields {
+  return typeof err === 'object' && err !== null ? (err as ErrorFields) : {};
+}
+
+function statusOf(err: unknown): number | null {
+  const fields = errorFields(err);
+  const status = typeof fields.statusCode === 'number' ? fields.statusCode : fields.status;
+  return typeof status === 'number' ? status : null;
+}
+
+/** The provider's `error.type` of a mid-stream error event, or of an API error body. */
+function providerTypeOf(err: unknown): string | null {
+  const fields = errorFields(err);
+  if (typeof fields.type === 'string') return fields.type;
+  return typeof fields.error?.type === 'string' ? fields.error.type : null;
+}
+
+function isTransientStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+/**
+ * Whether a failure of one attempt justifies the next rung of the ladder: our own deadline,
+ * connection errors, 408/409/429/5xx, a mid-stream provider error event of a transient type, and
+ * an empty answer. A 4xx, a refusal, a truncated answer and a bug would fail the same way again,
+ * so they are surfaced instead.
+ */
+function isTransientKaleError(err: unknown): boolean {
+  if (isDeterministicModelError(err)) return false;
+  if (err instanceof EmptyModelResponseError || err instanceof KaleDeadlineError) return true;
+  const fields = errorFields(err);
+  if (fields.name === 'AbortError' || fields.name === 'TimeoutError') return true;
+  const status = statusOf(err);
+  if (status !== null) return isTransientStatus(status);
+  // An AI SDK APICallError without a status is a network failure; it knows whether a retry helps.
+  if (fields.name === 'AI_APICallError') return fields.isRetryable === true;
+  const type = providerTypeOf(err);
+  return type !== null && TRANSIENT_STREAM_ERROR_TYPES.has(type);
+}
+
+function errorSummary(err: unknown): string {
+  const status = statusOf(err);
+  const type = providerTypeOf(err);
+  const base = err instanceof Error ? err.message : String(err);
+  return `${base}${status !== null ? ` [${status}]` : ''}${type ? ` (${type})` : ''}`;
+}
+
+/** Surface a non-transient failure: typed errors as they are, a provider 4xx as a typed rejection. */
+function surfaceKaleError(err: unknown, modelId: string): unknown {
+  if (isDeterministicModelError(err)) return err;
+  const status = statusOf(err);
+  if (status !== null) {
+    return new ModelRejectedError(modelId, status, providerTypeOf(err), err);
+  }
+  return err;
+}
+
+// ─── Stop reasons ───────────────────────────────────────────────────
+
+/**
+ * Judge how a finished call stopped. `length` is a cut-off answer (on this path it cannot be told
+ * apart from context overflow, so no larger-cap retry is attempted): it throws, and the pipeline
+ * routes a thrown error to the assembler's fallback text, which beats publishing half a sentence.
+ * `content-filter` is a refusal on the Anthropic API only; on OpenAI-style providers it means a
+ * moderation hit and keeps the old handling. Branch on the finish reason, not on `stopDetails`,
+ * which can be absent on a refusal.
+ */
+function assertUsableFinish(
+  target: KaleTarget,
+  finishReason: string | undefined,
+  providerMetadata: unknown,
+  maxTokens: number
+): void {
+  if (finishReason === 'length') {
+    throw new OutputCapError(target.modelId, maxTokens);
+  }
+  if (finishReason === 'content-filter' && target.anthropic) {
+    throw new RefusalError(target.modelId, stopCategoryOf(providerMetadata));
+  }
+}
+
+function stopCategoryOf(providerMetadata: unknown): string | null {
+  const anthropic = (providerMetadata as { anthropic?: { stopDetails?: { category?: unknown } } } | undefined)
+    ?.anthropic;
+  const category = anthropic?.stopDetails?.category;
+  return typeof category === 'string' ? category : null;
+}
+
+// ─── Fallback ladder ────────────────────────────────────────────────
+
+type KaleCall = (target: KaleTarget, timeoutMs: number) => Promise<AiCompletionResult>;
+
+/**
+ * Primary model, then the configured fallback model, then (for a non-Anthropic primary provider)
+ * Anthropic as a last resort. A rung is tried only after a transient failure of the one before;
+ * anything else is thrown at once, so one bad request costs one call, not five.
+ */
+async function runLadder(mode: 'blocking' | 'streaming', call: KaleCall): Promise<AiCompletionResult> {
+  const tag = mode === 'streaming' ? 'streaming ' : '';
+  let lastError = 'unknown';
+
+  // Primary model
+  const primaryId = getModelId();
+  try {
+    return await call(getPrimaryTarget(), getTimeoutMs());
+  } catch (primaryError) {
+    lastError = errorSummary(primaryError);
+    console.error(`[kale/provider] Primary ${tag}model (${getProvider()}/${primaryId}) failed: ${lastError}`);
+    if (!isTransientKaleError(primaryError)) throw surfaceKaleError(primaryError, primaryId);
+  }
+
+  // Explicit fallback model (same provider)
+  const fallbackId = getFallbackModelId();
+  if (fallbackId) {
+    try {
+      logger.warn('kale/provider', `Trying fallback model: ${fallbackId}${mode === 'streaming' ? ' (streaming)' : ''}`);
+      const result = await call(getFallbackTarget()!, getFallbackTimeoutMs());
+      return { ...result, fallback_used: true };
+    } catch (fallbackError) {
+      lastError = errorSummary(fallbackError);
+      console.error(`[kale/provider] Fallback ${tag}model failed: ${lastError}`);
+      if (!isTransientKaleError(fallbackError)) throw surfaceKaleError(fallbackError, fallbackId);
+    }
+  }
+
+  // Last resort: if primary provider wasn't Anthropic and CLAUDE_API_KEY exists, try Anthropic
+  // Set KALE_DISABLE_FALLBACK=true to skip this (useful during testing to avoid Anthropic costs)
+  const claudeKey = process.env.CLAUDE_API_KEY;
+  const fallbackDisabled = process.env.KALE_DISABLE_FALLBACK === 'true';
+  if (!fallbackDisabled && getProvider() !== 'anthropic' && claudeKey) {
+    const claudeModel = getClaudeModelId();
+    try {
+      logger.warn('kale/provider', `Primary provider failed, falling back to Anthropic (${claudeModel})`);
+      const anthropicModel = createAnthropic({ apiKey: claudeKey })(claudeModel);
+      const result = await call({ model: anthropicModel, modelId: claudeModel, anthropic: true }, getFallbackTimeoutMs());
+      return { ...result, fallback_used: true };
+    } catch (claudeError) {
+      lastError = errorSummary(claudeError);
+      console.error(`[kale/provider] Anthropic fallback also failed: ${lastError}`);
+      if (!isTransientKaleError(claudeError)) throw surfaceKaleError(claudeError, claudeModel);
+    }
+  }
+
+  throw new Error(`All Kale model attempts failed (${getProvider()}/${primaryId}): ${lastError}`);
 }
 
 // ─── Blocking Completion ────────────────────────────────────────────
 
 /**
  * Generate text with the configured Kale model.
- * Tries primary model first, falls back to fallback model on failure.
+ * Tries the primary model, then the fallback ladder (see `runLadder`) on transient failures.
  * Returns the same AiCompletionResult shape used by the legacy client.
  */
 export async function kaleGenerateText(
@@ -162,82 +355,52 @@ export async function kaleGenerateText(
 ): Promise<AiCompletionResult> {
   const maxTokens = opts?.maxTokens ?? getMaxTokens();
   const temperature = opts?.temperature ?? getTemperature();
-  const timeoutMs = getTimeoutMs();
   const apiKey = getApiKey();
 
   if (!apiKey) {
     throw new Error(`No API key found. Set KALE_API_KEY or CLAUDE_API_KEY. Provider: ${getProvider()}, Model: ${getModelId()}`);
   }
 
-  // Try primary model
-  let lastError: string = 'unknown';
-  try {
-    return await callGenerateText(getPrimaryModel(), systemPrompt, userPrompt, maxTokens, temperature, timeoutMs);
-  } catch (primaryError) {
-    lastError = primaryError instanceof Error ? primaryError.message : String(primaryError);
-    // Log full error details for debugging provider compatibility
-    const errObj = primaryError as Record<string, unknown>;
-    const statusCode = errObj?.statusCode ?? errObj?.status ?? '';
-    console.error(`[kale/provider] Primary model (${getProvider()}/${getModelId()}) failed: ${lastError}${statusCode ? ` [${statusCode}]` : ''}`);
-  }
-
-  // Try explicit fallback model (same provider)
-  const fallback = getFallbackModel();
-  if (fallback) {
-    try {
-      logger.warn('kale/provider', `Trying fallback model: ${getFallbackModelId()}`);
-      return await callGenerateText(fallback, systemPrompt, userPrompt, maxTokens, temperature, getFallbackTimeoutMs());
-    } catch (fallbackError) {
-      lastError = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-      console.error(`[kale/provider] Fallback model failed:`, lastError);
-    }
-  }
-
-  // Last resort: if primary provider wasn't Anthropic and CLAUDE_API_KEY exists, try Anthropic
-  // Set KALE_DISABLE_FALLBACK=true to skip this (useful during testing to avoid Anthropic costs)
-  const claudeKey = process.env.CLAUDE_API_KEY;
-  const fallbackDisabled = process.env.KALE_DISABLE_FALLBACK === 'true';
-  if (!fallbackDisabled && getProvider() !== 'anthropic' && claudeKey) {
-    try {
-      const claudeModel = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
-      logger.warn('kale/provider', `Primary provider failed, falling back to Anthropic (${claudeModel})`);
-      const anthropicModel = createAnthropic({ apiKey: claudeKey })(claudeModel);
-      return await callGenerateText(anthropicModel, systemPrompt, userPrompt, maxTokens, temperature, getFallbackTimeoutMs());
-    } catch (claudeError) {
-      lastError = claudeError instanceof Error ? claudeError.message : String(claudeError);
-      console.error(`[kale/provider] Anthropic fallback also failed:`, lastError);
-    }
-  }
-
-  throw new Error(`All Kale model attempts failed (${getProvider()}/${getModelId()}): ${lastError}`);
+  return runLadder('blocking', (target, timeoutMs) =>
+    callGenerateText(target, systemPrompt, userPrompt, maxTokens, temperature, timeoutMs)
+  );
 }
 
 async function callGenerateText(
-  model: LanguageModel,
+  target: KaleTarget,
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number,
   temperature: number,
   timeoutMs: number
 ): Promise<AiCompletionResult> {
+  const startedAt = Date.now();
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), timeoutMs);
 
   try {
-    const result = await generateText({
-      model,
-      // Use top-level `system` — the SDK translates per-provider
-      // (Anthropic system param, OpenAI system role, etc.)
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: userPrompt },
-      ],
-      maxOutputTokens: maxTokens,
-      temperature,
-      maxRetries: 0,
-      abortSignal: abort.signal,
-      providerOptions: getProviderOptions(),
-    });
+    let result;
+    try {
+      result = await generateText({
+        model: target.model,
+        // Use top-level `system` — the SDK translates per-provider
+        // (Anthropic system param, OpenAI system role, etc.)
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt },
+        ],
+        maxOutputTokens: maxTokens,
+        temperature,
+        maxRetries: 0,
+        abortSignal: abort.signal,
+        providerOptions: getProviderOptions(),
+      });
+    } catch (err) {
+      if (abort.signal.aborted) throw new KaleDeadlineError(target.modelId, timeoutMs);
+      throw err;
+    }
+
+    assertUsableFinish(target, result.finishReason, result.providerMetadata, maxTokens);
 
     if (!result.text) {
       // Log the full response shape so we can see what the provider actually returned
@@ -257,28 +420,60 @@ async function callGenerateText(
       // content instead of text when in "thinking" mode.
       if (reasoningText) {
         console.warn(`[kale/provider] No text content but found reasoning output (${reasoningText.length} chars), using as text`);
-        return {
-          content: reasoningText,
-          model: resp?.modelId ?? 'unknown',
-          prompt_tokens: result.usage?.inputTokens ?? 0,
-          completion_tokens: result.usage?.outputTokens ?? 0,
-        };
+        return finishResult(target, reasoningText, result, startedAt);
       }
 
-      throw new Error(
-        `Empty response from model (finishReason=${finishReason}, outputTokens=${result.usage?.outputTokens ?? 0})`
+      throw new EmptyModelResponseError(
+        target.modelId,
+        `Empty response (finishReason=${finishReason}, outputTokens=${result.usage?.outputTokens ?? 0})`
       );
     }
 
-    return {
-      content: result.text,
-      model: result.response?.modelId ?? 'unknown',
-      prompt_tokens: result.usage?.inputTokens ?? 0,
-      completion_tokens: result.usage?.outputTokens ?? 0,
-    };
+    return finishResult(target, result.text, result, startedAt);
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The pieces of a finished `generateText` / `streamText` call that the result reads. */
+interface FinishedCall {
+  response?: { modelId?: string } | undefined;
+  usage?: Parameters<typeof normalizeAiSdkUsage>[0];
+  finishReason?: string | undefined;
+  providerMetadata?: unknown;
+}
+
+function finishResult(
+  target: KaleTarget,
+  content: string,
+  finished: FinishedCall,
+  startedAt: number
+): AiCompletionResult {
+  const usage = normalizeAiSdkUsage(finished.usage);
+  const responseModel = finished.response?.modelId ?? 'unknown';
+  const stopReason = finished.finishReason ?? null;
+  logAiUsage({
+    surface: 'kale',
+    requestedModel: target.modelId,
+    responseModel,
+    inputTokens: usage.promptTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+    outputTokens: usage.completionTokens,
+    stopReason,
+    ms: Date.now() - startedAt,
+    fallbackUsed: false,
+  });
+  return {
+    content,
+    model: responseModel,
+    prompt_tokens: usage.promptTokens,
+    completion_tokens: usage.completionTokens,
+    stop_reason: stopReason,
+    stop_category: stopCategoryOf(finished.providerMetadata),
+    cache_creation_input_tokens: usage.cacheWriteTokens,
+    cache_read_input_tokens: usage.cacheReadTokens,
+  };
 }
 
 // ─── Streaming Completion ───────────────────────────────────────────
@@ -286,7 +481,8 @@ async function callGenerateText(
 /**
  * Stream-based completion using the configured Kale model.
  * Calls `onChunk` for each content delta (for heartbeat emission).
- * Falls back to blocking `kaleGenerateText()` as last resort.
+ * Uses the same fallback ladder as `kaleGenerateText`; there is no blocking replay of a failed
+ * stream.
  */
 export async function kaleStreamText(
   systemPrompt: string,
@@ -296,39 +492,14 @@ export async function kaleStreamText(
 ): Promise<AiCompletionResult> {
   const maxTokens = opts?.maxTokens ?? getMaxTokens();
   const temperature = opts?.temperature ?? getTemperature();
-  const timeoutMs = getTimeoutMs();
 
-  // Try primary model streaming
-  try {
-    return await callStreamText(getPrimaryModel(), systemPrompt, userPrompt, maxTokens, temperature, timeoutMs, onChunk);
-  } catch (primaryError) {
-    console.error(
-      `[kale/provider] Primary streaming failed:`,
-      primaryError instanceof Error ? primaryError.message : primaryError
-    );
-  }
-
-  // Try fallback model streaming
-  const fallback = getFallbackModel();
-  if (fallback) {
-    try {
-      logger.warn('kale/provider', `Falling back to ${getFallbackModelId()} (streaming)`);
-      return await callStreamText(fallback, systemPrompt, userPrompt, maxTokens, temperature, getFallbackTimeoutMs(), onChunk);
-    } catch (fallbackError) {
-      console.error(
-        `[kale/provider] Fallback streaming failed:`,
-        fallbackError instanceof Error ? fallbackError.message : fallbackError
-      );
-    }
-  }
-
-  // Last resort: blocking mode
-  logger.warn('kale/provider', 'All streaming attempts failed, trying blocking mode');
-  return await kaleGenerateText(systemPrompt, userPrompt, { maxTokens, temperature });
+  return runLadder('streaming', (target, timeoutMs) =>
+    callStreamText(target, systemPrompt, userPrompt, maxTokens, temperature, timeoutMs, onChunk)
+  );
 }
 
 async function callStreamText(
-  model: LanguageModel,
+  target: KaleTarget,
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number,
@@ -336,12 +507,16 @@ async function callStreamText(
   timeoutMs: number,
   onChunk?: () => void
 ): Promise<AiCompletionResult> {
+  const startedAt = Date.now();
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), timeoutMs);
+  // `result.text` rejects with a generic "no output" error; the stream's own error (its status,
+  // or a mid-stream provider error event) arrives here and decides how the ladder reacts.
+  let streamError: unknown;
 
   try {
     const result = streamText({
-      model,
+      model: target.model,
       system: systemPrompt,
       messages: [
         { role: 'user', content: userPrompt },
@@ -351,25 +526,32 @@ async function callStreamText(
       maxRetries: 0,
       abortSignal: abort.signal,
       onChunk: () => { onChunk?.(); },
+      onError: ({ error }) => { streamError = error; },
       providerOptions: getProviderOptions(),
     });
 
     // Consume the stream to get the full text
-    const text = await result.text;
+    let text: string;
+    try {
+      text = await result.text;
+    } catch (err) {
+      if (abort.signal.aborted) throw new KaleDeadlineError(target.modelId, timeoutMs);
+      throw streamError ?? err;
+    }
+    if (streamError !== undefined) throw streamError;
+
+    const finishReason = await result.finishReason;
+    const providerMetadata = await result.providerMetadata;
+    assertUsableFinish(target, finishReason, providerMetadata, maxTokens);
 
     if (!text) {
-      throw new Error('Empty streaming response from model');
+      throw new EmptyModelResponseError(target.modelId, 'Empty streaming response');
     }
 
     const usage = await result.usage;
     const response = await result.response;
 
-    return {
-      content: text,
-      model: response?.modelId ?? 'unknown',
-      prompt_tokens: usage?.inputTokens ?? 0,
-      completion_tokens: usage?.outputTokens ?? 0,
-    };
+    return finishResult(target, text, { response, usage, finishReason, providerMetadata }, startedAt);
   } finally {
     clearTimeout(timer);
   }
