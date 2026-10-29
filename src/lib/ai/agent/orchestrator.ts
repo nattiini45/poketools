@@ -189,8 +189,15 @@ export function applyToolOverrides(
     if (name === 'validateTeam') {
       // Server-authoritative league scope: the model never names whose roster or which league is checked.
       base.player_id = overrides.userId;
-      if (overrides.seasonId) base.season_id = overrides.seasonId;
-      else delete base.season_id;
+      if (overrides.seasonId) {
+        base.season_id = overrides.seasonId;
+        // In a resolved league the assigned core is the server's: a model-supplied one is never trusted. With no core
+        // assigned the field is dropped, so `checkTeam` reads (and reports) it from `season_participants`.
+        if (overrides.playerCore && overrides.playerCore.length === 3) base.player_core = overrides.playerCore;
+        else delete base.player_core;
+      } else {
+        delete base.season_id;
+      }
     }
     return base;
   }
@@ -216,7 +223,8 @@ function buildAgentToolSet(persona: AgentPersona, overrides: ToolOverrides): Too
     const def = AGENT_TOOLS[name];
     set[name] = tool({
       description: def.description,
-      inputSchema: def.inputSchema,
+      // The model sees (and is validated against) its own schema; the strict one runs in executeTool after the overrides.
+      inputSchema: def.modelInputSchema ?? def.inputSchema,
       execute: async (input: unknown) => {
         // Merge server-authoritative context BEFORE validation/cache so the cache
         // key and persisted call reflect the input that actually ran.

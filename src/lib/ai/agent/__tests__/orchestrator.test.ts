@@ -436,6 +436,24 @@ describe('applyToolOverrides', () => {
     expect(out).not.toHaveProperty('season_id');
   });
 
+  it('in a resolved league the assigned core is the server’s: a model-supplied core is overwritten', () => {
+    const out = applyToolOverrides(
+      'validateTeam',
+      { team: [], format: 'gen9ru', player_core: ['Fire', 'Fire', 'Fire'] },
+      { ...overrides, seasonId: 'season-1' },
+    ) as Record<string, unknown>;
+    expect(out.player_core).toEqual(['Grass', 'Ground', 'Poison']);
+  });
+
+  it('in a resolved league with no assigned core a model-supplied core is dropped, so the check reads it from the season', () => {
+    const out = applyToolOverrides(
+      'validateTeam',
+      { team: [], format: 'gen9ru', player_core: ['Fire', 'Water', 'Grass'] },
+      { userId: 'me', rulesetId: 'rs-1', playerCore: null, seasonId: 'season-1' },
+    ) as Record<string, unknown>;
+    expect(out).not.toHaveProperty('player_core');
+  });
+
   it('does not scope buildTeam to a league (it builds from usage; the validation call has no roster)', () => {
     const out = applyToolOverrides('buildTeam', { format: 'gen9ou' }, { ...overrides, seasonId: 'season-1' }) as Record<string, unknown>;
     expect(out).not.toHaveProperty('season_id');

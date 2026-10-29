@@ -18,14 +18,19 @@ import {
   GetLearnsetInput,
   CalculateDamageInput,
   ValidateTeamInput,
+  ValidateTeamModelInput,
   GetUsageStatsInput,
   QueryLeagueDataInput,
   GetMatchHistoryInput,
+  GetMatchHistoryModelInput,
   GetUpcomingMatchesInput,
+  GetUpcomingMatchesModelInput,
   GetMatchAnalysisContextInput,
+  GetMatchAnalysisContextModelInput,
   SearchStrategyKnowledgeInput,
   CreatePokepasteInput,
   BuildTeamInput,
+  BuildTeamModelInput,
 } from './schemas';
 import { lookupPokemon, getTypeChart, getLearnset } from './pkmn';
 import { calculateDamage } from './calc';
@@ -41,7 +46,13 @@ import { buildTeam } from './team-builder';
 export interface AgentTool {
   name: string;
   description: string;
+  /** The STRICT schema `executeTool` validates with, after the server has set its own fields (`applyToolOverrides`). */
   inputSchema: z.ZodTypeAny;
+  /**
+   * What the model is shown and validated against, when it differs: it leaves out the fields the server sets and
+   * relaxes the ones it overwrites, so a value the model invents there cannot fail the call before the override runs.
+   */
+  modelInputSchema?: z.ZodTypeAny;
   /** Runs the executor over already-validated input (parsed by the schema). */
   execute: (input: unknown) => Promise<unknown>;
 }
@@ -52,11 +63,13 @@ function defineTool<S extends z.ZodTypeAny>(
   description: string,
   schema: S,
   run: (input: z.infer<S>) => unknown | Promise<unknown>,
+  modelSchema?: z.ZodTypeAny,
 ): AgentTool {
   return {
     name,
     description,
     inputSchema: schema,
+    modelInputSchema: modelSchema,
     execute: async (input) => run(input as z.infer<S>),
   };
 }
@@ -93,6 +106,7 @@ const TOOLS: AgentTool[] = [
     'Check a team\'s legality for a format (species/move/ability/item existence, learnset legality, EV limits, and clauses). Returns per-Pokémon and team-level issues. Validate before presenting any team to the user.',
     ValidateTeamInput,
     validateTeam,
+    ValidateTeamModelInput,
   ),
   defineTool(
     'getUsageStats',
@@ -111,18 +125,21 @@ const TOOLS: AgentTool[] = [
     'Get a player\'s completed match history (opponent, win/loss, game score, date, replay URLs), optionally scoped to one tournament. Use it to scout an opponent or summarise a player\'s record.',
     GetMatchHistoryInput,
     getMatchHistory,
+    GetMatchHistoryModelInput,
   ),
   defineTool(
     'getUpcomingMatches',
     'Get a player\'s scheduled or pending (not-yet-played) matches, including the opponent and status. Use it to prepare a player for what is next.',
     GetUpcomingMatchesInput,
     getUpcomingMatches,
+    GetUpcomingMatchesModelInput,
   ),
   defineTool(
     'getMatchAnalysisContext',
     'Fetch the complete battle context for a specific match by id: per-game battle stats (leads, KOs, moves), team sheets with abilities/items, league & format rules, and the turn-by-turn summary — including who set each weather and terrain. Call this FIRST when analysing or recapping a specific match; it is the only source of what actually happened in the game (the other tools return aggregates and replay URLs, not parsed events).',
     GetMatchAnalysisContextInput,
     getMatchAnalysisContext,
+    GetMatchAnalysisContextModelInput,
   ),
   defineTool(
     'searchStrategyKnowledge',
@@ -142,6 +159,7 @@ const TOOLS: AgentTool[] = [
     'Meta-tool: assemble a full, legal team for a format around optional core Pokémon and locked items/moves. Deterministically chains lookup → usage → type-coverage → validation and returns the team, a pokepaste link, and threat coverage.',
     BuildTeamInput,
     buildTeam,
+    BuildTeamModelInput,
   ),
 ];
 

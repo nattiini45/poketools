@@ -194,7 +194,7 @@ async function runCase(
       for (const tc of step.toolCalls ?? []) {
         calledTools.add(tc.toolName);
         const tool = tools[tc.toolName];
-        if (!tool || !tool.inputSchema.safeParse(tc.input).success) schemaRejected = true;
+        if (!tool || !(tool.modelInputSchema ?? tool.inputSchema).safeParse(tc.input).success) schemaRejected = true;
       }
     }
 
