@@ -33,6 +33,13 @@ export default defineDe<typeof en>()({
       ability_not_allowed: '{ability} steht nicht auf der Erlaubnisliste der Fähigkeiten dieses Regelwerks',
       ev_total: 'EV-Summe ({total}) liegt über 510',
       ev_stat_cap: '{stat}-EVs ({value}) liegen über 252',
+      ev_stat_invalid: '{stat}-EVs ({value}) müssen eine ganze Zahl von 0 bis 252 sein',
+      iv_range: '{stat}-IVs ({value}) müssen eine ganze Zahl von 0 bis 31 sein',
+      level_range: 'Das Level ({value}) muss eine ganze Zahl von 1 bis 100 sein',
+      malformed_set: 'Dieses Set ist unvollständig oder fehlerhaft',
+      duplicate_move: '{move} ist mehrfach aufgeführt',
+      move_illegal: '{species} kann {move} nicht legal erlernen',
+      ability_illegal: '{species} kann die Fähigkeit {ability} nicht haben',
       tera_core_mismatch: 'Tera-Typ {type} muss einem deiner Core-Typen entsprechen ({types})',
       tera_type_mismatch: 'Tera-Typ {type} muss einem Typ von {species} entsprechen ({types})',
       legendary_phase: '{species} ist legendär und in dieser Phase nicht erlaubt',
@@ -54,6 +61,8 @@ export default defineDe<typeof en>()({
       evolution_stage_cap:
         'Entwicklungsregel: In dieser Phase sind höchstens {cap} voll entwickelte Pokémon erlaubt, du hast {found}',
       not_in_roster: '{species} ist nicht in deinem Draft-Kader',
+      ruleset_load_failed:
+        'Das Regelwerk für diese Prüfung konnte nicht verwendet werden, das Team wurde nur gegen das Format geprüft und ist für deine Liga nicht als legal bestätigt',
     },
   },
   speed: {

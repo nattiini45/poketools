@@ -459,9 +459,42 @@ export interface SetLegalityResult {
   selectedAbility: string;
 }
 
+/**
+ * Which dex a legality check reads: the generation's own (`standard`: learnsets restricted to the generation, the
+ * restriction Showdown's `[Gen 9]` formats use) or its whole National Dex (`national`: Mega Evolutions and other past
+ * species resolve, past moves are legal, and a move learned in ANY generation up to `gen` counts, as in Showdown's
+ * National Dex formats).
+ */
+export type LegalityUniverse = 'standard' | 'national';
+
+/** A species of the given universe (the standard generation, or its National Dex). */
+function speciesIn(universe: LegalityUniverse, name: string, gen: number) {
+  return universe === 'national' ? getNationalSpecies(name, gen) : getSpecies(name, gen);
+}
+
+/**
+ * The generations of the National Dex universe (see `getNationalSpecies`): the same `@pkmn/data` wrapper as the
+ * standard one with the `exists` test widened to the past and unobtainable entries, so a Mega Evolution or a removed
+ * move resolves and has a learnset. Built lazily: the `isNonstandard` set is declared further down.
+ */
+let nationalGens: Generations | undefined;
+function getNationalGeneration(num: number = 9) {
+  nationalGens ??= new Generations(Dex, (d) => {
+    if (!d.exists) return false;
+    if (d.kind === 'Ability' && d.id === 'noability') return false;
+    const nonstandard = 'isNonstandard' in d ? ((d.isNonstandard as string | null | undefined) ?? null) : null;
+    return NATIONAL_NONSTANDARD.has(nonstandard);
+  });
+  return nationalGens.get(num);
+}
+
 /** Get all legal abilities for a species */
-export function getLegalAbilities(speciesName: string, gen: number = 9): { name: string; slot: string }[] {
-  const species = getSpecies(speciesName, gen);
+export function getLegalAbilities(
+  speciesName: string,
+  gen: number = 9,
+  universe: LegalityUniverse = 'standard',
+): { name: string; slot: string }[] {
+  const species = speciesIn(universe, speciesName, gen);
   if (!species) return [];
   const abilities: { name: string; slot: string }[] = [];
   const abilitiesData = species.abilities as unknown as Record<string, string>;
@@ -471,18 +504,25 @@ export function getLegalAbilities(speciesName: string, gen: number = 9): { name:
   return abilities;
 }
 
-/** Check if a species can learn specific moves (async — learnsets are lazy-loaded) */
+/**
+ * Check if a species can learn specific moves (async — learnsets are lazy-loaded).
+ *
+ * A species the dex of the universe does not know has no learnset to judge by: every move comes back illegal here,
+ * and the team validator skips the check for such a species (it reports the unknown species itself).
+ */
 export async function checkMoveLegality(
   speciesName: string,
   moves: string[],
   gen: number = 9,
+  universe: LegalityUniverse = 'standard',
 ): Promise<{ move: string; legal: boolean }[]> {
-  const g = getGeneration(gen);
+  const national = universe === 'national';
+  const g = national ? getNationalGeneration(gen) : getGeneration(gen);
   const species = g.species.get(speciesName);
   if (!species) return moves.map((m) => ({ move: m, legal: false }));
 
-  // For modern gens, enforce generation-native learnset restriction
-  const restriction = restrictionForGeneration(gen);
+  // Standard: the generation-native learnset restriction. National Dex: a move learned in any generation up to `gen`.
+  const restriction = national ? undefined : restrictionForGeneration(gen);
   const learnable = await g.learnsets.learnable(species.name, restriction);
   const allLearnable = new Set<string>(Object.keys(learnable ?? {}));
 
@@ -500,12 +540,12 @@ export async function validateSetLegality(
   selectedAbility: string,
   moves: string[],
   gen: number = 9,
+  universe: LegalityUniverse = 'standard',
 ): Promise<SetLegalityResult> {
-  const abilities = getLegalAbilities(speciesName, gen);
-  const moveIssues = await checkMoveLegality(speciesName, moves, gen);
-  const abilityLegal = !selectedAbility || abilities.some(
-    (a) => a.name.toLowerCase() === selectedAbility.toLowerCase(),
-  );
+  const abilities = getLegalAbilities(speciesName, gen, universe);
+  const moveIssues = await checkMoveLegality(speciesName, moves, gen, universe);
+  const selectedId = toID(selectedAbility);
+  const abilityLegal = selectedId === '' || abilities.some((a) => toID(a.name) === selectedId);
 
   return {
     species: speciesName,
@@ -523,8 +563,8 @@ export async function validateSetLegality(
  * Uses `species.nfe` first (canonical flag in @pkmn/data) and falls back to
  * `species.evos.length === 0` for older data.
  */
-export function isFullyEvolved(name: string, gen: number = 9): boolean {
-  const species = getSpecies(name, gen);
+export function isFullyEvolved(name: string, gen: number = 9, universe: LegalityUniverse = 'standard'): boolean {
+  const species = speciesIn(universe, name, gen);
   if (!species) return false;
   if (typeof species.nfe === 'boolean') return !species.nfe;
   return !species.evos || species.evos.length === 0;
@@ -542,8 +582,8 @@ const LEGENDARY_TAGS = new Set([
  * Mythical in @pkmn/dex. Ultra Beasts and Paradox Pokémon are NOT considered
  * legendary by this helper (they're separate tags).
  */
-export function isLegendary(name: string, gen: number = 9): boolean {
-  const species = getSpecies(name, gen);
+export function isLegendary(name: string, gen: number = 9, universe: LegalityUniverse = 'standard'): boolean {
+  const species = speciesIn(universe, name, gen);
   if (!species) return false;
   const tags = (species.tags as string[] | undefined) ?? [];
   return tags.some((t) => LEGENDARY_TAGS.has(t));

@@ -115,6 +115,13 @@ export type ValidationIssueCode =
   | 'eviolite_tier_cap'
   | 'epb_stage2_tera'
   | 'epb_stage_tera'
+  | 'malformed_set'
+  | 'duplicate_move'
+  | 'move_illegal'
+  | 'ability_illegal'
+  | 'ev_stat_invalid'
+  | 'iv_range'
+  | 'level_range'
   // Team-wide (`TeamIssue`)
   | 'team_empty'
   | 'team_too_large'
@@ -125,7 +132,8 @@ export type ValidationIssueCode =
   | 'type_quota'
   | 'tera_match_no_core'
   | 'evolution_stage_cap'
-  | 'not_in_roster';
+  | 'not_in_roster'
+  | 'ruleset_load_failed';
 
 /**
  * Params of a validation issue. Names follow the pkmn seam
@@ -154,12 +162,32 @@ export interface TeamIssue {
   params?: ValidationIssueParams;
 }
 
+/**
+ * Which rules a server-side team check enforced, so a caller never reads "legal" as "legal under the league's rules"
+ * when weaker rules were used.
+ *  - `ruleset`: a stored ruleset version (the league or phase pin, or a ruleset meant to be seen).
+ *  - `format_preset`: no ruleset was named; the format's catalog rules were enforced (its tier bans, ability and item
+ *    bans, clauses).
+ *  - `format_basic`: no ruleset was named and the format has no catalog entry; only the generation and the Species
+ *    Clause were enforced (nothing is banned).
+ * `fallback` is set when a ruleset WAS named and the check ran on the format instead because it could not be read
+ * (`ruleset_not_found`: no such readable ruleset, `ruleset_load_failed`: the read failed). Such a result is never valid.
+ */
+export interface RulesetSource {
+  kind: 'ruleset' | 'format_preset' | 'format_basic';
+  fallback?: 'ruleset_not_found' | 'ruleset_load_failed';
+  /** The format key of a `format_*` source. */
+  format?: string;
+}
+
 export interface TeamValidationResult {
   valid: boolean;
   issues: SetIssue[];
   team_issues: string[];  // team-wide problems (e.g. Species Clause), English
   /** The same team-wide issues with codes, aligned to `team_issues` (absent from older producers). */
   team_issue_details?: TeamIssue[];
+  /** Which rules the server enforced (set by the shared server-side check; absent from the bare `validateTeam`). */
+  ruleset_source?: RulesetSource;
 }
 
 export interface ValidateTeamRequest {

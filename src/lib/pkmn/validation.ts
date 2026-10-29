@@ -60,21 +60,85 @@ export function validateDraftOwnership(
   return draftOwnershipIssues(pokemon, draftedPokemon).map((i) => i.issue);
 }
 
-/** `validateDraftOwnership` with codes (`not_in_roster`). */
+/**
+ * `validateDraftOwnership` with codes (`not_in_roster`). Names compare by dex id (`toID`), so `Rotom-Wash`,
+ * `rotom wash` and `Rotomwash` are one Pokémon.
+ */
 function draftOwnershipIssues(pokemon: PokemonSet[], draftedPokemon: string[]): TeamIssue[] {
-  const ownedSet = new Set(draftedPokemon.map((n) => n.toLowerCase()));
+  const ownedSet = new Set(draftedPokemon.map((n) => toID(n)));
   const issues: TeamIssue[] = [];
 
-  for (const set of pokemon) {
-    if (!ownedSet.has(set.species.toLowerCase())) {
+  for (const raw of pokemon) {
+    const species = (raw as { species?: unknown } | null)?.species;
+    if (typeof species !== 'string' || species === '') continue; // a malformed set is reported as such
+    if (!ownedSet.has(toID(species))) {
       issues.push({
-        issue: `${set.species} is not in your draft roster`,
-        ...codedIssue('not_in_roster', { species: set.species }),
+        issue: `${species} is not in your draft roster`,
+        ...codedIssue('not_in_roster', { species }),
       });
     }
   }
 
   return issues;
+}
+
+// ── Reading a set defensively ───────────────────────────────────────
+
+const STAT_KEYS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const;
+const MAX_EV_PER_STAT = 252;
+const MAX_EV_TOTAL = 510;
+const MAX_IV = 31;
+const MAX_MOVES = 4;
+
+type Spread = Partial<Record<(typeof STAT_KEYS)[number], unknown>>;
+
+/** A set whose members the validator may read without further guards. */
+export interface ReadSet {
+  species: string;
+  item: string;
+  ability: string;
+  moves: string[];
+  evs: Spread;
+  ivs: Spread;
+  /** Absent level = the default (100). */
+  level: unknown;
+  tera_type?: string;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Reads one stored or posted set without ever throwing: a missing `evs`, `ivs`, `moves`, `item` or `ability` takes
+ * its default (a set under construction has none of them); a member of the wrong type, or no species, makes the set
+ * malformed (`null`), which the validator reports as `malformed_set`. The boundary schemas (`pokemonSetSchema`)
+ * refuse such a set before it is stored; this is the guard for rows stored before they did.
+ */
+export function readSet(raw: unknown): ReadSet | null {
+  if (!isRecord(raw)) return null;
+  const { species, item, ability, moves, evs, ivs, level, tera_type } = raw;
+  if (typeof species !== 'string' || species.trim() === '') return null;
+  if (item !== undefined && item !== null && typeof item !== 'string') return null;
+  if (ability !== undefined && ability !== null && typeof ability !== 'string') return null;
+  if (moves !== undefined && moves !== null && (!Array.isArray(moves) || moves.some((m) => typeof m !== 'string'))) return null;
+  if (evs !== undefined && evs !== null && !isRecord(evs)) return null;
+  if (ivs !== undefined && ivs !== null && !isRecord(ivs)) return null;
+  return {
+    species,
+    item: typeof item === 'string' ? item : '',
+    ability: typeof ability === 'string' ? ability : '',
+    moves: (moves as string[] | undefined | null) ?? [],
+    evs: isRecord(evs) ? evs : {},
+    ivs: isRecord(ivs) ? ivs : {},
+    level,
+    tera_type: typeof tera_type === 'string' ? tera_type : undefined,
+  };
+}
+
+/** A malformed set's label in an issue: its species when it has a readable one. */
+function labelOfMalformed(raw: unknown): string {
+  const species = isRecord(raw) ? raw.species : undefined;
+  return typeof species === 'string' ? species : '';
 }
 
 /** Splits coded team issues into the legacy English list plus the aligned details. */
@@ -167,7 +231,7 @@ export function validateTeam(
   const teamIssues: TeamIssue[] = [];
 
   // ── Structural checks ─────────────────────────────────────────────
-  if (pokemon.length === 0) {
+  if (!Array.isArray(pokemon) || pokemon.length === 0) {
     teamIssues.push({ issue: 'Team must have at least 1 Pokémon', ...codedIssue('team_empty') });
     return { valid: false, issues, ...teamIssueFields(teamIssues) };
   }
@@ -198,8 +262,22 @@ export function validateTeam(
     national ? getNationalAbility(name, gen) : getAbility(name, gen),
   );
 
+  // Every set read once, defensively; a set that cannot be read is reported and skipped by every later check.
+  const sets: (ReadSet | null)[] = pokemon.map(readSet);
+
   for (let i = 0; i < pokemon.length; i++) {
-    const set = pokemon[i];
+    const set = sets[i];
+    if (set === null) {
+      const label = labelOfMalformed(pokemon[i]);
+      issues.push({
+        pokemon_index: i,
+        species: label,
+        issue: 'This set is incomplete or malformed',
+        severity: 'error',
+        ...codedIssue('malformed_set'),
+      });
+      continue;
+    }
 
     // Species existence
     const species = resolveSpecies(set.species);
@@ -223,9 +301,10 @@ export function validateTeam(
     if (set.moves.length === 0) {
       issues.push({ pokemon_index: i, species: species.name, issue: 'Must have at least 1 move', severity: 'error', ...codedIssue('min_moves') });
     }
-    if (set.moves.length > 4) {
+    if (set.moves.length > MAX_MOVES) {
       issues.push({ pokemon_index: i, species: species.name, issue: 'Cannot have more than 4 moves', severity: 'error', ...codedIssue('max_moves') });
     }
+    const seenMoves = new Set<string>();
     for (const moveName of set.moves) {
       const move = resolveMove(moveName);
       if (!move) {
@@ -238,6 +317,22 @@ export function validateTeam(
         });
       } else if (!movesAllowed(toID(move.name))) {
         issues.push(listIssue('moves', rules.moves.mode, i, species.name, move.name));
+      }
+      // Showdown refuses a set that names a move twice. The canonical id decides, so an alias or a differently cased
+      // spelling of one move counts; an unknown move is compared by its own id.
+      const moveId = toID(move?.name ?? moveName);
+      if (moveId !== '') {
+        if (seenMoves.has(moveId)) {
+          const shown = move?.name ?? moveName;
+          issues.push({
+            pokemon_index: i,
+            species: species.name,
+            issue: `${shown} is listed more than once`,
+            severity: 'error',
+            ...codedIssue('duplicate_move', { move: shown }),
+          });
+        }
+        seenMoves.add(moveId);
       }
     }
 
@@ -273,27 +368,70 @@ export function validateTeam(
       }
     }
 
-    // EV total (max 510)
-    const evTotal = set.evs.hp + set.evs.atk + set.evs.def + set.evs.spa + set.evs.spd + set.evs.spe;
-    if (evTotal > 510) {
+    // Individual EVs: a whole number from 0 to 252. Both bounds matter: a negative EV would let the other five stats
+    // pass the total below (-760 with five 252s totals 500). A stat that is absent is 0.
+    let evTotal = 0;
+    for (const stat of STAT_KEYS) {
+      const val = set.evs[stat];
+      if (val === undefined || val === null) continue;
+      if (typeof val !== 'number' || !Number.isInteger(val) || val < 0) {
+        issues.push({
+          pokemon_index: i,
+          species: species.name,
+          issue: `${stat} EVs (${String(val)}) must be a whole number from 0 to ${MAX_EV_PER_STAT}`,
+          severity: 'error',
+          ...codedIssue('ev_stat_invalid', { stat, value: typeof val === 'number' ? val : String(val) }),
+        });
+        continue;
+      }
+      evTotal += val;
+      if (val > MAX_EV_PER_STAT) {
+        issues.push({
+          pokemon_index: i,
+          species: species.name,
+          issue: `${stat} EVs (${val}) exceed ${MAX_EV_PER_STAT}`,
+          severity: 'error',
+          ...codedIssue('ev_stat_cap', { stat, value: val }),
+        });
+      }
+    }
+
+    // EV total (max 510), over the stats that are valid on their own.
+    if (evTotal > MAX_EV_TOTAL) {
       issues.push({
         pokemon_index: i,
         species: species.name,
-        issue: `EV total (${evTotal}) exceeds 510`,
+        issue: `EV total (${evTotal}) exceeds ${MAX_EV_TOTAL}`,
         severity: 'error',
         ...codedIssue('ev_total', { total: evTotal }),
       });
     }
 
-    // Individual EV cap (max 252)
-    for (const [stat, val] of Object.entries(set.evs)) {
-      if (val > 252) {
+    // IVs: a whole number from 0 to 31; an absent stat is the default (31).
+    for (const stat of STAT_KEYS) {
+      const val = set.ivs[stat];
+      if (val === undefined || val === null) continue;
+      if (typeof val !== 'number' || !Number.isInteger(val) || val < 0 || val > MAX_IV) {
         issues.push({
           pokemon_index: i,
           species: species.name,
-          issue: `${stat} EVs (${val}) exceed 252`,
+          issue: `${stat} IVs (${String(val)}) must be a whole number from 0 to ${MAX_IV}`,
           severity: 'error',
-          ...codedIssue('ev_stat_cap', { stat, value: val }),
+          ...codedIssue('iv_range', { stat, value: typeof val === 'number' ? val : String(val) }),
+        });
+      }
+    }
+
+    // Level: a whole number from 1 to 100; an absent level is the default (100).
+    if (set.level !== undefined && set.level !== null) {
+      const level = set.level;
+      if (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 100) {
+        issues.push({
+          pokemon_index: i,
+          species: species.name,
+          issue: `Level (${String(level)}) must be a whole number from 1 to 100`,
+          severity: 'error',
+          ...codedIssue('level_range', { value: typeof level === 'number' ? level : String(level) }),
         });
       }
     }
@@ -303,7 +441,8 @@ export function validateTeam(
   if (rules.clauses.includes(SPECIES_CLAUSE)) {
     const seen = new Map<string, number>();
     for (let i = 0; i < pokemon.length; i++) {
-      const species = resolveSpecies(pokemon[i].species);
+      const member = sets[i];
+      const species = member ? resolveSpecies(member.species) : undefined;
       if (!species) continue;
       // Species Clause keys on base species (e.g. Rotom-Wash → Rotom)
       const baseSpecies = species.baseSpecies ?? species.name;
@@ -320,17 +459,22 @@ export function validateTeam(
     }
   }
 
-  // Duplicate item check (Item Clause — not standard in most formats, but supported)
+  // Duplicate item check (Item Clause — not standard in most formats, but supported). The canonical item id decides,
+  // so `Choice Scarf`, `choicescarf` and `choice-scarf` are one item; an item the dex does not know is compared by
+  // its own id.
   if (rules.clauses.includes(ITEM_CLAUSE)) {
     const seenItems = new Map<string, number>();
     for (let i = 0; i < pokemon.length; i++) {
-      if (!pokemon[i].item) continue;
-      const key = pokemon[i].item.toLowerCase();
+      const member = sets[i];
+      if (!member || !member.item) continue;
+      const shown = resolveItem(member.item)?.name ?? member.item;
+      const key = toID(shown);
+      if (key === '') continue;
       const firstIndex = seenItems.get(key);
       if (firstIndex !== undefined) {
         teamIssues.push({
-          issue: `Item Clause: duplicate ${pokemon[i].item} (slots ${firstIndex + 1} and ${i + 1})`,
-          ...codedIssue('item_clause', { item: pokemon[i].item, slotA: firstIndex + 1, slotB: i + 1 }),
+          issue: `Item Clause: duplicate ${shown} (slots ${firstIndex + 1} and ${i + 1})`,
+          ...codedIssue('item_clause', { item: shown, slotA: firstIndex + 1, slotB: i + 1 }),
         });
       } else {
         seenItems.set(key, i);
@@ -342,8 +486,8 @@ export function validateTeam(
   if (rules.min_shared_type_pct > 0) {
     const required = Math.round(pokemon.length * rules.min_shared_type_pct / 100);
     const typeCounts = new Map<string, number>();
-    for (const set of pokemon) {
-      const species = resolveSpecies(set.species);
+    for (const member of sets) {
+      const species = member ? resolveSpecies(member.species) : undefined;
       if (!species) continue;
       for (const t of species.types) {
         typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
@@ -371,9 +515,9 @@ export function validateTeam(
   // ── Team Constraints engine ───────────────────────────────────────
   if (rules.team_constraints) {
     enforceTeamConstraints(
-      pokemon,
+      sets,
       rules.team_constraints,
-      gen,
+      { gen, universe: national ? 'national' : 'standard', resolveSpecies },
       ctx.playerCore ?? null,
       issues,
       teamIssues,
@@ -391,14 +535,41 @@ export function validateTeam(
 
 // ── Team Constraints implementation ─────────────────────────────────
 
+/**
+ * What the constraint engine needs of the ruleset's universe: the generation, the universe (the fully-evolved and
+ * legendary reads follow it) and the universe-aware species resolver the rest of the validator uses. A National Dex
+ * ruleset resolves a Mega Evolution or a past-generation species; the standard `getSpecies` would not, and the rules
+ * below (fully-evolved cap, legendary ban, type quotas, Eviolite) would skip exactly those Pokémon.
+ */
+interface ConstraintScope {
+  gen: number;
+  universe: 'standard' | 'national';
+  resolveSpecies: (name: string) => ResolvedSpecies | undefined;
+}
+
+/** The members of a species the engine reads. */
+interface ResolvedSpecies {
+  name: string;
+  types: readonly string[];
+  tier?: unknown;
+  natDexTier?: unknown;
+}
+
+/** The tier a ruleset's universe ranks a species by: `tier` in the standard generation, `natDexTier` in the National Dex. */
+function tierOf(species: ResolvedSpecies, universe: 'standard' | 'national'): string | undefined {
+  const field = universe === 'national' ? (species.natDexTier ?? species.tier) : species.tier;
+  return typeof field === 'string' ? field : undefined;
+}
+
 function enforceTeamConstraints(
-  pokemon: PokemonSet[],
+  sets: (ReadSet | null)[],
   constraints: TeamConstraints,
-  gen: number,
+  scope: ConstraintScope,
   playerCore: CoreTriple | null,
   issues: SetIssue[],
   teamIssues: TeamIssue[],
 ): void {
+  const { gen, universe, resolveSpecies } = scope;
   // ── 1. Type quotas ────────────────────────────────────────────────
   if (constraints.type_quotas) {
     const quota = constraints.type_quotas;
@@ -420,8 +591,8 @@ function enforceTeamConstraints(
       const counts = new Map<string, number>();
       for (const t of coreTypes) counts.set(t, 0);
 
-      for (const set of pokemon) {
-        const species = getSpecies(set.species, gen);
+      for (const set of sets) {
+        const species = set ? resolveSpecies(set.species) : undefined;
         if (!species) continue;
         if (quota.allow_multi_count) {
           for (const t of species.types) {
@@ -448,10 +619,10 @@ function enforceTeamConstraints(
 
   // ── 2. Tera match ────────────────────────────────────────────────
   if (constraints.tera_match && constraints.tera_match !== 'none') {
-    for (let i = 0; i < pokemon.length; i++) {
-      const set = pokemon[i];
-      if (!set.tera_type) continue; // no tera set = nothing to check
-      const species = getSpecies(set.species, gen);
+    for (let i = 0; i < sets.length; i++) {
+      const set = sets[i];
+      if (!set || !set.tera_type) continue; // no tera set = nothing to check
+      const species = resolveSpecies(set.species);
       if (!species) continue;
 
       if (constraints.tera_match === 'player_core') {
@@ -496,11 +667,12 @@ function enforceTeamConstraints(
     const legendariesAllowed = stage.legendaries_allowed ?? false;
 
     let feCount = 0;
-    for (let i = 0; i < pokemon.length; i++) {
-      const species = getSpecies(pokemon[i].species, gen);
+    for (let i = 0; i < sets.length; i++) {
+      const member = sets[i];
+      const species = member ? resolveSpecies(member.species) : undefined;
       if (!species) continue;
 
-      if (!legendariesAllowed && isLegendary(species.name, gen)) {
+      if (!legendariesAllowed && isLegendary(species.name, gen, universe)) {
         issues.push({
           pokemon_index: i,
           species: species.name,
@@ -510,18 +682,19 @@ function enforceTeamConstraints(
         });
       }
 
-      if (isFullyEvolved(species.name, gen)) {
+      if (isFullyEvolved(species.name, gen, universe)) {
         feCount++;
-        const tier = normalizeTier(species.tier as string | undefined);
+        const rawTier = tierOf(species, universe);
+        const tier = normalizeTier(rawTier);
         if (tierMax && tier && compareTier(tier, tierMax) > 0) {
           issues.push({
             pokemon_index: i,
             species: species.name,
             issue:
-              `${species.name} is fully evolved and its tier (${species.tier}) is above the ` +
+              `${species.name} is fully evolved and its tier (${rawTier}) is above the ` +
               `phase cap (${tierMax})`,
             severity: 'error',
-            ...codedIssue('fe_tier_above_cap', { species: species.name, tier: String(species.tier), cap: tierMax }),
+            ...codedIssue('fe_tier_above_cap', { species: species.name, tier: String(rawTier), cap: tierMax }),
           });
         } else if (tierMax && !tier) {
           // Unrankable FE (e.g. CAP / Illegal) — block defensively
@@ -545,10 +718,11 @@ function enforceTeamConstraints(
   } else if (constraints.evolution_stage && constraints.evolution_stage.mode === 'unrestricted') {
     // Even in unrestricted mode we may still block legendaries explicitly.
     if (constraints.evolution_stage.legendaries_allowed === false) {
-      for (let i = 0; i < pokemon.length; i++) {
-        const species = getSpecies(pokemon[i].species, gen);
+      for (let i = 0; i < sets.length; i++) {
+        const member = sets[i];
+        const species = member ? resolveSpecies(member.species) : undefined;
         if (!species) continue;
-        if (isLegendary(species.name, gen)) {
+        if (isLegendary(species.name, gen, universe)) {
           issues.push({
             pokemon_index: i,
             species: species.name,
@@ -564,13 +738,16 @@ function enforceTeamConstraints(
   // ── 4. Eviolite tier cap ──────────────────────────────────────────
   if (constraints.eviolite_tier_cap) {
     const cap: TierKey = constraints.eviolite_tier_cap;
-    const banned = computeEvioliteBannedSpecies(gen, cap);
+    // The banned set is a scan of the whole dex (memoised per generation and cap): it is read only when a set holds
+    // Eviolite, so a team without one never pays for it.
+    let banned: ReadonlySet<string> | null = null;
 
-    for (let i = 0; i < pokemon.length; i++) {
-      const set = pokemon[i];
-      if (!set.item || set.item.toLowerCase() !== 'eviolite') continue;
-      const species = getSpecies(set.species, gen);
+    for (let i = 0; i < sets.length; i++) {
+      const set = sets[i];
+      if (!set || toID(set.item) !== 'eviolite') continue;
+      const species = resolveSpecies(set.species);
       if (!species) continue;
+      banned ??= computeEvioliteBannedSpecies(gen, cap, universe);
       if (banned.has(species.name.toLowerCase())) {
         issues.push({
           pokemon_index: i,

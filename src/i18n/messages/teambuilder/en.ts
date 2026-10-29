@@ -45,6 +45,13 @@ export default {
       ability_not_allowed: "{ability} is not on this ruleset's list of allowed abilities",
       ev_total: 'EV total ({total}) exceeds 510',
       ev_stat_cap: '{stat} EVs ({value}) exceed 252',
+      ev_stat_invalid: '{stat} EVs ({value}) must be a whole number from 0 to 252',
+      iv_range: '{stat} IVs ({value}) must be a whole number from 0 to 31',
+      level_range: 'Level ({value}) must be a whole number from 1 to 100',
+      malformed_set: 'This set is incomplete or malformed',
+      duplicate_move: '{move} is listed more than once',
+      move_illegal: '{species} cannot legally learn {move}',
+      ability_illegal: '{species} cannot have the ability {ability}',
       tera_core_mismatch: 'Tera type {type} must match one of your core types ({types})',
       tera_type_mismatch: "Tera type {type} must match one of {species}'s types ({types})",
       legendary_phase: '{species} is a legendary and is not allowed in this phase',
@@ -66,6 +73,8 @@ export default {
       evolution_stage_cap:
         'Evolution stage rule: at most {cap} fully-evolved Pokémon allowed in this phase, found {found}',
       not_in_roster: '{species} is not in your draft roster',
+      ruleset_load_failed:
+        'The ruleset for this check could not be used, so the team was checked against the format only and is not confirmed legal for your league',
     },
   },
   /** Outspeed solver notes (`api/pkmn/speed-calc` `impossible`); `{item}` is the localized Choice Scarf. */
