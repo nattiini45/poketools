@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { APIConnectionError, APIError, APIUserAbortError } from '@anthropic-ai/sdk';
+import { AnthropicError, APIConnectionError, APIError, APIUserAbortError } from '@anthropic-ai/sdk';
 
 // ─── Set env before module loads ───────────────────────────────────
 
@@ -87,6 +87,14 @@ function apiError(status: number | undefined, type: string | null = null) {
   return new APIError(status, { type: 'error', error: { type, message: 'secret provider text' } }, undefined, undefined, type as never);
 }
 
+/** What `MessageStream` throws when the body dies mid-stream: a plain AnthropicError wrapping the cause. */
+function wrappedNetworkError() {
+  const cause = Object.assign(new TypeError('terminated'), {
+    cause: Object.assign(new Error('socket closed'), { code: 'UND_ERR_SOCKET' }),
+  });
+  return Object.assign(new AnthropicError('terminated'), { cause });
+}
+
 /** Resolves when the signal aborts, like the SDK iterator does when the request is cancelled. */
 function untilAborted(signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -134,7 +142,7 @@ describe('ai/client', () => {
       expect(mockCreate).toHaveBeenCalledTimes(1);
     });
 
-    it('sends temperature 0.2 to Sonnet 4.6 and an explicit deadline and retry budget', async () => {
+    it('sends temperature 0.2 to Sonnet 4.6, a deadline signal and no SDK retries (the fallback model is the retry)', async () => {
       mockCreate.mockResolvedValueOnce(makeResponse('ok'));
 
       await complete('system prompt', 'user prompt');
@@ -149,7 +157,7 @@ describe('ai/client', () => {
       });
       expect(body).not.toHaveProperty('output_config');
       expect(options.signal).toBeInstanceOf(AbortSignal);
-      expect(options.maxRetries).toBe(1);
+      expect(options.maxRetries).toBe(0);
     });
 
     it('omits temperature for model ids that reject it', async () => {
@@ -258,6 +266,24 @@ describe('ai/client', () => {
 
         expect(failure).toBeInstanceOf(ModelRejectedError);
         expect((failure as ModelRejectedError).message).not.toContain('secret provider text');
+        expect(mockCreate).toHaveBeenCalledTimes(1);
+      });
+
+      it('asks the fallback after the SDK wraps a mid-stream network failure (blocking)', async () => {
+        mockCreate
+          .mockRejectedValueOnce(wrappedNetworkError())
+          .mockResolvedValueOnce(makeResponse('Recovered', FALLBACK));
+
+        const result = await complete('sys', 'user');
+        expect(result.fallback_used).toBe(true);
+      });
+
+      it('does not ask the fallback for the SDK preflight error', async () => {
+        mockCreate.mockRejectedValueOnce(
+          new AnthropicError('Streaming is required for operations that may take longer than 10 minutes.'),
+        );
+
+        await expect(complete('sys', 'user')).rejects.toThrow('Streaming is required');
         expect(mockCreate).toHaveBeenCalledTimes(1);
       });
 
@@ -406,7 +432,7 @@ describe('ai/client', () => {
       const [body, options] = mockStream.mock.calls[0];
       expect(body).toMatchObject({ model: PRIMARY, max_tokens: 4096, temperature: 0.2 });
       expect(options.signal).toBeInstanceOf(AbortSignal);
-      expect(options.maxRetries).toBe(1);
+      expect(options.maxRetries).toBe(0);
 
       mockStream.mockReturnValueOnce(makeStream([textEvent('a')], { model: 'claude-sonnet-5-5' }));
       await completeStreaming('sys', 'user', undefined, undefined, { model: 'claude-sonnet-5-5' });
@@ -466,6 +492,34 @@ describe('ai/client', () => {
 
         const result = await completeStreaming('sys', 'user');
         expect(result.content).toBe('complete answer');
+      });
+
+      it('falls back when the SDK wraps a dropped connection (TypeError terminated) as an AnthropicError', async () => {
+        mockStream
+          .mockReturnValueOnce(makeFailingStream(wrappedNetworkError(), [textEvent('part')]))
+          .mockReturnValueOnce(makeStream([textEvent('complete answer')], { model: FALLBACK }));
+
+        const result = await completeStreaming('sys', 'user');
+        expect(result).toMatchObject({ content: 'complete answer', fallback_used: true });
+      });
+
+      it.each([
+        'request ended without sending any chunks',
+        'stream ended without producing a Message with role=assistant',
+      ])('falls back on the stream-shape error "%s"', async (message) => {
+        mockStream
+          .mockReturnValueOnce(makeFailingStream(new AnthropicError(message)))
+          .mockReturnValueOnce(makeStream([textEvent('complete answer')], { model: FALLBACK }));
+
+        const result = await completeStreaming('sys', 'user');
+        expect(result.content).toBe('complete answer');
+      });
+
+      it('does not fall back on a plain programming error thrown while streaming', async () => {
+        mockStream.mockReturnValueOnce(makeFailingStream(new TypeError('boom')));
+
+        await expect(completeStreaming('sys', 'user')).rejects.toThrow('boom');
+        expect(mockStream).toHaveBeenCalledTimes(1);
       });
 
       it('surfaces a 400 without asking the fallback', async () => {
@@ -545,6 +599,20 @@ describe('ai/client', () => {
 
         await expect(completeStreaming('sys', 'user')).rejects.toBeInstanceOf(RefusalError);
         expect(mockStream).toHaveBeenCalledTimes(1);
+      });
+
+      it('takes the refusal category from the message_delta event, which the SDK snapshot drops', async () => {
+        mockStream.mockReturnValueOnce(
+          makeStream(
+            [{ type: 'message_delta', delta: { stop_reason: 'refusal', stop_details: { type: 'refusal', category: 'cyber', explanation: null } } }],
+            { stop_reason: 'refusal', stop_details: null },
+          ),
+        );
+
+        const failure = await completeStreaming('sys', 'user').catch((e: unknown) => e);
+
+        expect(failure).toBeInstanceOf(RefusalError);
+        expect((failure as RefusalError).category).toBe('cyber');
       });
 
       it('falls back on an empty streamed answer', async () => {

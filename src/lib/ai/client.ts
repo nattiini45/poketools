@@ -1,4 +1,4 @@
-import Anthropic, { APIConnectionError, APIError, APIUserAbortError } from '@anthropic-ai/sdk';
+import Anthropic, { AnthropicError, APIConnectionError, APIError, APIUserAbortError } from '@anthropic-ai/sdk';
 import { initLogger, wrapAnthropic } from 'braintrust';
 import { logger } from '@/lib/logger';
 import { getClaudeFallbackModelId, getClaudeModelId } from './constants';
@@ -8,6 +8,7 @@ import {
   OutputCapError,
   RefusalError,
   isDeterministicModelError,
+  isNetworkFailure,
 } from './errors';
 import { modelAcceptsTemperature, modelSupportsEffort } from './model-capabilities';
 import { logAiUsage, normalizeAnthropicUsage } from './usage-log';
@@ -34,10 +35,11 @@ const PRIMARY_TIMEOUT_MS = 150_000;
 const FALLBACK_TIMEOUT_MS = 90_000;
 
 /**
- * SDK-level retries per attempt (connection errors, 408/409/429/5xx before any byte of the
- * answer). The deadline above bounds them, since it aborts the whole attempt.
+ * SDK-level retries per attempt: none. The SDK sleeps `retry-after` / `retry-after-ms` between
+ * retries without looking at our deadline signal, so a long header could push primary + fallback
+ * past `maxDuration`. The fallback model is the retry.
  */
-const SDK_MAX_RETRIES = 1;
+const SDK_MAX_RETRIES = 0;
 
 /** Default max tokens for Claude API (required parameter) */
 const DEFAULT_MAX_TOKENS = 4096;
@@ -130,7 +132,8 @@ function isTransientStatus(status: number): boolean {
  *
  * Our deadline arrives as `APIUserAbortError`, an `APIError` that is not an
  * `APIConnectionError`, so it is listed explicitly. A mid-stream SSE `error` event has an
- * undefined `status` (`core/streaming.js`) and is told apart by `err.type`.
+ * undefined `status` (`core/streaming.js`) and is told apart by `err.type`. A body read that
+ * dies mid-stream is a plain `AnthropicError` wrapping the network error.
  */
 function isTransientModelError(err: unknown): boolean {
   if (isDeterministicModelError(err)) return false;
@@ -139,6 +142,13 @@ function isTransientModelError(err: unknown): boolean {
   if (err instanceof APIError) {
     if (typeof err.status === 'number') return isTransientStatus(err.status);
     return err.type !== null && TRANSIENT_STREAM_ERROR_TYPES.has(err.type);
+  }
+  if (err instanceof AnthropicError) {
+    // `MessageStream` wraps a non-abort error thrown while reading the body (undici's
+    // `TypeError('terminated')`, ECONNRESET) as a plain AnthropicError with the original as its
+    // `cause`; the stream-shape errors are plain AnthropicErrors too. Both are a connection that
+    // broke mid-answer. The 'Streaming is required' preflight error has neither, and stays fatal.
+    return isNetworkFailure(err.cause) || /\bended without\b/.test(err.message);
   }
   return false;
 }
@@ -340,10 +350,15 @@ async function callModelStreaming(
     });
 
     let content = '';
+    // `MessageStream` does not copy `delta.stop_details` into its snapshot, so the refusal
+    // details are taken from the `message_delta` event itself.
+    let streamStopDetails: Anthropic.RefusalStopDetails | null = null;
 
     for await (const event of stream) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         content += event.delta.text;
+      } else if (event.type === 'message_delta' && event.delta.stop_details) {
+        streamStopDetails = event.delta.stop_details;
       }
 
       onChunk?.();
@@ -358,7 +373,8 @@ async function callModelStreaming(
 
     // Read the final message before judging the text: the stop reason decides whether the
     // text is an answer at all.
-    const finalMessage = await stream.finalMessage();
+    const snapshot = await stream.finalMessage();
+    const finalMessage = { ...snapshot, stop_details: snapshot.stop_details ?? streamStopDetails };
     assertUsableStop(finalMessage.stop_reason, finalMessage.stop_details?.category ?? null, model, call);
 
     if (!content) {

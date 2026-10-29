@@ -80,3 +80,41 @@ export class EmptyModelResponseError extends Error {
 export function isDeterministicModelError(err: unknown): err is OutputCapError | RefusalError | ModelRejectedError {
   return err instanceof OutputCapError || err instanceof RefusalError || err instanceof ModelRejectedError;
 }
+
+/** Socket-level error codes that mean the connection broke, not that the request was bad. */
+const NETWORK_ERROR_CODES = new Set([
+  'ConnectionRefused',
+  'ConnectionClosed',
+  'FailedToOpenSocket',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EPIPE',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'UND_ERR_SOCKET',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+/** `fetch` (undici) failure messages that carry no code of their own. */
+const NETWORK_ERROR_MESSAGES = new Set(['terminated', 'fetch failed', 'other side closed']);
+
+/**
+ * Whether an error, or anything in its `cause` chain, is a broken connection: a socket error
+ * code, or the bare `TypeError('terminated')` / `TypeError('fetch failed')` that undici throws
+ * when the peer drops the response body mid-stream. A plain programming `TypeError` is not.
+ */
+export function isNetworkFailure(err: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current: unknown = err;
+  while (current instanceof Error && !visited.has(current) && visited.size < 8) {
+    visited.add(current);
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) return true;
+    if (current instanceof TypeError && NETWORK_ERROR_MESSAGES.has(current.message.toLowerCase())) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}

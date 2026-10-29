@@ -75,7 +75,41 @@ function sse(events: Array<{ event: string; data: unknown }>): Response {
   return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream', 'request-id': 'req_test' } });
 }
 
-function streamEvents(model: string, text: string, stopReason = 'end_turn') {
+/**
+ * An SSE response whose connection dies after `keep` events: the body stream errors the way
+ * undici does when the peer drops the socket (`TypeError('terminated')` with a socket cause).
+ */
+function cutSse(events: Array<{ event: string; data: unknown }>, keep: number): Response {
+  const encoder = new TextEncoder();
+  const chunks = events
+    .slice(0, keep)
+    .map((e) => encoder.encode(`event: ${e.event}
+data: ${JSON.stringify(e.data)}
+
+`));
+  let index = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index < chunks.length) {
+        controller.enqueue(chunks[index++]);
+        return;
+      }
+      controller.error(
+        Object.assign(new TypeError('terminated'), {
+          cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }),
+        }),
+      );
+    },
+  });
+  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream', 'request-id': 'req_test' } });
+}
+
+function streamEvents(
+  model: string,
+  text: string,
+  stopReason = 'end_turn',
+  stopDetails: Record<string, unknown> | null = null,
+) {
   return [
     {
       event: 'message_start',
@@ -98,7 +132,11 @@ function streamEvents(model: string, text: string, stopReason = 'end_turn') {
     { event: 'content_block_stop', data: { type: 'content_block_stop', index: 0 } },
     {
       event: 'message_delta',
-      data: { type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 34 } },
+      data: {
+        type: 'message_delta',
+        delta: { stop_reason: stopReason, stop_sequence: null, ...(stopDetails ? { stop_details: stopDetails } : {}) },
+        usage: { output_tokens: 34 },
+      },
     },
     { event: 'message_stop', data: { type: 'message_stop' } },
   ];
@@ -293,5 +331,56 @@ describe('ai/client against the real SDK error handling', () => {
       client.completeStreaming('sys', 'user', undefined, 1000, { jsonOutput: true }),
     ).rejects.toBeInstanceOf(OutputCapError);
     expect(recorded).toHaveLength(1);
+  });
+
+  it('falls back after the connection drops mid-stream (the SDK wraps it as a plain AnthropicError)', async () => {
+    respond = (request, call) =>
+      call === 1
+        ? cutSse(streamEvents(String(request.body.model), 'part'), 3)
+        : sse(streamEvents(String(request.body.model), 'complete answer'));
+
+    const result = await client.completeStreaming('sys', 'user');
+
+    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+    expect(result).toMatchObject({ content: 'complete answer', fallback_used: true });
+  });
+
+  it('fails when the connection drops mid-stream on both models, with no further attempt', async () => {
+    respond = (request) => cutSse(streamEvents(String(request.body.model), 'part'), 3);
+
+    await expect(client.completeStreaming('sys', 'user')).rejects.toThrow();
+    expect(recorded).toHaveLength(2);
+  });
+
+  it('reads the refusal category from the streamed message_delta, which the SDK snapshot drops', async () => {
+    respond = (request) =>
+      sse(
+        streamEvents(String(request.body.model), '', 'refusal', { type: 'refusal', category: 'cyber', explanation: null }),
+      );
+
+    const { RefusalError } = await import('../errors');
+    const failure = await client.completeStreaming('sys', 'user').catch((e: unknown) => e);
+
+    expect(failure).toBeInstanceOf(RefusalError);
+    expect((failure as { category: string | null }).category).toBe('cyber');
+    expect(recorded).toHaveLength(1);
+  });
+
+  it('sends the request with no SDK retry: a 529 with a long retry-after goes straight to the fallback', async () => {
+    respond = (request, call) =>
+      call === 1
+        ? new Response(JSON.stringify({ type: 'error', error: { type: 'overloaded_error', message: 'x' } }), {
+            status: 529,
+            // Without maxRetries: 0 the SDK would sleep this long before retrying, ignoring the deadline.
+            headers: { 'content-type': 'application/json', 'retry-after': '55', 'x-should-retry': 'true' },
+          })
+        : messageJson(String(request.body.model), 'fallback');
+
+    const started = Date.now();
+    const result = await client.complete('sys', 'user');
+
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+    expect(result.fallback_used).toBe(true);
   });
 });
