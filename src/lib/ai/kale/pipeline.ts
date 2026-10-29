@@ -1,7 +1,8 @@
 import { kaleGenerateText } from './provider';
 import { getReportDefinition } from './registry';
 import { getPipelineMode } from './prompts';
-import { isDeterministicModelError } from '../errors';
+import { describeAiFailure } from '../failure';
+import { AllModelsFailedError, isDeterministicModelError } from '../errors';
 import type {
   PromptTask,
   TaskResult,
@@ -11,6 +12,17 @@ import type {
 import type { TournamentReportType, ReportContent } from '@/types/tournament-report';
 
 const MAX_RETRIES = 2;
+
+/**
+ * What a failed task stores in the report's `error` column: a stable code and a short cause (the
+ * upstream status or the error class, plus the model ids when every rung failed). Never the
+ * error's message, which can quote the provider or the model; that stays in the console line.
+ */
+function storedTaskFailure(err: unknown): string {
+  const exhausted = err instanceof AllModelsFailedError;
+  const { stored } = describeAiFailure(exhausted ? err.cause : err, { code: 'ai_report_failed', message: '' });
+  return exhausted ? `${stored} (${err.models.join(' -> ')})` : stored;
+}
 
 // ─── Public Pipeline API ────────────────────────────────────────────
 
@@ -213,7 +225,7 @@ async function executeWithRetry(
           completionTokens: 0,
           validationErrors: [{
             type: 'structural',
-            detail: `Task "${task.id}" failed: ${err.message}`,
+            detail: `Task "${task.id}" failed: ${storedTaskFailure(err)}`,
             severity: 'error',
           }],
           retries,
@@ -229,7 +241,7 @@ async function executeWithRetry(
           completionTokens: 0,
           validationErrors: [{
             type: 'structural',
-            detail: `Task "${task.id}" failed after ${maxRetries + 1} attempts: ${err instanceof Error ? err.message : 'unknown error'}`,
+            detail: `Task "${task.id}" failed after ${maxRetries + 1} attempts: ${storedTaskFailure(err)}`,
             severity: 'error',
           }],
           retries,

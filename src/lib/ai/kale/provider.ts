@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { anthropicApiKey } from '../api-key';
 import { getClaudeEffort, getClaudeFallbackModelId, getClaudeModelId } from '../constants';
 import {
+  AllModelsFailedError,
   EmptyModelResponseError,
   ModelRejectedError,
   OutputCapError,
@@ -15,6 +16,7 @@ import {
 } from '../errors';
 import { modelAcceptsTemperature, modelSupportsEffort } from '../model-capabilities';
 import { logAiUsage, normalizeAiSdkUsage } from '../usage-log';
+import { warnRemovedKaleSettings } from './removed-settings';
 
 // ─── Configuration ──────────────────────────────────────────────────
 //
@@ -43,6 +45,7 @@ function getMaxTokens(): number {
 
 /** Returns true if the Anthropic API key is configured */
 export function isKaleConfigured(): boolean {
+  warnRemovedKaleSettings();
   return Boolean(getApiKey());
 }
 
@@ -224,13 +227,16 @@ type KaleCall = (target: KaleTarget, timeoutMs: number) => Promise<AiCompletionR
  */
 async function runLadder(mode: 'blocking' | 'streaming', call: KaleCall): Promise<AiCompletionResult> {
   const tag = mode === 'streaming' ? 'streaming ' : '';
+  warnRemovedKaleSettings();
 
   // Primary model
   const primaryId = getClaudeModelId();
+  let primarySummary: string;
   try {
     return await call(getPrimaryTarget(), getTimeoutMs());
   } catch (primaryError) {
-    console.error(`[kale/provider] Primary ${tag}model (${primaryId}) failed: ${errorSummary(primaryError)}`);
+    primarySummary = errorSummary(primaryError);
+    console.error(`[kale/provider] Primary ${tag}model (${primaryId}) failed: ${primarySummary}`);
     if (!isTransientKaleError(primaryError)) throw surfaceKaleError(primaryError, primaryId);
   }
 
@@ -243,7 +249,13 @@ async function runLadder(mode: 'blocking' | 'streaming', call: KaleCall): Promis
     const fallbackFailure = errorSummary(fallbackError);
     console.error(`[kale/provider] Fallback ${tag}model (${fallbackId}) failed: ${fallbackFailure}`);
     if (!isTransientKaleError(fallbackError)) throw surfaceKaleError(fallbackError, fallbackId);
-    throw new Error(`All Kale model attempts failed (${primaryId}): ${fallbackFailure}`);
+    throw new AllModelsFailedError(
+      [
+        { model: primaryId, summary: primarySummary },
+        { model: fallbackId, summary: fallbackFailure },
+      ],
+      fallbackError
+    );
   }
 }
 

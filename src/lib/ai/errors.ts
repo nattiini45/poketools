@@ -76,6 +76,23 @@ export class EmptyModelResponseError extends Error {
   }
 }
 
+/**
+ * Every rung of a fallback ladder failed transiently. The message names each model with its
+ * failure summary, for the server log; it can quote the provider, so callers that store a failure
+ * describe the `cause` (the last rung's error) and the model ids instead of this message.
+ */
+export class AllModelsFailedError extends Error {
+  /** The models asked, in order. */
+  readonly models: readonly string[];
+
+  constructor(attempts: readonly { model: string; summary: string }[], cause: unknown) {
+    super(`All model attempts failed: ${attempts.map((a) => `${a.model}: ${a.summary}`).join('; ')}`);
+    this.name = 'AllModelsFailedError';
+    this.models = attempts.map((a) => a.model);
+    this.cause = cause;
+  }
+}
+
 /** Errors the fallback ladders never retry: the same request would fail the same way. */
 export function isDeterministicModelError(err: unknown): err is OutputCapError | RefusalError | ModelRejectedError {
   return err instanceof OutputCapError || err instanceof RefusalError || err instanceof ModelRejectedError;

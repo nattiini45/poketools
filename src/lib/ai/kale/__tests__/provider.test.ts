@@ -25,7 +25,8 @@ vi.mock('@ai-sdk/anthropic', () => ({
 // ─── Import after mocks ────────────────────────────────────────────
 
 import { isKaleConfigured, kaleGenerateText, kaleStreamText } from '../provider';
-import { OutputCapError, RefusalError, ModelRejectedError } from '../../errors';
+import { AllModelsFailedError, OutputCapError, RefusalError, ModelRejectedError } from '../../errors';
+import { resetRemovedKaleSettingsWarning } from '../removed-settings';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ describe('kale/provider', () => {
     mockGenerateText.mockReset();
     mockStreamText.mockReset();
     mockAnthropicModel.mockClear();
+    resetRemovedKaleSettingsWarning();
     vi.unstubAllEnvs();
     // The defaults under test must not depend on the machine that runs them (a shell can export
     // CLAUDE_API_EFFORT or CLAUDE_MODEL). An empty value means unset.
@@ -102,6 +104,24 @@ describe('kale/provider', () => {
       vi.stubEnv('ANTHROPIC_API_KEY', '');
       vi.stubEnv('CLAUDE_API_KEY', '');
       expect(isKaleConfigured()).toBe(false);
+    });
+  });
+
+  describe('removed Kale settings', () => {
+    it('logs one warning per process naming the removed variables, however many calls follow', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.stubEnv('KALE_MODEL', 'some-value');
+      mockGenerateText.mockResolvedValue(makeGenerateResult('ok'));
+
+      isKaleConfigured();
+      await kaleGenerateText('sys', 'user');
+      await kaleGenerateText('sys', 'user');
+
+      const warnings = warnSpy.mock.calls.map((call: unknown[]) => String(call[0])).filter((line: string) => line.includes('no longer used'));
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('KALE_MODEL is no longer used');
+      expect(warnings[0]).toContain('CLAUDE_MODEL / CLAUDE_FALLBACK_MODEL and ANTHROPIC_API_KEY');
+      expect(warnings[0]).not.toContain('some-value');
     });
   });
 
@@ -174,8 +194,27 @@ describe('kale/provider', () => {
         reasoningText: 'Reasoning output content',
       });
 
-      await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('All Kale model attempts failed');
+      await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('All model attempts failed');
       expect(mockGenerateText).toHaveBeenCalledTimes(2);
+    });
+
+    it('asks the fallback when the text is empty, and returns its text, never the thinking', async () => {
+      mockGenerateText
+        .mockResolvedValueOnce({
+          text: '',
+          response: { modelId: 'claude-sonnet-5-5' },
+          usage: { inputTokens: 5, outputTokens: 15 },
+          finishReason: 'stop',
+          reasoningText: 'thinking…',
+        })
+        .mockResolvedValueOnce(makeGenerateResult('The real answer.', 'claude-haiku-5-5'));
+
+      const result = await kaleGenerateText('sys', 'user');
+
+      expect(result.content).toBe('The real answer.');
+      expect(result.fallback_used).toBe(true);
+      expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(result)).not.toContain('thinking…');
     });
 
     it('throws when text and reasoningText are both empty', async () => {
@@ -187,7 +226,19 @@ describe('kale/provider', () => {
         reasoningText: undefined,
       });
 
-      await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('All Kale model attempts failed');
+      await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('All model attempts failed');
+    });
+
+    it('sends KALE_MAX_TOKENS as the cap of a call that sets none', async () => {
+      vi.stubEnv('KALE_MAX_TOKENS', '1234');
+      mockGenerateText.mockResolvedValueOnce(makeGenerateResult('ok'));
+      mockStreamText.mockReturnValueOnce(makeStreamResult('ok'));
+
+      await kaleGenerateText('sys', 'user');
+      await kaleStreamText('sys', 'user');
+
+      expect(mockGenerateText.mock.calls[0][0].maxOutputTokens).toBe(1234);
+      expect(mockStreamText.mock.calls[0][0].maxOutputTokens).toBe(1234);
     });
 
     it('passes a custom maxTokens', async () => {
@@ -310,9 +361,54 @@ describe('kale/provider', () => {
       it('throws when every rung fails transiently', async () => {
         mockGenerateText.mockRejectedValue(apiCallError(529));
 
-        await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('All Kale model attempts failed');
+        await expect(kaleGenerateText('sys', 'user')).rejects.toThrow('All model attempts failed');
         // Primary + fallback, nothing more: no blocking replay.
         expect(mockGenerateText).toHaveBeenCalledTimes(2);
+      });
+
+      it('names both models with their own summaries and keeps the last error as the cause', async () => {
+        const first = apiCallError(529, { message: 'primary overloaded' });
+        const second = apiCallError(503, { message: 'fallback unavailable' });
+        mockGenerateText.mockRejectedValueOnce(first).mockRejectedValueOnce(second);
+
+        const failure = await kaleGenerateText('sys', 'user').catch((e: unknown) => e);
+
+        expect(failure).toBeInstanceOf(AllModelsFailedError);
+        const error = failure as AllModelsFailedError;
+        expect(error.models).toEqual(['claude-sonnet-5-5', 'claude-haiku-5-5']);
+        expect(error.cause).toBe(second);
+        expect(error.message).toContain('claude-sonnet-5-5: ');
+        expect(error.message).toContain('[529]');
+        expect(error.message).toContain('claude-haiku-5-5: ');
+        expect(error.message).toContain('[503]');
+      });
+
+      it('gives the fallback attempt KALE_FALLBACK_TIMEOUT_MS as its deadline', async () => {
+        vi.useFakeTimers();
+        try {
+          vi.stubEnv('KALE_FALLBACK_TIMEOUT_MS', '2000');
+          let fallbackSignal: AbortSignal | undefined;
+          mockGenerateText
+            .mockRejectedValueOnce(apiCallError(529))
+            .mockImplementationOnce(
+              (opts: { abortSignal: AbortSignal }) =>
+                new Promise((_resolve, reject) => {
+                  fallbackSignal = opts.abortSignal;
+                  opts.abortSignal.addEventListener('abort', () =>
+                    reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+                  );
+                }),
+            );
+
+          const pending = kaleGenerateText('sys', 'user').catch((e: unknown) => e);
+          await vi.advanceTimersByTimeAsync(1999);
+          expect(fallbackSignal?.aborted).toBe(false);
+          await vi.advanceTimersByTimeAsync(1);
+          expect(fallbackSignal?.aborted).toBe(true);
+          expect(await pending).toBeInstanceOf(AllModelsFailedError);
+        } finally {
+          vi.useRealTimers();
+        }
       });
 
       it('surfaces an unclassified error instead of walking the ladder', async () => {
@@ -457,7 +553,7 @@ describe('kale/provider', () => {
     it('has no blocking replay when every stream fails', async () => {
       mockStreamText.mockImplementation(failingStream(apiCallError(529)));
 
-      await expect(kaleStreamText('sys', 'user')).rejects.toThrow('All Kale model attempts failed');
+      await expect(kaleStreamText('sys', 'user')).rejects.toThrow('All model attempts failed');
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 

@@ -67,8 +67,10 @@ export function getClaudeEffort(): ClaudeEffort {
 // ─── Output caps ────────────────────────────────────────────────────
 //
 // The models think adaptively and the thinking counts against `max_tokens`, so a cap is sized for
-// the thinking plus the visible answer, not for the answer alone. A call that does not stream
-// stays at or below 16000 so it finishes inside the SDK's non-streaming time limit.
+// the thinking plus the visible answer, not for the answer alone. The real limit on how much a call
+// can produce is the client's wall-clock deadline per attempt (150 s for the first model, 90 s for
+// the fallback, see `client.ts`), not a token count: a larger cap only helps if the model can
+// finish inside that time.
 
 export const AI_MAX_TOKENS = {
   /** Post-match analysis and match-prep scouting (both stream). */
@@ -78,8 +80,8 @@ export const AI_MAX_TOKENS = {
   /** Broadcast round recap paragraph (single response). */
   recap: 4_096,
   /**
-   * One Kale task. The visible text stays short (the prompt asks for a sentence or a paragraph);
-   * the budget is for the model's thinking.
+   * One Kale task. A decomposed task asks for a sentence up to a few paragraphs, a single-mode
+   * task for one JSON report; the cap covers that visible text plus the model's thinking.
    */
   kaleTask: 4_096,
 } as const;

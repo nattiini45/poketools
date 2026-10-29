@@ -278,10 +278,10 @@
       "expires": ["expireTournamentReads"],
       "audit": ["round.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitDiscordEvent(tournament_started)", "emitSocialEvent(round_generated)", "emitSocialEvent(tournament_started)"],
-      "importFingerprint": "5a8dedc0b37756a5",
-      "importFiles": 293,
+      "importFingerprint": "ca80f0d9c8340877",
+      "importFiles": 295,
       "imports": {
-        "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "38f4ece88378dd89", "files": 158 },
+        "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "bf56fffcb96afadd", "files": 160 },
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "fd7707284f8e638e", "files": 4 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
         "src/lib/api/user-facing-error.ts": { "names": ["UserFacingError"], "closure": "e3b0c44298fc1c14", "files": 1 },
