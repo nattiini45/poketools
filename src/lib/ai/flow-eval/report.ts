@@ -36,6 +36,8 @@ export interface FlowSummary {
   costPerCall: number;
   costPerRun: number;
   totalCostUsd: number;
+  /** The part of the cost that is an estimate for attempts the provider never reported (failed primary attempts, thrown calls). */
+  failedAttemptCostUsd: number;
   failures: CheckFailure[];
 }
 
@@ -97,6 +99,7 @@ export function summarize(rows: readonly RunRow[]): FlowSummary[] {
       costPerCall: mean(totalCost, calls.length),
       costPerRun: mean(totalCost, ofFlow.length),
       totalCostUsd: totalCost,
+      failedAttemptCostUsd: calls.reduce((s, c) => s + (c.failedAttemptUsd ?? 0), 0),
       failures: [...failures.values()].filter((f) => f.failed > 0).sort((a, b) => Number(b.hard) - Number(a.hard) || b.failed - a.failed),
     });
   }
@@ -138,12 +141,13 @@ export function formatReport(summaries: readonly FlowSummary[], meta: ReportMeta
     );
   }
   const total = summaries.reduce((sum, s) => sum + s.totalCostUsd, 0);
-  lines.push('', `Total cost of the table: ${usd(total)}.`, '');
+  const estimated = summaries.reduce((sum, s) => sum + s.failedAttemptCostUsd, 0);
+  lines.push('', `Total cost of the table: ${usd(total)}${estimated > 0 ? `, of which ${usd(estimated)} is a worst-case estimate for failed attempts (a failed primary attempt before a fallback answer, or a call that threw)` : ''}.`, '');
   lines.push(
     'Notes: tokens are what the provider billed (output includes thinking; ~thinking is the output not accounted for by the visible text at about 3.3 characters per token, so a rough figure). ' +
       'Parse is the app parser (`parse-analysis.ts`, `parse-scouting.ts`) and, for Kale, the matchup storyline JSON. ' +
       '`wrong_score` / `wrong_player` are the `kale/validator.ts` errors; its `checkPlayerNames` is a no-op and its Pokémon-name checks are warnings, so a clean validator run proves the scores and the winner attribution, not every name. ' +
-      'Truncated is `stop_reason` `max_tokens` (Kale: `length`). A call whose usage the provider never reported (an error) is costed by estimate.',
+      'Truncated is `stop_reason` `max_tokens` (Kale: `length`). A call that threw, and the primary attempt that failed before a fallback answered, report no usage and are costed at the worst case of the attempt, so the cap is a ceiling.',
     '',
   );
   for (const s of summaries) {

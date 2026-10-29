@@ -2,9 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, mkdi
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installEgressGuard, main, parseArgs, priorRows, readAllowedKeys, UsageError, type CliOptions } from '../cli';
+import { installEgressGuard, main, parseArgs, priorRows, readAllowedKeys, resumeMismatch, UsageError, type CliOptions } from '../cli';
 import { OutputCapError, RefusalError } from '../../errors';
-import { injectOneLinerResults } from '../flows';
 import type { createDexLookup } from '../graders';
 import type { CallRequest, ModelCaller, ModelResponse, RunRow } from '../types';
 
@@ -109,6 +108,8 @@ describe('parseArgs', () => {
     [['--model', 'gpt'], /--model/],
     [['--out', 'a', '--resume', 'b'], /exclusive/],
     [['--repeat'], /needs a value/],
+    [['--out', '-h'], /needs a value/],
+    [['--cases', '-x'], /needs a value/],
   ])('rejects %j', (argv, message) => {
     expect(() => parseArgs(argv)).toThrow(UsageError);
     expect(() => parseArgs(argv)).toThrow(message);
@@ -280,8 +281,10 @@ describe('main: a live run with a fake model', () => {
     expect(trunc.calls[0]).toMatchObject({ truncated: true, outputTokens: 8000, stopReason: 'max_tokens' });
     expect(refused.calls[0].refused).toBe(true);
     expect(fallback.calls[0]).toMatchObject({ fallback: true, servedModel: 'claude-haiku-5-5' });
-    // priced at Haiku: 1000 x $0.10/M + 400 x $0.50/M
-    expect(fallback.calls[0].costUsd).toBeCloseTo(0.0001 + 0.0002, 8);
+    // Haiku answered (1000 x $0.10/M + 400 x $0.50/M); the primary attempt that failed first is charged at its worst case
+    expect(fallback.calls[0].failedAttemptUsd).toBeGreaterThan(0.08);
+    expect(fallback.calls[0].costUsd).toBeCloseTo(0.0003 + fallback.calls[0].failedAttemptUsd, 8);
+    expect(fallback.calls[0].costEstimated).toBe(true);
     expect(clean.pass).toBe(true);
     expect([trunc.pass, refused.pass, fallback.pass]).toEqual([false, false, true]);
     const summary = JSON.parse(readFileSync(path.join(dir, 'summary.json'), 'utf8')).summaries[0];
@@ -369,16 +372,128 @@ describe('main: the cost cap', () => {
   });
 });
 
-describe('Kale narrative injection', () => {
-  it('matches the pipeline wording and only adds the match one-liners', () => {
-    const pipeline = readFileSync(path.join(ROOT, 'src/lib/ai/kale/pipeline.ts'), 'utf8');
-    expect(pipeline).toContain('Match summaries (written by you in the previous step — reference these):');
-    const results = new Map([['match_one_liner_0', ' One. '], ['headline', 'Ignored'], ['match_one_liner_1', 'Two.']]);
-    expect(injectOneLinerResults('P', results)).toBe('P\n\nMatch summaries (written by you in the previous step — reference these):\n- One.\n- Two.');
-    expect(injectOneLinerResults('P', new Map())).toBe('P');
+describe('main: the cost cap holds for the primary and the fallback attempt', () => {
+  const sonnetWorst = (promptTokens: number, maxTokens: number): number => (promptTokens * 2 + maxTokens * 10) / 1_000_000;
+
+  it('reserves the worst case of both attempts, so a cap that fits only one attempt starts nothing', async () => {
+    // the dry run prints the primary-only worst case of the call; the fallback attempt adds about 5% on top
+    const dry = harness(['--dry-run', '--json', '--flow', 'slot-coach', '--per-flow', '1']);
+    await main(dry.options);
+    const primaryOnly = JSON.parse(dry.out.join('\n')).worstCaseUsd as number;
+    const h = harness(['--flow', 'slot-coach', '--per-flow', '1', '--max-cost-usd', String(primaryOnly * 1.01), '--out', tmp()]);
+    expect(await main(h.options)).toBe(1);
+    expect(h.calls).toHaveLength(0);
+    const ok = harness(['--flow', 'slot-coach', '--per-flow', '1', '--max-cost-usd', String(primaryOnly * 1.2), '--out', tmp()]);
+    await main(ok.options);
+    expect(ok.calls).toHaveLength(1);
+  });
+  it('charges a double transient failure at the worst case of both attempts, to the cap, results and resume', async () => {
+    const dir = tmp();
+    const h = harness(['--flow', 'slot-coach', '--per-flow', '2', '--max-cost-usd', '1', '--out', dir, '--concurrency', '1'], {
+      caller: async () => {
+        throw new Error('Connection error.');
+      },
+    });
+    await main(h.options);
+    const rows = rowsOf(dir);
+    for (const r of rows) {
+      expect(r.calls[0]).toMatchObject({ error: 'transient', costEstimated: true });
+      expect(r.calls[0].costUsd).toBeGreaterThan(sonnetWorst(0, 8000));
+      expect(r.calls[0].failedAttemptUsd).toBe(r.calls[0].costUsd);
+    }
+    const summary = JSON.parse(readFileSync(path.join(dir, 'summary.json'), 'utf8'));
+    expect(summary.meta.spentUsd).toBeCloseTo(rows.reduce((s, r) => s + r.calls[0].costUsd, 0), 8);
+    expect(summary.meta.spentUsd).toBeGreaterThan(0.16);
+    expect(priorRows(dir).spentUsd).toBeCloseTo(summary.meta.spentUsd, 8);
+    expect(summary.summaries[0].failedAttemptCostUsd).toBeCloseTo(summary.meta.spentUsd, 8);
+  });
+
+  it('stops a run that would have passed the cap only because failed attempts were free', async () => {
+    const dir = tmp();
+    const h = harness(['--flow', 'slot-coach', '--per-flow', '8', '--max-cost-usd', '0.3', '--out', dir, '--concurrency', '1'], {
+      caller: async () => {
+        throw new Error('Connection error.');
+      },
+    });
+    await main(h.options);
+    const spent = JSON.parse(readFileSync(path.join(dir, 'summary.json'), 'utf8')).meta.spentUsd as number;
+    expect(spent).toBeLessThanOrEqual(0.3);
+    expect(h.calls.length).toBeLessThan(8);
+  });
+
+  it('a typed truncation from the fallback model also charges the primary attempt that failed first', async () => {
+    const dir = tmp();
+    const h = harness(['--flow', 'slot-coach', '--per-flow', '1', '--out', dir], {
+      caller: async () => {
+        throw new OutputCapError('claude-haiku-5-5', 8000);
+      },
+    });
+    await main(h.options);
+    const call = rowsOf(dir)[0].calls[0];
+    expect(call).toMatchObject({ truncated: true, fallback: true });
+    expect(call.costUsd).toBeGreaterThan(0.08 + 0.003); // primary worst + Haiku's 8000 output tokens
   });
 });
 
+describe('main: JSON flows are asked as production asks them', () => {
+  it('sends jsonOutput for analysis and scouting only', async () => {
+    const h = harness(['--flow', 'match-analysis,scouting,team-coach,kale-recap', '--per-flow', '1', '--out', tmp()]);
+    await main(h.options);
+    const by = new Map(h.calls.map((c) => [c.surface, c.jsonOutput]));
+    expect(by.get('match-analysis')).toBe(true);
+    expect(by.get('match-prep-analysis')).toBe(true);
+    expect(by.get('team-coach')).toBe(false);
+    expect(by.get('kale')).toBe(false);
+  });
+
+  it('records an all-thinking truncation (OutputCapError, no text) as truncated at worst-case cost, not as an empty answer', async () => {
+    const dir = tmp();
+    const h = harness(['--flow', 'match-analysis', '--per-flow', '1', '--out', dir], {
+      caller: async () => {
+        throw new OutputCapError('claude-sonnet-5-5', 16000);
+      },
+    });
+    await main(h.options);
+    const call = rowsOf(dir)[0].calls[0];
+    expect(call).toMatchObject({ error: 'truncated', truncated: true, outputTokens: 16000, costEstimated: true });
+    expect(call.costUsd).toBeGreaterThan(0.16);
+    expect(rowsOf(dir)[0].pass).toBe(false);
+  });
+});
+
+describe('main: --resume never mixes runs', () => {
+  it('refuses a different model, effort, fixtures or flow set, sends nothing, and leaves config.json untouched', async () => {
+    const dir = tmp();
+    await main(harness(['--flow', 'recap', '--per-flow', '1', '--out', dir]).options);
+    const before = readFileSync(path.join(dir, 'config.json'), 'utf8');
+    for (const args of [['--model', 'claude-haiku-5-5'], ['--effort', 'high'], ['--fixtures', 'both'], ['--flow', 'recap,slot-coach']]) {
+      const h = harness([...(args[0] === '--flow' ? [] : ['--flow', 'recap']), ...args, '--per-flow', '1', '--resume', dir]);
+      expect(await main(h.options)).toBe(2);
+      expect(h.err.join('\n')).toMatch(/different setup/);
+      expect(h.calls).toHaveLength(0);
+    }
+    expect(readFileSync(path.join(dir, 'config.json'), 'utf8')).toBe(before);
+  });
+
+  it('resumes with the same setup and keeps the original config.json even when other flags differ', async () => {
+    const dir = tmp();
+    await main(harness(['--flow', 'recap', '--per-flow', '1', '--out', dir]).options);
+    const before = readFileSync(path.join(dir, 'config.json'), 'utf8');
+    const h = harness(['--flow', 'recap', '--per-flow', '2', '--max-cost-usd', '3', '--resume', dir]);
+    expect(await main(h.options)).toBe(0);
+    expect(h.calls).toHaveLength(1);
+    expect(readFileSync(path.join(dir, 'config.json'), 'utf8')).toBe(before);
+  });
+
+  it('resumeMismatch reads the stored setup', () => {
+    const stored = JSON.stringify({ model: 'm', effort: 'low', fixtures: 'synthetic', flows: ['b', 'a'] });
+    const now = { model: 'm', effort: 'low', fixtures: 'synthetic', flows: ['a', 'b'] };
+    expect(resumeMismatch(stored, now)).toBeNull();
+    expect(resumeMismatch(null, now)).toBeNull();
+    expect(resumeMismatch(stored, { ...now, model: 'x' })).toMatch(/model: m -> x/);
+    expect(resumeMismatch('{', now)).toMatch(/unreadable/);
+  });
+});
 describe('installEgressGuard', () => {
   const original = globalThis.fetch;
   afterEach(() => {

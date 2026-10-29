@@ -143,8 +143,12 @@ describe('gradeScouting', () => {
 
   it('fails the wrong branch: picks with a team, matchup_analysis without one', () => {
     const picksWithTeam = gradeScouting(scoutingFor(withTeam, { suggested_picks: [{ pokemon: 'Heatran', role: 'r', set_summary: 's', reasoning: 'x' }] }), withTeam, lookup);
-    // the app parser drops suggested_picks when a team exists, so the branch check sees a clean matchup_analysis
-    expect(hardFailing(picksWithTeam)).toEqual([]);
+    // the app parser drops suggested_picks when a team exists, so only the raw JSON shows the model emitted it
+    expect(hardFailing(picksWithTeam)).toEqual(['branch_exclusive']);
+    const matchupWithoutTeam = gradeScouting(scoutingFor(noTeam, { matchup_analysis: { your_advantages: 'a', their_advantages: 'b', neutral_ground: 'c' } }), noTeam, lookup);
+    expect(hardFailing(matchupWithoutTeam)).toEqual(['branch_exclusive']);
+    const emptyPicks = gradeScouting(scoutingFor(withTeam, { suggested_picks: [] }), withTeam, lookup);
+    expect(hardFailing(emptyPicks)).toEqual([]);
     const noMatchup = gradeScouting(scoutingFor(withTeam, { matchup_analysis: undefined }), withTeam, lookup);
     expect(hardFailing(noMatchup)).toContain('branch_fields');
     const noPicks = gradeScouting(scoutingFor(noTeam, { suggested_picks: undefined }), noTeam, lookup);
@@ -227,7 +231,7 @@ describe('gradeKaleTask', () => {
 
 const call = (over: Partial<CallRecord> = {}): CallRecord => ({
   taskId: 'main', requestedModel: 'claude-sonnet-5-5', servedModel: 'claude-sonnet-5-5', effort: 'medium', maxTokens: 16000,
-  inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, outputChars: 1, ms: 1, costUsd: 0, costEstimated: false,
+  inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, outputChars: 1, ms: 1, costUsd: 0, failedAttemptUsd: 0, costEstimated: false,
   stopReason: 'end_turn', truncated: false, refused: false, fallback: false, error: null, ...over,
 });
 

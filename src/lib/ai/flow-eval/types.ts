@@ -167,6 +167,12 @@ export interface CallRecord {
   outputChars: number;
   ms: number;
   costUsd: number;
+  /**
+   * The part of costUsd that is an estimate for attempts the provider never reported: the primary
+   * attempt that failed before the fallback answered, or every attempt of a call that threw.
+   * Rows written before this field existed lack it (read it as 0).
+   */
+  failedAttemptUsd: number;
   /** True when the cost is an estimate (the call failed, so the provider reported no usage). */
   costEstimated: boolean;
   stopReason: string | null;

@@ -13,13 +13,15 @@
  * - Coaches and recap: the prompt builders the routes and the recap engine import
  *   (`coach-prompts.ts`, `recap-prompt.ts`).
  *
- * One deliberate difference from production: the JSON flows ask for the answer without
- * `jsonOutput`, so an answer cut off at `max_tokens` comes back as partial text with its real
- * usage and `stop_reason` (production throws `OutputCapError` and discards it). The truncation
- * check fails the run either way; this way the cost of a truncated call is known, not guessed.
+ * The JSON flows (analysis, scouting) ask with `jsonOutput`, as the routes do: an answer cut off at
+ * `max_tokens` (thinking included, even when no text came out) throws `OutputCapError` and is
+ * recorded as truncated. The provider reports no usage for a thrown call, so its cost is estimated
+ * at the worst case. Likewise the cost cap holds for both attempts of the primary/fallback ladder:
+ * see `runCall`.
  */
 
-import { AI_MAX_TOKENS } from '../constants';
+import { AI_MAX_TOKENS, getClaudeFallbackModelId } from '../constants';
+import { injectOneLinerResults } from '../kale/inject';
 import { buildForecastPromptTasks, buildRecapPromptTasks } from '../kale/prompts';
 import type { PromptTask } from '../kale/types';
 import { buildSlotCoachSystemPrompt, buildSlotCoachUserPrompt, buildTeamCoachSystemPrompt, buildTeamCoachUserPrompt } from '../coach-prompts';
@@ -37,7 +39,7 @@ import {
   servedDiffersFromRequested,
   type SpeciesLookup,
 } from './graders';
-import { callCostUsd, estimateTokens, worstCaseCostUsd } from './pricing';
+import { baseModelId, callCostUsd, estimateTokens, priceOf, worstCaseCostUsd } from './pricing';
 import {
   emptyValidatorCounts,
   type AnyCase,
@@ -69,6 +71,8 @@ export interface PlannedCall {
   user: string;
   maxTokens: number;
   surface: string;
+  /** The production caller parses the answer as JSON and asks with jsonOutput. */
+  jsonOutput: boolean;
 }
 
 /**
@@ -110,6 +114,7 @@ const fromKaleTask = (task: PromptTask): PlannedCall => ({
   user: task.userPrompt,
   maxTokens: task.maxTokens,
   surface: 'kale',
+  jsonOutput: false,
 });
 
 export function planCase(flow: FlowId, c: AnyCase): PlannedCall[] {
@@ -120,40 +125,25 @@ export function planCase(flow: FlowId, c: AnyCase): PlannedCall[] {
       return buildForecastPromptTasks((c as KaleForecastCase).factPack, 'decomposed').map(fromKaleTask);
     case 'match-analysis': {
       const m = c as MatchAnalysisCase;
-      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(m.systemPrompt, m.locale), user: m.userPrompt, maxTokens: AI_MAX_TOKENS.analysis, surface: 'match-analysis' }];
+      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(m.systemPrompt, m.locale), user: m.userPrompt, maxTokens: AI_MAX_TOKENS.analysis, surface: 'match-analysis', jsonOutput: true }];
     }
     case 'scouting': {
       const s = c as ScoutingCase;
-      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(s.systemPrompt, s.locale), user: s.userPrompt, maxTokens: AI_MAX_TOKENS.analysis, surface: 'match-prep-analysis' }];
+      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(s.systemPrompt, s.locale), user: s.userPrompt, maxTokens: AI_MAX_TOKENS.analysis, surface: 'match-prep-analysis', jsonOutput: true }];
     }
     case 'team-coach': {
       const t = c as TeamCoachCase;
-      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(buildTeamCoachSystemPrompt(), t.locale), user: buildTeamCoachUserPrompt(t.team, t.format, t.generation), maxTokens: AI_MAX_TOKENS.coach, surface: 'team-coach' }];
+      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(buildTeamCoachSystemPrompt(), t.locale), user: buildTeamCoachUserPrompt(t.team, t.format, t.generation), maxTokens: AI_MAX_TOKENS.coach, surface: 'team-coach', jsonOutput: false }];
     }
     case 'slot-coach': {
       const s = c as SlotCoachCase;
-      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(buildSlotCoachSystemPrompt(), s.locale), user: buildSlotCoachUserPrompt(s.set, s.team, s.format, s.generation), maxTokens: AI_MAX_TOKENS.coach, surface: 'slot-coach' }];
+      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(buildSlotCoachSystemPrompt(), s.locale), user: buildSlotCoachUserPrompt(s.set, s.team, s.format, s.generation), maxTokens: AI_MAX_TOKENS.coach, surface: 'slot-coach', jsonOutput: false }];
     }
     case 'recap': {
       const r = c as RecapCase;
-      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(RECAP_NARRATIVE_SYSTEM_PROMPT, r.locale), user: buildNarrativePrompt(r.input), maxTokens: AI_MAX_TOKENS.recap, surface: 'recap' }];
+      return [{ taskId: 'main', stage: 1, system: withOutputLanguage(RECAP_NARRATIVE_SYSTEM_PROMPT, r.locale), user: buildNarrativePrompt(r.input), maxTokens: AI_MAX_TOKENS.recap, surface: 'recap', jsonOutput: false }];
     }
   }
-}
-
-/**
- * The narrative prompt gets the one-liners of stage 1 appended, as `kale/pipeline.ts` does. That
- * function is private there, and importing the pipeline would pull in the report registry and with
- * it the database client, which an eval must never load; the few lines are copied, and a test pins
- * the wording against the pipeline's.
- */
-export function injectOneLinerResults(prompt: string, results: Map<string, string>): string {
-  const oneLiners: string[] = [];
-  for (const [id, text] of results) {
-    if (id.startsWith('match_one_liner_')) oneLiners.push(`- ${text.trim()}`);
-  }
-  if (oneLiners.length === 0) return prompt;
-  return `${prompt}\n\nMatch summaries (written by you in the previous step — reference these):\n${oneLiners.join('\n')}`;
 }
 
 // ─── Running one call ───────────────────────────────────────────────
@@ -173,22 +163,44 @@ interface CallOutcome {
   skipped: boolean;
 }
 
+const TRANSIENT_NAMES = new Set(['APIConnectionError', 'APIUserAbortError', 'AnthropicError', 'TimeoutError', 'AbortError', 'EmptyModelResponseError']);
+
 function classifyError(error: unknown): CallErrorKind {
   if (error instanceof OutputCapError) return 'truncated';
   if (error instanceof RefusalError) return 'refused';
   if (isDeterministicModelError(error)) return 'rejected';
-  if (error instanceof Error && /exceeded|terminated|fetch failed|overloaded|empty/i.test(error.message)) return 'transient';
+  if (error instanceof Error && (TRANSIENT_NAMES.has(error.name) || /exceeded|terminated|fetch failed|overloaded|empty|connection|timeout|timed out|aborted|ECONN|ETIMEDOUT/i.test(error.message))) return 'transient';
   return 'other';
 }
 
 const TRUNCATING_STOPS = new Set(['max_tokens', 'length']);
 const REFUSING_STOPS = new Set(['refusal', 'content-filter']);
 
+/** The model the fallback ladder asks second. A model the price table lacks is capped at the requested model's rates. */
+function fallbackModelFor(requested: string): string {
+  const fallback = getClaudeFallbackModelId();
+  return priceOf(fallback) ? fallback : requested;
+}
+
+/**
+ * The model id a typed error names (`OutputCapError`, `RefusalError`, `ModelRejectedError` carry
+ * it), when it is one the eval can price; otherwise the requested model.
+ */
+function erroredModel(error: unknown, requested: string): string {
+  const named = (error as { model?: unknown } | null)?.model;
+  return typeof named === 'string' && priceOf(named) ? named : requested;
+}
+
 async function runCall(ctx: ExecContext, call: PlannedCall, userOverride?: string): Promise<CallOutcome> {
   const { settings, guard } = ctx;
   const user = userOverride ?? call.user;
   const promptEstimate = estimateTokens(call.system) + estimateTokens(user);
-  const worst = worstCaseCostUsd(settings.model, promptEstimate, call.maxTokens);
+  const fallbackModel = fallbackModelFor(settings.model);
+  // `client.ts` and the Kale provider ask the primary model and, after a transient failure, the
+  // fallback model, and report only the attempt that answered. The cap must hold for both attempts,
+  // so the reservation is the worst case of each, and a failed attempt is charged by estimate.
+  const worstPrimary = worstCaseCostUsd(settings.model, promptEstimate, call.maxTokens);
+  const worstFallback = worstCaseCostUsd(fallbackModel, promptEstimate, call.maxTokens);
   const base = {
     taskId: call.taskId,
     requestedModel: settings.model,
@@ -196,11 +208,11 @@ async function runCall(ctx: ExecContext, call: PlannedCall, userOverride?: strin
     maxTokens: call.maxTokens,
   };
 
-  const reservation = await guard.reserve(worst);
+  const reservation = await guard.reserve(worstPrimary + worstFallback);
   if (!reservation) {
     const record: CallRecord = {
       ...base, servedModel: null, inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, outputChars: 0,
-      ms: 0, costUsd: 0, costEstimated: false, stopReason: null, truncated: false, refused: false, fallback: false, error: null,
+      ms: 0, costUsd: 0, failedAttemptUsd: 0, costEstimated: false, stopReason: null, truncated: false, refused: false, fallback: false, error: null,
     };
     return { record, content: null, skipped: true };
   }
@@ -208,12 +220,15 @@ async function runCall(ctx: ExecContext, call: PlannedCall, userOverride?: strin
   const startedAt = Date.now();
   try {
     const response = await ctx.caller(
-      { system: call.system, user, maxTokens: call.maxTokens, jsonOutput: false, surface: call.surface },
+      { system: call.system, user, maxTokens: call.maxTokens, jsonOutput: call.jsonOutput, surface: call.surface },
       settings,
     );
     const ms = Date.now() - startedAt;
     const priced = callCostUsd(response.model, response);
-    const costUsd = priced ?? worst;
+    const fallback = response.fallbackUsed || servedDiffersFromRequested(settings.model, response.model);
+    // The primary attempt that failed before the fallback answered left no usage report.
+    const failedAttemptUsd = fallback ? worstPrimary : 0;
+    const costUsd = (priced ?? worstFallback) + failedAttemptUsd;
     guard.settle(reservation, costUsd);
     const record: CallRecord = {
       ...base,
@@ -225,21 +240,30 @@ async function runCall(ctx: ExecContext, call: PlannedCall, userOverride?: strin
       outputChars: response.content.length,
       ms,
       costUsd,
-      costEstimated: priced === null,
+      failedAttemptUsd,
+      costEstimated: priced === null || failedAttemptUsd > 0,
       stopReason: response.stopReason,
       truncated: response.stopReason !== null && TRUNCATING_STOPS.has(response.stopReason),
       refused: response.stopReason !== null && REFUSING_STOPS.has(response.stopReason),
-      fallback: response.fallbackUsed || servedDiffersFromRequested(settings.model, response.model),
+      fallback,
       error: null,
     };
     return { record, content: response.content, skipped: false };
   } catch (error) {
     const ms = Date.now() - startedAt;
     const kind = classifyError(error);
-    // The provider reported no usage for a failed call: a truncated answer used its whole output
-    // cap, a refusal at least the prompt, anything else is taken as free. Marked as estimated.
-    const costUsd =
-      kind === 'truncated' ? worst : kind === 'refused' ? worstCaseCostUsd(settings.model, promptEstimate, 0) : 0;
+    // The provider reported no usage for a failed call, so it is costed by estimate, at the worst
+    // case of every attempt that can have been billed: a truncated answer used its whole output
+    // cap, a refusal at least the prompt, a transient failure both attempts, a rejected request
+    // (a 400) nothing. A typed error from the fallback model means the primary failed first.
+    const model = erroredModel(error, settings.model);
+    const fromFallback = baseModelId(model) !== baseModelId(settings.model);
+    const earlierAttempt = fromFallback ? worstPrimary : 0;
+    let costUsd = 0;
+    if (kind === 'truncated') costUsd = worstCaseCostUsd(model, promptEstimate, call.maxTokens) + earlierAttempt;
+    else if (kind === 'refused') costUsd = worstCaseCostUsd(model, promptEstimate, 0) + earlierAttempt;
+    else if (kind === 'transient') costUsd = worstPrimary + worstFallback;
+    else if (kind === 'rejected') costUsd = earlierAttempt;
     guard.settle(reservation, costUsd);
     const record: CallRecord = {
       ...base,
@@ -251,17 +275,17 @@ async function runCall(ctx: ExecContext, call: PlannedCall, userOverride?: strin
       outputChars: 0,
       ms,
       costUsd,
+      failedAttemptUsd: costUsd,
       costEstimated: true,
       stopReason: kind === 'truncated' ? 'max_tokens' : kind === 'refused' ? 'refusal' : null,
       truncated: kind === 'truncated',
       refused: kind === 'refused',
-      fallback: false,
+      fallback: fromFallback,
       error: kind,
     };
     return { record, content: null, skipped: false };
   }
 }
-
 // ─── Running one case ───────────────────────────────────────────────
 
 export interface ExecResult {

@@ -93,7 +93,7 @@ export function parseArgs(argv: readonly string[]): Parsed {
     else if (flag === '--dry-run') parsed.dryRun = true;
     else if (VALUE_FLAGS.has(flag)) {
       const value = argv[i + 1];
-      if (value === undefined || value.startsWith('--')) throw new UsageError(`${flag} needs a value`);
+      if (value === undefined || value.startsWith('-')) throw new UsageError(`${flag} needs a value (a value cannot start with '-')`);
       i += 1;
       switch (flag) {
         case '--flow': {
@@ -214,6 +214,24 @@ export function priorRows(dir: string): { rows: RunRow[]; spentUsd: number } {
   // Every row ever written was paid for, replaced or not.
   const spentUsd = all.reduce((sum, row) => sum + row.calls.reduce((s, c) => s + c.costUsd, 0), 0);
   return { rows: [...last.values()], spentUsd };
+}
+
+/** What differs between a resumed run's stored config and the flags of this invocation, or null when they agree (or there is no stored config). */
+export function resumeMismatch(stored: string | null, now: { model: string; effort: string; fixtures: string; flows: readonly string[] }): string | null {
+  if (stored === null) return null;
+  let config: Record<string, unknown>;
+  try {
+    config = JSON.parse(stored) as Record<string, unknown>;
+  } catch {
+    return 'config.json is unreadable';
+  }
+  const differences: string[] = [];
+  for (const key of ['model', 'effort', 'fixtures'] as const) {
+    if (config[key] !== now[key]) differences.push(`${key}: ${String(config[key])} -> ${now[key]}`);
+  }
+  const storedFlows = Array.isArray(config.flows) ? (config.flows as unknown[]).map(String).sort().join(',') : '';
+  if (storedFlows !== [...now.flows].sort().join(',')) differences.push('flows');
+  return differences.length > 0 ? differences.join('; ') : null;
 }
 
 function selectCases(all: LoadedCase[], parsed: Parsed): LoadedCase[] {
@@ -357,6 +375,14 @@ export async function main(options: CliOptions): Promise<number> {
   }
 
   // ─── Live run ───────────────────────────────────────────────────────
+  const configFile = path.join(outDir, 'config.json');
+  if (parsed.resume !== undefined) {
+    const mismatch = resumeMismatch(readIfPresent(configFile), { model, effort, fixtures: parsed.fixtures, flows: parsed.flows });
+    if (mismatch) {
+      io.error(`ai-flow eval: --resume ${parsed.resume} was started with a different setup (${mismatch}). Resume with the same --model, --effort, --fixtures and --flow, or start a new run.`);
+      return 2;
+    }
+  }
   let apiKey = env.CLAUDE_API_KEY || env.ANTHROPIC_API_KEY || '';
   if (!apiKey) {
     const file = path.resolve(options.root, parsed.envFile ?? env.AI_FLOW_EVAL_ENV_FILE ?? '.env.local');
@@ -378,7 +404,8 @@ export async function main(options: CliOptions): Promise<number> {
   const prior = parsed.resume ? priorRows(outDir) : { rows: [] as RunRow[], spentUsd: 0 };
   const guard = new CostGuard(parsed.maxCostUsd, prior.spentUsd);
   const resultsFile = path.join(outDir, 'results.jsonl');
-  writeFileSync(path.join(outDir, 'config.json'), JSON.stringify({ runName, model, effort, repeat: parsed.repeat, capUsd: parsed.maxCostUsd, flows: parsed.flows, fixtures: parsed.fixtures, cases: cases.map((c) => `${c.flow}/${c.case.id}`) }, null, 2));
+  // A resumed run keeps the config it was started with; it is written only when it is missing.
+  if (parsed.resume === undefined || !existsSync(configFile)) writeFileSync(configFile, JSON.stringify({ runName, model, effort, repeat: parsed.repeat, capUsd: parsed.maxCostUsd, flows: parsed.flows, fixtures: parsed.fixtures, cases: cases.map((c) => `${c.flow}/${c.case.id}`) }, null, 2));
 
   io.log(`ai-flow eval ${runName}: ${model}, effort ${effort}, repeat ${parsed.repeat}, ${cases.length} case(s), cap $${parsed.maxCostUsd}, estimate $${est.totalUsd.toFixed(2)}${prior.spentUsd > 0 ? `, $${prior.spentUsd.toFixed(4)} already spent` : ''}`);
 

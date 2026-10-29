@@ -13,15 +13,15 @@
  *   npm run eval:ai-flows:fixtures
  *
  * The logic and the flag list live in `src/lib/ai/flow-eval/cli.ts`. This file only installs the egress
- * guard (a live run may reach api.anthropic.com and nothing else: no database, no other host) and hands
+ * guard (always; a run may reach api.anthropic.com and nothing else: no database, no other host) and hands
  * over. Fixtures are synthetic (`scripts/eval-fixtures/ai-flows/`); anything derived from real data
  * belongs under the gitignored `.internal/evals/ai-flows/fixtures/` and is read only with `--fixtures internal|both`.
  */
 (async () => {
   const argv = process.argv.slice(2);
   const { installEgressGuard, main } = await import('../src/lib/ai/flow-eval/cli');
-  const offline = argv.some((arg) => arg === '--dry-run' || arg === '--list' || arg === '--help' || arg === '-h');
-  if (!offline) installEgressGuard();
+  // Always: the offline modes (--dry-run, --list, --help) do no network I/O, so the guard costs them nothing.
+  installEgressGuard();
   const io = { log: (line: string) => console.log(line), error: (line: string) => console.error(line) };
   process.exit(await main({ argv, env: process.env, io, root: process.cwd() }));
 })().catch((error: unknown) => {

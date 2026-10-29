@@ -153,6 +153,15 @@ export function gradeScouting(text: string, c: ScoutingCase, lookup: SpeciesLook
   const checks: Check[] = [hard('parse', true)];
   const { expect } = c;
 
+  // The app parser drops the half of the schema that does not apply, so exclusivity is checked on the raw JSON.
+  const raw = parseLooseJson(text) ?? {};
+  const present = (key: string): boolean => {
+    const v = raw[key];
+    return v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
+  };
+  const forbidden = c.hasUserTeam ? 'suggested_picks' : 'matchup_analysis';
+  checks.push(hard('branch_exclusive', !present(forbidden), `${forbidden} must be omitted ${c.hasUserTeam ? 'when the player has a team' : 'when the player has no team'}`));
+
   checks.push(
     hard('required_text', nonEmptyString(parsed.opponent_profile) && nonEmptyString(parsed.recommendations.key_advice)),
     hard('signature_pokemon', parsed.signature_pokemon.length > 0 && parsed.signature_pokemon.every((s) => nonEmptyString(s.pokemon))),

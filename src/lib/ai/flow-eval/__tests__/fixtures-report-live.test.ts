@@ -81,7 +81,7 @@ describe('parseFixtureFile', () => {
 const call = (over: Partial<CallRecord> = {}): CallRecord => ({
   taskId: 'main', requestedModel: 'claude-sonnet-5-5', servedModel: 'claude-sonnet-5-5', effort: 'medium', maxTokens: 16000,
   inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 500, outputChars: 600, ms: 2000, costUsd: 0.01,
-  costEstimated: false, stopReason: 'end_turn', truncated: false, refused: false, fallback: false, error: null, ...over,
+  failedAttemptUsd: 0, costEstimated: false, stopReason: 'end_turn', truncated: false, refused: false, fallback: false, error: null, ...over,
 });
 
 const row = (caseId: string, calls: CallRecord[], checks: RunRow['checks'], over: Partial<RunRow> = {}): RunRow => ({
