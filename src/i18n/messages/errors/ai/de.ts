@@ -15,6 +15,9 @@ export default defineDe<typeof en>()({
   ai_report_failed: 'Der Bericht konnte nicht erstellt werden – versuch es später noch einmal.',
   ai_analysis_cache_read_failed:
     'Die gespeicherte Analyse konnte nicht geladen werden – versuch es später noch einmal.',
+  ai_output_truncated: 'Die KI-Antwort wurde abgeschnitten, bevor sie fertig war – versuch es noch einmal.',
+  ai_output_refused: 'Die KI hat diese Antwort abgelehnt.',
+  ai_service_unavailable: 'Der KI-Dienst ist gerade nicht verfügbar – versuch es später noch einmal.',
 
   ai_model_ids_unknown: 'Unbekannte Modell-ID(s): {ids}',
 
