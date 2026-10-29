@@ -158,6 +158,8 @@ export interface ToolOverrides {
   rulesetId?: string | null;
   /** The player's assigned core types, forced onto buildTeam/validateTeam. */
   playerCore?: string[] | null;
+  /** The resolved league's id, forced onto validateTeam (roster, core and Evolution Point Buy scope). */
+  seasonId?: string | null;
 }
 
 /**
@@ -183,6 +185,12 @@ export function applyToolOverrides(
     if (overrides.rulesetId) base.ruleset_id = overrides.rulesetId;
     if (overrides.playerCore && overrides.playerCore.length === 3) {
       base.player_core = overrides.playerCore;
+    }
+    if (name === 'validateTeam') {
+      // Server-authoritative league scope: the model never names whose roster or which league is checked.
+      base.player_id = overrides.userId;
+      if (overrides.seasonId) base.season_id = overrides.seasonId;
+      else delete base.season_id;
     }
     return base;
   }
@@ -343,6 +351,7 @@ export async function runAgent(request: AgentRequest): Promise<RunAgentResult> {
     userId,
     rulesetId: pack.league?.ruleset_id ?? null,
     playerCore: pack.league?.player_core ?? null,
+    seasonId: pack.league?.season_id ?? null,
   });
   const needsVision = hasImageParts(messages);
   const models = selectModels(profile, needsVision);

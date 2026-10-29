@@ -139,3 +139,72 @@ describe('validateTeam (league ruleset + player core)', () => {
     expect(readExposedRuleset).not.toHaveBeenCalled();
   });
 });
+
+describe('validateTeam: the shared team check (same rules as the editor)', () => {
+  const GARCHOMP = { ...legalGarchomp };
+
+  it('says which rules ran', async () => {
+    const plain = await validateTeam({ format: 'gen9ou', team: [GARCHOMP] });
+    expect(plain.ruleset_source).toEqual({ kind: 'format_preset', format: 'gen9ou' });
+
+    vi.mocked(readExposedRuleset).mockResolvedValue(buildRuleset({ base_format: 'gen9ou' }));
+    const league = await validateTeam({ format: 'gen9ou', ruleset_id: 'rs-1', team: [GARCHOMP] });
+    expect(league.ruleset_source).toEqual({ kind: 'ruleset' });
+    vi.mocked(readExposedRuleset).mockReset();
+  });
+
+  it('applies the format tier bans when there is no league ruleset', async () => {
+    const result = await validateTeam({
+      format: 'gen9ou',
+      team: [{ species: 'Koraidon', item: 'Choice Band', ability: 'Orichalcum Pulse', moves: ['Collision Course'] }],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some((i) => /Koraidon is banned/.test(i.issue))).toBe(true);
+  });
+
+  it('flags an ability the species cannot have', async () => {
+    const result = await validateTeam({ format: 'gen9ou', team: [{ ...GARCHOMP, ability: 'Levitate' }] });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some((i) => /cannot have the ability Levitate/.test(i.issue))).toBe(true);
+  });
+
+  it('flags a move named twice', async () => {
+    const result = await validateTeam({ format: 'gen9ou', team: [{ ...GARCHOMP, moves: ['Earthquake', 'Earthquake'] }] });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some((i) => /Earthquake is listed more than once/.test(i.issue))).toBe(true);
+  });
+
+  it('applies the Item Clause by canonical item id when the ruleset has it', async () => {
+    vi.mocked(readExposedRuleset).mockResolvedValue(buildRuleset({ base_format: 'gen9ou', clauses: ['Species Clause', 'Item Clause'] }));
+    const result = await validateTeam({
+      format: 'gen9ou',
+      ruleset_id: 'rs-1',
+      team: [{ ...GARCHOMP, item: 'Choice Scarf' }, { ...legalRotomWash, item: 'choicescarf' }],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.team_issues.some((m) => /Item Clause/.test(m))).toBe(true);
+    vi.mocked(readExposedRuleset).mockReset();
+  });
+
+  it.each([
+    ['is not found', async (): Promise<null> => null, 'ruleset_not_found'],
+    ['fails to load', async (): Promise<never> => { throw new Error('db down'); }, 'ruleset_load_failed'],
+  ] as const)('a ruleset id that %s is reported, never silently replaced by weaker rules', async (_label, read, fallback) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(readExposedRuleset).mockImplementation(read as never);
+
+    const result = await validateTeam({ format: 'gen9ou', ruleset_id: 'rs-gone', team: [GARCHOMP] });
+
+    expect(result.valid).toBe(false);
+    expect(result.ruleset_source).toEqual({ kind: 'format_preset', format: 'gen9ou', fallback });
+    expect(result.team_issues.some((m) => /could not be used/.test(m))).toBe(true);
+    log.mockRestore();
+    vi.mocked(readExposedRuleset).mockReset();
+  });
+
+  it('keeps its result shape: valid, format, issues with four fields, team_issues', async () => {
+    const result = await validateTeam({ format: 'gen9ou', team: [{ species: 'Magikarp', moves: ['Hydro Pump'] }] });
+    expect(Object.keys(result).sort()).toEqual(['format', 'issues', 'ruleset_source', 'team_issues', 'valid']);
+    expect(Object.keys(result.issues[0]).sort()).toEqual(['issue', 'pokemon_index', 'severity', 'species']);
+  });
+});

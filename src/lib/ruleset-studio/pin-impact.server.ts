@@ -16,6 +16,7 @@ import 'server-only';
 import type { Ruleset } from '@/types/ruleset';
 import type { SessionPlayer } from '@/types/auth';
 import { validateTeam } from '@/lib/pkmn/validation';
+import { teamPokemonSchema } from '@/lib/validation/schemas';
 import { listParticipantCores } from '@/lib/supabase/queries/seasons';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { listRulesetVersions } from '@/lib/supabase/queries/ruleset-definitions';
@@ -37,19 +38,50 @@ export interface PinImpactInput {
   targets: readonly PinTarget[];
 }
 
-/** Teams of one target that are valid under `from` and not under `to`. Pure given the rulesets; no I/O. */
+/** What `summarizePinImpact` counted: teams that become invalid, and stored rows that are not a team at all. */
+export interface PinImpactCount {
+  broken: number;
+  /** Rows whose `pokemon` is not a list of well-formed sets (stored before the boundary schemas); not counted in `broken`. */
+  malformed: number;
+}
+
+/**
+ * Teams of one target that are valid under `from` and not under `to`, and how many stored rows were not a readable team.
+ * Pure given the rulesets; no I/O. Only the synchronous core runs here (no learnset layer): this loop validates up to
+ * `MAX_IMPACT_TEAMS` teams twice, and a learnset rule would cancel out of the comparison anyway.
+ *
+ * A malformed row (one stored before `teamPokemonSchema` guarded the team routes) is skipped and counted apart, so a
+ * single bad row cannot fail the whole confirmation. The same shape check as the boundary decides, so a team the editor
+ * would refuse to save is not silently judged "valid" or "invalid".
+ */
+export function summarizePinImpact(
+  teams: ReadonlyArray<{ player_id: string; pokemon: unknown }>,
+  from: Ruleset,
+  to: Ruleset,
+  coreOf: (playerId: string) => CoreTriple | null,
+): PinImpactCount {
+  let broken = 0;
+  let malformed = 0;
+  for (const team of teams) {
+    const parsed = teamPokemonSchema.safeParse(team.pokemon);
+    if (!parsed.success) {
+      malformed += 1;
+      continue;
+    }
+    const context = { playerCore: coreOf(team.player_id) };
+    if (validateTeam(parsed.data, from, context).valid && !validateTeam(parsed.data, to, context).valid) broken += 1;
+  }
+  return { broken, malformed };
+}
+
+/** Teams of one target that are valid under `from` and not under `to` (see `summarizePinImpact`). */
 export function countBecomingInvalid(
-  teams: ReadonlyArray<{ player_id: string; pokemon: Parameters<typeof validateTeam>[0] }>,
+  teams: ReadonlyArray<{ player_id: string; pokemon: unknown }>,
   from: Ruleset,
   to: Ruleset,
   coreOf: (playerId: string) => CoreTriple | null,
 ): number {
-  let broken = 0;
-  for (const team of teams) {
-    const context = { playerCore: coreOf(team.player_id) };
-    if (validateTeam(team.pokemon, from, context).valid && !validateTeam(team.pokemon, to, context).valid) broken += 1;
-  }
-  return broken;
+  return summarizePinImpact(teams, from, to, coreOf).broken;
 }
 
 export async function computePinImpact(input: PinImpactInput): Promise<PinImpact> {
@@ -95,7 +127,12 @@ export async function computePinImpact(input: PinImpactInput): Promise<PinImpact
     const cores = needsCores && seasonId !== null ? await listParticipantCores(seasonId) : new Map<string, CoreTriple>();
 
     answer.checked = teams.length;
-    answer.would_break = countBecomingInvalid(teams, current, target, (playerId) => cores.get(playerId) ?? null);
+    const { broken, malformed } = summarizePinImpact(teams, current, target, (playerId) => cores.get(playerId) ?? null);
+    answer.would_break = broken;
+    // Not an error of this request, but a data problem worth knowing: rows the boundary schemas would refuse today.
+    if (malformed > 0) {
+      console.warn(`[pin-impact] ${malformed} of ${teams.length} stored teams of ${state.kind} ${state.id} are malformed and were not counted`);
+    }
   }
 
   return {

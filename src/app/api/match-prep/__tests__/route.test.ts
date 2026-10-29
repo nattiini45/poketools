@@ -1,3 +1,4 @@
+import { makeSet } from '@/test/team-fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
@@ -121,8 +122,8 @@ const tournament = {
 };
 
 const pokemon = [
-  { species: 'Pikachu', moves: ['Thunderbolt'] },
-  { species: 'Charizard', moves: ['Flamethrower'] },
+  makeSet('Pikachu', { moves: ['Thunderbolt'] }),
+  makeSet('Charizard', { moves: ['Flamethrower'] }),
 ];
 
 // --------------- GET tests ---------------
@@ -237,6 +238,17 @@ describe('POST /api/match-prep', () => {
     expect(payload.error).toContain('pokemon');
     expect(payload.code).toBe('validation_failed');
     expect(payload.params).toEqual({ issues: payload.error });
+  });
+
+  it('returns 400 for a malformed set and registers nothing', async () => {
+    const response = await POST(
+      makePostRequest({ match_id: MATCH_ID, pokemon: [{ ...makeSet('Pikachu'), evs: undefined }], import_source: 'manual' }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.code).toBe('validation_failed');
+    expect(upsertMatchPrepTeam).not.toHaveBeenCalled();
   });
 
   it('returns 404 when match does not exist', async () => {

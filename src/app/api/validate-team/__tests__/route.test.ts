@@ -42,12 +42,21 @@ vi.mock('@/lib/supabase/queries/drafts', () => ({
 // League groups: the caller's group (a league with groups only).
 vi.mock('@/lib/supabase/queries/season-groups', () => ({ getSeasonGroupOfPlayer: vi.fn() }));
 
+// The route runs the shared check (`checkTeam`); its leaves are faked here: the synchronous core, the learnset layer
+// and the Evolution Point Buy reads. The pipeline itself is pinned in `src/lib/team/__tests__/check.test.ts`.
 vi.mock('@/lib/pkmn/validation', () => ({
   validateTeam: vi.fn(),
+  codedIssue: (code: string, params?: Record<string, unknown>) => (params ? { code, params } : { code }),
 }));
 
-vi.mock('@/lib/draft/epb-team-validation', () => ({
+vi.mock('@/lib/pkmn/team-legality', () => ({
+  checkTeamLegality: vi.fn(async () => []),
+}));
+
+vi.mock('@/lib/draft/epb-team-validation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/draft/epb-team-validation')>()),
   validateEpbTeamForSeason: vi.fn(),
+  loadEpbSeasonState: vi.fn(async () => ({ formatRules: null, trackers: [], lines: [] })),
 }));
 
 import { POST } from '../route';
@@ -100,10 +109,23 @@ const RULESET = {
 };
 
 const POKEMON = [
-  { species: 'Garchomp', ability: 'Rough Skin', item: 'Rocky Helmet', moves: ['Earthquake'] },
+  {
+    name: '',
+    species: 'Garchomp',
+    gender: '',
+    item: 'Rocky Helmet',
+    ability: 'Rough Skin',
+    evs: { hp: 0, atk: 252, def: 0, spa: 0, spd: 4, spe: 252 },
+    ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
+    nature: 'Jolly',
+    level: 100,
+    moves: ['Earthquake'],
+  },
 ];
 
 const VALID_RESULT = { valid: true, issues: [], team_issues: [] };
+/** What the route answers for a clean check against a stored ruleset. */
+const VALID_ANSWER = { ...VALID_RESULT, team_issue_details: [], ruleset_source: { kind: 'ruleset' } };
 
 const EPB_SEASON = {
   id: SEASON_ID,
@@ -175,6 +197,49 @@ describe('POST /api/validate-team', () => {
     expect(body.error).toContain('ruleset_id');
   });
 
+  // ── Shape of the team (#51): a coded 400, never a 500 ───────────────
+
+  const MALFORMED: [string, unknown][] = [
+    ['a set without evs', [{ ...POKEMON[0], evs: undefined }]],
+    ['a set without moves', [{ ...POKEMON[0], moves: undefined }]],
+    ['a negative EV', [{ ...POKEMON[0], evs: { ...POKEMON[0].evs, hp: -760 } }]],
+    ['an EV above 252', [{ ...POKEMON[0], evs: { ...POKEMON[0].evs, atk: 253 } }]],
+    ['an IV above 31', [{ ...POKEMON[0], ivs: { ...POKEMON[0].ivs, spe: 32 } }]],
+    ['level 0', [{ ...POKEMON[0], level: 0 }]],
+    ['level 101', [{ ...POKEMON[0], level: 101 }]],
+    ['five moves', [{ ...POKEMON[0], moves: ['a', 'b', 'c', 'd', 'e'] }]],
+    ['a species of 101 characters', [{ ...POKEMON[0], species: 'x'.repeat(101) }]],
+    ['a move that is not text', [{ ...POKEMON[0], moves: [42] }]],
+    ['a set that is null', [null]],
+    ['a set that is a string', ['Garchomp']],
+    ['pokemon that is not a list', { species: 'Garchomp' }],
+    ['an empty team', []],
+    ['seven sets', Array.from({ length: 7 }, () => POKEMON[0])],
+  ];
+
+  it.each(MALFORMED)('answers 400 validation_failed for %s, and never reaches a validator', async (_label, pokemon) => {
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
+
+    const res = await POST(makeRequest({ pokemon, ruleset_id: RULESET_ID }));
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.code).toBe('validation_failed');
+    expect(body.params).toEqual({ issues: body.error });
+    expect(validateTeam).not.toHaveBeenCalled();
+  });
+
+  it('accepts what the teambuilder sends: a set under construction (no moves, empty strings, no nature)', async () => {
+    vi.mocked(readExposedRuleset).mockResolvedValue(RULESET as never);
+    vi.mocked(validateTeam).mockReturnValue(VALID_RESULT);
+    const blank = { ...POKEMON[0], item: '', ability: '', nature: '', moves: [], gender: '', name: '' };
+
+    const res = await POST(makeRequest({ pokemon: [blank], ruleset_id: RULESET_ID }));
+
+    expect(res.status).toBe(200);
+    expect(validateTeam).toHaveBeenCalledWith([blank], RULESET, expect.anything());
+  });
+
   it('returns 404 when ruleset is not found', async () => {
     vi.mocked(readExposedRuleset).mockResolvedValue(null);
 
@@ -197,7 +262,7 @@ describe('POST /api/validate-team', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(body.data).toEqual(VALID_RESULT);
+    expect(body.data).toEqual(VALID_ANSWER);
     expect(validateTeam).toHaveBeenCalledWith(
       POKEMON,
       RULESET,
@@ -381,7 +446,7 @@ describe('POST /api/validate-team', () => {
     expect(body.success).toBe(true);
     expect(body.data.valid).toBe(false);
     expect(body.data.issues.some((i: { issue: string }) => i.issue.includes('Baton Pass is banned'))).toBe(true);
-    expect(validateEpbTeamForSeason).toHaveBeenCalledWith(SEASON_ID, PLAYER.playerId, POKEMON);
+    expect(validateEpbTeamForSeason).toHaveBeenCalledWith(SEASON_ID, PLAYER.playerId, POKEMON, expect.anything());
   });
 
   it('EPB season: merges coded team issues, deduped by text and aligned with team_issues', async () => {
@@ -442,7 +507,7 @@ describe('POST /api/validate-team', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(body.data).toEqual(VALID_RESULT);
+    expect(body.data).toEqual(VALID_ANSWER);
     expect(validateEpbTeamForSeason).not.toHaveBeenCalled();
   });
 
@@ -480,7 +545,7 @@ describe('POST /api/validate-team', () => {
 
     expect(body.success).toBe(true);
     // Core result returned unchanged — no EPB merge.
-    expect(body.data).toEqual(VALID_RESULT);
+    expect(body.data).toEqual(VALID_ANSWER);
     // EPB enforcement must NOT have run for the client-supplied season.
     expect(validateEpbTeamForSeason).not.toHaveBeenCalled();
   });

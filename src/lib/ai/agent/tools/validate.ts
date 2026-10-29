@@ -1,20 +1,23 @@
 /**
  * Team-legality agent tool (PRD §5, Layer 1): `validateTeam`.
  *
- * Wraps `validateTeam` from `src/lib/pkmn/validation.ts` (species/move/item/
- * ability existence, bans, EV totals, clauses) and additionally runs the
- * existing `checkMoveLegality` learnset check so moves a species cannot learn
- * are surfaced too. Builds a minimal synthetic `Ruleset` from the format
- * string — the agent validates legality before any team is presented.
+ * A thin adapter over `checkTeam` (`src/lib/team/check.server.ts`), the same function behind the teambuilder's live
+ * check (`POST /api/validate-team`) and the import preview, so "the agent says legal" means "the editor says legal".
+ * That covers the league ruleset (or, with none, the FORMAT's catalog rules including its tier bans), the clauses,
+ * learnsets and abilities, EV/IV/level ranges, duplicate moves, the assigned core, the drafted roster and the
+ * Evolution Point Buy rules.
+ *
+ * The result says which rules ran (`ruleset_source`). A ruleset id that was asked for and could not be read is NOT a
+ * silent fallback: the result is invalid and carries the `ruleset_load_failed` team issue.
+ *
+ * `player_id` and `season_id` are set by the server (`applyToolOverrides`), never trusted from the model: they scope
+ * the roster, the assigned core and the Evolution Point Buy state to the authenticated player's own league.
  */
-import type { PokemonSet, StatSpread } from '@/types/team';
+import type { PokemonSet, RulesetSource, StatSpread } from '@/types/team';
 import type { Ruleset } from '@/types/ruleset';
 import type { CoreTriple } from '@/types/season';
-import { validateTeam as validateTeamCore } from '@/lib/pkmn/validation';
-import { rulesFromBans } from '@/lib/ruleset-kit/effective';
-import { checkMoveLegality } from '@/lib/pkmn/dex';
+import { checkTeam, type RulesetFailure } from '@/lib/team/check.server';
 import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
-import { parseGenFromFormat } from '../../format';
 import type { ValidateTeamInput } from './schemas';
 
 export interface ValidateTeamIssue {
@@ -29,6 +32,8 @@ export interface ValidateTeamResult {
   format: string;
   issues: ValidateTeamIssue[];
   team_issues: string[];
+  /** Which rules were enforced: the league's ruleset, the format's catalog rules, or only the generation. */
+  ruleset_source: RulesetSource;
 }
 
 const ZERO_EVS: StatSpread = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
@@ -61,88 +66,46 @@ function toPokemonSet(set: ValidateTeamInput['team'][number]): PokemonSet {
   };
 }
 
-/** Build a minimal standard Ruleset from a format string (e.g. "gen9ou"). */
-function rulesetForFormat(format: string): Ruleset {
-  // The format text is model-supplied: read it once, case-folded, so the generation and the rules agree.
-  const id = format.toLowerCase();
-  const gen = parseGenFromFormat(id);
-  return {
-    id: 'agent-synthetic',
-    name: format,
-    base_format: format,
-    is_doubles: /vgc|doubles|bss/i.test(format),
-    clauses: ['Species Clause'],
-    bans: { pokemon: [], moves: [], items: [], abilities: [] },
-    additions: { pokemon: [] },
-    allow: { pokemon: null, moves: null, items: null, abilities: null },
-    custom_rules_string: '',
-    min_shared_type_pct: 0,
-    team_constraints: null,
-    gen,
-    universe: 'standard',
-    rules: rulesFromBans({
-      gen,
-      formatKey: id,
-      doubles: /vgc|doubles|bss/i.test(format),
-      clauses: ['Species Clause'],
-    }),
-    version: null,
-    created_by: null,
-    created_at: '',
-    updated_at: '',
-  };
-}
-
 /**
- * Resolve the ruleset to validate against: the real league ruleset (with its
- * bans, clauses and team-constraints) when `ruleset_id` is supplied and loads,
- * otherwise a synthetic base-format ruleset. An unresolvable id soft-falls back
- * so a hallucinated id never breaks validation.
+ * The real ruleset when `ruleset_id` is supplied and readable (through `readExposedRuleset`: only a ruleset meant to
+ * be seen, never another admin's private draft). Otherwise null plus WHY, so the check reports the downgrade.
  */
-async function resolveRuleset(input: ValidateTeamInput): Promise<Ruleset> {
-  if (input.ruleset_id) {
-    try {
-      // A model-supplied id is read only when the ruleset is meant to be seen (never another admin's private draft).
-      const real = await readExposedRuleset(input.ruleset_id);
-      if (real) return real;
-    } catch {
-      // fall through to synthetic
-    }
+async function readRuleset(
+  rulesetId: string | undefined,
+): Promise<{ ruleset: Ruleset | null; failure?: RulesetFailure }> {
+  if (!rulesetId) return { ruleset: null };
+  try {
+    const found = await readExposedRuleset(rulesetId);
+    return found ? { ruleset: found } : { ruleset: null, failure: 'ruleset_not_found' };
+  } catch (err) {
+    console.error('[agent/validateTeam] could not read the ruleset:', err);
+    return { ruleset: null, failure: 'ruleset_load_failed' };
   }
-  return rulesetForFormat(input.format);
 }
 
 export async function validateTeam(input: ValidateTeamInput): Promise<ValidateTeamResult> {
-  const ruleset = await resolveRuleset(input);
-  const gen = parseGenFromFormat(ruleset.base_format);
-  const team = input.team.map(toPokemonSet);
-  const playerCore = (input.player_core as CoreTriple | undefined) ?? null;
+  const { ruleset, failure } = await readRuleset(input.ruleset_id);
+  const result = await checkTeam({
+    pokemon: input.team.map(toPokemonSet),
+    ruleset,
+    rulesetFailure: failure,
+    format: input.format,
+    playerId: input.player_id ?? null,
+    seasonId: input.season_id ?? null,
+    // The core in the agent's context is the server's own read of the player's league; without one the check reads it.
+    playerCore: input.player_core ? (input.player_core as CoreTriple) : undefined,
+  });
 
-  const core = validateTeamCore(team, ruleset, { playerCore });
-  const issues: ValidateTeamIssue[] = core.issues.map((i) => ({
-    pokemon_index: i.pokemon_index,
-    species: i.species,
-    issue: i.issue,
-    severity: i.severity,
-  }));
-  const teamIssues = [...core.team_issues];
-
-  // Learnset legality — surface moves the species cannot legally learn.
-  for (let i = 0; i < team.length; i++) {
-    const set = team[i];
-    const legality = await checkMoveLegality(set.species, set.moves, gen);
-    for (const { move, legal } of legality) {
-      if (!legal && move) {
-        issues.push({
-          pokemon_index: i,
-          species: set.species,
-          issue: `${set.species} cannot legally learn ${move}`,
-          severity: 'error',
-        });
-      }
-    }
-  }
-
-  const valid = issues.every((i) => i.severity !== 'error') && teamIssues.length === 0;
-  return { valid, format: input.format, issues, team_issues: teamIssues };
+  return {
+    valid: result.valid,
+    format: input.format,
+    issues: result.issues.map((i) => ({
+      pokemon_index: i.pokemon_index,
+      species: i.species,
+      issue: i.issue,
+      severity: i.severity,
+    })),
+    team_issues: result.team_issues,
+    ruleset_source: result.ruleset_source ?? { kind: 'format_basic', format: input.format },
+  };
 }

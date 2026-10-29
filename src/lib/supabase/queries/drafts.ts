@@ -471,6 +471,10 @@ export async function getPicksByPool(poolId: string): Promise<DraftPickWithPlaye
   }));
 }
 
+/**
+ * A player's live picks in a pool. A voided pick (`voided_at` set: the queue engine voids a pick instead of deleting
+ * it) no longer counts for roster, budget or availability, so it is not returned.
+ */
 export async function getPicksByPlayer(
   poolId: string,
   playerId: string
@@ -480,6 +484,7 @@ export async function getPicksByPlayer(
     .select('*')
     .eq('draft_pool_id', poolId)
     .eq('player_id', playerId)
+    .is('voided_at', null)
     .order('pick_number');
 
   if (error) throw error;

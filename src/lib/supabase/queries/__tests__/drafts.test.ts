@@ -656,6 +656,13 @@ describe('queries/drafts — picks', () => {
       expect(await getPicksByPlayer('dp-1', 'p-99')).toEqual([]);
     });
 
+    it('leaves voided picks out: a voided pick no longer counts for the roster', async () => {
+      mockBuilder.is.mockClear();
+      mockBuilder.order.mockReturnValue({ data: [draftPickRow], error: null });
+      await getPicksByPlayer('dp-1', 'p-1');
+      expect(mockBuilder.is).toHaveBeenCalledWith('voided_at', null);
+    });
+
     it('throws on error', async () => {
       mockBuilder.order.mockReturnValue({ data: null, error: new Error('err') });
       await expect(getPicksByPlayer('dp-1', 'p-1')).rejects.toThrow('err');

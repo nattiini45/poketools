@@ -34,7 +34,7 @@ import { getPinTargetStates, listRulesetVersions } from '@/lib/supabase/queries/
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { listParticipantCores } from '@/lib/supabase/queries/seasons';
 import { listTeamsForPinImpact } from '@/lib/supabase/queries/teams';
-import { MAX_IMPACT_TEAMS, computePinImpact, countBecomingInvalid } from '../pin-impact.server';
+import { MAX_IMPACT_TEAMS, computePinImpact, countBecomingInvalid, summarizePinImpact } from '../pin-impact.server';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const DEF = '33333333-3333-4333-8333-333333333333';
@@ -98,6 +98,25 @@ describe('countBecomingInvalid', () => {
     const teams = [team('a', GARCHOMP)];
     expect(countBecomingInvalid(teams, RULES_V1, RULES_V1, noCore)).toBe(0);
     expect(countBecomingInvalid(teams, RULES_V2, RULES_V1, noCore)).toBe(0);
+  });
+
+  it('survives a malformed stored team: it is skipped, the rest are still counted (it used to fail the whole request)', () => {
+    const malformed = [
+      { id: 'm1', player_id: 'player-m1', pokemon: [{ species: 'Garchomp' }] }, // no evs, ivs or moves
+      { id: 'm2', player_id: 'player-m2', pokemon: null },
+      { id: 'm3', player_id: 'player-m3', pokemon: [null] },
+      { id: 'm4', player_id: 'player-m4', pokemon: 'Garchomp' },
+      { id: 'm5', player_id: 'player-m5', pokemon: [{ ...GARCHOMP, evs: { hp: -760, atk: 252, def: 252, spa: 252, spd: 252, spe: 252 } }] },
+    ];
+    const teams = [...malformed, team('a', GARCHOMP), team('b', DRAGONITE)];
+
+    expect(() => countBecomingInvalid(teams, RULES_V1, RULES_V2, noCore)).not.toThrow();
+    expect(countBecomingInvalid(teams, RULES_V1, RULES_V2, noCore)).toBe(1);
+  });
+
+  it('counts the malformed rows apart from the teams that would break', () => {
+    const teams = [{ id: 'm', player_id: 'p', pokemon: [{ species: 'Garchomp' }] }, team('a', GARCHOMP), team('b', DRAGONITE)];
+    expect(summarizePinImpact(teams, RULES_V1, RULES_V2, noCore)).toEqual({ broken: 1, malformed: 1 });
   });
 
   it('hands each team its player assigned core to the validator', () => {

@@ -80,6 +80,8 @@ export interface ContextPackTeam {
 export interface ContextPackLeague {
   /** The league/season name (its identity for this request), when resolvable. */
   league_name: string | null;
+  /** The league's id, when resolvable: it scopes the roster and Evolution Point Buy checks of `validateTeam`. */
+  season_id: string | null;
   /** The league's own prose rules (season + tournament description). */
   description: string | null;
   ruleset_name: string;
@@ -371,6 +373,7 @@ function buildLeagueSection(
 
   return {
     league_name: season?.name ?? null,
+    season_id: season?.id ?? null,
     description: descriptionParts.length ? descriptionParts.join('\n\n') : null,
     ruleset_name: ruleset?.name ?? 'Custom league ruleset',
     ruleset_version: ruleset?.version?.version_no ?? null,

@@ -151,6 +151,11 @@ export const ValidateTeamInput = z.object({
   format: z.string().min(1), // e.g. "gen9ou"
   ruleset_id: rulesetIdSchema,
   player_core: playerCoreSchema,
+  // Set by the server (`applyToolOverrides`) from the authenticated player and the resolved league; whatever the model
+  // puts here is overwritten or dropped. They scope the drafted roster, the assigned core and the Evolution Point Buy
+  // state to the player's own league.
+  player_id: z.string().uuid().optional().describe('Set by the server. Leave empty.'),
+  season_id: z.string().uuid().optional().describe('Set by the server. Leave empty.'),
 });
 export type ValidateTeamInput = z.infer<typeof ValidateTeamInput>;
 
