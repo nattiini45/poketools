@@ -1,0 +1,14 @@
+{
+  "$comment": "Run-only tsconfig for scripts/ai-flow-eval.ts, used by `tsx` via `--tsconfig`. It resolves the `@/` alias and the `server-only` marker (the same no-op stub Vitest uses) and pins the public example format pack, so the eval never loads a private pack. The root tsconfig.json is not modified and `tsc --noEmit` does not read this file.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@/*": ["../src/*"],
+      "@format-pack": ["../src/format-packs/example"],
+      "@pack-extensions": ["../src/format-packs/example/extensions"],
+      "server-only": ["../src/test/server-only-stub.ts"]
+    }
+  },
+  "include": ["./ai-flow-eval.ts"]
+}

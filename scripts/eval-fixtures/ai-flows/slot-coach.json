@@ -1,0 +1,1311 @@
+{
+  "schemaVersion": 1,
+  "flow": "slot-coach",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "slot-coach-1",
+      "label": "special attacker on an offensive team",
+      "locale": "en",
+      "set": {
+        "name": "",
+        "species": "Gholdengo",
+        "item": "Air Balloon",
+        "ability": "Good as Gold",
+        "nature": "Timid",
+        "tera_type": "Fairy",
+        "moves": [
+          "Make It Rain",
+          "Shadow Ball",
+          "Nasty Plot",
+          "Recover"
+        ],
+        "evs": {
+          "hp": 4,
+          "atk": 0,
+          "def": 0,
+          "spa": 252,
+          "spd": 0,
+          "spe": 252
+        }
+      },
+      "team": [
+        {
+          "name": "",
+          "species": "Great Tusk",
+          "item": "Booster Energy",
+          "ability": "Protosynthesis",
+          "nature": "Jolly",
+          "tera_type": "Steel",
+          "moves": [
+            "Headlong Rush",
+            "Close Combat",
+            "Rapid Spin",
+            "Knock Off"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Gholdengo",
+          "item": "Air Balloon",
+          "ability": "Good as Gold",
+          "nature": "Timid",
+          "tera_type": "Fairy",
+          "moves": [
+            "Make It Rain",
+            "Shadow Ball",
+            "Nasty Plot",
+            "Recover"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 0,
+            "def": 0,
+            "spa": 252,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Dragapult",
+          "item": "Choice Specs",
+          "ability": "Infiltrator",
+          "nature": "Timid",
+          "tera_type": "Ghost",
+          "moves": [
+            "Draco Meteor",
+            "Shadow Ball",
+            "U-turn",
+            "Flamethrower"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 0,
+            "def": 0,
+            "spa": 252,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Slowking-Galar",
+          "item": "Heavy-Duty Boots",
+          "ability": "Regenerator",
+          "nature": "Bold",
+          "tera_type": "Water",
+          "moves": [
+            "Sludge Bomb",
+            "Future Sight",
+            "Chilly Reception",
+            "Slack Off"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Landorus-Therian",
+          "item": "Rocky Helmet",
+          "ability": "Intimidate",
+          "nature": "Impish",
+          "tera_type": "Flying",
+          "moves": [
+            "Earthquake",
+            "U-turn",
+            "Stealth Rock",
+            "Taunt"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Corviknight",
+          "item": "Leftovers",
+          "ability": "Pressure",
+          "nature": "Impish",
+          "tera_type": "Dragon",
+          "moves": [
+            "Brave Bird",
+            "Body Press",
+            "Defog",
+            "Roost"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        }
+      ],
+      "format": "gen9ou",
+      "generation": 9
+    },
+    {
+      "id": "slot-coach-2",
+      "label": "bulky pivot",
+      "locale": "en",
+      "set": {
+        "name": "",
+        "species": "Garchomp",
+        "item": "Rocky Helmet",
+        "ability": "Rough Skin",
+        "nature": "Jolly",
+        "tera_type": "Steel",
+        "moves": [
+          "Earthquake",
+          "Dragon Tail",
+          "Stealth Rock",
+          "Swords Dance"
+        ],
+        "evs": {
+          "hp": 4,
+          "atk": 252,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 252
+        }
+      },
+      "team": [
+        {
+          "name": "",
+          "species": "Kingambit",
+          "item": "Leftovers",
+          "ability": "Supreme Overlord",
+          "nature": "Adamant",
+          "tera_type": "Dark",
+          "moves": [
+            "Kowtow Cleave",
+            "Sucker Punch",
+            "Iron Head",
+            "Swords Dance"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Iron Valiant",
+          "item": "Booster Energy",
+          "ability": "Quark Drive",
+          "nature": "Naive",
+          "tera_type": "Fighting",
+          "moves": [
+            "Spirit Break",
+            "Close Combat",
+            "Knock Off",
+            "Swords Dance"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Hatterene",
+          "item": "Leftovers",
+          "ability": "Magic Bounce",
+          "nature": "Bold",
+          "tera_type": "Steel",
+          "moves": [
+            "Psychic",
+            "Dazzling Gleam",
+            "Mystical Fire",
+            "Calm Mind"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Skeledirge",
+          "item": "Heavy-Duty Boots",
+          "ability": "Unaware",
+          "nature": "Bold",
+          "tera_type": "Water",
+          "moves": [
+            "Torch Song",
+            "Slack Off",
+            "Hex",
+            "Will-O-Wisp"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Garchomp",
+          "item": "Rocky Helmet",
+          "ability": "Rough Skin",
+          "nature": "Jolly",
+          "tera_type": "Steel",
+          "moves": [
+            "Earthquake",
+            "Dragon Tail",
+            "Stealth Rock",
+            "Swords Dance"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Rotom-Wash",
+          "item": "Leftovers",
+          "ability": "Levitate",
+          "nature": "Bold",
+          "tera_type": "Fairy",
+          "moves": [
+            "Hydro Pump",
+            "Volt Switch",
+            "Will-O-Wisp",
+            "Pain Split"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        }
+      ],
+      "format": "gen9ou",
+      "generation": 9
+    },
+    {
+      "id": "slot-coach-3",
+      "label": "setup sweeper",
+      "locale": "en",
+      "set": {
+        "name": "",
+        "species": "Heatran",
+        "item": "Leftovers",
+        "ability": "Flash Fire",
+        "nature": "Calm",
+        "tera_type": "Grass",
+        "moves": [
+          "Magma Storm",
+          "Earth Power",
+          "Stealth Rock",
+          "Taunt"
+        ],
+        "evs": {
+          "hp": 252,
+          "atk": 0,
+          "def": 4,
+          "spa": 0,
+          "spd": 252,
+          "spe": 0
+        }
+      },
+      "team": [
+        {
+          "name": "",
+          "species": "Weavile",
+          "item": "Choice Band",
+          "ability": "Pressure",
+          "nature": "Jolly",
+          "tera_type": "Dark",
+          "moves": [
+            "Triple Axel",
+            "Knock Off",
+            "Ice Shard",
+            "Low Kick"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Annihilape",
+          "item": "Leftovers",
+          "ability": "Defiant",
+          "nature": "Jolly",
+          "tera_type": "Water",
+          "moves": [
+            "Bulk Up",
+            "Rage Fist",
+            "Drain Punch",
+            "Taunt"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Clefable",
+          "item": "Leftovers",
+          "ability": "Magic Guard",
+          "nature": "Bold",
+          "tera_type": "Steel",
+          "moves": [
+            "Moonblast",
+            "Soft-Boiled",
+            "Stealth Rock",
+            "Flamethrower"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Gliscor",
+          "item": "Toxic Orb",
+          "ability": "Poison Heal",
+          "nature": "Impish",
+          "tera_type": "Water",
+          "moves": [
+            "Earthquake",
+            "Knock Off",
+            "Protect",
+            "Toxic"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Dragonite",
+          "item": "Heavy-Duty Boots",
+          "ability": "Multiscale",
+          "nature": "Adamant",
+          "tera_type": "Normal",
+          "moves": [
+            "Extreme Speed",
+            "Dragon Dance",
+            "Earthquake",
+            "Roost"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Heatran",
+          "item": "Leftovers",
+          "ability": "Flash Fire",
+          "nature": "Calm",
+          "tera_type": "Grass",
+          "moves": [
+            "Magma Storm",
+            "Earth Power",
+            "Stealth Rock",
+            "Taunt"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        }
+      ],
+      "format": "gen9ou",
+      "generation": 9
+    },
+    {
+      "id": "slot-coach-4",
+      "label": "mono-type lead",
+      "locale": "en",
+      "set": {
+        "name": "",
+        "species": "Toxapex",
+        "item": "Black Sludge",
+        "ability": "Regenerator",
+        "nature": "Bold",
+        "tera_type": "Steel",
+        "moves": [
+          "Scald",
+          "Toxic",
+          "Recover",
+          "Haze"
+        ],
+        "evs": {
+          "hp": 252,
+          "atk": 0,
+          "def": 252,
+          "spa": 0,
+          "spd": 4,
+          "spe": 0
+        }
+      },
+      "team": [
+        {
+          "name": "",
+          "species": "Toxapex",
+          "item": "Black Sludge",
+          "ability": "Regenerator",
+          "nature": "Bold",
+          "tera_type": "Steel",
+          "moves": [
+            "Scald",
+            "Toxic",
+            "Recover",
+            "Haze"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Rotom-Wash",
+          "item": "Leftovers",
+          "ability": "Levitate",
+          "nature": "Bold",
+          "tera_type": "Fairy",
+          "moves": [
+            "Hydro Pump",
+            "Volt Switch",
+            "Will-O-Wisp",
+            "Pain Split"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Primarina",
+          "item": "Throat Spray",
+          "ability": "Liquid Voice",
+          "nature": "Modest",
+          "tera_type": "Fairy",
+          "moves": [
+            "Hyper Voice",
+            "Moonblast",
+            "Psychic",
+            "Calm Mind"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 0,
+            "def": 0,
+            "spa": 252,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Gyarados",
+          "item": "Heavy-Duty Boots",
+          "ability": "Intimidate",
+          "nature": "Adamant",
+          "tera_type": "Ground",
+          "moves": [
+            "Waterfall",
+            "Dragon Dance",
+            "Earthquake",
+            "Taunt"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Pelipper",
+          "item": "Damp Rock",
+          "ability": "Drizzle",
+          "nature": "Bold",
+          "tera_type": "Water",
+          "moves": [
+            "Scald",
+            "Hurricane",
+            "U-turn",
+            "Roost"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Dondozo",
+          "item": "Leftovers",
+          "ability": "Unaware",
+          "nature": "Impish",
+          "tera_type": "Water",
+          "moves": [
+            "Wave Crash",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        }
+      ],
+      "format": "gen9monotype",
+      "generation": 9
+    },
+    {
+      "id": "slot-coach-5",
+      "label": "German output, hazard setter",
+      "locale": "de",
+      "set": {
+        "name": "",
+        "species": "Landorus-Therian",
+        "item": "Rocky Helmet",
+        "ability": "Intimidate",
+        "nature": "Impish",
+        "tera_type": "Flying",
+        "moves": [
+          "Earthquake",
+          "U-turn",
+          "Stealth Rock",
+          "Taunt"
+        ],
+        "evs": {
+          "hp": 252,
+          "atk": 0,
+          "def": 252,
+          "spa": 0,
+          "spd": 4,
+          "spe": 0
+        }
+      },
+      "team": [
+        {
+          "name": "",
+          "species": "Great Tusk",
+          "item": "Booster Energy",
+          "ability": "Protosynthesis",
+          "nature": "Jolly",
+          "tera_type": "Steel",
+          "moves": [
+            "Headlong Rush",
+            "Close Combat",
+            "Rapid Spin",
+            "Knock Off"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Garchomp",
+          "item": "Rocky Helmet",
+          "ability": "Rough Skin",
+          "nature": "Jolly",
+          "tera_type": "Steel",
+          "moves": [
+            "Earthquake",
+            "Dragon Tail",
+            "Stealth Rock",
+            "Swords Dance"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Landorus-Therian",
+          "item": "Rocky Helmet",
+          "ability": "Intimidate",
+          "nature": "Impish",
+          "tera_type": "Flying",
+          "moves": [
+            "Earthquake",
+            "U-turn",
+            "Stealth Rock",
+            "Taunt"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Gliscor",
+          "item": "Toxic Orb",
+          "ability": "Poison Heal",
+          "nature": "Impish",
+          "tera_type": "Water",
+          "moves": [
+            "Earthquake",
+            "Knock Off",
+            "Protect",
+            "Toxic"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Excadrill",
+          "item": "Leftovers",
+          "ability": "Sand Rush",
+          "nature": "Jolly",
+          "tera_type": "Water",
+          "moves": [
+            "Earthquake",
+            "Iron Head",
+            "Rapid Spin",
+            "Swords Dance"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Hippowdon",
+          "item": "Leftovers",
+          "ability": "Sand Stream",
+          "nature": "Impish",
+          "tera_type": "Water",
+          "moves": [
+            "Earthquake",
+            "Slack Off",
+            "Stealth Rock",
+            "Yawn"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        }
+      ],
+      "format": "gen9ou",
+      "generation": 9
+    },
+    {
+      "id": "slot-coach-6",
+      "label": "defensive core piece",
+      "locale": "en",
+      "set": {
+        "name": "",
+        "species": "Ferrothorn",
+        "item": "Leftovers",
+        "ability": "Iron Barbs",
+        "nature": "Relaxed",
+        "tera_type": "Water",
+        "moves": [
+          "Spikes",
+          "Leech Seed",
+          "Power Whip",
+          "Knock Off"
+        ],
+        "evs": {
+          "hp": 252,
+          "atk": 0,
+          "def": 252,
+          "spa": 0,
+          "spd": 4,
+          "spe": 0
+        }
+      },
+      "team": [
+        {
+          "name": "",
+          "species": "Toxapex",
+          "item": "Black Sludge",
+          "ability": "Regenerator",
+          "nature": "Bold",
+          "tera_type": "Steel",
+          "moves": [
+            "Scald",
+            "Toxic",
+            "Recover",
+            "Haze"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Rotom-Wash",
+          "item": "Leftovers",
+          "ability": "Levitate",
+          "nature": "Bold",
+          "tera_type": "Fairy",
+          "moves": [
+            "Hydro Pump",
+            "Volt Switch",
+            "Will-O-Wisp",
+            "Pain Split"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Rillaboom",
+          "item": "Choice Band",
+          "ability": "Grassy Surge",
+          "nature": "Adamant",
+          "tera_type": "Fire",
+          "moves": [
+            "Grassy Glide",
+            "Wood Hammer",
+            "Knock Off",
+            "U-turn"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Ferrothorn",
+          "item": "Leftovers",
+          "ability": "Iron Barbs",
+          "nature": "Relaxed",
+          "tera_type": "Water",
+          "moves": [
+            "Spikes",
+            "Leech Seed",
+            "Power Whip",
+            "Knock Off"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Corviknight",
+          "item": "Leftovers",
+          "ability": "Pressure",
+          "nature": "Impish",
+          "tera_type": "Dragon",
+          "moves": [
+            "Brave Bird",
+            "Body Press",
+            "Defog",
+            "Roost"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Kingambit",
+          "item": "Leftovers",
+          "ability": "Supreme Overlord",
+          "nature": "Adamant",
+          "tera_type": "Dark",
+          "moves": [
+            "Kowtow Cleave",
+            "Sucker Punch",
+            "Iron Head",
+            "Swords Dance"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        }
+      ],
+      "format": "gen9ou",
+      "generation": 9
+    },
+    {
+      "id": "slot-coach-7",
+      "label": "last slot of a gym team",
+      "locale": "en",
+      "set": {
+        "name": "",
+        "species": "Scizor",
+        "item": "Choice Band",
+        "ability": "Technician",
+        "nature": "Adamant",
+        "tera_type": "Steel",
+        "moves": [
+          "Bullet Punch",
+          "U-turn",
+          "Knock Off",
+          "Close Combat"
+        ],
+        "evs": {
+          "hp": 4,
+          "atk": 252,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 252
+        }
+      },
+      "team": [
+        {
+          "name": "",
+          "species": "Kingambit",
+          "item": "Leftovers",
+          "ability": "Supreme Overlord",
+          "nature": "Adamant",
+          "tera_type": "Dark",
+          "moves": [
+            "Kowtow Cleave",
+            "Sucker Punch",
+            "Iron Head",
+            "Swords Dance"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Corviknight",
+          "item": "Leftovers",
+          "ability": "Pressure",
+          "nature": "Impish",
+          "tera_type": "Dragon",
+          "moves": [
+            "Brave Bird",
+            "Body Press",
+            "Defog",
+            "Roost"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Ferrothorn",
+          "item": "Leftovers",
+          "ability": "Iron Barbs",
+          "nature": "Relaxed",
+          "tera_type": "Water",
+          "moves": [
+            "Spikes",
+            "Leech Seed",
+            "Power Whip",
+            "Knock Off"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 252,
+            "spa": 0,
+            "spd": 4,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Heatran",
+          "item": "Leftovers",
+          "ability": "Flash Fire",
+          "nature": "Calm",
+          "tera_type": "Grass",
+          "moves": [
+            "Magma Storm",
+            "Earth Power",
+            "Stealth Rock",
+            "Taunt"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Gholdengo",
+          "item": "Air Balloon",
+          "ability": "Good as Gold",
+          "nature": "Timid",
+          "tera_type": "Fairy",
+          "moves": [
+            "Make It Rain",
+            "Shadow Ball",
+            "Nasty Plot",
+            "Recover"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 0,
+            "def": 0,
+            "spa": 252,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Scizor",
+          "item": "Choice Band",
+          "ability": "Technician",
+          "nature": "Adamant",
+          "tera_type": "Steel",
+          "moves": [
+            "Bullet Punch",
+            "U-turn",
+            "Knock Off",
+            "Close Combat"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        }
+      ],
+      "format": "gen9ou",
+      "generation": 9
+    },
+    {
+      "id": "slot-coach-8",
+      "label": "national dex",
+      "locale": "en",
+      "set": {
+        "name": "",
+        "species": "Skeledirge",
+        "item": "Heavy-Duty Boots",
+        "ability": "Unaware",
+        "nature": "Bold",
+        "tera_type": "Water",
+        "moves": [
+          "Torch Song",
+          "Slack Off",
+          "Hex",
+          "Will-O-Wisp"
+        ],
+        "evs": {
+          "hp": 252,
+          "atk": 0,
+          "def": 4,
+          "spa": 0,
+          "spd": 252,
+          "spe": 0
+        }
+      },
+      "team": [
+        {
+          "name": "",
+          "species": "Heatran",
+          "item": "Leftovers",
+          "ability": "Flash Fire",
+          "nature": "Calm",
+          "tera_type": "Grass",
+          "moves": [
+            "Magma Storm",
+            "Earth Power",
+            "Stealth Rock",
+            "Taunt"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Skeledirge",
+          "item": "Heavy-Duty Boots",
+          "ability": "Unaware",
+          "nature": "Bold",
+          "tera_type": "Water",
+          "moves": [
+            "Torch Song",
+            "Slack Off",
+            "Hex",
+            "Will-O-Wisp"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Ceruledge",
+          "item": "Life Orb",
+          "ability": "Weak Armor",
+          "nature": "Adamant",
+          "tera_type": "Ghost",
+          "moves": [
+            "Bitter Blade",
+            "Shadow Sneak",
+            "Swords Dance",
+            "Poltergeist"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Torkoal",
+          "item": "Heat Rock",
+          "ability": "Drought",
+          "nature": "Bold",
+          "tera_type": "Fire",
+          "moves": [
+            "Lava Plume",
+            "Stealth Rock",
+            "Rapid Spin",
+            "Yawn"
+          ],
+          "evs": {
+            "hp": 252,
+            "atk": 0,
+            "def": 4,
+            "spa": 0,
+            "spd": 252,
+            "spe": 0
+          }
+        },
+        {
+          "name": "",
+          "species": "Volcarona",
+          "item": "Heavy-Duty Boots",
+          "ability": "Flame Body",
+          "nature": "Timid",
+          "tera_type": "Water",
+          "moves": [
+            "Quiver Dance",
+            "Fiery Dance",
+            "Bug Buzz",
+            "Giga Drain"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 0,
+            "def": 0,
+            "spa": 252,
+            "spd": 0,
+            "spe": 252
+          }
+        },
+        {
+          "name": "",
+          "species": "Talonflame",
+          "item": "Heavy-Duty Boots",
+          "ability": "Gale Wings",
+          "nature": "Jolly",
+          "tera_type": "Fire",
+          "moves": [
+            "Brave Bird",
+            "Flare Blitz",
+            "Swords Dance",
+            "Roost"
+          ],
+          "evs": {
+            "hp": 4,
+            "atk": 252,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 252
+          }
+        }
+      ],
+      "format": "gen9nationaldex",
+      "generation": 9
+    }
+  ]
+}
