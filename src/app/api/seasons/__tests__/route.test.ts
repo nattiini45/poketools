@@ -119,6 +119,11 @@ const resourceAdminPlayer = {
   status: 'active' as const,
 };
 
+/** The actions passed to the mocked `logAuditEvent` so far, in order. */
+function loggedActions(): string[] {
+  return vi.mocked(logAuditEvent).mock.calls.map(([logged]) => logged.action);
+}
+
 describe('GET /api/seasons', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -400,6 +405,42 @@ describe('POST /api/seasons', () => {
     }
   });
 
+  it('logs season.create with the actor and the new league', async () => {
+    const created = { ...mockSeason, id: 'season-new', name: 'Spring League' };
+    vi.mocked(requireAnyAdmin).mockResolvedValue(adminPlayer);
+    vi.mocked(createSeason).mockResolvedValue(created);
+
+    const request = {
+      json: vi.fn().mockResolvedValue({ name: 'Spring League', format_type: 'singles' }),
+    } as unknown as NextRequest;
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith({
+      actor_id: 'admin-1',
+      actor_name: 'Admin',
+      action: 'season.create',
+      resource_type: 'season',
+      resource_id: 'season-new',
+      resource_name: 'Spring League',
+      metadata: { format_type: 'singles', ruleset_id: null, clone_from: null },
+    });
+  });
+
+  it('logs no creation event when the create fails or the body is invalid', async () => {
+    vi.mocked(requireAnyAdmin).mockResolvedValue(adminPlayer);
+    vi.mocked(createSeason).mockRejectedValue(new Error('DB error'));
+
+    await POST({
+      json: vi.fn().mockResolvedValue({ name: 'Season One', format_type: 'singles' }),
+    } as unknown as NextRequest);
+    await POST({ json: vi.fn().mockResolvedValue({ format_type: 'singles' }) } as unknown as NextRequest);
+
+    expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalled();
+  });
+
   it('returns 500 on unexpected error', async () => {
     vi.mocked(requireAnyAdmin).mockResolvedValue(adminPlayer);
     vi.mocked(createSeason).mockRejectedValue(new Error('DB error'));
@@ -475,7 +516,7 @@ describe('POST /api/seasons — EPB point-buy list auto-bind', () => {
       expect(response.status).toBe(201);
       expect(body.success).toBe(true);
       expect(vi.mocked(bindSeasonToList)).not.toHaveBeenCalled();
-      expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalled();
+      expect(loggedActions()).toEqual(['season.create']);
       expect(warnSpy).toHaveBeenCalled();
     } finally {
       warnSpy.mockRestore();
@@ -493,7 +534,7 @@ describe('POST /api/seasons — EPB point-buy list auto-bind', () => {
 
       expect(response.status).toBe(201);
       expect(body.success).toBe(true);
-      expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalled();
+      expect(loggedActions()).toEqual(['season.create']);
       expect(errorSpy).toHaveBeenCalled();
     } finally {
       errorSpy.mockRestore();
@@ -515,8 +556,8 @@ describe('POST /api/seasons — EPB point-buy list auto-bind', () => {
         format_type: 'evolution_point_buy',
         ruleset_id: packRuleset.id,
       });
-      // Reused row: nothing to audit.
-      expect(logAuditEvent).not.toHaveBeenCalled();
+      // Reused row: no ruleset event, only the league's own creation.
+      expect(loggedActions()).toEqual(['season.create']);
     } finally {
       warnSpy.mockRestore();
     }

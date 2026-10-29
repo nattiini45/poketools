@@ -6,6 +6,8 @@ The AI Agent is PokéTools' multi-persona, tool-using competitive assistant. Unl
 
 It is server-side only (Anthropic SDK + OpenAI-compatible providers), per the AI hard rule in `CLAUDE.md`.
 
+The **Admin Assistant** (`src/lib/ai/admin-agent/`, spec section 18 of [the PokéTools spec](./poketools-spec.md)) is a separate system with its own loop, registry and tables; it reuses nothing of this agent.
+
 ### File Structure
 
 - **Main Entry Point**: `src/lib/ai/agent/orchestrator.ts` (`runAgent`)
@@ -50,7 +52,7 @@ The 10 LLM tools: `lookupPokemon`, `getTypeChart`, `getLearnset`, `calculateDama
 
 ### Models (default escalation order)
 
-`mimo-v2.6-pro` (T0) → `deepseek-v4-pro` (T0) → `minimax-m3` (T0-V vision) → `claude-haiku-4-5` (T2) → `claude-sonnet-4-6` (T2). A player's stored `model_priority` reorders this; `AGENT_DEFAULT_MODEL` floats one id to the front of the built-in registry. Only configured providers (API key + base URL, or `CLAUDE_API_KEY` for Anthropic) remain in the chain.
+`mimo-v2.6-pro` (T0) → `deepseek-v4-pro` (T0) → `minimax-m3` (T0-V vision) → `claude-haiku-4-5` (T2) → `claude-sonnet-4-6` (T2). A player's stored `model_priority` reorders this; `AGENT_DEFAULT_MODEL` floats one id to the front of the built-in registry. Only configured providers (API key + base URL, or `ANTHROPIC_API_KEY` for Anthropic) remain in the chain.
 
 ### Data Flows
 

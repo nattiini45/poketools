@@ -33,18 +33,18 @@ const TOUR_OVERLAY_UNAVAILABLE = { path: ['tour_overlay'], message: 'This preset
  * from a catalog preset (`preset`, a format id such as `gen9ou` or `gen9natdexdraft`). `tour_overlay` adds the preset's
  * documented Smogon tour clauses and bans as ordinary editable entries; it needs a preset that has them.
  */
-export const rulesetCreateSchema = z.union([
-  z.strictObject({ document: documentSchema, slug: slugSchema.optional() }),
-  z
-    .strictObject({
-      name: definitionNameSchema,
-      base_locale: z.enum(['en', 'de']),
-      preset: z.string().refine(isRulesetPresetId, { message: 'Unknown rule preset' }).optional(),
-      tour_overlay: z.boolean().optional(),
-      slug: slugSchema.optional(),
-    })
-    .refine((body) => body.tour_overlay !== true || hasTourOverlay(body.preset), TOUR_OVERLAY_UNAVAILABLE),
-]);
+export const rulesetCreateFromDocumentSchema = z.strictObject({ document: documentSchema, slug: slugSchema.optional() });
+/** The name form of the create body (the one the Admin Assistant sends; exported so its binding derives from the route's own object). */
+export const rulesetCreateFromNameSchema = z
+  .strictObject({
+    name: definitionNameSchema,
+    base_locale: z.enum(['en', 'de']),
+    preset: z.string().refine(isRulesetPresetId, { message: 'Unknown rule preset' }).optional(),
+    tour_overlay: z.boolean().optional(),
+    slug: slugSchema.optional(),
+  })
+  .refine((body) => body.tour_overlay !== true || hasTourOverlay(body.preset), TOUR_OVERLAY_UNAVAILABLE);
+export const rulesetCreateSchema = z.union([rulesetCreateFromDocumentSchema, rulesetCreateFromNameSchema]);
 export type RulesetCreateBody = z.infer<typeof rulesetCreateSchema>;
 
 /** `PUT /api/ruleset-definitions/[id]/draft` */

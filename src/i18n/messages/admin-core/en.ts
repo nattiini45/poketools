@@ -97,6 +97,7 @@ const auditActions = {
   season__auto_bind_point_buy_list: 'Point-buy list bound automatically',
   season__auto_create_battle_ruleset: 'Battle ruleset created automatically',
   season__clear_battle_ruleset_bans: 'Bans cleared from the automatic battle ruleset',
+  season__create: 'League created',
   season__update: 'League settings changed',
   season__clone: 'League created from another league',
   season__clone_failed: 'League copy failed',
@@ -125,6 +126,15 @@ const auditActions = {
   draft__pick_order__free: 'Draft switched to free order',
   draft__pool__delete: 'Draft deleted before it started',
   draft__order__roll: 'Draft order rolled',
+  agent__propose: 'Assistant proposed a plan',
+  agent__approve: 'Assistant plan approved',
+  agent__decline: 'Assistant plan declined',
+  agent__expire: 'Assistant plan expired',
+  agent__step__execute: 'Assistant step carried out',
+  agent__step__fail: 'Assistant step failed',
+  agent__step__unknown: 'Assistant step with unknown outcome',
+  agent__draft__write: 'Assistant saved a draft',
+  agent__budget__block: 'Assistant stopped by its usage limit',
 } as const satisfies Record<AuditActionKey, string>;
 
 export default {

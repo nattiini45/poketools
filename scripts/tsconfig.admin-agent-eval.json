@@ -1,0 +1,19 @@
+{
+  "$comment": "Run-only tsconfig for scripts/admin-agent-eval.ts (plan 7.2). Modelled on tsconfig.example.json, not on tsconfig.audit.json: `@format-pack` and `@pack-extensions` are pinned to the public EXAMPLE pack (tsx never reads FORMAT_PACK, and the audit config lists the private pack first), so a maintainer checkout cannot load the private pack into a run that sends data to a model API. `server-only` maps to the no-op stub the tests use. `@/auth` maps to an eval stub: the plan stage answers its reads from the fixture world, so no guard runs and it signs nobody in; the local-stack stages install a synthetic session and a player reader on it, so the real guards run against the local `players` table. `next/cache`, the Discord sender and the social sender map to RECORDERS (src/lib/ai/admin-agent/eval/stubs/): nothing is sent or revalidated, and the grader reads what they recorded. The root tsconfig is untouched; `tsc --noEmit` does not use this file. A test (`eval/__tests__/eval-static.test.ts`) fails when this file lets a private path in.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "paths": {
+      "@/auth": ["../src/lib/ai/admin-agent/eval/stubs/auth.ts"],
+      "@/lib/discord/notify": ["../src/lib/ai/admin-agent/eval/stubs/discord-notify.ts"],
+      "@/lib/social/notify": ["../src/lib/ai/admin-agent/eval/stubs/social-notify.ts"],
+      "@/*": ["../src/*"],
+      "@format-pack": ["../src/format-packs/example"],
+      "@pack-extensions": ["../src/format-packs/example/extensions"],
+      "server-only": ["../src/test/server-only-stub.ts"],
+      "next/cache": ["../src/lib/ai/admin-agent/eval/stubs/next-cache.ts"]
+    }
+  },
+  "include": ["./admin-agent-eval.ts"]
+}

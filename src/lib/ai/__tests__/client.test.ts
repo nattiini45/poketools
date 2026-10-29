@@ -4,7 +4,7 @@ import { AnthropicError, APIConnectionError, APIError, APIUserAbortError } from 
 // ─── Set env before module loads ───────────────────────────────────
 
 vi.hoisted(() => {
-  process.env.CLAUDE_API_KEY = 'test-key';
+  process.env.ANTHROPIC_API_KEY = 'test-key';
 });
 
 // ─── Mocks ─────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import Anthropic, { AnthropicError, APIConnectionError, APIError, APIUserAbortError } from '@anthropic-ai/sdk';
 import { initLogger, wrapAnthropic } from 'braintrust';
 import { logger } from '@/lib/logger';
+import { anthropicApiKey } from './api-key';
 import { getClaudeFallbackModelId, getClaudeModelId } from './constants';
 import {
   EmptyModelResponseError,
@@ -15,7 +16,6 @@ import { logAiUsage, normalizeAnthropicUsage } from './usage-log';
 
 // ─── Configuration ──────────────────────────────────────────────────
 
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY ?? '';
 const BRAINTRUST_API_KEY = process.env.BRAINTRUST_API_KEY ?? '';
 
 // ─── Braintrust Observability ───────────────────────────────────────
@@ -56,10 +56,11 @@ let _client: Anthropic | null = null;
 
 function getClient(): Anthropic {
   if (!_client) {
-    if (!CLAUDE_API_KEY) {
-      throw new Error('CLAUDE_API_KEY environment variable is required');
+    const apiKey = anthropicApiKey();
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is required');
     }
-    const anthropic = new Anthropic({ apiKey: CLAUDE_API_KEY });
+    const anthropic = new Anthropic({ apiKey });
     _client = BRAINTRUST_API_KEY ? wrapAnthropic(anthropic) : anthropic;
   }
   return _client;

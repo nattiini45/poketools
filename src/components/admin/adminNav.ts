@@ -5,7 +5,10 @@
  *
  * Visibility mirrors the API guards: `siteAdminOnly` items require full
  * `isAdmin`, `superadminOnly` requires `isSuperadmin`; everything else is
- * available to any admin (including resource admins).
+ * available to any admin (including resource admins). An `assistant` item
+ * (the Admin Assistant) also needs `AdminRoles.assistantEnabled`, which the
+ * admin layout derives from the live role (the public flag, the server switch
+ * and the audience), so it never shows where the assistant would answer 404.
  *
  * Labels are keys of `shell.admin.groups` / `shell.admin.items`
  * (`src/i18n/messages/shell`), translated where the nav renders. Pages a pack
@@ -26,6 +29,8 @@ export interface AdminNavItem {
   deprecated?: boolean;
   /** Secondary destinations rendered indented under a primary item. */
   sub?: boolean;
+  /** The Admin Assistant: shown only while `AdminRoles.assistantEnabled` is true. */
+  assistant?: boolean;
 }
 
 export interface AdminNavGroup {
@@ -65,6 +70,7 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
       { href: '/admin/matches', labelKey: 'matches' },
       { href: '/admin/rulesets', labelKey: 'rulesets' },
       { href: '/admin/formats', labelKey: 'formats' },
+      { href: '/admin/assistant', labelKey: 'assistant', assistant: true },
     ],
   },
   {
@@ -96,9 +102,15 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
 export interface AdminRoles {
   isSiteAdmin: boolean;
   isSuperadmin: boolean;
+  /** The Admin Assistant is on for this viewer (see `agentEnabledFor`); unset means off. */
+  assistantEnabled?: boolean;
 }
 
-function mayOpen(item: { siteAdminOnly?: boolean; superadminOnly?: boolean }, roles: AdminRoles): boolean {
+function mayOpen(
+  item: { siteAdminOnly?: boolean; superadminOnly?: boolean; assistant?: boolean },
+  roles: AdminRoles,
+): boolean {
+  if (item.assistant && roles.assistantEnabled !== true) return false;
   if (item.superadminOnly) return roles.isSuperadmin;
   if (item.siteAdminOnly) return roles.isSiteAdmin;
   return true;

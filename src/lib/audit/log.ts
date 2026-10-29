@@ -10,6 +10,7 @@
 
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/types/database';
+import { getAgentAuditContext } from './agent-context';
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -90,6 +91,7 @@ export type AuditAction =
   | 'season.auto_bind_point_buy_list'
   | 'season.auto_create_battle_ruleset'
   | 'season.clear_battle_ruleset_bans'
+  | 'season.create'
   | 'season.update'
   | 'season.clone'
   | 'season.clone_failed'
@@ -118,6 +120,17 @@ export type AuditAction =
   | 'draft.pick_order.free'
   | 'draft.pool.delete'
   | 'draft.order.roll'
+  // The Admin Assistant's own events (docs/poketools-spec.md §18, "Audit"); the routes it
+  // dispatches write their usual events, tagged through the agent audit context.
+  | 'agent.propose'
+  | 'agent.approve'
+  | 'agent.decline'
+  | 'agent.expire'
+  | 'agent.step.execute'
+  | 'agent.step.fail'
+  | 'agent.step.unknown'
+  | 'agent.draft.write'
+  | 'agent.budget.block'
   // Actions of a pack extension's own routes (docs/format-packs.md, "Pack extensions"). They have
   // no `auditActions` label: the extension labels them (`auditActionLabels`, localized), and the
   // audit log humanizes any it leaves out (`auditActionLabel`).
@@ -152,6 +165,14 @@ export interface AuditLogEntry {
  *   });
  */
 export function logAuditEvent(entry: AuditLogEntry): void {
+  // Inside an Admin Assistant dispatch, the event carries the agent's provenance. It wins over
+  // the route's own metadata, so a route cannot claim or hide `via: 'agent'`. Outside one, the
+  // metadata is passed through untouched.
+  const agentContext = getAgentAuditContext();
+  const metadata = agentContext
+    ? { ...entry.metadata, ...definedFields(agentContext), via: 'agent' }
+    : entry.metadata;
+
   // Fire-and-forget: catch all errors so the caller is never disrupted
   const row: Database['public']['Tables']['audit_log']['Insert'] = {
     actor_id: entry.actor_id,
@@ -161,7 +182,7 @@ export function logAuditEvent(entry: AuditLogEntry): void {
     resource_id: entry.resource_id,
     resource_name: entry.resource_name ?? null,
     changes: entry.changes as unknown as Database['public']['Tables']['audit_log']['Insert']['changes'],
-    metadata: entry.metadata as unknown as Database['public']['Tables']['audit_log']['Insert']['metadata'],
+    metadata: metadata as unknown as Database['public']['Tables']['audit_log']['Insert']['metadata'],
     ip_address: entry.ip_address ?? null,
   };
   try {
@@ -181,6 +202,11 @@ export function logAuditEvent(entry: AuditLogEntry): void {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
+
+/** The own fields of `fields` that are not `undefined` (an unset optional context field adds no key). */
+function definedFields(fields: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
+}
 
 /** Add a before/after diff for a field if values differ. Mutates changes. */
 export function diffField(

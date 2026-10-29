@@ -52,6 +52,7 @@ export default defineDe<typeof en>()({
       matches: 'Spiele',
       rulesets: 'Regelwerke',
       formats: 'Formate',
+      assistant: 'Assistent',
       players: 'Spielerliste',
       achievements: 'Erfolge',
       wiki: 'Wiki-Moderation',

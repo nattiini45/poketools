@@ -10,6 +10,7 @@ import type {
 } from '@/types/social';
 import { decryptJson } from './crypto';
 import { formatSocialPost } from './format';
+import { matchesEventFilter } from './matchers';
 import { publishToProvider } from './providers';
 
 /**
@@ -44,14 +45,6 @@ async function emitAsync(payload: SocialEventPayload): Promise<void> {
   } catch (err) {
     console.error('[Social] Failed to emit event:', payload.event_type, err instanceof Error ? err.message : String(err));
   }
-}
-
-function matchesEventFilter(
-  integration: SocialIntegrationWithSecrets,
-  eventType: SocialEventPayload['event_type'],
-): boolean {
-  if (integration.event_filter.length === 0) return true;
-  return integration.event_filter.includes(eventType);
 }
 
 function parseCredentials(integration: SocialIntegrationWithSecrets): SocialCredentials | null {

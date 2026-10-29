@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { LanguageModel } from 'ai';
+import { anthropicApiKey } from '../api-key';
 
 /**
  * AI Agent provider helper (PRD §2 — Model Tiering).
@@ -123,11 +124,11 @@ export const AGENT_MODELS: readonly AgentModelEntry[] = orderByDefault(BUILTIN_M
 /**
  * True when the env vars this model needs are all non-empty. OpenAI-compatible
  * providers require both an API key and a base URL; Anthropic requires only
- * `CLAUDE_API_KEY`.
+ * `ANTHROPIC_API_KEY` (or the deprecated `CLAUDE_API_KEY`).
  */
 export function isModelConfigured(config: AgentModelConfig): boolean {
   if (config.provider === 'anthropic') {
-    return envValue('CLAUDE_API_KEY').length > 0;
+    return anthropicApiKey().length > 0;
   }
   const { apiKeyVar, baseUrlVar } = COMPAT_ENV[config.provider];
   return envValue(apiKeyVar).length > 0 && envValue(baseUrlVar).length > 0;
@@ -142,9 +143,9 @@ export function isModelConfigured(config: AgentModelConfig): boolean {
  */
 export function createCompatibleModel(config: AgentModelConfig): LanguageModel {
   if (config.provider === 'anthropic') {
-    const apiKey = envValue('CLAUDE_API_KEY');
+    const apiKey = anthropicApiKey();
     if (!apiKey) {
-      throw new Error('CLAUDE_API_KEY is required for the Anthropic agent tier');
+      throw new Error('ANTHROPIC_API_KEY is required for the Anthropic agent tier');
     }
     return createAnthropic({ apiKey })(config.modelName);
   }

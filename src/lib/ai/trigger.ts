@@ -1,3 +1,4 @@
+import { anthropicApiKey } from './api-key';
 import { generateTournamentReportAsync } from './tournament-report-generator';
 import type { TournamentReportType } from '@/types/tournament-report';
 
@@ -10,7 +11,7 @@ export function triggerTournamentReport(
   roundId: string,
   reportType: TournamentReportType
 ): void {
-  if (!process.env.KALE_API_KEY && !process.env.CLAUDE_API_KEY) return;
+  if (!process.env.KALE_API_KEY && !anthropicApiKey()) return;
 
   generateTournamentReportAsync(tournamentId, roundId, reportType).catch((err) => {
     console.error(`[ai/trigger] Failed to trigger ${reportType}:`, err);
@@ -30,7 +31,7 @@ export function triggerMatchAnalysis(
     ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
   // Only trigger if the AI feature is configured
-  if (!process.env.CLAUDE_API_KEY) return;
+  if (!anthropicApiKey()) return;
 
   fetch(`${baseUrl}/api/ai/match-analysis`, {
     method: 'POST',
