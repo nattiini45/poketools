@@ -169,7 +169,7 @@ describe('POST /api/teams/ai/slot-coach — input validation and failures', () =
 
   it.each([
     ['a refusal', () => new RefusalError('claude-sonnet-4-6'), 422, 'ai_output_refused'],
-    ['a rejected request', () => new ModelRejectedError('claude-sonnet-4-6', 400, 'invalid_request_error'), 502, 'ai_service_unavailable'],
+    ['a rejected request', () => new ModelRejectedError('claude-sonnet-4-6', 400, 'invalid_request_error'), 502, 'ai_request_rejected'],
   ])('answers %s with its own status and code', async (_label, makeError, status, code) => {
     vi.mocked(complete).mockRejectedValue(makeError());
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

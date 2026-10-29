@@ -1,9 +1,9 @@
 /**
  * What a Claude model id accepts on the raw Messages API.
  *
- * The legacy client sends `temperature: 0.2` on every request. Newer models reject sampling
- * parameters with a 400 (the 5.x family and Opus 4.7 or later), so the value is sent only to
- * ids known to accept it. An id this module cannot parse is treated as "rejects": omitting
+ * The legacy client historically sent `temperature: 0.2` on every request. Newer models reject
+ * sampling parameters with a 400 (the 5.x family and Opus 4.7 or later), so the value is now sent
+ * only to ids known to accept it. An id this module cannot parse is treated as "rejects": omitting
  * `temperature` is always valid, while sending it to a model that refuses it is a hard failure
  * that the fallback ladder would otherwise paper over.
  *

@@ -118,8 +118,8 @@ describe('describeAiFailure', () => {
       stored: 'ai_output_refused: bio on m',
     });
     expect(describeAiFailure(new ModelRejectedError('m', 401, 'authentication_error'), fallback)).toMatchObject({
-      code: 'ai_service_unavailable',
-      stored: 'ai_service_unavailable: HTTP 401 authentication_error on m',
+      code: 'ai_request_rejected',
+      stored: 'ai_request_rejected: HTTP 401 authentication_error on m',
     });
   });
 
@@ -135,6 +135,23 @@ describe('describeAiFailure', () => {
   it('records only the status of an upstream error, not its message', () => {
     const upstream = Object.assign(new Error('private provider text'), { status: 529 });
     expect(describeAiFailure(upstream, fallback).stored).toBe('ai_analysis_failed: upstream HTTP 529');
+  });
+
+  it('reads an AI SDK statusCode the same way', () => {
+    const upstream = Object.assign(new Error('private provider text'), { statusCode: 503 });
+    expect(describeAiFailure(upstream, fallback).stored).toBe('ai_analysis_failed: upstream HTTP 503');
+  });
+
+  it('never stores the message of an untyped error, which can quote model output', () => {
+    let parseError: unknown;
+    try {
+      JSON.parse('Here is my analysis of the match');
+    } catch (err) {
+      parseError = err;
+    }
+    const described = describeAiFailure(parseError, fallback);
+    expect(described.stored).toBe('ai_analysis_failed: SyntaxError');
+    expect(described.stored).not.toContain('analysis of the match');
   });
 });
 

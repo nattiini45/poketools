@@ -553,7 +553,7 @@ describe('POST /api/ai/match-analysis — hardening', () => {
     [
       'a rejected request',
       () => new ModelRejectedError('claude-sonnet-4-6', 400, 'invalid_request_error'),
-      { code: 'ai_service_unavailable', stored: 'ai_service_unavailable: HTTP 400 invalid_request_error on claude-sonnet-4-6' },
+      { code: 'ai_request_rejected', stored: 'ai_request_rejected: HTTP 400 invalid_request_error on claude-sonnet-4-6' },
     ],
   ])('maps %s to its own code, safe message and stable stored error', async (_label, makeError, expected) => {
     arrange();

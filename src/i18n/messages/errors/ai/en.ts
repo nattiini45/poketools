@@ -35,7 +35,7 @@ export default {
   // cap, the model declined, or the provider rejected the request itself
   ai_output_truncated: 'The AI response was cut off before it was complete — please try again.',
   ai_output_refused: 'The AI declined to produce this response.',
-  ai_service_unavailable: 'The AI service is not available right now — please try again later.',
+  ai_request_rejected: 'The AI service rejected this request, so trying again will not help. Please tell a site admin.',
 
   // Agent settings
   ai_model_ids_unknown: 'Unrecognized model ID: {ids}',

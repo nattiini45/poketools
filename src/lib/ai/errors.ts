@@ -46,14 +46,14 @@ export class RefusalError extends UserFacingError<'ai_output_refused'> {
  * credential or permission problem, an unknown model id. Asking another model with the same
  * request and key does not help, so this is surfaced instead of falling back.
  */
-export class ModelRejectedError extends UserFacingError<'ai_service_unavailable'> {
+export class ModelRejectedError extends UserFacingError<'ai_request_rejected'> {
   readonly model: string;
   readonly upstreamStatus: number | null;
   /** The provider's `error.type` (for example `invalid_request_error`), or null. */
   readonly upstreamType: string | null;
 
   constructor(model: string, upstreamStatus: number | null, upstreamType: string | null, cause?: unknown) {
-    super(aiMessages.ai_service_unavailable, { code: 'ai_service_unavailable', status: 502 });
+    super(aiMessages.ai_request_rejected, { code: 'ai_request_rejected', status: 502 });
     this.name = 'ModelRejectedError';
     this.model = model;
     this.upstreamStatus = upstreamStatus;

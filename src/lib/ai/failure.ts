@@ -22,12 +22,12 @@ export interface AiFailureFallback {
   message: string;
 }
 
-const MAX_CAUSE_LENGTH = 160;
-
+/**
+ * The error's class name only. Messages are never stored: a JSON parse error quotes the model's
+ * output and provider errors quote the provider; both stay in the caller's console line.
+ */
 function shortCause(err: unknown): string {
-  const raw = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  const flat = raw.replace(/\s+/g, ' ').trim();
-  return flat.length > MAX_CAUSE_LENGTH ? `${flat.slice(0, MAX_CAUSE_LENGTH)}…` : flat;
+  return err instanceof Error ? err.name.slice(0, 60) : typeof err;
 }
 
 /** The upstream status of an SDK or AI SDK error, or null. */
@@ -55,9 +55,9 @@ export function describeAiFailure(err: unknown, fallback: AiFailureFallback): Ai
   }
   if (err instanceof ModelRejectedError) {
     return {
-      code: 'ai_service_unavailable',
+      code: 'ai_request_rejected',
       message: err.message,
-      stored: `ai_service_unavailable: HTTP ${err.upstreamStatus ?? '?'} ${err.upstreamType ?? 'unknown'} on ${err.model}`,
+      stored: `ai_request_rejected: HTTP ${err.upstreamStatus ?? '?'} ${err.upstreamType ?? 'unknown'} on ${err.model}`,
     };
   }
   const status = upstreamStatus(err);

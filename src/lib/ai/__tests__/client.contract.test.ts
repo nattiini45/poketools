@@ -11,7 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 vi.hoisted(() => {
-  process.env.CLAUDE_API_KEY = 'test-key';
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  delete process.env.CLAUDE_API_KEY;
 });
 
 vi.mock('braintrust', () => ({

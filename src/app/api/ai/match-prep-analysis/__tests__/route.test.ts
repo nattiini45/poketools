@@ -513,7 +513,7 @@ describe('POST /api/ai/match-prep-analysis — hardening', () => {
     [
       'a rejected request',
       () => new ModelRejectedError('claude-sonnet-4-6', 401, 'authentication_error'),
-      { code: 'ai_service_unavailable', stored: 'ai_service_unavailable: HTTP 401 authentication_error on claude-sonnet-4-6' },
+      { code: 'ai_request_rejected', stored: 'ai_request_rejected: HTTP 401 authentication_error on claude-sonnet-4-6' },
     ],
   ])('maps %s to its own code, safe message and stable stored error', async (_label, makeError, expected) => {
     arrange();
