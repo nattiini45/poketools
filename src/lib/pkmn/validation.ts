@@ -127,7 +127,8 @@ export function readSet(raw: unknown): ReadSet | null {
     species,
     item: typeof item === 'string' ? item : '',
     ability: typeof ability === 'string' ? ability : '',
-    moves: (moves as string[] | undefined | null) ?? [],
+    // The editor keeps a fixed four-slot move array: an empty or blank slot is no move at all.
+    moves: ((moves as string[] | undefined | null) ?? []).filter((m) => m.trim() !== ''),
     evs: isRecord(evs) ? evs : {},
     ivs: isRecord(ivs) ? ivs : {},
     level,

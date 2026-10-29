@@ -208,3 +208,26 @@ describe('validateTeam: the shared team check (same rules as the editor)', () =>
     expect(Object.keys(result.issues[0]).sort()).toEqual(['issue', 'pokemon_index', 'severity', 'species']);
   });
 });
+
+describe('validateTeam through the dispatcher: never cached', () => {
+  it('runs again for an identical call, so changed league state or a recovered ruleset read is seen', async () => {
+    const { executeTool, __clearToolResultCache } = await import('../execute');
+    __clearToolResultCache();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const input = { format: 'gen9ou', ruleset_id: 'rs-1', team: [legalGarchomp] };
+
+    // First the ruleset read fails (a transient fault), then it recovers.
+    vi.mocked(readExposedRuleset).mockRejectedValueOnce(new Error('db blip'));
+    vi.mocked(readExposedRuleset).mockResolvedValueOnce(buildRuleset({ base_format: 'gen9ou' }));
+
+    const first = await executeTool('validateTeam', input);
+    const second = await executeTool('validateTeam', input);
+
+    expect(readExposedRuleset).toHaveBeenCalledTimes(2);
+    expect(first.ok && first.data).toMatchObject({ valid: false, ruleset_source: { fallback: 'ruleset_load_failed' } });
+    expect(second.ok && second.data).toMatchObject({ valid: true, ruleset_source: { kind: 'ruleset' } });
+    expect(second.ok && second.cached).toBeFalsy();
+    log.mockRestore();
+    vi.mocked(readExposedRuleset).mockReset();
+  });
+});

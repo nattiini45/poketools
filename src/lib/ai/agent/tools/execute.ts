@@ -35,8 +35,12 @@ function timeoutFor(name: string): number {
   return TIMEOUT_BY_TOOL[name] ?? DEFAULT_TIMEOUT_MS;
 }
 
-/** Tools whose results must not be cached (side effects / non-idempotent). */
-const NO_CACHE = new Set(['buildTeam', 'createPokepaste']);
+/**
+ * Tools whose results must not be cached: side effects (`createPokepaste`), too coarse to share (`buildTeam`), or
+ * answers that depend on mutable state outside the input (`validateTeam`: the roster, trackers, assigned core and the
+ * ruleset read change, and a transient `ruleset_load_failed` must not stick for five minutes).
+ */
+const NO_CACHE = new Set(['buildTeam', 'createPokepaste', 'validateTeam']);
 
 export type ExecuteToolResult =
   | { ok: true; data: unknown; cached?: boolean }

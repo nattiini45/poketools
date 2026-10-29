@@ -165,6 +165,16 @@ function teraOnlyRow(tera_rules: TeraRules) {
 }
 
 describe('validateEpbTeam (pure core)', () => {
+  it('accepts a three-move set the editor saved with an empty fourth slot (the match-prep gate)', () => {
+    const result = validateEpbTeam(
+      [makeSet({ species: 'Garchomp', moves: ['Earthquake', 'Dragon Claw', 'Swords Dance', ''] })],
+      { bannedMoves: ['Baton Pass'], bannedItems: [], teraRules: STAGE2_STAB_ONLY, stageByIndex: [null] },
+    );
+
+    expect(result.issues).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
   it('flags a banned move present in a set', () => {
     const result = validateEpbTeam(
       [makeSet({ species: 'Garchomp', moves: ['Earthquake', 'Baton Pass'] })],

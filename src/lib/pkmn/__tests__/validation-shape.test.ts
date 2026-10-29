@@ -85,6 +85,24 @@ describe('validateTeam: a set that is not a well-formed set never throws', () =>
   });
 });
 
+describe('validateTeam: empty move slots (the editor keeps a fixed four-slot array)', () => {
+  it('ignores empty and blank slots: one real move in four slots is a legal set', () => {
+    const result = validateTeam([makeSet('Garchomp', { moves: ['Earthquake', '', '  ', ''] })], OU);
+    expect(result.valid).toBe(true);
+    expect(codesOf(result)).toEqual([]);
+  });
+
+  it('four empty slots are "no move" (min_moves) and nothing else: no unknown move, no max_moves', () => {
+    const result = validateTeam([makeSet('Garchomp', { moves: ['', '', '', ''] })], OU);
+    expect(codesOf(result)).toEqual(['min_moves']);
+  });
+
+  it('does not count empty slots towards the four-move cap or as duplicates', () => {
+    const result = validateTeam([makeSet('Garchomp', { moves: ['Earthquake', 'Dragon Claw', 'Swords Dance', 'Stealth Rock', '', ''] })], OU);
+    expect(codesOf(result)).toEqual([]);
+  });
+});
+
 describe('validateTeam: duplicate moves', () => {
   it('flags a move named twice', () => {
     const result = validateTeam([makeSet('Garchomp', { moves: ['Earthquake', 'Dragon Claw', 'Earthquake'] })], OU);
