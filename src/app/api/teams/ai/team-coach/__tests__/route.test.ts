@@ -114,6 +114,12 @@ describe('POST /api/teams/ai/team-coach', () => {
     await POST(makeRequest(validBody));
     expect(vi.mocked(complete).mock.calls[1][0].endsWith(`\n\n${outputLanguageInstruction('en')}`)).toBe(true);
   });
+
+  it('asks for an output cap that leaves room for thinking (8000)', async () => {
+    await POST(makeRequest(validBody));
+
+    expect(vi.mocked(complete).mock.calls[0][2]).toEqual({ surface: 'team-coach', maxTokens: 8000 });
+  });
 });
 
 describe('POST /api/teams/ai/team-coach — shared set validation and failures', () => {

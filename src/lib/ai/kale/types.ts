@@ -11,7 +11,7 @@ export interface PromptTask {
   stage: number;
   systemPrompt: string;
   userPrompt: string;
-  /** Expected max tokens for this task (decomposed tasks use fewer) */
+  /** Output cap for this task, sized for the model's thinking as well as the visible text */
   maxTokens: number;
 }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─── Mocks ─────────────────────────────────────────────────────────
 
@@ -69,6 +69,10 @@ describe('tournament-report-generator', () => {
     mockIsConfigured.mockReturnValue(true);
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   describe('generateTournamentReportAsync', () => {
     it('returns early when Kale is not configured', async () => {
       mockIsConfigured.mockReturnValue(false);
@@ -83,6 +87,7 @@ describe('tournament-report-generator', () => {
     });
 
     it('cleans up stale pending report and regenerates', async () => {
+      vi.stubEnv('CLAUDE_MODEL', '');
       const staleDate = new Date(Date.now() - 10 * 60 * 1000).toISOString(); // 10 min old
       mockGetReport.mockResolvedValue({ status: 'pending', created_at: staleDate } as never);
       mockCreateReport.mockResolvedValue({ id: 'report-1' } as never);
@@ -100,7 +105,8 @@ describe('tournament-report-generator', () => {
       await generateTournamentReportAsync('t1', 'r1', 'meta_report');
 
       expect(mockDeleteReport).toHaveBeenCalled();
-      expect(mockCreateReport).toHaveBeenCalled();
+      // The row is labelled with the Claude model that is asked first.
+      expect(mockCreateReport).toHaveBeenCalledWith('t1', 'r1', 'meta_report', 'claude-sonnet-5-5');
       expect(mockUpdateReport).toHaveBeenCalledWith('report-1', expect.objectContaining({
         status: 'completed',
       }));

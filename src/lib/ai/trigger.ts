@@ -11,7 +11,7 @@ export function triggerTournamentReport(
   roundId: string,
   reportType: TournamentReportType
 ): void {
-  if (!process.env.KALE_API_KEY && !anthropicApiKey()) return;
+  if (!anthropicApiKey()) return;
 
   generateTournamentReportAsync(tournamentId, roundId, reportType).catch((err) => {
     console.error(`[ai/trigger] Failed to trigger ${reportType}:`, err);

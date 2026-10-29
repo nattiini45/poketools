@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { aiTournamentReportSchema, formatZodErrors } from '@/lib/validation';
-import { AI_ANALYSIS_STALE_MS, getKaleModelId } from '@/lib/ai/constants';
+import { AI_ANALYSIS_STALE_MS, getClaudeModelId } from '@/lib/ai/constants';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import {
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
           await deleteTournamentReport(tournamentId, roundId, reportType);
         }
 
-        const record = await createTournamentReport(tournamentId, roundId, reportType, getKaleModelId());
+        const record = await createTournamentReport(tournamentId, roundId, reportType, getClaudeModelId());
         let pipelineResult: Awaited<ReturnType<typeof runPipeline>> | null = null;
 
         try {

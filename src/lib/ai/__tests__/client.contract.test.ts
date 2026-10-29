@@ -5,9 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * `fetch`, so what is asserted is the request that would reach the Messages API (body, headers,
  * path) and how the real SDK's responses and errors drive the client. No network, no model call.
  *
- * Request shapes per model id live here so a model change (PR 5 moves the defaults to the 5.5
- * family) has a test that names the contract: 4.6 keeps `temperature: 0.2`, models that reject
- * sampling parameters get none.
+ * Request shapes per model id live here so a model change has a test that names the contract:
+ * the defaults are the 5.5 family, which gets `output_config.effort` (default `medium`), no
+ * `temperature` and no `thinking` field; an older model that still accepts a temperature keeps
+ * `temperature: 0.2`, and Haiku 4.5 gets no effort.
  */
 
 vi.hoisted(() => {
@@ -150,6 +151,11 @@ let client: ClientModule;
 
 beforeEach(async () => {
   recorded.length = 0;
+  // The defaults under test must not depend on the machine that runs them (a shell can export
+  // CLAUDE_EFFORT or CLAUDE_MODEL). An empty value means unset.
+  vi.stubEnv('CLAUDE_MODEL', '');
+  vi.stubEnv('CLAUDE_FALLBACK_MODEL', '');
+  vi.stubEnv('CLAUDE_EFFORT', '');
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -179,14 +185,16 @@ describe('ai/client request contract (recorded fetch)', () => {
     expect(new URL(request.url).pathname).toBe('/v1/messages');
     expect(request.headers['x-api-key']).toBe('test-key');
     expect(request.headers['anthropic-version']).toBeTruthy();
+    // Pinned whole: no temperature, no thinking field (the 5.5 models think adaptively by default
+    // and reject `thinking: { type: 'disabled' }`), effort at its default.
     expect(request.body).toEqual({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       max_tokens: 4096,
       system: 'the system prompt',
       messages: [{ role: 'user', content: 'the user prompt' }],
-      temperature: 0.2,
+      output_config: { effort: 'medium' },
     });
-    expect(result).toMatchObject({ content: 'hello', model: 'claude-sonnet-4-6', prompt_tokens: 12, completion_tokens: 34 });
+    expect(result).toMatchObject({ content: 'hello', model: 'claude-sonnet-5-5', prompt_tokens: 12, completion_tokens: 34 });
   });
 
   it('posts a streaming request with stream:true and parses the real SSE stream', async () => {
@@ -196,20 +204,46 @@ describe('ai/client request contract (recorded fetch)', () => {
     const result = await client.completeStreaming('sys', 'user', onChunk, 2048);
 
     expect(recorded).toHaveLength(1);
-    expect(recorded[0].body).toMatchObject({
-      model: 'claude-sonnet-4-6',
+    expect(recorded[0].body).toEqual({
+      model: 'claude-sonnet-5-5',
       max_tokens: 2048,
       stream: true,
-      temperature: 0.2,
+      system: 'sys',
+      messages: [{ role: 'user', content: 'user' }],
+      output_config: { effort: 'medium' },
     });
     expect(result).toMatchObject({
       content: 'streamed answer',
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       stop_reason: 'end_turn',
       prompt_tokens: 12,
       completion_tokens: 34,
     });
     expect(onChunk).toHaveBeenCalled();
+  });
+
+  it.each([
+    // The caps the routes ask for (`AI_MAX_TOKENS`): analysis and scouting stream, the rest do not.
+    ['match analysis', 16_000, true],
+    ['match prep scouting', 16_000, true],
+    ['slot and team coach', 8_000, false],
+    ['recap', 4_096, false],
+  ])('sends the %s output cap (%i) with effort and no thinking field', async (_surface, maxTokens, streaming) => {
+    if (streaming) {
+      respond = (request) => sse(streamEvents(String(request.body.model), 'ok'));
+      await client.completeStreaming('sys', 'user', undefined, undefined, { maxTokens });
+    } else {
+      respond = (request) => messageJson(String(request.body.model), 'ok');
+      await client.complete('sys', 'user', { maxTokens });
+    }
+
+    const body = recorded[0].body;
+    expect(body.max_tokens).toBe(maxTokens);
+    expect(body.output_config).toEqual({ effort: 'medium' });
+    expect(body).not.toHaveProperty('thinking');
+    expect(body).not.toHaveProperty('temperature');
+    expect(body).not.toHaveProperty('top_p');
+    expect(body).not.toHaveProperty('top_k');
   });
 
   describe.each([
@@ -227,14 +261,15 @@ describe('ai/client request contract (recorded fetch)', () => {
     it(`${sendsTemperature ? 'sends' : 'omits'} temperature and ${sendsEffort ? 'sends' : 'omits'} effort (blocking)`, async () => {
       respond = (request) => messageJson(String(request.body.model), 'ok');
 
-      await client.complete('sys', 'user', { model, effort: 'low' });
+      await client.complete('sys', 'user', { model });
 
       const body = recorded[0].body;
       expect(body.model).toBe(model);
       if (sendsTemperature) expect(body.temperature).toBe(0.2);
       else expect(body).not.toHaveProperty('temperature');
-      if (sendsEffort) expect(body.output_config).toEqual({ effort: 'low' });
+      if (sendsEffort) expect(body.output_config).toEqual({ effort: 'medium' });
       else expect(body).not.toHaveProperty('output_config');
+      expect(body).not.toHaveProperty('thinking');
     });
 
     it(`${sendsTemperature ? 'sends' : 'omits'} temperature (streaming)`, async () => {
@@ -246,18 +281,77 @@ describe('ai/client request contract (recorded fetch)', () => {
       expect(body.stream).toBe(true);
       if (sendsTemperature) expect(body.temperature).toBe(0.2);
       else expect(body).not.toHaveProperty('temperature');
+      if (sendsEffort) expect(body.output_config).toEqual({ effort: 'medium' });
+      else expect(body).not.toHaveProperty('output_config');
+      expect(body).not.toHaveProperty('thinking');
+    });
+  });
+
+  describe('CLAUDE_EFFORT', () => {
+    it.each(['low', 'medium', 'high', 'xhigh', 'max'])('sends %s to a model that supports effort', async (effort) => {
+      vi.stubEnv('CLAUDE_EFFORT', effort);
+      respond = (request) => messageJson(String(request.body.model), 'ok');
+
+      await client.complete('sys', 'user');
+
+      expect(recorded[0].body.output_config).toEqual({ effort });
+    });
+
+    it('falls back to medium and warns for an invalid value', async () => {
+      vi.stubEnv('CLAUDE_EFFORT', 'ludicrous');
+      respond = (request) => messageJson(String(request.body.model), 'ok');
+
+      await client.complete('sys', 'user');
+
+      expect(recorded[0].body.output_config).toEqual({ effort: 'medium' });
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('CLAUDE_EFFORT'));
+    });
+
+    it('does not send effort to Haiku 4.5, whatever the setting', async () => {
+      vi.stubEnv('CLAUDE_EFFORT', 'max');
+      respond = (request) => messageJson(String(request.body.model), 'ok');
+
+      await client.complete('sys', 'user', { model: 'claude-haiku-4-5-20251001' });
+
+      expect(recorded[0].body).not.toHaveProperty('output_config');
+    });
+
+    it('lets one call override the setting', async () => {
+      vi.stubEnv('CLAUDE_EFFORT', 'high');
+      respond = (request) => messageJson(String(request.body.model), 'ok');
+
+      await client.complete('sys', 'user', { effort: 'low' });
+
+      expect(recorded[0].body.output_config).toEqual({ effort: 'low' });
+    });
+
+    it('sends the same effort to the fallback model (Haiku 5.5 supports it)', async () => {
+      vi.stubEnv('CLAUDE_EFFORT', 'high');
+      respond = (request, call) =>
+        call === 1 ? errorJson(529, 'overloaded_error') : messageJson(String(request.body.model), 'fallback');
+
+      await client.complete('sys', 'user');
+
+      expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-5-5', 'claude-haiku-5-5']);
+      expect(recorded[1].body).toEqual({
+        model: 'claude-haiku-5-5',
+        max_tokens: 4096,
+        system: 'sys',
+        messages: [{ role: 'user', content: 'user' }],
+        output_config: { effort: 'high' },
+      });
     });
   });
 
   it('reads CLAUDE_MODEL and CLAUDE_FALLBACK_MODEL with || (an empty value means the default)', async () => {
-    vi.stubEnv('CLAUDE_MODEL', 'claude-sonnet-5-5');
+    vi.stubEnv('CLAUDE_MODEL', 'claude-opus-5-5');
     vi.stubEnv('CLAUDE_FALLBACK_MODEL', '');
     respond = (request, call) =>
       call === 1 ? errorJson(529, 'overloaded_error') : messageJson(String(request.body.model), 'fallback');
 
     const result = await client.complete('sys', 'user');
 
-    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-5-5', 'claude-haiku-4-5-20251001']);
+    expect(recorded.map((r) => r.body.model)).toEqual(['claude-opus-5-5', 'claude-haiku-5-5']);
     expect(result.fallback_used).toBe(true);
   });
 
@@ -281,7 +375,7 @@ describe('ai/client against the real SDK error handling', () => {
 
     const result = await client.complete('sys', 'user');
 
-    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-5-5', 'claude-haiku-5-5']);
     expect(result).toMatchObject({ content: 'from fallback', fallback_used: true });
   });
 
@@ -342,7 +436,7 @@ describe('ai/client against the real SDK error handling', () => {
 
     const result = await client.completeStreaming('sys', 'user');
 
-    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-5-5', 'claude-haiku-5-5']);
     expect(result).toMatchObject({ content: 'complete answer', fallback_used: true });
   });
 
@@ -381,7 +475,7 @@ describe('ai/client against the real SDK error handling', () => {
     const result = await client.complete('sys', 'user');
 
     expect(Date.now() - started).toBeLessThan(5_000);
-    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+    expect(recorded.map((r) => r.body.model)).toEqual(['claude-sonnet-5-5', 'claude-haiku-5-5']);
     expect(result.fallback_used).toBe(true);
   });
 });

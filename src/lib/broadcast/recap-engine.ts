@@ -24,6 +24,7 @@ import { isLocale, type Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { broadcastCasterMessages } from '@/i18n/messages/broadcast-caster';
 import { withOutputLanguage } from '@/lib/ai/language';
+import { AI_MAX_TOKENS } from '@/lib/ai/constants';
 
 // ─── Recap Composition ───────────────────────────────────────────────
 
@@ -451,7 +452,7 @@ async function generateRecapNarrative(
       locale,
     );
     const userPrompt = buildNarrativePrompt(input);
-    const result = await complete(systemPrompt, userPrompt, { surface: 'recap' });
+    const result = await complete(systemPrompt, userPrompt, { surface: 'recap', maxTokens: AI_MAX_TOKENS.recap });
 
     return result.content ?? undefined;
   } catch {

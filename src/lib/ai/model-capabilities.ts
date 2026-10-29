@@ -1,9 +1,10 @@
 /**
  * What a Claude model id accepts on the raw Messages API.
  *
- * The legacy client historically sent `temperature: 0.2` on every request. Newer models reject
- * sampling parameters with a 400 (the 5.x family and Opus 4.7 or later), so the value is now sent
- * only to ids known to accept it. An id this module cannot parse is treated as "rejects": omitting
+ * The text surfaces (the raw-SDK client and Kale) send a sampling temperature only to a model that
+ * accepts one. Newer models reject sampling parameters with a 400 (the 5.x family and Opus 4.7
+ * or later), so the value is sent only to ids known to accept it. `output_config.effort` is
+ * likewise sent only to ids that support it. An id this module cannot parse is treated as "rejects": omitting
  * `temperature` is always valid, while sending it to a model that refuses it is a hard failure
  * that the fallback ladder would otherwise paper over.
  *
@@ -42,7 +43,7 @@ export function modelAcceptsTemperature(model: string): boolean {
 
 /**
  * True when the model accepts `output_config.effort`. Haiku 4.5 and older models do not;
- * Sonnet 4.6, Opus 4.5 or later and the 5.x family do.
+ * Sonnet 4.6, Opus 4.5 or later and the whole 5.x family (Haiku 5.5 included) do.
  */
 export function modelSupportsEffort(model: string): boolean {
   const parsed = parseModel(model);

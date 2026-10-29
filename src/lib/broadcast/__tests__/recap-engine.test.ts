@@ -326,5 +326,9 @@ describe('composeWeeklyRecap i18n (T15)', () => {
     const [systemPrompt] = mockComplete.mock.calls[0] as [string, string];
     expect(systemPrompt.endsWith(outputLanguageInstruction('en'))).toBe(true);
     expect(systemPrompt).not.toContain('German');
+    // The cap leaves room for the model's thinking as well as the paragraph.
+    expect(mockComplete.mock.calls[0][2]).toEqual({ surface: 'recap', maxTokens: 4096 });
+    // The cap leaves room for the model's thinking as well as the paragraph.
+    expect(mockComplete.mock.calls[0][2]).toEqual({ surface: 'recap', maxTokens: 4096 });
   });
 });

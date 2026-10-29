@@ -1,3 +1,4 @@
+import { AI_MAX_TOKENS } from '../../constants';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getAggregates, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
@@ -131,28 +132,28 @@ function getPromptTasks(factPack: unknown, mode: PipelineMode): PromptTask[] {
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite a single headline sentence crowning the season champion.`,
       userPrompt: `Season: ${fp.seasonName}\nChampion: ${fp.seasonMvp.player_name}\nRecord: ${fp.seasonMvp.reason}`,
-      maxTokens: 100,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'notable_moments',
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nList 3-5 notable moments or storylines from this season. Each should be 1 sentence. Return as a JSON array of strings.`,
       userPrompt: `Season: ${fp.seasonName}\n${fp.totalGames} games played\n\nFinal standings:\n${standings}\n\nTop Pokémon:\n${usage}`,
-      maxTokens: 400,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'meta_evolution',
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite 2-3 sentences about how the metagame evolved over this season based on the usage data.`,
       userPrompt: `Top Pokémon usage:\n${usage}`,
-      maxTokens: 200,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'season_narrative',
       stage: 2,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite a 3-5 paragraph season wrap-up narrative. Celebrate the champion, highlight key storylines, and reflect on the meta. Use paragraph breaks.`,
       userPrompt: `Season: ${fp.seasonName} | ${fp.totalGames} games\nChampion: ${fp.seasonMvp.player_name} — ${fp.seasonMvp.reason}\n\nFinal standings:\n${standings}\n\nTop Pokémon:\n${usage}`,
-      maxTokens: 800,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
   ];
 }
@@ -170,7 +171,7 @@ function buildSingleTask(fp: SeasonSummaryFactPack): PromptTask {
     stage: 1,
     systemPrompt: `${PERSONA}\n\n${RULES}\n\nRespond with JSON:\n{"headline":"","narrative":"","notable_moments":[""],"meta_evolution":""}`,
     userPrompt: `Season: ${fp.seasonName} | ${fp.totalGames} games\nChampion: ${fp.seasonMvp.player_name} — ${fp.seasonMvp.reason}\n\nStandings:\n${standings}\n\nUsage:\n${usage}`,
-    maxTokens: 2048,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 

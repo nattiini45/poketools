@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { complete } from '@/lib/ai/client';
+import { AI_MAX_TOKENS } from '@/lib/ai/constants';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
 import { teamCoachSchema, formatZodErrors, type CoachPokemonSet } from '@/lib/validation';
 import { withOutputLanguage } from '@/lib/ai/language';
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     const systemPrompt = withOutputLanguage(buildTeamCoachSystemPrompt(), getRequestLocale(req));
     const userPrompt = buildTeamCoachUserPrompt(filledTeam, format, generation);
 
-    const result = await complete(systemPrompt, userPrompt, { surface: 'team-coach' });
+    const result = await complete(systemPrompt, userPrompt, { surface: 'team-coach', maxTokens: AI_MAX_TOKENS.coach });
     return NextResponse.json({ success: true, content: result.content });
   } catch (error) {
     return safeErrorResponse(error, 'AI team coach failed');

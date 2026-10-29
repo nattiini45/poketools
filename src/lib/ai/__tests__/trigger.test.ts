@@ -18,7 +18,6 @@ describe('triggerTournamentReport', () => {
   });
 
   it('does nothing when no AI key is configured', () => {
-    delete process.env.KALE_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_API_KEY;
 
@@ -27,19 +26,17 @@ describe('triggerTournamentReport', () => {
     expect(mockGenerateReport).not.toHaveBeenCalled();
   });
 
-  it('calls generateTournamentReportAsync when KALE_API_KEY is set', () => {
+  it('ignores the removed KALE_API_KEY: the Claude key is the only one', () => {
     process.env.KALE_API_KEY = 'kale-key';
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_API_KEY;
-    mockGenerateReport.mockResolvedValue(undefined as never);
 
     triggerTournamentReport('t-1', 'r-1', 'round_recap');
 
-    expect(mockGenerateReport).toHaveBeenCalledWith('t-1', 'r-1', 'round_recap');
+    expect(mockGenerateReport).not.toHaveBeenCalled();
   });
 
   it('calls generateTournamentReportAsync when ANTHROPIC_API_KEY is set', () => {
-    delete process.env.KALE_API_KEY;
     process.env.ANTHROPIC_API_KEY = 'claude-key';
     mockGenerateReport.mockResolvedValue(undefined as never);
 

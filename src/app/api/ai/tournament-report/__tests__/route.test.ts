@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 // ─── Mocks ──────────────────────────────────────────────────────────
@@ -102,6 +102,10 @@ describe('POST /api/ai/tournament-report', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(checkAndRecordAiGeneration).mockResolvedValue({ allowed: true, limit: 10, remaining: 9, used: 1 });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('returns 401 when not admin', async () => {
@@ -306,6 +310,7 @@ describe('POST /api/ai/tournament-report', () => {
   });
 
   it('streams a successful report generation', async () => {
+    vi.stubEnv('CLAUDE_MODEL', '');
     vi.mocked(requireAdmin).mockResolvedValue(mockAdmin as never);
     vi.mocked(getTournamentById).mockResolvedValue({ id: UUID_TOURNAMENT } as never);
     vi.mocked(getRoundById).mockResolvedValue({ id: UUID_ROUND } as never);
@@ -316,7 +321,7 @@ describe('POST /api/ai/tournament-report', () => {
       promptTokens: 100,
       completionTokens: 200,
       generationTimeMs: 5000,
-      modelUsed: 'claude-sonnet-4-6',
+      modelUsed: 'claude-haiku-5-5',
       validationErrors: [],
     } as never);
 
@@ -325,10 +330,17 @@ describe('POST /api/ai/tournament-report', () => {
 
     const streamText = await readStream(res);
     expect(streamText).toContain('"status":"done"');
-    // The row keeps the model the pipeline reports as having answered.
+    // The row is created with the Claude model that was asked, then keeps the model the pipeline
+    // reports as having answered (here the fallback).
+    expect(createTournamentReport).toHaveBeenCalledWith(
+      UUID_TOURNAMENT,
+      UUID_ROUND,
+      'round_recap',
+      'claude-sonnet-5-5',
+    );
     expect(updateTournamentReport).toHaveBeenCalledWith(
       'new-report',
-      expect.objectContaining({ status: 'completed', model_id: 'claude-sonnet-4-6' }),
+      expect.objectContaining({ status: 'completed', model_id: 'claude-haiku-5-5' }),
     );
   });
 

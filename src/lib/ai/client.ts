@@ -2,7 +2,7 @@ import Anthropic, { AnthropicError, APIConnectionError, APIError, APIUserAbortEr
 import { initLogger, wrapAnthropic } from 'braintrust';
 import { logger } from '@/lib/logger';
 import { anthropicApiKey } from './api-key';
-import { getClaudeFallbackModelId, getClaudeModelId } from './constants';
+import { getClaudeEffort, getClaudeFallbackModelId, getClaudeModelId, type ClaudeEffort } from './constants';
 import {
   EmptyModelResponseError,
   ModelRejectedError,
@@ -88,8 +88,8 @@ export interface AiCompletionResult {
 export interface AiCallOptions {
   /** Ask this model first instead of `CLAUDE_MODEL`. The fallback model is unchanged. */
   model?: string;
-  /** `output_config.effort`; sent only to models that support it. */
-  effort?: 'low' | 'medium' | 'high';
+  /** `output_config.effort` for this call instead of `CLAUDE_EFFORT`; sent only to models that support it. */
+  effort?: ClaudeEffort;
   /** Output cap. Takes precedence over the positional `maxTokens` of `completeStreaming`. */
   maxTokens?: number;
   /**
@@ -106,7 +106,7 @@ interface ResolvedCall {
   system: string;
   user: string;
   maxTokens: number;
-  effort?: AiCallOptions['effort'];
+  effort: ClaudeEffort;
   jsonOutput: boolean;
   surface: string;
 }
@@ -181,9 +181,11 @@ function buildParams(model: string, call: ResolvedCall): Anthropic.MessageCreate
     max_tokens: call.maxTokens,
     system: call.system,
     messages: [{ role: 'user', content: call.user }],
-    // Models that reject sampling parameters get none; Sonnet 4.6 keeps 0.2.
+    // Models that reject sampling parameters get none (the 5.x family); an older model keeps 0.2.
     ...(modelAcceptsTemperature(model) && { temperature: TEMPERATURE }),
-    ...(call.effort && modelSupportsEffort(model) && { output_config: { effort: call.effort } }),
+    // Effort goes only to models that accept it (not Haiku 4.5). `thinking` is never sent: the
+    // 5.x models think adaptively by default and reject `{ type: 'disabled' }`.
+    ...(modelSupportsEffort(model) && { output_config: { effort: call.effort } }),
   };
 }
 
@@ -197,7 +199,7 @@ function resolveCall(
     system: systemPrompt,
     user: userPrompt,
     maxTokens: options?.maxTokens ?? positionalMaxTokens ?? DEFAULT_MAX_TOKENS,
-    effort: options?.effort,
+    effort: options?.effort ?? getClaudeEffort(),
     jsonOutput: options?.jsonOutput ?? false,
     surface: options?.surface ?? DEFAULT_SURFACE,
   };
