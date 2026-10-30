@@ -1,4 +1,4 @@
-import { getGeneration, getSpecies, listNationalSpecies } from './dex';
+import { getGeneration, getNationalSpecies, getSpecies, listNationalSpecies } from './dex';
 import type { RulesetUniverse } from './format-catalog';
 import type { TierKey } from '@/types/ruleset';
 import { formatPack } from '@/lib/format-pack';
@@ -94,9 +94,16 @@ export function compareTier(a: TierKey, b: TierKey): number {
  *
  * Stops at the first branch with > 1 evos? No — branches are explored fully
  * because the Eviolite ban must consider every reachable evolution.
+ *
+ * `universe` picks the dex and the tier field: the standard generation reads `tier`, the National Dex reads
+ * `natDexTier` (past species carry no standard tier).
  */
-function getHighestEvoTier(name: string, gen: number = 9): TierKey | null {
-  const start = getSpecies(name, gen);
+function getHighestEvoTier(name: string, gen: number = 9, universe: RulesetUniverse = 'standard'): TierKey | null {
+  const lookup = (n: string) => (universe === 'national' ? getNationalSpecies(n, gen) : getSpecies(n, gen));
+  const tierOf = (s: { tier?: unknown; natDexTier?: unknown }): string | undefined =>
+    (universe === 'national' ? s.natDexTier : s.tier) as string | undefined;
+
+  const start = lookup(name);
   if (!start) return null;
 
   let best: TierKey | null = null;
@@ -108,10 +115,10 @@ function getHighestEvoTier(name: string, gen: number = 9): TierKey | null {
     if (visited.has(next)) continue;
     visited.add(next);
 
-    const evo = getSpecies(next, gen);
+    const evo = lookup(next);
     if (!evo) continue;
 
-    const tier = normalizeTier(evo.tier as string | undefined);
+    const tier = normalizeTier(tierOf(evo));
     if (tier && (best === null || compareTier(tier, best) > 0)) {
       best = tier;
     }
@@ -121,6 +128,9 @@ function getHighestEvoTier(name: string, gen: number = 9): TierKey | null {
   return best;
 }
 
+/** `${universe}:${gen}:${capTier}` -> banned set. The dex is static per process, so a result never goes stale. */
+const evioliteBannedMemo = new Map<string, ReadonlySet<string>>();
+
 /**
  * Build the set of NFE species (by canonical name, lowercased) whose forward
  * evolution chain contains at least one tier strictly above `capTier`.
@@ -129,23 +139,34 @@ function getHighestEvoTier(name: string, gen: number = 9): TierKey | null {
  * the cap" rule. The species themselves remain legal; only their Eviolite item is
  * blocked. Callers pass the ruleset's stored cap; the default cap comes from the
  * format pack (`coreLiga.evioliteCapTierDefault`).
+ *
+ * The scan walks the whole dex and depends only on `(universe, gen, capTier)`, so it runs once per process and the
+ * SAME read-only set is returned afterwards (never mutate it). The generation is part of the key: Gen 8 and Gen 9
+ * tiers differ.
  */
 export function computeEvioliteBannedSpecies(
   gen: number = 9,
   capTier: TierKey = formatPack.coreLiga.evioliteCapTierDefault,
-): Set<string> {
+  universe: RulesetUniverse = 'standard',
+): ReadonlySet<string> {
+  const key = `${universe}:${gen}:${capTier}`;
+  const memoised = evioliteBannedMemo.get(key);
+  if (memoised) return memoised;
+
   const out = new Set<string>();
-  const generation = getGeneration(gen);
+  const candidates = universe === 'national' ? listNationalSpecies(gen) : Array.from(getGeneration(gen).species);
 
-  for (const species of Array.from(generation.species)) {
+  for (const species of candidates) {
     if (!species.evos || species.evos.length === 0) continue;
-    if (species.isNonstandard) continue;
+    // The standard generation hides non-standard species already; the National Dex walks its own universe.
+    if (universe === 'standard' && species.isNonstandard) continue;
 
-    const highest = getHighestEvoTier(species.name, gen);
+    const highest = getHighestEvoTier(species.name, gen, universe);
     if (highest && compareTier(highest, capTier) > 0) {
       out.add(species.name.toLowerCase());
     }
   }
 
+  evioliteBannedMemo.set(key, out);
   return out;
 }

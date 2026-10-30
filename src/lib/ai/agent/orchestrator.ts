@@ -158,6 +158,8 @@ export interface ToolOverrides {
   rulesetId?: string | null;
   /** The player's assigned core types, forced onto buildTeam/validateTeam. */
   playerCore?: string[] | null;
+  /** The resolved league's id, forced onto validateTeam (roster, core and Evolution Point Buy scope). */
+  seasonId?: string | null;
 }
 
 /**
@@ -184,6 +186,25 @@ export function applyToolOverrides(
     if (overrides.playerCore && overrides.playerCore.length === 3) {
       base.player_core = overrides.playerCore;
     }
+    if (name === 'validateTeam') {
+      // Server-authoritative league scope: the model never names whose roster or which league is checked.
+      base.player_id = overrides.userId;
+      if (overrides.seasonId) {
+        base.season_id = overrides.seasonId;
+        // In a resolved league the assigned core is the server's: a model-supplied one is never trusted. With no core
+        // assigned the field is dropped, so `checkTeam` reads (and reports) it from `season_participants`.
+        if (overrides.playerCore && overrides.playerCore.length === 3) base.player_core = overrides.playerCore;
+        else delete base.player_core;
+      } else {
+        delete base.season_id;
+      }
+    }
+    return base;
+  }
+
+  if (name === 'getMatchAnalysisContext') {
+    // The tool answers only for a match the authenticated player may see; the model cannot name another requester.
+    base.requesterId = overrides.userId;
     return base;
   }
 
@@ -202,7 +223,8 @@ function buildAgentToolSet(persona: AgentPersona, overrides: ToolOverrides): Too
     const def = AGENT_TOOLS[name];
     set[name] = tool({
       description: def.description,
-      inputSchema: def.inputSchema,
+      // The model sees (and is validated against) its own schema; the strict one runs in executeTool after the overrides.
+      inputSchema: def.modelInputSchema ?? def.inputSchema,
       execute: async (input: unknown) => {
         // Merge server-authoritative context BEFORE validation/cache so the cache
         // key and persisted call reflect the input that actually ran.
@@ -337,6 +359,7 @@ export async function runAgent(request: AgentRequest): Promise<RunAgentResult> {
     userId,
     rulesetId: pack.league?.ruleset_id ?? null,
     playerCore: pack.league?.player_core ?? null,
+    seasonId: pack.league?.season_id ?? null,
   });
   const needsVision = hasImageParts(messages);
   const models = selectModels(profile, needsVision);

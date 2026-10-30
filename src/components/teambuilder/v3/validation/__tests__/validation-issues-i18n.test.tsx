@@ -73,6 +73,15 @@ describe('SetWorkspace jump sections', () => {
     expect(jumpSectionFor('item_banned')).toBe('fields');
     expect(jumpSectionFor('unknown_ability')).toBe('fields');
     expect(jumpSectionFor('ev_stat_cap')).toBe('stats');
+    // The codes of the shared team check.
+    expect(jumpSectionFor('ev_stat_invalid')).toBe('stats');
+    expect(jumpSectionFor('iv_range')).toBe('stats');
+    expect(jumpSectionFor('move_illegal')).toBe('moves');
+    expect(jumpSectionFor('duplicate_move')).toBe('moves');
+    expect(jumpSectionFor('ability_illegal')).toBe('fields');
+    // Codes with no field to jump to stay on the species header.
+    expect(jumpSectionFor('level_range')).toBe('header');
+    expect(jumpSectionFor('malformed_set')).toBe('header');
     expect(jumpSectionFor('species_banned')).toBe('header');
     expect(jumpSectionFor(undefined)).toBe('header');
   });

@@ -85,6 +85,10 @@ export default {
       },
       target: '{name}: {broken} of {total} would be invalid',
       truncated: 'The check stopped after {checked} teams, so these numbers cover only those.',
+      malformed: {
+        one: '{count} stored team could not be checked: its data is not a valid team. It is not part of these numbers.',
+        other: '{count} stored teams could not be checked: their data is not a valid team. They are not part of these numbers.',
+      },
       failed: 'The submitted teams could not be checked. Some may become invalid under version {version}.',
     },
   },

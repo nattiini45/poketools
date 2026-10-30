@@ -23,8 +23,9 @@ vi.mock('@/lib/pkmn/teams', () => ({
   parseTeamText: vi.fn(),
 }));
 
-vi.mock('@/lib/pkmn/validation', () => ({
-  validateTeam: vi.fn(),
+// The preview runs the shared team check (`checkTeam`, pinned in src/lib/team/__tests__/check.test.ts).
+vi.mock('@/lib/team/check.server', () => ({
+  checkTeam: vi.fn(),
 }));
 
 // The limiter decision is mocked; the 429 body comes from the real `rateLimitedResponse`.
@@ -38,13 +39,13 @@ import { POST } from '../route';
 import { requirePlayer, AuthError } from '@/lib/auth/helpers';
 import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { parseTeamText } from '@/lib/pkmn/teams';
-import { validateTeam } from '@/lib/pkmn/validation';
+import { checkTeam } from '@/lib/team/check.server';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 
 const mockRequirePlayer = requirePlayer as ReturnType<typeof vi.fn>;
 const mockGetRuleset = readExposedRuleset as ReturnType<typeof vi.fn>;
 const mockParseTeam = parseTeamText as ReturnType<typeof vi.fn>;
-const mockValidateTeam = validateTeam as ReturnType<typeof vi.fn>;
+const mockCheckTeam = checkTeam as ReturnType<typeof vi.fn>;
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -124,14 +125,14 @@ describe('POST /api/import-team', () => {
 
     mockParseTeam.mockReturnValue(pokemon);
     mockGetRuleset.mockResolvedValue(ruleset);
-    mockValidateTeam.mockReturnValue(validation);
+    mockCheckTeam.mockResolvedValue(validation);
 
     const res = await POST(makeRequest({ text: 'Garchomp', ruleset_id: '00000000-0000-4000-8000-000000000001' }));
     const json = await res.json();
 
     expect(json.success).toBe(true);
     expect(json.data.validation).toEqual(validation);
-    expect(mockValidateTeam).toHaveBeenCalledWith(pokemon, ruleset);
+    expect(mockCheckTeam).toHaveBeenCalledWith({ pokemon, ruleset });
   });
 
   it('returns 404 when ruleset not found', async () => {

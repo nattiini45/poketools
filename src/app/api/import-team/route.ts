@@ -4,7 +4,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { importTeamSchema, formatZodErrors } from '@/lib/validation';
 import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { parseTeamText } from '@/lib/pkmn/teams';
-import { validateTeam } from '@/lib/pkmn/validation';
+import { checkTeam } from '@/lib/team/check.server';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
 import type { ImportTeamResponse } from '@/types/team';
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
-      validation = validateTeam(pokemon, ruleset);
+      validation = await checkTeam({ pokemon, ruleset });
     }
 
     const result: ImportTeamResponse = { pokemon, validation };

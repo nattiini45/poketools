@@ -415,4 +415,53 @@ describe('applyToolOverrides', () => {
     const input = { species: 'Garchomp' };
     expect(applyToolOverrides('lookupPokemon', input, overrides)).toBe(input);
   });
+
+  it('forces the authenticated player and the resolved league onto validateTeam, whatever the model sent', () => {
+    const out = applyToolOverrides(
+      'validateTeam',
+      { team: [], format: 'gen9ru', player_id: 'someone-else', season_id: 'another-league' },
+      { ...overrides, seasonId: 'season-1' },
+    ) as Record<string, unknown>;
+    expect(out.player_id).toBe('me');
+    expect(out.season_id).toBe('season-1');
+  });
+
+  it('drops a league the model named when none resolved: no league means no roster of someone else’s', () => {
+    const out = applyToolOverrides(
+      'validateTeam',
+      { team: [], format: 'gen9ou', player_id: 'someone-else', season_id: 'another-league' },
+      { userId: 'me', rulesetId: null, playerCore: null, seasonId: null },
+    ) as Record<string, unknown>;
+    expect(out.player_id).toBe('me');
+    expect(out).not.toHaveProperty('season_id');
+  });
+
+  it('in a resolved league the assigned core is the server’s: a model-supplied core is overwritten', () => {
+    const out = applyToolOverrides(
+      'validateTeam',
+      { team: [], format: 'gen9ru', player_core: ['Fire', 'Fire', 'Fire'] },
+      { ...overrides, seasonId: 'season-1' },
+    ) as Record<string, unknown>;
+    expect(out.player_core).toEqual(['Grass', 'Ground', 'Poison']);
+  });
+
+  it('in a resolved league with no assigned core a model-supplied core is dropped, so the check reads it from the season', () => {
+    const out = applyToolOverrides(
+      'validateTeam',
+      { team: [], format: 'gen9ru', player_core: ['Fire', 'Water', 'Grass'] },
+      { userId: 'me', rulesetId: 'rs-1', playerCore: null, seasonId: 'season-1' },
+    ) as Record<string, unknown>;
+    expect(out).not.toHaveProperty('player_core');
+  });
+
+  it('does not scope buildTeam to a league (it builds from usage; the validation call has no roster)', () => {
+    const out = applyToolOverrides('buildTeam', { format: 'gen9ou' }, { ...overrides, seasonId: 'season-1' }) as Record<string, unknown>;
+    expect(out).not.toHaveProperty('season_id');
+    expect(out).not.toHaveProperty('player_id');
+  });
+
+  it('sets the requester of getMatchAnalysisContext to the authenticated player, overwriting the model', () => {
+    const out = applyToolOverrides('getMatchAnalysisContext', { matchId: 'm-1', requesterId: 'an-admin' }, overrides) as Record<string, unknown>;
+    expect(out).toEqual({ matchId: 'm-1', requesterId: 'me' });
+  });
 });

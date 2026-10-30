@@ -9,8 +9,9 @@
  *   4. wraps the result as `{ ok: true, data }`.
  *
  * Deterministic read tools are memoised for 5 minutes (keyed by name + input).
- * `buildTeam` and `createPokepaste` are never cached — they have side effects
- * (pokepaste publishing) or are too coarse to share.
+ * `buildTeam`, `createPokepaste` and `validateTeam` are never cached — they have
+ * side effects (pokepaste publishing), are too coarse to share, or depend on
+ * mutable league state (roster, trackers, assigned core, the ruleset read).
  */
 import { LruCache } from '@/lib/utils/lru-cache';
 import { formatZodErrors } from '@/lib/validation/schemas';
@@ -35,8 +36,26 @@ function timeoutFor(name: string): number {
   return TIMEOUT_BY_TOOL[name] ?? DEFAULT_TIMEOUT_MS;
 }
 
-/** Tools whose results must not be cached (side effects / non-idempotent). */
-const NO_CACHE = new Set(['buildTeam', 'createPokepaste']);
+/**
+ * Tools whose results must not be cached: side effects (`createPokepaste`), too coarse to share (`buildTeam`), or
+ * answers that depend on mutable state outside the input (`validateTeam`: the roster, trackers, assigned core and the
+ * ruleset read change, and a transient `ruleset_load_failed` must not stick for five minutes).
+ */
+const NO_CACHE = new Set(['buildTeam', 'createPokepaste', 'validateTeam']);
+
+/** Start of the error `executeTool` returns when the (post-override) input fails the tool's strict schema. */
+export const INVALID_INPUT_PREFIX = 'Invalid input for';
+
+/**
+ * True when a tool result (what the model is handed back: `res.data`, or `{ error }`) is the strict-schema failure of
+ * `executeTool`. The model-facing schema accepted the call, the server-set fields were applied, and the strict schema
+ * still refused it: a bug of the server or of the harness identity, invisible to the model.
+ */
+export function isStrictSchemaFailure(output: unknown): boolean {
+  if (typeof output !== 'object' || output === null) return false;
+  const error = (output as { error?: unknown }).error;
+  return typeof error === 'string' && error.startsWith(INVALID_INPUT_PREFIX);
+}
 
 export type ExecuteToolResult =
   | { ok: true; data: unknown; cached?: boolean }
@@ -83,7 +102,7 @@ export async function executeTool(name: string, rawInput: unknown): Promise<Exec
 
   const parsed = tool.inputSchema.safeParse(rawInput);
   if (!parsed.success) {
-    return { ok: false, error: `Invalid input for '${name}': ${formatZodErrors(parsed.error)}` };
+    return { ok: false, error: `${INVALID_INPUT_PREFIX} '${name}': ${formatZodErrors(parsed.error)}` };
   }
 
   const cacheable = !NO_CACHE.has(name);

@@ -131,6 +131,8 @@ export {
   tournamentParticipantSeedsSchema,
   draftPoolTemplateCreateSchema,
   draftPickSchema,
+  pokemonSetSchema,
+  teamPokemonSchema,
   validateTeamSchema,
   paginationQuerySchema,
   adminGameEditSchema,

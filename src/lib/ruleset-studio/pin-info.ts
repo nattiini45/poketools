@@ -132,6 +132,12 @@ export interface PinImpactTarget {
   checked: number;
   /** Teams that are valid under the pinned version and would not be under the target version. */
   would_break: number;
+  /**
+   * Stored teams that could not be checked at all: their `pokemon` is not a list of well-formed sets (rows stored before the
+   * boundary schemas guarded the team routes). They are not part of `checked` and cannot be counted in `would_break`.
+   * Always set by `computePinImpact`; absent means 0 (an answer built before the field existed).
+   */
+  malformed?: number;
 }
 
 /**
@@ -146,6 +152,8 @@ export interface PinImpact {
   checked: number;
   /** Sum of `would_break` over the targets. */
   would_break: number;
+  /** Sum of `malformed` over the targets (absent means 0). */
+  malformed?: number;
   truncated: boolean;
   targets: PinImpactTarget[];
 }

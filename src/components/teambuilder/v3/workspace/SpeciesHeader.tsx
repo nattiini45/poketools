@@ -10,6 +10,7 @@ import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { useEditorContext } from '../editor/EditorContext';
 import { useSpeciesData } from '../hooks/useSpeciesData';
 import type { PokemonSet } from '@/types/team';
+import { toBoundedInt } from '@/lib/pkmn/set-bounds';
 
 interface SpeciesHeaderProps {
   slot: number;
@@ -104,9 +105,10 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
               type="number"
               min={1}
               max={100}
+              step={1}
               value={set.level ?? 100}
               onChange={(e) => {
-                const v = Math.max(1, Math.min(100, Number(e.target.value) || 100));
+                const v = toBoundedInt(e.target.value, 1, 100, 100);
                 dispatch({ type: 'UPDATE_SLOT', slot, patch: { level: v } });
               }}
               disabled={state.locked}

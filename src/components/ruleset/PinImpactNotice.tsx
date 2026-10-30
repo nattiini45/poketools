@@ -62,6 +62,11 @@ function ReadyNotice({ impact, version }: { impact: Extract<PinImpactState, { st
           ))}
         </ul>
       )}
+      {(impact.malformed ?? 0) > 0 && (
+        <Alert variant="warning" role="status">
+          {t('pin.impact.malformed', { count: impact.malformed ?? 0 })}
+        </Alert>
+      )}
       {impact.truncated && <p className="text-sm text-poke-text-muted">{t('pin.impact.truncated', { checked: impact.checked })}</p>}
     </>
   );

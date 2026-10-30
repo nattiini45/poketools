@@ -206,7 +206,8 @@ function validateToolCalls(toolCalls: ReadonlyArray<{ toolName: string; input: u
     if (!tool) {
       return { ok: false, error: `Unknown tool '${call.toolName}'` };
     }
-    const parsed = tool.inputSchema.safeParse(call.input);
+    // What the model was shown: the server-set fields are not its to fill in (the strict schema runs after the overrides).
+    const parsed = (tool.modelInputSchema ?? tool.inputSchema).safeParse(call.input);
     if (!parsed.success) {
       const detail = parsed.error.issues
         .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)

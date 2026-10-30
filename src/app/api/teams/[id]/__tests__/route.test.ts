@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
+import { makeSet } from '@/test/team-fixtures';
 
 // ─── Mocks ──────────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ const mockTeam = {
   id: 'a270be7b-7033-4b49-808c-bf2d5ef8e0ed',
   player_id: 'player-1',
   tournament_id: 'tourney-1',
-  pokemon: [{ species: 'Pikachu' }],
+  pokemon: [makeSet('Pikachu')],
   locked: false,
 };
 
@@ -105,6 +106,22 @@ describe('GET /api/teams/[id]', () => {
 
     expect(res.status).toBe(401);
     expect(json.success).toBe(false);
+  });
+
+  it.each([
+    ['a set without evs', { ...makeSet('Pikachu'), evs: undefined }],
+    ['a negative EV', { ...makeSet('Pikachu'), evs: { hp: -760, atk: 252, def: 252, spa: 252, spd: 252, spe: 252 } }],
+    ['five moves', { ...makeSet('Pikachu'), moves: ['a', 'b', 'c', 'd', 'e'] }],
+    ['a set that is a string', 'Pikachu'],
+  ])('refuses %s with a coded 400 before it reads or writes the team', async (_label, badSet) => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+
+    const res = await PATCH(makeRequest({ pokemon: [badSet], import_source: 'manual' }), routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.code).toBe('validation_failed');
+    expect(updateTeamPokemon).not.toHaveBeenCalled();
   });
 
   it('returns 404 when team not found', async () => {
@@ -201,7 +218,7 @@ describe('PATCH /api/teams/[id]', () => {
       new (AuthError as unknown as new (m: string, s: number) => Error)('Not authenticated', 401),
     );
 
-    const res = await PATCH(makeRequest({ pokemon: [], import_source: 'manual' }), routeParams);
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
     const json = await res.json();
 
     expect(res.status).toBe(401);
@@ -212,7 +229,7 @@ describe('PATCH /api/teams/[id]', () => {
     vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
     vi.mocked(getTeamById).mockResolvedValue(null);
 
-    const res = await PATCH(makeRequest({ pokemon: [], import_source: 'manual' }), routeParams);
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
     const json = await res.json();
 
     expect(res.status).toBe(404);
@@ -224,7 +241,7 @@ describe('PATCH /api/teams/[id]', () => {
     vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'other-player' } as never);
     vi.mocked(getTeamById).mockResolvedValue(mockTeam as never);
 
-    const res = await PATCH(makeRequest({ pokemon: [], import_source: 'manual' }), routeParams);
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
     const json = await res.json();
 
     expect(res.status).toBe(403);
@@ -236,7 +253,7 @@ describe('PATCH /api/teams/[id]', () => {
     vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
     vi.mocked(getTeamById).mockResolvedValue({ ...mockTeam, locked: true } as never);
 
-    const res = await PATCH(makeRequest({ pokemon: [], import_source: 'manual' }), routeParams);
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
     const json = await res.json();
 
     expect(res.status).toBe(409);
@@ -247,11 +264,11 @@ describe('PATCH /api/teams/[id]', () => {
   it('updates team pokemon successfully', async () => {
     vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
     vi.mocked(getTeamById).mockResolvedValue(mockTeam as never);
-    const updatedTeam = { ...mockTeam, pokemon: [{ species: 'Charizard' }] };
+    const updatedTeam = { ...mockTeam, pokemon: [makeSet('Charizard')] };
     vi.mocked(updateTeamPokemon).mockResolvedValue(updatedTeam as never);
 
     const res = await PATCH(
-      makeRequest({ pokemon: [{ species: 'Charizard' }], import_source: 'pokepastes' }),
+      makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'pokepastes' }),
       routeParams,
     );
     const json = await res.json();
@@ -260,7 +277,7 @@ describe('PATCH /api/teams/[id]', () => {
     expect(json.success).toBe(true);
     expect(updateTeamPokemon).toHaveBeenCalledWith(
       'a270be7b-7033-4b49-808c-bf2d5ef8e0ed',
-      [{ species: 'Charizard' }],
+      [makeSet('Charizard')],
       'pokepastes',
       undefined, // no name in this request
       { correction: false },
@@ -276,7 +293,7 @@ describe('PATCH /api/teams/[id]', () => {
     vi.mocked(getTeamById).mockResolvedValue(mockTeam as never);
     vi.mocked(updateTeamPokemon).mockResolvedValue(teamRowWithShareSecrets({ id: 'a270be7b-7033-4b49-808c-bf2d5ef8e0ed', player_id: 'player-1' }));
 
-    const res = await PATCH(makeRequest({ pokemon: [{ species: 'Charizard' }], import_source: 'manual' }), routeParams);
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'manual' }), routeParams);
 
     expect(res.status).toBe(200);
     expectNoPrivateTeamData(await res.json());
@@ -295,7 +312,7 @@ describe('PATCH /api/teams/[id]', () => {
     vi.mocked(updateTeamPokemon).mockResolvedValue(linked);
     vi.mocked(getTournamentById).mockResolvedValue({ id: 'tourney-1', season_id: 'season-1' } as never);
 
-    const res = await PATCH(makeRequest({ pokemon: [{ species: 'Charizard' }], import_source: 'manual' }), routeParams);
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'manual' }), routeParams);
 
     expect(res.status).toBe(200);
     expect(getTeamVisibilityFacts).toHaveBeenCalledWith(['a270be7b-7033-4b49-808c-bf2d5ef8e0ed']);
@@ -322,7 +339,7 @@ describe('PATCH /api/teams/[id]', () => {
     vi.mocked(updateTeamPokemon).mockResolvedValue(linked);
     vi.mocked(getTournamentById).mockRejectedValue(new Error('tournament read failed'));
 
-    const res = await PATCH(makeRequest({ pokemon: [{ species: 'Charizard' }], import_source: 'manual' }), routeParams);
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'manual' }), routeParams);
 
     expect(res.status).toBe(200);
     expect((await res.json()).success).toBe(true);
@@ -341,7 +358,7 @@ describe('PATCH /api/teams/[id]', () => {
 
     const res = await PATCH(
       makeRequest({
-        pokemon: [{ species: 'Charizard' }],
+        pokemon: [makeSet('Charizard')],
         import_source: 'pokepastes',
         name: 'Sun Squad',
       }),
@@ -351,7 +368,7 @@ describe('PATCH /api/teams/[id]', () => {
     expect(res.status).toBe(200);
     expect(updateTeamPokemon).toHaveBeenCalledWith(
       'a270be7b-7033-4b49-808c-bf2d5ef8e0ed',
-      [{ species: 'Charizard' }],
+      [makeSet('Charizard')],
       'pokepastes',
       'Sun Squad',
       { correction: false },
@@ -368,7 +385,7 @@ describe('PATCH /api/teams/[id]', () => {
 
       // The exact body useTeamSave sends for an existing team.
       const res = await PATCH(
-        makeRequest({ pokemon: [{ species: 'Charizard' }], import_source: 'manual', name: 'Final roster' }),
+        makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'manual', name: 'Final roster' }),
         routeParams,
       );
 
@@ -385,15 +402,15 @@ describe('PATCH /api/teams/[id]', () => {
     it('lets a site admin correct it (the write goes through the correction path) and expires the league world', async () => {
       vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'admin-1', isAdmin: true } as never);
       vi.mocked(getTeamById).mockResolvedValue(linked as never);
-      vi.mocked(updateTeamPokemon).mockResolvedValue({ ...linked, pokemon: [{ species: 'Charizard' }] } as never);
+      vi.mocked(updateTeamPokemon).mockResolvedValue({ ...linked, pokemon: [makeSet('Charizard')] } as never);
       vi.mocked(getTournamentById).mockResolvedValue({ id: 'tourney-1', season_id: 'season-1' } as never);
 
-      const res = await PATCH(makeRequest({ pokemon: [{ species: 'Charizard' }], import_source: 'manual' }), routeParams);
+      const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'manual' }), routeParams);
 
       expect(res.status).toBe(200);
       expect(updateTeamPokemon).toHaveBeenCalledWith(
         'a270be7b-7033-4b49-808c-bf2d5ef8e0ed',
-        [{ species: 'Charizard' }],
+        [makeSet('Charizard')],
         'manual',
         undefined,
         { correction: true },
@@ -410,7 +427,7 @@ describe('PATCH /api/teams/[id]', () => {
       vi.mocked(updateTeamPokemon).mockRejectedValue(new TeamMatchCompletedError());
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      const res = await PATCH(makeRequest({ pokemon: [{ species: 'Charizard' }], import_source: 'manual' }), routeParams);
+      const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'manual' }), routeParams);
 
       expect(res.status).toBe(409);
       expect((await res.json()).code).toBe('team_match_completed');
@@ -429,7 +446,7 @@ describe('PATCH /api/teams/[id]', () => {
       team_visibility: 'always_public',
     } as never);
 
-    const res = await PATCH(makeRequest({ pokemon: [{ species: 'Charizard' }], import_source: 'manual' }), routeParams);
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'manual' }), routeParams);
 
     expect(res.status).toBe(200);
     expect(expirePublicTags).toHaveBeenCalledWith(['season:season-1']);

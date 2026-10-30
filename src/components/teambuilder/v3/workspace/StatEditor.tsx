@@ -9,6 +9,7 @@ import { useSpeciesData } from '../hooks/useSpeciesData';
 import SpreadPresets from './SpreadPresets';
 import { NATURE_DATA } from '../constants';
 import type { PokemonSet, StatSpread } from '@/types/team';
+import { toBoundedInt } from '@/lib/pkmn/set-bounds';
 
 const STAT_KEYS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const;
 type StatKey = (typeof STAT_KEYS)[number];
@@ -68,7 +69,7 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
   );
 
   const handleEvChange = (stat: StatKey, raw: string) => {
-    const requested = Math.max(0, Math.min(252, Number(raw) || 0));
+    const requested = toBoundedInt(raw, 0, 252, 0);
     const currentForStat = evs[stat] ?? 0;
     const remaining = 510 - totalEvs + currentForStat;
     const clamped = Math.min(requested, remaining);
@@ -76,7 +77,7 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
   };
 
   const handleIvChange = (stat: StatKey, raw: string) => {
-    const val = Math.max(0, Math.min(31, Number(raw) || 0));
+    const val = toBoundedInt(raw, 0, 31, 0);
     dispatch({ type: 'UPDATE_SLOT', slot, patch: { ivs: { ...ivs, [stat]: val } } });
   };
 
@@ -148,6 +149,7 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
                 type="number"
                 min={0}
                 max={252}
+                step={1}
                 value={ev}
                 onChange={(e) => handleEvChange(stat, e.target.value)}
                 disabled={state.locked}
@@ -157,6 +159,7 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
                 type="number"
                 min={0}
                 max={31}
+                step={1}
                 value={iv}
                 onChange={(e) => handleIvChange(stat, e.target.value)}
                 disabled={state.locked}

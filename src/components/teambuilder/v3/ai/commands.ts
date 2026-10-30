@@ -35,6 +35,7 @@ export type EditorCommandErrorCode =
   | 'slot_empty'
   | 'invalid_move_index'
   | 'empty_proposal'
+  | 'invalid_set'
   | 'unknown_command';
 
 export interface CommandResult {

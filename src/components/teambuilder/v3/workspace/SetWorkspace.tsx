@@ -32,6 +32,11 @@ const SECTION_BY_CODE: Partial<Record<ValidationIssueCode, JumpSection>> = {
   ability_banned: 'fields',
   ev_total: 'stats',
   ev_stat_cap: 'stats',
+  ev_stat_invalid: 'stats',
+  iv_range: 'stats',
+  move_illegal: 'moves',
+  duplicate_move: 'moves',
+  ability_illegal: 'fields',
 };
 
 /** Exported for tests. */

@@ -306,6 +306,7 @@ describe('renderContextPack', () => {
       opponent_scout: null,
       league: {
         league_name: 'Summer Monotype Cup',
+        season_id: null,
         description: 'All Pokémon on a team must share a single type.',
         ruleset_name: 'Summer Monotype Cup',
         ruleset_version: 2,
@@ -381,6 +382,8 @@ describe('buildContextPack — league-scoped (plan mode)', () => {
     const pack = await buildContextPack(PLAYER, planContext);
     expect(pack.league?.ruleset_id).toBe('CUSTOM');
     expect(pack.league?.player_core).toEqual(['Grass', 'Ground', 'Poison']);
+    // The league id scopes the roster and Evolution Point Buy checks of validateTeam.
+    expect(pack.league?.season_id).toBe('S1');
     const md = renderContextPack(pack);
     expect(md).toContain('Ruleset id (pass this exact id as ruleset_id to buildTeam): CUSTOM');
   });

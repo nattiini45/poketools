@@ -1002,10 +1002,60 @@ export const draftPickSchema = z.object({
   stage3_pokemon: z.string().trim().min(1).max(FIELD_LIMITS.NAME).nullable().optional(),
 });
 
+// ─── Team payload shape (every API boundary that takes a team) ───────
+
+/** A whole-number stat investment with both bounds; a stat left out takes `fallback` (a set under construction). */
+const statValue = (max: number, fallback: number) => z.number().int().min(0).max(max).default(fallback);
+
+const evSpreadSchema = z.object({
+  hp: statValue(252, 0),
+  atk: statValue(252, 0),
+  def: statValue(252, 0),
+  spa: statValue(252, 0),
+  spd: statValue(252, 0),
+  spe: statValue(252, 0),
+});
+
+const ivSpreadSchema = z.object({
+  hp: statValue(31, 31),
+  atk: statValue(31, 31),
+  def: statValue(31, 31),
+  spa: statValue(31, 31),
+  spd: statValue(31, 31),
+  spe: statValue(31, 31),
+});
+
+/**
+ * One Pokémon set as the app stores it (`PokemonSet`, `src/types/team.ts`), bounded: strings are capped, EVs run 0 to
+ * 252 and IVs 0 to 31 per stat (both bounds, so a negative EV cannot make room for a fifth 252), the level is 1 to 100
+ * and a set carries at most four moves. Empty strings are the "unset" value of `item`, `ability`, `nature` and `gender`
+ * (the editor creates a blank set with them); `moves` may be empty so the live check can report `min_moves` while a
+ * set is being built. Unknown keys are dropped, not stored. The team-sum rules (EV total 510) and the dex rules
+ * (is that a move) stay with the validator.
+ */
+export const pokemonSetSchema = z.object({
+  name: z.string().max(FIELD_LIMITS.NAME).default(''),
+  species: z.string().trim().min(1).max(FIELD_LIMITS.NAME),
+  gender: z.enum(['', 'M', 'F', 'N']).default(''),
+  item: z.string().max(FIELD_LIMITS.NAME).default(''),
+  ability: z.string().max(FIELD_LIMITS.NAME).default(''),
+  evs: evSpreadSchema,
+  ivs: ivSpreadSchema,
+  nature: z.string().max(FIELD_LIMITS.LABEL).default(''),
+  level: z.number().int().min(1).max(100).default(100),
+  moves: z.array(z.string().max(FIELD_LIMITS.NAME)).max(4),
+  shiny: z.boolean().optional(),
+  happiness: z.number().int().min(0).max(255).optional(),
+  tera_type: z.string().max(FIELD_LIMITS.LABEL).optional(),
+});
+
+/** A team: one to six sets. */
+export const teamPokemonSchema = z.array(pokemonSetSchema).min(1).max(6);
+
 // ─── Team Validation Schema ──────────────────────────────────────────
 
 export const validateTeamSchema = z.object({
-  pokemon: z.unknown(),
+  pokemon: teamPokemonSchema,
   ruleset_id: uuid,
   season_id: uuid.optional(),
   // Optional tournament context. When provided, the API resolves the
@@ -1084,7 +1134,7 @@ export const importTeamSchema = z.object({
 
 export const matchPrepSchema = z.object({
   match_id: uuid,
-  pokemon: z.unknown(),
+  pokemon: teamPokemonSchema,
   import_source: teamImportSourceSchema.default('manual'),
   player_id: uuid.optional(),
 });
@@ -1538,15 +1588,13 @@ export const castSessionPopulateSchema = z.object({
 export const teamCreateSchema = z.object({
   tournament_id: uuid.nullable().optional(),
   season_id: uuid.nullable().optional(),
-  pokemon: z.unknown().refine((val) => Array.isArray(val) && val.length > 0, {
-    message: 'pokemon are required',
-  }),
+  pokemon: teamPokemonSchema,
   import_source: teamImportSourceSchema.optional(),
   name: z.string().trim().max(80).optional(),
 });
 
 export const teamUpdateSchema = z.object({
-  pokemon: z.unknown(),
+  pokemon: teamPokemonSchema,
   import_source: teamImportSourceSchema,
   name: z.string().trim().max(80).optional(),
 });

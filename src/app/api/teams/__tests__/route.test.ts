@@ -379,6 +379,27 @@ describe('POST /api/teams', () => {
     expect(body.error).toContain('pokemon');
   });
 
+  it.each([
+    ['a set without evs', { ...mockPokemonSet, evs: undefined }],
+    ['a negative EV', { ...mockPokemonSet, evs: { ...mockPokemonSet.evs, hp: -760 } }],
+    ['five moves', { ...mockPokemonSet, moves: ['a', 'b', 'c', 'd', 'e'] }],
+    ['an IV above 31', { ...mockPokemonSet, ivs: { ...mockPokemonSet.ivs, hp: 32 } }],
+    ['level 0', { ...mockPokemonSet, level: 0 }],
+    ['an item of 101 characters', { ...mockPokemonSet, item: 'x'.repeat(101) }],
+    ['a set that is null', null],
+  ])('refuses %s with a coded 400 and stores nothing', async (_label, badSet) => {
+    const request = {
+      json: vi.fn().mockResolvedValue({ tournament_id: UUID, pokemon: [badSet] }),
+    } as unknown as NextRequest;
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('validation_failed');
+    expect(createTeam).not.toHaveBeenCalled();
+  });
+
   it('creates a personal team (no tournament_id) with status 201', async () => {
     vi.mocked(createTeam).mockResolvedValue({ ...mockTeam, tournament_id: null });
     const request = {

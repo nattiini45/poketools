@@ -123,34 +123,57 @@ const teamSetSchema = z.object({
   teraType: z.string().optional(),
 });
 
+const RULESET_ID_DESCRIPTION =
+  'The league ruleset id from the "League ruleset" context section, when present. Validates the team against the league\'s real bans, clauses and team constraints instead of the bare base format.';
+const PLAYER_CORE_DESCRIPTION =
+  "The player's three assigned core types from the context (e.g. [\"Fire\",\"Water\",\"Grass\"]). Required for leagues whose type quota is based on the player core.";
+
 /**
  * A league ruleset id whose real bans/clauses/team-constraints should gate
  * legality (instead of a synthetic base-format ruleset). Optional and lenient —
  * an unresolvable id soft-falls back to the base format server-side.
  */
-export const rulesetIdSchema = z
-  .string()
-  .min(1)
-  .optional()
-  .describe(
-    'The league ruleset id from the "League ruleset" context section, when present. Validates the team against the league\'s real bans, clauses and team constraints instead of the bare base format.',
-  );
+export const rulesetIdSchema = z.string().min(1).optional().describe(RULESET_ID_DESCRIPTION);
 /** The player's assigned Core Liga triple (three type names). */
-export const playerCoreSchema = z
-  .array(z.string().min(1))
-  .length(3)
-  .optional()
-  .describe(
-    "The player's three assigned core types from the context (e.g. [\"Fire\",\"Water\",\"Grass\"]). Required for leagues whose type quota is based on the player core.",
-  );
+export const playerCoreSchema = z.array(z.string().min(1)).length(3).optional().describe(PLAYER_CORE_DESCRIPTION);
 
-/** Validate a team's legality (species/move/ability/item/learnset) for a format. */
-export const ValidateTeamInput = z.object({
+/**
+ * MODEL-FACING variants of the two fields above. The server overwrites (or drops) both before the strict schema runs
+ * (`applyToolOverrides`), so a malformed value the model invents must not fail the call before that happens.
+ */
+const rulesetIdModelSchema = z.string().optional().describe(RULESET_ID_DESCRIPTION);
+const playerCoreModelSchema = z.array(z.string()).optional().describe(PLAYER_CORE_DESCRIPTION);
+
+/**
+ * What the MODEL sees of `validateTeam`: the team, the format, and `ruleset_id` / `player_core` in a lenient form. The
+ * server overwrites those two with the resolved league's when it resolved one (`applyToolOverrides`); with no league the
+ * model's own values stay, and the strict schema below then validates them. `player_id` and `season_id` are not part of
+ * it, so nothing the model could invent there can fail the call before the override runs.
+ */
+export const ValidateTeamModelInput = z.object({
   // Allow more than 6 so the tool itself can flag oversized teams.
   team: z.array(teamSetSchema).min(1).max(12),
   format: z.string().min(1), // e.g. "gen9ou"
+  ruleset_id: rulesetIdModelSchema,
+  player_core: playerCoreModelSchema,
+});
+
+/**
+ * Validate a team's legality (species/move/ability/item/learnset) for a format. This is the STRICT schema `executeTool`
+ * runs after `applyToolOverrides`: `player_id` and `season_id` are set by the server from the authenticated player and
+ * the resolved league (the model never sees or names them); they scope the drafted roster, the assigned core and the
+ * Evolution Point Buy state to the player's own league. Both stay optional because a check with no league needs neither,
+ * but a league needs its player: `season_id` without `player_id` is refused, so a caller that skipped
+ * `applyToolOverrides` cannot get a league check that silently drops the roster.
+ */
+export const ValidateTeamInput = ValidateTeamModelInput.extend({
   ruleset_id: rulesetIdSchema,
   player_core: playerCoreSchema,
+  player_id: z.string().uuid().optional(),
+  season_id: z.string().uuid().optional(),
+}).refine((input) => input.season_id === undefined || input.player_id !== undefined, {
+  message: 'player_id is required with season_id (set by the server)',
+  path: ['player_id'],
 });
 export type ValidateTeamInput = z.infer<typeof ValidateTeamInput>;
 
@@ -186,23 +209,43 @@ export const QueryLeagueDataInput = z.object({
 });
 export type QueryLeagueDataInput = z.infer<typeof QueryLeagueDataInput>;
 
-/** Get a player's completed match history (optionally scoped to one tournament). */
-export const GetMatchHistoryInput = z.object({
-  playerId: z.string().uuid(),
+const playerIdModelSchema = z
+  .string()
+  .uuid()
+  .optional()
+  .describe('Another player (an opponent) by id. Leave empty for the player you are talking to: the server fills it in.');
+
+/** What the model sees of `getMatchHistory`: `playerId` is optional, the server defaults it to the authenticated player. */
+export const GetMatchHistoryModelInput = z.object({
+  playerId: playerIdModelSchema,
   tournamentId: z.string().uuid().optional(),
   limit: z.number().int().min(1).max(20).default(20),
 });
+
+/** Get a player's completed match history (optionally scoped to one tournament). */
+export const GetMatchHistoryInput = GetMatchHistoryModelInput.extend({ playerId: z.string().uuid() });
 export type GetMatchHistoryInput = z.infer<typeof GetMatchHistoryInput>;
 
+/** What the model sees of `getUpcomingMatches`. */
+export const GetUpcomingMatchesModelInput = z.object({ playerId: playerIdModelSchema });
+
 /** Get a player's upcoming (scheduled / pending) matches. */
-export const GetUpcomingMatchesInput = z.object({
-  playerId: z.string().uuid(),
-});
+export const GetUpcomingMatchesInput = GetUpcomingMatchesModelInput.extend({ playerId: z.string().uuid() });
 export type GetUpcomingMatchesInput = z.infer<typeof GetUpcomingMatchesInput>;
 
-/** Fetch the full battle context (stats, teams, rules, turn-by-turn) for one match. */
-export const GetMatchAnalysisContextInput = z.object({
+/** What the model sees of `getMatchAnalysisContext`: only the match id. */
+export const GetMatchAnalysisContextModelInput = z.object({
   matchId: z.string().uuid(),
+});
+
+/**
+ * Fetch the full battle context (stats, teams, rules, turn-by-turn) for one match. The STRICT schema: `requesterId` is
+ * set by the server (`applyToolOverrides`) to the authenticated player and is not part of what the model sees. It is
+ * REQUIRED here, so a caller that skipped `applyToolOverrides` is refused at the schema instead of failing open. The tool
+ * answers only for a match this player may see.
+ */
+export const GetMatchAnalysisContextInput = GetMatchAnalysisContextModelInput.extend({
+  requesterId: z.string().uuid(),
 });
 export type GetMatchAnalysisContextInput = z.infer<typeof GetMatchAnalysisContextInput>;
 
@@ -230,13 +273,19 @@ export type CreatePokepasteInput = z.infer<typeof CreatePokepasteInput>;
 
 // ─── Meta-tool ───────────────────────────────────────────────────────
 
-/** Assemble a legal team around optional cores/items/moves (chains lookup→usage→calc→validate). */
-export const BuildTeamInput = z.object({
+/** What the model sees of `buildTeam` (`ruleset_id` and `player_core` are overwritten by the server when a league resolved). */
+export const BuildTeamModelInput = z.object({
   format: z.string().min(1),
   core_pokemon: z.array(z.string().min(1)).max(2).optional(),
   requested_items: z.record(z.string(), z.string()).optional(),
   requested_moves: z.record(z.string(), z.array(z.string())).optional(),
   team_size: z.number().int().min(1).max(6).default(6),
+  ruleset_id: rulesetIdModelSchema,
+  player_core: playerCoreModelSchema,
+});
+
+/** Assemble a legal team around optional cores/items/moves (chains lookup→usage→calc→validate). */
+export const BuildTeamInput = BuildTeamModelInput.extend({
   ruleset_id: rulesetIdSchema,
   player_core: playerCoreSchema,
 });

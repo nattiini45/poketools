@@ -34,7 +34,7 @@ import { getPinTargetStates, listRulesetVersions } from '@/lib/supabase/queries/
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { listParticipantCores } from '@/lib/supabase/queries/seasons';
 import { listTeamsForPinImpact } from '@/lib/supabase/queries/teams';
-import { MAX_IMPACT_TEAMS, computePinImpact, countBecomingInvalid } from '../pin-impact.server';
+import { MAX_IMPACT_TEAMS, computePinImpact, countBecomingInvalid, summarizePinImpact } from '../pin-impact.server';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const DEF = '33333333-3333-4333-8333-333333333333';
@@ -100,6 +100,25 @@ describe('countBecomingInvalid', () => {
     expect(countBecomingInvalid(teams, RULES_V2, RULES_V1, noCore)).toBe(0);
   });
 
+  it('survives a malformed stored team: it is skipped, the rest are still counted (it used to fail the whole request)', () => {
+    const malformed = [
+      { id: 'm1', player_id: 'player-m1', pokemon: [{ species: 'Garchomp' }] }, // no evs, ivs or moves
+      { id: 'm2', player_id: 'player-m2', pokemon: null },
+      { id: 'm3', player_id: 'player-m3', pokemon: [null] },
+      { id: 'm4', player_id: 'player-m4', pokemon: 'Garchomp' },
+      { id: 'm5', player_id: 'player-m5', pokemon: [{ ...GARCHOMP, evs: { hp: -760, atk: 252, def: 252, spa: 252, spd: 252, spe: 252 } }] },
+    ];
+    const teams = [...malformed, team('a', GARCHOMP), team('b', DRAGONITE)];
+
+    expect(() => countBecomingInvalid(teams, RULES_V1, RULES_V2, noCore)).not.toThrow();
+    expect(countBecomingInvalid(teams, RULES_V1, RULES_V2, noCore)).toBe(1);
+  });
+
+  it('counts the malformed rows apart from the teams that would break', () => {
+    const teams = [{ id: 'm', player_id: 'p', pokemon: [{ species: 'Garchomp' }] }, team('a', GARCHOMP), team('b', DRAGONITE)];
+    expect(summarizePinImpact(teams, RULES_V1, RULES_V2, noCore)).toEqual({ broken: 1, malformed: 1 });
+  });
+
   it('hands each team its player assigned core to the validator', () => {
     const seen: string[] = [];
     countBecomingInvalid([team('a', GARCHOMP), team('b', DRAGONITE)], RULES_V1, RULES_V2, (playerId) => {
@@ -126,15 +145,34 @@ describe('computePinImpact', () => {
       version_no: 2,
       checked: 5,
       would_break: 3,
+      malformed: 0,
       truncated: false,
       targets: [
-        { kind: 'season', id: SEASON, name: 'season 1', checked: 2, would_break: 1 },
-        { kind: 'tournament', id: PHASE, name: 'tournament 1', checked: 3, would_break: 2 },
+        { kind: 'season', id: SEASON, name: 'season 1', checked: 2, would_break: 1, malformed: 0 },
+        { kind: 'tournament', id: PHASE, name: 'tournament 1', checked: 3, would_break: 2, malformed: 0 },
       ],
     });
     expect(listTeamsForPinImpact).toHaveBeenCalledWith({ kind: 'season', id: SEASON }, MAX_IMPACT_TEAMS);
     // The rules of each version are read once, however many targets use them.
     expect(vi.mocked(getRulesetById).mock.calls.map(([id]) => id).sort()).toEqual([V1, V2]);
+  });
+
+  it('reports malformed stored teams apart: they are not in checked and not in would_break, per target and in total', async () => {
+    vi.mocked(getPinTargetStates).mockResolvedValue([state('season', SEASON), state('tournament', PHASE)]);
+    const bad = { id: 'bad', player_id: 'player-bad', pokemon: [{ species: 'Garchomp' }] as unknown as PokemonSet[] };
+    vi.mocked(listTeamsForPinImpact).mockImplementation(async (scope) =>
+      scope.kind === 'season'
+        ? { teams: [bad, team('a', GARCHOMP), team('b', DRAGONITE)], truncated: false }
+        : { teams: [bad, { ...bad, id: 'bad2' }], truncated: false },
+    );
+
+    const impact = await computePinImpact(input([{ kind: 'season', id: SEASON }, { kind: 'tournament', id: PHASE }]));
+
+    expect(impact).toMatchObject({ checked: 2, would_break: 1, malformed: 3 });
+    expect(impact.targets).toEqual([
+      expect.objectContaining({ id: SEASON, checked: 2, would_break: 1, malformed: 1 }),
+      expect.objectContaining({ id: PHASE, checked: 0, would_break: 0, malformed: 2 }),
+    ]);
   });
 
   it('a target already on the version changes nothing and reads no team', async () => {

@@ -160,6 +160,22 @@ describe('PinImpactNotice', () => {
     expect(html).toContain('The check stopped after 12 teams, so these numbers cover only those.');
   });
 
+  it('names stored teams that could not be checked, in both languages, apart from the counts', () => {
+    const one = render({ status: 'ready', impact: { ...IMPACT, malformed: 1 } });
+    expect(one).toContain('1 stored team could not be checked: its data is not a valid team.');
+    expect(render({ status: 'ready', impact: { ...IMPACT, malformed: 3 } })).toContain('3 stored teams could not be checked');
+    expect(render({ status: 'ready', impact: { ...IMPACT, malformed: 2 } }, 'de')).toContain('2 gespeicherte Teams konnten nicht geprüft werden');
+    // All teams unreadable: nothing was checked, and the notice still says why.
+    const none = render({ status: 'ready', impact: { ...IMPACT, checked: 0, would_break: 0, malformed: 2, targets: [] } });
+    expect(none).toContain('No submitted team is checked against this ruleset yet.');
+    expect(none).toContain('2 stored teams could not be checked');
+  });
+
+  it('says nothing about unreadable teams when there are none (or the answer predates the field)', () => {
+    expect(render({ status: 'ready', impact: { ...IMPACT, malformed: 0 } })).not.toContain('could not be checked');
+    expect(render({ status: 'ready', impact: IMPACT })).not.toContain('could not be checked');
+  });
+
   it('a check that could not run says so and gives the reason, without a count', () => {
     const html = render({ status: 'failed', error: { code: 'rate_limited', params: { seconds: 30 } } });
     expect(html).toContain('The submitted teams could not be checked. Some may become invalid under version 3.');

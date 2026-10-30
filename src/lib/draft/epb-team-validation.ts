@@ -9,6 +9,7 @@ import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { lineLookup, resolveEpbStage } from '@/lib/match/epb-stage-resolution';
 import { codedIssue, validateTeam } from '@/lib/pkmn/validation';
 import { getSpecies } from '@/lib/pkmn/dex';
+import { toID } from '@/lib/pkmn/i18n/id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { PokemonSet, TeamValidationResult } from '@/types/team';
 import { rulesFromBans } from '@/lib/ruleset-kit/effective';
@@ -230,6 +231,62 @@ function resolveStageByIndex(
   });
 }
 
+/** What the EPB checks read of a season for one trainer: the season's rules, the trainer's trackers and the season's lines. */
+export interface EpbSeasonState {
+  formatRules: Awaited<ReturnType<typeof getFormatRules>>;
+  trackers: Awaited<ReturnType<typeof getPlayerTrackers>>;
+  lines: Awaited<ReturnType<typeof getSeasonLineThresholds>>;
+}
+
+/** Reads the three EPB inputs in parallel. */
+export async function loadEpbSeasonState(seasonId: string, playerId: string): Promise<EpbSeasonState> {
+  const [formatRules, trackers, lines] = await Promise.all([
+    getFormatRules(seasonId),
+    getPlayerTrackers(seasonId, playerId),
+    getSeasonLineThresholds(seasonId),
+  ]);
+  return { formatRules, trackers, lines };
+}
+
+/**
+ * Every Pokémon form the trainer owns in an Evolution Point Buy season, as the species names a team may carry.
+ *
+ * The draft stores a pick as the line's BASE Pokémon (`draft_picks.pokemon_name`, `v_entry.base_pokemon`), so the
+ * picks cannot say whether a trainer owns Samurott. The trackers can: one tracker per held line (a Redraft deletes the
+ * tracker of a dropped line and creates the one of a new line), and a line owns its base, its stage-2 and stage-3 forms
+ * and the locked stage-3 branch. A tracker whose line is not among the season's lines still owns its base and its
+ * locked branch. Group scoping comes with the trackers (one trainer, one group).
+ */
+export function ownedSpeciesFromTrackers(
+  trackers: readonly Pick<EpbSeasonState['trackers'][number], 'line_id' | 'base_pokemon' | 'locked_stage3_pokemon'>[],
+  lines: LineThresholds[],
+): string[] {
+  const lineOf = lineLookup(lines);
+  const owned = new Set<string>();
+  for (const tracker of trackers) {
+    const line = lineOf(tracker);
+    const forms = line
+      ? collectLineForms(line, tracker.locked_stage3_pokemon)
+      : new Set([tracker.base_pokemon, ...(tracker.locked_stage3_pokemon ? [tracker.locked_stage3_pokemon] : [])]);
+    for (const form of forms) if (form) owned.add(form);
+  }
+  return [...owned];
+}
+
+/**
+ * The forms of the lines whose BASE Pokémon is in `bases`: the roster of a trainer whose picks exist but whose trackers
+ * do not (yet). Several lines can share a base (Oshawott → Samurott, Samurott-Hisui); every one of them is expanded.
+ */
+export function ownedSpeciesFromBases(bases: readonly string[], lines: LineThresholds[]): string[] {
+  const wanted = new Set(bases.map(toID));
+  const owned = new Set<string>(bases);
+  for (const line of lines) {
+    if (!wanted.has(toID(line.base_pokemon))) continue;
+    for (const form of collectLineForms(line)) if (form) owned.add(form);
+  }
+  return [...owned];
+}
+
 /**
  * Validate an EPB team against the season's `format_rules` (banned moves/items,
  * stage-aware tera). Non-throwing variant for UX routes that want the
@@ -243,12 +300,10 @@ export async function validateEpbTeamForSeason(
   seasonId: string,
   playerId: string,
   pokemon: PokemonSet[],
+  /** The season state when the caller has read it already (the shared team check reads it once for roster and rules). */
+  state?: EpbSeasonState,
 ): Promise<TeamValidationResult> {
-  const [formatRules, trackers, lines] = await Promise.all([
-    getFormatRules(seasonId),
-    getPlayerTrackers(seasonId, playerId),
-    getSeasonLineThresholds(seasonId),
-  ]);
+  const { formatRules, trackers, lines } = state ?? (await loadEpbSeasonState(seasonId, playerId));
 
   const bannedMoves = formatRules?.banned_moves?.length ? formatRules.banned_moves : DEFAULT_BANNED_MOVES;
   const bannedItems = formatRules?.banned_items?.length ? formatRules.banned_items : DEFAULT_BANNED_ITEMS;
