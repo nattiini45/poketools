@@ -309,6 +309,20 @@ describe('checkTeam: the assigned core', () => {
     expect(codesOf(result)).not.toContain('tera_core_mismatch');
   });
 
+  it('a failed core read fails a type-quota core rule too, replacing its missing-core message', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(getParticipantCore).mockRejectedValue(new Error('db down'));
+    const quotaRuleset = makeRuleset({
+      base_format: 'gen9ou',
+      team_constraints: { type_quotas: { source: 'player_core', min_per_type: 1, allow_multi_count: true } },
+    });
+    const result = await checkTeam({ pokemon: [makeSet('Garchomp')], ruleset: quotaRuleset, playerId: PLAYER, seasonId: SEASON_ID });
+    expect(codesOf(result)).toContain('core_load_failed');
+    expect(codesOf(result)).not.toContain('type_quota_no_core');
+    expect(result.valid).toBe(false);
+    log.mockRestore();
+  });
+
   it('a failed core read is its own cause: logged, labelled core_load_failed, never "no core assigned", and never valid', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(getParticipantCore).mockRejectedValue(new Error('db down'));

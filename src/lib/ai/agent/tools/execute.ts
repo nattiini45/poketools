@@ -9,8 +9,9 @@
  *   4. wraps the result as `{ ok: true, data }`.
  *
  * Deterministic read tools are memoised for 5 minutes (keyed by name + input).
- * `buildTeam` and `createPokepaste` are never cached — they have side effects
- * (pokepaste publishing) or are too coarse to share.
+ * `buildTeam`, `createPokepaste` and `validateTeam` are never cached — they have
+ * side effects (pokepaste publishing), are too coarse to share, or depend on
+ * mutable league state (roster, trackers, assigned core, the ruleset read).
  */
 import { LruCache } from '@/lib/utils/lru-cache';
 import { formatZodErrors } from '@/lib/validation/schemas';
