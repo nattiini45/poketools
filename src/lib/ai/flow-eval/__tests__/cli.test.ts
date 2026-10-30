@@ -475,6 +475,15 @@ describe('main: --resume never mixes runs', () => {
     expect(readFileSync(path.join(dir, 'config.json'), 'utf8')).toBe(before);
   });
 
+  it('refuses to resume a path with no previous run, and sends nothing', async () => {
+    for (const dir of [path.join(tmp(), 'typo'), tmp()]) {
+      const h = harness(['--flow', 'recap', '--per-flow', '1', '--resume', dir]);
+      expect(await main(h.options)).toBe(2);
+      expect(h.err.join('\n')).toMatch(/nothing to resume/);
+      expect(h.calls).toHaveLength(0);
+    }
+  });
+
   it('resumes with the same setup and keeps the original config.json even when other flags differ', async () => {
     const dir = tmp();
     await main(harness(['--flow', 'recap', '--per-flow', '1', '--out', dir]).options);

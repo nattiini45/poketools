@@ -29,8 +29,9 @@ describe('pricing', () => {
     expect(pricedModels()).toContain('claude-haiku-5-5');
   });
 
-  it('the worst case of a call is the whole prompt plus a full output cap', () => {
-    expect(worstCaseCostUsd('claude-sonnet-5-5', 10_000, 16_000)).toBeCloseTo((10_000 * 2 + 16_000 * 10) / 1_000_000, 10);
+  it('the worst case of a call is the whole prompt at the cache-write rate plus a full output cap', () => {
+    // Sonnet 5.5: a 5-minute cache write ($2.50) bills above fresh input ($2), so the reservation uses it.
+    expect(worstCaseCostUsd('claude-sonnet-5-5', 10_000, 16_000)).toBeCloseTo((10_000 * 2.5 + 16_000 * 10) / 1_000_000, 10);
   });
 
   it('estimates tokens on the high side', () => {

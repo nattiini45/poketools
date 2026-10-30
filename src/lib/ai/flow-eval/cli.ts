@@ -377,6 +377,11 @@ export async function main(options: CliOptions): Promise<number> {
   // ─── Live run ───────────────────────────────────────────────────────
   const configFile = path.join(outDir, 'config.json');
   if (parsed.resume !== undefined) {
+    // A typo'd or empty resume path must not silently become a fresh paid run.
+    if (readIfPresent(path.join(outDir, 'results.jsonl')) === null) {
+      io.error(`ai-flow eval: nothing to resume in ${parsed.resume} (no results.jsonl). Check the path, or start a new run without --resume.`);
+      return 2;
+    }
     const mismatch = resumeMismatch(readIfPresent(configFile), { model, effort, fixtures: parsed.fixtures, flows: parsed.flows });
     if (mismatch) {
       io.error(`ai-flow eval: --resume ${parsed.resume} was started with a different setup (${mismatch}). Resume with the same --model, --effort, --fixtures and --flow, or start a new run.`);

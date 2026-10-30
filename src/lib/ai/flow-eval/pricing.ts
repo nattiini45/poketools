@@ -64,13 +64,15 @@ export function callCostUsd(model: string, usage: CallUsage): number | null {
 }
 
 /**
- * The most one call to `model` can cost: the whole prompt as fresh input plus a full `maxTokens`
- * of output. The cost cap reserves this before a call starts, so it can never be exceeded.
+ * The most one call to `model` can cost: the whole prompt at the dearest input rate (a cache write
+ * bills above fresh input) plus a full `maxTokens` of output. The cost cap reserves this before a
+ * call starts, so it can never be exceeded.
  */
 export function worstCaseCostUsd(model: string, promptTokensEstimate: number, maxTokens: number): number {
   const price = priceOf(model);
   if (!price) throw new Error(`no price for model ${model}`);
-  return (promptTokensEstimate * price.inputPerMTok + maxTokens * price.outputPerMTok) / 1_000_000;
+  const inputRate = Math.max(price.inputPerMTok, price.cacheWritePerMTok);
+  return (promptTokensEstimate * inputRate + maxTokens * price.outputPerMTok) / 1_000_000;
 }
 
 /** Rough prompt size. Deliberately on the high side (about 3 characters per token for the 5.x tokenizer). */
