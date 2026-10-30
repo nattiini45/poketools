@@ -24,7 +24,7 @@ import type { ConversationRecord, Json, MessageRecord, NewRef, UsageMeters } fro
 import { toolUsesOf, textOf, toJson, type ToolUseBlock } from './blocks';
 import { loopCode } from './codes';
 import { LOOP_EVENTS, harnessEventMessage } from './harness';
-import { costMicro, DEFAULT_CONTEXT_WINDOW_TOKENS, estimateStepCostMicro, estimateTokens, maxOutputTokensFor } from './pricing';
+import { contextWindowFor, costMicro, estimateStepCostMicro, estimateTokens, estimateWarmStepCostMicro, maxOutputTokensFor, promptTokensOf } from './pricing';
 import { failureResult, serializeToolResult, toolResultBlock, type SerializedToolResult } from './tool-results';
 import { entryOf, type TranscriptEntry } from './transcript';
 import { safeSink } from './events';
@@ -113,6 +113,12 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
   const sentinel = deps.stateChannel === 'sentinel-user' ? deps.sentinelFor(conversation.id) : '';
   let turnCost = 0;
   let conversationSpend = await currentConversationSpend(run);
+  /** The prompt (fresh, written and read) of the previous settled step of this turn: what the next step should read back. */
+  let previousPrefix: number | null = null;
+  /** The measured meters and the prompt estimate of the previous settled step of this turn, for the warm reservation. */
+  let previousStep: PreviousStep | null = null;
+  /** The lowest cache-read share of that prefix seen from step 2 on (see `cacheReadShare`). */
+  let lowestCacheReadRatio: number | null = null;
 
   const result = (reason: DoneReason, resumable: boolean): TurnOutcome => ({
     reason,
@@ -121,6 +127,7 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     toolCalls: counters.toolCalls,
     stagings: counters.stagings,
     costUsdMicro: turnCost,
+    ...(lowestCacheReadRatio !== null ? { lowestCacheReadRatio } : {}),
   });
 
   /** Stops with a resumable event: the admin (or the UI) posts `{continue: true}` to go on. */
@@ -138,13 +145,22 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
 
     // ── Context size ────────────────────────────────────────────────
     const promptTokens = estimatePromptTokens(run, sentinel);
-    if (promptTokens > ((deps.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS) * limits.contextRefusePercent) / 100) {
+    if (promptTokens > ((deps.contextWindowTokens ?? contextWindowFor(model)) * limits.contextRefusePercent) / 100) {
       emit({ type: 'error', code: 'agent_context_full', reason: 'context_over_limit' });
       return result('context', false);
     }
 
     // ── Reserve ─────────────────────────────────────────────────────
-    const estimate = estimateStepCostMicro(model, promptTokens, maxOutputTokens);
+    // Step 1 of a turn reserves the cold ceiling: the whole prompt as a 1 h cache write, since a cache miss after a human
+    // pause is the expensive case. A later step follows the previous one seconds apart, so what that step measured is in the
+    // cache: reserve it at the read price plus only the messages appended since (the same bytes-over-3.5 estimate on both
+    // sides, so the difference is the delta). The cold figure stays the ceiling.
+    // The warm figure is only trusted while the evidence says the cache is working (see `warmReservationApplies`).
+    const coldEstimate = estimateStepCostMicro(model, promptTokens, maxOutputTokens);
+    const estimate =
+      previousStep !== null && warmReservationApplies(previousStep, transcript)
+        ? Math.min(coldEstimate, estimateWarmStepCostMicro(model, previousStep.usage, promptTokens - previousStep.estimatedPromptTokens, maxOutputTokens))
+        : coldEstimate;
     const reservation = await deps.store.usage
       .reserveUsage(request.adminId, {
         adminName: request.adminName,
@@ -193,6 +209,7 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     // ── The model step ──────────────────────────────────────────────
     const remainingMs = Math.max(MIN_STEP_TIMEOUT_MS, hardDeadline - deps.now().getTime());
     let stepResult: ModelStepResult;
+    const transcriptLength = transcript.length;
     try {
       stepResult = await deps.port.step({
         model,
@@ -221,6 +238,19 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     await deps.store.usage
       .settleUsage(request.adminId, reservation.usageId, { ...stepResult.usage, costUsdMicro: stepCost, stopReason: stepResult.rawStopReason ?? stepResult.stopReason })
       .catch((error: unknown) => console.error('[admin-agent] usage settle failed; the reservation stays and counts', error));
+    // The read share is computed before any logging, so a throwing log sink cannot lose the regression signal the warm
+    // reservation gate reads.
+    const ratio = cacheReadShare(previousPrefix, stepResult.usage);
+    if (ratio !== null) lowestCacheReadRatio = lowestCacheReadRatio === null ? ratio : Math.min(lowestCacheReadRatio, ratio);
+    const regressed = ratio !== null && ratio < CACHE_REGRESSION_RATIO;
+    // Diagnostics only: a failure here can never touch the turn.
+    try {
+      diagnoseStep({ conversationId: conversation.id, model: stepResult.model || model, step, usage: stepResult.usage, previousPrefix, iterations: stepResult.iterations });
+    } catch (error) {
+      console.error('[admin-agent] step diagnostics failed', error);
+    }
+    previousPrefix = promptTokensOf(stepResult.usage);
+    previousStep = { usage: stepResult.usage, estimatedPromptTokens: promptTokens, transcriptLength, regressed };
     emit({
       type: 'usage',
       step,
@@ -241,7 +271,13 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
         role: 'assistant',
         kind: 'chat',
         content: toJson(stepResult.blocks),
-        ui: { text: textOf(stepResult.blocks), tool_calls: calls.map((c) => ({ id: c.id, name: c.name })) },
+        // A refused step's partial output is stored exactly as produced (the history is append-only and a replayed prefix
+        // must match) and only flagged here; the UI projection hides its prose.
+        ui: {
+          text: textOf(stepResult.blocks),
+          tool_calls: calls.map((c) => ({ id: c.id, name: c.name })),
+          ...(stepResult.stopReason === 'refusal' ? { refused: true, ...(stepResult.stopDetails?.category ? { refusal_category: stepResult.stopDetails.category } : {}) } : {}),
+        },
         model: stepResult.model || model,
         stopReason: stepResult.rawStopReason ?? stepResult.stopReason,
         usage: usageJson(stepResult.usage, stepCost),
@@ -255,6 +291,20 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     // ── What the stop means ─────────────────────────────────────────
     switch (stepResult.stopReason) {
       case 'refusal':
+        deps.audit({
+          actor_id: request.adminId,
+          actor_name: request.adminName,
+          action: 'agent.model.refusal',
+          resource_type: 'agent_conversation',
+          resource_id: conversation.id,
+          metadata: {
+            category: stepResult.stopDetails?.category ?? null,
+            model: stepResult.model || model,
+            step,
+            stop_reason: stepResult.rawStopReason,
+            partial_stored: hasBlocks,
+          },
+        });
         await answerUnrun(run, calls, 'refused');
         emit({ type: 'error', code: loopCode('refused'), reason: 'refusal' });
         return result('refused', false);
@@ -313,6 +363,103 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     // A write was held back for lack of time: the admin (or the UI) resumes the turn and the model asks for it again.
     if (deadlineHit) return stopResumable('deadline', LOOP_EVENTS.turnDeadline, { step: counters.steps, reason: 'tool_calls' });
   }
+}
+
+/** What a later step of the same turn needs to know about the one before it. */
+interface PreviousStep {
+  usage: UsageMeters;
+  estimatedPromptTokens: number;
+  /** How many transcript entries the previous request carried, so what was appended since can be counted. */
+  transcriptLength: number;
+  /** The previous step's own cache read fell below `CACHE_REGRESSION_RATIO` of the step before it. */
+  regressed: boolean;
+}
+
+/** At least this share of the previous prompt must have gone through the cache (read or written) for a warm reservation. */
+export const WARM_MIN_CACHED_SHARE = 0.5;
+/** The cache lookup only reaches back about 20 content blocks from the new breakpoint: more than this many appended blocks may miss. */
+export const WARM_MAX_APPENDED_BLOCKS = 8;
+
+/** The content blocks the transcript gained since a step's request (an event entry counts as one). */
+export function blocksAppendedSince(transcript: readonly TranscriptEntry[], fromIndex: number): number {
+  let count = 0;
+  for (const entry of transcript.slice(fromIndex)) count += entry.role === 'event' ? 1 : entry.blocks.length;
+  return count;
+}
+
+/**
+ * Whether the next step may reserve the warm estimate. It may when (a) the previous step's meters show the cache engaged
+ * (cache reads and writes are at least half its prompt), (b) at most `WARM_MAX_APPENDED_BLOCKS` content blocks were appended
+ * since (a cache hit needs a breakpoint within the lookup window of the new one, and parallel tool calls can add many
+ * blocks), and (c) the previous step did not itself log a cache regression. Otherwise the cold ceiling is reserved: a miss
+ * is billed cold, and a reservation that assumed a hit would let a capped conversation overshoot by that premium.
+ */
+export function warmReservationApplies(previous: PreviousStep, transcript: readonly TranscriptEntry[]): boolean {
+  const prompt = promptTokensOf(previous.usage);
+  if (prompt <= 0) return false;
+  const cached = previous.usage.cacheReadTokens + previous.usage.cacheWrite5mTokens + previous.usage.cacheWrite1hTokens;
+  if (cached < WARM_MIN_CACHED_SHARE * prompt) return false;
+  if (blocksAppendedSince(transcript, previous.transcriptLength) > WARM_MAX_APPENDED_BLOCKS) return false;
+  return !previous.regressed;
+}
+
+/** A step 2 or later whose cache read is below this share of the previous step's prefix is logged as a cache regression. */
+export const CACHE_REGRESSION_RATIO = 0.5;
+
+/**
+ * The share of the previous step's prefix that this step read back from the cache, or `null` when there is no comparison
+ * (the first step of a turn, or a previous step that reported no prompt). Each step of a turn appends to the one before it
+ * and the breakpoint of the last call covers its whole prefix, so a healthy cache reads back nearly all of it. A fixed
+ * read/total threshold would be wrong: a large tool result lowers that ratio legitimately; this one compares like with like.
+ */
+export function cacheReadShare(previousPrefix: number | null, usage: UsageMeters): number | null {
+  if (previousPrefix === null || previousPrefix <= 0) return null;
+  return usage.cacheReadTokens / previousPrefix;
+}
+
+interface StepDiagnosis {
+  conversationId: string;
+  model: string;
+  step: number;
+  usage: UsageMeters;
+  previousPrefix: number | null;
+  iterations?: ModelStepResult['iterations'];
+}
+
+/**
+ * Logs one structured, content-free line when a step's cache read fell below `CACHE_REGRESSION_RATIO` of the previous
+ * step's prefix (ids, a model name and token counts only), and another when the API reported usage iterations that are not
+ * plain messages (billed apart from the totals). Returns the read share for the turn outcome.
+ */
+export function diagnoseStep(input: StepDiagnosis): number | null {
+  const ratio = cacheReadShare(input.previousPrefix, input.usage);
+  if (ratio !== null && ratio < CACHE_REGRESSION_RATIO) {
+    console.warn(
+      `[admin-agent] cache_read_regression ${JSON.stringify({
+        conversation_id: input.conversationId,
+        model: input.model,
+        step: input.step,
+        cache_read_tokens: input.usage.cacheReadTokens,
+        cache_write_tokens: input.usage.cacheWrite5mTokens + input.usage.cacheWrite1hTokens,
+        fresh_input_tokens: input.usage.inputTokens,
+        prompt_tokens: promptTokensOf(input.usage),
+        previous_prompt_tokens: input.previousPrefix,
+        ratio: Math.round(ratio * 1000) / 1000,
+      })}`,
+    );
+  }
+  const other = (input.iterations ?? []).filter((iteration) => iteration.type !== 'message');
+  if (other.length > 0) {
+    console.warn(
+      `[admin-agent] non_message_iterations ${JSON.stringify({
+        conversation_id: input.conversationId,
+        model: input.model,
+        step: input.step,
+        iterations: other.map((iteration) => ({ type: iteration.type, model: iteration.model ?? null, input_tokens: iteration.inputTokens, output_tokens: iteration.outputTokens })),
+      })}`,
+    );
+  }
+  return ratio;
 }
 
 const BUDGET_CODE = {

@@ -71,6 +71,14 @@ function assistantTextOf(message: MessageRecord): string | null {
     .join('');
 }
 
+/**
+ * Whether a model step ended on a refusal. Its partial prose is kept in the stored history exactly as produced (it is part of
+ * the replayed prefix) and is only left out of what the browser shows: the refusal reaches the admin as its own error.
+ */
+function isRefused(message: MessageRecord): boolean {
+  return (isObject(message.ui) && message.ui.refused === true) || message.stop_reason === 'refusal';
+}
+
 function toolCallsOf(message: MessageRecord): Array<{ id: string; name: string }> {
   const calls: Array<{ id: string; name: string }> = [];
   const fromUi = isObject(message.ui) && Array.isArray(message.ui.tool_calls) ? message.ui.tool_calls : null;
@@ -153,7 +161,7 @@ export function projectTranscript(messages: readonly MessageRecord[]): Transcrip
       items.push({ type: 'user', seq: message.seq, at: message.created_at, text: textOfMessage(message) });
     } else if (message.role === 'assistant') {
       const text = assistantTextOf(message);
-      if (text === null || text.trim() !== '') items.push({ type: 'assistant', seq: message.seq, at: message.created_at, text });
+      if (!isRefused(message) && (text === null || text.trim() !== '')) items.push({ type: 'assistant', seq: message.seq, at: message.created_at, text });
       for (const call of toolCallsOf(message)) {
         const item: Extract<TranscriptItem, { type: 'tool' }> = {
           type: 'tool',

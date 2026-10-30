@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { codesPendingInCatalog, isCatalogued, loopCode, LOOP_CODES, AdminAgentLoopError, plainParams } from '../codes';
 import { createEventStream, encodeSseEvent, safeSink } from '../events';
 import { HARNESS_MARKER, harnessEventMessage, harnessEventText, hasUnconsumedHarnessEvent, neutralizeAdminText, readHarnessEvent, stableStringify } from '../harness';
-import { DEFAULT_CONTEXT_WINDOW_TOKENS, costMicro, estimateStepCostMicro, estimateTokens, maxOutputTokensFor, priceOf, RESERVE_OUTPUT_TOKENS } from '../pricing';
+import { DEFAULT_CONTEXT_WINDOW_TOKENS, LONG_PROMPT_TOKENS, contextWindowFor, costMicro, estimateStepCostMicro, estimateTokens, estimateWarmStepCostMicro, maxOutputTokensFor, priceOf, promptTokensOf, RESERVE_OUTPUT_TOKENS } from '../pricing';
 import { composeDynamicState, localDate, stateData, storedStateHash } from '../state';
 import { MAX_TOOL_RESULT_BYTES, failureResult, serializeToolResult, toolResultBlock } from '../tool-results';
 import { sanitizeTitle } from '../titles';
@@ -166,15 +166,54 @@ describe('pricing', () => {
   it('prices the three 5.5 models per million tokens in micro-dollars', () => {
     expect(costMicro('claude-opus-5-5', meters)).toBe((4 + 5 + 8 + 0.2 + 20) * 1_000_000);
     expect(costMicro('claude-sonnet-5-5', meters)).toBe((2 + 2.5 + 4 + 0.2 + 10) * 1_000_000);
-    expect(costMicro('claude-haiku-5-5', meters)).toBe(Math.ceil((0.1 + 0.125 + 0.2 + 0.01 + 0.5) * 1_000_000));
     expect(costMicro('claude-opus-5-5-20261001', meters)).toBe(costMicro('claude-opus-5-5', meters));
+    // Haiku bills prompts of up to 100K tokens at 0.10 / 0.50: 20K of each meter is an 80K prompt.
+    const short = { inputTokens: 20_000, cacheWrite5mTokens: 20_000, cacheWrite1hTokens: 20_000, cacheReadTokens: 20_000, outputTokens: 20_000 };
+    expect(costMicro('claude-haiku-5-5', short)).toBe(Math.ceil(20_000 * (0.1 + 0.125 + 0.2 + 0.01 + 0.5)));
+  });
+
+  it('bills a Haiku prompt above 100K tokens at the long-prompt card (0.50 / 2.50, cache prices assumed), and no other model', () => {
+    expect(priceOf('claude-haiku-5-5', LONG_PROMPT_TOKENS).price).toMatchObject({ input: 0.1, output: 0.5 });
+    expect(priceOf('claude-haiku-5-5', LONG_PROMPT_TOKENS + 1).price).toEqual({ input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite5m: 0.625, cacheWrite1h: 1 });
+    expect(priceOf('claude-haiku-5-5-20261001', 200_000).known).toBe(true);
+    for (const model of ['claude-opus-5-5', 'claude-sonnet-5-5']) expect(priceOf(model, 900_000)).toEqual(priceOf(model, 0));
+    // 99K fresh + 2K read is a 101K prompt: all of it, output included, at the long card.
+    const over = { inputTokens: 99_000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 2_000, outputTokens: 1_000 };
+    expect(costMicro('claude-haiku-5-5', over)).toBe(Math.ceil(99_000 * 0.5 + 2_000 * 0.05 + 1_000 * 2.5));
+    expect(promptTokensOf(over)).toBe(101_000);
+  });
+
+  it('reserves a warm step at the read price for the previous prefix plus only the appended messages, never above the cold ceiling', () => {
+    const previous = { inputTokens: 1_000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 9_000, cacheReadTokens: 40_000, outputTokens: 500 };
+    // 50K prefix at 0.20, 2K appended at the 1 h write price 8, plus the 8K-token answer reserve at 20.
+    expect(estimateWarmStepCostMicro('claude-opus-5-5', previous, 2_000, 32_000)).toBe(50_000 * 0.2 + 2_000 * 8 + RESERVE_OUTPUT_TOKENS * 20);
+    expect(estimateWarmStepCostMicro('claude-opus-5-5', previous, 2_000, 1_000)).toBe(50_000 * 0.2 + 2_000 * 8 + 1_000 * 20);
+    expect(estimateWarmStepCostMicro('claude-sonnet-5-5', previous, 0, 16_000)).toBe(50_000 * 0.2 + RESERVE_OUTPUT_TOKENS * 10);
+    const cold = estimateStepCostMicro('claude-opus-5-5', 52_000, 32_000);
+    expect(estimateWarmStepCostMicro('claude-opus-5-5', previous, 2_000, 32_000)).toBeLessThan(cold);
+    // The cold function is unchanged and is the ceiling.
+    expect(cold).toBe(52_000 * 8 + RESERVE_OUTPUT_TOKENS * 20);
+    for (const appended of [0, 1, 5_000, 800_000]) expect(estimateWarmStepCostMicro('claude-opus-5-5', previous, appended, 32_000)).toBeLessThanOrEqual(estimateStepCostMicro('claude-opus-5-5', 50_000 + appended, 32_000));
+  });
+
+  it('falls back to the cold estimate when the previous step reported no prompt, and ignores a negative delta', () => {
+    const none = { inputTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
+    expect(estimateWarmStepCostMicro('claude-opus-5-5', none, 3_000, 32_000)).toBe(estimateStepCostMicro('claude-opus-5-5', 3_000, 32_000));
+    const some = { ...none, cacheReadTokens: 10_000 };
+    expect(estimateWarmStepCostMicro('claude-opus-5-5', some, -500, 1_000)).toBe(estimateWarmStepCostMicro('claude-opus-5-5', some, 0, 1_000));
+  });
+
+  it('prices a warm Haiku reservation at the long-prompt card once prefix and delta pass 100K', () => {
+    const previous = { inputTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 99_000, outputTokens: 0 };
+    expect(estimateWarmStepCostMicro('claude-haiku-5-5', previous, 1_000, 4_096)).toBe(Math.ceil(99_000 * 0.01 + 1_000 * 0.2 + 4_096 * 0.5));
+    expect(estimateWarmStepCostMicro('claude-haiku-5-5', previous, 2_000, 4_096)).toBe(Math.ceil(99_000 * 0.05 + 2_000 * 1 + 4_096 * 2.5));
   });
 
   it('prices an unknown model at the highest price of every column', () => {
-    expect(priceOf('claude-future-9').known).toBe(false);
-    expect(priceOf('claude-future-9').price).toEqual({ input: 4, output: 20, cacheRead: 0.2, cacheWrite5m: 5, cacheWrite1h: 8 });
-    expect(priceOf('claude-opus-5-5').known).toBe(true);
-    expect(priceOf('claude-opus-5-50').known).toBe(false);
+    expect(priceOf('claude-future-9', 0).known).toBe(false);
+    expect(priceOf('claude-future-9', 0).price).toEqual({ input: 4, output: 20, cacheRead: 0.2, cacheWrite5m: 5, cacheWrite1h: 8 });
+    expect(priceOf('claude-opus-5-5', 0).known).toBe(true);
+    expect(priceOf('claude-opus-5-50', 0).known).toBe(false);
   });
 
   it('reserves the whole prompt at the cold 1 h write price plus an assumed answer', () => {
@@ -189,6 +228,15 @@ describe('pricing', () => {
     expect(maxOutputTokensFor('claude-sonnet-5-5')).toBe(16_000);
     expect(maxOutputTokensFor('claude-haiku-5-5')).toBe(4096);
     expect(DEFAULT_CONTEXT_WINDOW_TOKENS).toBe(200_000);
+  });
+
+  it('sets the context window per model: 1M for Opus and Sonnet 5.5, 100k for Haiku, 200k for any other id', () => {
+    expect(contextWindowFor('claude-opus-5-5')).toBe(1_000_000);
+    expect(contextWindowFor('claude-opus-5-5-20261001')).toBe(1_000_000);
+    expect(contextWindowFor('claude-sonnet-5-5')).toBe(1_000_000);
+    expect(contextWindowFor('claude-haiku-5-5')).toBe(LONG_PROMPT_TOKENS);
+    expect(contextWindowFor('claude-opus-5')).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS);
+    expect(contextWindowFor('claude-opus-5-50')).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS);
   });
 });
 

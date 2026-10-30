@@ -29,7 +29,7 @@ export { rebuildTranscript, danglingToolUses, firstPairingViolation } from './tr
 export type { TranscriptEntry } from './transcript';
 export { composeDynamicState, stateData, localDate } from './state';
 export type { DynamicState } from './state';
-export { costMicro, estimateStepCostMicro, estimateTokens, maxOutputTokensFor, priceOf, DEFAULT_CONTEXT_WINDOW_TOKENS } from './pricing';
+export { contextWindowFor, costMicro, estimateStepCostMicro, estimateTokens, estimateWarmStepCostMicro, maxOutputTokensFor, priceOf, DEFAULT_CONTEXT_WINDOW_TOKENS } from './pricing';
 export { AdminAgentLoopError, codesPendingInCatalog, loopCode } from './codes';
 export { ModelPortError } from './types';
 export type {

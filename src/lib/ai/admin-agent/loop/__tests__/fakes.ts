@@ -9,7 +9,7 @@ import type { ConversationRecord, MessageRecord, NewMessage, PlanRecord, Proposa
 import { parseAdminAgentEnv, type AdminAgentConfig } from '../../env';
 import type { ToolSet, WireTool } from '../../registry';
 import type { ToolDefinition } from '../../registry';
-import type { ModelCompleteInput, ModelCompleteResult, ModelStepInput, ModelStepResult, ToolCallContext, ToolRunResult, ToolRuntime, LoopDeps, LoopStore, AgentStreamEvent, AdminModelPort } from '../types';
+import type { ModelCompleteInput, ModelCompleteResult, ModelStopInfo, ModelStepInput, ModelStepResult, ToolCallContext, ToolRunResult, ToolRuntime, LoopDeps, LoopStore, AgentStreamEvent, AdminModelPort } from '../types';
 import type { AssistantBlock } from '../blocks';
 
 export const ADMIN: AdminId = adminIdOf('11111111-1111-4111-8111-111111111111');
@@ -249,7 +249,7 @@ export class FakeStore {
 
 // ─── Model port ──────────────────────────────────────────────────────
 
-export interface StepSpec {
+export interface StepSpec extends ModelStopInfo {
   blocks: AssistantBlock[];
   stopReason?: ModelStepResult['stopReason'];
   rawStopReason?: string | null;
@@ -285,6 +285,8 @@ export class FakePort implements AdminModelPort {
   readonly inputs: ModelStepInput[] = [];
   readonly completions: ModelCompleteInput[] = [];
   completeText: string | Error = 'Draft a league';
+  /** Extra fields every `complete` call returns (stop reason and details). */
+  completeExtra: Partial<ModelCompleteResult> = {};
   constructor(private readonly clock?: Clock) {}
 
   script(...specs: Array<StepSpec | Error>): this {
@@ -308,13 +310,17 @@ export class FakePort implements AdminModelPort {
       rawStopReason: spec.rawStopReason ?? null,
       usage: { inputTokens: 1000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 0, outputTokens: 200, ...spec.usage },
       model: spec.model ?? input.model,
+      ...(spec.finishReason !== undefined ? { finishReason: spec.finishReason } : {}),
+      ...(spec.rawFinishReason !== undefined ? { rawFinishReason: spec.rawFinishReason } : {}),
+      ...(spec.stopDetails !== undefined ? { stopDetails: spec.stopDetails } : {}),
+      ...(spec.iterations !== undefined ? { iterations: spec.iterations } : {}),
     };
   }
 
   async complete(input: ModelCompleteInput): Promise<ModelCompleteResult> {
     this.completions.push(input);
     if (this.completeText instanceof Error) throw this.completeText;
-    return { text: this.completeText, usage: { ...ZERO_USAGE, inputTokens: 100, outputTokens: 10 }, model: input.model };
+    return { text: this.completeText, usage: { ...ZERO_USAGE, inputTokens: 100, outputTokens: 10 }, model: input.model, ...this.completeExtra };
   }
 }
 

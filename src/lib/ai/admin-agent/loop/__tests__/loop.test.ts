@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { costMicro } from '../pricing';
 import { loopCode } from '../codes';
 import { startTurn } from '../start';
+import { blocksAppendedSince, cacheReadShare, diagnoseStep, warmReservationApplies } from '../loop';
 import { ModelPortError, type AgentStreamEvent, type TurnInput } from '../types';
+import type { TranscriptEntry } from '../transcript';
 import { ADMIN, CONVERSATION_ID, harness, readEvents, textStep, toolStep, typesOf, type Harness } from './fakes';
 
 async function turn(h: Harness, input: TurnInput = { kind: 'message', text: 'Make me a league', clientMsgId: 'c1' }) {
@@ -406,6 +408,225 @@ describe('provenance of ids (plan 6.3)', () => {
   });
 });
 
+describe('the reservation estimate', () => {
+  it('reserves the cold ceiling for step 1 and a warm estimate for later steps of the turn', async () => {
+    const h = harness();
+    // A long history, so the prompt estimate (bytes over 3.5, about 60K tokens) is above what the scripted meters report.
+    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(200_000) }] });
+    h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+    h.tools.on('league_get', () => ({ ok: true, data: { rows: 'x'.repeat(2_000) } }));
+    h.port.script(
+      toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }),
+      toolStep([{ name: 'league_get', id: 'toolu_b' }], { usage: { inputTokens: 300, cacheWrite1hTokens: 1_200, cacheReadTokens: 50_000 } }),
+      textStep('Done.', { usage: { inputTokens: 300, cacheWrite1hTokens: 1_200, cacheReadTokens: 51_200 } }),
+    );
+    await turn(h);
+    const [first, second, third] = h.fake.usage.filter((row) => row.purpose === 'turn').map((row) => row.reserved);
+    // Opus 5.5: the answer reserve is 8K tokens at $20 = 160 000 micro-dollars.
+    const answer = 8_000 * 20;
+    // Step 1 is the cold ceiling: the whole estimated prompt (above 55K tokens) at 8 per token.
+    expect(first).toBeGreaterThan(answer + 55_000 * 8);
+    // Step 2: the measured 50K prefix at 0.20 (10 000) plus the few thousand appended tokens at 8, far below a cold 50K x 8.
+    expect(second).toBeGreaterThanOrEqual(answer + 50_000 * 0.2);
+    expect(second).toBeLessThan(answer + 50_000 * 0.2 + 10_000 * 8);
+    expect(second).toBeLessThan(first / 2);
+    // Step 3 reads the 52 500 tokens step 2 left behind.
+    expect(third).toBeGreaterThanOrEqual(answer + 52_500 * 0.2);
+    expect(third).toBeLessThan(answer + 52_500 * 0.2 + 10_000 * 8);
+  });
+
+  describe('falls back to the cold estimate unless the cache is known to be working', () => {
+    const answer = 8_000 * 20;
+    /** A long history so the cold estimate (above 55K tokens) is far from any warm figure. */
+    const longHistory = () => {
+      const h = harness();
+      h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(200_000) }] });
+      h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+      h.tools.on('league_get', () => ({ ok: true, data: {} }));
+      return h;
+    };
+    const turnRows = (h: Harness) => h.fake.usage.filter((row) => row.purpose === 'turn').map((row) => row.reserved);
+    const COLD_FLOOR = answer + 55_000 * 8;
+
+    it('(a) when the previous step shows the cache did not engage', async () => {
+      const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const h = longHistory();
+      h.port.script(toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 50_000, cacheWrite1hTokens: 0, cacheReadTokens: 0 } }), textStep('Done.'));
+      await turn(h);
+      const [first, second] = turnRows(h);
+      expect(first).toBeGreaterThan(COLD_FLOOR);
+      expect(second).toBeGreaterThan(COLD_FLOOR);
+      spy.mockRestore();
+    });
+
+    it('(b) when many content blocks were appended since (parallel tool calls)', async () => {
+      const h = longHistory();
+      const calls = Array.from({ length: 9 }, (_, i) => ({ name: 'league_get', id: `toolu_${i}` }));
+      h.port.script(toolStep(calls, { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }), textStep('Done.'));
+      await turn(h);
+      expect(turnRows(h)[1]).toBeGreaterThan(COLD_FLOOR);
+    });
+
+    it('(c) when the previous step itself logged a cache regression', async () => {
+      const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const h = longHistory();
+      h.port.script(
+        toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }),
+        // The cache was written again instead of read: engaged by the share rule, but 10K of a 50K prefix is a regression.
+        toolStep([{ name: 'league_get', id: 'toolu_b' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 39_500, cacheReadTokens: 10_000 } }),
+        textStep('Done.'),
+      );
+      await turn(h);
+      const [, second, third] = turnRows(h);
+      expect(second).toBeLessThan(COLD_FLOOR);
+      expect(third).toBeGreaterThan(COLD_FLOOR);
+      spy.mockRestore();
+    });
+
+    it('keeps the warm figure when all three hold (control)', async () => {
+      const h = longHistory();
+      h.port.script(toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }), textStep('Done.'));
+      await turn(h);
+      expect(turnRows(h)[1]).toBeLessThan(COLD_FLOOR);
+    });
+
+    it('decides from the previous step alone: the rule on its own inputs', () => {
+      const usage = (over: Partial<{ inputTokens: number; cacheReadTokens: number; cacheWrite5mTokens: number; cacheWrite1hTokens: number }>) => ({ inputTokens: 1_000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 0, outputTokens: 10, ...over });
+      const text = (seq: number): TranscriptEntry => ({ role: 'user', kind: 'chat', seq, blocks: [{ type: 'text', text: 't' }] });
+      const few = [text(1), text(2)];
+      const prev = (u: ReturnType<typeof usage>, over: Partial<{ transcriptLength: number; regressed: boolean }> = {}) => ({ usage: u, estimatedPromptTokens: 0, transcriptLength: 0, regressed: false, ...over });
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 })), few)).toBe(true);
+      // Exactly half of the prompt through the cache still counts; just under does not. Writes count as engaged.
+      expect(warmReservationApplies(prev(usage({ inputTokens: 5_000, cacheWrite5mTokens: 5_000 })), few)).toBe(true);
+      expect(warmReservationApplies(prev(usage({ inputTokens: 5_001, cacheWrite1hTokens: 4_999 })), few)).toBe(false);
+      expect(warmReservationApplies(prev(usage({ inputTokens: 0 })), few)).toBe(false);
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 }), { regressed: true }), few)).toBe(false);
+      // Eight appended blocks is the limit; nine is over; an event counts as one block.
+      const eight = Array.from({ length: 8 }, (_, i) => text(i));
+      expect(blocksAppendedSince(eight, 0)).toBe(8);
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 })), eight)).toBe(true);
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 })), [...eight, text(9)])).toBe(false);
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 }), { transcriptLength: 8 }), [...eight, text(9)])).toBe(true);
+      expect(blocksAppendedSince([{ role: 'event', kind: 'harness_event', seq: 1, event: 'e', text: 't', data: {} }], 0)).toBe(1);
+    });
+  });
+
+  it('never reserves more than the cold estimate, and a new turn starts cold again', async () => {
+    const h = harness();
+    // A long history, so a cold estimate (above 55K tokens at 8 per token) is far from any warm figure.
+    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(200_000) }] });
+    h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+    h.tools.on('league_get', () => ({ ok: true, data: {} }));
+    h.port.script(
+      // Turn 1 reaches a real step 2 (a tool call first), which reserves the warm figure off a healthy cache.
+      toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }),
+      textStep('One.', { usage: { inputTokens: 300, cacheWrite1hTokens: 1_200, cacheReadTokens: 50_000 } }),
+      // Turn 2's first step.
+      textStep('Two.'),
+    );
+    await turn(h);
+    await turn(h, { kind: 'message', text: 'Again', clientMsgId: 'c2' });
+    const [first, warm, nextTurn] = h.fake.usage.filter((row) => row.purpose === 'turn').map((row) => row.reserved);
+    const coldFloor = 8_000 * 20 + 55_000 * 8;
+    expect(first).toBeGreaterThan(coldFloor);
+    // The warm step stays under its own cold ceiling.
+    expect(warm).toBeLessThan(coldFloor);
+    expect(warm).toBeLessThanOrEqual(first);
+    // The next turn's step 1 does not carry the warm figure over: it is cold again (a carried 50K-read figure is ~170K).
+    expect(nextTurn).toBeGreaterThan(coldFloor);
+  });
+});
+
+describe('the cache regression signal', () => {
+  const meters = (cacheRead: number, extra: { input?: number; write?: number } = {}) => ({ cacheReadTokens: cacheRead, inputTokens: extra.input ?? 300, cacheWrite1hTokens: extra.write ?? 700 });
+  const twoSteps = (second: ReturnType<typeof meters>) => {
+    const h = harness();
+    h.tools.on('league_get', () => ({ ok: true, data: {} }));
+    h.port.script(toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 9500, cacheReadTokens: 0 } }), textStep('Done.', { usage: second }));
+    return h;
+  };
+  const lines = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cache_read_regression'));
+
+  it('stays quiet while step 2 reads back at least half of the previous prefix, and reports the share on the outcome', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const h = twoSteps(meters(9000));
+    const { outcome, events } = await turn(h);
+    expect(lines(spy)).toEqual([]);
+    // 9000 of the previous 10000-token prompt.
+    expect(outcome.lowestCacheReadRatio).toBeCloseTo(0.9, 5);
+    // The pinned stream event is untouched.
+    expect(done(events)).toEqual({ type: 'done', reason: 'completed', resumable: false });
+    spy.mockRestore();
+  });
+
+  it('logs one content-free structured line when the read drops below half of the previous prefix', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const h = twoSteps(meters(2000, { input: 400, write: 7600 }));
+    const { outcome } = await turn(h);
+    const found = lines(spy);
+    expect(found).toHaveLength(1);
+    const payload = JSON.parse(found[0].slice(found[0].indexOf('{'))) as Record<string, unknown>;
+    expect(payload).toEqual({
+      conversation_id: CONVERSATION_ID,
+      model: 'claude-opus-5-5',
+      step: 2,
+      cache_read_tokens: 2000,
+      cache_write_tokens: 7600,
+      fresh_input_tokens: 400,
+      prompt_tokens: 10_000,
+      previous_prompt_tokens: 10_000,
+      ratio: 0.2,
+    });
+    expect(found[0]).not.toMatch(/Make me a league|Done\.|league_get/);
+    expect(outcome.lowestCacheReadRatio).toBeCloseTo(0.2, 5);
+    spy.mockRestore();
+  });
+
+  it('does not compare the first step of a turn with anything', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    h.port.script(textStep('One step.', { usage: { cacheReadTokens: 0, cacheWrite1hTokens: 10_000 } }));
+    const { outcome } = await turn(h);
+    expect(lines(spy)).toEqual([]);
+    expect(outcome).not.toHaveProperty('lowestCacheReadRatio');
+    spy.mockRestore();
+  });
+
+  it('can never break a turn: a logger that throws changes nothing, and the signal survives it', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {
+      throw new Error('log sink down');
+    });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const h = twoSteps(meters(100));
+    const { outcome } = await turn(h);
+    expect(outcome).toMatchObject({ reason: 'completed', steps: 2 });
+    // The read share is computed before any logging, so the outcome (and the warm-reservation gate) still see it.
+    expect(outcome.lowestCacheReadRatio).toBeCloseTo(0.01, 5);
+    expect(errors.mock.calls.some((call) => String(call[0]).includes('step diagnostics failed'))).toBe(true);
+    spy.mockRestore();
+    errors.mockRestore();
+  });
+
+  it('computes the share against the previous prefix, and has none without one', () => {
+    const usage = { inputTokens: 100, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 450, outputTokens: 1 };
+    expect(cacheReadShare(900, usage)).toBe(0.5);
+    expect(cacheReadShare(null, usage)).toBeNull();
+    expect(cacheReadShare(0, usage)).toBeNull();
+  });
+
+  it('notes usage iterations that are not plain messages (billed apart from the totals), with no content', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const usage = { inputTokens: 100, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 900, outputTokens: 5 };
+    expect(diagnoseStep({ conversationId: 'c', model: 'm', step: 2, usage, previousPrefix: 1000, iterations: [{ type: 'message', inputTokens: 1, outputTokens: 1 }] })).toBe(0.9);
+    expect(spy).not.toHaveBeenCalled();
+    diagnoseStep({ conversationId: 'c', model: 'm', step: 1, usage, previousPrefix: null, iterations: [{ type: 'fallback_message', model: 'claude-sonnet-5', inputTokens: 10, outputTokens: 2 }] });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(String(spy.mock.calls[0][0])).toContain('non_message_iterations');
+    expect(String(spy.mock.calls[0][0])).toContain('fallback_message');
+    spy.mockRestore();
+  });
+});
+
 describe('stop reasons that run nothing', () => {
   it('a refusal executes no tool, keeps the history valid and reports a retryable failure', async () => {
     const h = harness();
@@ -418,6 +639,64 @@ describe('stop reasons that run nothing', () => {
     expect(kinds(h).slice(-2)).toEqual(['assistant:chat', 'user:tool_results']);
     const results = h.fake.messages.at(-1)?.content as Array<{ tool_use_id: string; is_error?: boolean }>;
     expect(results[0]).toMatchObject({ tool_use_id: 'x', is_error: true });
+  });
+
+  it('a mid-stream refusal keeps its partial exactly as produced, flagged in metadata, and audits the category', async () => {
+    const h = harness();
+    const partial = textStep('I will start by', { stopReason: 'refusal', rawStopReason: 'refusal', stopDetails: { category: 'cyber' }, rawFinishReason: 'refusal', finishReason: 'content-filter' });
+    h.port.script(partial, textStep('A fresh answer.'));
+    const { outcome } = await turn(h);
+    expect(outcome.reason).toBe('refused');
+
+    const stored = h.fake.messages.find((m) => m.role === 'assistant');
+    // Persisted as is: the replayed prefix (and a thinking-block history check) must see the same bytes. Only metadata marks it.
+    expect(stored?.content).toEqual(partial.blocks);
+    expect(stored?.stop_reason).toBe('refusal');
+    expect(stored?.ui).toEqual({ text: 'I will start by', tool_calls: [], refused: true, refusal_category: 'cyber' });
+    expect(h.audit).toHaveLength(1);
+    expect(h.audit[0]).toMatchObject({
+      action: 'agent.model.refusal',
+      actor_id: ADMIN,
+      resource_type: 'agent_conversation',
+      resource_id: CONVERSATION_ID,
+      metadata: { category: 'cyber', model: 'claude-opus-5-5', step: 1, stop_reason: 'refusal', partial_stored: true },
+    });
+    expect(JSON.stringify(h.audit[0])).not.toContain('I will start by');
+
+    // The next turn replays it: it is still in the transcript the model is sent.
+    await turn(h, { kind: 'message', text: 'Try again', clientMsgId: 'c2' });
+    const replayed = h.port.inputs[1].transcript.find((e) => e.role === 'assistant');
+    expect(replayed && replayed.role === 'assistant' ? replayed.blocks : null).toEqual(partial.blocks);
+  });
+
+  it('a refusal with no content stores nothing and audits partial_stored: false', async () => {
+    const h = harness();
+    h.port.script({ blocks: [], stopReason: 'refusal', rawStopReason: 'refusal' });
+    const { outcome } = await turn(h);
+    expect(outcome.reason).toBe('refused');
+    expect(h.fake.messages.filter((m) => m.role === 'assistant')).toHaveLength(0);
+    expect(h.audit[0]).toMatchObject({ action: 'agent.model.refusal', metadata: { partial_stored: false } });
+  });
+
+  it('a refusal without details still audits, with no category', async () => {
+    const h = harness();
+    h.port.script(textStep('No.', { stopReason: 'refusal', rawStopReason: 'refusal' }));
+    await turn(h);
+    expect(h.audit[0]).toMatchObject({ action: 'agent.model.refusal', metadata: { category: null } });
+    expect(h.fake.messages.find((m) => m.role === 'assistant')?.ui).toEqual({ text: 'No.', tool_calls: [], refused: true });
+  });
+
+  it('does not flag or audit a normal answer or a truncation', async () => {
+    const h = harness();
+    h.port.script(textStep('Fine.'));
+    await turn(h);
+    const h2 = harness();
+    h2.port.script(textStep('cut', { stopReason: 'max_tokens', rawStopReason: 'max_tokens' }));
+    await turn(h2);
+    for (const x of [h, h2]) {
+      expect(x.audit).toEqual([]);
+      expect(x.fake.messages.find((m) => m.role === 'assistant')?.ui).not.toHaveProperty('refused');
+    }
   });
 
   it('max_tokens with a tool call executes nothing', async () => {
@@ -553,8 +832,9 @@ describe('model failures', () => {
   });
 
   it('refuses a turn when the conversation is over the context threshold', async () => {
+    // 50% of the 1M window is 500K estimated tokens (bytes over 3.5): 1.9M bytes is over it.
     const h = harness({ env: { ADMIN_AGENT_CONTEXT_REFUSE_PERCENT: '50' } });
-    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(400_000) }] });
+    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(1_900_000) }] });
     h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
     h.port.script(textStep('never'));
     const { events, outcome } = await turn(h);
@@ -562,5 +842,47 @@ describe('model failures', () => {
     expect(h.port.inputs).toHaveLength(0);
     expect(errorOf(events)).toMatchObject({ code: 'agent_context_full' });
     expect(h.fake.usage).toHaveLength(0);
+  });
+
+  describe('the window follows the conversation model, at the same share of it (80% by default)', () => {
+    // 800K bytes is about 230K estimated tokens: over 80% of a 200K window (160K), far under 80% of 1M (800K).
+    const run = async (model: string, bytes: number) => {
+      const h = harness({ conversation: { model } });
+      h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(bytes) }] });
+      h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+      h.port.script(textStep('answered'));
+      return turn(h);
+    };
+
+    it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5-20261001'])('lets %s run a prompt the old 200k window would have refused', async (model) => {
+      const { outcome } = await run(model, 800_000);
+      expect(outcome.reason).toBe('completed');
+    });
+
+    it.each(['claude-opus-5-5', 'claude-sonnet-5-5'])('still refuses %s at 80%% of 1M (800K estimated tokens)', async (model) => {
+      const { outcome, events } = await run(model, 3_000_000);
+      expect(outcome.reason).toBe('context');
+      expect(errorOf(events)).toMatchObject({ code: 'agent_context_full' });
+    });
+
+    it('keeps Haiku at 100k, so it is refused before the long-prompt card (80K estimated tokens)', async () => {
+      expect((await run('claude-haiku-5-5', 200_000)).outcome.reason).toBe('completed');
+      expect((await run('claude-haiku-5-5', 400_000)).outcome.reason).toBe('context');
+    });
+
+    it('lets an explicit contextWindowTokens override win over the model window', async () => {
+      const h = harness({ conversation: { model: 'claude-opus-5-5' } });
+      h.deps.contextWindowTokens = 200_000;
+      h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(800_000) }] });
+      h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+      h.port.script(textStep('answered'));
+      expect((await turn(h)).outcome.reason).toBe('context');
+    });
+
+    it('treats a model the table does not know (a pinned older id) as the conservative 200k, and never rejects the conversation', async () => {
+      const resumed = await run('claude-opus-5', 400_000);
+      expect(resumed.outcome.reason).toBe('completed');
+      expect((await run('claude-opus-5', 800_000)).outcome.reason).toBe('context');
+    });
   });
 });

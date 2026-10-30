@@ -9,6 +9,7 @@ import {
   assertAdminAgentBootEnv,
   parseAdminAgentEnv,
 } from '../env';
+import { PRICED_MODEL_IDS } from '../loop/pricing';
 
 const ON = { ADMIN_AGENT_ENABLED: 'true' };
 const SITE_ADMIN = { playerId: '11111111-1111-4111-8111-111111111111', isSiteAdmin: true, isAnyAdmin: true };
@@ -300,6 +301,49 @@ describe('caps, limits and models', () => {
       expect(bad.enabled, `${key}=${value}`).toBe(false);
       expect(bad.problems.map((p) => p.key)).toEqual([key]);
     }
+  });
+
+  it('accepts exactly the priced model ids, each with an optional dated suffix, for every slot', () => {
+    for (const key of ['ADMIN_AGENT_MODEL_WRITE', 'ADMIN_AGENT_MODEL_READ', 'ADMIN_AGENT_MODEL_SMALL'] as const) {
+      for (const id of [...PRICED_MODEL_IDS, ...PRICED_MODEL_IDS.map((model) => `${model}-20261001`)]) {
+        const config = parseAdminAgentEnv({ ...ON, [key]: id });
+        expect(config.problems, `${key}=${id}`).toEqual([]);
+        expect(config.enabled, `${key}=${id}`).toBe(true);
+      }
+    }
+    expect(PRICED_MODEL_IDS).toEqual(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']);
+    expect(parseAdminAgentEnv({ ...ON, ADMIN_AGENT_MODEL_WRITE: 'claude-opus-5-5-20261001' }).models.write.model).toBe('claude-opus-5-5-20261001');
+  });
+
+  it('fails closed for an id the pricing table does not know, a malformed suffix or a lookalike', () => {
+    for (const value of [
+      'claude-opus-5',
+      'claude-fable-5-1',
+      'claude-opus-4-8',
+      'claude-future-9',
+      'claude-opus-5-50',
+      'claude-opus-5-5-latest',
+      'claude-opus-5-5-2026100',
+      'claude-opus-5-5-202610011',
+      'claude-opus-5-5-20261001-x',
+      'claude-opus-5-5-99999999',
+      'claude-opus-5-5-00000000',
+      'claude-opus-5-5-20261301',
+      'claude-opus-5-5-20261032',
+      'Claude-Opus-5-5',
+      ' claude-opus-5-5 x',
+    ]) {
+      const bad = parseAdminAgentEnv({ ...ON, ADMIN_AGENT_MODEL_WRITE: value });
+      expect(bad.enabled, value).toBe(false);
+      expect(bad.problems.map((p) => p.key), value).toEqual(['ADMIN_AGENT_MODEL_WRITE']);
+      expect(bad.models.write.model, value).toBe('claude-opus-5-5');
+    }
+  });
+
+  it('reports a bad model id at boot, and never over a resumed conversation: the check only parses the env defaults', () => {
+    expect(() => assertAdminAgentBootEnv({ ...ON, ADMIN_AGENT_MODEL_READ: 'claude-sonnet-5' })).toThrow(MissingEnvError);
+    expect(() => assertAdminAgentBootEnv({ ...ON, ADMIN_AGENT_MODEL_READ: 'claude-sonnet-5-5-20261001' })).not.toThrow();
+    expect(() => assertAdminAgentBootEnv({ ADMIN_AGENT_ENABLED: 'false', ADMIN_AGENT_MODEL_READ: 'claude-sonnet-5' })).not.toThrow();
   });
 
   it('keeps the valid values when another key is invalid', () => {

@@ -59,9 +59,11 @@ export async function generateTitle(deps: LoopDeps, request: TitleRequest): Prom
   try {
     const result = await callPort(port, { model, effort, prompt });
     await store.usage
-      .settleUsage(adminId, reservation, { ...result.usage, costUsdMicro: costMicro(result.model || model, result.usage), stopReason: 'end_turn' })
+      .settleUsage(adminId, reservation, { ...result.usage, costUsdMicro: costMicro(result.model || model, result.usage), stopReason: result.rawFinishReason ?? result.finishReason ?? result.stopReason ?? 'unknown' })
       .catch((error: unknown) => console.error('[admin-agent] title usage settle failed; the reservation stays and counts', error));
-    title = sanitizeTitle(result.text);
+    // Only a call that ended normally has usable text (a port that cannot tell the stop is trusted, as before). A refused,
+    // truncated, context-exceeded or otherwise ended call writes no title; it is still billed and settled above.
+    title = result.stopReason === undefined || result.stopReason === 'end_turn' ? sanitizeTitle(result.text) : null;
   } catch (error) {
     console.error('[admin-agent] title generation failed', error);
     await store.usage.releaseUsage(adminId, reservation, 'title_failed').catch(() => undefined);
