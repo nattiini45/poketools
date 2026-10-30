@@ -4,13 +4,12 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getRoundById, deleteRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { getMatchesByRound } from '@/lib/supabase/queries/matches';
+import { deleteMatchesByIds, getMatchesByRound } from '@/lib/supabase/queries/matches';
 import { getGamesByMatch } from '@/lib/supabase/queries/games';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { updateTournament } from '@/lib/supabase/queries/tournaments';
-import { supabase } from '@/lib/supabase/client';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -84,13 +83,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       await resetMatch(match.id, player.playerId);
     }
 
-    if (matches.length > 0) {
-      const { error: matchDelErr } = await supabase
-        .from('matches')
-        .delete()
-        .eq('round_id', id);
-      if (matchDelErr) throw matchDelErr;
-    }
+    // Through the query layer: it releases the matches' team rows first, so no match-prep row survives as an orphan.
+    await deleteMatchesByIds(matches.map((match) => match.id));
 
     await deleteRound(id);
 
