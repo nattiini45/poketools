@@ -3,6 +3,7 @@ import { getReportDefinition } from './registry';
 import { getPipelineMode } from './prompts';
 import { describeAiFailure } from '../failure';
 import { AllModelsFailedError, isDeterministicModelError } from '../errors';
+import { injectOneLinerResults } from './inject';
 import type {
   PromptTask,
   TaskResult,
@@ -262,21 +263,4 @@ async function executeWithRetry(
     retries,
     model: '',
   };
-}
-
-/**
- * Inject one-liner results from stage 1 into the narrative prompt.
- * Replaces pre-written one-liners with LLM-generated ones for richer narrative input.
- */
-function injectOneLinerResults(prompt: string, results: Map<string, string>): string {
-  const oneLiners: string[] = [];
-  for (const [id, text] of results) {
-    if (id.startsWith('match_one_liner_')) {
-      oneLiners.push(`- ${text.trim()}`);
-    }
-  }
-
-  if (oneLiners.length === 0) return prompt;
-
-  return `${prompt}\n\nMatch summaries (written by you in the previous step — reference these):\n${oneLiners.join('\n')}`;
 }

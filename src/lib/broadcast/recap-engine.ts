@@ -25,6 +25,7 @@ import { createTranslator } from '@/i18n/core';
 import { broadcastCasterMessages } from '@/i18n/messages/broadcast-caster';
 import { withOutputLanguage } from '@/lib/ai/language';
 import { AI_MAX_TOKENS } from '@/lib/ai/constants';
+import { RECAP_NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt, type NarrativeInput } from '@/lib/ai/recap-prompt';
 
 // ─── Recap Composition ───────────────────────────────────────────────
 
@@ -427,15 +428,6 @@ function computeRoundUsage(
 
 // ─── AI Narrative Generation ──────────────────────────────────────────
 
-interface NarrativeInput {
-  leagueName: string;
-  tournamentName: string;
-  roundName: string;
-  roundNumber: number;
-  results: RecapMatchSummary[];
-  headlineMatch: RecapMatchSummary | null;
-}
-
 async function generateRecapNarrative(
   input: NarrativeInput,
   locale: Locale,
@@ -448,7 +440,7 @@ async function generateRecapNarrative(
     // (i18n-core §6.4), so the narrative and the headline reason taken from
     // its first sentence match the overlay's language.
     const systemPrompt = withOutputLanguage(
-      'You are a sports commentator for a competitive Pokémon league. Write brief, engaging recap paragraphs.',
+      RECAP_NARRATIVE_SYSTEM_PROMPT,
       locale,
     );
     const userPrompt = buildNarrativePrompt(input);
@@ -459,23 +451,6 @@ async function generateRecapNarrative(
     // AI generation is optional — fail silently
     return undefined;
   }
-}
-
-function buildNarrativePrompt(input: NarrativeInput): string {
-  const matchLines = input.results
-    .map((r) => `  ${r.player1_name} vs ${r.player2_name}: ${r.winner_name} wins ${r.score}`)
-    .join('\n');
-
-  return `You are a sports commentator for the "${input.leagueName}" competitive Pokémon league.
-
-Write a brief, engaging 2-3 sentence recap paragraph for ${input.roundName} of ${input.tournamentName}. Be dramatic but concise. Reference specific results. The scores shown are Pokémon scores (surviving Pokémon).
-
-This round's results:
-${matchLines}
-
-${input.headlineMatch ? `Headline match: ${input.headlineMatch.player1_name} vs ${input.headlineMatch.player2_name} (${input.headlineMatch.score})` : ''}
-
-Write ONLY the paragraph — no headers, no bullet points.`;
 }
 
 function extractHeadlineReason(narrative: string, fallback: string): string {

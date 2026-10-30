@@ -24,6 +24,8 @@
     "db:types": "node scripts/db-types.mjs",
     "db:types:check": "node scripts/db-types.mjs --check",
     "audit:seasons": "npx tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts",
+    "eval:ai-flows": "npx tsx --tsconfig scripts/tsconfig.ai-flow-eval.json scripts/ai-flow-eval.ts",
+    "eval:ai-flows:fixtures": "node scripts/ai-flow-eval-fixtures.mjs",
     "capture": "node scripts/capture.mjs",
     "capture:route": "node scripts/capture-route.mjs"
   },
