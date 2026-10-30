@@ -3,10 +3,14 @@
  * ledger: a price in dollars per million tokens is numerically the micro-dollars of one token.
  *
  * Sources: Opus 5.5 4 / 20 (input / output), cache read 0.20, cache write 5 m 5.00 and 1 h 8.00; Sonnet 5.5 2 / 10,
- * read 0.20, write 2.50 and 4.00; Haiku 5.5 0.10 / 0.50 with the Haiku cache prices assumed (read 0.1x, writes 1.25x and
- * 2x the input price; plan section 9 marks them unverified). A model id that is not in the table is priced at the
- * highest price of every column, so an unknown model can only make the cap stricter. A real run reads the actual meters
- * from the API response (`UsageMeters`); the table is only used to turn them into money and to reserve before a call.
+ * read 0.20, write 2.50 and 4.00; Haiku 5.5 0.10 / 0.50 (a published rate up to a 100K-token prompt). The Haiku cache
+ * prices are NOT published: they are derived (read 0.1x, writes 1.25x and 2x the input price) and stay assumed.
+ *
+ * The table is also the allowlist of model ids the configuration accepts (`PRICED_MODEL_IDS`, used by `env.ts`): a new id
+ * is added here together with its price row and a contract-test case. A conversation row can still pin an id that is not
+ * in the table (it is never rejected after the fact); such a model is priced at the highest price of every column. A real
+ * run reads the actual meters from the API response (`UsageMeters`); the table is only used to turn them into money and to
+ * reserve before a call.
  */
 import type { UsageMeters } from '../store/types';
 
@@ -24,6 +28,9 @@ const TABLE: ReadonlyArray<readonly [string, ModelPrice]> = [
   ['claude-sonnet-5-5', { input: 2, output: 10, cacheRead: 0.2, cacheWrite5m: 2.5, cacheWrite1h: 4 }],
   ['claude-haiku-5-5', { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite5m: 0.125, cacheWrite1h: 0.2 }],
 ];
+
+/** The model ids the table prices, in table order. The configuration accepts these (and a dated form of each), nothing else. */
+export const PRICED_MODEL_IDS: readonly string[] = TABLE.map(([id]) => id);
 
 const HIGHEST: ModelPrice = TABLE.reduce<ModelPrice>(
   (max, [, price]) => ({

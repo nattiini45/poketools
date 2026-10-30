@@ -2,6 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 import { MissingEnvError } from '@/lib/env';
+import { PRICED_MODEL_IDS } from './loop/pricing';
 
 /**
  * Admin Assistant configuration (spec §13 "Admin Assistant", §18.9 and §18.10; plan 6.4).
@@ -26,8 +27,13 @@ import { MissingEnvError } from '@/lib/env';
 
 type EnvSource = Record<string, string | undefined>;
 
-/** Models are Anthropic only (§18.10); the id is a model name, not a URL or a path. */
-const MODEL_ID = /^claude-[a-z0-9][a-z0-9.-]{0,63}$/;
+/**
+ * Models are Anthropic only (§18.10) and must be priced: the ids of the pricing table, each optionally with a dated
+ * `-YYYYMMDD` suffix. Any other id would be billed at the table's highest rate while the caps count real money, and a wrong
+ * id fails at the first request, so it turns the assistant off at boot instead. This covers the configured defaults of NEW
+ * conversations only: a conversation row keeps the id it was created with, and nothing validates that id again.
+ */
+const MODEL_ID = new RegExp(`^(?:${PRICED_MODEL_IDS.join('|')})(?:-[0-9]{8})?$`);
 /** Effort ceiling is `high` (plan 3.4); `xhigh` and `max` are not accepted. */
 const EFFORTS = ['low', 'medium', 'high'] as const;
 export type AdminAgentEffort = (typeof EFFORTS)[number];
@@ -119,7 +125,10 @@ const allowedPlayerIds = z
   });
 
 const modelId = (fallback: string) =>
-  optional(z.string().regex(MODEL_ID, { message: "must be an Anthropic model id such as 'claude-…'" }), fallback);
+  optional(
+    z.string().regex(MODEL_ID, { message: `must be one of ${PRICED_MODEL_IDS.join(', ')} (optionally with a -YYYYMMDD suffix)` }),
+    fallback
+  );
 const effort = (fallback: AdminAgentEffort) =>
   optional(z.enum(EFFORTS, { message: "must be 'low', 'medium' or 'high' (or unset)" }), fallback);
 
