@@ -8,7 +8,8 @@
  * price of the tier) and stay assumed until the price list states them.
  *
  * The table is also the allowlist of model ids the configuration accepts (`PRICED_MODEL_IDS`, used by `env.ts`): a new id
- * is added here together with its price row and a contract-test case. A conversation row can still pin an id that is not
+ * is added here together with its price row, a `CONTEXT_WINDOWS` row (none means the conservative 200k), a
+ * `maxOutputTokensFor` tier where needed, the id lists the tests pin (`env.test.ts`, `units.test.ts`) and a contract-test case. A conversation row can still pin an id that is not
  * in the table (it is never rejected after the fact); such a model is priced at the highest price of every column, which
  * is only a stricter cap while the real rate is not above those maxima. A real run reads the actual meters from the API
  * response (`UsageMeters`); the table is only used to turn them into money and to reserve before a call.
@@ -58,7 +59,7 @@ const matches = (model: string, prefix: string): boolean => model === prefix || 
  * The price of `model`; `known` is false when the table has no entry and the highest price is returned. `promptTokens` (the
  * whole prompt of the call: fresh, written and read) selects the long-prompt card where the model has one.
  */
-export function priceOf(model: string, promptTokens = 0): { price: ModelPrice; known: boolean } {
+export function priceOf(model: string, promptTokens: number): { price: ModelPrice; known: boolean } {
   const hit = TABLE.find(([prefix]) => matches(model, prefix));
   if (!hit) return { price: HIGHEST, known: false };
   const long = promptTokens > LONG_PROMPT_TOKENS ? LONG_PROMPT.find(([prefix]) => matches(model, prefix)) : undefined;

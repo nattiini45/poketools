@@ -17,8 +17,9 @@
  * forced tool choice is involved either, which the 5.5 models answer with a 400.
  *
  * It never throws: a failed call, an unreadable answer or a refused request is a verdict of "no rescue" with a short
- * machine reason, never a provider message. A call that ended on `max_tokens` or `refusal` reports that as the reason
- * (its text is not read), so a truncated answer is not mistaken for a model that wrote bad JSON.
+ * machine reason, never a provider message. A call that ended any other way than `end_turn` (`max_tokens`, `refusal`,
+ * `context_exceeded`, ...) reports its stop as the reason (its text is not read), so a truncated or limit-ended answer is
+ * not mistaken for a model that wrote bad JSON.
  */
 import { z } from 'zod';
 import { costMicro } from '../loop/pricing';
@@ -48,7 +49,7 @@ export interface JudgeInput {
 
 export interface JudgeOutcome {
   verdict: JudgeVerdict | null;
-  /** Why there is no verdict: a port error kind, `max_tokens`, `refusal` or `unparseable`. Null with a verdict. */
+  /** Why there is no verdict: a port error kind, a stop other than `end_turn`, or `unparseable`. Null with a verdict. */
   error: string | null;
   costUsdMicro: number;
 }
@@ -111,7 +112,7 @@ export function createPortJudge(port: AdminModelPort, options: PortJudgeOptions 
           timeoutMs: options.timeoutMs ?? JUDGE_TIMEOUT_MS,
         });
         const cost = costMicro(result.model || model, result.usage);
-        if (result.stopReason === 'max_tokens' || result.stopReason === 'refusal') return { verdict: null, error: result.stopReason, costUsdMicro: cost };
+        if (result.stopReason !== undefined && result.stopReason !== 'end_turn') return { verdict: null, error: result.stopReason, costUsdMicro: cost };
         const verdict = parseVerdict(result.text);
         return verdict === null ? { verdict: null, error: 'unparseable', costUsdMicro: cost } : { verdict, error: null, costUsdMicro: cost };
       } catch (error) {

@@ -176,7 +176,7 @@ describe('pricing', () => {
     expect(priceOf('claude-haiku-5-5', LONG_PROMPT_TOKENS).price).toMatchObject({ input: 0.1, output: 0.5 });
     expect(priceOf('claude-haiku-5-5', LONG_PROMPT_TOKENS + 1).price).toEqual({ input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite5m: 0.625, cacheWrite1h: 1 });
     expect(priceOf('claude-haiku-5-5-20261001', 200_000).known).toBe(true);
-    for (const model of ['claude-opus-5-5', 'claude-sonnet-5-5']) expect(priceOf(model, 900_000)).toEqual(priceOf(model));
+    for (const model of ['claude-opus-5-5', 'claude-sonnet-5-5']) expect(priceOf(model, 900_000)).toEqual(priceOf(model, 0));
     // 99K fresh + 2K read is a 101K prompt: all of it, output included, at the long card.
     const over = { inputTokens: 99_000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 2_000, outputTokens: 1_000 };
     expect(costMicro('claude-haiku-5-5', over)).toBe(Math.ceil(99_000 * 0.5 + 2_000 * 0.05 + 1_000 * 2.5));
@@ -210,10 +210,10 @@ describe('pricing', () => {
   });
 
   it('prices an unknown model at the highest price of every column', () => {
-    expect(priceOf('claude-future-9').known).toBe(false);
-    expect(priceOf('claude-future-9').price).toEqual({ input: 4, output: 20, cacheRead: 0.2, cacheWrite5m: 5, cacheWrite1h: 8 });
-    expect(priceOf('claude-opus-5-5').known).toBe(true);
-    expect(priceOf('claude-opus-5-50').known).toBe(false);
+    expect(priceOf('claude-future-9', 0).known).toBe(false);
+    expect(priceOf('claude-future-9', 0).price).toEqual({ input: 4, output: 20, cacheRead: 0.2, cacheWrite5m: 5, cacheWrite1h: 8 });
+    expect(priceOf('claude-opus-5-5', 0).known).toBe(true);
+    expect(priceOf('claude-opus-5-50', 0).known).toBe(false);
   });
 
   it('reserves the whole prompt at the cold 1 h write price plus an assumed answer', () => {

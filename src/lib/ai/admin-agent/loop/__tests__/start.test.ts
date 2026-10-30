@@ -414,8 +414,8 @@ describe('titles', () => {
     expect(silent.fake.usage.find((r) => r.purpose === 'title')?.stopReason).toBe('unknown');
   });
 
-  it('writes no title from a call that was refused or cut off, but still settles and bills it', async () => {
-    for (const [stopReason, raw] of [['refusal', 'refusal'], ['max_tokens', 'max_tokens']] as const) {
+  it('writes no title from a call that did not end normally, but still settles and bills it', async () => {
+    for (const [stopReason, raw] of [['refusal', 'refusal'], ['max_tokens', 'max_tokens'], ['context_exceeded', 'model_context_window_exceeded'], ['other', 'pause_turn']] as const) {
       const h = harness({ conversation: { title: null } });
       h.port.script(textStep('Sure.'));
       h.port.completeText = 'A perfectly fine title';

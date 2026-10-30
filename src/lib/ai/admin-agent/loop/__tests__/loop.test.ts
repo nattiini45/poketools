@@ -513,14 +513,27 @@ describe('the reservation estimate', () => {
 
   it('never reserves more than the cold estimate, and a new turn starts cold again', async () => {
     const h = harness();
-    h.port.script(textStep('One.', { usage: { cacheReadTokens: 200_000, inputTokens: 100 } }), textStep('Two.', { usage: { cacheReadTokens: 100, inputTokens: 100 } }));
+    // A long history, so a cold estimate (above 55K tokens at 8 per token) is far from any warm figure.
+    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(200_000) }] });
+    h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+    h.tools.on('league_get', () => ({ ok: true, data: {} }));
+    h.port.script(
+      // Turn 1 reaches a real step 2 (a tool call first), which reserves the warm figure off a healthy cache.
+      toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }),
+      textStep('One.', { usage: { inputTokens: 300, cacheWrite1hTokens: 1_200, cacheReadTokens: 50_000 } }),
+      // Turn 2's first step.
+      textStep('Two.'),
+    );
     await turn(h);
     await turn(h, { kind: 'message', text: 'Again', clientMsgId: 'c2' });
-    const rows = h.fake.usage.filter((row) => row.purpose === 'turn');
-    // The second turn's first step saw a 200K previous measurement from the first turn and ignored it: it is a step 1.
-    expect(rows).toHaveLength(2);
-    expect(rows[1].reserved).toBeGreaterThan(0);
-    expect(rows[1].reserved).toBeLessThan(8_000 * 20 + 20_000 * 8);
+    const [first, warm, nextTurn] = h.fake.usage.filter((row) => row.purpose === 'turn').map((row) => row.reserved);
+    const coldFloor = 8_000 * 20 + 55_000 * 8;
+    expect(first).toBeGreaterThan(coldFloor);
+    // The warm step stays under its own cold ceiling.
+    expect(warm).toBeLessThan(coldFloor);
+    expect(warm).toBeLessThanOrEqual(first);
+    // The next turn's step 1 does not carry the warm figure over: it is cold again (a carried 50K-read figure is ~170K).
+    expect(nextTurn).toBeGreaterThan(coldFloor);
   });
 });
 
@@ -579,14 +592,19 @@ describe('the cache regression signal', () => {
     spy.mockRestore();
   });
 
-  it('can never break a turn: a logger that throws changes nothing', async () => {
+  it('can never break a turn: a logger that throws changes nothing, and the signal survives it', async () => {
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {
       throw new Error('log sink down');
     });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const h = twoSteps(meters(100));
     const { outcome } = await turn(h);
     expect(outcome).toMatchObject({ reason: 'completed', steps: 2 });
+    // The read share is computed before any logging, so the outcome (and the warm-reservation gate) still see it.
+    expect(outcome.lowestCacheReadRatio).toBeCloseTo(0.01, 5);
+    expect(errors.mock.calls.some((call) => String(call[0]).includes('step diagnostics failed'))).toBe(true);
     spy.mockRestore();
+    errors.mockRestore();
   });
 
   it('computes the share against the previous prefix, and has none without one', () => {
@@ -649,6 +667,15 @@ describe('stop reasons that run nothing', () => {
     await turn(h, { kind: 'message', text: 'Try again', clientMsgId: 'c2' });
     const replayed = h.port.inputs[1].transcript.find((e) => e.role === 'assistant');
     expect(replayed && replayed.role === 'assistant' ? replayed.blocks : null).toEqual(partial.blocks);
+  });
+
+  it('a refusal with no content stores nothing and audits partial_stored: false', async () => {
+    const h = harness();
+    h.port.script({ blocks: [], stopReason: 'refusal', rawStopReason: 'refusal' });
+    const { outcome } = await turn(h);
+    expect(outcome.reason).toBe('refused');
+    expect(h.fake.messages.filter((m) => m.role === 'assistant')).toHaveLength(0);
+    expect(h.audit[0]).toMatchObject({ action: 'agent.model.refusal', metadata: { partial_stored: false } });
   });
 
   it('a refusal without details still audits, with no category', async () => {
@@ -841,6 +868,15 @@ describe('model failures', () => {
     it('keeps Haiku at 100k, so it is refused before the long-prompt card (80K estimated tokens)', async () => {
       expect((await run('claude-haiku-5-5', 200_000)).outcome.reason).toBe('completed');
       expect((await run('claude-haiku-5-5', 400_000)).outcome.reason).toBe('context');
+    });
+
+    it('lets an explicit contextWindowTokens override win over the model window', async () => {
+      const h = harness({ conversation: { model: 'claude-opus-5-5' } });
+      h.deps.contextWindowTokens = 200_000;
+      h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(800_000) }] });
+      h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+      h.port.script(textStep('answered'));
+      expect((await turn(h)).outcome.reason).toBe('context');
     });
 
     it('treats a model the table does not know (a pinned older id) as the conservative 200k, and never rejects the conversation', async () => {

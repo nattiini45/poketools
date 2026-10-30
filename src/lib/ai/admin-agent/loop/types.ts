@@ -53,7 +53,8 @@ export interface ModelIteration {
 
 /**
  * Why a call ended, as the provider reported it, beyond the normalised `StopReason`. Every field is optional: a port that
- * cannot tell (a fake, a replay) leaves them out.
+ * cannot tell leaves it out (a fake that was given nothing; the eval replay for `iterations`, while it reports the finish
+ * reasons it can derive from the recording).
  */
 export interface ModelStopInfo {
   /** The SDK's normalised finish reason (`stop`, `length`, `content-filter`, `tool-calls`, ...). */
@@ -284,7 +285,7 @@ export interface LoopDeps {
   drift?(input: { adminId: AdminId; conversationId: string }): Promise<readonly string[]>;
   /** The channel the port renders harness events with; the loop needs it to strip the sentinel from admin text. */
   stateChannel: ProviderAdapterConfig['stateChannel'];
-  /** Overrides the model's context window for the "refuse at N%" rule; unset, `contextWindowFor(model)` decides (1M for Opus and Sonnet 5.5). */
+  /** Overrides the model's context window for the "refuse at N%" rule; unset, `contextWindowFor(model)` decides (1M for Opus and Sonnet 5.5, 100k for Haiku 5.5, 200k for an id the table does not know). */
   contextWindowTokens?: number;
 }
 
@@ -315,7 +316,7 @@ export interface TurnOutcome {
   costUsdMicro: number;
   /**
    * The lowest share of the previous step's prefix that a later step of the turn read back from the cache (1 is a full
-   * hit). Absent when the turn had no second step. It is deliberately not on the `done` stream event, which clients pin.
+   * hit). Absent when no comparison happened (no second step, or the previous step reported no prompt; see `cacheReadShare`). It is deliberately not on the `done` stream event, which clients pin.
    */
   lowestCacheReadRatio?: number;
 }

@@ -35,7 +35,15 @@ type EnvSource = Record<string, string | undefined>;
  * (`src/instrumentation.ts`). This covers the configured defaults of NEW conversations only: a conversation row keeps the
  * id it was created with, and nothing validates that id again.
  */
-const MODEL_ID = new RegExp(`^(?:${PRICED_MODEL_IDS.join('|')})(?:-[0-9]{8})?$`);
+const MODEL_ID = modelIdPattern(PRICED_MODEL_IDS);
+
+/** The allowlist as a regex: each id escaped, an optional real calendar-date suffix (`-20YYMMDD`). */
+function modelIdPattern(ids: readonly string[]): RegExp {
+  if (ids.length === 0) throw new Error('[admin-agent] the pricing table names no model');
+  const escaped = ids.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`^(?:${escaped.join('|')})(?:-20\\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01]))?$`);
+}
+
 /** Effort ceiling is `high` (plan 3.4); `xhigh` and `max` are not accepted. */
 const EFFORTS = ['low', 'medium', 'high'] as const;
 export type AdminAgentEffort = (typeof EFFORTS)[number];

@@ -84,9 +84,9 @@ describe('createPortJudge', () => {
     const garbage = fakePort(() => ({ text: 'I think yes.', usage: USAGE, model: JUDGE_MODEL }));
     expect(await createPortJudge(garbage.port).judge({ intent: 'x'.repeat(30), answer: 'y' })).toEqual({ verdict: null, error: 'unparseable', costUsdMicro: 70 });
 
-    // A call that ended on its token limit or a refusal says so, instead of looking like a model that wrote bad JSON. Its text is not read.
+    // A call that ended any other way than end_turn says so, instead of looking like a model that wrote bad JSON. Its text is not read.
     const goodJson = '{"conveys":true,"quote":"q","reason":"r"}';
-    for (const stop of ['max_tokens', 'refusal'] as const) {
+    for (const stop of ['max_tokens', 'refusal', 'context_exceeded', 'other'] as const) {
       const ended = fakePort(() => ({ text: goodJson, usage: USAGE, model: JUDGE_MODEL, stopReason: stop, rawFinishReason: stop }));
       expect(await createPortJudge(ended.port).judge({ intent: 'x'.repeat(30), answer: 'y' })).toEqual({ verdict: null, error: stop, costUsdMicro: 70 });
     }

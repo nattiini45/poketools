@@ -156,7 +156,7 @@ export function readStopInfo(providerMetadata: unknown): Pick<ModelStopInfo, 'st
   if (!isRecord(anthropic)) return {};
   const out: Pick<ModelStopInfo, 'stopDetails' | 'iterations'> = {};
   const details = anthropic.stopDetails;
-  if (isRecord(details)) out.stopDetails = typeof details.category === 'string' && details.category !== '' ? { category: details.category.slice(0, 64) } : {};
+  if (isRecord(details) && typeof details.category === 'string' && details.category !== '') out.stopDetails = { category: details.category.slice(0, 64) };
   if (Array.isArray(anthropic.iterations)) {
     const iterations = anthropic.iterations.flatMap((entry): ModelIteration[] =>
       isRecord(entry) && typeof entry.type === 'string'

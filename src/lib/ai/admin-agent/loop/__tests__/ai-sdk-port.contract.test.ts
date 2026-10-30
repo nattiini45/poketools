@@ -408,8 +408,8 @@ describe('small mappings', () => {
     expect(readStopInfo({ anthropic: 'x' })).toEqual({});
     expect(readStopInfo({ anthropic: { stopDetails: { type: 'refusal', category: 'cyber', explanation: 'e' } } })).toEqual({ stopDetails: { category: 'cyber' } });
     // A refusal with details but no category, and a category of the wrong type.
-    expect(readStopInfo({ anthropic: { stopDetails: { type: 'refusal' } } })).toEqual({ stopDetails: {} });
-    expect(readStopInfo({ anthropic: { stopDetails: { type: 'refusal', category: 7 } } })).toEqual({ stopDetails: {} });
+    expect(readStopInfo({ anthropic: { stopDetails: { type: 'refusal' } } })).toEqual({});
+    expect(readStopInfo({ anthropic: { stopDetails: { type: 'refusal', category: 7 } } })).toEqual({});
     expect(
       readStopInfo({
         anthropic: {

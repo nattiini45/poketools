@@ -238,14 +238,16 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     await deps.store.usage
       .settleUsage(request.adminId, reservation.usageId, { ...stepResult.usage, costUsdMicro: stepCost, stopReason: stepResult.rawStopReason ?? stepResult.stopReason })
       .catch((error: unknown) => console.error('[admin-agent] usage settle failed; the reservation stays and counts', error));
+    // The read share is computed before any logging, so a throwing log sink cannot lose the regression signal the warm
+    // reservation gate reads.
+    const ratio = cacheReadShare(previousPrefix, stepResult.usage);
+    if (ratio !== null) lowestCacheReadRatio = lowestCacheReadRatio === null ? ratio : Math.min(lowestCacheReadRatio, ratio);
+    const regressed = ratio !== null && ratio < CACHE_REGRESSION_RATIO;
     // Diagnostics only: a failure here can never touch the turn.
-    let regressed = false;
     try {
-      const ratio = diagnoseStep({ conversationId: conversation.id, model: stepResult.model || model, step, usage: stepResult.usage, previousPrefix, iterations: stepResult.iterations });
-      if (ratio !== null) lowestCacheReadRatio = lowestCacheReadRatio === null ? ratio : Math.min(lowestCacheReadRatio, ratio);
-      regressed = ratio !== null && ratio < CACHE_REGRESSION_RATIO;
-    } catch {
-      // Never fail a turn over a log line.
+      diagnoseStep({ conversationId: conversation.id, model: stepResult.model || model, step, usage: stepResult.usage, previousPrefix, iterations: stepResult.iterations });
+    } catch (error) {
+      console.error('[admin-agent] step diagnostics failed', error);
     }
     previousPrefix = promptTokensOf(stepResult.usage);
     previousStep = { usage: stepResult.usage, estimatedPromptTokens: promptTokens, transcriptLength, regressed };

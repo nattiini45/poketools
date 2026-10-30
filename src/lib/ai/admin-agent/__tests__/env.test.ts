@@ -326,6 +326,10 @@ describe('caps, limits and models', () => {
       'claude-opus-5-5-2026100',
       'claude-opus-5-5-202610011',
       'claude-opus-5-5-20261001-x',
+      'claude-opus-5-5-99999999',
+      'claude-opus-5-5-00000000',
+      'claude-opus-5-5-20261301',
+      'claude-opus-5-5-20261032',
       'Claude-Opus-5-5',
       ' claude-opus-5-5 x',
     ]) {
