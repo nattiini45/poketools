@@ -282,19 +282,21 @@ export async function checkTeam(input: TeamCheckInput): Promise<TeamValidationRe
 
   // 4. Union, deduped; every validator must be clean.
   let coreTeamIssues = teamIssuesOf(core);
-  if (coreReadFailed) {
+  const constraints = ruleset.team_constraints;
+  const rulesetUsesCore =
+    constraints?.type_quotas?.source === 'player_core' || constraints?.tera_match === 'player_core';
+  if (coreReadFailed && rulesetUsesCore) {
     // The core could not be READ: that is not "no core assigned". Whatever the validator said about a missing core is
-    // replaced by the true cause, so the player is not told to ask for a core they already have.
+    // replaced by the true cause, so the player is not told to ask for a core they already have. Keyed off the ruleset,
+    // not the validator's output: a team with no tera types emits no missing-core message, yet was never checked.
     const noCore = (i: TeamIssue) => i.code === 'type_quota_no_core' || i.code === 'tera_match_no_core';
-    if (coreTeamIssues.some(noCore)) {
-      coreTeamIssues = [
-        ...coreTeamIssues.filter((i) => !noCore(i)),
-        {
-          issue: 'Your assigned core could not be read, so the rules that depend on it could not be checked. Try again in a moment',
-          ...codedIssue('core_load_failed'),
-        },
-      ];
-    }
+    coreTeamIssues = [
+      ...coreTeamIssues.filter((i) => !noCore(i)),
+      {
+        issue: 'Your assigned core could not be read, so the rules that depend on it could not be checked. Try again in a moment',
+        ...codedIssue('core_load_failed'),
+      },
+    ];
   }
   const teamIssues = dedupTeamIssues([...coreTeamIssues, ...(epbResult ? teamIssuesOf(epbResult) : [])]);
   if (source.fallback) {

@@ -306,6 +306,15 @@ describe('checkTeam: the assigned core', () => {
     log.mockRestore();
   });
 
+  it('a failed core read is never valid even when no set has a tera type (a tera-only core rule)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(getParticipantCore).mockRejectedValue(new Error('db down'));
+    const result = await checkTeam({ pokemon: [makeSet('Garchomp')], ruleset: coreRuleset, playerId: PLAYER, seasonId: SEASON_ID });
+    expect(codesOf(result)).toContain('core_load_failed');
+    expect(result.valid).toBe(false);
+    log.mockRestore();
+  });
+
   it('a core that is genuinely not assigned still says so (the read worked)', async () => {
     vi.mocked(getParticipantCore).mockResolvedValue(null);
     const result = await checkTeam({ pokemon: teraGarchomp, ruleset: coreRuleset, playerId: PLAYER, seasonId: SEASON_ID });
