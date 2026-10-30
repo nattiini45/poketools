@@ -59,7 +59,7 @@ import {
   type TeamCoachCase,
   type ValidatorCounts,
 } from './types';
-import { isDeterministicModelError, OutputCapError, RefusalError } from '../errors';
+import { AllModelsFailedError, isDeterministicModelError, OutputCapError, RefusalError } from '../errors';
 
 // ─── Planning ───────────────────────────────────────────────────────
 
@@ -169,6 +169,8 @@ function classifyError(error: unknown): CallErrorKind {
   if (error instanceof OutputCapError) return 'truncated';
   if (error instanceof RefusalError) return 'refused';
   if (isDeterministicModelError(error)) return 'rejected';
+  // Kale's ladder gave up after both rungs failed transiently: both attempts were made.
+  if (error instanceof AllModelsFailedError) return 'transient';
   if (error instanceof Error && (TRANSIENT_NAMES.has(error.name) || /exceeded|terminated|fetch failed|overloaded|empty|connection|timeout|timed out|aborted|ECONN|ETIMEDOUT/i.test(error.message))) return 'transient';
   return 'other';
 }

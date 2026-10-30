@@ -6,7 +6,7 @@
  * - Everything else: `completeStreaming` (analysis, scouting; they stream in production) or
  *   `complete` (coaches, recap) of `client.ts`.
  *
- * Both modules read the API key (`CLAUDE_API_KEY`) when they are imported, and Kale reads the model
+ * Both modules read the API key (`anthropicApiKey()`: `ANTHROPIC_API_KEY`, then the deprecated `CLAUDE_API_KEY`), and Kale reads the model
  * and effort from `CLAUDE_MODEL` / `CLAUDE_API_EFFORT` on every call, so the entry script sets the
  * environment first and this module imports them lazily.
  */

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installEgressGuard, main, parseArgs, priorRows, readAllowedKeys, resumeMismatch, UsageError, type CliOptions } from '../cli';
-import { OutputCapError, RefusalError } from '../../errors';
+import { AllModelsFailedError, OutputCapError, RefusalError } from '../../errors';
 import type { createDexLookup } from '../graders';
 import type { CallRequest, ModelCaller, ModelResponse, RunRow } from '../types';
 
@@ -194,7 +194,7 @@ describe('main: a live run with a fake model', () => {
     const dir = tmp();
     const h = harness(['--flow', 'recap', '--per-flow', '2', '--out', dir], { env: { BRAINTRUST_API_KEY: 'bt-secret' } });
     await main(h.options);
-    expect(h.env.CLAUDE_API_KEY).toBe(SECRET);
+    expect(h.env.ANTHROPIC_API_KEY).toBe(SECRET);
     expect(h.env.CLAUDE_MODEL).toBe('claude-sonnet-5-5');
     expect(h.env.CLAUDE_API_EFFORT).toBe('medium');
     expect(h.env.BRAINTRUST_API_KEY).toBeUndefined();
@@ -492,6 +492,48 @@ describe('main: --resume never mixes runs', () => {
     expect(resumeMismatch(null, now)).toBeNull();
     expect(resumeMismatch(stored, { ...now, model: 'x' })).toMatch(/model: m -> x/);
     expect(resumeMismatch('{', now)).toMatch(/unreadable/);
+  });
+});
+describe('main: API key resolution', () => {
+  it('prefers ANTHROPIC_API_KEY over CLAUDE_API_KEY in the environment, like anthropicApiKey()', async () => {
+    const h = harness(['--flow', 'recap', '--per-flow', '1', '--out', tmp()], { env: { ANTHROPIC_API_KEY: ' primary ', CLAUDE_API_KEY: 'deprecated' }, envFile: null });
+    await main(h.options);
+    expect(h.env.ANTHROPIC_API_KEY).toBe('primary');
+  });
+
+  it('falls back to CLAUDE_API_KEY when ANTHROPIC_API_KEY is blank, and to the env file after that', async () => {
+    const a = harness(['--flow', 'recap', '--per-flow', '1', '--out', tmp()], { env: { ANTHROPIC_API_KEY: '  ', CLAUDE_API_KEY: 'deprecated' }, envFile: null });
+    await main(a.options);
+    expect(a.env.ANTHROPIC_API_KEY).toBe('deprecated');
+    const b = harness(['--flow', 'recap', '--per-flow', '1', '--out', tmp()], { envFile: 'CLAUDE_API_KEY=old\nANTHROPIC_API_KEY=new\n' });
+    await main(b.options);
+    expect(b.env.ANTHROPIC_API_KEY).toBe('new');
+    const c = harness(['--flow', 'recap', '--per-flow', '1', '--out', tmp()], { envFile: 'CLAUDE_API_KEY=old\n' });
+    await main(c.options);
+    expect(c.env.ANTHROPIC_API_KEY).toBe('old');
+  });
+});
+
+describe('main: Kale gave up after both rungs failed', () => {
+  it('treats AllModelsFailedError as a transient double failure and charges both attempts under the cap', async () => {
+    const dir = tmp();
+    const h = harness(['--flow', 'kale-recap', '--per-flow', '1', '--out', dir, '--max-cost-usd', '5'], {
+      caller: async () => {
+        throw new AllModelsFailedError([{ model: 'claude-sonnet-5-5', summary: 'overloaded' }, { model: 'claude-haiku-5-5', summary: 'overloaded' }], new Error('x'));
+      },
+    });
+    await main(h.options);
+    const row = rowsOf(dir)[0];
+    expect(row.calls.length).toBeGreaterThan(0);
+    for (const call of row.calls) {
+      expect(call).toMatchObject({ error: 'transient', costEstimated: true });
+      // primary worst case (4096 output tokens at $10/M) plus the Haiku fallback's
+      expect(call.costUsd).toBeGreaterThan(0.04);
+      expect(call.failedAttemptUsd).toBe(call.costUsd);
+    }
+    expect(row.pass).toBe(false);
+    const spent = JSON.parse(readFileSync(path.join(dir, 'summary.json'), 'utf8')).meta.spentUsd as number;
+    expect(spent).toBeCloseTo(row.calls.reduce((s, c) => s + c.costUsd, 0), 8);
   });
 });
 describe('installEgressGuard', () => {

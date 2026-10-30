@@ -383,7 +383,8 @@ export async function main(options: CliOptions): Promise<number> {
       return 2;
     }
   }
-  let apiKey = env.CLAUDE_API_KEY || env.ANTHROPIC_API_KEY || '';
+  // Same order as `anthropicApiKey()`: ANTHROPIC_API_KEY, then the deprecated CLAUDE_API_KEY; blank counts as unset.
+  let apiKey = (env.ANTHROPIC_API_KEY ?? '').trim() || (env.CLAUDE_API_KEY ?? '').trim();
   if (!apiKey) {
     const file = path.resolve(options.root, parsed.envFile ?? env.AI_FLOW_EVAL_ENV_FILE ?? '.env.local');
     const text = (options.readEnvFile ?? readIfPresent)(file);
@@ -395,7 +396,7 @@ export async function main(options: CliOptions): Promise<number> {
     return 2;
   }
   // The app's call paths read these; nothing else is taken from an env file, and tracing stays off.
-  env.CLAUDE_API_KEY = apiKey;
+  env.ANTHROPIC_API_KEY = apiKey;
   env.CLAUDE_MODEL = model;
   env.CLAUDE_API_EFFORT = effort;
   delete env.BRAINTRUST_API_KEY;
