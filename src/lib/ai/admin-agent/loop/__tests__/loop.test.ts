@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { costMicro } from '../pricing';
 import { loopCode } from '../codes';
 import { startTurn } from '../start';
+import { cacheReadShare, diagnoseStep } from '../loop';
 import { ModelPortError, type AgentStreamEvent, type TurnInput } from '../types';
 import { ADMIN, CONVERSATION_ID, harness, readEvents, textStep, toolStep, typesOf, type Harness } from './fakes';
 
@@ -402,6 +403,91 @@ describe('provenance of ids (plan 6.3)', () => {
     h.port.script(toolStep([{ name: 'league_get' }]), textStep('done'));
     const { outcome } = await turn(h, { kind: 'message', text: `look at ${TYPED}`, clientMsgId: 'c3' });
     expect(outcome.reason).toBe('completed');
+    spy.mockRestore();
+  });
+});
+
+describe('the cache regression signal', () => {
+  const meters = (cacheRead: number, extra: { input?: number; write?: number } = {}) => ({ cacheReadTokens: cacheRead, inputTokens: extra.input ?? 300, cacheWrite1hTokens: extra.write ?? 700 });
+  const twoSteps = (second: ReturnType<typeof meters>) => {
+    const h = harness();
+    h.tools.on('league_get', () => ({ ok: true, data: {} }));
+    h.port.script(toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 9500, cacheReadTokens: 0 } }), textStep('Done.', { usage: second }));
+    return h;
+  };
+  const lines = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cache_read_regression'));
+
+  it('stays quiet while step 2 reads back at least half of the previous prefix, and reports the share on the outcome', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const h = twoSteps(meters(9000));
+    const { outcome, events } = await turn(h);
+    expect(lines(spy)).toEqual([]);
+    // 9000 of the previous 10000-token prompt.
+    expect(outcome.lowestCacheReadRatio).toBeCloseTo(0.9, 5);
+    // The pinned stream event is untouched.
+    expect(done(events)).toEqual({ type: 'done', reason: 'completed', resumable: false });
+    spy.mockRestore();
+  });
+
+  it('logs one content-free structured line when the read drops below half of the previous prefix', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const h = twoSteps(meters(2000, { input: 400, write: 7600 }));
+    const { outcome } = await turn(h);
+    const found = lines(spy);
+    expect(found).toHaveLength(1);
+    const payload = JSON.parse(found[0].slice(found[0].indexOf('{'))) as Record<string, unknown>;
+    expect(payload).toEqual({
+      conversation_id: CONVERSATION_ID,
+      model: 'claude-opus-5-5',
+      step: 2,
+      cache_read_tokens: 2000,
+      cache_write_tokens: 7600,
+      fresh_input_tokens: 400,
+      prompt_tokens: 10_000,
+      previous_prompt_tokens: 10_000,
+      ratio: 0.2,
+    });
+    expect(found[0]).not.toMatch(/Make me a league|Done\.|league_get/);
+    expect(outcome.lowestCacheReadRatio).toBeCloseTo(0.2, 5);
+    spy.mockRestore();
+  });
+
+  it('does not compare the first step of a turn with anything', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    h.port.script(textStep('One step.', { usage: { cacheReadTokens: 0, cacheWrite1hTokens: 10_000 } }));
+    const { outcome } = await turn(h);
+    expect(lines(spy)).toEqual([]);
+    expect(outcome).not.toHaveProperty('lowestCacheReadRatio');
+    spy.mockRestore();
+  });
+
+  it('can never break a turn: a logger that throws changes nothing', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {
+      throw new Error('log sink down');
+    });
+    const h = twoSteps(meters(100));
+    const { outcome } = await turn(h);
+    expect(outcome).toMatchObject({ reason: 'completed', steps: 2 });
+    spy.mockRestore();
+  });
+
+  it('computes the share against the previous prefix, and has none without one', () => {
+    const usage = { inputTokens: 100, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 450, outputTokens: 1 };
+    expect(cacheReadShare(900, usage)).toBe(0.5);
+    expect(cacheReadShare(null, usage)).toBeNull();
+    expect(cacheReadShare(0, usage)).toBeNull();
+  });
+
+  it('notes usage iterations that are not plain messages (billed apart from the totals), with no content', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const usage = { inputTokens: 100, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 900, outputTokens: 5 };
+    expect(diagnoseStep({ conversationId: 'c', model: 'm', step: 2, usage, previousPrefix: 1000, iterations: [{ type: 'message', inputTokens: 1, outputTokens: 1 }] })).toBe(0.9);
+    expect(spy).not.toHaveBeenCalled();
+    diagnoseStep({ conversationId: 'c', model: 'm', step: 1, usage, previousPrefix: null, iterations: [{ type: 'fallback_message', model: 'claude-sonnet-5', inputTokens: 10, outputTokens: 2 }] });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(String(spy.mock.calls[0][0])).toContain('non_message_iterations');
+    expect(String(spy.mock.calls[0][0])).toContain('fallback_message');
     spy.mockRestore();
   });
 });

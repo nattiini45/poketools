@@ -49,6 +49,11 @@ export function priceOf(model: string): { price: ModelPrice; known: boolean } {
   return hit ? { price: hit[1], known: true } : { price: HIGHEST, known: false };
 }
 
+/** The whole prompt of a settled call: fresh input plus everything written to or read from the cache. */
+export function promptTokensOf(meters: UsageMeters): number {
+  return meters.inputTokens + meters.cacheWrite5mTokens + meters.cacheWrite1hTokens + meters.cacheReadTokens;
+}
+
 /** The real cost of a response, rounded up to a whole micro-dollar. */
 export function costMicro(model: string, meters: UsageMeters): number {
   const { price } = priceOf(model);

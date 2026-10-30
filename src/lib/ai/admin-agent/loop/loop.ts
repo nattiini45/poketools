@@ -24,7 +24,7 @@ import type { ConversationRecord, Json, MessageRecord, NewRef, UsageMeters } fro
 import { toolUsesOf, textOf, toJson, type ToolUseBlock } from './blocks';
 import { loopCode } from './codes';
 import { LOOP_EVENTS, harnessEventMessage } from './harness';
-import { costMicro, DEFAULT_CONTEXT_WINDOW_TOKENS, estimateStepCostMicro, estimateTokens, maxOutputTokensFor } from './pricing';
+import { costMicro, DEFAULT_CONTEXT_WINDOW_TOKENS, estimateStepCostMicro, estimateTokens, maxOutputTokensFor, promptTokensOf } from './pricing';
 import { failureResult, serializeToolResult, toolResultBlock, type SerializedToolResult } from './tool-results';
 import { entryOf, type TranscriptEntry } from './transcript';
 import { safeSink } from './events';
@@ -113,6 +113,10 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
   const sentinel = deps.stateChannel === 'sentinel-user' ? deps.sentinelFor(conversation.id) : '';
   let turnCost = 0;
   let conversationSpend = await currentConversationSpend(run);
+  /** The prompt (fresh, written and read) of the previous settled step of this turn: what the next step should read back. */
+  let previousPrefix: number | null = null;
+  /** The lowest cache-read share of that prefix seen from step 2 on (see `cacheReadShare`). */
+  let lowestCacheReadRatio: number | null = null;
 
   const result = (reason: DoneReason, resumable: boolean): TurnOutcome => ({
     reason,
@@ -121,6 +125,7 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     toolCalls: counters.toolCalls,
     stagings: counters.stagings,
     costUsdMicro: turnCost,
+    ...(lowestCacheReadRatio !== null ? { lowestCacheReadRatio } : {}),
   });
 
   /** Stops with a resumable event: the admin (or the UI) posts `{continue: true}` to go on. */
@@ -221,6 +226,14 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     await deps.store.usage
       .settleUsage(request.adminId, reservation.usageId, { ...stepResult.usage, costUsdMicro: stepCost, stopReason: stepResult.rawStopReason ?? stepResult.stopReason })
       .catch((error: unknown) => console.error('[admin-agent] usage settle failed; the reservation stays and counts', error));
+    // Diagnostics only: a failure here can never touch the turn.
+    try {
+      const ratio = diagnoseStep({ conversationId: conversation.id, model: stepResult.model || model, step, usage: stepResult.usage, previousPrefix, iterations: stepResult.iterations });
+      if (ratio !== null) lowestCacheReadRatio = lowestCacheReadRatio === null ? ratio : Math.min(lowestCacheReadRatio, ratio);
+      previousPrefix = promptTokensOf(stepResult.usage);
+    } catch {
+      // Never fail a turn over a log line.
+    }
     emit({
       type: 'usage',
       step,
@@ -333,6 +346,65 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     // A write was held back for lack of time: the admin (or the UI) resumes the turn and the model asks for it again.
     if (deadlineHit) return stopResumable('deadline', LOOP_EVENTS.turnDeadline, { step: counters.steps, reason: 'tool_calls' });
   }
+}
+
+/** A step 2 or later whose cache read is below this share of the previous step's prefix is logged as a cache regression. */
+export const CACHE_REGRESSION_RATIO = 0.5;
+
+/**
+ * The share of the previous step's prefix that this step read back from the cache, or `null` when there is no comparison
+ * (the first step of a turn, or a previous step that reported no prompt). Each step of a turn appends to the one before it
+ * and the breakpoint of the last call covers its whole prefix, so a healthy cache reads back nearly all of it. A fixed
+ * read/total threshold would be wrong: a large tool result lowers that ratio legitimately; this one compares like with like.
+ */
+export function cacheReadShare(previousPrefix: number | null, usage: UsageMeters): number | null {
+  if (previousPrefix === null || previousPrefix <= 0) return null;
+  return usage.cacheReadTokens / previousPrefix;
+}
+
+interface StepDiagnosis {
+  conversationId: string;
+  model: string;
+  step: number;
+  usage: UsageMeters;
+  previousPrefix: number | null;
+  iterations?: ModelStepResult['iterations'];
+}
+
+/**
+ * Logs one structured, content-free line when a step's cache read fell below `CACHE_REGRESSION_RATIO` of the previous
+ * step's prefix (ids, a model name and token counts only), and another when the API reported usage iterations that are not
+ * plain messages (billed apart from the totals). Returns the read share for the turn outcome.
+ */
+export function diagnoseStep(input: StepDiagnosis): number | null {
+  const ratio = cacheReadShare(input.previousPrefix, input.usage);
+  if (ratio !== null && ratio < CACHE_REGRESSION_RATIO) {
+    console.warn(
+      `[admin-agent] cache_read_regression ${JSON.stringify({
+        conversation_id: input.conversationId,
+        model: input.model,
+        step: input.step,
+        cache_read_tokens: input.usage.cacheReadTokens,
+        cache_write_tokens: input.usage.cacheWrite5mTokens + input.usage.cacheWrite1hTokens,
+        fresh_input_tokens: input.usage.inputTokens,
+        prompt_tokens: promptTokensOf(input.usage),
+        previous_prompt_tokens: input.previousPrefix,
+        ratio: Math.round(ratio * 1000) / 1000,
+      })}`,
+    );
+  }
+  const other = (input.iterations ?? []).filter((iteration) => iteration.type !== 'message');
+  if (other.length > 0) {
+    console.warn(
+      `[admin-agent] non_message_iterations ${JSON.stringify({
+        conversation_id: input.conversationId,
+        model: input.model,
+        step: input.step,
+        iterations: other.map((iteration) => ({ type: iteration.type, model: iteration.model ?? null, input_tokens: iteration.inputTokens, output_tokens: iteration.outputTokens })),
+      })}`,
+    );
+  }
+  return ratio;
 }
 
 const BUDGET_CODE = {

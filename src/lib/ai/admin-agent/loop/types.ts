@@ -313,4 +313,9 @@ export interface TurnOutcome {
   stagings: number;
   /** Cost of this turn's model calls, micro-dollars. */
   costUsdMicro: number;
+  /**
+   * The lowest share of the previous step's prefix that a later step of the turn read back from the cache (1 is a full
+   * hit). Absent when the turn had no second step. It is deliberately not on the `done` stream event, which clients pin.
+   */
+  lowestCacheReadRatio?: number;
 }
