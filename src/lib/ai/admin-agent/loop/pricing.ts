@@ -71,9 +71,10 @@ export function promptTokensOf(meters: UsageMeters): number {
   return meters.inputTokens + meters.cacheWrite5mTokens + meters.cacheWrite1hTokens + meters.cacheReadTokens;
 }
 
-/** The real cost of a response, rounded up to a whole micro-dollar. */
+/** The real cost of a response, rounded up to a whole micro-dollar. An unknown model id is priced at the maxima and logged. */
 export function costMicro(model: string, meters: UsageMeters): number {
-  const { price } = priceOf(model, promptTokensOf(meters));
+  const { price, known } = priceOf(model, promptTokensOf(meters));
+  if (!known) console.warn(`[admin-agent] no price for model ${model.slice(0, 80)}; billed at the highest table price`);
   const total =
     meters.inputTokens * price.input +
     meters.cacheWrite5mTokens * price.cacheWrite5m +

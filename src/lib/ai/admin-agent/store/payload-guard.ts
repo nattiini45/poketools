@@ -81,7 +81,8 @@ function containsWebhookUrl(value: string): boolean {
   return false;
 }
 
-export type PayloadViolationKind = 'forbidden_key' | 'webhook_url' | 'private_field_in_text';
+/** `not_scanned`: the payload is deeper or larger than the scan walks, so it cannot be cleared. */
+export type PayloadViolationKind = 'forbidden_key' | 'webhook_url' | 'private_field_in_text' | 'not_scanned';
 
 export interface PayloadViolation {
   /** Where, as `a.b[2].c` (key names only). */
@@ -93,7 +94,8 @@ const MAX_DEPTH = 64;
 const MAX_NODES = 250_000;
 
 function scan(value: unknown, path: string, depth: number, budget: { nodes: number }, textKeys: boolean): PayloadViolation | null {
-  if (budget.nodes-- <= 0 || depth > MAX_DEPTH) return null;
+  // Fail closed: a payload past the scan's own limits is refused, never waved through unscanned.
+  if (budget.nodes-- <= 0 || depth > MAX_DEPTH) return { path, kind: 'not_scanned' };
   if (typeof value === 'string') {
     if (containsWebhookUrl(value)) return { path, kind: 'webhook_url' };
     if (textKeys && PRIVATE_KEY_IN_TEXT.test(value)) return { path, kind: 'private_field_in_text' };

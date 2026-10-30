@@ -61,6 +61,7 @@ export default defineDe<typeof en>()({
     'Es ist nicht bekannt, ob dieser Schritt durchgegangen ist. Prüf das, bevor du es noch einmal versuchst.',
   reconcile_ambiguous: 'Mehrere vorhandene Einträge passen zu diesem Schritt. Prüf sie, bevor du weitermachst.',
   ledger_unavailable: 'Es wurde nichts getan, weil der Assistent es nicht aufzeichnen konnte.',
+  precondition_read_failed: 'Es wurde nichts getan, weil der aktuelle Stand nicht geprüft werden konnte. Versuch es gleich noch einmal.',
   agent_harness_error: 'Beim Assistenten ist ein interner Fehler aufgetreten. Es wurde nichts wiederholt.',
 
   participant_already_enrolled: 'Dieser Spieler ist schon in der Liga.',

@@ -66,7 +66,9 @@ export async function generateTitle(deps: LoopDeps, request: TitleRequest): Prom
     title = result.stopReason === undefined || result.stopReason === 'end_turn' ? sanitizeTitle(result.text) : null;
   } catch (error) {
     console.error('[admin-agent] title generation failed', error);
-    await store.usage.releaseUsage(adminId, reservation, 'title_failed').catch(() => undefined);
+    await store.usage
+      .releaseUsage(adminId, reservation, 'title_failed')
+      .catch((releaseError: unknown) => console.error('[admin-agent] title reservation could not be released; it stays and counts', releaseError));
     return null;
   }
   if (title === null) return null;

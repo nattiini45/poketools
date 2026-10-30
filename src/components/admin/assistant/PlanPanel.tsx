@@ -1,5 +1,6 @@
 'use client';
 
+import Alert from '@/components/ui/Alert';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { PANEL, PANEL_INSET } from '@/components/ui/panel';
@@ -53,6 +54,8 @@ function useRowValue() {
 
 export interface PlanPanelProps {
   plan: PlanView | null;
+  /** The stored Plan exists but does not read: an alert instead of the empty state. */
+  unreadable?: boolean;
   className?: string;
   /**
    * Puts a sentence in the message box for the admin to send ("Fix this", "Build"). The panel never changes the plan or
@@ -69,7 +72,7 @@ export interface PlanPanelProps {
  * to the bottom edge). Read-only in phase 0: the admin changes the plan by telling the assistant, and the shortcuts only write
  * the sentence for them.
  */
-export default function PlanPanel({ plan, className, onAsk, canAsk = false }: PlanPanelProps) {
+export default function PlanPanel({ plan, unreadable = false, className, onAsk, canAsk = false }: PlanPanelProps) {
   const t = useT(adminAssistantMessages);
   const cards = useT(adminAssistantCardsMessages);
   const rowValue = useRowValue();
@@ -92,7 +95,11 @@ export default function PlanPanel({ plan, className, onAsk, canAsk = false }: Pl
       </header>
 
       {plan === null ? (
-        <p className="text-sm text-poke-text-muted">{t('plan.empty')}</p>
+        unreadable ? (
+          <Alert variant="warning">{t('plan.unreadable')}</Alert>
+        ) : (
+          <p className="text-sm text-poke-text-muted">{t('plan.empty')}</p>
+        )
       ) : (
         <>
           <p className="text-sm">

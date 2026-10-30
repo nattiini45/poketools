@@ -236,6 +236,16 @@ describe('POST /api/admin/agent/proposals/[id]/approve', () => {
       mocks.store.conversations.getConversation.mockResolvedValue(conversation());
     });
 
+    it('refuses the approve with a harness error when no session could be recorded: nothing reaped, claimed or dispatched', async () => {
+      mocks.authAndRecord.mockResolvedValue(null);
+      const res = await call();
+      expect(res.status).toBe(500);
+      expect((await res.json()).code).toBe('agent_harness_error');
+      expect(mocks.store.proposals.reapExecutingProposals).not.toHaveBeenCalled();
+      expect(mocks.store.proposals.claimProposal).not.toHaveBeenCalled();
+      expect(mocks.store.actions.insertAction).not.toHaveBeenCalled();
+    });
+
     it('claims, then refuses a proposal whose step is not in the registry: 409 proposal_stale, finished stale, the model told, nothing dispatched', async () => {
       mocks.store.proposals.getProposalOrThrow.mockResolvedValue(proposal({ steps: [STEP] as never }));
       mocks.store.proposals.claimProposal.mockResolvedValue(proposal({ status: 'executing', approved_by: ME, steps: [STEP] as never }));
@@ -311,6 +321,17 @@ describe('POST /api/admin/agent/proposals/[id]/resume', () => {
     expect((await call({ 'content-type': 'application/json' })).status).toBe(403);
     mocks.requireAnyAdmin.mockRejectedValue(new AuthError('Admin access required', 403, 'forbidden'));
     expect((await call()).status).toBe(403);
+  });
+
+  it('refuses the resume with a harness error when no session could be recorded: nothing reaped, claimed or dispatched', async () => {
+    vi.stubEnv('ADMIN_AGENT_MAX_PHASE', '1');
+    mocks.authAndRecord.mockResolvedValue(null);
+    const res = await call();
+    expect(res.status).toBe(500);
+    expect((await res.json()).code).toBe('agent_harness_error');
+    expect(mocks.store.proposals.reapExecutingProposals).not.toHaveBeenCalled();
+    expect(mocks.store.proposals.claimProposal).not.toHaveBeenCalled();
+    expect(mocks.store.actions.insertAction).not.toHaveBeenCalled();
   });
 
   it('answers 409 proposal_not_resumable for a proposal that is not an executing Build of this admin', async () => {

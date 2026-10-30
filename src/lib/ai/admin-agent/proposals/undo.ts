@@ -308,7 +308,7 @@ export async function prepareUndo(ctx: PrepareContext, args: UndoArgs): Promise<
   const expanded: Expanded[] = [];
   let total = 0;
   let truncated = plan.truncated;
-  for (const planStep of planSteps) {
+  for (const [index, planStep] of planSteps.entries()) {
     const row = rowOf.get(planStep.actionId) as Row;
     const result = await expand(ctx, subject, row, planStep, { fact: fact(row), nameOf, playerNames: undoFacts.playerNames, pinTargets, draft, lastChatRev });
     if ('reason' in result) {
@@ -320,7 +320,9 @@ export async function prepareUndo(ctx: PrepareContext, args: UndoArgs): Promise<
       continue;
     }
     if (total + result.steps.length > UNDO_MAX_STEPS) {
+      // Every row from here on stays as it is: listed on the card, so the admin sees what this undo leaves.
       truncated = true;
+      for (const rest of planSteps.slice(index)) note('notUndoable', rowOf.get(rest.actionId) as Row, 'too_many_steps');
       break;
     }
     total += result.steps.length;

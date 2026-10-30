@@ -58,8 +58,9 @@ export function createSseParser(onEvent: (event: AgentEvent) => void): SseParser
     try {
       const event = asAgentEvent(JSON.parse(data));
       if (event !== null) onEvent(event);
-    } catch {
-      // A malformed frame is skipped.
+    } catch (error) {
+      // A malformed frame is skipped, but not silently: a lost `done` or `error` frame must at least show in the console.
+      console.warn('[assistant] dropped a malformed stream frame', error);
     }
   };
 

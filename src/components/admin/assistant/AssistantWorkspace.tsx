@@ -177,7 +177,7 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
           </div>
         </section>
         <div className="lg:col-span-5">
-          <PlanPanel plan={plan} className="lg:sticky lg:top-20" onAsk={ask} canAsk={!composerDisabled && !conv.sending} />
+          <PlanPanel plan={plan} unreadable={detail.planUnreadable === true} className="lg:sticky lg:top-20" onAsk={ask} canAsk={!composerDisabled && !conv.sending} />
         </div>
       </div>
     );
@@ -186,7 +186,7 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {header}
-      {planOpen && <PlanPanel plan={plan} className="max-h-[45%] overflow-y-auto" onAsk={ask} canAsk={!composerDisabled && !conv.sending} />}
+      {planOpen && <PlanPanel plan={plan} unreadable={detail.planUnreadable === true} className="max-h-[45%] overflow-y-auto" onAsk={ask} canAsk={!composerDisabled && !conv.sending} />}
       {body}
       {footer}
     </div>

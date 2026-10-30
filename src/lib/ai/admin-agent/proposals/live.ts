@@ -75,6 +75,18 @@ async function codeOf(run: () => Promise<unknown>, where: string): Promise<strin
   }
 }
 
+/**
+ * How a refused guard reads as a Plan fact: an absent entity, a forbidden one, or `null` for any other refusal
+ * (`unauthenticated`, `rate_limited`, `ruleset_locked`, ...). A `null` leaves the fact out, which `planReadiness` reports as
+ * `fact_unavailable`, so a refusal that says nothing about the entity never reads as "it does not exist".
+ */
+export function refusalFact(code: string, where: string): 'not_found' | 'forbidden' | null {
+  if (code.endsWith('not_found')) return 'not_found';
+  if (code === 'forbidden' || code.endsWith('_forbidden')) return 'forbidden';
+  console.warn(`[admin-agent] ${where}: refused with ${code}; the fact stays unavailable`);
+  return null;
+}
+
 async function epbHead(): Promise<EpbBattleRulesetHead | null> {
   const [head] = await findHeadRulesetsByName(pointBuyBattleRulesetInput().name);
   return head === undefined ? null : { versionId: head.id, versionNo: head.version?.version_no ?? 0, slug: head.name };
@@ -125,7 +137,8 @@ async function loadPlanFacts(input: Parameters<StagingSource['loadPlanFacts']>[0
   const rulesetVersions: NonNullable<PlanFacts['rulesetVersions']> = {};
   for (const versionId of needs.rulesetVersionIds) {
     const code = await codeOf(() => guardFor({ kind: 'rulesetUsable', versionId }), 'facts ruleset version');
-    rulesetVersions[versionId] = code === null ? 'usable' : code === 'ruleset_forbidden' || code === 'forbidden' ? 'forbidden' : 'not_found';
+    const fact = code === null ? 'usable' : refusalFact(code, 'facts ruleset version');
+    if (fact !== null) rulesetVersions[versionId] = fact;
   }
 
   const rulesetDefinitions: NonNullable<PlanFacts['rulesetDefinitions']> = {};
@@ -138,7 +151,8 @@ async function loadPlanFacts(input: Parameters<StagingSource['loadPlanFacts']>[0
     } catch (err) {
       const mapped = toolErrorFromThrown(err, 'facts ruleset definition');
       if (mapped.code === 'agent_harness_error' || mapped.code === 'upstream_timeout') throw err;
-      rulesetDefinitions[definitionId] = { state: mapped.code === 'ruleset_not_found' ? 'not_found' : 'forbidden' };
+      const fact = refusalFact(mapped.code, 'facts ruleset definition');
+      if (fact !== null) rulesetDefinitions[definitionId] = { state: fact };
     }
   }
 
@@ -162,7 +176,8 @@ async function loadPlanFacts(input: Parameters<StagingSource['loadPlanFacts']>[0
   const formats: NonNullable<PlanFacts['formats']> = {};
   for (const formatId of needs.formatDefinitionIds) {
     const code = await codeOf(() => guardFor({ kind: 'formatViewer', id: formatId }), 'facts format');
-    formats[formatId] = { state: code === null ? 'ok' : code === 'forbidden' ? 'forbidden' : 'not_found' };
+    const state = code === null ? 'ok' : refusalFact(code, 'facts format');
+    if (state !== null) formats[formatId] = { state };
   }
 
   // Round names for `bo_overrides`: only an elimination bracket names its rounds. The participant count is the previous

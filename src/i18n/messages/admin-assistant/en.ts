@@ -71,6 +71,7 @@ export default {
     longTitle: 'Setup plan',
     revision: 'Revision {number}',
     empty: 'The plan fills in as you describe what you want.',
+    unreadable: 'This plan can no longer be read. Ask the assistant to set it up again.',
     sections: {
       ruleset: 'Ruleset',
       format: 'Format',
@@ -231,6 +232,7 @@ export default {
     generic: 'The assistant could not answer. Please try again.',
     retry: 'Try again',
     loadFailed: 'Could not load the conversation.',
+    refreshFailed: 'Could not refresh this card. What it shows may be out of date.',
     sendFailed: 'The message could not be sent.',
     notAvailable: 'The assistant is not available.',
   },

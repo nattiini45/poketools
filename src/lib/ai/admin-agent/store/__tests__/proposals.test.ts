@@ -70,8 +70,8 @@ describe('stageProposal', () => {
     expect(supersede.payload).toEqual({ status: 'superseded' });
     expect(eqOf(supersede, 'supersede_key')).toBe('league_start:abc');
     expect(eqOf(supersede, 'status')).toBe('proposed');
-    expect(hasStep(supersede, 'neq', 'id', PROPOSAL)).toBe(true);
-    expect(db.calls.indexOf(insert)).toBeLessThan(db.calls.indexOf(supersede));
+    // Retired before the insert: a supersede failure refuses a staging that wrote nothing.
+    expect(db.calls.indexOf(supersede)).toBeLessThan(db.calls.indexOf(insert));
   });
 
   it('inserts under the caller-chosen id (args_hash covers the proposal id) and leaves the id to the database otherwise', async () => {
