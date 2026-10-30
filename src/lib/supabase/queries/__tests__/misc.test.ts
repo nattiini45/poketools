@@ -1131,6 +1131,14 @@ describe('queries/match-analyses', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('stores the model that answered when the patch carries model_id', async () => {
+      mockBuilder.eq.mockReturnValue({ error: null });
+      await updateMatchAnalysis('ma1', { status: 'completed', model_id: 'claude-haiku-4-5-20251001' });
+      expect(mockBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'completed', model_id: 'claude-haiku-4-5-20251001' }),
+      );
+    });
+
     it('throws on error', async () => {
       mockBuilder.eq.mockReturnValue({ error: { message: 'err' } });
       await expect(
@@ -1223,6 +1231,14 @@ describe('queries/match-prep-analyses', () => {
       await expect(
         updateMatchPrepAnalysis('mpa1', { status: 'completed' }),
       ).resolves.toBeUndefined();
+    });
+
+    it('stores the model that answered when the patch carries model_id', async () => {
+      mockBuilder.eq.mockReturnValue({ error: null });
+      await updateMatchPrepAnalysis('mpa1', { status: 'completed', model_id: 'claude-haiku-4-5-20251001' });
+      expect(mockBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'completed', model_id: 'claude-haiku-4-5-20251001' }),
+      );
     });
 
     it('throws on error', async () => {

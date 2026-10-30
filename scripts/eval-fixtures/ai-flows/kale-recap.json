@@ -1,0 +1,5587 @@
+{
+  "schemaVersion": 1,
+  "flow": "kale-recap",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "recap-gym-r3",
+      "label": "gym league, round 3, 4 players, one unusual pick",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Gym League",
+        "tournamentName": "Sample Gym Cup",
+        "roundName": "Round 3",
+        "roundNumber": 3,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": "Steel",
+          "player-bram": "Water",
+          "player-cleo": "Fire",
+          "player-dara": "Ground"
+        },
+        "matches": [
+          {
+            "matchId": "match-recap-gym-r3-1",
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "winnerName": "Bram",
+            "loserName": "Ada",
+            "winnerScore": 3,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (3-0)",
+            "scoreString": "3-0",
+            "player1TotalKos": 3,
+            "player2TotalKos": 4,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Rotom-Wash",
+            "mvpPlayerName": "Bram",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 3,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch"
+                ]
+              },
+              {
+                "pokemonName": "Primarina",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hyper Voice",
+                  "Moonblast"
+                ]
+              },
+              {
+                "pokemonName": "Gyarados",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Waterfall",
+                  "Dragon Dance"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch",
+                  "Iron Head"
+                ]
+              },
+              {
+                "pokemonName": "Corviknight",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Brave Bird",
+                  "Body Press",
+                  "Defog"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed",
+                  "Power Whip"
+                ]
+              },
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power",
+                  "Stealth Rock"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Bram defeated Ada 3-0 in a dominant sweep (3-0), with Rotom-Wash earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Rotom-Wash earned MVP for Bram with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-gym-r3-2",
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "winnerName": "Cleo",
+            "loserName": "Dara",
+            "winnerScore": 3,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (3-0)",
+            "scoreString": "3-0",
+            "player1TotalKos": 3,
+            "player2TotalKos": 1,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Heatran",
+            "mvpPlayerName": "Cleo",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 2,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off"
+                ]
+              },
+              {
+                "pokemonName": "Ceruledge",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Bitter Blade",
+                  "Shadow Sneak"
+                ]
+              },
+              {
+                "pokemonName": "Torkoal",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Lava Plume",
+                  "Stealth Rock",
+                  "Rapid Spin"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat",
+                  "Rapid Spin"
+                ]
+              },
+              {
+                "pokemonName": "Garchomp",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Dragon Tail"
+                ]
+              },
+              {
+                "pokemonName": "Landorus-Therian",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "U-turn"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off",
+                  "Protect"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Cleo defeated Dara 3-0 in a dominant sweep (3-0), with Heatran earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Heatran earned MVP for Cleo with 2 KOs"
+            ]
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": "Ground",
+            "points": 6,
+            "recordString": "2W-1L",
+            "kdString": "+3",
+            "rankChange": "unchanged at #1",
+            "wins": 2,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 2,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 3,
+            "recordString": "1W-2L",
+            "kdString": "+7",
+            "rankChange": "unchanged at #2",
+            "wins": 1,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 7
+          },
+          {
+            "rank": 3,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 3,
+            "recordString": "1W-2L",
+            "kdString": "+1",
+            "rankChange": "unchanged at #3",
+            "wins": 1,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 1
+          },
+          {
+            "rank": 4,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": "Fire",
+            "points": 3,
+            "recordString": "1W-2L",
+            "kdString": "-5",
+            "rankChange": "unchanged at #4",
+            "wins": 1,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": -5
+          }
+        ],
+        "previousStandings": [
+          {
+            "rank": 1,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": "Ground",
+            "points": 6,
+            "recordString": "2W-1L",
+            "kdString": "+3",
+            "rankChange": "#1",
+            "wins": 2,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 2,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 3,
+            "recordString": "1W-2L",
+            "kdString": "+7",
+            "rankChange": "#2",
+            "wins": 1,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 7
+          },
+          {
+            "rank": 3,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 3,
+            "recordString": "1W-2L",
+            "kdString": "+1",
+            "rankChange": "#3",
+            "wins": 1,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 1
+          },
+          {
+            "rank": 4,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": "Fire",
+            "points": 3,
+            "recordString": "1W-2L",
+            "kdString": "-5",
+            "rankChange": "#4",
+            "wins": 1,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": -5
+          }
+        ],
+        "standingsChanges": [],
+        "pokemonUsage": [
+          {
+            "pokemonName": "Heatran",
+            "timesBrought": 2,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Rotom-Wash",
+            "timesBrought": 1,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Primarina",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Corviknight",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Ferrothorn",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Ceruledge",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Landorus-Therian",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Toxapex",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Gyarados",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Kingambit",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Skeledirge",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Torkoal",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Great Tusk",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Garchomp",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Gliscor",
+            "timesBrought": 1,
+            "totalKos": 0
+          }
+        ],
+        "bestPerformer": {
+          "playerName": "Bram",
+          "reason": "won 3-0, Rotom-Wash as MVP with 3 KOs"
+        },
+        "unusualPick": {
+          "pokemonName": "Rotom-Wash",
+          "playerName": "Bram",
+          "reason": "Water-type Gym Leader brought off-type Rotom-Wash to strong effect (3 KOs)"
+        },
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara"
+        ],
+        "validPokemonNames": [
+          "Toxapex",
+          "Rotom-Wash",
+          "Primarina",
+          "Gyarados",
+          "Kingambit",
+          "Corviknight",
+          "Ferrothorn",
+          "Heatran",
+          "Skeledirge",
+          "Ceruledge",
+          "Torkoal",
+          "Great Tusk",
+          "Garchomp",
+          "Landorus-Therian",
+          "Gliscor"
+        ],
+        "matchData": [
+          {
+            "match_id": "match-recap-gym-r3-1",
+            "player_1_id": "player-ada",
+            "player_1_name": "Ada",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-bram",
+            "player_2_name": "Bram",
+            "player_2_avatar_url": null,
+            "winner_id": "player-bram",
+            "winner_name": "Bram",
+            "p1_score": 0,
+            "p2_score": 3,
+            "p1_total_kos": 3,
+            "p2_total_kos": 4,
+            "mvp_pokemon": "Rotom-Wash",
+            "mvp_player_id": "player-bram",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-gym-r3-2",
+            "player_1_id": "player-cleo",
+            "player_1_name": "Cleo",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-dara",
+            "player_2_name": "Dara",
+            "player_2_avatar_url": null,
+            "winner_id": "player-cleo",
+            "winner_name": "Cleo",
+            "p1_score": 3,
+            "p2_score": 0,
+            "p1_total_kos": 3,
+            "p2_total_kos": 1,
+            "mvp_pokemon": "Heatran",
+            "mvp_player_id": "player-cleo",
+            "mvp_kos": 2
+          }
+        ],
+        "pokemonTypes": {}
+      }
+    },
+    {
+      "id": "recap-gym-r1",
+      "label": "gym league, round 1 (no previous standings), 6 players",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Gym League",
+        "tournamentName": "Sample Gym Cup",
+        "roundName": "Round 1",
+        "roundNumber": 1,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": "Steel",
+          "player-bram": "Water",
+          "player-cleo": "Fire",
+          "player-dara": "Ground",
+          "player-eli": "Steel",
+          "player-faye": "Water"
+        },
+        "matches": [
+          {
+            "matchId": "match-recap-gym-r1-1",
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "winnerName": "Bram",
+            "loserName": "Ada",
+            "winnerScore": 2,
+            "loserScore": 1,
+            "marginDescription": "a close match (2-1)",
+            "scoreString": "2-1",
+            "player1TotalKos": 2,
+            "player2TotalKos": 6,
+            "gamesPlayed": 3,
+            "mvpPokemon": "Primarina",
+            "mvpPlayerName": "Bram",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch",
+                  "Will-O-Wisp"
+                ]
+              },
+              {
+                "pokemonName": "Primarina",
+                "totalKos": 3,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Hyper Voice",
+                  "Moonblast"
+                ]
+              },
+              {
+                "pokemonName": "Gyarados",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Waterfall",
+                  "Dragon Dance",
+                  "Earthquake"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch"
+                ]
+              },
+              {
+                "pokemonName": "Corviknight",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Brave Bird",
+                  "Body Press"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed"
+                ]
+              },
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power",
+                  "Stealth Rock"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Bram defeated Ada 2-1 in a close match (2-1), with Primarina earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Primarina earned MVP for Bram with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-gym-r1-2",
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "winnerName": "Dara",
+            "loserName": "Cleo",
+            "winnerScore": 1,
+            "loserScore": 0,
+            "marginDescription": "the closest possible margin (1-0)",
+            "scoreString": "1-0",
+            "player1TotalKos": 0,
+            "player2TotalKos": 3,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Landorus-Therian",
+            "mvpPlayerName": "Dara",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Garchomp",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Dragon Tail",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Landorus-Therian",
+                "totalKos": 2,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Earthquake",
+                  "U-turn"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off",
+                  "Protect"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off",
+                  "Hex"
+                ]
+              },
+              {
+                "pokemonName": "Ceruledge",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Bitter Blade",
+                  "Shadow Sneak"
+                ]
+              },
+              {
+                "pokemonName": "Torkoal",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Lava Plume",
+                  "Stealth Rock",
+                  "Rapid Spin"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Dara defeated Cleo 1-0 in the closest possible margin (1-0), with Landorus-Therian earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Landorus-Therian earned MVP for Dara with 2 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-gym-r1-3",
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "winnerName": "Eli",
+            "loserName": "Faye",
+            "winnerScore": 3,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (3-0)",
+            "scoreString": "3-0",
+            "player1TotalKos": 3,
+            "player2TotalKos": 1,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Kingambit",
+            "mvpPlayerName": "Eli",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 2,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch",
+                  "Iron Head"
+                ]
+              },
+              {
+                "pokemonName": "Corviknight",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Brave Bird",
+                  "Body Press",
+                  "Defog"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed"
+                ]
+              },
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic",
+                  "Recover"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch",
+                  "Will-O-Wisp"
+                ]
+              },
+              {
+                "pokemonName": "Primarina",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hyper Voice",
+                  "Moonblast",
+                  "Psychic"
+                ]
+              },
+              {
+                "pokemonName": "Gyarados",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Waterfall",
+                  "Dragon Dance"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Eli defeated Faye 3-0 in a dominant sweep (3-0), with Kingambit earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Kingambit earned MVP for Eli with 2 KOs"
+            ]
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 3,
+            "recordString": "1W-0L",
+            "kdString": "+5",
+            "rankChange": "#1",
+            "wins": 1,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 5
+          },
+          {
+            "rank": 2,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": "Water",
+            "points": 3,
+            "recordString": "1W-0L",
+            "kdString": "+2",
+            "rankChange": "#2",
+            "wins": 1,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 2
+          },
+          {
+            "rank": 3,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": "Steel",
+            "points": 0,
+            "recordString": "0W-1L",
+            "kdString": "+6",
+            "rankChange": "#3",
+            "wins": 0,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 6
+          },
+          {
+            "rank": 4,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 0,
+            "recordString": "0W-1L",
+            "kdString": "+3",
+            "rankChange": "#4",
+            "wins": 0,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 5,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": "Fire",
+            "points": 0,
+            "recordString": "0W-1L",
+            "kdString": "+2",
+            "rankChange": "#5",
+            "wins": 0,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 2
+          },
+          {
+            "rank": 6,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": "Ground",
+            "points": 0,
+            "recordString": "0W-1L",
+            "kdString": "+1",
+            "rankChange": "#6",
+            "wins": 0,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 1
+          }
+        ],
+        "previousStandings": null,
+        "standingsChanges": [],
+        "pokemonUsage": [
+          {
+            "pokemonName": "Heatran",
+            "timesBrought": 3,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Primarina",
+            "timesBrought": 2,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Kingambit",
+            "timesBrought": 2,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Rotom-Wash",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Toxapex",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Gyarados",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Corviknight",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Ferrothorn",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Landorus-Therian",
+            "timesBrought": 1,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Garchomp",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Great Tusk",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Gliscor",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Skeledirge",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Ceruledge",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Torkoal",
+            "timesBrought": 1,
+            "totalKos": 0
+          }
+        ],
+        "bestPerformer": {
+          "playerName": "Eli",
+          "reason": "won 3-0, Kingambit as MVP with 2 KOs"
+        },
+        "unusualPick": null,
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye"
+        ],
+        "validPokemonNames": [
+          "Toxapex",
+          "Rotom-Wash",
+          "Primarina",
+          "Gyarados",
+          "Kingambit",
+          "Corviknight",
+          "Ferrothorn",
+          "Heatran",
+          "Great Tusk",
+          "Garchomp",
+          "Landorus-Therian",
+          "Gliscor",
+          "Skeledirge",
+          "Ceruledge",
+          "Torkoal"
+        ],
+        "matchData": [
+          {
+            "match_id": "match-recap-gym-r1-1",
+            "player_1_id": "player-ada",
+            "player_1_name": "Ada",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-bram",
+            "player_2_name": "Bram",
+            "player_2_avatar_url": null,
+            "winner_id": "player-bram",
+            "winner_name": "Bram",
+            "p1_score": 1,
+            "p2_score": 2,
+            "p1_total_kos": 2,
+            "p2_total_kos": 6,
+            "mvp_pokemon": "Primarina",
+            "mvp_player_id": "player-bram",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-gym-r1-2",
+            "player_1_id": "player-cleo",
+            "player_1_name": "Cleo",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-dara",
+            "player_2_name": "Dara",
+            "player_2_avatar_url": null,
+            "winner_id": "player-dara",
+            "winner_name": "Dara",
+            "p1_score": 0,
+            "p2_score": 1,
+            "p1_total_kos": 0,
+            "p2_total_kos": 3,
+            "mvp_pokemon": "Landorus-Therian",
+            "mvp_player_id": "player-dara",
+            "mvp_kos": 2
+          },
+          {
+            "match_id": "match-recap-gym-r1-3",
+            "player_1_id": "player-eli",
+            "player_1_name": "Eli",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-faye",
+            "player_2_name": "Faye",
+            "player_2_avatar_url": null,
+            "winner_id": "player-eli",
+            "winner_name": "Eli",
+            "p1_score": 3,
+            "p2_score": 0,
+            "p1_total_kos": 3,
+            "p2_total_kos": 1,
+            "mvp_pokemon": "Kingambit",
+            "mvp_player_id": "player-eli",
+            "mvp_kos": 2
+          }
+        ],
+        "pokemonTypes": {}
+      }
+    },
+    {
+      "id": "recap-core-r4",
+      "label": "core league, round 4, 6 players",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Core League",
+        "tournamentName": "Sample Core Cup",
+        "roundName": "Round 4",
+        "roundNumber": 4,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": null,
+          "player-bram": null,
+          "player-cleo": null,
+          "player-dara": null,
+          "player-eli": null,
+          "player-faye": null
+        },
+        "matches": [
+          {
+            "matchId": "match-recap-core-r4-1",
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "winnerName": "Ada",
+            "loserName": "Bram",
+            "winnerScore": 2,
+            "loserScore": 0,
+            "marginDescription": "a comfortable win (2-0)",
+            "scoreString": "2-0",
+            "player1TotalKos": 5,
+            "player2TotalKos": 0,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Rillaboom",
+            "mvpPlayerName": "Ada",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic",
+                  "Recover"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch"
+                ]
+              },
+              {
+                "pokemonName": "Rillaboom",
+                "totalKos": 3,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Grassy Glide",
+                  "Wood Hammer"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Garchomp",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Dragon Tail",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Landorus-Therian",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "U-turn"
+                ]
+              },
+              {
+                "pokemonName": "Dragonite",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Extreme Speed",
+                  "Dragon Dance",
+                  "Earthquake"
+                ]
+              },
+              {
+                "pokemonName": "Dragapult",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Draco Meteor",
+                  "Shadow Ball"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Ada defeated Bram 2-0 in a comfortable win (2-0), with Rillaboom earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Rillaboom earned MVP for Ada with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-core-r4-2",
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "winnerName": "Cleo",
+            "loserName": "Dara",
+            "winnerScore": 4,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (4-0)",
+            "scoreString": "4-0",
+            "player1TotalKos": 5,
+            "player2TotalKos": 4,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Great Tusk",
+            "mvpPlayerName": "Cleo",
+            "mvpKos": 4,
+            "winnerTeam": [
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off",
+                  "Hex"
+                ]
+              },
+              {
+                "pokemonName": "Iron Valiant",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spirit Break",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 4,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat",
+                  "Rapid Spin"
+                ]
+              },
+              {
+                "pokemonName": "Weavile",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Triple Axel",
+                  "Knock Off",
+                  "Ice Shard"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch"
+                ]
+              },
+              {
+                "pokemonName": "Rillaboom",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Grassy Glide",
+                  "Wood Hammer",
+                  "Knock Off"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed",
+                  "Power Whip"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Cleo defeated Dara 4-0 in a dominant sweep (4-0), with Great Tusk earning MVP honors (4 KOs).",
+            "keyPerformances": [
+              "Great Tusk earned MVP for Cleo with 4 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-core-r4-3",
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "winnerName": "Eli",
+            "loserName": "Faye",
+            "winnerScore": 2,
+            "loserScore": 1,
+            "marginDescription": "a close match (2-1)",
+            "scoreString": "2-1",
+            "player1TotalKos": 5,
+            "player2TotalKos": 3,
+            "gamesPlayed": 3,
+            "mvpPokemon": "Landorus-Therian",
+            "mvpPlayerName": "Eli",
+            "mvpKos": 4,
+            "winnerTeam": [
+              {
+                "pokemonName": "Garchomp",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Dragon Tail",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Landorus-Therian",
+                "totalKos": 4,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Earthquake",
+                  "U-turn",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Dragonite",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Extreme Speed",
+                  "Dragon Dance",
+                  "Earthquake"
+                ]
+              },
+              {
+                "pokemonName": "Dragapult",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Draco Meteor",
+                  "Shadow Ball"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off",
+                  "Hex"
+                ]
+              },
+              {
+                "pokemonName": "Iron Valiant",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spirit Break",
+                  "Close Combat",
+                  "Knock Off"
+                ]
+              },
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat",
+                  "Rapid Spin"
+                ]
+              },
+              {
+                "pokemonName": "Weavile",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Triple Axel",
+                  "Knock Off",
+                  "Ice Shard"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Eli defeated Faye 2-1 in a close match (2-1), with Landorus-Therian earning MVP honors (4 KOs).",
+            "keyPerformances": [
+              "Landorus-Therian earned MVP for Eli with 4 KOs"
+            ]
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 12,
+            "recordString": "4W-0L",
+            "kdString": "0",
+            "rankChange": "up 1 from #2 to #1",
+            "wins": 4,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 0
+          },
+          {
+            "rank": 2,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 12,
+            "recordString": "4W-0L",
+            "kdString": "-2",
+            "rankChange": "down 1 from #1 to #2",
+            "wins": 4,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -2
+          },
+          {
+            "rank": 3,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 7,
+            "recordString": "2W-1L-1D",
+            "kdString": "-3",
+            "rankChange": "unchanged at #3",
+            "wins": 2,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": -3
+          },
+          {
+            "rank": 4,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-2L",
+            "kdString": "+2",
+            "rankChange": "unchanged at #4",
+            "wins": 2,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 2
+          },
+          {
+            "rank": 5,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-3L",
+            "kdString": "-1",
+            "rankChange": "up 1 from #6 to #5",
+            "wins": 1,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -1
+          },
+          {
+            "rank": 6,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-3L",
+            "kdString": "-3",
+            "rankChange": "down 1 from #5 to #6",
+            "wins": 1,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -3
+          }
+        ],
+        "previousStandings": [
+          {
+            "rank": 1,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 12,
+            "recordString": "4W-0L",
+            "kdString": "-2",
+            "rankChange": "#1",
+            "wins": 4,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -2
+          },
+          {
+            "rank": 2,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 12,
+            "recordString": "4W-0L",
+            "kdString": "0",
+            "rankChange": "#2",
+            "wins": 4,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 0
+          },
+          {
+            "rank": 3,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 7,
+            "recordString": "2W-1L-1D",
+            "kdString": "-3",
+            "rankChange": "#3",
+            "wins": 2,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": -3
+          },
+          {
+            "rank": 4,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-2L",
+            "kdString": "+2",
+            "rankChange": "#4",
+            "wins": 2,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 2
+          },
+          {
+            "rank": 5,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-3L",
+            "kdString": "-3",
+            "rankChange": "#5",
+            "wins": 1,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -3
+          },
+          {
+            "rank": 6,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-3L",
+            "kdString": "-1",
+            "rankChange": "#6",
+            "wins": 1,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -1
+          }
+        ],
+        "standingsChanges": [
+          "Bram moved up 1 from #2 to #1",
+          "Cleo moved down 1 from #1 to #2",
+          "Dara moved up 1 from #6 to #5",
+          "Faye moved down 1 from #5 to #6"
+        ],
+        "pokemonUsage": [
+          {
+            "pokemonName": "Great Tusk",
+            "timesBrought": 2,
+            "totalKos": 5
+          },
+          {
+            "pokemonName": "Rillaboom",
+            "timesBrought": 2,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Landorus-Therian",
+            "timesBrought": 2,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Toxapex",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Ferrothorn",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Weavile",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Rotom-Wash",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Dragonite",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Skeledirge",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Garchomp",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Dragapult",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Iron Valiant",
+            "timesBrought": 2,
+            "totalKos": 0
+          }
+        ],
+        "bestPerformer": {
+          "playerName": "Cleo",
+          "reason": "won 4-0, Great Tusk as MVP with 4 KOs"
+        },
+        "unusualPick": null,
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye"
+        ],
+        "validPokemonNames": [
+          "Toxapex",
+          "Rotom-Wash",
+          "Rillaboom",
+          "Ferrothorn",
+          "Garchomp",
+          "Landorus-Therian",
+          "Dragonite",
+          "Dragapult",
+          "Skeledirge",
+          "Iron Valiant",
+          "Great Tusk",
+          "Weavile"
+        ],
+        "matchData": [
+          {
+            "match_id": "match-recap-core-r4-1",
+            "player_1_id": "player-ada",
+            "player_1_name": "Ada",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-bram",
+            "player_2_name": "Bram",
+            "player_2_avatar_url": null,
+            "winner_id": "player-ada",
+            "winner_name": "Ada",
+            "p1_score": 2,
+            "p2_score": 0,
+            "p1_total_kos": 5,
+            "p2_total_kos": 0,
+            "mvp_pokemon": "Rillaboom",
+            "mvp_player_id": "player-ada",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-core-r4-2",
+            "player_1_id": "player-cleo",
+            "player_1_name": "Cleo",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-dara",
+            "player_2_name": "Dara",
+            "player_2_avatar_url": null,
+            "winner_id": "player-cleo",
+            "winner_name": "Cleo",
+            "p1_score": 4,
+            "p2_score": 0,
+            "p1_total_kos": 5,
+            "p2_total_kos": 4,
+            "mvp_pokemon": "Great Tusk",
+            "mvp_player_id": "player-cleo",
+            "mvp_kos": 4
+          },
+          {
+            "match_id": "match-recap-core-r4-3",
+            "player_1_id": "player-eli",
+            "player_1_name": "Eli",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-faye",
+            "player_2_name": "Faye",
+            "player_2_avatar_url": null,
+            "winner_id": "player-eli",
+            "winner_name": "Eli",
+            "p1_score": 2,
+            "p2_score": 1,
+            "p1_total_kos": 5,
+            "p2_total_kos": 3,
+            "mvp_pokemon": "Landorus-Therian",
+            "mvp_player_id": "player-eli",
+            "mvp_kos": 4
+          }
+        ],
+        "pokemonTypes": {}
+      }
+    },
+    {
+      "id": "recap-open-r2",
+      "label": "open cup, round 2, 8 players, four matches",
+      "locale": "en",
+      "factPack": {
+        "leagueName": null,
+        "tournamentName": "Sample Open Cup",
+        "roundName": "Round 2",
+        "roundNumber": 2,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": null,
+          "player-bram": null,
+          "player-cleo": null,
+          "player-dara": null,
+          "player-eli": null,
+          "player-faye": null,
+          "player-gus": null,
+          "player-hana": null
+        },
+        "matches": [
+          {
+            "matchId": "match-recap-open-r2-1",
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "winnerName": "Bram",
+            "loserName": "Ada",
+            "winnerScore": 2,
+            "loserScore": 0,
+            "marginDescription": "a comfortable win (2-0)",
+            "scoreString": "2-0",
+            "player1TotalKos": 4,
+            "player2TotalKos": 5,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Iron Valiant",
+            "mvpPlayerName": "Bram",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch"
+                ]
+              },
+              {
+                "pokemonName": "Iron Valiant",
+                "totalKos": 3,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Spirit Break",
+                  "Close Combat",
+                  "Knock Off"
+                ]
+              },
+              {
+                "pokemonName": "Hatterene",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Psychic",
+                  "Dazzling Gleam"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off",
+                  "Hex"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Gholdengo",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Make It Rain",
+                  "Shadow Ball",
+                  "Nasty Plot"
+                ]
+              },
+              {
+                "pokemonName": "Dragapult",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Draco Meteor",
+                  "Shadow Ball"
+                ]
+              },
+              {
+                "pokemonName": "Slowking-Galar",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Sludge Bomb",
+                  "Future Sight",
+                  "Chilly Reception"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Bram defeated Ada 2-0 in a comfortable win (2-0), with Iron Valiant earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Iron Valiant earned MVP for Bram with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-open-r2-2",
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "winnerName": "Cleo",
+            "loserName": "Dara",
+            "winnerScore": 3,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (3-0)",
+            "scoreString": "3-0",
+            "player1TotalKos": 6,
+            "player2TotalKos": 2,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Clefable",
+            "mvpPlayerName": "Cleo",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Weavile",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Triple Axel",
+                  "Knock Off"
+                ]
+              },
+              {
+                "pokemonName": "Annihilape",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Bulk Up",
+                  "Rage Fist",
+                  "Drain Punch"
+                ]
+              },
+              {
+                "pokemonName": "Clefable",
+                "totalKos": 3,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Moonblast",
+                  "Soft-Boiled"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off",
+                  "Protect"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat",
+                  "Rapid Spin"
+                ]
+              },
+              {
+                "pokemonName": "Gholdengo",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Make It Rain",
+                  "Shadow Ball",
+                  "Nasty Plot"
+                ]
+              },
+              {
+                "pokemonName": "Dragapult",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Draco Meteor",
+                  "Shadow Ball",
+                  "U-turn"
+                ]
+              },
+              {
+                "pokemonName": "Slowking-Galar",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Sludge Bomb",
+                  "Future Sight",
+                  "Chilly Reception"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Cleo defeated Dara 3-0 in a dominant sweep (3-0), with Clefable earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Clefable earned MVP for Cleo with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-open-r2-3",
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "winnerName": "Eli",
+            "loserName": "Faye",
+            "winnerScore": 4,
+            "loserScore": 1,
+            "marginDescription": "a commanding victory (4-1)",
+            "scoreString": "4-1",
+            "player1TotalKos": 3,
+            "player2TotalKos": 3,
+            "gamesPlayed": 3,
+            "mvpPokemon": "Kingambit",
+            "mvpPlayerName": "Eli",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 2,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch",
+                  "Iron Head"
+                ]
+              },
+              {
+                "pokemonName": "Iron Valiant",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spirit Break",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Hatterene",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Psychic",
+                  "Dazzling Gleam",
+                  "Mystical Fire"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Weavile",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Triple Axel",
+                  "Knock Off"
+                ]
+              },
+              {
+                "pokemonName": "Annihilape",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Bulk Up",
+                  "Rage Fist"
+                ]
+              },
+              {
+                "pokemonName": "Clefable",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Moonblast",
+                  "Soft-Boiled"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off",
+                  "Protect"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Eli defeated Faye 4-1 in a commanding victory (4-1), with Kingambit earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Kingambit earned MVP for Eli with 2 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-open-r2-4",
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "winnerName": "Gus",
+            "loserName": "Hana",
+            "winnerScore": 4,
+            "loserScore": 1,
+            "marginDescription": "a commanding victory (4-1)",
+            "scoreString": "4-1",
+            "player1TotalKos": 6,
+            "player2TotalKos": 2,
+            "gamesPlayed": 3,
+            "mvpPokemon": "Dragapult",
+            "mvpPlayerName": "Gus",
+            "mvpKos": 4,
+            "winnerTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Gholdengo",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Make It Rain",
+                  "Shadow Ball",
+                  "Nasty Plot"
+                ]
+              },
+              {
+                "pokemonName": "Dragapult",
+                "totalKos": 4,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Draco Meteor",
+                  "Shadow Ball"
+                ]
+              },
+              {
+                "pokemonName": "Slowking-Galar",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Sludge Bomb",
+                  "Future Sight"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch",
+                  "Iron Head"
+                ]
+              },
+              {
+                "pokemonName": "Iron Valiant",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spirit Break",
+                  "Close Combat",
+                  "Knock Off"
+                ]
+              },
+              {
+                "pokemonName": "Hatterene",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Psychic",
+                  "Dazzling Gleam",
+                  "Mystical Fire"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Gus defeated Hana 4-1 in a commanding victory (4-1), with Dragapult earning MVP honors (4 KOs).",
+            "keyPerformances": [
+              "Dragapult earned MVP for Gus with 4 KOs"
+            ]
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-1",
+            "rankChange": "unchanged at #1",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -1
+          },
+          {
+            "rank": 2,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-2",
+            "rankChange": "unchanged at #2",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -2
+          },
+          {
+            "rank": 3,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-5",
+            "rankChange": "up 1 from #4 to #3",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 4,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 4,
+            "recordString": "1W-0L-1D",
+            "kdString": "+1",
+            "rankChange": "down 1 from #3 to #4",
+            "wins": 1,
+            "losses": 0,
+            "draws": 1,
+            "killDifferential": 1
+          },
+          {
+            "rank": 5,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "+3",
+            "rankChange": "unchanged at #5",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 6,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-2",
+            "rankChange": "up 1 from #7 to #6",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -2
+          },
+          {
+            "rank": 7,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 2,
+            "recordString": "0W-0L-2D",
+            "kdString": "+2",
+            "rankChange": "down 1 from #6 to #7",
+            "wins": 0,
+            "losses": 0,
+            "draws": 2,
+            "killDifferential": 2
+          },
+          {
+            "rank": 8,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 0,
+            "recordString": "0W-2L",
+            "kdString": "+5",
+            "rankChange": "unchanged at #8",
+            "wins": 0,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 5
+          }
+        ],
+        "previousStandings": [
+          {
+            "rank": 1,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-1",
+            "rankChange": "#1",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -1
+          },
+          {
+            "rank": 2,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-2",
+            "rankChange": "#2",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -2
+          },
+          {
+            "rank": 3,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 4,
+            "recordString": "1W-0L-1D",
+            "kdString": "+1",
+            "rankChange": "#3",
+            "wins": 1,
+            "losses": 0,
+            "draws": 1,
+            "killDifferential": 1
+          },
+          {
+            "rank": 4,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-5",
+            "rankChange": "#4",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 5,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "+3",
+            "rankChange": "#5",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 6,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 2,
+            "recordString": "0W-0L-2D",
+            "kdString": "+2",
+            "rankChange": "#6",
+            "wins": 0,
+            "losses": 0,
+            "draws": 2,
+            "killDifferential": 2
+          },
+          {
+            "rank": 7,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-2",
+            "rankChange": "#7",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -2
+          },
+          {
+            "rank": 8,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 0,
+            "recordString": "0W-2L",
+            "kdString": "+5",
+            "rankChange": "#8",
+            "wins": 0,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 5
+          }
+        ],
+        "standingsChanges": [
+          "Hana moved up 1 from #4 to #3",
+          "Gus moved down 1 from #3 to #4",
+          "Dara moved up 1 from #7 to #6",
+          "Ada moved down 1 from #6 to #7"
+        ],
+        "pokemonUsage": [
+          {
+            "pokemonName": "Dragapult",
+            "timesBrought": 3,
+            "totalKos": 6
+          },
+          {
+            "pokemonName": "Kingambit",
+            "timesBrought": 3,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Iron Valiant",
+            "timesBrought": 3,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Slowking-Galar",
+            "timesBrought": 3,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Great Tusk",
+            "timesBrought": 3,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Hatterene",
+            "timesBrought": 3,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Skeledirge",
+            "timesBrought": 3,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Gholdengo",
+            "timesBrought": 3,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Clefable",
+            "timesBrought": 2,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Weavile",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Annihilape",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Gliscor",
+            "timesBrought": 2,
+            "totalKos": 2
+          }
+        ],
+        "bestPerformer": {
+          "playerName": "Cleo",
+          "reason": "won 3-0, Clefable as MVP with 3 KOs"
+        },
+        "unusualPick": null,
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye",
+          "Gus",
+          "Hana"
+        ],
+        "validPokemonNames": [
+          "Kingambit",
+          "Iron Valiant",
+          "Hatterene",
+          "Skeledirge",
+          "Great Tusk",
+          "Gholdengo",
+          "Dragapult",
+          "Slowking-Galar",
+          "Weavile",
+          "Annihilape",
+          "Clefable",
+          "Gliscor"
+        ],
+        "matchData": [
+          {
+            "match_id": "match-recap-open-r2-1",
+            "player_1_id": "player-ada",
+            "player_1_name": "Ada",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-bram",
+            "player_2_name": "Bram",
+            "player_2_avatar_url": null,
+            "winner_id": "player-bram",
+            "winner_name": "Bram",
+            "p1_score": 0,
+            "p2_score": 2,
+            "p1_total_kos": 4,
+            "p2_total_kos": 5,
+            "mvp_pokemon": "Iron Valiant",
+            "mvp_player_id": "player-bram",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-open-r2-2",
+            "player_1_id": "player-cleo",
+            "player_1_name": "Cleo",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-dara",
+            "player_2_name": "Dara",
+            "player_2_avatar_url": null,
+            "winner_id": "player-cleo",
+            "winner_name": "Cleo",
+            "p1_score": 3,
+            "p2_score": 0,
+            "p1_total_kos": 6,
+            "p2_total_kos": 2,
+            "mvp_pokemon": "Clefable",
+            "mvp_player_id": "player-cleo",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-open-r2-3",
+            "player_1_id": "player-eli",
+            "player_1_name": "Eli",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-faye",
+            "player_2_name": "Faye",
+            "player_2_avatar_url": null,
+            "winner_id": "player-eli",
+            "winner_name": "Eli",
+            "p1_score": 4,
+            "p2_score": 1,
+            "p1_total_kos": 3,
+            "p2_total_kos": 3,
+            "mvp_pokemon": "Kingambit",
+            "mvp_player_id": "player-eli",
+            "mvp_kos": 2
+          },
+          {
+            "match_id": "match-recap-open-r2-4",
+            "player_1_id": "player-gus",
+            "player_1_name": "Gus",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-hana",
+            "player_2_name": "Hana",
+            "player_2_avatar_url": null,
+            "winner_id": "player-gus",
+            "winner_name": "Gus",
+            "p1_score": 4,
+            "p2_score": 1,
+            "p1_total_kos": 6,
+            "p2_total_kos": 2,
+            "mvp_pokemon": "Dragapult",
+            "mvp_player_id": "player-gus",
+            "mvp_kos": 4
+          }
+        ],
+        "pokemonTypes": {}
+      }
+    },
+    {
+      "id": "recap-gym-r6",
+      "label": "gym league, late round 6, 8 players",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Gym League",
+        "tournamentName": "Sample Gym Cup",
+        "roundName": "Round 6",
+        "roundNumber": 6,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": "Steel",
+          "player-bram": "Water",
+          "player-cleo": "Fire",
+          "player-dara": "Ground",
+          "player-eli": "Steel",
+          "player-faye": "Water",
+          "player-gus": "Fire",
+          "player-hana": "Ground"
+        },
+        "matches": [
+          {
+            "matchId": "match-recap-gym-r6-1",
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "winnerName": "Bram",
+            "loserName": "Ada",
+            "winnerScore": 1,
+            "loserScore": 0,
+            "marginDescription": "the closest possible margin (1-0)",
+            "scoreString": "1-0",
+            "player1TotalKos": 1,
+            "player2TotalKos": 4,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Gyarados",
+            "mvpPlayerName": "Bram",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic",
+                  "Recover"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch",
+                  "Will-O-Wisp"
+                ]
+              },
+              {
+                "pokemonName": "Primarina",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hyper Voice",
+                  "Moonblast"
+                ]
+              },
+              {
+                "pokemonName": "Gyarados",
+                "totalKos": 2,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Waterfall",
+                  "Dragon Dance",
+                  "Earthquake"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch"
+                ]
+              },
+              {
+                "pokemonName": "Corviknight",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Brave Bird",
+                  "Body Press"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed",
+                  "Power Whip"
+                ]
+              },
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power",
+                  "Stealth Rock"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Bram defeated Ada 1-0 in the closest possible margin (1-0), with Gyarados earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Gyarados earned MVP for Bram with 2 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-gym-r6-2",
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "winnerName": "Dara",
+            "loserName": "Cleo",
+            "winnerScore": 4,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (4-0)",
+            "scoreString": "4-0",
+            "player1TotalKos": 1,
+            "player2TotalKos": 3,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Gliscor",
+            "mvpPlayerName": "Dara",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat",
+                  "Rapid Spin"
+                ]
+              },
+              {
+                "pokemonName": "Garchomp",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Dragon Tail",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Landorus-Therian",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "U-turn",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 3,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off",
+                  "Protect"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off"
+                ]
+              },
+              {
+                "pokemonName": "Ceruledge",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Bitter Blade",
+                  "Shadow Sneak"
+                ]
+              },
+              {
+                "pokemonName": "Torkoal",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Lava Plume",
+                  "Stealth Rock",
+                  "Rapid Spin"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Dara defeated Cleo 4-0 in a dominant sweep (4-0), with Gliscor earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Gliscor earned MVP for Dara with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-gym-r6-3",
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "winnerName": "Faye",
+            "loserName": "Eli",
+            "winnerScore": 1,
+            "loserScore": 0,
+            "marginDescription": "the closest possible margin (1-0)",
+            "scoreString": "1-0",
+            "player1TotalKos": 2,
+            "player2TotalKos": 6,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Toxapex",
+            "mvpPlayerName": "Faye",
+            "mvpKos": 4,
+            "winnerTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 4,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch",
+                  "Will-O-Wisp"
+                ]
+              },
+              {
+                "pokemonName": "Primarina",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hyper Voice",
+                  "Moonblast",
+                  "Psychic"
+                ]
+              },
+              {
+                "pokemonName": "Gyarados",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Waterfall",
+                  "Dragon Dance"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch",
+                  "Iron Head"
+                ]
+              },
+              {
+                "pokemonName": "Corviknight",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Brave Bird",
+                  "Body Press"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed"
+                ]
+              },
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power",
+                  "Stealth Rock"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Faye defeated Eli 1-0 in the closest possible margin (1-0), with Toxapex earning MVP honors (4 KOs).",
+            "keyPerformances": [
+              "Toxapex earned MVP for Faye with 4 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-gym-r6-4",
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "winnerName": "Gus",
+            "loserName": "Hana",
+            "winnerScore": 1,
+            "loserScore": 0,
+            "marginDescription": "the closest possible margin (1-0)",
+            "scoreString": "1-0",
+            "player1TotalKos": 2,
+            "player2TotalKos": 1,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Ceruledge",
+            "mvpPlayerName": "Gus",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off"
+                ]
+              },
+              {
+                "pokemonName": "Ceruledge",
+                "totalKos": 2,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Bitter Blade",
+                  "Shadow Sneak"
+                ]
+              },
+              {
+                "pokemonName": "Torkoal",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Lava Plume",
+                  "Stealth Rock",
+                  "Rapid Spin"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Garchomp",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Dragon Tail",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Landorus-Therian",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "U-turn",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Gus defeated Hana 1-0 in the closest possible margin (1-0), with Ceruledge earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Ceruledge earned MVP for Gus with 2 KOs"
+            ]
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": "Water",
+            "points": 15,
+            "recordString": "5W-1L",
+            "kdString": "-1",
+            "rankChange": "unchanged at #1",
+            "wins": 5,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -1
+          },
+          {
+            "rank": 2,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": "Steel",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "+6",
+            "rankChange": "unchanged at #2",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": 6
+          },
+          {
+            "rank": 3,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": "Fire",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "+5",
+            "rankChange": "unchanged at #3",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": 5
+          },
+          {
+            "rank": 4,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "-3",
+            "rankChange": "up 1 from #5 to #4",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -3
+          },
+          {
+            "rank": 5,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": "Fire",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "-5",
+            "rankChange": "up 1 from #6 to #5",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 6,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": "Ground",
+            "points": 7,
+            "recordString": "2W-3L-1D",
+            "kdString": "+2",
+            "rankChange": "down 2 from #4 to #6",
+            "wins": 2,
+            "losses": 3,
+            "draws": 1,
+            "killDifferential": 2
+          },
+          {
+            "rank": 7,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 7,
+            "recordString": "2W-3L-1D",
+            "kdString": "+1",
+            "rankChange": "unchanged at #7",
+            "wins": 2,
+            "losses": 3,
+            "draws": 1,
+            "killDifferential": 1
+          },
+          {
+            "rank": 8,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": "Ground",
+            "points": 6,
+            "recordString": "2W-4L",
+            "kdString": "-3",
+            "rankChange": "unchanged at #8",
+            "wins": 2,
+            "losses": 4,
+            "draws": 0,
+            "killDifferential": -3
+          }
+        ],
+        "previousStandings": [
+          {
+            "rank": 1,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": "Water",
+            "points": 15,
+            "recordString": "5W-1L",
+            "kdString": "-1",
+            "rankChange": "#1",
+            "wins": 5,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -1
+          },
+          {
+            "rank": 2,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": "Steel",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "+6",
+            "rankChange": "#2",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": 6
+          },
+          {
+            "rank": 3,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": "Fire",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "+5",
+            "rankChange": "#3",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": 5
+          },
+          {
+            "rank": 4,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": "Ground",
+            "points": 7,
+            "recordString": "2W-3L-1D",
+            "kdString": "+2",
+            "rankChange": "#4",
+            "wins": 2,
+            "losses": 3,
+            "draws": 1,
+            "killDifferential": 2
+          },
+          {
+            "rank": 5,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "-3",
+            "rankChange": "#5",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -3
+          },
+          {
+            "rank": 6,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": "Fire",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "-5",
+            "rankChange": "#6",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 7,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 7,
+            "recordString": "2W-3L-1D",
+            "kdString": "+1",
+            "rankChange": "#7",
+            "wins": 2,
+            "losses": 3,
+            "draws": 1,
+            "killDifferential": 1
+          },
+          {
+            "rank": 8,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": "Ground",
+            "points": 6,
+            "recordString": "2W-4L",
+            "kdString": "-3",
+            "rankChange": "#8",
+            "wins": 2,
+            "losses": 4,
+            "draws": 0,
+            "killDifferential": -3
+          }
+        ],
+        "standingsChanges": [
+          "Ada moved up 1 from #5 to #4",
+          "Gus moved up 1 from #6 to #5",
+          "Dara moved down 2 from #4 to #6"
+        ],
+        "pokemonUsage": [
+          {
+            "pokemonName": "Heatran",
+            "timesBrought": 4,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Toxapex",
+            "timesBrought": 2,
+            "totalKos": 5
+          },
+          {
+            "pokemonName": "Gliscor",
+            "timesBrought": 2,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Gyarados",
+            "timesBrought": 2,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Rotom-Wash",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Corviknight",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Ceruledge",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Kingambit",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Skeledirge",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Primarina",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Ferrothorn",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Great Tusk",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Garchomp",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Landorus-Therian",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Torkoal",
+            "timesBrought": 2,
+            "totalKos": 0
+          }
+        ],
+        "bestPerformer": {
+          "playerName": "Dara",
+          "reason": "won 4-0, Gliscor as MVP with 3 KOs"
+        },
+        "unusualPick": {
+          "pokemonName": "Gyarados",
+          "playerName": "Bram",
+          "reason": "Water-type Gym Leader brought off-type Gyarados to strong effect (2 KOs)"
+        },
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye",
+          "Gus",
+          "Hana"
+        ],
+        "validPokemonNames": [
+          "Toxapex",
+          "Rotom-Wash",
+          "Primarina",
+          "Gyarados",
+          "Kingambit",
+          "Corviknight",
+          "Ferrothorn",
+          "Heatran",
+          "Great Tusk",
+          "Garchomp",
+          "Landorus-Therian",
+          "Gliscor",
+          "Skeledirge",
+          "Ceruledge",
+          "Torkoal"
+        ],
+        "matchData": [
+          {
+            "match_id": "match-recap-gym-r6-1",
+            "player_1_id": "player-ada",
+            "player_1_name": "Ada",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-bram",
+            "player_2_name": "Bram",
+            "player_2_avatar_url": null,
+            "winner_id": "player-bram",
+            "winner_name": "Bram",
+            "p1_score": 0,
+            "p2_score": 1,
+            "p1_total_kos": 1,
+            "p2_total_kos": 4,
+            "mvp_pokemon": "Gyarados",
+            "mvp_player_id": "player-bram",
+            "mvp_kos": 2
+          },
+          {
+            "match_id": "match-recap-gym-r6-2",
+            "player_1_id": "player-cleo",
+            "player_1_name": "Cleo",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-dara",
+            "player_2_name": "Dara",
+            "player_2_avatar_url": null,
+            "winner_id": "player-dara",
+            "winner_name": "Dara",
+            "p1_score": 0,
+            "p2_score": 4,
+            "p1_total_kos": 1,
+            "p2_total_kos": 3,
+            "mvp_pokemon": "Gliscor",
+            "mvp_player_id": "player-dara",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-gym-r6-3",
+            "player_1_id": "player-eli",
+            "player_1_name": "Eli",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-faye",
+            "player_2_name": "Faye",
+            "player_2_avatar_url": null,
+            "winner_id": "player-faye",
+            "winner_name": "Faye",
+            "p1_score": 0,
+            "p2_score": 1,
+            "p1_total_kos": 2,
+            "p2_total_kos": 6,
+            "mvp_pokemon": "Toxapex",
+            "mvp_player_id": "player-faye",
+            "mvp_kos": 4
+          },
+          {
+            "match_id": "match-recap-gym-r6-4",
+            "player_1_id": "player-gus",
+            "player_1_name": "Gus",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-hana",
+            "player_2_name": "Hana",
+            "player_2_avatar_url": null,
+            "winner_id": "player-gus",
+            "winner_name": "Gus",
+            "p1_score": 1,
+            "p2_score": 0,
+            "p1_total_kos": 2,
+            "p2_total_kos": 1,
+            "mvp_pokemon": "Ceruledge",
+            "mvp_player_id": "player-gus",
+            "mvp_kos": 2
+          }
+        ],
+        "pokemonTypes": {}
+      }
+    },
+    {
+      "id": "recap-core-r2",
+      "label": "core league, round 2, 4 players",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Core League",
+        "tournamentName": "Sample Core Cup",
+        "roundName": "Round 2",
+        "roundNumber": 2,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-gus": null,
+          "player-hana": null,
+          "player-ada": null,
+          "player-bram": null
+        },
+        "matches": [
+          {
+            "matchId": "match-recap-core-r2-1",
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "winnerName": "Hana",
+            "loserName": "Gus",
+            "winnerScore": 3,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (3-0)",
+            "scoreString": "3-0",
+            "player1TotalKos": 3,
+            "player2TotalKos": 3,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Landorus-Therian",
+            "mvpPlayerName": "Hana",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Garchomp",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Dragon Tail",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Landorus-Therian",
+                "totalKos": 2,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Earthquake",
+                  "U-turn"
+                ]
+              },
+              {
+                "pokemonName": "Dragonite",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Extreme Speed",
+                  "Dragon Dance",
+                  "Earthquake"
+                ]
+              },
+              {
+                "pokemonName": "Dragapult",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Draco Meteor",
+                  "Shadow Ball"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch",
+                  "Will-O-Wisp"
+                ]
+              },
+              {
+                "pokemonName": "Rillaboom",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Grassy Glide",
+                  "Wood Hammer"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed",
+                  "Power Whip"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Hana defeated Gus 3-0 in a dominant sweep (3-0), with Landorus-Therian earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Landorus-Therian earned MVP for Hana with 2 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-core-r2-2",
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "winnerName": "Bram",
+            "loserName": "Ada",
+            "winnerScore": 2,
+            "loserScore": 1,
+            "marginDescription": "a close match (2-1)",
+            "scoreString": "2-1",
+            "player1TotalKos": 1,
+            "player2TotalKos": 5,
+            "gamesPlayed": 3,
+            "mvpPokemon": "Ferrothorn",
+            "mvpPlayerName": "Bram",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch"
+                ]
+              },
+              {
+                "pokemonName": "Rillaboom",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Grassy Glide",
+                  "Wood Hammer"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 3,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed",
+                  "Power Whip"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off"
+                ]
+              },
+              {
+                "pokemonName": "Iron Valiant",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spirit Break",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat",
+                  "Rapid Spin"
+                ]
+              },
+              {
+                "pokemonName": "Weavile",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Triple Axel",
+                  "Knock Off"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Bram defeated Ada 2-1 in a close match (2-1), with Ferrothorn earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Ferrothorn earned MVP for Bram with 3 KOs"
+            ]
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-4",
+            "rankChange": "up 1 from #2 to #1",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -4
+          },
+          {
+            "rank": 2,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "+2",
+            "rankChange": "up 1 from #3 to #2",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 2
+          },
+          {
+            "rank": 3,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 1,
+            "recordString": "0W-1L-1D",
+            "kdString": "-2",
+            "rankChange": "down 2 from #1 to #3",
+            "wins": 0,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": -2
+          },
+          {
+            "rank": 4,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 1,
+            "recordString": "0W-1L-1D",
+            "kdString": "-2",
+            "rankChange": "unchanged at #4",
+            "wins": 0,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": -2
+          }
+        ],
+        "previousStandings": [
+          {
+            "rank": 1,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 1,
+            "recordString": "0W-1L-1D",
+            "kdString": "-2",
+            "rankChange": "#1",
+            "wins": 0,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": -2
+          },
+          {
+            "rank": 2,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-4",
+            "rankChange": "#2",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -4
+          },
+          {
+            "rank": 3,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "+2",
+            "rankChange": "#3",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 2
+          },
+          {
+            "rank": 4,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 1,
+            "recordString": "0W-1L-1D",
+            "kdString": "-2",
+            "rankChange": "#4",
+            "wins": 0,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": -2
+          }
+        ],
+        "standingsChanges": [
+          "Bram moved up 1 from #2 to #1",
+          "Ada moved up 1 from #3 to #2",
+          "Gus moved down 2 from #1 to #3"
+        ],
+        "pokemonUsage": [
+          {
+            "pokemonName": "Ferrothorn",
+            "timesBrought": 2,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Rillaboom",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Toxapex",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Rotom-Wash",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Landorus-Therian",
+            "timesBrought": 1,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Dragapult",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Great Tusk",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Garchomp",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Dragonite",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Skeledirge",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Iron Valiant",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Weavile",
+            "timesBrought": 1,
+            "totalKos": 0
+          }
+        ],
+        "bestPerformer": {
+          "playerName": "Hana",
+          "reason": "won 3-0, Landorus-Therian as MVP with 2 KOs"
+        },
+        "unusualPick": null,
+        "validPlayerNames": [
+          "Gus",
+          "Hana",
+          "Ada",
+          "Bram"
+        ],
+        "validPokemonNames": [
+          "Garchomp",
+          "Landorus-Therian",
+          "Dragonite",
+          "Dragapult",
+          "Toxapex",
+          "Rotom-Wash",
+          "Rillaboom",
+          "Ferrothorn",
+          "Skeledirge",
+          "Iron Valiant",
+          "Great Tusk",
+          "Weavile"
+        ],
+        "matchData": [
+          {
+            "match_id": "match-recap-core-r2-1",
+            "player_1_id": "player-gus",
+            "player_1_name": "Gus",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-hana",
+            "player_2_name": "Hana",
+            "player_2_avatar_url": null,
+            "winner_id": "player-hana",
+            "winner_name": "Hana",
+            "p1_score": 0,
+            "p2_score": 3,
+            "p1_total_kos": 3,
+            "p2_total_kos": 3,
+            "mvp_pokemon": "Landorus-Therian",
+            "mvp_player_id": "player-hana",
+            "mvp_kos": 2
+          },
+          {
+            "match_id": "match-recap-core-r2-2",
+            "player_1_id": "player-ada",
+            "player_1_name": "Ada",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-bram",
+            "player_2_name": "Bram",
+            "player_2_avatar_url": null,
+            "winner_id": "player-bram",
+            "winner_name": "Bram",
+            "p1_score": 1,
+            "p2_score": 2,
+            "p1_total_kos": 1,
+            "p2_total_kos": 5,
+            "mvp_pokemon": "Ferrothorn",
+            "mvp_player_id": "player-bram",
+            "mvp_kos": 3
+          }
+        ],
+        "pokemonTypes": {}
+      }
+    },
+    {
+      "id": "recap-open-r5",
+      "label": "open cup, round 5, best of one, 6 players",
+      "locale": "en",
+      "factPack": {
+        "leagueName": null,
+        "tournamentName": "Sample Open Cup",
+        "roundName": "Round 5",
+        "roundNumber": 5,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 1,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-cleo": null,
+          "player-dara": null,
+          "player-eli": null,
+          "player-faye": null,
+          "player-gus": null,
+          "player-hana": null
+        },
+        "matches": [
+          {
+            "matchId": "match-recap-open-r5-1",
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "winnerName": "Cleo",
+            "loserName": "Dara",
+            "winnerScore": 4,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (4-0)",
+            "scoreString": "4-0",
+            "player1TotalKos": 4,
+            "player2TotalKos": 4,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Slowking-Galar",
+            "mvpPlayerName": "Cleo",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Gholdengo",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Make It Rain",
+                  "Shadow Ball"
+                ]
+              },
+              {
+                "pokemonName": "Dragapult",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Draco Meteor",
+                  "Shadow Ball",
+                  "U-turn"
+                ]
+              },
+              {
+                "pokemonName": "Slowking-Galar",
+                "totalKos": 3,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Sludge Bomb",
+                  "Future Sight"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch"
+                ]
+              },
+              {
+                "pokemonName": "Iron Valiant",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spirit Break",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Hatterene",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Psychic",
+                  "Dazzling Gleam",
+                  "Mystical Fire"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off",
+                  "Hex"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Cleo defeated Dara 4-0 in a dominant sweep (4-0), with Slowking-Galar earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Slowking-Galar earned MVP for Cleo with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-open-r5-2",
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "winnerName": "Eli",
+            "loserName": "Faye",
+            "winnerScore": 4,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (4-0)",
+            "scoreString": "4-0",
+            "player1TotalKos": 5,
+            "player2TotalKos": 2,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Annihilape",
+            "mvpPlayerName": "Eli",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Weavile",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Triple Axel",
+                  "Knock Off",
+                  "Ice Shard"
+                ]
+              },
+              {
+                "pokemonName": "Annihilape",
+                "totalKos": 3,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Bulk Up",
+                  "Rage Fist"
+                ]
+              },
+              {
+                "pokemonName": "Clefable",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Moonblast",
+                  "Soft-Boiled",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat",
+                  "Rapid Spin"
+                ]
+              },
+              {
+                "pokemonName": "Gholdengo",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Make It Rain",
+                  "Shadow Ball"
+                ]
+              },
+              {
+                "pokemonName": "Dragapult",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Draco Meteor",
+                  "Shadow Ball"
+                ]
+              },
+              {
+                "pokemonName": "Slowking-Galar",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Sludge Bomb",
+                  "Future Sight"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Eli defeated Faye 4-0 in a dominant sweep (4-0), with Annihilape earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Annihilape earned MVP for Eli with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-open-r5-3",
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "winnerName": "Gus",
+            "loserName": "Hana",
+            "winnerScore": 4,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (4-0)",
+            "scoreString": "4-0",
+            "player1TotalKos": 3,
+            "player2TotalKos": 2,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Skeledirge",
+            "mvpPlayerName": "Gus",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch"
+                ]
+              },
+              {
+                "pokemonName": "Iron Valiant",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spirit Break",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Hatterene",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Psychic",
+                  "Dazzling Gleam"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 2,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off",
+                  "Hex"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Weavile",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Triple Axel",
+                  "Knock Off",
+                  "Ice Shard"
+                ]
+              },
+              {
+                "pokemonName": "Annihilape",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Bulk Up",
+                  "Rage Fist"
+                ]
+              },
+              {
+                "pokemonName": "Clefable",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Moonblast",
+                  "Soft-Boiled"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off",
+                  "Protect"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Gus defeated Hana 4-0 in a dominant sweep (4-0), with Skeledirge earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Skeledirge earned MVP for Gus with 2 KOs"
+            ]
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 15,
+            "recordString": "5W-0L",
+            "kdString": "-4",
+            "rankChange": "unchanged at #1",
+            "wins": 5,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -4
+          },
+          {
+            "rank": 2,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 12,
+            "recordString": "4W-1L",
+            "kdString": "+5",
+            "rankChange": "unchanged at #2",
+            "wins": 4,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 5
+          },
+          {
+            "rank": 3,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 9,
+            "recordString": "3W-2L",
+            "kdString": "0",
+            "rankChange": "unchanged at #3",
+            "wins": 3,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 0
+          },
+          {
+            "rank": 4,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 7,
+            "recordString": "2W-2L-1D",
+            "kdString": "+4",
+            "rankChange": "up 1 from #5 to #4",
+            "wins": 2,
+            "losses": 2,
+            "draws": 1,
+            "killDifferential": 4
+          },
+          {
+            "rank": 5,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 7,
+            "recordString": "2W-2L-1D",
+            "kdString": "-4",
+            "rankChange": "down 1 from #4 to #5",
+            "wins": 2,
+            "losses": 2,
+            "draws": 1,
+            "killDifferential": -4
+          },
+          {
+            "rank": 6,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-4L",
+            "kdString": "-5",
+            "rankChange": "unchanged at #6",
+            "wins": 1,
+            "losses": 4,
+            "draws": 0,
+            "killDifferential": -5
+          }
+        ],
+        "previousStandings": [
+          {
+            "rank": 1,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 15,
+            "recordString": "5W-0L",
+            "kdString": "-4",
+            "rankChange": "#1",
+            "wins": 5,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -4
+          },
+          {
+            "rank": 2,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 12,
+            "recordString": "4W-1L",
+            "kdString": "+5",
+            "rankChange": "#2",
+            "wins": 4,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 5
+          },
+          {
+            "rank": 3,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 9,
+            "recordString": "3W-2L",
+            "kdString": "0",
+            "rankChange": "#3",
+            "wins": 3,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 0
+          },
+          {
+            "rank": 4,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 7,
+            "recordString": "2W-2L-1D",
+            "kdString": "-4",
+            "rankChange": "#4",
+            "wins": 2,
+            "losses": 2,
+            "draws": 1,
+            "killDifferential": -4
+          },
+          {
+            "rank": 5,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 7,
+            "recordString": "2W-2L-1D",
+            "kdString": "+4",
+            "rankChange": "#5",
+            "wins": 2,
+            "losses": 2,
+            "draws": 1,
+            "killDifferential": 4
+          },
+          {
+            "rank": 6,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-4L",
+            "kdString": "-5",
+            "rankChange": "#6",
+            "wins": 1,
+            "losses": 4,
+            "draws": 0,
+            "killDifferential": -5
+          }
+        ],
+        "standingsChanges": [
+          "Cleo moved up 1 from #5 to #4",
+          "Faye moved down 1 from #4 to #5"
+        ],
+        "pokemonUsage": [
+          {
+            "pokemonName": "Annihilape",
+            "timesBrought": 2,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Slowking-Galar",
+            "timesBrought": 2,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Skeledirge",
+            "timesBrought": 2,
+            "totalKos": 3
+          },
+          {
+            "pokemonName": "Hatterene",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Clefable",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Great Tusk",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Gholdengo",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Dragapult",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Kingambit",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Iron Valiant",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Weavile",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Gliscor",
+            "timesBrought": 2,
+            "totalKos": 0
+          }
+        ],
+        "bestPerformer": {
+          "playerName": "Cleo",
+          "reason": "won 4-0, Slowking-Galar as MVP with 3 KOs"
+        },
+        "unusualPick": null,
+        "validPlayerNames": [
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye",
+          "Gus",
+          "Hana"
+        ],
+        "validPokemonNames": [
+          "Great Tusk",
+          "Gholdengo",
+          "Dragapult",
+          "Slowking-Galar",
+          "Kingambit",
+          "Iron Valiant",
+          "Hatterene",
+          "Skeledirge",
+          "Weavile",
+          "Annihilape",
+          "Clefable",
+          "Gliscor"
+        ],
+        "matchData": [
+          {
+            "match_id": "match-recap-open-r5-1",
+            "player_1_id": "player-cleo",
+            "player_1_name": "Cleo",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-dara",
+            "player_2_name": "Dara",
+            "player_2_avatar_url": null,
+            "winner_id": "player-cleo",
+            "winner_name": "Cleo",
+            "p1_score": 4,
+            "p2_score": 0,
+            "p1_total_kos": 4,
+            "p2_total_kos": 4,
+            "mvp_pokemon": "Slowking-Galar",
+            "mvp_player_id": "player-cleo",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-open-r5-2",
+            "player_1_id": "player-eli",
+            "player_1_name": "Eli",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-faye",
+            "player_2_name": "Faye",
+            "player_2_avatar_url": null,
+            "winner_id": "player-eli",
+            "winner_name": "Eli",
+            "p1_score": 4,
+            "p2_score": 0,
+            "p1_total_kos": 5,
+            "p2_total_kos": 2,
+            "mvp_pokemon": "Annihilape",
+            "mvp_player_id": "player-eli",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-open-r5-3",
+            "player_1_id": "player-gus",
+            "player_1_name": "Gus",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-hana",
+            "player_2_name": "Hana",
+            "player_2_avatar_url": null,
+            "winner_id": "player-gus",
+            "winner_name": "Gus",
+            "p1_score": 4,
+            "p2_score": 0,
+            "p1_total_kos": 3,
+            "p2_total_kos": 2,
+            "mvp_pokemon": "Skeledirge",
+            "mvp_player_id": "player-gus",
+            "mvp_kos": 2
+          }
+        ],
+        "pokemonTypes": {}
+      }
+    },
+    {
+      "id": "recap-gym-r2",
+      "label": "gym league, round 2, 6 players",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Gym League",
+        "tournamentName": "Sample Gym Cup",
+        "roundName": "Round 2",
+        "roundNumber": 2,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-eli": "Steel",
+          "player-faye": "Water",
+          "player-gus": "Fire",
+          "player-hana": "Ground",
+          "player-ada": "Steel",
+          "player-bram": "Water"
+        },
+        "matches": [
+          {
+            "matchId": "match-recap-gym-r2-1",
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "winnerName": "Eli",
+            "loserName": "Faye",
+            "winnerScore": 2,
+            "loserScore": 0,
+            "marginDescription": "a comfortable win (2-0)",
+            "scoreString": "2-0",
+            "player1TotalKos": 5,
+            "player2TotalKos": 2,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Heatran",
+            "mvpPlayerName": "Eli",
+            "mvpKos": 3,
+            "winnerTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch",
+                  "Iron Head"
+                ]
+              },
+              {
+                "pokemonName": "Corviknight",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Brave Bird",
+                  "Body Press"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed",
+                  "Power Whip"
+                ]
+              },
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 3,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power",
+                  "Stealth Rock"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch"
+                ]
+              },
+              {
+                "pokemonName": "Primarina",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hyper Voice",
+                  "Moonblast"
+                ]
+              },
+              {
+                "pokemonName": "Gyarados",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Waterfall",
+                  "Dragon Dance"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Eli defeated Faye 2-0 in a comfortable win (2-0), with Heatran earning MVP honors (3 KOs).",
+            "keyPerformances": [
+              "Heatran earned MVP for Eli with 3 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-gym-r2-2",
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "winnerName": "Hana",
+            "loserName": "Gus",
+            "winnerScore": 4,
+            "loserScore": 0,
+            "marginDescription": "a dominant sweep (4-0)",
+            "scoreString": "4-0",
+            "player1TotalKos": 3,
+            "player2TotalKos": 3,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Garchomp",
+            "mvpPlayerName": "Hana",
+            "mvpKos": 2,
+            "winnerTeam": [
+              {
+                "pokemonName": "Great Tusk",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Headlong Rush",
+                  "Close Combat"
+                ]
+              },
+              {
+                "pokemonName": "Garchomp",
+                "totalKos": 2,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Earthquake",
+                  "Dragon Tail",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Landorus-Therian",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "U-turn",
+                  "Stealth Rock"
+                ]
+              },
+              {
+                "pokemonName": "Gliscor",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Earthquake",
+                  "Knock Off"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power"
+                ]
+              },
+              {
+                "pokemonName": "Skeledirge",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Torch Song",
+                  "Slack Off"
+                ]
+              },
+              {
+                "pokemonName": "Ceruledge",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Bitter Blade",
+                  "Shadow Sneak",
+                  "Swords Dance"
+                ]
+              },
+              {
+                "pokemonName": "Torkoal",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Lava Plume",
+                  "Stealth Rock",
+                  "Rapid Spin"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Hana defeated Gus 4-0 in a dominant sweep (4-0), with Garchomp earning MVP honors (2 KOs).",
+            "keyPerformances": [
+              "Garchomp earned MVP for Hana with 2 KOs"
+            ]
+          },
+          {
+            "matchId": "match-recap-gym-r2-3",
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "winnerName": "Bram",
+            "loserName": "Ada",
+            "winnerScore": 2,
+            "loserScore": 0,
+            "marginDescription": "a comfortable win (2-0)",
+            "scoreString": "2-0",
+            "player1TotalKos": 1,
+            "player2TotalKos": 7,
+            "gamesPlayed": 2,
+            "mvpPokemon": "Toxapex",
+            "mvpPlayerName": "Bram",
+            "mvpKos": 4,
+            "winnerTeam": [
+              {
+                "pokemonName": "Toxapex",
+                "totalKos": 4,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": true,
+                "movesUsed": [
+                  "Scald",
+                  "Toxic"
+                ]
+              },
+              {
+                "pokemonName": "Rotom-Wash",
+                "totalKos": 1,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hydro Pump",
+                  "Volt Switch",
+                  "Will-O-Wisp"
+                ]
+              },
+              {
+                "pokemonName": "Primarina",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Hyper Voice",
+                  "Moonblast"
+                ]
+              },
+              {
+                "pokemonName": "Gyarados",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Waterfall",
+                  "Dragon Dance"
+                ]
+              }
+            ],
+            "loserTeam": [
+              {
+                "pokemonName": "Kingambit",
+                "totalKos": 0,
+                "wasKoed": false,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Kowtow Cleave",
+                  "Sucker Punch",
+                  "Iron Head"
+                ]
+              },
+              {
+                "pokemonName": "Corviknight",
+                "totalKos": 1,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Brave Bird",
+                  "Body Press"
+                ]
+              },
+              {
+                "pokemonName": "Ferrothorn",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Spikes",
+                  "Leech Seed"
+                ]
+              },
+              {
+                "pokemonName": "Heatran",
+                "totalKos": 0,
+                "wasKoed": true,
+                "wasLead": false,
+                "isMvp": false,
+                "movesUsed": [
+                  "Magma Storm",
+                  "Earth Power",
+                  "Stealth Rock"
+                ]
+              }
+            ],
+            "preWrittenOneLiner": "Bram defeated Ada 2-0 in a comfortable win (2-0), with Toxapex earning MVP honors (4 KOs).",
+            "keyPerformances": [
+              "Toxapex earned MVP for Bram with 4 KOs"
+            ]
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": "Steel",
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "+3",
+            "rankChange": "unchanged at #1",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 2,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": "Water",
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-2",
+            "rankChange": "up 1 from #3 to #2",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -2
+          },
+          {
+            "rank": 3,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": "Ground",
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-5",
+            "rankChange": "down 1 from #2 to #3",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 4,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-5",
+            "rankChange": "up 2 from #6 to #4",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 5,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 1,
+            "recordString": "0W-1L-1D",
+            "kdString": "+2",
+            "rankChange": "down 1 from #4 to #5",
+            "wins": 0,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": 2
+          },
+          {
+            "rank": 6,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": "Fire",
+            "points": 0,
+            "recordString": "0W-2L",
+            "kdString": "+5",
+            "rankChange": "down 1 from #5 to #6",
+            "wins": 0,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 5
+          }
+        ],
+        "previousStandings": [
+          {
+            "rank": 1,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": "Steel",
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "+3",
+            "rankChange": "#1",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 2,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": "Ground",
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-5",
+            "rankChange": "#2",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 3,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": "Water",
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-2",
+            "rankChange": "#3",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -2
+          },
+          {
+            "rank": 4,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 1,
+            "recordString": "0W-1L-1D",
+            "kdString": "+2",
+            "rankChange": "#4",
+            "wins": 0,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": 2
+          },
+          {
+            "rank": 5,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": "Fire",
+            "points": 0,
+            "recordString": "0W-2L",
+            "kdString": "+5",
+            "rankChange": "#5",
+            "wins": 0,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 5
+          },
+          {
+            "rank": 6,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-5",
+            "rankChange": "#6",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -5
+          }
+        ],
+        "standingsChanges": [
+          "Faye moved up 1 from #3 to #2",
+          "Hana moved down 1 from #2 to #3",
+          "Bram moved up 2 from #6 to #4",
+          "Ada moved down 1 from #4 to #5",
+          "Gus moved down 1 from #5 to #6"
+        ],
+        "pokemonUsage": [
+          {
+            "pokemonName": "Heatran",
+            "timesBrought": 3,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Toxapex",
+            "timesBrought": 2,
+            "totalKos": 4
+          },
+          {
+            "pokemonName": "Corviknight",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Rotom-Wash",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Gyarados",
+            "timesBrought": 2,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Ferrothorn",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Primarina",
+            "timesBrought": 2,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Kingambit",
+            "timesBrought": 2,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Garchomp",
+            "timesBrought": 1,
+            "totalKos": 2
+          },
+          {
+            "pokemonName": "Great Tusk",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Skeledirge",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Ceruledge",
+            "timesBrought": 1,
+            "totalKos": 1
+          },
+          {
+            "pokemonName": "Landorus-Therian",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Gliscor",
+            "timesBrought": 1,
+            "totalKos": 0
+          },
+          {
+            "pokemonName": "Torkoal",
+            "timesBrought": 1,
+            "totalKos": 0
+          }
+        ],
+        "bestPerformer": {
+          "playerName": "Hana",
+          "reason": "won 4-0, Garchomp as MVP with 2 KOs"
+        },
+        "unusualPick": null,
+        "validPlayerNames": [
+          "Eli",
+          "Faye",
+          "Gus",
+          "Hana",
+          "Ada",
+          "Bram"
+        ],
+        "validPokemonNames": [
+          "Kingambit",
+          "Corviknight",
+          "Ferrothorn",
+          "Heatran",
+          "Toxapex",
+          "Rotom-Wash",
+          "Primarina",
+          "Gyarados",
+          "Great Tusk",
+          "Garchomp",
+          "Landorus-Therian",
+          "Gliscor",
+          "Skeledirge",
+          "Ceruledge",
+          "Torkoal"
+        ],
+        "matchData": [
+          {
+            "match_id": "match-recap-gym-r2-1",
+            "player_1_id": "player-eli",
+            "player_1_name": "Eli",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-faye",
+            "player_2_name": "Faye",
+            "player_2_avatar_url": null,
+            "winner_id": "player-eli",
+            "winner_name": "Eli",
+            "p1_score": 2,
+            "p2_score": 0,
+            "p1_total_kos": 5,
+            "p2_total_kos": 2,
+            "mvp_pokemon": "Heatran",
+            "mvp_player_id": "player-eli",
+            "mvp_kos": 3
+          },
+          {
+            "match_id": "match-recap-gym-r2-2",
+            "player_1_id": "player-gus",
+            "player_1_name": "Gus",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-hana",
+            "player_2_name": "Hana",
+            "player_2_avatar_url": null,
+            "winner_id": "player-hana",
+            "winner_name": "Hana",
+            "p1_score": 0,
+            "p2_score": 4,
+            "p1_total_kos": 3,
+            "p2_total_kos": 3,
+            "mvp_pokemon": "Garchomp",
+            "mvp_player_id": "player-hana",
+            "mvp_kos": 2
+          },
+          {
+            "match_id": "match-recap-gym-r2-3",
+            "player_1_id": "player-ada",
+            "player_1_name": "Ada",
+            "player_1_avatar_url": null,
+            "player_2_id": "player-bram",
+            "player_2_name": "Bram",
+            "player_2_avatar_url": null,
+            "winner_id": "player-bram",
+            "winner_name": "Bram",
+            "p1_score": 0,
+            "p2_score": 2,
+            "p1_total_kos": 1,
+            "p2_total_kos": 7,
+            "mvp_pokemon": "Toxapex",
+            "mvp_player_id": "player-bram",
+            "mvp_kos": 4
+          }
+        ],
+        "pokemonTypes": {}
+      }
+    }
+  ]
+}

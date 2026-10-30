@@ -1,3 +1,4 @@
+import { AI_MAX_TOKENS } from '../../constants';
 import { getAggregates, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
@@ -81,7 +82,7 @@ function getPromptTasks(factPack: unknown, mode: PipelineMode): PromptTask[] {
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nRespond with JSON:\n{"headline":"","narrative":"","top_pokemon":[{"pokemon_name":"","role":"","analysis":""}],"type_trends":"","emerging_threats":""}`,
       userPrompt: `Tournament: ${fp.tournamentName}\nFormat: ${fp.format}\nGames: ${fp.totalGames}\n\nUsage:\n${usageTable}`,
-      maxTokens: 2048,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     }];
   }
 
@@ -91,35 +92,35 @@ function getPromptTasks(factPack: unknown, mode: PipelineMode): PromptTask[] {
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite a single headline about the dominant meta trend.`,
       userPrompt: `Tournament: ${fp.tournamentName}\nTop 5:\n${fp.usageData.slice(0, 5).map((u) => `${u.pokemonName} (${u.usagePct}%)`).join(', ')}`,
-      maxTokens: 100,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'top_pokemon_analysis',
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nFor each of the top 5 Pokémon, write a JSON array: [{"pokemon_name":"","role":"brief role description","analysis":"1-2 sentences on performance"}]`,
       userPrompt: `Usage data:\n${usageTable}`,
-      maxTokens: 600,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'type_trends',
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite 2-3 sentences about type-based trends visible in the usage data.`,
       userPrompt: `Usage data:\n${usageTable}`,
-      maxTokens: 200,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'emerging_threats',
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite 2-3 sentences about emerging or underrated picks (lower usage but high win rate or KOs).`,
       userPrompt: `Full usage (sorted by usage %):\n${fp.usageData.map((u) => `${u.pokemonName}: ${u.usagePct}% usage, ${u.winRate}% WR, ${u.totalKos} KOs`).join('\n')}`,
-      maxTokens: 200,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'meta_narrative',
       stage: 2,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite a 3-4 paragraph meta analysis narrative. Discuss the top performers, type trends, and emerging threats. Use specific stats.`,
       userPrompt: `Tournament: ${fp.tournamentName} | ${fp.format} | ${fp.totalGames} games\n\nUsage:\n${usageTable}`,
-      maxTokens: 800,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
   ];
 }

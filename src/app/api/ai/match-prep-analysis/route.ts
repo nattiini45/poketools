@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isSuperadmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { aiMatchPrepSchema, formatZodErrors } from '@/lib/validation';
-import { AI_ANALYSIS_STALE_MS } from '@/lib/ai/constants';
+import { AI_ANALYSIS_STALE_MS, AI_MAX_TOKENS, getClaudeModelId } from '@/lib/ai/constants';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import {
   getMatchPrepAnalysis,
@@ -15,6 +15,8 @@ import { parseScoutingResponse } from '@/lib/ai/parse-scouting';
 import { completeStreaming } from '@/lib/ai/client';
 import { checkAndRecordAiGeneration, type AiRateLimitResult } from '@/lib/ai/rate-limit';
 import { withOutputLanguage } from '@/lib/ai/language';
+import { describeAiFailure } from '@/lib/ai/failure';
+import { createSafeSseSender } from '@/lib/ai/sse';
 import { resolveContentLocale } from '@/i18n/content-locale';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorCode } from '@/i18n/messages/errors';
@@ -23,10 +25,10 @@ import type { MatchWithPlayers } from '@/types/match';
 
 export const maxDuration = 300;
 
-const DEFAULT_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
 const HEARTBEAT_INTERVAL_MS = 5_000;
 /** Code of the SSE `failed` frame (`errors/ai`). */
 const FAILED_CODE: ApiErrorCode = 'ai_analysis_failed';
+const FAILED_MESSAGE = 'Analysis failed — please try again later.';
 
 // ─── POST: Generate scouting report ──────────────────────────────────
 
@@ -166,23 +168,22 @@ export async function POST(request: NextRequest) {
 
   // ── Stream the LLM work ────────────────────────────────────────────
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
+  const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Every frame goes through the safe sender: a browser that left must not turn a stored
+      // report into a failed one.
+      const sse = createSafeSseSender(controller);
+
       let lastHeartbeat = Date.now();
       function emitHeartbeatIfNeeded() {
         const now = Date.now();
         if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
-          try {
-            controller.enqueue(encoder.encode('data: {"status":"thinking"}\n\n'));
-          } catch { /* stream closed */ }
+          sse.send({ status: 'thinking' });
           lastHeartbeat = now;
         }
       }
 
-      try {
-        controller.enqueue(encoder.encode('data: {"status":"thinking"}\n\n'));
-      } catch { /* stream closed */ }
+      sse.send({ status: 'thinking' });
 
       const fallbackHeartbeat = setInterval(() => {
         emitHeartbeatIfNeeded();
@@ -200,10 +201,12 @@ export async function POST(request: NextRequest) {
           resolveContentLocale({ matchId }),
         ]);
 
+        // The row starts with the model we ask for; a completed row is updated to the model
+        // that actually answered (a fallback answer must not be labelled with the primary).
         const record = await createMatchPrepAnalysis(
           matchId,
           player.playerId,
-          DEFAULT_MODEL,
+          getClaudeModelId(),
           hasUserTeam
         );
         const startTime = Date.now();
@@ -213,7 +216,10 @@ export async function POST(request: NextRequest) {
             withOutputLanguage(systemPrompt, contentLocale),
             userPrompt,
             emitHeartbeatIfNeeded,
-            4096,
+            undefined,
+            // The answer is parsed as JSON, so one cut off at the output cap is a failure. The cap
+            // leaves room for the model's thinking as well as the JSON.
+            { jsonOutput: true, surface: 'match-prep-analysis', maxTokens: AI_MAX_TOKENS.analysis },
           );
           const generationTime = Date.now() - startTime;
 
@@ -221,6 +227,7 @@ export async function POST(request: NextRequest) {
 
           await updateMatchPrepAnalysis(record.id, {
             analysis,
+            model_id: result.model || undefined,
             has_user_team: hasUserTeam,
             prompt_tokens: result.prompt_tokens,
             completion_tokens: result.completion_tokens,
@@ -229,34 +236,28 @@ export async function POST(request: NextRequest) {
             error: null,
           });
 
-          controller.enqueue(
-            encoder.encode(`data: {"status":"done"}\n\n`)
-          );
+          // Saved as completed: a closed stream cannot flip it to failed.
+          sse.send({ status: 'done' });
         } catch (llmError) {
           const errorMessage = llmError instanceof Error ? llmError.message : 'Unknown LLM error';
           console.error('[ai/match-prep-analysis] LLM error:', errorMessage);
 
+          const failure = describeAiFailure(llmError, { code: FAILED_CODE, message: FAILED_MESSAGE });
           await updateMatchPrepAnalysis(record.id, {
             status: 'failed',
-            error: errorMessage,
+            error: failure.stored,
             generation_time_ms: Date.now() - startTime,
           });
 
-          const safeMessage = 'Analysis failed — please try again later.';
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ status: 'failed', error: safeMessage, code: FAILED_CODE })}\n\n`)
-          );
+          sse.send({ status: 'failed', error: failure.message, code: failure.code });
         }
       } catch (setupError) {
         const message = setupError instanceof Error ? setupError.message : 'Internal error';
         console.error('[ai/match-prep-analysis] Setup error:', message);
-        const safeMessage = 'Analysis failed — please try again later.';
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ status: 'failed', error: safeMessage, code: FAILED_CODE })}\n\n`)
-        );
+        sse.send({ status: 'failed', error: FAILED_MESSAGE, code: FAILED_CODE });
       } finally {
         clearInterval(fallbackHeartbeat);
-        controller.close();
+        sse.close();
       }
     },
   });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock the provider before importing pipeline
 vi.mock('../provider', () => ({
@@ -22,6 +22,11 @@ import { runRecapPipeline, runForecastPipeline } from '../pipeline';
 import { kaleGenerateText } from '../provider';
 import { buildRecapFactPack, buildForecastFactPack } from '../fact-pack';
 import type { RecapFactPack, ForecastFactPack } from '../types';
+import { AllModelsFailedError, ModelRejectedError, OutputCapError, RefusalError } from '../../errors';
+import { AI_MAX_TOKENS } from '../../constants';
+import { buildForecastPromptTasks, buildRecapPromptTasks } from '../prompts';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const mockGenerateText = vi.mocked(kaleGenerateText);
 const mockBuildRecapFactPack = vi.mocked(buildRecapFactPack);
@@ -336,5 +341,141 @@ describe('pipeline — LLM failure handling', () => {
     expect(content.match_summaries[0].one_liner).toBe(recapFactPack.matches[0].preWrittenOneLiner);
     // Validation errors should be reported
     expect(result.validationErrors.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['a truncated answer', () => new OutputCapError('m', 150)],
+    ['a refusal', () => new RefusalError('m', 'cyber')],
+    ['a rejected request', () => new ModelRejectedError('m', 400, 'invalid_request_error')],
+  ])('makes exactly one call per task after %s, then uses the fallback text', async (_label, makeError) => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // A generic failure is retried (3 attempts per task): this gives the number of tasks.
+    mockGenerateText.mockRejectedValue(new Error('API down'));
+    await runRecapPipeline('t1', 'r1');
+    const attemptsWithRetries = mockGenerateText.mock.calls.length;
+    const tasks = attemptsWithRetries / 3;
+    expect(Number.isInteger(tasks) && tasks > 0).toBe(true);
+
+    mockGenerateText.mockReset();
+    mockGenerateText.mockRejectedValue(makeError());
+    const result = await runRecapPipeline('t1', 'r1');
+    const content = result.content as import('@/types/tournament-report').RoundRecapContent;
+
+    expect(mockGenerateText).toHaveBeenCalledTimes(tasks);
+    expect(content.match_summaries[0].one_liner).toBe(recapFactPack.matches[0].preWrittenOneLiner);
+    expect(result.validationErrors.some((e) => e.severity === 'error')).toBe(true);
+    errorSpy.mockRestore();
+  });
+});
+
+describe('pipeline — what a failed task stores', () => {
+  beforeEach(() => {
+    vi.stubEnv('KALE_PIPELINE_MODE', 'decomposed');
+    mockBuildRecapFactPack.mockResolvedValue(recapFactPack);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  function storedDetails(result: Awaited<ReturnType<typeof runRecapPipeline>>): string {
+    return result.validationErrors.map((e) => e.detail).join('\n');
+  }
+
+  it('stores the error class, never the message, of an untyped failure', async () => {
+    mockGenerateText.mockRejectedValue(new Error('provider said: secret prompt text and quota details'));
+
+    const stored = storedDetails(await runRecapPipeline('t1', 'r1'));
+
+    expect(stored).toContain('failed after 3 attempts: ai_report_failed: Error');
+    expect(stored).not.toContain('secret');
+    expect(stored).not.toContain('quota');
+  });
+
+  it('stores the upstream status and the model ids when every rung failed, but not the provider text', async () => {
+    const lastRung = Object.assign(new Error('Overloaded: private provider detail'), { statusCode: 529 });
+    mockGenerateText.mockRejectedValue(
+      new AllModelsFailedError(
+        [
+          { model: 'claude-sonnet-5-5', summary: 'Overloaded: private provider detail [529]' },
+          { model: 'claude-haiku-5-5', summary: 'Overloaded: private provider detail [529]' },
+        ],
+        lastRung,
+      ),
+    );
+
+    const stored = storedDetails(await runRecapPipeline('t1', 'r1'));
+
+    expect(stored).toContain('ai_report_failed: upstream HTTP 529 (claude-sonnet-5-5 -> claude-haiku-5-5)');
+    expect(stored).not.toContain('private');
+  });
+
+  it.each([
+    ['a truncated answer', () => new OutputCapError('claude-sonnet-5-5', 4096), 'ai_output_truncated: max_tokens 4096 on claude-sonnet-5-5'],
+    ['a refusal', () => new RefusalError('claude-sonnet-5-5', 'cyber'), 'ai_output_refused: cyber on claude-sonnet-5-5'],
+    [
+      'a rejected request',
+      () => new ModelRejectedError('claude-sonnet-5-5', 400, 'invalid_request_error'),
+      'ai_request_rejected: HTTP 400 invalid_request_error on claude-sonnet-5-5',
+    ],
+  ])('stores a code and a short cause for %s', async (_label, makeError, expected) => {
+    mockGenerateText.mockRejectedValue(makeError());
+
+    expect(storedDetails(await runRecapPipeline('t1', 'r1'))).toContain(`failed: ${expected}`);
+  });
+});
+
+describe('pipeline — Kale task output caps', () => {
+  beforeEach(() => {
+    mockBuildRecapFactPack.mockResolvedValue(recapFactPack);
+    mockBuildForecastFactPack.mockResolvedValue(forecastFactPack);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each(['decomposed', 'single'] as const)('gives every recap and forecast task in %s mode the Kale task cap', (mode) => {
+    const tasks = [...buildRecapPromptTasks(recapFactPack, mode), ...buildForecastPromptTasks(forecastFactPack, mode)];
+
+    expect(tasks.length).toBeGreaterThan(0);
+    for (const task of tasks) expect(task.maxTokens, task.id).toBe(AI_MAX_TOKENS.kaleTask);
+  });
+
+  it('sets the cap through AI_MAX_TOKENS.kaleTask on every task of every report definition', () => {
+    const kaleDir = join(__dirname, '..');
+    const files = [
+      join(kaleDir, 'prompts.ts'),
+      ...readdirSync(join(kaleDir, 'reports'))
+        .filter((name) => name.endsWith('.ts'))
+        .map((name) => join(kaleDir, 'reports', name)),
+    ];
+
+    let caps = 0;
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8');
+      for (const match of source.matchAll(/maxTokens:\s*([^,\n]+),/g)) {
+        caps++;
+        expect(match[1].trim(), file).toBe('AI_MAX_TOKENS.kaleTask');
+      }
+    }
+    expect(caps).toBeGreaterThan(10);
+  });
+
+  it('passes task.maxTokens to the provider on every call', async () => {
+    vi.stubEnv('KALE_PIPELINE_MODE', 'decomposed');
+    mockGenerateText.mockReset();
+    mockGenerateText.mockResolvedValue({ content: 'A sentence about the round.', model: 'test', prompt_tokens: 1, completion_tokens: 1 });
+
+    await runRecapPipeline('t1', 'r1');
+
+    expect(mockGenerateText.mock.calls.length).toBeGreaterThan(1);
+    for (const call of mockGenerateText.mock.calls) {
+      expect(call[2]).toEqual({ maxTokens: AI_MAX_TOKENS.kaleTask });
+    }
   });
 });

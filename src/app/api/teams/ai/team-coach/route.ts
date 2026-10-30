@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { complete } from '@/lib/ai/client';
+import { AI_MAX_TOKENS } from '@/lib/ai/constants';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
 import { teamCoachSchema, formatZodErrors } from '@/lib/validation';
 import { withOutputLanguage } from '@/lib/ai/language';
+import { buildTeamCoachSystemPrompt, buildTeamCoachUserPrompt } from '@/lib/ai/coach-prompts';
 import { getRequestLocale } from '@/i18n/server';
 import { parseFormatId } from '@/lib/pkmn/format-id';
 import type { ApiResult } from '@/types/api';
-import type { PokemonSet } from '@/types/team';
 
 /**
  * POST /api/teams/ai/team-coach
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const filledTeam = (team as PokemonSet[]).filter((t: PokemonSet) => t.species);
+    const filledTeam = team.filter((t) => t.species);
     if (filledTeam.length === 0) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'At least one Pokémon is required', code: 'ai_coach_team_empty' },
@@ -62,52 +63,9 @@ export async function POST(req: NextRequest) {
     const systemPrompt = withOutputLanguage(buildTeamCoachSystemPrompt(), getRequestLocale(req));
     const userPrompt = buildTeamCoachUserPrompt(filledTeam, format, generation);
 
-    const result = await complete(systemPrompt, userPrompt);
+    const result = await complete(systemPrompt, userPrompt, { surface: 'team-coach', maxTokens: AI_MAX_TOKENS.coach });
     return NextResponse.json({ success: true, content: result.content });
   } catch (error) {
     return safeErrorResponse(error, 'AI team coach failed');
   }
-}
-
-function buildTeamCoachSystemPrompt(): string {
-  return `You are an expert competitive Pokémon team builder coach. You analyze entire teams and provide holistic feedback on team structure, synergy, and strategy.
-
-Rules:
-- Assess overall team archetype and strategy coherence
-- Identify type synergies and defensive cores
-- Evaluate role distribution (win con, wallbreaker, pivot, check, etc.)
-- Identify shared weaknesses to common threats
-- Suggest specific improvements with named Pokémon/moves/items
-- Keep responses focused (5-8 bullet points)
-- Use competitive Pokémon terminology correctly
-- Reference the format's metagame when relevant
-- Rate overall team quality at the end (S/A/B/C/D/F tier)`;
-}
-
-function buildTeamCoachUserPrompt(
-  team: PokemonSet[],
-  format: string,
-  generation: number,
-): string {
-  const setLines = team.map((set) => {
-    const moves = (set.moves ?? []).filter(Boolean).join(', ') || 'None';
-    const evSummary = Object.entries(set.evs ?? {})
-      .filter(([, v]) => v > 0)
-      .map(([k, v]) => `${v} ${k}`)
-      .join('/');
-    return `• ${set.species}${set.name ? ` (${set.name})` : ''} @ ${set.item || 'None'} | ${set.ability || '?'} | ${set.nature || '?'} | ${evSummary || 'No EVs'} | Moves: ${moves}${set.tera_type ? ` | Tera: ${set.tera_type}` : ''}`;
-  });
-
-  return `Analyze this team in ${format.toUpperCase()} (Gen ${generation}):
-
-${setLines.join('\n')}
-
-Provide a holistic team analysis covering:
-1. Team archetype and strategy
-2. Offensive synergy and coverage
-3. Defensive cores and type balance
-4. Shared weaknesses and threats
-5. Role distribution assessment
-6. Specific improvement suggestions
-7. Overall tier rating (S/A/B/C/D/F)`;
 }

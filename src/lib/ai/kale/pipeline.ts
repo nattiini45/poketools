@@ -1,6 +1,9 @@
 import { kaleGenerateText } from './provider';
 import { getReportDefinition } from './registry';
 import { getPipelineMode } from './prompts';
+import { describeAiFailure } from '../failure';
+import { AllModelsFailedError, isDeterministicModelError } from '../errors';
+import { injectOneLinerResults } from './inject';
 import type {
   PromptTask,
   TaskResult,
@@ -10,6 +13,17 @@ import type {
 import type { TournamentReportType, ReportContent } from '@/types/tournament-report';
 
 const MAX_RETRIES = 2;
+
+/**
+ * What a failed task stores in the report's `error` column: a stable code and a short cause (the
+ * upstream status or the error class, plus the model ids when every rung failed). Never the
+ * error's message, which can quote the provider or the model; that stays in the console line.
+ */
+function storedTaskFailure(err: unknown): string {
+  const exhausted = err instanceof AllModelsFailedError;
+  const { stored } = describeAiFailure(exhausted ? err.cause : err, { code: 'ai_report_failed', message: '' });
+  return exhausted ? `${stored} (${err.models.join(' -> ')})` : stored;
+}
 
 // ─── Public Pipeline API ────────────────────────────────────────────
 
@@ -202,6 +216,23 @@ async function executeWithRetry(
       }
     } catch (err) {
       console.error(`[kale/pipeline] Task "${task.id}" failed:`, err instanceof Error ? err.message : err);
+      // A truncated or refused answer, or a request the provider rejected, would come back the
+      // same way: go straight to the assembler's fallback text instead of paying for more tries.
+      if (isDeterministicModelError(err)) {
+        return {
+          taskId: task.id,
+          text: '',
+          promptTokens: 0,
+          completionTokens: 0,
+          validationErrors: [{
+            type: 'structural',
+            detail: `Task "${task.id}" failed: ${storedTaskFailure(err)}`,
+            severity: 'error',
+          }],
+          retries,
+          model: '',
+        };
+      }
       if (attempt === maxRetries) {
         // Return empty string — assembler will use fallback
         return {
@@ -211,7 +242,7 @@ async function executeWithRetry(
           completionTokens: 0,
           validationErrors: [{
             type: 'structural',
-            detail: `Task "${task.id}" failed after ${maxRetries + 1} attempts: ${err instanceof Error ? err.message : 'unknown error'}`,
+            detail: `Task "${task.id}" failed after ${maxRetries + 1} attempts: ${storedTaskFailure(err)}`,
             severity: 'error',
           }],
           retries,
@@ -232,21 +263,4 @@ async function executeWithRetry(
     retries,
     model: '',
   };
-}
-
-/**
- * Inject one-liner results from stage 1 into the narrative prompt.
- * Replaces pre-written one-liners with LLM-generated ones for richer narrative input.
- */
-function injectOneLinerResults(prompt: string, results: Map<string, string>): string {
-  const oneLiners: string[] = [];
-  for (const [id, text] of results) {
-    if (id.startsWith('match_one_liner_')) {
-      oneLiners.push(`- ${text.trim()}`);
-    }
-  }
-
-  if (oneLiners.length === 0) return prompt;
-
-  return `${prompt}\n\nMatch summaries (written by you in the previous step — reference these):\n${oneLiners.join('\n')}`;
 }

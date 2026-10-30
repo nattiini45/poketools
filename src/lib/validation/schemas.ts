@@ -1388,11 +1388,52 @@ export const teamLibraryListQuerySchema = z.object({
   tags: z.array(z.string().trim().min(1).max(FIELD_LIMITS.NAME)).max(20).optional(),
 });
 
+/**
+ * One Pokémon set as the AI coaches read it. Lenient on purpose: every field is optional or
+ * nullable (the coaches check for a species themselves and answer with their own codes), but
+ * every string is length-capped, a set has at most four moves and EVs are bounded, so a request
+ * cannot put an unbounded blob into a paid prompt. Keys the prompts do not read are stripped.
+ * Shared by `teamCoachSchema` and `slotCoachSchema`.
+ */
+const coachText = z.string().max(FIELD_LIMITS.NAME).nullish();
+const coachEv = z.number().int().min(0).max(999).optional();
+
+export const coachPokemonSetSchema = z.object({
+  name: coachText,
+  species: coachText,
+  item: coachText,
+  ability: coachText,
+  nature: coachText,
+  tera_type: coachText,
+  moves: z.array(z.string().max(FIELD_LIMITS.NAME)).max(4).nullish(),
+  evs: z
+    .object({
+      hp: coachEv,
+      atk: coachEv,
+      def: coachEv,
+      spa: coachEv,
+      spd: coachEv,
+      spe: coachEv,
+    })
+    .nullish(),
+});
+
 export const teamCoachSchema = z.object({
-  team: z.array(z.unknown()).min(1).max(6),
+  team: z.array(coachPokemonSetSchema).min(1).max(6),
   format: z.string().trim().min(1).max(FIELD_LIMITS.NAME),
   generation: z.number().int().min(1).max(9),
 });
+
+/**
+ * The `set` and `team` of a slot-coach request. `format` and `generation` are checked first by
+ * the route, which keeps its pinned error codes for them.
+ */
+export const slotCoachSetsSchema = z.object({
+  set: coachPokemonSetSchema,
+  team: z.array(coachPokemonSetSchema).max(6),
+});
+
+export type CoachPokemonSet = z.infer<typeof coachPokemonSetSchema>;
 
 // ─── Type Exports ────────────────────────────────────────────────────
 

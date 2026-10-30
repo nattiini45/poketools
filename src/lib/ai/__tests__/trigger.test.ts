@@ -6,6 +6,7 @@ vi.mock('../tournament-report-generator', () => ({
 
 import { triggerTournamentReport, triggerMatchAnalysis } from '../trigger';
 import { generateTournamentReportAsync } from '../tournament-report-generator';
+import { resetRemovedKaleSettingsWarning } from '../kale/removed-settings';
 
 const mockGenerateReport = vi.mocked(generateTournamentReportAsync);
 
@@ -18,7 +19,6 @@ describe('triggerTournamentReport', () => {
   });
 
   it('does nothing when no AI key is configured', () => {
-    delete process.env.KALE_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_API_KEY;
 
@@ -27,19 +27,26 @@ describe('triggerTournamentReport', () => {
     expect(mockGenerateReport).not.toHaveBeenCalled();
   });
 
-  it('calls generateTournamentReportAsync when KALE_API_KEY is set', () => {
+  it('ignores the removed KALE_API_KEY and says so once, naming the missing key', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    resetRemovedKaleSettingsWarning();
     process.env.KALE_API_KEY = 'kale-key';
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_API_KEY;
-    mockGenerateReport.mockResolvedValue(undefined as never);
 
     triggerTournamentReport('t-1', 'r-1', 'round_recap');
+    triggerTournamentReport('t-1', 'r-1', 'round_forecast');
 
-    expect(mockGenerateReport).toHaveBeenCalledWith('t-1', 'r-1', 'round_recap');
+    expect(mockGenerateReport).not.toHaveBeenCalled();
+    const lines = warnSpy.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('no longer used'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('KALE_API_KEY is no longer used');
+    expect(lines[0]).toContain('No Anthropic API key is configured');
+    expect(lines[0]).not.toContain('kale-key');
+    warnSpy.mockRestore();
   });
 
   it('calls generateTournamentReportAsync when ANTHROPIC_API_KEY is set', () => {
-    delete process.env.KALE_API_KEY;
     process.env.ANTHROPIC_API_KEY = 'claude-key';
     mockGenerateReport.mockResolvedValue(undefined as never);
 

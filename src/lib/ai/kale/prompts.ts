@@ -1,3 +1,4 @@
+import { AI_MAX_TOKENS } from '../constants';
 import type { PromptTask, RecapFactPack, ForecastFactPack, MatchFact, MatchupFact, PipelineMode } from './types';
 
 // ─── Kale Cabbage Persona ───────────────────────────────────────────
@@ -65,7 +66,7 @@ function buildMatchOneLinerTask(match: MatchFact, index: number, gen: number): P
     stage: 1,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite a single engaging sentence summarizing this match result. Reference specific Pokémon performances. Gen ${gen} context.`,
     userPrompt: data,
-    maxTokens: 150,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -78,7 +79,7 @@ function buildHeadlineTask(fp: RecapFactPack): PromptTask {
     stage: 2,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite a single headline sentence summarizing this round's most newsworthy result. Be specific — reference a player or result.`,
     userPrompt: `Round: ${fp.roundName}\n\nMatch Results:\n${matchSummaries}\n\nStandings Movement:\n${topChanges || 'No rank changes'}`,
-    maxTokens: 100,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -92,7 +93,7 @@ function buildStandingsStoryTask(fp: RecapFactPack): PromptTask {
     stage: 2,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite 2-3 sentences describing the standings shifts this round. COPY exact point totals and records verbatim from the data. Do NOT calculate or estimate — use the exact numbers provided.`,
     userPrompt: `Standings after ${fp.roundName}:\n${standings}\n\nKey movements:\n${fp.standingsChanges.join('\n') || 'No rank changes this round'}`,
-    maxTokens: 200,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -107,7 +108,7 @@ function buildMetaTrendsTask(fp: RecapFactPack): PromptTask {
     stage: 2,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite 2-3 sentences about Pokémon usage patterns from THIS round's matches only. Reference the most-used Pokémon and notable performers. Gen ${fp.gen} context.`,
     userPrompt: `Pokémon usage this round:\n${usage}`,
-    maxTokens: 200,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -117,7 +118,7 @@ function buildSpotlightTask(fp: RecapFactPack): PromptTask {
     stage: 2,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite 1-2 sentences explaining why this player was the best performer this round. Use specific stats from the data.`,
     userPrompt: `Player: ${fp.bestPerformer!.playerName}\nPerformance: ${fp.bestPerformer!.reason}`,
-    maxTokens: 150,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -127,7 +128,7 @@ function buildSpicyPickTask(fp: RecapFactPack): PromptTask {
     stage: 2,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite 1-2 sentences about why this Pokémon pick is notable or unusual. Use the context provided.`,
     userPrompt: `Pokémon: ${fp.unusualPick!.pokemonName}\nPlayer: ${fp.unusualPick!.playerName}\nContext: ${fp.unusualPick!.reason}`,
-    maxTokens: 150,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -154,7 +155,7 @@ function buildNarrativeTask(fp: RecapFactPack): PromptTask {
     stage: 3,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite a 3-5 paragraph analytical round recap. Lead with the most dramatic result. Reference specific Pokémon, scores, and standings implications. Frame through competitive stakes. Use paragraph breaks.`,
     userPrompt: context,
-    maxTokens: 800,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -222,7 +223,7 @@ Respond with a JSON object (no markdown fences):
     stage: 1,
     systemPrompt,
     userPrompt: sections.join('\n'),
-    maxTokens: 4096,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -265,7 +266,7 @@ function buildMatchupStorylineTask(matchup: MatchupFact, index: number, _fp: For
     stage: 1,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite a JSON object for this matchup preview:\n{"storyline": "2-3 sentences on why this matters", "edge": "who has the edge and why", "key_pokemon": "the Pokémon to watch"}`,
     userPrompt: data,
-    maxTokens: 300,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -279,7 +280,7 @@ function buildForecastHeadlineTask(fp: ForecastFactPack): PromptTask {
     stage: 2,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite a single headline sentence previewing this round's most compelling storyline.`,
     userPrompt: `Round: ${fp.roundName}\n\nMatchups:\n${matchupSummaries}`,
-    maxTokens: 100,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -293,7 +294,7 @@ function buildStandingsContextTask(fp: ForecastFactPack): PromptTask {
     stage: 2,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite 2-3 sentences about what's at stake in the standings — advancement, elimination, must-win situations. Use exact numbers from the data.`,
     userPrompt: `Current standings:\n${standings}`,
-    maxTokens: 200,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -307,7 +308,7 @@ function buildBoldPredictionTask(fp: ForecastFactPack): PromptTask {
     stage: 2,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nMake a single bold, specific prediction for this round. Take a stand — pick a winner or a surprising outcome. Be concrete.`,
     userPrompt: `Matchups:\n${data}`,
-    maxTokens: 150,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -329,7 +330,7 @@ function buildForecastNarrativeTask(fp: ForecastFactPack): PromptTask {
     stage: 3,
     systemPrompt: `${KALE_PERSONA}\n\n${FACT_RULES}\n\nWrite a 2-3 paragraph preview covering the key matchups and what's at stake. Frame each matchup as a story. Make clear predictions with reasoning.`,
     userPrompt: context,
-    maxTokens: 600,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }
 
@@ -377,6 +378,6 @@ Respond with a JSON object (no markdown fences):
     stage: 1,
     systemPrompt,
     userPrompt: sections.join('\n'),
-    maxTokens: 4096,
+    maxTokens: AI_MAX_TOKENS.kaleTask,
   };
 }

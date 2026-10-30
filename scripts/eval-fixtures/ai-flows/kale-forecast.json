@@ -1,0 +1,1347 @@
+{
+  "schemaVersion": 1,
+  "flow": "kale-forecast",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "forecast-gym-r4",
+      "label": "gym league, round 4, teams hidden (preview)",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Gym League",
+        "tournamentName": "Sample Gym Cup",
+        "roundName": "Round 4",
+        "roundNumber": 4,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": "Steel",
+          "player-bram": "Water",
+          "player-cleo": "Fire",
+          "player-dara": "Ground"
+        },
+        "matchups": [
+          {
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "player1Rank": 4,
+            "player2Rank": 3,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "0W-3L",
+            "player2Record": "0W-3L"
+          },
+          {
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "player1Rank": 1,
+            "player2Rank": 2,
+            "headToHead": "Dara leads 1-0",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "2W-0L-1D",
+            "player2Record": "1W-2L"
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": "Fire",
+            "points": 7,
+            "recordString": "2W-0L-1D",
+            "kdString": "+3",
+            "rankChange": "#1",
+            "wins": 2,
+            "losses": 0,
+            "draws": 1,
+            "killDifferential": 3
+          },
+          {
+            "rank": 2,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": "Ground",
+            "points": 3,
+            "recordString": "1W-2L",
+            "kdString": "0",
+            "rankChange": "#2",
+            "wins": 1,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 0
+          },
+          {
+            "rank": 3,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 0,
+            "recordString": "0W-3L",
+            "kdString": "+6",
+            "rankChange": "#3",
+            "wins": 0,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": 6
+          },
+          {
+            "rank": 4,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 0,
+            "recordString": "0W-3L",
+            "kdString": "-3",
+            "rankChange": "#4",
+            "wins": 0,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -3
+          }
+        ],
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara"
+        ],
+        "validPokemonNames": []
+      }
+    },
+    {
+      "id": "forecast-gym-r1",
+      "label": "gym league, round 1 (no standings yet), 6 players (preview)",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Gym League",
+        "tournamentName": "Sample Gym Cup",
+        "roundName": "Round 1",
+        "roundNumber": 1,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": "Steel",
+          "player-bram": "Water",
+          "player-cleo": "Fire",
+          "player-dara": "Ground",
+          "player-eli": "Steel",
+          "player-faye": "Water"
+        },
+        "matchups": [
+          {
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "player1Rank": null,
+            "player2Rank": null,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "N/A",
+            "player2Record": "N/A"
+          },
+          {
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "player1Rank": null,
+            "player2Rank": null,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "N/A",
+            "player2Record": "N/A"
+          },
+          {
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "player1Rank": null,
+            "player2Rank": null,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "N/A",
+            "player2Record": "N/A"
+          }
+        ],
+        "currentStandings": [],
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye"
+        ],
+        "validPokemonNames": []
+      }
+    },
+    {
+      "id": "forecast-core-r3",
+      "label": "core league, round 3, teams visible (preview)",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Core League",
+        "tournamentName": "Sample Core Cup",
+        "roundName": "Round 3",
+        "roundNumber": 3,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": null,
+          "player-bram": null,
+          "player-cleo": null,
+          "player-dara": null,
+          "player-eli": null,
+          "player-faye": null
+        },
+        "matchups": [
+          {
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "player1Rank": 1,
+            "player2Rank": 5,
+            "headToHead": "First meeting",
+            "player1Team": [
+              "Toxapex",
+              "Rotom-Wash",
+              "Rillaboom",
+              "Ferrothorn",
+              "Corviknight",
+              "Kingambit"
+            ],
+            "player2Team": [
+              "Garchomp",
+              "Landorus-Therian",
+              "Dragonite",
+              "Dragapult",
+              "Clefable",
+              "Primarina"
+            ],
+            "player1Record": "2W-0L",
+            "player2Record": "0W-1L-1D"
+          },
+          {
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "player1Rank": 2,
+            "player2Rank": 4,
+            "headToHead": "Dara leads 1-0",
+            "player1Team": [
+              "Skeledirge",
+              "Iron Valiant",
+              "Great Tusk",
+              "Weavile",
+              "Kingambit",
+              "Ceruledge"
+            ],
+            "player2Team": [
+              "Toxapex",
+              "Rotom-Wash",
+              "Rillaboom",
+              "Ferrothorn",
+              "Corviknight",
+              "Kingambit"
+            ],
+            "player1Record": "1W-1L",
+            "player2Record": "1W-1L"
+          },
+          {
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "player1Rank": 6,
+            "player2Rank": 3,
+            "headToHead": "Faye leads 1-0",
+            "player1Team": [
+              "Garchomp",
+              "Landorus-Therian",
+              "Dragonite",
+              "Dragapult",
+              "Clefable",
+              "Primarina"
+            ],
+            "player2Team": [
+              "Skeledirge",
+              "Iron Valiant",
+              "Great Tusk",
+              "Weavile",
+              "Kingambit",
+              "Ceruledge"
+            ],
+            "player1Record": "0W-2L",
+            "player2Record": "1W-1L"
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "+5",
+            "rankChange": "#1",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 5
+          },
+          {
+            "rank": 2,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "+6",
+            "rankChange": "#2",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 6
+          },
+          {
+            "rank": 3,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "+3",
+            "rankChange": "#3",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 4,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-3",
+            "rankChange": "#4",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -3
+          },
+          {
+            "rank": 5,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 1,
+            "recordString": "0W-1L-1D",
+            "kdString": "+5",
+            "rankChange": "#5",
+            "wins": 0,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": 5
+          },
+          {
+            "rank": 6,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 0,
+            "recordString": "0W-2L",
+            "kdString": "+1",
+            "rankChange": "#6",
+            "wins": 0,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 1
+          }
+        ],
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye"
+        ],
+        "validPokemonNames": [
+          "Toxapex",
+          "Rotom-Wash",
+          "Rillaboom",
+          "Ferrothorn",
+          "Corviknight",
+          "Kingambit",
+          "Garchomp",
+          "Landorus-Therian",
+          "Dragonite",
+          "Dragapult",
+          "Clefable",
+          "Primarina",
+          "Skeledirge",
+          "Iron Valiant",
+          "Great Tusk",
+          "Weavile",
+          "Ceruledge"
+        ]
+      }
+    },
+    {
+      "id": "forecast-open-r3",
+      "label": "open cup, round 3, 8 players, four matchups (preview)",
+      "locale": "en",
+      "factPack": {
+        "leagueName": null,
+        "tournamentName": "Sample Open Cup",
+        "roundName": "Round 3",
+        "roundNumber": 3,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": null,
+          "player-bram": null,
+          "player-cleo": null,
+          "player-dara": null,
+          "player-eli": null,
+          "player-faye": null,
+          "player-gus": null,
+          "player-hana": null
+        },
+        "matchups": [
+          {
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "player1Rank": 7,
+            "player2Rank": 4,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "0W-1L-1D",
+            "player2Record": "1W-0L-1D"
+          },
+          {
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "player1Rank": 6,
+            "player2Rank": 3,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "1W-1L",
+            "player2Record": "1W-0L-1D"
+          },
+          {
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "player1Rank": 2,
+            "player2Rank": 8,
+            "headToHead": "Faye leads 1-0",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "2W-0L",
+            "player2Record": "0W-2L"
+          },
+          {
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "player1Rank": 1,
+            "player2Rank": 5,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "2W-0L",
+            "player2Record": "1W-0L-1D"
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "+4",
+            "rankChange": "#1",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 4
+          },
+          {
+            "rank": 2,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-0L",
+            "kdString": "-4",
+            "rankChange": "#2",
+            "wins": 2,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -4
+          },
+          {
+            "rank": 3,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 4,
+            "recordString": "1W-0L-1D",
+            "kdString": "+4",
+            "rankChange": "#3",
+            "wins": 1,
+            "losses": 0,
+            "draws": 1,
+            "killDifferential": 4
+          },
+          {
+            "rank": 4,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 4,
+            "recordString": "1W-0L-1D",
+            "kdString": "+1",
+            "rankChange": "#4",
+            "wins": 1,
+            "losses": 0,
+            "draws": 1,
+            "killDifferential": 1
+          },
+          {
+            "rank": 5,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 4,
+            "recordString": "1W-0L-1D",
+            "kdString": "0",
+            "rankChange": "#5",
+            "wins": 1,
+            "losses": 0,
+            "draws": 1,
+            "killDifferential": 0
+          },
+          {
+            "rank": 6,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-1L",
+            "kdString": "-1",
+            "rankChange": "#6",
+            "wins": 1,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -1
+          },
+          {
+            "rank": 7,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 1,
+            "recordString": "0W-1L-1D",
+            "kdString": "+6",
+            "rankChange": "#7",
+            "wins": 0,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": 6
+          },
+          {
+            "rank": 8,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 0,
+            "recordString": "0W-2L",
+            "kdString": "-4",
+            "rankChange": "#8",
+            "wins": 0,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": -4
+          }
+        ],
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye",
+          "Gus",
+          "Hana"
+        ],
+        "validPokemonNames": []
+      }
+    },
+    {
+      "id": "forecast-gym-r7",
+      "label": "gym league, final round 7, 8 players, teams visible (preview)",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Gym League",
+        "tournamentName": "Sample Gym Cup",
+        "roundName": "Round 7",
+        "roundNumber": 7,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-ada": "Steel",
+          "player-bram": "Water",
+          "player-cleo": "Fire",
+          "player-dara": "Ground",
+          "player-eli": "Steel",
+          "player-faye": "Water",
+          "player-gus": "Fire",
+          "player-hana": "Ground"
+        },
+        "matchups": [
+          {
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "player1Rank": 4,
+            "player2Rank": 8,
+            "headToHead": "First meeting",
+            "player1Team": [
+              "Kingambit",
+              "Corviknight",
+              "Ferrothorn",
+              "Heatran",
+              "Gholdengo",
+              "Scizor"
+            ],
+            "player2Team": [
+              "Toxapex",
+              "Rotom-Wash",
+              "Primarina",
+              "Gyarados",
+              "Pelipper",
+              "Dondozo"
+            ],
+            "player1Record": "3W-3L",
+            "player2Record": "0W-6L"
+          },
+          {
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "player1Rank": 3,
+            "player2Rank": 1,
+            "headToHead": "First meeting",
+            "player1Team": [
+              "Heatran",
+              "Skeledirge",
+              "Ceruledge",
+              "Torkoal",
+              "Volcarona",
+              "Talonflame"
+            ],
+            "player2Team": [
+              "Great Tusk",
+              "Garchomp",
+              "Landorus-Therian",
+              "Gliscor",
+              "Excadrill",
+              "Hippowdon"
+            ],
+            "player1Record": "2W-1L-3D",
+            "player2Record": "4W-2L"
+          },
+          {
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "player1Rank": 2,
+            "player2Rank": 5,
+            "headToHead": "First meeting",
+            "player1Team": [
+              "Kingambit",
+              "Corviknight",
+              "Ferrothorn",
+              "Heatran",
+              "Gholdengo",
+              "Scizor"
+            ],
+            "player2Team": [
+              "Toxapex",
+              "Rotom-Wash",
+              "Primarina",
+              "Gyarados",
+              "Pelipper",
+              "Dondozo"
+            ],
+            "player1Record": "3W-2L-1D",
+            "player2Record": "2W-3L-1D"
+          },
+          {
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "player1Rank": 7,
+            "player2Rank": 6,
+            "headToHead": "First meeting",
+            "player1Team": [
+              "Heatran",
+              "Skeledirge",
+              "Ceruledge",
+              "Torkoal",
+              "Volcarona",
+              "Talonflame"
+            ],
+            "player2Team": [
+              "Great Tusk",
+              "Garchomp",
+              "Landorus-Therian",
+              "Gliscor",
+              "Excadrill",
+              "Hippowdon"
+            ],
+            "player1Record": "1W-5L",
+            "player2Record": "1W-4L-1D"
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": "Ground",
+            "points": 12,
+            "recordString": "4W-2L",
+            "kdString": "+3",
+            "rankChange": "#1",
+            "wins": 4,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 2,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": "Steel",
+            "points": 10,
+            "recordString": "3W-2L-1D",
+            "kdString": "-3",
+            "rankChange": "#2",
+            "wins": 3,
+            "losses": 2,
+            "draws": 1,
+            "killDifferential": -3
+          },
+          {
+            "rank": 3,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": "Fire",
+            "points": 9,
+            "recordString": "2W-1L-3D",
+            "kdString": "-3",
+            "rankChange": "#3",
+            "wins": 2,
+            "losses": 1,
+            "draws": 3,
+            "killDifferential": -3
+          },
+          {
+            "rank": 4,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 9,
+            "recordString": "3W-3L",
+            "kdString": "-4",
+            "rankChange": "#4",
+            "wins": 3,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": -4
+          },
+          {
+            "rank": 5,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": "Water",
+            "points": 7,
+            "recordString": "2W-3L-1D",
+            "kdString": "0",
+            "rankChange": "#5",
+            "wins": 2,
+            "losses": 3,
+            "draws": 1,
+            "killDifferential": 0
+          },
+          {
+            "rank": 6,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": "Ground",
+            "points": 4,
+            "recordString": "1W-4L-1D",
+            "kdString": "+2",
+            "rankChange": "#6",
+            "wins": 1,
+            "losses": 4,
+            "draws": 1,
+            "killDifferential": 2
+          },
+          {
+            "rank": 7,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": "Fire",
+            "points": 3,
+            "recordString": "1W-5L",
+            "kdString": "+6",
+            "rankChange": "#7",
+            "wins": 1,
+            "losses": 5,
+            "draws": 0,
+            "killDifferential": 6
+          },
+          {
+            "rank": 8,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 0,
+            "recordString": "0W-6L",
+            "kdString": "-3",
+            "rankChange": "#8",
+            "wins": 0,
+            "losses": 6,
+            "draws": 0,
+            "killDifferential": -3
+          }
+        ],
+        "validPlayerNames": [
+          "Ada",
+          "Bram",
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye",
+          "Gus",
+          "Hana"
+        ],
+        "validPokemonNames": [
+          "Kingambit",
+          "Corviknight",
+          "Ferrothorn",
+          "Heatran",
+          "Gholdengo",
+          "Scizor",
+          "Toxapex",
+          "Rotom-Wash",
+          "Primarina",
+          "Gyarados",
+          "Pelipper",
+          "Dondozo",
+          "Skeledirge",
+          "Ceruledge",
+          "Torkoal",
+          "Volcarona",
+          "Talonflame",
+          "Great Tusk",
+          "Garchomp",
+          "Landorus-Therian",
+          "Gliscor",
+          "Excadrill",
+          "Hippowdon"
+        ]
+      }
+    },
+    {
+      "id": "forecast-core-r2",
+      "label": "core league, round 2, 4 players (preview)",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Core League",
+        "tournamentName": "Sample Core Cup",
+        "roundName": "Round 2",
+        "roundNumber": 2,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-gus": null,
+          "player-hana": null,
+          "player-ada": null,
+          "player-bram": null
+        },
+        "matchups": [
+          {
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "player1Rank": 4,
+            "player2Rank": 3,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "0W-1L",
+            "player2Record": "1W-0L"
+          },
+          {
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "player1Rank": 1,
+            "player2Rank": 2,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "1W-0L",
+            "player2Record": "1W-0L"
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-0L",
+            "kdString": "+6",
+            "rankChange": "#1",
+            "wins": 1,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 6
+          },
+          {
+            "rank": 2,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-0L",
+            "kdString": "+3",
+            "rankChange": "#2",
+            "wins": 1,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 3,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-0L",
+            "kdString": "-1",
+            "rankChange": "#3",
+            "wins": 1,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -1
+          },
+          {
+            "rank": 4,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 0,
+            "recordString": "0W-1L",
+            "kdString": "+4",
+            "rankChange": "#4",
+            "wins": 0,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": 4
+          }
+        ],
+        "validPlayerNames": [
+          "Gus",
+          "Hana",
+          "Ada",
+          "Bram"
+        ],
+        "validPokemonNames": []
+      }
+    },
+    {
+      "id": "forecast-open-r4",
+      "label": "open cup, round 4, best of one (preview)",
+      "locale": "en",
+      "factPack": {
+        "leagueName": null,
+        "tournamentName": "Sample Open Cup",
+        "roundName": "Round 4",
+        "roundNumber": 4,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 1,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-cleo": null,
+          "player-dara": null,
+          "player-eli": null,
+          "player-faye": null,
+          "player-gus": null,
+          "player-hana": null
+        },
+        "matchups": [
+          {
+            "player1Name": "Cleo",
+            "player2Name": "Dara",
+            "player1Rank": 2,
+            "player2Rank": 5,
+            "headToHead": "Cleo leads 1-0",
+            "player1Team": [
+              "Great Tusk",
+              "Gholdengo",
+              "Dragapult",
+              "Slowking-Galar",
+              "Landorus-Therian",
+              "Corviknight"
+            ],
+            "player2Team": [
+              "Kingambit",
+              "Iron Valiant",
+              "Hatterene",
+              "Skeledirge",
+              "Garchomp",
+              "Rotom-Wash"
+            ],
+            "player1Record": "3W-0L",
+            "player2Record": "1W-2L"
+          },
+          {
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "player1Rank": 6,
+            "player2Rank": 4,
+            "headToHead": "First meeting",
+            "player1Team": [
+              "Weavile",
+              "Annihilape",
+              "Clefable",
+              "Gliscor",
+              "Dragonite",
+              "Heatran"
+            ],
+            "player2Team": [
+              "Great Tusk",
+              "Gholdengo",
+              "Dragapult",
+              "Slowking-Galar",
+              "Landorus-Therian",
+              "Corviknight"
+            ],
+            "player1Record": "0W-1L-2D",
+            "player2Record": "1W-1L-1D"
+          },
+          {
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "player1Rank": 1,
+            "player2Rank": 3,
+            "headToHead": "First meeting",
+            "player1Team": [
+              "Kingambit",
+              "Iron Valiant",
+              "Hatterene",
+              "Skeledirge",
+              "Garchomp",
+              "Rotom-Wash"
+            ],
+            "player2Team": [
+              "Weavile",
+              "Annihilape",
+              "Clefable",
+              "Gliscor",
+              "Dragonite",
+              "Heatran"
+            ],
+            "player1Record": "3W-0L",
+            "player2Record": "2W-1L"
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": null,
+            "points": 9,
+            "recordString": "3W-0L",
+            "kdString": "+1",
+            "rankChange": "#1",
+            "wins": 3,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": 1
+          },
+          {
+            "rank": 2,
+            "playerName": "Cleo",
+            "playerId": "player-cleo",
+            "gymType": null,
+            "points": 9,
+            "recordString": "3W-0L",
+            "kdString": "-4",
+            "rankChange": "#2",
+            "wins": 3,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -4
+          },
+          {
+            "rank": 3,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": null,
+            "points": 6,
+            "recordString": "2W-1L",
+            "kdString": "-5",
+            "rankChange": "#3",
+            "wins": 2,
+            "losses": 1,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 4,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": null,
+            "points": 4,
+            "recordString": "1W-1L-1D",
+            "kdString": "0",
+            "rankChange": "#4",
+            "wins": 1,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": 0
+          },
+          {
+            "rank": 5,
+            "playerName": "Dara",
+            "playerId": "player-dara",
+            "gymType": null,
+            "points": 3,
+            "recordString": "1W-2L",
+            "kdString": "-3",
+            "rankChange": "#5",
+            "wins": 1,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": -3
+          },
+          {
+            "rank": 6,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": null,
+            "points": 2,
+            "recordString": "0W-1L-2D",
+            "kdString": "+1",
+            "rankChange": "#6",
+            "wins": 0,
+            "losses": 1,
+            "draws": 2,
+            "killDifferential": 1
+          }
+        ],
+        "validPlayerNames": [
+          "Cleo",
+          "Dara",
+          "Eli",
+          "Faye",
+          "Gus",
+          "Hana"
+        ],
+        "validPokemonNames": [
+          "Great Tusk",
+          "Gholdengo",
+          "Dragapult",
+          "Slowking-Galar",
+          "Landorus-Therian",
+          "Corviknight",
+          "Kingambit",
+          "Iron Valiant",
+          "Hatterene",
+          "Skeledirge",
+          "Garchomp",
+          "Rotom-Wash",
+          "Weavile",
+          "Annihilape",
+          "Clefable",
+          "Gliscor",
+          "Dragonite",
+          "Heatran"
+        ]
+      }
+    },
+    {
+      "id": "forecast-gym-r5",
+      "label": "gym league, round 5, 6 players (preview)",
+      "locale": "en",
+      "factPack": {
+        "leagueName": "Sample Gym League",
+        "tournamentName": "Sample Gym Cup",
+        "roundName": "Round 5",
+        "roundNumber": 5,
+        "format": "gen9ou",
+        "gen": 9,
+        "bestOf": 3,
+        "scoring": "3 points for a win, 1 point for a draw, 0 points for a loss",
+        "gymTypes": {
+          "player-eli": "Steel",
+          "player-faye": "Water",
+          "player-gus": "Fire",
+          "player-hana": "Ground",
+          "player-ada": "Steel",
+          "player-bram": "Water"
+        },
+        "matchups": [
+          {
+            "player1Name": "Eli",
+            "player2Name": "Faye",
+            "player1Rank": 2,
+            "player2Rank": 1,
+            "headToHead": "Faye leads 1-0",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "2W-1L-1D",
+            "player2Record": "4W-0L"
+          },
+          {
+            "player1Name": "Gus",
+            "player2Name": "Hana",
+            "player1Rank": 6,
+            "player2Rank": 5,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "1W-3L",
+            "player2Record": "1W-2L-1D"
+          },
+          {
+            "player1Name": "Ada",
+            "player2Name": "Bram",
+            "player1Rank": 3,
+            "player2Rank": 4,
+            "headToHead": "First meeting",
+            "player1Team": [],
+            "player2Team": [],
+            "player1Record": "2W-2L",
+            "player2Record": "2W-2L"
+          }
+        ],
+        "currentStandings": [
+          {
+            "rank": 1,
+            "playerName": "Faye",
+            "playerId": "player-faye",
+            "gymType": "Water",
+            "points": 12,
+            "recordString": "4W-0L",
+            "kdString": "-5",
+            "rankChange": "#1",
+            "wins": 4,
+            "losses": 0,
+            "draws": 0,
+            "killDifferential": -5
+          },
+          {
+            "rank": 2,
+            "playerName": "Eli",
+            "playerId": "player-eli",
+            "gymType": "Steel",
+            "points": 7,
+            "recordString": "2W-1L-1D",
+            "kdString": "+1",
+            "rankChange": "#2",
+            "wins": 2,
+            "losses": 1,
+            "draws": 1,
+            "killDifferential": 1
+          },
+          {
+            "rank": 3,
+            "playerName": "Ada",
+            "playerId": "player-ada",
+            "gymType": "Steel",
+            "points": 6,
+            "recordString": "2W-2L",
+            "kdString": "+6",
+            "rankChange": "#3",
+            "wins": 2,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 6
+          },
+          {
+            "rank": 4,
+            "playerName": "Bram",
+            "playerId": "player-bram",
+            "gymType": "Water",
+            "points": 6,
+            "recordString": "2W-2L",
+            "kdString": "+3",
+            "rankChange": "#4",
+            "wins": 2,
+            "losses": 2,
+            "draws": 0,
+            "killDifferential": 3
+          },
+          {
+            "rank": 5,
+            "playerName": "Hana",
+            "playerId": "player-hana",
+            "gymType": "Ground",
+            "points": 4,
+            "recordString": "1W-2L-1D",
+            "kdString": "+4",
+            "rankChange": "#5",
+            "wins": 1,
+            "losses": 2,
+            "draws": 1,
+            "killDifferential": 4
+          },
+          {
+            "rank": 6,
+            "playerName": "Gus",
+            "playerId": "player-gus",
+            "gymType": "Fire",
+            "points": 3,
+            "recordString": "1W-3L",
+            "kdString": "+2",
+            "rankChange": "#6",
+            "wins": 1,
+            "losses": 3,
+            "draws": 0,
+            "killDifferential": 2
+          }
+        ],
+        "validPlayerNames": [
+          "Eli",
+          "Faye",
+          "Gus",
+          "Hana",
+          "Ada",
+          "Bram"
+        ],
+        "validPokemonNames": []
+      }
+    }
+  ]
+}
