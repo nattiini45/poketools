@@ -102,11 +102,11 @@ export async function computePinImpact(input: PinImpactInput): Promise<PinImpact
   };
   const target = await rulesetOf(to.id);
 
-  const answers: PinImpactTarget[] = [];
+  const answers: Required<PinImpactTarget>[] = [];
   let budget = MAX_IMPACT_TEAMS;
   let truncated = false;
   for (const state of states) {
-    const answer: PinImpactTarget = { kind: state.kind, id: state.id, name: state.name, checked: 0, would_break: 0 };
+    const answer: Required<PinImpactTarget> = { kind: state.kind, id: state.id, name: state.name, checked: 0, would_break: 0, malformed: 0 };
     answers.push(answer);
     // Already on the target version (loadMoveTargets guarantees a pin): nothing changes for it.
     if (state.ruleset_id === null || state.ruleset_id === to.id) continue;
@@ -126,19 +126,18 @@ export async function computePinImpact(input: PinImpactInput): Promise<PinImpact
     const needsCores = current.team_constraints !== null || target.team_constraints !== null;
     const cores = needsCores && seasonId !== null ? await listParticipantCores(seasonId) : new Map<string, CoreTriple>();
 
-    answer.checked = teams.length;
     const { broken, malformed } = summarizePinImpact(teams, current, target, (playerId) => cores.get(playerId) ?? null);
+    // A malformed row was not checked, so it is neither in `checked` nor in `would_break`; the dialog names it apart.
+    answer.checked = teams.length - malformed;
     answer.would_break = broken;
-    // Not an error of this request, but a data problem worth knowing: rows the boundary schemas would refuse today.
-    if (malformed > 0) {
-      console.warn(`[pin-impact] ${malformed} of ${teams.length} stored teams of ${state.kind} ${state.id} are malformed and were not counted`);
-    }
+    answer.malformed = malformed;
   }
 
   return {
     version_no: to.version_no,
     checked: answers.reduce((sum, a) => sum + a.checked, 0),
     would_break: answers.reduce((sum, a) => sum + a.would_break, 0),
+    malformed: answers.reduce((sum, a) => sum + a.malformed, 0),
     truncated,
     targets: answers,
   };

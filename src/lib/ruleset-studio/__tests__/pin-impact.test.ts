@@ -145,15 +145,34 @@ describe('computePinImpact', () => {
       version_no: 2,
       checked: 5,
       would_break: 3,
+      malformed: 0,
       truncated: false,
       targets: [
-        { kind: 'season', id: SEASON, name: 'season 1', checked: 2, would_break: 1 },
-        { kind: 'tournament', id: PHASE, name: 'tournament 1', checked: 3, would_break: 2 },
+        { kind: 'season', id: SEASON, name: 'season 1', checked: 2, would_break: 1, malformed: 0 },
+        { kind: 'tournament', id: PHASE, name: 'tournament 1', checked: 3, would_break: 2, malformed: 0 },
       ],
     });
     expect(listTeamsForPinImpact).toHaveBeenCalledWith({ kind: 'season', id: SEASON }, MAX_IMPACT_TEAMS);
     // The rules of each version are read once, however many targets use them.
     expect(vi.mocked(getRulesetById).mock.calls.map(([id]) => id).sort()).toEqual([V1, V2]);
+  });
+
+  it('reports malformed stored teams apart: they are not in checked and not in would_break, per target and in total', async () => {
+    vi.mocked(getPinTargetStates).mockResolvedValue([state('season', SEASON), state('tournament', PHASE)]);
+    const bad = { id: 'bad', player_id: 'player-bad', pokemon: [{ species: 'Garchomp' }] as unknown as PokemonSet[] };
+    vi.mocked(listTeamsForPinImpact).mockImplementation(async (scope) =>
+      scope.kind === 'season'
+        ? { teams: [bad, team('a', GARCHOMP), team('b', DRAGONITE)], truncated: false }
+        : { teams: [bad, { ...bad, id: 'bad2' }], truncated: false },
+    );
+
+    const impact = await computePinImpact(input([{ kind: 'season', id: SEASON }, { kind: 'tournament', id: PHASE }]));
+
+    expect(impact).toMatchObject({ checked: 2, would_break: 1, malformed: 3 });
+    expect(impact.targets).toEqual([
+      expect.objectContaining({ id: SEASON, checked: 2, would_break: 1, malformed: 1 }),
+      expect.objectContaining({ id: PHASE, checked: 0, would_break: 0, malformed: 2 }),
+    ]);
   });
 
   it('a target already on the version changes nothing and reads no team', async () => {

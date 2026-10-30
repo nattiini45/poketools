@@ -76,6 +76,10 @@ export default defineDe<typeof en>()({
       },
       target: '{name}: {broken} von {total} wären ungültig',
       truncated: 'Die Prüfung endete nach {checked} Teams, diese Zahlen gelten also nur für sie.',
+      malformed: {
+        one: '{count} gespeichertes Team konnte nicht geprüft werden: Seine Daten sind kein gültiges Team. Es zählt in diesen Zahlen nicht mit.',
+        other: '{count} gespeicherte Teams konnten nicht geprüft werden: Ihre Daten sind kein gültiges Team. Sie zählen in diesen Zahlen nicht mit.',
+      },
       failed: 'Die eingereichten Teams konnten nicht geprüft werden. Manche könnten unter Version {version} ungültig werden.',
     },
   },
