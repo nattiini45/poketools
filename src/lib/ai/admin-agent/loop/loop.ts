@@ -116,7 +116,7 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
   /** The prompt (fresh, written and read) of the previous settled step of this turn: what the next step should read back. */
   let previousPrefix: number | null = null;
   /** The measured meters and the prompt estimate of the previous settled step of this turn, for the warm reservation. */
-  let previousStep: { usage: UsageMeters; estimatedPromptTokens: number } | null = null;
+  let previousStep: PreviousStep | null = null;
   /** The lowest cache-read share of that prefix seen from step 2 on (see `cacheReadShare`). */
   let lowestCacheReadRatio: number | null = null;
 
@@ -155,11 +155,12 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     // pause is the expensive case. A later step follows the previous one seconds apart, so what that step measured is in the
     // cache: reserve it at the read price plus only the messages appended since (the same bytes-over-3.5 estimate on both
     // sides, so the difference is the delta). The cold figure stays the ceiling.
+    // The warm figure is only trusted while the evidence says the cache is working (see `warmReservationApplies`).
     const coldEstimate = estimateStepCostMicro(model, promptTokens, maxOutputTokens);
     const estimate =
-      previousStep === null
-        ? coldEstimate
-        : Math.min(coldEstimate, estimateWarmStepCostMicro(model, previousStep.usage, promptTokens - previousStep.estimatedPromptTokens, maxOutputTokens));
+      previousStep !== null && warmReservationApplies(previousStep, transcript)
+        ? Math.min(coldEstimate, estimateWarmStepCostMicro(model, previousStep.usage, promptTokens - previousStep.estimatedPromptTokens, maxOutputTokens))
+        : coldEstimate;
     const reservation = await deps.store.usage
       .reserveUsage(request.adminId, {
         adminName: request.adminName,
@@ -208,6 +209,7 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     // ── The model step ──────────────────────────────────────────────
     const remainingMs = Math.max(MIN_STEP_TIMEOUT_MS, hardDeadline - deps.now().getTime());
     let stepResult: ModelStepResult;
+    const transcriptLength = transcript.length;
     try {
       stepResult = await deps.port.step({
         model,
@@ -237,14 +239,16 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
       .settleUsage(request.adminId, reservation.usageId, { ...stepResult.usage, costUsdMicro: stepCost, stopReason: stepResult.rawStopReason ?? stepResult.stopReason })
       .catch((error: unknown) => console.error('[admin-agent] usage settle failed; the reservation stays and counts', error));
     // Diagnostics only: a failure here can never touch the turn.
+    let regressed = false;
     try {
       const ratio = diagnoseStep({ conversationId: conversation.id, model: stepResult.model || model, step, usage: stepResult.usage, previousPrefix, iterations: stepResult.iterations });
       if (ratio !== null) lowestCacheReadRatio = lowestCacheReadRatio === null ? ratio : Math.min(lowestCacheReadRatio, ratio);
+      regressed = ratio !== null && ratio < CACHE_REGRESSION_RATIO;
     } catch {
       // Never fail a turn over a log line.
     }
     previousPrefix = promptTokensOf(stepResult.usage);
-    previousStep = { usage: stepResult.usage, estimatedPromptTokens: promptTokens };
+    previousStep = { usage: stepResult.usage, estimatedPromptTokens: promptTokens, transcriptLength, regressed };
     emit({
       type: 'usage',
       step,
@@ -357,6 +361,44 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     // A write was held back for lack of time: the admin (or the UI) resumes the turn and the model asks for it again.
     if (deadlineHit) return stopResumable('deadline', LOOP_EVENTS.turnDeadline, { step: counters.steps, reason: 'tool_calls' });
   }
+}
+
+/** What a later step of the same turn needs to know about the one before it. */
+interface PreviousStep {
+  usage: UsageMeters;
+  estimatedPromptTokens: number;
+  /** How many transcript entries the previous request carried, so what was appended since can be counted. */
+  transcriptLength: number;
+  /** The previous step's own cache read fell below `CACHE_REGRESSION_RATIO` of the step before it. */
+  regressed: boolean;
+}
+
+/** At least this share of the previous prompt must have gone through the cache (read or written) for a warm reservation. */
+export const WARM_MIN_CACHED_SHARE = 0.5;
+/** The cache lookup only reaches back about 20 content blocks from the new breakpoint: more than this many appended blocks may miss. */
+export const WARM_MAX_APPENDED_BLOCKS = 8;
+
+/** The content blocks the transcript gained since a step's request (an event entry counts as one). */
+export function blocksAppendedSince(transcript: readonly TranscriptEntry[], fromIndex: number): number {
+  let count = 0;
+  for (const entry of transcript.slice(fromIndex)) count += entry.role === 'event' ? 1 : entry.blocks.length;
+  return count;
+}
+
+/**
+ * Whether the next step may reserve the warm estimate. It may when (a) the previous step's meters show the cache engaged
+ * (cache reads and writes are at least half its prompt), (b) at most `WARM_MAX_APPENDED_BLOCKS` content blocks were appended
+ * since (a cache hit needs a breakpoint within the lookup window of the new one, and parallel tool calls can add many
+ * blocks), and (c) the previous step did not itself log a cache regression. Otherwise the cold ceiling is reserved: a miss
+ * is billed cold, and a reservation that assumed a hit would let a capped conversation overshoot by that premium.
+ */
+export function warmReservationApplies(previous: PreviousStep, transcript: readonly TranscriptEntry[]): boolean {
+  const prompt = promptTokensOf(previous.usage);
+  if (prompt <= 0) return false;
+  const cached = previous.usage.cacheReadTokens + previous.usage.cacheWrite5mTokens + previous.usage.cacheWrite1hTokens;
+  if (cached < WARM_MIN_CACHED_SHARE * prompt) return false;
+  if (blocksAppendedSince(transcript, previous.transcriptLength) > WARM_MAX_APPENDED_BLOCKS) return false;
+  return !previous.regressed;
 }
 
 /** A step 2 or later whose cache read is below this share of the previous step's prefix is logged as a cache regression. */

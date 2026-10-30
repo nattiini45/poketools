@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { costMicro } from '../pricing';
 import { loopCode } from '../codes';
 import { startTurn } from '../start';
-import { cacheReadShare, diagnoseStep } from '../loop';
+import { blocksAppendedSince, cacheReadShare, diagnoseStep, warmReservationApplies } from '../loop';
 import { ModelPortError, type AgentStreamEvent, type TurnInput } from '../types';
+import type { TranscriptEntry } from '../transcript';
 import { ADMIN, CONVERSATION_ID, harness, readEvents, textStep, toolStep, typesOf, type Harness } from './fakes';
 
 async function turn(h: Harness, input: TurnInput = { kind: 'message', text: 'Make me a league', clientMsgId: 'c1' }) {
@@ -432,6 +433,82 @@ describe('the reservation estimate', () => {
     // Step 3 reads the 52 500 tokens step 2 left behind.
     expect(third).toBeGreaterThanOrEqual(answer + 52_500 * 0.2);
     expect(third).toBeLessThan(answer + 52_500 * 0.2 + 10_000 * 8);
+  });
+
+  describe('falls back to the cold estimate unless the cache is known to be working', () => {
+    const answer = 8_000 * 20;
+    /** A long history so the cold estimate (above 55K tokens) is far from any warm figure. */
+    const longHistory = () => {
+      const h = harness();
+      h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(200_000) }] });
+      h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+      h.tools.on('league_get', () => ({ ok: true, data: {} }));
+      return h;
+    };
+    const turnRows = (h: Harness) => h.fake.usage.filter((row) => row.purpose === 'turn').map((row) => row.reserved);
+    const COLD_FLOOR = answer + 55_000 * 8;
+
+    it('(a) when the previous step shows the cache did not engage', async () => {
+      const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const h = longHistory();
+      h.port.script(toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 50_000, cacheWrite1hTokens: 0, cacheReadTokens: 0 } }), textStep('Done.'));
+      await turn(h);
+      const [first, second] = turnRows(h);
+      expect(first).toBeGreaterThan(COLD_FLOOR);
+      expect(second).toBeGreaterThan(COLD_FLOOR);
+      spy.mockRestore();
+    });
+
+    it('(b) when many content blocks were appended since (parallel tool calls)', async () => {
+      const h = longHistory();
+      const calls = Array.from({ length: 9 }, (_, i) => ({ name: 'league_get', id: `toolu_${i}` }));
+      h.port.script(toolStep(calls, { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }), textStep('Done.'));
+      await turn(h);
+      expect(turnRows(h)[1]).toBeGreaterThan(COLD_FLOOR);
+    });
+
+    it('(c) when the previous step itself logged a cache regression', async () => {
+      const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const h = longHistory();
+      h.port.script(
+        toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }),
+        // The cache was written again instead of read: engaged by the share rule, but 10K of a 50K prefix is a regression.
+        toolStep([{ name: 'league_get', id: 'toolu_b' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 39_500, cacheReadTokens: 10_000 } }),
+        textStep('Done.'),
+      );
+      await turn(h);
+      const [, second, third] = turnRows(h);
+      expect(second).toBeLessThan(COLD_FLOOR);
+      expect(third).toBeGreaterThan(COLD_FLOOR);
+      spy.mockRestore();
+    });
+
+    it('keeps the warm figure when all three hold (control)', async () => {
+      const h = longHistory();
+      h.port.script(toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }), textStep('Done.'));
+      await turn(h);
+      expect(turnRows(h)[1]).toBeLessThan(COLD_FLOOR);
+    });
+
+    it('decides from the previous step alone: the rule on its own inputs', () => {
+      const usage = (over: Partial<{ inputTokens: number; cacheReadTokens: number; cacheWrite5mTokens: number; cacheWrite1hTokens: number }>) => ({ inputTokens: 1_000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 0, outputTokens: 10, ...over });
+      const text = (seq: number): TranscriptEntry => ({ role: 'user', kind: 'chat', seq, blocks: [{ type: 'text', text: 't' }] });
+      const few = [text(1), text(2)];
+      const prev = (u: ReturnType<typeof usage>, over: Partial<{ transcriptLength: number; regressed: boolean }> = {}) => ({ usage: u, estimatedPromptTokens: 0, transcriptLength: 0, regressed: false, ...over });
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 })), few)).toBe(true);
+      // Exactly half of the prompt through the cache still counts; just under does not. Writes count as engaged.
+      expect(warmReservationApplies(prev(usage({ inputTokens: 5_000, cacheWrite5mTokens: 5_000 })), few)).toBe(true);
+      expect(warmReservationApplies(prev(usage({ inputTokens: 5_001, cacheWrite1hTokens: 4_999 })), few)).toBe(false);
+      expect(warmReservationApplies(prev(usage({ inputTokens: 0 })), few)).toBe(false);
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 }), { regressed: true }), few)).toBe(false);
+      // Eight appended blocks is the limit; nine is over; an event counts as one block.
+      const eight = Array.from({ length: 8 }, (_, i) => text(i));
+      expect(blocksAppendedSince(eight, 0)).toBe(8);
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 })), eight)).toBe(true);
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 })), [...eight, text(9)])).toBe(false);
+      expect(warmReservationApplies(prev(usage({ cacheReadTokens: 9_000 }), { transcriptLength: 8 }), [...eight, text(9)])).toBe(true);
+      expect(blocksAppendedSince([{ role: 'event', kind: 'harness_event', seq: 1, event: 'e', text: 't', data: {} }], 0)).toBe(1);
+    });
   });
 
   it('never reserves more than the cold estimate, and a new turn starts cold again', async () => {

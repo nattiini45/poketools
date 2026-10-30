@@ -30,8 +30,10 @@ type EnvSource = Record<string, string | undefined>;
 /**
  * Models are Anthropic only (§18.10) and must be priced: the ids of the pricing table, each optionally with a dated
  * `-YYYYMMDD` suffix. Any other id would be billed at the table's highest rate while the caps count real money, and a wrong
- * id fails at the first request, so it turns the assistant off at boot instead. This covers the configured defaults of NEW
- * conversations only: a conversation row keeps the id it was created with, and nothing validates that id again.
+ * id fails at the first request, so it is refused up front: the config reports the key as a problem and the assistant is
+ * off, and while `ADMIN_AGENT_ENABLED` is on `assertAdminAgentBootEnv` makes the whole server refuse to start
+ * (`src/instrumentation.ts`). This covers the configured defaults of NEW conversations only: a conversation row keeps the
+ * id it was created with, and nothing validates that id again.
  */
 const MODEL_ID = new RegExp(`^(?:${PRICED_MODEL_IDS.join('|')})(?:-[0-9]{8})?$`);
 /** Effort ceiling is `high` (plan 3.4); `xhigh` and `max` are not accepted. */
