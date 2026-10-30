@@ -61,34 +61,28 @@ const BUILD_ENV = {
 };
 
 /**
- * Project env prefixes stripped before every step. A developer's shell (or a
- * `.env` loaded by some other tool) must not be able to change a result here —
- * `NEXT_PUBLIC_WORLD_ASSETS_URL` in particular flips `getWorldAssetBase()` and
- * would make the manifest test pass locally while failing in CI, the exact
- * inversion this script exists to prevent.
+ * The environment every step runs with: an ALLOW-list, not a deny-list. A developer's shell (or a `.env` some other tool
+ * loaded) must not be able to change a result here: `NEXT_PUBLIC_WORLD_ASSETS_URL` flips `getWorldAssetBase()`,
+ * `FORMAT_PACK=private` makes the clean clone throw, `RATE_LIMIT_STORE`, `TZ` or an opt-in test flag change what the suites
+ * do. Only what a process needs to find its tools, its temp dir, its home and a proxy is passed through; `CI=true` and
+ * `TZ=UTC` match the GitHub runner, then the step's own env (the build's placeholders) goes on top.
  */
-const STRIPPED_PREFIXES = [
-  'NEXT_PUBLIC_',
-  'SUPABASE_',
-  'NEXTAUTH_',
-  'DISCORD_',
-  'BOOTSTRAP_',
-  'CRON_',
-  'KALE_',
-  'AZURE_',
-  'CLAUDE_',
-  'DEEPSEEK_',
-  'MINIMAX_',
-  'MESHY_',
-  'NANOGPT_',
-];
+const PASSED_ENV = new Set([
+  'PATH', 'PATHEXT', 'SYSTEMROOT', 'COMSPEC', 'WINDIR', 'SYSTEMDRIVE', 'PROGRAMDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)',
+  'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'APPDATA', 'LOCALAPPDATA', 'USER', 'USERNAME',
+  'LOGNAME', 'SHELL', 'TERM', 'NPM_CONFIG_CACHE', 'NODE_EXTRA_CA_CERTS', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
+]);
 
-function ciEnv(extra = {}) {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (STRIPPED_PREFIXES.some((prefix) => key.startsWith(prefix))) delete env[key];
+/** The fixed values CI's runner has. */
+const CI_FIXED_ENV = { CI: 'true', TZ: 'UTC' };
+
+export function ciEnv(extra = {}, source = process.env) {
+  const env = {};
+  // Windows spells PATH as `Path` and lower-case proxy variables are common: the match ignores case, the key keeps its spelling.
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== undefined && PASSED_ENV.has(key.toUpperCase())) env[key] = value;
   }
-  return { ...env, ...extra };
+  return { ...env, ...CI_FIXED_ENV, ...extra };
 }
 
 /** The CI steps, in ci.yml order. `shellText` is the literal `run:` value.

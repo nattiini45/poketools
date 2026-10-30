@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { QUIET_GIT_CONFIG, rmTree } from './temp-repo.mjs';
 import {
   CHANGED_PATHSPECS,
   expandPaths,
@@ -421,7 +422,7 @@ describe('file selection', () => {
 describe('run() against a scratch repo', () => {
   let root = null;
   afterEach(() => {
-    if (root) rmSync(root, { recursive: true, force: true });
+    if (root) rmTree(root);
     root = null;
   });
 
@@ -527,7 +528,7 @@ describe('run() against a scratch repo', () => {
   it('changed-files mode scans files added or modified since BASE, top-level src files included', () => {
     const dir = scratch({ 'src/components/b/Clean.tsx': files['src/components/b/Clean.tsx'] });
     const git = (...args) => {
-      const res = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+      const res = spawnSync('git', [...QUIET_GIT_CONFIG, ...args], { cwd: dir, encoding: 'utf8' });
       if (res.status !== 0) throw new Error(`git ${args.join(' ')}: ${res.stderr}`);
       return res.stdout.trim();
     };
@@ -557,7 +558,7 @@ describe('run() against a scratch repo', () => {
 
   it('changed-files mode exits 2 when BASE cannot be resolved', () => {
     const dir = scratch(files);
-    spawnSync('git', ['init', '-q'], { cwd: dir });
+    spawnSync('git', [...QUIET_GIT_CONFIG, 'init', '-q'], { cwd: dir });
     expect(run([], { root: dir, env: { BASE: 'no-such-ref' } }).exitCode).toBe(2);
   });
 });

@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CiDriftError, checkDrift, ciRunSteps } from '../verify-ci.mjs';
+import { CiDriftError, checkDrift, ciEnv, ciRunSteps } from '../verify-ci.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -188,5 +188,26 @@ describe('verify-ci: build step env', () => {
         new RegExp(`cannot parse this line.*${bad.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
       );
     }
+  });
+});
+
+describe('ciEnv: what a step inherits', () => {
+  it('passes only the allow-list, fixes CI and TZ, and lets the step env win', () => {
+    const env = ciEnv(
+      { DISCORD_CLIENT_ID: 'placeholder' },
+      {
+        Path: 'C:/bin',
+        HOME: '/home/dev',
+        https_proxy: 'http://proxy',
+        TZ: 'Europe/Berlin',
+        FORMAT_PACK: 'private',
+        RATE_LIMIT_STORE: 'memory',
+        NEXT_PUBLIC_WORLD_ASSETS_URL: 'https://example.invalid',
+        NODE_OPTIONS: '--max-old-space-size=1',
+        GAUNTLET_TESTS: '1',
+        CI: 'false',
+      },
+    );
+    expect(env).toEqual({ Path: 'C:/bin', HOME: '/home/dev', https_proxy: 'http://proxy', CI: 'true', TZ: 'UTC', DISCORD_CLIENT_ID: 'placeholder' });
   });
 });
