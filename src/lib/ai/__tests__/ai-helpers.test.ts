@@ -1,10 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSafeSseSender } from '../sse';
 import { modelAcceptsTemperature, modelSupportsEffort } from '../model-capabilities';
 import { describeAiFailure } from '../failure';
 import { ModelRejectedError, OutputCapError, RefusalError } from '../errors';
 import { normalizeAiSdkUsage, normalizeAnthropicUsage } from '../usage-log';
-import { CLAUDE_DEFAULT_FALLBACK_MODEL, CLAUDE_DEFAULT_MODEL, getClaudeFallbackModelId, getClaudeModelId, getKaleModelId } from '../constants';
+import {
+  CLAUDE_DEFAULT_EFFORT,
+  CLAUDE_DEFAULT_FALLBACK_MODEL,
+  CLAUDE_DEFAULT_MODEL,
+  getClaudeEffort,
+  getClaudeFallbackModelId,
+  getClaudeModelId,
+  parseClaudeEffort,
+} from '../constants';
 
 describe('createSafeSseSender', () => {
   async function open() {
@@ -74,9 +82,12 @@ describe('model capabilities', () => {
     ['claude-sonnet-4-6', true],
     ['claude-opus-4-6', true],
     ['claude-opus-4-5', true],
+    ['claude-opus-5-5', true],
     ['claude-sonnet-5-5', true],
     ['claude-haiku-5-5', true],
+    ['claude-haiku-5-5-20261001', true],
     ['claude-haiku-4-5-20251001', false],
+    ['claude-haiku-4-5', false],
     ['claude-sonnet-4-5', false],
     ['claude-3-5-sonnet-20241022', false],
     ['unknown', false],
@@ -86,22 +97,61 @@ describe('model capabilities', () => {
 });
 
 describe('model configuration', () => {
-  it('uses the code defaults and treats empty values as unset', () => {
+  it('defaults every text surface to the 5.5 pair and treats empty values as unset', () => {
     vi.stubEnv('CLAUDE_MODEL', '');
     vi.stubEnv('CLAUDE_FALLBACK_MODEL', '');
-    vi.stubEnv('KALE_MODEL', '');
-    expect(getClaudeModelId()).toBe(CLAUDE_DEFAULT_MODEL);
-    expect(getClaudeFallbackModelId()).toBe(CLAUDE_DEFAULT_FALLBACK_MODEL);
-    expect(getKaleModelId()).toBe(CLAUDE_DEFAULT_MODEL);
+    expect(CLAUDE_DEFAULT_MODEL).toBe('claude-sonnet-5-5');
+    expect(CLAUDE_DEFAULT_FALLBACK_MODEL).toBe('claude-haiku-5-5');
+    expect(getClaudeModelId()).toBe('claude-sonnet-5-5');
+    expect(getClaudeFallbackModelId()).toBe('claude-haiku-5-5');
     vi.unstubAllEnvs();
   });
 
-  it('resolves KALE_MODEL ahead of CLAUDE_MODEL', () => {
-    vi.stubEnv('CLAUDE_MODEL', 'claude-sonnet-5-5');
-    expect(getKaleModelId()).toBe('claude-sonnet-5-5');
-    vi.stubEnv('KALE_MODEL', 'claude-haiku-5-5');
-    expect(getKaleModelId()).toBe('claude-haiku-5-5');
+  it('reads CLAUDE_MODEL and CLAUDE_FALLBACK_MODEL at call time', () => {
+    vi.stubEnv('CLAUDE_MODEL', 'claude-opus-5-5');
+    vi.stubEnv('CLAUDE_FALLBACK_MODEL', 'claude-sonnet-5-5');
+    expect(getClaudeModelId()).toBe('claude-opus-5-5');
+    expect(getClaudeFallbackModelId()).toBe('claude-sonnet-5-5');
     vi.unstubAllEnvs();
+  });
+});
+
+describe('CLAUDE_API_EFFORT', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it.each(['low', 'medium', 'high', 'xhigh', 'max'])('accepts %s', (level) => {
+    vi.stubEnv('CLAUDE_API_EFFORT', level);
+    expect(getClaudeEffort()).toBe(level);
+  });
+
+  it('defaults to medium when unset or empty, without a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubEnv('CLAUDE_API_EFFORT', '');
+    expect(getClaudeEffort()).toBe('medium');
+    expect(CLAUDE_DEFAULT_EFFORT).toBe('medium');
+    expect(parseClaudeEffort(undefined)).toBe('medium');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('ignores CLAUDE_EFFORT, which belongs to the Claude Code CLI', () => {
+    vi.stubEnv('CLAUDE_EFFORT', 'max');
+    vi.stubEnv('CLAUDE_API_EFFORT', '');
+    expect(getClaudeEffort()).toBe('medium');
+  });
+
+  it('ignores case and surrounding whitespace', () => {
+    expect(parseClaudeEffort(' HIGH ')).toBe('high');
+  });
+
+  it('warns once and uses medium for an invalid value', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(parseClaudeEffort('turbo-effort')).toBe('medium');
+    expect(parseClaudeEffort('turbo-effort')).toBe('medium');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('CLAUDE_API_EFFORT');
   });
 });
 

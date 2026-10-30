@@ -18,7 +18,7 @@ import type {
   RoundForecastContent,
 } from '@/types/tournament-report';
 import type { RoundRecapPublishedData, RoundForecastPublishedData } from '@/types/discord';
-import { AI_ANALYSIS_STALE_MS, getKaleModelId } from './constants';
+import { AI_ANALYSIS_STALE_MS, getClaudeModelId } from './constants';
 
 /**
  * Generate a tournament report asynchronously (fire-and-forget).
@@ -45,7 +45,7 @@ export async function generateTournamentReportAsync(
       await deleteTournamentReport(tournamentId, roundId, reportType);
     }
 
-    const record = await createTournamentReport(tournamentId, roundId, reportType, getKaleModelId());
+    const record = await createTournamentReport(tournamentId, roundId, reportType, getClaudeModelId());
 
     // Run the Kale 2.0 pipeline (registry resolves the correct report definition)
     const pipelineResult = await runPipeline(reportType, { tournamentId, roundId });

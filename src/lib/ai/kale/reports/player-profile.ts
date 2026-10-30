@@ -1,3 +1,4 @@
+import { AI_MAX_TOKENS } from '../../constants';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
 import { getAllTimePlayerAggregates } from '@/lib/supabase/queries/aggregates';
@@ -159,7 +160,7 @@ function getPromptTasks(factPack: unknown, mode: PipelineMode): PromptTask[] {
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nRespond with JSON:\n{"headline":"","narrative":"","signature_pokemon":[{"pokemon_name":"","analysis":""}],"notable_wins":[{"context":""}],"team_evolution":""}`,
       userPrompt: `Player: ${fp.playerName}${fp.gymType ? ` (${fp.gymType}-type Gym Leader)` : ''}\nTournament: ${fp.tournamentName}\nRecord: ${record}\n\nSignature Pokémon:\n${pokemonList}\n\nNotable wins:\n${wins || 'None'}`,
-      maxTokens: 2048,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     }];
   }
 
@@ -169,28 +170,28 @@ function getPromptTasks(factPack: unknown, mode: PipelineMode): PromptTask[] {
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite a single headline sentence about this player's season.`,
       userPrompt: `${fp.playerName}${fp.gymType ? ` (${fp.gymType}-type)` : ''}: ${record}`,
-      maxTokens: 100,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'signature_analysis',
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nFor each signature Pokémon, write 1 sentence of analysis. Return as JSON array: [{"pokemon_name":"","analysis":""}]`,
       userPrompt: `Player: ${fp.playerName}\n${pokemonList}`,
-      maxTokens: 400,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'team_evolution',
       stage: 1,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite 2-3 sentences about this player's team-building tendencies based on their Pokémon usage.`,
       userPrompt: `Player: ${fp.playerName}${fp.gymType ? ` (${fp.gymType}-type Gym)` : ''}\n${pokemonList}`,
-      maxTokens: 200,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
     {
       id: 'profile_narrative',
       stage: 2,
       systemPrompt: `${PERSONA}\n\n${RULES}\n\nWrite a 2-4 paragraph player profile narrative. Cover their season arc, key Pokémon, and what defines their style.`,
       userPrompt: `Player: ${fp.playerName}${fp.gymType ? ` (${fp.gymType}-type Gym Leader)` : ''}\nRecord: ${record}\nMatches played: ${fp.totalMatches}\n\nSignature Pokémon:\n${pokemonList}\n\nNotable wins:\n${wins || 'None'}`,
-      maxTokens: 600,
+      maxTokens: AI_MAX_TOKENS.kaleTask,
     },
   ];
 }

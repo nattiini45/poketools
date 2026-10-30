@@ -34,8 +34,8 @@ import { OutputCapError, RefusalError, ModelRejectedError } from '../errors';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-const PRIMARY = 'claude-sonnet-4-6';
-const FALLBACK = 'claude-haiku-4-5-20251001';
+const PRIMARY = 'claude-sonnet-5-5';
+const FALLBACK = 'claude-haiku-5-5';
 
 function makeTextBlock(text: string) {
   return { type: 'text' as const, text };
@@ -115,6 +115,11 @@ describe('ai/client', () => {
     mockCreate.mockReset();
     mockStream.mockReset();
     vi.unstubAllEnvs();
+    // The defaults under test must not depend on the machine that runs them (a shell can export
+    // CLAUDE_API_EFFORT or CLAUDE_MODEL). An empty value means unset.
+    vi.stubEnv('CLAUDE_MODEL', '');
+    vi.stubEnv('CLAUDE_FALLBACK_MODEL', '');
+    vi.stubEnv('CLAUDE_API_EFFORT', '');
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -142,29 +147,38 @@ describe('ai/client', () => {
       expect(mockCreate).toHaveBeenCalledTimes(1);
     });
 
-    it('sends temperature 0.2 to Sonnet 4.6, a deadline signal and no SDK retries (the fallback model is the retry)', async () => {
+    it('sends effort medium, no temperature and no thinking to the default model, with a deadline signal and no SDK retries (the fallback model is the retry)', async () => {
       mockCreate.mockResolvedValueOnce(makeResponse('ok'));
 
       await complete('system prompt', 'user prompt');
 
       const [body, options] = mockCreate.mock.calls[0];
-      expect(body).toMatchObject({
+      expect(body).toEqual({
         model: PRIMARY,
         max_tokens: 4096,
         system: 'system prompt',
-        temperature: 0.2,
         messages: [{ role: 'user', content: 'user prompt' }],
+        output_config: { effort: 'medium' },
       });
-      expect(body).not.toHaveProperty('output_config');
       expect(options.signal).toBeInstanceOf(AbortSignal);
       expect(options.maxRetries).toBe(0);
+    });
+
+    it('keeps temperature 0.2 for an older model that accepts it', async () => {
+      mockCreate.mockResolvedValueOnce(makeResponse('ok', 'claude-sonnet-4-6'));
+
+      await complete('sys', 'user', { model: 'claude-sonnet-4-6' });
+
+      expect(mockCreate.mock.calls[0][0]).toMatchObject({ model: 'claude-sonnet-4-6', temperature: 0.2 });
     });
 
     it('omits temperature for model ids that reject it', async () => {
       for (const model of ['claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-4-7', 'claude-opus-5-5']) {
         mockCreate.mockResolvedValueOnce(makeResponse('ok', model));
         await complete('sys', 'user', { model });
-        expect(mockCreate.mock.calls.at(-1)![0]).not.toHaveProperty('temperature');
+        const body = mockCreate.mock.calls.at(-1)![0];
+        expect(body).not.toHaveProperty('temperature');
+        expect(body).not.toHaveProperty('thinking');
       }
     });
 
@@ -184,9 +198,14 @@ describe('ai/client', () => {
       await complete('sys', 'user', { maxTokens: 2000, effort: 'low' });
       expect(mockCreate.mock.calls[0][0]).toMatchObject({ max_tokens: 2000, output_config: { effort: 'low' } });
 
+      // Haiku 5.5 supports effort; Haiku 4.5 does not.
       mockCreate.mockResolvedValueOnce(makeResponse('ok', FALLBACK));
       await complete('sys', 'user', { model: FALLBACK, effort: 'low' });
-      expect(mockCreate.mock.calls[1][0]).not.toHaveProperty('output_config');
+      expect(mockCreate.mock.calls[1][0]).toMatchObject({ output_config: { effort: 'low' } });
+
+      mockCreate.mockResolvedValueOnce(makeResponse('ok', 'claude-haiku-4-5-20251001'));
+      await complete('sys', 'user', { model: 'claude-haiku-4-5-20251001', effort: 'low' });
+      expect(mockCreate.mock.calls[2][0]).not.toHaveProperty('output_config');
     });
 
     it('sums cache tokens into prompt_tokens and treats null cache counts as zero', async () => {
@@ -426,17 +445,19 @@ describe('ai/client', () => {
       expect(onChunk).toHaveBeenCalled();
     });
 
-    it('sends the request with a deadline signal, a retry budget and gated temperature', async () => {
+    it('sends the request with a deadline signal, a retry budget, effort and gated temperature', async () => {
       mockStream.mockReturnValueOnce(makeStream([textEvent('a')]));
       await completeStreaming('sys', 'user');
       const [body, options] = mockStream.mock.calls[0];
-      expect(body).toMatchObject({ model: PRIMARY, max_tokens: 4096, temperature: 0.2 });
+      expect(body).toMatchObject({ model: PRIMARY, max_tokens: 4096, output_config: { effort: 'medium' } });
+      expect(body).not.toHaveProperty('temperature');
+      expect(body).not.toHaveProperty('thinking');
       expect(options.signal).toBeInstanceOf(AbortSignal);
       expect(options.maxRetries).toBe(0);
 
-      mockStream.mockReturnValueOnce(makeStream([textEvent('a')], { model: 'claude-sonnet-5-5' }));
-      await completeStreaming('sys', 'user', undefined, undefined, { model: 'claude-sonnet-5-5' });
-      expect(mockStream.mock.calls[1][0]).not.toHaveProperty('temperature');
+      mockStream.mockReturnValueOnce(makeStream([textEvent('a')], { model: 'claude-sonnet-4-6' }));
+      await completeStreaming('sys', 'user', undefined, undefined, { model: 'claude-sonnet-4-6' });
+      expect(mockStream.mock.calls[1][0]).toMatchObject({ temperature: 0.2 });
     });
 
     it('takes the positional cap, and lets options.maxTokens override it', async () => {

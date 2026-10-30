@@ -530,7 +530,8 @@ describe('POST /api/ai/match-analysis — hardening', () => {
 
     expect(await readStream(await POST(makeRequest({ match_id: UUID_MATCH })))).toContain('"status":"done"');
 
-    expect(vi.mocked(completeStreaming).mock.calls[0][4]).toMatchObject({ jsonOutput: true });
+    // The cap leaves room for the model's thinking as well as the JSON.
+    expect(vi.mocked(completeStreaming).mock.calls[0][4]).toMatchObject({ jsonOutput: true, maxTokens: 16000 });
     // The row is created with the model that was asked, then updated to the responder.
     expect(createMatchAnalysis).toHaveBeenCalledWith(UUID_MATCH, expect.any(String));
     expect(updateMatchAnalysis).toHaveBeenCalledWith(

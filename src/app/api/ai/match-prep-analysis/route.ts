@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isSuperadmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { aiMatchPrepSchema, formatZodErrors } from '@/lib/validation';
-import { AI_ANALYSIS_STALE_MS, getClaudeModelId } from '@/lib/ai/constants';
+import { AI_ANALYSIS_STALE_MS, AI_MAX_TOKENS, getClaudeModelId } from '@/lib/ai/constants';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import {
   getMatchPrepAnalysis,
@@ -216,9 +216,10 @@ export async function POST(request: NextRequest) {
             withOutputLanguage(systemPrompt, contentLocale),
             userPrompt,
             emitHeartbeatIfNeeded,
-            4096,
-            // The answer is parsed as JSON, so one cut off at the output cap is a failure.
-            { jsonOutput: true, surface: 'match-prep-analysis' },
+            undefined,
+            // The answer is parsed as JSON, so one cut off at the output cap is a failure. The cap
+            // leaves room for the model's thinking as well as the JSON.
+            { jsonOutput: true, surface: 'match-prep-analysis', maxTokens: AI_MAX_TOKENS.analysis },
           );
           const generationTime = Date.now() - startTime;
 

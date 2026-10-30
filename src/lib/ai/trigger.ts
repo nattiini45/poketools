@@ -1,4 +1,5 @@
 import { anthropicApiKey } from './api-key';
+import { warnRemovedKaleSettings } from './kale/removed-settings';
 import { generateTournamentReportAsync } from './tournament-report-generator';
 import type { TournamentReportType } from '@/types/tournament-report';
 
@@ -11,7 +12,8 @@ export function triggerTournamentReport(
   roundId: string,
   reportType: TournamentReportType
 ): void {
-  if (!process.env.KALE_API_KEY && !anthropicApiKey()) return;
+  warnRemovedKaleSettings();
+  if (!anthropicApiKey()) return;
 
   generateTournamentReportAsync(tournamentId, roundId, reportType).catch((err) => {
     console.error(`[ai/trigger] Failed to trigger ${reportType}:`, err);
