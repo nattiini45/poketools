@@ -551,7 +551,8 @@ describe('installEgressGuard', () => {
     installEgressGuard();
     await expect(fetch('https://api.anthropic.com/v1/messages')).resolves.toBeInstanceOf(Response);
     await expect(fetch('https://example.supabase.co/rest/v1/matches')).rejects.toThrow(/blocked/);
-    await expect(fetch('http://127.0.0.1:54321/rest/v1/matches')).rejects.toThrow(/blocked/);
+    // A plain-HTTP local URL on purpose: the guard must block it. fetch is stubbed above, nothing is sent.
+    await expect(fetch('http://127.0.0.1:54321/rest/v1/matches')).rejects.toThrow(/blocked/); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request
     expect(seen).toEqual(['https://api.anthropic.com/v1/messages']);
   });
 });
