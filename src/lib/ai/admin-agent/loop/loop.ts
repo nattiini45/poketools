@@ -24,7 +24,7 @@ import type { ConversationRecord, Json, MessageRecord, NewRef, UsageMeters } fro
 import { toolUsesOf, textOf, toJson, type ToolUseBlock } from './blocks';
 import { loopCode } from './codes';
 import { LOOP_EVENTS, harnessEventMessage } from './harness';
-import { costMicro, DEFAULT_CONTEXT_WINDOW_TOKENS, estimateStepCostMicro, estimateTokens, maxOutputTokensFor, promptTokensOf } from './pricing';
+import { costMicro, DEFAULT_CONTEXT_WINDOW_TOKENS, estimateStepCostMicro, estimateTokens, estimateWarmStepCostMicro, maxOutputTokensFor, promptTokensOf } from './pricing';
 import { failureResult, serializeToolResult, toolResultBlock, type SerializedToolResult } from './tool-results';
 import { entryOf, type TranscriptEntry } from './transcript';
 import { safeSink } from './events';
@@ -115,6 +115,8 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
   let conversationSpend = await currentConversationSpend(run);
   /** The prompt (fresh, written and read) of the previous settled step of this turn: what the next step should read back. */
   let previousPrefix: number | null = null;
+  /** The measured meters and the prompt estimate of the previous settled step of this turn, for the warm reservation. */
+  let previousStep: { usage: UsageMeters; estimatedPromptTokens: number } | null = null;
   /** The lowest cache-read share of that prefix seen from step 2 on (see `cacheReadShare`). */
   let lowestCacheReadRatio: number | null = null;
 
@@ -149,7 +151,15 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     }
 
     // ── Reserve ─────────────────────────────────────────────────────
-    const estimate = estimateStepCostMicro(model, promptTokens, maxOutputTokens);
+    // Step 1 of a turn reserves the cold ceiling: the whole prompt as a 1 h cache write, since a cache miss after a human
+    // pause is the expensive case. A later step follows the previous one seconds apart, so what that step measured is in the
+    // cache: reserve it at the read price plus only the messages appended since (the same bytes-over-3.5 estimate on both
+    // sides, so the difference is the delta). The cold figure stays the ceiling.
+    const coldEstimate = estimateStepCostMicro(model, promptTokens, maxOutputTokens);
+    const estimate =
+      previousStep === null
+        ? coldEstimate
+        : Math.min(coldEstimate, estimateWarmStepCostMicro(model, previousStep.usage, promptTokens - previousStep.estimatedPromptTokens, maxOutputTokens));
     const reservation = await deps.store.usage
       .reserveUsage(request.adminId, {
         adminName: request.adminName,
@@ -230,10 +240,11 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     try {
       const ratio = diagnoseStep({ conversationId: conversation.id, model: stepResult.model || model, step, usage: stepResult.usage, previousPrefix, iterations: stepResult.iterations });
       if (ratio !== null) lowestCacheReadRatio = lowestCacheReadRatio === null ? ratio : Math.min(lowestCacheReadRatio, ratio);
-      previousPrefix = promptTokensOf(stepResult.usage);
     } catch {
       // Never fail a turn over a log line.
     }
+    previousPrefix = promptTokensOf(stepResult.usage);
+    previousStep = { usage: stepResult.usage, estimatedPromptTokens: promptTokens };
     emit({
       type: 'usage',
       step,

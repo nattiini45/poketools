@@ -407,6 +407,46 @@ describe('provenance of ids (plan 6.3)', () => {
   });
 });
 
+describe('the reservation estimate', () => {
+  it('reserves the cold ceiling for step 1 and a warm estimate for later steps of the turn', async () => {
+    const h = harness();
+    // A long history, so the prompt estimate (bytes over 3.5, about 60K tokens) is above what the scripted meters report.
+    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(200_000) }] });
+    h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+    h.tools.on('league_get', () => ({ ok: true, data: { rows: 'x'.repeat(2_000) } }));
+    h.port.script(
+      toolStep([{ name: 'league_get', id: 'toolu_a' }], { usage: { inputTokens: 500, cacheWrite1hTokens: 49_500, cacheReadTokens: 0 } }),
+      toolStep([{ name: 'league_get', id: 'toolu_b' }], { usage: { inputTokens: 300, cacheWrite1hTokens: 1_200, cacheReadTokens: 50_000 } }),
+      textStep('Done.', { usage: { inputTokens: 300, cacheWrite1hTokens: 1_200, cacheReadTokens: 51_200 } }),
+    );
+    await turn(h);
+    const [first, second, third] = h.fake.usage.filter((row) => row.purpose === 'turn').map((row) => row.reserved);
+    // Opus 5.5: the answer reserve is 8K tokens at $20 = 160 000 micro-dollars.
+    const answer = 8_000 * 20;
+    // Step 1 is the cold ceiling: the whole estimated prompt (above 55K tokens) at 8 per token.
+    expect(first).toBeGreaterThan(answer + 55_000 * 8);
+    // Step 2: the measured 50K prefix at 0.20 (10 000) plus the few thousand appended tokens at 8, far below a cold 50K x 8.
+    expect(second).toBeGreaterThanOrEqual(answer + 50_000 * 0.2);
+    expect(second).toBeLessThan(answer + 50_000 * 0.2 + 10_000 * 8);
+    expect(second).toBeLessThan(first / 2);
+    // Step 3 reads the 52 500 tokens step 2 left behind.
+    expect(third).toBeGreaterThanOrEqual(answer + 52_500 * 0.2);
+    expect(third).toBeLessThan(answer + 52_500 * 0.2 + 10_000 * 8);
+  });
+
+  it('never reserves more than the cold estimate, and a new turn starts cold again', async () => {
+    const h = harness();
+    h.port.script(textStep('One.', { usage: { cacheReadTokens: 200_000, inputTokens: 100 } }), textStep('Two.', { usage: { cacheReadTokens: 100, inputTokens: 100 } }));
+    await turn(h);
+    await turn(h, { kind: 'message', text: 'Again', clientMsgId: 'c2' });
+    const rows = h.fake.usage.filter((row) => row.purpose === 'turn');
+    // The second turn's first step saw a 200K previous measurement from the first turn and ignored it: it is a step 1.
+    expect(rows).toHaveLength(2);
+    expect(rows[1].reserved).toBeGreaterThan(0);
+    expect(rows[1].reserved).toBeLessThan(8_000 * 20 + 20_000 * 8);
+  });
+});
+
 describe('the cache regression signal', () => {
   const meters = (cacheRead: number, extra: { input?: number; write?: number } = {}) => ({ cacheReadTokens: cacheRead, inputTokens: extra.input ?? 300, cacheWrite1hTokens: extra.write ?? 700 });
   const twoSteps = (second: ReturnType<typeof meters>) => {
