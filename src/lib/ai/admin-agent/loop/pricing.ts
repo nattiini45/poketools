@@ -118,11 +118,24 @@ export function estimateTokens(text: string): number {
   return Math.ceil(Buffer.byteLength(text, 'utf8') / 3.5);
 }
 
-/**
- * The context window used for the "refuse a new turn at N% of the window" rule. Unverified for the 5.5 ids (spike S4
- * measures it; the research notes 1M), so it is the conservative 200k for every model unless the caller overrides.
- */
+/** The window assumed for a model that is not in `CONTEXT_WINDOWS` (an id a conversation row pinned earlier): the conservative 200k. */
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
+
+/**
+ * Context windows for the "refuse a new turn at N% of the window" rule, keyed like `TABLE`. Opus and Sonnet 5.5 list 1M
+ * (Models API `max_input_tokens`). Haiku 5.5 lists 1M too but is kept at 100k: that is the edge of its cheaper price card, so
+ * a Haiku conversation is refused before it can reach the long-prompt card.
+ */
+const CONTEXT_WINDOWS: ReadonlyArray<readonly [string, number]> = [
+  ['claude-opus-5-5', 1_000_000],
+  ['claude-sonnet-5-5', 1_000_000],
+  ['claude-haiku-5-5', LONG_PROMPT_TOKENS],
+];
+
+/** The context window the gate uses for `model`. */
+export function contextWindowFor(model: string): number {
+  return CONTEXT_WINDOWS.find(([prefix]) => matches(model, prefix))?.[1] ?? DEFAULT_CONTEXT_WINDOW_TOKENS;
+}
 
 /** The most output tokens a step may produce: 32k for Opus, 16k for Sonnet and other models, 4k for Haiku (plan 3.4). */
 export function maxOutputTokensFor(model: string): number {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { codesPendingInCatalog, isCatalogued, loopCode, LOOP_CODES, AdminAgentLoopError, plainParams } from '../codes';
 import { createEventStream, encodeSseEvent, safeSink } from '../events';
 import { HARNESS_MARKER, harnessEventMessage, harnessEventText, hasUnconsumedHarnessEvent, neutralizeAdminText, readHarnessEvent, stableStringify } from '../harness';
-import { DEFAULT_CONTEXT_WINDOW_TOKENS, LONG_PROMPT_TOKENS, costMicro, estimateStepCostMicro, estimateTokens, estimateWarmStepCostMicro, maxOutputTokensFor, priceOf, promptTokensOf, RESERVE_OUTPUT_TOKENS } from '../pricing';
+import { DEFAULT_CONTEXT_WINDOW_TOKENS, LONG_PROMPT_TOKENS, contextWindowFor, costMicro, estimateStepCostMicro, estimateTokens, estimateWarmStepCostMicro, maxOutputTokensFor, priceOf, promptTokensOf, RESERVE_OUTPUT_TOKENS } from '../pricing';
 import { composeDynamicState, localDate, stateData, storedStateHash } from '../state';
 import { MAX_TOOL_RESULT_BYTES, failureResult, serializeToolResult, toolResultBlock } from '../tool-results';
 import { sanitizeTitle } from '../titles';
@@ -228,6 +228,15 @@ describe('pricing', () => {
     expect(maxOutputTokensFor('claude-sonnet-5-5')).toBe(16_000);
     expect(maxOutputTokensFor('claude-haiku-5-5')).toBe(4096);
     expect(DEFAULT_CONTEXT_WINDOW_TOKENS).toBe(200_000);
+  });
+
+  it('sets the context window per model: 1M for Opus and Sonnet 5.5, 100k for Haiku, 200k for any other id', () => {
+    expect(contextWindowFor('claude-opus-5-5')).toBe(1_000_000);
+    expect(contextWindowFor('claude-opus-5-5-20261001')).toBe(1_000_000);
+    expect(contextWindowFor('claude-sonnet-5-5')).toBe(1_000_000);
+    expect(contextWindowFor('claude-haiku-5-5')).toBe(LONG_PROMPT_TOKENS);
+    expect(contextWindowFor('claude-opus-5')).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS);
+    expect(contextWindowFor('claude-opus-5-50')).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS);
   });
 });
 

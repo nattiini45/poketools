@@ -284,7 +284,7 @@ export interface LoopDeps {
   drift?(input: { adminId: AdminId; conversationId: string }): Promise<readonly string[]>;
   /** The channel the port renders harness events with; the loop needs it to strip the sentinel from admin text. */
   stateChannel: ProviderAdapterConfig['stateChannel'];
-  /** The model's context window for the "refuse at N%" rule; defaults to a conservative 200k (spike S4 measures the real one). */
+  /** Overrides the model's context window for the "refuse at N%" rule; unset, `contextWindowFor(model)` decides (1M for Opus and Sonnet 5.5). */
   contextWindowTokens?: number;
 }
 

@@ -24,7 +24,7 @@ import type { ConversationRecord, Json, MessageRecord, NewRef, UsageMeters } fro
 import { toolUsesOf, textOf, toJson, type ToolUseBlock } from './blocks';
 import { loopCode } from './codes';
 import { LOOP_EVENTS, harnessEventMessage } from './harness';
-import { costMicro, DEFAULT_CONTEXT_WINDOW_TOKENS, estimateStepCostMicro, estimateTokens, estimateWarmStepCostMicro, maxOutputTokensFor, promptTokensOf } from './pricing';
+import { contextWindowFor, costMicro, estimateStepCostMicro, estimateTokens, estimateWarmStepCostMicro, maxOutputTokensFor, promptTokensOf } from './pricing';
 import { failureResult, serializeToolResult, toolResultBlock, type SerializedToolResult } from './tool-results';
 import { entryOf, type TranscriptEntry } from './transcript';
 import { safeSink } from './events';
@@ -145,7 +145,7 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
 
     // ── Context size ────────────────────────────────────────────────
     const promptTokens = estimatePromptTokens(run, sentinel);
-    if (promptTokens > ((deps.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS) * limits.contextRefusePercent) / 100) {
+    if (promptTokens > ((deps.contextWindowTokens ?? contextWindowFor(model)) * limits.contextRefusePercent) / 100) {
       emit({ type: 'error', code: 'agent_context_full', reason: 'context_over_limit' });
       return result('context', false);
     }

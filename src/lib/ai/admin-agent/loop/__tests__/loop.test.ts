@@ -728,8 +728,9 @@ describe('model failures', () => {
   });
 
   it('refuses a turn when the conversation is over the context threshold', async () => {
+    // 50% of the 1M window is 500K estimated tokens (bytes over 3.5): 1.9M bytes is over it.
     const h = harness({ env: { ADMIN_AGENT_CONTEXT_REFUSE_PERCENT: '50' } });
-    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(400_000) }] });
+    h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(1_900_000) }] });
     h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
     h.port.script(textStep('never'));
     const { events, outcome } = await turn(h);
@@ -737,5 +738,38 @@ describe('model failures', () => {
     expect(h.port.inputs).toHaveLength(0);
     expect(errorOf(events)).toMatchObject({ code: 'agent_context_full' });
     expect(h.fake.usage).toHaveLength(0);
+  });
+
+  describe('the window follows the conversation model, at the same share of it (80% by default)', () => {
+    // 800K bytes is about 230K estimated tokens: over 80% of a 200K window (160K), far under 80% of 1M (800K).
+    const run = async (model: string, bytes: number) => {
+      const h = harness({ conversation: { model } });
+      h.fake.seed({ role: 'user', kind: 'chat', content: [{ type: 'text', text: 'x'.repeat(bytes) }] });
+      h.fake.seed({ role: 'assistant', kind: 'chat', content: [{ type: 'text', text: 'ok' }] });
+      h.port.script(textStep('answered'));
+      return turn(h);
+    };
+
+    it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5-20261001'])('lets %s run a prompt the old 200k window would have refused', async (model) => {
+      const { outcome } = await run(model, 800_000);
+      expect(outcome.reason).toBe('completed');
+    });
+
+    it.each(['claude-opus-5-5', 'claude-sonnet-5-5'])('still refuses %s at 80%% of 1M (800K estimated tokens)', async (model) => {
+      const { outcome, events } = await run(model, 3_000_000);
+      expect(outcome.reason).toBe('context');
+      expect(errorOf(events)).toMatchObject({ code: 'agent_context_full' });
+    });
+
+    it('keeps Haiku at 100k, so it is refused before the long-prompt card (80K estimated tokens)', async () => {
+      expect((await run('claude-haiku-5-5', 200_000)).outcome.reason).toBe('completed');
+      expect((await run('claude-haiku-5-5', 400_000)).outcome.reason).toBe('context');
+    });
+
+    it('treats a model the table does not know (a pinned older id) as the conservative 200k, and never rejects the conversation', async () => {
+      const resumed = await run('claude-opus-5', 400_000);
+      expect(resumed.outcome.reason).toBe('completed');
+      expect((await run('claude-opus-5', 800_000)).outcome.reason).toBe('context');
+    });
   });
 });
