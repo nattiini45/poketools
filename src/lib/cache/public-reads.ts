@@ -513,7 +513,7 @@ const tournamentParticipants = cache((tournamentId: string) =>
 );
 
 const tournamentMatchRecords = cache((tournamentId: string) =>
-  cachedRead(tournamentSpec('tournament-match-records', tournamentId), () =>
+  cachedRead(tournamentSpec('tournament-match-records-v2', tournamentId), () =>
     getCompletedMatchRecords(tournamentId),
   ),
 );

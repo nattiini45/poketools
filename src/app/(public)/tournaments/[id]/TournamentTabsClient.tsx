@@ -86,8 +86,7 @@ export default function TournamentTabsClient({
     const map: Record<string, string[]> = {};
     for (const match of matches) {
       if (match.status !== 'completed') continue;
-      const key = `${match.player_1_id}::${match.player_2_id}`;
-      map[key] = match.games.map((g) => g.winner_id ?? '');
+      map[match.id] = match.games.map((g) => g.winner_id ?? '');
     }
     return map;
   }, [matches]);

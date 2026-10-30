@@ -11,7 +11,7 @@ export interface StandingsOptions {
   pointsPerDraw?: number;
   /** Battle stats for computing kill differential and games played */
   battleStats?: TournamentBattleStat[];
-  /** Game data: map of match_id → array of game winner IDs */
+  /** Game data: map of match id → array of game winner IDs (one entry per game). */
   gamesByMatch?: Record<string, string[]>;
   /** Only include matches up to this round number */
   maxRound?: number;
@@ -131,8 +131,8 @@ export function computeStandings(
   // Compute games played from game data
   if (gamesByMatch) {
     for (const match of filteredMatches) {
-      const matchKey = `${match.player_1_id}::${match.player_2_id}`;
-      const games = gamesByMatch[matchKey];
+      // Keyed by match id: a rematch of the same pair must count its own games, not overwrite the first series (#45).
+      const games = match.match_id === undefined ? undefined : gamesByMatch[match.match_id];
       if (games) {
         const s1 = standingMap.get(match.player_1_id);
         const s2 = standingMap.get(match.player_2_id);

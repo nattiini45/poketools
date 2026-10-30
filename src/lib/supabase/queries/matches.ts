@@ -1817,7 +1817,7 @@ export async function getCompletedMatchRecords(
     (from, to) =>
       supabase
         .from('matches')
-        .select('player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .select('id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
         .eq('tournament_id', tournamentId)
         .eq('status', 'completed')
         .order('created_at', { ascending: true })
@@ -1827,6 +1827,7 @@ export async function getCompletedMatchRecords(
   );
 
   return rows.map((row) => ({
+    match_id: row.id,
     player_1_id: row.player_1_id,
     player_2_id: row.player_2_id,
     winner_id: row.winner_id,
@@ -1848,7 +1849,7 @@ export async function getCompletedMatchRecordsBatch(
     (from, to) =>
       supabase
         .from('matches')
-        .select('tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .select('id, tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
         .in('tournament_id', tournamentIds)
         .eq('status', 'completed')
         .order('created_at', { ascending: true })
@@ -1860,6 +1861,7 @@ export async function getCompletedMatchRecordsBatch(
   const result = new Map<string, MatchRecord[]>();
   for (const row of rows) {
     const record: MatchRecord = {
+      match_id: row.id,
       player_1_id: row.player_1_id,
       player_2_id: row.player_2_id,
       winner_id: row.winner_id,

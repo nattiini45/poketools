@@ -51,6 +51,7 @@ function completedRows(count: number, tournamentId = T, offset = 0): FakeRow[] {
 
 function expectedRecord(i: number) {
   return {
+    match_id: idOf(i),
     player_1_id: `pl-${i}-a`,
     player_2_id: `pl-${i}-b`,
     winner_id: `pl-${i}-a`,
@@ -95,7 +96,7 @@ describe('getCompletedMatchRecords', () => {
     ]);
     for (const q of f.queries) {
       expect(q.table).toBe('matches');
-      expect(q.select).toBe('player_1_id, player_2_id, winner_id, rounds!inner( round_number )');
+      expect(q.select).toBe('id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )');
       expect(q.limit).toBeNull();
       expect(q.orders).toEqual([
         { column: 'created_at', ascending: true },
