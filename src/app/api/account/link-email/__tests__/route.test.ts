@@ -28,6 +28,7 @@ vi.mock('@/lib/supabase/queries/players', () => ({
 import { POST } from '@/app/api/account/link-email/route';
 import { isReservedSuperadminEmail, requirePlayer } from '@/lib/auth/helpers';
 import { getPlayerById, linkAuthUserToPlayer } from '@/lib/supabase/queries/players';
+import { resetMemoryRateLimits } from '@/lib/utils/rate-limit';
 
 const mockPlayer: Player = {
   id: 'player-1',
@@ -62,13 +63,31 @@ const VALID_BODY = { email: 'ash@example.com', password: 'pikachu123' };
 describe('POST /api/account/link-email', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The limiter's in-memory store: the real counting, without a database.
+    vi.stubEnv('RATE_LIMIT_STORE', 'memory');
+    resetMemoryRateLimits();
     vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'player-1' } as Awaited<ReturnType<typeof requirePlayer>>);
     vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
     vi.mocked(isReservedSuperadminEmail).mockReturnValue(false);
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     delete process.env.SUPERADMIN_DISCORD_ID;
+  });
+
+  it('limits attempts per player before reading the body, and per inbox whatever the alias (#36)', async () => {
+    signUp.mockResolvedValue({ data: { user: { id: 'auth-1', identities: [] } }, error: null });
+    for (let i = 0; i < 3; i += 1) expect((await POST(makeRequest({ ...VALID_BODY, email: `ash+${i}@example.com` }))).status).toBe(409);
+    // The fourth try at the same inbox is refused before GoTrue is asked.
+    const inbox = await POST(makeRequest({ ...VALID_BODY, email: 'Ash+other@Example.com' }));
+    expect(inbox.status).toBe(429);
+    expect(signUp).toHaveBeenCalledTimes(3);
+    // The fifth attempt of this player still counts; the sixth is refused whatever it says.
+    await POST(makeRequest({ ...VALID_BODY, email: 'misty@example.com' }));
+    const player = await POST(makeRequest({ ...VALID_BODY, email: 'brock@example.com' }));
+    expect(player.status).toBe(429);
+    expect(signUp).toHaveBeenCalledTimes(4);
   });
 
   it('returns 409 when an email login is already linked', async () => {

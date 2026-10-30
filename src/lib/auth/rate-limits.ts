@@ -15,6 +15,7 @@
  */
 import {
   emailIdentity,
+  rateLimitIpIdentity,
   findClientIp,
   firstRateLimitDenial,
   UNKNOWN_CLIENT_IP,
@@ -93,7 +94,7 @@ export async function checkAuthRateLimit(
   const checks: RateLimitCheck[] = [];
 
   if (ip !== null) {
-    checks.push({ bucket: `${action}-ip`, identity: ip, options: profile.ip });
+    checks.push({ bucket: `${action}-ip`, identity: rateLimitIpIdentity(ip), options: profile.ip });
   } else if (emailCheck) {
     // No client address header (the production host always sets one). Do not
     // put every such request into one site-wide IP bucket: with a 10/hour

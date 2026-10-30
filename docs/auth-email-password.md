@@ -64,7 +64,13 @@ Project: your Supabase project (`<project-ref>`)
   is set; both are UNIQUE (migration `20260611120000_email_password_auth.sql`).
 - Signup/resend/forgot responses are enumeration-safe (generic success even
   for already-registered/unknown emails). The authenticated link-email route
-  may return explicit duplicate errors.
+  may return explicit duplicate errors (`email_already_registered`, with a
+  link to resend the confirmation email): every attempt counts against 5 per
+  hour per player and 3 per hour per inbox first, so it cannot be used to
+  test addresses in bulk.
+- The sign-in page's `callbackUrl` is only ever a path on this site
+  (`sanitizeCallbackUrl` in `src/lib/auth/safe-callback-url.ts`): `//host`,
+  `/\host`, whitespace, control characters and schemes fall back to `/`.
 - `auth_user_id` is redacted from public DTOs alongside `discord_id`
   (`PublicPlayer`, participant endpoints, broadcast standings).
 - Deleting a player cascades to `auth.users` via `admin.deleteUser`

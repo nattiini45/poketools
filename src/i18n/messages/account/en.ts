@@ -25,6 +25,7 @@ export default {
     emailLinked: 'Email login added. Check your inbox to confirm the address before using it to sign in.',
     loadFailed: 'Failed to load linked accounts.',
     linkEmailFailed: 'Failed to link email login. Please try again.',
+    resendVerification: 'Is it your address and still unconfirmed? Send the confirmation email again',
     linkDiscordFailed: 'Failed to start Discord linking. Please try again.',
   },
   agentSettings: {

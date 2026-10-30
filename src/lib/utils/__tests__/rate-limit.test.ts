@@ -9,8 +9,10 @@ import {
   emailIdentity,
   findClientIp,
   getClientIp,
+  getClientRateLimitIp,
   MEMORY_STORE_MAX_KEYS,
   RATE_LIMIT_RPC_TIMEOUT_MS,
+  rateLimitIpIdentity,
   rateLimitKey,
   rateLimitStore,
   RateLimitUnavailableError,
@@ -169,6 +171,39 @@ describe('getClientIp', () => {
 describe('emailIdentity', () => {
   it('normalizes case and whitespace', () => {
     expect(emailIdentity('  Alice@Example.COM ')).toBe('alice@example.com');
+  });
+
+  it('keys one inbox once: a +tag is dropped, and Gmail ignores dots and its googlemail alias (#33)', () => {
+    expect(emailIdentity('alice+spam1@example.com')).toBe('alice@example.com');
+    expect(emailIdentity('A.L.I.C.E+x@GoogleMail.com')).toBe('alice@gmail.com');
+    expect(emailIdentity('a.lice@gmail.com')).toBe('alice@gmail.com');
+    // Dots matter elsewhere, and an address that is all tag or has no @ is left alone.
+    expect(emailIdentity('a.lice@example.com')).toBe('a.lice@example.com');
+    expect(emailIdentity('+tag@example.com')).toBe('+tag@example.com');
+    expect(emailIdentity('not-an-address')).toBe('not-an-address');
+  });
+});
+
+describe('rateLimitIpIdentity', () => {
+  it('keys an IPv6 address on its /64, in any spelling (#33)', () => {
+    expect(rateLimitIpIdentity('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2::/64');
+    expect(rateLimitIpIdentity('2001:0DB8:0001:0002::1')).toBe('2001:db8:1:2::/64');
+    expect(rateLimitIpIdentity('[2001:db8:1:2::ffff]')).toBe('2001:db8:1:2::/64');
+    expect(rateLimitIpIdentity('2001:db8::1')).toBe('2001:db8:0:0::/64');
+    expect(rateLimitIpIdentity('fe80::1%eth0')).toBe('fe80:0:0:0::/64');
+  });
+
+  it('leaves IPv4, IPv4-mapped IPv6 and anything unparsable as it is', () => {
+    expect(rateLimitIpIdentity('203.0.113.9')).toBe('203.0.113.9');
+    expect(rateLimitIpIdentity('::ffff:203.0.113.9')).toBe('::ffff:203.0.113.9');
+    expect(rateLimitIpIdentity('1:2:3')).toBe('1:2:3');
+    expect(rateLimitIpIdentity('unknown')).toBe('unknown');
+  });
+
+  it('is what the request helper and the public limit key on', async () => {
+    const ipv6 = { headers: new Headers({ 'x-forwarded-for': '2001:db8:1:2::abcd' }) };
+    expect(getClientRateLimitIp(ipv6)).toBe('2001:db8:1:2::/64');
+    expect(getClientRateLimitIp({ headers: new Headers() })).toBe('unknown');
   });
 });
 

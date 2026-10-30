@@ -13,7 +13,7 @@ import { newRulesetDocument } from '@/lib/ruleset-studio/document';
 import { createPublished } from '@/lib/ruleset-studio/library';
 import { SEED_FORMAT_IDS } from '@/lib/pkmn/seed-format-ids';
 import { secretsEqual } from '@/lib/utils/crypto';
-import { checkRateLimit, getClientIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
+import { checkRateLimit, getClientRateLimitIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { SessionPlayer } from '@/types/auth';
 import type { ApiResult } from '@/types/api';
 
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const rate = await checkRateLimit('bootstrap', getClientIp(request), BOOTSTRAP_RATE_LIMIT);
+      const rate = await checkRateLimit('bootstrap', getClientRateLimitIp(request), BOOTSTRAP_RATE_LIMIT);
       if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
 
       const body = await readJsonBody(request);

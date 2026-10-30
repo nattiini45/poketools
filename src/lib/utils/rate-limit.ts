@@ -297,6 +297,45 @@ export function getClientIp(request: Pick<Request, 'headers'>): string {
   return findClientIp(request) ?? UNKNOWN_CLIENT_IP;
 }
 
+/** The eight hextets of an IPv6 address, or null when it is not one. */
+function ipv6Hextets(address: string): string[] | null {
+  const bare = address.replace(/^\[|\]$/g, '').split('%')[0];
+  if (!bare.includes(':') || !/^[0-9a-fA-F:.]+$/.test(bare)) return null;
+  const halves = bare.split('::');
+  if (halves.length > 2) return null;
+  const part = (text: string): string[] => (text === '' ? [] : text.split(':'));
+  const head = part(halves[0]);
+  const tail = halves.length === 2 ? part(halves[1]) : [];
+  // An embedded IPv4 tail (`::ffff:1.2.3.4`) counts as two hextets.
+  const last = (halves.length === 2 ? tail : head).at(-1);
+  const v4 = last !== undefined && last.includes('.') ? 1 : 0;
+  const missing = 8 - head.length - tail.length - v4;
+  if (halves.length === 1 ? missing !== 0 : missing < 0) return null;
+  const all = [...head, ...Array.from({ length: halves.length === 2 ? missing : 0 }, () => '0'), ...tail];
+  return all.every((hextet) => hextet.includes('.') || /^[0-9a-fA-F]{1,4}$/.test(hextet)) ? all : null;
+}
+
+/**
+ * The identity a per-IP limit is keyed on (issue #33). One IPv6 host commonly holds a whole /64, so keying on the full
+ * address lets it reset a limit by changing the low bits: an IPv6 address counts as its /64 prefix. IPv4, an IPv4-mapped
+ * IPv6 address and anything that does not parse stay as they are. Audit fields keep the raw address (`findClientIp`).
+ */
+export function rateLimitIpIdentity(ip: string): string {
+  const hextets = ipv6Hextets(ip);
+  if (hextets === null) return ip;
+  if (hextets.at(-1)?.includes('.')) return ip;
+  return `${hextets
+    .slice(0, 4)
+    .map((hextet) => hextet.toLowerCase().replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
+}
+
+/** {@link getClientIp} as a rate-limit identity ({@link rateLimitIpIdentity}). */
+export function getClientRateLimitIp(request: Pick<Request, 'headers'>): string {
+  const ip = findClientIp(request);
+  return ip === null ? UNKNOWN_CLIENT_IP : rateLimitIpIdentity(ip);
+}
+
 /**
  * Per-IP limit of a public route (`/api/proxy-image`, `/api/replay-frames`,
  * `/api/broadcast/recap`, the `/api/calc/*` routes).
@@ -317,7 +356,7 @@ export async function checkPublicRateLimit(
   options: RateLimitOptions,
 ): Promise<RateLimitResult> {
   const ip = findClientIp(request);
-  if (ip !== null) return checkRateLimit(bucket, ip, options);
+  if (ip !== null) return checkRateLimit(bucket, rateLimitIpIdentity(ip), options);
   if (rateLimitStore() === 'memory') {
     assertValidCall(bucket, options);
     return { allowed: true, remaining: options.limit, retryAfterSeconds: 0 };
@@ -326,9 +365,27 @@ export async function checkPublicRateLimit(
   return checkRateLimit(bucket, UNKNOWN_CLIENT_IP, options);
 }
 
-/** Normalized email identity for per-inbox limits (trimmed, lower-cased). */
+const DOTLESS_DOMAINS: Readonly<Record<string, string>> = { 'gmail.com': 'gmail.com', 'googlemail.com': 'gmail.com' };
+
+/**
+ * The inbox an address delivers to, for per-inbox limits (issue #33): trimmed and lower-cased, a `+tag` dropped, and for
+ * Gmail the dots of the local part dropped and `googlemail.com` folded into `gmail.com`. Only the limiter key changes; the
+ * address itself is stored and mailed as the person typed it.
+ */
 export function emailIdentity(email: string): string {
-  return email.trim().toLowerCase();
+  const lower = email.trim().toLowerCase();
+  const at = lower.lastIndexOf('@');
+  if (at <= 0) return lower;
+  let local = lower.slice(0, at);
+  let domain = lower.slice(at + 1);
+  const plus = local.indexOf('+');
+  if (plus > 0) local = local.slice(0, plus);
+  const folded = DOTLESS_DOMAINS[domain];
+  if (folded !== undefined) {
+    domain = folded;
+    local = local.replaceAll('.', '');
+  }
+  return `${local}@${domain}`;
 }
 
 export interface RateLimitCheck {

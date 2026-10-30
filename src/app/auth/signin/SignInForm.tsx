@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { sanitizeCallbackUrl } from '@/lib/auth/safe-callback-url';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import Button from '@/components/ui/Button';
@@ -50,7 +51,8 @@ export default function SignInForm({ callbackUrl, initialErrorCode }: SignInForm
         return;
       }
       // Full navigation so the server-rendered session is picked up
-      window.location.assign(callbackUrl);
+      // Checked again here: the prop is the only thing between the query string and the browser's navigation.
+      window.location.assign(sanitizeCallbackUrl(callbackUrl));
     } finally {
       setLoading(false);
     }
@@ -84,7 +86,7 @@ export default function SignInForm({ callbackUrl, initialErrorCode }: SignInForm
         type="button"
         variant="secondary"
         className="w-full"
-        onClick={() => signIn('discord', { callbackUrl })}
+        onClick={() => signIn('discord', { callbackUrl: sanitizeCallbackUrl(callbackUrl) })}
       >
         {t('signIn.discord')}
       </Button>
