@@ -406,6 +406,8 @@ describe('titles', () => {
     h.port.completeExtra = { rawFinishReason: 'end_turn', finishReason: 'stop', stopReason: 'end_turn' };
     await turn(h);
     expect(h.fake.usage.find((r) => r.purpose === 'title')?.stopReason).toBe('end_turn');
+    // A normal end writes the title.
+    expect(h.fake.conversation.title).not.toBeNull();
 
     // A port that says nothing leaves it unknown instead of claiming an ordinary end.
     const silent = harness({ conversation: { title: null } });

@@ -9,7 +9,7 @@
  *
  * The table is also the allowlist of model ids the configuration accepts (`PRICED_MODEL_IDS`, used by `env.ts`): a new id
  * is added here together with its price row, a `CONTEXT_WINDOWS` row (none means the conservative 200k), a
- * `maxOutputTokensFor` tier where needed, the id lists the tests pin (`env.test.ts`, `units.test.ts`) and a contract-test case. A conversation row can still pin an id that is not
+ * `maxOutputTokensFor` tier where needed, a `LONG_PROMPT` row where the model has a different above-100K card, the id lists the tests pin (`env.test.ts`, `units.test.ts`) and a contract-test case. A conversation row can still pin an id that is not
  * in the table (it is never rejected after the fact); such a model is priced at the highest price of every column, which
  * is only a stricter cap while the real rate is not above those maxima. A real run reads the actual meters from the API
  * response (`UsageMeters`); the table is only used to turn them into money and to reserve before a call.

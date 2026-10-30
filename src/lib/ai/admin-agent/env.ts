@@ -37,7 +37,10 @@ type EnvSource = Record<string, string | undefined>;
  */
 const MODEL_ID = modelIdPattern(PRICED_MODEL_IDS);
 
-/** The allowlist as a regex: each id escaped, an optional real calendar-date suffix (`-20YYMMDD`). */
+/**
+ * The allowlist as a regex: each id escaped, an optional date-shaped suffix (`-20YYMMDD`, month 01-12, day 01-31;
+ * the day is not checked against its month, so a typo like 20260230 still passes).
+ */
 function modelIdPattern(ids: readonly string[]): RegExp {
   if (ids.length === 0) throw new Error('[admin-agent] the pricing table names no model');
   const escaped = ids.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
