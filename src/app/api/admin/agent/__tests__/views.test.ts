@@ -39,6 +39,25 @@ describe('projectTranscript', () => {
     expect(JSON.stringify(items)).not.toMatch(/private chain|"sig"|thinking/);
   });
 
+  it('hides the prose of a refused step but keeps its tool lines, and reads old rows by their stop reason', () => {
+    const refused = (seq: number, rest: Record<string, unknown>) =>
+      msg(seq, 'assistant', 'chat', {
+        content: [{ type: 'text', text: 'I will start by' }, { type: 'tool_use', id: `t${seq}`, name: 'plan_set', input: {} }],
+        ...rest,
+      });
+    const items = projectTranscript([
+      msg(1, 'user', 'chat', { content: [{ type: 'text', text: 'hello' }] }),
+      refused(2, { ui: { text: 'I will start by', tool_calls: [{ id: 't2', name: 'plan_set' }], refused: true, refusal_category: 'cyber' } }),
+      msg(3, 'user', 'tool_results', { content: [{ type: 'tool_result', tool_use_id: 't2', content: '{}', is_error: true }], ui: { results: [{ tool_use_id: 't2', name: 'plan_set', ok: false, code: 'agent_refused' }] } }),
+      // A row stored before the flag existed: the stop reason column says the same.
+      refused(4, { ui: { text: 'I will start by', tool_calls: [{ id: 't4', name: 'plan_set' }] }, stop_reason: 'refusal' }),
+      msg(5, 'assistant', 'chat', { content: [{ type: 'text', text: 'Here is the real answer.' }], ui: { text: 'Here is the real answer.', tool_calls: [] }, stop_reason: 'end_turn' }),
+    ]);
+    expect(items.filter((i) => i.type === 'assistant').map((i) => (i as { text: string | null }).text)).toEqual(['Here is the real answer.']);
+    expect(items.filter((i) => i.type === 'tool').map((i) => (i as { id: string }).id)).toEqual(['t2', 't4']);
+    expect(JSON.stringify(items)).not.toMatch(/cyber|refusal_category|I will start by/);
+  });
+
   it('leaves a tool pending until its result is stored', () => {
     const items = projectTranscript([msg(1, 'assistant', 'chat', { content: [{ type: 'tool_use', id: 'a', name: 'league_get', input: {} }], ui: { text: '', tool_calls: [{ id: 'a', name: 'league_get' }] } })]);
     expect(items).toEqual([{ type: 'tool', seq: 1, id: 'a', name: 'league_get', status: 'pending', code: null, proposalId: null }]);

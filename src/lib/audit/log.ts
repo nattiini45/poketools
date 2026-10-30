@@ -131,6 +131,7 @@ export type AuditAction =
   | 'agent.step.unknown'
   | 'agent.draft.write'
   | 'agent.budget.block'
+  | 'agent.model.refusal'
   // Actions of a pack extension's own routes (docs/format-packs.md, "Pack extensions"). They have
   // no `auditActions` label: the extension labels them (`auditActionLabels`, localized), and the
   // audit log humanizes any it leaves out (`auditActionLabel`).

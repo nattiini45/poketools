@@ -135,6 +135,7 @@ const auditActions = {
   agent__step__unknown: 'Assistant step with unknown outcome',
   agent__draft__write: 'Assistant saved a draft',
   agent__budget__block: 'Assistant stopped by its usage limit',
+  agent__model__refusal: 'Assistant request declined by the model',
 } as const satisfies Record<AuditActionKey, string>;
 
 export default {

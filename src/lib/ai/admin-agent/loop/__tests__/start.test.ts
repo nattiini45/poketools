@@ -400,6 +400,33 @@ describe('titles', () => {
     expect(row).toMatchObject({ settled: true, model: 'claude-haiku-5-5' });
   });
 
+  it('settles the title call with the stop reason the port reported, never a hard-coded one', async () => {
+    const h = harness({ conversation: { title: null } });
+    h.port.script(textStep('Sure.'));
+    h.port.completeExtra = { rawFinishReason: 'end_turn', finishReason: 'stop', stopReason: 'end_turn' };
+    await turn(h);
+    expect(h.fake.usage.find((r) => r.purpose === 'title')?.stopReason).toBe('end_turn');
+
+    // A port that says nothing leaves it unknown instead of claiming an ordinary end.
+    const silent = harness({ conversation: { title: null } });
+    silent.port.script(textStep('Sure.'));
+    await turn(silent);
+    expect(silent.fake.usage.find((r) => r.purpose === 'title')?.stopReason).toBe('unknown');
+  });
+
+  it('writes no title from a call that was refused or cut off, but still settles and bills it', async () => {
+    for (const [stopReason, raw] of [['refusal', 'refusal'], ['max_tokens', 'max_tokens']] as const) {
+      const h = harness({ conversation: { title: null } });
+      h.port.script(textStep('Sure.'));
+      h.port.completeText = 'A perfectly fine title';
+      h.port.completeExtra = { stopReason, rawFinishReason: raw };
+      const { outcome } = await turn(h);
+      expect(outcome.reason).toBe('completed');
+      expect(h.fake.conversation.title).toBeNull();
+      expect(h.fake.usage.find((r) => r.purpose === 'title')).toMatchObject({ settled: true, stopReason: raw });
+    }
+  });
+
   it('writes nothing after a failed turn or when a title exists', async () => {
     const failed = harness({ conversation: { title: null } });
     failed.port.script(new Error('boom'));

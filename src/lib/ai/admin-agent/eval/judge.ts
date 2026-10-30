@@ -11,11 +11,14 @@
  * The call goes through the harness's own model port (`complete`, the AI SDK provider setup of the live run, Haiku 5.5 at
  * low effort), so it uses the same key, the same pricing table and the same `fetch` as every other live call, and the
  * eval's egress guard (`host-guard.ts`) applies to it: only the model API host is reachable. The verdict is a JSON object
- * in plain text, parsed and validated here; no forced tool choice and no provider-specific structured-output mode is
- * involved, because the 5.5 models answer 400 to a forced tool choice.
+ * in plain text, parsed and validated here, not requested through `output_config.format`. (That mode is not a forced tool
+ * choice, so the 5.5 models would accept it; it is left out because a schema cannot enforce that the quote is copied
+ * character for character, which the grader checks itself, and the SDK's object helper throws on a malformed answer.) No
+ * forced tool choice is involved either, which the 5.5 models answer with a 400.
  *
  * It never throws: a failed call, an unreadable answer or a refused request is a verdict of "no rescue" with a short
- * machine reason, never a provider message.
+ * machine reason, never a provider message. A call that ended on `max_tokens` or `refusal` reports that as the reason
+ * (its text is not read), so a truncated answer is not mistaken for a model that wrote bad JSON.
  */
 import { z } from 'zod';
 import { costMicro } from '../loop/pricing';
@@ -45,7 +48,7 @@ export interface JudgeInput {
 
 export interface JudgeOutcome {
   verdict: JudgeVerdict | null;
-  /** Why there is no verdict: a port error kind, or `unparseable`. Null with a verdict. */
+  /** Why there is no verdict: a port error kind, `max_tokens`, `refusal` or `unparseable`. Null with a verdict. */
   error: string | null;
   costUsdMicro: number;
 }
@@ -108,6 +111,7 @@ export function createPortJudge(port: AdminModelPort, options: PortJudgeOptions 
           timeoutMs: options.timeoutMs ?? JUDGE_TIMEOUT_MS,
         });
         const cost = costMicro(result.model || model, result.usage);
+        if (result.stopReason === 'max_tokens' || result.stopReason === 'refusal') return { verdict: null, error: result.stopReason, costUsdMicro: cost };
         const verdict = parseVerdict(result.text);
         return verdict === null ? { verdict: null, error: 'unparseable', costUsdMicro: cost } : { verdict, error: null, costUsdMicro: cost };
       } catch (error) {

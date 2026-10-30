@@ -29,6 +29,7 @@ describe('auditActionLabel', () => {
       'agent.step.unknown',
       'agent.draft.write',
       'agent.budget.block',
+      'agent.model.refusal',
       'season.create',
     ];
     for (const action of agentActions) {

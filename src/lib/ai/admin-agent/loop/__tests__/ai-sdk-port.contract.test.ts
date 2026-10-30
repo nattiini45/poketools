@@ -5,7 +5,7 @@
  * accepts (spikes S2 to S5 and S8 need a key).
  */
 import { describe, expect, it, vi } from 'vitest';
-import { classifyPortError, createAiSdkModelPort, normalizeStopReason, usageMeters, type AiSdkPortOptions } from '../ai-sdk-port';
+import { classifyPortError, createAiSdkModelPort, normalizeStopReason, readStopInfo, usageMeters, type AiSdkPortOptions } from '../ai-sdk-port';
 import { DEFAULT_ADAPTER } from '../ai-sdk-messages';
 import { ModelPortError, type ModelStepInput, type ProviderAdapterConfig } from '../types';
 import type { TranscriptEntry } from '../transcript';
@@ -53,7 +53,7 @@ function sseResponse(events: Array<Record<string, unknown>>): Response {
   return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
 }
 
-function messageStream(options: { stop: string; blocks: Array<Record<string, unknown>>; usage?: Record<string, unknown>; model?: string }) {
+function messageStream(options: { stop: string; blocks: Array<Record<string, unknown>>; usage?: Record<string, unknown>; model?: string; stopDetails?: Record<string, unknown> }) {
   const events: Array<Record<string, unknown>> = [
     {
       type: 'message_start',
@@ -84,7 +84,7 @@ function messageStream(options: { stop: string; blocks: Array<Record<string, unk
     }
     events.push({ type: 'content_block_stop', index });
   });
-  events.push({ type: 'message_delta', delta: { stop_reason: options.stop, stop_sequence: null }, usage: { output_tokens: 42 } });
+  events.push({ type: 'message_delta', delta: { stop_reason: options.stop, stop_sequence: null, ...(options.stopDetails ? { stop_details: options.stopDetails } : {}) }, usage: { output_tokens: 42 } });
   events.push({ type: 'message_stop' });
   return events;
 }
@@ -343,6 +343,36 @@ describe('reading a response', () => {
     expect((await truncated.port.step(input([user(1, 'x')]))).stopReason).toBe('max_tokens');
   });
 
+  it('reads the finish reasons and the refusal category from the provider metadata, once per step', async () => {
+    const refused = port({}, () => sseResponse(messageStream({ stop: 'refusal', blocks: [{ type: 'text', text: 'No.' }], stopDetails: { type: 'refusal', category: 'cyber', explanation: 'a private sentence' } })));
+    const result = await refused.port.step(input([user(1, 'x')]));
+    expect(result).toMatchObject({ stopReason: 'refusal', rawStopReason: 'refusal', rawFinishReason: 'refusal', finishReason: 'content-filter', stopDetails: { category: 'cyber' } });
+    // Only the category is kept: not the explanation, which is model prose.
+    expect(JSON.stringify(result.stopDetails)).not.toContain('private');
+
+    const plain = port({}, () => sseResponse(TOOL_TURN));
+    const normal = await plain.port.step(input([user(1, 'x')]));
+    expect(normal).toMatchObject({ rawFinishReason: 'tool_use', finishReason: 'tool-calls' });
+    expect(normal).not.toHaveProperty('stopDetails');
+    expect(normal).not.toHaveProperty('iterations');
+  });
+
+  it('reports how a small side call ended, so a cut-off or refused answer is not read as a complete one', async () => {
+    const reply = (stop: string, extra: Record<string, unknown> = {}, text = 'League') =>
+      new Response(JSON.stringify({ id: 'msg_t', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', content: [{ type: 'text', text }], stop_reason: stop, stop_sequence: null, usage: { input_tokens: 30, output_tokens: 5 }, ...extra }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    const call = (response: () => Response) => port({}, response).port.complete({ model: 'claude-haiku-5-5', effort: 'low', system: 's', prompt: 'p', maxOutputTokens: 1024, timeoutMs: 30_000 });
+
+    expect(await call(() => reply('end_turn'))).toMatchObject({ stopReason: 'end_turn', rawFinishReason: 'end_turn', finishReason: 'stop' });
+    expect(await call(() => reply('max_tokens'))).toMatchObject({ stopReason: 'max_tokens', rawFinishReason: 'max_tokens', finishReason: 'length' });
+    const withIterations = await call(() => reply('end_turn', { usage: { input_tokens: 30, output_tokens: 5, iterations: [{ type: 'message', input_tokens: 30, output_tokens: 5 }] } }));
+    expect(withIterations.iterations).toEqual([{ type: 'message', inputTokens: 30, outputTokens: 5 }]);
+    const refused = await call(() => reply('refusal', { stop_details: { type: 'refusal', category: 'bio' } }));
+    expect(refused).toMatchObject({ stopReason: 'refusal', rawFinishReason: 'refusal', stopDetails: { category: 'bio' } });
+  });
+
   it('classifies a rejected request (a 401 is not retried) without exposing the provider text', async () => {
     const { port: p } = port({}, () => new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key sk-secret' } }), { status: 401, headers: { 'content-type': 'application/json' } }));
     const error = await p.step(input([user(1, 'x')])).catch((e: unknown) => e);
@@ -371,6 +401,28 @@ describe('small mappings', () => {
     expect(usageMeters(base, { ...DEFAULT_ADAPTER, cacheTtl: '5m' })).toMatchObject({ cacheWrite5mTokens: 600, cacheWrite1hTokens: 0 });
     expect(usageMeters({ ...base, raw: { cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 400 } } }, DEFAULT_ADAPTER)).toMatchObject({ cacheWrite5mTokens: 200, cacheWrite1hTokens: 400 });
     expect(usageMeters({ inputTokens: undefined, outputTokens: undefined }, DEFAULT_ADAPTER)).toEqual({ inputTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, cacheReadTokens: 0, outputTokens: 0 });
+  });
+
+  it('narrows the provider metadata: a string category, numeric iterations, nothing else', () => {
+    expect(readStopInfo(undefined)).toEqual({});
+    expect(readStopInfo({ anthropic: 'x' })).toEqual({});
+    expect(readStopInfo({ anthropic: { stopDetails: { type: 'refusal', category: 'cyber', explanation: 'e' } } })).toEqual({ stopDetails: { category: 'cyber' } });
+    // A refusal with details but no category, and a category of the wrong type.
+    expect(readStopInfo({ anthropic: { stopDetails: { type: 'refusal' } } })).toEqual({ stopDetails: {} });
+    expect(readStopInfo({ anthropic: { stopDetails: { type: 'refusal', category: 7 } } })).toEqual({ stopDetails: {} });
+    expect(
+      readStopInfo({
+        anthropic: {
+          iterations: [{ type: 'message', inputTokens: 10, outputTokens: 4 }, { type: 'fallback_message', model: 'claude-sonnet-5', inputTokens: 'bad', outputTokens: 2 }, { inputTokens: 1 }, 'junk'],
+        },
+      }),
+    ).toEqual({
+      iterations: [
+        { type: 'message', inputTokens: 10, outputTokens: 4 },
+        { type: 'fallback_message', model: 'claude-sonnet-5', inputTokens: 0, outputTokens: 2 },
+      ],
+    });
+    expect(readStopInfo({ anthropic: { iterations: null } })).toEqual({});
   });
 
   it('classifies transport errors', () => {

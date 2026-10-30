@@ -28,6 +28,9 @@ function defaultMeters(requestIndex: number, calls: number): UsageMeters {
   return { ...NONE, ...base, outputTokens: 140 + calls * 70 };
 }
 
+/** The AI SDK's normalised finish reason for each loop stop reason the replay produces. */
+const FINISH_BY_STOP: Partial<Record<StopReason, string>> = { end_turn: 'stop', tool_use: 'tool-calls', max_tokens: 'length', refusal: 'content-filter' };
+
 export interface ReplayOptions {
   /** Resolves `{{placeholder}}` tokens in tool inputs (the world's ids). */
   resolve: <T>(value: T) => T;
@@ -89,13 +92,16 @@ export class ReplayPort implements AdminModelPort {
       toolCalls: blocks.flatMap((b) => (b.type === 'tool_use' ? [{ id: b.id, name: b.name, input: b.input }] : [])),
       stopReason,
       rawStopReason: stopReason,
+      // What the AI SDK port reports for the same stop, so the loop's diagnostics see a replay as they see a live run.
+      rawFinishReason: stopReason,
+      finishReason: FINISH_BY_STOP[stopReason],
       usage,
       model: input.model,
     };
   }
 
   async complete(input: ModelCompleteInput): Promise<ModelCompleteResult> {
-    return { text: 'Eval conversation', usage: { ...NONE, inputTokens: 100, outputTokens: 5 }, model: input.model };
+    return { text: 'Eval conversation', usage: { ...NONE, inputTokens: 100, outputTokens: 5 }, model: input.model, stopReason: 'end_turn', rawFinishReason: 'end_turn', finishReason: 'stop' };
   }
 }
 

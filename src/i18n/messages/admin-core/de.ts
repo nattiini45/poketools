@@ -154,6 +154,7 @@ export default defineDe<typeof en>()({
     agent__step__unknown: 'Schritt des Assistenten mit unbekanntem Ergebnis',
     agent__draft__write: 'Assistent hat einen Entwurf gespeichert',
     agent__budget__block: 'Assistent durch sein Nutzungslimit gestoppt',
+    agent__model__refusal: 'Anfrage des Assistenten vom Modell abgelehnt',
   },
   error: {
     title: 'Fehler im Adminbereich',

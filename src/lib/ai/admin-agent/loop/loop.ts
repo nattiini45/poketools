@@ -241,7 +241,13 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
         role: 'assistant',
         kind: 'chat',
         content: toJson(stepResult.blocks),
-        ui: { text: textOf(stepResult.blocks), tool_calls: calls.map((c) => ({ id: c.id, name: c.name })) },
+        // A refused step's partial output is stored exactly as produced (the history is append-only and a replayed prefix
+        // must match) and only flagged here; the UI projection hides its prose.
+        ui: {
+          text: textOf(stepResult.blocks),
+          tool_calls: calls.map((c) => ({ id: c.id, name: c.name })),
+          ...(stepResult.stopReason === 'refusal' ? { refused: true, ...(stepResult.stopDetails?.category ? { refusal_category: stepResult.stopDetails.category } : {}) } : {}),
+        },
         model: stepResult.model || model,
         stopReason: stepResult.rawStopReason ?? stepResult.stopReason,
         usage: usageJson(stepResult.usage, stepCost),
@@ -255,6 +261,20 @@ async function runStepsInner(run: TurnRun): Promise<TurnOutcome> {
     // ── What the stop means ─────────────────────────────────────────
     switch (stepResult.stopReason) {
       case 'refusal':
+        deps.audit({
+          actor_id: request.adminId,
+          actor_name: request.adminName,
+          action: 'agent.model.refusal',
+          resource_type: 'agent_conversation',
+          resource_id: conversation.id,
+          metadata: {
+            category: stepResult.stopDetails?.category ?? null,
+            model: stepResult.model || model,
+            step,
+            stop_reason: stepResult.rawStopReason,
+            partial_stored: hasBlocks,
+          },
+        });
         await answerUnrun(run, calls, 'refused');
         emit({ type: 'error', code: loopCode('refused'), reason: 'refusal' });
         return result('refused', false);

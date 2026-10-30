@@ -42,7 +42,31 @@ export interface ModelStepInput {
   timeoutMs: number;
 }
 
-export interface ModelStepResult {
+/** One entry of the API's per-sampling `usage.iterations` array, narrowed to what a log line needs. */
+export interface ModelIteration {
+  /** `message`, `compaction`, `advisor_message` or `fallback_message`. Anything but `message` is billed apart from the totals. */
+  type: string;
+  model?: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * Why a call ended, as the provider reported it, beyond the normalised `StopReason`. Every field is optional: a port that
+ * cannot tell (a fake, a replay) leaves them out.
+ */
+export interface ModelStopInfo {
+  /** The SDK's normalised finish reason (`stop`, `length`, `content-filter`, `tool-calls`, ...). */
+  finishReason?: string;
+  /** The provider's raw stop reason (`end_turn`, `max_tokens`, `refusal`, ...). */
+  rawFinishReason?: string;
+  /** Present on a refusal that carried `stop_details`. The category is the classifier's (`cyber`, `bio`, ...), when it named one. */
+  stopDetails?: { category?: string };
+  /** The API's usage iterations, when it sent them. */
+  iterations?: readonly ModelIteration[];
+}
+
+export interface ModelStepResult extends ModelStopInfo {
   /** The assistant message exactly as the model produced it, thinking blocks included. Never empty. */
   blocks: AssistantBlock[];
   /** Tool calls in order, parsed from `blocks`; `invalid` when the provider could not parse the input. */
@@ -71,10 +95,12 @@ export interface ModelCompleteInput {
   timeoutMs: number;
 }
 
-export interface ModelCompleteResult {
+export interface ModelCompleteResult extends ModelStopInfo {
   text: string;
   usage: UsageMeters;
   model: string;
+  /** The normalised stop reason, when the port knows it. A call that ended on `max_tokens` or `refusal` has an unreliable `text`. */
+  stopReason?: StopReason;
 }
 
 export type ModelPortErrorKind = 'unavailable' | 'timeout' | 'invalid_request' | 'auth' | 'context_exceeded' | 'unknown';

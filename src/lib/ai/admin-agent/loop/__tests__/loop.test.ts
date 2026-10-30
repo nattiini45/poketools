@@ -420,6 +420,55 @@ describe('stop reasons that run nothing', () => {
     expect(results[0]).toMatchObject({ tool_use_id: 'x', is_error: true });
   });
 
+  it('a mid-stream refusal keeps its partial exactly as produced, flagged in metadata, and audits the category', async () => {
+    const h = harness();
+    const partial = textStep('I will start by', { stopReason: 'refusal', rawStopReason: 'refusal', stopDetails: { category: 'cyber' }, rawFinishReason: 'refusal', finishReason: 'content-filter' });
+    h.port.script(partial, textStep('A fresh answer.'));
+    const { outcome } = await turn(h);
+    expect(outcome.reason).toBe('refused');
+
+    const stored = h.fake.messages.find((m) => m.role === 'assistant');
+    // Persisted as is: the replayed prefix (and a thinking-block history check) must see the same bytes. Only metadata marks it.
+    expect(stored?.content).toEqual(partial.blocks);
+    expect(stored?.stop_reason).toBe('refusal');
+    expect(stored?.ui).toEqual({ text: 'I will start by', tool_calls: [], refused: true, refusal_category: 'cyber' });
+    expect(h.audit).toHaveLength(1);
+    expect(h.audit[0]).toMatchObject({
+      action: 'agent.model.refusal',
+      actor_id: ADMIN,
+      resource_type: 'agent_conversation',
+      resource_id: CONVERSATION_ID,
+      metadata: { category: 'cyber', model: 'claude-opus-5-5', step: 1, stop_reason: 'refusal', partial_stored: true },
+    });
+    expect(JSON.stringify(h.audit[0])).not.toContain('I will start by');
+
+    // The next turn replays it: it is still in the transcript the model is sent.
+    await turn(h, { kind: 'message', text: 'Try again', clientMsgId: 'c2' });
+    const replayed = h.port.inputs[1].transcript.find((e) => e.role === 'assistant');
+    expect(replayed && replayed.role === 'assistant' ? replayed.blocks : null).toEqual(partial.blocks);
+  });
+
+  it('a refusal without details still audits, with no category', async () => {
+    const h = harness();
+    h.port.script(textStep('No.', { stopReason: 'refusal', rawStopReason: 'refusal' }));
+    await turn(h);
+    expect(h.audit[0]).toMatchObject({ action: 'agent.model.refusal', metadata: { category: null } });
+    expect(h.fake.messages.find((m) => m.role === 'assistant')?.ui).toEqual({ text: 'No.', tool_calls: [], refused: true });
+  });
+
+  it('does not flag or audit a normal answer or a truncation', async () => {
+    const h = harness();
+    h.port.script(textStep('Fine.'));
+    await turn(h);
+    const h2 = harness();
+    h2.port.script(textStep('cut', { stopReason: 'max_tokens', rawStopReason: 'max_tokens' }));
+    await turn(h2);
+    for (const x of [h, h2]) {
+      expect(x.audit).toEqual([]);
+      expect(x.fake.messages.find((m) => m.role === 'assistant')?.ui).not.toHaveProperty('refused');
+    }
+  });
+
   it('max_tokens with a tool call executes nothing', async () => {
     const h = harness();
     h.port.script(toolStep([{ name: 'plan_set', id: 'x' }], { stopReason: 'max_tokens', rawStopReason: 'max_tokens' }));

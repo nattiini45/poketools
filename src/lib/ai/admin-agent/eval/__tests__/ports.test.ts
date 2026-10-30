@@ -36,6 +36,18 @@ describe('ReplayPort', () => {
     port.beginTurn(1);
     const result = await port.step(input());
     expect(result.stopReason).toBe('max_tokens');
+    // The optional finish fields a real port reports, so the loop's diagnostics see a replay as they see a live run.
+    expect(result).toMatchObject({ rawFinishReason: 'max_tokens', finishReason: 'length' });
+    expect(result).not.toHaveProperty('stopDetails');
+  });
+
+  it('reports finish reasons for a natural stop and a refusal, and for the small call', async () => {
+    const port = new ReplayPort(recordingSchema.parse({ turns: [[{ calls: [{ name: 'league_list', input: {} }] }, { text: 'Done.' }, { text: 'No.', stop: 'refusal' }]] }), { resolve: identity });
+    port.beginTurn(0);
+    expect(await port.step(input())).toMatchObject({ rawFinishReason: 'tool_use', finishReason: 'tool-calls' });
+    expect(await port.step(input())).toMatchObject({ rawFinishReason: 'end_turn', finishReason: 'stop' });
+    expect(await port.step(input())).toMatchObject({ rawFinishReason: 'refusal', finishReason: 'content-filter' });
+    expect(await port.complete({ model: 'm', effort: 'low', system: 's', prompt: 'p', maxOutputTokens: 10, timeoutMs: 10 })).toMatchObject({ stopReason: 'end_turn', rawFinishReason: 'end_turn' });
   });
 
   it('writes the first request to the cache and reads it afterwards, unless the recording says otherwise', async () => {

@@ -25,8 +25,10 @@ import {
   type AdminModelPort,
   type ModelCompleteInput,
   type ModelCompleteResult,
+  type ModelIteration,
   type ModelStepInput,
   type ModelStepResult,
+  type ModelStopInfo,
   type ProviderAdapterConfig,
   type StopReason,
 } from './types';
@@ -143,6 +145,34 @@ export function usageMeters(usage: SdkUsage, adapter: ProviderAdapterConfig): Us
   return { inputTokens: fresh, cacheWrite5mTokens: write5m, cacheWrite1hTokens: write1h, cacheReadTokens: read, outputTokens: num(usage.outputTokens) };
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The stop details and usage iterations in the provider metadata of one call (`providerMetadata.anthropic`), narrowed:
+ * nothing is trusted to be present, and only a string category and numeric token counts are kept. Read once per call.
+ */
+export function readStopInfo(providerMetadata: unknown): Pick<ModelStopInfo, 'stopDetails' | 'iterations'> {
+  const anthropic = isRecord(providerMetadata) ? providerMetadata.anthropic : undefined;
+  if (!isRecord(anthropic)) return {};
+  const out: Pick<ModelStopInfo, 'stopDetails' | 'iterations'> = {};
+  const details = anthropic.stopDetails;
+  if (isRecord(details)) out.stopDetails = typeof details.category === 'string' && details.category !== '' ? { category: details.category.slice(0, 64) } : {};
+  if (Array.isArray(anthropic.iterations)) {
+    const iterations = anthropic.iterations.flatMap((entry): ModelIteration[] =>
+      isRecord(entry) && typeof entry.type === 'string'
+        ? [{ type: entry.type, ...(typeof entry.model === 'string' ? { model: entry.model } : {}), inputTokens: num(entry.inputTokens), outputTokens: num(entry.outputTokens) }]
+        : [],
+    );
+    if (iterations.length > 0) out.iterations = iterations;
+  }
+  return out;
+}
+
+/** The optional finish fields of a result, left out when the provider sent nothing. */
+function stopFields(finish: string | undefined, raw: string | undefined, providerMetadata: unknown): ModelStopInfo {
+  return { ...(finish !== undefined ? { finishReason: finish } : {}), ...(raw !== undefined ? { rawFinishReason: raw } : {}), ...readStopInfo(providerMetadata) };
+}
+
 /** Classifies whatever the SDK or the network threw. The cause stays on the error for the server log. */
 export function classifyPortError(error: unknown): ModelPortError {
   if (error instanceof ModelPortError) return error;
@@ -219,13 +249,15 @@ export function createAiSdkModelPort(options: AiSdkPortOptions = {}): AdminModel
       let raw: string | undefined;
       let usage: SdkUsage;
       let modelId: string;
+      let providerMetadata: unknown;
       try {
-        [content, finish, raw, usage, modelId] = await Promise.all([
+        [content, finish, raw, usage, modelId, providerMetadata] = await Promise.all([
           result.content as PromiseLike<readonly SdkContentPart[]>,
           result.finishReason,
           result.rawFinishReason,
           result.usage as PromiseLike<SdkUsage>,
           Promise.resolve(result.response).then((response) => response.modelId),
+          result.providerMetadata as PromiseLike<unknown>,
         ]);
       } catch (error) {
         throw classifyPortError(error);
@@ -245,6 +277,7 @@ export function createAiSdkModelPort(options: AiSdkPortOptions = {}): AdminModel
         rawStopReason: raw ?? finish ?? null,
         usage: usageMeters(usage, adapter),
         model: modelId || input.model,
+        ...stopFields(finish, raw, providerMetadata),
       };
     },
 
@@ -259,7 +292,15 @@ export function createAiSdkModelPort(options: AiSdkPortOptions = {}): AdminModel
           abortSignal: AbortSignal.timeout(input.timeoutMs),
           providerOptions: providerOptionsFor(input.effort, adapter),
         });
-        return { text: result.text, usage: usageMeters(result.usage as SdkUsage, adapter), model: result.response.modelId || input.model };
+        const raw = result.rawFinishReason;
+        const finish = result.finishReason;
+        return {
+          text: result.text,
+          usage: usageMeters(result.usage as SdkUsage, adapter),
+          model: result.response.modelId || input.model,
+          stopReason: normalizeStopReason(raw, finish),
+          ...stopFields(finish, raw, result.providerMetadata),
+        };
       } catch (error) {
         throw classifyPortError(error);
       }

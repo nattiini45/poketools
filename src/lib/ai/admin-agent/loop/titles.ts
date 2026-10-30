@@ -59,9 +59,10 @@ export async function generateTitle(deps: LoopDeps, request: TitleRequest): Prom
   try {
     const result = await callPort(port, { model, effort, prompt });
     await store.usage
-      .settleUsage(adminId, reservation, { ...result.usage, costUsdMicro: costMicro(result.model || model, result.usage), stopReason: 'end_turn' })
+      .settleUsage(adminId, reservation, { ...result.usage, costUsdMicro: costMicro(result.model || model, result.usage), stopReason: result.rawFinishReason ?? result.finishReason ?? result.stopReason ?? 'unknown' })
       .catch((error: unknown) => console.error('[admin-agent] title usage settle failed; the reservation stays and counts', error));
-    title = sanitizeTitle(result.text);
+    // A call that was refused or cut off by its token limit has no usable text; it is still billed and settled above.
+    title = result.stopReason === 'refusal' || result.stopReason === 'max_tokens' ? null : sanitizeTitle(result.text);
   } catch (error) {
     console.error('[admin-agent] title generation failed', error);
     await store.usage.releaseUsage(adminId, reservation, 'title_failed').catch(() => undefined);
