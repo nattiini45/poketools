@@ -152,7 +152,15 @@ describe('checkTeam: the drafted roster of a legacy draft league', () => {
     expect(codesOf(result)).not.toContain('not_in_roster');
   });
 
-  it('has no roster rule for a player with no pool (nothing drafted, not in the league)', async () => {
+  it('a pool with no live picks is an EMPTY roster: the strictest rule, every member is "not in your draft roster"', async () => {
+    vi.mocked(getDraftPoolBySeason).mockResolvedValue({ id: 'pool-1' } as never);
+    vi.mocked(getPicksByPlayer).mockResolvedValue([]);
+    const result = await checkTeam({ pokemon: team, ruleset: OU, playerId: PLAYER, seasonId: SEASON_ID });
+    expect(result.team_issue_details?.filter((i) => i.code === 'not_in_roster')).toHaveLength(2);
+    expect(result.valid).toBe(false);
+  });
+
+  it('has no roster rule for a player with no pool (no draft context at all)', async () => {
     const result = await checkTeam({ pokemon: team, ruleset: OU, playerId: PLAYER, seasonId: SEASON_ID });
     expect(getPicksByPlayer).not.toHaveBeenCalled();
     expect(codesOf(result)).not.toContain('not_in_roster');
@@ -286,12 +294,31 @@ describe('checkTeam: the assigned core', () => {
     expect(codesOf(result)).not.toContain('tera_core_mismatch');
   });
 
-  it('logs a failed core read and reads it as "none assigned"', async () => {
+  it('a failed core read is its own cause: logged, labelled core_load_failed, never "no core assigned", and never valid', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(getParticipantCore).mockRejectedValue(new Error('db down'));
     const result = await checkTeam({ pokemon: teraGarchomp, ruleset: coreRuleset, playerId: PLAYER, seasonId: SEASON_ID });
     expect(log).toHaveBeenCalled();
+    expect(codesOf(result)).toContain('core_load_failed');
+    expect(codesOf(result)).not.toContain('tera_match_no_core');
+    expect(result.valid).toBe(false);
+    expect(result.team_issues).toHaveLength(result.team_issue_details?.length ?? -1);
+    log.mockRestore();
+  });
+
+  it('a core that is genuinely not assigned still says so (the read worked)', async () => {
+    vi.mocked(getParticipantCore).mockResolvedValue(null);
+    const result = await checkTeam({ pokemon: teraGarchomp, ruleset: coreRuleset, playerId: PLAYER, seasonId: SEASON_ID });
     expect(codesOf(result)).toContain('tera_match_no_core');
+    expect(codesOf(result)).not.toContain('core_load_failed');
+  });
+
+  it('a failed core read adds nothing when the ruleset does not use the core', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(getParticipantCore).mockRejectedValue(new Error('db down'));
+    const result = await checkTeam({ pokemon: [makeSet('Garchomp')], ruleset: OU, playerId: PLAYER, seasonId: SEASON_ID });
+    expect(codesOf(result)).not.toContain('core_load_failed');
+    expect(result.valid).toBe(true);
     log.mockRestore();
   });
 });

@@ -2,10 +2,15 @@ import 'server-only';
 /**
  * The ONE server-side team check. Every surface that answers "is this team legal?" calls `checkTeam`, so the
  * teambuilder's live check (`POST /api/validate-team`), the import preview (`POST /api/import-team`) and the AI
- * agent's `validateTeam` tool cannot disagree about the same team. The ruleset pin-impact check and the Evolution
- * Point Buy match-prep gate run the synchronous core (`validateTeam`, ./pkmn/validation.ts) directly: they judge
- * thousands of stored teams or one stored team without a player's session, where a learnset rule would cancel out of
- * the comparison anyway.
+ * agent's `validateTeam` tool cannot disagree about the same team. Two callers do NOT go through `checkTeam`:
+ *  - the ruleset pin-impact check (`src/lib/ruleset-studio/pin-impact.server.ts`) runs the synchronous core
+ *    (`validateTeam`, `src/lib/pkmn/validation.ts`) on up to 2000 stored teams, twice each; a learnset rule cancels
+ *    out of its old-vs-new comparison, and it has no player session, so no roster or core context;
+ *  - the Evolution Point Buy match-prep check-in gate (`assertEpbTeamCompliant`,
+ *    `src/lib/draft/epb-team-validation.ts`) enforces only the season's EPB format rules (banned moves and items,
+ *    stage-aware tera) through the synchronous core on a ruleset built in code. It does not apply the league ruleset,
+ *    the learnset layer or the roster.
+ * `checkTeam` itself calls `validateEpbTeamForSeason` for the same EPB rules, so the live check shows them too.
  *
  * What the check layers, in order:
  *  1. the ruleset: the stored version the caller read (a phase's pin, or a ruleset meant to be seen), or, when the
@@ -21,8 +26,10 @@ import 'server-only';
  *
  * The drafted roster is a HARD constraint in a league that has one (player-agent decision 9): a voided pick does not
  * count, and in an Evolution Point Buy league the trainer's trackers say what is owned (a pick stores the line's base
- * Pokémon, the tracker owns its evolved forms, and a Redraft changes the trackers). A player with no draft context at
- * all (not in the league, nothing drafted yet) has no roster rule, as before.
+ * Pokémon, the tracker owns its evolved forms, and a Redraft changes the trackers). A player WITH a draft context but
+ * nothing drafted (a pool exists, or trackers do, and no live picks) has an EMPTY roster, which is the strictest rule:
+ * every Pokémon on the team is "not in your draft roster". Only a player with no draft context at all (no season given,
+ * or neither a pool nor trackers: not in the league, or no draft created yet) has no roster rule, as before.
  *
  * NOT checked here, on purpose: the draft BUDGET. Points are enforced when a pick is made (`draft__commit_pick`, the
  * `INSUFFICIENT_BUDGET` family in `src/lib/draft/budget.ts`), and a team that is a subset of a legal roster cannot
@@ -249,19 +256,21 @@ export async function checkTeam(input: TeamCheckInput): Promise<TeamValidationRe
   // 2. League context: the season, the assigned core, the EPB state and the roster.
   const { playerId, seasonId } = input;
   let playerCore: CoreTriple | null = input.playerCore ?? null;
+  let coreReadFailed = false;
   let draftedPokemon: string[] | undefined;
   let epb: EpbSeasonState | null = null;
   if (seasonId && playerId) {
     const season = input.season !== undefined ? input.season : await getSeasonById(seasonId);
     const isEpb = season !== null && isEvolutionPointBuy(season.format_type);
 
-    const [core, epbState] = await Promise.all([
+    const [coreRead, epbState] = await Promise.all([
       // ALWAYS read server-side from `season_participants.core_types` unless the server itself supplied it (the
       // agent's context pack): the validator uses it for `type_quotas.source === 'player_core'` and `tera_match`.
-      input.playerCore !== undefined ? Promise.resolve(input.playerCore) : readCore(seasonId, playerId),
+      input.playerCore !== undefined ? Promise.resolve({ core: input.playerCore, failed: false }) : readCore(seasonId, playerId),
       isEpb ? loadEpbSeasonState(seasonId, playerId) : Promise.resolve(null),
     ]);
-    playerCore = core;
+    playerCore = coreRead.core;
+    coreReadFailed = coreRead.failed;
     epb = epbState;
     draftedPokemon = await loadRoster(seasonId, playerId, epb);
   }
@@ -272,7 +281,22 @@ export async function checkTeam(input: TeamCheckInput): Promise<TeamValidationRe
   const epbResult = epb && seasonId && playerId ? await validateEpbTeamForSeason(seasonId, playerId, pokemon, epb) : null;
 
   // 4. Union, deduped; every validator must be clean.
-  const teamIssues = dedupTeamIssues([...teamIssuesOf(core), ...(epbResult ? teamIssuesOf(epbResult) : [])]);
+  let coreTeamIssues = teamIssuesOf(core);
+  if (coreReadFailed) {
+    // The core could not be READ: that is not "no core assigned". Whatever the validator said about a missing core is
+    // replaced by the true cause, so the player is not told to ask for a core they already have.
+    const noCore = (i: TeamIssue) => i.code === 'type_quota_no_core' || i.code === 'tera_match_no_core';
+    if (coreTeamIssues.some(noCore)) {
+      coreTeamIssues = [
+        ...coreTeamIssues.filter((i) => !noCore(i)),
+        {
+          issue: 'Your assigned core could not be read, so the rules that depend on it could not be checked. Try again in a moment',
+          ...codedIssue('core_load_failed'),
+        },
+      ];
+    }
+  }
+  const teamIssues = dedupTeamIssues([...coreTeamIssues, ...(epbResult ? teamIssuesOf(epbResult) : [])]);
   if (source.fallback) {
     // One code, one text; `params.reason` (and `ruleset_source.fallback`) keep "not found" and "read failed" apart.
     teamIssues.push({
@@ -293,12 +317,15 @@ export async function checkTeam(input: TeamCheckInput): Promise<TeamValidationRe
   };
 }
 
-/** The assigned core triple; a failed read is logged and reads as "none assigned" (the check then says so). */
-async function readCore(seasonId: string, playerId: string): Promise<CoreTriple | null> {
+/**
+ * The assigned core triple. A failed read is logged and flagged (`failed`), never reported as "no core assigned": the
+ * check then names the true cause (`core_load_failed`) instead of the validator's missing-core message.
+ */
+async function readCore(seasonId: string, playerId: string): Promise<{ core: CoreTriple | null; failed: boolean }> {
   try {
-    return await getParticipantCore(seasonId, playerId);
+    return { core: await getParticipantCore(seasonId, playerId), failed: false };
   } catch (err) {
     console.error('[team-check] could not read the assigned core:', err);
-    return null;
+    return { core: null, failed: true };
   }
 }

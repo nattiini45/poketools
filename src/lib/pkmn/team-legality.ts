@@ -1,11 +1,11 @@
 /**
  * The part of team legality that needs the learnsets: can the species learn each move, and can it have the ability.
  *
- * `validateTeam` (./validation.ts) is synchronous and reads no learnsets, because it also runs team by team inside the
+ * `validateTeam` (`src/lib/pkmn/validation.ts`) is synchronous and reads no learnsets, because it also runs team by team inside the
  * ruleset pin-impact check (up to 2000 teams per request, twice each) where a learnset rule cancels out of the
  * comparison anyway. The checks here are asynchronous (learnsets are lazy-loaded) and belong to the server-side team
- * check (`src/lib/team-check`) that every validator surface shares: the teambuilder's live check, the import, the
- * Evolution Point Buy check and the AI agent's tool. They reuse the dex legality helpers (`validateSetLegality`), so a
+ * check (`checkTeam`, `src/lib/team/check.server.ts`) that the teambuilder's live check, the import preview and the AI
+ * agent's tool share. They reuse the dex legality helpers (`validateSetLegality`), so a
  * team is judged by the same rules as the per-slot picker (`/api/pkmn/validate-set`).
  *
  * Universe: a standard ruleset restricts learnsets to its generation (what Showdown's `[Gen 9]` formats do); a National

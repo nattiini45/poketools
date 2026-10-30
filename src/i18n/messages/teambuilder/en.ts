@@ -73,6 +73,8 @@ export default {
       evolution_stage_cap:
         'Evolution stage rule: at most {cap} fully-evolved Pokémon allowed in this phase, found {found}',
       not_in_roster: '{species} is not in your draft roster',
+      core_load_failed:
+        'Your assigned core could not be read, so the rules that depend on it could not be checked. Try again in a moment',
       ruleset_load_failed:
         'The ruleset for this check could not be used, so the team was checked against the format only and is not confirmed legal for your league',
     },
@@ -113,6 +115,7 @@ export default {
     slot_empty: 'Slot is empty',
     invalid_move_index: 'Invalid move index',
     empty_proposal: 'Team proposal is empty',
+    invalid_set: 'The proposed set is not valid and could not be saved',
     unknown_command: 'Unknown command',
   },
   editor: {

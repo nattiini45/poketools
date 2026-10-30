@@ -73,6 +73,47 @@ describe('executeEditorCommand keeps every accepted value inside the save bounds
     expect(accepted(saved)).toBe(true);
   });
 
+  describe('refuses (ok:false) what bounding cannot repair, instead of reporting success for a set that cannot be saved', () => {
+    it.each([
+      ['a blank species', { species: '   ', evs: { atk: 1 } }],
+      ['a missing species', { evs: { atk: 1 } }],
+      ['a shiny that is not a boolean', { species: 'Garchomp', shiny: 'yes' }],
+    ])('propose_team with %s', (_label, proposed) => {
+      const { result, saved } = run(
+        { kind: 'propose_team', team: [proposed as unknown as PokemonSet], mode: 'replace' },
+        [null, null, null, null, null, null],
+      );
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe('invalid_set');
+      expect(result.error).toMatch(/^The proposed set is not valid and could not be saved: set 1: /);
+      expect(saved).toEqual([]); // nothing was applied
+    });
+
+    it('propose_team refuses the whole proposal when one of its sets is unsaveable, and applies none', () => {
+      const good = makeSet('Dragonite');
+      const bad = { ...makeSet('Garchomp'), shiny: 1 } as unknown as PokemonSet;
+      const { result, saved } = run({ kind: 'propose_team', team: [good, bad], mode: 'replace' }, [null, null, null, null, null, null]);
+      expect(result).toMatchObject({ ok: false, code: 'invalid_set' });
+      expect(result.error).toContain('set 2');
+      expect(saved).toEqual([]);
+    });
+
+    it('apply_set refuses a patch that would leave the slot unsaveable, and leaves the slot as it was', () => {
+      const { result, saved } = run({ kind: 'apply_set', slot: 0, set: { species: '' } });
+      expect(result).toMatchObject({ ok: false, code: 'invalid_set' });
+      expect(saved[0].species).toBe('Garchomp');
+
+      const shiny = run({ kind: 'apply_set', slot: 0, set: { shiny: 'yes' } as unknown as Partial<PokemonSet> });
+      expect(shiny.result).toMatchObject({ ok: false, code: 'invalid_set' });
+    });
+
+    it('the reason is catalogued in English and German', async () => {
+      const { teambuilderMessages } = await import('@/i18n/messages/teambuilder');
+      expect(teambuilderMessages.en.commandErrors.invalid_set).toBeTruthy();
+      expect(teambuilderMessages.de.commandErrors.invalid_set).not.toBe(teambuilderMessages.en.commandErrors.invalid_set);
+    });
+  });
+
   it('a valid command is passed through untouched', () => {
     const { saved } = run({ kind: 'set_evs', slot: 0, spread: { atk: 252, spe: 252, hp: 4 } });
     expect(saved[0].evs).toEqual({ hp: 4, atk: 252, def: 0, spa: 0, spd: 0, spe: 252 });

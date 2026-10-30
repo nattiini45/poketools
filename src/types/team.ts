@@ -133,7 +133,8 @@ export type ValidationIssueCode =
   | 'tera_match_no_core'
   | 'evolution_stage_cap'
   | 'not_in_roster'
-  | 'ruleset_load_failed';
+  | 'ruleset_load_failed'
+  | 'core_load_failed';
 
 /**
  * Params of a validation issue. Names follow the pkmn seam

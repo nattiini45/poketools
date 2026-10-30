@@ -13,10 +13,27 @@ import type {
 import { teambuilderMessages } from '@/i18n/messages/teambuilder';
 import { boundSet, type SetLike } from '@/lib/pkmn/set-bounds';
 import type { PokemonSet } from '@/types/team';
+import { formatZodErrors, pokemonSetSchema } from '@/lib/validation/schemas';
 
 /** A refused command: the code for the UI, plus its English text for agents and logs. */
 function fail(code: EditorCommandErrorCode): CommandResult {
   return { ok: false, code, error: teambuilderMessages.en.commandErrors[code] };
+}
+
+/** A refused set: the catalogued reason, plus what the save boundary objects to (English, for agents and logs). */
+function failInvalidSet(detail: string): CommandResult {
+  const base = fail('invalid_set');
+  return { ...base, error: `${base.error}: ${detail}` };
+}
+
+/**
+ * The reason the save boundary (`pokemonSetSchema`, the one `POST /api/teams` and `PATCH /api/teams/[id]` use) would
+ * refuse `set`, or null when it would accept it. Bounding and filling cannot repair everything (a blank species, a
+ * `shiny` that is not a boolean), and a command must not report success for a set that can never be saved.
+ */
+function boundaryRefusal(set: unknown): string | null {
+  const parsed = pokemonSetSchema.safeParse(set);
+  return parsed.success ? null : formatZodErrors(parsed.error);
 }
 
 /**
@@ -57,7 +74,11 @@ export function executeEditorCommand(
       if (cmd.slot < 0 || cmd.slot > 5) return fail('invalid_slot');
       const existing = state.team[cmd.slot];
       if (!existing) return fail('slot_empty');
-      dispatch({ type: 'UPDATE_SLOT', slot: cmd.slot, patch: boundSet(cmd.set) });
+      const patch = boundSet(cmd.set);
+      // The slot AFTER the patch is what gets saved: refuse a patch that would leave it unsaveable.
+      const refusal = boundaryRefusal({ ...existing, ...patch });
+      if (refusal) return failInvalidSet(refusal);
+      dispatch({ type: 'UPDATE_SLOT', slot: cmd.slot, patch });
       return { ok: true };
     }
 
@@ -136,7 +157,12 @@ export function executeEditorCommand(
 
     case 'propose_team': {
       if (cmd.team.length === 0) return fail('empty_proposal');
-      dispatch({ type: 'APPLY_TEAM_PROPOSAL', team: cmd.team.map(completeSet), mode: cmd.mode });
+      const team = cmd.team.map(completeSet);
+      for (const [index, set] of team.entries()) {
+        const refusal = boundaryRefusal(set);
+        if (refusal) return failInvalidSet(`set ${index + 1}: ${refusal}`);
+      }
+      dispatch({ type: 'APPLY_TEAM_PROPOSAL', team, mode: cmd.mode });
       return { ok: true };
     }
 

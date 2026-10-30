@@ -61,6 +61,8 @@ export default defineDe<typeof en>()({
       evolution_stage_cap:
         'Entwicklungsregel: In dieser Phase sind höchstens {cap} voll entwickelte Pokémon erlaubt, du hast {found}',
       not_in_roster: '{species} ist nicht in deinem Draft-Kader',
+      core_load_failed:
+        'Dein zugewiesener Core konnte nicht gelesen werden, daher konnten die Regeln, die von ihm abhängen, nicht geprüft werden. Versuche es gleich noch einmal',
       ruleset_load_failed:
         'Das Regelwerk für diese Prüfung konnte nicht verwendet werden, das Team wurde nur gegen das Format geprüft und ist für deine Liga nicht als legal bestätigt',
     },
@@ -99,6 +101,7 @@ export default defineDe<typeof en>()({
     slot_empty: 'Der Slot ist leer',
     invalid_move_index: 'Ungültiger Attacken-Platz',
     empty_proposal: 'Der Teamvorschlag ist leer',
+    invalid_set: 'Der vorgeschlagene Satz ist ungültig und konnte nicht übernommen werden',
     unknown_command: 'Unbekannter Befehl',
   },
   editor: {

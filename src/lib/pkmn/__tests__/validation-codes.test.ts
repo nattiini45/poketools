@@ -135,7 +135,7 @@ describe('teambuilder.validation.issue catalog', () => {
     'species_clause', 'item_clause', 'shared_type', 'type_quota_no_core', 'type_quota',
     'tera_match_no_core', 'evolution_stage_cap', 'not_in_roster',
     'ev_stat_invalid', 'iv_range', 'level_range', 'malformed_set', 'duplicate_move', 'move_illegal', 'ability_illegal',
-    'ruleset_load_failed',
+    'ruleset_load_failed', 'core_load_failed',
   ];
 
   it('has an English and a distinct German message for every code', () => {
