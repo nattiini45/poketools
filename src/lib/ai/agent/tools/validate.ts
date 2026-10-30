@@ -84,6 +84,8 @@ async function readRuleset(
 }
 
 export async function validateTeam(input: ValidateTeamInput): Promise<ValidateTeamResult> {
+  // The schema refuses this too; a direct caller must not get a league check that silently drops the roster and core.
+  if (input.season_id && !input.player_id) throw new Error('validateTeam: player_id is required with season_id');
   const { ruleset, failure } = await readRuleset(input.ruleset_id);
   const result = await checkTeam({
     pokemon: input.team.map(toPokemonSet),

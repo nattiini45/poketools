@@ -472,8 +472,9 @@ export async function getPicksByPool(poolId: string): Promise<DraftPickWithPlaye
 }
 
 /**
- * A player's live picks in a pool. A voided pick (`voided_at` set: the queue engine voids a pick instead of deleting
- * it) no longer counts for roster, budget or availability, so it is not returned.
+ * A player's picks in one pool, in pick order, WITHOUT the voided ones (`voided_at` set: the queue engine voids a pick
+ * instead of deleting it). It reads that one pool only: a Redraft's picks are in the Redraft pool, and what a trainer
+ * owns after a Redraft is decided elsewhere (the trackers, in an Evolution Point Buy league).
  */
 export async function getPicksByPlayer(
   poolId: string,

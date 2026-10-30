@@ -28,9 +28,6 @@ describe('the model-facing schemas leave out what the server sets', () => {
   ])('%s does not expose %j to the model', (name, fields) => {
     const json = JSON.stringify(model(name).safeParse({ team: [{ species: 'Garchomp', moves: ['Earthquake'] }], format: 'gen9ou', matchId: MATCH }).data);
     for (const field of fields) expect(json).not.toContain(field);
-    // …and the strict schema still has them, for the server to fill.
-    const strictShape = (AGENT_TOOLS[name].inputSchema as unknown as { shape: Record<string, unknown> }).shape;
-    for (const field of fields) expect(strictShape).toHaveProperty(field);
     const modelShape = (model(name) as unknown as { shape: Record<string, unknown> }).shape;
     for (const field of fields) expect(modelShape).not.toHaveProperty(field);
   });
@@ -77,6 +74,27 @@ describe('a hallucinated value for a server-set field is replaced, not fatal', (
 });
 
 describe('the strict schema stays strict', () => {
+  it('still accepts the server-set fields, for the server to fill', () => {
+    const strict = AGENT_TOOLS.validateTeam.inputSchema.safeParse({
+      team: [{ species: 'Garchomp', moves: ['Earthquake'] }],
+      format: 'gen9ou',
+      player_id: ME,
+      season_id: SEASON,
+    });
+    expect(strict.success).toBe(true);
+    expect(AGENT_TOOLS.getMatchAnalysisContext.inputSchema.safeParse({ matchId: MATCH, requesterId: ME }).success).toBe(true);
+  });
+
+  it('a direct caller that skipped applyToolOverrides fails closed where the tool depends on the identity', () => {
+    // match context: no requester, no answer
+    expect(AGENT_TOOLS.getMatchAnalysisContext.inputSchema.safeParse({ matchId: MATCH }).success).toBe(false);
+    // validateTeam: a league (season_id) needs its player; without a league neither is needed
+    const team = [{ species: 'Garchomp', moves: ['Earthquake'] }];
+    expect(AGENT_TOOLS.validateTeam.inputSchema.safeParse({ team, format: 'gen9ou', season_id: SEASON }).success).toBe(false);
+    expect(AGENT_TOOLS.validateTeam.inputSchema.safeParse({ team, format: 'gen9ou' }).success).toBe(true);
+    expect(AGENT_TOOLS.validateTeam.inputSchema.safeParse({ team, format: 'gen9ou', player_id: ME }).success).toBe(true);
+  });
+
   it('rejects a non-uuid server-set field that reaches it (a server bug must not slip through)', () => {
     expect(AGENT_TOOLS.validateTeam.inputSchema.safeParse({ team: [{ species: 'Garchomp', moves: ['Earthquake'] }], format: 'gen9ou', player_id: 'x' }).success).toBe(false);
     expect(AGENT_TOOLS.getMatchAnalysisContext.inputSchema.safeParse({ matchId: MATCH, requesterId: 'x' }).success).toBe(false);

@@ -739,7 +739,7 @@ function enforceTeamConstraints(
   // ── 4. Eviolite tier cap ──────────────────────────────────────────
   if (constraints.eviolite_tier_cap) {
     const cap: TierKey = constraints.eviolite_tier_cap;
-    // The banned set is a scan of the whole dex (memoised per generation and cap): it is read only when a set holds
+    // The banned set is a scan of the whole dex (memoised per universe, generation and cap): it is read only when a set holds
     // Eviolite, so a team without one never pays for it.
     let banned: ReadonlySet<string> | null = null;
 

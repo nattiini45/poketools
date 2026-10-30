@@ -145,8 +145,10 @@ const rulesetIdModelSchema = z.string().optional().describe(RULESET_ID_DESCRIPTI
 const playerCoreModelSchema = z.array(z.string()).optional().describe(PLAYER_CORE_DESCRIPTION);
 
 /**
- * What the MODEL sees of `validateTeam`: the team and the format. Server-set fields are not part of it, so nothing the
- * model could invent there can fail the call before `applyToolOverrides` runs.
+ * What the MODEL sees of `validateTeam`: the team, the format, and `ruleset_id` / `player_core` in a lenient form. The
+ * server overwrites those two with the resolved league's when it resolved one (`applyToolOverrides`); with no league the
+ * model's own values stay, and the strict schema below then validates them. `player_id` and `season_id` are not part of
+ * it, so nothing the model could invent there can fail the call before the override runs.
  */
 export const ValidateTeamModelInput = z.object({
   // Allow more than 6 so the tool itself can flag oversized teams.
@@ -160,13 +162,18 @@ export const ValidateTeamModelInput = z.object({
  * Validate a team's legality (species/move/ability/item/learnset) for a format. This is the STRICT schema `executeTool`
  * runs after `applyToolOverrides`: `player_id` and `season_id` are set by the server from the authenticated player and
  * the resolved league (the model never sees or names them); they scope the drafted roster, the assigned core and the
- * Evolution Point Buy state to the player's own league.
+ * Evolution Point Buy state to the player's own league. Both stay optional because a check with no league needs neither,
+ * but a league needs its player: `season_id` without `player_id` is refused, so a caller that skipped
+ * `applyToolOverrides` cannot get a league check that silently drops the roster.
  */
 export const ValidateTeamInput = ValidateTeamModelInput.extend({
   ruleset_id: rulesetIdSchema,
   player_core: playerCoreSchema,
   player_id: z.string().uuid().optional(),
   season_id: z.string().uuid().optional(),
+}).refine((input) => input.season_id === undefined || input.player_id !== undefined, {
+  message: 'player_id is required with season_id (set by the server)',
+  path: ['player_id'],
 });
 export type ValidateTeamInput = z.infer<typeof ValidateTeamInput>;
 
@@ -233,11 +240,12 @@ export const GetMatchAnalysisContextModelInput = z.object({
 
 /**
  * Fetch the full battle context (stats, teams, rules, turn-by-turn) for one match. The STRICT schema: `requesterId` is
- * set by the server (`applyToolOverrides`) to the authenticated player and is not part of what the model sees. The tool
- * answers only for a match this player may see, and refuses a call that carries no requester.
+ * set by the server (`applyToolOverrides`) to the authenticated player and is not part of what the model sees. It is
+ * REQUIRED here, so a caller that skipped `applyToolOverrides` is refused at the schema instead of failing open. The tool
+ * answers only for a match this player may see.
  */
 export const GetMatchAnalysisContextInput = GetMatchAnalysisContextModelInput.extend({
-  requesterId: z.string().uuid().optional(),
+  requesterId: z.string().uuid(),
 });
 export type GetMatchAnalysisContextInput = z.infer<typeof GetMatchAnalysisContextInput>;
 

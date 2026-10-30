@@ -102,6 +102,12 @@ describe('checkTeam: which rules ran', () => {
     },
   );
 
+  it('refuses a rulesetFailure together with a ruleset: the flag would be silently ignored', async () => {
+    await expect(checkTeam({ pokemon: [makeSet('Garchomp')], ruleset: OU, rulesetFailure: 'ruleset_load_failed' })).rejects.toThrow(
+      /rulesetFailure is only meaningful/,
+    );
+  });
+
   it('needs a ruleset or a format', async () => {
     await expect(checkTeam({ pokemon: [makeSet()], ruleset: null })).rejects.toThrow(/ruleset or a format/);
   });
@@ -254,6 +260,15 @@ describe('checkTeam: the drafted roster of an Evolution Point Buy league', () =>
     expect(result.team_issue_details).toEqual([
       expect.objectContaining({ code: 'not_in_roster', params: { species: 'Samurott' } }),
     ]);
+  });
+
+  it('picks of a shared base own the forms of every line that base starts (Samurott and Samurott-Hisui)', async () => {
+    vi.mocked(getDraftPoolBySeason).mockResolvedValue({ id: 'pool-1' } as never);
+    vi.mocked(getPicksByPlayer).mockResolvedValue([{ pokemon_name: 'Oshawott' } as never]);
+    const result = await run([samurott]);
+    expect(codesOf(result)).not.toContain('not_in_roster');
+    expect(codesOf(await run([samurottHisui]))).not.toContain('not_in_roster');
+    expect(codesOf(await run([garchomp]))).toContain('not_in_roster'); // a base that was not picked owns nothing
   });
 
   it('a trainer with no trackers and no pool has no roster rule', async () => {

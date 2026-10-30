@@ -53,7 +53,7 @@ describe('getMatchAnalysisContext: who may read a match', () => {
   it('refuses a call with no requester (the server sets it; a direct call without one is refused)', async () => {
     vi.mocked(getMatchById).mockResolvedValue(match('completed'));
 
-    await expect(getMatchAnalysisContext({ matchId: MATCH_ID })).rejects.toThrow(REFUSAL);
+    await expect(getMatchAnalysisContext({ matchId: MATCH_ID } as never)).rejects.toThrow(REFUSAL);
     expect(getMatchById).not.toHaveBeenCalled();
     expect(gatherMatchContext).not.toHaveBeenCalled();
   });
@@ -95,6 +95,15 @@ describe('getMatchAnalysisContext: who may read a match', () => {
 });
 
 describe('through the tool dispatcher', () => {
+  it('a direct executeTool call that skipped applyToolOverrides is refused at the schema, before any read', async () => {
+    const res = await executeTool('getMatchAnalysisContext', { matchId: MATCH_ID });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/^Invalid input for 'getMatchAnalysisContext'.*requesterId/);
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(gatherMatchContext).not.toHaveBeenCalled();
+  });
+
   it('hands the model the refusal as a tool error, not the match', async () => {
     vi.mocked(getMatchById).mockResolvedValue(match('completed', OPPONENT, STRANGER));
 

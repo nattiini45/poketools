@@ -74,7 +74,8 @@ export interface TeamCheckInput {
   ruleset: Ruleset | null;
   /**
    * Set when the caller ASKED for a ruleset and `ruleset` is null: it was not found, or reading it failed. The check
-   * then runs on `format` and reports the failure; the result is never valid. Omit it for a bare format check.
+   * then runs on `format` and reports the failure; the result is never valid. Omit it for a bare format check. Passing
+   * it together with a `ruleset` is a caller bug and throws.
    */
   rulesetFailure?: RulesetFailure;
   /** The format key (`gen9ou`) to enforce when there is no ruleset. */
@@ -247,6 +248,9 @@ export async function checkTeam(input: TeamCheckInput): Promise<TeamValidationRe
   if (input.ruleset) {
     ruleset = input.ruleset;
     source = { kind: 'ruleset' };
+    // `rulesetFailure` says the ruleset the caller ASKED for could not be used; with one in hand there is nothing to report,
+    // and silently ignoring the flag would hide a caller bug. Refused outright.
+    if (input.rulesetFailure) throw new Error('checkTeam: rulesetFailure is only meaningful when no ruleset is supplied');
   } else {
     if (!input.format) throw new Error('checkTeam needs a ruleset or a format');
     ({ ruleset, source } = rulesetForFormat(input.format));

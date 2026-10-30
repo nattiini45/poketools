@@ -18,6 +18,8 @@ import {
   isLineBrought,
   validateEpbTeam,
   assertEpbTeamCompliant,
+  ownedSpeciesFromBases,
+  ownedSpeciesFromTrackers,
 } from '../epb-team-validation';
 import { getPlayerTrackers } from '@/lib/supabase/queries/evolutions';
 import { getSeasonLineThresholds } from '@/lib/draft/epb-thresholds';
@@ -67,6 +69,32 @@ describe('isLineBrought (registered team OR battle rows)', () => {
 
   it('is false with no evidence at all', () => {
     expect(isLineBrought(GASTLY_LINE, { playerId: 'p1', registeredSpecies: null, battleStats: [] })).toBe(false);
+  });
+});
+
+describe('ownedSpeciesFromBases (picks without trackers)', () => {
+  const OSHAWOTT = { line_id: 'oshawott-samurott', base_pokemon: 'Oshawott', stage2_pokemon: 'Dewott', stage3_pokemon: 'Samurott', stage2_kos: 3, stage3_kos: 8 };
+  const OSHAWOTT_HISUI = { line_id: 'oshawott-samurott-hisui', base_pokemon: 'Oshawott', stage2_pokemon: 'Dewott-Hisui', stage3_pokemon: 'Samurott-Hisui', stage2_kos: 3, stage3_kos: 8 };
+  const GIBLE = { line_id: 'gible-garchomp', base_pokemon: 'Gible', stage2_pokemon: 'Gabite', stage3_pokemon: 'Garchomp', stage2_kos: 3, stage3_kos: 11 };
+
+  it('a pick of a base shared by two lines owns every form of BOTH lines', () => {
+    const owned = ownedSpeciesFromBases(['Oshawott'], [OSHAWOTT, OSHAWOTT_HISUI, GIBLE]);
+    expect(owned.sort()).toEqual(['Dewott', 'Dewott-Hisui', 'Oshawott', 'Samurott', 'Samurott-Hisui'].sort());
+  });
+
+  it('matches the base by dex id, not by spelling, and keeps the pick itself even with no matching line', () => {
+    expect(ownedSpeciesFromBases(['oshawott'], [OSHAWOTT])).toEqual(expect.arrayContaining(['oshawott', 'Samurott']));
+    expect(ownedSpeciesFromBases(['Mystery'], [OSHAWOTT])).toEqual(['Mystery']);
+  });
+
+  it('owns nothing of a line whose base was not picked, and nothing for no picks', () => {
+    expect(ownedSpeciesFromBases(['Gible'], [OSHAWOTT, GIBLE]).sort()).toEqual(['Gabite', 'Garchomp', 'Gible']);
+    expect(ownedSpeciesFromBases([], [OSHAWOTT, GIBLE])).toEqual([]);
+  });
+
+  it('ownedSpeciesFromTrackers: a tracker owns only its own branch', () => {
+    const owned = ownedSpeciesFromTrackers([{ line_id: 'oshawott-samurott-hisui', base_pokemon: 'Oshawott', locked_stage3_pokemon: null }], [OSHAWOTT, OSHAWOTT_HISUI]);
+    expect(owned.sort()).toEqual(['Dewott-Hisui', 'Oshawott', 'Samurott-Hisui']);
   });
 });
 
