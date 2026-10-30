@@ -14,9 +14,14 @@ vi.mock('@/lib/supabase/client', () => ({ supabase: mockBuilder }));
 
 import {
   appendMessages,
+  conversationBelongsTo,
   createConversation,
   DRY_RUN_CONVERSATION_ID,
+  dryRunIdentity,
+  getOrCreateProfile,
+  isDryRunUser,
 } from '../memory';
+import { z } from 'zod';
 
 const WRITE_RESULT = { id: 'conv-1', last_message_at: '2026-09-29T10:00:00.000Z' };
 
@@ -108,5 +113,46 @@ describe('appendMessages', () => {
 
     expect(result).toEqual({ id: DRY_RUN_CONVERSATION_ID, last_message_at: expect.any(String) });
     expect(mockBuilder.from).not.toHaveBeenCalled();
+  });
+});
+
+describe('dryRunIdentity (the eval harness identity)', () => {
+  const uuid = z.string().uuid();
+
+  it('is a valid UUID, so the strict tool schemas accept the ids the server sets from it', () => {
+    for (const model of ['deepseek-v4-pro', 'mimo-v2.6-pro', undefined]) {
+      expect(uuid.safeParse(dryRunIdentity(model)).success).toBe(true);
+    }
+  });
+
+  it('is deterministic per model and differs between models', () => {
+    expect(dryRunIdentity('deepseek-v4-pro')).toBe(dryRunIdentity('deepseek-v4-pro'));
+    expect(dryRunIdentity('deepseek-v4-pro')).not.toBe(dryRunIdentity('mimo-v2.6-pro'));
+  });
+
+  it('still opts out of every write and every read: nothing touches the DB', async () => {
+    const id = dryRunIdentity('deepseek-v4-pro');
+    expect(isDryRunUser(id)).toBe(true);
+
+    expect(await createConversation(id, 'kale', [])).toEqual({ id: DRY_RUN_CONVERSATION_ID, last_message_at: expect.any(String) });
+    expect(await conversationBelongsTo(DRY_RUN_CONVERSATION_ID, id, 'kale')).toBe(true);
+    await getOrCreateProfile(id);
+    expect(mockBuilder.from).not.toHaveBeenCalled();
+  });
+
+  it('carries the model under test as the router first preference', async () => {
+    const profile = await getOrCreateProfile(dryRunIdentity('deepseek-v4-pro'));
+    expect(profile.model_priority).toEqual(['deepseek-v4-pro']);
+    expect((await getOrCreateProfile(dryRunIdentity())).model_priority).toEqual([]);
+  });
+
+  it('the old eval-<model> ids keep working', async () => {
+    expect(isDryRunUser('eval-harness')).toBe(true);
+    expect((await getOrCreateProfile('eval-some-model')).model_priority).toEqual(['some-model']);
+  });
+
+  it('a real player id is not a dry run', () => {
+    expect(isDryRunUser('00000000-0000-4000-8000-000000000011')).toBe(false);
+    expect(isDryRunUser('5b1c2f7e-0d0a-4c3e-9a55-1f2b3c4d5e6f')).toBe(false);
   });
 });

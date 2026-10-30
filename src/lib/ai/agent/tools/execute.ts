@@ -42,6 +42,20 @@ function timeoutFor(name: string): number {
  */
 const NO_CACHE = new Set(['buildTeam', 'createPokepaste', 'validateTeam']);
 
+/** Start of the error `executeTool` returns when the (post-override) input fails the tool's strict schema. */
+export const INVALID_INPUT_PREFIX = 'Invalid input for';
+
+/**
+ * True when a tool result (what the model is handed back: `res.data`, or `{ error }`) is the strict-schema failure of
+ * `executeTool`. The model-facing schema accepted the call, the server-set fields were applied, and the strict schema
+ * still refused it: a bug of the server or of the harness identity, invisible to the model.
+ */
+export function isStrictSchemaFailure(output: unknown): boolean {
+  if (typeof output !== 'object' || output === null) return false;
+  const error = (output as { error?: unknown }).error;
+  return typeof error === 'string' && error.startsWith(INVALID_INPUT_PREFIX);
+}
+
 export type ExecuteToolResult =
   | { ok: true; data: unknown; cached?: boolean }
   | { ok: false; error: string };
@@ -87,7 +101,7 @@ export async function executeTool(name: string, rawInput: unknown): Promise<Exec
 
   const parsed = tool.inputSchema.safeParse(rawInput);
   if (!parsed.success) {
-    return { ok: false, error: `Invalid input for '${name}': ${formatZodErrors(parsed.error)}` };
+    return { ok: false, error: `${INVALID_INPUT_PREFIX} '${name}': ${formatZodErrors(parsed.error)}` };
   }
 
   const cacheable = !NO_CACHE.has(name);

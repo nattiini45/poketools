@@ -10,10 +10,12 @@
  *   npx tsx scripts/agent-eval.ts --model deepseek-v4-pro
  *   npx tsx scripts/agent-eval.ts --model deepseek-v4-pro --cases dex-garchomp-hp,type-eq-gyarados
  *
- * Each case calls `runAgent()` DIRECTLY (no HTTP) with a fake userId
- * `eval-<modelId>`. The `eval-` prefix opts the run out of all DB persistence
- * (see `agent/memory.ts` DRY_RUN_USER_PREFIX) and encodes the model under test
- * as the router's first preference. Execution is sequential (RAM), with a
+ * Each case calls `runAgent()` DIRECTLY (no HTTP) with the deterministic dry-run
+ * identity of the model (`dryRunIdentity`, `agent/memory.ts`). It is a VALID UUID in a
+ * reserved range, so the strict tool schemas accept the ids the server sets from it, it
+ * opts the run out of all DB persistence, and it carries the model under test as the
+ * router's first preference. A tool call the strict schema refuses counts as a tool
+ * failure (`hasToolSchemaFailure`). Execution is sequential (RAM), with a
  * per-CATEGORY case timeout (teambuild gets longer — see {@link timeoutForCategory});
  * failures are logged and the run continues.
  *
@@ -151,12 +153,16 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 type AgentModule = typeof import('../src/lib/ai/agent/orchestrator');
 type RegistryModule = typeof import('../src/lib/ai/agent/tools/registry');
+type MemoryModule = typeof import('../src/lib/ai/agent/memory');
+type ScoringModule = typeof import('../src/lib/ai/agent/eval-scoring');
 
 async function runCase(
   runAgent: AgentModule['runAgent'],
   tools: RegistryModule['AGENT_TOOLS'],
   modelId: string,
   c: EvalCase,
+  memory: Pick<MemoryModule, 'dryRunIdentity'>,
+  scoring: Pick<ScoringModule, 'hasToolSchemaFailure'>,
 ): Promise<CaseResult> {
   const base: CaseResult = {
     id: c.id,
@@ -175,7 +181,7 @@ async function runCase(
   try {
     const res = await withTimeout(
       runAgent({
-        userId: `eval-${modelId}`,
+        userId: memory.dryRunIdentity(modelId),
         persona: c.persona,
         messages: [{ role: 'user', content: c.prompt }],
         context: c.context,
@@ -186,16 +192,14 @@ async function runCase(
     const [answer, steps] = await Promise.all([res.result.text, res.result.steps]);
     base.latency_ms = Date.now() - start;
 
-    // Schema-rejected tool calls: any tool_schema escalation OR a final call
-    // whose args fail its registry schema (defence-in-depth re-validation).
-    let schemaRejected = metadata.escalations.some((e) => e.reason === 'tool_schema');
+    // Schema-rejected tool calls: any tool_schema escalation, a final call whose args fail its model-facing schema
+    // (defence-in-depth re-validation), OR a call the STRICT schema refused after the server set its own fields (seen
+    // in the tool result, not in the model's input).
+    const schemaRejected =
+      metadata.escalations.some((e) => e.reason === 'tool_schema') || scoring.hasToolSchemaFailure(steps, tools);
     const calledTools = new Set<string>();
     for (const step of steps) {
-      for (const tc of step.toolCalls ?? []) {
-        calledTools.add(tc.toolName);
-        const tool = tools[tc.toolName];
-        if (!tool || !(tool.modelInputSchema ?? tool.inputSchema).safeParse(tc.input).success) schemaRejected = true;
-      }
+      for (const tc of step.toolCalls ?? []) calledTools.add(tc.toolName);
     }
 
     const requiredToolsCalled = (c.expect.mustCallTools ?? []).every((t) => calledTools.has(t));
@@ -262,6 +266,8 @@ async function main(): Promise<void> {
   const provider = await import('../src/lib/ai/agent/provider');
   const { runAgent } = await import('../src/lib/ai/agent/orchestrator');
   const { AGENT_TOOLS } = await import('../src/lib/ai/agent/tools/registry');
+  const memory = await import('../src/lib/ai/agent/memory');
+  const scoring = await import('../src/lib/ai/agent/eval-scoring');
   const { loadGoldenSet } = await import('../src/lib/ai/agent/__tests__/evals/golden-set');
 
   const allCases = await loadGoldenSet();
@@ -303,7 +309,7 @@ async function main(): Promise<void> {
     const results: CaseResult[] = [];
     for (const c of cases) {
       process.stderr.write(`  ${c.id} … `);
-      const r = await runCase(runAgent, AGENT_TOOLS, modelId, c);
+      const r = await runCase(runAgent, AGENT_TOOLS, modelId, c, memory, scoring);
       results.push(r);
       const verdict = r.error
         ? `ERROR (${r.error})`

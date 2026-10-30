@@ -6,6 +6,7 @@
  *
  * Style follows the existing query modules in `src/lib/supabase/queries/*`.
  */
+import { createHash } from 'node:crypto';
 import { supabase } from '@/lib/supabase/client';
 import type { Tables, Json } from '@/types/database';
 import type { AgentMessage } from './types';
@@ -47,9 +48,33 @@ export const DRY_RUN_USER_PREFIX = 'eval-';
 /** Synthetic conversation id returned for dry runs; recognised by {@link isDryRunUser}. */
 export const DRY_RUN_CONVERSATION_ID = 'eval-dry-run-conversation';
 
-/** True when an id marks an eval dry run (see {@link DRY_RUN_USER_PREFIX}). */
+/**
+ * A dry-run identity that is a well-formed UUID, in a reserved range. The tools validate the ids the server sets
+ * (`player_id`, `requesterId`, `playerId`) with strict `uuid()` schemas, so an `eval-` id would fail every one of them
+ * inside the harness. The range (version 4, variant 8, `e7a10000-0000-…-0000` + 8 hex digits) is outside what
+ * `gen_random_uuid()` is meant to produce for a `players.id` in practice (a fixed 48-bit prefix), and
+ * {@link dryRunIdentity} is the only thing that mints one.
+ */
+export const DRY_RUN_UUID_PREFIX = 'e7a10000-0000-4000-8000-0000';
+
+/** Model under test per dry-run UUID identity (an `eval-<model>` id carries it in the id itself). */
+const dryRunModels = new Map<string, string>();
+
+/**
+ * The deterministic identity of an eval run for `modelId` (omit it for a run with no model preference): a valid UUID in
+ * the reserved dry-run range, so persistence is skipped (`isDryRunUser`) AND the strict tool schemas accept it. The
+ * model is remembered for the router's first preference (`ephemeralProfile`).
+ */
+export function dryRunIdentity(modelId?: string): string {
+  const digest = modelId ? createHash('sha256').update(modelId).digest('hex').slice(0, 8) : '00000000';
+  const id = `${DRY_RUN_UUID_PREFIX}${digest}`;
+  if (modelId) dryRunModels.set(id, modelId);
+  return id;
+}
+
+/** True when an id marks an eval dry run (see {@link DRY_RUN_USER_PREFIX} and {@link dryRunIdentity}). */
 export function isDryRunUser(id: string): boolean {
-  return id.startsWith(DRY_RUN_USER_PREFIX);
+  return id.startsWith(DRY_RUN_USER_PREFIX) || id.startsWith(DRY_RUN_UUID_PREFIX);
 }
 
 /**
@@ -62,7 +87,9 @@ export function isDryRunUser(id: string): boolean {
  */
 function ephemeralProfile(playerId: string): AgentProfileRow {
   const now = new Date().toISOString();
-  const suffix = playerId.slice(DRY_RUN_USER_PREFIX.length);
+  const suffix = playerId.startsWith(DRY_RUN_USER_PREFIX)
+    ? playerId.slice(DRY_RUN_USER_PREFIX.length)
+    : (dryRunModels.get(playerId) ?? '');
   const modelPriority = suffix && suffix !== 'harness' ? [suffix] : [];
   return {
     player_id: playerId,
