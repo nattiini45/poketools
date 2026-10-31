@@ -379,6 +379,7 @@ export interface TableStageInput {
 
 function toRecord(match: PublicMatch, roundNumbers: Readonly<Record<string, number>>): MatchRecord {
   return {
+    match_id: match.id,
     player_1_id: match.player_1_id,
     player_2_id: match.player_2_id,
     winner_id: match.winner_id,
@@ -554,7 +555,7 @@ export function buildTableStage(input: TableStageInput): HubTableStage {
             battleStats: battleStats.filter((stat) => tableGames.has(stat.game_id)),
             gamesByMatch: Object.fromEntries(
               tableCompleted.map((match) => [
-                `${match.player_1_id}::${match.player_2_id}`,
+                match.id,
                 match.games.map((game) => game.winner_id ?? ''),
               ]),
             ),
