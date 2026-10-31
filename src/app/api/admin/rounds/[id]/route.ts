@@ -4,7 +4,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getRoundById, deleteRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { deleteMatchesByIds, getMatchesByRound } from '@/lib/supabase/queries/matches';
+import { deleteMatchesByRound, getMatchesByRound } from '@/lib/supabase/queries/matches';
 import { getGamesByMatch } from '@/lib/supabase/queries/games';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
@@ -83,8 +83,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       await resetMatch(match.id, player.playerId);
     }
 
-    // Through the query layer: it releases the matches' team rows first, so no match-prep row survives as an orphan.
-    await deleteMatchesByIds(matches.map((match) => match.id));
+    // Through the query layer: it releases the matches' team rows first, so a match-prep row never survives as a second
+    // planned row of its player. It reads the round's matches itself, in pages, and deletes on the round id.
+    await deleteMatchesByRound(id);
 
     await deleteRound(id);
 
