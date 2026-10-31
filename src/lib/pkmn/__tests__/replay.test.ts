@@ -764,6 +764,86 @@ describe('parseReplayLog', () => {
     expect(lycanroc!.turns_active).toBe(0);
   });
 
+  it('credits a hazard KO to the Zoroark when it set the hazard in disguise, even after the copied species was out', () => {
+    const log = [
+      '|poke|p2|Zoroark, M|',
+      '|poke|p2|Lycanroc, M|',
+      '|switch|p1a: Alpha|Alpha|100/100',
+      '|switch|p2a: Howler|Lycanroc, M|100/100',
+      '|turn|1',
+      '|move|p2a: Howler|Stone Edge|p1a: Alpha',
+      '|-damage|p1a: Alpha|60/100',
+      '|switch|p2a: Howler|Lycanroc, M|100/100',
+      '|turn|2',
+      '|move|p2a: Howler|Stealth Rock|',
+      '|-sidestart|p1: Player1|move: Stealth Rock',
+      '|replace|p2a: Masque|Zoroark, M',
+      '|-end|p2a: Masque|Illusion',
+      '|switch|p1a: Beta|Beta|10/100',
+      '|-damage|p1a: Beta|0 fnt|[from] Stealth Rock',
+      '|faint|p1a: Beta',
+      '|win|Player2',
+    ].join('\n');
+
+    const result = parseReplayLog(log);
+    const zoroark = result.players[1].pokemon.find((p) => p.pokemon_name === 'Zoroark');
+    const lycanroc = result.players[1].pokemon.find((p) => p.pokemon_name === 'Lycanroc');
+    expect(zoroark!.kos_dealt).toBe(1);
+    expect(lycanroc!.kos_dealt).toBe(0);
+  });
+
+  it('keeps the credit for a hazard the copied species set before the disguise', () => {
+    const log = [
+      '|poke|p2|Zoroark, M|',
+      '|poke|p2|Lycanroc, M|',
+      '|switch|p1a: Alpha|Alpha|100/100',
+      '|switch|p2a: Howler|Lycanroc, M|100/100',
+      '|turn|1',
+      '|move|p2a: Howler|Stealth Rock|',
+      '|-sidestart|p1: Player1|move: Stealth Rock',
+      '|switch|p2a: Howler|Lycanroc, M|100/100',
+      '|turn|2',
+      '|move|p2a: Howler|Bitter Malice|p1a: Alpha',
+      '|-damage|p1a: Alpha|50/100',
+      '|replace|p2a: Masque|Zoroark, M',
+      '|-end|p2a: Masque|Illusion',
+      '|switch|p1a: Beta|Beta|10/100',
+      '|-damage|p1a: Beta|0 fnt|[from] Stealth Rock',
+      '|faint|p1a: Beta',
+      '|win|Player2',
+    ].join('\n');
+
+    const result = parseReplayLog(log);
+    const zoroark = result.players[1].pokemon.find((p) => p.pokemon_name === 'Zoroark');
+    const lycanroc = result.players[1].pokemon.find((p) => p.pokemon_name === 'Lycanroc');
+    expect(lycanroc!.kos_dealt).toBe(1);
+    expect(zoroark!.kos_dealt).toBe(0);
+    expect(zoroark!.moves_used).toEqual(['Bitter Malice']);
+  });
+
+  it('leaves the rows as they are for an Illusion reveal in doubles (per-side attribution, #53)', () => {
+    const log = [
+      '|poke|p2|Zoroark, M|',
+      '|poke|p2|Lycanroc, M|',
+      '|poke|p2|Ally, M|',
+      '|switch|p1a: Alpha|Alpha|100/100',
+      '|switch|p1b: Gamma|Gamma|100/100',
+      '|switch|p2a: Howler|Lycanroc, M|100/100',
+      '|switch|p2b: Friend|Ally, M|100/100',
+      '|turn|1',
+      '|move|p2b: Friend|Tackle|p1a: Alpha',
+      '|-damage|p1a: Alpha|50/100',
+      '|replace|p2a: Masque|Zoroark, M',
+      '|-end|p2a: Masque|Illusion',
+      '|win|Player2',
+    ].join('\n');
+
+    const result = parseReplayLog(log);
+    const zoroark = result.players[1].pokemon.find((p) => p.pokemon_name === 'Zoroark');
+    // No split: nothing is moved onto the Zoroark, whose activity cannot be told from its ally's here.
+    expect(zoroark?.was_brought ?? false).toBe(false);
+  });
+
   it('hands the Zoroark a move it used in disguise even when the copied species had used it before', () => {
     const log = [
       '|poke|p2|Zoroark, M|',

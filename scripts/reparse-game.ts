@@ -5,11 +5,10 @@
  * Use after a replay-parser fix lands to repair stats recorded from the buggy
  * parser: the game's stored `replay_url` is fetched again, parsed with the
  * CURRENT parser, and the resulting rows are written through `editGame` — the
- * same path the admin game editor uses (PATCH /api/admin/games/[id]), so
- * aggregates roll back and re-apply, match status and gamification
- * re-evaluate, evolutions re-check (EPB debit/credit), and `stats_locked` is
- * set. The winner is left untouched: `editGame` derives `match_won` from the
- * game's unchanged `winner_id`.
+ * same path the admin game editor uses (PATCH /api/admin/games/[id]); see
+ * `editGame` in `src/lib/pkmn/game-pipeline.ts` for what it rolls back,
+ * re-applies and re-evaluates. The winner is left untouched: the game's
+ * `winner_id` is not part of the edit.
  *
  * ---------------------------------------------------------------------------
  * Prerequisites
@@ -140,7 +139,16 @@ function resolveSidePlayers(
   match: MatchWithPlayers,
 ): [string, string] {
   const participants = new Set([match.player_1_id, match.player_2_id]);
-  const monToPlayer = new Map(oldStats.map((s) => [s.pokemon_name, s.player_id]));
+  // A species both players brought (a mirror pick) says nothing about the side: it casts no vote.
+  const owners = new Map<string, Set<string>>();
+  for (const s of oldStats) {
+    const set = owners.get(s.pokemon_name) ?? new Set<string>();
+    set.add(s.player_id);
+    owners.set(s.pokemon_name, set);
+  }
+  const monToPlayer = new Map(
+    [...owners].filter(([, set]) => set.size === 1).map(([name, set]) => [name, [...set][0]] as const),
+  );
 
   const resolved = parsed.players.map((side, idx) => {
     const votes = new Map<string, number>();
@@ -244,11 +252,12 @@ async function main(): Promise<void> {
       `The re-fetched replay hashes to ${bound.hash}, the stored replay_hash is ${game.replay_hash}: ` +
         `the remote replay changed since it was recorded, so this may not be the battle the game holds.`,
     );
-    if (!args.force) {
+    // The diff below is still printed (a dry run is how to inspect it); only a write needs --force.
+    if (args.apply && !args.force) {
       console.error('Refusing to write. Check the replay, or pass --force to proceed.');
       process.exit(1);
     }
-    console.error('--force given: continuing despite the hash mismatch.');
+    if (args.apply) console.error('--force given: continuing despite the hash mismatch.');
   }
 
   const parsed = bound.parsed;
@@ -348,20 +357,23 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const actor = await getPlayerById(args.actorId!);
-  if (!actor) throw new Error(`--actor ${args.actorId} is not a known player`);
+  const actorId = args.actorId;
+  if (actorId === null) throw new Error('--apply requires --actor'); // parseArgs already refused this
+  const actor = await getPlayerById(actorId);
+  if (!actor) throw new Error(`--actor ${actorId} is not a known player`);
   if (!actor.is_admin || actor.status !== 'active') {
-    throw new Error(`--actor ${args.actorId} is not an active admin; the audit event must name the admin responsible`);
+    throw new Error(`--actor ${actorId} is not an active admin; the audit event must name the admin responsible`);
   }
+  const hashChanged = game.replay_hash !== null && game.replay_hash !== undefined && bound.hash !== game.replay_hash;
 
   const result = await editGame({
     game_id: args.gameId,
-    admin_id: args.actorId!,
+    admin_id: actorId,
     battle_stats: newStats,
   });
 
   logAuditEvent({
-    actor_id: args.actorId!,
+    actor_id: actorId,
     actor_name: actor.name,
     action: 'game.edit',
     resource_type: 'game',
@@ -375,6 +387,8 @@ async function main(): Promise<void> {
       replay_hash: bound.hash,
       battle_stats_replaced: true,
       rows_changed: changed,
+      // What --force overrode, so the audit trail shows a deliberate override rather than a routine repair.
+      ...(args.force ? { forced: { stats_locked: game.stats_locked === true, replay_hash_changed: hashChanged, species_set_mismatch: setMismatch } } : {}),
       match_status: result.match_status,
       match_winner_id: result.match_winner_id,
       ...(result.match_status_conflict ? { match_status_conflict: true } : {}),
@@ -401,6 +415,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
+  // The whole error, stack and cause included: a failure inside editGame may have written part of the edit.
+  console.error(err);
+  console.error('If this happened during --apply, check the game in the admin UI: the stats may be partly replaced.');
   process.exit(1);
 });
