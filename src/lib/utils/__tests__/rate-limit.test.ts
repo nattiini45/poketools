@@ -198,6 +198,7 @@ describe('rateLimitIpIdentity', () => {
     expect(rateLimitIpIdentity('203.0.113.9')).toBe('203.0.113.9');
     expect(rateLimitIpIdentity('::ffff:203.0.113.9')).toBe('203.0.113.9');
     expect(rateLimitIpIdentity('::FFFF:203.0.113.9')).toBe('203.0.113.9');
+    expect(rateLimitIpIdentity('::ffff:cb00:7109')).toBe('203.0.113.9');
     expect(rateLimitIpIdentity('64:ff9b::203.0.113.9')).toBe('64:ff9b::203.0.113.9');
     expect(rateLimitIpIdentity('unknown')).toBe('unknown');
     expect(warn).not.toHaveBeenCalled();

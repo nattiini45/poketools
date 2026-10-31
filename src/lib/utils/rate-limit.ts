@@ -335,6 +335,11 @@ export function rateLimitIpIdentity(ip: string): string {
     const mapped = hextets.length === 7 && hextets.slice(0, 5).every((group) => /^0{1,4}$/.test(group)) && /^ffff$/i.test(hextets[5]);
     return mapped ? last : ip.toLowerCase();
   }
+  // The same mapping spelled in hex (`::ffff:cb00:7109`): its IPv4 address, not the shared all-zero /64.
+  if (hextets.slice(0, 5).every((group) => /^0{1,4}$/.test(group)) && /^ffff$/i.test(hextets[5])) {
+    const [high, low] = [parseInt(hextets[6], 16), parseInt(hextets[7], 16)];
+    return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+  }
   return `${hextets
     .slice(0, 4)
     .map((hextet) => hextet.toLowerCase().replace(/^0+(?=.)/, ''))
