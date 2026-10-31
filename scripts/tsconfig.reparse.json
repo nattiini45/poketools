@@ -1,0 +1,15 @@
+{
+  "$comment": "Run-only tsconfig for scripts/reparse-game.ts. Used by `tsx` via `--tsconfig scripts/tsconfig.reparse.json` so the editGame import chain can resolve the `server-only` marker package and `next/cache` outside a Next request context (same stubs Vitest uses — see scripts/tsconfig.audit.json for why). `@format-pack` stays private-first: on a private-pack league, run the script from a checkout that carries src/format-packs/private/ so editGame's EPB evolution recheck reads the league's real tuning. The root tsconfig.json is NOT modified, so the Next.js server-only guard stays intact for the app build. This file is NOT consumed by `tsc --noEmit` (typecheck) — typecheck uses the root tsconfig which already includes scripts/*.ts via **/*.ts.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@/*": ["../src/*"],
+      "@format-pack": ["../src/format-packs/private", "../src/format-packs/example"],
+      "@pack-extensions": ["../src/format-packs/private/extensions", "../src/format-packs/example/extensions"],
+      "server-only": ["../src/test/server-only-stub.ts"],
+      "next/cache": ["../src/test/next-cache-stub.ts"]
+    }
+  },
+  "include": ["./reparse-game.ts"]
+}
