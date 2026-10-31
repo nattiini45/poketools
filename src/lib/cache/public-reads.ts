@@ -391,7 +391,7 @@ const seasonByeRounds = cache((seasonId: string) =>
 
 /** Completed match records of every stage of a league, flattened. */
 const seasonMatchRecords = cache((seasonId: string) =>
-  cachedRead(seasonSpec('season-match-records', seasonId), async (): Promise<MatchRecord[]> => {
+  cachedRead(seasonSpec('season-match-records-v2', seasonId), async (): Promise<MatchRecord[]> => {
     const stageIds = await getSeasonStageIds(seasonId);
     const byStage = await getCompletedMatchRecordsBatch(stageIds);
     return [...byStage.values()].flat();

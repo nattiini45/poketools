@@ -2,7 +2,10 @@ import type { Pairing, GeneratedRound, MatchRecord, ByeRecord } from './types';
 import { BYE_PLAYER_ID } from './types';
 import { computeStandings, buildPairingHistory, havePlayed } from './standings';
 
-/** How many search steps one round may spend before it settles for the best pairing found (or greedy). */
+/**
+ * How many search steps each pairing search of a round may spend: the bye-candidate pass and the fewest-rematches fallback
+ * each get this budget. A search that runs out settles for the best pairing found (or greedy).
+ */
 export const SWISS_SEARCH_STEP_LIMIT = 200_000;
 
 type PairingHistory = ReturnType<typeof buildPairingHistory>;
@@ -15,8 +18,9 @@ interface Matching {
 /**
  * The pairing of `players` (in standings order) with the fewest rematches, preferring higher-ranked opponents: a depth-first
  * search that always pairs the highest-ranked unpaired player first and tries opponents in standings order, so the first
- * complete pairing it finds at a given rematch count is the one a top-down Monrad pairing would pick. `maxRematches` bounds
- * the search; `budget` caps its steps. Returns null when no pairing within the bound was found.
+ * complete pairing it finds is, when called with `maxRematches` = 0 and a rematch-free pairing exists, the one a top-down
+ * Monrad pairing would pick. `maxRematches` bounds the search; `budget` caps its steps. Returns null when no pairing within
+ * the bound was found, or when the budget ran out before one was.
  */
 function searchPairing(players: readonly string[], history: PairingHistory, maxRematches: number, budget: { steps: number }): Matching | null {
   const paired = new Set<string>();
@@ -85,7 +89,8 @@ function greedyPairing(players: readonly string[], history: PairingHistory): Mat
  *    backtracks instead of forcing the last players together (#39)
  * 4. Handle bye for odd player count: the lowest-ranked player who has not had one (`byeHistory` lists the byes stored on
  *    earlier rounds) whose removal still leaves a rematch-free pairing; then the lowest-ranked of the rest
- * 5. When no bye and pairing avoid every rematch, the pairing with the fewest rematches (bounded search, then greedy)
+ * 5. When no bye and pairing avoid every rematch: the lowest-ranked bye candidate sits out, and the others get the pairing
+ *    with the fewest rematches (bounded search; greedy, logged, when the search ran out before beating it)
  */
 export function generateSwissRound(
   participantIds: string[],
@@ -132,10 +137,15 @@ export function generateSwissRound(
     const players = without(bye);
     const searched = searchPairing(players, history, players.length, fallbackBudget);
     const greedy = greedyPairing(players, history);
-    if (budget.steps < 0 || fallbackBudget.steps < 0) {
-      console.warn(`[swiss] round ${roundNumber}: the pairing search hit its step limit; using the best pairing found`);
+    const matching = searched !== null && searched.rematches <= greedy.rematches ? searched : greedy;
+    // Only a result the search could not prove minimal is worth a line: a completed search's fallback is the best there is.
+    if (fallbackBudget.steps < 0) {
+      console.warn(
+        `[swiss] round ${roundNumber} of ${ranked.length} players: the fewest-rematches search hit its step limit; ` +
+          `${matching === greedy ? 'used the greedy pairing' : 'used the best pairing found'} (${matching.rematches} rematches)`,
+      );
     }
-    chosen = { bye, matching: searched !== null && searched.rematches <= greedy.rematches ? searched : greedy };
+    chosen = { bye, matching };
   }
 
   return {

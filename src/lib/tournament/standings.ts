@@ -11,7 +11,10 @@ export interface StandingsOptions {
   pointsPerDraw?: number;
   /** Battle stats for computing kill differential and games played */
   battleStats?: TournamentBattleStat[];
-  /** Game data: map of match id → array of game winner IDs (one entry per game). */
+  /**
+   * Game data: map of match id → array of game winner IDs (one entry per game). The match records must carry `match_id`:
+   * a record without one scores no games.
+   */
   gamesByMatch?: Record<string, string[]>;
   /** Only include matches up to this round number */
   maxRound?: number;

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateSwissRound } from '../swiss';
+import { computeStandings } from '../standings';
 import type { MatchRecord } from '../types';
 import { BYE_PLAYER_ID } from '../types';
 
@@ -24,7 +25,6 @@ describe('generateSwissRound', () => {
     const round = generateSwissRound(['p1', 'p2', 'p3'], names, [], 1);
     expect(round.pairings).toHaveLength(1);
     expect(round.bye_player_ids).toHaveLength(1);
-    expect(round.bye_player_ids[0]).not.toBe('e');
   });
 
   it('avoids re-pairing players who already met', () => {
@@ -59,7 +59,6 @@ describe('generateSwissRound', () => {
     const round = generateSwissRound(['p1', 'p2', 'p3'], names, history, 2);
     // p3 already had bye, so bye should go to p1 or p2
     expect(round.bye_player_ids).toHaveLength(1);
-    expect(round.bye_player_ids[0]).not.toBe('e');
     expect(round.bye_player_ids[0]).not.toBe('p3');
   });
 
@@ -67,7 +66,6 @@ describe('generateSwissRound', () => {
     const round = generateSwissRound(['p1', 'p2', 'p3', 'p4', 'p5'], names, [], 1);
     expect(round.pairings).toHaveLength(2);
     expect(round.bye_player_ids).toHaveLength(1);
-    expect(round.bye_player_ids[0]).not.toBe('e');
     // Total accounted for: 2*2 + 1 = 5
     const allPlayers = new Set<string>();
     for (const p of round.pairings) {
@@ -85,7 +83,10 @@ describe('generateSwissRound', () => {
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
-/** Whether some bye choice and perfect matching of `players` avoids every pair in `met` (brute force). */
+/**
+ * Whether some bye choice and perfect matching of `players` avoids every pair in `met` (brute force). Bye candidates:
+ * players without a prior bye, or all of them once everyone has had one (the engine's own rule).
+ */
 function rematchFreeExists(players: string[], met: Set<string>, hadBye: Set<string>): boolean {
   const pairUp = (rest: string[]): boolean => {
     if (rest.length === 0) return true;
@@ -157,6 +158,21 @@ describe('generateSwissRound without avoidable rematches (#39)', () => {
       }
     }
     expect(rounds).toBeGreaterThan(200);
+  });
+
+  it('takes the first fewest-rematch pairing in standings order when every pairing repeats a match', () => {
+    // Four players who have all met: every pairing has two rematches, so standings order decides.
+    const ids = ['p1', 'p2', 'p3', 'p4'];
+    const pairs: Array<[string, string]> = [['p1', 'p2'], ['p3', 'p4'], ['p1', 'p3'], ['p2', 'p4'], ['p1', 'p4'], ['p2', 'p3']];
+    const history: MatchRecord[] = pairs.map(([a, b], i) => ({ player_1_id: a, player_2_id: b, winner_id: a, round_number: Math.floor(i / 2) + 1 }));
+    const names = Object.fromEntries(ids.map((id) => [id, id]));
+    const standings = computeStandings(ids, names, history).map((s) => s.player_id);
+    const round = generateSwissRound(ids, names, history, 4);
+    expect(round.pairings).toEqual([
+      { player_1_id: standings[0], player_2_id: standings[1] },
+      { player_1_id: standings[2], player_2_id: standings[3] },
+    ]);
+    expect(round.bye_player_ids).toEqual([]);
   });
 
   it('gives the bye to a player without one, and still pairs the rest without a rematch', () => {
