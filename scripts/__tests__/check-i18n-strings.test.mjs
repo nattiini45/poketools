@@ -558,7 +558,8 @@ describe('run() against a scratch repo', () => {
 
   it('changed-files mode exits 2 when BASE cannot be resolved', () => {
     const dir = scratch(files);
-    spawnSync('git', [...QUIET_GIT_CONFIG, 'init', '-q'], { cwd: dir });
+    const init = spawnSync('git', [...QUIET_GIT_CONFIG, 'init', '-q'], { cwd: dir, encoding: 'utf8' });
+    if (init.status !== 0) throw new Error(`git init: ${init.stderr}`);
     expect(run([], { root: dir, env: { BASE: 'no-such-ref' } }).exitCode).toBe(2);
   });
 });

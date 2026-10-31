@@ -81,7 +81,7 @@ Runs on push to `main` and PRs targeting `main`. Concurrency: cancel in-progress
 9. **Tests** — `npm test`
 10. **Coverage** — `npm run test:coverage` (floors on `src/lib/**` and API route handlers; components and pages are report-only)
 
-`npm run verify:ci` (`scripts/verify-ci.mjs`) runs the same steps locally, in a clean clone, with an allow-listed environment (tool paths, home, temp dirs and proxies only) plus `CI=true` and `TZ=UTC`, so a variable in your shell cannot change the result.
+`npm run verify:ci` (`scripts/verify-ci.mjs`) runs the same steps locally, in a clean clone, with an allow-listed environment (what the toolchain needs: paths, home, temp dirs, npm cache, CA trust, proxies; PATH is still honoured) plus `CI=true` and `TZ=UTC`, so a project variable in your shell cannot change the result.
 
 ### CI Environment
 Build and tests use placeholder env vars (`NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co`, etc.). Real secrets are never needed for CI, and CI never reaches a Supabase project.

@@ -11,7 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runMirror } from '../mirror-private-overlay.mjs';
-import { QUIET_GIT_CONFIG, rmTree } from './temp-repo.mjs';
+import { QUIET_GIT_CONFIG, rmTrees } from './temp-repo.mjs';
 import {
   MANIFEST_NAME,
   OUTPUT_TMP_SUFFIX,
@@ -33,7 +33,7 @@ const caseInsensitiveFs = process.platform === 'win32' || process.platform === '
 const dirs = [];
 afterEach(() => {
   // See temp-repo.mjs: git's background maintenance is off, and the removal retries anyway (ENOTEMPTY on CI, issue #80).
-  while (dirs.length > 0) rmTree(/** @type {string} */ (dirs.pop()));
+  rmTrees(dirs);
 });
 
 function git(root, ...args) {

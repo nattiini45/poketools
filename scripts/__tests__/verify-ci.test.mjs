@@ -210,4 +210,10 @@ describe('ciEnv: what a step inherits', () => {
     );
     expect(env).toEqual({ Path: 'C:/bin', HOME: '/home/dev', https_proxy: 'http://proxy', CI: 'true', TZ: 'UTC', DISCORD_CLIENT_ID: 'placeholder' });
   });
+
+  it('skips an unset value, and lets the step env win over CI, TZ and variables the shell may not pass', () => {
+    const env = ciEnv({ NODE_OPTIONS: '--max-old-space-size=4096', TZ: 'US/Eastern' }, { HOME: '/home/dev', PATH: undefined });
+    expect(env).toEqual({ HOME: '/home/dev', CI: 'true', TZ: 'US/Eastern', NODE_OPTIONS: '--max-old-space-size=4096' });
+    expect('PATH' in env).toBe(false);
+  });
 });

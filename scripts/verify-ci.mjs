@@ -64,7 +64,8 @@ const BUILD_ENV = {
  * The environment every step runs with: an ALLOW-list, not a deny-list. A developer's shell (or a `.env` some other tool
  * loaded) must not be able to change a result here: `NEXT_PUBLIC_WORLD_ASSETS_URL` flips `getWorldAssetBase()`,
  * `FORMAT_PACK=private` makes the clean clone throw, `RATE_LIMIT_STORE`, `TZ` or an opt-in test flag change what the suites
- * do. Only what a process needs to find its tools, its temp dir, its home and a proxy is passed through; `CI=true` and
+ * do. Only the minimum the toolchain needs to run is passed through (paths, home, temp dirs, the Windows runtime
+ * variables, npm cache, CA trust and proxies; PATH is still honoured), everything else is dropped; `CI=true` and
  * `TZ=UTC` match the GitHub runner, then the step's own env (the build's placeholders) goes on top.
  */
 const PASSED_ENV = new Set([
