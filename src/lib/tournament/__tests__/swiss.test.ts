@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { generateSwissRound } from '../swiss';
 import { computeStandings } from '../standings';
 import type { MatchRecord } from '../types';
@@ -173,6 +173,21 @@ describe('generateSwissRound without avoidable rematches (#39)', () => {
       { player_1_id: standings[2], player_2_id: standings[3] },
     ]);
     expect(round.bye_player_ids).toEqual([]);
+  });
+
+  it('settles for the greedy pairing, and says so, when the search runs out of steps', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ids = ['p1', 'p2', 'p3', 'p4'];
+    const history: MatchRecord[] = [{ player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1', round_number: 1 }];
+    const round = generateSwissRound(ids, Object.fromEntries(ids.map((id) => [id, id])), history, 2, [], { stepLimit: 1 });
+    // Everyone is still paired, with the greedy top-down pairing, and both cut-short searches are logged.
+    expect(round.pairings).toHaveLength(2);
+    expect(new Set(round.pairings.flatMap((p) => [p.player_1_id, p.player_2_id])).size).toBe(4);
+    expect(warn.mock.calls.map((call) => String(call[0]))).toEqual([
+      expect.stringContaining('rematch-free search hit its step limit after 1 of 1'),
+      expect.stringContaining('used the greedy pairing'),
+    ]);
+    warn.mockRestore();
   });
 
   it('gives the bye to a player without one, and still pairs the rest without a rematch', () => {

@@ -17,9 +17,9 @@ interface Matching {
 
 /**
  * The pairing of `players` (in standings order) with the fewest rematches, preferring higher-ranked opponents: a depth-first
- * search that always pairs the highest-ranked unpaired player first and tries opponents in standings order, so the first
- * complete pairing it finds is, when called with `maxRematches` = 0 and a rematch-free pairing exists, the one a top-down
- * Monrad pairing would pick. `maxRematches` bounds the search; `budget` caps its steps. Returns null when no pairing within
+ * search that always pairs the highest-ranked unpaired player first and tries opponents in standings order. With
+ * `maxRematches` = 0 it returns the first rematch-free pairing in that order: the top-down Monrad pairing whenever that
+ * pairing has no rematch, else the nearest rematch-free one to it. `maxRematches` bounds the search; `budget` caps its steps. Returns null when no pairing within
  * the bound was found, or when the budget ran out before one was.
  */
 function searchPairing(players: readonly string[], history: PairingHistory, maxRematches: number, budget: { steps: number }): Matching | null {
@@ -97,8 +97,11 @@ export function generateSwissRound(
   participantNames: Record<string, string>,
   matchHistory: MatchRecord[],
   roundNumber: number,
-  byeHistory: ByeRecord[] = []
+  byeHistory: ByeRecord[] = [],
+  /** Overrides `SWISS_SEARCH_STEP_LIMIT` (tests). */
+  options: { stepLimit?: number } = {},
 ): GeneratedRound {
+  const stepLimit = options.stepLimit ?? SWISS_SEARCH_STEP_LIMIT;
   const standings = computeStandings(
     participantIds,
     participantNames,
@@ -119,21 +122,30 @@ export function generateSwissRound(
         ];
   const without = (bye: string | null) => (bye === null ? ranked : ranked.filter((id) => id !== bye));
 
-  const budget = { steps: SWISS_SEARCH_STEP_LIMIT };
+  const budget = { steps: stepLimit };
   let chosen: { bye: string | null; matching: Matching } | null = null;
+  let tried = 0;
   // First: the best bye candidate that leaves a pairing without any rematch.
   for (const bye of byeCandidates) {
+    tried += 1;
     const matching = searchPairing(without(bye), history, 0, budget);
     if (matching !== null) {
       chosen = { bye, matching };
       break;
     }
-    if (budget.steps < 0) break;
+    if (budget.steps < 0) {
+      // Not proven: a candidate not yet tried (or this one, further on) might still have allowed a clean round.
+      console.warn(
+        `[swiss] round ${roundNumber} of ${ranked.length} players: the rematch-free search hit its step limit after ` +
+          `${tried} of ${byeCandidates.length} bye candidate(s); falling back to the first candidate and its best pairing`,
+      );
+      break;
+    }
   }
   // Else: the first candidate's pairing with the fewest rematches, or greedy when the search ran out of steps.
   if (chosen === null) {
     const bye = byeCandidates[0];
-    const fallbackBudget = { steps: SWISS_SEARCH_STEP_LIMIT };
+    const fallbackBudget = { steps: stepLimit };
     const players = without(bye);
     const searched = searchPairing(players, history, players.length, fallbackBudget);
     const greedy = greedyPairing(players, history);
