@@ -13,3 +13,8 @@
 export async function revalidatePath(..._args: unknown[]): Promise<void> {
   // Intentional no-op: script runners have no Next.js revalidation runtime.
 }
+
+/** Same for tag revalidation (`src/lib/revalidation.ts` expires public reads by tag). */
+export function revalidateTag(..._args: unknown[]): void {
+  // Intentional no-op: script runners have no Next.js revalidation runtime.
+}
