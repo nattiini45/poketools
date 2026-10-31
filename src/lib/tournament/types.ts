@@ -47,6 +47,8 @@ export interface ByeRecord {
 }
 
 export interface MatchRecord {
+  /** The match's id: what `gamesByMatch` is keyed on (a rematch of the same pair is a different match). */
+  match_id?: string;
   player_1_id: string;
   player_2_id: string;
   winner_id: string | null;

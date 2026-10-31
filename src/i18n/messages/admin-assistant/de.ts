@@ -65,6 +65,7 @@ export default defineDe<typeof en>()({
     longTitle: 'Einrichtungsplan',
     revision: 'Revision {number}',
     empty: 'Der Plan füllt sich, während du beschreibst, was du willst.',
+    unreadable: 'Dieser Plan lässt sich nicht mehr lesen. Bitte den Assistenten, ihn neu aufzusetzen.',
     sections: {
       ruleset: 'Regelwerk',
       format: 'Format',
@@ -226,6 +227,7 @@ export default defineDe<typeof en>()({
     generic: 'Der Assistent konnte nicht antworten. Versuch es bitte noch einmal.',
     retry: 'Erneut versuchen',
     loadFailed: 'Die Unterhaltung konnte nicht geladen werden.',
+    refreshFailed: 'Diese Karte konnte nicht aktualisiert werden. Was sie zeigt, ist vielleicht nicht mehr aktuell.',
     sendFailed: 'Die Nachricht konnte nicht gesendet werden.',
     notAvailable: 'Der Assistent ist nicht verfügbar.',
   },

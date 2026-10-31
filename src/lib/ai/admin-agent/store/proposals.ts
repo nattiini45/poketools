@@ -106,6 +106,21 @@ export function proposalRepository(ctx: StoreContext) {
         if (pending - replaced >= input.maxPending) throw new AdminAgentStoreError('agent_cap_reached', { limit: input.maxPending });
       }
 
+      // Supersede before the insert (the order `writePlanRevision` uses): a failure here refuses a staging that wrote nothing,
+      // and a failed insert afterwards leaves at worst the older card retired, never a live card the caller was told failed.
+      if (input.supersedeKey) {
+        unwrap(
+          'proposals.supersede',
+          await ctx.db
+            .from('admin_agent_proposals')
+            .update({ status: 'superseded' })
+            .eq('conversation_id', conversation.id)
+            .eq('admin_id', adminId)
+            .eq('supersede_key', input.supersedeKey)
+            .eq('status', 'proposed'),
+        );
+      }
+
       const proposal = unwrapRow(
         'proposals.stage',
         await ctx.db
@@ -133,19 +148,6 @@ export function proposalRepository(ctx: StoreContext) {
           .select(PROPOSAL_COLUMNS)
           .single(),
       );
-      if (input.supersedeKey) {
-        unwrap(
-          'proposals.supersede',
-          await ctx.db
-            .from('admin_agent_proposals')
-            .update({ status: 'superseded' })
-            .eq('conversation_id', conversation.id)
-            .eq('admin_id', adminId)
-            .eq('supersede_key', input.supersedeKey)
-            .eq('status', 'proposed')
-            .neq('id', proposal.id),
-        );
-      }
       return proposal;
     },
 

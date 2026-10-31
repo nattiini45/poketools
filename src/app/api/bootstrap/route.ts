@@ -5,7 +5,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
 import { bootstrapSchema, formatZodErrors } from '@/lib/validation';
 import { secretsEqual } from '@/lib/utils/crypto';
-import { checkRateLimit, getClientIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
+import { checkRateLimit, getClientIp, getClientRateLimitIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import { bootstrapEnvSchema, readEnv } from '@/lib/env';
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rate = await checkRateLimit('bootstrap', getClientIp(request), BOOTSTRAP_RATE_LIMIT);
+    const rate = await checkRateLimit('bootstrap', getClientRateLimitIp(request), BOOTSTRAP_RATE_LIMIT);
     if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
 
     // 1. Eligibility: bootstrap is over for good once any admin exists.

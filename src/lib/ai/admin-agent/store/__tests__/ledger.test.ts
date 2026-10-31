@@ -116,6 +116,7 @@ describe('actions', () => {
     const list = db.to('admin_agent_actions').at(-1)!;
     expect(hasStep(list, 'limit', 500)).toBe(true);
     expect(eqOf(list, 'admin_id')).toBe(ADMIN);
+    expect(eqOf(list, 'conversation_id')).toBe(CONVERSATION);
     await actions.listProposalActions(admin, PROPOSAL);
     expect(eqOf(db.to('admin_agent_actions').at(-1)!, 'proposal_id')).toBe(PROPOSAL);
     expect(await actions.listProposalActions(admin, 'nope')).toEqual([]);

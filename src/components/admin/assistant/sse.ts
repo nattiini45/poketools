@@ -55,12 +55,20 @@ export function createSseParser(onEvent: (event: AgentEvent) => void): SseParser
       .map((line) => line.slice(5).replace(/^ /, ''))
       .join('\n');
     if (data === '') return;
+    // A frame that does not parse, or parses into no known event, is skipped, but not silently: a lost `done` or `error`
+    // frame must at least show in the console. Only the parse is guarded: a throw in the handler is the caller's own bug.
+    let event: AgentEvent | null;
     try {
-      const event = asAgentEvent(JSON.parse(data));
-      if (event !== null) onEvent(event);
-    } catch {
-      // A malformed frame is skipped.
+      event = asAgentEvent(JSON.parse(data));
+    } catch (error) {
+      console.warn('[assistant] dropped a malformed stream frame', error);
+      return;
     }
+    if (event === null) {
+      console.warn('[assistant] dropped an unrecognised stream frame', data.slice(0, 200));
+      return;
+    }
+    onEvent(event);
   };
 
   return {

@@ -7,7 +7,7 @@ import { approveProposal } from '../../../_lib/approve';
 import { authorizeAgent } from '../../../_lib/auth';
 import { assertSameOriginRequest, readAgentJson } from '../../../_lib/request';
 
-/** An approve runs the whole Build in this request; the executor stops starting steps after 240 s (spec §18.6). */
+/** An approve runs the whole Build in this request; the executor stops starting steps after 225 s (spec §18.6). */
 export const maxDuration = 300;
 
 /** The body is four short fields; 16 KiB is far above any honest request. */

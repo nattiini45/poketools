@@ -34,6 +34,7 @@ vi.mock('@/lib/utils/rate-limit', async () => {
   return {
     checkRateLimit,
     getClientIp: vi.fn(() => '203.0.113.9'),
+    getClientRateLimitIp: vi.fn(() => '203.0.113.9'),
     rateLimitedResponse: (seconds: number) =>
       Res.json(
         { success: false, error: `Rate limit exceeded. Try again in ${seconds}s.`, code: 'rate_limited', params: { seconds } },

@@ -34,6 +34,11 @@ describe('checkAuthRateLimit', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it('keys an IPv6 client on its /64 and an aliased address on its inbox (#33)', async () => {
+    await checkAuthRateLimit('signup', request({ 'x-forwarded-for': '2001:db8:1:2::abcd' }), 'A.sh+x@googlemail.com');
+    expect(keysHit()).toEqual([rateLimitKey('signup-ip', '2001:db8:1:2::/64'), rateLimitKey('signup-email', 'ash@gmail.com')]);
+  });
+
   it('returns the first denial and does not count later checks', async () => {
     rpc.mockResolvedValueOnce({ data: [{ allowed: false, hits: 11, retry_after_seconds: 99 }], error: null });
 

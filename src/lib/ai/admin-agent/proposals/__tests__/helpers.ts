@@ -105,8 +105,10 @@ export class MemoryStore {
         getSnapshot: async (_admin: string, actionId: string) => this.snapshots.get(actionId) ?? null,
       },
       actions: {
-        listActions: async () => this.actions,
-        listProposalActions: async (_admin: string, proposalId: string) => this.actions.filter((action) => action.proposal_id === proposalId),
+        // Honours the filters the real store applies, so a call that drops one is caught by the tests that use it.
+        listActions: async (admin: string, conversationId: string, limit = 200) =>
+          this.actions.filter((action) => action.admin_id === admin && action.conversation_id === conversationId).slice(0, Math.min(limit, 500)),
+        listProposalActions: async (admin: string, proposalId: string) => this.actions.filter((action) => action.admin_id === admin && action.proposal_id === proposalId),
       },
       proposals: {
         stageProposal: async (adminId: string, input: StageArgs) => {

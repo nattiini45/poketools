@@ -72,6 +72,7 @@ export default {
   unknown_outcome: 'It is not known whether this step went through. Check before trying again.',
   reconcile_ambiguous: 'More than one existing item matches this step. Check them before continuing.',
   ledger_unavailable: 'Nothing was done because the assistant could not record it.',
+  precondition_read_failed: 'Nothing was done because the current state could not be checked. A bit later, ask the assistant to prepare this again.',
   agent_harness_error: 'The assistant ran into an internal error. Nothing was retried.',
 
   // Preflight: causes that would otherwise be a masked server error or a silent no-op

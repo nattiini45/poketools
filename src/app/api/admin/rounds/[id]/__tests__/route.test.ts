@@ -27,6 +27,7 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchesByRound: vi.fn(),
+  deleteMatchesByRound: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/games', () => ({
@@ -49,16 +50,6 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   updateTournament: vi.fn(),
 }));
 
-vi.mock('@/lib/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      delete: vi.fn(() => ({
-        eq: vi.fn(async () => ({ error: null })),
-      })),
-    })),
-  },
-}));
-
 vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
 }));
@@ -66,7 +57,7 @@ vi.mock('@/lib/audit/log', () => ({
 import { DELETE } from '@/app/api/admin/rounds/[id]/route';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { getRoundById, getRoundsByTournament, deleteRound } from '@/lib/supabase/queries/rounds';
-import { getMatchesByRound } from '@/lib/supabase/queries/matches';
+import { deleteMatchesByRound, getMatchesByRound } from '@/lib/supabase/queries/matches';
 import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { updateTournament } from '@/lib/supabase/queries/tournaments';
@@ -159,6 +150,40 @@ describe('DELETE /api/admin/rounds/[id]', () => {
     expect(deleteRound).not.toHaveBeenCalled();
     expect(resetMatch).not.toHaveBeenCalled();
     expect(rebuildAggregatesForScope).not.toHaveBeenCalled();
+  });
+
+  it('deletes the matches of the round through the query layer, which releases their teams first (#73)', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);
+    vi.mocked(getMatchesByRound).mockResolvedValue([
+      { id: 'match-1', status: 'scheduled' },
+      { id: 'match-2', status: 'completed' },
+    ] as never);
+    vi.mocked(getGamesByMatch).mockResolvedValue([] as never);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect((await res.json()).success).toBe(true);
+    expect(resetMatch).toHaveBeenCalledTimes(1);
+    expect(resetMatch).toHaveBeenCalledWith('match-2', expect.anything());
+    expect(deleteMatchesByRound).toHaveBeenCalledWith('ccd1e4a6-92f3-48fe-8cb7-1fd927e0e38f');
+    expect(vi.mocked(deleteMatchesByRound).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(deleteRound).mock.invocationCallOrder[0]);
+  });
+
+  it('stops when the matches cannot be released and deleted: the round and the tournament stay as they were', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);
+    vi.mocked(getMatchesByRound).mockResolvedValue([{ id: 'match-1', status: 'scheduled' }] as never);
+    vi.mocked(getGamesByMatch).mockResolvedValue([] as never);
+    vi.mocked(deleteMatchesByRound).mockRejectedValueOnce(new Error('release failed'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect(res.status).toBe(500);
+    expect((await res.json()).success).toBe(false);
+    expect(deleteRound).not.toHaveBeenCalled();
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 
   it('allows deleting a legacy / RR / Swiss round and rebuilds tournament aggregates', async () => {

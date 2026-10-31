@@ -76,10 +76,10 @@ describe('computeStandings', () => {
 
   it('computes games_played from gamesByMatch option', () => {
     const matches: MatchRecord[] = [
-      { player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 },
+      { match_id: 'm1', player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 },
     ];
     const gamesByMatch: Record<string, string[]> = {
-      'a::b': ['winner-1', 'winner-2', 'winner-3'],
+      m1: ['winner-1', 'winner-2', 'winner-3'],
     };
     const standings = computeStandings(['a', 'b'], names, matches, {}, { gamesByMatch });
     const alice = standings.find((s) => s.player_id === 'a')!;
@@ -88,12 +88,24 @@ describe('computeStandings', () => {
     expect(bob.games_played).toBe(3);
   });
 
+  it('counts each series of a rematch once, and only the rounds the filter keeps (#45)', () => {
+    const matches: MatchRecord[] = [
+      { match_id: 'm1', player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 },
+      { match_id: 'm2', player_1_id: 'a', player_2_id: 'b', winner_id: 'b', round_number: 3 },
+    ];
+    const gamesByMatch: Record<string, string[]> = { m1: ['a', 'a'], m2: ['b', 'a', 'b'] };
+    const all = computeStandings(['a', 'b'], names, matches, {}, { gamesByMatch });
+    expect(all.find((s) => s.player_id === 'a')!.games_played).toBe(5);
+    const early = computeStandings(['a', 'b'], names, matches, {}, { gamesByMatch, maxRound: 2 });
+    expect(early.find((s) => s.player_id === 'a')!.games_played).toBe(2);
+  });
+
   it('leaves games_played at 0 when gamesByMatch key does not match', () => {
     const matches: MatchRecord[] = [
-      { player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 },
+      { match_id: 'm1', player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 },
     ];
     const gamesByMatch: Record<string, string[]> = {
-      'x::y': ['g1'],
+      other: ['g1'],
     };
     const standings = computeStandings(['a', 'b'], names, matches, {}, { gamesByMatch });
     const alice = standings.find((s) => s.player_id === 'a')!;

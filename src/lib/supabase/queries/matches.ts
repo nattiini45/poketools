@@ -1348,6 +1348,32 @@ export async function deleteMatchesByIds(ids: string[]): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Hard-delete every match of one round. The ids are read in stable pages (no
+ * 1000-row cap), their team rows released, then the delete runs on the
+ * `round_id` predicate, so the round is the source of truth rather than a
+ * snapshot of it. A round too large to read whole is refused before anything
+ * is released or deleted. Errors propagate.
+ */
+export async function deleteMatchesByRound(roundId: string): Promise<void> {
+  assertValidUuid(roundId);
+  const { rows, truncated } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('id')
+        .eq('round_id', roundId)
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `deleteMatchesByRound ${roundId}` },
+  );
+  if (truncated) throw new Error(`deleteMatchesByRound: round ${roundId} has more matches than one bounded read holds`);
+  if (rows.length === 0) return;
+  await releaseTeamsFromMatches(rows.map((row) => row.id));
+  const { error } = await supabase.from('matches').delete().eq('round_id', roundId);
+  if (error) throw error;
+}
+
 export async function updateMatchStatus(
   id: string,
   status: MatchStatus,
@@ -1817,7 +1843,7 @@ export async function getCompletedMatchRecords(
     (from, to) =>
       supabase
         .from('matches')
-        .select('player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .select('id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
         .eq('tournament_id', tournamentId)
         .eq('status', 'completed')
         .order('created_at', { ascending: true })
@@ -1827,6 +1853,7 @@ export async function getCompletedMatchRecords(
   );
 
   return rows.map((row) => ({
+    match_id: row.id,
     player_1_id: row.player_1_id,
     player_2_id: row.player_2_id,
     winner_id: row.winner_id,
@@ -1848,7 +1875,7 @@ export async function getCompletedMatchRecordsBatch(
     (from, to) =>
       supabase
         .from('matches')
-        .select('tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .select('id, tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
         .in('tournament_id', tournamentIds)
         .eq('status', 'completed')
         .order('created_at', { ascending: true })
@@ -1860,6 +1887,7 @@ export async function getCompletedMatchRecordsBatch(
   const result = new Map<string, MatchRecord[]>();
   for (const row of rows) {
     const record: MatchRecord = {
+      match_id: row.id,
       player_1_id: row.player_1_id,
       player_2_id: row.player_2_id,
       winner_id: row.winner_id,

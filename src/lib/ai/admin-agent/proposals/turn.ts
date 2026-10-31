@@ -1,7 +1,9 @@
 /**
  * Per-turn staging limits (plan 3.4): at most 4 stagings in one assistant turn, and at most ONE Go-live (G) proposal, so a
- * single model step can never put a pile of irreversible cards in front of the admin. The loop makes one counter object per
- * turn (`newTurnStaging()`), passes it to every `stageProposal` call, and `stageProposal` checks and records on it.
+ * single model step can never put a pile of irreversible cards in front of the admin. The guard is the loop's own counters
+ * (`executeCalls` in `loop/loop.ts`), checked before a staging tool runs. The `turn` object `stageProposal` checks here is
+ * made per call by `staged/stage-tools.ts`, so it only backstops a caller that deliberately reuses one object; it is not the
+ * guard.
  *
  * The per-conversation cap of 2 pending proposals is separate: it is enforced by the store when the row is inserted.
  */

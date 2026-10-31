@@ -177,6 +177,20 @@ describe('propose_undo of an executed Build: the worked example', () => {
     expect(h.guards).toEqual([]);
   });
 
+  it('lists every row past the step limit as not undoable when the undo is cut short', async () => {
+    const { h, forward } = await builtWorld();
+    const roster = forward.rows['roster.1'];
+    // A second roster row of twelve: the two together need 24 removes, more than one undo may hold.
+    h.store.actions.push({ ...structuredClone(roster), id: '00000000-0000-4000-8000-000000000998', step_key: 'roster.2', created_at: roster.created_at });
+    const result = await h.stage('propose_undo', { proposal_id: forward.proposalId });
+    const card = result.status === 'staged' ? lastRow(h).card : null;
+    expect(card?.undo?.truncated).toBe(true);
+    expect(card?.steps.length).toBeLessThanOrEqual(UNDO_MAX_STEPS);
+    const dropped = card?.undo?.notUndoable.filter((note) => note.reason === 'too_many_steps').map((note) => note.op) ?? [];
+    expect(dropped).toContain('league_create');
+    expect(dropped.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('says nothing is left to undo the second time: the rows are undone', async () => {
     const { h, forward } = await builtWorld();
     for (const row of h.store.actions) row.status = 'undone';
@@ -346,6 +360,15 @@ describe('propose_undo of the ruleset drafts the chat wrote', () => {
     expect(refused(await h.stage('propose_undo', { ruleset_id: DEFINITION_ID, draft_rev: 2 })).findings).toEqual([{ section: 'ruleset_patch_draft', code: 'snapshot_unavailable' }]);
     h.store.snapshots.set(patches[0].id, { document: { big: 'x'.repeat(60 * 1024) }, doc_hash: 'b'.repeat(64) });
     expect(refused(await h.stage('propose_undo', { ruleset_id: DEFINITION_ID, draft_rev: 2 })).findings).toEqual([{ section: 'ruleset_patch_draft', code: 'snapshot_unavailable' }]);
+  });
+
+  it('never undoes a save another conversation made', async () => {
+    const h = makeHarness();
+    const live = new LiveReads();
+    draftWrites(h, live);
+    scriptLiveReads(h, live);
+    for (const row of h.store.actions) row.conversation_id = '00000000-0000-4000-8000-000000000999';
+    expect(refused(await h.stage('propose_undo', { ruleset_id: DEFINITION_ID, draft_rev: 2 })).code).toBe('nothing_to_undo');
   });
 
   it('knows no save at a revision the chat never left', async () => {

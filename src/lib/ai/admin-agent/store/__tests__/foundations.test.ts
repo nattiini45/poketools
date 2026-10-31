@@ -117,6 +117,13 @@ describe('payload hygiene', () => {
     expect(findForbiddenPayload({ text: '{"discordId" : "99"}' })?.kind).toBe('private_field_in_text');
   });
 
+  it('refuses a payload deeper than the scan walks instead of passing it unscanned', () => {
+    let deep: unknown = { leaf: 'x' };
+    for (let i = 0; i < 70; i += 1) deep = { next: deep };
+    expect(findForbiddenPayload(deep)?.kind).toBe('not_scanned');
+    expect(findForbiddenPayload({ list: Array.from({ length: 260_000 }, () => 1) })?.kind).toBe('not_scanned');
+  });
+
   it('lets ordinary payloads through, including a participant seed and the word password in prose', () => {
     expect(findForbiddenPayload({ seed: 3, name: 'Alice', note: 'reset your password in the UI', tags: ['a', 1, null, true] })).toBeNull();
     expect(findForbiddenPayload(null)).toBeNull();

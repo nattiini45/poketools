@@ -1,8 +1,8 @@
 import 'server-only';
 /**
  * Proposals, the routes' side: what `GET /api/admin/agent/proposals/[id]` serves (the card and, while the proposal waits,
- * the approval token to its owner) and what the approve route recomputes (the step hashes, the hash formulas and the
- * precondition recheck). Never imported by the chat loop (a module-graph test keeps the token out of its reach).
+ * the approval token to its owner). The executor recomputes the hashes and rechecks the preconditions with the same helpers,
+ * imported from `steps.ts` and `fingerprints.ts` directly. Never imported by the chat loop (a module-graph test keeps the token out of its reach).
  */
 import { liveStager } from './live';
 
