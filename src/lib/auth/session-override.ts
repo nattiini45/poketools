@@ -12,7 +12,7 @@ import 'server-only';
  *   `authAndRecord()` does with the result of `auth()`. A session built by hand, parsed from JSON, read from the
  *   database or copied with a spread is a different object and is refused.
  * - `runAsVerifiedSession()` refuses a session whose `expires` has passed (or cannot be read), before every run.
- * - An allow-list test (`__tests__/session-override.test.ts`) keeps `runAsVerifiedSession` importable only from
+ * - An allow-list test (`__tests__/session-override-static.test.ts`) keeps `runAsVerifiedSession` importable only from
  *   `src/lib/ai/admin-agent/dispatch/` and keeps every other file from declaring its own session store.
  *
  * What it is not: it does not replace the guards. The override carries the whole `Session` (provider, user id AND

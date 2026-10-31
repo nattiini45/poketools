@@ -435,6 +435,14 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
         </span>
       </header>
 
+      {loadError !== null && (
+        <Alert variant="warning">
+          {t('errors.refreshFailed')}{' '}
+          <button type="button" className="underline" onClick={() => void load()}>
+            {t('errors.retry')}
+          </button>
+        </Alert>
+      )}
       {actionError !== null && <Alert variant="error">{errorText(actionError)}</Alert>}
 
       {resultStatus !== null && (

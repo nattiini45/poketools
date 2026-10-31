@@ -1,12 +1,12 @@
 /**
  * The bindings of every Build and Go-live operation (spec §18.4): the allow-list of routes the approve route can dispatch.
- * Only the approve and resume routes import this file (a module-graph test keeps the chat route away from it).
+ * Only `_lib/approve.ts` imports this file, and that wiring is reachable from the approve and resume routes only (a
+ * module-graph test keeps the chat route away from it).
  *
  * Phase 1, slice 2 binds the Build operations of the thin vertical, one file per operation: league, roster, phases and a
  * standalone tournament, plus (slice 8) one player added to a standalone tournament (`BUILD_OP_ROUTES` names the same methods
  * and paths; the executor's recheck compares them). The compensating calls they declare as reversals (archive a league or a
- * tournament, remove a roster row or a tournament player) are bound too, and
- * staging cannot reach them yet: an undo proposal is a later slice. `groups_set` (phase 2) and `draft_pool_create` (phase 4)
+ * tournament, remove a roster row or a tournament player) are bound too; `propose_undo` stages them from the ledger (slice 5). `groups_set` (phase 2) and `draft_pool_create` (phase 4)
  * have no binding, so a stored step that names them is `proposal_stale` (unknown op).
  *
  * Slice 3 binds the four stageable Go-live operations (`GOLIVE_STAGEABLE`): publish a ruleset, move a pin, start a phase and

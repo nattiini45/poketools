@@ -555,9 +555,9 @@ A deleted league is captured here and deleted from the live tables in one transa
 | `ai_avatar_gallery` | Generated avatar choices |
 | `trainer_avatars_3d` | 3D trainer avatar configuration |
 
-### 4.14 Admin Assistant tables (planned)
+### 4.14 Admin Assistant tables (P0-P1 shipped)
 
-> **Created by `20261027100000_admin_agent_tables.sql`.** They belong to the Admin Assistant (§18), which is still planned; only the tables exist, listed in the AI group of 4.13. Exact column types and indexes are fixed in that migration; the field tables below name the columns the design depends on, with coarse types in this section's notation; the remaining bookkeeping columns (timestamps, version counters) are fixed there too.
+> **Created by `20261027100000_admin_agent_tables.sql`.** They belong to the Admin Assistant (§18; P0 and P1 shipped, off by default), listed in the AI group of 4.13. Exact column types and indexes are fixed in that migration; the field tables below name the columns the design depends on, with coarse types in this section's notation; the remaining bookkeeping columns (timestamps, version counters) are fixed there too.
 
 The Admin Assistant keeps its own tables. It does **not** extend `agent_conversations` (the player agent's single JSONB blob, §18.2).
 
@@ -1118,9 +1118,9 @@ Every cron route but refresh-usage-stats also accepts POST for a manual run; all
 
 The draft routes' exact contracts: `docs/draft-room.md` and the route handlers under `src/app/api/drafts/`.
 
-### Admin Assistant routes (planned)
+### Admin Assistant routes (P0-P1 shipped, P2-P5 planned)
 
-> **Planned: no page or route below exists yet** (§18). `scripts/__tests__/public-docs.test.mjs` resolves every literal `/api` path of this document to a real route file, so the API routes are written with a prefix shorthand until their handlers exist; the full paths replace it phase by phase, with the code. The planned pages are deliberately in a table: the test checks page paths only inside the code blocks of §5, so the phase that ships a page moves it into those lists, and from then on the test covers it. Exact paths marked (P0) are fixed in the P0 pull request.
+> **P0 and P1 shipped (off by default); rows marked P2 or later, `drift`, `PATCH plans/[id]` and `history` are not built** (§18). `scripts/__tests__/public-docs.test.mjs` resolves every literal `/api` path of this document to a real route file, so the API routes are written with a prefix shorthand until their handlers exist; the full paths replace it phase by phase, with the code. The planned pages are deliberately in a table: the test checks page paths only inside the code blocks of §5, so the phase that ships a page moves it into those lists, and from then on the test covers it. Exact paths marked (P0) are fixed in the P0 pull request.
 
 | Page | Notes |
 |---|---|
@@ -1137,7 +1137,7 @@ The admin navigation gets one item in the Competitions group, not `siteAdminOnly
 | conversations: list, create, read (P0) | Own conversations only; another admin's id answers 404 |
 | `POST conversations/[id]/messages` | One user turn `{text, client_msg_id}`, or `{continue: true}` after a harness event. Streams server-sent events (below). Takes the turn lease first: 409 `agent_conversation_busy` |
 | `GET conversations/[id]/drift` | `unchanged` / `changed_outside` / `gone` for the entities the conversation built or changed (§18.8) |
-| `PATCH plans/[id]` | The admin's own edit of a Plan field, with the expected `revision` |
+| `PATCH plans/[id]` (P2, not built) | The admin's own edit of a Plan field, with the expected `revision`. Until then the panel is read-only and the admin changes the Plan by telling the assistant |
 | `GET proposals/[id]` | The frozen preview and, to the owning admin while the proposal is `proposed`, the approval token |
 | `POST proposals/[id]/approve` | `{token, proposal_hash, preview_hash, acks}`: runs a Build or one Go-live call (§18.6). Answers 501 `phase_disabled` until P1 |
 | `POST proposals/[id]/decline`, `POST proposals/[id]/resume` (P0) | Decline; resume a Build left `executing` within 10 minutes. A Go-live proposal never resumes |
@@ -1883,9 +1883,9 @@ AGENT_DAILY_LIMIT=20               # per player, the agent chat
 
 Validation (`src/lib/env.ts`): a module validates the group of variables it reads with `readEnv` and a zod schema per group (the service-role client and the Discord provider when they load, the GoTrue client per request), and one error lists every missing or invalid key of the group by name, never by value. Empty and whitespace-only values count as missing. Single request-time reads use `requireEnv`. A route whose own secret is missing answers 500 with a distinct code (`cron_not_configured`, `bootstrap_not_configured`).
 
-### Admin Assistant (planned, optional)
+### Admin Assistant (optional, off by default)
 
-None of these exists yet (§18). All are optional and **off by default**: with nothing set the assistant is not reachable, and the player agent above is unaffected. Each is added to `.env.example` (commented, with its default) in P0, together with the parse below.
+These ship with P0 and P1 (§18). All are optional and **off by default**: with nothing set the assistant is not reachable, and the player agent above is unaffected. Each is added to `.env.example` (commented, with its default) in P0, together with the parse below.
 
 | Variable | Default | Effect |
 |---|---|---|
@@ -1956,9 +1956,9 @@ Rules:
 - [ ] Ownership constraints in teambuilder
 - [ ] Draft-aware stats views
 
-### Admin Assistant — P0 to P5 (planned)
-Its own sequence, independent of the phases above and gated by `ADMIN_AGENT_MAX_PHASE`. Scope, exit gates and prerequisites: §18.17. Nothing is built.
-- [ ] P0 Foundations: read-only assistant, spikes, tables, evaluation harness
+### Admin Assistant — P0 to P5 (P0 done, P1 implemented)
+Its own sequence, independent of the phases above and gated by `ADMIN_AGENT_MAX_PHASE`. Scope, exit gates and prerequisites: §18.17. P0 is done; P1 is implemented except tournament update and seeds.
+- [x] P0 Foundations: read-only assistant, spikes, tables, evaluation harness
 - [ ] P1 Build gate, thin league vertical, standalone tournaments, ruleset tools
 - [ ] P2 Leagues complete: groups, amend mode, lifecycle Go-live cards
 - [ ] P3 Format Studio authoring
@@ -2053,9 +2053,9 @@ The whole site can be switched between English and German. Module doc, style gui
 
 ---
 
-## 18. Admin Assistant (planned)
+## 18. Admin Assistant (P0-P1 shipped, P2-P5 planned)
 
-> **Status: planned. Nothing in this section is built.** This is the amendment AGENTS.md requires before code. It introduces two new shared patterns (in-process route dispatch under a verified-session override, §18.4; hash-bound confirmation proposals run by a privileged executor, §18.6), nine tables (§4.14), routes (§5), environment variables (§13) and a delivery sequence (§15, §18.17). It is numbered 18 so that the section numbers other documents cite stay stable. As each phase lands, the code, this section, the table index (4.13), the route map (5) and the environment list (13) are updated together. Where a point says "decided in P0 by spike", the spike result (§18.16) is recorded here before code depends on it.
+> **Status: P0 and P1 shipped, off by default (P1 without tournament update and seeds); P2 to P5 planned.** This is the amendment AGENTS.md requires before code. It introduces two new shared patterns (in-process route dispatch under a verified-session override, §18.4; hash-bound confirmation proposals run by a privileged executor, §18.6), nine tables (§4.14), routes (§5), environment variables (§13) and a delivery sequence (§15, §18.17). It is numbered 18 so that the section numbers other documents cite stay stable. As each phase lands, the code, this section, the table index (4.13), the route map (5) and the environment list (13) are updated together. Where a point says "decided in P0 by spike", the spike result (§18.16) is recorded here before code depends on it.
 >
 > **Terms in this section.** "Phase" means a league phase (§4.3). P0-P5 are *delivery phases* (rollout stages, §18.17) gated by `ADMIN_AGENT_MAX_PHASE`; they are unrelated to the Phase 1-5 build order of §15. "Class" is the action level (R, P, D, B, G, N, §18.5). "Role" is the admin level (site admin or resource admin, §18.9); "tier" is not used for either, so it keeps its rating and draft meanings.
 
@@ -2081,7 +2081,7 @@ Also out of scope: switching models mid-conversation, cross-provider fallback, t
 
 The existing player agent ([`ai-agent.md`](./ai-agent.md): Kale, Linden, the teambuilder Assistant panel) is a different system. The two share nothing at runtime.
 
-| | Player agent (built) | Admin Assistant (planned) |
+| | Player agent (built) | Admin Assistant (P0-P1 shipped) |
 |---|---|---|
 | Who | any signed-in player (`requirePlayer`) | admins only (`requireAnyAdmin`, re-read live) |
 | Entry | `POST /api/ai/agent/chat` | the routes under `/api/admin/agent/…` (§5) |
@@ -2187,7 +2187,7 @@ It is not "fail closed with no override and no cookie": inside a real request th
 | N | not a tool | never | n/a (§18.1) |
 
 Rules
-1. A class is a ceiling that live state can only raise (B to G), never lower. For example `league_update_settings` becomes G for a `status` change, and a `ruleset_id` change on a started league that already has a pin is not a proposal at all: the route refuses it (`ruleset_pin_started`) and the assistant offers the pin-move card.
+1. A class is a ceiling that live state can only raise (B to G), never lower. P1 has no tool with such a raise, so its stored class is the tool's declared class; the planned settings tools are where it applies. For example `league_update_settings` (planned) would become G for a `status` change, and a `ruleset_id` change on a started league that already has a pin is not a proposal at all: the route refuses it (`ruleset_pin_started`) and the assistant offers the pin-move card.
 2. A ruleset edit never changes a running league: leagues and phases pin immutable versions (§4.7). A ruleset has no B operation: drafts are D, publishing is G, and moving a pin is G. Pinning a *private* published version to a league, phase or tournament makes that version publicly readable, so the card says so inside the "visible publicly" acknowledgement.
 3. A G proposal has exactly one step, with one exception: an undo proposal (§18.8). At most one G proposal is staged per assistant turn.
 4. A G proposal on an entity not created in this conversation is flagged "existing league, not created in this chat".
@@ -2233,7 +2233,7 @@ route       per step: ledger row → preconditions → dispatch as the verified 
             → harness event appended; the UI then posts {continue: true} so the model reports and adjusts
 ```
 
-**Staging (in the chat loop).** `propose_*` does not execute. The harness parses the arguments with the route's own zod schema; runs the real guards for every resource named (fail early with `forbidden`); runs the shared ruleset-usability checks for every ruleset id; checks provenance (below); runs preflight (§18.7); computes the class from live state; computes the preview, outward effects, targets and precondition fingerprints; stores one immutable proposal row; and answers the model `{status: 'staged'}`. No domain table is touched. At most 2 proposals are pending per conversation; re-staging the same tool and target supersedes the older one.
+**Staging (in the chat loop).** `propose_*` does not execute. The harness parses the arguments with the route's own zod schema; runs the real guards for every resource named (fail early with `forbidden`); runs the shared ruleset-usability checks for every ruleset id; checks provenance (below); runs preflight (§18.7); computes the class (the declared one in P1, see Classes rule 1); computes the preview, outward effects, targets and precondition fingerprints; stores one immutable proposal row; and answers the model `{status: 'staged'}`. No domain table is touched. At most 2 proposals are pending per conversation; re-staging the same tool and target supersedes the older one.
 
 **Binding the approval to the exact request.** Canonical JSON (sorted keys, no whitespace) is hashed three ways: `args_hash` over the operation, method, route template, path parameters, query, body template, admin, conversation, proposal and step; `proposal_hash` over the ordered step hashes, preconditions and required acknowledgements; `preview_hash` over the preview, outward effects, targets and locale. The card shows an 8-character plan code. At approve time the server recomputes both hashes from the stored rows, never from the request or the model's last message; a mismatch is `409 proposal_hash_mismatch` and nothing runs. The dispatched request is rebuilt from stored fields.
 
@@ -2354,9 +2354,9 @@ League admins cannot read the audit page, so the league admin page gets an **Ass
 | Kill switches, delivery-phase cap, audience | off, phase `0`, `site` (§13) |
 | Messages | 40 per hour per admin; text up to 8,000 characters (roster pastes included) |
 | In flight | 1 turn per admin |
-| Executed writes | 60 per hour per admin |
+| Approve or resume requests | 60 per hour per admin (a Build counts once, however many steps it runs; the per-conversation caps and the Build step limit bound the writes themselves) |
 | Per Build | at most 40 steps, 10 entity-creating steps |
-| Per conversation (blast radius, counted atomically when a proposal is claimed) | 3 league creates, 3 tournament creates, 5 ruleset creates, 8 format creates and forks, 6 Go-live executions (an undo counts as one), 50 targets moved by pin moves (a publish moves none) |
+| Per conversation (blast radius, counted atomically when a proposal is claimed) | 3 league creates, 3 tournament creates, 6 Go-live executions (an undo counts as one), 50 targets moved by pin moves (a publish moves none). Reserved, not enforced yet: 5 ruleset creates, 8 format creates and forks (P1 writes rulesets only as private drafts, without a card) |
 | Dollars per conversation | warning at 60% of a $5 hard stop |
 | Dollars per admin | $20 per day, $120 per month |
 | Dollars, all admins | $80 per day |

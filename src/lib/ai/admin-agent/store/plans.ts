@@ -7,8 +7,9 @@
  *
  *  1. the pending Build proposals for an OLDER revision are superseded FIRST. Any writer that wins the compare-and-set
  *     supersedes them, so doing it before is harmless when this write then loses the race (a card for the newer revision
- *     is not touched), and a failure afterwards can never leave a Build card pending for an old revision (the approve
- *     path also compares `plan_revision`);
+ *     is not touched), and a failure afterwards can never leave a Build card pending for an old revision. There is no
+ *     second lock at approve time (the executor does not compare `plan_revision`): this order is the guard, and the turn
+ *     lease keeps a Build from being staged between this step and the next;
  *  2. the compare-and-set advances the plan: from here the write has happened;
  *  3. the history row is appended, retried once, and a failure is logged and swallowed: `plan_revisions` is evidence, not
  *     the source of truth (a missing row only makes `plan_revert` to that revision answer a clean refusal).

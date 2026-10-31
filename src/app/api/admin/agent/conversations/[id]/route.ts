@@ -33,6 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       store.proposals.listProposals(auth.adminId, conversation.id, { limit: PROPOSALS_SHOWN }),
     ]);
     const now = new Date();
+    const planView = plan === null ? null : toPlanView(plan);
 
     return NextResponse.json<ApiResult<ConversationDetail>>(
       {
@@ -41,7 +42,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           conversation: toConversationSummary(conversation, auth.role, now),
           items: projectTranscript(history.messages),
           truncated: history.truncated,
-          plan: plan === null ? null : toPlanView(plan),
+          plan: planView,
+          ...(plan !== null && planView === null ? { planUnreadable: true } : {}),
           proposals: proposals.map((row) => toProposalSummaryView(row, now)),
           awaitingContinue: awaitsContinue(history.messages),
           limits: toLimits(auth.config),

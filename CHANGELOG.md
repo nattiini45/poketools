@@ -25,7 +25,7 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 - **Admin Assistant (preview; spec section 18).** A chat for site admins at `/admin/assistant` and as a drawer that
   plans a league, a standalone tournament or a ruleset with the admin and then sets it up through the site's own routes,
   only after the admin approves a card the server writes:
-  - **Plan:** the assistant fills a Plan the admin can see and edit, resolves names and dates with tools, asks about every
+  - **Plan:** the assistant fills a Plan the admin can see (and changes by asking), resolves names and dates with tools, asks about every
     value it would otherwise pick, and states the engine's limits plainly (for example a double round robin).
   - **Build card (phase 1):** creates the league, its roster and phases, or a standalone tournament and its players, in a
     fixed order derived by code. Every step writes a ledger row first, is re-checked against the route's own schema, and
@@ -41,9 +41,18 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   - **Progress card** with each step's result, links to what was created, Resume and Undo.
   - **Audit:** `agent.*` events, and the routes' own events carry the conversation, step, tool and approving admin.
   - **Caps:** per-turn limits, rate limits, dollar budgets reserved before each model call, and per-conversation limits on
-    leagues, tournaments, rulesets, Go-live executions and pin targets.
+    leagues, tournaments, Go-live executions and pin targets (the ruleset and format limits are reserved).
 - Evaluation harness `scripts/admin-agent-eval.ts`: plan, executor and end-to-end stages, the last two against a local
   Supabase stack only.
+
+### Fixed
+
+- **Admin Assistant review follow-ups.** A refused fact check other than "not found" or "forbidden" now reads as
+  unavailable instead of "it does not exist"; a precondition read that fails stops a Build under its own code
+  (`precondition_read_failed`) instead of "the situation changed"; an older card is retired before its replacement is
+  stored; an unreadable stored Plan says so in the panel; a card whose status refresh fails shows a warning; the payload
+  check refuses data too deep or too large to scan; an undo cut off at its step limit lists every row it leaves; a Build
+  stops starting steps after 225 s so the last one ends inside the route's 300 s; an unpriced model id is logged.
 
 ## [0.5.0] - 2026-10-28
 

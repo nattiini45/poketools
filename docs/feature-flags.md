@@ -27,7 +27,7 @@ The assistant (spec section 18, `docs/poketools-spec.md`) is off unless both swi
 | `ADMIN_AGENT_MODEL_*`, `ADMIN_AGENT_EFFORT_*` | Opus 5.5 / Sonnet 5.5 `medium`, Haiku 5.5 `low` | Model id and effort (`low`, `medium`, `high`) for write, read and small (titles, hints) conversations |
 | `ADMIN_AGENT_BUDGET_*_USD` | $5 per conversation (warn at 60%), $20 per admin per day, $120 per admin per month, $80 per day overall | Spending caps in US dollars |
 | `ADMIN_AGENT_TURNS_PER_HOUR`, `_WRITES_PER_HOUR`, `_MAX_*`, `_TURN_DEADLINE_SECONDS`, `_CONTEXT_REFUSE_PERCENT` | 40, 60, spec 18.10 limits | Rate limits, per-turn and per-Build limits |
-| `ADMIN_AGENT_CAP_*` | 3 leagues, 3 tournaments, 5 rulesets, 8 formats, 6 Go-live executions, 50 pin targets | Blast radius per conversation |
+| `ADMIN_AGENT_CAP_*` | 3 leagues, 3 tournaments, 5 rulesets, 8 formats, 6 Go-live executions, 50 pin targets | Blast radius per conversation. The ruleset and format caps are reserved and not enforced yet |
 | `ADMIN_AGENT_PROPOSAL_TTL_{BUILD,GOLIVE}_MINUTES` | 60, 15 | Confirmation card lifetime, bounded 5-240 |
 
 Parsing: unset or blank is the default, the string `false` is off, and an invalid value switches the assistant off (an invalid `ADMIN_AGENT_MAX_PHASE` degrades to `0`). With `ADMIN_AGENT_ENABLED` on, an invalid value stops the server at boot and names the key, never the value; with it off, nothing here can stop a boot. All names, defaults and units are in `.env.example`.

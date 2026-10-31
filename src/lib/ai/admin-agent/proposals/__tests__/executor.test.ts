@@ -13,7 +13,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ERROR_CATALOGS } from '@/i18n/messages/errors';
 import { stripComments } from '../../__tests__/architecture/graph';
-import type { VerifyContext } from '../../dispatch';
+import { DEFAULT_ROUTE_TIMEOUT_MS, type VerifyContext } from '../../dispatch';
 import { uid } from '../../plans/__tests__/fixtures';
 import { AdminAgentStoreError } from '../../store/errors';
 import { EXECUTION_ERROR_STATUS, blastClaims, extractStepResult, ProposalExecutionError, REAPER_AGE_MS, RESUME_WINDOW_MS, ROUTE_MAX_DURATION_SECONDS, SETTLE_MS, STEP_DEADLINE_MS, executeProposal } from '../executor';
@@ -499,6 +499,17 @@ describe('order, references and failures', () => {
   });
 });
 
+describe('the time budget', () => {
+  it('ends the last step a request may start, with its dispatch and settle, inside the route maxDuration', () => {
+    expect(STEP_DEADLINE_MS + DEFAULT_ROUTE_TIMEOUT_MS + SETTLE_MS + 5_000).toBeLessThanOrEqual(ROUTE_MAX_DURATION_SECONDS * 1000);
+  });
+
+  it('reaps only well after a request that started a step could still be running it', () => {
+    expect(REAPER_AGE_MS).toBe(RESUME_WINDOW_MS + ROUTE_MAX_DURATION_SECONDS * 1000 + 60_000);
+    expect(REAPER_AGE_MS).toBeGreaterThan(STEP_DEADLINE_MS + DEFAULT_ROUTE_TIMEOUT_MS + SETTLE_MS);
+  });
+});
+
 describe('preconditions', () => {
   it('a changed fingerprint skips the step, ends the proposal stale and dispatches nothing', async () => {
     world.harness.world.value.league_name_recent = { somebody: 'created a league of this name' };
@@ -511,10 +522,12 @@ describe('preconditions', () => {
     expect(world.store.action('league')).toMatchObject({ status: 'skipped', error_code: 'proposal_stale' });
   });
 
-  it('a read that cannot be answered counts as a change (fail closed)', async () => {
+  it('a read that cannot be answered stops the run like a change (fail closed), under its own code', async () => {
     world.harness.world.unavailable.add('league_name_recent');
     const result = await world.approve();
     expect(result.status).toBe('stale');
+    expect(result.steps[0].code).toBe('precondition_read_failed');
+    expect(world.store.action('league')).toMatchObject({ status: 'skipped', error_code: 'precondition_read_failed' });
     expect(world.calls).toEqual([]);
   });
 });
@@ -615,7 +628,7 @@ describe('outcome mapping and reconcile', () => {
 });
 
 describe('the deadline and resume', () => {
-  it('starts no new step after 240 s: the proposal stays executing and a resume continues after the last ok step', async () => {
+  it('starts no new step after 225 s: the proposal stays executing and a resume continues after the last ok step', async () => {
     world.script.league_create = (call) => {
       world.clock.ms += STEP_DEADLINE_MS + 1000;
       return okReply('league_create', call);

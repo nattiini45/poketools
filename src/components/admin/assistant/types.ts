@@ -164,6 +164,8 @@ export interface ConversationDetail {
   /** The history hit the read bound: older rows are not shown. */
   truncated: boolean;
   plan: PlanView | null;
+  /** A stored Plan exists but no longer reads (`plan` is then null): the panel says so instead of "no plan yet". */
+  planUnreadable?: boolean;
   proposals: ProposalSummaryView[];
   /** A harness event is waiting for the model: offer "Continue". */
   awaitingContinue: boolean;

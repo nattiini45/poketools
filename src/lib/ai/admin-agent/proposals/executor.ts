@@ -62,11 +62,15 @@ import { RESUME_WINDOW_MS } from './types';
 export { REAPER_AGE_MS, RESULT_EVENT, ROUTE_MAX_DURATION_SECONDS };
 // The resume window lives in `types.ts`: the card the chat side serves needs it to say whether a Resume is offered.
 export { RESUME_WINDOW_MS };
-/** No new step starts after this much wall clock of one request; the proposal stays `executing` for a resume. */
-export const STEP_DEADLINE_MS = 240_000;
+/**
+ * No new step starts after this much wall clock of one request; the proposal stays `executing` for a resume. A step started
+ * just before it may still dispatch (`DEFAULT_ROUTE_TIMEOUT_MS`) and settle (`SETTLE_MS`), and all of that must end inside
+ * the route's `maxDuration` (`ROUTE_MAX_DURATION_SECONDS`), with a few seconds to spare: 225 + 55 + 15 + 5 = 300 s.
+ */
+export const STEP_DEADLINE_MS = 225_000;
 /** Reconcile waits this long and reads again before it says a write that may still be running is absent. */
 export const SETTLE_MS = 15_000;
-/** The write limiter: one hit per approve or resume (spec §18.10 "Executed writes"). */
+/** The write limiter: one hit per approve or resume request, not per step (spec §18.10 "Approve or resume requests"). */
 const WRITE_LIMIT_WINDOW_SECONDS = 60 * 60;
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
@@ -735,13 +739,15 @@ async function concludeReconcile(
 
 /** Everything after the ledger row exists: preconditions, references, the dispatch, the outcome mapping and the read-back. */
 async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBinding, action: ActionRecord): Promise<{ run: StepRun; stale?: boolean }> {
-  // c. Preconditions: the same reads staging hashed. A read that cannot be answered counts as a change (fail closed).
+  // c. Preconditions: the same reads staging hashed. A read that cannot be answered stops the run like a change (fail
+  // closed), under its own code: it says nothing about whether the situation changed.
   let changed = false;
   try {
     changed = (await changedPreconditions(ctx.deps.fingerprints, entriesOf(step))).length > 0;
   } catch (error) {
     console.error(`${logTag}: a precondition read failed for ${step.key}`, error);
-    changed = true;
+    const run = await settleStep(ctx, step, action, { status: 'skipped', code: 'precondition_read_failed' });
+    return { run, stale: true };
   }
   if (changed) {
     const run = await settleStep(ctx, step, action, { status: 'skipped', code: 'proposal_stale' });
