@@ -35,7 +35,7 @@
  *   npx tsx --tsconfig scripts/tsconfig.reparse.json scripts/reparse-game.ts \
  *     --game=<uuid> --actor=<admin player uuid> --apply
  *
- *   # Write despite a species-set mismatch (see below):
+ *   # Write despite a species-set mismatch, a changed replay hash or stats_locked (see below):
  *   ... --apply --force
  *
  * ---------------------------------------------------------------------------
@@ -53,6 +53,13 @@
  *     Pokémon rows than the game holds — refused without `--force` since that
  *     is usually a wrong replay, wrong game, or a parser change that wants a
  *     human look first.
+ *   - Also refused without `--force`: a re-fetched replay whose hash differs
+ *     from the stored `replay_hash` (the remote replay changed), and a game
+ *     with `stats_locked` (an admin corrected its stats by hand).
+ *   - Writes nothing when the re-parse matches the stored rows, and requires
+ *     `--actor` to be an active admin.
+ *   - Doubles: the parser attributes moves and KOs per side, not per slot
+ *     (#53), so an Illusion split in a doubles game is not reliable yet.
  *
  * This script is READ-ONLY by default (dry-run). It only mutates data with
  * `--apply`. It never applies migrations.
@@ -233,10 +240,15 @@ async function main(): Promise<void> {
 
   const bound = await fetchBoundReplay(game.replay_url);
   if (game.replay_hash && bound.hash !== game.replay_hash) {
-    console.warn(
-      `WARNING: re-fetched replay hashes to ${bound.hash}, stored replay_hash is ${game.replay_hash} — ` +
-        `the remote replay changed since recording. Stats still parse; review the diff carefully.`,
+    console.error(
+      `The re-fetched replay hashes to ${bound.hash}, the stored replay_hash is ${game.replay_hash}: ` +
+        `the remote replay changed since it was recorded, so this may not be the battle the game holds.`,
     );
+    if (!args.force) {
+      console.error('Refusing to write. Check the replay, or pass --force to proceed.');
+      process.exit(1);
+    }
+    console.error('--force given: continuing despite the hash mismatch.');
   }
 
   const parsed = bound.parsed;
@@ -320,13 +332,27 @@ async function main(): Promise<void> {
   }
   console.log(`\n${changed} of ${newStats.length} rows differ.${game.stats_locked ? ' (stats_locked is set)' : ''}`);
 
+  if (changed === 0) {
+    console.log('\nNothing to repair: the re-parse matches the stored rows. Nothing written.');
+    return;
+  }
+
   if (!args.apply) {
     console.log('\nDRY-RUN: nothing written. Pass --apply --actor=<admin player uuid> to write.');
     return;
   }
 
+  // A locked game holds stats an admin corrected by hand: replacing them needs the same explicit --force.
+  if (game.stats_locked && !args.force) {
+    console.error('\nThe game has stats_locked set (hand-corrected stats). Refusing to replace them; pass --force to proceed.');
+    process.exit(1);
+  }
+
   const actor = await getPlayerById(args.actorId!);
   if (!actor) throw new Error(`--actor ${args.actorId} is not a known player`);
+  if (!actor.is_admin || actor.status !== 'active') {
+    throw new Error(`--actor ${args.actorId} is not an active admin; the audit event must name the admin responsible`);
+  }
 
   const result = await editGame({
     game_id: args.gameId,
@@ -355,6 +381,12 @@ async function main(): Promise<void> {
     },
   });
 
+  if (result.match_status_conflict) {
+    console.warn(
+      '\nWARNING: the match changed while the stats were written (match_status_conflict); its status was not ' +
+        're-evaluated. Check the match in the admin UI.',
+    );
+  }
   console.log('\nApplied via editGame:');
   console.log(`  match_status   : ${result.match_status}`);
   console.log(`  match_winner_id: ${result.match_winner_id}`);

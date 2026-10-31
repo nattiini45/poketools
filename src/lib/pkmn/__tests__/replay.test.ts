@@ -680,21 +680,21 @@ describe('parseReplayLog', () => {
       '|poke|p2|Zoroark-Hisui, M|',
       '|poke|p2|Lycanroc-Midnight, M|',
       '|switch|p1a: Alpha|Alpha|100/100',
-      '|switch|p2a: Prof. Lupin|Lycanroc-Midnight, M|100/100',
+      '|switch|p2a: Howler|Lycanroc-Midnight, M|100/100',
       '|turn|1',
-      '|move|p2a: Prof. Lupin|Bitter Malice|p1a: Alpha',
+      '|move|p2a: Howler|Bitter Malice|p1a: Alpha',
       '|-damage|p1a: Alpha|0 fnt',
       '|faint|p1a: Alpha',
       '|switch|p1a: Beta|Beta|100/100',
       '|turn|2',
-      '|move|p1a: Beta|Stored Power|p2a: Prof. Lupin',
-      '|-damage|p2a: Prof. Lupin|0 fnt',
-      '|replace|p2a: Krampus|Zoroark-Hisui, M',
-      '|-end|p2a: Krampus|Illusion',
-      '|faint|p2a: Krampus',
-      '|switch|p2a: Prof. Lupin|Lycanroc-Midnight, M|100/100',
+      '|move|p1a: Beta|Stored Power|p2a: Howler',
+      '|-damage|p2a: Howler|0 fnt',
+      '|replace|p2a: Masque|Zoroark-Hisui, M',
+      '|-end|p2a: Masque|Illusion',
+      '|faint|p2a: Masque',
+      '|switch|p2a: Howler|Lycanroc-Midnight, M|100/100',
       '|turn|3',
-      '|move|p2a: Prof. Lupin|Stone Edge|p1a: Beta',
+      '|move|p2a: Howler|Stone Edge|p1a: Beta',
       '|-damage|p1a: Beta|0 fnt',
       '|faint|p1a: Beta',
       '|win|Player2',
@@ -736,10 +736,10 @@ describe('parseReplayLog', () => {
       '|-damage|p1a: Alpha|60/100',
       '|move|p1a: Alpha|Stored Power|p2a: Lupin',
       '|-damage|p2a: Lupin|30/100',
-      '|replace|p2a: Krampus|Zoroark, M',
-      '|-end|p2a: Krampus|Illusion',
+      '|replace|p2a: Masque|Zoroark, M',
+      '|-end|p2a: Masque|Illusion',
       '|turn|2',
-      '|move|p2a: Krampus|Focus Blast|p1a: Alpha',
+      '|move|p2a: Masque|Focus Blast|p1a: Alpha',
       '|-damage|p1a: Alpha|0 fnt',
       '|faint|p1a: Alpha',
       '|win|Player2',
@@ -764,6 +764,31 @@ describe('parseReplayLog', () => {
     expect(lycanroc!.turns_active).toBe(0);
   });
 
+  it('hands the Zoroark a move it used in disguise even when the copied species had used it before', () => {
+    const log = [
+      '|poke|p2|Zoroark, M|',
+      '|poke|p2|Lycanroc, M|',
+      '|switch|p1a: Alpha|Alpha|100/100',
+      '|switch|p2a: Howler|Lycanroc, M|100/100',
+      '|turn|1',
+      '|move|p2a: Howler|Stone Edge|p1a: Alpha',
+      '|-damage|p1a: Alpha|60/100',
+      '|switch|p2a: Howler|Lycanroc, M|100/100',
+      '|turn|2',
+      '|move|p2a: Howler|Stone Edge|p1a: Alpha',
+      '|-damage|p1a: Alpha|30/100',
+      '|replace|p2a: Masque|Zoroark, M',
+      '|-end|p2a: Masque|Illusion',
+      '|win|Player2',
+    ].join('\n');
+
+    const result = parseReplayLog(log);
+    const zoroark = result.players[1].pokemon.find((p) => p.pokemon_name === 'Zoroark');
+    const lycanroc = result.players[1].pokemon.find((p) => p.pokemon_name === 'Lycanroc');
+    expect(zoroark!.moves_used).toEqual(['Stone Edge']);
+    expect(lycanroc!.moves_used).toEqual(['Stone Edge']);
+  });
+
   it('splits a disguise window on a legacy Illusion reveal via |detailschange|', () => {
     const log = [
       '|poke|p2|Zoroark, M|',
@@ -778,9 +803,9 @@ describe('parseReplayLog', () => {
       '|turn|2',
       '|move|p1a: Beta|Stored Power|p2a: Lupin',
       '|-damage|p2a: Lupin|0 fnt',
-      '|detailschange|p2a: Krampus|Zoroark, M',
-      '|-end|p2a: Krampus|Illusion',
-      '|faint|p2a: Krampus',
+      '|detailschange|p2a: Masque|Zoroark, M',
+      '|-end|p2a: Masque|Illusion',
+      '|faint|p2a: Masque',
       '|win|Player2',
     ].join('\n');
 

@@ -5,6 +5,7 @@ import { Protocol } from '@pkmn/protocol';
 import type { ParsedBattleStats, ParsedPokemonStat, ReplayData } from '@/types/game';
 import {
   isSameReplayPokemonEntity,
+  replaySpeciesEntityKey,
   stripHiddenPreviewSuffix,
 } from '@/lib/pkmn/replay-species';
 
@@ -124,6 +125,8 @@ interface ActivationBaseline {
   moves_used: Set<string>;
   was_brought: boolean;
   was_lead: boolean;
+  /** Moves used since this switch-in, a repeat of an earlier move included (what an Illusion reveal hands over). */
+  window_moves: Set<string>;
 }
 
 interface PokemonTracker {
@@ -285,6 +288,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
       moves_used: new Set(tracker.moves_used),
       was_brought: tracker.was_brought,
       was_lead: tracker.was_lead,
+      window_moves: new Set(),
     };
   }
 
@@ -388,9 +392,9 @@ export function parseReplayLog(log: string): ParsedBattleStats {
     if (base) {
       revealed.kos_dealt += illusionTracker.kos_dealt - base.kos_dealt;
       revealed.turns_active += illusionTracker.turns_active - base.turns_active;
-      for (const move of Array.from(illusionTracker.moves_used)) {
-        if (!base.moves_used.has(move)) revealed.moves_used.add(move);
-      }
+      // The window's own moves, not a set difference: a move the copied species had used before is still the Zoroark's
+      // when it uses it again during the disguise.
+      for (const move of Array.from(base.window_moves)) revealed.moves_used.add(move);
       if (illusionTracker.was_lead && !base.was_lead) revealed.was_lead = true;
 
       illusionTracker.kos_dealt = base.kos_dealt;
@@ -648,9 +652,11 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         const details = args[2] as string;
         const species = extractSpeciesFromDetails(details);
         const prevKey = slotToTrackerKey.get(extractSlot(ident));
-        // A detailschange to a different dex entity is a legacy Illusion reveal
-        // (newer logs announce it via |replace|); same-entity changes stay one tracker.
-        if (prevKey && !isSameReplayPokemonEntity(prevKey, species)) {
+        // A detailschange to a different dex species is a legacy Illusion reveal (newer logs announce it via |replace|).
+        // A forme change keeps its dex base species, including one between two non-base formes (Ogerpon-Wellspring to
+        // Ogerpon-Wellspring-Tera, Zygarde-10% to Zygarde-Complete, Necrozma-Dusk-Mane to Necrozma-Ultra), so it stays
+        // one tracker. (Zoroark-Hisui disguised as Zoroark shares a base and reads as a forme change: no split.)
+        if (prevKey && replaySpeciesEntityKey(prevKey) !== replaySpeciesEntityKey(species)) {
           applyIllusionBreak(ident, details);
         } else {
           syncSlotAfterFormeChange(ident, species);
@@ -682,6 +688,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         const tracker = findActiveTracker(side) ?? trackers[side].get(extractName(ident));
         if (tracker) {
           tracker.moves_used.add(moveName);
+          tracker.activationBaseline?.window_moves.add(moveName);
           attr.lastMoveUser = { side, pokemon: tracker.pokemon_name };
         }
         break;
