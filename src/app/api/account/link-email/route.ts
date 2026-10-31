@@ -5,6 +5,8 @@ import { createAuthClient } from '@/lib/supabase/auth-client';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { linkEmailSchema, formatZodErrors } from '@/lib/validation';
 import { getRequestLocale } from '@/i18n/server';
+import { readJsonBody } from '@/lib/api/json-body';
+import { checkRateLimit, emailIdentity, rateLimitedResponse, type RateLimitOptions } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
 
 /**
@@ -16,12 +18,21 @@ import type { ApiResult } from '@/types/api';
  * before verification is safe.
  *
  * Explicit duplicate-email error is acceptable here: the caller is
- * authenticated, unlike the public signup route.
+ * authenticated, unlike the public signup route, and the answer cannot be used
+ * to test addresses in bulk (#36): every attempt that passes the
+ * already-linked check counts per player before the body is read, and every
+ * attempt that also carries a valid address counts per inbox before the
+ * address is used. Both limits fail closed.
  *
  * SUPERADMIN_EMAIL is reserved: only the SUPERADMIN_DISCORD_ID player may
  * link it. Anyone else gets the generic create-failed 400, so the
  * route does not reveal which address is reserved.
  */
+/** Attempts per player, whatever the address. */
+export const LINK_EMAIL_PLAYER_LIMIT: RateLimitOptions = { limit: 5, windowSeconds: 60 * 60, failMode: 'closed' };
+/** Attempts per inbox (`emailIdentity`), whoever asks. */
+export const LINK_EMAIL_INBOX_LIMIT: RateLimitOptions = { limit: 3, windowSeconds: 60 * 60, failMode: 'closed' };
+
 const CREATE_FAILED_BODY: ApiResult<never> = {
   success: false,
   error: 'Could not create the email login. Check the email and password and try again.',
@@ -45,8 +56,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rawBody = await request.json().catch(() => ({}));
-    const parsed = linkEmailSchema.safeParse(rawBody);
+    const perPlayer = await checkRateLimit('link-email-player', player.id, LINK_EMAIL_PLAYER_LIMIT);
+    if (!perPlayer.allowed) return rateLimitedResponse(perPlayer.retryAfterSeconds);
+
+    const body = await readJsonBody(request);
+    if (!body.ok) return body.response;
+    const parsed = linkEmailSchema.safeParse(body.value);
     if (!parsed.success) {
       const issues = formatZodErrors(parsed.error);
       return NextResponse.json<ApiResult<never>>(
@@ -54,6 +69,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const perInbox = await checkRateLimit('link-email-inbox', emailIdentity(parsed.data.email), LINK_EMAIL_INBOX_LIMIT);
+    if (!perInbox.allowed) return rateLimitedResponse(perInbox.retryAfterSeconds);
 
     const superadminDiscordId = process.env.SUPERADMIN_DISCORD_ID;
     const isDiscordSuperadmin = !!superadminDiscordId && player.discord_id === superadminDiscordId;

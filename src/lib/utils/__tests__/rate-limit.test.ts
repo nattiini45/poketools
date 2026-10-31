@@ -9,8 +9,10 @@ import {
   emailIdentity,
   findClientIp,
   getClientIp,
+  getClientRateLimitIp,
   MEMORY_STORE_MAX_KEYS,
   RATE_LIMIT_RPC_TIMEOUT_MS,
+  rateLimitIpIdentity,
   rateLimitKey,
   rateLimitStore,
   RateLimitUnavailableError,
@@ -169,6 +171,59 @@ describe('getClientIp', () => {
 describe('emailIdentity', () => {
   it('normalizes case and whitespace', () => {
     expect(emailIdentity('  Alice@Example.COM ')).toBe('alice@example.com');
+  });
+
+  it('keys one inbox once: a +tag is dropped, and Gmail ignores dots and its googlemail alias (#33)', () => {
+    expect(emailIdentity('alice+spam1@example.com')).toBe('alice@example.com');
+    expect(emailIdentity('A.L.I.C.E+x@GoogleMail.com')).toBe('alice@gmail.com');
+    expect(emailIdentity('a.lice@gmail.com')).toBe('alice@gmail.com');
+    // Dots matter elsewhere, and an address that is all tag or has no @ is left alone.
+    expect(emailIdentity('a.lice@example.com')).toBe('a.lice@example.com');
+    expect(emailIdentity('+tag@example.com')).toBe('+tag@example.com');
+    expect(emailIdentity('not-an-address')).toBe('not-an-address');
+  });
+});
+
+describe('rateLimitIpIdentity', () => {
+  it('keys an IPv6 address on its /64, in any spelling (#33)', () => {
+    expect(rateLimitIpIdentity('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2::/64');
+    expect(rateLimitIpIdentity('2001:0DB8:0001:0002::1')).toBe('2001:db8:1:2::/64');
+    expect(rateLimitIpIdentity('[2001:db8:1:2::ffff]')).toBe('2001:db8:1:2::/64');
+    expect(rateLimitIpIdentity('2001:db8::1')).toBe('2001:db8:0:0::/64');
+    expect(rateLimitIpIdentity('fe80::1%eth0')).toBe('fe80:0:0:0::/64');
+  });
+
+  it('keys IPv4 and an IPv4-mapped address on the IPv4 address, and leaves anything unparsable as it is, lower-cased', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(rateLimitIpIdentity('203.0.113.9')).toBe('203.0.113.9');
+    expect(rateLimitIpIdentity('::ffff:203.0.113.9')).toBe('203.0.113.9');
+    expect(rateLimitIpIdentity('::FFFF:203.0.113.9')).toBe('203.0.113.9');
+    expect(rateLimitIpIdentity('::ffff:cb00:7109')).toBe('203.0.113.9');
+    expect(rateLimitIpIdentity('64:ff9b::203.0.113.9')).toBe('64:ff9b::203.0.113.9');
+    expect(rateLimitIpIdentity('unknown')).toBe('unknown');
+    expect(warn).not.toHaveBeenCalled();
+    // Malformed IPv6 spellings: too few groups, eight groups plus `::`, two `::`, a group too long.
+    for (const bad of ['1:2:3', '1:2:3:4:5:6:7:8::', '1:2:3:4::5:6:7:8', '1::2::3', '12345::1', 'ABCD:1:2']) {
+      expect(rateLimitIpIdentity(bad), bad).toBe(bad.toLowerCase());
+    }
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('is what the request helper and the public limit key on: two addresses of one /64 share a bucket', async () => {
+    const ipv6 = { headers: new Headers({ 'x-forwarded-for': '2001:db8:1:2::abcd' }) };
+    expect(getClientRateLimitIp(ipv6)).toBe('2001:db8:1:2::/64');
+    expect(getClientRateLimitIp({ headers: new Headers() })).toBe('unknown');
+
+    vi.stubEnv('RATE_LIMIT_STORE', 'memory');
+    resetMemoryRateLimits();
+    const options = { limit: 1, windowSeconds: 60 };
+    const first = { headers: new Headers({ 'x-forwarded-for': '2001:db8:1:2::aaaa' }) };
+    const sibling = { headers: new Headers({ 'x-forwarded-for': '2001:db8:1:2:ffff::1' }) };
+    const otherNet = { headers: new Headers({ 'x-forwarded-for': '2001:db8:1:3::aaaa' }) };
+    expect((await checkPublicRateLimit('ipv6-test', first, options)).allowed).toBe(true);
+    expect((await checkPublicRateLimit('ipv6-test', sibling, options)).allowed).toBe(false);
+    expect((await checkPublicRateLimit('ipv6-test', otherNet, options)).allowed).toBe(true);
+    vi.unstubAllEnvs();
   });
 });
 

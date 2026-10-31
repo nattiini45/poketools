@@ -6,6 +6,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Alert from '@/components/ui/Alert';
+import Link from 'next/link';
 import type { ApiResult } from '@/types/api';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -25,7 +26,8 @@ interface AccountIdentities {
 type SecurityErrorKey = keyof typeof accountEn.security & (
   'loadFailed' | 'passwordsMismatch' | 'linkEmailFailed' | 'linkDiscordFailed'
 );
-type SecurityError = { kind: 'key'; key: SecurityErrorKey } | { kind: 'api'; error: ApiErrorLike };
+/** `email`: the address the failed request was sent with, so a follow-up link never uses what was typed since. */
+type SecurityError = { kind: 'key'; key: SecurityErrorKey } | { kind: 'api'; error: ApiErrorLike; email?: string };
 
 export default function AccountSecuritySection() {
   const t = useT(accountMessages);
@@ -86,7 +88,7 @@ export default function AccountSecuritySection() {
         setConfirmPassword('');
         void loadIdentities();
       } else {
-        setFormError({ kind: 'api', error: json });
+        setFormError({ kind: 'api', error: json, email });
       }
     } catch {
       setFormError({ kind: 'key', key: 'linkEmailFailed' });
@@ -135,7 +137,20 @@ export default function AccountSecuritySection() {
       </p>
 
       {loadError && <Alert variant="error">{describe(loadError)}</Alert>}
-      {formError && <Alert variant="error" className="mb-3">{describe(formError)}</Alert>}
+      {formError && (
+        <Alert variant="error" className="mb-3">
+          {describe(formError)}
+          {/* The address is taken: if it is the player's own unconfirmed one, the confirmation email can be sent again. */}
+          {formError.kind === 'api' && formError.error.code === 'email_already_registered' && formError.email && (
+            <>
+              {' '}
+              <Link href={`/auth/verify-email?email=${encodeURIComponent(formError.email)}`} className="font-semibold underline">
+                {t('security.resendVerification')}
+              </Link>
+            </>
+          )}
+        </Alert>
+      )}
       {emailLinked && <Alert variant="success" className="mb-3">{t('security.emailLinked')}</Alert>}
 
       {identities && (

@@ -1,5 +1,6 @@
 import Card from '@/components/ui/Card';
 import { getT } from '@/i18n/server';
+import { sanitizeCallbackUrl } from '@/lib/auth/safe-callback-url';
 import { authMessages } from '@/i18n/messages/auth';
 import SignInForm from './SignInForm';
 
@@ -22,11 +23,8 @@ interface SignInPageProps {
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = await searchParams;
   const t = await getT(authMessages);
-  // Only allow same-origin relative redirect targets (no open redirect)
-  const callbackUrl =
-    params.callbackUrl?.startsWith('/') && !params.callbackUrl.startsWith('//')
-      ? params.callbackUrl
-      : '/';
+  // Only same-origin paths (no open redirect): see sanitizeCallbackUrl.
+  const callbackUrl = sanitizeCallbackUrl(params.callbackUrl);
   const initialErrorCode = signInErrorCode(params.error, (code) => t.has(`signIn.errors.${code}`));
 
   return (

@@ -23,6 +23,7 @@ export default defineDe<typeof en>()({
       'E-Mail-Anmeldung hinzugefügt. Bestätige die Adresse über den Link in deinem Postfach, bevor du dich damit anmeldest.',
     loadFailed: 'Die verknüpften Konten konnten nicht geladen werden.',
     linkEmailFailed: 'Die E-Mail-Anmeldung konnte nicht verknüpft werden. Bitte versuche es noch einmal.',
+    resendVerification: 'Ist es deine Adresse und noch nicht bestätigt? Bestätigungs-E-Mail erneut senden',
     linkDiscordFailed: 'Die Discord-Verknüpfung konnte nicht gestartet werden. Bitte versuche es noch einmal.',
   },
   agentSettings: {
