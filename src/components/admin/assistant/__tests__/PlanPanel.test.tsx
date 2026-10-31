@@ -48,6 +48,12 @@ describe('PlanPanel', () => {
     expect(renderWithI18n(<PlanPanel plan={null} />, { locale: 'de' })).toContain('Der Plan füllt sich, während du beschreibst, was du willst.');
   });
 
+  it('says an unreadable stored plan needs setting up again, instead of the empty hint', () => {
+    const html = renderWithI18n(<PlanPanel plan={null} unreadable />);
+    expect(html).toContain('This plan can no longer be read.');
+    expect(html).not.toContain('The plan fills in as you describe what you want.');
+  });
+
   it('shows the sections with their chips, in English', () => {
     const out = renderWithI18n(<PlanPanel plan={view()} />);
     expect(out).toContain('Gen 9 OU league');

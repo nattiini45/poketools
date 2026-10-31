@@ -71,10 +71,16 @@ export function promptTokensOf(meters: UsageMeters): number {
   return meters.inputTokens + meters.cacheWrite5mTokens + meters.cacheWrite1hTokens + meters.cacheReadTokens;
 }
 
-/** The real cost of a response, rounded up to a whole micro-dollar. An unknown model id is priced at the maxima and logged. */
+/** Unpriced model ids already logged by this process: one line per id, not one per call. */
+const warnedUnpriced = new Set<string>();
+
+/** The real cost of a response, rounded up to a whole micro-dollar. An unknown model id is priced at the maxima and logged once. */
 export function costMicro(model: string, meters: UsageMeters): number {
   const { price, known } = priceOf(model, promptTokensOf(meters));
-  if (!known) console.warn(`[admin-agent] no price for model ${model.slice(0, 80)}; billed at the highest table price`);
+  if (!known && !warnedUnpriced.has(model)) {
+    warnedUnpriced.add(model);
+    console.warn(`[admin-agent] no price for model ${model.slice(0, 80)}; billed at the highest table price`);
+  }
   const total =
     meters.inputTokens * price.input +
     meters.cacheWrite5mTokens * price.cacheWrite5m +

@@ -322,7 +322,11 @@ export async function prepareUndo(ctx: PrepareContext, args: UndoArgs): Promise<
     if (total + result.steps.length > UNDO_MAX_STEPS) {
       // Every row from here on stays as it is: listed on the card, so the admin sees what this undo leaves.
       truncated = true;
-      for (const rest of planSteps.slice(index)) note('notUndoable', rowOf.get(rest.actionId) as Row, 'too_many_steps');
+      // A row with no reversal at all would not fit a second undo either: it keeps the reason that says so.
+      for (const rest of planSteps.slice(index)) {
+        const restRow = rowOf.get(rest.actionId) as Row;
+        note('notUndoable', restRow, hasReversal(restRow.op) ? 'too_many_steps' : 'not_offered');
+      }
       break;
     }
     total += result.steps.length;

@@ -183,7 +183,7 @@ export default defineDe<typeof en>()({
       completed: 'Jeder Schritt wurde ausgeführt und bestätigt.',
       partial: 'Einige Schritte wurden ausgeführt, die übrigen nicht. Was lief, bleibt bestehen; nichts wurde zurückgerollt.',
       failed: 'Kein Schritt wurde abgeschlossen. Diese Karte hat nichts geändert.',
-      stale: 'Seit die Karte angezeigt wurde, hat sich etwas geändert, deshalb wurde vor dem nächsten Schritt gestoppt. Bereits ausgeführte Schritte bleiben erledigt.',
+      stale: 'Seit die Karte angezeigt wurde, hat sich etwas geändert, oder der aktuelle Stand ließ sich nicht prüfen, deshalb wurde vor dem nächsten Schritt gestoppt. Bereits ausgeführte Schritte bleiben erledigt.',
       unknown: 'Der Ausgang konnte nicht bestätigt werden. Es wurde nichts erneut versucht. Prüfe die Schritte unten, bevor du etwas erneut verlangst.',
       executing: 'Die Schritte laufen oder wurden vor dem Ende angehalten. Diese Karte zeigt, wo sie stehen.',
     },

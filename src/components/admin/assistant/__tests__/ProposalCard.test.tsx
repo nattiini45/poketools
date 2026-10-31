@@ -378,7 +378,7 @@ describe('ProposalCard: the result', () => {
     ['completed', [ok('league'), ok('roster')], 'Done', 'Every step ran and was confirmed.'],
     ['partial', [ok('league'), stepView('roster', { status: 'failed', errorCode: 'step_failed' })], 'Partly done', 'Some steps ran and the rest did not. What ran stays as it is; nothing was rolled back.'],
     ['failed', [stepView('league', { status: 'failed', errorCode: 'step_failed' }), stepView('roster', { status: 'skipped', errorCode: 'step_failed' })], 'Failed', 'No step was completed. Nothing was changed by this card.'],
-    ['stale', [ok('league'), stepView('roster', { status: 'skipped', errorCode: 'proposal_stale' })], 'Stopped: out of date', 'Things changed since this card was shown, so it stopped before the next step. Steps that already ran stay done.'],
+    ['stale', [ok('league'), stepView('roster', { status: 'skipped', errorCode: 'proposal_stale' })], 'Stopped: out of date', 'Things changed since this card was shown, or the current state could not be checked, so it stopped before the next step. Steps that already ran stay done.'],
     ['unknown', [stepView('league', { status: 'unknown', errorCode: 'unknown_outcome' }), stepView('roster', { status: 'skipped' })], 'Outcome unknown', 'The outcome could not be confirmed. Nothing was retried. Check the steps below before you ask for anything again.'],
     ['executing', [ok('league'), stepView('roster', { status: 'executing' })], 'Running', 'The steps are running, or stopped before the end. This card shows where they stand.'],
   ];

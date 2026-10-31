@@ -84,9 +84,9 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
       {conversation.readOnly && <Badge variant="gray">{t('list.readOnly')}</Badge>}
       {variant === 'drawer' && (
         <>
-          {plan !== null && (
+          {(plan !== null || detail.planUnreadable === true) && (
             <Button size="sm" variant="secondary" aria-expanded={planOpen} onClick={() => setPlanOpen((open) => !open)}>
-              {t('plan.title')} · {t(`plan.status.${plan.status}`)}
+              {plan !== null ? `${t('plan.title')} · ${t(`plan.status.${plan.status}`)}` : t('plan.title')}
             </Button>
           )}
           <Link

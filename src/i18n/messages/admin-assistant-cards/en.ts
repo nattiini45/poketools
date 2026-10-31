@@ -191,7 +191,7 @@ export default {
       completed: 'Every step ran and was confirmed.',
       partial: 'Some steps ran and the rest did not. What ran stays as it is; nothing was rolled back.',
       failed: 'No step was completed. Nothing was changed by this card.',
-      stale: 'Things changed since this card was shown, so it stopped before the next step. Steps that already ran stay done.',
+      stale: 'Things changed since this card was shown, or the current state could not be checked, so it stopped before the next step. Steps that already ran stay done.',
       unknown: 'The outcome could not be confirmed. Nothing was retried. Check the steps below before you ask for anything again.',
       executing: 'The steps are running, or stopped before the end. This card shows where they stand.',
     },

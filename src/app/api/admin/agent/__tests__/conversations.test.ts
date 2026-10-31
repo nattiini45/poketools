@@ -329,13 +329,14 @@ describe('GET /api/admin/agent/conversations/[id]', () => {
     for (const secret of ['SECRET REASONING', 'SIGNATURE', 'secret_arg', 'RESULT BODY', 'admin_id', 'registry-secret', 'claude-opus']) expect(text).not.toContain(secret);
   });
 
-  it('reports a plan whose stored document no longer parses as no plan, not as a failure', async () => {
+  it('reports a plan whose stored document no longer parses as unreadable, not as a failure or as no plan', async () => {
     mocks.store.conversations.getConversation.mockResolvedValue(conversation());
     mocks.store.messages.loadHistory.mockResolvedValue({ messages: [], truncated: true });
     mocks.store.plans.getActivePlan.mockResolvedValue(plan({ doc: { nonsense: true } }));
     mocks.store.proposals.listProposals.mockResolvedValue([]);
     const { data } = await (await item.GET(get('/api/admin/agent/conversations/x') as never, params({ id: CONVERSATION }))).json();
     expect(data.plan).toBeNull();
+    expect(data.planUnreadable).toBe(true);
     expect(data.truncated).toBe(true);
   });
 

@@ -149,6 +149,8 @@ export function findForbiddenMessageContent(role: 'user' | 'assistant' | 'system
 }
 
 function refuse(label: string, violation: PayloadViolation): never {
+  // Where and what kind, never the value: the refusal reaches the caller as a harness error, so the cause is logged here.
+  console.warn(`[admin-agent] payload refused (${violation.kind}) at ${label}${violation.path === '' ? '' : `.${violation.path}`}`);
   throw new AdminAgentStoreError('agent_harness_error', undefined, {
     reason: 'payload_forbidden',
     detail: { label, path: violation.path, kind: violation.kind },
