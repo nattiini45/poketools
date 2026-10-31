@@ -1348,6 +1348,32 @@ export async function deleteMatchesByIds(ids: string[]): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Hard-delete every match of one round. The ids are read in stable pages (no
+ * 1000-row cap), their team rows released, then the delete runs on the
+ * `round_id` predicate, so the round is the source of truth rather than a
+ * snapshot of it. A round too large to read whole is refused before anything
+ * is released or deleted. Errors propagate.
+ */
+export async function deleteMatchesByRound(roundId: string): Promise<void> {
+  assertValidUuid(roundId);
+  const { rows, truncated } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('id')
+        .eq('round_id', roundId)
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `deleteMatchesByRound ${roundId}` },
+  );
+  if (truncated) throw new Error(`deleteMatchesByRound: round ${roundId} has more matches than one bounded read holds`);
+  if (rows.length === 0) return;
+  await releaseTeamsFromMatches(rows.map((row) => row.id));
+  const { error } = await supabase.from('matches').delete().eq('round_id', roundId);
+  if (error) throw error;
+}
+
 export async function updateMatchStatus(
   id: string,
   status: MatchStatus,
