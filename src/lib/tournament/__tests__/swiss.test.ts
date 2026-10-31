@@ -99,6 +99,15 @@ function rematchFreeExists(players: string[], met: Set<string>, hadBye: Set<stri
   return candidates.some((bye) => pairUp(players.filter((p) => p !== bye)));
 }
 
+/** The fewest rematches any perfect matching of `players` can have (brute force). */
+function minRematches(players: string[], met: Set<string>): number {
+  if (players.length === 0) return 0;
+  const [first, ...others] = players;
+  return Math.min(
+    ...others.map((other, index) => (met.has(pairKey(first, other)) ? 1 : 0) + minRematches(others.filter((_, i) => i !== index), met)),
+  );
+}
+
 /** A small deterministic PRNG (mulberry32), so the property test is reproducible. */
 function rng(seed: number) {
   let a = seed >>> 0;
@@ -133,10 +142,13 @@ describe('generateSwissRound without avoidable rematches (#39)', () => {
   it('never returns a rematch when a brute-force search finds a rematch-free round (4 to 12 players)', () => {
     const random = rng(39);
     let rounds = 0;
+    let forced = 0;
     for (let n = 4; n <= 12; n += 1) {
       const ids = Array.from({ length: n }, (_, i) => `p${String(i).padStart(2, '0')}`);
       const names = Object.fromEntries(ids.map((id) => [id, id]));
-      const lastRound = Math.ceil(Math.log2(n)) + 1;
+      // Up to 8 players the event runs past a round robin's length, so some rounds must repeat a pairing: that exercises
+      // the fewest-rematches fallback too.
+      const lastRound = n <= 8 ? n + 1 : Math.ceil(Math.log2(n)) + 1;
       for (let event = 0; event < 6; event += 1) {
         const history: MatchRecord[] = [];
         const byes: { player_id: string; round_number: number }[] = [];
@@ -146,6 +158,11 @@ describe('generateSwissRound without avoidable rematches (#39)', () => {
           const hadBye = new Set(byes.map((b) => b.player_id));
           const rematches = round.pairings.filter((p) => met.has(pairKey(p.player_1_id, p.player_2_id))).length;
           if (rematchFreeExists(ids, met, hadBye)) expect(rematches, `n=${n} event=${event} round=${r}`).toBe(0);
+          // Otherwise the fallback is the fewest-rematch pairing of the players left after the bye.
+          else {
+            forced += 1;
+            expect(rematches, `n=${n} event=${event} round=${r}`).toBe(minRematches(ids.filter((id) => !round.bye_player_ids.includes(id)), met));
+          }
           // Everyone plays or has the bye, exactly once.
           const seen = round.pairings.flatMap((p) => [p.player_1_id, p.player_2_id]).concat(round.bye_player_ids);
           expect(new Set(seen).size).toBe(n);
@@ -158,6 +175,7 @@ describe('generateSwissRound without avoidable rematches (#39)', () => {
       }
     }
     expect(rounds).toBeGreaterThan(200);
+    expect(forced).toBeGreaterThan(0);
   });
 
   it('takes the first fewest-rematch pairing in standings order when every pairing repeats a match', () => {
