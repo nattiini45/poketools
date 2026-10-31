@@ -117,6 +117,15 @@ const SELF_INFLICTED_KINDS = new Set<DamageKind>(['recoil']);
 
 // ─── Per-Pokémon Stats Tracker ───────────────────────────────────────
 
+/** Tracker counters captured at switch-in; an Illusion reveal rolls the disguise window back. */
+interface ActivationBaseline {
+  kos_dealt: number;
+  turns_active: number;
+  moves_used: Set<string>;
+  was_brought: boolean;
+  was_lead: boolean;
+}
+
 interface PokemonTracker {
   pokemon_name: string;
   was_brought: boolean;
@@ -127,6 +136,7 @@ interface PokemonTracker {
   turns_active: number;
   is_active: boolean;
   first_seen_turn: number;
+  activationBaseline: ActivationBaseline | null;
 }
 
 /**
@@ -254,26 +264,28 @@ export function parseReplayLog(log: string): ParsedBattleStats {
     const sideTrackers = trackers[side];
     const prevKey = slotToTrackerKey.get(slot);
 
+    let tracker: PokemonTracker;
     if (prevKey && sideTrackers?.has(prevKey) && isSameReplayPokemonEntity(prevKey, name)) {
-      const tracker = sideTrackers.get(prevKey)!;
-      tracker.was_brought = true;
-      slotToTrackerKey.set(slot, prevKey);
-      slotToSpecies.set(slot, prevKey);
-      return tracker;
+      tracker = sideTrackers.get(prevKey)!;
+    } else {
+      tracker = findTrackerByEntity(side, name) ?? getOrCreateTracker(side, name, false);
     }
 
-    const existingEntity = findTrackerByEntity(side, name);
-    if (existingEntity) {
-      existingEntity.was_brought = true;
-      slotToTrackerKey.set(slot, existingEntity.pokemon_name);
-      slotToSpecies.set(slot, existingEntity.pokemon_name);
-      return existingEntity;
-    }
-
-    const tracker = getOrCreateTracker(side, name, true);
+    captureActivationBaseline(tracker);
+    tracker.was_brought = true;
     slotToTrackerKey.set(slot, tracker.pokemon_name);
     slotToSpecies.set(slot, tracker.pokemon_name);
     return tracker;
+  }
+
+  function captureActivationBaseline(tracker: PokemonTracker): void {
+    tracker.activationBaseline = {
+      kos_dealt: tracker.kos_dealt,
+      turns_active: tracker.turns_active,
+      moves_used: new Set(tracker.moves_used),
+      was_brought: tracker.was_brought,
+      was_lead: tracker.was_lead,
+    };
   }
 
   function syncSlotAfterFormeChange(ident: string, rawSpecies: string): void {
@@ -298,6 +310,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
       turns_active: 0,
       is_active: false,
       first_seen_turn: currentTurn,
+      activationBaseline: null,
     };
   }
 
@@ -306,6 +319,138 @@ export function parseReplayLog(log: string): ParsedBattleStats {
       if (t.is_active) return t;
     }
     return undefined;
+  }
+
+  /**
+   * Rewrite stored PokemonRefs that point at one tracker key (species) so they point at
+   * another — used when an Illusion reveal shows that refs recorded during the disguise
+   * window (hazard setters, damage attackers, status inflicters) name the revealed mon.
+   */
+  function rewriteAttributionRefs(side: string, fromKey: string, toKey: string): void {
+    const fix = (ref: PokemonRef | null): PokemonRef | null =>
+      ref && ref.side === side && ref.pokemon === fromKey ? { side, pokemon: toKey } : ref;
+
+    for (const hazardMap of Object.values(attr.hazards)) {
+      for (const [hazard, ref] of Array.from(hazardMap.entries())) {
+        const fixed = fix(ref);
+        if (fixed) hazardMap.set(hazard, fixed);
+      }
+    }
+    attr.weatherSetter = fix(attr.weatherSetter);
+    for (const map of [
+      attr.statusInflicter,
+      attr.leechSeedSource,
+      attr.trapSource,
+      attr.curseSource,
+      attr.perishSongUser,
+      attr.lastOpposingDamager,
+    ]) {
+      for (const [key, ref] of Array.from(map.entries())) {
+        const fixed = fix(ref);
+        if (fixed) map.set(key, fixed);
+      }
+    }
+    for (const [key, source] of Array.from(attr.lastDamageSource.entries())) {
+      const attacker = fix(source.attacker);
+      if (attacker !== source.attacker) {
+        attr.lastDamageSource.set(key, { ...source, attacker });
+      }
+    }
+  }
+
+  /**
+   * An Illusion broke: the log revealed that a slot's "species" (nickname and details it
+   * copied from a teammate) is actually a different Pokémon. The stats accumulated on the
+   * copied species' tracker since the slot switched in belong to the revealed Pokémon, so
+   * the disguise window's delta migrates to the revealed species' tracker and the copied
+   * tracker rolls back to its pre-window baseline.
+   */
+  function applyIllusionBreak(ident: string, details: string): void {
+    const side = extractSide(ident);
+    const slot = extractSlot(ident);
+    const revealedSpecies = extractSpeciesFromDetails(details);
+    const sideTrackers = trackers[side];
+    const illusionKey = slotToTrackerKey.get(slot);
+    if (!sideTrackers || !illusionKey) return;
+
+    const illusionTracker = sideTrackers.get(illusionKey);
+    if (!illusionTracker) return;
+
+    const revealed =
+      sideTrackers.get(revealedSpecies) ??
+      findTrackerByEntity(side, revealedSpecies) ??
+      getOrCreateTracker(side, revealedSpecies, false);
+
+    // A disguise as the same species needs no split — one tracker row serves both.
+    if (revealed.pokemon_name === illusionKey) return;
+
+    const base = illusionTracker.activationBaseline;
+    if (base) {
+      revealed.kos_dealt += illusionTracker.kos_dealt - base.kos_dealt;
+      revealed.turns_active += illusionTracker.turns_active - base.turns_active;
+      for (const move of Array.from(illusionTracker.moves_used)) {
+        if (!base.moves_used.has(move)) revealed.moves_used.add(move);
+      }
+      if (illusionTracker.was_lead && !base.was_lead) revealed.was_lead = true;
+
+      illusionTracker.kos_dealt = base.kos_dealt;
+      illusionTracker.turns_active = base.turns_active;
+      illusionTracker.moves_used = base.moves_used;
+      illusionTracker.was_brought = base.was_brought;
+      illusionTracker.was_lead = base.was_lead;
+      illusionTracker.activationBaseline = null;
+
+      // When the copied tracker had no activity before the disguise window, every stored
+      // ref to its species must have been recorded during the window — those are the
+      // revealed mon's actions, so rewrite them (a tracker with pre-window activity keeps
+      // its refs: they cannot be told apart from window refs).
+      if (
+        !base.was_brought &&
+        base.kos_dealt === 0 &&
+        base.turns_active === 0 &&
+        base.moves_used.size === 0
+      ) {
+        rewriteAttributionRefs(side, illusionKey, revealed.pokemon_name);
+      }
+    }
+
+    revealed.was_brought = true;
+    revealed.is_active = illusionTracker.is_active;
+    illusionTracker.is_active = false;
+
+    if (attr.activePokemon[side]?.pokemon === illusionKey) {
+      attr.activePokemon[side] = { side, pokemon: revealed.pokemon_name };
+    }
+    if (attr.lastMoveUser?.side === side && attr.lastMoveUser.pokemon === illusionKey) {
+      attr.lastMoveUser = { side, pokemon: revealed.pokemon_name };
+    }
+
+    slotToTrackerKey.set(slot, revealed.pokemon_name);
+    slotToSpecies.set(slot, revealed.pokemon_name);
+
+    // Damage/secondary tracking pending under the copied species' target key follows the
+    // reveal (e.g. the hit that broke the Illusion is resolved at the upcoming |faint|).
+    const oldKey = `${illusionKey}|${side}`;
+    const newKey = `${revealed.pokemon_name}|${side}`;
+    const dmgSource = attr.lastDamageSource.get(oldKey);
+    if (dmgSource !== undefined) {
+      attr.lastDamageSource.delete(oldKey);
+      attr.lastDamageSource.set(newKey, dmgSource);
+    }
+    for (const map of [
+      attr.lastOpposingDamager,
+      attr.statusInflicter,
+      attr.leechSeedSource,
+      attr.trapSource,
+      attr.curseSource,
+      attr.perishSongUser,
+    ]) {
+      const entry = map.get(oldKey);
+      if (entry !== undefined) {
+        map.delete(oldKey);
+        map.set(newKey, entry);
+      }
+    }
   }
 
   // ─── Damage Classification ──────────────────────────────────────
@@ -501,7 +646,15 @@ export function parseReplayLog(log: string): ParsedBattleStats {
       case 'detailschange': {
         const ident = args[1] as string;
         const details = args[2] as string;
-        syncSlotAfterFormeChange(ident, extractSpeciesFromDetails(details));
+        const species = extractSpeciesFromDetails(details);
+        const prevKey = slotToTrackerKey.get(extractSlot(ident));
+        // A detailschange to a different dex entity is a legacy Illusion reveal
+        // (newer logs announce it via |replace|); same-entity changes stay one tracker.
+        if (prevKey && !isSameReplayPokemonEntity(prevKey, species)) {
+          applyIllusionBreak(ident, details);
+        } else {
+          syncSlotAfterFormeChange(ident, species);
+        }
         break;
       }
 
@@ -509,6 +662,14 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         const ident = args[1] as string;
         const species = args[2] as string;
         syncSlotAfterFormeChange(ident, species);
+        break;
+      }
+
+      // ── Illusion break (Zoroark/Zorua revealed) ────────────────
+      case 'replace': {
+        const ident = args[1] as string;
+        const details = args[2] as string;
+        applyIllusionBreak(ident, details);
         break;
       }
 
