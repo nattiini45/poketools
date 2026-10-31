@@ -3,6 +3,10 @@ import type { NextRequest } from 'next/server';
 import type { Player } from '@/types/player';
 
 const signUp = vi.fn();
+const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
+
+// The limiter's Postgres store, for the fail-closed case; the other tests use the in-memory store.
+vi.mock('@/lib/supabase/client', () => ({ supabase: { rpc: (...args: unknown[]) => rpc(...args) } }));
 
 vi.mock('@/lib/supabase/auth-client', () => ({
   createAuthClient: () => ({ auth: { signUp } }),
@@ -25,7 +29,7 @@ vi.mock('@/lib/supabase/queries/players', () => ({
   linkAuthUserToPlayer: vi.fn(),
 }));
 
-import { POST } from '@/app/api/account/link-email/route';
+import { LINK_EMAIL_INBOX_LIMIT, LINK_EMAIL_PLAYER_LIMIT, POST } from '@/app/api/account/link-email/route';
 import { isReservedSuperadminEmail, requirePlayer } from '@/lib/auth/helpers';
 import { getPlayerById, linkAuthUserToPlayer } from '@/lib/supabase/queries/players';
 import { resetMemoryRateLimits } from '@/lib/utils/rate-limit';
@@ -76,6 +80,30 @@ describe('POST /api/account/link-email', () => {
     delete process.env.SUPERADMIN_DISCORD_ID;
   });
 
+  it('pins both limits: 5 per hour per player and 3 per hour per inbox, fail closed', () => {
+    expect(LINK_EMAIL_PLAYER_LIMIT).toEqual({ limit: 5, windowSeconds: 3600, failMode: 'closed' });
+    expect(LINK_EMAIL_INBOX_LIMIT).toEqual({ limit: 3, windowSeconds: 3600, failMode: 'closed' });
+  });
+
+  it('answers 503 and creates nothing when the limiter cannot be consulted', async () => {
+    vi.stubEnv('RATE_LIMIT_STORE', 'postgres');
+    rpc.mockRejectedValue(new Error('limiter down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await POST(makeRequest(VALID_BODY));
+    expect(res.status).toBe(503);
+    expect((await res.json()).code).toBe('rate_limit_unavailable');
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it('answers 400 invalid_json for a body that does not parse, and creates nothing', async () => {
+    const request = { json: vi.fn().mockRejectedValue(new SyntaxError('Unexpected token')), headers: new Headers() } as unknown as NextRequest;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await POST(request);
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('invalid_json');
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
   it('limits attempts per player before reading the body, and per inbox whatever the alias (#36)', async () => {
     signUp.mockResolvedValue({ data: { user: { id: 'auth-1', identities: [] } }, error: null });
     for (let i = 0; i < 3; i += 1) expect((await POST(makeRequest({ ...VALID_BODY, email: `ash+${i}@example.com` }))).status).toBe(409);
@@ -85,8 +113,10 @@ describe('POST /api/account/link-email', () => {
     expect(signUp).toHaveBeenCalledTimes(3);
     // The fifth attempt of this player still counts; the sixth is refused whatever it says.
     await POST(makeRequest({ ...VALID_BODY, email: 'misty@example.com' }));
-    const player = await POST(makeRequest({ ...VALID_BODY, email: 'brock@example.com' }));
+    const refused = makeRequest({ ...VALID_BODY, email: 'brock@example.com' });
+    const player = await POST(refused);
     expect(player.status).toBe(429);
+    expect(refused.json).not.toHaveBeenCalled();
     expect(signUp).toHaveBeenCalledTimes(4);
   });
 

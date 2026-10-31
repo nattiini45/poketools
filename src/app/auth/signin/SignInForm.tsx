@@ -51,7 +51,7 @@ export default function SignInForm({ callbackUrl, initialErrorCode }: SignInForm
         return;
       }
       // Full navigation so the server-rendered session is picked up
-      // Checked again here: the prop is the only thing between the query string and the browser's navigation.
+      // Checked again here: the page already sanitizes, but this form must not rely on every caller doing it.
       window.location.assign(sanitizeCallbackUrl(callbackUrl));
     } finally {
       setLoading(false);

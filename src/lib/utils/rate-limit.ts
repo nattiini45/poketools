@@ -310,20 +310,31 @@ function ipv6Hextets(address: string): string[] | null {
   const last = (halves.length === 2 ? tail : head).at(-1);
   const v4 = last !== undefined && last.includes('.') ? 1 : 0;
   const missing = 8 - head.length - tail.length - v4;
-  if (halves.length === 1 ? missing !== 0 : missing < 0) return null;
+  // Without `::` the groups must be exactly eight; with it, `::` stands for at least one group.
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return null;
   const all = [...head, ...Array.from({ length: halves.length === 2 ? missing : 0 }, () => '0'), ...tail];
   return all.every((hextet) => hextet.includes('.') || /^[0-9a-fA-F]{1,4}$/.test(hextet)) ? all : null;
 }
 
 /**
  * The identity a per-IP limit is keyed on (issue #33). One IPv6 host commonly holds a whole /64, so keying on the full
- * address lets it reset a limit by changing the low bits: an IPv6 address counts as its /64 prefix. IPv4, an IPv4-mapped
- * IPv6 address and anything that does not parse stay as they are. Audit fields keep the raw address (`findClientIp`).
+ * address lets it reset a limit by changing the low bits: an IPv6 address counts as its /64 prefix. An IPv4-mapped IPv6
+ * address counts as its IPv4 address; IPv4 stays as it is. Anything else that does not parse is lower-cased (so a
+ * spelling in another case is one key) and, when it looks like IPv6, logged. Audit fields keep the raw address
+ * (`findClientIp`).
  */
 export function rateLimitIpIdentity(ip: string): string {
   const hextets = ipv6Hextets(ip);
-  if (hextets === null) return ip;
-  if (hextets.at(-1)?.includes('.')) return ip;
+  if (hextets === null) {
+    if (ip.includes(':')) console.warn('[rate-limit] a client address with a colon did not parse as IPv6; keyed on it as it is');
+    return ip.toLowerCase();
+  }
+  const last = hextets.at(-1) ?? '';
+  if (last.includes('.')) {
+    // An embedded IPv4 tail is one entry: `::ffff:a.b.c.d` reads as five zero groups, `ffff`, then the address.
+    const mapped = hextets.length === 7 && hextets.slice(0, 5).every((group) => /^0{1,4}$/.test(group)) && /^ffff$/i.test(hextets[5]);
+    return mapped ? last : ip.toLowerCase();
+  }
   return `${hextets
     .slice(0, 4)
     .map((hextet) => hextet.toLowerCase().replace(/^0+(?=.)/, ''))
@@ -368,9 +379,10 @@ export async function checkPublicRateLimit(
 const DOTLESS_DOMAINS: Readonly<Record<string, string>> = { 'gmail.com': 'gmail.com', 'googlemail.com': 'gmail.com' };
 
 /**
- * The inbox an address delivers to, for per-inbox limits (issue #33): trimmed and lower-cased, a `+tag` dropped, and for
- * Gmail the dots of the local part dropped and `googlemail.com` folded into `gmail.com`. Only the limiter key changes; the
- * address itself is stored and mailed as the person typed it.
+ * The inbox an address delivers to, for per-inbox limits (issue #33): trimmed and lower-cased, a `+tag` suffix dropped
+ * (kept when the local part is only the tag), and for Gmail the dots of the local part dropped and `googlemail.com` folded
+ * into `gmail.com`. The folding only ever touches the limiter key: the address itself is stored and mailed unchanged
+ * apart from the schema's trim and lower-case.
  */
 export function emailIdentity(email: string): string {
   const lower = email.trim().toLowerCase();

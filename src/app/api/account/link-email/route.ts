@@ -18,9 +18,11 @@ import type { ApiResult } from '@/types/api';
  * before verification is safe.
  *
  * Explicit duplicate-email error is acceptable here: the caller is
- * authenticated, unlike the public signup route, and every attempt counts
- * against two fail-closed limits (per player, per inbox) before anything is
- * checked, so the answer cannot be used to test addresses in bulk (#36).
+ * authenticated, unlike the public signup route, and every attempt that
+ * passes the already-linked check and carries a valid address counts against
+ * two fail-closed limits (per player before the body is read, per inbox before
+ * the address is used), so the answer cannot be used to test addresses in bulk
+ * (#36).
  *
  * SUPERADMIN_EMAIL is reserved: only the SUPERADMIN_DISCORD_ID player may
  * link it. Anyone else gets the generic create-failed 400, so the

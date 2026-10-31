@@ -8,8 +8,8 @@ const PLACEHOLDER_ORIGIN = 'https://callback.invalid';
 export function sanitizeCallbackUrl(raw: string | null | undefined, fallback = '/'): string {
   if (typeof raw !== 'string' || raw.length === 0 || raw.length > 2048) return fallback;
   if (!raw.startsWith('/') || raw.startsWith('//')) return fallback;
-  // Backslashes become slashes in a browser's URL parser, and control characters and whitespace are stripped from it: both
-  // can turn a path into `//host`. None of them belongs in a path we would send someone to.
+  // A browser's URL parser turns backslashes into slashes and strips tabs, newlines and leading or trailing control
+  // characters and spaces: any of them can change how the URL parses (`//host`). None belongs in a path we send someone to.
   if (raw.includes('\\') || /[\u0000-\u001f\u007f\s]/.test(raw)) return fallback;
   let parsed: URL;
   try {
