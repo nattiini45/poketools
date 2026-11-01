@@ -8,6 +8,7 @@ vi.mock('@/lib/auth/helpers', () => ({
 
 vi.mock('@/lib/auth/superadmin', () => ({
   resolveSuperadminPlayerId: vi.fn(),
+  superadminDiscordId: vi.fn(),
 }));
 
 vi.mock('@/lib/api/error-response', () => ({
@@ -26,7 +27,7 @@ vi.mock('@/lib/audit/log', () => ({
 
 import { POST } from '@/app/api/admin/players/import/route';
 import { requireAdmin, isSuperadminNow } from '@/lib/auth/helpers';
-import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
+import { resolveSuperadminPlayerId, superadminDiscordId } from '@/lib/auth/superadmin';
 import { createPlayersBatch, getPlayersByDiscordIds, upsertPlayersByDiscordId } from '@/lib/supabase/queries/players';
 
 const admin = { playerId: 'admin-1', name: 'Admin' };
@@ -55,6 +56,7 @@ describe('POST /api/admin/players/import', () => {
     vi.mocked(createPlayersBatch).mockResolvedValue([]);
     vi.mocked(upsertPlayersByDiscordId).mockResolvedValue([]);
     vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(null);
+    vi.mocked(superadminDiscordId).mockReturnValue(null);
     vi.mocked(isSuperadminNow).mockResolvedValue(false);
   });
 
@@ -159,6 +161,7 @@ describe('POST /api/admin/players/import', () => {
     };
 
     function existingSuperadmin(id = SUPERADMIN_ROW) {
+      vi.mocked(superadminDiscordId).mockReturnValue(SUPERADMIN_DISCORD);
       vi.mocked(getPlayersByDiscordIds).mockResolvedValue(
         new Map([[SUPERADMIN_DISCORD, { id, discord_id: SUPERADMIN_DISCORD }]]) as never,
       );
@@ -234,11 +237,26 @@ describe('POST /api/admin/players/import', () => {
     });
 
     it('leaves an import that does not touch the superadmin row alone', async () => {
+      vi.mocked(superadminDiscordId).mockReturnValue(SUPERADMIN_DISCORD);
       vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(SUPERADMIN_ROW);
 
       await POST(jsonRequest({ mode: 'upsert', players: [upsertBody.players[1]] }));
 
       expect(isSuperadminNow).not.toHaveBeenCalled();
+      expect(upsertPlayersByDiscordId).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not read the superadmin row for existing rows that are not the superadmin', async () => {
+      vi.mocked(superadminDiscordId).mockReturnValue(SUPERADMIN_DISCORD);
+      vi.mocked(getPlayersByDiscordIds).mockResolvedValue(
+        new Map([[OTHER_DISCORD, { id: 'player-3', discord_id: OTHER_DISCORD }]]) as never,
+      );
+      vi.mocked(resolveSuperadminPlayerId).mockRejectedValue(new Error('db down'));
+
+      const res = await POST(jsonRequest({ mode: 'upsert', players: [upsertBody.players[1]] }));
+
+      expect(res.status).toBe(200);
+      expect(resolveSuperadminPlayerId).not.toHaveBeenCalled();
       expect(upsertPlayersByDiscordId).toHaveBeenCalledTimes(1);
     });
   });
