@@ -96,6 +96,7 @@ function row(overrides?: Partial<SessionPlayerRow>): SessionPlayerRow {
     champions_username: '',
     avatar_url: null,
     status: 'active',
+    sessions_valid_after: '-infinity',
     resource_admin_count: 0,
     ...overrides,
   };

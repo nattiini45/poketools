@@ -53,6 +53,7 @@ vi.mock('@/lib/supabase/queries/players', async (importOriginal) => {
     toSessionPlayer: actual.toSessionPlayer,
     getSessionPlayerRowByIdentity: vi.fn(),
     getPlayerByDiscordId: vi.fn(),
+    isAuthUserLinkedToDiscordId: vi.fn(),
     createPlayer: vi.fn(),
     updatePlayer: vi.fn(),
     linkDiscordToPlayer: vi.fn(),
@@ -66,6 +67,7 @@ import { verifyLinkToken } from '@/lib/utils/crypto';
 import {
   getSessionPlayerRowByIdentity,
   getPlayerByDiscordId,
+  isAuthUserLinkedToDiscordId,
   createPlayer,
   updatePlayer,
   linkDiscordToPlayer,
@@ -76,6 +78,7 @@ import {
   isSessionRefreshDue,
   loadSessionPlayer,
 } from '@/auth';
+import { SessionRevokedError } from '@/lib/auth/session-epoch';
 
 const mockedRead = vi.mocked(getSessionPlayerRowByIdentity);
 const mockedCreate = vi.mocked(createPlayer);
@@ -85,6 +88,7 @@ const mockedCookies = vi.mocked(cookies);
 const mockedVerifyLink = vi.mocked(verifyLinkToken);
 const mockedGetByDiscord = vi.mocked(getPlayerByDiscordId);
 const mockedLink = vi.mocked(linkDiscordToPlayer);
+const mockedIsLinked = vi.mocked(isAuthUserLinkedToDiscordId);
 
 type Callbacks = NonNullable<NextAuthConfig['callbacks']>;
 type JwtParams = Parameters<NonNullable<Callbacks['jwt']>>[0];
@@ -100,6 +104,13 @@ async function runJwt(params: Partial<JwtParams> & { token: JWT }): Promise<JWT>
   const result = await jwt({ user: undefined as unknown as JwtParams['user'], ...params } as JwtParams);
   if (!result) throw new Error('jwt callback returned null');
   return result;
+}
+
+/** The jwt callback's raw answer: null ends the session (Auth.js clears the cookie). */
+async function runJwtRaw(params: Partial<JwtParams> & { token: JWT }): Promise<JWT | null> {
+  const jwt = config().callbacks?.jwt;
+  if (!jwt) throw new Error('jwt callback missing');
+  return jwt({ user: undefined as unknown as JwtParams['user'], ...params } as JwtParams);
 }
 
 // ── Render scope (stand-in for the Flight request dispatcher) ────────
@@ -144,6 +155,7 @@ function makeRow(overrides?: Partial<SessionPlayerRow>): SessionPlayerRow {
     champions_username: 'ash_ch',
     avatar_url: null,
     status: 'active',
+    sessions_valid_after: '-infinity',
     resource_admin_count: 0,
     ...overrides,
   };
@@ -500,9 +512,409 @@ describe('jwt callback sign-in', () => {
   });
 });
 
+// ── credentials superadmin binding (GoTrue signup is public) ────────
+
+describe('credentials superadmin binding', () => {
+  const RESERVED = 'operator@example.test';
+  const OPERATOR_DISCORD_ID = '111122223333444455';
+  const credentialsAccount = {
+    provider: 'credentials',
+    type: 'credentials',
+    providerAccountId: 'auth-uuid-1',
+  } as JwtParams['account'];
+  const signIn = (email = RESERVED) =>
+    runJwt({
+      token: {},
+      account: credentialsAccount,
+      user: { id: 'auth-uuid-1', email, name: 'Operator' },
+      trigger: 'signIn',
+    });
+  const created = (): Player => ({
+    id: 'player-new',
+    name: 'Operator',
+    discord_id: null,
+    auth_user_id: 'auth-uuid-1',
+    ps_username: '',
+    champions_username: '',
+    is_admin: false,
+    is_creator: false,
+    is_guest: false,
+    is_test_account: false,
+    joined_date: '2026-09-29',
+    avatar_url: null,
+    avatar_config: null,
+    status: 'active',
+    suspended_until: null,
+    ban_reason: null,
+    created_at: '2026-09-29T12:00:00Z',
+    updated_at: '2026-09-29T12:00:00Z',
+  });
+
+  beforeEach(() => {
+    process.env.SUPERADMIN_EMAIL = RESERVED;
+    process.env.SUPERADMIN_DISCORD_ID = OPERATOR_DISCORD_ID;
+    mockedIsLinked.mockResolvedValue(false);
+  });
+
+  it('a brand-new player on the reserved email is not admin and is never promoted', async () => {
+    mockedRead.mockResolvedValue(null);
+    mockedCreate.mockResolvedValue(created());
+
+    const result = await signIn();
+
+    expect(mockedCreate).toHaveBeenCalledTimes(1);
+    expect(result.player).toMatchObject({ playerId: 'player-new', isAdmin: false });
+    expect(result.superadminLinked).toBe(false);
+    expect(mockedIsLinked).not.toHaveBeenCalled();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('an existing player on the reserved email without the operator Discord link is not admin', async () => {
+    mockedRead.mockResolvedValue(makeRow({ is_admin: false }));
+    mockedIsLinked.mockResolvedValue(false);
+
+    const result = await signIn();
+
+    expect(mockedIsLinked).toHaveBeenCalledWith('auth-uuid-1', OPERATOR_DISCORD_ID);
+    expect(result.player).toMatchObject({ isAdmin: false });
+    expect(result.superadminLinked).toBe(false);
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('the documented path: a player linked to SUPERADMIN_DISCORD_ID is superadmin and admin is persisted', async () => {
+    mockedRead.mockResolvedValue(makeRow({ is_admin: false }));
+    mockedIsLinked.mockResolvedValue(true);
+
+    const result = await signIn();
+
+    expect(result.player).toMatchObject({ isAdmin: true });
+    expect(result.superadminLinked).toBe(true);
+    expect(mockedUpdate).toHaveBeenCalledWith('player-1', { is_admin: true });
+  });
+
+  it('the email match is case- and whitespace-insensitive', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    mockedIsLinked.mockResolvedValue(true);
+
+    const result = await signIn('  Operator@Example.TEST ');
+
+    expect(result.superadminLinked).toBe(true);
+  });
+
+  it('with SUPERADMIN_DISCORD_ID unset no email session is superadmin, and nothing is read', async () => {
+    delete process.env.SUPERADMIN_DISCORD_ID;
+    mockedRead.mockResolvedValue(makeRow());
+    mockedIsLinked.mockResolvedValue(true);
+
+    const result = await signIn();
+
+    expect(result.superadminLinked).toBe(false);
+    expect(result.player).toMatchObject({ isAdmin: false });
+    expect(mockedIsLinked).not.toHaveBeenCalled();
+  });
+
+  it('another email never reads the link, even when the player holds the operator Discord id', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    mockedIsLinked.mockResolvedValue(true);
+
+    const result = await signIn('someone@example.test');
+
+    expect(result.superadminLinked).toBe(false);
+    expect(result.player).toMatchObject({ isAdmin: false });
+    expect(mockedIsLinked).not.toHaveBeenCalled();
+  });
+
+  it('a failed link read fails the sign-in lookup closed: no player, no admin', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    mockedIsLinked.mockRejectedValue(new Error('timeout'));
+
+    const result = await signIn();
+
+    expect(result.player).toBeNull();
+    expect(result.superadminLinked).toBeUndefined();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('the refresh recomputes the link: a link removed since sign-in drops superadmin', async () => {
+    mockedRead.mockResolvedValue(makeRow({ is_admin: true }));
+    mockedIsLinked.mockResolvedValue(false);
+    const token = discordToken({
+      id: 'auth-uuid-1',
+      provider: 'credentials',
+      email: RESERVED,
+      superadminLinked: true,
+      player: makeSessionPlayer({ isAdmin: true }),
+      refreshedAt: undefined,
+    });
+
+    const result = await runJwt({ token });
+
+    expect(mockedIsLinked).toHaveBeenCalledWith('auth-uuid-1', OPERATOR_DISCORD_ID);
+    expect(result.superadminLinked).toBe(false);
+    // The stored is_admin (granted earlier) is a role like any other; only the override stops applying.
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('the refresh keeps a linked superadmin', async () => {
+    mockedRead.mockResolvedValue(makeRow({ is_admin: false }));
+    mockedIsLinked.mockResolvedValue(true);
+    const token = discordToken({
+      id: 'auth-uuid-1',
+      provider: 'credentials',
+      email: RESERVED,
+      refreshedAt: undefined,
+    });
+
+    const result = await runJwt({ token });
+
+    expect(result.superadminLinked).toBe(true);
+    expect(result.player).toMatchObject({ isAdmin: true });
+  });
+
+  it('a Discord session never carries or reads the credentials link', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    const result = await runJwt({ token: discordToken({ refreshedAt: undefined }) });
+    expect(result.superadminLinked).toBeUndefined();
+    expect(mockedIsLinked).not.toHaveBeenCalled();
+  });
+
+  it('the session carries the derived boolean and never the Discord id', async () => {
+    const sessionCb = config().callbacks?.session;
+    if (!sessionCb) throw new Error('session callback missing');
+    const token = discordToken({ id: 'auth-uuid-1', provider: 'credentials', superadminLinked: true });
+
+    const session = (await sessionCb({
+      session: { user: { id: '', name: 'Operator', email: RESERVED, image: null }, expires: '2099-01-01' },
+      token,
+    } as unknown as Parameters<typeof sessionCb>[0])) as Session;
+
+    expect(session.superadminLinked).toBe(true);
+    expect(JSON.stringify(session)).not.toContain(OPERATOR_DISCORD_ID);
+    expect(JSON.stringify(token)).not.toContain(OPERATOR_DISCORD_ID);
+  });
+});
+
+// ── session epoch: authAt vs players.sessions_valid_after ───────────
+
+describe('session epoch', () => {
+  const discordAccount = { provider: 'discord', type: 'oauth', providerAccountId: 'discord-1' } as JwtParams['account'];
+  const credentialsAccount = {
+    provider: 'credentials',
+    type: 'credentials',
+    providerAccountId: 'auth-uuid-1',
+  } as JwtParams['account'];
+  const SIGNED_IN_AT = NOW - 3_600_000;
+  const iso = (ms: number): string => new Date(ms).toISOString();
+  const due = NOW - SESSION_PLAYER_TTL_MS - 1;
+
+  it('stamps authAt at a Discord sign-in', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    const result = await runJwt({
+      token: {},
+      account: discordAccount,
+      profile: { id: 'discord-1', username: 'ash' },
+      trigger: 'signIn',
+    });
+    expect(result.authAt).toBe(NOW);
+  });
+
+  it('stamps authAt at a credentials sign-in', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    const result = await runJwt({
+      token: {},
+      account: credentialsAccount,
+      user: { id: 'auth-uuid-1', email: 'ash@example.test', name: 'Ash' },
+      trigger: 'signIn',
+    });
+    expect(result.authAt).toBe(NOW);
+  });
+
+  it('stamps a credentials sign-in with the time its attempt started, so one in flight across a reset predates the revocation', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    const startedAt = NOW - 2_500;
+    const result = await runJwt({
+      token: {},
+      account: credentialsAccount,
+      user: { id: 'auth-uuid-1', email: 'ash@example.test', name: 'Ash', authStartedAt: startedAt },
+      trigger: 'signIn',
+    });
+    expect(result.authAt).toBe(startedAt);
+  });
+
+  it('ignores an attempt start time in the future', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    const result = await runJwt({
+      token: {},
+      account: credentialsAccount,
+      user: { id: 'auth-uuid-1', email: 'ash@example.test', name: 'Ash', authStartedAt: NOW + 60_000 },
+      trigger: 'signIn',
+    });
+    expect(result.authAt).toBe(NOW);
+  });
+
+  it('stamps authAt even when the sign-in lookup fails, so the next read can still be compared', async () => {
+    mockedRead.mockRejectedValue(new Error('timeout'));
+    const result = await runJwt({
+      token: {},
+      account: discordAccount,
+      profile: { id: 'discord-1', username: 'ash' },
+      trigger: 'signIn',
+    });
+    expect(result.authAt).toBe(NOW);
+  });
+
+  it('a sign-in is never revoked by an epoch that predates it', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(NOW - 1_000) }));
+    const result = await runJwt({
+      token: {},
+      account: discordAccount,
+      profile: { id: 'discord-1', username: 'ash' },
+      trigger: 'signIn',
+    });
+    expect(result.player).toEqual(makeSessionPlayer());
+    expect(result.authAt).toBe(NOW);
+  });
+
+  it('a refresh and an update() never advance authAt, and token.iat is not used', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    const token = discordToken({ authAt: SIGNED_IN_AT, refreshedAt: due, iat: Math.floor(NOW / 1000) });
+
+    const refreshed = await runJwt({ token });
+    expect(refreshed.authAt).toBe(SIGNED_IN_AT);
+
+    const updated = await runJwt({ token: { ...refreshed }, trigger: 'update' });
+    expect(updated.authAt).toBe(SIGNED_IN_AT);
+  });
+
+  it('decides on authAt, never on token.iat (iat moves on every re-encode)', async () => {
+    // The epoch is after the sign-in and before iat: only authAt may decide.
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(NOW - 60_000) }));
+    const token = discordToken({ authAt: SIGNED_IN_AT, refreshedAt: due, iat: Math.floor(NOW / 1000) });
+    expect(await runJwtRaw({ token })).toBeNull();
+  });
+
+  it('keeps a token issued after the epoch', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(SIGNED_IN_AT - 1) }));
+    const result = await runJwt({ token: discordToken({ authAt: SIGNED_IN_AT, refreshedAt: due }) });
+    expect(result.player).toEqual(makeSessionPlayer());
+  });
+
+  it('keeps a token issued at the very epoch', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(SIGNED_IN_AT) }));
+    const result = await runJwt({ token: discordToken({ authAt: SIGNED_IN_AT, refreshedAt: due }) });
+    expect(result.player).toEqual(makeSessionPlayer());
+  });
+
+  it('ends the session (jwt returns null) when the epoch is after the sign-in', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(SIGNED_IN_AT + 1) }));
+    expect(await runJwtRaw({ token: discordToken({ authAt: SIGNED_IN_AT, refreshedAt: due }) })).toBeNull();
+  });
+
+  it('ends a credentials session the same way, and a forced update() reads it at once', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(SIGNED_IN_AT + 1) }));
+    const token = discordToken({
+      id: 'auth-uuid-1',
+      provider: 'credentials',
+      authAt: SIGNED_IN_AT,
+      refreshedAt: NOW - 1_000,
+    });
+    expect(await runJwtRaw({ token, trigger: 'update' })).toBeNull();
+  });
+
+  it('accepts a legacy token (no authAt) while the epoch is -infinity', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: '-infinity' }));
+    const result = await runJwt({ token: discordToken({ refreshedAt: due }) });
+    expect(result.player).toEqual(makeSessionPlayer());
+    expect(result.authAt).toBeUndefined();
+  });
+
+  it('revokes a legacy token (no authAt) once the epoch has been bumped', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(NOW - 86_400_000) }));
+    expect(await runJwtRaw({ token: discordToken({ refreshedAt: due }) })).toBeNull();
+  });
+
+  it('a token inside the TTL is not re-read; the live guards catch a revocation in that window', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(NOW) }));
+    const token = discordToken({ authAt: SIGNED_IN_AT, refreshedAt: NOW - 1_000 });
+    const result = await runJwt({ token });
+    expect(mockedRead).not.toHaveBeenCalled();
+    expect(result.authAt).toBe(SIGNED_IN_AT);
+  });
+
+  it('a Discord session of a player whose epoch moved (a password reset) ends too', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(SIGNED_IN_AT + 5_000) }));
+    expect(await runJwtRaw({ token: discordToken({ authAt: SIGNED_IN_AT, refreshedAt: due }) })).toBeNull();
+  });
+
+  it('an unreadable epoch fails like a failed read: the stale copy stays and the next call retries', async () => {
+    mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: 'garbage' }));
+    const token = discordToken({ authAt: SIGNED_IN_AT, refreshedAt: due });
+    const result = await runJwt({ token });
+    expect(result.refreshedAt).toBe(due);
+  });
+
+  it('the session lasts 14 days', () => {
+    expect(config().session?.maxAge).toBe(14 * 24 * 60 * 60);
+  });
+
+  describe('loadSessionPlayer with a sign-in time', () => {
+    it('throws SessionRevokedError for a token older than the epoch, and returns no player', async () => {
+      mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(SIGNED_IN_AT + 1) }));
+      await expect(loadSessionPlayer('discord', 'discord-1', { authAt: SIGNED_IN_AT })).rejects.toBeInstanceOf(
+        SessionRevokedError,
+      );
+    });
+
+    it('returns the player for a token at or after the epoch', async () => {
+      mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(SIGNED_IN_AT) }));
+      await expect(loadSessionPlayer('discord', 'discord-1', { authAt: SIGNED_IN_AT })).resolves.toEqual(
+        makeSessionPlayer(),
+      );
+    });
+
+    it('treats a missing authAt as a legacy token: valid at -infinity, revoked once bumped', async () => {
+      mockedRead.mockResolvedValue(makeRow());
+      await expect(loadSessionPlayer('discord', 'discord-1', { authAt: undefined })).resolves.toEqual(
+        makeSessionPlayer(),
+      );
+      mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(SIGNED_IN_AT) }));
+      await expect(loadSessionPlayer('discord', 'discord-1', { authAt: undefined })).rejects.toBeInstanceOf(
+        SessionRevokedError,
+      );
+    });
+
+    it('still answers null, not a revocation, when the identity has no player', async () => {
+      mockedRead.mockResolvedValue(null);
+      await expect(loadSessionPlayer('discord', 'discord-1', { authAt: SIGNED_IN_AT })).resolves.toBeNull();
+    });
+
+    it('does not compare without a sign-in time argument (no token to judge)', async () => {
+      mockedRead.mockResolvedValue(makeRow({ sessions_valid_after: iso(NOW) }));
+      await expect(loadSessionPlayer('discord', 'discord-1')).resolves.toEqual(makeSessionPlayer());
+    });
+  });
+});
+
 // ── session callback ────────────────────────────────────────────────
 
 describe('session callback', () => {
+  it('carries authAt so the live guards can compare it with the epoch', async () => {
+    const sessionCb = config().callbacks?.session;
+    if (!sessionCb) throw new Error('session callback missing');
+
+    const withStamp = (await sessionCb({
+      session: { user: { id: '', name: 'Ash', email: null, image: null }, expires: '2099-01-01' },
+      token: discordToken({ authAt: NOW - 5_000 }),
+    } as unknown as Parameters<typeof sessionCb>[0])) as Session;
+    expect(withStamp.authAt).toBe(NOW - 5_000);
+
+    const legacy = (await sessionCb({
+      session: { user: { id: '', name: 'Ash', email: null, image: null }, expires: '2099-01-01' },
+      token: discordToken(),
+    } as unknown as Parameters<typeof sessionCb>[0])) as Session;
+    expect(legacy.authAt).toBeUndefined();
+  });
+
   it('exposes the player and provider but never the refresh timestamp', async () => {
     const sessionCb = config().callbacks?.session;
     if (!sessionCb) throw new Error('session callback missing');

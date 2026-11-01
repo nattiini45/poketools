@@ -30,9 +30,11 @@
  *      - a failed read throws the database error (fail closed). API routes turn
  *        it into a 500 through safeErrorResponse().
  *    Site admins bypass the ban/suspend check, as before. The superadmin
- *    identity (SUPERADMIN_DISCORD_ID / SUPERADMIN_EMAIL) is always site admin;
- *    requireSuperadmin accepts only that identity (restoring a league from the
- *    trash).
+ *    identity is always site admin; requireSuperadmin accepts only that
+ *    identity (restoring a league from the trash). It is the Discord account
+ *    with SUPERADMIN_DISCORD_ID, or the email login on SUPERADMIN_EMAIL whose
+ *    player is linked to that Discord id (read live, see `./superadmin.ts`):
+ *    the email alone is never enough.
  *
  * 3. View gates are live too. getLiveAccess() and getLiveSessionPlayer() make
  *    the same narrow read (memoised per render, so a layout gate, a page gate
@@ -45,6 +47,12 @@
 import { cache } from 'react';
 import { auth, loadSessionPlayer } from '@/auth';
 import { getVerifiedSession } from '@/lib/auth/session-override';
+import { SessionRevokedError } from '@/lib/auth/session-epoch';
+import {
+  isReservedSuperadminEmail,
+  resolveCredentialsSuperadminLink,
+  superadminDiscordId,
+} from '@/lib/auth/superadmin';
 import type { Session } from 'next-auth';
 import type { SessionPlayer } from '@/types/auth';
 import type { AdminResourceType } from '@/types/resource-admin';
@@ -80,17 +88,74 @@ export async function getSessionPlayer(): Promise<SessionPlayer | null> {
 
 /**
  * Live read of the signed-in identity's player. It uses the token only for
- * the identity. Null when the identity has no player. DB errors rethrow.
+ * the identity and its sign-in time. Null when the identity has no player.
+ * A token issued before the player's session epoch throws the 401 every
+ * guard answers for no session at all. DB errors rethrow.
  */
 async function readLivePlayer(session: Session): Promise<SessionPlayer | null> {
-  const identityId = session.user?.id;
-  if (!identityId) return null;
-
-  const player = await loadSessionPlayer(session.provider ?? 'discord', identityId);
-  if (player && isSuperadmin(session)) {
-    player.isAdmin = true;
-  }
+  const { player, revoked } = await readLiveIdentity(session);
+  if (revoked) throw sessionRevokedError();
   return player;
+}
+
+/**
+ * The live player of a session's identity, and whether that identity is the
+ * superadmin right now. `revoked`: the token was issued before the player's
+ * session epoch (`sessions_valid_after`), so the session is dead; the player
+ * is then null and nothing is granted.
+ */
+interface LiveIdentity {
+  player: SessionPlayer | null;
+  superadmin: boolean;
+  revoked: boolean;
+}
+
+/** The same 401 as no session: a revoked token is signed out, not forbidden. */
+function sessionRevokedError(): AuthError {
+  return new AuthError('Not authenticated', 401, 'unauthenticated');
+}
+
+/**
+ * Whether the credentials session's identity is the linked superadmin, read
+ * from the database (the token's `superadminLinked` can be 5 minutes old).
+ * Memoised per server render; only the reserved address ever reaches the query.
+ */
+const readCredentialsSuperadminLink = cache(
+  (authUserId: string, email: string): Promise<boolean> => resolveCredentialsSuperadminLink(authUserId, email)
+);
+
+/** The superadmin decision from live data: the snowflake for Discord, the Discord-linked reserved email for credentials. */
+async function isLiveSuperadmin(session: Session): Promise<boolean> {
+  if (session.provider !== 'credentials') return isSuperadmin(session);
+  const authUserId = session.user?.id;
+  const email = session.user?.email;
+  if (!authUserId || !email || !isReservedSuperadminEmail(email)) return false;
+  return readCredentialsSuperadminLink(authUserId, email);
+}
+
+/**
+ * Live read of the signed-in identity's player and superadmin status. A
+ * superadmin is always a site admin, whatever the stored `is_admin` says.
+ */
+async function readLiveIdentity(session: Session): Promise<LiveIdentity> {
+  const identityId = session.user?.id;
+  if (!identityId) return { player: null, superadmin: false, revoked: false };
+
+  const [loaded, superadmin] = await Promise.all([
+    loadSessionPlayer(session.provider ?? 'discord', identityId, { authAt: session.authAt }).then(
+      (player) => ({ player, revoked: false }),
+      (err: unknown) => {
+        if (err instanceof SessionRevokedError) return { player: null, revoked: true };
+        throw err;
+      }
+    ),
+    isLiveSuperadmin(session),
+  ]);
+  if (loaded.revoked) return { player: null, superadmin: false, revoked: true };
+  if (loaded.player && superadmin) {
+    loaded.player.isAdmin = true;
+  }
+  return { player: loaded.player, superadmin, revoked: false };
 }
 
 /**
@@ -102,7 +167,8 @@ async function readLivePlayer(session: Session): Promise<SessionPlayer | null> {
 export async function getLiveSessionPlayer(): Promise<SessionPlayer | null> {
   const session = await getSession();
   if (!session) return null;
-  return readLivePlayer(session);
+  const { player, revoked } = await readLiveIdentity(session);
+  return revoked ? null : player;
 }
 
 /** True when a (live) player may act: not banned or suspended. Site admins always may. */
@@ -141,7 +207,8 @@ export async function getLiveAccess(): Promise<LiveAccess | null> {
   const session = await getSession();
   if (!session) return null;
 
-  const player = await readLivePlayer(session);
+  const { player, superadmin, revoked } = await readLiveIdentity(session);
+  if (revoked) return null;
   if (!player || !isInGoodStanding(player)) {
     return { player, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, isSuperadmin: false };
   }
@@ -150,8 +217,18 @@ export async function getLiveAccess(): Promise<LiveAccess | null> {
     isSiteAdmin: player.isAdmin,
     isAnyAdmin: player.isAdmin || player.isResourceAdmin,
     isCreator: player.isAdmin || player.isCreator,
-    isSuperadmin: player.isAdmin && isSuperadmin(session),
+    isSuperadmin: player.isAdmin && superadmin,
   };
+}
+
+/**
+ * Whether the signed-in identity is the superadmin right now: the decision `requireSuperadmin()` makes, as a boolean.
+ * For a branch inside a handler that already answered its own guard (a participant or the superadmin). Never the
+ * token's `isSuperadmin(getSession())`: for a credentials session that copy can be 5 minutes old, so a revoked
+ * Discord link would keep authorizing.
+ */
+export async function isSuperadminNow(): Promise<boolean> {
+  return (await getLiveAccess())?.isSuperadmin === true;
 }
 
 /** Throws 403 unless the (live) player may act. Site admins bypass. */
@@ -180,9 +257,13 @@ async function requireSignedIn(): Promise<Session> {
  */
 export async function requireAuth(): Promise<Session> {
   const session = await requireSignedIn();
-  const player = await readLivePlayer(session);
+  const { player, superadmin, revoked } = await readLiveIdentity(session);
+  if (revoked) throw sessionRevokedError();
   if (player) assertInGoodStanding(player);
-  return { ...session, player };
+  // The returned session answers `isSuperadmin()` from the live read, not the token's copy.
+  return session.provider === 'credentials'
+    ? { ...session, player, superadminLinked: superadmin }
+    : { ...session, player };
 }
 
 /**
@@ -216,12 +297,13 @@ export async function requireAdmin(): Promise<SessionPlayer> {
  */
 export async function requireSuperadmin(): Promise<SessionPlayer> {
   const session = await requireSignedIn();
-  const player = await readLivePlayer(session);
+  const { player, superadmin, revoked } = await readLiveIdentity(session);
+  if (revoked) throw sessionRevokedError();
   if (!player) {
     throw new AuthError('Not a registered player', 403, 'forbidden');
   }
   assertInGoodStanding(player);
-  if (!player.isAdmin || !isSuperadmin(session)) {
+  if (!player.isAdmin || !superadmin) {
     throw new AuthError('Superadmin access required', 403, 'forbidden');
   }
   return player;
@@ -356,33 +438,28 @@ export function isAdmin(session: Session | null): boolean {
   return session?.player?.isAdmin === true;
 }
 
-/**
- * True when `email` is the configured SUPERADMIN_EMAIL (trimmed,
- * case-insensitive). False when SUPERADMIN_EMAIL is unset or blank. Used to
- * stop anyone but the Discord superadmin from linking that address.
- */
-export function isReservedSuperadminEmail(email: string | null | undefined): boolean {
-  const reserved = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();
-  if (!reserved || typeof email !== 'string') return false;
-  return email.trim().toLowerCase() === reserved;
-}
+export { isReservedSuperadminEmail };
 
 /**
- * Check if user is the superadmin (SUPERADMIN_DISCORD_ID or SUPERADMIN_EMAIL).
- * Identity-based, so never stale.
+ * Check if the session is the superadmin. A Discord session is, when its
+ * snowflake is SUPERADMIN_DISCORD_ID. An email/password session is only when
+ * its sign-in email is SUPERADMIN_EMAIL AND the player it resolves to carries
+ * SUPERADMIN_DISCORD_ID (`session.superadminLinked`, derived at sign-in and on
+ * every token refresh, `src/lib/auth/superadmin.ts`). The email alone is never
+ * enough: GoTrue accepts a signup for that address from anyone with the public
+ * anon key. A session from `requireAuth()` carries the live value; one from
+ * `getSession()` carries the token's, up to 5 minutes old (display only).
+ * (Checked via !== 'credentials' so pre-existing JWTs without a provider
+ * field keep working as Discord sessions.)
  */
 export function isSuperadmin(session: Session | null): boolean {
   if (!session) return false;
 
-  // Email/password sessions: match on the GoTrue-confirmed sign-in email;
-  // confirmation is enforced only by the project's Confirm email setting.
-  // (Checked via !== 'credentials' so pre-existing JWTs without a provider
-  // field keep working as Discord sessions.)
   if (session.provider === 'credentials') {
-    return isReservedSuperadminEmail(session.user?.email);
+    return isReservedSuperadminEmail(session.user?.email) && session.superadminLinked === true;
   }
 
-  const superadminId = process.env.SUPERADMIN_DISCORD_ID;
+  const superadminId = superadminDiscordId();
   return !!superadminId && session.user?.id === superadminId;
 }
 

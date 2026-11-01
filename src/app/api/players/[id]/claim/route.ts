@@ -7,6 +7,7 @@ import {
   claimGuestPlayer,
   getPlayerActivityCounts,
   getPlayerById,
+  revokePlayerSessions,
 } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
@@ -93,6 +94,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // A token minted for the source identity must not carry on as the claimed player. The guest row keeps its epoch
+    // through the claim, so the cutoff is written first with the application clock, the clock that stamps `authAt`;
+    // a failed write aborts the claim. The database adds its own clock inside the claim transaction
+    // (players_session_epoch_guard) and the epoch only moves forward, so it ends at the later of the two.
+    await revokePlayerSessions(guestId);
+
     let claimed: Player;
     try {
       claimed = await claimGuestPlayer(guestId, sourcePlayerId);
@@ -146,6 +153,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         source_player_name: source.name,
       },
     });
+
+    // A sign-in that started after the first cutoff and finished before the claim committed holds a token stamped
+    // after it. Its `authAt` (the attempt's start) precedes this second cutoff, so it dies here. The claim is
+    // committed and already audited above, so a failure is retried once and then surfaced (and logged) rather than reported as a success.
+    try {
+      await revokePlayerSessions(guestId);
+    } catch (firstErr) {
+      console.error('[players] guest claim committed; second session revocation failed, retrying:', firstErr);
+      await revokePlayerSessions(guestId);
+    }
 
     return NextResponse.json<ApiResult<Player>>({ success: true, data: claimed });
   } catch (err) {

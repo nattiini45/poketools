@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, signOut } from 'next-auth/react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -24,7 +24,7 @@ interface AccountIdentities {
 
 /** A client-side failure (a key of `account.security`) or the API's own error. Never translated text. */
 type SecurityErrorKey = keyof typeof accountEn.security & (
-  'loadFailed' | 'passwordsMismatch' | 'linkEmailFailed' | 'linkDiscordFailed'
+  'loadFailed' | 'passwordsMismatch' | 'linkEmailFailed' | 'linkDiscordFailed' | 'signOutEverywhereFailed'
 );
 /** `email`: the address the failed request was sent with, so a follow-up link never uses what was typed since. */
 type SecurityError = { kind: 'key'; key: SecurityErrorKey } | { kind: 'api'; error: ApiErrorLike; email?: string };
@@ -43,6 +43,7 @@ export default function AccountSecuritySection() {
   const [emailLinked, setEmailLinked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [linkingDiscord, setLinkingDiscord] = useState(false);
+  const [signingOutEverywhere, setSigningOutEverywhere] = useState(false);
 
   const loadIdentities = useCallback(async () => {
     try {
@@ -115,6 +116,26 @@ export default function AccountSecuritySection() {
       setFormError({ kind: 'key', key: 'linkDiscordFailed' });
     } finally {
       setLinkingDiscord(false);
+    }
+  };
+
+  const handleSignOutEverywhere = async () => {
+    setFormError(null);
+    setEmailLinked(false);
+    setSigningOutEverywhere(true);
+    try {
+      const res = await fetch('/api/account/sessions/revoke', { method: 'POST' });
+      const json = (await res.json()) as ApiResult<{ revoked: true }>;
+      if (!json.success) {
+        setFormError({ kind: 'api', error: json });
+        setSigningOutEverywhere(false);
+        return;
+      }
+      // The epoch already ended this session too; this clears the cookie at once.
+      await signOut({ callbackUrl: '/' });
+    } catch {
+      setFormError({ kind: 'key', key: 'signOutEverywhereFailed' });
+      setSigningOutEverywhere(false);
     }
   };
 
@@ -222,6 +243,16 @@ export default function AccountSecuritySection() {
           )}
         </div>
       )}
+
+      <div className="mt-4 flex items-center justify-between gap-4 border-t border-poke-border pt-4">
+        <div>
+          <p className="text-sm font-heading font-semibold text-poke-text-primary">{t('security.sessionsTitle')}</p>
+          <p className="text-sm text-poke-text-muted">{t('security.sessionsHint')}</p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={handleSignOutEverywhere} loading={signingOutEverywhere}>
+          {t('security.signOutEverywhere')}
+        </Button>
+      </div>
     </Card>
   );
 }

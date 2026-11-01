@@ -55,7 +55,7 @@ describe('sendWebhookTestMessage', () => {
     expect(url).toBe(STORED_URL);
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
-    expect(init.redirect).toBe('manual');
+    expect(init.redirect).toBe('error');
     expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(postedBody().allowed_mentions).toEqual({ parse: [] });
   });

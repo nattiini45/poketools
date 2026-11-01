@@ -85,7 +85,8 @@ Recommended:
 | Variable | Description |
 |---|---|
 | `NEXT_PUBLIC_SITE_URL` | Public origin used for canonical and Open Graph URLs (and as the share-link fallback). Canonical URLs fall back to `NEXTAUTH_URL`, then Vercel's production domain (`VERCEL_PROJECT_PRODUCTION_URL`), then `http://localhost:3000`. Production needs an https origin; a non-https value (other than localhost) is ignored. |
-| `SUPERADMIN_DISCORD_ID` / `SUPERADMIN_EMAIL` | The instance operator's Discord user ID or email; that account is treated as admin on every request |
+| `BLUESKY_SERVICE_HOST_ALLOWLIST` | Optional. Extra Bluesky server hosts (comma-separated, besides `bsky.social`) that a Bluesky integration's `service_url` may name; unset means `bsky.social` only |
+| `SUPERADMIN_DISCORD_ID` / `SUPERADMIN_EMAIL` | The instance operator's Discord user ID, and optionally the email of their linked email login; the Discord account is treated as admin on every request, the email login only while its player is linked to that Discord ID |
 | `FORMAT_PACK` | Which format pack the build uses: unset (your own pack when present, else the example pack), `example` or `private`. Set `private` in Production, so a build that lost your pack fails instead of shipping the example rules. See "Format packs" below. |
 
 Optional features (AI analysis, avatar generation and moderation, social publishing, the 3D world asset bucket, feature flags) have their own variables, all documented in `.env.example`. Runtime flags are described in [docs/feature-flags.md](docs/feature-flags.md).

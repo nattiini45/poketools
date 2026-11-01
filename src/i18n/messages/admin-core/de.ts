@@ -51,6 +51,7 @@ export default defineDe<typeof en>()({
     player__role__assign: 'Rolle vergeben',
     player__role__revoke: 'Rolle entzogen',
     player__claim: 'Gastkonto übernommen',
+    player__sessions_revoke: 'Überall abgemeldet',
     tournament__create: 'Turnier angelegt',
     tournament__update: 'Turnier bearbeitet',
     tournament__delete: 'Turnier gelöscht',

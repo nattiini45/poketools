@@ -47,6 +47,7 @@ vi.mock('@/lib/audit/log', () => ({ logAuditEvent }));
 
 import { POST } from '@/app/api/bootstrap/route';
 import { auth, loadSessionPlayer } from '@/auth';
+import { SessionRevokedError } from '@/lib/auth/session-epoch';
 import { safeErrorResponse } from '@/lib/api/error-response';
 
 function makeRequest(body: Record<string, unknown> = {}): NextRequest {
@@ -186,6 +187,16 @@ describe('POST /api/bootstrap', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it('returns the same 401 for a revoked session (sign-in time before the session epoch) and promotes nobody', async () => {
+    signedIn();
+    vi.mocked(loadSessionPlayer).mockRejectedValue(new SessionRevokedError());
+
+    const res = await POST(makeRequest({ secret: SECRET }));
+    expect(res.status).toBe(401);
+    expect((await res.json()).code).toBe('bootstrap_sign_in_required');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it('returns 409 bootstrap_player_missing when the signed-in identity has no player row', async () => {
     signedIn();
     vi.mocked(loadSessionPlayer).mockResolvedValue(null);
@@ -205,7 +216,7 @@ describe('POST /api/bootstrap', () => {
     expect(body.success).toBe(true);
     expect(body.data.playerId).toBe('player-1');
     expect(body.data.message).toContain('TestAdmin');
-    expect(loadSessionPlayer).toHaveBeenCalledWith('discord', 'discord-123');
+    expect(loadSessionPlayer).toHaveBeenCalledWith('discord', 'discord-123', { authAt: undefined });
     expect(rpc).toHaveBeenCalledWith('bootstrap_first_admin', { p_player_id: 'player-1' });
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'player.role.assign', resource_id: 'player-1', metadata: { via: 'bootstrap' } })
@@ -217,7 +228,7 @@ describe('POST /api/bootstrap', () => {
 
     const res = await POST(makeRequest({ secret: SECRET }));
     expect(res.status).toBe(200);
-    expect(loadSessionPlayer).toHaveBeenCalledWith('credentials', 'auth-user-uuid-1');
+    expect(loadSessionPlayer).toHaveBeenCalledWith('credentials', 'auth-user-uuid-1', { authAt: undefined });
   });
 
   it('returns 403 bootstrap_admin_exists when a concurrent bootstrap won the race', async () => {

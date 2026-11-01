@@ -13,6 +13,8 @@ import {
 } from '@/lib/supabase/queries/players';
 import type { SessionPlayerRow } from '@/lib/supabase/queries/players';
 import { authorizeCredentials } from '@/lib/auth/credentials';
+import { resolveCredentialsSuperadminLink } from '@/lib/auth/superadmin';
+import { isSessionRevoked, SessionRevokedError } from '@/lib/auth/session-epoch';
 import { verifyLinkToken } from '@/lib/utils/crypto';
 import { discordOAuthEnvSchema, readEnv, requireEnv } from '@/lib/env';
 import { syncSpriteStyleCookieAtSignIn } from '@/lib/pkmn/sprite-style-signin.server';
@@ -78,6 +80,13 @@ export const SESSION_PLAYER_TTL_MS = 5 * 60 * 1000;
 const REFRESHED_AT = 'refreshedAt';
 
 /**
+ * How long a session lasts. The cookie slides forward on every
+ * `/api/auth/session` request, so this is the idle limit; the epoch
+ * (`players.sessions_valid_after`) is what ends a session early.
+ */
+export const SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
+
+/**
  * True when the token's player copy must be re-read: no valid timestamp
  * (legacy token, or a sign-in whose lookup failed), older than the TTL, or
  * implausibly far in the future.
@@ -105,13 +114,24 @@ const readSessionPlayerRow = cache(
  * it. Returns a fresh object on every call; the DB is read at most once per
  * server render. Errors rethrow (callers decide whether to fail closed).
  * It does not apply the superadmin override; callers do that.
+ *
+ * With `token`, it also checks the token's sign-in time against the player's
+ * session epoch and throws `SessionRevokedError` for a token issued before it.
  */
 export async function loadSessionPlayer(
   provider: AuthProvider,
-  identityId: string
+  identityId: string,
+  token?: { authAt?: number }
 ): Promise<SessionPlayer | null> {
   const row = await readSessionPlayerRow(provider, identityId);
-  return row ? toSessionPlayer(row) : null;
+  if (!row) return null;
+  // `token` is the caller's sign-in time; without it there is no token to judge.
+  // A revoked token must not read as "no player" (the guards answer that with a
+  // 403), so it has its own error.
+  if (token && isSessionRevoked(token.authAt, row.sessions_valid_after)) {
+    throw new SessionRevokedError();
+  }
+  return toSessionPlayer(row);
 }
 
 interface AuthIdentity {
@@ -123,19 +143,16 @@ interface AuthIdentity {
    * is enforced only by the project's Confirm email setting.
    */
   email?: string | null;
+  /**
+   * Credentials provider only: the reserved email AND a player linked to
+   * `SUPERADMIN_DISCORD_ID` (`resolveCredentialsSuperadminLink`). The email
+   * alone never makes a superadmin: anyone can register it at GoTrue.
+   */
+  superadminLinked?: boolean;
 }
 
 function isSuperadminIdentity(identity: AuthIdentity): boolean {
-  if (identity.provider === 'credentials') {
-    // Same normalization as `isReservedSuperadminEmail` in
-    // `@/lib/auth/helpers` (not imported: helpers imports this module).
-    const superadminEmail = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();
-    return (
-      !!superadminEmail &&
-      typeof identity.email === 'string' &&
-      identity.email.trim().toLowerCase() === superadminEmail
-    );
-  }
+  if (identity.provider === 'credentials') return identity.superadminLinked === true;
   const superadminId = process.env.SUPERADMIN_DISCORD_ID;
   return !!superadminId && identity.id === superadminId;
 }
@@ -157,18 +174,25 @@ async function applySuperadminOverride(identity: AuthIdentity, player: SessionPl
 /**
  * Initial sign-in: one narrow read of the identity's player, creating the
  * player when none exists. A brand-new player cannot hold `resource_admins`
- * rows yet, so it needs no count query.
+ * rows yet, so it needs no count query. A player created here never carries
+ * the operator's Discord id, so it is never the credentials superadmin and
+ * the link read is skipped. `superadminLinked` is the credentials link result
+ * (always false for Discord, whose superadmin is decided by the snowflake).
  */
 async function resolveSignInPlayer(
   identity: AuthIdentity,
   create: () => Promise<Player>
-): Promise<SessionPlayer> {
+): Promise<{ player: SessionPlayer; superadminLinked: boolean }> {
   const row = await getSessionPlayerRowByIdentity(identity.provider, identity.id);
   const player = row
     ? toSessionPlayer(row)
-    : toSessionPlayer({ ...(await create()), resource_admin_count: 0 });
-  await applySuperadminOverride(identity, player);
-  return player;
+    : toSessionPlayer({ ...(await create()), sessions_valid_after: '-infinity', resource_admin_count: 0 });
+  const superadminLinked =
+    row && identity.provider === 'credentials'
+      ? await resolveCredentialsSuperadminLink(identity.id, identity.email)
+      : false;
+  await applySuperadminOverride({ ...identity, superadminLinked }, player);
+  return { player, superadminLinked };
 }
 
 /**
@@ -211,18 +235,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, request) {
+        const authStartedAt = Date.now();
         const user = await authorizeCredentials(
           typeof credentials?.email === 'string' ? credentials.email : '',
           typeof credentials?.password === 'string' ? credentials.password : '',
           request
         );
-        return { id: user.id, email: user.email, name: user.displayName };
+        return { id: user.id, email: user.email, name: user.displayName, authStartedAt };
       },
     }),
   ],
 
   session: {
     strategy: 'jwt',
+    maxAge: SESSION_MAX_AGE_SECONDS,
   },
 
   callbacks: {
@@ -287,11 +313,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const discordId = (profile as Record<string, unknown>).id as string;
         token.id = discordId;
         token.provider = 'discord';
+        // Set here and nowhere else: a refresh must never advance it, or it would outrun a revocation.
+        token.authAt = Date.now();
         const identity: AuthIdentity = { provider: 'discord', id: discordId };
 
         let created = false;
         try {
-          token.player = await resolveSignInPlayer(identity, () => {
+          ({ player: token.player } = await resolveSignInPlayer(identity, () => {
             created = true;
             const prof = profile as Record<string, unknown>;
             const discordUsername = (prof.username as string)
@@ -301,7 +329,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               name: discordUsername,
               discord_id: discordId,
             });
-          });
+          }));
+          delete token.superadminLinked;
           token[REFRESHED_AT] = Date.now();
         } catch (err) {
           console.warn('[auth] jwt callback player lookup failed:', err instanceof Error ? err.message : String(err));
@@ -318,6 +347,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const authUserId = user.id;
         token.id = authUserId;
         token.provider = 'credentials';
+        const now = Date.now();
+        token.authAt =
+          typeof user.authStartedAt === 'number' && user.authStartedAt <= now ? user.authStartedAt : now;
         const identity: AuthIdentity = {
           provider: 'credentials',
           id: authUserId,
@@ -326,17 +358,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         let created = false;
         try {
-          token.player = await resolveSignInPlayer(identity, () => {
+          const signedIn = await resolveSignInPlayer(identity, () => {
             created = true;
             return createPlayer({
               name: user.name ?? `Player ${authUserId.slice(0, 8)}`,
               auth_user_id: authUserId,
             });
           });
+          token.player = signedIn.player;
+          token.superadminLinked = signedIn.superadminLinked;
           token[REFRESHED_AT] = Date.now();
         } catch (err) {
           console.warn('[auth] jwt callback player lookup failed:', err instanceof Error ? err.message : String(err));
           token.player = null;
+          delete token.superadminLinked;
           delete token[REFRESHED_AT];
         }
         await syncSignInSpriteStyle(token.player, created);
@@ -358,15 +393,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: token.email,
         };
         try {
-          const player = await loadSessionPlayer(identity.provider, identity.id);
+          const player = await loadSessionPlayer(identity.provider, identity.id, { authAt: token.authAt });
+          const superadminLinked =
+            identity.provider === 'credentials'
+              ? await resolveCredentialsSuperadminLink(identity.id, identity.email)
+              : undefined;
           if (player) {
-            await applySuperadminOverride(identity, player);
+            await applySuperadminOverride({ ...identity, superadminLinked }, player);
           }
           // null: the identity no longer maps to a player (deleted), so the
           // stale copy must not keep its name or roles on read paths.
           token.player = player;
+          if (superadminLinked === undefined) delete token.superadminLinked;
+          else token.superadminLinked = superadminLinked;
           token[REFRESHED_AT] = now;
         } catch (err) {
+          // Revoked: end the session. Auth.js clears the cookie and `auth()` answers null.
+          if (err instanceof SessionRevokedError) return null;
           // Keep the stale copy and leave the timestamp alone, so the next
           // call retries. Guards do not depend on this copy.
           console.warn('[auth] jwt callback player refresh failed:', err instanceof Error ? err.message : String(err));
@@ -382,6 +425,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       session.player = token.player ?? null;
       session.provider = token.provider ?? 'discord';
+      if (session.provider === 'credentials') {
+        session.superadminLinked = token.superadminLinked === true;
+      }
+      if (typeof token.authAt === 'number') session.authAt = token.authAt;
       return session;
     },
   },

@@ -25,6 +25,7 @@ export type AuditAction =
   | 'player.role.assign'
   | 'player.role.revoke'
   | 'player.claim'
+  | 'player.sessions_revoke'
   | 'tournament.create'
   | 'tournament.update'
   | 'tournament.delete'

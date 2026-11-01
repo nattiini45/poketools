@@ -16,7 +16,8 @@ import 'server-only';
  *   `src/lib/ai/admin-agent/dispatch/` and keeps every other file from declaring its own session store.
  *
  * What it is not: it does not replace the guards. The override carries the whole `Session` (provider, user id AND
- * email, because `isSuperadmin` matches a credentials session on the email), and every `require*` guard in
+ * email, because `isSuperadmin` matches a credentials session on the email, and the sign-in time `authAt` the guards
+ * compare with the session epoch), and every `require*` guard in
  * `helpers.ts` still re-reads the player, roles, ban state and resource-admin rows live. A revocation mid-run is
  * honoured. Inside a real Next request the ambient cookie stays readable as well, so "no override and no cookie" is
  * not the safety property; the WeakSet and the allow-list are.

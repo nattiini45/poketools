@@ -15,6 +15,7 @@ vi.mock('@/lib/supabase/queries/players', () => ({
   getPlayerById: vi.fn(),
   getPlayerActivityCounts: vi.fn(),
   claimGuestPlayer: vi.fn(),
+  revokePlayerSessions: vi.fn(),
 }));
 
 vi.mock('@/lib/audit/log', () => ({
@@ -27,6 +28,7 @@ import {
   claimGuestPlayer,
   getPlayerActivityCounts,
   getPlayerById,
+  revokePlayerSessions,
 } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import { makeRequest, makeParams } from '@/lib/__tests__/helpers/api-request';
@@ -94,6 +96,64 @@ describe('POST /api/players/[id]/claim', () => {
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'player.claim' }),
     );
+  });
+
+  it('writes the session cutoff on the guest row before the identity moves', async () => {
+    const res = await POST(
+      makeRequest({ source_player_id: SOURCE_ID }),
+      { params: makeParams({ id: GUEST_ID }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(revokePlayerSessions).toHaveBeenCalledWith(GUEST_ID);
+    expect(vi.mocked(revokePlayerSessions).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(claimGuestPlayer).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('writes the cutoff again after the claim, retries a failed write once and surfaces a second failure', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const ok = await POST(makeRequest({ source_player_id: SOURCE_ID }), { params: makeParams({ id: GUEST_ID }) });
+    expect(ok.status).toBe(200);
+    expect(revokePlayerSessions).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(revokePlayerSessions).mock.invocationCallOrder[1]).toBeGreaterThan(
+      vi.mocked(claimGuestPlayer).mock.invocationCallOrder[0],
+    );
+
+    vi.mocked(revokePlayerSessions).mockReset();
+    vi.mocked(revokePlayerSessions)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockResolvedValueOnce(undefined);
+    const retried = await POST(makeRequest({ source_player_id: SOURCE_ID }), { params: makeParams({ id: GUEST_ID }) });
+    expect(retried.status).toBe(200);
+    expect(revokePlayerSessions).toHaveBeenCalledTimes(3);
+
+    vi.mocked(revokePlayerSessions).mockReset();
+    vi.mocked(revokePlayerSessions)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('down'))
+      .mockRejectedValueOnce(new Error('still down'));
+    const failed = await POST(makeRequest({ source_player_id: SOURCE_ID }), { params: makeParams({ id: GUEST_ID }) });
+    expect(failed.status).toBe(500);
+    expect(errorSpy).toHaveBeenCalled();
+    // The claim is committed, so it stays in the audit trail even when the revocation could not be written.
+    expect(logAuditEvent).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'player.claim' }));
+  });
+
+  it('aborts the claim when the cutoff cannot be written', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(revokePlayerSessions).mockRejectedValueOnce(new Error('db down'));
+
+    const res = await POST(
+      makeRequest({ source_player_id: SOURCE_ID }),
+      { params: makeParams({ id: GUEST_ID }) },
+    );
+
+    expect(res.status).toBe(500);
+    expect(claimGuestPlayer).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   it('rejects when source account has activity', async () => {

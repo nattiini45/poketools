@@ -25,6 +25,11 @@ export default defineDe<typeof en>()({
     linkEmailFailed: 'Die E-Mail-Anmeldung konnte nicht verknüpft werden. Bitte versuche es noch einmal.',
     resendVerification: 'Ist es deine Adresse und noch nicht bestätigt? Bestätigungs-E-Mail erneut senden',
     linkDiscordFailed: 'Die Discord-Verknüpfung konnte nicht gestartet werden. Bitte versuche es noch einmal.',
+    sessionsTitle: 'Sitzungen',
+    sessionsHint:
+      'Meldet dich auf allen Geräten und in allen Browsern ab, auch in diesem. Du kannst dich sofort wieder anmelden.',
+    signOutEverywhere: 'Überall abmelden',
+    signOutEverywhereFailed: 'Die Abmeldung auf allen Geräten hat nicht geklappt. Bitte versuche es noch einmal.',
   },
   agentSettings: {
     title: 'KI-Assistent',

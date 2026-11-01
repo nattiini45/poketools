@@ -15,6 +15,7 @@ export default defineDe<typeof en>()({
   player_identity_taken: 'Diese Discord-ID oder dieses Konto gehört bereits einem anderen Spieler.',
   player_update_forbidden: 'Du darfst diesen Spieler nicht bearbeiten.',
   creator_status_superadmin_only: 'Nur der Superadmin kann den Creator-Status vergeben.',
+  admin_status_superadmin_only: 'Nur der Superadmin kann den Admin-Status vergeben oder entziehen.',
   player_has_match_history: {
     one: 'Ein Spieler mit Spielhistorie ({count} Spiel) lässt sich nicht löschen. Sperre ihn stattdessen vorübergehend oder dauerhaft.',
     other:

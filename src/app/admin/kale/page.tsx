@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getSession, isSuperadmin } from '@/lib/auth/helpers';
+import { getSession, isSuperadminNow } from '@/lib/auth/helpers';
 import { listAllTournaments } from '@/lib/supabase/queries/tournaments';
 import PageContainer from '@/components/ui/PageContainer';
 import KaleConsole from './KaleConsole';
@@ -13,7 +13,7 @@ export default async function KaleAdminPage() {
     redirect('/api/auth/signin');
   }
 
-  if (!isSuperadmin(session)) {
+  if (!(await isSuperadminNow())) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">

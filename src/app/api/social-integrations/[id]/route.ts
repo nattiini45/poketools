@@ -11,6 +11,7 @@ import {
 import { encryptJson } from '@/lib/social/crypto';
 import type { ApiResult } from '@/types/api';
 import { checkCredentials, toCredentialHint } from '@/lib/social/validation';
+import { blueskyServiceUrlRejection } from '@/lib/social/bluesky-service';
 import type { SocialIntegration } from '@/types/social';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -97,6 +98,35 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           { status: 400 },
         );
       }
+
+      const serviceUrlRejection =
+
+        body.credentials.provider === 'bluesky' ? blueskyServiceUrlRejection(body.credentials.service_url) : null;
+
+      if (serviceUrlRejection) {
+
+        const issues = `credentials.service_url: not allowed (${serviceUrlRejection})`;
+
+        return NextResponse.json<ApiResult<never>>(
+
+          {
+
+            success: false,
+
+            error: issues,
+
+            code: 'validation_failed',
+
+            params: { issues },
+
+          },
+
+          { status: 400 },
+
+        );
+
+      }
+
 
       updateRecord.credentials_encrypted = encryptJson(body.credentials);
       updateRecord.credential_hint = toCredentialHint(body.credentials);

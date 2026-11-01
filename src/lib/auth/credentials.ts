@@ -3,6 +3,7 @@
 import { CredentialsSignin } from '@auth/core/errors';
 import { createAuthClient } from '@/lib/supabase/auth-client';
 import { checkAuthRateLimit } from '@/lib/auth/rate-limits';
+import { FIELD_LIMITS } from '@/lib/validation/schemas';
 
 /**
  * Email/password sign-in backed by Supabase Auth (GoTrue), called server-side
@@ -65,15 +66,27 @@ export async function authorizeCredentials(
     throw new InvalidCredentialsError();
   }
 
-  const displayName =
-    typeof data.user.user_metadata?.display_name === 'string' &&
-    data.user.user_metadata.display_name.trim()
-      ? data.user.user_metadata.display_name.trim()
-      : normalizedEmail.split('@')[0];
-
   return {
     id: data.user.id,
     email: normalizedEmail,
-    displayName,
+    displayName: resolveDisplayName(data.user.user_metadata?.display_name, normalizedEmail),
   };
+}
+
+/**
+ * GoTrue's own signup endpoint is reachable with the public anon key, so the
+ * `display_name` metadata can bypass the app's signup schema. It becomes the
+ * stored player name, hence it is brought to the name rules here: control
+ * characters dropped, whitespace collapsed, at most `FIELD_LIMITS.NAME`
+ * characters (counted in code points, so a pair is never cut). A missing or
+ * empty result falls back to the email's local part, cleaned the same way.
+ */
+function resolveDisplayName(raw: unknown, normalizedEmail: string): string {
+  const fromMetadata = typeof raw === 'string' ? cleanName(raw) : '';
+  return fromMetadata || cleanName(normalizedEmail.split('@')[0]) || 'Player';
+}
+
+function cleanName(value: string): string {
+  const cleaned = value.replace(/\s+/gu, ' ').replace(/\p{Cc}+/gu, '').trim();
+  return Array.from(cleaned).slice(0, FIELD_LIMITS.NAME).join('').trim();
 }

@@ -33,7 +33,13 @@ vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
 }));
 
+vi.mock('@/lib/audit/log', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/audit/log')>()),
+  logAuditEvent: vi.fn(),
+}));
+
 import { GET, PATCH, DELETE } from '@/app/api/players/[id]/route';
+import { logAuditEvent } from '@/lib/audit/log';
 import { revalidateTag } from 'next/cache';
 import { requireAuth, requireAdmin, isSuperadmin, AuthError } from '@/lib/auth/helpers';
 import {
@@ -342,6 +348,159 @@ describe('PATCH /api/players/[id]', () => {
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(vi.mocked(updatePlayer)).toHaveBeenCalledWith('51541de2-cef5-42ee-8563-d412cf4563a2', { is_creator: true });
+  });
+
+  describe('is_admin tiering', () => {
+    const targetId = '51541de2-cef5-42ee-8563-d412cf4563a2';
+
+    it.each([true, false])('refuses a site admin who is not the superadmin setting is_admin=%s', async (value) => {
+      vi.mocked(requireAuth).mockResolvedValue(adminSession);
+      vi.mocked(isSuperadmin).mockReturnValue(false);
+
+      const request = { json: vi.fn().mockResolvedValue({ is_admin: value }) } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(targetId));
+      const body = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(body.code).toBe('admin_status_superadmin_only');
+      expect(body.error).toBe('Only the superadmin can manage site admin status');
+      expect(updatePlayer).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it('refuses a site admin demoting themself through this route', async () => {
+      const ownId = 'a3a3a3a3-1111-4222-8333-444444444444';
+      vi.mocked(requireAuth).mockResolvedValue({ ...adminSession, player: { ...adminSession.player, playerId: ownId } });
+      vi.mocked(isSuperadmin).mockReturnValue(false);
+
+      const request = { json: vi.fn().mockResolvedValue({ is_admin: false }) } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(ownId));
+
+      expect(response.status).toBe(403);
+      expect(updatePlayer).not.toHaveBeenCalled();
+    });
+
+    it('lets the superadmin change is_admin and audits it', async () => {
+      vi.mocked(requireAuth).mockResolvedValue(adminSession);
+      vi.mocked(isSuperadmin).mockReturnValue(true);
+      vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
+      vi.mocked(updatePlayer).mockResolvedValue({ ...mockPlayer, is_admin: true });
+
+      const request = { json: vi.fn().mockResolvedValue({ is_admin: true }) } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(targetId));
+
+      expect(response.status).toBe(200);
+      expect(updatePlayer).toHaveBeenCalledWith(targetId, { is_admin: true });
+      expect(logAuditEvent).toHaveBeenCalledTimes(1);
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'player.update',
+          resource_id: targetId,
+          changes: { is_admin: { before: false, after: true } },
+        }),
+      );
+    });
+  });
+
+  describe('identity and audit', () => {
+    const targetId = '51541de2-cef5-42ee-8563-d412cf4563a2';
+
+    it('never hands a discord_id from the body to updatePlayer', async () => {
+      vi.mocked(requireAuth).mockResolvedValue(adminSession);
+      vi.mocked(isSuperadmin).mockReturnValue(true);
+      vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
+      vi.mocked(updatePlayer).mockResolvedValue({ ...mockPlayer, name: 'Renamed' });
+
+      const request = {
+        json: vi.fn().mockResolvedValue({ name: 'Renamed', discord_id: '999999999999999999' }),
+      } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(targetId));
+
+      expect(response.status).toBe(200);
+      expect(updatePlayer).toHaveBeenCalledWith(targetId, { name: 'Renamed' });
+      expect(JSON.stringify(vi.mocked(logAuditEvent).mock.calls)).not.toContain('999999999999999999');
+    });
+
+    it('writes one player.update event listing every changed field', async () => {
+      vi.mocked(requireAuth).mockResolvedValue(adminSession);
+      vi.mocked(isSuperadmin).mockReturnValue(true);
+      vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
+      vi.mocked(updatePlayer).mockResolvedValue({
+        ...mockPlayer,
+        name: 'Renamed',
+        ps_username: 'NewPS',
+        champions_username: 'NewChamps',
+        is_creator: true,
+      });
+
+      const request = {
+        json: vi.fn().mockResolvedValue({
+          name: 'Renamed',
+          ps_username: 'NewPS',
+          champions_username: 'NewChamps',
+          is_creator: true,
+        }),
+      } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(targetId));
+
+      expect(response.status).toBe(200);
+      expect(logAuditEvent).toHaveBeenCalledTimes(1);
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actor_id: 'admin-1',
+          action: 'player.update',
+          resource_type: 'player',
+          resource_id: targetId,
+          changes: {
+            name: { before: 'Ash', after: 'Renamed' },
+            ps_username: { before: 'AshPS', after: 'NewPS' },
+            champions_username: { before: '', after: 'NewChamps' },
+            is_creator: { before: false, after: true },
+          },
+        }),
+      );
+    });
+
+    it('writes no event when nothing changes', async () => {
+      vi.mocked(requireAuth).mockResolvedValue(adminSession);
+      vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
+      vi.mocked(updatePlayer).mockResolvedValue(mockPlayer);
+
+      const request = { json: vi.fn().mockResolvedValue({ name: 'Ash' }) } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(targetId));
+
+      expect(response.status).toBe(200);
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('answers malformed JSON with 400 invalid_json, not 500', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(requireAuth).mockResolvedValue(adminSession);
+
+      const request = {
+        json: vi.fn().mockRejectedValue(new SyntaxError('Unexpected end of JSON input')),
+      } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(targetId));
+      const body = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(body.code).toBe('invalid_json');
+      expect(updatePlayer).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+
+    it('answers a wrong-typed field with 400 validation_failed', async () => {
+      vi.mocked(requireAuth).mockResolvedValue(adminSession);
+
+      const request = { json: vi.fn().mockResolvedValue({ name: 5 }) } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(targetId));
+      const body = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(body.code).toBe('validation_failed');
+      expect(updatePlayer).not.toHaveBeenCalled();
+    });
   });
 });
 

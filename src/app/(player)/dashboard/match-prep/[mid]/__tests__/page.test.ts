@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
-  isSuperadmin: vi.fn(),
+  isSuperadminNow: vi.fn(),
   getMatchById: vi.fn(),
   getTournamentById: vi.fn(),
   getRulesetById: vi.fn(),
@@ -43,7 +43,7 @@ vi.mock('@/components/match/MatchStatusBadge', () => ({ default: () => null }));
 vi.mock('@/components/ui/PageContainer', () => ({ default: () => null }));
 vi.mock('@/lib/auth/helpers', () => ({
   getSession: mocks.getSession,
-  isSuperadmin: mocks.isSuperadmin,
+  isSuperadminNow: mocks.isSuperadminNow,
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: mocks.getMatchById }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: mocks.getTournamentById }));
@@ -88,7 +88,7 @@ beforeEach(() => {
   mocks.getSession.mockResolvedValue({
     player: { playerId: PLAYER_ID, name: 'Ash', isAdmin: false },
   });
-  mocks.isSuperadmin.mockReturnValue(false);
+  mocks.isSuperadminNow.mockResolvedValue(false);
   mocks.getMatchById.mockResolvedValue({
     id: MATCH_ID,
     tournament_id: TOURNAMENT_ID,

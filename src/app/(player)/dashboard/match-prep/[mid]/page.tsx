@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
-import { getSession, isSuperadmin } from '@/lib/auth/helpers';
+import { getSession, isSuperadminNow } from '@/lib/auth/helpers';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
@@ -40,7 +40,7 @@ export default async function MatchPrepPage({ params }: PageProps) {
     player.playerId === match.player_2_id;
 
   // Only match participants and the superadmin can view prep — regular admins cannot
-  if (!isParticipant && !isSuperadmin(session)) {
+  if (!isParticipant && !(await isSuperadminNow())) {
     redirect('/dashboard');
   }
 

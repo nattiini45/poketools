@@ -22,4 +22,5 @@ export default defineDe<typeof en>()({
   email_login_link_failed: 'Die E-Mail-Anmeldung konnte nicht verknüpft werden.',
   world_experience_invalid: '„worldExperience“ muss „auto“, „on“ oder „off“ sein.',
   world_experience_save_failed: 'Die 3D-Welt-Einstellung konnte nicht gespeichert werden.',
+  session_revoke_failed: 'Die Abmeldung auf allen Geräten hat nicht geklappt.',
 });

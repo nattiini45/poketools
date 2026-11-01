@@ -15,11 +15,15 @@ import { expirePublicTags, publicTags } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { Player, PublicPlayer } from '@/types/player';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { readJsonBody } from '@/lib/api/json-body';
 import { leagueTrashBlockError } from '@/lib/league-trash/errors';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
+
+/** The admin-editable fields an admin PATCH audits. Identity columns are not editable here. */
+const AUDITED_PLAYER_FIELDS = ['name', 'ps_username', 'champions_username', 'is_admin', 'is_creator'] as const;
 
 /**
  * Expire the public read-cache entries that show this player's card (name,
@@ -68,8 +72,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const session = await requireAuth();
     const invalidId = rejectInvalidPathId(id, 'INVALID_PLAYER_ID');
     if (invalidId) return invalidId;
-    const rawBody = await request.json();
-    const zodResult = playerUpdateSchema.safeParse(rawBody);
+    const parsedBody = await readJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const zodResult = playerUpdateSchema.safeParse(parsedBody.value);
 
     if (!zodResult.success) {
       const issues = formatZodErrors(zodResult.error);
@@ -102,6 +107,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json<ApiResult<Player>>({ success: true, data: player });
     }
 
+    // Granting or revoking site admin is the superadmin's alone: a site admin
+    // must not mint, demote or shield other admins (or touch the superadmin's row).
+    if (body.is_admin !== undefined && !isSuperadmin(session)) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Only the superadmin can manage site admin status', code: 'admin_status_superadmin_only' },
+        { status: 403 }
+      );
+    }
+
     // Only SUPERADMIN can change is_creator
     if (body.is_creator !== undefined && !isSuperadmin(session)) {
       return NextResponse.json<ApiResult<never>>(
@@ -115,11 +129,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const player = await updatePlayer(id, body);
     expirePlayerReads(id);
 
-    // Audit log for admin mutations (role changes, etc.)
-    if (before && isAdminUser && session.player) {
+    // One event per request, listing every audited field the request changed.
+    if (before && session.player) {
       const changes: Record<string, { before: unknown; after: unknown }> = {};
-      diffField(changes, 'is_admin', before.is_admin, body.is_admin ?? before.is_admin);
-      diffField(changes, 'is_creator', before.is_creator, body.is_creator ?? before.is_creator);
+      for (const field of AUDITED_PLAYER_FIELDS) {
+        diffField(changes, field, before[field], body[field] ?? before[field]);
+      }
 
       if (Object.keys(changes).length > 0) {
         logAuditEvent({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase/auth-client';
 import { supabase } from '@/lib/supabase/client';
+import { revokeSessionsOfAuthUser } from '@/lib/supabase/queries/players';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
 import { checkAuthRateLimit } from '@/lib/auth/rate-limits';
@@ -47,12 +48,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The epoch lives on the player, so this also ends the account's Discord sessions. It is written before the
+    // password changes and a failure aborts the reset: the other order would leave a changed password with the
+    // sessions of whoever held the old one still valid. A password update that fails afterwards only signs the
+    // owner out early.
+    await revokeSessionsOfAuthUser(data.user.id);
+
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       data.user.id,
       { password: parsed.data.password }
     );
 
     if (updateError) throw updateError;
+
+    // Revoke once more: an old-password sign-in that finished between the first write and the password change was
+    // stamped after the first epoch. Its `authAt` is the time its attempt started (`authStartedAt`), which precedes
+    // this write, so it dies here. The password has already changed, so a failure is retried once and then surfaced.
+    try {
+      await revokeSessionsOfAuthUser(data.user.id);
+    } catch (firstErr) {
+      console.error('[auth] reset-password: second session revocation failed, retrying:', firstErr);
+      await revokeSessionsOfAuthUser(data.user.id);
+    }
 
     return NextResponse.json<ApiResult<{ message: string }>>({
       success: true,

@@ -16,7 +16,10 @@ vi.mock('@/lib/supabase/client', () => ({
   supabase: { auth: { admin: { updateUserById } }, rpc: (...args: unknown[]) => rpc(...args) },
 }));
 
+vi.mock('@/lib/supabase/queries/players', () => ({ revokeSessionsOfAuthUser: vi.fn() }));
+
 import { POST } from '@/app/api/auth/reset-password/route';
+import { revokeSessionsOfAuthUser } from '@/lib/supabase/queries/players';
 import { rateLimitKey } from '@/lib/utils/rate-limit';
 import { AUTH_RATE_LIMITS } from '@/lib/auth/rate-limits';
 
@@ -65,6 +68,79 @@ describe('POST /api/auth/reset-password', () => {
     expect(body.success).toBe(true);
     expect(verifyOtp).toHaveBeenCalledWith({ type: 'recovery', token_hash: 'hash-123' });
     expect(updateUserById).toHaveBeenCalledWith('auth-7', { password: 'newpassword1' });
+  });
+
+  it('ends every earlier session of the account before and after the password changes', async () => {
+    verifyOtp.mockResolvedValue({ data: { user: { id: 'auth-7' } }, error: null });
+    updateUserById.mockResolvedValue({ data: {}, error: null });
+
+    const res = await POST(makeRequest({ token_hash: 'hash-123', password: 'newpassword1' }));
+
+    expect(res.status).toBe(200);
+    expect(revokeSessionsOfAuthUser).toHaveBeenCalledTimes(2);
+    expect(revokeSessionsOfAuthUser).toHaveBeenCalledWith('auth-7');
+    const [before, after] = vi.mocked(revokeSessionsOfAuthUser).mock.invocationCallOrder;
+    // Before: a revocation that fails must leave the old password in force.
+    expect(before).toBeLessThan(updateUserById.mock.invocationCallOrder[0]);
+    // After: an old-password sign-in that finished in between is revoked too.
+    expect(after).toBeGreaterThan(updateUserById.mock.invocationCallOrder[0]);
+  });
+
+  it('retries the revocation after the password change once, and reports a second failure', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    verifyOtp.mockResolvedValue({ data: { user: { id: 'auth-7' } }, error: null });
+    updateUserById.mockResolvedValue({ data: {}, error: null });
+    vi.mocked(revokeSessionsOfAuthUser)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockResolvedValueOnce(undefined);
+
+    const ok = await POST(makeRequest({ token_hash: 'hash-123', password: 'newpassword1' }));
+    expect(ok.status).toBe(200);
+    expect(revokeSessionsOfAuthUser).toHaveBeenCalledTimes(3);
+
+    vi.mocked(revokeSessionsOfAuthUser).mockReset();
+    vi.mocked(revokeSessionsOfAuthUser)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('down'))
+      .mockRejectedValueOnce(new Error('still down'));
+    const failed = await POST(makeRequest({ token_hash: 'hash-123', password: 'newpassword1' }));
+    expect(failed.status).toBe(500);
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('revokes nothing for an invalid recovery link', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    verifyOtp.mockResolvedValue({ data: { user: null }, error: { code: 'otp_expired', message: 'expired' } });
+
+    await POST(makeRequest({ token_hash: 'stale', password: 'newpassword1' }));
+
+    expect(revokeSessionsOfAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps the revocation when the password update fails afterwards', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    verifyOtp.mockResolvedValue({ data: { user: { id: 'auth-7' } }, error: null });
+    updateUserById.mockResolvedValue({ data: {}, error: new Error('weak password detail') });
+
+    const res = await POST(makeRequest({ token_hash: 'hash-123', password: 'newpassword1' }));
+
+    expect(res.status).toBe(500);
+    expect(revokeSessionsOfAuthUser).toHaveBeenCalledWith('auth-7');
+  });
+
+  it('leaves the password unchanged when the revocation failed', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    verifyOtp.mockResolvedValue({ data: { user: { id: 'auth-7' } }, error: null });
+    updateUserById.mockResolvedValue({ data: {}, error: null });
+    vi.mocked(revokeSessionsOfAuthUser).mockRejectedValueOnce(new Error('db down'));
+
+    const res = await POST(makeRequest({ token_hash: 'hash-123', password: 'newpassword1' }));
+
+    expect(res.status).toBe(500);
+    expect((await res.json()).code).toBe('password_reset_failed');
+    expect(updateUserById).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   it('answers a failed password update with the password_reset_failed fallback code', async () => {

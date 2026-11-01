@@ -26,4 +26,5 @@ export default {
   email_login_link_failed: 'Failed to link email login',
   world_experience_invalid: "worldExperience must be one of 'auto', 'on' or 'off'.",
   world_experience_save_failed: 'Failed to save the 3D world setting',
+  session_revoke_failed: 'Failed to sign out everywhere',
 } as const;

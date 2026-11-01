@@ -19,6 +19,7 @@ vi.mock('@/auth', () => ({
 }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: vi.fn() }));
 vi.mock('@/lib/supabase/queries/drafts', () => ({ getDraftPoolById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/players', () => ({ isAuthUserLinkedToDiscordId: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-definitions', () => ({ getFormatDefinitionMeta: vi.fn() }));
 vi.mock('@/lib/supabase/queries/ruleset-definitions', () => ({
   getDefinitionOfVersion: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('@/lib/supabase/queries/ruleset-definitions', () => ({
 import { auth, loadSessionPlayer } from '@/auth';
 import { getDraftPoolById } from '@/lib/supabase/queries/drafts';
 import { getFormatDefinitionMeta } from '@/lib/supabase/queries/format-definitions';
+import { isAuthUserLinkedToDiscordId } from '@/lib/supabase/queries/players';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getDefinitionOfVersion, getRulesetDefinitionMeta } from '@/lib/supabase/queries/ruleset-definitions';
 import {
@@ -161,10 +163,16 @@ const IDENTITIES: Identity[] = [
     live: livePlayer('p-superadmin'),
   },
   {
-    // A credentials session is the superadmin through its sign-in email.
+    // A credentials session is the superadmin through its sign-in email AND the Discord link of its player.
     label: 'superadmin (credentials session, reserved email)',
     session: credentialsSession('auth-uuid-root', SUPERADMIN_EMAIL, livePlayer('p-superadmin-cred')),
     live: livePlayer('p-superadmin-cred'),
+  },
+  {
+    // GoTrue accepts a signup for the reserved address from anyone holding the anon key.
+    label: 'reserved email without the Discord link (credentials session)',
+    session: credentialsSession('auth-uuid-squatter', SUPERADMIN_EMAIL, livePlayer('p-squatter')),
+    live: livePlayer('p-squatter'),
   },
   {
     label: 'site admin on a credentials session (not the reserved email)',
@@ -301,6 +309,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.SUPERADMIN_DISCORD_ID = SUPERADMIN_DISCORD_ID;
   process.env.SUPERADMIN_EMAIL = SUPERADMIN_EMAIL;
+  // Only the linked reserved identity resolves to the Discord-bound superadmin.
+  vi.mocked(isAuthUserLinkedToDiscordId).mockReset();
+  vi.mocked(isAuthUserLinkedToDiscordId).mockImplementation(
+    async (authUserId, discordId) => authUserId === 'auth-uuid-root' && discordId === SUPERADMIN_DISCORD_ID,
+  );
   mockedLoad.mockReset();
   mockedLoad.mockImplementation(async (_provider, identityId) => {
     const found = IDENTITIES.find((i) => i.session?.user?.id === identityId);
@@ -372,6 +385,8 @@ const SPOT_CHECKS: ReadonlyArray<readonly [identity: string, guard: string, expe
   ['superadmin (Discord id)', 'requireSuperadmin', 'ok'],
   ['superadmin (credentials session, reserved email)', 'requireAdmin', 'ok'],
   ['superadmin (credentials session, reserved email)', 'requireSuperadmin', 'ok'],
+  ['reserved email without the Discord link (credentials session)', 'requireSuperadmin', { statusCode: 403, code: 'forbidden' }],
+  ['reserved email without the Discord link (credentials session)', 'requireAdmin', { statusCode: 403, code: 'forbidden' }],
   ['site admin on a credentials session (not the reserved email)', 'requireSuperadmin', { statusCode: 403, code: 'forbidden' }],
 ];
 

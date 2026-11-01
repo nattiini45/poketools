@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockBuilder } = vi.hoisted(() => {
   const mb: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const m of ['from', 'select', 'update', 'eq', 'lte', 'not', 'or', 'order', 'range']) {
+  for (const m of ['from', 'select', 'update', 'eq', 'lte', 'not', 'or', 'order', 'range', 'single']) {
     mb[m] = vi.fn().mockReturnValue(mb);
   }
   return { mockBuilder: mb };
@@ -10,7 +10,7 @@ const { mockBuilder } = vi.hoisted(() => {
 
 vi.mock('@/lib/supabase/client', () => ({ supabase: mockBuilder }));
 
-import { clearExpiredSuspensions, playerSearchFilter } from '../players';
+import { banPlayer, clearExpiredSuspensions, playerSearchFilter, suspendPlayer, unsuspendPlayer } from '../players';
 
 describe('playerSearchFilter', () => {
   it('searches name and ps_username with a contains pattern', () => {
@@ -27,6 +27,73 @@ describe('playerSearchFilter', () => {
   it('keeps commas, parentheses and quotes inside the quoted pattern', () => {
     const filter = playerSearchFilter('a,b)"c');
     expect(filter).toBe('name.ilike."%a,b)\\"c%",ps_username.ilike."%a,b)\\"c%"');
+  });
+});
+
+describe('moderation and the session epoch', () => {
+  const NOW = new Date('2026-11-02T12:00:00.000Z');
+  const row = {
+    id: 'p-1',
+    name: 'Ash',
+    discord_id: null,
+    auth_user_id: null,
+    ps_username: '',
+    champions_username: '',
+    is_admin: false,
+    is_creator: false,
+    is_guest: false,
+    is_test_account: false,
+    joined_date: '2026-01-01',
+    avatar_url: null,
+    avatar_config: null,
+    status: 'active',
+    suspended_until: null,
+    ban_reason: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    for (const m of Object.keys(mockBuilder)) mockBuilder[m].mockReturnValue(mockBuilder);
+    mockBuilder.single.mockResolvedValue({ data: row, error: null });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a ban ends the sessions the player holds', async () => {
+    await banPlayer('p-1', 'cheating');
+    expect(mockBuilder.update).toHaveBeenCalledWith({
+      status: 'banned',
+      ban_reason: 'cheating',
+      suspended_until: null,
+      sessions_valid_after: NOW.toISOString(),
+    });
+  });
+
+  it('a suspension ends the sessions the player holds', async () => {
+    await suspendPlayer('p-1', '2026-12-01T00:00:00.000Z');
+    expect(mockBuilder.update).toHaveBeenCalledWith({
+      status: 'suspended',
+      suspended_until: '2026-12-01T00:00:00.000Z',
+      ban_reason: null,
+      sessions_valid_after: NOW.toISOString(),
+    });
+  });
+
+  it('lifting a sanction leaves the epoch alone, so an old token stays dead', async () => {
+    await unsuspendPlayer('p-1');
+    expect(mockBuilder.update).toHaveBeenCalledWith({ status: 'active', suspended_until: null, ban_reason: null });
+  });
+
+  it('the automatic end of a suspension leaves the epoch alone too', async () => {
+    mockBuilder.select.mockResolvedValue({ data: [], error: null });
+    await clearExpiredSuspensions('2026-10-23T12:00:00.000Z');
+    expect(mockBuilder.update).toHaveBeenCalledWith({ status: 'active', suspended_until: null });
   });
 });
 

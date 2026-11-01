@@ -61,6 +61,28 @@ describe('postToThreads', () => {
     expect(publishUrl.searchParams.get('creation_id')).toBe('container-1');
   });
 
+  it('sends both requests without following redirects and with a deadline', async () => {
+    mockFetchResponses([
+      { ok: true, json: { id: 'container-1' } },
+      { ok: true, json: { id: 'post-1' } },
+    ]);
+
+    await postToThreads(makeCredentials(), 'Hello Threads!');
+
+    for (const [, init] of vi.mocked(globalThis.fetch).mock.calls) {
+      expect(init?.redirect).toBe('error');
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
+  it('caps an upstream error body in the thrown message', async () => {
+    mockFetchResponses([{ ok: false, status: 400, text: 'y'.repeat(5000) }]);
+
+    const err = await postToThreads(makeCredentials(), 'Hi').then(() => new Error('did not throw'), (e: unknown) => e as Error);
+
+    expect(err.message.length).toBeLessThan(300);
+  });
+
   it('sets media_type to IMAGE and includes image_url when provided', async () => {
     mockFetchResponses([
       { ok: true, json: { id: 'container-2' } },

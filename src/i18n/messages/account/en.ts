@@ -27,6 +27,10 @@ export default {
     linkEmailFailed: 'Failed to link email login. Please try again.',
     resendVerification: 'Is it your address and still unconfirmed? Send the confirmation email again',
     linkDiscordFailed: 'Failed to start Discord linking. Please try again.',
+    sessionsTitle: 'Sessions',
+    sessionsHint: 'Signs you out on every device and browser, this one included. You can sign in again right away.',
+    signOutEverywhere: 'Sign out everywhere',
+    signOutEverywhereFailed: 'Could not sign you out everywhere. Please try again.',
   },
   agentSettings: {
     title: 'AI Assistant',

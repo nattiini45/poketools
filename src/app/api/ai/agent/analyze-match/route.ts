@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { requirePlayer, getSession, isSuperadmin } from '@/lib/auth/helpers';
+import { requirePlayer, isSuperadminNow } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { agentAnalyzeMatchSchema, formatZodErrors } from '@/lib/validation';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
@@ -151,8 +151,7 @@ export async function POST(request: NextRequest) {
       }
       // match-prep rules: participants and superadmin only — regular admins
       // must not see opponent prep.
-      const session = await getSession();
-      if (!isParticipant && !isSuperadmin(session)) {
+      if (!isParticipant && !(await isSuperadminNow())) {
         return NextResponse.json<ApiResult<never>>(
           {
             success: false,
