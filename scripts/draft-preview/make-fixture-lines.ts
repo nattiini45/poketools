@@ -20,7 +20,7 @@
  *
  * No database or network access: it reads one local file and writes one:
  *
- *   npx tsx --tsconfig tsconfig.json scripts/draft-preview/make-fixture-lines.ts \
+ *   npx --no-install tsx --tsconfig tsconfig.json scripts/draft-preview/make-fixture-lines.ts \
  *     --file <workbook.xlsx> --out <path outside the committed fixtures>
  *
  * (`--xlsx <path>` or a positional path work too.) League workbooks are not in the

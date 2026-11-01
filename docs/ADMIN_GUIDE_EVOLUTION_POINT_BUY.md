@@ -23,8 +23,8 @@ The league's workbooks are not in the repository; the league organiser supplies 
 ### CLI
 
 ```bash
-npx tsx scripts/import-point-buy.ts --xlsx=<point-buy workbook> --season-id=<uuid> [--dry-run]
-npx tsx scripts/import-team-roles.ts --xlsx=<team-roles workbook> [--dry-run]
+npx --no-install tsx scripts/import-point-buy.ts --xlsx=<point-buy workbook> --season-id=<uuid> [--dry-run]
+npx --no-install tsx scripts/import-team-roles.ts --xlsx=<team-roles workbook> [--dry-run]
 ```
 
 Both scripts require `--xlsx` and exit with an error if the file is not there. `import-point-buy.ts` names the list after the active pack's `epb.workbook.pointBuy.defaultListName` unless `--name` is given.

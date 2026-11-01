@@ -3,7 +3,7 @@
  * key and installs the egress guard); this module holds the logic so a test can run it with injected
  * input, output and model.
  *
- *   npx tsx --tsconfig scripts/tsconfig.ai-flow-eval.json scripts/ai-flow-eval.ts [flags]     (npm run eval:ai-flows -- [flags])
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.ai-flow-eval.json scripts/ai-flow-eval.ts [flags]     (npm run eval:ai-flows -- [flags])
  *
  *   --flow A,B             flows to run (default all): kale-recap, kale-forecast, match-analysis, scouting, team-coach, slot-coach, recap
  *   --cases ID,ID          only cases whose id equals or starts with one of these

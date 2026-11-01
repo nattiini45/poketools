@@ -29,10 +29,10 @@
  * closest station scale any lamp gets, 136 px/m; the kiosk: #schedule 1440).
  * The p99.9 deviation must stay ≤ the target's `gatePx`; a failing prop retries at
  * the fallback ratio 0.35 and is NOT written if it still fails. Run under
- * `npx tsx` so the plaza theme's station table can be imported. Captures stay
+ * `npx --no-install tsx` so the plaza theme's station table can be imported. Captures stay
  * the evidence of record; this is the pre-capture guard.
  *
- * Usage: npx tsx scripts/world-assets/decimate-props.mjs [--restore] [--dry-run]
+ * Usage: npx --no-install tsx scripts/world-assets/decimate-props.mjs [--restore] [--dry-run]
  *          [--only <name>] [--ratio 0.22] [--error <e>] [--out <dir>]
  * Then:  node scripts/world-assets/bake-manifest.mjs --refresh-mirror
  */

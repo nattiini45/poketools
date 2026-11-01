@@ -12,7 +12,7 @@
  * bases, the example pack's rule lines and its override line). Prices, thresholds and ratings come
  * from a fixed seed, so re-running the script is idempotent.
  *
- * Usage (no database, no network):  npx tsx --tsconfig tsconfig.json scripts/draft/make-example-list-fixtures.ts
+ * Usage (no database, no network):  npx --no-install tsx --tsconfig tsconfig.json scripts/draft/make-example-list-fixtures.ts
  */
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';

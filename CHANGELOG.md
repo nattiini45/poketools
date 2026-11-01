@@ -738,7 +738,7 @@ Follow-ups to the 2026-10-20 security audit: replays are bound to one game by ha
   import now sends only the side assignment and the preview's hash (409 `replay_changed_since_preview` when the replay
   changed); its form shows the replay's winner and stats read-only, and corrections go through the game editor.
   **Upgrade:** apply `supabase/migrations/20261020100000_games_replay_hash.sql` before deploying, then run
-  `npx tsx --env-file=.env.local scripts/backfill-replay-hashes.ts` (dry run; add `--write` to fill older games).
+  `npx --no-install tsx --env-file=.env.local scripts/backfill-replay-hashes.ts` (dry run; add `--write` to fill older games).
 - **`battle_stats` holds one row per Pokémon per player per game**: a unique index on
   `(game_id, player_id, lower(btrim(pokemon_name)))` (`20261020100100_battle_stats_unique_pokemon.sql`) backs the
   request schemas, a violation answers 409 `battle_stats_duplicate_pokemon`, and the admin game edit refuses a repeated

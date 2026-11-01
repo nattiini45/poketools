@@ -9,7 +9,7 @@
  * against the synthetic fixture's structure.
  *
  * Usage:
- *   npx tsx --tsconfig tsconfig.json scripts/draft/dump-list-fixture.ts \
+ *   npx --no-install tsx --tsconfig tsconfig.json scripts/draft/dump-list-fixture.ts \
  *     --xlsx <path to the point-buy workbook> \
  *     --out <path outside the committed fixtures>
  *

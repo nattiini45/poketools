@@ -2,7 +2,7 @@
  * The command line of the Admin Assistant eval (plan 7.1 to 7.6). `scripts/admin-agent-eval.ts` is the thin entry; this
  * module holds the logic so a test can run it with injected input and output.
  *
- *   npx tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts [flags]
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts [flags]
  *
  *   --stage plan|exec|e2e   `plan` (default): the real loop against the fixture world, no domain writes. `exec`: the real loop with a
  *                           RECORDED model and the real staged tools, approved through the real routes and executor on the LOCAL
@@ -289,7 +289,7 @@ export async function main(options: CliOptions): Promise<number> {
   const stage = parsed.stage as EvalStage;
   const stack = options.stack;
   if (stage !== 'plan' && stack === undefined) {
-    io.error(`admin-agent eval: stage '${stage}' is not built yet in this entry: it runs on the local Supabase stack, and only scripts/admin-agent-eval.ts prepares that and hands it over (npx tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --stage ${stage}).`);
+    io.error(`admin-agent eval: stage '${stage}' is not built yet in this entry: it runs on the local Supabase stack, and only scripts/admin-agent-eval.ts prepares that and hands it over (npx --no-install tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --stage ${stage}).`);
     return 2;
   }
   if (stage === 'exec' && parsed.portExplicit && parsed.port === 'live') {

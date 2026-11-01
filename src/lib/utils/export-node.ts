@@ -1,66 +1,5 @@
 import html2canvas from 'html2canvas';
-
-/**
- * Convert a cross-origin image URL to a data URL via our proxy.
- */
-async function toDataUrl(src: string): Promise<string> {
-  const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`;
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error(`Proxy failed for ${src}`);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-// 1x1 transparent PNG — safe fallback for unproxyable cross-origin images
-const TRANSPARENT_PIXEL =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualrQAAAABJRU5ErkJggg==';
-
-/**
- * Replace all cross-origin <img> elements inside a node with proxied data URLs.
- * Returns a Map of originals so the caller can restore them.
- */
-async function proxyCrossOriginImages(
-  node: HTMLElement,
-): Promise<Map<HTMLImageElement, string>> {
-  const originals = new Map<HTMLImageElement, string>();
-  const images = node.querySelectorAll('img');
-
-  await Promise.all(
-    Array.from(images).map(async (img) => {
-      const src = img.src;
-      if (
-        src &&
-        !src.startsWith(window.location.origin) &&
-        !src.startsWith('data:') &&
-        !src.startsWith('blob:')
-      ) {
-        originals.set(img, src);
-        try {
-          img.src = await toDataUrl(src);
-        } catch {
-          img.src = TRANSPARENT_PIXEL;
-        }
-        img.removeAttribute('srcset');
-      }
-    }),
-  );
-
-  return originals;
-}
-
-/**
- * Restore images to their original sources after export.
- */
-function restoreImages(originals: Map<HTMLImageElement, string>): void {
-  originals.forEach((src, img) => {
-    img.src = src;
-  });
-}
+import { proxyCrossOriginImages, restoreImages, type OriginalImageSource } from './node-image';
 
 export interface ExportResult {
   blobUrl: string;
@@ -91,14 +30,14 @@ export async function renderNodeAsPng(
   // Collect elements to hide during export
   const hiddenEls = Array.from(node.querySelectorAll<HTMLElement>('[data-export-hide]'));
   const prevDisplay = hiddenEls.map((el) => el.style.display);
-  let originals = new Map<HTMLImageElement, string>();
+  let originals = new Map<HTMLImageElement, OriginalImageSource>();
 
   try {
     // Hide export-only UI
     hiddenEls.forEach((el) => { el.style.display = 'none'; });
 
     // Proxy cross-origin images to prevent canvas tainting
-    originals = await proxyCrossOriginImages(node);
+    originals = await proxyCrossOriginImages(node, { onFailure: 'transparent' });
 
     // Render with html2canvas (Canvas 2D approach, no foreignObject)
     const canvas = await html2canvas(node, {

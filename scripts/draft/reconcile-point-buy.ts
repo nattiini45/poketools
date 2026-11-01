@@ -3,7 +3,7 @@
  * Parses the xlsx files only: no database access, no network.
  *
  * Usage:
- *   npx tsx --tsconfig tsconfig.json scripts/draft/reconcile-point-buy.ts \
+ *   npx --no-install tsx --tsconfig tsconfig.json scripts/draft/reconcile-point-buy.ts \
  *     --xlsx <path to the point-buy workbook> \
  *     [--utility-xlsx <path to the utility workbook>] \
  *     [--json] [--generated-at 2026-10-10T00:00:00.000Z]

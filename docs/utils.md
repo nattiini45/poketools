@@ -36,8 +36,13 @@ src/lib/utils/
 
 ### Node Export
 - **File**: `export-node.ts`
-- **Purpose**: Export nodes as PNG blob URLs via html2canvas
+- **Purpose**: Export nodes as PNG blob URLs via html2canvas (Canvas 2D). It is not folded into `capture-node.ts` because Firefox blocks `foreignObject` with cross-origin content
 - **Key Methods**: `renderNodeAsPng()`
+
+### Node Image Proxy
+- **File**: `node-image.ts`
+- **Purpose**: The cross-origin `<img>` handling both exporters share: swap each image for a data URL fetched through `/api/proxy-image` so the canvas is not tainted, then put `src` and `srcset` back
+- **Key Methods**: `toDataUrl()`, `proxyCrossOriginImages(node, { onFailure: 'keep' | 'transparent' })` (`capture-node` keeps the original source of an image the proxy cannot fetch, `export-node` swaps in a transparent pixel), `restoreImages()`
 
 ### LRU Cache
 - **File**: `lru-cache.ts`

@@ -2,7 +2,7 @@
  * One-off script to delete all tournament and league data from Supabase.
  * Keeps: players, rulesets, draft_pool_templates
  *
- * Usage: npx tsx scripts/wipe-league-data.ts
+ * Usage: npx --no-install tsx scripts/wipe-league-data.ts
  *
  * Loads env from .env.local automatically.
  */

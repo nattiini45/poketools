@@ -4,7 +4,7 @@
  * key off `CI`: Vercel sets `CI` too, and a production build there has to keep its type gate.
  */
 import { spawnSync } from 'node:child_process';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 

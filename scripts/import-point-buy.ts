@@ -2,7 +2,7 @@
  * Import Evolution Point Buy list data from the authoritative xlsx workbook.
  *
  * Usage:
- *   npx tsx scripts/import-point-buy.ts \
+ *   npx --no-install tsx scripts/import-point-buy.ts \
  *     --xlsx=<path to the point-buy workbook> \
  *     [--name="<list name>"] [--version=1] \
  *     [--season-id=<uuid>] [--dry-run]

@@ -21,7 +21,7 @@
  * stays the one landmark there. Rasterised by librsvg (sharp) — the same
  * bytes on every run.
  *
- * Usage: npx tsx scripts/world-assets/bake-plaza-skyline.mjs [--out]
+ * Usage: npx --no-install tsx scripts/world-assets/bake-plaza-skyline.mjs [--out]
  *        (tsx: the face-rect mask imports the plaza's TypeScript data faces)
  */
 

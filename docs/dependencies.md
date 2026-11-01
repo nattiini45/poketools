@@ -6,10 +6,13 @@ Check this doc before adding or updating any of these packages; check changelogs
 
 | Package | Gotcha |
 |---------|--------|
-| `next-auth` 5.0.0-beta.30 | Beta API — check changelog before updating |
+| `next-auth` 5.x beta (version in `package.json`) | Beta API — check changelog before updating |
 | `@pkmn/dex` + `@pkmn/data` | Use `new Generations(Dex)`, never `Dex.forFormat()`. Server-side only — never import in client components (2MB+). See the Pokémon Data Rules in [`AGENTS.md`](../AGENTS.md#pokemon-data-rules) |
 | `@pkmn/protocol` + `@pkmn/client` | The replay-parsing pair. NOT `@pkmn/logs` (doesn't exist) |
 | `@smogon/calc` | Phase 8 damage calc — import server-side |
+| `tsx` (dev) | Runs the maintenance scripts (`scripts/*.ts`, several with `SUPABASE_SERVICE_ROLE_KEY`). It is a locked dev dependency, so a script always runs the version in the lockfile: call it `npx --no-install tsx ...`, which fails when it is not installed instead of downloading whatever npm resolves that day |
+| `html-to-image` and `html2canvas` | Two DOM-to-PNG libraries on purpose: `html-to-image` (SVG `foreignObject`) for the match export cards, `html2canvas` (Canvas 2D) for the highlight card, because Firefox blocks `foreignObject` with cross-origin content. They share `src/lib/utils/node-image.ts`; do not drop one without a before/after capture in Firefox and Chromium ([`utils.md`](./utils.md)) |
+| `zustand` | Not a direct dependency. It stays installed because `@react-three/fiber` and `@react-three/drei` depend on it; do not import it from app code |
 | `motion` (not `framer-motion`) | Package renamed — import from `motion` |
 | `@ai-sdk/openai` v3.x | OpenAI-compatible mode: no Responses API, no reasoning detection. See `src/lib/ai/kale/provider.ts` |
 | `zod` v4 | Use `z.iso.date()` for `<input type="date">` payloads hitting Postgres `date` columns; `z.string().datetime()` rejects `YYYY-MM-DD`. See [`src/lib/AGENTS.md`](../src/lib/AGENTS.md) |

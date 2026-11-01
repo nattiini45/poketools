@@ -6,9 +6,9 @@
  * tool-call regressions before any user-facing route is cut over to the agent.
  *
  * Usage:
- *   npx tsx scripts/agent-eval.ts                      # all configured T0 text models
- *   npx tsx scripts/agent-eval.ts --model deepseek-v4-pro
- *   npx tsx scripts/agent-eval.ts --model deepseek-v4-pro --cases dex-garchomp-hp,type-eq-gyarados
+ *   npx --no-install tsx scripts/agent-eval.ts                      # all configured T0 text models
+ *   npx --no-install tsx scripts/agent-eval.ts --model deepseek-v4-pro
+ *   npx --no-install tsx scripts/agent-eval.ts --model deepseek-v4-pro --cases dex-garchomp-hp,type-eq-gyarados
  *
  * Each case calls `runAgent()` DIRECTLY (no HTTP) with the deterministic dry-run
  * identity of the model (`dryRunIdentity`, `agent/memory.ts`). It is a VALID UUID in a
