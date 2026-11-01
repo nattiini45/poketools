@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { seedLeague, type Client, type LeagueIds } from './local-fixture';
 import { deleteLocalRuleset } from '@/test/local-rulesets';
+import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 
 // LIVE-LOCAL test of the APP layer of the league recycle bin: the real route handlers (league DELETE, restore, pending
 // rebuild, expiry cron, player and ruleset DELETE) run against a LOCAL Supabase stack with a seeded league. Only the
@@ -9,33 +10,19 @@ import { deleteLocalRuleset } from '@/test/local-rulesets';
 // database functions, the rebuild (aggregates queue drain, ratings, streaks), the audit log and the storage sweep are
 // the real code. Companion of `league-trash.local.test.ts`, which proves the database functions themselves.
 //
-// It seeds LOCAL data only (after `supabase db reset`), never loads `.env`, never runs in CI, and cleans up after itself.
+// It seeds LOCAL data only (after `supabase db reset`), never loads `.env`, runs in CI only with LOCAL_STACK_CI=1, and cleans up after itself.
 //
 //   LOCAL_LEAGUE_TRASH=1 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 //   SUPABASE_SERVICE_ROLE_KEY=<local service_role> \
 //   npx vitest run src/lib/league-trash/__tests__/routes.local.test.ts
 //
 // The local key comes from `supabase status -o env` (SERVICE_ROLE_KEY).
-const optIn = process.env.LOCAL_LEAGUE_TRASH === '1' && process.env.CI !== 'true';
-
-const LOCAL_HOSTS: readonly string[] = ['127.0.0.1', 'localhost'];
+const optIn = localStackOptIn('LOCAL_LEAGUE_TRASH');
 
 /** Throws unless the Supabase URL points at a local stack and the key was passed on the command line. */
 function assertLocalStack(): string {
-  let host = '';
-  try {
-    host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname;
-  } catch {
-    throw new Error('[routes.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL is not a valid URL');
-  }
-  if (!LOCAL_HOSTS.includes(host)) {
-    throw new Error(`[routes.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL host "${host}" is not 127.0.0.1 or localhost`);
-  }
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key || key === 'dummy-service-role-key') {
-    throw new Error('[routes.local] refusing to run: pass the LOCAL SUPABASE_SERVICE_ROLE_KEY on the command line');
-  }
-  return key;
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
+  return requireLocalKey('SUPABASE_SERVICE_ROLE_KEY');
 }
 
 if (optIn) assertLocalStack();

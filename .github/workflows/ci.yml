@@ -94,3 +94,56 @@ jobs:
       - name: Tests and coverage
         run: npm run test:coverage
         # The only Vitest run: every project, plus the coverage floors in vitest.config.ts.
+
+  # ADVISORY: not a required check and never added to the main-protection ruleset. It starts an ephemeral
+  # Supabase stack on the runner (loopback only, no hosted project, no secrets), replays every migration on an
+  # empty database, checks src/types/database.ts against the replayed schema and runs the local-stack suites.
+  # LOCAL_STACK_CI=1 is what lets those suites run on CI (src/test/local-stack.ts).
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # A red job here is information, not a gate: the workflow run stays green.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start the local Supabase stack
+        # postgres-meta stays: `supabase gen types --local` (db:types:check) reads the schema through it. Mailpit stays
+        # for the e2e job's sign-up mail; this job does not use it.
+        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+
+      - name: Replay every migration on an empty database
+        run: npx supabase db reset --local
+
+      - name: Generated types match the replayed schema
+        run: npm run db:types:check
+
+      - name: Export the local stack's URL and keys
+        run: |
+          npx supabase status -o env | while IFS='=' read -r key value; do
+            value="${value%\"}"
+            value="${value#\"}"
+            case "$key" in
+              API_URL) name=NEXT_PUBLIC_SUPABASE_URL ;;
+              ANON_KEY) name=NEXT_PUBLIC_SUPABASE_ANON_KEY ;;
+              SERVICE_ROLE_KEY) name=SUPABASE_SERVICE_ROLE_KEY ;;
+              *) continue ;;
+            esac
+            [ "$name" = NEXT_PUBLIC_SUPABASE_URL ] || echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+
+      - name: Local-stack suites
+        run: npm run test:db
+        env:
+          LOCAL_STACK_CI: '1'

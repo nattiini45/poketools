@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { deleteLocalRuleset } from '@/test/local-rulesets';
 import { seedLeague, type LeagueIds } from './local-fixture';
+import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-LOCAL test of the Admin Assistant tables (supabase/migrations/20261027100000_admin_agent_tables.sql): the
 // triggers, the purge, the turn lease, the blast-radius counters, the usage reservation and the recycle-bin rule,
@@ -17,7 +18,7 @@ import { seedLeague, type LeagueIds } from './local-fixture';
 // The triggers' flag handling (a forged `app.retention_purge`, TRUNCATE, anon) needs SQL a PostgREST client cannot send;
 // it was checked in psql against the same stack (see the report of the change).
 //
-// It seeds LOCAL data only, never loads `.env`, never runs in CI. Rows cannot be deleted through the API on purpose, so
+// It seeds LOCAL data only, never loads `.env`, runs in CI only with LOCAL_STACK_CI=1. Rows cannot be deleted through the API on purpose, so
 // cleanup is the real retention purge: the test conversations are aged past the audit window first, and the purge drops
 // them with everything below them. The only residue are `admin_agent_usage` rows of the reservation test (settled at
 // cost 0, admin_id NULL once the test player is gone): usage is kept for two years by design.
@@ -27,22 +28,7 @@ import { seedLeague, type LeagueIds } from './local-fixture';
 //   npx vitest run src/lib/league-trash/__tests__/admin-agent-tables.local.test.ts
 //
 // The local key comes from `supabase status -o env` (SERVICE_ROLE_KEY).
-const optIn = process.env.LOCAL_ADMIN_AGENT_TABLES === '1' && process.env.CI !== 'true';
-
-const LOCAL_HOSTS: readonly string[] = ['127.0.0.1', 'localhost'];
-
-/** Throws unless the Supabase URL points at a local stack. */
-function assertLocalSupabaseUrl(raw: string | undefined): void {
-  let host = '';
-  try {
-    host = new URL(raw ?? '').hostname;
-  } catch {
-    throw new Error('[admin-agent-tables.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL is not a valid URL');
-  }
-  if (!LOCAL_HOSTS.includes(host)) {
-    throw new Error(`[admin-agent-tables.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL host "${host}" is not 127.0.0.1 or localhost`);
-  }
-}
+const optIn = localStackOptIn('LOCAL_ADMIN_AGENT_TABLES');
 
 /** A key passed on the command line, never the vitest placeholder. */
 function localServiceKey(): string {
@@ -54,7 +40,7 @@ function localServiceKey(): string {
 }
 
 if (optIn) {
-  assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
   localServiceKey();
 }
 

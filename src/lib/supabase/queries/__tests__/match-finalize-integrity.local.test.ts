@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
+import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-LOCAL test for supabase/migrations/20261018130000_match_finalize_integrity.sql
 // (code review C2, H2). It runs the real query functions against a LOCAL
@@ -17,34 +18,17 @@ import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 //   - the live rating writer (rating_apply_match_result, round 3) writes both
 //     players or nothing and refuses a stale fence, and rollback_game_aggregates
 //     decrements a counted game exactly once under concurrent calls.
-// Opt-in only, never in CI, and it never loads `.env`: every value comes from
+// Opt-in only, never in CI without LOCAL_STACK_CI=1, and it never loads `.env`: every value comes from
 // the command line.
 //
 //   LOCAL_SUPABASE_FINALIZE=1 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 //   NEXT_PUBLIC_SUPABASE_ANON_KEY=<local anon> SUPABASE_SERVICE_ROLE_KEY=<local service_role> \
 //   npx vitest run src/lib/supabase/queries/__tests__/match-finalize-integrity.local.test.ts
-const optIn = process.env.LOCAL_SUPABASE_FINALIZE === '1' && process.env.CI !== 'true';
-
-const LOCAL_HOSTS: readonly string[] = ['127.0.0.1', 'localhost'];
-
-/** Throws unless the Supabase URL points at a local stack. */
-function assertLocalSupabaseUrl(raw: string | undefined): void {
-  let host = '';
-  try {
-    host = new URL(raw ?? '').hostname;
-  } catch {
-    throw new Error('[match-finalize-integrity.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL is not a valid URL');
-  }
-  if (!LOCAL_HOSTS.includes(host)) {
-    throw new Error(
-      `[match-finalize-integrity.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL host "${host}" is not 127.0.0.1 or localhost`,
-    );
-  }
-}
+const optIn = localStackOptIn('LOCAL_SUPABASE_FINALIZE');
 
 if (optIn) {
   // Before the client module (which builds the client at import time) loads.
-  assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key || key === 'dummy-service-role-key') {
     throw new Error(
@@ -77,7 +61,7 @@ const ids = {
 
 describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
   beforeAll(async () => {
-    assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
 
     ({ supabase: client } = await import('@/lib/supabase/client'));
     games = await import('@/lib/supabase/queries/games');

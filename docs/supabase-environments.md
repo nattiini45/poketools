@@ -33,6 +33,22 @@ manual and browser checks: nothing it does reaches the hosted project.
 `supabase start` keeps its database volume between runs and does not replay migrations added since; run
 `npx supabase db reset --local` after pulling new migrations.
 
+### Local-stack suites (`npm run test:db`)
+
+Some suites prove behaviour only a real Postgres shows (grants, RPCs, constraints, PostgREST shapes). They live in `*.local.test.ts` and `*.live-db.test.ts` files and run in their own Vitest project, `db`, which `npm run test` never loads, so a plain test run cannot reach a database.
+
+```bash
+npx supabase start
+npx supabase migration up --local   # or db reset --local, which also empties the data
+npm run test:db                     # reads the URL and keys from `supabase status -o env`
+npm run test:db -- src/lib/supabase # extra arguments go to Vitest
+```
+
+- The suites touch the local stack only. `src/test/local-stack.ts` is the one place that decides: the `db` project refuses to start unless `NEXT_PUBLIC_SUPABASE_URL` is on the loopback interface (127.0.0.1, localhost or ::1), and no suite loads `.env`. A hosted URL stops the run before any query is sent.
+- Several suites count rows or assume a freshly reset database (`npx supabase db reset --local`); run them serially, which the project does.
+- On CI a real-DB suite is off unless `LOCAL_STACK_CI=1` is set. Only the advisory `database` and `e2e` jobs set it, after starting their own ephemeral stack on the runner (no Supabase secret, nothing hosted). Those jobs are not required checks; they replay every migration on an empty database, run `npm run db:types:check` and then `npm run test:db`.
+- Run one file with `npm run test:db -- <path>`. The shared `LOCAL_STACK=1` opens every suite's own flag (`LOCAL_RULESETS`, `LOCAL_LEAGUE_TRASH`, ...); the `db` project exists only for that script.
+- `ruleset-conversion.local.test.ts` keeps its own gate (`RULESET_REHEARSAL_DIR`) and the timing-only league-trash `huge` case stays opt-in (`LOCAL_LEAGUE_TRASH_HUGE=1`).
 ## Option B: hosted project
 
 1. Create a project in the [Supabase dashboard](https://supabase.com/dashboard).
@@ -56,7 +72,7 @@ manual and browser checks: nothing it does reaches the hosted project.
 ## Rules
 
 - Never commit project URLs, refs or keys. `.env.example` uses placeholders only.
-- Automated runs (tests, capture harnesses, preview loops) never query a hosted project. Measure query cost against a local stack (`SUPABASE_METER=1`, see `AGENTS.md`).
+- Automated runs (tests, capture harnesses, preview loops, CI jobs) never query a hosted project. Measure query cost against a local stack (`SUPABASE_METER=1`, see `AGENTS.md`).
 - Restoring a dump, or regenerating or squashing the baseline, must end by re-running `20261008081402_revoke_anon_private_match_columns.sql` and `20261008081443_close_public_api_roles.sql` (see `AGENTS.md`, Never Do).
 - Backups by plan, the dump recipe, the restore drill and lock-safe migrations: [Backups, Restore and Migration Safety](./operations-backup.md).
 - Do not add `@supabase/ssr`: PokéTools uses NextAuth and the existing clients in `src/lib/supabase/`.

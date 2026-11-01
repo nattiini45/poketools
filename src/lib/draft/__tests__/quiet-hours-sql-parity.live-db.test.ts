@@ -7,7 +7,7 @@
  *
  * LOCAL_DB_URL is the local stack's API URL (`supabase status` -> API_URL); the helpers are called through PostgREST
  * with the service role (the only role they are granted to). Any host other than 127.0.0.1 / localhost / ::1 is
- * refused, so the hosted project is never reached. Never runs in CI. It reads no `.env`.
+ * refused, so the hosted project is never reached. Runs in CI only with LOCAL_STACK_CI=1. It reads no `.env`.
  *
  * It replays every vector of fixtures/quiet-hours-vectors.json through draft__quiet_window_end, draft__running_ms
  * and draft__add_running_ms (supabase/migrations/20261018140100_draft_quiet_hours.sql) and through the TS mirror

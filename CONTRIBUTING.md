@@ -21,7 +21,7 @@ Thanks for your interest in contributing! This guide covers the essentials. Plea
    npm run build       # Production build (includes type-check)
    npm test            # Unit tests (Vitest)
    ```
-4. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for any user-facing change (Added, Changed, Fixed, Security, Removed), and an upgrade note for every new migration or environment variable.
+   Changes that touch SQL, grants, RPCs or the shape of a Supabase query also run the local-stack suites against your own local stack (`npx supabase start`, `npx supabase migration up --local`, then `npm run test:db`). They refuse any host but the loopback interface and never read `.env`. CI runs the same suites in an **advisory** `database` job (not a required check): it replays every migration on an empty database, runs `npm run db:types:check` and `npm run test:db` with `LOCAL_STACK_CI=1` on an ephemeral stack. See [docs/supabase-environments.md](docs/supabase-environments.md#local-stack-suites-npm-run-testdb).4. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for any user-facing change (Added, Changed, Fixed, Security, Removed), and an upgrade note for every new migration or environment variable.
 5. Open a PR against `main`. PR titles follow [Conventional Commits](https://www.conventionalcommits.org) (`feat: …`, `fix: …`, `docs: …`); CI checks this.
 
 Never commit secrets, real user data, or values from your own deployment (Supabase project refs, domains, Discord IDs). Use placeholders such as `<project-ref>` in docs and examples. CI runs gitleaks on every PR.
