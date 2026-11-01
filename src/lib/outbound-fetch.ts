@@ -5,7 +5,9 @@
  * A 3xx is a failure (`redirect: 'error'` throws a `TypeError`), so a response
  * cannot bounce a bearer token or app password to another host, and a hung
  * peer cannot hold the request open. A timeout surfaces as a `TimeoutError`.
- * Callers log `err.name` or their own message, never the URL.
+ * Callers log `err.name` or their own message, never the URL, and never an
+ * upstream response body: a third party (or a self-hosted PDS) can echo the
+ * handle, app password or webhook URL it was sent back in an error text.
  */
 
 /** Discord webhooks: small JSON or one image, and an admin may be waiting. */
@@ -25,8 +27,31 @@ export function outboundFetch(
   });
 }
 
-/** An upstream error body trimmed for a log line: it is third-party text, so it is capped. */
-export function logSnippet(body: string, max = 200): string {
-  const flat = body.replace(/\s+/g, ' ').trim();
-  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+/**
+ * A non-2xx answer from a provider. Carries the provider, the step and the
+ * HTTP status only: the response body is third-party text and stays out of the
+ * message, so the message is safe to throw, return and log as it is.
+ */
+export class OutboundHttpError extends Error {
+  readonly provider: string;
+  readonly operation: string;
+  readonly status: number;
+
+  constructor(provider: string, operation: string, status: number) {
+    super(`[${provider}] ${operation} failed: ${status}`);
+    this.name = 'OutboundHttpError';
+    this.provider = provider;
+    this.operation = operation;
+    this.status = status;
+  }
+}
+
+/** Builds the error for a failed response and discards its body unread so the connection is released. */
+export async function outboundHttpError(
+  provider: string,
+  operation: string,
+  response: Pick<Response, 'status'> & { body?: Response['body'] },
+): Promise<OutboundHttpError> {
+  await response.body?.cancel().catch(() => undefined);
+  return new OutboundHttpError(provider, operation, response.status);
 }

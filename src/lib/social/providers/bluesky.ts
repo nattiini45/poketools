@@ -1,6 +1,6 @@
 import type { BlueskyCredentials } from '@/types/social';
 import { fetchImageAsBuffer } from '../image-fetch';
-import { logSnippet, outboundFetch, SOCIAL_TIMEOUT_MS } from '@/lib/outbound-fetch';
+import { outboundFetch, outboundHttpError, SOCIAL_TIMEOUT_MS } from '@/lib/outbound-fetch';
 import { resolveBlueskyServiceUrl } from '../bluesky-service';
 
 interface BlueskySessionResponse {
@@ -44,8 +44,7 @@ export async function postToBluesky(
   );
 
   if (!sessionResponse.ok) {
-    const body = await sessionResponse.text().catch(() => '(no body)');
-    throw new Error(`[Bluesky] Session creation failed: ${sessionResponse.status} ${logSnippet(body)}`);
+    throw await outboundHttpError('Bluesky', 'Session creation', sessionResponse);
   }
 
   const session = (await sessionResponse.json().catch(() => ({}))) as BlueskySessionResponse;
@@ -73,8 +72,7 @@ export async function postToBluesky(
       );
 
       if (!blobResponse.ok) {
-        const body = await blobResponse.text().catch(() => '(no body)');
-        throw new Error(`[Bluesky] uploadBlob failed: ${blobResponse.status} ${logSnippet(body)}`);
+        throw await outboundHttpError('Bluesky', 'uploadBlob', blobResponse);
       }
 
       const uploaded = (await blobResponse.json().catch(() => ({}))) as BlueskyUploadBlobResponse;
@@ -124,8 +122,7 @@ export async function postToBluesky(
   );
 
   if (!recordResponse.ok) {
-    const body = await recordResponse.text().catch(() => '(no body)');
-    throw new Error(`[Bluesky] createRecord failed: ${recordResponse.status} ${logSnippet(body)}`);
+    throw await outboundHttpError('Bluesky', 'createRecord', recordResponse);
   }
 
   const created = (await recordResponse.json().catch(() => ({}))) as BlueskyCreateRecordResponse;

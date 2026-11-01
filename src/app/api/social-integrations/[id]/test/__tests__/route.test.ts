@@ -26,6 +26,9 @@ import { requireAdmin, AuthError } from '@/lib/auth/helpers';
 import { getSocialIntegrationByIdWithSecrets } from '@/lib/supabase/queries/social-integrations';
 import { sendSocialTestMessage } from '@/lib/social/notify';
 import { makeParams } from '@/lib/__tests__/helpers/api-request';
+import { BlueskyServiceUrlError } from '@/lib/social/bluesky-service';
+import enErrors from '@/i18n/messages/errors/broadcast/en';
+import deErrors from '@/i18n/messages/errors/broadcast/de';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -124,6 +127,34 @@ describe('POST /api/social-integrations/[id]/test', () => {
     expect(json.success).toBe(false);
     // safeErrorResponse hides internal error details — returns safe fallback
     expect(json.error).toBe('Failed to send test post');
+  });
+
+  it('answers a stored Bluesky service_url the provider refuses with a distinct coded 422', async () => {
+    vi.mocked(requireAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(getSocialIntegrationByIdWithSecrets).mockResolvedValue(mockIntegration as never);
+    vi.mocked(sendSocialTestMessage).mockRejectedValue(new BlueskyServiceUrlError('host_not_allowed'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await POST(makeEmptyRequest(), {
+      params: makeParams({ id: '3a1dce58-0105-46e5-802f-db4a05fb85db' }),
+    });
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json).toMatchObject({
+      success: false,
+      code: 'social_bluesky_service_url_rejected',
+      params: { reason: 'host_not_allowed' },
+    });
+    expect(json.error).not.toBe('Failed to send test post');
+    // Logged server-side with the original cause, and never with the stored address.
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('has a German and an English message for the invalid-target code', () => {
+    expect(enErrors.social_bluesky_service_url_rejected).toContain('{reason}');
+    expect(deErrors.social_bluesky_service_url_rejected).toContain('{reason}');
   });
 
   it('returns generic fallback message for non-Error exceptions', async () => {

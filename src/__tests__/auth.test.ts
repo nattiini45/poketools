@@ -997,6 +997,19 @@ describe('signIn callback link intent', () => {
     } as unknown as SignInParams);
   }
 
+  const SIGNED_IN_AT = NOW - 60_000;
+
+  /** The session `auth()` answers from the cookie: a cached player copy plus the identity and sign-in time. */
+  function liveSession(overrides?: Record<string, unknown>): Record<string, unknown> {
+    return {
+      user: { id: 'auth-uuid-1' },
+      provider: 'credentials',
+      authAt: SIGNED_IN_AT,
+      player: makeSessionPlayer({ playerId: 'P' }),
+      ...overrides,
+    };
+  }
+
   function expectIntentConsumed(): void {
     expect(cookieDelete).toHaveBeenCalledWith(expect.objectContaining({ name: LINK_DISCORD_COOKIE, path: '/' }));
   }
@@ -1016,7 +1029,8 @@ describe('signIn callback link intent', () => {
   });
 
   it('refuses the link when the live session belongs to another player', async () => {
-    mockAuth.mockResolvedValue({ player: makeSessionPlayer({ playerId: 'Q' }) });
+    mockAuth.mockResolvedValue(liveSession());
+    mockedRead.mockResolvedValue(makeRow({ id: 'Q' }));
 
     await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
 
@@ -1024,11 +1038,68 @@ describe('signIn callback link intent', () => {
     expect(mockedLink).not.toHaveBeenCalled();
   });
 
-  it('refuses the link when the session has no player', async () => {
-    mockAuth.mockResolvedValue({ player: null });
+  it('refuses the link when the identity has no player row now', async () => {
+    mockAuth.mockResolvedValue(liveSession());
+    mockedRead.mockResolvedValue(null);
 
     await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
     expect(mockedLink).not.toHaveBeenCalled();
+  });
+
+  it('refuses the link for a cached, not-yet-due session that an advanced cutoff has revoked', async () => {
+    // The cached copy still names player P and is far inside the TTL, so auth()
+    // answers it without a read. Only the live epoch says it is dead.
+    mockAuth.mockResolvedValue(liveSession({ player: makeSessionPlayer({ playerId: 'P' }) }));
+    mockedRead.mockResolvedValue(makeRow({ id: 'P', sessions_valid_after: new Date(SIGNED_IN_AT + 1).toISOString() }));
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+
+    expectIntentConsumed();
+    expect(mockedLink).not.toHaveBeenCalled();
+    expect(mockedGetByDiscord).not.toHaveBeenCalled();
+  });
+
+  it('treats a session without a sign-in time as revoked once any cutoff exists', async () => {
+    mockAuth.mockResolvedValue(liveSession({ authAt: undefined }));
+    mockedRead.mockResolvedValue(makeRow({ id: 'P', sessions_valid_after: new Date(NOW - 1_000).toISOString() }));
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+    expect(mockedLink).not.toHaveBeenCalled();
+  });
+
+  it.each(['banned', 'suspended'] as const)('refuses the link when the live player is %s', async (status) => {
+    mockAuth.mockResolvedValue(liveSession());
+    mockedRead.mockResolvedValue(makeRow({ id: 'P', status }));
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+    expect(mockedLink).not.toHaveBeenCalled();
+  });
+
+  it('lets a site admin link even when flagged suspended, as the guards do', async () => {
+    mockAuth.mockResolvedValue(liveSession());
+    mockedRead.mockResolvedValue(makeRow({ id: 'P', status: 'suspended', is_admin: true }));
+
+    await expect(runSignIn()).resolves.toBe(true);
+    expect(mockedLink).toHaveBeenCalledWith('P', 'D2');
+  });
+
+  it('fails closed when the live read throws', async () => {
+    mockAuth.mockResolvedValue(liveSession());
+    mockedRead.mockRejectedValue(new Error('db down'));
+
+    await expect(runSignIn()).resolves.toBe('/auth/error?error=Default');
+
+    expectIntentConsumed();
+    expect(mockedLink).not.toHaveBeenCalled();
+  });
+
+  it('reads the player live for the session identity, not from the cached copy', async () => {
+    mockAuth.mockResolvedValue(liveSession());
+    mockedRead.mockResolvedValue(makeRow({ id: 'P' }));
+
+    await runSignIn();
+
+    expect(mockedRead).toHaveBeenCalledWith('credentials', 'auth-uuid-1');
   });
 
   it('fails closed when the session check throws', async () => {
@@ -1041,7 +1112,8 @@ describe('signIn callback link intent', () => {
   });
 
   it('links Discord when the minting player is still signed in', async () => {
-    mockAuth.mockResolvedValue({ player: makeSessionPlayer({ playerId: 'P' }) });
+    mockAuth.mockResolvedValue(liveSession());
+    mockedRead.mockResolvedValue(makeRow({ id: 'P' }));
 
     await expect(runSignIn()).resolves.toBe(true);
 

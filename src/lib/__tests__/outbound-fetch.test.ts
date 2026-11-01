@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DISCORD_TIMEOUT_MS, logSnippet, outboundFetch, SOCIAL_TIMEOUT_MS } from '../outbound-fetch';
+import { DISCORD_TIMEOUT_MS, OutboundHttpError, outboundFetch, outboundHttpError, SOCIAL_TIMEOUT_MS } from '../outbound-fetch';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -52,14 +52,27 @@ describe('outboundFetch', () => {
   });
 });
 
-describe('logSnippet', () => {
-  it('leaves a short body alone and flattens whitespace', () => {
-    expect(logSnippet('a\n  b')).toBe('a b');
+describe('outboundHttpError', () => {
+  it('carries provider, step and status, and never the response body', async () => {
+    const response = new Response('echoed handle alice.bsky.social and app password PLACEHOLDER-SECRET', { status: 401 });
+
+    const err = await outboundHttpError('Bluesky', 'Session creation', response);
+
+    expect(err).toBeInstanceOf(OutboundHttpError);
+    expect(err).toMatchObject({ name: 'OutboundHttpError', provider: 'Bluesky', operation: 'Session creation', status: 401 });
+    expect(err.message).toBe('[Bluesky] Session creation failed: 401');
+    expect(JSON.stringify(err)).not.toContain('PLACEHOLDER-SECRET');
   });
 
-  it('caps a long body', () => {
-    const out = logSnippet('x'.repeat(5000));
-    expect(out.length).toBeLessThanOrEqual(201);
-    expect(out.endsWith('…')).toBe(true);
+  it('discards the body unread so the connection is released', async () => {
+    const response = new Response('payload', { status: 500 });
+
+    await outboundHttpError('X', 'POST /2/tweets', response);
+
+    await expect(response.text()).rejects.toThrow();
+  });
+
+  it('accepts a response without a body stream', async () => {
+    await expect(outboundHttpError('Threads', 'Publish post', { status: 502 })).resolves.toMatchObject({ status: 502 });
   });
 });

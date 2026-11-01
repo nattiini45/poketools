@@ -1,6 +1,6 @@
 import type { XCredentials } from '@/types/social';
 import { fetchImageAsBuffer } from '../image-fetch';
-import { logSnippet, outboundFetch, SOCIAL_TIMEOUT_MS } from '@/lib/outbound-fetch';
+import { outboundFetch, outboundHttpError, SOCIAL_TIMEOUT_MS } from '@/lib/outbound-fetch';
 
 interface XPostResponse {
   data?: { id: string; text: string };
@@ -37,8 +37,7 @@ async function uploadMedia(
   );
 
   if (!response.ok) {
-    const body = await response.text().catch(() => '(no body)');
-    throw new Error(`[X] Media upload failed: ${response.status} ${logSnippet(body)}`);
+    throw await outboundHttpError('X', 'Media upload', response);
   }
 
   const parsed = (await response.json().catch(() => ({}))) as XMediaUploadResponse;
@@ -83,8 +82,7 @@ export async function postToX(
   );
 
   if (!response.ok) {
-    const body = await response.text().catch(() => '(no body)');
-    throw new Error(`[X] POST /2/tweets failed: ${response.status} ${logSnippet(body)}`);
+    throw await outboundHttpError('X', 'POST /2/tweets', response);
   }
 
   const parsed = (await response.json().catch(() => ({}))) as XPostResponse;

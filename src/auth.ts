@@ -45,15 +45,29 @@ function clearLinkIntent(cookieStore: CookieStore): void {
 }
 
 /**
- * Player id of the live session on the current request, or null. A link
- * intent is honoured only for the player who is still signed in (the token
- * alone is a bearer credential that can outlive the session that minted it).
+ * Player id of the session on the current request, or null. A link intent is
+ * honoured only for the player who is still signed in (the token alone is a
+ * bearer credential that can outlive the session that minted it).
+ *
+ * `auth()` answers its cached player copy inside the refresh TTL, so a session
+ * that a password reset or "sign out everywhere" has just revoked still looks
+ * live there. Linking is a write that later mints a fresh `authAt` at the
+ * Discord sign-in, so the identity, epoch and standing are read live here
+ * (uncached, one narrow row), as the `require*` guards do. A failed read
+ * throws and the caller fails closed.
  * Declared with an explicit return type so the callback that calls it does
  * not make `auth`'s inferred type circular.
  */
 async function currentSessionPlayerId(): Promise<string | null> {
   const session = await auth();
-  return session?.player?.playerId ?? null;
+  const identityId = session?.user?.id;
+  if (!session || !identityId) return null;
+
+  const row = await getSessionPlayerRowByIdentity(session.provider ?? 'discord', identityId);
+  if (!row) return null;
+  if (isSessionRevoked(session.authAt, row.sessions_valid_after)) return null;
+  if (!row.is_admin && (row.status === 'banned' || row.status === 'suspended')) return null;
+  return row.id;
 }
 
 /**

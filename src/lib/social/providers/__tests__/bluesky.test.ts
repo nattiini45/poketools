@@ -6,6 +6,8 @@ vi.mock('../../image-fetch', () => ({
 
 import { postToBluesky } from '../bluesky';
 import { fetchImageAsBuffer } from '../../image-fetch';
+import { OutboundHttpError } from '@/lib/outbound-fetch';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { BlueskyCredentials } from '@/types/social';
 
 const mockFetchImageAsBuffer = vi.mocked(fetchImageAsBuffer);
@@ -146,12 +148,60 @@ describe('postToBluesky', () => {
     }
   });
 
-  it('caps an upstream error body in the thrown message', async () => {
-    mockFetchResponses([{ ok: false, status: 400, text: 'x'.repeat(5000) }]);
+  it.each([
+    ['session creation', 0],
+    ['uploadBlob', 1],
+    ['createRecord', 2],
+  ])('keeps an echoed %s error body out of the thrown error and every log line', async (_step, failAt) => {
+    mockFetchImageAsBuffer.mockResolvedValue({ buffer: Buffer.from('img'), contentType: 'image/png' });
+    const echoed =
+      'Invalid identifier test.bsky.social password app-password-123 ECHOED-BSKY-SECRET https://hooks.example/SECRET-HOOK';
+    const ok = [
+      { ok: true, json: { did: 'did:plc:abc', accessJwt: 'jwt-token-SECRET' } },
+      { ok: true, json: { blob: { $type: 'blob', ref: { $link: 'x' }, mimeType: 'image/png', size: 1 } } },
+      { ok: true, json: { uri: 'at://did:plc:abc/post/1' } },
+    ];
+    const responses = ok.slice(0, failAt);
+    responses.push({ ok: false, status: 400, text: echoed } as never);
+    // A failed uploadBlob falls back to a text-only post, whose createRecord then succeeds.
+    if (failAt === 1) responses.push(ok[2]);
+    mockFetchResponses(responses as never);
+    const spies = (['error', 'warn', 'log', 'info', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
 
-    const err = await postToBluesky(makeCredentials(), 'Test').then(() => new Error('did not throw'), (e: unknown) => e as Error);
+    const err = await postToBluesky(makeCredentials(), 'Test', 'https://example.com/img.png').then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
 
-    expect(err.message.length).toBeLessThan(300);
+    if (failAt !== 1) {
+      expect(err).toBeInstanceOf(OutboundHttpError);
+      expect(err).toMatchObject({ provider: 'Bluesky', status: 400 });
+    } else {
+      expect(err).toBeNull();
+    }
+    const observed = JSON.stringify([err?.message, ...spies.flatMap((s) => s.mock.calls)]);
+    expect(observed).toContain('400');
+    for (const secret of ['ECHOED-BSKY-SECRET', 'SECRET-HOOK', 'app-password-123', 'test.bsky.social', 'Invalid identifier']) {
+      expect(observed).not.toContain(secret);
+    }
+  });
+
+  it('a rejected service_url is a coded user-facing error that names the reason only', async () => {
+    mockFetchResponses([]);
+
+    const err = await postToBluesky(
+      makeCredentials({ service_url: 'https://evil.example' }),
+      'Test',
+    ).then(() => new Error('did not throw'), (e: unknown) => e as Error);
+
+    expect(err).toBeInstanceOf(UserFacingError);
+    expect(err).toMatchObject({
+      name: 'BlueskyServiceUrlError',
+      code: 'social_bluesky_service_url_rejected',
+      params: { reason: 'host_not_allowed' },
+      statusCode: 422,
+    });
+    expect(err.message).toContain('host_not_allowed');
   });
 
   it('defaults to bsky.social when service_url is empty', async () => {

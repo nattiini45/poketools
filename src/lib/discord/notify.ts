@@ -1,5 +1,5 @@
 import { resolveWebhooks } from '@/lib/supabase/queries/discord-webhooks';
-import { DISCORD_TIMEOUT_MS, logSnippet, outboundFetch } from '@/lib/outbound-fetch';
+import { DISCORD_TIMEOUT_MS, outboundFetch } from '@/lib/outbound-fetch';
 import { discordWebhookUrlSchema } from '@/lib/validation';
 import { resolveContentLocale } from '@/i18n/content-locale';
 import { DEFAULT_CONTENT_LOCALE, type Locale } from '@/i18n/config';
@@ -170,12 +170,9 @@ async function postToWebhook(
   try {
     const response = await outboundFetch(url.data, init, DISCORD_TIMEOUT_MS);
     if (!response.ok) {
-      console.error(
-        `[Discord] Webhook ${kind} failed:`,
-        webhook.id,
-        response.status,
-        logSnippet(await response.text().catch(() => '(no body)')),
-      );
+      // The body is Discord's text and can echo the webhook URL, so only the status is logged.
+      await response.body?.cancel().catch(() => undefined);
+      console.error(`[Discord] Webhook ${kind} failed:`, webhook.id, response.status);
     }
   } catch (err) {
     console.error(`[Discord] Webhook ${kind} unreachable:`, webhook.id, err instanceof Error ? err.name : 'unknown');

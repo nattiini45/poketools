@@ -118,8 +118,15 @@ Project: your Supabase project (`<project-ref>`)
 - The Discord link intent cookie is single-use and binds only a player id
   (HMAC of `playerId.exp`, 10-minute TTL). The `signIn` callback honours it
   only while the player who minted it still has a live session on that
-  browser (`auth()` must resolve to the same `playerId`); otherwise it
-  answers `LinkExpired` and links nothing. Signing out clears a pending
+  browser. `auth()` alone is not enough: inside the 5-minute refresh TTL it
+  answers its cached player, which a password reset or "sign out everywhere"
+  does not touch. So the callback re-reads the session identity's player
+  (one uncached narrow read) and requires the same `playerId`, a token that
+  `sessions_valid_after` has not revoked, and (unless a site admin) a player
+  that is not banned or suspended. Otherwise it answers `LinkExpired` and
+  links nothing (a failed read answers `Default`). Without that, a revoked
+  session could attach an attacker's Discord identity, and the following
+  Discord sign-in would mint a fresh `authAt`. Signing out clears a pending
   intent (`events.signOut`). In production the cookie is
   `__Host-poketools_link_discord` (Secure, host-only, path `/`); dev on
   http://localhost uses the unprefixed `poketools_link_discord`.
