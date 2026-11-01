@@ -24,6 +24,7 @@ export default {
   player_identity_taken: 'This Discord ID or account already belongs to another player.',
   player_update_forbidden: 'Not authorized to update this player',
   creator_status_superadmin_only: 'Only the superadmin can manage creator status',
+  admin_status_superadmin_only: 'Only the superadmin can manage site admin status',
   player_has_match_history: {
     one: 'Cannot delete a player with match history ({count} match). Suspend or ban them instead.',
     other: 'Cannot delete a player with match history ({count} matches). Suspend or ban them instead.',

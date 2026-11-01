@@ -164,9 +164,10 @@ export const playerCreateSchema = z.union([
   playerCreateRegisteredSchema,
 ]);
 
+// Identity (`discord_id`, `auth_user_id`) is deliberately absent: it moves only through
+// the guarded link, claim and import flows, never through a profile edit.
 export const playerUpdateSchema = z.object({
   name: z.string().trim().min(1).max(FIELD_LIMITS.NAME).optional(),
-  discord_id: discordIdSchema.optional(),
   ps_username: z.string().trim().max(FIELD_LIMITS.NAME).optional(),
   champions_username: z.string().trim().max(FIELD_LIMITS.NAME).optional(),
   is_admin: z.boolean().optional(),

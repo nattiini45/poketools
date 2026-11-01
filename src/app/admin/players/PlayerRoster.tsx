@@ -40,6 +40,7 @@ import {
 } from './roster-helpers';
 
 interface PlayerRosterProps {
+  /** The superadmin: the only viewer who may grant or revoke the admin and creator roles. */
   canManageCreators: boolean;
 }
 
@@ -166,7 +167,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
   const [dialogError, setDialogError] = useState<RosterError | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', discord_id: '', ps_username: '' });
+  const [editForm, setEditForm] = useState({ name: '', ps_username: '' });
 
   // Admin / creator / delete / reinstate confirmation
   const [pendingConfirm, setPendingConfirm] = useState<{ kind: RosterConfirmKind; player: Player } | null>(null);
@@ -441,19 +442,13 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     setEditingId(player.id);
     setEditForm({
       name: player.name,
-      discord_id: player.discord_id ?? '',
       ps_username: player.ps_username,
     });
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingId) return;
-    // Email-only players have no Discord ID — omit the empty field so
-    // validation doesn't reject the update.
-    const payload = {
-      ...editForm,
-      discord_id: editForm.discord_id.trim() || undefined,
-    };
+    const payload = { name: editForm.name, ps_username: editForm.ps_username };
     const name = players.find((p) => p.id === editingId)?.name ?? editForm.name;
     // A failed save keeps the row in edit mode with its input.
     if (await runAction('action', name, () => patchPlayer(editingId, payload))) {
@@ -486,15 +481,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
       header: t('players.columns.discordId'),
       sortable: true,
       render: (player) =>
-        editingId === player.id ? (
-          <input
-            value={editForm.discord_id}
-            onChange={(e) => setEditForm((f) => ({ ...f, discord_id: e.target.value }))}
-            className="w-full border border-poke-border rounded-poke-md px-2 py-1 text-sm bg-poke-surface text-poke-text-primary"
-          />
-        ) : (
-          <span className="text-sm text-poke-text-secondary">{player.discord_id ?? '—'}</span>
-        ),
+        <span className="text-sm text-poke-text-secondary">{player.discord_id ?? '—'}</span>,
     },
     {
       key: 'ps_username' satisfies PlayerSortColumn,
@@ -521,7 +508,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
       key: 'admin',
       header: t('players.columns.admin'),
       render: (player) =>
-        editingId === player.id ? (
+        editingId === player.id || !canManageCreators ? (
           <Badge variant={player.is_admin ? 'green' : 'gray'}>
             {player.is_admin ? t('players.roles.admin') : t('players.roles.player')}
           </Badge>

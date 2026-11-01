@@ -98,7 +98,6 @@ export interface PlayerRegistration {
 
 export interface PlayerUpdate {
   name?: string;
-  discord_id?: string;
   ps_username?: string;
   champions_username?: string;
   is_admin?: boolean;
