@@ -13,6 +13,7 @@ import {
 } from '@/lib/supabase/queries/players';
 import type { SessionPlayerRow } from '@/lib/supabase/queries/players';
 import { authorizeCredentials } from '@/lib/auth/credentials';
+import { resolveCredentialsSuperadminLink } from '@/lib/auth/superadmin';
 import { verifyLinkToken } from '@/lib/utils/crypto';
 import { discordOAuthEnvSchema, readEnv, requireEnv } from '@/lib/env';
 import { syncSpriteStyleCookieAtSignIn } from '@/lib/pkmn/sprite-style-signin.server';
@@ -123,19 +124,16 @@ interface AuthIdentity {
    * is enforced only by the project's Confirm email setting.
    */
   email?: string | null;
+  /**
+   * Credentials provider only: the reserved email AND a player linked to
+   * `SUPERADMIN_DISCORD_ID` (`resolveCredentialsSuperadminLink`). The email
+   * alone never makes a superadmin: anyone can register it at GoTrue.
+   */
+  superadminLinked?: boolean;
 }
 
 function isSuperadminIdentity(identity: AuthIdentity): boolean {
-  if (identity.provider === 'credentials') {
-    // Same normalization as `isReservedSuperadminEmail` in
-    // `@/lib/auth/helpers` (not imported: helpers imports this module).
-    const superadminEmail = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();
-    return (
-      !!superadminEmail &&
-      typeof identity.email === 'string' &&
-      identity.email.trim().toLowerCase() === superadminEmail
-    );
-  }
+  if (identity.provider === 'credentials') return identity.superadminLinked === true;
   const superadminId = process.env.SUPERADMIN_DISCORD_ID;
   return !!superadminId && identity.id === superadminId;
 }
@@ -157,18 +155,25 @@ async function applySuperadminOverride(identity: AuthIdentity, player: SessionPl
 /**
  * Initial sign-in: one narrow read of the identity's player, creating the
  * player when none exists. A brand-new player cannot hold `resource_admins`
- * rows yet, so it needs no count query.
+ * rows yet, so it needs no count query. A player created here never carries
+ * the operator's Discord id, so it is never the credentials superadmin and
+ * the link read is skipped. `superadminLinked` is the credentials link result
+ * (always false for Discord, whose superadmin is decided by the snowflake).
  */
 async function resolveSignInPlayer(
   identity: AuthIdentity,
   create: () => Promise<Player>
-): Promise<SessionPlayer> {
+): Promise<{ player: SessionPlayer; superadminLinked: boolean }> {
   const row = await getSessionPlayerRowByIdentity(identity.provider, identity.id);
   const player = row
     ? toSessionPlayer(row)
     : toSessionPlayer({ ...(await create()), resource_admin_count: 0 });
-  await applySuperadminOverride(identity, player);
-  return player;
+  const superadminLinked =
+    row && identity.provider === 'credentials'
+      ? await resolveCredentialsSuperadminLink(identity.id, identity.email)
+      : false;
+  await applySuperadminOverride({ ...identity, superadminLinked }, player);
+  return { player, superadminLinked };
 }
 
 /**
@@ -291,7 +296,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         let created = false;
         try {
-          token.player = await resolveSignInPlayer(identity, () => {
+          ({ player: token.player } = await resolveSignInPlayer(identity, () => {
             created = true;
             const prof = profile as Record<string, unknown>;
             const discordUsername = (prof.username as string)
@@ -301,7 +306,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               name: discordUsername,
               discord_id: discordId,
             });
-          });
+          }));
+          delete token.superadminLinked;
           token[REFRESHED_AT] = Date.now();
         } catch (err) {
           console.warn('[auth] jwt callback player lookup failed:', err instanceof Error ? err.message : String(err));
@@ -326,17 +332,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         let created = false;
         try {
-          token.player = await resolveSignInPlayer(identity, () => {
+          const signedIn = await resolveSignInPlayer(identity, () => {
             created = true;
             return createPlayer({
               name: user.name ?? `Player ${authUserId.slice(0, 8)}`,
               auth_user_id: authUserId,
             });
           });
+          token.player = signedIn.player;
+          token.superadminLinked = signedIn.superadminLinked;
           token[REFRESHED_AT] = Date.now();
         } catch (err) {
           console.warn('[auth] jwt callback player lookup failed:', err instanceof Error ? err.message : String(err));
           token.player = null;
+          delete token.superadminLinked;
           delete token[REFRESHED_AT];
         }
         await syncSignInSpriteStyle(token.player, created);
@@ -359,12 +368,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
         try {
           const player = await loadSessionPlayer(identity.provider, identity.id);
+          const superadminLinked =
+            identity.provider === 'credentials'
+              ? await resolveCredentialsSuperadminLink(identity.id, identity.email)
+              : undefined;
           if (player) {
-            await applySuperadminOverride(identity, player);
+            await applySuperadminOverride({ ...identity, superadminLinked }, player);
           }
           // null: the identity no longer maps to a player (deleted), so the
           // stale copy must not keep its name or roles on read paths.
           token.player = player;
+          if (superadminLinked === undefined) delete token.superadminLinked;
+          else token.superadminLinked = superadminLinked;
           token[REFRESHED_AT] = now;
         } catch (err) {
           // Keep the stale copy and leave the timestamp alone, so the next
@@ -382,6 +397,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       session.player = token.player ?? null;
       session.provider = token.provider ?? 'discord';
+      if (session.provider === 'credentials') {
+        session.superadminLinked = token.superadminLinked === true;
+      }
       return session;
     },
   },

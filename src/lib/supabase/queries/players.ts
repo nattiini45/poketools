@@ -115,6 +115,24 @@ export async function getSessionPlayerRowByIdentity(
 }
 
 /**
+ * Whether the player behind a credentials identity (`auth_user_id`) holds this
+ * exact Discord id. The superadmin binding reads it apart from the session
+ * read (`SESSION_PLAYER_COLUMNS` selects no identity column) and returns only
+ * the boolean, so the id is never copied into a token or a session.
+ */
+export async function isAuthUserLinkedToDiscordId(authUserId: string, discordId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('players')
+    .select('id')
+    .eq('auth_user_id', authUserId)
+    .eq('discord_id', discordId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
  * Map a session row to the `SessionPlayer` stored in the JWT. Picks fields
  * explicitly, so extra properties on the input (for example a full `Player`
  * from `createPlayer`) never reach the token.

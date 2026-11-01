@@ -76,12 +76,30 @@ Project: your Supabase project (`<project-ref>`)
   (`PublicPlayer`, participant endpoints, broadcast standings).
 - Deleting a player cascades to `auth.users` via `admin.deleteUser`
   (no DB-level FK — an `ON DELETE SET NULL` could violate the CHECK).
-- Superadmin: `SUPERADMIN_DISCORD_ID` matches Discord sessions only;
-  optional `SUPERADMIN_EMAIL` matches email sessions only.
-  Both email checks trim and lowercase before comparing
-  (`isReservedSuperadminEmail` in `src/lib/auth/helpers.ts`). The match is on
-  the GoTrue-confirmed sign-in email; confirmation is enforced only by the
-  project's Confirm email setting.
+- GoTrue is directly reachable: the anon key is public, so anyone can call
+  `/auth/v1/signup` and `/auth/v1/token` on the project and create an auth
+  user for any address, including `SUPERADMIN_EMAIL`, without going through
+  `POST /api/auth/signup`. The application must therefore never treat an
+  email as an identity on its own.
+- Superadmin: `SUPERADMIN_DISCORD_ID` matches Discord sessions only. An email
+  session is the superadmin only when BOTH hold: its sign-in email is the
+  optional `SUPERADMIN_EMAIL` (trimmed and lowercased on both sides,
+  `isReservedSuperadminEmail` in `src/lib/auth/superadmin.ts`) AND the
+  `players` row it resolves to carries `discord_id === SUPERADMIN_DISCORD_ID`
+  (`resolveCredentialsSuperadminLink`, a separate narrow read; the id never
+  enters the token or the session, only the derived `superadminLinked`
+  boolean). The link is re-read on every token refresh and on every guarded
+  call (`requireAuth`, `requireSuperadmin`, `getLiveAccess`). With
+  `SUPERADMIN_DISCORD_ID` unset, an email superadmin is impossible. A player
+  row created by the very sign-in is never the superadmin. The account is
+  linked to Discord only by the operator signing in with Discord and linking
+  the address (see below), so an attacker's own GoTrue user on the reserved
+  address, whose player row has no such `discord_id`, gets a plain player
+  session.
+- GoTrue `display_name` metadata is attacker-controlled too (user metadata
+  is set at signup): `authorizeCredentials` re-runs it through the name rules
+  (control characters stripped, whitespace collapsed, `FIELD_LIMITS.NAME`
+  code points) before it becomes a player name.
 - `SUPERADMIN_EMAIL` can be linked only from the `SUPERADMIN_DISCORD_ID`
   account: `POST /api/account/link-email` refuses it for any other player (or
   for everyone when `SUPERADMIN_DISCORD_ID` is unset) with the same generic

@@ -19,6 +19,12 @@ declare module 'next-auth' {
      * legacy sessions type-check. Absent = 'discord'.
      */
     provider?: AuthProvider;
+    /**
+     * Credentials sessions only: the sign-in email is `SUPERADMIN_EMAIL` and
+     * the player carries `SUPERADMIN_DISCORD_ID` (see `src/lib/auth/superadmin.ts`).
+     * A derived boolean, never the Discord id. The guards recompute it live.
+     */
+    superadminLinked?: boolean;
   }
 }
 
@@ -27,6 +33,8 @@ declare module '@auth/core/jwt' {
     id?: string; // Discord snowflake or Supabase auth user UUID (see provider)
     provider?: AuthProvider;
     player?: SessionPlayer | null;
+    /** Derived superadmin-link boolean for credentials tokens (see `Session.superadminLinked`). */
+    superadminLinked?: boolean;
   }
 }
 

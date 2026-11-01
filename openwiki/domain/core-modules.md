@@ -12,7 +12,7 @@ Two providers resolve to the same `players` row:
 
 **Identity anchor:** `discord_id` or email-matched `players` row. Session managed by NextAuth v5 with JWT strategy.
 
-**Superadmin:** Discord ID in `SUPERADMIN_DISCORD_ID` (Discord sessions) and optional `SUPERADMIN_EMAIL` (email sessions), auto-promoted on every request.
+**Superadmin:** Discord ID in `SUPERADMIN_DISCORD_ID` (Discord sessions) auto-promoted on every request; an email session is the superadmin only when its email is `SUPERADMIN_EMAIL` and its player row carries that Discord id (the email alone is never enough: GoTrue accepts a signup for it from anyone with the anon key).
 
 **Auth helpers** (`src/lib/auth/helpers.ts`):
 ```

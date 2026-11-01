@@ -57,7 +57,7 @@ Every agent writing code in this repo must follow these patterns. They map to th
 ### A07 — Auth Bypass
 
 - Session management: NextAuth v5 with JWT strategy. Two providers resolve to the same `players` row: Discord OAuth (`checks: ['state']`) and a Credentials provider backed by Supabase Auth email/password (server-side GoTrue via `src/lib/supabase/auth-client.ts`; no `@supabase/ssr`, no persisted Supabase sessions). See `docs/auth-email-password.md`.
-- Superadmin: Discord ID in `SUPERADMIN_DISCORD_ID` (Discord sessions) and optional `SUPERADMIN_EMAIL` (email sessions), auto-promoted on every request.
+- Superadmin: Discord ID in `SUPERADMIN_DISCORD_ID` (Discord sessions), auto-promoted on every request. An email session is the superadmin only when its email is the optional `SUPERADMIN_EMAIL` AND its player row carries `discord_id === SUPERADMIN_DISCORD_ID` (`src/lib/auth/superadmin.ts`; the email alone is never enough). GoTrue is directly reachable with the public anon key, so anyone can create an auth user on the reserved address; the Discord binding is the control, and with `SUPERADMIN_DISCORD_ID` unset no email superadmin exists. The token and session carry only the derived `superadminLinked` boolean, never the id.
 - No direct session manipulation — always go through NextAuth helpers.
 
 ### A10 — Logging & Monitoring

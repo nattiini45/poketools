@@ -35,8 +35,14 @@ vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolById: vi.fn(),
 }));
 
+// Mock the Discord-link read behind the credentials superadmin decision
+vi.mock('@/lib/supabase/queries/players', () => ({
+  isAuthUserLinkedToDiscordId: vi.fn(),
+}));
+
 import * as React from 'react';
 import { auth, loadSessionPlayer } from '@/auth';
+import { isAuthUserLinkedToDiscordId } from '@/lib/supabase/queries/players';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getDraftPoolById } from '@/lib/supabase/queries/drafts';
 import {
@@ -66,6 +72,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 // typed as NextMiddleware, which confuses vi.mocked's type inference.
 const mockedAuth = vi.mocked(auth) as unknown as ReturnType<typeof vi.fn<() => Promise<Session | null>>>;
 const mockedLoad = vi.mocked(loadSessionPlayer);
+const mockedLinked = vi.mocked(isAuthUserLinkedToDiscordId);
 
 // ── Render scope (stand-in for the Flight request dispatcher) ────────
 
@@ -131,6 +138,8 @@ function signIn(tokenPlayer: SessionPlayer | null, livePlayer: SessionPlayer | n
 beforeEach(() => {
   vi.clearAllMocks();
   mockedLoad.mockReset();
+  mockedLinked.mockReset();
+  mockedLinked.mockResolvedValue(false);
   delete process.env.SUPERADMIN_DISCORD_ID;
   delete process.env.SUPERADMIN_EMAIL;
 });
@@ -225,10 +234,23 @@ describe('isSuperadmin', () => {
     expect(isSuperadmin(session)).toBe(false);
   });
 
-  it('matches SUPERADMIN_EMAIL for credentials sessions (case-insensitive)', () => {
+  it('matches SUPERADMIN_EMAIL for credentials sessions that carry the Discord link (case-insensitive)', () => {
     process.env.SUPERADMIN_EMAIL = 'Test@Example.com';
-    const session: Session = { ...makeSession(makePlayer()), provider: 'credentials' };
+    const session: Session = { ...makeSession(makePlayer()), provider: 'credentials', superadminLinked: true };
     expect(isSuperadmin(session)).toBe(true);
+  });
+
+  it('does not promote a credentials session on the reserved email alone', () => {
+    process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    const session: Session = { ...makeSession(makePlayer()), provider: 'credentials' };
+    expect(isSuperadmin(session)).toBe(false);
+    expect(isSuperadmin({ ...session, superadminLinked: false })).toBe(false);
+  });
+
+  it('does not promote a linked credentials session whose email is not the reserved one', () => {
+    process.env.SUPERADMIN_EMAIL = 'someone-else@example.com';
+    const session: Session = { ...makeSession(makePlayer()), provider: 'credentials', superadminLinked: true };
+    expect(isSuperadmin(session)).toBe(false);
   });
 
   it('ignores SUPERADMIN_EMAIL for discord sessions', () => {
@@ -272,6 +294,7 @@ describe('isReservedSuperadminEmail', () => {
     const session: Session = {
       ...base,
       provider: 'credentials',
+      superadminLinked: true,
       user: { ...base.user, email: 'boss@example.com ' },
     };
     expect(isSuperadmin(session)).toBe(true);
@@ -669,12 +692,45 @@ describe('requireSuperadmin', () => {
     await expect(requireSuperadmin()).resolves.toMatchObject({ playerId: 'player-1', isAdmin: true });
   });
 
-  it('passes for the credentials superadmin identity (SUPERADMIN_EMAIL)', async () => {
+  it('passes for the credentials superadmin identity (SUPERADMIN_EMAIL + the Discord link)', async () => {
     process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    process.env.SUPERADMIN_DISCORD_ID = 'snowflake-1';
+    mockedLinked.mockResolvedValue(true);
     mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials' });
     mockedLoad.mockImplementation(async () => makePlayer());
     await expect(requireSuperadmin()).resolves.toMatchObject({ isAdmin: true });
     expect(mockedLoad).toHaveBeenCalledWith('credentials', 'discord-1');
+    expect(mockedLinked).toHaveBeenCalledWith('discord-1', 'snowflake-1');
+  });
+
+  it('refuses the reserved email without the Discord link, whatever the token says', async () => {
+    process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    process.env.SUPERADMIN_DISCORD_ID = 'snowflake-1';
+    mockedLinked.mockResolvedValue(false);
+    mockedAuth.mockResolvedValue({
+      ...makeSession(makePlayer()),
+      provider: 'credentials',
+      superadminLinked: true,
+    });
+    mockedLoad.mockImplementation(async () => makePlayer({ isAdmin: true }));
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('refuses the reserved email when SUPERADMIN_DISCORD_ID is unset, without a link read', async () => {
+    process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials' });
+    mockedLoad.mockImplementation(async () => makePlayer({ isAdmin: true }));
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 403 });
+    expect(mockedLinked).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the live link read fails', async () => {
+    process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    process.env.SUPERADMIN_DISCORD_ID = 'snowflake-1';
+    mockedLinked.mockRejectedValue(new Error('db down'));
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials' });
+    mockedLoad.mockImplementation(async () => makePlayer());
+    await expect(requireSuperadmin()).rejects.toThrow('db down');
   });
 
   it('throws AuthError(401) when not authenticated, without a live read', async () => {

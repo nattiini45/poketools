@@ -20,6 +20,7 @@ import {
 } from '../credentials';
 import { rateLimitKey } from '@/lib/utils/rate-limit';
 import { AUTH_RATE_LIMITS } from '@/lib/auth/rate-limits';
+import { FIELD_LIMITS } from '@/lib/validation/schemas';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -55,6 +56,47 @@ describe('authorizeCredentials', () => {
 
     const user = await authorizeCredentials('misty@example.com', 'hunter22');
     expect(user.displayName).toBe('misty');
+  });
+
+  // GoTrue's own /auth/v1/signup is reachable with the public anon key, so
+  // `display_name` arrives without the app's signup schema ever having seen it.
+  describe('display_name from GoTrue metadata', () => {
+    const signInWith = (user_metadata: Record<string, unknown>) => {
+      signInWithPassword.mockResolvedValue({
+        data: { user: { id: 'auth-user-1', user_metadata } },
+        error: null,
+      });
+      return authorizeCredentials('misty@example.com', 'hunter22');
+    };
+
+    it('truncates an over-long name to the name limit', async () => {
+      const user = await signInWith({ display_name: 'x'.repeat(500) });
+      expect(user.displayName).toBe('x'.repeat(FIELD_LIMITS.NAME));
+    });
+
+    it('strips control characters and collapses whitespace', async () => {
+      const user = await signInWith({ display_name: '  A\u0000s\u0007h\n\t  Ketchum' });
+      expect(user.displayName).toBe('Ash Ketchum');
+    });
+
+    it('falls back to the email local part for a whitespace-only or control-only name', async () => {
+      expect((await signInWith({ display_name: ' \t\n ' })).displayName).toBe('misty');
+      expect((await signInWith({ display_name: '\u0000\u0001' })).displayName).toBe('misty');
+    });
+
+    it('ignores a non-string display_name', async () => {
+      expect((await signInWith({ display_name: { evil: true } })).displayName).toBe('misty');
+    });
+
+    it('keeps a valid name exactly, emoji and accents included', async () => {
+      expect((await signInWith({ display_name: 'Zoë 🔥 Müller' })).displayName).toBe('Zoë 🔥 Müller');
+    });
+
+    it('never cuts a surrogate pair in half when truncating', async () => {
+      const user = await signInWith({ display_name: '🔥'.repeat(FIELD_LIMITS.NAME + 5) });
+      expect(Array.from(user.displayName)).toHaveLength(FIELD_LIMITS.NAME);
+      expect(user.displayName).toBe('🔥'.repeat(FIELD_LIMITS.NAME));
+    });
   });
 
   it('throws EmailNotVerifiedError when the email is not confirmed', async () => {
