@@ -10,6 +10,17 @@ Thanks for your interest in contributing! This guide covers the essentials. Plea
 4. Set up your own Supabase project, local (`npx supabase start`, then `npx supabase db reset`) or hosted (`npx supabase link --project-ref <your-project-ref>`, then `npx supabase db push`); see [docs/supabase-environments.md](docs/supabase-environments.md)
 5. `npm run dev` to start the dev server
 
+### Local development without Discord
+
+Discord sign-in is optional. Leave `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` blank (set both or neither) and the sign-in page offers email and password only. With a local Supabase stack running (`npx supabase start`, `npx supabase migration up --local`):
+
+```bash
+npm run dev:seed   # a local admin, the standard rulesets and one 8-player league; safe to run again
+npm run dev
+```
+
+Then sign in at `/auth/signin` as `local-admin@poketools.test` with the password the seed prints (`poketools-local-admin`). Those credentials open nothing but a local stack: the seed refuses any Supabase URL that is not the loopback interface and never reads `.env`. The local stack requires email confirmation for new sign-ups; read the confirmation link in Mailpit at http://127.0.0.1:54324.
+
 ## Development Workflow
 
 1. Create a feature branch from `main`
@@ -21,7 +32,8 @@ Thanks for your interest in contributing! This guide covers the essentials. Plea
    npm run build       # Production build (includes type-check)
    npm test            # Unit tests (Vitest)
    ```
-   Changes that touch SQL, grants, RPCs or the shape of a Supabase query also run the local-stack suites against your own local stack (`npx supabase start`, `npx supabase migration up --local`, then `npm run test:db`). They refuse any host but the loopback interface and never read `.env`. CI runs the same suites in an **advisory** `database` job (not a required check): it replays every migration on an empty database, runs `npm run db:types:check` and `npm run test:db` with `LOCAL_STACK_CI=1` on an ephemeral stack. See [docs/supabase-environments.md](docs/supabase-environments.md#local-stack-suites-npm-run-testdb).4. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for any user-facing change (Added, Changed, Fixed, Security, Removed), and an upgrade note for every new migration or environment variable.
+   Changes that touch SQL, grants, RPCs or the shape of a Supabase query also run the local-stack suites against your own local stack (`npx supabase start`, `npx supabase migration up --local`, then `npm run test:db`). They refuse any host but the loopback interface and never read `.env`. CI runs the same suites in an **advisory** `database` job (not a required check): it replays every migration on an empty database, runs `npm run db:types:check` and `npm run test:db` with `LOCAL_STACK_CI=1` on an ephemeral stack. See [docs/supabase-environments.md](docs/supabase-environments.md#local-stack-suites-npm-run-testdb).
+4. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for any user-facing change (Added, Changed, Fixed, Security, Removed), and an upgrade note for every new migration or environment variable.
 5. Open a PR against `main`. PR titles follow [Conventional Commits](https://www.conventionalcommits.org) (`feat: …`, `fix: …`, `docs: …`); CI checks this.
 
 Never commit secrets, real user data, or values from your own deployment (Supabase project refs, domains, Discord IDs). Use placeholders such as `<project-ref>` in docs and examples. CI runs gitleaks on every PR.

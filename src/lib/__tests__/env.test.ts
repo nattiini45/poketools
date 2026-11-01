@@ -6,6 +6,7 @@ import {
   bootEnvSchemas,
   bootstrapEnvSchema,
   bootstrapModeEnvSchema,
+  discordOAuthEnabled,
   discordOAuthEnvSchema,
   MissingEnvError,
   rateLimitEnvSchema,
@@ -110,6 +111,40 @@ describe('readEnv', () => {
   });
 });
 
+describe('discordOAuthEnabled', () => {
+  it('is on when both keys are set', () => {
+    expect(discordOAuthEnabled({ DISCORD_CLIENT_ID: 'id', DISCORD_CLIENT_SECRET: 'secret' })).toBe(true);
+  });
+
+  it('is off when neither key is set, empty or whitespace-only', () => {
+    expect(discordOAuthEnabled({})).toBe(false);
+    expect(discordOAuthEnabled({ DISCORD_CLIENT_ID: '', DISCORD_CLIENT_SECRET: '' })).toBe(false);
+    expect(discordOAuthEnabled({ DISCORD_CLIENT_ID: '  ', DISCORD_CLIENT_SECRET: undefined })).toBe(false);
+  });
+
+  it('names the missing key with the existing MissingEnvError wording when exactly one is set', () => {
+    const onlyId = readError(() => discordOAuthEnabled({ DISCORD_CLIENT_ID: 'id' }));
+    expect(onlyId.problems).toEqual([{ key: 'DISCORD_CLIENT_SECRET', reason: 'missing' }]);
+    expect(onlyId.message).toContain('Missing required environment variables or invalid values: DISCORD_CLIENT_SECRET (missing)');
+
+    const onlySecret = readError(() => discordOAuthEnabled({ DISCORD_CLIENT_ID: '', DISCORD_CLIENT_SECRET: 'secret' }));
+    expect(onlySecret.problems).toEqual([{ key: 'DISCORD_CLIENT_ID', reason: 'missing' }]);
+  });
+
+  it('never puts a value in the error', () => {
+    const err = readError(() => discordOAuthEnabled({ DISCORD_CLIENT_ID: SECRET }));
+    expect(err.message).not.toContain(SECRET);
+  });
+
+  it('reads process.env by default', () => {
+    vi.stubEnv('DISCORD_CLIENT_ID', 'id');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', 'secret');
+    expect(discordOAuthEnabled()).toBe(true);
+    vi.stubEnv('DISCORD_CLIENT_ID', '');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', '');
+    expect(discordOAuthEnabled()).toBe(false);
+  });
+});
 describe('rateLimitEnvSchema', () => {
   it('accepts postgres, memory and unset; trims and treats blank as unset', () => {
     expect(readEnv(rateLimitEnvSchema, {})).toEqual({ RATE_LIMIT_STORE: undefined, VERCEL: undefined });

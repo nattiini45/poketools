@@ -9,6 +9,7 @@ import WorldExperienceSection from '@/components/player/WorldExperienceSection';
 import { LanguageSettingsSection } from '@/components/shared/LanguagePicker';
 import SpriteStyleSettingsSection from './SpriteStyleSettingsSection';
 import { getT } from '@/i18n/server';
+import { discordOAuthEnabled } from '@/lib/env';
 import { commonMessages } from '@/i18n/messages/common';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,7 @@ export default async function SettingsPage() {
       subtitle={t('settingsPage.subtitle')}
       maxWidth="md"
     >
-      <AccountSecuritySection />
+      <AccountSecuritySection discordEnabled={discordOAuthEnabled()} />
       <WorldExperienceSection />
       {ExtensionSettingsSection && <ExtensionSettingsSection />}
       <LanguageSettingsSection />

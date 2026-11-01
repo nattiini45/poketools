@@ -47,7 +47,7 @@ npm run dev                     # http://localhost:3000
 
 - `npx supabase status -o env` prints the local values: `API_URL` goes into `NEXT_PUBLIC_SUPABASE_URL`, `ANON_KEY` into `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SERVICE_ROLE_KEY` into `SUPABASE_SERVICE_ROLE_KEY` (see `docs/supabase-environments.md`).
 - Add `http://localhost:3000/api/auth/callback/discord` as an OAuth2 redirect URL of your Discord application.
-- The README's "Required" table lists every variable the core flows need; `.env.example` holds the full surface. An empty value counts as missing: the server env schema (`src/lib/env.ts`) names every missing or invalid key of a group at once. The six variables the build itself needs are the CI set: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`.
+- The README's "Required" table lists every variable the core flows need; `.env.example` holds the full surface. An empty value counts as missing: the server env schema (`src/lib/env.ts`) names every missing or invalid key of a group at once. The four variables the build itself needs are the CI set: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`. Discord OAuth is optional (`DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` both set, or neither): without it the sign-in page offers email/password only, and `npm run dev:seed` gives a local checkout a seeded admin.
 - First admin and the default rulesets: README, "First run".
 - A fresh clone runs the neutral example format pack, whose numbers are placeholders: README, "Format packs", and `docs/format-packs.md`.
 

@@ -1,0 +1,29 @@
+{
+  "$comment": "Run-only tsconfig for scripts/dev-seed-run.ts (npm run dev:seed), same mapping as tsconfig.audit.json: the server-only marker and next/cache resolve to the test stubs under tsx, the root tsconfig stays untouched.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@/*": [
+        "../src/*"
+      ],
+      "@format-pack": [
+        "../src/format-packs/private",
+        "../src/format-packs/example"
+      ],
+      "@pack-extensions": [
+        "../src/format-packs/private/extensions",
+        "../src/format-packs/example/extensions"
+      ],
+      "server-only": [
+        "../src/test/server-only-stub.ts"
+      ],
+      "next/cache": [
+        "../src/test/next-cache-stub.ts"
+      ]
+    }
+  },
+  "include": [
+    "./dev-seed-run.ts"
+  ]
+}

@@ -39,6 +39,7 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }));
 vi.mock('@/lib/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/env')>()),
   requireEnv: (name: string) => `test-${name}`,
+  discordOAuthEnabled: () => true,
   readEnv: (schema: { shape: object }) =>
     Object.fromEntries(Object.keys(schema.shape).map((name) => [name, `test-${name}`])),
 }));

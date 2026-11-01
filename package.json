@@ -20,6 +20,7 @@
     "lint": "eslint src/ scripts/ --max-warnings=0",
     "test": "vitest run",
     "test:db": "node scripts/test-db.mjs",
+    "dev:seed": "node scripts/dev-seed.mjs",
     "test:changed": "vitest related --changed",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

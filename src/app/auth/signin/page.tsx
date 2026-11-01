@@ -2,6 +2,7 @@ import Card from '@/components/ui/Card';
 import { getT } from '@/i18n/server';
 import { sanitizeCallbackUrl } from '@/lib/auth/safe-callback-url';
 import { authMessages } from '@/i18n/messages/auth';
+import { discordOAuthEnabled } from '@/lib/env';
 import SignInForm from './SignInForm';
 
 // Public: no auth required
@@ -32,7 +33,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       <h1 className="text-xl font-heading font-bold text-poke-text-primary mb-4">
         {t('signIn.title')}
       </h1>
-      <SignInForm callbackUrl={callbackUrl} initialErrorCode={initialErrorCode} />
+      <SignInForm callbackUrl={callbackUrl} initialErrorCode={initialErrorCode} discordEnabled={discordOAuthEnabled()} />
     </Card>
   );
 }

@@ -32,11 +32,24 @@ export const supabaseAuthEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: required,
 });
 
-/** Read by the NextAuth Discord provider (`src/auth.ts`) at import time. */
+/** Read by the NextAuth Discord provider (`src/auth.ts`) at import time, once `discordOAuthEnabled()` says it is on. */
 export const discordOAuthEnvSchema = z.object({
   DISCORD_CLIENT_ID: required,
   DISCORD_CLIENT_SECRET: required,
 });
+
+/**
+ * Whether Discord sign-in is configured. Both keys set: on. Neither: off (email/password only, the zero-setup local
+ * path). Exactly one: a misconfiguration, reported with the `discordOAuthEnvSchema` wording (`MissingEnvError` naming
+ * the missing key) instead of silently running without Discord. Empty and whitespace-only count as unset, so
+ * `DISCORD_CLIENT_ID=` in an env file keeps Discord off.
+ */
+export function discordOAuthEnabled(source: EnvSource = process.env): boolean {
+  const isSet = (key: keyof z.infer<typeof discordOAuthEnvSchema>) => (source[key] ?? '').trim() !== '';
+  if (!isSet('DISCORD_CLIENT_ID') && !isSet('DISCORD_CLIENT_SECRET')) return false;
+  readEnv(discordOAuthEnvSchema, source);
+  return true;
+}
 
 /** Unset, empty and whitespace-only all count as unset; anything else is kept trimmed. */
 const optionalTrimmed = <T extends z.ZodType>(schema: T) =>

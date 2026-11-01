@@ -19,6 +19,7 @@ export default {
   password_reset_failed: 'Password reset failed',
   player_registration_required: 'Player registration required',
   discord_already_linked: 'A Discord account is already linked.',
+  discord_not_configured: 'Discord sign-in is not configured on this deployment.',
   discord_link_start_failed: 'Failed to start Discord linking',
   email_login_already_linked: 'An email login is already linked to this account.',
   email_login_create_failed: 'Could not create the email login. Check the email and password and try again.',

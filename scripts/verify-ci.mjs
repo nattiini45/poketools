@@ -63,8 +63,6 @@ const BUILD_ENV = {
   SUPABASE_SERVICE_ROLE_KEY: 'placeholder',
   NEXTAUTH_SECRET: 'ci-secret',
   NEXTAUTH_URL: 'http://localhost:3000',
-  DISCORD_CLIENT_ID: 'placeholder',
-  DISCORD_CLIENT_SECRET: 'placeholder',
 };
 
 /**

@@ -14,6 +14,7 @@ export default defineDe<typeof en>()({
   password_reset_failed: 'Dein Passwort konnte nicht zurückgesetzt werden.',
   player_registration_required: 'Dafür brauchst du ein Spielerprofil.',
   discord_already_linked: 'Es ist bereits ein Discord-Konto verknüpft.',
+  discord_not_configured: 'Discord-Anmeldung ist auf dieser Instanz nicht eingerichtet.',
   discord_link_start_failed: 'Die Verknüpfung mit Discord konnte nicht gestartet werden.',
   email_login_already_linked: 'Mit diesem Konto ist bereits eine E-Mail-Anmeldung verknüpft.',
   email_login_create_failed:

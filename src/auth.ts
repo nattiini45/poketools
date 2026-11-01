@@ -16,7 +16,7 @@ import { authorizeCredentials } from '@/lib/auth/credentials';
 import { resolveCredentialsSuperadminLink } from '@/lib/auth/superadmin';
 import { isSessionRevoked, SessionRevokedError } from '@/lib/auth/session-epoch';
 import { verifyLinkToken } from '@/lib/utils/crypto';
-import { discordOAuthEnvSchema, readEnv, requireEnv } from '@/lib/env';
+import { discordOAuthEnabled, discordOAuthEnvSchema, readEnv, requireEnv } from '@/lib/env';
 import { syncSpriteStyleCookieAtSignIn } from '@/lib/pkmn/sprite-style-signin.server';
 import type { AuthProvider, SessionPlayer } from '@/types/auth';
 import type { Player } from '@/types/player';
@@ -226,23 +226,28 @@ async function syncSignInSpriteStyle(player: SessionPlayer | null | undefined, c
   }
 }
 
-// Read when this module evaluates (the build collects page data for the auth
-// route, so the build needs them too); reports both keys at once when unset.
-const discordEnv = readEnv(discordOAuthEnvSchema);
+// Read when this module evaluates (the build collects page data for the auth route). Discord is optional: with
+// neither key set the app runs on email/password only; exactly one key throws the `MissingEnvError` that names the
+// other.
+const discordEnv = discordOAuthEnabled() ? readEnv(discordOAuthEnvSchema) : null;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
 
   providers: [
-    Discord({
-      clientId: discordEnv.DISCORD_CLIENT_ID,
-      clientSecret: discordEnv.DISCORD_CLIENT_SECRET,
-      checks: ['state'],
-      // Discord sends an RFC 9207 `iss` parameter on the callback. Without an issuer Auth.js compares it with its
-      // "https://authjs.dev" placeholder and every sign-in fails. The token and userinfo URLs stay absolute, so this
-      // adds no discovery request.
-      issuer: 'https://discord.com',
-    }),
+    ...(discordEnv
+      ? [
+          Discord({
+            clientId: discordEnv.DISCORD_CLIENT_ID,
+            clientSecret: discordEnv.DISCORD_CLIENT_SECRET,
+            checks: ['state'],
+            // Discord sends an RFC 9207 `iss` parameter on the callback. Without an issuer Auth.js compares it with its
+            // "https://authjs.dev" placeholder and every sign-in fails. The token and userinfo URLs stay absolute, so
+            // this adds no discovery request.
+            issuer: 'https://discord.com',
+          }),
+        ]
+      : []),
     Credentials({
       credentials: {
         email: { label: 'Email', type: 'email' },

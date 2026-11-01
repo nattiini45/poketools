@@ -53,9 +53,9 @@ PokéTools is self-hosted: every deployment brings its own Supabase project, Dis
 
 The migrations in `supabase/migrations/` create the schema, the grants (the `anon` and `authenticated` API roles hold no privilege in `public`; every read and write goes through the app's API routes) and the public Storage buckets `avatars` and `social-images`.
 
-### 2. Discord application
+### 2. Discord application (optional)
 
-Create an application in the Discord developer portal and add this OAuth2 redirect URL:
+Discord sign-in is optional. Without it the app signs players in with email and password, which is all a local checkout needs: leave `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` blank, run `npm run dev:seed` against the local stack and sign in as the seeded admin (see [CONTRIBUTING.md](CONTRIBUTING.md#local-development-without-discord)). To turn Discord on, create an application in the Discord developer portal and add this OAuth2 redirect URL:
 
 ```
 <NEXTAUTH_URL>/api/auth/callback/discord
@@ -63,7 +63,7 @@ Create an application in the Discord developer portal and add this OAuth2 redire
 
 For local development that is `http://localhost:3000/api/auth/callback/discord`. Copy the client ID and secret into `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET`.
 
-Email/password sign-in is optional and needs extra Supabase Auth configuration: see [docs/auth-email-password.md](docs/auth-email-password.md).
+Email/password sign-in needs extra Supabase Auth configuration on a hosted project: see [docs/auth-email-password.md](docs/auth-email-password.md).
 
 ### 3. Environment variables
 
@@ -76,7 +76,6 @@ Required:
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key — server only, never expose to the client |
 | `NEXTAUTH_SECRET` | Random string for NextAuth session encryption (e.g. `openssl rand -base64 32`) |
 | `NEXTAUTH_URL` | The deployment's origin; `http://localhost:3000` for local dev |
-| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | Your Discord OAuth application |
 | `CRON_SECRET` | Random string that protects `/api/cron/*` |
 | `BOOTSTRAP_SECRET` | Random string for the one-time first-run setup below |
 
@@ -84,6 +83,7 @@ Recommended:
 
 | Variable | Description |
 |---|---|
+| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | Your Discord OAuth application. Set both or neither: neither means email/password sign-in only, exactly one fails at startup |
 | `NEXT_PUBLIC_SITE_URL` | Public origin used for canonical and Open Graph URLs (and as the share-link fallback). Canonical URLs fall back to `NEXTAUTH_URL`, then Vercel's production domain (`VERCEL_PROJECT_PRODUCTION_URL`), then `http://localhost:3000`. Production needs an https origin; a non-https value (other than localhost) is ignored. |
 | `BLUESKY_SERVICE_HOST_ALLOWLIST` | Optional. Extra Bluesky server hosts (comma-separated, besides `bsky.social`) that a Bluesky integration's `service_url` may name; unset means `bsky.social` only |
 | `SUPERADMIN_DISCORD_ID` / `SUPERADMIN_EMAIL` | The instance operator's Discord user ID, and optionally the email of their linked email login; the Discord account is treated as admin on every request, the email login only while its player is linked to that Discord ID |
