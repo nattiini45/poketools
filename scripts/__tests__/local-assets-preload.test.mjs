@@ -71,6 +71,15 @@ describe('local-assets.cjs: a next start build must not bake the bucket', () => 
     expect(run('start').status).toBe(0);
   });
 
+  it('does not mistake the placeholder URL in the sprite-base error message for a baked bucket', () => {
+    build('/sprites');
+    writeFileSync(
+      join(dir, '.next', 'static', 'chunks', 'app', 'message.js'),
+      'throw Error("set an absolute http(s) URL (the public bucket, e.g. https://<project>.supabase.co/storage/v1/object/public/sprites) or a root-relative path");\n',
+    );
+    expect(run('start').status).toBe(0);
+  });
+
   it('pins NEXT_PUBLIC_SPRITES_URL to the local mirror for next dev', () => {
     writeFileSync(join(dir, 'next.js'), 'process.stdout.write(String(process.env.NEXT_PUBLIC_SPRITES_URL));\n');
     expect(run('dev')).toMatchObject({ status: 0, stdout: '/sprites' });

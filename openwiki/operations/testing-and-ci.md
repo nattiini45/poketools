@@ -13,6 +13,7 @@
 | `npm run test:watch` | Watch mode |
 | `npm run test:coverage` | Coverage report (V8 provider) |
 | `npm run test:db` | The local-stack suites (`*.local.test.ts`, `*.live-db.test.ts`) in the `db` project, against `supabase start`; refuses a non-loopback host |
+| `npm run build:e2e` / `npm run test:e2e` | The production build the Playwright smoke suite serves, and the suite (`e2e/`, Chromium, local stack only; setup in CONTRIBUTING.md) |
 
 Vitest seeds dummy Supabase env vars when unset, so unit tests don't require real secrets.
 
@@ -90,8 +91,10 @@ Runs on push to `main` and PRs targeting `main`. Concurrency: cancel in-progress
 Besides the required `build-and-test` job, `ci.yml` has jobs that are **advisory** (`continue-on-error`, never required checks, never in the main-protection ruleset):
 
 - **`database`** — starts an ephemeral Supabase stack on the runner (`supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor`; postgres-meta stays for `gen types`), runs `supabase db reset --local` (every migration on an empty database), `npm run db:types:check`, exports `supabase status -o env`, and runs `npm run test:db` with `LOCAL_STACK_CI=1`.
+- **`e2e`** — its own ephemeral stack (Mailpit included), `supabase db reset --local`, `npm run build:e2e` (a production build against the local stack and the local asset mirrors), `npx playwright install --with-deps chromium`, then `npm run test:e2e`: the Playwright smoke suite in `e2e/` (public pages, email sign-up through Mailpit, report and confirm a result, admin match history, broadcast overlay, German switch). On failure it uploads the HTML report and the traces (`playwright-report` artifact). Running and updating it: [CONTRIBUTING.md](../../CONTRIBUTING.md#end-to-end-tests).
 
 They use no Supabase secret and reach no hosted project; `src/test/local-stack.ts` keeps a real-DB suite off on CI unless `LOCAL_STACK_CI=1`, and refuses every non-loopback host. `npm run verify:ci` mirrors `build-and-test` only.
+
 ### CI Environment
 Build and tests use placeholder env vars (`NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co`, etc.). Real secrets are never needed for CI, and CI never reaches a Supabase project.
 
