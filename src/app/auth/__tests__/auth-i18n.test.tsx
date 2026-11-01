@@ -31,6 +31,7 @@ vi.mock('next-auth/react', () => ({ signIn: vi.fn() }));
 import AuthErrorPage from '../error/page';
 import SignInPage from '../signin/page';
 import SignInForm from '../signin/SignInForm';
+import SignUpPage from '../signup/page';
 import VerifyEmailPage from '../verify-email/page';
 import SignUpForm from '../signup/SignUpForm';
 
@@ -102,6 +103,18 @@ describe('/auth/signin', () => {
     expect(html).toContain('Sign in with Discord');
     expect(html).toContain('Forgot password?');
     expect(html).not.toContain('role="alert"');
+  });
+});
+
+describe('/auth/signup', () => {
+  it('mentions Discord only when Discord OAuth is configured', async () => {
+    vi.stubEnv('DISCORD_CLIENT_ID', 'discord-id');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', 'discord-secret');
+    expect(renderWithI18n(<>{await SignUpPage()}</>)).toContain('Have Discord?');
+
+    vi.stubEnv('DISCORD_CLIENT_ID', '');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', '');
+    expect(renderWithI18n(<>{await SignUpPage()}</>)).not.toContain('Have Discord?');
   });
 });
 
