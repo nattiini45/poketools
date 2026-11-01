@@ -47,6 +47,7 @@
 import { cache } from 'react';
 import { auth, loadSessionPlayer } from '@/auth';
 import { getVerifiedSession } from '@/lib/auth/session-override';
+import { SessionRevokedError } from '@/lib/auth/session-epoch';
 import {
   isReservedSuperadminEmail,
   resolveCredentialsSuperadminLink,
@@ -87,16 +88,31 @@ export async function getSessionPlayer(): Promise<SessionPlayer | null> {
 
 /**
  * Live read of the signed-in identity's player. It uses the token only for
- * the identity. Null when the identity has no player. DB errors rethrow.
+ * the identity and its sign-in time. Null when the identity has no player.
+ * A token issued before the player's session epoch throws the 401 every
+ * guard answers for no session at all. DB errors rethrow.
  */
 async function readLivePlayer(session: Session): Promise<SessionPlayer | null> {
-  return (await readLiveIdentity(session)).player;
+  const { player, revoked } = await readLiveIdentity(session);
+  if (revoked) throw sessionRevokedError();
+  return player;
 }
 
-/** The live player of a session's identity, and whether that identity is the superadmin right now. */
+/**
+ * The live player of a session's identity, and whether that identity is the
+ * superadmin right now. `revoked`: the token was issued before the player's
+ * session epoch (`sessions_valid_after`), so the session is dead; the player
+ * is then null and nothing is granted.
+ */
 interface LiveIdentity {
   player: SessionPlayer | null;
   superadmin: boolean;
+  revoked: boolean;
+}
+
+/** The same 401 as no session: a revoked token is signed out, not forbidden. */
+function sessionRevokedError(): AuthError {
+  return new AuthError('Not authenticated', 401, 'unauthenticated');
 }
 
 /**
@@ -123,16 +139,23 @@ async function isLiveSuperadmin(session: Session): Promise<boolean> {
  */
 async function readLiveIdentity(session: Session): Promise<LiveIdentity> {
   const identityId = session.user?.id;
-  if (!identityId) return { player: null, superadmin: false };
+  if (!identityId) return { player: null, superadmin: false, revoked: false };
 
-  const [player, superadmin] = await Promise.all([
-    loadSessionPlayer(session.provider ?? 'discord', identityId),
+  const [loaded, superadmin] = await Promise.all([
+    loadSessionPlayer(session.provider ?? 'discord', identityId, { authAt: session.authAt }).then(
+      (player) => ({ player, revoked: false }),
+      (err: unknown) => {
+        if (err instanceof SessionRevokedError) return { player: null, revoked: true };
+        throw err;
+      }
+    ),
     isLiveSuperadmin(session),
   ]);
-  if (player && superadmin) {
-    player.isAdmin = true;
+  if (loaded.revoked) return { player: null, superadmin: false, revoked: true };
+  if (loaded.player && superadmin) {
+    loaded.player.isAdmin = true;
   }
-  return { player, superadmin };
+  return { player: loaded.player, superadmin, revoked: false };
 }
 
 /**
@@ -144,7 +167,8 @@ async function readLiveIdentity(session: Session): Promise<LiveIdentity> {
 export async function getLiveSessionPlayer(): Promise<SessionPlayer | null> {
   const session = await getSession();
   if (!session) return null;
-  return readLivePlayer(session);
+  const { player, revoked } = await readLiveIdentity(session);
+  return revoked ? null : player;
 }
 
 /** True when a (live) player may act: not banned or suspended. Site admins always may. */
@@ -183,7 +207,8 @@ export async function getLiveAccess(): Promise<LiveAccess | null> {
   const session = await getSession();
   if (!session) return null;
 
-  const { player, superadmin } = await readLiveIdentity(session);
+  const { player, superadmin, revoked } = await readLiveIdentity(session);
+  if (revoked) return null;
   if (!player || !isInGoodStanding(player)) {
     return { player, isSiteAdmin: false, isAnyAdmin: false, isCreator: false, isSuperadmin: false };
   }
@@ -222,7 +247,8 @@ async function requireSignedIn(): Promise<Session> {
  */
 export async function requireAuth(): Promise<Session> {
   const session = await requireSignedIn();
-  const { player, superadmin } = await readLiveIdentity(session);
+  const { player, superadmin, revoked } = await readLiveIdentity(session);
+  if (revoked) throw sessionRevokedError();
   if (player) assertInGoodStanding(player);
   // The returned session answers `isSuperadmin()` from the live read, not the token's copy.
   return session.provider === 'credentials'
@@ -261,7 +287,8 @@ export async function requireAdmin(): Promise<SessionPlayer> {
  */
 export async function requireSuperadmin(): Promise<SessionPlayer> {
   const session = await requireSignedIn();
-  const { player, superadmin } = await readLiveIdentity(session);
+  const { player, superadmin, revoked } = await readLiveIdentity(session);
+  if (revoked) throw sessionRevokedError();
   if (!player) {
     throw new AuthError('Not a registered player', 403, 'forbidden');
   }

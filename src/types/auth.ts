@@ -25,6 +25,13 @@ declare module 'next-auth' {
      * A derived boolean, never the Discord id. The guards recompute it live.
      */
     superadminLinked?: boolean;
+    /**
+     * Epoch ms of the sign-in that minted this session, set only at sign-in.
+     * The live guards compare it with `players.sessions_valid_after`
+     * (`src/lib/auth/session-epoch.ts`); absent on a session minted before the
+     * stamp existed.
+     */
+    authAt?: number;
   }
 }
 
@@ -35,6 +42,8 @@ declare module '@auth/core/jwt' {
     player?: SessionPlayer | null;
     /** Derived superadmin-link boolean for credentials tokens (see `Session.superadminLinked`). */
     superadminLinked?: boolean;
+    /** Epoch ms of the sign-in (see `Session.authAt`). Never refreshed; not `iat`, which moves on every re-encode. */
+    authAt?: number;
   }
 }
 

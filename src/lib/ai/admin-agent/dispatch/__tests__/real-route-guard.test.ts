@@ -73,7 +73,7 @@ describe('invokeRoute behind the real requirePlayer guard', () => {
     const outcome = await invokeRoute(leagueList, {}, await context());
 
     expect(outcome).toMatchObject({ kind: 'ok', httpStatus: 200, data: [{ id: 's1' }] });
-    expect(loadSessionPlayer).toHaveBeenCalledWith('discord', ME);
+    expect(loadSessionPlayer).toHaveBeenCalledWith('discord', ME, { authAt: undefined });
     expect(getSeasonsByPlayer).toHaveBeenCalledWith(ME);
   });
 

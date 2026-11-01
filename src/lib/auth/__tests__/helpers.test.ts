@@ -66,6 +66,7 @@ import {
   AuthError,
 } from '../helpers';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { SessionRevokedError } from '@/lib/auth/session-epoch';
 import { safeErrorResponse } from '@/lib/api/error-response';
 
 // Cast to the session-returning overload only; NextAuth v5's `auth` is also
@@ -433,7 +434,7 @@ describe('getLiveAccess', () => {
 
     const access = await getLiveAccess();
     expect(access).toMatchObject({ isSiteAdmin: false, isAnyAdmin: false, isCreator: false });
-    expect(mockedLoad).toHaveBeenCalledWith('discord', 'discord-1');
+    expect(mockedLoad).toHaveBeenCalledWith('discord', 'discord-1', { authAt: undefined });
   });
 
   it('denies a player whose last resource-admin assignment was removed', async () => {
@@ -525,7 +526,7 @@ describe('getLiveAccess', () => {
     expect(mockedAuth).toHaveBeenCalledTimes(1);
     // The live read itself is memoised per render inside loadSessionPlayer
     // (src/auth.ts); see live-access-render.test.ts for the one-query proof.
-    expect(new Set(mockedLoad.mock.calls.map((args) => args.join(':')))).toEqual(
+    expect(new Set(mockedLoad.mock.calls.map(([provider, id]) => `${provider}:${id}`))).toEqual(
       new Set(['discord:discord-1'])
     );
   });
@@ -539,7 +540,7 @@ describe('requireAuth', () => {
     const result = await requireAuth();
     expect(result.user.id).toBe('discord-1');
     expect(result.player).toMatchObject({ name: 'New' });
-    expect(mockedLoad).toHaveBeenCalledWith('discord', 'discord-1');
+    expect(mockedLoad).toHaveBeenCalledWith('discord', 'discord-1', { authAt: undefined });
   });
 
   it('throws AuthError(401) when not authenticated, without a live read', async () => {
@@ -618,13 +619,13 @@ describe('requirePlayer', () => {
     mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials', user: { id: 'auth-uuid-1' } });
     mockedLoad.mockResolvedValue(makePlayer());
     await requirePlayer();
-    expect(mockedLoad).toHaveBeenCalledWith('credentials', 'auth-uuid-1');
+    expect(mockedLoad).toHaveBeenCalledWith('credentials', 'auth-uuid-1', { authAt: undefined });
   });
 
   it('treats a legacy session without a provider as discord', async () => {
     signIn(makePlayer());
     await requirePlayer();
-    expect(mockedLoad).toHaveBeenCalledWith('discord', 'discord-1');
+    expect(mockedLoad).toHaveBeenCalledWith('discord', 'discord-1', { authAt: undefined });
   });
 
   it('throws AuthError(403) when the identity has no player, even if the token has one', async () => {
@@ -699,7 +700,7 @@ describe('requireSuperadmin', () => {
     mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials' });
     mockedLoad.mockImplementation(async () => makePlayer());
     await expect(requireSuperadmin()).resolves.toMatchObject({ isAdmin: true });
-    expect(mockedLoad).toHaveBeenCalledWith('credentials', 'discord-1');
+    expect(mockedLoad).toHaveBeenCalledWith('credentials', 'discord-1', { authAt: undefined });
     expect(mockedLinked).toHaveBeenCalledWith('discord-1', 'snowflake-1');
   });
 
@@ -1030,5 +1031,88 @@ describe('requireDraftAdmin', () => {
     vi.mocked(isResourceAdminFor).mockResolvedValue(false);
 
     await expect(requireDraftAdmin(POOL_ID)).rejects.toMatchObject({ statusCode: 403 });
+  });
+});
+
+// ── Session epoch: a token issued before players.sessions_valid_after is dead ──
+
+describe('revoked sessions (session epoch)', () => {
+  const SIGNED_IN_AT = 1_700_000_000_000;
+
+  function revokedSession(): void {
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer({ isAdmin: true })), authAt: SIGNED_IN_AT });
+    mockedLoad.mockRejectedValue(new SessionRevokedError());
+  }
+
+  const GUARDS: Array<[string, () => Promise<unknown>]> = [
+    ['requireAuth', () => requireAuth()],
+    ['requirePlayer', () => requirePlayer()],
+    ['requireAdmin', () => requireAdmin()],
+    ['requireSuperadmin', () => requireSuperadmin()],
+    ['requireAnyAdmin', () => requireAnyAdmin()],
+    ['requireCreator', () => requireCreator()],
+    ['requireResourceAdmin', () => requireResourceAdmin('season', '11111111-1111-4111-8111-111111111111')],
+  ];
+
+  it('hands the token sign-in time to the live read', async () => {
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), authAt: SIGNED_IN_AT });
+    mockedLoad.mockResolvedValue(makePlayer());
+    await requirePlayer();
+    expect(mockedLoad).toHaveBeenCalledWith('discord', 'discord-1', { authAt: SIGNED_IN_AT });
+  });
+
+  it.each(GUARDS)('%s answers 401 unauthenticated, never 403', async (_name, guard) => {
+    revokedSession();
+    await expect(guard()).rejects.toBeInstanceOf(AuthError);
+    await expect(guard()).rejects.toMatchObject({ statusCode: 401, code: 'unauthenticated' });
+  });
+
+  it('reaches the client as a 401 with the unauthenticated code', async () => {
+    revokedSession();
+    const err = await requirePlayer().catch((e: unknown) => e);
+    const res = safeErrorResponse(err, 'fallback');
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ success: false, code: 'unauthenticated' });
+  });
+
+  it('getLiveAccess treats a revoked session as signed out', async () => {
+    revokedSession();
+    await expect(getLiveAccess()).resolves.toBeNull();
+  });
+
+  it('getLiveSessionPlayer treats a revoked session as signed out', async () => {
+    revokedSession();
+    await expect(getLiveSessionPlayer()).resolves.toBeNull();
+  });
+
+  it('never grants the superadmin identity to a revoked session', async () => {
+    process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
+    revokedSession();
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 401 });
+    await expect(requireAdmin()).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('a revoked credentials session never reads the superadmin link as a grant', async () => {
+    process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    process.env.SUPERADMIN_DISCORD_ID = 'snowflake-1';
+    mockedLinked.mockResolvedValue(true);
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials', authAt: SIGNED_IN_AT });
+    mockedLoad.mockRejectedValue(new SessionRevokedError());
+    await expect(requireSuperadmin()).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('a failed read that is not a revocation still fails closed with the database error', async () => {
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), authAt: SIGNED_IN_AT });
+    const dbError = new Error('connection refused');
+    mockedLoad.mockRejectedValue(dbError);
+    await expect(requirePlayer()).rejects.toBe(dbError);
+    await expect(getLiveAccess()).rejects.toBe(dbError);
+  });
+
+  it('a live session passes untouched', async () => {
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer({ isAdmin: true })), authAt: SIGNED_IN_AT });
+    mockedLoad.mockResolvedValue(makePlayer({ isAdmin: true }));
+    await expect(requireAdmin()).resolves.toMatchObject({ isAdmin: true });
+    await expect(getLiveAccess()).resolves.toMatchObject({ isSiteAdmin: true });
   });
 });

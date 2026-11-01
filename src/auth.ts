@@ -14,6 +14,7 @@ import {
 import type { SessionPlayerRow } from '@/lib/supabase/queries/players';
 import { authorizeCredentials } from '@/lib/auth/credentials';
 import { resolveCredentialsSuperadminLink } from '@/lib/auth/superadmin';
+import { isSessionRevoked, SessionRevokedError } from '@/lib/auth/session-epoch';
 import { verifyLinkToken } from '@/lib/utils/crypto';
 import { discordOAuthEnvSchema, readEnv, requireEnv } from '@/lib/env';
 import { syncSpriteStyleCookieAtSignIn } from '@/lib/pkmn/sprite-style-signin.server';
@@ -79,6 +80,13 @@ export const SESSION_PLAYER_TTL_MS = 5 * 60 * 1000;
 const REFRESHED_AT = 'refreshedAt';
 
 /**
+ * How long a session lasts. The cookie slides forward on every
+ * `/api/auth/session` request, so this is the idle limit; the epoch
+ * (`players.sessions_valid_after`) is what ends a session early.
+ */
+export const SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
+
+/**
  * True when the token's player copy must be re-read: no valid timestamp
  * (legacy token, or a sign-in whose lookup failed), older than the TTL, or
  * implausibly far in the future.
@@ -106,13 +114,24 @@ const readSessionPlayerRow = cache(
  * it. Returns a fresh object on every call; the DB is read at most once per
  * server render. Errors rethrow (callers decide whether to fail closed).
  * It does not apply the superadmin override; callers do that.
+ *
+ * With `token`, it also checks the token's sign-in time against the player's
+ * session epoch and throws `SessionRevokedError` for a token issued before it.
  */
 export async function loadSessionPlayer(
   provider: AuthProvider,
-  identityId: string
+  identityId: string,
+  token?: { authAt?: number }
 ): Promise<SessionPlayer | null> {
   const row = await readSessionPlayerRow(provider, identityId);
-  return row ? toSessionPlayer(row) : null;
+  if (!row) return null;
+  // `token` is the caller's sign-in time; without it there is no token to judge.
+  // A revoked token must not read as "no player" (the guards answer that with a
+  // 403), so it has its own error.
+  if (token && isSessionRevoked(token.authAt, row.sessions_valid_after)) {
+    throw new SessionRevokedError();
+  }
+  return toSessionPlayer(row);
 }
 
 interface AuthIdentity {
@@ -167,7 +186,7 @@ async function resolveSignInPlayer(
   const row = await getSessionPlayerRowByIdentity(identity.provider, identity.id);
   const player = row
     ? toSessionPlayer(row)
-    : toSessionPlayer({ ...(await create()), resource_admin_count: 0 });
+    : toSessionPlayer({ ...(await create()), sessions_valid_after: '-infinity', resource_admin_count: 0 });
   const superadminLinked =
     row && identity.provider === 'credentials'
       ? await resolveCredentialsSuperadminLink(identity.id, identity.email)
@@ -228,6 +247,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   session: {
     strategy: 'jwt',
+    maxAge: SESSION_MAX_AGE_SECONDS,
   },
 
   callbacks: {
@@ -292,6 +312,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const discordId = (profile as Record<string, unknown>).id as string;
         token.id = discordId;
         token.provider = 'discord';
+        // Set here and nowhere else: a refresh must never advance it, or it would outrun a revocation.
+        token.authAt = Date.now();
         const identity: AuthIdentity = { provider: 'discord', id: discordId };
 
         let created = false;
@@ -324,6 +346,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const authUserId = user.id;
         token.id = authUserId;
         token.provider = 'credentials';
+        token.authAt = Date.now();
         const identity: AuthIdentity = {
           provider: 'credentials',
           id: authUserId,
@@ -367,7 +390,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: token.email,
         };
         try {
-          const player = await loadSessionPlayer(identity.provider, identity.id);
+          const player = await loadSessionPlayer(identity.provider, identity.id, { authAt: token.authAt });
           const superadminLinked =
             identity.provider === 'credentials'
               ? await resolveCredentialsSuperadminLink(identity.id, identity.email)
@@ -382,6 +405,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           else token.superadminLinked = superadminLinked;
           token[REFRESHED_AT] = now;
         } catch (err) {
+          // Revoked: end the session. Auth.js clears the cookie and `auth()` answers null.
+          if (err instanceof SessionRevokedError) return null;
           // Keep the stale copy and leave the timestamp alone, so the next
           // call retries. Guards do not depend on this copy.
           console.warn('[auth] jwt callback player refresh failed:', err instanceof Error ? err.message : String(err));
@@ -400,6 +425,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.provider === 'credentials') {
         session.superadminLinked = token.superadminLinked === true;
       }
+      if (typeof token.authAt === 'number') session.authAt = token.authAt;
       return session;
     },
   },

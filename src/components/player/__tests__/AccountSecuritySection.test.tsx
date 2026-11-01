@@ -4,8 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withI18n } from '@/test/i18n';
 
-vi.mock('next-auth/react', () => ({ signIn: vi.fn() }));
+vi.mock('next-auth/react', () => ({ signIn: vi.fn(), signOut: vi.fn() }));
 
+import { signOut } from 'next-auth/react';
 import AccountSecuritySection from '../AccountSecuritySection';
 
 const RESEND = 'Is it your address and still unconfirmed? Send the confirmation email again';
@@ -56,5 +57,70 @@ describe('AccountSecuritySection: an already registered address', () => {
     await submitLink('ash@example.com');
     await screen.findByRole('alert');
     expect(screen.queryByRole('link', { name: RESEND })).toBeNull();
+  });
+});
+
+describe('AccountSecuritySection: sign out everywhere', () => {
+  beforeEach(() => {
+    vi.mocked(signOut).mockClear();
+  });
+
+  function stubSessions(answer: { success: boolean; code?: string; error?: string; data?: unknown }) {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/account/identities') {
+        return { json: async () => ({ success: true, data: { hasDiscord: true, hasEmail: false, email: null, emailConfirmed: false } }) };
+      }
+      return { json: async () => answer };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('revokes the sessions, then ends this browser session too', async () => {
+    const fetchMock = stubSessions({ success: true, data: { revoked: true } });
+    const user = userEvent.setup();
+    render(withI18n(<AccountSecuritySection />));
+
+    await user.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalledWith({ callbackUrl: '/' }));
+    expect(fetchMock).toHaveBeenCalledWith('/api/account/sessions/revoke', { method: 'POST' });
+  });
+
+  it('keeps the player signed in and shows the API error when the revocation fails', async () => {
+    stubSessions({ success: false, code: 'session_revoke_failed', error: 'Failed to sign out everywhere' });
+    const user = userEvent.setup();
+    render(withI18n(<AccountSecuritySection />));
+
+    await user.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('shows a client-side message when the request itself fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === '/api/account/identities') {
+          return { json: async () => ({ success: true, data: { hasDiscord: true, hasEmail: false, email: null, emailConfirmed: false } }) };
+        }
+        throw new Error('network');
+      }),
+    );
+    const user = userEvent.setup();
+    render(withI18n(<AccountSecuritySection />));
+
+    await user.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not sign you out everywhere');
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('is labelled in German', async () => {
+    stubSessions({ success: true, data: { revoked: true } });
+    render(withI18n(<AccountSecuritySection />, { locale: 'de' }));
+
+    expect(await screen.findByRole('button', { name: 'Überall abmelden' })).toBeTruthy();
   });
 });

@@ -28,6 +28,14 @@ src/
 - **Purpose**: Route authorization gates
 - **Key Methods**: `requireAuth()`, `requirePlayer()`, `requireAdmin()`, `requireAnyAdmin()`, `requireResourceAdmin()`, `requireDraftAdmin()`, `requireCreator()`
 
+### Session lifetime and revocation
+- **Files**: `src/auth.ts`, `src/lib/auth/session-epoch.ts`, `src/lib/supabase/queries/players.ts`
+- **Lifetime**: the session is a JWT cookie with a 14-day `maxAge` (`SESSION_MAX_AGE_SECONDS`). The cookie slides forward on every `/api/auth/session` request, so 14 days is the idle limit.
+- **Epoch**: `players.sessions_valid_after` (`timestamptz NOT NULL DEFAULT '-infinity'`) is the account-level session epoch. A token carries `authAt`, the epoch ms of the sign-in that minted it, stamped at sign-in only. A refresh or `update({})` never advances it, and `token.iat` is never used (it moves on every re-encode). A token is revoked when `authAt < sessions_valid_after`; equal is valid. A token without `authAt` (minted before the stamp existed) is valid while the epoch is `-infinity` and revoked by the first bump.
+- **Who moves it** (`revokePlayerSessions`, `revokeSessionsOfAuthUser`; written with the application clock, only forward): a password reset (`POST /api/auth/reset-password`, which also ends the account's Discord sessions), banning or suspending a player, claiming a guest account, and "Sign out everywhere" (`POST /api/account/sessions/revoke`, audited as `player.sessions_revoke`, button in the account security section). Reinstating a player does not move it, so an old token stays dead.
+- **Where it is enforced**: the `jwt` callback reads the epoch on every refresh and returns `null` for a revoked token, which ends the session (Auth.js clears the cookie, `auth()` answers null). Every guard reads it live through `loadSessionPlayer(provider, id, { authAt })`; a revoked token answers **401 `unauthenticated`**, never 403, and `getLiveAccess()` / `getLiveSessionPlayer()` treat it as signed out. `session.authAt` carries the sign-in time to the guards; the epoch itself never reaches the token or the session.
+- **Deploy order**: the migration (`20261102110000_players_sessions_valid_after.sql`) is applied before the code that selects the column.
+
 ## Data Flows
 - **Input**: Request cookies/session tokens
 - **Processing**:

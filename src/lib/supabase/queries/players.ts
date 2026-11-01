@@ -51,10 +51,12 @@ export function toPlayer(row: PlayerRow): Player {
  *
  * The result feeds the session JWT, so never add identity or moderation
  * columns here (`discord_id`, `auth_user_id`, `ban_reason`, `suspended_until`,
- * `is_test_account`, `avatar_config`).
+ * `is_test_account`, `avatar_config`). `sessions_valid_after` is the session
+ * epoch: the live guards compare it with the token's sign-in time and it never
+ * reaches `SessionPlayer`, the token or the session.
  */
 export const SESSION_PLAYER_COLUMNS =
-  'id, name, is_admin, is_creator, ps_username, champions_username, avatar_url, status, resource_admins(count)';
+  'id, name, is_admin, is_creator, ps_username, champions_username, avatar_url, status, sessions_valid_after, resource_admins(count)';
 
 const PLAYER_STATUSES: readonly PlayerStatus[] = ['active', 'suspended', 'banned'];
 
@@ -68,6 +70,8 @@ export interface SessionPlayerRow {
   champions_username: string;
   avatar_url: string | null;
   status: PlayerStatus;
+  /** Raw `players.sessions_valid_after`: `'-infinity'` or an ISO timestamp (`src/lib/auth/session-epoch.ts`). */
+  sessions_valid_after: string;
   /** Number of `resource_admins` rows held by this player (embedded count). */
   resource_admin_count: number;
 }
@@ -110,8 +114,43 @@ export async function getSessionPlayerRowByIdentity(
     champions_username: data.champions_username,
     avatar_url: data.avatar_url ?? null,
     status: parsePlayerStatus(data.status),
+    sessions_valid_after: data.sessions_valid_after,
     resource_admin_count: data.resource_admins[0]?.count ?? 0,
   };
+}
+
+/**
+ * Ends every session of a player: tokens issued before now stop working
+ * (`sessions_valid_after`, `src/lib/auth/session-epoch.ts`). The epoch is
+ * written with the application clock, the clock that stamps a token's sign-in
+ * time, and only ever moves forward. A new sign-in afterwards is unaffected.
+ * Errors rethrow: a caller must not report a revocation that did not happen.
+ */
+export async function revokePlayerSessions(playerId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('players')
+    .update({ sessions_valid_after: now })
+    .eq('id', playerId)
+    .lt('sessions_valid_after', now);
+
+  if (error) throw error;
+}
+
+/**
+ * `revokePlayerSessions` for the player behind a Supabase auth user. The epoch
+ * is on the player, so it ends that player's Discord sessions too. A user with
+ * no player row yet matches nothing, which is a success.
+ */
+export async function revokeSessionsOfAuthUser(authUserId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('players')
+    .update({ sessions_valid_after: now })
+    .eq('auth_user_id', authUserId)
+    .lt('sessions_valid_after', now);
+
+  if (error) throw error;
 }
 
 /**
@@ -713,7 +752,9 @@ export async function getPlayerCompetitiveRefs(id: string): Promise<PlayerCompet
 }
 
 /**
- * Permanently ban a player. Clears any active suspension.
+ * Permanently ban a player. Clears any active suspension and ends the
+ * sessions the player holds (`sessions_valid_after`): reinstating the player
+ * later does not revive them.
  */
 export async function banPlayer(id: string, banReason: string): Promise<Player> {
   const { data, error } = await supabase
@@ -722,6 +763,7 @@ export async function banPlayer(id: string, banReason: string): Promise<Player> 
       status: 'banned',
       ban_reason: banReason,
       suspended_until: null,
+      sessions_valid_after: new Date().toISOString(),
     })
     .eq('id', id)
     .select()
@@ -732,7 +774,8 @@ export async function banPlayer(id: string, banReason: string): Promise<Player> 
 }
 
 /**
- * Suspend a player until the given timestamp. Sets suspended_until.
+ * Suspend a player until the given timestamp. Sets suspended_until and ends
+ * the sessions the player holds, like a ban.
  */
 export async function suspendPlayer(id: string, suspendedUntil: string): Promise<Player> {
   const { data, error } = await supabase
@@ -741,6 +784,7 @@ export async function suspendPlayer(id: string, suspendedUntil: string): Promise
       status: 'suspended',
       suspended_until: suspendedUntil,
       ban_reason: null,
+      sessions_valid_after: new Date().toISOString(),
     })
     .eq('id', id)
     .select()

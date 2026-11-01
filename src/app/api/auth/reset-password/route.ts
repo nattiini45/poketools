@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase/auth-client';
 import { supabase } from '@/lib/supabase/client';
+import { revokeSessionsOfAuthUser } from '@/lib/supabase/queries/players';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
 import { checkAuthRateLimit } from '@/lib/auth/rate-limits';
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest) {
     );
 
     if (updateError) throw updateError;
+
+    // The epoch lives on the player, so this also ends the account's Discord sessions. It runs after the change:
+    // the old password can no longer sign in, so nothing it minted can outlive the revocation.
+    await revokeSessionsOfAuthUser(data.user.id);
 
     return NextResponse.json<ApiResult<{ message: string }>>({
       success: true,

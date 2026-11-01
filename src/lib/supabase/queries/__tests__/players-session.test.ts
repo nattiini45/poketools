@@ -30,6 +30,7 @@ const dbRow = {
   champions_username: 'ash_ch',
   avatar_url: 'https://example.test/ash.png',
   status: 'active',
+  sessions_valid_after: '-infinity',
   resource_admins: [{ count: 3 }],
 };
 
@@ -52,6 +53,7 @@ describe('SESSION_PLAYER_COLUMNS', () => {
       'champions_username',
       'avatar_url',
       'status',
+      'sessions_valid_after',
       'resource_admins(count)',
     ]);
   });
@@ -82,6 +84,7 @@ describe('getSessionPlayerRowByIdentity', () => {
       champions_username: 'ash_ch',
       avatar_url: 'https://example.test/ash.png',
       status: 'active',
+      sessions_valid_after: '-infinity',
       resource_admin_count: 3,
     });
   });
@@ -143,6 +146,7 @@ describe('toSessionPlayer', () => {
       champions_username: 'ash_ch',
       avatar_url: null,
       status: 'suspended',
+      sessions_valid_after: '-infinity',
       resource_admin_count: 1,
     });
 
@@ -170,6 +174,7 @@ describe('toSessionPlayer', () => {
       champions_username: '',
       avatar_url: null,
       status: 'active' as const,
+      sessions_valid_after: '-infinity',
       resource_admin_count: 0,
       discord_id: 'snowflake-1',
       auth_user_id: 'auth-uuid-1',
@@ -179,6 +184,7 @@ describe('toSessionPlayer', () => {
     expect(player).not.toHaveProperty('discord_id');
     expect(player).not.toHaveProperty('auth_user_id');
     expect(player).not.toHaveProperty('ban_reason');
+    expect(player).not.toHaveProperty('sessions_valid_after');
     expect(player.isResourceAdmin).toBe(false);
   });
 });

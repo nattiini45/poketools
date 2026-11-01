@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, loadSessionPlayer } from '@/auth';
+import { SessionRevokedError } from '@/lib/auth/session-epoch';
 import { supabase } from '@/lib/supabase/client';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
@@ -97,7 +98,17 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    const player = await loadSessionPlayer(session.provider ?? 'discord', session.user.id);
+    let player: Awaited<ReturnType<typeof loadSessionPlayer>>;
+    try {
+      player = await loadSessionPlayer(session.provider ?? 'discord', session.user.id, { authAt: session.authAt });
+    } catch (err) {
+      // A revoked token is signed out, not a failure: the same answer as no session.
+      if (!(err instanceof SessionRevokedError)) throw err;
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'You must be signed in to bootstrap.', code: 'bootstrap_sign_in_required' },
+        { status: 401 }
+      );
+    }
     if (!player) {
       return NextResponse.json<ApiResult<never>>(
         {

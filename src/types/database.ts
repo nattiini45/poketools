@@ -3909,6 +3909,7 @@ export type Database = {
           joined_date: string
           name: string
           ps_username: string
+          sessions_valid_after: string
           sprite_style: string
           status: string
           suspended_until: string | null
@@ -3931,6 +3932,7 @@ export type Database = {
           joined_date?: string
           name: string
           ps_username?: string
+          sessions_valid_after?: string
           sprite_style?: string
           status?: string
           suspended_until?: string | null
@@ -3953,6 +3955,7 @@ export type Database = {
           joined_date?: string
           name?: string
           ps_username?: string
+          sessions_valid_after?: string
           sprite_style?: string
           status?: string
           suspended_until?: string | null
@@ -6036,6 +6039,7 @@ export type Database = {
           joined_date: string
           name: string
           ps_username: string
+          sessions_valid_after: string
           sprite_style: string
           status: string
           suspended_until: string | null

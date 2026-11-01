@@ -32,6 +32,7 @@ const auditActions = {
   player__role__assign: 'Role assigned',
   player__role__revoke: 'Role revoked',
   player__claim: 'Guest account claimed',
+  player__sessions_revoke: 'Signed out everywhere',
   tournament__create: 'Tournament created',
   tournament__update: 'Tournament updated',
   tournament__delete: 'Tournament deleted',
