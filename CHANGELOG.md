@@ -45,8 +45,25 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 - Evaluation harness `scripts/admin-agent-eval.ts`: plan, executor and end-to-end stages, the last two against a local
   Supabase stack only.
 
+### Changed
+
+- **Supported Node is `^22.22.2 || ^24.15.0`, enforced.** `package.json` declares it in `engines` and `.npmrc` sets
+  `engine-strict`, so `npm install` / `npm ci` fail on Node 23, 25 or a 22.x before 22.22.2 instead of printing a
+  warning (jsdom 30, used by the DOM tests, needs it). `.nvmrc` pins 24.22.1 and CI reads it; `@types/node` is on 24.
+  Upgrade Node locally before pulling this.
+- **CI runs the Vitest suite and the type-check once, with a 30 minute timeout and no lint warnings allowed**
+  (`npm run lint` passes `--max-warnings=0`). `legacy-peer-deps` is gone from `.npmrc`.
+
+### Removed
+
+- Unused dependencies `@dnd-kit/core`, `@dnd-kit/utilities`, `@react-three/rapier` and the direct `zustand` entry
+  (`zustand` stays installed through `@react-three/fiber`); `tsx` is now a locked devDependency and the maintenance
+  scripts are documented as `npx --no-install tsx`.
+
 ### Fixed
 
+- `scripts/route-manifest.mjs` held a raw NUL byte, so git treated it as binary and its diff was hidden; a NUL byte in
+  a tracked source file now fails `src/lib/__tests__/source-line-endings.test.ts`.
 - **Admin Assistant review follow-ups.** A refused fact check other than "not found" or "forbidden" now reads as
   unavailable instead of "it does not exist"; a precondition read that fails stops a Build under its own code
   (`precondition_read_failed`) instead of "the situation changed"; an older card is retired before its replacement is
