@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireAdmin, isSuperadmin } from '@/lib/auth/helpers';
+import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
 import { supabase } from '@/lib/supabase/client';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { playerUpdateSchema, formatZodErrors } from '@/lib/validation';
@@ -24,6 +25,14 @@ interface RouteParams {
 
 /** The admin-editable fields an admin PATCH audits. Identity columns are not editable here. */
 const AUDITED_PLAYER_FIELDS = ['name', 'ps_username', 'champions_username', 'is_admin', 'is_creator'] as const;
+
+/** A PATCH whose fields all drop out of the schema or the caller's allowance would be an empty UPDATE. */
+function emptyUpdateResponse() {
+  return NextResponse.json<ApiResult<never>>(
+    { success: false, error: 'No changes to apply', code: 'player_update_empty' },
+    { status: 400 }
+  );
+}
 
 /**
  * Expire the public read-cache entries that show this player's card (name,
@@ -97,11 +106,26 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // The superadmin's own row is theirs alone: a site admin (or the owner of an
+    // unlinked session) cannot edit it, whatever the field. The row is read live
+    // from SUPERADMIN_DISCORD_ID; a failed read throws and refuses the request.
+    if (!isSuperadmin(session) && (await resolveSuperadminPlayerId()) === id) {
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: "Only the superadmin can change the superadmin's player",
+          code: 'superadmin_player_protected',
+        },
+        { status: 403 }
+      );
+    }
+
     // Non-admins can only change their own usernames
     if (!isAdminUser) {
       const allowedUpdate: Record<string, unknown> = {};
       if (body.ps_username !== undefined) allowedUpdate.ps_username = body.ps_username;
       if (body.champions_username !== undefined) allowedUpdate.champions_username = body.champions_username;
+      if (Object.keys(allowedUpdate).length === 0) return emptyUpdateResponse();
       const player = await updatePlayer(id, allowedUpdate);
       expirePlayerReads(id);
       return NextResponse.json<ApiResult<Player>>({ success: true, data: player });
@@ -123,6 +147,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { status: 403 }
       );
     }
+
+    if (Object.values(body).every((value) => value === undefined)) return emptyUpdateResponse();
 
     // Get the player before update for diffing
     const before = await getPlayerById(id);

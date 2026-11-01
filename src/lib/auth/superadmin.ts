@@ -13,7 +13,7 @@
  *
  * This module imports neither `@/auth` nor the auth helpers, so both can use it.
  */
-import { isAuthUserLinkedToDiscordId } from '@/lib/supabase/queries/players';
+import { getPlayerIdByDiscordId, isAuthUserLinkedToDiscordId } from '@/lib/supabase/queries/players';
 
 /** The configured `SUPERADMIN_EMAIL`, trimmed and lower-cased; null when unset or blank. */
 function reservedSuperadminEmail(): string | null {
@@ -51,4 +51,15 @@ export async function resolveCredentialsSuperadminLink(
   const discordId = superadminDiscordId();
   if (!discordId) return false;
   return isAuthUserLinkedToDiscordId(authUserId, discordId);
+}
+
+/**
+ * The id of the superadmin's own player row: the player linked to
+ * `SUPERADMIN_DISCORD_ID`, read live. Null when that variable is unset or no
+ * player carries it. Query errors rethrow (callers fail closed).
+ */
+export async function resolveSuperadminPlayerId(): Promise<string | null> {
+  const discordId = superadminDiscordId();
+  if (!discordId) return null;
+  return getPlayerIdByDiscordId(discordId);
 }

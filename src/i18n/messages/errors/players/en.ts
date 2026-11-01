@@ -25,6 +25,8 @@ export default {
   player_update_forbidden: 'Not authorized to update this player',
   creator_status_superadmin_only: 'Only the superadmin can manage creator status',
   admin_status_superadmin_only: 'Only the superadmin can manage site admin status',
+  superadmin_player_protected: "Only the superadmin can change the superadmin's player",
+  player_update_empty: 'No changes to apply',
   player_has_match_history: {
     one: 'Cannot delete a player with match history ({count} match). Suspend or ban them instead.',
     other: 'Cannot delete a player with match history ({count} matches). Suspend or ban them instead.',

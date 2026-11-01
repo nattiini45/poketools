@@ -42,6 +42,11 @@ import {
 interface PlayerRosterProps {
   /** The superadmin: the only viewer who may grant or revoke the admin and creator roles. */
   canManageCreators: boolean;
+  /**
+   * The superadmin's own player row for a viewer who is not the superadmin: the API refuses every
+   * edit of it, so the roster offers no Edit control there. Null for the superadmin and when none exists.
+   */
+  protectedPlayerId?: string | null;
 }
 
 /** `GET /api/players`: one page of the directory plus the exact number of matching players. */
@@ -114,7 +119,7 @@ function useRosterUpdate(url: RosterUrlState, replace: (search: string) => void)
   );
 }
 
-export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
+export default function PlayerRoster({ canManageCreators, protectedPlayerId = null }: PlayerRosterProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -555,9 +560,11 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
           </span>
         ) : (
           <span className="space-x-2">
-            <button type="button" onClick={() => startEditing(player)} className="text-poke-blue text-sm hover:underline">
-              {t('players.rowActions.edit')}
-            </button>
+            {player.id !== protectedPlayerId && (
+              <button type="button" onClick={() => startEditing(player)} className="text-poke-blue text-sm hover:underline">
+                {t('players.rowActions.edit')}
+              </button>
+            )}
             {player.is_guest && (
               <button
                 type="button"
@@ -601,6 +608,7 @@ export default function PlayerRoster({ canManageCreators }: PlayerRosterProps) {
     handleSaveEdit,
     openBanDialog,
     openSuspendDialog,
+    protectedPlayerId,
     startEditing,
     t,
   ]);
