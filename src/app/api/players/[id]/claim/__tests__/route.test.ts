@@ -138,6 +138,8 @@ describe('POST /api/players/[id]/claim', () => {
     const failed = await POST(makeRequest({ source_player_id: SOURCE_ID }), { params: makeParams({ id: GUEST_ID }) });
     expect(failed.status).toBe(500);
     expect(errorSpy).toHaveBeenCalled();
+    // The claim is committed, so it stays in the audit trail even when the revocation could not be written.
+    expect(logAuditEvent).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'player.claim' }));
   });
 
   it('aborts the claim when the cutoff cannot be written', async () => {
