@@ -41,6 +41,13 @@ describe('package.json dependencies', () => {
   });
 });
 
+describe('.npmrc', () => {
+  it('does not turn peer dependency resolution off (a conflict is fixed with a targeted override)', () => {
+    const npmrc = readFileSync(join(ROOT, '.npmrc'), 'utf8');
+    expect(npmrc).not.toMatch(/^\s*legacy-peer-deps\s*=/m);
+  });
+});
+
 describe('tsx invocations', () => {
   it('never call npx tsx without --no-install in a tracked file', () => {
     let out = '';
