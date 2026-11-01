@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
+import { superadminPlayerProtectedResponse } from '@/lib/auth/superadmin-player-guard';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { playerClaimSchema, formatZodErrors } from '@/lib/validation';
@@ -42,6 +43,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const { source_player_id: sourcePlayerId } = zodResult.data;
+
+    // The claim rewrites the target's identity and deletes the source row, so
+    // either side being the superadmin's row changes it.
+    const protectedRow =
+      (await superadminPlayerProtectedResponse(guestId)) ??
+      (await superadminPlayerProtectedResponse(sourcePlayerId));
+    if (protectedRow) return protectedRow;
 
     if (guestId === sourcePlayerId) {
       throw new UserFacingError('Guest and source account must be different players', {

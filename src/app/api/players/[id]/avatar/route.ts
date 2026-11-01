@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { requireAuth } from '@/lib/auth/helpers';
+import { superadminPlayerProtectedResponse } from '@/lib/auth/superadmin-player-guard';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { avatarUploadSchema, formatZodErrors } from '@/lib/validation';
 import { getPlayerById, updatePlayer } from '@/lib/supabase/queries/players';
@@ -143,6 +144,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { success: false, error: 'Not authorized to edit this avatar', code: 'avatar_edit_forbidden' },
         { status: 403 }
       );
+    }
+    if (!isOwn) {
+      const protectedRow = await superadminPlayerProtectedResponse(playerId);
+      if (protectedRow) return protectedRow;
     }
 
     // Verify player exists
@@ -410,6 +415,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
         { success: false, error: 'Not authorized to edit this avatar', code: 'avatar_edit_forbidden' },
         { status: 403 }
       );
+    }
+    if (!isOwn) {
+      const protectedRow = await superadminPlayerProtectedResponse(playerId);
+      if (protectedRow) return protectedRow;
     }
 
     const player = await getPlayerById(playerId);
