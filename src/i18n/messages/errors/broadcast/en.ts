@@ -49,7 +49,6 @@ export default {
   social_credentials_conflict: 'Provide either credentials or clear_credentials, not both',
   social_credentials_provider_mismatch: 'credentials.provider must match integration provider',
   social_credentials_field_required: '{provider} credentials require {field}',
-  social_bluesky_service_url_rejected: 'Bluesky service_url is not allowed: {reason}',
   INVALID_PRESET_ID: 'Preset not found',
   INVALID_WEBHOOK_ID: 'Webhook not found',
   INVALID_INTEGRATION_ID: 'Integration not found',

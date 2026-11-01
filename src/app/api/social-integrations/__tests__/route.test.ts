@@ -314,6 +314,8 @@ describe('social-integrations route', () => {
     ['https://evil.example', 'host_not_allowed'],
   ])('POST refuses a Bluesky service_url %s (%s) without storing anything', async (serviceUrl, reason) => {
     vi.mocked(requireAdmin).mockResolvedValue(undefined as never);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
 
     const request = {
       json: vi.fn().mockResolvedValue({
@@ -331,22 +333,22 @@ describe('social-integrations route', () => {
 
     const response = await POST(request);
     const payload = await response.json() as { success: boolean; code?: string; params?: unknown; error?: string };
+    const issues = `credentials.service_url: not allowed (${reason})`;
 
     expect(response.status).toBe(400);
-    expect(payload).toEqual({
-      success: false,
-      error: `Bluesky service_url is not allowed: ${reason}`,
-      code: 'social_bluesky_service_url_rejected',
-      params: { reason },
-    });
+    expect(payload).toEqual({ success: false, error: issues, code: 'validation_failed', params: { issues } });
     expect(vi.mocked(encryptJson)).not.toHaveBeenCalled();
     expect(vi.mocked(createSocialIntegration)).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it.each([undefined, 'https://bsky.social'])('POST stores a Bluesky integration with service_url %s', async (serviceUrl) => {
     vi.mocked(requireAdmin).mockResolvedValue(undefined as never);
     vi.mocked(encryptJson).mockReturnValue('encrypted');
     vi.mocked(createSocialIntegration).mockResolvedValue({ id: 'i-1' } as SocialIntegration);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
 
     const request = {
       json: vi.fn().mockResolvedValue({
@@ -366,6 +368,8 @@ describe('social-integrations route', () => {
 
     expect(response.status).toBe(201);
     expect(vi.mocked(createSocialIntegration)).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
   it('POST returns 400 social_credentials_provider_mismatch when credential provider differs', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(undefined as never);

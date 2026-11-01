@@ -59,17 +59,19 @@ function toCreateRecord(
 
     if (serviceUrlRejection) {
 
+      const issues = `credentials.service_url: not allowed (${serviceUrlRejection})`;
+
       return NextResponse.json<ApiResult<never>>(
 
         {
 
           success: false,
 
-          error: `Bluesky service_url is not allowed: ${serviceUrlRejection}`,
+          error: issues,
 
-          code: 'social_bluesky_service_url_rejected',
+          code: 'validation_failed',
 
-          params: { reason: serviceUrlRejection },
+          params: { issues },
 
         },
 

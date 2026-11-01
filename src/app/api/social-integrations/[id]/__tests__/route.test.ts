@@ -163,12 +163,8 @@ describe('social-integrations/[id] route', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(400);
-    expect(payload).toEqual({
-      success: false,
-      error: 'Bluesky service_url is not allowed: host_not_allowed',
-      code: 'social_bluesky_service_url_rejected',
-      params: { reason: 'host_not_allowed' },
-    });
+    const issues = 'credentials.service_url: not allowed (host_not_allowed)';
+    expect(payload).toEqual({ success: false, error: issues, code: 'validation_failed', params: { issues } });
     expect(vi.mocked(encryptJson)).not.toHaveBeenCalled();
     expect(vi.mocked(updateSocialIntegration)).not.toHaveBeenCalled();
   });
