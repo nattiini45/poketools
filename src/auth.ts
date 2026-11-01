@@ -235,12 +235,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, request) {
+        const authStartedAt = Date.now();
         const user = await authorizeCredentials(
           typeof credentials?.email === 'string' ? credentials.email : '',
           typeof credentials?.password === 'string' ? credentials.password : '',
           request
         );
-        return { id: user.id, email: user.email, name: user.displayName };
+        return { id: user.id, email: user.email, name: user.displayName, authStartedAt };
       },
     }),
   ],
@@ -346,7 +347,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const authUserId = user.id;
         token.id = authUserId;
         token.provider = 'credentials';
-        token.authAt = Date.now();
+        const now = Date.now();
+        token.authAt =
+          typeof user.authStartedAt === 'number' && user.authStartedAt <= now ? user.authStartedAt : now;
         const identity: AuthIdentity = {
           provider: 'credentials',
           id: authUserId,

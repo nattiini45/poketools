@@ -7,6 +7,7 @@ import {
   claimGuestPlayer,
   getPlayerActivityCounts,
   getPlayerById,
+  revokePlayerSessions,
 } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
@@ -93,6 +94,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // A token minted for the source identity must not carry on as the claimed player. The guest row keeps its epoch
+    // through the claim, so the cutoff is written first with the application clock, the clock that stamps `authAt`;
+    // a failed write aborts the claim. The database adds its own clock inside the claim transaction
+    // (players_session_epoch_guard) and the epoch only moves forward, so it ends at the later of the two.
+    await revokePlayerSessions(guestId);
+
     let claimed: Player;
     try {
       claimed = await claimGuestPlayer(guestId, sourcePlayerId);
@@ -129,8 +136,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       throw err;
     }
 
-    // The identity moved onto the guest row: a token minted for the source no longer carries on as the claimed
-    // player. The database ends it in the claim's own transaction (players_session_epoch_guard).
     logAuditEvent({
       actor_id: admin.playerId,
       actor_name: admin.name,

@@ -61,6 +61,16 @@ export async function POST(request: NextRequest) {
 
     if (updateError) throw updateError;
 
+    // Revoke once more: an old-password sign-in that finished between the first write and the password change was
+    // stamped after the first epoch. Its `authAt` is the time its attempt started (`authStartedAt`), which precedes
+    // this write, so it dies here. The password has already changed, so a failure is retried once and then surfaced.
+    try {
+      await revokeSessionsOfAuthUser(data.user.id);
+    } catch (firstErr) {
+      console.error('[auth] reset-password: second session revocation failed, retrying:', firstErr);
+      await revokeSessionsOfAuthUser(data.user.id);
+    }
+
     return NextResponse.json<ApiResult<{ message: string }>>({
       success: true,
       data: { message: 'Password updated! You can now sign in.' },

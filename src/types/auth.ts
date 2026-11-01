@@ -9,6 +9,15 @@ import type { DefaultSession } from 'next-auth';
 export type AuthProvider = 'discord' | 'credentials';
 
 declare module 'next-auth' {
+  interface User {
+    /**
+     * Credentials sign-ins only: epoch ms taken BEFORE the password was checked. It becomes the token's `authAt`,
+     * so an old-password sign-in that was already in flight when a reset revoked the account cannot be stamped
+     * after that revocation.
+     */
+    authStartedAt?: number;
+  }
+
   interface Session {
     user: DefaultSession['user'] & {
       id: string; // Discord snowflake or Supabase auth user UUID (see provider)

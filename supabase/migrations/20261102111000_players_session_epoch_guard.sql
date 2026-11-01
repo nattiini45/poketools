@@ -12,7 +12,9 @@
 --      true to false while it moves the source account's identity onto the guest row. A token minted for that source
 --      identity must not carry on as the claimed player, and a revocation written by the caller afterwards could
 --      fail and leave the claim committed with the old tokens valid. The trigger moves the epoch to the database
---      clock in the same UPDATE, so the claim and the revocation commit or roll back together.
+--      clock in the same UPDATE, so the claim and the revocation commit or roll back together. Tokens carry the
+--      application clock, so the claim route also writes an application-clock cutoff on the guest row BEFORE the
+--      claim and aborts when that write fails; the epoch only moves forward and ends at the later of the two.
 --
 -- The function is trigger-only: EXECUTE is revoked from every API role. anon and authenticated hold no privilege on
 -- `players` (20261008081443), and nothing here adds one. RLS stays enabled.

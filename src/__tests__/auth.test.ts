@@ -729,6 +729,29 @@ describe('session epoch', () => {
     expect(result.authAt).toBe(NOW);
   });
 
+  it('stamps a credentials sign-in with the time its attempt started, so one in flight across a reset predates the revocation', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    const startedAt = NOW - 2_500;
+    const result = await runJwt({
+      token: {},
+      account: credentialsAccount,
+      user: { id: 'auth-uuid-1', email: 'ash@example.test', name: 'Ash', authStartedAt: startedAt },
+      trigger: 'signIn',
+    });
+    expect(result.authAt).toBe(startedAt);
+  });
+
+  it('ignores an attempt start time in the future', async () => {
+    mockedRead.mockResolvedValue(makeRow());
+    const result = await runJwt({
+      token: {},
+      account: credentialsAccount,
+      user: { id: 'auth-uuid-1', email: 'ash@example.test', name: 'Ash', authStartedAt: NOW + 60_000 },
+      trigger: 'signIn',
+    });
+    expect(result.authAt).toBe(NOW);
+  });
+
   it('stamps authAt even when the sign-in lookup fails, so the next read can still be compared', async () => {
     mockedRead.mockRejectedValue(new Error('timeout'));
     const result = await runJwt({
