@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
+import { DEV_SEED_ADMIN, DEV_SEED_LEAGUE_NAME, DEV_SEED_PASSWORD, devSeedPlayerEmail } from '../constants';
 
 // LIVE-LOCAL test of `npm run dev:seed`: the seed runs twice against a LOCAL Supabase stack and must leave exactly one
 // admin, one league and one tournament behind (idempotent). Runs through `npm run test:db`; it never loads `.env`
@@ -34,11 +35,11 @@ describe.skipIf(!optIn)('dev seed (local stack)', () => {
     expect(adminRows.data).toHaveLength(1);
     expect(adminRows.data?.[0]).toMatchObject({ is_admin: true });
     const authUsers = await db.auth.admin.listUsers({ perPage: 1000 });
-    const seeded = authUsers.data.users.filter((u) => u.email === seed.DEV_SEED_ADMIN.email);
+    const seeded = authUsers.data.users.filter((u) => u.email === DEV_SEED_ADMIN.email);
     expect(seeded).toHaveLength(1);
     expect(seeded[0].email_confirmed_at).toBeTruthy();
 
-    const leagues = await db.from('seasons').select('id').eq('name', seed.DEV_SEED_LEAGUE_NAME);
+    const leagues = await db.from('seasons').select('id').eq('name', DEV_SEED_LEAGUE_NAME);
     expect(leagues.data).toHaveLength(1);
     const participants = await db.from('season_participants').select('player_id').eq('season_id', first.leagueId);
     expect(participants.data).toHaveLength(8);
@@ -48,7 +49,10 @@ describe.skipIf(!optIn)('dev seed (local stack)', () => {
 
   it('signs the seeded admin in with email and password', async () => {
     const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, requireLocalKey('NEXT_PUBLIC_SUPABASE_ANON_KEY'));
-    const { error } = await anon.auth.signInWithPassword({ email: seed.DEV_SEED_ADMIN.email, password: seed.DEV_SEED_ADMIN.password });
+    const { error } = await anon.auth.signInWithPassword({ email: DEV_SEED_ADMIN.email, password: DEV_SEED_ADMIN.password });
     expect(error).toBeNull();
+
+    const player = await anon.auth.signInWithPassword({ email: devSeedPlayerEmail(8), password: DEV_SEED_PASSWORD });
+    expect(player.error).toBeNull();
   });
 });

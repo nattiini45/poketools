@@ -3,6 +3,7 @@
  * loopback interface before the service-role client is even imported, so a hosted project can never be reached
  * whatever the environment holds.
  */
+import { DEV_SEED_ADMIN, DEV_SEED_LEAGUE_NAME, DEV_SEED_PLAYER_COUNT, devSeedPlayerEmail } from '../src/lib/dev-seed/constants';
 import { assertLoopbackUrl } from '../src/test/local-stack';
 
 async function main(): Promise<void> {
@@ -11,7 +12,7 @@ async function main(): Promise<void> {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('[dev-seed] SUPABASE_SERVICE_ROLE_KEY is not set');
 
   // The client reads its env at import: load the seed only after the guard.
-  const { runDevSeed, DEV_SEED_ADMIN, DEV_SEED_LEAGUE_NAME } = await import('../src/lib/dev-seed/seed');
+  const { runDevSeed } = await import('../src/lib/dev-seed/seed');
   const report = await runDevSeed();
 
   console.log(`[dev-seed] standard rulesets created: ${report.rulesetsCreated}`);
@@ -19,6 +20,7 @@ async function main(): Promise<void> {
   console.log('[dev-seed] local admin (local stack only):');
   console.log(`[dev-seed]   email:    ${DEV_SEED_ADMIN.email}`);
   console.log(`[dev-seed]   password: ${DEV_SEED_ADMIN.password}`);
+  console.log(`[dev-seed] seeded players sign in as ${devSeedPlayerEmail(1)} to ${devSeedPlayerEmail(DEV_SEED_PLAYER_COUNT)} with the same password`);
 }
 
 main().catch((err: unknown) => {

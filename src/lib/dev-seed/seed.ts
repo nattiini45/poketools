@@ -11,27 +11,24 @@ import 'server-only';
 
 import { supabase } from '@/lib/supabase/client';
 import { FORMAT_DEFAULTS } from '@/lib/pkmn/formats';
+import {
+  DEV_SEED_ADMIN,
+  DEV_SEED_LEAGUE_NAME,
+  DEV_SEED_PASSWORD,
+  DEV_SEED_PLAYER_COUNT,
+  DEV_SEED_TOURNAMENT_NAME,
+  devSeedPlayerEmail,
+} from './constants';
 import { seedStandardRulesets } from '@/lib/ruleset-studio/seed-standard';
 import { getLatestPublishedRulesetVersion } from '@/lib/supabase/queries/ruleset-definitions';
 import { createSeason, updateSeason, addSeasonParticipant } from '@/lib/supabase/queries/seasons';
 import { addParticipant, createTournament, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { createRound } from '@/lib/supabase/queries/rounds';
 import { createMatchBatch, updateMatchStatus } from '@/lib/supabase/queries/matches';
-import { createPlayersBatch } from '@/lib/supabase/queries/players';
 
-/** The local-only admin. The values are public on purpose: they open nothing but a local stack. */
-export const DEV_SEED_ADMIN = {
-  email: 'local-admin@poketools.test',
-  password: 'poketools-local-admin',
-  name: 'Local Admin',
-} as const;
-
-export const DEV_SEED_LEAGUE_NAME = 'Dev Seed League';
-export const DEV_SEED_TOURNAMENT_NAME = 'Dev Seed Regular Season';
 const SEED_RULESET_NAME = FORMAT_DEFAULTS.gen9ou.name;
-const SEED_PLAYER_COUNT = 8;
-/** `players.discord_id` of a seeded player: not a Discord snowflake, so it can never match a real account. */
-const seedDiscordId = (n: number) => `dev-seed-player-${n}`;
+/** `players.discord_id` an earlier version of the seed gave its players; such a row is adopted, never duplicated. */
+const legacySeedDiscordId = (n: number) => `dev-seed-player-${n}`;
 
 export interface DevSeedReport {
   adminEmail: string;
@@ -42,24 +39,17 @@ export interface DevSeedReport {
   tournamentId: string;
 }
 
-/** The auth user of the seed admin, created confirmed or (when it exists) reset to the documented password. */
-async function ensureAdminAuthUser(): Promise<string> {
-  const created = await supabase.auth.admin.createUser({
-    email: DEV_SEED_ADMIN.email,
-    password: DEV_SEED_ADMIN.password,
-    email_confirm: true,
-  });
+/** The auth user of `email`, created confirmed or (when it exists) reset to the documented password. */
+async function ensureAuthUser(email: string): Promise<string> {
+  const created = await supabase.auth.admin.createUser({ email, password: DEV_SEED_PASSWORD, email_confirm: true });
   if (created.data.user) return created.data.user.id;
   if (created.error?.code !== 'email_exists') throw created.error ?? new Error('createUser returned no user');
 
   const listed = await supabase.auth.admin.listUsers({ perPage: 1000 });
   if (listed.error) throw listed.error;
-  const existing = listed.data.users.find((u) => u.email?.toLowerCase() === DEV_SEED_ADMIN.email);
-  if (!existing) throw new Error(`${DEV_SEED_ADMIN.email} exists but was not found in the first 1000 auth users`);
-  const updated = await supabase.auth.admin.updateUserById(existing.id, {
-    password: DEV_SEED_ADMIN.password,
-    email_confirm: true,
-  });
+  const existing = listed.data.users.find((u) => u.email?.toLowerCase() === email);
+  if (!existing) throw new Error(`${email} exists but was not found in the first 1000 auth users`);
+  const updated = await supabase.auth.admin.updateUserById(existing.id, { password: DEV_SEED_PASSWORD, email_confirm: true });
   if (updated.error) throw updated.error;
   return existing.id;
 }
@@ -84,25 +74,30 @@ async function ensureAdminPlayer(authUserId: string): Promise<string> {
   return inserted.data.id;
 }
 
-async function ensureSeedPlayers(): Promise<string[]> {
-  const ids = Array.from({ length: SEED_PLAYER_COUNT }, (_, i) => seedDiscordId(i + 1));
-  const existing = await supabase.from('players').select('id, discord_id').in('discord_id', ids);
-  if (existing.error) throw existing.error;
-  const have = new Map((existing.data ?? []).map((p) => [p.discord_id, p.id]));
-  const missing = ids.filter((id) => !have.has(id));
-  if (missing.length > 0) {
-    const created = await createPlayersBatch(
-      missing.map((discordId) => ({ name: `Seed Player ${discordId.split('-').pop()}`, discord_id: discordId })),
-    );
-    for (const player of created) have.set(player.discord_id, player.id);
+/** The player of seeded account `n`: found by its login, adopted from the legacy Discord-id row, or created. */
+async function ensureSeedPlayer(n: number): Promise<string> {
+  const authUserId = await ensureAuthUser(devSeedPlayerEmail(n));
+  const linked = await supabase.from('players').select('id').eq('auth_user_id', authUserId).maybeSingle();
+  if (linked.error) throw linked.error;
+  if (linked.data) return linked.data.id;
+
+  const legacy = await supabase.from('players').select('id').eq('discord_id', legacySeedDiscordId(n)).maybeSingle();
+  if (legacy.error) throw legacy.error;
+  if (legacy.data) {
+    const adopted = await supabase.from('players').update({ auth_user_id: authUserId }).eq('id', legacy.data.id);
+    if (adopted.error) throw adopted.error;
+    return legacy.data.id;
   }
-  return ids.map((id) => {
-    const playerId = have.get(id);
-    if (!playerId) throw new Error(`seed player ${id} was not created`);
-    return playerId;
-  });
+  const inserted = await supabase.from('players').insert({ name: `Seed Player ${n}`, auth_user_id: authUserId }).select('id').single();
+  if (inserted.error) throw inserted.error;
+  return inserted.data.id;
 }
 
+async function ensureSeedPlayers(): Promise<string[]> {
+  const ids: string[] = [];
+  for (let n = 1; n <= DEV_SEED_PLAYER_COUNT; n += 1) ids.push(await ensureSeedPlayer(n));
+  return ids;
+}
 async function findLeague(): Promise<{ id: string } | null> {
   const found = await supabase.from('seasons').select('id').eq('name', DEV_SEED_LEAGUE_NAME).limit(1);
   if (found.error) throw found.error;
@@ -154,9 +149,10 @@ async function createLeague(playerIds: string[]): Promise<{ leagueId: string; to
 }
 
 export async function runDevSeed(): Promise<DevSeedReport> {
-  const authUserId = await ensureAdminAuthUser();
+  const authUserId = await ensureAuthUser(DEV_SEED_ADMIN.email);
   const adminPlayerId = await ensureAdminPlayer(authUserId);
   const { count: rulesetsCreated } = await seedStandardRulesets();
+  const playerIds = await ensureSeedPlayers();
 
   const existing = await findLeague();
   if (existing) {
@@ -166,7 +162,7 @@ export async function runDevSeed(): Promise<DevSeedReport> {
       // A run that stopped half way left a league without its tournament: start that league over.
       const dropped = await supabase.from('seasons').delete().eq('id', existing.id);
       if (dropped.error) throw dropped.error;
-      return finishFresh(adminPlayerId, rulesetsCreated);
+      return finishFresh(adminPlayerId, rulesetsCreated, playerIds);
     }
     return {
       adminEmail: DEV_SEED_ADMIN.email,
@@ -178,11 +174,10 @@ export async function runDevSeed(): Promise<DevSeedReport> {
     };
   }
 
-  return finishFresh(adminPlayerId, rulesetsCreated);
+  return finishFresh(adminPlayerId, rulesetsCreated, playerIds);
 }
 
-async function finishFresh(adminPlayerId: string, rulesetsCreated: number): Promise<DevSeedReport> {
-  const playerIds = await ensureSeedPlayers();
+async function finishFresh(adminPlayerId: string, rulesetsCreated: number, playerIds: string[]): Promise<DevSeedReport> {
   const { leagueId, tournamentId } = await createLeague(playerIds);
   return { adminEmail: DEV_SEED_ADMIN.email, adminPlayerId, rulesetsCreated, leagueCreated: true, leagueId, tournamentId };
 }
