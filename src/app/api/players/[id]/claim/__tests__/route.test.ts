@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/auth/helpers', () => ({
   requireAdmin: vi.fn(),
+  isSuperadminNow: vi.fn(),
   AuthError: class AuthError extends Error {
     statusCode: number;
     constructor(message: string, statusCode: number) {
@@ -9,6 +10,10 @@ vi.mock('@/lib/auth/helpers', () => ({
       this.statusCode = statusCode;
     }
   },
+}));
+
+vi.mock('@/lib/auth/superadmin', () => ({
+  resolveSuperadminPlayerId: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/players', () => ({
@@ -23,7 +28,8 @@ vi.mock('@/lib/audit/log', () => ({
 }));
 
 import { POST } from '../route';
-import { requireAdmin } from '@/lib/auth/helpers';
+import { requireAdmin, isSuperadminNow } from '@/lib/auth/helpers';
+import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
 import {
   claimGuestPlayer,
   getPlayerActivityCounts,
@@ -60,6 +66,8 @@ describe('POST /api/players/[id]/claim', () => {
       playerId: 'admin-1',
       name: 'Admin',
     } as never);
+    vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(null);
+    vi.mocked(isSuperadminNow).mockResolvedValue(false);
     vi.mocked(getPlayerById).mockImplementation(async (id: string) => {
       if (id === GUEST_ID) return guestPlayer as never;
       if (id === SOURCE_ID) return sourcePlayer as never;
@@ -305,5 +313,108 @@ describe('POST /api/players/[id]/claim', () => {
 
     expect(res.status).toBe(500);
     expect(json.error).toBe('Failed to link guest account');
+  });
+
+  describe('the superadmin row', () => {
+    const attempts: Array<[string, string]> = [
+      ['the source', SOURCE_ID],
+      ['the target', GUEST_ID],
+    ];
+
+    function expectNothingTouched() {
+      expect(getPlayerById).not.toHaveBeenCalled();
+      expect(getPlayerActivityCounts).not.toHaveBeenCalled();
+      expect(revokePlayerSessions).not.toHaveBeenCalled();
+      expect(claimGuestPlayer).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    }
+
+    it.each(attempts)(
+      'refuses a non-superadmin admin when %s is the superadmin row, before any read or write',
+      async (_which, superadminRow) => {
+        vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(superadminRow);
+
+        const res = await POST(
+          makeRequest({ source_player_id: SOURCE_ID }),
+          { params: makeParams({ id: GUEST_ID }) },
+        );
+
+        expect(res.status).toBe(403);
+        expect(await res.json()).toEqual({
+          success: false,
+          error: "Only the superadmin can change the superadmin's player",
+          code: 'superadmin_player_protected',
+        });
+        expectNothingTouched();
+      },
+    );
+
+    it('matches the superadmin row whatever the case of the ids', async () => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(SOURCE_ID);
+
+      const asSource = await POST(
+        makeRequest({ source_player_id: SOURCE_ID.toUpperCase() }),
+        { params: makeParams({ id: GUEST_ID }) },
+      );
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(GUEST_ID);
+      const asTarget = await POST(
+        makeRequest({ source_player_id: SOURCE_ID }),
+        { params: makeParams({ id: GUEST_ID.toUpperCase() }) },
+      );
+
+      expect(asSource.status).toBe(403);
+      expect(asTarget.status).toBe(403);
+      expectNothingTouched();
+    });
+
+    it('fails closed when the superadmin row cannot be read', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(resolveSuperadminPlayerId).mockRejectedValue(new Error('db down'));
+
+      const res = await POST(
+        makeRequest({ source_player_id: SOURCE_ID }),
+        { params: makeParams({ id: GUEST_ID }) },
+      );
+
+      expect(res.status).toBe(500);
+      expectNothingTouched();
+    });
+
+    it('decides the caller from the live read', async () => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(SOURCE_ID);
+
+      await POST(
+        makeRequest({ source_player_id: SOURCE_ID }),
+        { params: makeParams({ id: GUEST_ID }) },
+      );
+
+      expect(isSuperadminNow).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets the superadmin claim with their own row as the source', async () => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(SOURCE_ID);
+      vi.mocked(isSuperadminNow).mockResolvedValue(true);
+
+      const res = await POST(
+        makeRequest({ source_player_id: SOURCE_ID }),
+        { params: makeParams({ id: GUEST_ID }) },
+      );
+
+      expect(res.status).toBe(200);
+      expect(claimGuestPlayer).toHaveBeenCalledWith(GUEST_ID, SOURCE_ID);
+      expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: 'player.claim' }));
+    });
+
+    it('lets an admin claim when the superadmin row is a different player', async () => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue('0a0a0a0a-1111-4222-8333-555555555555');
+
+      const res = await POST(
+        makeRequest({ source_player_id: SOURCE_ID }),
+        { params: makeParams({ id: GUEST_ID }) },
+      );
+
+      expect(res.status).toBe(200);
+      expect(isSuperadminNow).not.toHaveBeenCalled();
+    });
   });
 });

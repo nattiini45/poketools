@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth/helpers';
+import { requireAdmin, isSuperadminNow } from '@/lib/auth/helpers';
+import { resolveSuperadminPlayerId, superadminDiscordId } from '@/lib/auth/superadmin';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import {
   adminPlayerImportPlayersSchema,
@@ -112,8 +113,32 @@ export async function POST(request: NextRequest) {
       uniquePlayers.set(player.discord_id, player);
     }
 
-    const dedupedPlayers = Array.from(uniquePlayers.values());
+    let dedupedPlayers = Array.from(uniquePlayers.values());
     const existingPlayers = await getPlayersByDiscordIds(dedupedPlayers.map((player) => player.discord_id));
+
+    // An upsert overwrites the matching row, so a non-superadmin admin must not reach the superadmin's own row
+    // (insert mode skips every existing row already). The reads run only when the import names the superadmin's
+    // Discord id and a row exists for it, so an unrelated upsert never depends on them. Both are live and a failed
+    // read throws (fail closed).
+    const superadminDiscord = superadminDiscordId();
+    if (mode === 'upsert' && superadminDiscord && existingPlayers.has(superadminDiscord)) {
+      const superadminPlayerId = await resolveSuperadminPlayerId();
+      if (superadminPlayerId && !(await isSuperadminNow())) {
+        const protectedId = superadminPlayerId.toLowerCase();
+        dedupedPlayers = dedupedPlayers.filter((player) => {
+          if (existingPlayers.get(player.discord_id)?.id.toLowerCase() !== protectedId) return true;
+          results.push({
+            name: player.name,
+            discord_id: player.discord_id,
+            success: false,
+            action: 'skipped',
+            error: "Only the superadmin can change the superadmin's player",
+            code: 'superadmin_player_protected',
+          });
+          return false;
+        });
+      }
+    }
 
     if (mode === 'insert') {
       const toCreate = dedupedPlayers.filter((player) => {
@@ -137,7 +162,7 @@ export async function POST(request: NextRequest) {
         results.push({ name: player.name, discord_id: player.discord_id ?? '', success: true, action: 'created' });
       }
     } else {
-      await upsertPlayersByDiscordId(dedupedPlayers);
+      if (dedupedPlayers.length > 0) await upsertPlayersByDiscordId(dedupedPlayers);
       for (const player of dedupedPlayers) {
         results.push({
           name: player.name,

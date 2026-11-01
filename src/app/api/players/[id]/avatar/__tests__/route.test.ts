@@ -16,6 +16,7 @@ import {
 
 vi.mock('@/lib/auth/helpers', () => ({
   requireAuth: vi.fn(),
+  isSuperadminNow: vi.fn(),
   AuthError: class AuthError extends Error {
     statusCode: number;
     constructor(message: string, statusCode: number) {
@@ -23,6 +24,10 @@ vi.mock('@/lib/auth/helpers', () => ({
       this.statusCode = statusCode;
     }
   },
+}));
+
+vi.mock('@/lib/auth/superadmin', () => ({
+  resolveSuperadminPlayerId: vi.fn(),
 }));
 
 vi.mock('@/lib/api/error-response', () => ({
@@ -61,7 +66,8 @@ vi.mock('next/cache', () => ({
 
 import { POST, DELETE } from '../route';
 import { revalidateTag } from 'next/cache';
-import { requireAuth } from '@/lib/auth/helpers';
+import { requireAuth, isSuperadminNow } from '@/lib/auth/helpers';
+import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
 import { getPlayerById, updatePlayer } from '@/lib/supabase/queries/players';
 import { getGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
 import { validateAvatarConfig } from '@/lib/avatar/manifest';
@@ -839,5 +845,93 @@ describe('DELETE /api/players/[id]/avatar', () => {
     expect(res.status).toBe(404);
     expect(json.error).toBe('Player not found');
     expect(json.code).toBe('player_not_found');
+  });
+});
+
+// ── The superadmin row ─────────────────────────────────────────────────
+
+describe('avatar routes and the superadmin row', () => {
+  const SPRITE_BODY = {
+    showdown_sprite: 'red',
+    sprite_url: 'https://play.pokemonshowdown.com/sprites/trainers/red.png',
+  };
+  const attempts: Array<[string, (id: string) => Promise<Response>]> = [
+    ['POST', (id) => POST(makeRequest(SPRITE_BODY), makeRouteParams(id))],
+    ['DELETE', (id) => DELETE({} as NextRequest, makeRouteParams(id))],
+  ];
+
+  function expectNothingWritten() {
+    expect(getPlayerById).not.toHaveBeenCalled();
+    expect(updatePlayer).not.toHaveBeenCalled();
+    expect(fake.api.upload).not.toHaveBeenCalled();
+    expect(fake.api.remove).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fake = createFakeAvatarBucket();
+    storage.bucket = fake.api;
+    vi.mocked(requireAuth).mockResolvedValue(ADMIN_SESSION as never);
+    vi.mocked(getPlayerById).mockResolvedValue({ ...MOCK_PLAYER });
+    vi.mocked(updatePlayer).mockResolvedValue(MOCK_UPDATED_PLAYER);
+    vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(PLAYER_ID);
+    vi.mocked(isSuperadminNow).mockResolvedValue(false);
+  });
+
+  it.each(attempts)('refuses a non-superadmin admin on %s with no read, write or cache expiry', async (_name, attempt) => {
+    const res = await attempt(PLAYER_ID);
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      success: false,
+      error: "Only the superadmin can change the superadmin's player",
+      code: 'superadmin_player_protected',
+    });
+    expectNothingWritten();
+  });
+
+  it.each(attempts)('matches the row whatever the case of the path id on %s', async (_name, attempt) => {
+    const res = await attempt(PLAYER_ID.toUpperCase());
+
+    expect(res.status).toBe(403);
+    expectNothingWritten();
+  });
+
+  it.each(attempts)('fails closed on %s when the superadmin row cannot be read', async (_name, attempt) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(resolveSuperadminPlayerId).mockRejectedValue(new Error('db down'));
+
+    const res = await attempt(PLAYER_ID);
+
+    expect(res.status).toBe(500);
+    expectNothingWritten();
+  });
+
+  it.each(attempts)('lets the superadmin change their own row on %s', async (_name, attempt) => {
+    vi.mocked(isSuperadminNow).mockResolvedValue(true);
+
+    const res = await attempt(PLAYER_ID);
+
+    expect(res.status).toBe(200);
+    expect(updatePlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(attempts)('lets an admin change another player on %s', async (_name, attempt) => {
+    vi.mocked(resolveSuperadminPlayerId).mockResolvedValue('0a0a0a0a-1111-4222-8333-555555555555');
+
+    const res = await attempt(PLAYER_ID);
+
+    expect(res.status).toBe(200);
+    expect(updatePlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not look up the superadmin when a player edits their own avatar', async () => {
+    vi.mocked(requireAuth).mockResolvedValue(OWN_SESSION as never);
+
+    const res = await DELETE({} as NextRequest, makeRouteParams(PLAYER_ID));
+
+    expect(res.status).toBe(200);
+    expect(resolveSuperadminPlayerId).not.toHaveBeenCalled();
   });
 });
