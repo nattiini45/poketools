@@ -156,25 +156,60 @@ export async function runDevSeed(): Promise<DevSeedReport> {
 
   const existing = await findLeague();
   if (existing) {
-    const stage = await supabase.from('tournaments').select('id').eq('season_id', existing.id).limit(1);
-    if (stage.error) throw stage.error;
-    if (!stage.data?.[0]) {
-      // A run that stopped half way left a league without its tournament: start that league over.
-      const dropped = await supabase.from('seasons').delete().eq('id', existing.id);
-      if (dropped.error) throw dropped.error;
-      return finishFresh(adminPlayerId, rulesetsCreated, playerIds);
+    const stage = await findCompleteStage(existing.id, playerIds.length);
+    if (stage) {
+      return {
+        adminEmail: DEV_SEED_ADMIN.email,
+        adminPlayerId,
+        rulesetsCreated,
+        leagueCreated: false,
+        leagueId: existing.id,
+        tournamentId: stage,
+      };
     }
-    return {
-      adminEmail: DEV_SEED_ADMIN.email,
-      adminPlayerId,
-      rulesetsCreated,
-      leagueCreated: false,
-      leagueId: existing.id,
-      tournamentId: stage.data[0].id,
-    };
+    // A run that stopped half way left a league that is missing part of what createLeague writes: start it over.
+    await dropLeague(existing.id);
   }
 
   return finishFresh(adminPlayerId, rulesetsCreated, playerIds);
+}
+
+/** The id of the seed tournament when the league holds everything `createLeague` writes, otherwise null. */
+async function findCompleteStage(leagueId: string, playerCount: number): Promise<string | null> {
+  const [season, stages, seasonPlayers] = await Promise.all([
+    supabase.from('seasons').select('status').eq('id', leagueId).single(),
+    supabase.from('tournaments').select('id, status, current_round').eq('season_id', leagueId),
+    supabase.from('season_participants').select('player_id', { count: 'exact', head: true }).eq('season_id', leagueId),
+  ]);
+  if (season.error) throw season.error;
+  if (stages.error) throw stages.error;
+  if (seasonPlayers.error) throw seasonPlayers.error;
+  const stage = stages.data?.[0];
+  if (stages.data?.length !== 1 || season.data.status !== 'active' || seasonPlayers.count !== playerCount) return null;
+  if (stage.status !== 'active' || stage.current_round !== 1) return null;
+
+  const [stagePlayers, rounds, matches] = await Promise.all([
+    supabase.from('tournament_participants').select('player_id', { count: 'exact', head: true }).eq('tournament_id', stage.id),
+    supabase.from('rounds').select('id', { count: 'exact', head: true }).eq('tournament_id', stage.id),
+    supabase.from('matches').select('status').eq('tournament_id', stage.id),
+  ]);
+  if (stagePlayers.error) throw stagePlayers.error;
+  if (rounds.error) throw rounds.error;
+  if (matches.error) throw matches.error;
+  const statuses = (matches.data ?? []).map((m) => m.status).sort();
+  const complete =
+    stagePlayers.count === playerCount &&
+    rounds.count === 1 &&
+    statuses.join(',') === 'completed,completed,scheduled,scheduled';
+  return complete ? stage.id : null;
+}
+
+/** The tournaments reference their season without a cascade, so they go first (rounds and matches cascade from them). */
+async function dropLeague(leagueId: string): Promise<void> {
+  const stages = await supabase.from('tournaments').delete().eq('season_id', leagueId);
+  if (stages.error) throw stages.error;
+  const season = await supabase.from('seasons').delete().eq('id', leagueId);
+  if (season.error) throw season.error;
 }
 
 async function finishFresh(adminPlayerId: string, rulesetsCreated: number, playerIds: string[]): Promise<DevSeedReport> {

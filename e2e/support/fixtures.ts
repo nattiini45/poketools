@@ -15,6 +15,8 @@ const isLocal = (rawUrl: string): boolean => {
 interface Watcher {
   /** Starts watching a page: page errors, hydration warnings and every request it makes. */
   watch(page: Page): void;
+  /** Aborts every request of the context that leaves the machine; one to Supabase also fails the test. */
+  guard(context: BrowserContext): Promise<void>;
   /** A fresh browser context (cookies of its own) whose pages are watched too. */
   newPage(): Promise<Page>;
 }
@@ -25,12 +27,12 @@ interface Watcher {
  * hermetic); one to Supabase, or any request for a Storage bucket object, fails the test.
  */
 export const test = base.extend<{ watcher: Watcher; page: Page; newPage: () => Promise<Page> }>({
-  watcher: async ({ browser }, use, testInfo) => {
+  watcher: async ({ browser, baseURL }, use, testInfo) => {
     const problems: string[] = [];
     const requests: Array<{ url: string }> = [];
     const contexts: BrowserContext[] = [];
 
-    const watchContext = async (context: BrowserContext) => {
+    const guard = async (context: BrowserContext) => {
       await context.route('**/*', (route) => {
         const url = route.request().url();
         if (isLocal(url)) return route.continue();
@@ -50,10 +52,12 @@ export const test = base.extend<{ watcher: Watcher; page: Page; newPage: () => P
 
     await use({
       watch,
+      guard,
       newPage: async () => {
-        const context = await browser.newContext({ locale: 'en-US' });
+        // A context made by hand does not inherit the project's `use` options, so the base URL is passed on here.
+        const context = await browser.newContext({ baseURL, locale: 'en-US' });
         contexts.push(context);
-        await watchContext(context);
+        await guard(context);
         const page = await context.newPage();
         watch(page);
         return page;
@@ -72,10 +76,7 @@ export const test = base.extend<{ watcher: Watcher; page: Page; newPage: () => P
   page: async ({ context, watcher }, use) => {
     const page = await context.newPage();
     // The default context is not created by `watcher.newPage`, so it needs the same route guard.
-    await context.route('**/*', (route) => {
-      const url = route.request().url();
-      return isLocal(url) ? route.continue() : route.abort();
-    });
+    await watcher.guard(context);
     watcher.watch(page);
     await use(page);
   },

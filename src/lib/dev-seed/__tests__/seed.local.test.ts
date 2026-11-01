@@ -47,6 +47,24 @@ describe.skipIf(!optIn)('dev seed (local stack)', () => {
     expect((matches.data ?? []).map((m) => m.status).sort()).toEqual(['completed', 'completed', 'scheduled', 'scheduled']);
   }, 180_000);
 
+  it('rebuilds a league that an interrupted run left without its matches', async () => {
+    const before = await seed.runDevSeed();
+    const db = admin();
+    const removed = await db.from('matches').delete().eq('tournament_id', before.tournamentId);
+    expect(removed.error).toBeNull();
+
+    const repaired = await seed.runDevSeed();
+    expect(repaired.leagueCreated).toBe(true);
+    const leagues = await db.from('seasons').select('id').eq('name', DEV_SEED_LEAGUE_NAME);
+    expect(leagues.data).toHaveLength(1);
+    const matches = await db.from('matches').select('status').eq('tournament_id', repaired.tournamentId);
+    expect((matches.data ?? []).map((m) => m.status).sort()).toEqual(['completed', 'completed', 'scheduled', 'scheduled']);
+
+    const again = await seed.runDevSeed();
+    expect(again.leagueCreated).toBe(false);
+    expect(again.leagueId).toBe(repaired.leagueId);
+  }, 180_000);
+
   it('signs the seeded admin in with email and password', async () => {
     const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, requireLocalKey('NEXT_PUBLIC_SUPABASE_ANON_KEY'));
     const { error } = await anon.auth.signInWithPassword({ email: DEV_SEED_ADMIN.email, password: DEV_SEED_ADMIN.password });
