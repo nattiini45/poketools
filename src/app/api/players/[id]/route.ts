@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireAdmin, isSuperadmin } from '@/lib/auth/helpers';
-import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
+import {
+  isSuperadminPlayerRow,
+  superadminPlayerProtectedBody,
+  superadminPlayerProtectedResponse,
+} from '@/lib/auth/superadmin-player-guard';
 import { supabase } from '@/lib/supabase/client';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { playerUpdateSchema, formatZodErrors } from '@/lib/validation';
@@ -109,15 +113,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // The superadmin's own row is theirs alone: a site admin (or the owner of an
     // unlinked session) cannot edit it, whatever the field. The row is read live
     // from SUPERADMIN_DISCORD_ID; a failed read throws and refuses the request.
-    if (!isSuperadmin(session) && (await resolveSuperadminPlayerId()) === id) {
-      return NextResponse.json<ApiResult<never>>(
-        {
-          success: false,
-          error: "Only the superadmin can change the superadmin's player",
-          code: 'superadmin_player_protected',
-        },
-        { status: 403 }
-      );
+    if (!isSuperadmin(session) && (await isSuperadminPlayerRow(id))) {
+      return superadminPlayerProtectedBody();
     }
 
     // Non-admins can only change their own usernames
@@ -187,6 +184,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const admin = await requireAdmin();
     const invalidId = rejectInvalidPathId(id, 'INVALID_PLAYER_ID');
     if (invalidId) return invalidId;
+    const protectedRow = await superadminPlayerProtectedResponse(id);
+    if (protectedRow) return protectedRow;
 
     // Fetch before deletion for audit log
     const before = await getPlayerById(id);

@@ -3,6 +3,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 vi.mock('@/lib/auth/helpers', () => ({
   requireAdmin: vi.fn(),
+  isSuperadminNow: vi.fn(),
+}));
+
+vi.mock('@/lib/auth/superadmin', () => ({
+  resolveSuperadminPlayerId: vi.fn(),
 }));
 
 vi.mock('@/lib/api/error-response', () => ({
@@ -21,7 +26,8 @@ vi.mock('@/lib/audit/log', () => ({
 
 import { POST as suspendPost } from '@/app/api/admin/players/[id]/suspend/route';
 import { POST as unsuspendPost } from '@/app/api/admin/players/[id]/unsuspend/route';
-import { requireAdmin } from '@/lib/auth/helpers';
+import { requireAdmin, isSuperadminNow } from '@/lib/auth/helpers';
+import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
 import { banPlayer, suspendPlayer, unsuspendPlayer } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 
@@ -57,6 +63,8 @@ describe('admin player discipline routes', () => {
     vi.mocked(suspendPlayer).mockResolvedValue(player as never);
     vi.mocked(banPlayer).mockResolvedValue(player as never);
     vi.mocked(unsuspendPlayer).mockResolvedValue(player as never);
+    vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(null);
+    vi.mocked(isSuperadminNow).mockResolvedValue(false);
   });
 
   it('suspends a player with a future date and writes audit log', async () => {
@@ -130,5 +138,88 @@ describe('admin player discipline routes', () => {
       action: 'player.unsuspend',
       resource_id: '51541de2-cef5-42ee-8563-d412cf4563a2',
     }));
+  });
+
+  describe('the superadmin row', () => {
+    const futureDate = () => new Date(Date.now() + 86_400_000).toISOString();
+    const protectedBody = {
+      success: false,
+      error: "Only the superadmin can change the superadmin's player",
+      code: 'superadmin_player_protected',
+    };
+    const attempts: Array<[string, () => Promise<Response>]> = [
+      ['suspend', () => suspendPost(request({ type: 'suspend', suspended_until: futureDate() }), params)],
+      ['ban', () => suspendPost(request({ type: 'ban', ban_reason: 'Locked out' }), params)],
+      ['unsuspend', () => unsuspendPost({} as NextRequest, params)],
+    ];
+
+    it.each(attempts)('refuses a non-superadmin admin on %s with no write and no audit row', async (_name, attempt) => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(player.id);
+      vi.mocked(isSuperadminNow).mockResolvedValue(false);
+
+      const res = await attempt();
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual(protectedBody);
+      expect(suspendPlayer).not.toHaveBeenCalled();
+      expect(banPlayer).not.toHaveBeenCalled();
+      expect(unsuspendPlayer).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it.each(attempts)('lets the superadmin act on their own row on %s', async (_name, attempt) => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(player.id);
+      vi.mocked(isSuperadminNow).mockResolvedValue(true);
+
+      const res = await attempt();
+
+      expect(res.status).toBe(200);
+      expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(attempts)('lets an admin act on another player on %s', async (_name, attempt) => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue('0a0a0a0a-1111-4222-8333-555555555555');
+
+      const res = await attempt();
+
+      expect(res.status).toBe(200);
+    });
+
+    it.each(attempts)('fails closed on %s when the superadmin row cannot be read', async (_name, attempt) => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(resolveSuperadminPlayerId).mockRejectedValue(new Error('db down'));
+
+      const res = await attempt();
+
+      expect(res.status).toBe(500);
+      expect(suspendPlayer).not.toHaveBeenCalled();
+      expect(banPlayer).not.toHaveBeenCalled();
+      expect(unsuspendPlayer).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+
+    it('matches the row whatever the case of the path id', async () => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(player.id);
+      const upper = { params: Promise.resolve({ id: player.id.toUpperCase() }) };
+
+      const res = await suspendPost(request({ type: 'ban', ban_reason: 'x' }), upper);
+      const unsuspend = await unsuspendPost({} as NextRequest, upper);
+
+      expect(res.status).toBe(403);
+      expect(unsuspend.status).toBe(403);
+      expect(banPlayer).not.toHaveBeenCalled();
+      expect(unsuspendPlayer).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('decides the caller from the live read, not the token', async () => {
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(player.id);
+      vi.mocked(isSuperadminNow).mockResolvedValue(false);
+
+      await suspendPost(request({ type: 'ban', ban_reason: 'x' }), params);
+
+      expect(isSuperadminNow).toHaveBeenCalledTimes(1);
+    });
   });
 });

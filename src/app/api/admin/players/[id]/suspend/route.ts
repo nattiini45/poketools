@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
+import { superadminPlayerProtectedResponse } from '@/lib/auth/superadmin-player-guard';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { adminPlayerDisciplineSchema, formatZodErrors } from '@/lib/validation';
 import { suspendPlayer, banPlayer } from '@/lib/supabase/queries/players';
@@ -18,6 +19,8 @@ export async function POST(
     const { id } = await params;
     const invalidId = rejectInvalidPathId(id, 'INVALID_PLAYER_ID');
     if (invalidId) return invalidId;
+    const protectedRow = await superadminPlayerProtectedResponse(id);
+    if (protectedRow) return protectedRow;
     const body = await request.json().catch(() => null);
 
     const zodResult = adminPlayerDisciplineSchema.safeParse(body);

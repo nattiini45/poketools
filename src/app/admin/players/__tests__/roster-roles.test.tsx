@@ -74,19 +74,33 @@ describe('PlayerRoster roles and identity', () => {
   });
 
   describe('the superadmin row', () => {
-    it('offers no Edit control for the protected row, while its other actions stay', async () => {
+    it('offers no Edit, Suspend, Ban or Delete control for the protected row', async () => {
       const nameCell = await renderRoster(false, 'p-1');
       const row = nameCell.closest('tr') as HTMLElement;
 
-      expect(within(row).queryByRole('button', { name: 'Edit' })).toBeNull();
-      expect(within(row).getByRole('button', { name: 'Delete' })).toBeTruthy();
+      for (const name of ['Edit', 'Suspend', 'Ban', 'Delete']) {
+        expect(within(row).queryByRole('button', { name })).toBeNull();
+      }
     });
 
-    it('offers Edit on every other row', async () => {
+    it('offers no Reinstate control for a protected row that is suspended', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify({ success: true, data: [{ ...linked, status: 'suspended' }], total: 1 }))),
+      );
+      const nameCell = await renderRoster(false, 'p-1');
+      const row = nameCell.closest('tr') as HTMLElement;
+
+      expect(within(row).queryByRole('button', { name: 'Reinstate' })).toBeNull();
+    });
+
+    it('offers every action on other rows', async () => {
       const nameCell = await renderRoster(false, 'someone-else');
       const row = nameCell.closest('tr') as HTMLElement;
 
-      expect(within(row).getByRole('button', { name: 'Edit' })).toBeTruthy();
+      for (const name of ['Edit', 'Suspend', 'Ban', 'Delete']) {
+        expect(within(row).getByRole('button', { name })).toBeTruthy();
+      }
     });
 
     it('offers Edit when no row is protected', async () => {

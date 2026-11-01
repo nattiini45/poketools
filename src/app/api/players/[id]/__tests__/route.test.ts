@@ -6,6 +6,7 @@ vi.mock('@/lib/auth/helpers', () => ({
   requireAuth: vi.fn(),
   requireAdmin: vi.fn(),
   isSuperadmin: vi.fn(),
+  isSuperadminNow: vi.fn(),
   AuthError: class AuthError extends Error {
     statusCode: number;
     constructor(message: string, statusCode: number) {
@@ -46,7 +47,7 @@ import { GET, PATCH, DELETE } from '@/app/api/players/[id]/route';
 import { logAuditEvent } from '@/lib/audit/log';
 import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
 import { revalidateTag } from 'next/cache';
-import { requireAuth, requireAdmin, isSuperadmin, AuthError } from '@/lib/auth/helpers';
+import { requireAuth, requireAdmin, isSuperadmin, isSuperadminNow, AuthError } from '@/lib/auth/helpers';
 import {
   getPlayerById,
   updatePlayer,
@@ -436,6 +437,19 @@ describe('PATCH /api/players/[id]', () => {
       expect(revalidateTag).not.toHaveBeenCalled();
     });
 
+    it('matches the row whatever the case of the path id', async () => {
+      vi.mocked(requireAuth).mockResolvedValue(adminSession);
+      vi.mocked(isSuperadmin).mockReturnValue(false);
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(superadminRowId);
+
+      const request = { json: vi.fn().mockResolvedValue({ name: 'Renamed' }) } as unknown as NextRequest;
+      const response = await PATCH(request, makeRouteArgs(superadminRowId.toUpperCase()));
+
+      expect(response.status).toBe(403);
+      expect(updatePlayer).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
     it('lets the superadmin edit their own row and audits it', async () => {
       vi.mocked(requireAuth).mockResolvedValue({
         ...adminSession,
@@ -660,6 +674,67 @@ describe('DELETE /api/players/[id]', () => {
     // Default happy path: player exists and has no competitive references.
     vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
     vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 0, trashedLeagues: 0 });
+    vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(null);
+    vi.mocked(isSuperadminNow).mockResolvedValue(false);
+  });
+
+  describe('the superadmin row', () => {
+    const superadminRowId = '0a0a0a0a-1111-4222-8333-555555555555';
+
+    it('refuses a non-superadmin admin with no read, delete, auth-user removal or audit row', async () => {
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(superadminRowId);
+      vi.mocked(isSuperadminNow).mockResolvedValue(false);
+
+      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs(superadminRowId));
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: "Only the superadmin can change the superadmin's player",
+        code: 'superadmin_player_protected',
+      });
+      expect(deletePlayer).not.toHaveBeenCalled();
+      expect(authAdminDeleteUser).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it('matches the row whatever the case of the path id', async () => {
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(superadminRowId);
+
+      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs(superadminRowId.toUpperCase()));
+
+      expect(response.status).toBe(403);
+      expect(deletePlayer).not.toHaveBeenCalled();
+    });
+
+    it('does not block the superadmin from their own row', async () => {
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(superadminRowId);
+      vi.mocked(isSuperadminNow).mockResolvedValue(true);
+      vi.mocked(getPlayerById).mockResolvedValue({ ...mockPlayer, id: superadminRowId });
+      vi.mocked(deletePlayer).mockResolvedValue(undefined);
+
+      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs(superadminRowId));
+
+      expect(response.status).toBe(200);
+      expect(deletePlayer).toHaveBeenCalledWith(superadminRowId);
+    });
+
+    it('fails closed when the superadmin row cannot be read', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(resolveSuperadminPlayerId).mockRejectedValue(new Error('db down'));
+
+      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs(mockPlayer.id));
+
+      expect(response.status).toBe(500);
+      expect(deletePlayer).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
   });
 
   it('returns 403 when not admin', async () => {
