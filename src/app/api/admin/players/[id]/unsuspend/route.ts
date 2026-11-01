@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
+import { superadminPlayerProtectedResponse } from '@/lib/auth/superadmin-player-guard';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { unsuspendPlayer } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -17,6 +18,8 @@ export async function POST(
     const { id } = await params;
     const invalidId = rejectInvalidPathId(id, 'INVALID_PLAYER_ID');
     if (invalidId) return invalidId;
+    const protectedRow = await superadminPlayerProtectedResponse(id);
+    if (protectedRow) return protectedRow;
 
     const player = await unsuspendPlayer(id);
     logAuditEvent({

@@ -102,6 +102,8 @@ describe('postToBluesky', () => {
     ['https://localhost', 'local_host'],
     ['https://pds.internal', 'local_host'],
     ['https://bsky.social:8443', 'port'],
+    ['https://bsky.social:443', 'port'],
+    ['https://bsky.social:', 'port'],
     ['https://user:pw@bsky.social', 'userinfo'],
     ['https://evil.example', 'host_not_allowed'],
   ])('refuses a stored service_url %s at send time without any request', async (serviceUrl, reason) => {

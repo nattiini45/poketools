@@ -33,8 +33,8 @@ const linked: Player = {
   updated_at: '2026-01-01T00:00:00.000Z',
 };
 
-async function renderRoster(canManageCreators: boolean) {
-  render(withI18n(<PlayerRoster canManageCreators={canManageCreators} />));
+async function renderRoster(canManageCreators: boolean, protectedPlayerId: string | null = null) {
+  render(withI18n(<PlayerRoster canManageCreators={canManageCreators} protectedPlayerId={protectedPlayerId} />));
   return screen.findByRole('cell', { name: 'Brock' });
 }
 
@@ -71,5 +71,43 @@ describe('PlayerRoster roles and identity', () => {
     const inputs = within(row as HTMLElement).getAllByRole('textbox');
     expect(inputs.map((input) => (input as HTMLInputElement).value)).toEqual(['Brock', 'BrockPS']);
     expect(within(row as HTMLElement).getByText('123456789012345678')).toBeTruthy();
+  });
+
+  describe('the superadmin row', () => {
+    it('offers no Edit, Suspend, Ban or Delete control for the protected row', async () => {
+      const nameCell = await renderRoster(false, 'p-1');
+      const row = nameCell.closest('tr') as HTMLElement;
+
+      for (const name of ['Edit', 'Suspend', 'Ban', 'Delete']) {
+        expect(within(row).queryByRole('button', { name })).toBeNull();
+      }
+    });
+
+    it('offers no Reinstate control for a protected row that is suspended', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify({ success: true, data: [{ ...linked, status: 'suspended' }], total: 1 }))),
+      );
+      const nameCell = await renderRoster(false, 'p-1');
+      const row = nameCell.closest('tr') as HTMLElement;
+
+      expect(within(row).queryByRole('button', { name: 'Reinstate' })).toBeNull();
+    });
+
+    it('offers every action on other rows', async () => {
+      const nameCell = await renderRoster(false, 'someone-else');
+      const row = nameCell.closest('tr') as HTMLElement;
+
+      for (const name of ['Edit', 'Suspend', 'Ban', 'Delete']) {
+        expect(within(row).getByRole('button', { name })).toBeTruthy();
+      }
+    });
+
+    it('offers Edit when no row is protected', async () => {
+      const nameCell = await renderRoster(false);
+      const row = nameCell.closest('tr') as HTMLElement;
+
+      expect(within(row).getByRole('button', { name: 'Edit' })).toBeTruthy();
+    });
   });
 });

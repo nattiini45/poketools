@@ -172,6 +172,21 @@ export async function isAuthUserLinkedToDiscordId(authUserId: string, discordId:
 }
 
 /**
+ * The id of the player linked to `discordId`, or null when none is. Returns the
+ * row id only, never the Discord id. Query errors rethrow (callers fail closed).
+ */
+export async function getPlayerIdByDiscordId(discordId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('players')
+    .select('id')
+    .eq('discord_id', discordId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
+/**
  * Map a session row to the `SessionPlayer` stored in the JWT. Picks fields
  * explicitly, so extra properties on the input (for example a full `Player`
  * from `createPlayer`) never reach the token.
