@@ -67,19 +67,20 @@ scripts/__tests__/safe-error-scan.test.mjs   # CI guard self-test
 
 **File:** `.github/workflows/ci.yml`
 
-Runs on push to `main` and PRs targeting `main`. Concurrency: cancel in-progress runs for the same branch.
+Runs on push to `main` and PRs targeting `main`. Concurrency: cancel in-progress runs for the same branch. The single `build-and-test` job has `timeout-minutes: 30` (the required check name is unchanged).
 
 ### Steps
-1. **Checkout** and **Node setup** (Node.js 22, npm cache), then `npm ci`
-2. **Security audit** — `npm audit --omit=dev --audit-level=high` (blocking, what ships), then the same over all dependencies (report only)
-3. **Lint** — `npm run lint` (`src/` and tracked `scripts/`)
+1. **Checkout** and **Node setup** (the version in `.nvmrc`, npm cache), then `npm ci`; `engines.node` plus `engine-strict` make an unsupported Node fail here
+2. **Security audit** — `npm audit --omit=dev --audit-level=high` (blocking, what ships), then `npm audit --audit-level=high` over all dependencies (report only)
+3. **Lint** — `npm run lint` (`src/` and tracked `scripts/`, `--max-warnings=0`: a warning fails the step)
 4. **Safe error response guard** — `ENFORCE=1 node scripts/check-safe-error-response.mjs`
 5. **Mojibake guard** — `ENFORCE=1 node scripts/check-mojibake.mjs`
 6. **i18n hard-coded string check** — `ENFORCE=1 node scripts/check-i18n-strings.mjs --all`
-7. **Type-check (example format pack)** — `npm run typecheck:example`
-8. **Type-check & build** — `npm run build` with `FORMAT_PACK=example` and placeholder env vars
-9. **Tests** — `npm test`
-10. **Coverage** — `npm run test:coverage` (floors on `src/lib/**` and API route handlers; components and pages are report-only)
+7. **Type-check (example format pack)** — `npm run typecheck:example`, the only type-check of the run
+8. **Build** — `npm run build` with `FORMAT_PACK=example`, placeholder env vars and `CI_SKIP_BUILD_TYPECHECK=1` (`next.config.mjs` maps that variable alone to `typescript.ignoreBuildErrors`, so the build does not type-check a second time; never `CI`, which Vercel sets too)
+9. **Tests and coverage** — `npm run test:coverage`, the only Vitest run (floors on `src/lib/**` and API route handlers; components and pages are report-only)
+
+`npm test` and the coverage run execute the same projects, which include repo-wide guards that no workflow step names, notably `src/lib/__tests__/source-line-endings.test.ts` (a lone CR or a NUL byte in a tracked source file makes git treat it as binary and hides its diff; fix with `tr -d '\r'` or the `\0` escape).
 
 `npm run verify:ci` (`scripts/verify-ci.mjs`) runs the same steps locally, in a clean clone, with an allow-listed environment (what the toolchain needs: paths, home, temp dirs, npm cache, CA trust, proxies; PATH is still honoured) plus `CI=true` and `TZ=UTC`, so a project variable in your shell cannot change the result.
 
@@ -113,7 +114,7 @@ ENFORCE=1 node scripts/check-safe-error-response.mjs
 - Uses `@vitejs/plugin-react`
 - Coverage provider: V8
 - Tests run against the `src/` directory
-- Projects: `app` (all `src/**/__tests__`, always against the public example format pack), `scripts`, and `private-pack` (only when the private format pack is on disk and `FORMAT_PACK` is not `example`). CI runs plain `npm test` in a checkout without the private pack, which is the public view (`FORMAT_PACK=example npm test` gives the same set on a maintainer checkout). See `docs/format-packs.md`.
+- Projects: `app` (all `src/**/__tests__`, always against the public example format pack), `scripts`, and `private-pack` (only when the private format pack is on disk and `FORMAT_PACK` is not `example`). CI runs the same projects through `npm run test:coverage` in a checkout without the private pack, which is the public view (`FORMAT_PACK=example npm test` gives the same set on a maintainer checkout). See `docs/format-packs.md`.
 
 ## Writing Tests
 
