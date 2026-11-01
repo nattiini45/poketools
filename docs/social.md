@@ -6,6 +6,8 @@ The Social module handles event fan-out to X, Threads, and Bluesky with provider
 ## File Structure
 ```
 src/lib/social/
+├── bluesky-host.ts  # Pure service_url host check (allowlist, rejection reasons)
+├── bluesky-service.ts  # Env-backed service_url resolver used by the provider and the routes
 ├── crypto.ts  # Credential encryption/decryption helpers
 ├── format.ts  # Event -> social post formatter
 ├── image-fetch.ts  # Remote image fetching helpers
@@ -34,6 +36,13 @@ src/lib/social/
 - **File**: `format.ts`
 - **Purpose**: Build provider-safe social post text
 - **Key Methods**: `formatSocialPost()`
+
+## Outbound requests
+- Every request to X, Threads, Bluesky and a Discord webhook goes through `outboundFetch` (`src/lib/outbound-fetch.ts`): no redirect is followed (a 3xx fails the request, so a bearer token or app password cannot be bounced to another host) and a deadline applies (8 s for Discord, 10 s for the social providers).
+- Bluesky `credentials.service_url` is not a free-form URL, because the provider sends the account's app password to it. It must be an `https` origin (no userinfo, port, path, IP literal, `localhost`, `*.local` or `*.internal`) whose host is `bsky.social` or listed in `BLUESKY_SERVICE_HOST_ALLOWLIST` (comma-separated, env-only). An omitted or blank value means `bsky.social`. The check runs at write time (400 `social_bluesky_service_url_rejected` with the `reason` param; no outbound request) and again at send time (`BlueskyServiceUrlError`), so a row stored before the rule cannot be used.
+- A Discord webhook URL is re-checked against `discordWebhookUrlSchema` (`https://discord.com/api/webhooks/<id>/<token>`, token `[\w-]+`) before each post; a stored row that fails is skipped.
+- Logs carry the webhook id and the error class, never the webhook URL, a handle, a password or a token; an upstream error body is capped at about 200 characters.
+- Out of scope: the `after()` emitters that call `emitDiscordEvent` / `emitSocialEvent` (their lifetime is a separate concern).
 
 ## Data Flows
 - **Input**: Social event payload + provider credentials/options

@@ -74,6 +74,16 @@ export const pushEnvSchema = z.object({
 });
 
 /**
+ * Read by the Bluesky provider and the social-integration routes (`src/lib/social/bluesky-service.ts`) per call:
+ * extra Bluesky server hosts (comma-separated, besides `bsky.social`) that an integration's `service_url` may name.
+ * Unset means only `bsky.social`. Entries are validated by `parseHostAllowlist`, which drops anything that is not a
+ * plain public hostname.
+ */
+export const socialEnvSchema = z.object({
+  BLUESKY_SERVICE_HOST_ALLOWLIST: optionalTrimmed(z.string()),
+});
+
+/**
  * The optional variables whose INVALID value must stop the server at boot
  * (lead ruling round 5): `src/instrumentation.ts` runs `assertBootEnv()` when
  * a Node.js server instance starts, so a bad value fails the deployment once,

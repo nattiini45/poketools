@@ -1,4 +1,6 @@
 import { resolveWebhooks } from '@/lib/supabase/queries/discord-webhooks';
+import { DISCORD_TIMEOUT_MS, logSnippet, outboundFetch } from '@/lib/outbound-fetch';
+import { discordWebhookUrlSchema } from '@/lib/validation';
 import { resolveContentLocale } from '@/i18n/content-locale';
 import { DEFAULT_CONTENT_LOCALE, type Locale } from '@/i18n/config';
 import { buildEmbed } from './embeds';
@@ -78,7 +80,7 @@ async function emitAsync(payload: DiscordEventPayload): Promise<void> {
         const lang = langFor(w);
         const { embed, content } = buildEmbed(payload, w.format_options, lang);
         const attachment = w.format_options.attach_match_card ? attachments.get(lang) : undefined;
-        return postToWebhook(w.webhook_url, embed, content, attachment ? [attachment] : undefined);
+        return postToWebhook(w, embed, content, attachment ? [attachment] : undefined);
       })
     );
   } catch (err) {
@@ -111,12 +113,27 @@ export interface DiscordEmbed {
   fields?: Array<{ name: string; value: string; inline?: boolean }>;
 }
 
+/**
+ * POST one embed to one stored webhook. The stored URL is re-checked against
+ * the Discord-only schema first (a row that bypassed write-time validation
+ * must not turn this into a request relay), the post follows no redirect and
+ * times out. Logs name the webhook id and the failure class, never the URL:
+ * it embeds the webhook token, and a fetch error can echo it.
+ */
 async function postToWebhook(
-  url: string,
+  webhook: Pick<DiscordWebhook, 'id' | 'webhook_url'>,
   embed: DiscordEmbed,
   content?: string,
   attachments?: WebhookAttachment[],
 ): Promise<void> {
+  const url = discordWebhookUrlSchema.safeParse(webhook.webhook_url);
+  if (!url.success) {
+    console.error('[Discord] Stored webhook URL is not a Discord webhook URL, skipping:', webhook.id);
+    return;
+  }
+
+  let init: Omit<RequestInit, 'redirect' | 'signal'>;
+  let kind: string;
   if (attachments && attachments.length > 0) {
     // Multipart form-data upload for file attachments
     // Discord requires payload_json + files[n] fields
@@ -136,34 +153,31 @@ async function postToWebhook(
         a.filename,
       );
     }
-
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      console.error(
-        `[Discord] Webhook multipart POST failed: ${response.status} ${response.statusText}`,
-        await response.text().catch(() => '(no body)'),
-      );
-    }
+    init = { method: 'POST', body: formData };
+    kind = 'multipart POST';
   } else {
     // Standard JSON payload (no attachments)
     const body: Record<string, unknown> = { embeds: [embed] };
     if (content) body.content = content;
-
-    const response = await fetch(url, {
+    init = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-    });
+    };
+    kind = 'POST';
+  }
 
+  try {
+    const response = await outboundFetch(url.data, init, DISCORD_TIMEOUT_MS);
     if (!response.ok) {
       console.error(
-        `[Discord] Webhook POST failed: ${response.status} ${response.statusText}`,
-        await response.text().catch(() => '(no body)'),
+        `[Discord] Webhook ${kind} failed:`,
+        webhook.id,
+        response.status,
+        logSnippet(await response.text().catch(() => '(no body)')),
       );
     }
+  } catch (err) {
+    console.error(`[Discord] Webhook ${kind} unreachable:`, webhook.id, err instanceof Error ? err.name : 'unknown');
   }
 }

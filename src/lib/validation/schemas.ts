@@ -132,7 +132,7 @@ export const pokemonTypeSchema = z.enum([
 
 // ─── Regex Patterns ──────────────────────────────────────────────────
 export const discordWebhookUrlSchema = z.string().regex(
-  /^https:\/\/discord\.com\/api\/webhooks\/\d+\/.+$/,
+  /^https:\/\/discord\.com\/api\/webhooks\/\d+\/[\w-]+$/,
   'Must be a valid Discord webhook URL (https://discord.com/api/webhooks/...)',
 );
 

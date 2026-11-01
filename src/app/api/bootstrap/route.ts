@@ -102,8 +102,8 @@ export async function POST(request: NextRequest) {
     try {
       player = await loadSessionPlayer(session.provider ?? 'discord', session.user.id, { authAt: session.authAt });
     } catch (err) {
-      // A revoked token is signed out, not a failure: the same answer as no session.
       if (!(err instanceof SessionRevokedError)) throw err;
+      // safe-error-response-allow: a revoked token is signed out, not a failure; the answer is the same as for no session
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'You must be signed in to bootstrap.', code: 'bootstrap_sign_in_required' },
         { status: 401 }

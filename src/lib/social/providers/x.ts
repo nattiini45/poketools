@@ -1,5 +1,6 @@
 import type { XCredentials } from '@/types/social';
 import { fetchImageAsBuffer } from '../image-fetch';
+import { logSnippet, outboundFetch, SOCIAL_TIMEOUT_MS } from '@/lib/outbound-fetch';
 
 interface XPostResponse {
   data?: { id: string; text: string };
@@ -23,17 +24,21 @@ async function uploadMedia(
   );
   formData.append('media_category', 'tweet_image');
 
-  const response = await fetch('https://upload.twitter.com/1.1/media/upload.json', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${credentials.access_token}`,
+  const response = await outboundFetch(
+    'https://upload.twitter.com/1.1/media/upload.json',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${credentials.access_token}`,
+      },
+      body: formData,
     },
-    body: formData,
-  });
+    SOCIAL_TIMEOUT_MS,
+  );
 
   if (!response.ok) {
     const body = await response.text().catch(() => '(no body)');
-    throw new Error(`[X] Media upload failed: ${response.status} ${body}`);
+    throw new Error(`[X] Media upload failed: ${response.status} ${logSnippet(body)}`);
   }
 
   const parsed = (await response.json().catch(() => ({}))) as XMediaUploadResponse;
@@ -57,22 +62,29 @@ export async function postToX(
       tweetBody.media = { media_ids: [mediaId] };
     } catch (err) {
       // Image upload failure should not prevent the text tweet
-      console.error('[X] Image upload failed, posting text-only:', err);
+      console.error(
+        '[X] Image upload failed, posting text-only:',
+        err instanceof Error ? `${err.name}: ${err.message}` : 'unknown error',
+      );
     }
   }
 
-  const response = await fetch('https://api.x.com/2/tweets', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${credentials.access_token}`,
-      'Content-Type': 'application/json',
+  const response = await outboundFetch(
+    'https://api.x.com/2/tweets',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${credentials.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(tweetBody),
     },
-    body: JSON.stringify(tweetBody),
-  });
+    SOCIAL_TIMEOUT_MS,
+  );
 
   if (!response.ok) {
     const body = await response.text().catch(() => '(no body)');
-    throw new Error(`[X] POST /2/tweets failed: ${response.status} ${body}`);
+    throw new Error(`[X] POST /2/tweets failed: ${response.status} ${logSnippet(body)}`);
   }
 
   const parsed = (await response.json().catch(() => ({}))) as XPostResponse;

@@ -10,6 +10,7 @@ import {
 import { encryptJson } from '@/lib/social/crypto';
 import type { ApiResult } from '@/types/api';
 import { checkCredentials, toCredentialHint } from '@/lib/social/validation';
+import { blueskyServiceUrlRejection } from '@/lib/social/bluesky-service';
 import type { SocialIntegration, CreateSocialIntegrationInput } from '@/types/social';
 
 /** A client-facing 400 for credentials that cannot be stored. */
@@ -51,6 +52,33 @@ function toCreateRecord(
         { status: 400 },
       );
     }
+
+    const serviceUrlRejection =
+
+      body.credentials.provider === 'bluesky' ? blueskyServiceUrlRejection(body.credentials.service_url) : null;
+
+    if (serviceUrlRejection) {
+
+      return NextResponse.json<ApiResult<never>>(
+
+        {
+
+          success: false,
+
+          error: `Bluesky service_url is not allowed: ${serviceUrlRejection}`,
+
+          code: 'social_bluesky_service_url_rejected',
+
+          params: { reason: serviceUrlRejection },
+
+        },
+
+        { status: 400 },
+
+      );
+
+    }
+
 
     record.credentials_encrypted = encryptJson(body.credentials);
     record.credential_hint = toCredentialHint(body.credentials);

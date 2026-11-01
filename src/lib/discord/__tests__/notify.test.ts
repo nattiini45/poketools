@@ -379,6 +379,85 @@ describe('emitDiscordEvent', () => {
     consoleSpy.mockRestore();
   });
 
+  it('posts without following redirects and with a deadline', async () => {
+    vi.mocked(resolveWebhooks).mockResolvedValue([makeWebhook()]);
+
+    emitDiscordEvent(makePayload());
+    await flushPromises();
+
+    const options = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    expect(options.redirect).toBe('error');
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it.each([
+    'http://discord.com/api/webhooks/123/abc',
+    'https://evil.example/api/webhooks/123/abc',
+    'https://discord.com.evil.example/api/webhooks/123/abc',
+    'https://discord.com/api/webhooks/123/abc?x=1',
+    'https://discord.com/api/webhooks/123/abc/extra',
+    'http://169.254.169.254/latest/meta-data',
+  ])('skips a stored URL that is not a Discord webhook (%s) and logs only the webhook id', async (url) => {
+    vi.mocked(resolveWebhooks).mockResolvedValue([makeWebhook({ id: 'wh-bad', webhook_url: url })]);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    emitDiscordEvent(makePayload());
+    await flushPromises();
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.any(String), 'wh-bad');
+    expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain(url);
+    consoleSpy.mockRestore();
+  });
+
+  it('still posts to the valid webhooks when one stored URL is invalid', async () => {
+    vi.mocked(resolveWebhooks).mockResolvedValue([
+      makeWebhook({ id: 'wh-bad', webhook_url: 'https://evil.example/x' }),
+      makeWebhook({ id: 'wh-ok', webhook_url: 'https://discord.com/api/webhooks/2/b' }),
+    ]);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    emitDiscordEvent(makePayload());
+    await flushPromises();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://discord.com/api/webhooks/2/b');
+  });
+
+  it('logs a thrown fetch error by webhook id and error name only, never the URL or the message', async () => {
+    const webhook = makeWebhook({ id: 'wh-1', webhook_url: 'https://discord.com/api/webhooks/123/SECRETtoken_1' });
+    vi.mocked(resolveWebhooks).mockResolvedValue([webhook]);
+    vi.mocked(fetch).mockRejectedValue(
+      new TypeError('fetch failed for https://discord.com/api/webhooks/123/SECRETtoken_1'),
+    );
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    emitDiscordEvent(makePayload());
+    await flushPromises();
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('unreachable'), 'wh-1', 'TypeError');
+    expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain('SECRETtoken_1');
+    consoleSpy.mockRestore();
+  });
+
+  it('caps the upstream body it logs for a rejected post', async () => {
+    vi.mocked(resolveWebhooks).mockResolvedValue([makeWebhook({ id: 'wh-1' })]);
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: () => Promise.resolve('q'.repeat(5000)),
+    } as Response);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    emitDiscordEvent(makePayload());
+    await flushPromises();
+
+    const logged = consoleSpy.mock.calls.flat().join(' ');
+    expect(logged).toContain('wh-1');
+    expect(logged.length).toBeLessThan(400);
+    consoleSpy.mockRestore();
+  });
   it('sends to multiple matching webhooks', async () => {
     const webhooks = [
       makeWebhook({ id: 'wh-1', webhook_url: 'https://discord.com/api/webhooks/1/a' }),

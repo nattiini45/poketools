@@ -1,4 +1,5 @@
 import type { ThreadsCredentials } from '@/types/social';
+import { logSnippet, outboundFetch, SOCIAL_TIMEOUT_MS } from '@/lib/outbound-fetch';
 
 interface ThreadsCreateResponse {
   id?: string;
@@ -29,13 +30,14 @@ export async function postToThreads(
     createParams.set('image_url', imageUrl);
   }
 
-  const createResponse = await fetch(
+  const createResponse = await outboundFetch(
     `${baseUrl}/${credentials.user_id}/threads?${createParams.toString()}`,
     { method: 'POST' },
+    SOCIAL_TIMEOUT_MS,
   );
   if (!createResponse.ok) {
     const body = await createResponse.text().catch(() => '(no body)');
-    throw new Error(`[Threads] Create post failed: ${createResponse.status} ${body}`);
+    throw new Error(`[Threads] Create post failed: ${createResponse.status} ${logSnippet(body)}`);
   }
 
   const created = (await createResponse.json().catch(() => ({}))) as ThreadsCreateResponse;
@@ -47,13 +49,14 @@ export async function postToThreads(
     creation_id: created.id,
     access_token: credentials.access_token,
   });
-  const publishResponse = await fetch(
+  const publishResponse = await outboundFetch(
     `${baseUrl}/${credentials.user_id}/threads_publish?${publishParams.toString()}`,
     { method: 'POST' },
+    SOCIAL_TIMEOUT_MS,
   );
   if (!publishResponse.ok) {
     const body = await publishResponse.text().catch(() => '(no body)');
-    throw new Error(`[Threads] Publish post failed: ${publishResponse.status} ${body}`);
+    throw new Error(`[Threads] Publish post failed: ${publishResponse.status} ${logSnippet(body)}`);
   }
 
   const published = (await publishResponse.json().catch(() => ({}))) as ThreadsPublishResponse;

@@ -67,7 +67,7 @@ A webhook URL is a secret: anyone holding it can post to the channel. It is writ
 ### Test post: `POST /api/discord-webhooks/[id]/test`
 - Site admin only; no request body. The server loads the stored URL by id, so the browser never sends or receives it.
 - Rate limited to 10 requests per 60 seconds per admin (bucket `discord-webhook-test`), checked before the database read (429 via `rateLimitedResponse`).
-- Posts a fixed embed (`discord.testEmbed.*` in the `integrations` catalog) in the webhook's forced language, or the admin's own language when the webhook follows the league. The URL is re-validated against the Discord-only schema, redirects are not followed, the request times out after 8 seconds, and `allowed_mentions` is empty. A disabled webhook can still be tested.
+- Posts a fixed embed (`discord.testEmbed.*` in the `integrations` catalog) in the webhook's forced language, or the admin's own language when the webhook follows the league. The URL is re-validated against the Discord-only schema (the same check runs before every event post), redirects are not followed (a 3xx counts as unreachable), the request times out after 8 seconds, and `allowed_mentions` is empty. A disabled webhook can still be tested.
 - Every attempt is audited as `discord_webhook.test` (`ok`, plus `status` or `kind`); the URL is never logged or returned.
 - Responses: 200 `{ status }`; 404 `webhook_not_found`; 404 `INVALID_WEBHOOK_ID` for a malformed id; 429 `rate_limited`; 502 `discord_webhook_test_rejected` (param `status`, Discord's HTTP status); 502 `discord_webhook_test_unreachable` (timeout, DNS or network failure); 422 `discord_webhook_url_invalid` (the stored URL fails validation). Anything else goes through `safeErrorResponse`.
 

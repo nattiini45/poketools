@@ -3,13 +3,12 @@ import 'server-only';
 import type { Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { integrationsMessages } from '@/i18n/messages/integrations';
+import { DISCORD_TIMEOUT_MS, outboundFetch } from '@/lib/outbound-fetch';
 import { discordWebhookUrlSchema } from '@/lib/validation';
 import type { DiscordWebhook } from '@/types/discord';
 
 /** Discord blurple, the colour the test embed has always used. */
 const TEST_EMBED_COLOR = 0x5865f2;
-/** Give up on Discord after this long (the admin is waiting on the button). */
-const TEST_TIMEOUT_MS = 8000;
 
 /** What happened to one test post, without ever carrying the webhook URL. */
 export type WebhookTestOutcome =
@@ -37,23 +36,25 @@ export async function sendWebhookTestMessage(
   const tr = createTranslator(integrationsMessages, forced === 'de' || forced === 'en' ? forced : locale);
 
   try {
-    const res = await fetch(url.data, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        embeds: [
-          {
-            title: tr('discord.testEmbed.title'),
-            description: tr('discord.testEmbed.description', { label: webhook.label }),
-            color: TEST_EMBED_COLOR,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-        allowed_mentions: { parse: [] },
-      }),
-      signal: AbortSignal.timeout(TEST_TIMEOUT_MS),
-      redirect: 'manual',
-    });
+    const res = await outboundFetch(
+      url.data,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          embeds: [
+            {
+              title: tr('discord.testEmbed.title'),
+              description: tr('discord.testEmbed.description', { label: webhook.label }),
+              color: TEST_EMBED_COLOR,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+          allowed_mentions: { parse: [] },
+        }),
+      },
+      DISCORD_TIMEOUT_MS,
+    );
     if (res.status >= 200 && res.status < 300) return { ok: true, status: res.status };
     console.error('[Discord] Webhook test rejected:', webhook.id, res.status);
     return { ok: false, kind: 'rejected', status: res.status };

@@ -41,6 +41,7 @@ function mockFetchResponses(responses: Array<{
 describe('postToBluesky', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('creates a session then posts a text-only record', async () => {
@@ -74,7 +75,8 @@ describe('postToBluesky', () => {
     expect(recordBody.record.embed).toBeUndefined();
   });
 
-  it('uses custom service_url and strips trailing slash', async () => {
+  it('uses an operator-allowlisted service_url and strips the trailing slash', async () => {
+    vi.stubEnv('BLUESKY_SERVICE_HOST_ALLOWLIST', 'custom.bsky.net');
     mockFetchResponses([
       { ok: true, json: { did: 'did:plc:abc', accessJwt: 'jwt-token' } },
       { ok: true, json: { uri: 'at://did:plc:abc/post/1' } },
@@ -89,6 +91,67 @@ describe('postToBluesky', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       'https://custom.bsky.net/xrpc/com.atproto.server.createSession',
     );
+  });
+
+  it.each([
+    ['http://bsky.social', 'not_https'],
+    ['https://127.0.0.1', 'ip_literal'],
+    ['https://[::1]', 'ip_literal'],
+    ['https://localhost', 'local_host'],
+    ['https://pds.internal', 'local_host'],
+    ['https://bsky.social:8443', 'port'],
+    ['https://user:pw@bsky.social', 'userinfo'],
+    ['https://evil.example', 'host_not_allowed'],
+  ])('refuses a stored service_url %s at send time without any request', async (serviceUrl, reason) => {
+    mockFetchResponses([]);
+
+    await expect(
+      postToBluesky(makeCredentials({ service_url: serviceUrl }), 'Test'),
+    ).rejects.toMatchObject({ name: 'BlueskyServiceUrlError', reason });
+
+    expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+  });
+
+  it('never puts the rejected URL, handle or password in the error', async () => {
+    mockFetchResponses([]);
+
+    const err = await postToBluesky(
+      makeCredentials({ service_url: 'https://evil.example/secret-path' }),
+      'Test',
+    ).then(() => new Error('did not throw'), (e: unknown) => e as Error);
+
+    expect(err.message).not.toContain('evil.example');
+    expect(err.message).not.toContain('app-password-123');
+    expect(err.message).not.toContain('test.bsky.social');
+  });
+
+  it('sends every request without following redirects and with a deadline', async () => {
+    mockFetchImageAsBuffer.mockResolvedValue({
+      buffer: Buffer.from('fake-image'),
+      contentType: 'image/png',
+    });
+    mockFetchResponses([
+      { ok: true, json: { did: 'did:plc:abc', accessJwt: 'jwt-token' } },
+      { ok: true, json: { blob: { $type: 'blob', ref: { $link: 'x' }, mimeType: 'image/png', size: 1 } } },
+      { ok: true, json: { uri: 'at://did:plc:abc/post/1' } },
+    ]);
+
+    await postToBluesky(makeCredentials(), 'Test', 'https://example.com/img.png');
+
+    const calls = vi.mocked(globalThis.fetch).mock.calls;
+    expect(calls).toHaveLength(3);
+    for (const [, init] of calls) {
+      expect(init?.redirect).toBe('error');
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
+  it('caps an upstream error body in the thrown message', async () => {
+    mockFetchResponses([{ ok: false, status: 400, text: 'x'.repeat(5000) }]);
+
+    const err = await postToBluesky(makeCredentials(), 'Test').then(() => new Error('did not throw'), (e: unknown) => e as Error);
+
+    expect(err.message.length).toBeLessThan(300);
   });
 
   it('defaults to bsky.social when service_url is empty', async () => {
@@ -201,7 +264,7 @@ describe('postToBluesky', () => {
 
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('[Bluesky] Image upload failed'),
-      expect.any(Error),
+      expect.stringContaining('Network error'),
     );
 
     // Only 2 fetch calls (session + record), no blob upload

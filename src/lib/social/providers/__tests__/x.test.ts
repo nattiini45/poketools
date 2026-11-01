@@ -95,6 +95,33 @@ describe('postToX', () => {
     expect(tweetBody.media).toEqual({ media_ids: ['media-123'] });
   });
 
+  it('sends the media upload and the tweet without following redirects and with a deadline', async () => {
+    mockFetchImageAsBuffer.mockResolvedValue({
+      buffer: Buffer.from('fake-image-data'),
+      contentType: 'image/png',
+    });
+    mockFetchResponses([
+      { ok: true, json: { media_id_string: 'media-123' } },
+      { ok: true, json: { data: { id: 'tweet-2', text: 'With image' } } },
+    ]);
+
+    await postToX(makeCredentials(), 'With image', 'https://example.com/img.png');
+
+    const calls = vi.mocked(globalThis.fetch).mock.calls;
+    expect(calls).toHaveLength(2);
+    for (const [, init] of calls) {
+      expect(init?.redirect).toBe('error');
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
+  it('caps an upstream error body in the thrown message', async () => {
+    mockFetchResponses([{ ok: false, status: 403, text: 'z'.repeat(5000) }]);
+
+    const err = await postToX(makeCredentials(), 'Hi').then(() => new Error('did not throw'), (e: unknown) => e as Error);
+
+    expect(err.message.length).toBeLessThan(300);
+  });
   it('falls back to text-only tweet when image upload fails', async () => {
     mockFetchImageAsBuffer.mockRejectedValue(new Error('Fetch error'));
 
@@ -108,7 +135,7 @@ describe('postToX', () => {
 
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('[X] Image upload failed'),
-      expect.any(Error),
+      expect.stringContaining('Fetch error'),
     );
 
     const fetchMock = vi.mocked(globalThis.fetch);
