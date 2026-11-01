@@ -310,6 +310,8 @@ describe('social-integrations route', () => {
     ['https://127.0.0.1', 'ip_literal'],
     ['https://localhost', 'local_host'],
     ['https://bsky.social:8443', 'port'],
+    ['https://bsky.social:443', 'port'],
+    ['https://bsky.social:', 'port'],
     ['https://user:pw@bsky.social', 'userinfo'],
     ['https://evil.example', 'host_not_allowed'],
   ])('POST refuses a Bluesky service_url %s (%s) without storing anything', async (serviceUrl, reason) => {

@@ -18,11 +18,16 @@ describe('checkBlueskyServiceUrl', () => {
     },
   );
 
-  it('accepts the default port written out', () => {
-    expect(checkBlueskyServiceUrl('https://bsky.social:443')).toEqual({ ok: true, origin: 'https://bsky.social' });
-  });
-
   const rejected: [string, BlueskyServiceUrlRejection][] = [
+    ['https://bsky.social:443', 'port'],
+    ['https://bsky.social:443/', 'port'],
+    ['https://bsky.social:', 'port'],
+    ['https://bsky.social:/', 'port'],
+    ['https://bsky.social:0443', 'port'],
+    [' https://BSKY.social:443 ', 'port'],
+    ['https://bsky.social:\t443', 'port'],
+    ['https://bsky.social:443\\', 'port'],
+    ['https://pds.example.org:443', 'port'],
     ['not a url', 'invalid_url'],
     ['bsky.social', 'invalid_url'],
     ['http://bsky.social', 'not_https'],

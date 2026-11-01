@@ -143,7 +143,12 @@ describe('social-integrations/[id] route', () => {
     expect(vi.mocked(updateSocialIntegration)).not.toHaveBeenCalled();
   });
 
-  it('PATCH refuses a Bluesky service_url outside the allowlist and stores nothing', async () => {
+  it.each([
+    ['https://evil.example', 'host_not_allowed'],
+    ['https://bsky.social:443', 'port'],
+    ['https://bsky.social:', 'port'],
+    ['https://bsky.social:8443', 'port'],
+  ])('PATCH refuses a Bluesky service_url %s (%s) and stores nothing', async (serviceUrl, reason) => {
     vi.mocked(getSocialIntegrationById).mockResolvedValue({ ...baseIntegration(), provider: 'bluesky' });
 
     const request = {
@@ -152,7 +157,7 @@ describe('social-integrations/[id] route', () => {
           provider: 'bluesky',
           handle: 'example.bsky.social',
           app_password: 'pw',
-          service_url: 'https://evil.example',
+          service_url: serviceUrl,
         },
       }),
     } as unknown as NextRequest;
@@ -163,7 +168,7 @@ describe('social-integrations/[id] route', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(400);
-    const issues = 'credentials.service_url: not allowed (host_not_allowed)';
+    const issues = `credentials.service_url: not allowed (${reason})`;
     expect(payload).toEqual({ success: false, error: issues, code: 'validation_failed', params: { issues } });
     expect(vi.mocked(encryptJson)).not.toHaveBeenCalled();
     expect(vi.mocked(updateSocialIntegration)).not.toHaveBeenCalled();

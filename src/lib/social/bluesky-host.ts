@@ -42,6 +42,22 @@ function isLocalName(hostname: string): boolean {
 }
 
 /**
+ * Whether the raw authority of an absolute URL carries a `:` port separator
+ * (`host:443`, `host:`, `host:8443`), which `new URL` normalises away for the
+ * default or an empty port. Mirrors the parser: tab/newline are dropped and
+ * `\` ends the authority like `/`; userinfo is everything up to the last `@`;
+ * a `:` inside an IPv6 literal's brackets is not a port.
+ */
+function hasExplicitPort(raw: string): boolean {
+  const cleaned = raw.replace(/[\t\n\r]/g, '').trim();
+  const afterScheme = cleaned.replace(/^[a-z][a-z0-9+.-]*:[/\\]*/i, '');
+  const authority = afterScheme.split(/[/\\?#]/, 1)[0];
+  const host = authority.slice(authority.lastIndexOf('@') + 1);
+  const hostEnd = host.startsWith('[') ? host.indexOf(']') + 1 : 0;
+  return host.indexOf(':', hostEnd) !== -1;
+}
+
+/**
  * The extra hosts an operator allows, from a comma-separated list. An entry
  * that is not a plain public hostname (an IP, `localhost`, `*.local`,
  * `*.internal`, a port, a scheme, a path) is dropped: the allowlist can widen
@@ -81,8 +97,8 @@ export function checkBlueskyServiceUrl(
 
   if (url.protocol !== 'https:') return { ok: false, reason: 'not_https' };
   if (url.username || url.password) return { ok: false, reason: 'userinfo' };
-  // The parser drops a default port, so any port left is a non-443 one.
-  if (url.port) return { ok: false, reason: 'port' };
+  // The parser drops `:443` and an empty `:`, so `url.port` cannot see them.
+  if (url.port || hasExplicitPort(value)) return { ok: false, reason: 'port' };
   if (isIpLiteral(url.hostname)) return { ok: false, reason: 'ip_literal' };
   if (isLocalName(url.hostname)) return { ok: false, reason: 'local_host' };
   if (url.search || url.hash || (url.pathname !== '/' && url.pathname !== '')) {
