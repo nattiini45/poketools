@@ -21,7 +21,16 @@ describe.skipIf(!optIn)('dev seed (local stack)', () => {
   }, 120_000);
 
   it('creates a confirmed admin, the league and its matches, and a second run changes nothing', async () => {
+    // E2E runs and manual use change the seeded league; start from a league this test creates itself.
+    const db = admin();
+    const old = await db.from('seasons').select('id').eq('name', DEV_SEED_LEAGUE_NAME);
+    for (const league of old.data ?? []) {
+      expect((await db.from('tournaments').delete().eq('season_id', league.id)).error).toBeNull();
+      expect((await db.from('seasons').delete().eq('id', league.id)).error).toBeNull();
+    }
+
     const first = await seed.runDevSeed();
+    expect(first.leagueCreated).toBe(true);
     const second = await seed.runDevSeed();
 
     expect(second.leagueCreated).toBe(false);
@@ -30,7 +39,6 @@ describe.skipIf(!optIn)('dev seed (local stack)', () => {
     expect(second.adminPlayerId).toBe(first.adminPlayerId);
     expect(second.rulesetsCreated).toBe(0);
 
-    const db = admin();
     const adminRows = await db.from('players').select('id, is_admin, auth_user_id').eq('id', first.adminPlayerId);
     expect(adminRows.data).toHaveLength(1);
     expect(adminRows.data?.[0]).toMatchObject({ is_admin: true });
@@ -47,24 +55,43 @@ describe.skipIf(!optIn)('dev seed (local stack)', () => {
     expect((matches.data ?? []).map((m) => m.status).sort()).toEqual(['completed', 'completed', 'scheduled', 'scheduled']);
   }, 180_000);
 
-  it('rebuilds a league that an interrupted run left without its matches', async () => {
+  it('completes a league that an interrupted run left half written, in place', async () => {
     const before = await seed.runDevSeed();
     const db = admin();
+    // The seed's last step moves the tournament out of `upcoming`; undo it and the writes before it.
     const removed = await db.from('matches').delete().eq('tournament_id', before.tournamentId);
     expect(removed.error).toBeNull();
+    const reset = await db.from('tournaments').update({ status: 'upcoming', current_round: 0 }).eq('id', before.tournamentId);
+    expect(reset.error).toBeNull();
 
     const repaired = await seed.runDevSeed();
-    expect(repaired.leagueCreated).toBe(true);
-    const leagues = await db.from('seasons').select('id').eq('name', DEV_SEED_LEAGUE_NAME);
-    expect(leagues.data).toHaveLength(1);
+    expect(repaired.leagueCreated).toBe(false);
+    expect(repaired.leagueId).toBe(before.leagueId);
+    expect(repaired.tournamentId).toBe(before.tournamentId);
     const matches = await db.from('matches').select('status').eq('tournament_id', repaired.tournamentId);
     expect((matches.data ?? []).map((m) => m.status).sort()).toEqual(['completed', 'completed', 'scheduled', 'scheduled']);
+    const rounds = await db.from('rounds').select('id').eq('tournament_id', repaired.tournamentId);
+    expect(rounds.data).toHaveLength(1);
+    const stage = await db.from('tournaments').select('status, current_round').eq('id', repaired.tournamentId).single();
+    expect(stage.data).toEqual({ status: 'active', current_round: 1 });
+  }, 180_000);
+
+  it('leaves a league that has been played further untouched on a rerun', async () => {
+    const before = await seed.runDevSeed();
+    const db = admin();
+    const scheduled = await db.from('matches').select('id').eq('tournament_id', before.tournamentId).eq('status', 'scheduled').limit(1);
+    const matchId = scheduled.data?.[0]?.id as string;
+    const played = await db.from('matches').update({ status: 'completed' }).eq('id', matchId);
+    expect(played.error).toBeNull();
 
     const again = await seed.runDevSeed();
     expect(again.leagueCreated).toBe(false);
-    expect(again.leagueId).toBe(repaired.leagueId);
+    expect(again.tournamentId).toBe(before.tournamentId);
+    const matches = await db.from('matches').select('id, status').eq('tournament_id', before.tournamentId);
+    expect(matches.data).toHaveLength(4);
+    expect(matches.data?.find((m) => m.id === matchId)?.status).toBe('completed');
+    expect(matches.data?.filter((m) => m.status === 'completed')).toHaveLength(3);
   }, 180_000);
-
   it('signs the seeded admin in with email and password', async () => {
     const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, requireLocalKey('NEXT_PUBLIC_SUPABASE_ANON_KEY'));
     const { error } = await anon.auth.signInWithPassword({ email: DEV_SEED_ADMIN.email, password: DEV_SEED_ADMIN.password });
@@ -74,3 +101,5 @@ describe.skipIf(!optIn)('dev seed (local stack)', () => {
     expect(player.error).toBeNull();
   });
 });
+
+
