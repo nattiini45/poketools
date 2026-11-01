@@ -90,7 +90,7 @@ export default defineConfig({
       ],
       exclude: ['src/**/__tests__/**', 'src/types/**'],
       reporter: ['text', 'html', 'clover', 'json', 'json-summary'],
-      // Enforced by the ci.yml "Test coverage" step (`npm run test:coverage`). Only the gated
+      // Enforced by the ci.yml "Tests and coverage" step (`npm run test:coverage`). Only the gated
       // glob (the include set before components and pages were added) has floors; there is no
       // global floor, so components and app pages stay report-only. Floors = measured minus 1
       // point, rounded down, from the lowest of two 2026-10-18 working-tree runs (lines 88.34,

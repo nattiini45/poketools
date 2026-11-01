@@ -16,6 +16,8 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # Without a timeout a hung step holds a runner for GitHub's six-hour default.
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,7 +26,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
@@ -69,7 +71,7 @@ jobs:
         # tsc against the pack this job builds (tsconfig.example.json pins @format-pack to the
         # example pack), so the result does not depend on whether a private pack is on disk.
 
-      - name: Type-check & build
+      - name: Build
         run: npm run build
         env:
           # CI builds and tests the public example pack (docs/format-packs.md); pinned so a
@@ -78,6 +80,9 @@ jobs:
           # The type check needs ~2.5 GB since the i18n catalogs landed; the runner's
           # default Node heap (~2 GB) ran out. Keep in step with BUILD_ENV in scripts/verify-ci.mjs.
           NODE_OPTIONS: --max-old-space-size=4096
+          # The explicit type-check step above is the type gate; next.config.mjs skips the build's duplicate
+          # only for this variable (never for CI, which Vercel sets too). Keep in step with BUILD_ENV in scripts/verify-ci.mjs.
+          CI_SKIP_BUILD_TYPECHECK: '1'
           # Build needs these but won't actually connect
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: placeholder
@@ -86,8 +91,6 @@ jobs:
           DISCORD_CLIENT_ID: placeholder
           DISCORD_CLIENT_SECRET: placeholder
 
-      - name: Run tests
-        run: npm test
-
-      - name: Test coverage
+      - name: Tests and coverage
         run: npm run test:coverage
+        # The only Vitest run: every project, plus the coverage floors in vitest.config.ts.

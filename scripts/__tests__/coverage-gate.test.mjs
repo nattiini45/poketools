@@ -47,12 +47,12 @@ describe('coverage gate', () => {
     expect(coverage.reporter).toEqual(expect.arrayContaining(['text', 'json-summary']));
   });
 
-  it('CI runs the coverage command as a blocking step', () => {
+  it('CI runs the coverage command as the one blocking test step', () => {
     const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
     expect(pkg.scripts['test:coverage']).toBe('vitest run --coverage');
     const ci = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8').replace(/\r\n/g, '\n');
-    const step = /\n( *)- name: Test coverage\n((?:\1 {2}.*\n?)*)/.exec(ci);
-    expect(step, 'ci.yml has a "Test coverage" step').not.toBeNull();
+    const step = /\n( *)- name: Tests and coverage\n((?:\1 {2}.*\n?)*)/.exec(ci);
+    expect(step, 'ci.yml has a "Tests and coverage" step').not.toBeNull();
     expect(step?.[2]).toMatch(/run: npm run test:coverage/);
     expect(step?.[2]).not.toMatch(/continue-on-error/);
   });

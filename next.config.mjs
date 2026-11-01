@@ -126,6 +126,9 @@ const nextConfig = {
   // Web Push sender (src/lib/push/send.ts, docs/push.md): a Node-only CommonJS package with native `crypto`/`https`
   // use. It stays an external require on the server instead of being bundled; it never reaches a client bundle.
   serverExternalPackages: ['web-push'],
+  // CI type-checks once, in its `typecheck:example` step, and sets this on the build step only. Never key it off `CI`:
+  // Vercel sets that too, and a production build there keeps its type gate.
+  typescript: { ignoreBuildErrors: process.env.CI_SKIP_BUILD_TYPECHECK === '1' },
   turbopack: {
     resolveAlias: {
       '@format-pack': FORMAT_PACK_ENTRY,

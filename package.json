@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:example": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc -p tsconfig.example.json --noEmit",
     "start": "next start",
-    "lint": "eslint src/ scripts/",
+    "lint": "eslint src/ scripts/ --max-warnings=0",
     "test": "vitest run",
     "test:changed": "vitest related --changed",
     "test:watch": "vitest",
