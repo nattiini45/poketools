@@ -35,7 +35,7 @@ PokéTools is a full-featured platform for managing competitive Pokémon leagues
 
 ## Quick Start
 
-The repository [README](../README.md) is the authoritative setup guide (prerequisites, environment variables, first admin, scheduled jobs). The short form for local development, which needs Node.js 22 (`.nvmrc`), Docker for the local Supabase stack and your own Discord application:
+The repository [README](../README.md) is the authoritative setup guide (prerequisites, environment variables, first admin, scheduled jobs). The short form for local development, which needs Node.js `^22.22.2 || ^24.15.0` (`.nvmrc` pins the version CI runs; `npm install` refuses anything else), Docker for the local Supabase stack and your own Discord application:
 
 ```bash
 npm install

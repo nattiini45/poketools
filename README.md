@@ -20,7 +20,7 @@ Competitive Pokémon league and tournament management platform. Built with Next.
 
 ## Prerequisites
 
-- Node.js 22+ (see `.nvmrc`)
+- Node.js `^22.22.2 || ^24.15.0` (`.nvmrc` pins the version CI runs; `npm install` refuses an unsupported Node)
 - npm
 - Your own [Supabase](https://supabase.com) project, or the Supabase CLI plus Docker for a local stack
 - Your own [Discord application](https://discord.com/developers/applications) for OAuth sign-in

@@ -4,6 +4,9 @@
   "description": "Competitive Pokemon league and tournament management platform",
   "license": "MIT",
   "private": true,
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0"
+  },
   "scripts": {
     "predev": "node scripts/mirror-private-overlay.mjs && node scripts/generate-placeholder-avatars.mjs --quiet",
     "dev": "next dev",
@@ -90,7 +93,7 @@
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
-    "@types/node": "^25",
+    "@types/node": "^24",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/web-push": "3.6.4",
