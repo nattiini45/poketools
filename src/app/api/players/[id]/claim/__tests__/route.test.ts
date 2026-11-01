@@ -15,7 +15,6 @@ vi.mock('@/lib/supabase/queries/players', () => ({
   getPlayerById: vi.fn(),
   getPlayerActivityCounts: vi.fn(),
   claimGuestPlayer: vi.fn(),
-  revokePlayerSessions: vi.fn(),
 }));
 
 vi.mock('@/lib/audit/log', () => ({
@@ -28,7 +27,6 @@ import {
   claimGuestPlayer,
   getPlayerActivityCounts,
   getPlayerById,
-  revokePlayerSessions,
 } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import { makeRequest, makeParams } from '@/lib/__tests__/helpers/api-request';
@@ -96,52 +94,6 @@ describe('POST /api/players/[id]/claim', () => {
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'player.claim' }),
     );
-  });
-
-  it('ends the sessions the claimed account held, and says so in the audit event', async () => {
-    const res = await POST(
-      makeRequest({ source_player_id: SOURCE_ID }),
-      { params: makeParams({ id: GUEST_ID }) },
-    );
-
-    expect(res.status).toBe(200);
-    expect(revokePlayerSessions).toHaveBeenCalledWith(GUEST_ID);
-    expect(logAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'player.claim',
-        metadata: expect.objectContaining({ sessions_revoked: true }),
-      }),
-    );
-  });
-
-  it('still reports the committed claim when the revocation write fails, and records that it did not happen', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(revokePlayerSessions).mockRejectedValueOnce(new Error('db down'));
-
-    const res = await POST(
-      makeRequest({ source_player_id: SOURCE_ID }),
-      { params: makeParams({ id: GUEST_ID }) },
-    );
-
-    expect(res.status).toBe(200);
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('revoke'), expect.any(Error));
-    expect(logAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ metadata: expect.objectContaining({ sessions_revoked: false }) }),
-    );
-    errorSpy.mockRestore();
-  });
-
-  it('revokes nothing when the claim itself is refused', async () => {
-    vi.mocked(claimGuestPlayer).mockRejectedValueOnce({ code: '55000', message: 'not active' });
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const res = await POST(
-      makeRequest({ source_player_id: SOURCE_ID }),
-      { params: makeParams({ id: GUEST_ID }) },
-    );
-
-    expect(res.status).toBe(409);
-    expect(revokePlayerSessions).not.toHaveBeenCalled();
   });
 
   it('rejects when source account has activity', async () => {

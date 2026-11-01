@@ -5,8 +5,7 @@ import type { NextRequest } from 'next/server';
 
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: vi.fn(),
-  getSession: vi.fn(),
-  isSuperadmin: vi.fn(),
+  isSuperadminNow: vi.fn(),
   AuthError: class AuthError extends Error {
     statusCode: number;
     constructor(message: string, statusCode: number) {
@@ -59,7 +58,7 @@ vi.mock('@/i18n/content-locale', () => ({
 
 import { POST } from '@/app/api/ai/agent/analyze-match/route';
 import { resolveContentLocale } from '@/i18n/content-locale';
-import { requirePlayer, getSession, isSuperadmin, AuthError } from '@/lib/auth/helpers';
+import { requirePlayer, isSuperadminNow, AuthError } from '@/lib/auth/helpers';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { runAgent } from '@/lib/ai/agent/orchestrator';
@@ -88,7 +87,6 @@ const UUID_MATCH = '00000000-0000-4000-8000-000000000001';
 
 const mockPlayer = { playerId: 'player-1', name: 'Ash', isAdmin: false };
 
-const mockSession = { player: mockPlayer, user: { id: 'discord-1' } };
 
 const scheduledMatch = {
   id: UUID_MATCH,
@@ -143,8 +141,7 @@ async function readBody(res: Response): Promise<string> {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(checkAndRecordAiGeneration).mockResolvedValue({ allowed: true, limit: 20, remaining: 19, used: 1 });
-  vi.mocked(getSession).mockResolvedValue(mockSession as never);
-  vi.mocked(isSuperadmin).mockReturnValue(false);
+  vi.mocked(isSuperadminNow).mockResolvedValue(false);
   // post_match defaults: no cached analysis, fresh row created, context gathered.
   vi.mocked(getMatchAnalysis).mockResolvedValue(null);
   vi.mocked(createMatchAnalysis).mockResolvedValue({ id: 'rec-1' } as never);
@@ -285,7 +282,7 @@ describe('POST /api/ai/agent/analyze-match', () => {
 
   it('lets a superadmin scout a match they are not part of', async () => {
     vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'player-3' } as never);
-    vi.mocked(isSuperadmin).mockReturnValue(true);
+    vi.mocked(isSuperadminNow).mockResolvedValue(true);
     vi.mocked(getMatchById).mockResolvedValue(scheduledMatch as never);
     vi.mocked(runAgent).mockResolvedValue(scoutRunAgent as never);
 

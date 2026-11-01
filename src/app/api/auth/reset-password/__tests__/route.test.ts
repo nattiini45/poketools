@@ -70,7 +70,7 @@ describe('POST /api/auth/reset-password', () => {
     expect(updateUserById).toHaveBeenCalledWith('auth-7', { password: 'newpassword1' });
   });
 
-  it('ends every earlier session of the account once the password has changed', async () => {
+  it('ends every earlier session of the account before the password changes', async () => {
     verifyOtp.mockResolvedValue({ data: { user: { id: 'auth-7' } }, error: null });
     updateUserById.mockResolvedValue({ data: {}, error: null });
 
@@ -79,8 +79,8 @@ describe('POST /api/auth/reset-password', () => {
     expect(res.status).toBe(200);
     expect(revokeSessionsOfAuthUser).toHaveBeenCalledTimes(1);
     expect(revokeSessionsOfAuthUser).toHaveBeenCalledWith('auth-7');
-    // After the password change, so the old password cannot mint a session that outlives the revocation.
-    expect(vi.mocked(revokeSessionsOfAuthUser).mock.invocationCallOrder[0]).toBeGreaterThan(
+    // Before the password change: a revocation that fails must leave the old password in force.
+    expect(vi.mocked(revokeSessionsOfAuthUser).mock.invocationCallOrder[0]).toBeLessThan(
       updateUserById.mock.invocationCallOrder[0],
     );
   });
@@ -94,17 +94,18 @@ describe('POST /api/auth/reset-password', () => {
     expect(revokeSessionsOfAuthUser).not.toHaveBeenCalled();
   });
 
-  it('revokes nothing when the password update failed', async () => {
+  it('keeps the revocation when the password update fails afterwards', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     verifyOtp.mockResolvedValue({ data: { user: { id: 'auth-7' } }, error: null });
     updateUserById.mockResolvedValue({ data: {}, error: new Error('weak password detail') });
 
-    await POST(makeRequest({ token_hash: 'hash-123', password: 'newpassword1' }));
+    const res = await POST(makeRequest({ token_hash: 'hash-123', password: 'newpassword1' }));
 
-    expect(revokeSessionsOfAuthUser).not.toHaveBeenCalled();
+    expect(res.status).toBe(500);
+    expect(revokeSessionsOfAuthUser).toHaveBeenCalledWith('auth-7');
   });
 
-  it('does not report a reset whose revocation failed as a success', async () => {
+  it('leaves the password unchanged when the revocation failed', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     verifyOtp.mockResolvedValue({ data: { user: { id: 'auth-7' } }, error: null });
     updateUserById.mockResolvedValue({ data: {}, error: null });
@@ -114,6 +115,7 @@ describe('POST /api/auth/reset-password', () => {
 
     expect(res.status).toBe(500);
     expect((await res.json()).code).toBe('password_reset_failed');
+    expect(updateUserById).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalled();
   });
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requirePlayer, requireAdmin, getSession, isSuperadmin } from '@/lib/auth/helpers';
+import { requirePlayer, requireAdmin, isSuperadminNow } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { wikiNotePatchSchema, wikiNoteBlockResubmissionSchema, formatZodErrors } from '@/lib/validation';
 import {
@@ -53,7 +53,7 @@ async function handleResubmissionBlock(id: string, rawBody: unknown) {
   const { block_resubmission: block } = zodResult.data;
 
   const admin = await requireAdmin();
-  if (!isSuperadmin(await getSession())) {
+  if (!(await isSuperadminNow())) {
     return NextResponse.json<ApiResult<never>>(
       {
         success: false,

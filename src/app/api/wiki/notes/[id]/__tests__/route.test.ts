@@ -4,8 +4,7 @@ import type { NextRequest } from 'next/server';
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: vi.fn(),
   requireAdmin: vi.fn(),
-  getSession: vi.fn(),
-  isSuperadmin: vi.fn(),
+  isSuperadminNow: vi.fn(),
   AuthError: class AuthError extends Error {
     statusCode: number;
     constructor(message: string, statusCode: number) {
@@ -29,7 +28,7 @@ vi.mock('@/lib/audit/log', () => ({
 }));
 
 import { PATCH, DELETE } from '@/app/api/wiki/notes/[id]/route';
-import { requirePlayer, requireAdmin, getSession, isSuperadmin, AuthError } from '@/lib/auth/helpers';
+import { requirePlayer, requireAdmin, isSuperadminNow, AuthError } from '@/lib/auth/helpers';
 import {
   getNoteById,
   updateNote,
@@ -254,8 +253,7 @@ describe('PATCH /api/wiki/notes/[id] block_resubmission', () => {
     vi.clearAllMocks();
     vi.mocked(requirePlayer).mockResolvedValue(PLAYER);
     vi.mocked(requireAdmin).mockResolvedValue(SUPERADMIN as never);
-    vi.mocked(getSession).mockResolvedValue({ user: { id: 'super-discord' } } as never);
-    vi.mocked(isSuperadmin).mockReturnValue(true);
+    vi.mocked(isSuperadminNow).mockResolvedValue(true);
     vi.mocked(setNoteResubmissionBlock).mockResolvedValue(true);
   });
 
@@ -290,7 +288,7 @@ describe('PATCH /api/wiki/notes/[id] block_resubmission', () => {
 
   it('refuses a site admin who is not the superadmin with 403 and writes nothing', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN as never);
-    vi.mocked(isSuperadmin).mockReturnValue(false);
+    vi.mocked(isSuperadminNow).mockResolvedValue(false);
     vi.mocked(getNoteById).mockResolvedValue(rejectedNote as never);
 
     const res = await PATCH(makeRequest({ block_resubmission: true }), makeParams(NOTE_ID));
@@ -303,7 +301,7 @@ describe('PATCH /api/wiki/notes/[id] block_resubmission', () => {
 
   it('refuses a site admin who is not the superadmin when unblocking too', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN as never);
-    vi.mocked(isSuperadmin).mockReturnValue(false);
+    vi.mocked(isSuperadminNow).mockResolvedValue(false);
 
     const res = await PATCH(makeRequest({ block_resubmission: false }), makeParams(NOTE_ID));
 

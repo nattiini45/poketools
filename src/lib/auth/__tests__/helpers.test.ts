@@ -61,6 +61,7 @@ import {
   isAdmin,
   isCreator,
   isSuperadmin,
+  isSuperadminNow,
   isReservedSuperadminEmail,
   isAnyAdmin,
   AuthError,
@@ -683,6 +684,36 @@ describe('requireAdmin', () => {
     process.env.SUPERADMIN_DISCORD_ID = 'discord-1';
     signIn(makePlayer(), makePlayer({ isAdmin: false }));
     await expect(requireAdmin()).resolves.toMatchObject({ isAdmin: true });
+  });
+});
+
+describe('isSuperadminNow', () => {
+  it('is false when signed out, without a live read', async () => {
+    mockedAuth.mockResolvedValue(null);
+    await expect(isSuperadminNow()).resolves.toBe(false);
+    expect(mockedLoad).not.toHaveBeenCalled();
+  });
+
+  it('is true for the credentials superadmin while the Discord link holds', async () => {
+    process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    process.env.SUPERADMIN_DISCORD_ID = 'snowflake-1';
+    mockedLinked.mockResolvedValue(true);
+    mockedAuth.mockResolvedValue({ ...makeSession(makePlayer()), provider: 'credentials' });
+    mockedLoad.mockImplementation(async () => makePlayer({ isAdmin: true }));
+    await expect(isSuperadminNow()).resolves.toBe(true);
+  });
+
+  it('is false once the Discord link is revoked, although the token still carries superadminLinked', async () => {
+    process.env.SUPERADMIN_EMAIL = 'test@example.com';
+    process.env.SUPERADMIN_DISCORD_ID = 'snowflake-1';
+    mockedLinked.mockResolvedValue(false);
+    mockedAuth.mockResolvedValue({
+      ...makeSession(makePlayer()),
+      provider: 'credentials',
+      superadminLinked: true,
+    });
+    mockedLoad.mockImplementation(async () => makePlayer({ isAdmin: true }));
+    await expect(isSuperadminNow()).resolves.toBe(false);
   });
 });
 

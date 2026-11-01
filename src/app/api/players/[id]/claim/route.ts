@@ -7,7 +7,6 @@ import {
   claimGuestPlayer,
   getPlayerActivityCounts,
   getPlayerById,
-  revokePlayerSessions,
 } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
@@ -130,16 +129,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       throw err;
     }
 
-    // The identity moved onto the guest row: a token minted for the source must not carry on as the claimed player.
-    // The claim is committed, so a failed write is logged and recorded in the audit event instead of failing the request.
-    let sessionsRevoked = true;
-    try {
-      await revokePlayerSessions(claimed.id);
-    } catch (err) {
-      sessionsRevoked = false;
-      console.error('[players] guest claim committed but its sessions could not be revoked:', err);
-    }
-
+    // The identity moved onto the guest row: a token minted for the source no longer carries on as the claimed
+    // player. The database ends it in the claim's own transaction (players_session_epoch_guard).
     logAuditEvent({
       actor_id: admin.playerId,
       actor_name: admin.name,
@@ -155,7 +146,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       metadata: {
         source_player_id: sourcePlayerId,
         source_player_name: source.name,
-        sessions_revoked: sessionsRevoked,
       },
     });
 

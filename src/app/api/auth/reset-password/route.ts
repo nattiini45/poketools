@@ -48,16 +48,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The epoch lives on the player, so this also ends the account's Discord sessions. It is written before the
+    // password changes and a failure aborts the reset: the other order would leave a changed password with the
+    // sessions of whoever held the old one still valid. A password update that fails afterwards only signs the
+    // owner out early.
+    await revokeSessionsOfAuthUser(data.user.id);
+
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       data.user.id,
       { password: parsed.data.password }
     );
 
     if (updateError) throw updateError;
-
-    // The epoch lives on the player, so this also ends the account's Discord sessions. It runs after the change:
-    // the old password can no longer sign in, so nothing it minted can outlive the revocation.
-    await revokeSessionsOfAuthUser(data.user.id);
 
     return NextResponse.json<ApiResult<{ message: string }>>({
       success: true,

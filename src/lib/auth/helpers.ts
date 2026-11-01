@@ -221,6 +221,16 @@ export async function getLiveAccess(): Promise<LiveAccess | null> {
   };
 }
 
+/**
+ * Whether the signed-in identity is the superadmin right now: the decision `requireSuperadmin()` makes, as a boolean.
+ * For a branch inside a handler that already answered its own guard (a participant or the superadmin). Never the
+ * token's `isSuperadmin(getSession())`: for a credentials session that copy can be 5 minutes old, so a revoked
+ * Discord link would keep authorizing.
+ */
+export async function isSuperadminNow(): Promise<boolean> {
+  return (await getLiveAccess())?.isSuperadmin === true;
+}
+
 /** Throws 403 unless the (live) player may act. Site admins bypass. */
 function assertInGoodStanding(player: SessionPlayer): void {
   if (isInGoodStanding(player)) return;
