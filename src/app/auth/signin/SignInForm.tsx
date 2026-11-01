@@ -14,12 +14,14 @@ interface SignInFormProps {
   callbackUrl: string;
   /** A key of `auth.signIn.errors` (the NextAuth `?error=` code), checked by the page. */
   initialErrorCode: string | null;
+  /** Decided on the server (discordOAuthEnabled()): the Discord button and its divider are not rendered without it. */
+  discordEnabled: boolean;
 }
 
 /** What went wrong: an OAuth error code from the redirect, bad credentials, or too many attempts (the sign-in rate limit). */
 type SignInError = { kind: 'oauth'; code: string } | { kind: 'credentials' } | { kind: 'tooManyAttempts' };
 
-export default function SignInForm({ callbackUrl, initialErrorCode }: SignInFormProps) {
+export default function SignInForm({ callbackUrl, initialErrorCode, discordEnabled }: SignInFormProps) {
   const t = useT(authMessages);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -82,20 +84,24 @@ export default function SignInForm({ callbackUrl, initialErrorCode }: SignInForm
         </Alert>
       )}
 
-      <Button
-        type="button"
-        variant="secondary"
-        className="w-full"
-        onClick={() => signIn('discord', { callbackUrl: sanitizeCallbackUrl(callbackUrl) })}
-      >
-        {t('signIn.discord')}
-      </Button>
+      {discordEnabled && (
+        <>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={() => signIn('discord', { callbackUrl: sanitizeCallbackUrl(callbackUrl) })}
+          >
+            {t('signIn.discord')}
+          </Button>
 
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-poke-border" />
-        <span className="text-xs text-poke-text-muted">{t('signIn.orEmail')}</span>
-        <div className="h-px flex-1 bg-poke-border" />
-      </div>
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-poke-border" />
+            <span className="text-xs text-poke-text-muted">{t('signIn.orEmail')}</span>
+            <div className="h-px flex-1 bg-poke-border" />
+          </div>
+        </>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <Input

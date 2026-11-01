@@ -19,9 +19,27 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   `NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT` for the UI; `ADMIN_AGENT_MAX_PHASE` (default `0`) decides what it may execute,
   `ADMIN_AGENT_GOLIVE` gates Go-live cards, and the model needs `ANTHROPIC_API_KEY`. Every setting and its default is in
   [docs/feature-flags.md](docs/feature-flags.md).
+- **Apply `20261102120000_audit_log_game_match_id_index.sql` (any time; no downtime).** It is a single
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS` for the admin match history panel, so it takes no write lock on
+  `audit_log`. A concurrent build that was cancelled leaves an INVALID index of the same name: check
+  `SELECT indisvalid FROM pg_index WHERE indexrelid = 'public.audit_log_game_match_id_idx'::regclass;`, and when it is
+  `false` run `DROP INDEX CONCURRENTLY public.audit_log_game_match_id_idx;` and apply the file again.
+- **Discord sign-in is optional.** Set `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` together to keep it, or leave
+  both blank for email and password only (one without the other stops the server at startup). Existing deployments
+  that set both see no change. A local `supabase start` stack now requires email confirmation like the hosted project;
+  after pulling, restart it (`npx supabase stop && npx supabase start`) so `supabase/config.toml` takes effect.
 
 ### Added
 
+- **Zero-setup local development.** `npm run dev:seed` gives a local stack a confirmed admin, the standard rulesets and
+  one 8-player league; with Discord left unconfigured, the sign-in page and Settings show email and password only
+  (CONTRIBUTING, "Local development without Discord").
+- **`npm run test:db`** runs every local-stack suite (`*.local.test.ts`, `*.live-db.test.ts`) in its own Vitest
+  project against a local Supabase stack, refusing any host but the loopback interface. CI runs it, plus a migration
+  replay and `npm run db:types:check`, in an advisory `database` job on its own ephemeral stack.
+- **`npm run test:e2e`**: a Playwright smoke suite (Chromium) over the local stack and a production build
+  (`npm run build:e2e`) with the local asset mirrors, served on port 3152: public pages, email sign-up and sign-in through Mailpit, report and confirm, the admin match
+  page, an overlay without the NavBar and the language switch. CI runs it in an advisory `e2e` job.
 - **Admin Assistant (preview; spec section 18).** A chat for site admins at `/admin/assistant` and as a drawer that
   plans a league, a standalone tournament or a ruleset with the admin and then sets it up through the site's own routes,
   only after the admin approves a card the server writes:
@@ -51,6 +69,9 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   `engine-strict`, so `npm install` / `npm ci` fail on Node 23, 25 or a 22.x before 22.22.2 instead of printing a
   warning (jsdom 30, used by the DOM tests, needs it). `.nvmrc` pins 24.22.1 and CI reads it; `@types/node` is on 24.
   Upgrade Node locally before pulling this.
+- The match history of the admin match page reads `audit_log` through an index on `metadata->>'match_id'` for game
+  events instead of scanning the table.
+- The build no longer needs `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` (CI dropped its placeholders).
 - **CI runs the Vitest suite and the type-check once, with a 30 minute timeout and no lint warnings allowed**
   (`npm run lint` passes `--max-warnings=0`). `legacy-peer-deps` is gone from `.npmrc`.
 
@@ -62,6 +83,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Fixed
 
+- `.claude/local-assets.cjs` refused every `next start` of a local build: it took the placeholder URL in the sprite-base
+  error message (`https://<project>.supabase.co/...`) for a baked Storage bucket. It now needs a real host.
 - `scripts/route-manifest.mjs` held a raw NUL byte, so git treated it as binary and its diff was hidden; a NUL byte in
   a tracked source file now fails `src/lib/__tests__/source-line-endings.test.ts`.
 - **Admin Assistant review follow-ups.** A refused fact check other than "not found" or "forbidden" now reads as

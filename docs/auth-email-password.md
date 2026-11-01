@@ -19,6 +19,21 @@ Supabase auth user UUID for email sessions, discriminated by
 JWTs minted before this feature). All API guards read `session.player`, which
 is identical for both providers.
 
+## Discord is optional
+
+The Discord provider is registered only when `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` are both set
+(`discordOAuthEnabled()` in [src/lib/env.ts](../src/lib/env.ts)). With neither set, the app runs on email/password
+alone: `/auth/signin` renders no Discord button, Settings offers no "Link Discord" action and
+`POST /api/account/link-discord` answers 409 `discord_not_configured`. Exactly one of the two is a configuration
+error and the server names the missing key at startup. The `discord` provider is decided on the server; the client id
+is never sent to the browser.
+
+For local development, `npm run dev:seed` creates a confirmed admin
+(`local-admin@poketools.test`) so no Discord application is needed ([CONTRIBUTING.md](../CONTRIBUTING.md#local-development-without-discord)).
+The local stack (`supabase/config.toml`) mirrors the hosted settings: confirmation required, site URL
+`http://localhost:3000`, redirect allowlist `http://localhost:3000/**`. Confirmation mails land in Mailpit
+(`http://127.0.0.1:54324`). A running stack picks the file up on `npx supabase stop && npx supabase start`.
+
 ## Required Supabase dashboard configuration (manual, one-time)
 
 Project: your Supabase project (`<project-ref>`)
@@ -53,7 +68,7 @@ Project: your Supabase project (`<project-ref>`)
 |---|---|---|
 | Signup | `/auth/signup` → `/auth/verify-email` | `POST /api/auth/signup` (player row is created on first login, not at signup) |
 | Confirm email | `/auth/confirm` (button-gated so mail scanners can't burn the token) | `POST /api/auth/confirm-email` (`verifyOtp type: 'email'`) |
-| Login | `/auth/signin` (Discord button + email form) | NextAuth Credentials provider |
+| Login | `/auth/signin` (email form; Discord button when Discord is configured) | NextAuth Credentials provider |
 | Forgot/reset password | `/auth/forgot-password`, `/auth/reset-password` | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` (`verifyOtp type: 'recovery'` + admin `updateUserById`) |
 | Link email to Discord account | Dashboard → Settings → Login methods | `POST /api/account/link-email` |
 | Link Discord to email account | Dashboard → Settings → Login methods | `POST /api/account/link-discord` (signed intent cookie) → Discord OAuth → `signIn` callback in [src/auth.ts](../src/auth.ts) |

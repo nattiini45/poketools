@@ -4,22 +4,21 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ltext } from '@/lib/studio-core/ltext';
 import { newRulesetDocument } from '../document';
 import type { SessionPlayer } from '@/types/auth';
+import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 
 // LIVE-LOCAL test of the ruleset library against a LOCAL Supabase stack (after `supabase db reset --local`): the real query
 // modules, the real library functions and the real database functions (publish, immutability, the pin keys, the format
-// attach cleanup). Only the session guard and the Next cache calls are replaced. Opt-in, never in CI, never loads `.env`:
+// attach cleanup). Only the session guard and the Next cache calls are replaced. Opt-in, never in CI without LOCAL_STACK_CI=1, never loads `.env`:
 //
 //   LOCAL_RULESETS=1 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=<local service_role> \
 //   npx vitest run src/lib/ruleset-studio/__tests__/ruleset-library.local.test.ts
 //
 // The local key comes from `supabase status -o env` (SERVICE_ROLE_KEY).
-const optIn = process.env.LOCAL_RULESETS === '1' && process.env.CI !== 'true';
+const optIn = localStackOptIn('LOCAL_RULESETS');
 
 if (optIn) {
-  const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://invalid').hostname;
-  if (!['127.0.0.1', 'localhost'].includes(host)) throw new Error(`[ruleset-library.local] refusing to run against ${host}`);
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key || key === 'dummy-service-role-key') throw new Error('[ruleset-library.local] pass the LOCAL SUPABASE_SERVICE_ROLE_KEY');
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
+  requireLocalKey('SUPABASE_SERVICE_ROLE_KEY');
 }
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));

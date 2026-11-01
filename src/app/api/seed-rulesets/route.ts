@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { supabase } from '@/lib/supabase/client';
 import { AuthError, requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
 import { bootstrapEnvSchema, bootstrapModeEnvSchema, readEnv } from '@/lib/env';
-import { ltext } from '@/lib/studio-core/ltext';
 import { logAuditEvent } from '@/lib/audit/log';
-import { FORMAT_DEFAULTS } from '@/lib/pkmn/formats';
-import { newRulesetDocument } from '@/lib/ruleset-studio/document';
-import { createPublished } from '@/lib/ruleset-studio/library';
-import { SEED_FORMAT_IDS } from '@/lib/pkmn/seed-format-ids';
+import { seedStandardRulesets } from '@/lib/ruleset-studio/seed-standard';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { checkRateLimit, getClientRateLimitIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { SessionPlayer } from '@/types/auth';
@@ -78,40 +73,13 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    // Get existing ruleset names to avoid duplicates
-    const { data: existing, error: fetchError } = await supabase
-      .from('ruleset_definitions')
-      .select('name_text');
+    const { count } = await seedStandardRulesets();
 
-    if (fetchError) throw fetchError;
-
-    const existingNames = new Set((existing ?? []).map((r) => r.name_text));
-
-    const seedable = SEED_FORMAT_IDS.flatMap((key) => (key in FORMAT_DEFAULTS ? [[key, FORMAT_DEFAULTS[key]] as const] : []));
-    const toInsert = seedable.filter(([, fmt]) => !existingNames.has(fmt.name));
-
-    if (toInsert.length === 0) {
+    if (count === 0) {
       return NextResponse.json<ApiResult<{ message: string }>>({
         success: true,
         data: { message: 'All standard rulesets already exist. Nothing to seed.' },
       });
-    }
-
-    // Each site ruleset is a `gallery` definition whose base is the catalog preset and which changes nothing: the effective
-    // rules are the preset's, computed and frozen by the publish of version 1.
-    let count = 0;
-    for (const [key, fmt] of toInsert) {
-      await createPublished({
-        name: ltext('en', fmt.name),
-        slugBase: key,
-        document: newRulesetDocument(fmt.name, 'en', key) as unknown as Record<string, unknown>,
-        ownerId: null,
-        kind: 'preset',
-        visibility: 'gallery',
-        seasonId: null,
-        changelog: ltext('en', 'Seeded from the preset catalog'),
-      });
-      count += 1;
     }
     revalidatePath('/admin/rulesets');
     logAuditEvent({

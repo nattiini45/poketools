@@ -25,7 +25,7 @@ function stubFetch(linkAnswer: { code: string; error: string }) {
 
 async function submitLink(address: string) {
   const user = userEvent.setup();
-  render(withI18n(<AccountSecuritySection />));
+  render(withI18n(<AccountSecuritySection discordEnabled />));
   await user.click(await screen.findByRole('button', { name: 'Add email login' }));
   await user.type(screen.getByLabelText('Email'), address);
   await user.type(screen.getByLabelText('Password'), 'pikachu123');
@@ -60,6 +60,34 @@ describe('AccountSecuritySection: an already registered address', () => {
   });
 });
 
+describe('AccountSecuritySection: Discord optional', () => {
+  function stubIdentities(hasDiscord: boolean) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ json: async () => ({ success: true, data: { hasDiscord, hasEmail: false, email: null, emailConfirmed: false } }) })),
+    );
+  }
+
+  it('offers to link Discord only when Discord OAuth is on', async () => {
+    stubIdentities(false);
+    const { unmount } = render(withI18n(<AccountSecuritySection discordEnabled />));
+    expect(await screen.findByRole('button', { name: 'Link Discord' })).toBeTruthy();
+    unmount();
+
+    render(withI18n(<AccountSecuritySection discordEnabled={false} />));
+    await screen.findByRole('button', { name: 'Add email login' });
+    expect(screen.queryByRole('button', { name: 'Link Discord' })).toBeNull();
+    expect(screen.queryByText('Discord')).toBeNull();
+  });
+
+  it('still shows an already linked Discord identity without a link action', async () => {
+    stubIdentities(true);
+    render(withI18n(<AccountSecuritySection discordEnabled={false} />));
+    expect(await screen.findByText('Discord')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Link Discord' })).toBeNull();
+  });
+});
+
 describe('AccountSecuritySection: sign out everywhere', () => {
   beforeEach(() => {
     vi.mocked(signOut).mockClear();
@@ -79,7 +107,7 @@ describe('AccountSecuritySection: sign out everywhere', () => {
   it('revokes the sessions, then ends this browser session too', async () => {
     const fetchMock = stubSessions({ success: true, data: { revoked: true } });
     const user = userEvent.setup();
-    render(withI18n(<AccountSecuritySection />));
+    render(withI18n(<AccountSecuritySection discordEnabled />));
 
     await user.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
 
@@ -90,7 +118,7 @@ describe('AccountSecuritySection: sign out everywhere', () => {
   it('keeps the player signed in and shows the API error when the revocation fails', async () => {
     stubSessions({ success: false, code: 'session_revoke_failed', error: 'Failed to sign out everywhere' });
     const user = userEvent.setup();
-    render(withI18n(<AccountSecuritySection />));
+    render(withI18n(<AccountSecuritySection discordEnabled />));
 
     await user.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
 
@@ -109,7 +137,7 @@ describe('AccountSecuritySection: sign out everywhere', () => {
       }),
     );
     const user = userEvent.setup();
-    render(withI18n(<AccountSecuritySection />));
+    render(withI18n(<AccountSecuritySection discordEnabled />));
 
     await user.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
 
@@ -119,7 +147,7 @@ describe('AccountSecuritySection: sign out everywhere', () => {
 
   it('is labelled in German', async () => {
     stubSessions({ success: true, data: { revoked: true } });
-    render(withI18n(<AccountSecuritySection />, { locale: 'de' }));
+    render(withI18n(<AccountSecuritySection discordEnabled />, { locale: 'de' }));
 
     expect(await screen.findByRole('button', { name: 'Überall abmelden' })).toBeTruthy();
   });

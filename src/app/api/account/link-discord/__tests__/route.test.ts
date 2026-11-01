@@ -58,8 +58,20 @@ describe('POST /api/account/link-discord', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXTAUTH_SECRET = 'test-nextauth-secret';
+    process.env.DISCORD_CLIENT_ID = 'discord-id';
+    process.env.DISCORD_CLIENT_SECRET = 'discord-secret';
     vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'player-1' } as Awaited<ReturnType<typeof requirePlayer>>);
     vi.mocked(getPlayerById).mockResolvedValue(emailOnlyPlayer);
+  });
+
+  it('returns 409 discord_not_configured and sets no cookie when Discord OAuth is off', async () => {
+    delete process.env.DISCORD_CLIENT_ID;
+    delete process.env.DISCORD_CLIENT_SECRET;
+
+    const res = await POST();
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('discord_not_configured');
+    expect(cookieSet).not.toHaveBeenCalled();
   });
 
   it('returns 409 when Discord is already linked', async () => {

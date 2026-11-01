@@ -5,6 +5,7 @@ import type { Database } from '@/types/database';
 import { PRIVATE_MATCH_FIELDS, PUBLIC_MATCH_FIELDS } from '@/lib/match/public-match';
 import { PRIVATE_MATCH_SENTINELS } from '@/lib/match/__tests__/private-match-fields';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
+import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-LOCAL test: proves the DATABASE refuses schema `public` to the API
 // roles (`anon`, `authenticated`), whatever the app does. The anon key ships
@@ -13,7 +14,7 @@ import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 // and the rest of public (20261008081443_close_public_api_roles): the private
 // `players` columns, `match_evolution_snapshots` and the rpc endpoints.
 // It seeds rows into a LOCAL Supabase stack only (after `supabase db reset`),
-// never loads `.env`, and never runs in CI.
+// never loads `.env`, and runs in CI only with LOCAL_STACK_CI=1.
 //
 //   LOCAL_SUPABASE_GRANTS=1 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 //   NEXT_PUBLIC_SUPABASE_ANON_KEY=<local anon> SUPABASE_SERVICE_ROLE_KEY=<local service_role> \
@@ -22,24 +23,7 @@ import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 // The local keys come from `supabase status -o env` (ANON_KEY,
 // SERVICE_ROLE_KEY). Before the two migrations above, every "cannot" case
 // fails: that is how the test was shown to see the leak (2026-10-07).
-const optIn = process.env.LOCAL_SUPABASE_GRANTS === '1' && process.env.CI !== 'true';
-
-const LOCAL_HOSTS: readonly string[] = ['127.0.0.1', 'localhost'];
-
-/** Throws unless the Supabase URL points at a local stack. */
-function assertLocalSupabaseUrl(raw: string | undefined): void {
-  let host = '';
-  try {
-    host = new URL(raw ?? '').hostname;
-  } catch {
-    throw new Error('[api-role-grants.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL is not a valid URL');
-  }
-  if (!LOCAL_HOSTS.includes(host)) {
-    throw new Error(
-      `[api-role-grants.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL host "${host}" is not 127.0.0.1 or localhost`,
-    );
-  }
-}
+const optIn = localStackOptIn('LOCAL_SUPABASE_GRANTS');
 
 /** A key passed on the command line, never the vitest placeholder. */
 function localKey(name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY' | 'SUPABASE_SERVICE_ROLE_KEY'): string {
@@ -51,7 +35,7 @@ function localKey(name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY' | 'SUPABASE_SERVICE_ROLE
 }
 
 if (optIn) {
-  assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
   localKey('NEXT_PUBLIC_SUPABASE_ANON_KEY');
   localKey('SUPABASE_SERVICE_ROLE_KEY');
 }
@@ -144,24 +128,24 @@ const ids = {
 
 describe.skipIf(!optIn)('API-role privileges on schema public (local stack)', () => {
   beforeAll(async () => {
-    assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
     const anonKey = localKey('NEXT_PUBLIC_SUPABASE_ANON_KEY');
     service = createClient<Database>(url, localKey('SUPABASE_SERVICE_ROLE_KEY'), NO_SESSION);
     api.anon = createClient<Database>(url, anonKey, NO_SESSION);
 
-    // `authenticated`: anyone can sign up with the public anon key, so a fresh
-    // self-signed-up user is the attacker's view (local stack: confirmations off).
-    const signUp = await createClient<Database>(url, anonKey, NO_SESSION).auth.signUp({
-      email: `grants-${RUN}@example.test`,
-      password: `${randomUUID()}-Aa1`,
-    });
-    if (signUp.error) throw signUp.error;
-    authUserId = signUp.data.user?.id ?? null;
-    const token = signUp.data.session?.access_token;
-    if (!token) {
-      throw new Error('[api-role-grants.local] sign-up returned no session: the local stack needs enable_confirmations = false');
-    }
+    // `authenticated`: anyone can sign up with the public anon key, so a fresh signed-in user is the attacker's
+    // view. The user is created confirmed through the admin API and signs in with its password, so the test does
+    // not depend on the stack's `enable_confirmations` (the local config has it on).
+    const email = `grants-${RUN}@example.test`;
+    const password = `${randomUUID()}-Aa1`;
+    const created = await service.auth.admin.createUser({ email, password, email_confirm: true });
+    if (created.error) throw created.error;
+    authUserId = created.data.user?.id ?? null;
+    const signIn = await createClient<Database>(url, anonKey, NO_SESSION).auth.signInWithPassword({ email, password });
+    if (signIn.error) throw signIn.error;
+    const token = signIn.data.session?.access_token;
+    if (!token) throw new Error('[api-role-grants.local] sign-in returned no session');
     api.authenticated = createClient<Database>(url, anonKey, {
       ...NO_SESSION,
       global: { headers: { Authorization: `Bearer ${token}` } },

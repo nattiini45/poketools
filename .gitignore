@@ -8,6 +8,8 @@
 
 # testing
 /coverage
+/test-results/
+/playwright-report/
 coverage_output.txt
 audit-report.json
 .kilo/

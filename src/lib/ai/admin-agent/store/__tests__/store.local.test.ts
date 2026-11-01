@@ -7,6 +7,7 @@ import { AdminAgentStoreError } from '../errors';
 import { adminIdOf, type AdminId } from '../ids';
 import type { AdminAgentDb } from '../context';
 import type { NewAction, NewMessage, NewProposal } from '../types';
+import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-LOCAL test of the Admin Assistant store against the real tables and functions of a LOCAL Supabase stack
 // (migration 20261027100000_admin_agent_tables.sql). The unit twins mock the client; this one proves what a mock cannot:
@@ -18,7 +19,7 @@ import type { NewAction, NewMessage, NewProposal } from '../types';
 //   * the blast-radius counters under concurrency;
 //   * the triggers still holding behind the store (a ledger row never returns to executing).
 //
-// It seeds LOCAL data only, never loads `.env`, never runs in CI. Rows cannot be deleted through the API on purpose,
+// It seeds LOCAL data only, never loads `.env`, runs in CI only with LOCAL_STACK_CI=1. Rows cannot be deleted through the API on purpose,
 // so cleanup is the real retention purge: the test conversations are aged past the audit window first and the purge
 // drops them with everything below them. The residue are `admin_agent_usage` rows (settled, admin_id NULL once the
 // test players are gone): usage is kept for two years by design.
@@ -28,22 +29,7 @@ import type { NewAction, NewMessage, NewProposal } from '../types';
 //   npx vitest run src/lib/ai/admin-agent/store/__tests__/store.local.test.ts
 //
 // The local key comes from `supabase status -o env` (SERVICE_ROLE_KEY).
-const optIn = process.env.LOCAL_ADMIN_AGENT_STORE === '1' && process.env.CI !== 'true';
-
-const LOCAL_HOSTS: readonly string[] = ['127.0.0.1', 'localhost'];
-
-/** Throws unless the Supabase URL points at a local stack. */
-function assertLocalSupabaseUrl(raw: string | undefined): void {
-  let host = '';
-  try {
-    host = new URL(raw ?? '').hostname;
-  } catch {
-    throw new Error('[admin-agent-store.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL is not a valid URL');
-  }
-  if (!LOCAL_HOSTS.includes(host)) {
-    throw new Error(`[admin-agent-store.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL host "${host}" is not 127.0.0.1 or localhost`);
-  }
-}
+const optIn = localStackOptIn('LOCAL_ADMIN_AGENT_STORE');
 
 /** A key passed on the command line, never the vitest placeholder. */
 function localServiceKey(): string {
@@ -55,7 +41,7 @@ function localServiceKey(): string {
 }
 
 if (optIn) {
-  assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
   localServiceKey();
 }
 

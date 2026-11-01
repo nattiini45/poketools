@@ -5,7 +5,7 @@ import { requirePlayer } from '@/lib/auth/helpers';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { signLinkToken } from '@/lib/utils/crypto';
-import { requireEnv } from '@/lib/env';
+import { discordOAuthEnabled, requireEnv } from '@/lib/env';
 import type { ApiResult } from '@/types/api';
 
 const LINK_INTENT_TTL_MS = 10 * 60 * 1000;
@@ -21,6 +21,12 @@ const LINK_INTENT_TTL_MS = 10 * 60 * 1000;
 export async function POST() {
   try {
     const sessionPlayer = await requirePlayer();
+    if (!discordOAuthEnabled()) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Discord sign-in is not configured on this deployment.', code: 'discord_not_configured' },
+        { status: 409 }
+      );
+    }
     const player = await getPlayerById(sessionPlayer.playerId);
     if (!player) {
       return NextResponse.json<ApiResult<never>>(

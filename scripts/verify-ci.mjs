@@ -1,5 +1,10 @@
 // Local reproduction of .github/workflows/ci.yml (job `build-and-test`).
 //
+// It mirrors ONLY `build-and-test`, the required check. The advisory jobs `database` and `e2e` need Docker and an
+// ephemeral Supabase stack, so they are skipped on purpose: run them with `npm run test:db` and `npm run test:e2e`
+// against your own local stack (CONTRIBUTING.md). The opt-in variables of those suites (LOCAL_STACK,
+// LOCAL_STACK_CI, ...) are not in the allow-list below, so they never leak into a step here.
+//
 // WHY THIS EXISTS: a green `npm test` in the working tree proves nothing about
 // CI. CI checks out ONLY tracked files, so anything a test reads from local-only
 // state — the `public/models/world/` asset mirror, `board/`, `.env`, a stale
@@ -58,8 +63,6 @@ const BUILD_ENV = {
   SUPABASE_SERVICE_ROLE_KEY: 'placeholder',
   NEXTAUTH_SECRET: 'ci-secret',
   NEXTAUTH_URL: 'http://localhost:3000',
-  DISCORD_CLIENT_ID: 'placeholder',
-  DISCORD_CLIENT_SECRET: 'placeholder',
 };
 
 /**

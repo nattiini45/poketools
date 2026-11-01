@@ -19,7 +19,8 @@ if (process.argv[2] === 'start') {
   const path = require('node:path');
   /* eslint-enable @typescript-eslint/no-require-imports */
   // A bucket's public path not followed by another name character, so a bucket
-  // whose name merely starts with "sprites" does not match.
+  // whose name merely starts with "sprites" does not match. The URL must have a real host: the
+  // sprite-base error message quotes `https://<project>.supabase.co/...sprites` as an example.
   const BUCKETS = [
     {
       name: 'world-assets',
@@ -28,7 +29,7 @@ if (process.argv[2] === 'start') {
     },
     {
       name: 'sprites',
-      re: /\/storage\/v1\/object\/public\/sprites(?![A-Za-z0-9_.-])/,
+      re: /https?:\/\/[^\s"'`<>]+\/storage\/v1\/object\/public\/sprites(?![A-Za-z0-9_.-])/,
       env: "$env:NEXT_PUBLIC_SPRITES_URL='/sprites'",
     },
   ];

@@ -10,6 +10,17 @@ Thanks for your interest in contributing! This guide covers the essentials. Plea
 4. Set up your own Supabase project, local (`npx supabase start`, then `npx supabase db reset`) or hosted (`npx supabase link --project-ref <your-project-ref>`, then `npx supabase db push`); see [docs/supabase-environments.md](docs/supabase-environments.md)
 5. `npm run dev` to start the dev server
 
+### Local development without Discord
+
+Discord sign-in is optional. Leave `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` blank (set both or neither) and the sign-in page offers email and password only. With a local Supabase stack running (`npx supabase start`, `npx supabase migration up --local`):
+
+```bash
+npm run dev:seed   # a local admin, the standard rulesets and one 8-player league; safe to run again
+npm run dev
+```
+
+Then sign in at `/auth/signin` as `local-admin@poketools.test` with the password the seed prints (`poketools-local-admin`). Those credentials open nothing but a local stack: the seed refuses any Supabase URL that is not the loopback interface and never reads `.env`. The local stack requires email confirmation for new sign-ups; read the confirmation link in Mailpit at http://127.0.0.1:54324.
+
 ## Development Workflow
 
 1. Create a feature branch from `main`
@@ -21,10 +32,35 @@ Thanks for your interest in contributing! This guide covers the essentials. Plea
    npm run build       # Production build (includes type-check)
    npm test            # Unit tests (Vitest)
    ```
+   Changes that touch SQL, grants, RPCs or the shape of a Supabase query also run the local-stack suites against your own local stack (`npx supabase start`, `npx supabase migration up --local`, then `npm run test:db`). They refuse any host but the loopback interface and never read `.env`. CI runs the same suites in an **advisory** `database` job (not a required check): it replays every migration on an empty database, runs `npm run db:types:check` and `npm run test:db` with `LOCAL_STACK_CI=1` on an ephemeral stack. See [docs/supabase-environments.md](docs/supabase-environments.md#local-stack-suites-npm-run-testdb).
 4. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for any user-facing change (Added, Changed, Fixed, Security, Removed), and an upgrade note for every new migration or environment variable.
 5. Open a PR against `main`. PR titles follow [Conventional Commits](https://www.conventionalcommits.org) (`feat: …`, `fix: …`, `docs: …`); CI checks this.
 
 Never commit secrets, real user data, or values from your own deployment (Supabase project refs, domains, Discord IDs). Use placeholders such as `<project-ref>` in docs and examples. CI runs gitleaks on every PR.
+
+## End-to-end tests
+
+`npm run test:e2e` runs a Playwright smoke suite in Chromium (`e2e/`): the public pages, email sign-up through the Mailpit confirmation mail and sign-in/out, a player reporting a result that the opponent confirms (standings move), the admin match page and its history, a broadcast overlay without the navigation bar, and the German language switch. Every page fails the test on an uncaught error or a hydration warning, and the suite refuses any run that touches a host other than the loopback interface or any Supabase Storage bucket object.
+
+Prerequisites, all local (nothing reaches a hosted Supabase project):
+
+1. `npx supabase start`, then `npx supabase migration up --local` (or `npx supabase db reset --local`). The stack must be running; Mailpit is on http://127.0.0.1:54324.
+2. `npm run build:e2e`: a production build against the local stack with the local asset mirrors and the example format pack. Rerun it after you change app code; the suite serves `.next` as it finds it.
+3. `npm run test:e2e`. The suite starts its own server on port 3152 (`E2E_PORT` changes it; a server already there is never reused), runs `npm run dev:seed` once (idempotent) and uses the seeded league and the seeded logins (`seed-player-1@poketools.test` to `seed-player-8@poketools.test`, `local-admin@poketools.test`, all with the seed password). Discord is unset, so sign-in is email and password.
+
+Run one spec, or keep a trace of a passing run, and open it in the trace viewer:
+
+```bash
+npx playwright test e2e/match-flow.spec.ts
+npx playwright test e2e/public.spec.ts --trace on
+npx playwright show-trace test-results/<test-folder>/trace.zip
+```
+
+A failing test keeps its trace and screenshot under `test-results/`; with `CI=1` the run also writes the HTML report to `playwright-report/` (`npx playwright show-report`). Use role and label locators (`getByRole`, `getByLabel`) and the fixtures in `e2e/support/fixtures.ts` (`test`, `newPage`) so the error and request guards apply. A spec that needs a match makes its own with `createScheduledMatch` in `e2e/support/seed.ts`, so reruns start clean. The sign-up test follows the stack's setting: with `enable_confirmations = true` (`supabase/config.toml`; a stack started before that setting needs `npx supabase stop` and `start`) it reads the confirmation link in Mailpit.
+
+The suite runs on the Lite view of the league page (the semantic DOM page that signed-out visitors get by default; `?tier=lite` forces it, `docs/worlds.md`), so it needs no WebGL and no world assets. The 3D route world itself is not covered: check it by hand when you change it.
+
+CI runs the suite in an **advisory** `e2e` job (not a required check, never in the main-protection ruleset): an ephemeral stack, `npm run build:e2e`, `npx playwright install --with-deps chromium`, then the suite. On failure it uploads the HTML report and the traces as the `playwright-report` artifact.
 
 ## Code Standards
 

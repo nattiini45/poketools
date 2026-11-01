@@ -6,24 +6,20 @@
  * LOCAL_DB_URL is the local stack's API URL (`supabase status` -> API_URL); the SQL helpers are called through
  * PostgREST with the service role, the only role they are granted to. Any host other than 127.0.0.1 / localhost / ::1
  * is refused, so the hosted project is never reached (AGENTS.md "Automation never spends the Supabase quota"). The
- * tests never run in CI and read no `.env`.
+ * tests run in CI only with `LOCAL_STACK_CI=1` (the advisory `database` job's ephemeral stack) and read no `.env`.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { assertLoopbackUrl, ciAllowsLocalStack } from '@/test/local-stack';
 
-/** Whether the opt-in is set (and this is not CI). The suites `describe.skipIf(!LOCAL_DB_OPTED_IN)`. */
-export const LOCAL_DB_OPTED_IN = Boolean(process.env.LOCAL_DB_URL) && process.env.CI !== 'true';
-
-function isLocalHost(url: string): boolean {
-  const host = new URL(url).hostname;
-  return host === '127.0.0.1' || host === 'localhost' || host === '[::1]' || host === '::1';
-}
+/** Whether the opt-in is set (and CI, if any, declared a local stack). The suites `describe.skipIf(!LOCAL_DB_OPTED_IN)`. */
+export const LOCAL_DB_OPTED_IN = Boolean(process.env.LOCAL_DB_URL) && ciAllowsLocalStack();
 
 /** The service-role client of the local stack; throws for a non-local URL or a missing key. */
 export function connectLocalDb(): SupabaseClient {
   const url = process.env.LOCAL_DB_URL;
   const key = process.env.LOCAL_DB_SERVICE_ROLE_KEY;
   if (!url) throw new Error('LOCAL_DB_URL is not set');
-  if (!isLocalHost(url)) throw new Error(`SQL parity tests refuse to run against ${new URL(url).host}: local stack only`);
+  assertLoopbackUrl(url, 'LOCAL_DB_URL');
   if (!key) throw new Error('LOCAL_DB_SERVICE_ROLE_KEY is required with LOCAL_DB_URL (the local service_role key)');
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }

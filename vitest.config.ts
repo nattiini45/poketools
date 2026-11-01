@@ -68,6 +68,10 @@ function runPrivatePack(): boolean {
 }
 const RUN_PRIVATE_PACK = runPrivatePack();
 
+/** Only `npm run test:db` (scripts/test-db.mjs) sets this: no other run defines the `db` project. */
+const RUN_LOCAL_STACK_DB = process.env.LOCAL_STACK_DB === '1';
+/** Suites that talk to a real local stack (docs/supabase-environments.md, "Local-stack suites"): the `db` project only. */
+const LOCAL_STACK_SUITES = ['src/**/__tests__/**/*.local.test.{ts,tsx}', 'src/**/__tests__/**/*.live-db.test.{ts,tsx}'];
 /** Script tests spawn CLIs (node, bash, git) per case; 5 s is too tight on a cold or loaded runner. */
 const SCRIPT_TEST_TIMEOUT_MS = 60_000;
 
@@ -109,7 +113,7 @@ export default defineConfig({
         test: {
           name: 'app',
           include: ['src/**/__tests__/**/*.test.{ts,tsx}'],
-          exclude: ['src/format-packs/private/**', ...configDefaults.exclude],
+          exclude: ['src/format-packs/private/**', ...LOCAL_STACK_SUITES, ...configDefaults.exclude],
         },
       },
       {
@@ -121,6 +125,27 @@ export default defineConfig({
           testTimeout: SCRIPT_TEST_TIMEOUT_MS,
         },
       },
+      // `npm run test:db` (scripts/test-db.mjs sets LOCAL_STACK_DB): the suites that need a real database. The
+      // project does not exist in any other run, so `npm run test` and the coverage run can never reach one. It
+      // refuses to start unless the stack is on the loopback interface (src/test/local-stack-setup.ts).
+      ...(RUN_LOCAL_STACK_DB
+        ? [
+            {
+              extends: true as const,
+              resolve: { alias: { '@format-pack': EXAMPLE_PACK, '@pack-extensions': EXAMPLE_EXTENSIONS } },
+              test: {
+                name: 'db',
+                include: LOCAL_STACK_SUITES,
+                exclude: ['src/format-packs/private/**', ...configDefaults.exclude],
+                setupFiles: ['./src/test/dom-setup.ts', './src/test/local-stack-setup.ts'],
+                // One database: suites that count rows or truncate tables must not overlap.
+                fileParallelism: false,
+                testTimeout: 60_000,
+                hookTimeout: 120_000,
+              },
+            },
+          ]
+        : []),
       ...(RUN_GAUNTLET && GAUNTLET_STATEFUL.length > 0
         ? [
             {

@@ -2,39 +2,23 @@ import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
+import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-LOCAL test: it seeds rows into a LOCAL Supabase stack and runs the real
 // query functions against real PostgREST, to prove the select shapes the unit
 // tests mock (count embeds, JSON-path columns, related-column ordering,
-// PGRST103) behave as the code assumes. Opt-in only, never in CI, and it never
+// PGRST103) behave as the code assumes. Opt-in only, never in CI without LOCAL_STACK_CI=1, and it never
 // loads `.env`: every value comes from the command line.
 //
 //   LOCAL_SUPABASE_SHAPES=1 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 //   NEXT_PUBLIC_SUPABASE_ANON_KEY=<local anon> SUPABASE_SERVICE_ROLE_KEY=<local service_role> \
 //   npx vitest run src/lib/supabase/queries/__tests__/postgrest-shapes.local.test.ts
-const optIn = process.env.LOCAL_SUPABASE_SHAPES === '1' && process.env.CI !== 'true';
-
-const LOCAL_HOSTS: readonly string[] = ['127.0.0.1', 'localhost'];
-
-/** Throws unless the Supabase URL points at a local stack. */
-function assertLocalSupabaseUrl(raw: string | undefined): void {
-  let host = '';
-  try {
-    host = new URL(raw ?? '').hostname;
-  } catch {
-    throw new Error('[postgrest-shapes.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL is not a valid URL');
-  }
-  if (!LOCAL_HOSTS.includes(host)) {
-    throw new Error(
-      `[postgrest-shapes.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL host "${host}" is not 127.0.0.1 or localhost`,
-    );
-  }
-}
+const optIn = localStackOptIn('LOCAL_SUPABASE_SHAPES');
 
 if (optIn) {
   // Before anything else runs, and before the client module (which builds the
   // client at import time) is loaded.
-  assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key || key === 'dummy-service-role-key') {
     throw new Error(
@@ -102,7 +86,7 @@ let baselineReplayCount = 0;
 
 describe.skipIf(!optIn)('PostgREST select shapes (local stack)', () => {
   beforeAll(async () => {
-    assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
 
     ({ supabase: client } = await import('@/lib/supabase/client'));
     players = await import('@/lib/supabase/queries/players');
@@ -282,7 +266,7 @@ describe.skipIf(!optIn)('PostgREST select shapes (local stack)', () => {
       expect(row1).not.toBeNull();
       expect(row1!.resource_admin_count).toBe(2);
       expect(Object.keys(row1!).sort()).toEqual(
-        ['avatar_url', 'champions_username', 'id', 'is_admin', 'is_creator', 'name', 'ps_username', 'resource_admin_count', 'status'],
+        ['avatar_url', 'champions_username', 'id', 'is_admin', 'is_creator', 'name', 'ps_username', 'resource_admin_count', 'sessions_valid_after', 'status'],
       );
       const session1 = players.toSessionPlayer(row1!);
       logShape('toSessionPlayer(p1)', session1);

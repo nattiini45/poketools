@@ -549,7 +549,7 @@ COMMIT;
 
 ### LIVE-LOCAL test: `src/lib/supabase/__tests__/api-role-grants.local.test.ts`
 
-Implemented as proposed, with the Option C cases built in. It has no `columns` mode, because Option A was not adopted. It is opt-in (`LOCAL_SUPABASE_GRANTS=1`), refuses any host but `127.0.0.1` or `localhost`, takes its keys from the command line only, never loads `.env` and never runs in CI. It signs up a throwaway user through local GoTrue (the `authenticated` view an attacker gets) and seeds a ruleset, two players (private sentinels in `discord_id` and `ban_reason`), a tournament, a round, a match carrying `PRIVATE_MATCH_SENTINELS`, and one `match_evolution_snapshots` row. Afterwards it deletes every seeded row and the user.
+Implemented as proposed, with the Option C cases built in. It has no `columns` mode, because Option A was not adopted. It is opt-in (`LOCAL_SUPABASE_GRANTS=1`), refuses any host but `127.0.0.1` or `localhost`, takes its keys from the command line only, never loads `.env` and runs in CI only with LOCAL_STACK_CI=1. It creates a confirmed throwaway user through the local GoTrue admin API and signs it in (the `authenticated` view an attacker gets) and seeds a ruleset, two players (private sentinels in `discord_id` and `ban_reason`), a tournament, a round, a match carrying `PRIVATE_MATCH_SENTINELS`, and one `match_evolution_snapshots` row. Afterwards it deletes every seeded row and the user.
 
 ```bash
 # Local keys: `supabase status -o env` (ANON_KEY, SERVICE_ROLE_KEY).

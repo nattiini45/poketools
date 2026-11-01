@@ -4,6 +4,7 @@ import { LeagueTrashDbError, leagueTrashBlockOf } from '../db-error';
 import { seedLeague, type Client, type LeagueIds } from './local-fixture';
 import { DERIVED_SPECS, OWNED_SPECS, countsByKey, fingerprintLeague, readClocks } from './local-readers';
 import { deleteLocalRuleset } from '@/test/local-rulesets';
+import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-LOCAL test of the league recycle bin (supabase/migrations/20261026091000_league_trash.sql and its siblings):
 // seeds real leagues into a LOCAL Supabase stack through supabase-js and proves, against the real functions behind
@@ -22,30 +23,15 @@ import { deleteLocalRuleset } from '@/test/local-rulesets';
 //   * timings of a realistic league (and, with LOCAL_LEAGUE_TRASH_HUGE=1, of a ~118k battle_stats league).
 // Schema drift needs DDL, which supabase-js cannot run: see scripts/league-trash-lab/ (04_schema_drift.sql).
 //
-// It seeds LOCAL data only (after `supabase db reset`), never loads `.env`, never runs in CI, and cleans up after itself.
+// It seeds LOCAL data only (after `supabase db reset`), never loads `.env`, runs in CI only with LOCAL_STACK_CI=1, and cleans up after itself.
 //
 //   LOCAL_LEAGUE_TRASH=1 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 //   SUPABASE_SERVICE_ROLE_KEY=<local service_role> \
 //   npx vitest run src/lib/league-trash/__tests__/league-trash.local.test.ts
 //
 // The local key comes from `supabase status -o env` (SERVICE_ROLE_KEY). Add LOCAL_LEAGUE_TRASH_HUGE=1 for the big timing.
-const optIn = process.env.LOCAL_LEAGUE_TRASH === '1' && process.env.CI !== 'true';
+const optIn = localStackOptIn('LOCAL_LEAGUE_TRASH');
 const hugeOptIn = optIn && process.env.LOCAL_LEAGUE_TRASH_HUGE === '1';
-
-const LOCAL_HOSTS: readonly string[] = ['127.0.0.1', 'localhost'];
-
-/** Throws unless the Supabase URL points at a local stack. */
-function assertLocalSupabaseUrl(raw: string | undefined): void {
-  let host = '';
-  try {
-    host = new URL(raw ?? '').hostname;
-  } catch {
-    throw new Error('[league-trash.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL is not a valid URL');
-  }
-  if (!LOCAL_HOSTS.includes(host)) {
-    throw new Error(`[league-trash.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL host "${host}" is not 127.0.0.1 or localhost`);
-  }
-}
 
 /** A key passed on the command line, never the vitest placeholder. */
 function localServiceKey(): string {
@@ -57,7 +43,7 @@ function localServiceKey(): string {
 }
 
 if (optIn) {
-  assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
   localServiceKey();
 }
 

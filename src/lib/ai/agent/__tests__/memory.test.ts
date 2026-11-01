@@ -1,18 +1,21 @@
 import { config } from 'dotenv';
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-DATABASE test: it writes and deletes real rows. Automation must never
 // spend the Supabase quota (AGENTS.md hard rule), so it runs only on an
 // explicit opt-in, against a local stack:
 //   AGENT_MEMORY_LIVE_DB=1 npx vitest run src/lib/ai/agent/__tests__/memory.test.ts
 // Mocked coverage of the same module lives in memory-writes.test.ts.
-const liveDbOptIn = process.env.AGENT_MEMORY_LIVE_DB === '1' && process.env.CI !== 'true';
+const liveDbOptIn = localStackOptIn('AGENT_MEMORY_LIVE_DB');
 
 if (liveDbOptIn) {
   // Load the env over vitest.config's placeholders so the Supabase client
   // constructs against the configured DB, before the query modules (which
   // build the client at import time) are dynamically imported.
   config({ override: true });
+  // The .env just loaded may name the hosted project: refuse it before any client is built.
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
 }
 
 // Skip unless opted in / when env is missing / when the DB is unreachable.

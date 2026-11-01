@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
+import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-LOCAL proof of the PostgREST shapes behind the admin match list
 // (`listAdminMatchesPage`) that the mocked unit tests cannot prove:
@@ -13,34 +14,17 @@ import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 //   - the two-step read: a filter on the `games` embed never shrinks the
 //     `games` of a returned row.
 // It seeds its own run-unique rows into a LOCAL Supabase stack and removes them
-// again. Opt-in only, never in CI, and it never loads `.env`: every value comes
+// again. Opt-in only, never in CI without LOCAL_STACK_CI=1, and it never loads `.env`: every value comes
 // from the command line.
 //
 //   LOCAL_SUPABASE_MATCH_LIST=1 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 //   SUPABASE_SERVICE_ROLE_KEY=<local service_role> \
 //   npx vitest run src/lib/supabase/queries/__tests__/matches-admin-list.local.test.ts
-const optIn = process.env.LOCAL_SUPABASE_MATCH_LIST === '1' && process.env.CI !== 'true';
-
-const LOCAL_HOSTS: readonly string[] = ['127.0.0.1', 'localhost'];
-
-/** Throws unless the Supabase URL points at a local stack. */
-function assertLocalSupabaseUrl(raw: string | undefined): void {
-  let host = '';
-  try {
-    host = new URL(raw ?? '').hostname;
-  } catch {
-    throw new Error('[matches-admin-list.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL is not a valid URL');
-  }
-  if (!LOCAL_HOSTS.includes(host)) {
-    throw new Error(
-      `[matches-admin-list.local] refusing to run: NEXT_PUBLIC_SUPABASE_URL host "${host}" is not 127.0.0.1 or localhost`,
-    );
-  }
-}
+const optIn = localStackOptIn('LOCAL_SUPABASE_MATCH_LIST');
 
 if (optIn) {
   // Before the client module (which builds the client at import time) loads.
-  assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key || key === 'dummy-service-role-key') {
     throw new Error(
@@ -94,7 +78,7 @@ const REPLAY = 'https://replay.pokemonshowdown.com/gen9ou-1';
 
 describe.skipIf(!optIn)('admin match list: PostgREST shapes (local stack)', () => {
   beforeAll(async () => {
-    assertLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
     ({ supabase: client } = await import('@/lib/supabase/client'));
     queries = await import('@/lib/supabase/queries/matches');
 

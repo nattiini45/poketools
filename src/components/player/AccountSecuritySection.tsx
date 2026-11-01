@@ -29,7 +29,12 @@ type SecurityErrorKey = keyof typeof accountEn.security & (
 /** `email`: the address the failed request was sent with, so a follow-up link never uses what was typed since. */
 type SecurityError = { kind: 'key'; key: SecurityErrorKey } | { kind: 'api'; error: ApiErrorLike; email?: string };
 
-export default function AccountSecuritySection() {
+interface AccountSecuritySectionProps {
+  /** Decided on the server (discordOAuthEnabled()): without it the Discord row offers no link action. */
+  discordEnabled: boolean;
+}
+
+export default function AccountSecuritySection({ discordEnabled }: AccountSecuritySectionProps) {
   const t = useT(accountMessages);
   const errorText = useApiErrorText(errorsAuth);
   const [identities, setIdentities] = useState<AccountIdentities | null>(null);
@@ -176,19 +181,21 @@ export default function AccountSecuritySection() {
 
       {identities && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-heading font-semibold text-poke-text-primary">{t('security.discord')}</p>
-              <p className="text-sm text-poke-text-muted">
-                {identities.hasDiscord ? t('security.linked') : t('security.notLinked')}
-              </p>
+          {(discordEnabled || identities.hasDiscord) && (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-heading font-semibold text-poke-text-primary">{t('security.discord')}</p>
+                <p className="text-sm text-poke-text-muted">
+                  {identities.hasDiscord ? t('security.linked') : t('security.notLinked')}
+                </p>
+              </div>
+              {discordEnabled && !identities.hasDiscord && (
+                <Button variant="secondary" size="sm" onClick={handleLinkDiscord} loading={linkingDiscord}>
+                  {t('security.linkDiscord')}
+                </Button>
+              )}
             </div>
-            {!identities.hasDiscord && (
-              <Button variant="secondary" size="sm" onClick={handleLinkDiscord} loading={linkingDiscord}>
-                {t('security.linkDiscord')}
-              </Button>
-            )}
-          </div>
+          )}
 
           <div className="flex items-center justify-between gap-4">
             <div>

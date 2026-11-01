@@ -5,7 +5,7 @@
  * verbatim, and an unknown or odd code shows `Default`. English stays the
  * literal the pages always showed.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
@@ -31,6 +31,7 @@ vi.mock('next-auth/react', () => ({ signIn: vi.fn() }));
 import AuthErrorPage from '../error/page';
 import SignInPage from '../signin/page';
 import SignInForm from '../signin/SignInForm';
+import SignUpPage from '../signup/page';
 import VerifyEmailPage from '../verify-email/page';
 import SignUpForm from '../signup/SignUpForm';
 
@@ -40,6 +41,9 @@ async function renderPage(node: Promise<ReactNode>): Promise<string> {
 
 beforeEach(() => {
   cookieJar.locale = undefined;
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('/auth/error', () => {
@@ -67,6 +71,8 @@ describe('/auth/error', () => {
 
 describe('/auth/signin', () => {
   it('passes only a known code to the form, which translates it', async () => {
+    vi.stubEnv('DISCORD_CLIENT_ID', 'discord-id');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', 'discord-secret');
     cookieJar.locale = 'de';
     const tree = await SignInPage({ searchParams: Promise.resolve({ error: 'OAuthSignin' }) });
     const html = renderWithI18n(<>{tree}</>, { locale: 'de' });
@@ -76,16 +82,39 @@ describe('/auth/signin', () => {
     expect(html).toContain('Mit Discord anmelden');
   });
 
+  it('offers no Discord button or email divider when Discord OAuth is not configured', async () => {
+    vi.stubEnv('DISCORD_CLIENT_ID', '');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', '');
+    const tree = await SignInPage({ searchParams: Promise.resolve({}) });
+    const html = renderWithI18n(<>{tree}</>);
+    expect(html).not.toContain('Sign in with Discord');
+    expect(html).not.toContain('or with email');
+    expect(html).toContain('Forgot password?');
+    expect(html).toContain('type="email"');
+  });
+
   it('an unknown code falls back to Default', async () => {
     const tree = await SignInPage({ searchParams: Promise.resolve({ error: 'Weird' }) });
     expect(renderWithI18n(<>{tree}</>)).toContain('Sign-in failed. Please try again.');
   });
 
   it('the form keeps the English copy without a provider', () => {
-    const html = renderToStaticMarkup(<SignInForm callbackUrl="/" initialErrorCode={null} />);
+    const html = renderToStaticMarkup(<SignInForm callbackUrl="/" initialErrorCode={null} discordEnabled />);
     expect(html).toContain('Sign in with Discord');
     expect(html).toContain('Forgot password?');
     expect(html).not.toContain('role="alert"');
+  });
+});
+
+describe('/auth/signup', () => {
+  it('mentions Discord only when Discord OAuth is configured', async () => {
+    vi.stubEnv('DISCORD_CLIENT_ID', 'discord-id');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', 'discord-secret');
+    expect(renderWithI18n(<>{await SignUpPage()}</>)).toContain('Have Discord?');
+
+    vi.stubEnv('DISCORD_CLIENT_ID', '');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', '');
+    expect(renderWithI18n(<>{await SignUpPage()}</>)).not.toContain('Have Discord?');
   });
 });
 
