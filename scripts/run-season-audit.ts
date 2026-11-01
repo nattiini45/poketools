@@ -30,14 +30,14 @@
  * How to run
  * ---------------------------------------------------------------------------
  *   # DRY-RUN audit (default; READ-ONLY — no writes):
- *   npx tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts
  *
  *   # Audit a single season only:
- *   npx tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts --season=<uuid>
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts --season=<uuid>
  *
  *   # REPAIR mode (WRITES — only when you intend to fix mismatches):
- *   npx tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts --repair
- *   npx tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts --season=<uuid> --repair
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts --repair
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts --season=<uuid> --repair
  *
  *   # Or via the npm script:
  *   npm run audit:seasons

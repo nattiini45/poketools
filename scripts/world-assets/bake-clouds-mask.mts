@@ -18,7 +18,7 @@
  *
  * AD-CLOUDS owns `PARAMS` from B7; `lib.mjs` stays frozen.
  *
- * Usage: npx tsx scripts/world-assets/bake-clouds-mask.mts [--out]
+ * Usage: npx --no-install tsx scripts/world-assets/bake-clouds-mask.mts [--out]
  *        (Windows: PowerShell or MSYS_NO_PATHCONV=1)
  */
 

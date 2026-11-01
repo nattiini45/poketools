@@ -45,8 +45,25 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 - Evaluation harness `scripts/admin-agent-eval.ts`: plan, executor and end-to-end stages, the last two against a local
   Supabase stack only.
 
+### Changed
+
+- **Supported Node is `^22.22.2 || ^24.15.0`, enforced.** `package.json` declares it in `engines` and `.npmrc` sets
+  `engine-strict`, so `npm install` / `npm ci` fail on Node 23, 25 or a 22.x before 22.22.2 instead of printing a
+  warning (jsdom 30, used by the DOM tests, needs it). `.nvmrc` pins 24.22.1 and CI reads it; `@types/node` is on 24.
+  Upgrade Node locally before pulling this.
+- **CI runs the Vitest suite and the type-check once, with a 30 minute timeout and no lint warnings allowed**
+  (`npm run lint` passes `--max-warnings=0`). `legacy-peer-deps` is gone from `.npmrc`.
+
+### Removed
+
+- Unused dependencies `@dnd-kit/core`, `@dnd-kit/utilities`, `@react-three/rapier` and the direct `zustand` entry
+  (`zustand` stays installed through `@react-three/fiber`); `tsx` is now a locked devDependency and the maintenance
+  scripts are documented as `npx --no-install tsx`.
+
 ### Fixed
 
+- `scripts/route-manifest.mjs` held a raw NUL byte, so git treated it as binary and its diff was hidden; a NUL byte in
+  a tracked source file now fails `src/lib/__tests__/source-line-endings.test.ts`.
 - **Admin Assistant review follow-ups.** A refused fact check other than "not found" or "forbidden" now reads as
   unavailable instead of "it does not exist"; a precondition read that fails stops a Build under its own code
   (`precondition_read_failed`) instead of "the situation changed"; an older card is retired before its replacement is
@@ -738,7 +755,7 @@ Follow-ups to the 2026-10-20 security audit: replays are bound to one game by ha
   import now sends only the side assignment and the preview's hash (409 `replay_changed_since_preview` when the replay
   changed); its form shows the replay's winner and stats read-only, and corrections go through the game editor.
   **Upgrade:** apply `supabase/migrations/20261020100000_games_replay_hash.sql` before deploying, then run
-  `npx tsx --env-file=.env.local scripts/backfill-replay-hashes.ts` (dry run; add `--write` to fill older games).
+  `npx --no-install tsx --env-file=.env.local scripts/backfill-replay-hashes.ts` (dry run; add `--write` to fill older games).
 - **`battle_stats` holds one row per Pokémon per player per game**: a unique index on
   `(game_id, player_id, lower(btrim(pokemon_name)))` (`20261020100100_battle_stats_unique_pokemon.sql`) backs the
   request schemas, a violation answers 409 `battle_stats_duplicate_pokemon`, and the admin game edit refuses a repeated

@@ -5,7 +5,7 @@
  * OK / FAIL / SKIPPED per model. Configured models that respond are OK,
  * configured models that error are FAIL, unconfigured models are SKIPPED.
  *
- * Usage: npx tsx scripts/agent-smoke.ts
+ * Usage: npx --no-install tsx scripts/agent-smoke.ts
  *
  * Loads env from .env.local automatically. Never prints API keys. Always
  * exits 0 — this is a report, not a gate.

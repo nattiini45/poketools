@@ -1,53 +1,5 @@
 import { toPng } from 'html-to-image';
-
-/**
- * Convert a cross-origin image URL to a data URL via our proxy.
- */
-async function toDataUrl(src: string): Promise<string> {
-  const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`;
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error(`Proxy failed for ${src}`);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-/**
- * Proxy all cross-origin <img> elements inside a node to data URLs.
- * Returns a Map of originals so the caller can restore them.
- */
-async function proxyCrossOriginImages(
-  node: HTMLElement,
-): Promise<Map<HTMLImageElement, string>> {
-  const originals = new Map<HTMLImageElement, string>();
-  const images = node.querySelectorAll('img');
-
-  await Promise.all(
-    Array.from(images).map(async (img) => {
-      const src = img.src;
-      if (
-        src &&
-        !src.startsWith(window.location.origin) &&
-        !src.startsWith('data:') &&
-        !src.startsWith('blob:')
-      ) {
-        originals.set(img, src);
-        try {
-          img.src = await toDataUrl(src);
-        } catch {
-          // Leave original — may render blank but won't block capture
-        }
-        img.removeAttribute('srcset');
-      }
-    }),
-  );
-
-  return originals;
-}
+import { proxyCrossOriginImages, restoreImages, type OriginalImageSource } from './node-image';
 
 /**
  * Capture a DOM node as a high-quality PNG data URL.
@@ -74,7 +26,7 @@ export async function captureNodeAsDataUrl(
   parent.insertBefore(wrapper, next);
   wrapper.appendChild(node);
 
-  let originals = new Map<HTMLImageElement, string>();
+  let originals = new Map<HTMLImageElement, OriginalImageSource>();
 
   try {
     // Proxy cross-origin images to prevent canvas tainting
@@ -90,9 +42,7 @@ export async function captureNodeAsDataUrl(
     return dataUrl;
   } finally {
     // Restore originals and unwrap
-    originals.forEach((src, img) => {
-      img.src = src;
-    });
+    restoreImages(originals);
     parent.insertBefore(node, wrapper);
     parent.removeChild(wrapper);
   }

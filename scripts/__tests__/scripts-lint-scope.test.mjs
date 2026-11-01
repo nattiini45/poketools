@@ -16,7 +16,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 describe('scripts lint scope', () => {
   it('npm run lint lints src/ and scripts/', () => {
     const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
-    expect(pkg.scripts.lint.split(/\s+/)).toEqual(['eslint', 'src/', 'scripts/']);
+    expect(pkg.scripts.lint.split(/\s+/)).toEqual(['eslint', 'src/', 'scripts/', '--max-warnings=0']);
   });
 
   it('turns anchored scripts/ entries of .gitignore into ignores and skips everything else', () => {

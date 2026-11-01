@@ -21,8 +21,8 @@
  * It talks to Supabase only when a maintainer runs it, with the service-role credentials given in
  * the environment. It never reads a .env file by itself; pass one explicitly:
  *
- *   npx tsx --env-file=.env.local scripts/backfill-replay-hashes.ts            # dry run
- *   npx tsx --env-file=.env.local scripts/backfill-replay-hashes.ts --write    # apply
+ *   npx --no-install tsx --env-file=.env.local scripts/backfill-replay-hashes.ts            # dry run
+ *   npx --no-install tsx --env-file=.env.local scripts/backfill-replay-hashes.ts --write    # apply
  *
  * Options: --write, --limit <n> (only the first n games without a hash), --delay-ms <ms> (>= 1000).
  * Needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.

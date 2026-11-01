@@ -19,7 +19,7 @@
  * Texel (col, row) covers world x = −21 + (col + ½)·42/512, z = −21 + (row + ½)·42/512
  * (row 0 = north edge = UV v 1; see `worldToMaskUv`).
  *
- * Usage: npx tsx scripts/world-assets/bake-plaza-mask.mts [--out]
+ * Usage: npx --no-install tsx scripts/world-assets/bake-plaza-mask.mts [--out]
  */
 
 import { createHash } from 'node:crypto';

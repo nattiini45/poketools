@@ -5,7 +5,7 @@ Thanks for your interest in contributing! This guide covers the essentials. Plea
 ## Getting Started
 
 1. Fork the repo and clone locally
-2. `npm install` (Node.js 22+, see `.nvmrc`)
+2. `npm install` (Node.js `^22.22.2 || ^24.15.0`; `.nvmrc` pins the version CI runs, and npm refuses an unsupported Node)
 3. Copy `.env.example` to `.env.local` and fill in the required values (see the README's Self-hosting section)
 4. Set up your own Supabase project, local (`npx supabase start`, then `npx supabase db reset`) or hosted (`npx supabase link --project-ref <your-project-ref>`, then `npx supabase db push`); see [docs/supabase-environments.md](docs/supabase-environments.md)
 5. `npm run dev` to start the dev server

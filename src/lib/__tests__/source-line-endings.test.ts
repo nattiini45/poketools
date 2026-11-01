@@ -1,5 +1,6 @@
 /**
- * Guard: no tracked source file under `src/` or `scripts/` holds a lone CR.
+ * Guard: no tracked source file under `src/` or `scripts/` holds a lone CR,
+ * and no tracked file with a source extension anywhere holds a NUL byte.
  *
  * A CR that is not followed by LF (a classic-Mac line end, or CR CR LF from a
  * tool that translated LF to CRLF twice) makes git's `text=auto` treat the file
@@ -10,7 +11,13 @@
  * CRLF on its own is allowed here: a Windows checkout made before the
  * `eol=lf` rule still has CRLF working files, and git stores them as LF.
  * Files git already treats as binary by attribute (fonts, images, `.glb`) and
- * files holding NUL bytes are skipped.
+ * files holding NUL bytes are skipped by the lone-CR check.
+ *
+ * A NUL byte in a source file is its own failure: git classes the file as
+ * binary just like a lone CR does, and `scripts/route-manifest.mjs` carried a
+ * raw NUL in a `split('\0')` call, so the PR that added it showed no diff. Write
+ * the escape `\0` instead of the byte. Genuine binary assets are exempt by
+ * extension (`SOURCE_EXTENSIONS` lists what is checked).
  *
  * One pass over the tree: `git ls-files --eol` already reads every working
  * file and reports a file holding a lone CR as `w/-text` (git counts a lone CR
@@ -110,6 +117,34 @@ function loneCrOffenders(cwd: string, candidates: string[]): string[] {
   return offenders;
 }
 
+/** Extensions of text files that git and reviewers must be able to diff. Binary assets are not listed. */
+const SOURCE_EXTENSIONS = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.md', '.mdx', '.sql', '.yml', '.yaml', '.css', '.html', '.toml', '.sh',
+]);
+
+/** w/-text files with a source extension: git saw binary-looking content, so a NUL byte is possible. */
+function nulCandidates(records: EolRecord[]): string[] {
+  return records
+    .filter((r) => r.worktree === '-text' && SOURCE_EXTENSIONS.has(path.extname(r.file).toLowerCase()))
+    .map((r) => r.file);
+}
+
+/** `file (byte N)` for each candidate that really holds a NUL byte. */
+function nulOffenders(cwd: string, candidates: string[]): string[] {
+  const offenders: string[] = [];
+  for (const file of candidates) {
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(path.join(cwd, file));
+    } catch {
+      continue; // deleted in the working tree
+    }
+    const at = bytes.indexOf(0);
+    if (at !== -1) offenders.push(`${file} (byte ${at}): write the escape \\0 instead of a raw NUL`);
+  }
+  return offenders;
+}
+
 describe('firstLoneCr', () => {
   const bytes = (s: string) => new TextEncoder().encode(s);
 
@@ -139,6 +174,56 @@ describe('loneCrCandidates', () => {
     ].join('\0');
     expect(loneCrCandidates(parseLsFilesEol(out))).toEqual(['src/with space.ts']);
   });
+});
+
+describe('nulCandidates', () => {
+  it('keeps w/-text files with a source extension and drops binary assets and text files', () => {
+    const out = [
+      'i/lf    w/lf    attr/text=auto eol=lf \tsrc/a.ts',
+      'i/-text w/-text attr/text=auto eol=lf \tscripts/with-nul.mjs',
+      'i/-text w/-text attr/text=auto eol=lf \tdata/Config.JSON',
+      'i/-text w/-text attr/-text            \tpublic/icon.png',
+      'i/-text w/-text attr/-text            \tpublic/font.woff2',
+      'i/-text w/-text attr/-text            \tsrc/model.glb',
+      'i/-text w/-text attr/-text            \tpublic/basis.wasm',
+      'i/lf    w/      attr/text=auto eol=lf \tsrc/deleted.ts',
+      '',
+    ].join('\0');
+    expect(nulCandidates(parseLsFilesEol(out))).toEqual(['scripts/with-nul.mjs', 'data/Config.JSON']);
+  });
+});
+
+describe('NUL byte detection in a temp repo', () => {
+  it(
+    'names a source file holding a NUL and ignores binary assets and clean files',
+    () => {
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'nul-'));
+      try {
+        const git = (...args: string[]) =>
+          execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false', ...args], {
+            cwd: dir,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+        git('init', '-q');
+        writeFileSync(path.join(dir, '.gitattributes'), '* text=auto eol=lf\n*.png binary\n');
+        writeFileSync(path.join(dir, 'clean.mjs'), "out.split('\\0');\n");
+        writeFileSync(path.join(dir, 'raw-nul.mjs'), Buffer.from("out.split('\0');\n"));
+        writeFileSync(path.join(dir, 'raw-nul.json'), Buffer.from('{"a":"\0"}\n'));
+        writeFileSync(path.join(dir, 'image.png'), Buffer.from([0x89, 0x50, 0x00, 0x00]));
+        git('add', '.');
+
+        const candidates = nulCandidates(lsFilesEol(dir, ['.']));
+        expect(candidates.sort()).toEqual(['raw-nul.json', 'raw-nul.mjs']);
+        const offenders = nulOffenders(dir, candidates);
+        expect(offenders.map((o) => o.split(' ')[0]).sort()).toEqual(['raw-nul.json', 'raw-nul.mjs']);
+        expect(offenders.find((o) => o.startsWith('raw-nul.mjs'))).toContain('(byte 11)');
+        expect(nulOffenders(dir, ['clean.mjs'])).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    GIT_IO_TIMEOUT_MS,
+  );
 });
 
 describe('git eol classification', () => {
@@ -183,6 +268,16 @@ describe('git eol classification', () => {
 });
 
 describe('tracked source files', () => {
+  it(
+    'contain no NUL byte (a NUL makes git treat the file as binary and hides its diff)',
+    () => {
+      const records = lsFilesEol(REPO_ROOT, ['.']);
+      expect(records.length).toBeGreaterThan(1000);
+      expect(nulOffenders(REPO_ROOT, nulCandidates(records))).toEqual([]);
+    },
+    GIT_IO_TIMEOUT_MS,
+  );
+
   it(
     'contain no lone CR (CR CR LF or bare CR)',
     () => {

@@ -4,16 +4,16 @@
  * and the real staged tools, approved through the real routes and executor on the LOCAL Supabase stack.
  *
  *   # offline self-test, no key, no network, no database
- *   npx tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --port replay
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --port replay
  *
  *   # live: needs ANTHROPIC_API_KEY (shell or .env.local; nothing else is read from an env file)
- *   npx tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --cases RO,SF --model claude-sonnet-5-5 --repeat 3
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --cases RO,SF --model claude-sonnet-5-5 --repeat 3
  *
  *   # local stack (npx supabase start; run `npx supabase db reset --local` before a full run): no model call
- *   npx tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --stage exec
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --stage exec
  *
  *   # local stack with the live model, one case
- *   npx tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --stage e2e --cases TN1 --max-cost-usd 1
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.admin-agent-eval.json scripts/admin-agent-eval.ts --stage e2e --cases TN1 --max-cost-usd 1
  *
  *   # with --judge a live run also asks Haiku 5.5 (low effort) about answer groups (those with an intent) whose phrases did not match; it is opt-in with --judge (live only)
  *

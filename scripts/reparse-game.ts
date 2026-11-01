@@ -28,10 +28,10 @@
  * How to run
  * ---------------------------------------------------------------------------
  *   # DRY-RUN (default; READ-ONLY — prints stored vs re-parsed rows):
- *   npx tsx --tsconfig scripts/tsconfig.reparse.json scripts/reparse-game.ts --game=<uuid>
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.reparse.json scripts/reparse-game.ts --game=<uuid>
  *
  *   # WRITE run (replaces battle_stats through editGame):
- *   npx tsx --tsconfig scripts/tsconfig.reparse.json scripts/reparse-game.ts \
+ *   npx --no-install tsx --tsconfig scripts/tsconfig.reparse.json scripts/reparse-game.ts \
  *     --game=<uuid> --actor=<admin player uuid> --apply
  *
  *   # Write despite a species-set mismatch, a changed replay hash or stats_locked (see below):

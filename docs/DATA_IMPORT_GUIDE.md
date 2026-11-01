@@ -20,7 +20,7 @@ The committed list fixtures are synthetic and follow the example pack:
 - `src/lib/draft/__tests__/fixtures/example-list.json` (importer-row shape);
 - `src/app/(public)/draft-preview/fixture-lines.example.json` (read-layer shape, example overrides applied).
 
-`npx tsx --tsconfig tsconfig.json scripts/draft/make-example-list-fixtures.ts` regenerates both from a fixed seed (no database, no network). Stage names and species ids are @pkmn data; prices, thresholds, ratings and texts are not a real list. `scripts/draft/dump-list-fixture.ts` and `scripts/draft-preview/make-fixture-lines.ts` read a private workbook; do not commit their output.
+`npx --no-install tsx --tsconfig tsconfig.json scripts/draft/make-example-list-fixtures.ts` regenerates both from a fixed seed (no database, no network). Stage names and species ids are @pkmn data; prices, thresholds, ratings and texts are not a real list. `scripts/draft/dump-list-fixture.ts` and `scripts/draft-preview/make-fixture-lines.ts` read a private workbook; do not commit their output.
 
 ## Point-buy list
 

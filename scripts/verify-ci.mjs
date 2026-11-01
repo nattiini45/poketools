@@ -52,6 +52,8 @@ const NEEDS_SHELL = process.platform === 'win32';
 const BUILD_ENV = {
   FORMAT_PACK: 'example',
   NODE_OPTIONS: '--max-old-space-size=4096',
+  // The explicit typecheck:example step is the type gate; the build skips its duplicate (next.config.mjs).
+  CI_SKIP_BUILD_TYPECHECK: '1',
   NEXT_PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'placeholder',
   NEXTAUTH_SECRET: 'ci-secret',
@@ -117,8 +119,8 @@ const STEPS = [
   },
   { name: '5c-typecheck-example', shellText: 'npm run typecheck:example', cmd: NPM, args: ['run', 'typecheck:example'] },
   { name: '6-build', shellText: 'npm run build', cmd: NPM, args: ['run', 'build'], env: BUILD_ENV },
-  { name: '7-test', shellText: 'npm test', cmd: NPM, args: ['test'] },
-  { name: '8-coverage', shellText: 'npm run test:coverage', cmd: NPM, args: ['run', 'test:coverage'] },
+  // The coverage run is the only Vitest run: it executes every project and enforces the thresholds.
+  { name: '7-tests-and-coverage', shellText: 'npm run test:coverage', cmd: NPM, args: ['run', 'test:coverage'] },
 ];
 
 function fail(message) {
@@ -358,13 +360,25 @@ export function checkDrift(text) {
   }
 }
 
-/** CI pins a Node major; a local divergence is worth saying out loud. */
-function checkNodeVersion(text) {
-  const wanted = /node-version:\s*'?(\d+)/.exec(text)?.[1];
-  const actual = process.versions.node.split('.')[0];
-  if (wanted && wanted !== actual) {
-    console.warn(`[verify-ci] note: ci.yml pins Node ${wanted}, this shell is ${process.versions.node}.`);
+/**
+ * CI reads its Node version from `.nvmrc` (`node-version-file`), so that file is the one pin. Notes for a local divergence
+ * or a second pin in ci.yml; the supported range itself is enforced by `engines` + `engine-strict` in the clone's `npm ci`.
+ */
+export function nodeVersionNotes(ciText, nvmrc, actualVersion) {
+  const notes = [];
+  if (!/^\s*(?:-\s*)?node-version-file:\s*\.nvmrc\s*(?:#.*)?$/m.test(ciText)) {
+    notes.push('ci.yml does not read the Node version from .nvmrc (node-version-file: .nvmrc), so CI and .nvmrc can drift apart.');
   }
+  const wanted = nvmrc.trim().replace(/^v/, '');
+  if (wanted.split('.')[0] !== actualVersion.split('.')[0]) {
+    notes.push(`.nvmrc pins Node ${wanted}, this shell is ${actualVersion}.`);
+  }
+  return notes;
+}
+
+function checkNodeVersion(text) {
+  const nvmrc = readFileSync(join(REPO_ROOT, '.nvmrc'), 'utf8');
+  for (const note of nodeVersionNotes(text, nvmrc, process.versions.node)) console.warn(`[verify-ci] note: ${note}`);
 }
 
 /**

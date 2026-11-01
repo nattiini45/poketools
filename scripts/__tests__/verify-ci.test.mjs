@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CiDriftError, checkDrift, ciEnv, ciRunSteps } from '../verify-ci.mjs';
+import { CiDriftError, checkDrift, ciEnv, ciRunSteps, nodeVersionNotes } from '../verify-ci.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -188,6 +188,60 @@ describe('verify-ci: build step env', () => {
         new RegExp(`cannot parse this line.*${bad.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
       );
     }
+  });
+});
+
+describe('verify-ci: the shape of build-and-test', () => {
+  const ci = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  it('runs the Vitest suite once (the coverage run) and keeps the explicit type gate', () => {
+    const commands = cmds(ci);
+    expect(commands).not.toContain('npm test');
+    expect(commands.filter((c) => c === 'npm run test:coverage')).toHaveLength(1);
+    expect(commands.filter((c) => c === 'npm run typecheck:example')).toHaveLength(1);
+  });
+
+  it('fails on a lint warning (the lint step runs npm run lint, which carries --max-warnings=0)', () => {
+    expect(cmds(ci)).toContain('npm run lint');
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    expect(pkg.scripts.lint).toMatch(/--max-warnings=0\b/);
+  });
+
+  it('bounds the job with a timeout', () => {
+    expect(ci).toMatch(/^ {4}timeout-minutes: 30\s*$/m);
+  });
+
+  it('skips the build type-check through CI_SKIP_BUILD_TYPECHECK only, set on the build step', () => {
+    expect(ci.match(/CI_SKIP_BUILD_TYPECHECK/g)?.length).toBeGreaterThanOrEqual(1);
+    expect(driftMessage(() => checkDrift(ci.replace(/\n\s*CI_SKIP_BUILD_TYPECHECK:.*\n/, '\n')))).toMatch(
+      /no longer sets CI_SKIP_BUILD_TYPECHECK/,
+    );
+  });
+
+  it('reads the Node version from .nvmrc, with no second pin', () => {
+    expect(ci).toMatch(/node-version-file: \.nvmrc/);
+    expect(ci).not.toMatch(/^\s*node-version:/m);
+  });
+});
+
+describe('verify-ci: nodeVersionNotes', () => {
+  const withFile = 'steps:\n  - uses: actions/setup-node@x\n    with:\n      node-version-file: .nvmrc\n';
+
+  it('is quiet when the shell matches .nvmrc and ci.yml reads it', () => {
+    expect(nodeVersionNotes(withFile, '24.22.1\n', '24.22.1')).toEqual([]);
+  });
+
+  it('says so when the shell runs another major than .nvmrc', () => {
+    expect(nodeVersionNotes(withFile, '24.22.1\n', '22.22.2').join(' ')).toMatch(/\.nvmrc pins Node 24\.22\.1.*22\.22\.2/);
+  });
+
+  it('tolerates a v prefix and a bare major in .nvmrc', () => {
+    expect(nodeVersionNotes(withFile, 'v24\n', '24.15.0')).toEqual([]);
+  });
+
+  it('flags a ci.yml that pins node-version itself', () => {
+    const pinned = 'steps:\n  - uses: actions/setup-node@x\n    with:\n      node-version: 22\n';
+    expect(nodeVersionNotes(pinned, '24.22.1', '24.22.1').join(' ')).toMatch(/node-version-file/);
   });
 });
 

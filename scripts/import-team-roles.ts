@@ -2,7 +2,7 @@
  * Import team role data from the league workbook's role sheets (format pack `workbook.teamRoles`).
  *
  * Usage:
- *   npx tsx scripts/import-team-roles.ts --xlsx=<path to the workbook> [--dry-run]
+ *   npx --no-install tsx scripts/import-team-roles.ts --xlsx=<path to the workbook> [--dry-run]
  *
  * The workbook is not in the repository: the league organiser supplies it privately.
  *

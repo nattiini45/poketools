@@ -239,13 +239,13 @@ Optional: add your own tests under `src/format-packs/private/__tests__/`; the `p
 | Command | What runs |
 |---|---|
 | `npm test` | `app` (example pack) + `scripts`; plus `private-pack` when the private pack is present. |
-| `FORMAT_PACK=example npm test` | The public view only. CI runs plain `npm test` (no `FORMAT_PACK` on the test step) in a checkout without the private pack, which is the same set. |
+| `FORMAT_PACK=example npm test` | The public view only. CI runs `npm run test:coverage` (no `FORMAT_PACK` on the test step) in a checkout without the private pack, which is the same set. |
 | `npx vitest run --project private-pack` | Only the companion suite (golden parity, moved test copies). |
 | `npx vitest run src/lib/format-pack` | The contract tests: `pack-contract.test.ts` (schema, message tree, example fixture, accessors, `definePackEn` type checks) and `pack-pkmn.server.test.ts` (every utility id, line-rule base and hint species against `@pkmn/dex`). |
 
 Public tests read values from `@/lib/format-pack` when the assertion is about the mechanism; literal expectations are fine when they are the example pack's own values.
 
-**Fixtures.** `npx tsx --tsconfig tsconfig.json scripts/draft/make-example-list-fixtures.ts` writes the example list fixtures from the example pack (it imports the pack by relative path, so the output is the same on every checkout):
+**Fixtures.** `npx --no-install tsx --tsconfig tsconfig.json scripts/draft/make-example-list-fixtures.ts` writes the example list fixtures from the example pack (it imports the pack by relative path, so the output is the same on every checkout):
 
 - `src/lib/draft/__tests__/fixtures/example-list.json` (importer-row shape);
 - `src/app/(public)/draft-preview/fixture-lines.example.json` (read-layer shape, example overrides applied).

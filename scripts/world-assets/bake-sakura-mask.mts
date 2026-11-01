@@ -18,7 +18,7 @@
  *
  * AD-SAKURA owns `PARAMS` from B5; `lib.mjs` stays frozen.
  *
- * Usage: npx tsx scripts/world-assets/bake-sakura-mask.mts [--out]
+ * Usage: npx --no-install tsx scripts/world-assets/bake-sakura-mask.mts [--out]
  *        (Windows: PowerShell or MSYS_NO_PATHCONV=1)
  */
 

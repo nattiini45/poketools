@@ -17,7 +17,7 @@
  *
  * AD-MOUNTAIN owns `PARAMS` from B6; `lib.mjs` stays frozen.
  *
- * Usage: npx tsx scripts/world-assets/bake-mountain-mask.mts [--out]
+ * Usage: npx --no-install tsx scripts/world-assets/bake-mountain-mask.mts [--out]
  *        (Windows: PowerShell or MSYS_NO_PATHCONV=1)
  */
 
