@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { postToThreads } from '../threads';
+import { OutboundHttpError } from '@/lib/outbound-fetch';
 import type { ThreadsCredentials } from '@/types/social';
 
 function makeCredentials(overrides?: Partial<ThreadsCredentials>): ThreadsCredentials {
@@ -75,12 +76,25 @@ describe('postToThreads', () => {
     }
   });
 
-  it('caps an upstream error body in the thrown message', async () => {
-    mockFetchResponses([{ ok: false, status: 400, text: 'y'.repeat(5000) }]);
+  it.each([
+    ['create', 0],
+    ['publish', 1],
+  ])('keeps an echoed %s error body out of the thrown error and every log line', async (_step, failAt) => {
+    const echoed = 'bad token threads-token-123 for user-456 ECHOED-THREADS-SECRET https://hooks.example/SECRET-HOOK';
+    const responses: Array<{ ok: boolean; status?: number; json?: unknown; text?: string }> = [];
+    if (failAt === 1) responses.push({ ok: true, json: { id: 'container-1' } });
+    responses.push({ ok: false, status: 400, text: echoed });
+    mockFetchResponses(responses);
+    const spies = (['error', 'warn', 'log', 'info', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
 
     const err = await postToThreads(makeCredentials(), 'Hi').then(() => new Error('did not throw'), (e: unknown) => e as Error);
 
-    expect(err.message.length).toBeLessThan(300);
+    expect(err).toBeInstanceOf(OutboundHttpError);
+    expect(err).toMatchObject({ provider: 'Threads', status: 400 });
+    const observed = JSON.stringify([err.message, ...spies.flatMap((s) => s.mock.calls)]);
+    for (const secret of ['ECHOED-THREADS-SECRET', 'SECRET-HOOK', 'threads-token-123', 'bad token']) {
+      expect(observed).not.toContain(secret);
+    }
   });
 
   it('sets media_type to IMAGE and includes image_url when provided', async () => {

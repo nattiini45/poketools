@@ -27,6 +27,7 @@ export default defineDe<typeof en>()({
   social_credentials_conflict: 'Gib entweder neue Zugangsdaten an oder lösch die vorhandenen – nicht beides.',
   social_credentials_provider_mismatch: 'Die Zugangsdaten gehören zu einem anderen Anbieter als die Integration.',
   social_credentials_field_required: 'Für {provider} fehlt in den Zugangsdaten das Feld {field}.',
+  social_bluesky_service_url_rejected: 'Die gespeicherte Bluesky-Serveradresse ist nicht erlaubt ({reason}).',
   INVALID_PRESET_ID: 'Preset nicht gefunden.',
   INVALID_WEBHOOK_ID: 'Webhook nicht gefunden.',
   INVALID_INTEGRATION_ID: 'Integration nicht gefunden.',

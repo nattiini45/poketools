@@ -33,6 +33,8 @@ import { decryptJson } from '../crypto';
 import { formatSocialPost } from '../format';
 import { publishToProvider } from '../providers';
 import { emitSocialEvent, sendSocialTestMessage } from '../notify';
+import { BlueskyServiceUrlError } from '../bluesky-service';
+import { OutboundHttpError } from '@/lib/outbound-fetch';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -257,7 +259,7 @@ describe('emitSocialEvent', () => {
     expect(publishToProvider).toHaveBeenCalledTimes(2);
   });
 
-  it('swallows publishToProvider errors silently', async () => {
+  it('swallows publishToProvider errors and logs them', async () => {
     vi.mocked(resolveSocialIntegrations).mockResolvedValue([makeIntegration()]);
     vi.mocked(publishToProvider).mockRejectedValue(new Error('API error'));
 
@@ -266,8 +268,54 @@ describe('emitSocialEvent', () => {
     emitSocialEvent(makePayload());
     await flushPromises();
 
-    // Should not throw
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
     consoleSpy.mockRestore();
+  });
+
+  it('logs a rejected post with its integration, provider, event and a classification, and keeps posting the others', async () => {
+    vi.mocked(resolveSocialIntegrations).mockResolvedValue([
+      makeIntegration({ id: 'int-bad', provider: 'bluesky' }),
+      makeIntegration({ id: 'int-ok', provider: 'x' }),
+    ]);
+    vi.mocked(publishToProvider).mockImplementation(async (provider) => {
+      if (provider === 'bluesky') throw new BlueskyServiceUrlError('host_not_allowed');
+    });
+    vi.mocked(decryptJson)
+      .mockReturnValueOnce({ provider: 'bluesky', handle: 'alice.bsky.social', app_password: 'PLACEHOLDER-APP-PASSWORD' })
+      .mockReturnValueOnce({ provider: 'x', access_token: 'test-token' });
+    const spies = (['error', 'warn', 'log', 'info', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
+
+    emitSocialEvent(makePayload());
+    await flushPromises();
+
+    expect(publishToProvider).toHaveBeenCalledTimes(2);
+    const logged = JSON.stringify(spies.flatMap((s) => s.mock.calls));
+    expect(logged).toContain('int-bad');
+    expect(logged).toContain('bluesky');
+    expect(logged).toContain('match_confirmed');
+    expect(logged).toContain('invalid_target');
+    expect(logged).toContain('host_not_allowed');
+    expect(logged).not.toContain('int-ok');
+    expect(logged).not.toContain('PLACEHOLDER-APP-PASSWORD');
+    expect(logged).not.toContain('alice.bsky.social');
+  });
+
+  it.each([
+    [new OutboundHttpError('X', 'POST /2/tweets', 403), 'http_error', '[X] POST /2/tweets failed: 403'],
+    [Object.assign(new Error('The operation timed out'), { name: 'TimeoutError' }), 'TimeoutError', null],
+    [new TypeError('fetch failed: https://hooks.example/SECRET-HOOK'), 'TypeError', null],
+  ])('classifies a failed post (%#) without echoing an unvetted message', async (error, classification, safeMessage) => {
+    vi.mocked(resolveSocialIntegrations).mockResolvedValue([makeIntegration()]);
+    vi.mocked(publishToProvider).mockRejectedValue(error);
+    const spies = (['error', 'warn', 'log', 'info', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
+
+    emitSocialEvent(makePayload());
+    await flushPromises();
+
+    const logged = JSON.stringify(spies.flatMap((s) => s.mock.calls));
+    expect(logged).toContain(classification);
+    if (safeMessage) expect(logged).toContain(safeMessage);
+    expect(logged).not.toContain('SECRET-HOOK');
   });
 });
 

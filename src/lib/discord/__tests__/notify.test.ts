@@ -440,24 +440,25 @@ describe('emitDiscordEvent', () => {
     consoleSpy.mockRestore();
   });
 
-  it('caps the upstream body it logs for a rejected post', async () => {
-    vi.mocked(resolveWebhooks).mockResolvedValue([makeWebhook({ id: 'wh-1' })]);
-    vi.mocked(fetch).mockResolvedValue({
-      ok: false,
-      status: 400,
-      statusText: 'Bad Request',
-      text: () => Promise.resolve('q'.repeat(5000)),
-    } as Response);
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('logs a rejected post by webhook id and status only, never the upstream body', async () => {
+    const url = 'https://discord.com/api/webhooks/123/SECRETtoken_1';
+    vi.mocked(resolveWebhooks).mockResolvedValue([makeWebhook({ id: 'wh-1', webhook_url: url })]);
+    const body = `Invalid webhook ${url} for Bearer ECHOED-DISCORD-SECRET`;
+    const text = vi.fn(() => Promise.resolve(body));
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 400, statusText: 'Bad Request', text } as unknown as Response);
+    const spies = (['error', 'warn', 'log', 'info', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
 
     emitDiscordEvent(makePayload());
     await flushPromises();
 
-    const logged = consoleSpy.mock.calls.flat().join(' ');
+    const logged = JSON.stringify(spies.flatMap((s) => s.mock.calls));
     expect(logged).toContain('wh-1');
-    expect(logged.length).toBeLessThan(400);
-    consoleSpy.mockRestore();
+    expect(logged).toContain('400');
+    expect(logged).not.toContain('SECRETtoken_1');
+    expect(logged).not.toContain('ECHOED-DISCORD-SECRET');
+    expect(logged).not.toContain('Invalid webhook');
   });
+
   it('sends to multiple matching webhooks', async () => {
     const webhooks = [
       makeWebhook({ id: 'wh-1', webhook_url: 'https://discord.com/api/webhooks/1/a' }),

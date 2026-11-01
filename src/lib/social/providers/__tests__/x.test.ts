@@ -6,6 +6,7 @@ vi.mock('../../image-fetch', () => ({
 
 import { postToX } from '../x';
 import { fetchImageAsBuffer } from '../../image-fetch';
+import { OutboundHttpError } from '@/lib/outbound-fetch';
 import type { XCredentials } from '@/types/social';
 
 const mockFetchImageAsBuffer = vi.mocked(fetchImageAsBuffer);
@@ -115,12 +116,28 @@ describe('postToX', () => {
     }
   });
 
-  it('caps an upstream error body in the thrown message', async () => {
-    mockFetchResponses([{ ok: false, status: 403, text: 'z'.repeat(5000) }]);
+  it('keeps an echoed upstream body out of the thrown error and every log line', async () => {
+    mockFetchImageAsBuffer.mockResolvedValue({ buffer: Buffer.from('img'), contentType: 'image/png' });
+    const echoed = 'bad token x-bearer-token-123 echoed ECHOED-X-SECRET https://hooks.example/SECRET-HOOK';
+    mockFetchResponses([
+      { ok: false, status: 400, text: echoed }, // media upload
+      { ok: false, status: 403, text: echoed }, // tweet
+    ]);
+    const spies = (['error', 'warn', 'log', 'info', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
 
-    const err = await postToX(makeCredentials(), 'Hi').then(() => new Error('did not throw'), (e: unknown) => e as Error);
+    const err = await postToX(makeCredentials(), 'Hi', 'https://example.com/img.png').then(
+      () => new Error('did not throw'),
+      (e: unknown) => e as Error,
+    );
 
-    expect(err.message.length).toBeLessThan(300);
+    expect(err).toBeInstanceOf(OutboundHttpError);
+    expect(err).toMatchObject({ provider: 'X', status: 403 });
+    expect(err.message).toBe('[X] POST /2/tweets failed: 403');
+    const observed = JSON.stringify([err.message, ...spies.flatMap((s) => s.mock.calls)]);
+    expect(observed).toContain('400');
+    for (const secret of ['ECHOED-X-SECRET', 'SECRET-HOOK', 'x-bearer-token-123', 'bad token']) {
+      expect(observed).not.toContain(secret);
+    }
   });
   it('falls back to text-only tweet when image upload fails', async () => {
     mockFetchImageAsBuffer.mockRejectedValue(new Error('Fetch error'));

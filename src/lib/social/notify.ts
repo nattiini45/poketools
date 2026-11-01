@@ -8,9 +8,11 @@ import type {
   SocialEventPayload,
   SocialIntegrationWithSecrets,
 } from '@/types/social';
+import { OutboundHttpError } from '@/lib/outbound-fetch';
 import { decryptJson } from './crypto';
 import { formatSocialPost } from './format';
 import { matchesEventFilter } from './matchers';
+import { BlueskyServiceUrlError } from './bluesky-service';
 import { publishToProvider } from './providers';
 
 /**
@@ -39,12 +41,31 @@ async function emitAsync(payload: SocialEventPayload): Promise<void> {
       tournamentId: payload.tournament_id,
     });
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       matching.map((integration) => publishIntegrationEvent(integration, payload, lang)),
     );
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') return;
+      const integration = matching[index];
+      console.error(
+        `[Social] Post failed: integration=${integration.id} provider=${integration.provider} event=${payload.event_type} failure=${classifyPublishFailure(result.reason)}`,
+      );
+    });
   } catch (err) {
     console.error('[Social] Failed to emit event:', payload.event_type, err instanceof Error ? err.message : String(err));
   }
+}
+
+/**
+ * A log-safe label for a rejected post. Only errors whose message this code
+ * builds from non-secret parts (a refused Bluesky target, a provider's HTTP
+ * status) contribute it; anything else, such as a network error that can name
+ * the host or carry request text, is reduced to its class name.
+ */
+function classifyPublishFailure(err: unknown): string {
+  if (err instanceof BlueskyServiceUrlError) return `invalid_target (${err.reason})`;
+  if (err instanceof OutboundHttpError) return `http_error (${err.message})`;
+  return err instanceof Error ? err.name : 'unknown';
 }
 
 function parseCredentials(integration: SocialIntegrationWithSecrets): SocialCredentials | null {
