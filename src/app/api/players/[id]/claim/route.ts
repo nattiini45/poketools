@@ -136,6 +136,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       throw err;
     }
 
+    // A sign-in that started after the first cutoff and finished before the claim committed holds a token stamped
+    // after it. Its `authAt` (the attempt's start) precedes this second cutoff, so it dies here. The claim is
+    // committed, so a failure is retried once and then surfaced (and logged) rather than reported as a success.
+    try {
+      await revokePlayerSessions(guestId);
+    } catch (firstErr) {
+      console.error('[players] guest claim committed; second session revocation failed, retrying:', firstErr);
+      await revokePlayerSessions(guestId);
+    }
+
     logAuditEvent({
       actor_id: admin.playerId,
       actor_name: admin.name,

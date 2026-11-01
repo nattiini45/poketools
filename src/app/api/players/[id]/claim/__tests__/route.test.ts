@@ -111,6 +111,35 @@ describe('POST /api/players/[id]/claim', () => {
     );
   });
 
+  it('writes the cutoff again after the claim, retries a failed write once and surfaces a second failure', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const ok = await POST(makeRequest({ source_player_id: SOURCE_ID }), { params: makeParams({ id: GUEST_ID }) });
+    expect(ok.status).toBe(200);
+    expect(revokePlayerSessions).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(revokePlayerSessions).mock.invocationCallOrder[1]).toBeGreaterThan(
+      vi.mocked(claimGuestPlayer).mock.invocationCallOrder[0],
+    );
+
+    vi.mocked(revokePlayerSessions).mockReset();
+    vi.mocked(revokePlayerSessions)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockResolvedValueOnce(undefined);
+    const retried = await POST(makeRequest({ source_player_id: SOURCE_ID }), { params: makeParams({ id: GUEST_ID }) });
+    expect(retried.status).toBe(200);
+    expect(revokePlayerSessions).toHaveBeenCalledTimes(3);
+
+    vi.mocked(revokePlayerSessions).mockReset();
+    vi.mocked(revokePlayerSessions)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('down'))
+      .mockRejectedValueOnce(new Error('still down'));
+    const failed = await POST(makeRequest({ source_player_id: SOURCE_ID }), { params: makeParams({ id: GUEST_ID }) });
+    expect(failed.status).toBe(500);
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
   it('aborts the claim when the cutoff cannot be written', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(revokePlayerSessions).mockRejectedValueOnce(new Error('db down'));
