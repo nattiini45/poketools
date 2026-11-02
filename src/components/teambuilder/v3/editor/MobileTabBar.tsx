@@ -49,6 +49,9 @@ export default function MobileTabBar() {
         {TABS.map((tab) => (
           <button
             key={tab.id}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={activeSheet === tab.id}
             onClick={() => setActiveSheet(activeSheet === tab.id ? null : tab.id)}
             className={[
               'flex-1 flex flex-col items-center py-2 gap-0.5 transition-colors',

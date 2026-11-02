@@ -33,6 +33,7 @@ export default defineDe<typeof en>()({
     install: 'PokéTools-App installieren',
     iosHint: 'Für die App-Ansicht tippe in Safari auf „Teilen“ und dann auf „Zum Home-Bildschirm“.',
   },
+  skipToContent: 'Zum Inhalt springen',
   guest: 'Gast',
   admin: {
     navLabel: 'Admin',
