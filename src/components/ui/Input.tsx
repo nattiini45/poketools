@@ -1,6 +1,7 @@
 import { forwardRef, type InputHTMLAttributes } from "react";
 import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { FieldMessages, useFieldA11y } from "./field-a11y";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -9,13 +10,12 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, hint, className, id, type, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+  ({ label, error, hint, className, id, type, "aria-describedby": describedBy, ...props }, ref) => {
+    const field = useFieldA11y({ id, error, hint, describedBy });
     const isDate = type === "date";
     const input = (
       <input
         ref={ref}
-        id={inputId}
         type={type}
         className={cn(
           "flex h-10 w-full rounded-poke-md border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary shadow-sm transition-colors placeholder:text-poke-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
@@ -25,13 +25,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           className
         )}
         {...props}
+        {...field.controlProps}
       />
     );
     return (
       <div className="space-y-1.5">
         {label && (
           <label
-            htmlFor={inputId}
+            htmlFor={field.controlId}
             className="block text-sm font-heading font-semibold text-poke-text-primary"
           >
             {label}
@@ -48,10 +49,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         ) : (
           input
         )}
-        {error && <p className="text-sm text-poke-danger">{error}</p>}
-        {hint && !error && (
-          <p className="text-sm text-poke-text-muted">{hint}</p>
-        )}
+        <FieldMessages errorId={field.errorId} hintId={field.hintId} error={error} hint={hint} />
       </div>
     );
   }
