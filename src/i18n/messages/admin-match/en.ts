@@ -149,6 +149,7 @@ export default {
       reasonLabel: 'Reason for settling the match',
       reasonPlaceholder: 'Why is the result recorded here (e.g. the players reported it to the organizer)?',
       success: 'Result recorded. The match is completed.',
+      incomplete: 'Result recorded, but some follow-up steps failed. They will be retried. The match is completed.',
       selectWinner: 'Select a winner to record the result',
       failed: 'Could not record the result. Please try again.',
     },

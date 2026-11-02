@@ -40,6 +40,8 @@ export default {
   match_reset_admin_only: 'Only admins can reset match state',
   match_status_override_admin_only: 'Only admins can complete or dispute a match that is still in progress',
   match_settle_admin_only: 'Only admins can settle a match that has not been played',
+  // confirm-match: a scheduled match cannot be completed here; the settle route requires the reason and writes the audit event (409)
+  match_settle_use_result_route: 'A match that has not started is settled with the record-result action, which asks for a reason',
   match_dispute_resolve_admin_only: 'Only admins can resolve disputed matches',
   match_complete_no_winner: 'Cannot complete a match without a winner',
   // confirm-match: the guarded status update missed and the match is now in a different state (409, nothing written)

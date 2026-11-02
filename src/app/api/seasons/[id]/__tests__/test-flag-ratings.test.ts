@@ -98,6 +98,7 @@ const summary = (isTestSeason: boolean): TestFlagRatingRebuildSummary => ({
   passes: 2,
   settled: true,
   unratedMatches: isTestSeason ? 0 : 3,
+  streaksRebuilt: 2,
 });
 
 const patch = (body: unknown) =>
@@ -139,7 +140,7 @@ describe('PATCH /api/seasons/[id] — test-league flag and ratings', () => {
         metadata: {
           is_test_season: true,
           changed: true,
-          rating_rebuild: { players: 2, rebuilt: 2, passes: 2, settled: true, unrated_matches: 0 },
+          rating_rebuild: { players: 2, rebuilt: 2, passes: 2, settled: true, unrated_matches: 0, streaks_rebuilt: 2 },
           rating_rebuild_error: null,
         },
       }),
@@ -171,7 +172,7 @@ describe('PATCH /api/seasons/[id] — test-league flag and ratings', () => {
       expect.objectContaining({
         metadata: expect.objectContaining({
           changed: false,
-          rating_rebuild: { players: 2, rebuilt: 2, passes: 2, settled: true, unrated_matches: 0 },
+          rating_rebuild: { players: 2, rebuilt: 2, passes: 2, settled: true, unrated_matches: 0, streaks_rebuilt: 2 },
         }),
       }),
     );
@@ -235,7 +236,7 @@ describe('PATCH /api/seasons/[id] — test-league flag and ratings', () => {
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({
-          rating_rebuild: { players: 2, rebuilt: 2, passes: 8, settled: false, unrated_matches: 0 },
+          rating_rebuild: { players: 2, rebuilt: 2, passes: 8, settled: false, unrated_matches: 0, streaks_rebuilt: 2 },
           rating_rebuild_error: 'test_flag_rating_rebuild_unsettled',
         }),
       }),

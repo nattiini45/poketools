@@ -413,7 +413,13 @@ function emitAnnouncements(input: {
     void emitSocialEvent(achievementPayload);
   }
 
-  if (streaks && streaks.winner.win_streak.after >= 5 && streaks.winner.win_streak.after % 5 === 0) {
+  // The rebuilt streak can equal the stored one (a match that did not move it), so the milestone needs a real rise.
+  if (
+    streaks &&
+    streaks.winner.win_streak.after >= 5 &&
+    streaks.winner.win_streak.after % 5 === 0 &&
+    streaks.winner.win_streak.after > streaks.winner.win_streak.before
+  ) {
     const streakMilestonePayload = {
       event_type: 'streak_milestone' as const,
       tournament_id: match.tournament_id,

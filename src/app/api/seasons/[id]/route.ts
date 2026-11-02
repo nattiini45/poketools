@@ -256,6 +256,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
                 passes: ratingRebuild.passes,
                 settled: ratingRebuild.settled,
                 unrated_matches: ratingRebuild.unratedMatches,
+                streaks_rebuilt: ratingRebuild.streaksRebuilt,
               }
             : null,
           rating_rebuild_error: rebuildWarning?.code ?? null,

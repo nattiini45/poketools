@@ -50,7 +50,7 @@ type LocalError = 'selectWinner' | 'updateFailed' | 'resetFailed' | 'deleteFaile
 /** An API failure (translated by its code) or a local message key; never translated text (i18n-core §1.7). */
 type ActionError = { api: ApiErrorLike } | { local: LocalError };
 type ActionSuccess =
-  | { kind: 'completed' | 'disputed' | 'settled' }
+  | { kind: 'completed' | 'disputed' | 'settled' | 'settledIncomplete' }
   | { kind: 'reset' | 'gameDeleted'; count: number };
 
 /** The reset dialog's read of what a reset touches. */
@@ -300,8 +300,14 @@ export default function AdminMatchActions({
         setTimeout(() => router.refresh(), 1500);
       } else {
         const apiError = toApiErrorLike(json);
-        setError({ api: apiError });
-        if (gameChangeFailureHints(apiError).reload || errorNeedsRefresh(apiError.code)) router.refresh();
+        if (apiError.code === 'match_finalize_incomplete') {
+          // The completion is already saved; only the follow-up steps failed and are retried.
+          setSuccess({ kind: 'settledIncomplete' });
+          router.refresh();
+        } else {
+          setError({ api: apiError });
+          if (gameChangeFailureHints(apiError).reload || errorNeedsRefresh(apiError.code)) router.refresh();
+        }
       }
     } catch {
       setError({ local: 'settleFailed' });
@@ -427,6 +433,8 @@ export default function AdminMatchActions({
         return t('actions.success.disputed');
       case 'settled':
         return tMatch('actions.settle.success');
+      case 'settledIncomplete':
+        return tMatch('actions.settle.incomplete');
       case 'reset':
         return t('actions.success.reset', { count: s.count });
       case 'gameDeleted':
@@ -643,7 +651,7 @@ export default function AdminMatchActions({
         </div>
       )}
       {success && (
-        <Alert variant="success" className="mt-4">
+        <Alert variant={success.kind === 'settledIncomplete' ? 'warning' : 'success'} className="mt-4">
           <div className="space-y-1">
             <p>{successText(success)}</p>
             {/* Itemized recalculation summary (spec §24). Rendered when the

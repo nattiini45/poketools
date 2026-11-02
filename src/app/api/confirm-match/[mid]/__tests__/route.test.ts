@@ -604,6 +604,25 @@ describe('POST /api/confirm-match/[mid]', () => {
     expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'completed', overridePlayerOneId, 'admin-1', undefined, 'in_progress');
   });
 
+  it('refuses to complete a scheduled match here: the settle route asks for the reason and audits it', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
+    vi.mocked(getMatchById).mockResolvedValue({
+      ...pendingMatch,
+      player_1_id: overridePlayerOneId,
+      player_2_id: overridePlayerTwoId,
+      winner_id: null,
+      submitter_id: null,
+      status: 'scheduled',
+    } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+
+    const response = await POST(makeRequest({ action: 'confirm', winner_id: overridePlayerOneId }), routeParams(MID));
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('match_settle_use_result_route');
+    expect(updateMatchStatus).not.toHaveBeenCalled();
+  });
+
   it('audits an admin dispute as match.dispute, with or without notes', async () => {
     vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
     vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);

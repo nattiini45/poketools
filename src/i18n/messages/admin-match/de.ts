@@ -148,6 +148,8 @@ export default defineDe<typeof en>()({
       reasonLabel: 'Grund für das Eintragen des Ergebnisses',
       reasonPlaceholder: 'Warum wird das Ergebnis hier eingetragen (z. B. weil die Spieler es dem Organisator gemeldet haben)?',
       success: 'Ergebnis eingetragen. Das Spiel ist abgeschlossen.',
+      incomplete:
+        'Ergebnis eingetragen, aber einige Folgeschritte sind fehlgeschlagen. Sie werden erneut versucht. Das Spiel ist abgeschlossen.',
       selectWinner: 'Wähle einen Sieger aus, um das Ergebnis einzutragen',
       failed: 'Das Ergebnis konnte nicht eingetragen werden. Bitte versuche es erneut.',
     },

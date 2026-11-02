@@ -67,6 +67,35 @@ describe('settling a scheduled match from the admin page', () => {
     await screen.findByText('Result recorded. The match is completed.');
   });
 
+  it.each([
+    ['en' as const, 'Result recorded, but some follow-up steps failed. They will be retried. The match is completed.'],
+    ['de' as const, 'Ergebnis eingetragen, aber einige Folgeschritte sind fehlgeschlagen. Sie werden erneut versucht. Das Spiel ist abgeschlossen.'],
+  ])(
+    'shows a distinct notice and refreshes when the completion is saved but follow-up steps failed (%s)',
+    async (locale, notice) => {
+      fetchMock.mockResolvedValue({
+        json: async () => ({
+          success: false,
+          error: 'The result was recorded, but 2 follow-up steps failed.',
+          code: 'match_finalize_incomplete',
+          params: { count: 2 },
+        }),
+      });
+      const user = userEvent.setup();
+      render(withI18n(ui(), { locale }));
+      const [pick, record] = locale === 'de' ? ['Gary', 'Ergebnis eintragen'] : ['Gary', 'Record result'];
+      await user.click(screen.getByRole('button', { name: pick }));
+      await user.click(screen.getByRole('button', { name: record }));
+      await user.type(screen.getByRole('textbox'), 'because');
+      await user.click(screen.getAllByRole('button', { name: record }).at(-1)!);
+
+      await screen.findByText(notice);
+      expect(refresh).toHaveBeenCalled();
+      expect(screen.queryByText('Result recorded. The match is completed.')).toBeNull();
+      expect(screen.queryByText(/could not record|Das Ergebnis konnte nicht/i)).toBeNull();
+    },
+  );
+
   it('keeps the confirm button off until a reason is typed', async () => {
     const user = userEvent.setup();
     render(withI18n(ui()));

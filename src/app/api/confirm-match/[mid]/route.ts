@@ -89,6 +89,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // An unplayed match is settled through the dedicated route only: it requires the reason and writes the
+    // match.admin_result audit event, which this route does not.
+    if (match.status === 'scheduled' && targetStatus === 'completed') {
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: 'A match that has not started is settled with the record-result action, which asks for a reason',
+          code: 'match_settle_use_result_route',
+        },
+        { status: 409 }
+      );
+    }
+
     // The confirmer should not be the submitter (unless admin)
     if (action === 'confirm' && match.submitter_id === player.playerId && !hasAdminAccess) {
       return NextResponse.json<ApiResult<never>>(

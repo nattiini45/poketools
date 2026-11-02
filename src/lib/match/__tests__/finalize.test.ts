@@ -220,6 +220,35 @@ describe('finalizeMatchCompletion', () => {
     );
   });
 
+  describe('win streak milestone', () => {
+    const winnerStreak = (before: number, after: number): StreakChanges => ({
+      ...STREAK_CHANGES,
+      win_streak: { before, after },
+    });
+    const milestone = expect.objectContaining({ event_type: 'streak_milestone' });
+
+    it('announces a milestone when the win streak rises onto a multiple of five', async () => {
+      vi.mocked(recomputeStreaks).mockResolvedValueOnce(winnerStreak(4, 5)).mockResolvedValueOnce(STREAK_CHANGES);
+
+      await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(emitDiscordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_type: 'streak_milestone',
+          data: expect.objectContaining({ streak_count: 5, player_name: 'Alice' }),
+        }),
+      );
+    });
+
+    it('announces nothing when the rebuilt streak sits on a milestone it already held', async () => {
+      vi.mocked(recomputeStreaks).mockResolvedValueOnce(winnerStreak(5, 5)).mockResolvedValueOnce(STREAK_CHANGES);
+
+      await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(emitDiscordEvent).not.toHaveBeenCalledWith(milestone);
+    });
+  });
+
   it('skips idempotently when the previous state was already completed', async () => {
     const result = await finalizeMatchCompletion({
       match: { ...match, status: 'completed' },
