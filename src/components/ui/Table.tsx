@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { motion, type Variants } from "@/components/shared/motion";
 import { cn } from "@/lib/utils/cn";
+import { DURATION, EASE, OFFSET, STAGGER } from "@/lib/motion/tokens";
 import {
   cycleColumnSort,
   type ColumnSortState,
@@ -113,12 +114,12 @@ const alignClass = {
 
 const tbodyVariants: Variants = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.04 } },
+  visible: { transition: { staggerChildren: STAGGER.mobile } },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  hidden: { opacity: 0, y: OFFSET.sm },
+  visible: { opacity: 1, y: 0, transition: { duration: DURATION.state, ease: EASE.out } },
 };
 
 export interface SortableTableHeaderProps {

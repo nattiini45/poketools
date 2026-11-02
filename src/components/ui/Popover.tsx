@@ -12,6 +12,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "@/components/shared/motion";
 import { cn } from "@/lib/utils/cn";
+import { SPRING } from "@/lib/motion/tokens";
 
 type PopoverSide = "top" | "bottom" | "left" | "right";
 type PopoverAlign = "start" | "center" | "end";
@@ -198,7 +199,7 @@ function HoverPopover({
                 initial={{ opacity: 0, scale: 0.96, y: 4 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 4 }}
-                transition={{ type: "spring", damping: 25, stiffness: 400 }}
+                transition={SPRING.default}
                 className={cn(
                   "fixed z-[9998] rounded-poke-lg bg-poke-surface border border-poke-border shadow-poke-lg overflow-hidden",
                   contentClassName

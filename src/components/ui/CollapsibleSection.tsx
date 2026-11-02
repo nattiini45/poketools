@@ -4,6 +4,7 @@ import { useState, useId, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "@/components/shared/motion";
 import { cn } from "@/lib/utils/cn";
+import { DURATION, EASE } from "@/lib/motion/tokens";
 
 interface CollapsibleSectionProps {
   /** Anchor id on the outer <section>, so a link can jump to it. */
@@ -98,7 +99,7 @@ export default function CollapsibleSection({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25, ease: "easeInOut" }}
+              transition={{ duration: DURATION.state, ease: EASE.standard }}
               style={{ overflow: "hidden" }}
             >
               <div className="p-5">{children}</div>

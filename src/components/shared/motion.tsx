@@ -12,6 +12,7 @@
 export {
   motion,
   AnimatePresence,
+  MotionConfig,
   useAnimation,
   useInView,
   useMotionValue,

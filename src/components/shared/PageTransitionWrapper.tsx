@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "@/components/shared/motion";
+import { motion, AnimatePresence, useReducedMotion } from "@/components/shared/motion";
+import { pageTransition } from "@/lib/motion/page-transition";
 import type { ReactNode } from "react";
 
 export default function PageTransitionWrapper({
@@ -10,16 +11,11 @@ export default function PageTransitionWrapper({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const reduceMotion = useReducedMotion() ?? false;
 
   return (
     <AnimatePresence mode="popLayout">
-      <motion.div
-        key={pathname}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.15, ease: "easeOut" }}
-      >
+      <motion.div key={pathname} {...pageTransition(reduceMotion)}>
         {children}
       </motion.div>
     </AnimatePresence>

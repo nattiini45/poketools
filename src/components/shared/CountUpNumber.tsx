@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useInView } from "@/components/shared/motion";
+import { useInView, useReducedMotion } from "@/components/shared/motion";
 
 interface CountUpNumberProps {
   value: number;
@@ -16,10 +16,11 @@ export default function CountUpNumber({
 }: CountUpNumberProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true });
+  const reduceMotion = useReducedMotion();
   const [display, setDisplay] = useState(0);
 
   useEffect(() => {
-    if (!inView || value === 0) return;
+    if (reduceMotion || !inView || value === 0) return;
 
     const start = performance.now();
     let raf: number;
@@ -38,12 +39,14 @@ export default function CountUpNumber({
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [inView, value, duration]);
+  }, [reduceMotion, inView, value, duration]);
 
-  const renderedValue = inView && value === 0 ? 0 : display;
+  const renderedValue = reduceMotion || (inView && value === 0) ? value : display;
 
   return (
-    <span ref={ref} className={className}>
+    // The server cannot know the viewer's motion preference, so a reduced-motion client may show the final value
+    // where the server markup held the starting 0.
+    <span ref={ref} className={className} suppressHydrationWarning>
       {renderedValue}
     </span>
   );
