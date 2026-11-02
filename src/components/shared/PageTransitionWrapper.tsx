@@ -14,7 +14,9 @@ export default function PageTransitionWrapper({
   const reduceMotion = useReducedMotion() ?? false;
 
   return (
-    <AnimatePresence mode="popLayout">
+    // `initial={false}`: the server cannot know the reduced-motion preference, so the first paint must not carry the
+    // slide's starting offset (a reduced-motion client would never animate it away and keep the page shifted).
+    <AnimatePresence mode="popLayout" initial={false}>
       <motion.div key={pathname} {...pageTransition(reduceMotion)}>
         {children}
       </motion.div>
