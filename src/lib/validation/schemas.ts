@@ -637,6 +637,12 @@ export const matchReopenSchema = z.object({
   reason: reasonSchema,
 });
 
+/** Admin result for a match nobody played (no-show, drop, result agreed outside the app): the winner and a required reason. */
+export const matchResultSchema = z.object({
+  winner_id: uuid,
+  reason: reasonSchema,
+});
+
 /** Match reset: cascade flag plus an optional reason (the admin UI requires it). */
 export const matchResetSchema = cascadeActionSchema.extend({
   reason: reasonSchema.optional(),
@@ -1468,6 +1474,7 @@ export type ConfirmMatchInput = z.infer<typeof confirmMatchSchema>;
 export type MatchScheduleInput = z.infer<typeof matchScheduleSchema>;
 export type MatchReopenInput = z.infer<typeof matchReopenSchema>;
 export type MatchResetInput = z.infer<typeof matchResetSchema>;
+export type MatchResultInput = z.infer<typeof matchResultSchema>;
 export type GameDeleteInput = z.infer<typeof gameDeleteSchema>;
 export type MatchHistoryQueryInput = z.infer<typeof matchHistoryQuerySchema>;
 export type RulesetCreateInput = z.infer<typeof rulesetCreateSchema>;
