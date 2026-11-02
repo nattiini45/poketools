@@ -1,22 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
+import { ENABLE_PWA } from '@/lib/feature-flags';
 import { pushRegistersServiceWorker, swScriptUrl } from '@/lib/push/client';
-
-const PWA_ENABLED = process.env.NEXT_PUBLIC_PWA_ENABLED === 'true';
-
-async function clearPwaCaches(): Promise<void> {
-  if (typeof window === 'undefined' || !('caches' in window)) {
-    return;
-  }
-
-  const cacheKeys = await caches.keys();
-  await Promise.all(
-    cacheKeys
-      .filter((key) => key.startsWith('poketools-shell-'))
-      .map((key) => caches.delete(key)),
-  );
-}
+import { clearPwaCaches } from '@/lib/pwa/caches';
 
 async function unregisterPwaWorker(): Promise<void> {
   const registrations = await navigator.serviceWorker.getRegistrations();
@@ -55,7 +42,7 @@ export default function PwaRegistrar() {
     const syncServiceWorker = async () => {
       // Web Push needs the worker even when the offline shell is off (docs/push.md): it then registers in
       // `?mode=push` form, which handles push only and caches nothing.
-      if (!PWA_ENABLED && !pushRegistersServiceWorker()) {
+      if (!ENABLE_PWA && !pushRegistersServiceWorker()) {
         await unregisterPwaWorker();
         return;
       }

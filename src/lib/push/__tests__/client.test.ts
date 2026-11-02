@@ -12,6 +12,13 @@ import {
 import { endpointFingerprint } from '@/lib/supabase/queries/push-subscriptions';
 import { makeBrowserKeys, makeVapidKeys, FCM_ENDPOINT } from './fixtures';
 
+// The flag is a build-time constant; the mock reads it per access so each test sets it without reloading modules.
+const flags = vi.hoisted(() => ({ pwa: false }));
+vi.mock('@/lib/feature-flags', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/feature-flags')>();
+  return Object.defineProperties({ ...actual }, { ENABLE_PWA: { get: () => flags.pwa, enumerable: true } });
+});
+
 const vapid = makeVapidKeys();
 const browserKeys = makeBrowserKeys();
 
@@ -35,6 +42,7 @@ const env = (over: Partial<Parameters<typeof detectPushSupport>[0] & object> = {
 });
 
 beforeEach(() => {
+  flags.pwa = false;
   vi.stubEnv('NEXT_PUBLIC_VAPID_PUBLIC_KEY', vapid.publicKey);
 });
 afterEach(() => {
@@ -73,6 +81,18 @@ describe('detectPushSupport', () => {
 describe('swScriptUrl', () => {
   it('registers the push-only form while the PWA flag is off (the test environment has it unset)', () => {
     expect(swScriptUrl()).toBe('/sw.js?mode=push');
+  });
+
+  it('registers the versioned full worker with the PWA flag on', () => {
+    flags.pwa = true;
+    vi.stubEnv('NEXT_PUBLIC_BUILD_ID', 'abc123def456');
+    expect(swScriptUrl()).toBe('/sw.js?v=abc123def456');
+  });
+
+  it('falls back to the dev build id when none is baked in', () => {
+    flags.pwa = true;
+    vi.stubEnv('NEXT_PUBLIC_BUILD_ID', '');
+    expect(swScriptUrl()).toBe('/sw.js?v=dev');
   });
 });
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useT } from '@/i18n/client';
+import { ENABLE_PWA } from '@/lib/feature-flags';
 import { shellMessages } from '@/i18n/messages/shell';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -13,11 +14,10 @@ interface PwaInstallPromptProps {
   className?: string;
 }
 
-const PWA_ENABLED = process.env.NEXT_PUBLIC_PWA_ENABLED === 'true';
 const subscribe = () => () => {};
 
 function getShowIosGuideSnapshot() {
-  if (typeof window === 'undefined' || !PWA_ENABLED) {
+  if (typeof window === 'undefined' || !ENABLE_PWA) {
     return false;
   }
 
@@ -36,7 +36,7 @@ export default function PwaInstallPrompt({ className = '' }: PwaInstallPromptPro
   const t = useT(shellMessages);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !PWA_ENABLED) {
+    if (typeof window === 'undefined' || !ENABLE_PWA) {
       return;
     }
 
@@ -52,7 +52,7 @@ export default function PwaInstallPrompt({ className = '' }: PwaInstallPromptPro
     };
   }, []);
 
-  if (!PWA_ENABLED) {
+  if (!ENABLE_PWA) {
     return null;
   }
 

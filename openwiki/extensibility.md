@@ -13,8 +13,7 @@ Runtime gates defined in `src/lib/feature-flags.ts`. All flags are `NEXT_PUBLIC_
 | `NEXT_PUBLIC_AGENT_POST_MATCH` | `false` | Routes post-match analysis through AI agent |
 | `NEXT_PUBLIC_AGENT_MATCH_ANALYSIS` | `false` | Routes scouting card through AI agent |
 | `NEXT_PUBLIC_ENABLE_KALE_CABBAGE` | `false` | Legacy Kale report testing |
-| `NEXT_PUBLIC_PWA_ENABLED` | — | PWA installable shell |
-| `NEXT_PUBLIC_PWA_CACHE_LEVEL` | — | Service worker cache aggressiveness |
+| `NEXT_PUBLIC_PWA_ENABLED` | `false` | PWA installable shell (`ENABLE_PWA`): service worker with an offline page, no cached pages |
 
 ### Feature flag pattern
 ```typescript

@@ -37,3 +37,10 @@ export const ENABLE_AGENT_POST_MATCH =
  */
 export const ENABLE_ADMIN_ASSISTANT =
   process.env.NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT === 'true';
+
+/**
+ * Show and register the offline shell (`public/sw.js`, docs/push.md "Service worker"). Default disabled; with it off
+ * the registrar removes a worker and caches an earlier PWA-enabled build left, and Web Push (when configured)
+ * registers the push-only worker instead.
+ */
+export const ENABLE_PWA = process.env.NEXT_PUBLIC_PWA_ENABLED === 'true';

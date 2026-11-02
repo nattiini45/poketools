@@ -171,13 +171,14 @@ PokéTools includes an installable PWA shell with a service worker and offline f
 
 | Variable | Description |
 |---|---|
-| `NEXT_PUBLIC_PWA_ENABLED` | Enable service worker registration (`true` or `false`). |
-| `NEXT_PUBLIC_PWA_CACHE_LEVEL` | Reserved for future cache tiers (`shell`, `read`, `sync`); not read by the code yet. |
+| `NEXT_PUBLIC_PWA_ENABLED` | Enable service worker registration (`true` or `false`). Read in one place, `src/lib/feature-flags.ts` (`ENABLE_PWA`). |
 
 Notes:
-- The current PWA scope covers app-shell caching and offline fallback only — no API caching or offline writes.
-- Service worker can be disabled instantly by setting `NEXT_PUBLIC_PWA_ENABLED=false`.
-- Web Push for draft turn alerts is configured separately (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`; see [docs/push.md](docs/push.md)). With push configured the service worker is registered even when `NEXT_PUBLIC_PWA_ENABLED=false`, in a mode that caches nothing.
+- The worker never stores a page. Navigations always go to the network, and when it is unreachable the worker shows `/offline.html`; a signed-in page is never kept for the next person on the device. Only the hashed build files (`/_next/static/`) and the app icons (`/pwa/`) are cached, no API responses, and nothing is written offline.
+- The worker is registered as `/sw.js?v=<build id>`. The build id comes from `VERCEL_GIT_COMMIT_SHA` (`dev` locally) in `next.config.mjs`, so each deploy gets its own cache and the worker deletes the previous ones when it activates. Signing out also clears the worker's caches.
+- Broadcast overlays (`/broadcast/*`) never register the worker.
+- Service worker can be disabled instantly by setting `NEXT_PUBLIC_PWA_ENABLED=false`: the next page load removes the worker and its caches.
+- Web Push for draft turn alerts is configured separately (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`; see [docs/push.md](docs/push.md)). With push configured the service worker is registered even when `NEXT_PUBLIC_PWA_ENABLED=false`, in a mode that caches and intercepts nothing.
 
 ## Contributing
 

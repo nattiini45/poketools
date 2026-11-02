@@ -1,16 +1,26 @@
-const CACHE_VERSION = 'v2';
-const SHELL_CACHE = `poketools-shell-${CACHE_VERSION}`;
+// Routing decisions (which requests are intercepted, what is cache-first) live in sw-routing.js so the test suite
+// can run them without a browser. It is versioned with the worker so a new build always fetches the matching copy.
+const SEARCH_PARAMS = new URL(self.location.href).searchParams;
+
+// Registered as `/sw.js?v=<build id>` (src/lib/push/client.ts, `swScriptUrl`): the id names the cache, so every
+// deploy gets a fresh cache and `activate` deletes the previous ones. A missing or odd value falls back to a fixed name.
+const RAW_VERSION = SEARCH_PARAMS.get('v') || '';
+const CACHE_VERSION = /^[A-Za-z0-9._-]{1,64}$/.test(RAW_VERSION) ? RAW_VERSION : 'unversioned';
+const CACHE_PREFIX = 'poketools-shell-';
+const SHELL_CACHE = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const OFFLINE_FALLBACK = '/offline.html';
+
+importScripts(`/sw-routing.js?v=${encodeURIComponent(CACHE_VERSION)}`);
+const routing = self.PokeToolsSwRouting;
 
 // Registered as `/sw.js?mode=push` when the PWA flag is off but Web Push is configured (src/lib/push/client.ts):
 // the worker then only handles push, and caches and intercepts nothing.
-const PUSH_ONLY = new URL(self.location.href).searchParams.get('mode') === 'push';
+const PUSH_ONLY = SEARCH_PARAMS.get('mode') === 'push';
 
+// Static files only: no page HTML is ever stored (the `/` page included), because a cached page outlives the
+// session that rendered it.
 const SHELL_ASSETS = [
-  '/',
   OFFLINE_FALLBACK,
-  '/manifest.webmanifest',
-  '/favicon.ico',
   '/pwa/icon-192.png',
   '/pwa/icon-512.png',
   '/pwa/icon-192-maskable.png',
@@ -38,7 +48,7 @@ self.addEventListener('activate', (event) => {
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((key) => key.startsWith('poketools-shell-') && (PUSH_ONLY || key !== SHELL_CACHE))
+          .filter((key) => key.startsWith(CACHE_PREFIX) && (PUSH_ONLY || key !== SHELL_CACHE))
           .map((key) => caches.delete(key)),
       );
 
@@ -46,28 +56,6 @@ self.addEventListener('activate', (event) => {
     })(),
   );
 });
-
-function isStaticAsset(pathname, destination) {
-  if (pathname.startsWith('/_next/static/')) {
-    return true;
-  }
-
-  if (pathname.startsWith('/pwa/')) {
-    return true;
-  }
-
-  if (pathname === '/manifest.webmanifest' || pathname === '/favicon.ico') {
-    return true;
-  }
-
-  return (
-    destination === 'style' ||
-    destination === 'script' ||
-    destination === 'font' ||
-    destination === 'image' ||
-    destination === 'manifest'
-  );
-}
 
 async function cacheFirst(request) {
   const cached = await caches.match(request);
@@ -90,45 +78,17 @@ self.addEventListener('fetch', (event) => {
   }
 
   const { request } = event;
+  const route = routing.routeRequest(request, self.location.origin);
 
-  if (request.method !== 'GET') {
-    return;
-  }
-
-  const url = new URL(request.url);
-
-  if (url.origin !== self.location.origin) {
-    return;
-  }
-
-  if (url.pathname.startsWith('/api/')) {
-    return;
-  }
-
-  if (request.mode === 'navigate') {
+  if (route === 'navigation') {
+    // Network first, and nothing is stored: a failed navigation shows the offline page, never an earlier render.
     event.respondWith(
-      (async () => {
-        try {
-          const response = await fetch(request);
-          const cache = await caches.open(SHELL_CACHE);
-          void cache.put(request, response.clone());
-          return response;
-        } catch {
-          const cachedPage = await caches.match(request);
-          if (cachedPage) {
-            return cachedPage;
-          }
-
-          const offlinePage = await caches.match(OFFLINE_FALLBACK);
-          return offlinePage || Response.error();
-        }
-      })(),
+      fetch(request).catch(async () => (await caches.match(OFFLINE_FALLBACK)) || Response.error()),
     );
-
     return;
   }
 
-  if (isStaticAsset(url.pathname, request.destination)) {
+  if (route === 'static') {
     event.respondWith(cacheFirst(request));
   }
 });

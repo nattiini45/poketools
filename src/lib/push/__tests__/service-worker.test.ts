@@ -9,6 +9,7 @@ import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 
 const SOURCE = readFileSync(path.join(process.cwd(), 'public', 'sw.js'), 'utf8');
+const ROUTING_SOURCE = readFileSync(path.join(process.cwd(), 'public', 'sw-routing.js'), 'utf8');
 const ORIGIN = 'https://poketools.test';
 
 interface FakeClient {
@@ -30,9 +31,9 @@ function loadWorker(script = '/sw.js') {
   const cacheStore = { addAll: vi.fn(async () => undefined), put: vi.fn(async () => undefined) };
   const caches = {
     open: vi.fn(async () => cacheStore),
-    keys: vi.fn(async () => ['poketools-shell-v1', 'poketools-shell-v2', 'other-cache']),
+    keys: vi.fn(async () => ['poketools-shell-v1', 'poketools-shell-v2', 'poketools-shell-build-2', 'other-cache']),
     delete: vi.fn(async (_key: string) => true),
-    match: vi.fn(async () => undefined),
+    match: vi.fn(async (_request?: unknown): Promise<unknown> => undefined),
   };
   const clients = {
     matchAll: vi.fn(async (): Promise<FakeClient[]> => []),
@@ -43,7 +44,7 @@ function loadWorker(script = '/sw.js') {
     showNotification: vi.fn(async (_title: string, _options?: Record<string, unknown>) => undefined),
     pushManager: { subscribe: vi.fn(async (_options: Record<string, unknown>): Promise<unknown> => undefined) },
   };
-  const fetchMock = vi.fn(async (_url: string, _init?: Record<string, unknown>) => ({ ok: true }));
+  const fetchMock = vi.fn(async (_url: unknown, _init?: Record<string, unknown>): Promise<unknown> => ({ ok: true }));
   const self = {
     location: { href: `${ORIGIN}${script}`, origin: ORIGIN },
     addEventListener: (type: string, handler: (event: unknown) => void) => handlers.set(type, handler),
@@ -51,7 +52,11 @@ function loadWorker(script = '/sw.js') {
     registration,
     clients,
   };
-  vm.runInNewContext(SOURCE, { self, caches, URL, Response, fetch: fetchMock, console }, { filename: 'sw.js' });
+  const importScripts = vi.fn((_url: string) => {
+    vm.runInContext(ROUTING_SOURCE, context, { filename: 'sw-routing.js' });
+  });
+  const context = vm.createContext({ self, caches, URL, Response, fetch: fetchMock, console, importScripts });
+  vm.runInContext(SOURCE, context, { filename: 'sw.js' });
 
   /** Fires an event and returns what it handed to `waitUntil` (awaited). */
   async function fire(type: string, event: Record<string, unknown> = {}) {
@@ -65,9 +70,9 @@ function loadWorker(script = '/sw.js') {
       respondWith: (p: Promise<unknown>) => responses.push(p),
     });
     await Promise.all(waits);
-    return { waited: waits.length, responded: responses.length };
+    return { waited: waits.length, responded: responses.length, response: responses[0] };
   }
-  return { handlers, fire, caches, cacheStore, clients, registration, fetchMock, self };
+  return { handlers, fire, caches, cacheStore, clients, registration, fetchMock, self, importScripts };
 }
 
 const pushEvent = (data: unknown) => ({
@@ -245,20 +250,107 @@ describe('pushsubscriptionchange handler', () => {
   });
 });
 
+const nav = (pathname: string) => ({ method: 'GET', url: `${ORIGIN}${pathname}`, mode: 'navigate', destination: 'document' });
+const asset = (pathname: string, destination = 'script') => ({ method: 'GET', url: `${ORIGIN}${pathname}`, mode: 'no-cors', destination });
+
 describe('caching modes', () => {
-  it('full mode: precaches the shell on install, prunes old shells, and answers navigations', async () => {
-    const sw = loadWorker('/sw.js');
+  it('full mode: precaches static files only (no page HTML, not `/`), prunes every other shell cache', async () => {
+    const sw = loadWorker('/sw.js?v=build-2');
+    expect(sw.importScripts).toHaveBeenCalledWith('/sw-routing.js?v=build-2');
+
     await sw.fire('install');
-    expect(sw.cacheStore.addAll).toHaveBeenCalled();
+    expect(sw.caches.open).toHaveBeenCalledWith('poketools-shell-build-2');
+    const precached = (sw.cacheStore.addAll.mock.calls[0] as unknown as [string[]])[0];
+    expect(precached).not.toContain('/');
+    expect(precached).toContain('/offline.html');
+    expect(precached.every((url) => url === '/offline.html' || url.startsWith('/pwa/'))).toBe(true);
     expect(sw.self.skipWaiting).toHaveBeenCalled();
 
     await sw.fire('activate');
-    expect(sw.caches.delete).toHaveBeenCalledTimes(1);
-    expect(sw.caches.delete).toHaveBeenCalledWith('poketools-shell-v1');
+    expect(sw.caches.delete.mock.calls.map((call) => call[0]).sort()).toEqual(['poketools-shell-v1', 'poketools-shell-v2']);
     expect(sw.clients.claim).toHaveBeenCalled();
+  });
 
-    const result = await sw.fire('fetch', { request: { method: 'GET', url: `${ORIGIN}/leagues`, mode: 'navigate', destination: 'document' } });
-    expect(result.responded).toBe(1);
+  it('names the cache after the build id and a different id drops the earlier build', async () => {
+    const sw = loadWorker('/sw.js?v=build-3');
+    await sw.fire('activate');
+    expect(sw.caches.delete.mock.calls.map((call) => call[0]).sort()).toEqual([
+      'poketools-shell-build-2',
+      'poketools-shell-v1',
+      'poketools-shell-v2',
+    ]);
+  });
+
+  it.each(['', '?v=', '?v=has%20space', '?v=../x', `?v=${'x'.repeat(65)}`])('an unusable version (%j) uses one fixed cache name', async (query) => {
+    const sw = loadWorker(`/sw.js${query}`);
+    await sw.fire('install');
+    expect(sw.caches.open).toHaveBeenCalledWith('poketools-shell-unversioned');
+  });
+
+  it.each(['/leagues', '/dashboard', '/admin/players', '/broadcast/match/1/live', '/teams/shared/abc'])(
+    'a navigation to %s is fetched from the network and never stored',
+    async (pathname) => {
+      const sw = loadWorker('/sw.js?v=build-2');
+      const page = { ok: true, status: 200, clone: () => page };
+      sw.fetchMock.mockResolvedValue(page);
+
+      const result = await sw.fire('fetch', { request: nav(pathname) });
+      expect(result.responded).toBe(1);
+      await expect(result.response).resolves.toBe(page);
+      expect(sw.cacheStore.put).not.toHaveBeenCalled();
+      expect(sw.caches.open).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a navigation that answers 500 is passed through and never stored', async () => {
+    const sw = loadWorker('/sw.js?v=build-2');
+    const failed = { ok: false, status: 500, clone: () => failed };
+    sw.fetchMock.mockResolvedValue(failed);
+
+    const result = await sw.fire('fetch', { request: nav('/leagues') });
+    await expect(result.response).resolves.toBe(failed);
+    expect(sw.cacheStore.put).not.toHaveBeenCalled();
+  });
+
+  it('offline: a navigation shows /offline.html, never a page that was visited earlier', async () => {
+    const sw = loadWorker('/sw.js?v=build-2');
+    const offlinePage = { offline: true };
+    const earlierDashboard = { dashboard: true };
+    sw.fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    sw.caches.match.mockImplementation(async (request: unknown) => {
+      if (request === '/offline.html') return offlinePage;
+      return earlierDashboard;
+    });
+
+    const result = await sw.fire('fetch', { request: nav('/dashboard') });
+    await expect(result.response).resolves.toBe(offlinePage);
+  });
+
+  it('static assets are cache first and stored; other assets are not intercepted', async () => {
+    const sw = loadWorker('/sw.js?v=build-2');
+    const fresh = { ok: true, status: 200, clone: () => fresh };
+    sw.fetchMock.mockResolvedValue(fresh);
+
+    const hit = await sw.fire('fetch', { request: asset('/_next/static/chunks/app.js') });
+    expect(hit.responded).toBe(1);
+    await expect(hit.response).resolves.toBe(fresh);
+    expect(sw.cacheStore.put).toHaveBeenCalledTimes(1);
+
+    sw.caches.match.mockResolvedValueOnce({ cached: true });
+    const cached = await sw.fire('fetch', { request: asset('/pwa/icon-192.png', 'image') });
+    await expect(cached.response).resolves.toEqual({ cached: true });
+
+    for (const request of [
+      asset('/_next/image?url=%2Fa.png&w=64&q=75', 'image'),
+      asset('/avatar/me.png', 'image'),
+      asset('/fonts/a.woff2', 'font'),
+      asset('/manifest.webmanifest', 'manifest'),
+      { method: 'POST', url: `${ORIGIN}/_next/static/a.js`, mode: 'no-cors', destination: 'script' },
+      asset('/api/players', 'empty'),
+    ]) {
+      expect((await sw.fire('fetch', { request })).responded).toBe(0);
+    }
+    expect(sw.cacheStore.put).toHaveBeenCalledTimes(1);
   });
 
   it('push mode (?mode=push): caches nothing on install, deletes every shell cache, intercepts no request', async () => {
@@ -269,12 +361,13 @@ describe('caching modes', () => {
     expect(sw.self.skipWaiting).toHaveBeenCalled();
 
     await sw.fire('activate');
-    expect(sw.caches.delete.mock.calls.map((call) => call[0]).sort()).toEqual(['poketools-shell-v1', 'poketools-shell-v2']);
+    expect(sw.caches.delete.mock.calls.map((call) => call[0]).sort()).toEqual([
+      'poketools-shell-build-2',
+      'poketools-shell-v1',
+      'poketools-shell-v2',
+    ]);
 
-    for (const request of [
-      { method: 'GET', url: `${ORIGIN}/leagues`, mode: 'navigate', destination: 'document' },
-      { method: 'GET', url: `${ORIGIN}/_next/static/chunk.js`, mode: 'no-cors', destination: 'script' },
-    ]) {
+    for (const request of [nav('/leagues'), asset('/_next/static/chunk.js')]) {
       const result = await sw.fire('fetch', { request });
       expect(result.responded).toBe(0);
     }

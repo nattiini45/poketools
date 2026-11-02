@@ -121,8 +121,13 @@ const apiHeaders = [
   },
 ];
 
+// The service worker (public/sw.js) names its cache after this id, so a deploy replaces the previous deploy's caches.
+// Derived here, not a variable anyone sets: Vercel provides the commit SHA, a local build is 'dev'.
+const BUILD_ID = (process.env.VERCEL_GIT_COMMIT_SHA ?? '').trim().slice(0, 12) || 'dev';
+
 const nextConfig = {
   poweredByHeader: false,
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   // Web Push sender (src/lib/push/send.ts, docs/push.md): a Node-only CommonJS package with native `crypto`/`https`
   // use. It stays an external require on the server instead of being bundled; it never reaches a client bundle.
   serverExternalPackages: ['web-push'],
@@ -162,8 +167,9 @@ const nextConfig = {
   },
   async headers() {
     return [
-      {
-        source: '/sw.js',
+      // The worker and the routing script it imports: a stale copy of either would run the previous deploy's policy.
+      ...['/sw.js', '/sw-routing.js'].map((source) => ({
+        source,
         headers: [
           ...securityHeaders,
           {
@@ -171,7 +177,7 @@ const nextConfig = {
             value: 'no-cache, no-store, must-revalidate',
           },
         ],
-      },
+      })),
       {
         source: '/api/:path*',
         headers: [...securityHeaders, ...apiHeaders],

@@ -32,7 +32,7 @@ Make a key pair once per deployment with `npx web-push generate-vapid-keys` and 
 
 `src/lib/push/config.ts` (`readPushConfig`) validates all three: the key lengths, that the private key belongs to the public one, and the subject form. Anything missing or invalid means push is **disabled**: the server sends nothing and reads nothing, `POST /api/push/subscriptions` answers `503 push_disabled`, `GET` reports `enabled: false`, and one warning per process names the offending variables (never a value). The UI hides the bell and the settings card when the build has no public key, and the bell hides itself for good once the server answers `push_disabled`. A deployment without keys behaves exactly as before.
 
-The service worker is registered whenever push is configured, even with `NEXT_PUBLIC_PWA_ENABLED=false`: it is then registered as `/sw.js?mode=push`, which handles push only and caches and intercepts nothing (it also removes shell caches an earlier PWA-enabled build left). With the PWA flag on, the worker is the full offline shell plus the push handlers. `src/lib/push/client.ts` (`swScriptUrl`) is the single place that picks the URL; `PwaRegistrar` and the bell both use it.
+The service worker is registered whenever push is configured, even with `NEXT_PUBLIC_PWA_ENABLED=false`: it is then registered as `/sw.js?mode=push`, which handles push only and caches and intercepts nothing (it also removes shell caches an earlier PWA-enabled build left). With the PWA flag on, the worker is registered as `/sw.js?v=<build id>` and is the offline shell plus the push handlers. `src/lib/push/client.ts` (`swScriptUrl`) is the single place that picks the URL; `PwaRegistrar` and the bell both use it.
 
 ## Platforms
 
@@ -95,12 +95,12 @@ Logs name the push service host and the status code, never an endpoint path, key
 
 ## Service worker
 
-`public/sw.js` (`CACHE_VERSION` v2):
+`public/sw.js` (its cache is named `poketools-shell-<build id>`, from the `v` parameter of the registration URL):
 
 - `push`: shows the notification (`title`, `body`, `tag`, `renotify`, icon) from the payload, and always shows something, also for a missing or malformed payload. A payload URL is reduced to a same-origin path; anything else opens `/`.
 - `notificationclick`: closes the notification, focuses an open PokéTools window already on that page, else navigates another PokéTools window there, else opens a window.
 - `pushsubscriptionchange`: subscribes again if the browser gave no new subscription and POSTs it with the old endpoint as `replaces`.
-- The shell caching (install, activate, fetch) is unchanged, and switched off in `?mode=push`.
+- The offline shell (install, activate, fetch) is separate from the push handlers and switched off in `?mode=push`. It stores no page: navigations go to the network and fall back to `/offline.html`; only `/_next/static/` and `/pwa/` files are served cache-first. Which requests it touches is decided by `public/sw-routing.js` (loaded with `importScripts`, tested in `src/lib/pwa/__tests__/sw-routing.test.ts`). `activate` deletes every other `poketools-shell-*` cache, so each deploy replaces the previous one's, and sign-out calls `clearPwaCaches()` (`src/lib/pwa/caches.ts`) first.
 
 There is no monochrome badge asset yet, so notifications carry only the icon (`/pwa/icon-192.png`).
 
