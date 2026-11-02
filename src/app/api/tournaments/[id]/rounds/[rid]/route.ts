@@ -4,6 +4,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import {
   getRoundById,
   updateRoundStatus,
+  completeRound,
   updateRoundBestOf,
   updateRoundDeadline,
 } from '@/lib/supabase/queries/rounds';
@@ -118,9 +119,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // `rounds.status` is a manual flag that every generate route trusts, so completing is where unfinished matches
     // are caught: before any write, in every format. A resource admin can force it with a reason (audited below),
     // which is the only way to close a round whose match can never be played.
+    // A round that is already completed has nothing left to refuse or to force: a repeat only answers with it.
     let forcedOpenMatches = 0;
     let roundMatches: Awaited<ReturnType<typeof getMatchesByRound>> = [];
-    if (body.status === 'completed') {
+    if (body.status === 'completed' && round.status !== 'completed') {
       roundMatches = await getMatchesByRound(rid);
       const unfinished = roundMatches.filter((match) => match.status !== 'completed');
       if (unfinished.length > 0) {
@@ -150,7 +152,27 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const statusBefore = round.status;
-    if (body.status) {
+    // Side effects of a completion belong to the one call that really made the transition. The conditional claim
+    // gives overlapping submissions the same guarantee as a sequential repeat.
+    let completedNow = false;
+    if (body.status === 'completed') {
+      if (round.status !== 'completed') {
+        const claimed = await completeRound(rid);
+        if (claimed) {
+          round = claimed;
+          completedNow = true;
+        } else {
+          const current = await getRoundById(rid);
+          if (!current) {
+            return NextResponse.json<ApiResult<never>>(
+              { success: false, error: 'Round not found', code: 'round_not_found' },
+              { status: 404 }
+            );
+          }
+          round = current;
+        }
+      }
+    } else if (body.status) {
       round = await updateRoundStatus(rid, body.status);
     }
 
@@ -174,7 +196,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    if (forcedOpenMatches > 0) {
+    if (completedNow && forcedOpenMatches > 0) {
       logAuditEvent({
         actor_id: admin.playerId,
         actor_name: admin.name,
@@ -192,8 +214,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    // Emit round_completed Discord event when round is marked completed
-    if (body.status === 'completed') {
+    // Emit round_completed Discord event when this call completed the round
+    if (completedNow) {
       try {
         if (tournament) {
           const [allMatchRecords, participants] = await Promise.all([

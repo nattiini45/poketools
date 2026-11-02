@@ -212,6 +212,24 @@ export async function updateRoundStatus(
   return toRound(data);
 }
 
+/**
+ * Atomic claim of the transition to `completed`: the conditional update changes a row only for the call that moves
+ * the round out of another status. `null` means the round was already completed (or is gone), so a caller that
+ * acts on a completion (audit, events, recap) acts only when it gets the round back.
+ */
+export async function completeRound(id: string): Promise<Round | null> {
+  const { data, error } = await supabase
+    .from('rounds')
+    .update({ status: 'completed' })
+    .eq('id', id)
+    .neq('status', 'completed')
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? toRound(data) : null;
+}
+
 export async function updateRoundBestOf(
   id: string,
   bestOf: number
