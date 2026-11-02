@@ -80,6 +80,7 @@ src/lib/tournament/
 
   | From | Admin may also go to |
   |---|---|
+  | `scheduled` | `completed` (the admin settle, `POST /api/admin/matches/[id]/result`; refused for a non-admin with `match_settle_admin_only`; `POST /api/confirm-match/[mid]` refuses it with 409 `match_settle_use_result_route`, because only the settle route requires the reason and writes the audit event) |
   | `in_progress` | `scheduled`, `completed`, `disputed` |
   | `pending_confirmation` | `in_progress`, `scheduled` |
   | `completed` | `scheduled`, `in_progress` |

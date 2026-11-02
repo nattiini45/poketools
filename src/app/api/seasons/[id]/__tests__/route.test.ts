@@ -313,6 +313,7 @@ describe('PATCH /api/seasons/[id] — test-league flag', () => {
       passes: 0,
       settled: true,
       unratedMatches: 0,
+      streaksRebuilt: 0,
     });
 
     const response = await patch({ is_test_season: true });
@@ -334,7 +335,7 @@ describe('PATCH /api/seasons/[id] — test-league flag', () => {
       metadata: {
         is_test_season: true,
         changed: true,
-        rating_rebuild: { players: 0, rebuilt: 0, passes: 0, settled: true, unrated_matches: 0 },
+        rating_rebuild: { players: 0, rebuilt: 0, passes: 0, settled: true, unrated_matches: 0, streaks_rebuilt: 0 },
         rating_rebuild_error: null,
       },
     });

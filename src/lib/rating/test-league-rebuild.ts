@@ -12,7 +12,8 @@
  *     them (the live path skipped them), so the replay meets them as never
  *     rated.
  * Rebuilding the players of the league's completed matches replays them
- * under the new flag. The rebuild's own gap healing may add further players
+ * under the new flag, and rebuilds their streak rows, which follow the same
+ * flag. The rebuild's own gap healing may add further players
  * (`rebuildRatingsForPlayers`).
  *
  * One pass does not settle the league's players among themselves. A rebuild
@@ -52,6 +53,7 @@
  */
 import { listSeasonCompletedMatchPlayerIds } from '@/lib/supabase/queries/ratings';
 import { rebuildRatingsForPlayers, type RebuildRatingsResult } from '@/lib/rating/updateRatings';
+import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { expireRatingReads } from '@/lib/revalidation';
 
 /** The most passes of one flag rebuild that may still change a player. One
@@ -74,6 +76,8 @@ export interface TestFlagRatingRebuildSummary {
   settled: boolean;
   /** Matches the first pass found without rating history (the league's matches after the flag went OFF). */
   unratedMatches: number;
+  /** Players whose streak row was rebuilt from their full history (the league's players). */
+  streaksRebuilt: number;
 }
 
 function unratedMatchCount(results: readonly RebuildRatingsResult[]): number {
@@ -131,5 +135,10 @@ export async function rebuildRatingsAfterTestFlagChange(
 ): Promise<TestFlagRatingRebuildSummary> {
   const playerIds = await listSeasonCompletedMatchPlayerIds(seasonId);
   const rebuilt = await rebuildRatingsSettled(playerIds);
-  return { seasonId, isTestSeason, playerIds, ...rebuilt };
+  // Streaks follow the same current-flag rule as ratings (`matchCountsForRatings`), so the stored rows of the
+  // league's players are stale until replayed. Each rebuild reads only the player's history, so no pass loop is needed.
+  for (const playerId of playerIds) {
+    await recomputeStreaks(playerId);
+  }
+  return { seasonId, isTestSeason, playerIds, ...rebuilt, streaksRebuilt: playerIds.length };
 }

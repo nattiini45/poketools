@@ -44,6 +44,7 @@ const auditActions = {
   match__dispute: 'Match disputed',
   match__reopen: 'Match reopened',
   match__override: 'Match overridden',
+  match__admin_result: 'Match result recorded by an admin',
   match__bulk_confirm: 'Match confirmed in bulk',
   match__bulk_schedule: 'Match time set in bulk',
   match__bulk_note: 'Match note added in bulk',

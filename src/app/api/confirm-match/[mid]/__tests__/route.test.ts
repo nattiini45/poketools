@@ -62,10 +62,12 @@ vi.mock('@/lib/gamification/signatures', () => ({
 }));
 
 vi.mock('@/lib/gamification/streaks', () => ({
-  updateStreaks: vi.fn().mockResolvedValue({
+  recomputeStreaks: vi.fn().mockResolvedValue({
     win_streak: { before: 0, after: 1 },
     loss_streak: { before: 0, after: 0 },
-    draw_streak: { before: 0, after: 0 },
+    ko_streak: { before: 0, after: 0 },
+    flawless_streak: { before: 0, after: 0 },
+    new_records: [],
   }),
 }));
 
@@ -602,6 +604,25 @@ describe('POST /api/confirm-match/[mid]', () => {
     expect(updateMatchStatus).toHaveBeenCalledWith(MID, 'completed', overridePlayerOneId, 'admin-1', undefined, 'in_progress');
   });
 
+  it('refuses to complete a scheduled match here: the settle route asks for the reason and audits it', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
+    vi.mocked(getMatchById).mockResolvedValue({
+      ...pendingMatch,
+      player_1_id: overridePlayerOneId,
+      player_2_id: overridePlayerTwoId,
+      winner_id: null,
+      submitter_id: null,
+      status: 'scheduled',
+    } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+
+    const response = await POST(makeRequest({ action: 'confirm', winner_id: overridePlayerOneId }), routeParams(MID));
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('match_settle_use_result_route');
+    expect(updateMatchStatus).not.toHaveBeenCalled();
+  });
+
   it('audits an admin dispute as match.dispute, with or without notes', async () => {
     vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
     vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
@@ -745,7 +766,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   it('counts every failed step in match_finalize_incomplete', async () => {
     arrangeConfirm();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    // battle_stats fails, so streaks and announcements cannot run either.
+    // battle_stats fails, so the announcement cannot run either (streaks read their own history).
     vi.mocked(getBattleStatsByMatch).mockRejectedValueOnce(new Error('stats read failed'));
 
     const response = await POST(makeRequest({ action: 'confirm' }), routeParams('642bef26-17c2-466f-8eca-61a394f687ca'));
@@ -753,7 +774,7 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     expect(response.status).toBe(500);
     expect(payload.code).toBe('match_finalize_incomplete');
-    expect(payload.params).toEqual({ count: 3 });
+    expect(payload.params).toEqual({ count: 2 });
     consoleError.mockRestore();
   });
 

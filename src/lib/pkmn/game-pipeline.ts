@@ -152,6 +152,34 @@ function getAutoConfirmAt(source: GameSource, screenshotUrl?: string): string | 
   return null;
 }
 
+/** The match does not exist (or was deleted meanwhile). HTTP 404. */
+export class MatchNotFoundError extends UserFacingError {
+  constructor() {
+    super('Match not found', { code: 'match_not_found', status: 404 });
+    this.name = 'MatchNotFoundError';
+  }
+}
+
+/** The submitter is neither a participant nor an admin of the match (a site admin or a resource admin of its tournament or league). HTTP 403. */
+export class MatchSubmitForbiddenError extends UserFacingError {
+  constructor() {
+    super('Only match participants or admins can submit results', { code: 'match_submit_forbidden', status: 403 });
+    this.name = 'MatchSubmitForbiddenError';
+  }
+}
+
+/** The match is past the point where games can be added (pending confirmation, completed or disputed). HTTP 409. */
+export class MatchNotOpenForGamesError extends UserFacingError<'match_submit_wrong_status'> {
+  constructor(status: MatchStatus) {
+    super(`Cannot submit game for match in ${status} state`, {
+      code: 'match_submit_wrong_status',
+      params: { status },
+      status: 409,
+    });
+    this.name = 'MatchNotOpenForGamesError';
+  }
+}
+
 export class DuplicateReplayError extends UserFacingError {
   constructor() {
     super(
@@ -268,18 +296,18 @@ async function discardUnfinishedGame(gameId: string): Promise<void> {
  */
 export async function recordGameResult(input: GamePipelineInput): Promise<GamePipelineResult> {
   const match = await getMatchById(input.match_id);
-  if (!match) throw new Error('Match not found');
+  if (!match) throw new MatchNotFoundError();
 
   // Validate the actor is a participant or admin
   const isParticipant =
     input.submitter_id === match.player_1_id ||
     input.submitter_id === match.player_2_id;
   if (!isParticipant && !input.is_admin) {
-    throw new Error('Only match participants or admins can submit results');
+    throw new MatchSubmitForbiddenError();
   }
 
   if (match.status !== 'scheduled' && match.status !== 'in_progress') {
-    throw new Error(`Cannot submit game for match in ${match.status} state`);
+    throw new MatchNotOpenForGamesError(match.status);
   }
 
   // Round context, read once and BEFORE the first write: best_of drives the Bo
@@ -433,7 +461,7 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
       // log the lost race (as reevaluateMatchStatus does) so the extra game
       // on a decided match can be traced.
       const latest = await getMatchById(input.match_id);
-      if (!latest) throw new Error('Match not found');
+      if (!latest) throw new MatchNotFoundError();
       console.error(
         `[game-pipeline] match ${input.match_id} moved from ${currentStatus} to ${latest.status} while game ` +
           `${game.id} was recorded; the game is saved, the ${targetStatus} write was not applied`
@@ -460,7 +488,7 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
  */
 async function getMatchContext(matchId: string) {
   const match = await getMatchById(matchId);
-  if (!match) throw new Error('Match not found');
+  if (!match) throw new MatchNotFoundError();
   const tournament = await getTournamentById(match.tournament_id);
   if (!tournament) throw new Error('Tournament not found');
   return { match, tournament };

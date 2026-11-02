@@ -16,12 +16,17 @@ vi.mock('@/lib/rating/updateRatings', () => ({
 vi.mock('@/lib/revalidation', () => ({
   expireRatingReads: vi.fn(),
 }));
+vi.mock('@/lib/gamification/streaks', () => ({
+  recomputeStreaks: vi.fn(),
+}));
 
 import { MAX_PASSES, rebuildRatingsAfterTestFlagChange, rebuildRatingsSettled } from '../test-league-rebuild';
 import { listSeasonCompletedMatchPlayerIds } from '@/lib/supabase/queries/ratings';
 import { rebuildRatingsForPlayers, type RebuildRatingsResult } from '@/lib/rating/updateRatings';
 import { expireRatingReads } from '@/lib/revalidation';
+import { recomputeStreaks } from '@/lib/gamification/streaks';
 
+const mockStreaks = vi.mocked(recomputeStreaks);
 const mockPlayers = vi.mocked(listSeasonCompletedMatchPlayerIds);
 const mockRebuild = vi.mocked(rebuildRatingsForPlayers);
 const mockExpire = vi.mocked(expireRatingReads);
@@ -40,6 +45,34 @@ beforeEach(() => {
 });
 
 describe('rebuildRatingsAfterTestFlagChange', () => {
+  it('rebuilds the streak rows of the league players after the ratings, so a stale row never outlives the flag change', async () => {
+    const order: string[] = [];
+    mockPlayers.mockResolvedValue(['p1', 'p2']);
+    mockRebuild.mockImplementation(async () => {
+      order.push('ratings');
+      return [unchanged('p1'), unchanged('p2')];
+    });
+    mockStreaks.mockImplementation(async (playerId: string) => {
+      order.push('streaks:' + playerId);
+      return {} as Awaited<ReturnType<typeof recomputeStreaks>>;
+    });
+
+    const summary = await rebuildRatingsAfterTestFlagChange('s1', true);
+
+    expect(order).toEqual(['ratings', 'streaks:p1', 'streaks:p2']);
+    expect(summary.streaksRebuilt).toBe(2);
+  });
+
+  it('throws a failed streak rebuild unchanged so the route reports a rebuild warning', async () => {
+    const error = new Error('streak fence');
+    mockPlayers.mockResolvedValue(['p1', 'p2']);
+    mockRebuild.mockResolvedValue([unchanged('p1'), unchanged('p2')]);
+    mockStreaks.mockRejectedValueOnce(error);
+
+    await expect(rebuildRatingsAfterTestFlagChange('s1', true)).rejects.toBe(error);
+    expect(mockStreaks).toHaveBeenCalledTimes(1);
+  });
+
   it('flag ON: repeats the pass over every rebuilt player and stops when a pass changes nobody', async () => {
     mockPlayers.mockResolvedValue(['p1', 'p2']);
     mockRebuild
@@ -58,8 +91,11 @@ describe('rebuildRatingsAfterTestFlagChange', () => {
       passes: 2,
       settled: true,
       unratedMatches: 0,
+      streaksRebuilt: 2,
     });
     expect(mockExpire).toHaveBeenCalledWith(['p1', 'p2', 'healed']);
+    // Only the league's players: a gap-healing addition is outside the flag's reach for streaks.
+    expect(mockStreaks.mock.calls).toEqual([['p1'], ['p2']]);
   });
 
   it('flag OFF: pairs the never-rated league matches in a further pass over every rebuilt player', async () => {
@@ -128,7 +164,8 @@ describe('rebuildRatingsAfterTestFlagChange', () => {
 
     expect(mockRebuild).not.toHaveBeenCalled();
     expect(mockExpire).not.toHaveBeenCalled();
-    expect(summary).toMatchObject({ passes: 0, settled: true, playerIds: [], rebuiltPlayerIds: [] });
+    expect(summary).toMatchObject({ passes: 0, settled: true, playerIds: [], rebuiltPlayerIds: [], streaksRebuilt: 0 });
+    expect(mockStreaks).not.toHaveBeenCalled();
   });
 
   it('throws a rebuild failure unchanged and still expires the rating reads of the league players', async () => {

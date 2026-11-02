@@ -39,6 +39,9 @@ export default {
   match_transition_invalid: 'Invalid transition: {from} → {to}',
   match_reset_admin_only: 'Only admins can reset match state',
   match_status_override_admin_only: 'Only admins can complete or dispute a match that is still in progress',
+  match_settle_admin_only: 'Only admins can settle a match that has not been played',
+  // confirm-match: a scheduled match cannot be completed here; the settle route requires the reason and writes the audit event (409)
+  match_settle_use_result_route: 'A match that has not started is settled with the record-result action, which asks for a reason',
   match_dispute_resolve_admin_only: 'Only admins can resolve disputed matches',
   match_complete_no_winner: 'Cannot complete a match without a winner',
   // confirm-match: the guarded status update missed and the match is now in a different state (409, nothing written)
@@ -47,6 +50,12 @@ export default {
   match_dispute_participants_only: 'Only match participants or admins can dispute results',
 
   // Manual results and replays
+  // recordGameResult: the submitter is neither a participant nor an admin of the match (403)
+  match_submit_forbidden: 'Only match participants or admins can submit results',
+  // recordGameResult: the match is no longer open for games (409)
+  match_submit_wrong_status: 'Cannot submit game for match in {status} state',
+  // POST /api/admin/matches/[id]/result: the match is not scheduled or in progress (409, nothing written)
+  match_result_wrong_status: 'A result can only be set for a match that is scheduled or in progress, but this match is {status}.',
   match_player_not_participant: 'Player {playerId} is not in this match',
   manual_result_winner_not_participant: 'Winner must be a match participant',
   replay_player_not_in_match: 'Player "{username}" ({player}) is not a participant in this match',

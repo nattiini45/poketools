@@ -463,16 +463,36 @@ describe('recordGameResult', () => {
     expect(result.match_status).toBe('in_progress');
   });
 
-  it('throws for non-participant, non-admin', async () => {
-    await expect(
-      recordGameResult({
-        match_id: 'match-1',
-        winner_id: 'player-1',
-        source: 'manual' as const,
-        battle_stats: [],
-        submitter_id: 'stranger',
-      })
-    ).rejects.toThrow('Only match participants or admins');
+  it('refuses a non-participant, non-admin with a catalogued 403 and writes nothing', async () => {
+    const refusal = await recordGameResult({
+      match_id: 'match-1',
+      winner_id: 'player-1',
+      source: 'manual' as const,
+      battle_stats: [],
+      submitter_id: 'stranger',
+    }).catch((error: unknown) => error);
+
+    expect(refusal).toBeInstanceOf(UserFacingError);
+    expect(refusal).toMatchObject({
+      message: 'Only match participants or admins can submit results',
+      code: 'match_submit_forbidden',
+      statusCode: 403,
+    });
+    expect(createGame).not.toHaveBeenCalled();
+  });
+
+  it('lets an admin submitter (a league organizer) record a game for a match they do not play', async () => {
+    const result = await recordGameResult({
+      match_id: 'match-1',
+      winner_id: 'player-1',
+      source: 'manual' as const,
+      battle_stats: [],
+      submitter_id: 'organizer',
+      is_admin: true,
+    });
+
+    expect(result.game_id).toBeDefined();
+    expect(createGame).toHaveBeenCalledTimes(1);
   });
 
   it('rejects duplicate replay_url within the same match', async () => {
@@ -536,7 +556,12 @@ describe('recordGameResult', () => {
         battle_stats: [],
         submitter_id: 'player-1',
       })
-    ).rejects.toThrow('Cannot submit game for match in completed state');
+    ).rejects.toMatchObject({
+      message: 'Cannot submit game for match in completed state',
+      code: 'match_submit_wrong_status',
+      params: { status: 'completed' },
+      statusCode: 409,
+    });
   });
 
   it('transitions to pending_confirmation when Bo threshold is reached', async () => {
@@ -621,7 +646,7 @@ describe('recordGameResult', () => {
         battle_stats: [],
         submitter_id: 'player-1',
       })
-    ).rejects.toThrow('Match not found');
+    ).rejects.toMatchObject({ message: 'Match not found', code: 'match_not_found', statusCode: 404 });
   });
 
   it('throws if tournament not found', async () => {

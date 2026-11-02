@@ -139,6 +139,20 @@ export default {
     resetReasonPlaceholder: 'Why is this match being reset?',
     deleteReasonLabel: 'Reason for deleting the game',
     deleteReasonPlaceholder: 'Why is this game being deleted?',
+    settle: {
+      section: 'Record result',
+      hint: 'This match has not started. Choose the winner to settle it without a replay. The result counts for standings, ratings and the bracket like any other.',
+      winnerLabel: 'Winner',
+      button: 'Record result',
+      dialogTitle: 'Record the result',
+      dialogMessage: 'Settle this match with {winner} as the winner? The match is completed at once, without a confirmation step.',
+      reasonLabel: 'Reason for settling the match',
+      reasonPlaceholder: 'Why is the result recorded here (e.g. the players reported it to the organizer)?',
+      success: 'Result recorded. The match is completed.',
+      incomplete: 'Result recorded, but some follow-up steps failed. They will be retried. The match is completed.',
+      selectWinner: 'Select a winner to record the result',
+      failed: 'Could not record the result. Please try again.',
+    },
     cascadeMessage: {
       one: '{count} later bracket match has results or is in progress. Resetting this match also resets it, together with its results, ratings and aggregates. This cannot be undone.',
       other:

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { getMatchById } from '@/lib/supabase/queries/matches';
-import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
+import { canAdministerMatchAccess } from '@/lib/auth/match-access';
 import type { ApiResult } from '@/types/api';
 import type { SessionPlayer } from '@/types/auth';
 import type { MatchWithPlayers } from '@/types/match';
@@ -37,8 +37,7 @@ export async function authorizeMatchAdmin(matchId: string): Promise<MatchAdminAu
     };
   }
 
-  const hasAdminAccess =
-    player.isAdmin || (await isResourceAdminFor(player.playerId, 'tournament', match.tournament_id));
+  const hasAdminAccess = await canAdministerMatchAccess(player, match.tournament_id);
   if (!hasAdminAccess) {
     return {
       ok: false,

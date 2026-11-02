@@ -103,6 +103,29 @@ describe('AdminMatchActions i18n', () => {
     expect(count(renderToStaticMarkup(ui('in_progress')))).toBe(1);
   });
 
+  it('offers the settle form for a scheduled match only, in English and German', () => {
+    const scheduled = (
+      <AdminMatchActions
+        matchId="m1"
+        currentStatus="scheduled"
+        player1={P1}
+        player2={P2}
+        currentWinnerId={null}
+        games={[]}
+        tournamentId="t1"
+        bestOf={3}
+        isSiteAdmin
+      />
+    );
+    const en = renderToStaticMarkup(scheduled);
+    expect(en).toContain('Record result');
+    expect(en).toContain('Ash');
+    expect(en).toContain('Gary');
+    expect(renderWithI18n(scheduled, { locale: 'de' })).toContain('Ergebnis eintragen');
+    expect(renderToStaticMarkup(ui('in_progress'))).not.toContain('Record result');
+    expect(renderToStaticMarkup(ui('completed'))).not.toContain('Record result');
+  });
+
   it('keeps the list query on the game edit links', () => {
     const suffix = `?back=${encodeURIComponent('status=disputed')}`;
     expect(renderToStaticMarkup(ui('in_progress', suffix))).toContain(`href="/admin/matches/m1/games/g1/edit${suffix}"`);

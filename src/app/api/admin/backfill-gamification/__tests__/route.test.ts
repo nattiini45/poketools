@@ -112,7 +112,22 @@ const match = (
 describe('POST /api/admin/backfill-gamification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(updateStreaks).mockReset();
     vi.mocked(getBattleStatsByMatch).mockResolvedValue({});
+  });
+
+  it('hands the streak update null stats for a match the player has no battle stats in (unknown, not zero)', async () => {
+    vi.mocked(requireAdmin).mockResolvedValue(undefined as never);
+    mockSupabaseChain({ data: [match('m1', 'p1', 'p2', 'p1')] });
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't1', season_id: 's1' } as never);
+    vi.mocked(getBattleStatsByMatch).mockResolvedValue({
+      g1: [{ player_id: 'p1', kos_dealt: 4, was_koed: false }],
+    } as never);
+
+    await POST();
+
+    expect(updateStreaks).toHaveBeenCalledWith('p1', { won: true, lost: false, drew: false }, { total_kos_dealt: 4, total_kos_lost: 0 }, 'm1');
+    expect(updateStreaks).toHaveBeenCalledWith('p2', { won: false, lost: true, drew: false }, null, 'm1');
   });
 
   it('returns error when not admin', async () => {
@@ -192,7 +207,7 @@ describe('POST /api/admin/backfill-gamification', () => {
       const row = stored.get(playerId) ?? { win: 0, ko: 0 };
       stored.set(playerId, {
         win: result.won ? row.win + 1 : 0,
-        ko: stats.total_kos_dealt >= 3 ? row.ko + 1 : 0,
+        ko: stats === null ? row.ko : stats.total_kos_dealt >= 3 ? row.ko + 1 : 0,
       });
       return {} as never;
     });

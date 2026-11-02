@@ -104,6 +104,7 @@ import { updateSignatures } from '@/lib/gamification/signatures';
 import { recomputeStreaks, updateStreaks } from '@/lib/gamification/streaks';
 import { updateRatings } from '@/lib/rating/updateRatings';
 import type { MatchWithPlayers } from '@/types/match';
+import type { StreakChanges } from '@/types/streak';
 
 const match: MatchWithPlayers = {
   id: 'match-1',
@@ -133,6 +134,14 @@ const match: MatchWithPlayers = {
   games: [{ id: 'game-1', game_number: 1, winner_id: 'player-1', replay_url: 'https://replay.test', source: 'ps_replay', stats_locked: false }],
 };
 
+const STREAK_CHANGES: StreakChanges = {
+  win_streak: { before: 0, after: 1 },
+  loss_streak: { before: 0, after: 0 },
+  ko_streak: { before: 0, after: 0 },
+  flawless_streak: { before: 0, after: 0 },
+  new_records: [],
+};
+
 let errorSpy: ReturnType<typeof vi.spyOn>;
 
 describe('finalizeMatchCompletion', () => {
@@ -151,13 +160,7 @@ describe('finalizeMatchCompletion', () => {
       winnerChange: 20,
       loserChange: -20,
     });
-    vi.mocked(updateStreaks).mockResolvedValue({
-      win_streak: { before: 0, after: 1 },
-      loss_streak: { before: 0, after: 0 },
-      ko_streak: { before: 0, after: 0 },
-      flawless_streak: { before: 0, after: 0 },
-      new_records: [],
-    });
+    vi.mocked(recomputeStreaks).mockResolvedValue(STREAK_CHANGES);
     vi.mocked(updateSignatures).mockResolvedValue([]);
     vi.mocked(checkAchievements).mockResolvedValue([]);
     vi.mocked(markMatchFinalized).mockResolvedValue(true);
@@ -215,6 +218,35 @@ describe('finalizeMatchCompletion', () => {
         }),
       }),
     );
+  });
+
+  describe('win streak milestone', () => {
+    const winnerStreak = (before: number, after: number): StreakChanges => ({
+      ...STREAK_CHANGES,
+      win_streak: { before, after },
+    });
+    const milestone = expect.objectContaining({ event_type: 'streak_milestone' });
+
+    it('announces a milestone when the win streak rises onto a multiple of five', async () => {
+      vi.mocked(recomputeStreaks).mockResolvedValueOnce(winnerStreak(4, 5)).mockResolvedValueOnce(STREAK_CHANGES);
+
+      await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(emitDiscordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_type: 'streak_milestone',
+          data: expect.objectContaining({ streak_count: 5, player_name: 'Alice' }),
+        }),
+      );
+    });
+
+    it('announces nothing when the rebuilt streak sits on a milestone it already held', async () => {
+      vi.mocked(recomputeStreaks).mockResolvedValueOnce(winnerStreak(5, 5)).mockResolvedValueOnce(STREAK_CHANGES);
+
+      await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(emitDiscordEvent).not.toHaveBeenCalledWith(milestone);
+    });
   });
 
   it('skips idempotently when the previous state was already completed', async () => {
@@ -475,7 +507,7 @@ describe('finalizeMatchCompletion', () => {
     });
 
     expect(result).toEqual({ finalized: true, complete: false, failed_steps: ['ratings'] });
-    expect(updateStreaks).toHaveBeenCalledTimes(2);
+    expect(recomputeStreaks).toHaveBeenCalledTimes(2);
     expect(updateSignatures).toHaveBeenCalledTimes(2);
     expect(checkAchievements).toHaveBeenCalledTimes(2);
     expect(runEpbMatchdayHooks).toHaveBeenCalledWith(expect.objectContaining({ matchday: 4 }));
@@ -527,7 +559,7 @@ describe('finalizeMatchCompletion', () => {
     expect(emitSocialEvent).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'rating_milestone' }));
   });
 
-  it('blocks the steps that need battle stats when the stats read fails, and runs the others', async () => {
+  it('blocks the steps that need the match battle stats when that read fails, and runs the others (streaks read their own history)', async () => {
     vi.mocked(getTournamentById).mockResolvedValue({
       id: 'tournament-1',
       name: 'EvoLiga',
@@ -542,16 +574,16 @@ describe('finalizeMatchCompletion', () => {
       previousStatus: 'pending_confirmation',
     });
 
-    expect(result.failed_steps).toEqual(['battle_stats', 'streaks', 'announcements', 'epb_real_kills', 'epb_hooks']);
+    expect(result.failed_steps).toEqual(['battle_stats', 'announcements', 'epb_real_kills', 'epb_hooks']);
     expect(updateRatings).toHaveBeenCalled();
+    expect(recomputeStreaks).toHaveBeenCalledTimes(2);
     expect(updateSignatures).toHaveBeenCalledTimes(2);
     expect(checkAchievements).toHaveBeenCalledTimes(2);
-    expect(updateStreaks).not.toHaveBeenCalled();
     expect(runEpbMatchdayHooks).not.toHaveBeenCalled();
     expect(creditMatchRealKills).not.toHaveBeenCalled();
     expect(emitDiscordEvent).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledWith(
-      '[match-finalize] step "streaks" not run for match match-1: "battle_stats" failed'
+      '[match-finalize] step "announcements" not run for match match-1: "battle_stats" failed'
     );
   });
 
@@ -573,9 +605,24 @@ describe('finalizeMatchCompletion', () => {
       'bracket_propagation',
     ]);
     expect(updateRatings).toHaveBeenCalled();
-    expect(updateStreaks).toHaveBeenCalledTimes(2);
+    expect(recomputeStreaks).toHaveBeenCalledTimes(2);
     expect(updateSignatures).toHaveBeenCalledTimes(2);
     expect(checkAchievements).not.toHaveBeenCalled();
+    expect(markMatchFinalized).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds both players streaks from their history and records a failed rebuild without stopping the rest', async () => {
+    const err = new Error('streaks replace refused twice');
+    vi.mocked(recomputeStreaks).mockRejectedValueOnce(err);
+
+    const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+    expect(recomputeStreaks).toHaveBeenCalledWith('player-1');
+    expect(recomputeStreaks).toHaveBeenCalledWith('player-2');
+    expect(result.failed_steps).toEqual(['streaks']);
+    expect(updateSignatures).toHaveBeenCalledTimes(2);
+    expect(checkAchievements).toHaveBeenCalledTimes(2);
+    expect(errorSpy).toHaveBeenCalledWith('[match-finalize] step "streaks" failed for match match-1', err);
     expect(markMatchFinalized).not.toHaveBeenCalled();
   });
 
@@ -673,7 +720,7 @@ describe('finalizeMatchCompletion', () => {
         { player_id: 'player-1', match_id: 'match-1' },
         { player_id: 'player-2', match_id: 'match-1' },
       ] as never);
-      vi.mocked(recomputeStreaks).mockResolvedValue();
+      vi.mocked(recomputeStreaks).mockResolvedValue(STREAK_CHANGES);
       vi.mocked(getMatchSnapshots).mockResolvedValue([]);
     });
 

@@ -138,6 +138,21 @@ export default defineDe<typeof en>()({
     resetReasonPlaceholder: 'Warum wird dieses Spiel zurückgesetzt?',
     deleteReasonLabel: 'Grund für das Löschen der Partie',
     deleteReasonPlaceholder: 'Warum wird diese Partie gelöscht?',
+    settle: {
+      section: 'Ergebnis eintragen',
+      hint: 'Dieses Spiel hat noch nicht begonnen. Wähle den Sieger, um es ohne Replay abzuschließen. Das Ergebnis zählt für Tabelle, Ratings und Turnierbaum wie jedes andere.',
+      winnerLabel: 'Sieger',
+      button: 'Ergebnis eintragen',
+      dialogTitle: 'Ergebnis eintragen',
+      dialogMessage: 'Dieses Spiel mit {winner} als Sieger abschließen? Das Spiel wird sofort abgeschlossen, ohne Bestätigungsschritt.',
+      reasonLabel: 'Grund für das Eintragen des Ergebnisses',
+      reasonPlaceholder: 'Warum wird das Ergebnis hier eingetragen (z. B. weil die Spieler es dem Organisator gemeldet haben)?',
+      success: 'Ergebnis eingetragen. Das Spiel ist abgeschlossen.',
+      incomplete:
+        'Ergebnis eingetragen, aber einige Folgeschritte sind fehlgeschlagen. Sie werden erneut versucht. Das Spiel ist abgeschlossen.',
+      selectWinner: 'Wähle einen Sieger aus, um das Ergebnis einzutragen',
+      failed: 'Das Ergebnis konnte nicht eingetragen werden. Bitte versuche es erneut.',
+    },
     cascadeMessage: {
       one: '{count} späteres Spiel im Turnierbaum hat Ergebnisse oder läuft bereits. Beim Zurücksetzen wird es samt Ergebnissen, Ratings und Aggregaten ebenfalls zurückgesetzt. Das lässt sich nicht rückgängig machen.',
       other:

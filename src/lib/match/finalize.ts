@@ -16,11 +16,10 @@ import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { buildGamePokemonStats, computePokemonScoreFromGameStats } from '@/lib/discord/helpers';
 import { checkAchievements } from '@/lib/gamification/achievements';
 import { updateSignatures } from '@/lib/gamification/signatures';
-import { recomputeStreaks, updateStreaks } from '@/lib/gamification/streaks';
+import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { updateRatings, type RatingUpdateResult } from '@/lib/rating/updateRatings';
 import type { MatchStatus, MatchWithPlayers } from '@/types/match';
 import type { BattleStat } from '@/types/game';
-import { aggregateMatchKOs } from '@/lib/match/match-kos';
 import type { Tournament } from '@/types/tournament';
 import type { StreakChanges } from '@/types/streak';
 import type { EarnedAchievement } from '@/types/achievement';
@@ -62,8 +61,10 @@ export type FinalizeStep = (typeof FINALIZE_STEPS)[number];
  * What the heal does with each step, checked step by step against the code:
  * - `rerun`: replay-safe, run again from durable state.
  *   revalidate (cache expiry), tournament / battle_stats (reads), streaks
- *   (`recomputeStreaks` replays the player's completed matches from scratch;
- *   the incremental `updateStreaks` is NOT replay-safe), signatures
+ *   (the live step and the heal both run `recomputeStreaks`, which rebuilds
+ *   the player's row from their completed matches in one fenced write and
+ *   grants nothing; the incremental `updateStreaks` is not replay-safe and
+ *   only the backfill uses it), signatures
  *   (recomputed from aggregates), epb_real_kills (each game is credited once:
  *   `epb_credit_game_kills` sets `games.evolution_applied_at` in the same
  *   transaction and answers 'already_applied' afterwards; the stage recheck
@@ -412,7 +413,13 @@ function emitAnnouncements(input: {
     void emitSocialEvent(achievementPayload);
   }
 
-  if (streaks && streaks.winner.win_streak.after >= 5 && streaks.winner.win_streak.after % 5 === 0) {
+  // The rebuilt streak can equal the stored one (a match that did not move it), so the milestone needs a real rise.
+  if (
+    streaks &&
+    streaks.winner.win_streak.after >= 5 &&
+    streaks.winner.win_streak.after % 5 === 0 &&
+    streaks.winner.win_streak.after > streaks.winner.win_streak.before
+  ) {
     const streakMilestonePayload = {
       event_type: 'streak_milestone' as const,
       tournament_id: match.tournament_id,
@@ -518,19 +525,14 @@ export async function finalizeMatchCompletion({
   const statsByGame = statsStep.ok ? statsStep.value : null;
   const flatStats = statsByGame ? Object.values(statsByGame).flat() : null;
 
+  // Rebuilt from each player's whole history in one fenced write: two finalizations
+  // sharing a player both end up counted, and a rerun lands on the same numbers.
   let streaks: { winner: StreakChanges; loser: StreakChanges } | null = null;
-  if (flatStats) {
-    const streakStep = await runner.run('streaks', async () => {
-      const [winner, loser] = await Promise.all([
-        updateStreaks(winnerId, { won: true, lost: false, drew: false }, aggregateMatchKOs(flatStats, winnerId), match.id),
-        updateStreaks(loserId, { won: false, lost: true, drew: false }, aggregateMatchKOs(flatStats, loserId), match.id),
-      ]);
-      return { winner, loser };
-    });
-    if (streakStep.ok) streaks = streakStep.value;
-  } else {
-    runner.blocked('streaks', 'battle_stats');
-  }
+  const streakStep = await runner.run('streaks', async () => {
+    const [winner, loser] = await Promise.all([recomputeStreaks(winnerId), recomputeStreaks(loserId)]);
+    return { winner, loser };
+  });
+  if (streakStep.ok) streaks = streakStep.value;
 
   await runner.run('signatures', async () => {
     await Promise.all([updateSignatures(winnerId), updateSignatures(loserId)]);
@@ -703,7 +705,7 @@ export async function healMatchFinalization(
   const tournamentStep = await runner.run('tournament', () => loadTournament(match.tournament_id));
   const tournament = tournamentStep.ok ? tournamentStep.value : null;
 
-  // Replay-from-scratch: correct whether or not the first run's increment landed.
+  // Rebuilt from the history: correct whether or not the first run's write landed.
   await runner.run('streaks', async () => {
     await recomputeStreaks(match.player_1_id);
     await recomputeStreaks(match.player_2_id);
