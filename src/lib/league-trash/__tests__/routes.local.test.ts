@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { seedLeague, type Client, type LeagueIds } from './local-fixture';
 import { deleteLocalRuleset } from '@/test/local-rulesets';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
@@ -112,6 +112,17 @@ describe.skipIf(!optIn)('league recycle bin: the routes against the local stack'
     if (error) throw new Error(`backdate: ${error.message}`);
   }
 
+  /** Confirms the delete's and the restore's rebuild of ONE fixture league, whatever state a failed test left it in. */
+  async function clearPendingRebuilds(ids: LeagueIds): Promise<void> {
+    try {
+      const entry = await queries.getLeagueTrashBySeason(ids.seasonId);
+      if (entry) await queries.markLeagueTrashRebuildDone(entry.id);
+      await queries.markLeagueRestoreRebuildDone(ids.seasonId);
+    } catch (e) {
+      console.warn('[routes.local] could not clear a pending rebuild', e);
+    }
+  }
+
   async function dispose(ids: LeagueIds): Promise<void> {
     const attempt = async (what: string, run: () => PromiseLike<{ error: { message: string } | null }>) => {
       const { error } = await run();
@@ -156,6 +167,12 @@ describe.skipIf(!optIn)('league recycle bin: the routes against the local stack'
     rulesetRoute = await import('@/app/api/rulesets/[id]/route');
   }, SLOW);
 
+  // A failed step must not leave this league's rebuild marker behind: a pending marker makes every later restore in
+  // the file answer 409 LEAGUE_TRASH_REBUILD_PENDING, and the next run would meet it too.
+  afterEach(async () => {
+    for (const ids of created) await clearPendingRebuilds(ids);
+  }, SLOW);
+
   afterAll(async () => {
     delete process.env.CRON_SECRET;
     for (const ids of created.reverse()) await dispose(ids).catch((e: unknown) => console.warn('[routes.local] cleanup failed', e));
@@ -184,7 +201,8 @@ describe.skipIf(!optIn)('league recycle bin: the routes against the local stack'
       expect(await count('tournaments', 'season_id', league.seasonId)).toBe(0);
       const { data: row } = await admin.from('league_trash').select('rebuild_pending, season_name').eq('id', trashId).single();
       expect(row).toEqual({ rebuild_pending: false, season_name: 'LTR routes' });
-      expect(await queries.listPendingLeagueRebuilds()).toEqual([]);
+      // Scoped to this league: the global list also holds whatever other suites or earlier interrupted runs left pending.
+      expect(await queries.getPendingLeagueRebuild(trashId)).toBeNull();
 
       const audit = await auditRows('season.delete', league.seasonId);
       expect(audit[0].actor_id).toBe(league.adminId);
@@ -221,7 +239,7 @@ describe.skipIf(!optIn)('league recycle bin: the routes against the local stack'
 
     it('refuses to restore while the rebuild after the delete is unconfirmed, and the pending rebuild route clears it', async () => {
       await admin.from('league_trash').update({ rebuild_pending: true }).eq('id', trashId);
-      expect((await queries.listPendingLeagueRebuilds()).map((p) => [p.kind, p.trash_id])).toEqual([['delete', trashId]]);
+      expect(await queries.getPendingLeagueRebuild(trashId)).toMatchObject({ kind: 'delete', trash_id: trashId, season_id: league.seasonId });
 
       const refused = await restoreRoute.POST(asRequest(new Request('http://localhost/x', { method: 'POST' })), ctx(trashId));
       expect(refused.status).toBe(409);
@@ -232,7 +250,7 @@ describe.skipIf(!optIn)('league recycle bin: the routes against the local stack'
       const runBody = await run.json();
       expect(run.status, JSON.stringify(runBody)).toBe(200);
       expect(runBody.data).toEqual({ kind: 'delete', rebuild_warning: null });
-      expect(await queries.listPendingLeagueRebuilds()).toEqual([]);
+      expect(await queries.getPendingLeagueRebuild(trashId)).toBeNull();
 
       const again = await rebuildRoute.POST(asRequest(new Request('http://localhost/x', { method: 'POST' })), ctx(trashId));
       expect(again.status).toBe(404);
@@ -250,10 +268,14 @@ describe.skipIf(!optIn)('league recycle bin: the routes against the local stack'
 
       expect(await count('seasons', 'id', league.seasonId)).toBe(1);
       expect(await count('league_trash', 'id', trashId)).toBe(0);
-      expect(await queries.listPendingLeagueRebuilds()).toEqual([]);
+      expect(await queries.getPendingLeagueRebuild(trashId)).toBeNull();
 
       // The restore queued one increment job per game with stats; the route's drain applied them.
-      const { count: pendingJobs } = await admin.from('aggregate_jobs').select('*', { count: 'exact', head: true }).in('status', ['pending', 'processing']);
+      const { count: pendingJobs } = await admin
+        .from('aggregate_jobs')
+        .select('*', { count: 'exact', head: true })
+        .in('game_id', league.gameIds)
+        .in('status', ['pending', 'processing']);
       expect(pendingJobs).toBe(0);
       const { count: unapplied } = await admin
         .from('games')

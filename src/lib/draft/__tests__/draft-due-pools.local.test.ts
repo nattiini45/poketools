@@ -126,14 +126,27 @@ describe.skipIf(!optIn)('draft_list_due_pools (local stack)', () => {
 
   afterAll(async () => {
     if (!db) return;
-    if (seasonIds.length > 0) await db.from('seasons').delete().in('id', seasonIds);
-    if (playerId) await db.from('players').delete().eq('id', playerId);
+    // draft_pools.season_id restricts the season delete: the pools (and their slots) go first, in one statement.
+    const failures: string[] = [];
+    const attempt = async (what: string, op: PromiseLike<{ error: { message: string } | null }>) => {
+      const { error } = await op;
+      if (error) failures.push(`${what}: ${error.message}`);
+    };
+    if (seasonIds.length > 0) await attempt('draft_pools', db.from('draft_pools').delete().in('season_id', seasonIds));
+    if (seasonIds.length > 0) await attempt('seasons', db.from('seasons').delete().in('id', seasonIds));
+    if (playerId) await attempt('players', db.from('players').delete().eq('id', playerId));
+    if (failures.length > 0) throw new Error(`[draft-due-pools.local] cleanup left fixture rows behind: ${failures.join('; ')}`);
   });
 
-  it('a limit of 25 over 30 open pools still returns the one overdue pool', async () => {
-    const list = await dueIds(25);
-    expect(list.length).toBeLessThanOrEqual(25);
-    expect(list[0]).toBe(overdueFirst);
+  it('a limit below the open pool count still returns the pools with work due, not the idle ones', async () => {
+    // Other suites or earlier interrupted runs may leave their own due pools in the shared local database: size the
+    // limit from them, so exactly this suite's two due pools must fit in the list and the idle ones must not crowd them out.
+    const mine = new Set(Object.values(ids));
+    const foreignDue = (await dueIds(1000)).filter((id) => !mine.has(id)).length;
+    const limit = foreignDue + 2;
+    const list = await dueIds(limit);
+    expect(list.length).toBeLessThanOrEqual(limit);
+    expect(list).toEqual(expect.arrayContaining([overdueFirst, ids.redraftDue]));
   });
 
   it('returns exactly the pools with work due, and none of the idle ones', async () => {
@@ -152,7 +165,10 @@ describe.skipIf(!optIn)('draft_list_due_pools (local stack)', () => {
   });
 
   it('honours the limit', async () => {
-    expect(await dueIds(1)).toEqual([overdueFirst]);
+    const all = await dueIds(1000);
+    expect(all.length).toBeGreaterThanOrEqual(2);
+    expect(await dueIds(1)).toEqual(all.slice(0, 1));
+    expect(await dueIds(2)).toEqual(all.slice(0, 2));
     expect(await dueIds(0)).toEqual([]);
   });
 
