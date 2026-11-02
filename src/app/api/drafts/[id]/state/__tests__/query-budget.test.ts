@@ -29,10 +29,12 @@ vi.mock('@/lib/supabase/client', () => {
   function builder(table: string) {
     const filters: [string, unknown][] = [];
     let single = false;
+    let window: [number, number] | null = null;
     const run = () => {
-      const rows = (db.tables[table] ?? []).filter((row) =>
+      const matching = (db.tables[table] ?? []).filter((row) =>
         filters.every(([column, value]) => !(column in row) || row[column] === value),
       );
+      const rows = window ? matching.slice(window[0], window[1] + 1) : matching;
       if (single) return { data: rows[0] ?? null, error: null };
       return { data: rows, error: null };
     };
@@ -46,6 +48,10 @@ vi.mock('@/lib/supabase/client', () => {
       not: () => chain,
       in: () => chain,
       order: () => chain,
+      range: (from: number, to: number) => {
+        window = [from, to];
+        return chain;
+      },
       limit: () => chain,
       maybeSingle: () => {
         single = true;

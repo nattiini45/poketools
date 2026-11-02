@@ -32,6 +32,7 @@ import { getPlayerStatTotalsByMatch, replacePlayerStreaks, StreaksStaleError } f
 const PLAYER = '11111111-1111-4111-8111-111111111111';
 const M1 = '22222222-2222-4222-8222-222222222222';
 const M2 = '33333333-3333-4333-8333-333333333333';
+const M3 = '44444444-4444-4444-8444-444444444444';
 
 const ROW = {
   current_win_streak: 2,
@@ -51,6 +52,7 @@ beforeEach(() => {
   h.ranges.length = 0;
   h.filters.length = 0;
   h.select.mockClear();
+  h.from.mockClear();
 });
 
 describe('replacePlayerStreaks', () => {
@@ -96,19 +98,35 @@ describe('getPlayerStatTotalsByMatch', () => {
     id,
     kos_dealt: kos,
     was_koed: koed,
-    games: { match_id: matchId, matches: { status: 'completed' } },
+    games: { match_id: matchId },
   });
 
   it('sums the player rows per match; a match without rows is absent (unknown)', async () => {
     h.pages.push({ data: [stat(M1, 2, false, 'a'), stat(M1, 1, true, 'b'), stat(M2, 0, true, 'c')] });
 
-    const totals = await getPlayerStatTotalsByMatch(PLAYER);
+    const totals = await getPlayerStatTotalsByMatch(PLAYER, [M1, M2, M3]);
 
     expect(totals.get(M1)).toEqual({ total_kos_dealt: 3, total_kos_lost: 1 });
     expect(totals.get(M2)).toEqual({ total_kos_dealt: 0, total_kos_lost: 1 });
-    expect(totals.has('44444444-4444-4444-8444-444444444444')).toBe(false);
+    expect(totals.has(M3)).toBe(false);
     expect(h.filters).toContainEqual(['player_id', PLAYER]);
-    expect(h.filters).toContainEqual(['games.matches.status', 'completed']);
+  });
+
+  it('filters by the given match ids only, never by the current match status', async () => {
+    h.pages.push({ data: [stat(M1, 2, false, 'a'), stat(M2, 1, true, 'b')] });
+
+    const totals = await getPlayerStatTotalsByMatch(PLAYER, [M1]);
+
+    expect([...totals.keys()]).toEqual([M1]);
+    expect(new Set(h.filters.map(([column]) => column))).toEqual(new Set(['player_id']));
+    expect(h.select).toHaveBeenCalledWith('id, kos_dealt, was_koed, games!inner ( match_id )');
+  });
+
+  it('reads nothing for an empty match list', async () => {
+    const totals = await getPlayerStatTotalsByMatch(PLAYER, []);
+
+    expect(totals.size).toBe(0);
+    expect(h.from).not.toHaveBeenCalled();
   });
 
   it('pages past the 1000-row cap in ONE logical read (not one read per match)', async () => {
@@ -116,7 +134,7 @@ describe('getPlayerStatTotalsByMatch', () => {
     const second = [stat(M2, 4, false, 'b-0')];
     h.pages.push({ data: first }, { data: second });
 
-    const totals = await getPlayerStatTotalsByMatch(PLAYER);
+    const totals = await getPlayerStatTotalsByMatch(PLAYER, [M1, M2]);
 
     expect(totals.get(M1)).toEqual({ total_kos_dealt: 1000, total_kos_lost: 0 });
     expect(totals.get(M2)).toEqual({ total_kos_dealt: 4, total_kos_lost: 0 });
@@ -129,6 +147,6 @@ describe('getPlayerStatTotalsByMatch', () => {
     const error = new Error('read failed');
     h.pages.push({ data: null, error });
 
-    await expect(getPlayerStatTotalsByMatch(PLAYER)).rejects.toBe(error);
+    await expect(getPlayerStatTotalsByMatch(PLAYER, [M1])).rejects.toBe(error);
   });
 });

@@ -29,6 +29,7 @@ vi.mock('@/lib/supabase/client', () => {
         return chain;
       },
       order: () => chain,
+      range: () => chain,
       maybeSingle: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
       then: (resolve: (v: { data: Row[]; error: null }) => unknown) => resolve({ data: rows(), error: null }),
     };

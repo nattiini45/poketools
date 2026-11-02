@@ -31,6 +31,7 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
   createMatchBatch: vi.fn(),
+  getMatchesByTournament: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/season-groups', () => ({
@@ -51,7 +52,7 @@ import {
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament, createRound } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch } from '@/lib/supabase/queries/matches';
+import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
 import { revalidateTag } from 'next/cache';
@@ -85,7 +86,10 @@ const mockParticipants = [
 // ─── Tests ──────────────────────────────────────────────────────────
 
 describe('POST /api/tournaments/[id]/rounds/manual', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getMatchesByTournament).mockResolvedValue([]);
+  });
 
   it('returns auth error when not resource admin', async () => {
     vi.mocked(requireResourceAdmin).mockRejectedValue(
@@ -473,6 +477,66 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       expect(updateTournament).not.toHaveBeenCalled();
     },
   );
+
+  describe('legacy elimination bracket with a force-completed round', () => {
+    const pairings = [
+      { player_1_id: P1, player_2_id: P2 },
+      { player_1_id: P3, player_2_id: P4 },
+    ];
+
+    function arrange(bracketType: string, matchStatuses: string[]) {
+      vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(getTournamentById).mockResolvedValue({
+        ...mockTournament,
+        bracket_type: bracketType,
+        current_round: 1,
+      } as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bracket_side: null },
+      ] as never);
+      vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
+      vi.mocked(createRound).mockResolvedValue({ id: 'r-2', round_number: 2, name: 'Round 2' } as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([
+        ...matchStatuses.map((status, i) => ({ id: `m-${i}`, round_id: 'r-1', status })),
+        { id: 'other', round_id: 'r-0', status: 'scheduled' },
+      ] as never);
+    }
+
+    it.each(['single_elim', 'double_elim'])(
+      'answers 409 rounds_previous_matches_unfinished for %s and writes nothing',
+      async (bracketType) => {
+        arrange(bracketType, ['completed', 'disputed']);
+
+        const res = await POST(makeRequest({ pairings }), routeParams);
+        const json = await res.json();
+
+        expect(res.status).toBe(409);
+        expect(json.code).toBe('rounds_previous_matches_unfinished');
+        expect(json.params).toEqual({ round: 'Round 1', count: 1 });
+        expect(createRound).not.toHaveBeenCalled();
+        expect(createMatchBatch).not.toHaveBeenCalled();
+        expect(updateTournament).not.toHaveBeenCalled();
+      },
+    );
+
+    it('lets the next manual round through once every match of the previous round is completed', async () => {
+      arrange('single_elim', ['completed', 'completed']);
+
+      const res = await POST(makeRequest({ pairings }), routeParams);
+
+      expect(res.status).toBe(201);
+      expect(createRound).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not read matches for a Swiss tournament', async () => {
+      arrange('swiss', ['disputed']);
+
+      const res = await POST(makeRequest({ pairings }), routeParams);
+
+      expect(res.status).toBe(201);
+      expect(getMatchesByTournament).not.toHaveBeenCalled();
+    });
+  });
 
   it.each(['swiss', 'round_robin'])('still lets a first manual %s round through', async (bracketType) => {
     vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);

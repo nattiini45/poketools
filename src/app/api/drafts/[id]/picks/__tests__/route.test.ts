@@ -53,6 +53,7 @@ vi.mock('@/lib/draft/evolution-engine', () => ({
 
 vi.mock('@/lib/supabase/queries/evolutions', () => ({
   getTierByBasePokemon: vi.fn(),
+  getPlayerWildcards: vi.fn(async () => []),
   createTracker: vi.fn(),
 }));
 
@@ -104,7 +105,7 @@ import {
   getRoundForPick,
 } from '@/lib/draft/engine';
 import { isEvoLeague } from '@/lib/draft/evolution-engine';
-import { createTracker, getTierByBasePokemon } from '@/lib/supabase/queries/evolutions';
+import { createTracker, getPlayerWildcards, getTierByBasePokemon } from '@/lib/supabase/queries/evolutions';
 import { getListEntryByBaseAndStage3 } from '@/lib/supabase/queries/point-buy-lists';
 import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
 import { getPlayerById } from '@/lib/supabase/queries/players';
@@ -423,8 +424,7 @@ describe('POST /api/drafts/[id]/picks', () => {
       { pokemon_name: 'Charizard', power_tier: null },
     ] as never);
 
-    const { getTierByBasePokemon } = await import('@/lib/supabase/queries/evolutions');
-    vi.mocked(getTierByBasePokemon).mockResolvedValue({ id: 'wildcard-tier' } as never);
+    vi.mocked(getPlayerWildcards).mockResolvedValue([{ id: 'wildcard-tier', base_pokemon: 'Pikachu' }] as never);
     vi.mocked(createDraftPick).mockResolvedValue({ id: 'pick-1', pokemon_name: 'Pikachu', pick_number: 1 } as never);
 
     const res = await POST(makeRequest({ pokemon_name: 'Pikachu' }), routeParams);
@@ -445,8 +445,7 @@ describe('POST /api/drafts/[id]/picks', () => {
       { pokemon_name: 'Charizard', power_tier: null },
     ] as never);
 
-    const { getTierByBasePokemon } = await import('@/lib/supabase/queries/evolutions');
-    vi.mocked(getTierByBasePokemon).mockResolvedValue(null);
+    vi.mocked(getPlayerWildcards).mockResolvedValue([]);
 
     const res = await POST(makeRequest({ pokemon_name: 'Pikachu' }), routeParams);
     const json = await res.json();
@@ -732,15 +731,63 @@ describe('POST /api/drafts/[id]/picks — legacy pick names (#47)', () => {
       expect(createDraftPick).not.toHaveBeenCalled();
     });
 
-    it('stores the tier base name of an evolution wildcard and still creates its tracker', async () => {
-      vi.mocked(isEvoLeague).mockResolvedValue(true);
-      vi.mocked(getTierByBasePokemon).mockResolvedValue({ base_pokemon: 'Eevee', stage2_pokemon: 'Vaporeon' } as never);
+    describe('an evolution wildcard assigned to the picker', () => {
+      // The lookup answers per player, like the query: the wildcards of the player asked for, nobody else's.
+      const wildcardsOf: Record<string, string[]> = { 'player-1': ['Eevee'], 'player-2': ['Ditto'] };
 
-      const res = await POST(makeRequest({ pokemon_name: 'Eevee' }), routeParams);
+      beforeEach(() => {
+        vi.mocked(isEvoLeague).mockResolvedValue(true);
+        vi.mocked(getPlayerWildcards).mockImplementation((async (_seasonId: string, playerId: string) =>
+          (wildcardsOf[playerId] ?? []).map((base) => ({ base_pokemon: base, player_id: playerId }))) as never);
+        // Like the query: an exact match on the stored spelling, so a raw 'eevee' finds nothing.
+        vi.mocked(getTierByBasePokemon).mockImplementation((async (_seasonId: string, base: string, playerId?: string | null) =>
+          (wildcardsOf[playerId ?? ''] ?? []).includes(base)
+            ? { base_pokemon: base, stage2_pokemon: 'Vaporeon' }
+            : null) as never);
+      });
 
-      expect(res.status).toBe(201);
-      expect(storedName()).toBe('Eevee');
-      expect(createTracker).toHaveBeenCalledWith(expect.objectContaining({ base_pokemon: 'Eevee', player_id: 'player-1' }));
+      it.each(['Eevee', 'eevee', 'EEVEE', ' eevee '])(
+        'stores the tier base name Eevee for %j and still creates its tracker',
+        async (sent) => {
+          const res = await POST(makeRequest({ pokemon_name: sent }), routeParams);
+
+          expect(res.status).toBe(201);
+          expect(storedName()).toBe('Eevee');
+          expect(createTracker).toHaveBeenCalledWith(
+            expect.objectContaining({ base_pokemon: 'Eevee', player_id: 'player-1' }),
+          );
+        },
+      );
+
+      it('looks the wildcard up for the picker, not for the pool', async () => {
+        await POST(makeRequest({ pokemon_name: 'eevee' }), routeParams);
+
+        expect(getPlayerWildcards).toHaveBeenCalledWith('season-1', 'player-1');
+      });
+
+      it("refuses a Pokémon that is another player's wildcard with NOT_IN_POOL", async () => {
+        const res = await POST(makeRequest({ pokemon_name: 'ditto' }), routeParams);
+
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('NOT_IN_POOL');
+        expect(createDraftPick).not.toHaveBeenCalled();
+      });
+
+      it('refuses a Pokémon that is neither listed nor a wildcard of the picker', async () => {
+        const res = await POST(makeRequest({ pokemon_name: 'eevee2' }), routeParams);
+
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('NOT_IN_POOL');
+      });
+
+      it('reads no wildcard outside an evolution league', async () => {
+        vi.mocked(isEvoLeague).mockResolvedValue(false);
+
+        const res = await POST(makeRequest({ pokemon_name: 'eevee' }), routeParams);
+
+        expect(res.status).toBe(400);
+        expect(getPlayerWildcards).not.toHaveBeenCalled();
+      });
     });
   });
 

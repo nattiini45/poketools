@@ -623,21 +623,21 @@ describe('queries/drafts — pools', () => {
 describe('queries/drafts — picks', () => {
   describe('getPicksByPool', () => {
     it('returns picks with player names', async () => {
-      // Chain: .from.select.eq.order — terminal .order
+      // Chain: .from.select.eq.order.order.range — terminal .range (paged; see drafts-picks-paging.test.ts)
       const pickWithPlayer = { ...draftPickRow, players: { name: 'Ash' } };
-      mockBuilder.order.mockReturnValue({ data: [pickWithPlayer], error: null });
+      mockBuilder.range.mockReturnValue({ data: [pickWithPlayer], error: null });
       const result = await getPicksByPool('dp-1');
       expect(result).toHaveLength(1);
       expect(result[0].player_name).toBe('Ash');
     });
 
     it('returns empty array when none', async () => {
-      mockBuilder.order.mockReturnValue({ data: [], error: null });
+      mockBuilder.range.mockReturnValue({ data: [], error: null });
       expect(await getPicksByPool('dp-1')).toEqual([]);
     });
 
     it('throws on error', async () => {
-      mockBuilder.order.mockReturnValue({ data: null, error: new Error('err') });
+      mockBuilder.range.mockReturnValue({ data: null, error: new Error('err') });
       await expect(getPicksByPool('dp-1')).rejects.toThrow('err');
     });
   });

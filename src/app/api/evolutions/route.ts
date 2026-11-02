@@ -9,16 +9,12 @@ import {
   bulkCreateTiers,
 } from '@/lib/supabase/queries/evolutions';
 import { createPoolEntry, getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
+import { isDuplicatePoolEntry, syncPoolEntries } from '@/lib/draft/pool-entry-sync';
 import { toID } from '@/lib/pkmn/i18n/id';
 import type { ApiResult } from '@/types/api';
 import type { EvolutionTier, EvolutionTierFormData } from '@/types/evolution';
 import { evolutionCreateSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-
-/** The 409 the pool-entry writers raise when the Pokémon is already listed under any spelling. */
-function isDuplicatePoolEntry(err: unknown): boolean {
-  return err instanceof UserFacingError && err.code === 'pool_entry_duplicate_name';
-}
 
 /**
  * GET /api/evolutions?season_id=X&type=all|tiers|wildcards
@@ -106,9 +102,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
       // Auto-sync: create matching draft pool entries for non-wildcard tiers
       const nonWildcards = items.filter((i) => !i.player_id);
       if (nonWildcards.length > 0) {
-        const { bulkCreatePoolEntries } = await import(
-          '@/lib/supabase/queries/draft-pool-entries'
-        );
         const existing = await getPoolEntries(seasonId);
         // Compared by id, as the picks route does: a second spelling of a listed Pokémon is no new pool entry.
         const seen = new Set(existing.map((e) => toID(e.pokemon_name)));
@@ -124,20 +117,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
             pokemon_name: i.base_pokemon,
             power_tier: i.power_tier ?? null,
           }));
-        if (newEntries.length > 0) {
-          try {
-            await bulkCreatePoolEntries(newEntries);
-          } catch (err) {
-            if (!isDuplicatePoolEntry(err)) throw err;
-            // A concurrent writer listed one of them meanwhile and the batch is all-or-nothing: write what is still missing.
-            const listed = new Set((await getPoolEntries(seasonId)).map((e) => toID(e.pokemon_name)));
-            const missing = newEntries.filter((e) => !listed.has(toID(e.pokemon_name)));
-            try {
-              if (missing.length > 0) await bulkCreatePoolEntries(missing);
-            } catch (retryErr) {
-              if (!isDuplicatePoolEntry(retryErr)) throw retryErr;
-            }
-          }
+        const unresolved = await syncPoolEntries(seasonId, newEntries);
+        if (unresolved.length > 0) {
+          // The tiers are committed; success would hide Pokémon that have a tier but no pool entry.
+          throw new UserFacingError(
+            `The tiers were saved, but ${unresolved.join(', ')} could not be added to the draft pool. Add them to the pool list by hand.`,
+            {
+              code: 'evolution_pool_sync_incomplete',
+              params: { pokemon: unresolved.join(', '), count: unresolved.length },
+              status: 500,
+            },
+          );
         }
       }
 

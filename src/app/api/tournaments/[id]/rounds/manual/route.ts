@@ -12,6 +12,7 @@ import { getRoundsByTournament, createRound } from '@/lib/supabase/queries/round
 import { createMatchBatch } from '@/lib/supabase/queries/matches';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
+import { assertLegacyEliminationRoundSettled } from '@/lib/tournament/previous-round-guard';
 import { expireTournamentReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { Round } from '@/types/round';
@@ -107,6 +108,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           },
           { status: 400 }
         );
+      }
+      if (tournament.bracket_type === 'single_elim' || tournament.bracket_type === 'double_elim') {
+        await assertLegacyEliminationRoundSettled(id, currentRound);
       }
     }
 

@@ -491,6 +491,90 @@ describe('recomputeStreaks', () => {
     expect(replacePlayerStreaks).toHaveBeenCalledTimes(1);
   });
 
+  describe('a match that completes between the history read and the stats read', () => {
+    // A small in-memory stand-in for the database, with read latency: a read takes its snapshot after `latency`
+    // microtask turns, and match B completes after `completeAt` turns. The stats reader honours the real
+    // contract: the totals of the match ids it is given, whatever their status.
+    const turns = async (n: number) => {
+      for (let i = 0; i < n; i++) await Promise.resolve();
+    };
+
+    async function rebuildWhileBCompletesAt(completeAt: number, slowFirstHistoryRead: number) {
+      const completed = new Set(['a']);
+      const history = new Map([
+        ['a', histMatch('a', PLAYER_ID, 1)],
+        ['b', histMatch('b', 'opp', 2)],
+      ]);
+      // A won with 3 KOs and none lost; B was lost with 0 KOs dealt and 2 lost, which breaks both streaks.
+      const allStats = new Map([
+        ['a', stats(3, 0)],
+        ['b', stats(0, 2)],
+      ]);
+
+      let historyReads = 0;
+      vi.mocked(getCompletedMatchesForRatingReplay).mockImplementation(async () => {
+        // Rebuild A's history query is the slow one: B can finish its whole rebuild before A's query takes its snapshot.
+        await turns(3 + (historyReads++ === 0 ? slowFirstHistoryRead : 0));
+        return [...completed].map((id) => history.get(id)!) as never;
+      });
+      vi.mocked(getPlayerStatTotalsByMatch).mockImplementation((async (_player: string, matchIds?: readonly string[]) => {
+        await turns(1);
+        // Without ids the reader keeps its old contract: only matches that are completed right now.
+        const wanted = matchIds ?? [...completed];
+        return new Map([...allStats].filter(([id]) => wanted.includes(id)));
+      }) as never);
+      let stored: unknown = null;
+      vi.mocked(replacePlayerStreaks).mockImplementation(async (_player, row, expectedIds) => {
+        if ([...expectedIds].sort().join() !== [...completed].sort().join()) {
+          throw new StreaksStaleError(PLAYER_ID, new Error('PT409'));
+        }
+        stored = row;
+      });
+
+      // Two finalizations of one player: A's rebuild runs while B completes and then rebuilds on its own.
+      await Promise.all([
+        recomputeStreaks(PLAYER_ID),
+        (async () => {
+          await turns(completeAt);
+          completed.add('b');
+          await recomputeStreaks(PLAYER_ID);
+        })(),
+      ]);
+      return stored;
+    }
+
+    it.each([0, 20].flatMap((slow) => Array.from({ length: 12 }, (_, i) => [i, slow] as const)))(
+      'ends with the row of the full history (KO and flawless streaks broken by B) when B completes after %i turns and the first history read lags %i',
+      async (completeAt, slow) => {
+        const row = await rebuildWhileBCompletesAt(completeAt, slow);
+
+        expect(row).toMatchObject({
+          current_ko_streak: 0,
+          current_flawless_streak: 0,
+          best_ko_streak: 1,
+          best_flawless_streak: 1,
+          current_loss_streak: 1,
+          last_match_id: 'b',
+        });
+      },
+    );
+
+    it('reads the stats of exactly the history match ids it fenced on', async () => {
+      vi.mocked(getCompletedMatchesForRatingReplay).mockResolvedValue([
+        histMatch('a', PLAYER_ID, 1),
+        histMatch('b', 'opp', 2),
+      ] as never);
+
+      await recomputeStreaks(PLAYER_ID);
+
+      const [, ids] = vi.mocked(getPlayerStatTotalsByMatch).mock.calls[0];
+      expect([...(ids as readonly string[])].sort()).toEqual(['a', 'b']);
+      expect(vi.mocked(getCompletedMatchesForRatingReplay).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(getPlayerStatTotalsByMatch).mock.invocationCallOrder[0],
+      );
+    });
+  });
+
   it('is replay-safe: a second run lands on the same row whatever the stored row says', async () => {
     vi.mocked(getCompletedMatchesForRatingReplay).mockResolvedValue([
       histMatch('a', PLAYER_ID, 1),

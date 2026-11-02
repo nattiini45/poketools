@@ -34,6 +34,8 @@ export default defineDe<typeof en>()({
   evolution_tiers_mixed_season: 'Alle Tier-Einträge eines Sammelimports müssen zur selben Saison gehören.',
   evolution_stage2_required: 'Die Angabe „stage2_pokemon“ fehlt.',
   evolution_tier_not_found: 'Tier-Eintrag nicht gefunden.',
+  evolution_pool_sync_incomplete:
+    'Die Tiers wurden gespeichert, aber {pokemon} konnte nicht in den Draft-Pool übernommen werden. Trag sie von Hand in die Pool-Liste ein.',
 
   pool_entries_empty: 'Gib mindestens einen Eintrag an.',
   pool_entries_mixed_season: 'Alle Einträge eines Sammelimports müssen zur selben Saison gehören.',
