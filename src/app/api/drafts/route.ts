@@ -7,6 +7,7 @@ import { DraftRuleError } from '@/lib/draft/errors';
 import { draftErrorResponse } from '@/lib/draft/http';
 import { minCompletion } from '@/lib/draft/budget';
 import { availablePricesSorted, getDefaultRounds } from '@/lib/draft/engine';
+import { splitIntoRosters } from '@/lib/draft/roster-split';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import { defaultPickOrder, isPickOrderAllowed } from '@/lib/draft/pool-format';
 import { seasonRosterIds } from '@/lib/draft/pool-roster';
@@ -384,6 +385,19 @@ export async function POST(request: NextRequest) {
               error: `A budget of ${body.budget} per trainer cannot fill ${rounds} picks for ${players} trainer${players === 1 ? '' : 's'}: the ${needed} cheapest Pokémon on the pool list cost ${minimum} together, against ${available} in total`,
               code: 'draft_budget_below_listed_rounds',
               params: { budget: body.budget, rounds, players, needed, minimum, available },
+            },
+            { status: 400 }
+          );
+        }
+        // Enough in total is not enough: the Pokémon are dealt out whole, so the prices must split into rosters.
+        // Only a proven impossibility refuses; a search that runs out of nodes lets the pool through.
+        if (splitIntoRosters(listedPrices, players, rounds, body.budget) === 'no') {
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `The prices on the pool list cannot be split into ${players} roster${players === 1 ? '' : 's'} of ${rounds} Pokémon that each stay within ${body.budget} points`,
+              code: 'draft_budget_list_unassignable',
+              params: { budget: body.budget, rounds, players },
             },
             { status: 400 }
           );

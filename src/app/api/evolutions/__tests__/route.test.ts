@@ -30,6 +30,7 @@ vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({
 }));
 
 import { GET, POST } from '@/app/api/evolutions/route';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { requireAuth, requireResourceAdmin } from '@/lib/auth/helpers';
 import {
   getTierList,
@@ -216,6 +217,48 @@ describe('POST /api/evolutions', () => {
         expect.objectContaining({ pokemon_name: 'Pichu' }),
       ]),
     );
+  });
+
+  it('bulk create still saves the tiers when a concurrent writer lists a Pokémon first, and writes the entries still missing', async () => {
+    vi.mocked(bulkCreateTiers).mockResolvedValue([{ id: 'tier-1' }, { id: 'tier-2' }] as never);
+    vi.mocked(getPoolEntries)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([{ id: 'e1', pokemon_name: 'pichu' }] as never);
+    vi.mocked(bulkCreatePoolEntries)
+      .mockRejectedValueOnce(new UserFacingError('Pichu is already in the draft pool', { code: 'pool_entry_duplicate_name', status: 409 }))
+      .mockResolvedValueOnce([] as never);
+    const tier = (base_pokemon: string) => ({
+      season_id: '00000000-0000-4000-a000-000000000001',
+      base_pokemon,
+      stage2_pokemon: 'X',
+      stage2_kos: 3,
+    });
+
+    const response = await POST({ json: vi.fn().mockResolvedValue([tier('Pichu'), tier('Eevee')]) } as unknown as NextRequest);
+
+    expect(response.status).toBe(201);
+    expect(vi.mocked(bulkCreatePoolEntries)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bulkCreatePoolEntries).mock.calls[1][0]).toEqual([expect.objectContaining({ pokemon_name: 'Eevee' })]);
+  });
+
+  it('single create answers 201 when a concurrent writer lists the Pokémon between the read and the write', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(createTier).mockResolvedValue({ id: 'tier-1' } as never);
+    vi.mocked(getPoolEntries).mockResolvedValue([] as never);
+    vi.mocked(createPoolEntry).mockRejectedValue(
+      new UserFacingError('Pichu is already in the draft pool', { code: 'pool_entry_duplicate_name', status: 409 }),
+    );
+
+    const response = await POST({
+      json: vi.fn().mockResolvedValue({
+        season_id: '00000000-0000-4000-a000-000000000001',
+        base_pokemon: 'Pichu',
+        stage2_pokemon: 'Pikachu',
+        stage2_kos: 3,
+      }),
+    } as unknown as NextRequest);
+
+    expect(response.status).toBe(201);
   });
 
   it('bulk create skips pool-entry sync for wildcards (player_id present)', async () => {

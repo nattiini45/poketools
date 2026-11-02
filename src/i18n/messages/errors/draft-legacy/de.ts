@@ -19,6 +19,8 @@ export default defineDe<typeof en>()({
     'Ein Budget von {budget} reicht nicht für {rounds} Picks zum Standardpreis von {price} (nötig: {minimum}).',
   draft_budget_below_listed_rounds:
     'Ein Budget von {budget} pro Trainer reicht nicht für {rounds} Picks von {players} Trainern: die {needed} günstigsten Pokémon der Pool-Liste kosten zusammen {minimum}, verfügbar sind insgesamt {available}.',
+  draft_budget_list_unassignable:
+    'Die Preise der Pool-Liste lassen sich nicht auf {players} Kader mit je {rounds} Pokémon verteilen, die jeweils höchstens {budget} Punkte kosten.',
   draft_pool_list_too_small:
     'Die Pool-Liste hat {listed} Pokémon, aber {players} Trainer brauchen {needed} Picks ({rounds} pro Trainer).',
   draft_pick_strands_roster:

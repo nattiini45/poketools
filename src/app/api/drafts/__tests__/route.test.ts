@@ -616,6 +616,29 @@ describe('POST /api/drafts', () => {
         expect(createDraftPool).not.toHaveBeenCalled();
       });
 
+      it('refuses prices that cannot be dealt into affordable rosters although they fit in total: 1 and 99 for two trainers at 50', async () => {
+        twoTrainers();
+        vi.mocked(getPoolEntries).mockResolvedValue([entry('Cheap', 1), entry('Dear', 99)]);
+
+        const response = await post({ season_id: SEASON, draft_type: 'budget', pick_order: 'free', budget: 50, rounds: 1 });
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+          code: 'draft_budget_list_unassignable',
+          params: { budget: 50, rounds: 1, players: 2 },
+        });
+        expect(createDraftPool).not.toHaveBeenCalled();
+      });
+
+      it('accepts prices that can be dealt: 20 and 80 for two trainers at 100', async () => {
+        twoTrainers();
+        vi.mocked(getPoolEntries).mockResolvedValue([entry('A', 20), entry('B', 80)]);
+
+        const response = await post({ season_id: SEASON, draft_type: 'budget', pick_order: 'free', budget: 100, rounds: 1 });
+
+        expect(response.status).toBe(201);
+      });
+
       it('refuses when the cheapest picks of all trainers cost more than their budgets together, and accepts at the edge', async () => {
         twoTrainers();
         vi.mocked(getPoolEntries).mockResolvedValue([entry('A', 3), entry('B', 3), entry('C', 3), entry('D', 3), entry('E', 90)]);

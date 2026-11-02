@@ -13,6 +13,12 @@ import { toID } from '@/lib/pkmn/i18n/id';
 import type { ApiResult } from '@/types/api';
 import type { EvolutionTier, EvolutionTierFormData } from '@/types/evolution';
 import { evolutionCreateSchema, formatZodErrors } from '@/lib/validation';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+
+/** The 409 the pool-entry writers raise when the Pokémon is already listed under any spelling. */
+function isDuplicatePoolEntry(err: unknown): boolean {
+  return err instanceof UserFacingError && err.code === 'pool_entry_duplicate_name';
+}
 
 /**
  * GET /api/evolutions?season_id=X&type=all|tiers|wildcards
@@ -119,7 +125,19 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
             power_tier: i.power_tier ?? null,
           }));
         if (newEntries.length > 0) {
-          await bulkCreatePoolEntries(newEntries);
+          try {
+            await bulkCreatePoolEntries(newEntries);
+          } catch (err) {
+            if (!isDuplicatePoolEntry(err)) throw err;
+            // A concurrent writer listed one of them meanwhile and the batch is all-or-nothing: write what is still missing.
+            const listed = new Set((await getPoolEntries(seasonId)).map((e) => toID(e.pokemon_name)));
+            const missing = newEntries.filter((e) => !listed.has(toID(e.pokemon_name)));
+            try {
+              if (missing.length > 0) await bulkCreatePoolEntries(missing);
+            } catch (retryErr) {
+              if (!isDuplicatePoolEntry(retryErr)) throw retryErr;
+            }
+          }
         }
       }
 
@@ -151,11 +169,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
       const baseId = toID(input.base_pokemon);
       const existing = (await getPoolEntries(input.season_id)).find((e) => toID(e.pokemon_name) === baseId);
       if (!existing) {
-        await createPoolEntry({
-          season_id: input.season_id,
-          pokemon_name: input.base_pokemon,
-          power_tier: input.power_tier ?? null,
-        });
+        try {
+          await createPoolEntry({
+            season_id: input.season_id,
+            pokemon_name: input.base_pokemon,
+            power_tier: input.power_tier ?? null,
+          });
+        } catch (err) {
+          // A concurrent writer listed it meanwhile: the entry the sync wants exists, and the tier is already saved.
+          if (!isDuplicatePoolEntry(err)) throw err;
+        }
       }
     }
 
