@@ -15,16 +15,18 @@ import { useSyncExternalStore } from "react";
 
 type GlobalErrorLocale = "en" | "de";
 
-const COPY: Record<GlobalErrorLocale, { heading: string; fallback: string; retry: string }> = {
+const COPY: Record<GlobalErrorLocale, { heading: string; fallback: string; retry: string; reference: string }> = {
   en: {
     heading: "Something went seriously wrong",
     fallback: "A critical error occurred.",
     retry: "Try again",
+    reference: "Reference",
   },
   de: {
     heading: "Da ist etwas gründlich schiefgelaufen",
     fallback: "Ein schwerwiegender Fehler ist aufgetreten.",
     retry: "Erneut versuchen",
+    reference: "Referenz",
   },
 };
 
@@ -63,8 +65,11 @@ export default function GlobalError({
               {copy.heading}
             </h2>
             <p className="text-sm text-[#C4B596] max-w-md">
-              {error.message || copy.fallback}
+              {copy.fallback}
             </p>
+            {error.digest ? (
+              <p className="mt-2 text-xs text-[#C4B596]">{copy.reference}: {error.digest}</p>
+            ) : null}
           </div>
           <button
             onClick={() => reset()}

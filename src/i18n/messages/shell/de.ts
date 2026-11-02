@@ -7,6 +7,7 @@ export default defineDe<typeof en>()({
     fallback: 'Ein unerwarteter Fehler ist aufgetreten.',
     retry: 'Erneut versuchen',
     back: 'Zurück',
+    reference: 'Referenz: {digest}',
   },
   notFound: {
     title: 'Seite nicht gefunden',
