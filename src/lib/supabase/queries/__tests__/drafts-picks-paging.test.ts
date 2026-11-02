@@ -102,6 +102,15 @@ describe('getPicksByPool', () => {
     expect(picks.map((p) => p.id)).toEqual(['pick-a', 'pick-b', 'pick-00002']);
   });
 
+  it('refuses a history longer than the paging bound instead of returning a prefix', async () => {
+    h.state.rows = Array.from({ length: 20_001 }, (_, i) => pickRow(i + 1));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(getPicksByPool('pool-1')).rejects.toThrow(/getPicksByPool/);
+
+    warn.mockRestore();
+  });
+
   it('throws on a read error rather than returning the picks read so far', async () => {
     h.state.rows = Array.from({ length: 1050 }, (_, i) => pickRow(i + 1));
     h.state.error = new Error('read failed');

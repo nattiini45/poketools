@@ -36,7 +36,7 @@ export async function syncPoolEntries(
       await createPoolEntry(entry);
     } catch (err) {
       if (!isDuplicatePoolEntry(err)) {
-        console.error(`[pool-entry-sync] could not add the pool entry ${entry.pokemon_name}:`, err);
+        console.error('[pool-entry-sync] could not add a pool entry:', entry.pokemon_name, err);
       }
     }
   }

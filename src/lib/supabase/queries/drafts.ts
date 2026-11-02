@@ -497,7 +497,7 @@ async function refuseLostDeleteRace(id: string, queue: boolean): Promise<never> 
  * the same pick number and keep the pool from ever completing.
  */
 export async function getPicksByPool(poolId: string): Promise<DraftPickWithPlayer[]> {
-  const { rows } = await readBoundedPages<DraftPickRowWithPlayer>(
+  const { rows, truncated } = await readBoundedPages<DraftPickRowWithPlayer>(
     (from, to) =>
       supabase
         .from('draft_picks')
@@ -508,6 +508,9 @@ export async function getPicksByPool(poolId: string): Promise<DraftPickWithPlaye
         .range(from, to),
     { label: 'getPicksByPool' },
   );
+
+  // A prefix of the history would make the next pick number repeat and keep the pool from completing.
+  if (truncated) throw new Error(`getPicksByPool: the pick history of pool ${poolId} is longer than the paging bound`);
 
   return rows.map((row) => ({
     ...toDraftPick(row),

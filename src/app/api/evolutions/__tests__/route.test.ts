@@ -311,7 +311,7 @@ describe('POST /api/evolutions', () => {
       expect(payload.params).toEqual({ pokemon: 'Charmander', count: 1 });
       expect(payload.error).toContain('Charmander');
       expect(bulkCreateTiers).toHaveBeenCalledTimes(1);
-      expect(error).toHaveBeenCalledWith(expect.stringContaining('pool entry'), failure);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('pool entry'), 'Charmander', failure);
       error.mockRestore();
     });
 
