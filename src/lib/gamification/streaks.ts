@@ -177,12 +177,17 @@ export function computeStreaksFromHistory(
  */
 export async function recomputeStreaks(playerId: string): Promise<StreakChanges> {
   for (let attempt = 1; ; attempt++) {
-    const [scope, history, statTotals, stored] = await Promise.all([
+    // The history is read first and the stats are read for exactly its match ids: a match that completes in
+    // between is then in neither or in both, and the fence below catches the first case.
+    const [scope, history, stored] = await Promise.all([
       loadRatingScope(),
       getCompletedMatchesForRatingReplay(playerId),
-      getPlayerStatTotalsByMatch(playerId),
       getPlayerStreaks(playerId),
     ]);
+    const statTotals = await getPlayerStatTotalsByMatch(
+      playerId,
+      history.map((match) => match.id)
+    );
 
     const after = computeStreaksFromHistory(playerId, history, statTotals, scope);
     try {

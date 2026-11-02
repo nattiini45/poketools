@@ -144,14 +144,27 @@ export interface PlayerMatchStatTotals {
 }
 
 /**
- * The player's own battle_stats rows of every COMPLETED match, summed per
- * match, in ONE paged read (not one read per match). A match the player has
- * no row for is absent from the map: its KO figures are unknown, not zero.
+ * The player's own battle_stats rows of the given matches, summed per match,
+ * in ONE paged read (not one read per match). A match the player has no row
+ * for is absent from the map: its KO figures are unknown, not zero.
+ *
+ * The matches are named by the caller, whatever their status now: the streak
+ * rebuild passes the ids of the history it already read and fences on, so a
+ * match that completes between the two reads can never be in the history and
+ * missing from the stats (a status filter here would drop it).
+ *
  * Paged to the end (`readAllPages`): a truncated read would turn a match with
  * stats into an unknown one and silently change the streaks.
  */
-export async function getPlayerStatTotalsByMatch(playerId: string): Promise<Map<string, PlayerMatchStatTotals>> {
+export async function getPlayerStatTotalsByMatch(
+  playerId: string,
+  matchIds: readonly string[]
+): Promise<Map<string, PlayerMatchStatTotals>> {
   assertValidUuid(playerId, 'playerId');
+  const totals = new Map<string, PlayerMatchStatTotals>();
+  if (matchIds.length === 0) return totals;
+
+  const wanted = new Set(matchIds);
   const rows = await readAllPages<{
     id: string;
     kos_dealt: number;
@@ -160,16 +173,15 @@ export async function getPlayerStatTotalsByMatch(playerId: string): Promise<Map<
   }>((from, to) =>
     supabase
       .from('battle_stats')
-      .select('id, kos_dealt, was_koed, games!inner ( match_id, matches!inner ( status ) )')
+      .select('id, kos_dealt, was_koed, games!inner ( match_id )')
       .eq('player_id', playerId)
-      .eq('games.matches.status', 'completed')
       .order('id', { ascending: true })
       .range(from, to)
   );
 
-  const totals = new Map<string, PlayerMatchStatTotals>();
   for (const row of rows) {
     const matchId = (row.games as { match_id: string }).match_id;
+    if (!wanted.has(matchId)) continue;
     const entry = totals.get(matchId) ?? { total_kos_dealt: 0, total_kos_lost: 0 };
     entry.total_kos_dealt += row.kos_dealt;
     if (row.was_koed) entry.total_kos_lost += 1;

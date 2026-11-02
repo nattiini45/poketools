@@ -42,7 +42,14 @@ const ids = {
   tournament: randomUUID(),
   round: randomUUID(),
   matches: [randomUUID(), randomUUID(), randomUUID()],
+  games: [randomUUID(), randomUUID(), randomUUID()],
 };
+
+const STATS = [
+  { kosDealt: 3, wasKoed: false },
+  { kosDealt: 3, wasKoed: false },
+  { kosDealt: 0, wasKoed: true },
+];
 
 const ZERO_ROW = {
   current_win_streak: 0,
@@ -97,6 +104,28 @@ describe.skipIf(!optIn)('streaks_replace_player: fence and concurrent finalizes 
         })),
       ),
     );
+    await run(
+      'games',
+      client.from('games').insert(
+        ids.matches.map((matchId, i) => ({ id: ids.games[i], match_id: matchId, game_number: 1, replay_url: '', source: 'manual' as const })),
+        { defaultToNull: false },
+      ),
+    );
+    // The first two matches are clean KO wins; the third has no KO dealt and one lost, which breaks both streaks.
+    // A rebuild that read the third match's history without its stats would wrongly keep them running.
+    await run(
+      'battle_stats',
+      client.from('battle_stats').insert(
+        STATS.map((stat, i) => ({
+          game_id: ids.games[i],
+          player_id: ids.p1,
+          pokemon_name: 'Pikachu',
+          kos_dealt: stat.kosDealt,
+          was_koed: stat.wasKoed,
+        })),
+        { defaultToNull: false },
+      ),
+    );
   }, 60000);
 
   afterAll(async () => {
@@ -107,6 +136,8 @@ describe.skipIf(!optIn)('streaks_replace_player: fence and concurrent finalizes 
       if (error) failures.push(`${label}: ${JSON.stringify(error)}`);
     };
     await del('player_streaks', client.from('player_streaks').delete().in('player_id', [ids.p1, ids.p2]));
+    await del('battle_stats', client.from('battle_stats').delete().in('game_id', ids.games));
+    await del('games', client.from('games').delete().in('id', ids.games));
     await del('matches', client.from('matches').delete().in('id', ids.matches));
     await del('rounds', client.from('rounds').delete().eq('id', ids.round));
     await del('tournaments', client.from('tournaments').delete().eq('id', ids.tournament));
@@ -133,7 +164,7 @@ describe.skipIf(!optIn)('streaks_replace_player: fence and concurrent finalizes 
     expect((await queries.getPlayerStreaks(ids.p1))?.best_win_streak).toBe(1);
   });
 
-  it('counts both matches when two finalizations of one player run at once', async () => {
+  it('counts both matches, with their battle stats, when two finalizations of one player run at once', async () => {
     await Promise.all(
       [ids.matches[1], ids.matches[2]].map(async (matchId) => {
         await complete(matchId);
@@ -145,6 +176,19 @@ describe.skipIf(!optIn)('streaks_replace_player: fence and concurrent finalizes 
     expect(row?.current_win_streak).toBe(3);
     expect(row?.best_win_streak).toBe(3);
     expect(row?.last_match_id).toBe(ids.matches[2]);
+    // The third match's stats break the KO and flawless streaks of the first two; a rebuild that missed them
+    // would leave both at 2.
+    expect(row?.best_ko_streak).toBe(2);
+    expect(row?.current_ko_streak).toBe(0);
+    expect(row?.best_flawless_streak).toBe(2);
+    expect(row?.current_flawless_streak).toBe(0);
+  });
+
+  it('reads the stats of the matches it is given, completed or not', async () => {
+    const totals = await queries.getPlayerStatTotalsByMatch(ids.p1, ids.matches);
+    expect([...totals.keys()].sort()).toEqual([...ids.matches].sort());
+    expect(totals.get(ids.matches[2])).toEqual({ total_kos_dealt: 0, total_kos_lost: 1 });
+    expect((await queries.getPlayerStatTotalsByMatch(ids.p1, [ids.matches[0]])).size).toBe(1);
   });
 
   it('is replay-safe: a second rebuild leaves the row identical', async () => {
