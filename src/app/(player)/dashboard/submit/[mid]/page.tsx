@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
 import { getLiveAccess } from '@/lib/auth/helpers';
+import { canAdministerMatchAccess } from '@/lib/auth/match-access';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getMatchPrepTeams } from '@/lib/supabase/queries/match-prep-teams';
 import { supabase } from '@/lib/supabase/client';
@@ -29,8 +30,6 @@ export default async function SubmitResultPage({ params }: PageProps) {
   const access = await getLiveAccess();
   const player = access?.player;
   if (!access || !player) redirect('/');
-  const isSiteAdmin = access.isSiteAdmin;
-
   const match = await getMatchById(mid);
   if (!match) notFound();
 
@@ -38,7 +37,13 @@ export default async function SubmitResultPage({ params }: PageProps) {
     player.playerId === match.player_1_id ||
     player.playerId === match.player_2_id;
 
-  if (!isParticipant && !isSiteAdmin) {
+  // Live roles: a site admin, or a resource admin of this match's tournament or
+  // league (the league organizer). A player with no admin role costs no lookup.
+  const canAdminister =
+    access.isSiteAdmin ||
+    (access.isAnyAdmin && (await canAdministerMatchAccess(player, match.tournament_id)));
+
+  if (!isParticipant && !canAdminister) {
     redirect('/dashboard');
   }
 
@@ -62,11 +67,11 @@ export default async function SubmitResultPage({ params }: PageProps) {
   const prepTeams = selectVisibleMatchPrepRosters(
     prepTeamRows,
     match,
-    { viewerId: player.playerId, isAdmin: isSiteAdmin },
+    { viewerId: player.playerId, isAdmin: canAdminister },
     tournamentVisibility
   );
 
-  const isAdmin = isSiteAdmin && !isParticipant;
+  const isAdmin = canAdminister && !isParticipant;
 
   const [t, tForms, tEnum] = await Promise.all([getT(matchMessages), getT(matchFormsMessages), getT(enumMessages)]);
   const strong = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
@@ -102,7 +107,7 @@ export default async function SubmitResultPage({ params }: PageProps) {
             prepTeams={prepTeams}
             generation={generation}
             redirectTo={`/tournaments/${match.tournament_id}/matches/${mid}`}
-            isAdmin={isSiteAdmin}
+            isAdmin={canAdminister}
           />
         )}
 

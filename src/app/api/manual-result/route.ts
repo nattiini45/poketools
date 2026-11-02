@@ -3,6 +3,7 @@ import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { submitsAsMatchAdmin } from '@/lib/auth/match-access';
 import { emitMatchResultEffects } from '@/lib/match/result-effects';
 import { createMomentsBatch } from '@/lib/supabase/queries/broadcast-moments';
 import { manualResultSchema, formatZodErrors } from '@/lib/validation';
@@ -83,7 +84,9 @@ export async function POST(request: NextRequest) {
       source: 'manual',
       battle_stats: battleStats,
       submitter_id: player.playerId,
-      is_admin: player.isAdmin,
+      // Live role of the guard plus the match's own resource admins (the
+      // league organizer): the same rule as confirm-match and the admin routes.
+      is_admin: await submitsAsMatchAdmin(player, match),
     });
 
     // Broadcast moments marked in the tracker. The match, game and author are

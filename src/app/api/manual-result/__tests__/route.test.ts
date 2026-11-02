@@ -38,6 +38,10 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchById: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/resource-admins', () => ({
+  isResourceAdminFor: vi.fn(),
+}));
+
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentById: vi.fn(),
 }));
@@ -92,6 +96,7 @@ import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { requirePlayer, AuthError } from '@/lib/auth/helpers';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
@@ -151,11 +156,64 @@ const validBody = {
 describe('POST /api/manual-result', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isResourceAdminFor).mockResolvedValue(false);
     vi.mocked(requirePlayer).mockResolvedValue({
       playerId: P1_ID,
       name: 'Alice',
       isAdmin: false,
     } as never);
+  });
+
+  // ---- who may submit (admin authority is decided live, per match) ----
+
+  describe('submit authority', () => {
+    const OUTSIDER_ID = '99999999-9999-4999-8999-999999999999';
+
+    beforeEach(() => {
+      vi.mocked(getMatchById).mockResolvedValue(match as never);
+      vi.mocked(recordGameResult).mockResolvedValue({
+        game_id: 'g1', game_winner_id: P1_ID, match_status: 'in_progress', match_winner_id: null,
+        bo_reached: false, evolution_events: [],
+      });
+    });
+
+    it('lets a resource admin of the match tournament or league submit for a match they do not play', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue({ playerId: OUTSIDER_ID, name: 'Org', isAdmin: false } as never);
+      vi.mocked(isResourceAdminFor).mockResolvedValue(true);
+
+      const response = await POST(makeRequest(validBody));
+
+      expect(response.status).toBe(200);
+      expect(isResourceAdminFor).toHaveBeenCalledWith(OUTSIDER_ID, 'tournament', TOURNAMENT_ID);
+      expect(vi.mocked(recordGameResult).mock.calls[0][0]).toMatchObject({
+        submitter_id: OUTSIDER_ID,
+        is_admin: true,
+      });
+    });
+
+    it('passes no admin authority for a non-participant who administers nothing here', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue({ playerId: OUTSIDER_ID, name: 'Eve', isAdmin: false } as never);
+
+      await POST(makeRequest(validBody));
+
+      expect(vi.mocked(recordGameResult).mock.calls[0][0]).toMatchObject({ is_admin: false });
+    });
+
+    it('passes admin authority for a site admin without a resource lookup', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue({ playerId: OUTSIDER_ID, name: 'Root', isAdmin: true } as never);
+
+      await POST(makeRequest(validBody));
+
+      expect(isResourceAdminFor).not.toHaveBeenCalled();
+      expect(vi.mocked(recordGameResult).mock.calls[0][0]).toMatchObject({ is_admin: true });
+    });
+
+    it('submits a participant as a participant, with no role lookup', async () => {
+      await POST(makeRequest(validBody));
+
+      expect(isResourceAdminFor).not.toHaveBeenCalled();
+      expect(vi.mocked(recordGameResult).mock.calls[0][0]).toMatchObject({ submitter_id: P1_ID, is_admin: false });
+    });
   });
 
   // ---- auth ----

@@ -43,9 +43,54 @@ describe('isValidTransition', () => {
     expect(isValidTransition('completed', 'disputed')).toBe(false);
   });
 
-  it('rejects skipping states (scheduled → completed)', () => {
+  it('rejects skipping states for a player (scheduled → completed, scheduled → pending_confirmation)', () => {
     expect(isValidTransition('scheduled', 'completed')).toBe(false);
+    expect(isValidTransition('scheduled', 'completed', false)).toBe(false);
     expect(isValidTransition('scheduled', 'pending_confirmation')).toBe(false);
+  });
+});
+
+describe('admin settle transition (scheduled → completed)', () => {
+  const ctx: TransitionContext = {
+    actor_id: 'admin-user',
+    is_admin: true,
+    winner_id: 'player-1',
+    player_1_id: 'player-1',
+    player_2_id: 'player-2',
+  };
+
+  it('is admin-only: valid for an admin, invalid for a player', () => {
+    expect(isValidTransition('scheduled', 'completed', true)).toBe(true);
+    expect(isValidTransition('scheduled', 'completed', false)).toBe(false);
+    expect(isValidTransition('scheduled', 'completed')).toBe(false);
+  });
+
+  it('lists completed among the admin next states of scheduled only', () => {
+    expect(getValidNextStates('scheduled', true)).toEqual(['in_progress', 'completed']);
+    expect(getValidNextStates('scheduled')).toEqual(['in_progress']);
+  });
+
+  it('validates for an admin with a participant winner', () => {
+    expect(validateTransition('scheduled', 'completed', ctx)).toEqual({ valid: true });
+  });
+
+  it('still needs a winner, and a participant winner, for an admin', () => {
+    expect(validateTransition('scheduled', 'completed', { ...ctx, winner_id: undefined }).code).toBe(
+      'match_complete_no_winner'
+    );
+    expect(validateTransition('scheduled', 'completed', { ...ctx, winner_id: 'outsider' }).code).toBe(
+      'match_winner_not_participant'
+    );
+  });
+
+  it('refuses a participant with the settle-specific admin-only code', () => {
+    expect(
+      validateTransition('scheduled', 'completed', { ...ctx, actor_id: 'player-1', is_admin: false })
+    ).toEqual({
+      valid: false,
+      error: 'Only admins can settle a match that has not been played',
+      code: 'match_settle_admin_only',
+    });
   });
 });
 
@@ -114,7 +159,7 @@ describe('validateTransition', () => {
   };
 
   it('rejects invalid state transitions', () => {
-    const result = validateTransition('scheduled', 'completed', baseCtx);
+    const result = validateTransition('scheduled', 'pending_confirmation', baseCtx);
     expect(result.valid).toBe(false);
     expect(result.error).toContain('Invalid transition');
   });
@@ -191,9 +236,9 @@ describe('validateTransition', () => {
     [
       'invalid transition',
       'scheduled' as const,
-      'completed' as const,
+      'pending_confirmation' as const,
       baseCtx,
-      { error: 'Invalid transition: scheduled → completed', code: 'match_transition_invalid', params: { from: 'scheduled', to: 'completed' } },
+      { error: 'Invalid transition: scheduled → pending_confirmation', code: 'match_transition_invalid', params: { from: 'scheduled', to: 'pending_confirmation' } },
     ],
     [
       'non-admin dispute resolution',

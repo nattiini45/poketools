@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   tournament: { data: null as unknown, error: null as unknown },
   clientProps: [] as Record<string, unknown>[],
   tournamentSelect: vi.fn(),
+  isResourceAdminFor: vi.fn(async (_playerId: string, _type: string, _id: string) => false),
 }));
 
 vi.mock('next/headers', () => ({
@@ -47,6 +48,9 @@ vi.mock('@/lib/auth/helpers', () => ({
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchById: vi.fn(async () => mocks.match),
+}));
+vi.mock('@/lib/supabase/queries/resource-admins', () => ({
+  isResourceAdminFor: (playerId: string, type: string, id: string) => mocks.isResourceAdminFor(playerId, type, id),
 }));
 vi.mock('@/lib/supabase/queries/match-prep-teams', () => ({
   getMatchPrepTeams: vi.fn(async () => {
@@ -93,11 +97,11 @@ function set(species: string): PokemonSet {
   };
 }
 
-function viewer(playerId: string, isSiteAdmin = false) {
+function viewer(playerId: string, isSiteAdmin = false, isResourceAdmin = false) {
   return {
-    player: { playerId, isAdmin: isSiteAdmin },
+    player: { playerId, isAdmin: isSiteAdmin, isResourceAdmin },
     isSiteAdmin,
-    isAnyAdmin: isSiteAdmin,
+    isAnyAdmin: isSiteAdmin || isResourceAdmin,
     isCreator: isSiteAdmin,
   };
 }
@@ -167,6 +171,38 @@ describe('submit page roster visibility (spec §7)', () => {
     expect(prepTeamsProp()).toEqual({ player1: [set('Pikachu')], player2: [set('Garchomp')] });
     expect(mocks.clientProps[0].isAdmin).toBe(true);
     expect(html).toContain('submit-client');
+  });
+
+  it('a resource admin of the match league who does not play gets the admin view and both rosters', async () => {
+    mocks.access = viewer('organizer', false, true);
+    mocks.isResourceAdminFor.mockResolvedValue(true);
+    const html = await render();
+    expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('organizer', 'tournament', 't-1');
+    expect(prepTeamsProp()).toEqual({ player1: [set('Pikachu')], player2: [set('Garchomp')] });
+    expect(mocks.clientProps[0].isAdmin).toBe(true);
+    expect(html).toContain('submit-client');
+    expect(html).toContain('on behalf of the players');
+  });
+
+  it('a resource admin of another league is sent back to the dashboard', async () => {
+    mocks.access = viewer('other-organizer', false, true);
+    mocks.isResourceAdminFor.mockResolvedValue(false);
+    await expect(render()).rejects.toThrow('REDIRECT /dashboard');
+    expect(mocks.clientProps).toHaveLength(0);
+  });
+
+  it('a participant who is also a resource admin is treated as a participant (no on-behalf note)', async () => {
+    mocks.access = viewer('p1', false, true);
+    mocks.isResourceAdminFor.mockResolvedValue(true);
+    const html = await render();
+    expect(html).not.toContain('on behalf of the players');
+    expect(mocks.clientProps).toHaveLength(1);
+  });
+
+  it('a plain player (no admin role at all) costs no role lookup', async () => {
+    mocks.access = viewer('stranger');
+    await expect(render()).rejects.toThrow('REDIRECT /dashboard');
+    expect(mocks.isResourceAdminFor).not.toHaveBeenCalled();
   });
 
   it('a demoted admin (live is_admin false) gets no admin view', async () => {

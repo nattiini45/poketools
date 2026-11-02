@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
+import { canAdministerMatchAccess } from '@/lib/auth/match-access';
 import { getMatchById, updateMatchStatus } from '@/lib/supabase/queries/matches';
 import { validateTransition } from '@/lib/tournament/match-state';
 import { revalidateMatchPages } from '@/lib/revalidation';
@@ -54,8 +54,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const targetStatus = action === 'confirm' ? 'completed' as const : 'disputed' as const;
 
     // Site admins or resource admins for this tournament can act as admin
-    const hasAdminAccess = player.isAdmin ||
-      await isResourceAdminFor(player.playerId, 'tournament', match.tournament_id);
+    const hasAdminAccess = await canAdministerMatchAccess(player, match.tournament_id);
 
     if ((requestedWinnerId || notes) && !hasAdminAccess) {
       return NextResponse.json<ApiResult<never>>(

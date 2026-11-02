@@ -5,6 +5,7 @@ import { fetchBoundReplay } from '@/lib/pkmn/replay-binding';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { getPlayerByPsUsername } from '@/lib/supabase/queries/players';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { submitsAsMatchAdmin } from '@/lib/auth/match-access';
 import { emitMatchResultEffects } from '@/lib/match/result-effects';
 import { parseReplaySchema, formatZodErrors } from '@/lib/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
       replay,
       side_player_ids: [sidePlayerIds[0] ?? '', sidePlayerIds[1] ?? ''],
       submitter_id: player.playerId,
-      is_admin: player.isAdmin,
+      is_admin: await submitsAsMatchAdmin(player, match),
     });
 
     // 4. Shared post-record side effects (revalidate, notify, AI, aggregates)

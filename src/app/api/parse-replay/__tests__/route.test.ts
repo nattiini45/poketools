@@ -62,6 +62,10 @@ vi.mock('@/lib/discord/helpers', () => ({
   computePokemonScoreFromGameStats: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/resource-admins', () => ({
+  isResourceAdminFor: vi.fn(),
+}));
+
 vi.mock('@/lib/ai/trigger', () => ({
   triggerMatchAnalysis: vi.fn(),
 }));
@@ -81,6 +85,7 @@ import { fetchReplay, parseReplayLog } from '@/lib/pkmn/replay';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { getPlayerByPsUsername } from '@/lib/supabase/queries/players';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -150,6 +155,50 @@ describe('POST /api/parse-replay', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requirePlayer).mockResolvedValue(PLAYER);
+    vi.mocked(isResourceAdminFor).mockResolvedValue(false);
+  });
+
+  // ── Who may submit ────────────────────────────────────────
+
+  describe('submit authority', () => {
+    const ORGANIZER = { ...PLAYER, playerId: 'organizer', name: 'Org' };
+
+    beforeEach(() => {
+      vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
+      vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
+      vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
+      vi.mocked(getPlayerByPsUsername).mockImplementation(async (username: string) => {
+        if (username === 'alice_ps') return { id: 'p1', name: 'Alice' } as never;
+        if (username === 'bob_ps') return { id: 'p2', name: 'Bob' } as never;
+        return null;
+      });
+      vi.mocked(recordGameResult).mockResolvedValue({ game_id: 'g1', bo_reached: false } as never);
+    });
+
+    it('passes admin authority for a resource admin of the match tournament or league who does not play', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue(ORGANIZER);
+      vi.mocked(isResourceAdminFor).mockResolvedValue(true);
+
+      const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+
+      expect(res.status).toBe(200);
+      expect(isResourceAdminFor).toHaveBeenCalledWith('organizer', 'tournament', 't1');
+      expect(vi.mocked(recordGameResult).mock.calls[0][0]).toMatchObject({ submitter_id: 'organizer', is_admin: true });
+    });
+
+    it('passes no admin authority for a non-participant who administers nothing here', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue(ORGANIZER);
+
+      await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+
+      expect(vi.mocked(recordGameResult).mock.calls[0][0]).toMatchObject({ is_admin: false });
+    });
+
+    it('does not look up resource roles for a participant', async () => {
+      await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+
+      expect(isResourceAdminFor).not.toHaveBeenCalled();
+    });
   });
 
   // ── Validation ────────────────────────────────────────────

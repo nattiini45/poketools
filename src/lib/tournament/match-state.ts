@@ -11,9 +11,12 @@ import type { MatchStatus } from '@/types/match';
  * pending_confirmation → disputed (player flags)
  * disputed → completed (admin manual override)
  *
- * Admin-only backward moves (ADMIN_TRANSITIONS): any state back to scheduled
- * (reset), and completed / pending_confirmation / disputed back to in_progress
- * (reopen: games are kept, only the result is withdrawn).
+ * Admin-only moves (ADMIN_TRANSITIONS): any state back to scheduled (reset),
+ * completed / pending_confirmation / disputed back to in_progress (reopen:
+ * games are kept, only the result is withdrawn), and the forward overrides
+ * scheduled / in_progress → completed (a result an admin sets directly: a
+ * no-show, a dropped player, or a result agreed outside the app; no
+ * confirmation step, the admin's decision is the confirmation).
  */
 
 const VALID_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
@@ -24,9 +27,9 @@ const VALID_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
   disputed: ['completed'],
 };
 
-/** Admin-only backward transitions for resetting / correcting match state. */
+/** Admin-only transitions: resetting, reopening and settling a match. */
 const ADMIN_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
-  scheduled: [],
+  scheduled: ['completed'],
   in_progress: ['scheduled', 'completed', 'disputed'],
   pending_confirmation: ['in_progress', 'scheduled'],
   completed: ['scheduled', 'in_progress'],
@@ -121,6 +124,13 @@ export function validateTransition(
   const adminOnly =
     !nextStates(VALID_TRANSITIONS, from).includes(to) && nextStates(ADMIN_TRANSITIONS, from).includes(to);
   if (adminOnly && !context.is_admin) {
+    if (from === 'scheduled' && to === 'completed') {
+      return {
+        valid: false,
+        error: 'Only admins can settle a match that has not been played',
+        code: 'match_settle_admin_only',
+      };
+    }
     // Forward overrides (in_progress -> completed / disputed) skip the
     // confirmation step; every other admin-only move resets the match.
     if (to === 'completed' || to === 'disputed') {
