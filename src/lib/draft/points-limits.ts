@@ -11,3 +11,9 @@
  * accepted bid. Live budgets are orders of magnitude below it.
  */
 export const LEGACY_POINTS_MAX = 100_000;
+
+/**
+ * Rounds of a legacy pool (`draft_pools.team_size_exact` with `team_size_mode = 'exact'`): what the create body and the
+ * admin form accept, and the count a pool without a stored one plays (`getDefaultRounds`).
+ */
+export const LEGACY_ROUNDS = { default: 11, min: 1, max: 50 } as const;

@@ -261,7 +261,8 @@ async function createQueuePool(
  * → `201 { pool_id }`. A body in the legacy shape (`draft_type`, `budget`) for
  * an EPB season creates the initial queue pool with that budget; a `default_point_cost`
  * in it is refused (`400 validation_failed`), since point-buy seasons price from their list.
- * Other seasons take the legacy path: `{ season_id, draft_type, pick_order?, budget?, default_point_cost? }`
+ * Other seasons take the legacy path: `{ season_id, draft_type, pick_order?, budget?, default_point_cost?, rounds? }`
+ * (`rounds`, 1 to 50, is the pool's exact team size and 11 when omitted; a point-buy season maps it to the queue roster size)
  * (`default_point_cost` only for `budget` pools; on any other type it is `400 validation_failed`).
  * `draft_type` is the pricing, `pick_order` the turn order (omitted = snake for snake, free otherwise);
  * an auction with a non-free order is `400 draft_auction_order_not_free`.
@@ -301,10 +302,15 @@ export async function POST(request: NextRequest) {
               { status: 400 }
             );
           }
+          // `rounds` is the queue pool's roster size (an out-of-range value is `INVALID_CONFIG` on `roster_size`).
+          const config: DraftConfigInput = {
+            ...(legacy.budget != null && legacy.budget >= 1 ? { budget: legacy.budget } : {}),
+            ...(legacy.rounds !== undefined ? { roster_size: legacy.rounds } : {}),
+          };
           input = {
             season_id: legacy.season_id,
             kind: 'initial',
-            config: legacy.budget != null && legacy.budget >= 1 ? { budget: legacy.budget } : undefined,
+            config: Object.keys(config).length > 0 ? config : undefined,
           };
         }
         const group = resolveCreateGroup(await getSeasonGroups(seasonId), input.season_group_id);
@@ -345,7 +351,7 @@ export async function POST(request: NextRequest) {
     // Fixed costs in a turn order: a player who cannot afford their remaining rounds stalls everyone, so a
     // budget below rounds × default price (what an unpriced Pokémon costs) could never finish. Pool entries
     // are added after creation, so only the default price is checked here.
-    const rounds = getDefaultRounds(body.draft_type);
+    const rounds = body.rounds ?? getDefaultRounds(body.draft_type);
     if (
       body.draft_type === 'budget' && isTurnEnforced(pickOrder) && body.budget != null &&
       body.default_point_cost != null && body.budget < rounds * body.default_point_cost
@@ -391,6 +397,8 @@ export async function POST(request: NextRequest) {
       pick_order: pickOrder,
       point_budget: body.budget ?? null,
       default_point_cost: body.default_point_cost ?? null,
+      // Without `rounds` the pool keeps no stored team size and plays the engine default.
+      ...(body.rounds !== undefined ? { team_size_mode: 'exact' as const, team_size_exact: body.rounds } : {}),
     });
     // The league page's cached `hasDraftPool` flips now, not when the entry ages out (D37).
     expireDraftReads(body.season_id);

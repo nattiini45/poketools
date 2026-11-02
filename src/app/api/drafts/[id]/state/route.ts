@@ -56,6 +56,8 @@ interface DraftStateResponse {
   stalled_picker: PickerStall | null;
   next_pick_number: number;
   current_round: number;
+  /** Rounds every trainer drafts (the pool's exact team size, else the engine default). */
+  total_rounds: number;
   taken_pokemon: string[];
   /**
    * EPB: drafted line identities (base|stage3) from evolution trackers.
@@ -275,6 +277,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const response: DraftStateResponse = {
       ...state,
       picks: toPublicPicks(state.picks),
+      total_rounds: totalRounds,
       taken_pokemon: Array.from(state.taken_pokemon),
       stalled_picker: stalledPicker,
     };

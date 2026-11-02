@@ -382,7 +382,10 @@ One row per Pokémon per player per game: unique index `battle_stats_game_player
 > Every order caps a player at the round count (`draft_roster_full`; free order has no turn to do it).
 > `POST /api/drafts` takes an optional `pick_order` (omitted = snake for snake pricing, free otherwise), refuses an auction in
 > a turn order (`draft_auction_order_not_free`), and refuses fixed prices in a turn order when the budget is below rounds ×
-> default price (`draft_budget_below_rounds`). In free order the board lets participants pick for themselves (auctions:
+> default price (`draft_budget_below_rounds`). Its optional `rounds` (1 to 50, 11 when omitted) is stored as the pool's exact
+> team size (`team_size_mode = 'exact'`, `team_size_exact`) and is the round count both of the picks cap and of that budget
+> check; a point-buy season maps it to the queue pool's roster size (`INVALID_CONFIG` on `roster_size` above 20). `name` and
+> `pool_template_id` are not fields of a pool: a body that carries one answers 400 `validation_failed` naming it. In free order the board lets participants pick for themselves (auctions:
 > admins only) and admins choose whose pick they enter. The queue engine ignores `pick_order`; its pools keep the default.
 
 ### 4.12 Draft Picks
@@ -2403,7 +2406,7 @@ These are facts about the current engine and app. `engine_support` is a constant
 - **Discord and social posts cannot be recalled or suppressed;** the card says exactly what will post and to how many channels.
 - **A ruleset edit never changes a running league** (pinned versions, §4.7); moving a pin is its own confirmed operation. A private ruleset pinned by a league becomes publicly readable.
 - **No signup, registration or check-in flow exists** for leagues or standalone tournaments.
-- **Draft numbers.** The legacy draft engine's roster size is fixed at 11; the queue engine has a configurable roster size. No per-Pokémon point table or tier-to-points data exists in the repository. The assistant reads tiers from the pinned format catalog, installed dex data, cached usage statistics and (P4) `smogon_fetch`; for point tables it asks how to proceed (a prepared file, one by one, propose points, or propose tiers) and never invents tier tables, budgets or token rules. Point-buy numbers are ordinary editable values; the assistant supports the current path (a bound point-buy list version, format rules, pool entries, tier limits) and, once it exists, the draft economy in Ruleset Studio, asking per league which to use (default: the one the league already uses).
+- **Draft numbers.** The legacy draft engine plays 11 rounds by default (the league draft panel sets 1 to 50 when it creates the pool; a plan cannot); the queue engine has a configurable roster size. No per-Pokémon point table or tier-to-points data exists in the repository. The assistant reads tiers from the pinned format catalog, installed dex data, cached usage statistics and (P4) `smogon_fetch`; for point tables it asks how to proceed (a prepared file, one by one, propose points, or propose tiers) and never invents tier tables, budgets or token rules. Point-buy numbers are ordinary editable values; the assistant supports the current path (a bound point-buy list version, format rules, pool entries, tier limits) and, once it exists, the draft economy in Ruleset Studio, asking per league which to use (default: the one the league already uses).
 
 ### 18.14 Internationalization
 

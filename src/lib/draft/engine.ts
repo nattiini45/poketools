@@ -8,6 +8,7 @@ import type {
 } from '@/types/draft';
 import { toID } from '@/lib/pkmn/i18n/id';
 import { minCompletion } from './budget';
+import { LEGACY_ROUNDS } from './points-limits';
 import { isTurnEnforced } from './pool-format';
 
 // ─── Snake Draft Order ──────────────────────────────────────────────
@@ -374,16 +375,9 @@ export function isDraftComplete(
  * EPB seasons override with format_rules.draft_picks (default 9).
  * This can be overridden by the admin at pool creation.
  */
-export function getDefaultRounds(draftType: DraftType): number {
-  switch (draftType) {
-    case 'snake':
-      return 11; // Standard draft league roster size
-    case 'auction':
-    case 'budget':
-      return 11;
-    default:
-      return 11;
-  }
+export function getDefaultRounds(_draftType: DraftType): number {
+  // The same standard roster size for every pricing.
+  return LEGACY_ROUNDS.default;
 }
 
 /** Resolve total draft rounds, preferring explicit EPB/format overrides. */

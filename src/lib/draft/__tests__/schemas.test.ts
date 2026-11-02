@@ -281,6 +281,26 @@ describe('query schemas', () => {
     expect(draftPoolCreateSchema.safeParse({ ...pool, budget: 10, default_point_cost: null }).success).toBe(true);
   });
 
+  it('legacy pool create: rounds is a whole number from 1 to 50, omitted by default', () => {
+    const pool = { season_id: U1, draft_type: 'snake' };
+    expect(draftPoolCreateSchema.parse(pool)).not.toHaveProperty('rounds');
+    for (const rounds of [1, 6, 11, 50]) expect(draftPoolCreateSchema.parse({ ...pool, rounds })).toMatchObject({ rounds });
+    for (const rounds of [0, 51, -1, 2.5, '6', null]) expect(draftPoolCreateSchema.safeParse({ ...pool, rounds }).success).toBe(false);
+  });
+
+  it('legacy pool create: name and pool_template_id are refused naming the field, never stripped', () => {
+    const pool = { season_id: U1, draft_type: 'snake' };
+    const named = draftPoolCreateSchema.safeParse({ ...pool, name: 'Autumn draft' });
+    expect(named.success).toBe(false);
+    expect(formatZodErrors(named.error!)).toBe('name: is not supported: a draft pool has no name');
+    const templated = draftPoolCreateSchema.safeParse({ ...pool, pool_template_id: U1 });
+    expect(templated.success).toBe(false);
+    expect(formatZodErrors(templated.error!)).toBe('pool_template_id: is not supported: draft pools are not created from a template');
+    expect(draftPoolCreateSchema.safeParse({ ...pool, name: null }).success).toBe(false);
+    // Other keys keep being ignored, so older clients and plan bodies are not refused for them.
+    expect(draftPoolCreateSchema.safeParse({ ...pool, something_else: 1 }).success).toBe(true);
+  });
+
   it('cron limit 1..100', () => {
     expect(draftTicksQuerySchema.parse({ limit: '25' })).toEqual({ limit: 25 });
     expect(draftTicksQuerySchema.safeParse({ limit: '0' }).success).toBe(false);

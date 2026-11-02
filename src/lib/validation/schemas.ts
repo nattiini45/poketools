@@ -13,7 +13,7 @@
  */
 import { z } from 'zod';
 import { LOCALES } from '@/i18n/config';
-import { LEGACY_POINTS_MAX } from '@/lib/draft/points-limits';
+import { LEGACY_POINTS_MAX, LEGACY_ROUNDS } from '@/lib/draft/points-limits';
 import { formatPack } from '@/lib/format-pack';
 import type { BroadcastMomentType } from '@/types/broadcast';
 import {
@@ -1246,12 +1246,14 @@ export const draftPoolCreateSchema = z.object({
    * working. The route refuses auction with a non-free order (`draft_auction_order_not_free`).
    */
   pick_order: draftPickOrderSchema.optional(),
-  name: z.string().trim().min(1).max(FIELD_LIMITS.TITLE).optional(),
+  /** Refused, not stripped: a pool has no name and no template, and silently dropping them hid that from the client. */
+  name: z.undefined({ error: 'is not supported: a draft pool has no name' }).optional(),
   budget: z.number().int().min(0).max(LEGACY_POINTS_MAX).optional(),
   /** Legacy budget pools: the price of an entry without its own `point_cost` (null/omitted = 0). */
   default_point_cost: legacyPointCost,
-  rounds: z.number().int().min(1).max(50).optional(),
-  pool_template_id: uuid.optional(),
+  /** Legacy pools: the rounds every trainer drafts (omitted = the engine default). Point-buy leagues map it to the roster size. */
+  rounds: z.number().int().min(LEGACY_ROUNDS.min).max(LEGACY_ROUNDS.max).optional(),
+  pool_template_id: z.undefined({ error: 'is not supported: draft pools are not created from a template' }).optional(),
 }).superRefine((body, ctx) => {
   // Only budget pools price entries; elsewhere a default price would still leak into
   // point estimates (the teambuilder folds it in whenever the pool has a budget).

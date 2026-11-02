@@ -140,6 +140,9 @@ export default {
       one: 'Creates: {order}, {pricing}, {count} point per player.',
       other: 'Creates: {order}, {pricing}, {count} points per player.',
     },
+    /** Legacy pools: the pool's 	eam_size_exact. */
+    rounds: 'Rounds',
+    roundsHint: 'How many Pokémon each player drafts, from {min} to {max}. The standard is {standard}.',
     pointBudget: 'Point Budget per Player',
     /** Budget drafts only: the pool's `default_point_cost`. */
     defaultPrice: 'Default Price (optional)',
@@ -149,6 +152,7 @@ export default {
       budgetInvalid: 'Enter a whole number from 1 to {max}.',
       priceInvalid: 'Enter a whole number from 0 to {max}, or leave the field empty.',
       priceAboveBudget: 'The default price cannot be higher than the point budget ({budget} pts).',
+      roundsInvalid: 'Enter a whole number from {min} to {max}.',
     },
     createFailed: 'Failed to create draft pool',
   },

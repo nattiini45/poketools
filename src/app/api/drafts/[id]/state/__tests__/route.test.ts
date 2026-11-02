@@ -161,6 +161,8 @@ describe('GET /api/drafts/[id]/state', () => {
     expect(res.status).toBe(200);
     expect(json.success).toBe(true);
     expect(json.data.taken_pokemon).toEqual(['Pikachu']);
+    // The resolved round count, so a board never has to assume 11.
+    expect(json.data.total_rounds).toBe(6);
     expect(json.data.current_picker).toBe('p1');
     expect(json.data.next_pick_number).toBe(1);
   });
