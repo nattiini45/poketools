@@ -3,7 +3,7 @@
 > These wiki pages are a hand-maintained, navigable summary of the repository. When they disagree with the code, `AGENTS.md` or `docs/poketools-spec.md`, those win; update the page in the same change.
 
 > Competitive Pokémon league and tournament management platform.
-> Built with Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 3, Supabase (Postgres), and NextAuth v5 (Discord OAuth). Targets Vercel; any Next.js 16 host works.
+> Built with Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 3, Supabase (Postgres), and NextAuth v5 (email/password, with optional Discord OAuth). Targets Vercel; any Next.js 16 host works.
 
 ## What PokéTools Does
 
@@ -27,7 +27,7 @@ PokéTools is a full-featured platform for managing competitive Pokémon leagues
 | Frontend | React 19, Tailwind CSS 3 |
 | Language | TypeScript (strict, no `any`) |
 | Database | Supabase (Postgres) via `@supabase/supabase-js` |
-| Auth | NextAuth v5 — Discord OAuth + email/password |
+| Auth | NextAuth v5 — email/password, plus Discord OAuth when configured |
 | AI | Anthropic SDK + Vercel AI SDK v6, OpenAI-compatible providers |
 | Pokémon Data | `@pkmn/data`, `@pkmn/dex`, `@pkmn/protocol`, `@pkmn/client`, `@smogon/calc` |
 | Hosting | Vercel (or any Next.js host) |
@@ -35,20 +35,22 @@ PokéTools is a full-featured platform for managing competitive Pokémon leagues
 
 ## Quick Start
 
-The repository [README](../README.md) is the authoritative setup guide (prerequisites, environment variables, first admin, scheduled jobs). The short form for local development, which needs Node.js `^22.22.2 || ^24.15.0` (`.nvmrc` pins the version CI runs; `npm install` refuses anything else), Docker for the local Supabase stack and your own Discord application:
+The repository [README](../README.md) is the authoritative setup guide (prerequisites, environment variables, first admin, scheduled jobs). The short form for local development, which needs Node.js `^22.22.2 || ^24.15.0` (`.nvmrc` pins the version CI runs; `npm install` refuses anything else) and Docker for the local Supabase stack (a Discord application is optional):
 
 ```bash
 npm install
 cp .env.example .env.local      # then fill in the values (README, "Environment variables")
 npx supabase start              # local Postgres, Auth, Storage and REST API
 npx supabase db reset           # apply supabase/migrations/ to the local stack
+npm run dev:seed                # a local admin, the standard rulesets and one demo league (safe to run again)
 npm run dev                     # http://localhost:3000
 ```
 
 - `npx supabase status -o env` prints the local values: `API_URL` goes into `NEXT_PUBLIC_SUPABASE_URL`, `ANON_KEY` into `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SERVICE_ROLE_KEY` into `SUPABASE_SERVICE_ROLE_KEY` (see `docs/supabase-environments.md`).
-- Add `http://localhost:3000/api/auth/callback/discord` as an OAuth2 redirect URL of your Discord application.
+- Zero-setup path, no Discord: leave `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` blank and sign in at `/auth/signin` as the seeded admin `local-admin@poketools.test` (password `poketools-local-admin`, local stack only). A new email/password sign-up must confirm its address: the confirmation mail is in Mailpit at http://127.0.0.1:54324.
+- Only if you turn Discord on: add `http://localhost:3000/api/auth/callback/discord` as an OAuth2 redirect URL of your Discord application.
 - The README's "Required" table lists every variable the core flows need; `.env.example` holds the full surface. An empty value counts as missing: the server env schema (`src/lib/env.ts`) names every missing or invalid key of a group at once. The four variables the build itself needs are the CI set: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`. Discord OAuth is optional (`DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` both set, or neither): without it the sign-in page offers email/password only, and `npm run dev:seed` gives a local checkout a seeded admin.
-- First admin and the default rulesets: README, "First run".
+- First admin and the default rulesets: `npm run dev:seed` creates both on a local stack; anywhere else use `POST /api/bootstrap` (README, "First run"). `SUPERADMIN_DISCORD_ID` is not the way to get a first admin, and `SUPERADMIN_EMAIL` alone never makes an email/password account superadmin.
 - A fresh clone runs the neutral example format pack, whose numbers are placeholders: README, "Format packs", and `docs/format-packs.md`.
 
 ## Documentation Map

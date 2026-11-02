@@ -23,7 +23,7 @@ Competitive Pokémon league and tournament management platform. Built with Next.
 - Node.js `^22.22.2 || ^24.15.0` (`.nvmrc` pins the version CI runs; `npm install` refuses an unsupported Node)
 - npm
 - Your own [Supabase](https://supabase.com) project, or the Supabase CLI plus Docker for a local stack
-- Your own [Discord application](https://discord.com/developers/applications) for OAuth sign-in
+- Optional: your own [Discord application](https://discord.com/developers/applications) for OAuth sign-in. Without one, players sign in with email and password
 
 ## Quick start (local development)
 
@@ -32,8 +32,11 @@ npm install
 cp .env.example .env.local      # then fill in the values below
 npx supabase start              # local Postgres, Auth, Storage and REST API
 npx supabase db reset           # apply supabase/migrations/ to the local stack
+npm run dev:seed                # a local admin, the standard rulesets and one demo league (safe to run again)
 npm run dev                     # http://localhost:3000
 ```
+
+This needs no Discord application: leave `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` blank and sign in at `/auth/signin` as the seeded admin (`local-admin@poketools.test`, password `poketools-local-admin`; the seed refuses any Supabase URL that is not the loopback interface). New email/password sign-ups must confirm their address: the local stack catches the mail in Mailpit at http://127.0.0.1:54324.
 
 `npx supabase status -o env` prints the local API URL and keys. The full, current env surface lives in `.env.example`; [docs/supabase-environments.md](docs/supabase-environments.md) covers the local and hosted Supabase options in more detail.
 
@@ -86,7 +89,7 @@ Recommended:
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | Your Discord OAuth application. Set both or neither: neither means email/password sign-in only, exactly one fails at startup |
 | `NEXT_PUBLIC_SITE_URL` | Public origin used for canonical and Open Graph URLs (and as the share-link fallback). Canonical URLs fall back to `NEXTAUTH_URL`, then Vercel's production domain (`VERCEL_PROJECT_PRODUCTION_URL`), then `http://localhost:3000`. Production needs an https origin; a non-https value (other than localhost) is ignored. |
 | `BLUESKY_SERVICE_HOST_ALLOWLIST` | Optional. Extra Bluesky server hosts (comma-separated, besides `bsky.social`) that a Bluesky integration's `service_url` may name; unset means `bsky.social` only |
-| `SUPERADMIN_DISCORD_ID` / `SUPERADMIN_EMAIL` | The instance operator's Discord user ID, and optionally the email of their linked email login; the Discord account is treated as admin on every request, the email login only while its player is linked to that Discord ID |
+| `SUPERADMIN_DISCORD_ID` / `SUPERADMIN_EMAIL` | Optional, and only for a deployment that uses Discord: the instance operator's Discord user ID, and optionally the email of their linked email login. The Discord account is treated as admin on every request; the email login only while its player is linked to that Discord ID. `SUPERADMIN_EMAIL` alone grants nothing, and neither variable is how you get a first admin (see "First run") |
 | `FORMAT_PACK` | Which format pack the build uses: unset (your own pack when present, else the example pack), `example` or `private`. Set `private` in Production, so a build that lost your pack fails instead of shipping the example rules. See "Format packs" below. |
 
 Optional features (AI analysis, avatar generation and moderation, social publishing, the 3D world asset bucket, feature flags) have their own variables, all documented in `.env.example`. Runtime flags are described in [docs/feature-flags.md](docs/feature-flags.md).
@@ -97,8 +100,8 @@ Optional features (AI analysis, avatar generation and moderation, social publish
 
 ### 4. First run
 
-1. Start the app and sign in once with Discord.
-2. While no admin exists yet, make that signed-in player the first admin by sending `POST /api/bootstrap` with the JSON body `{ "secret": "<BOOTSTRAP_SECRET>" }` (for example with `fetch` from the browser console on your deployment), then sign out and back in. The route promotes your existing player row and turns itself off for good as soon as any admin exists.
+1. Start the app and sign in once. Discord is optional: sign up with email and password (confirm the address from the mail; locally it is in Mailpit at http://127.0.0.1:54324), or use Discord when you configured it.
+2. Get the first admin in one of two ways. On a local stack, `npm run dev:seed` creates one (`local-admin@poketools.test`) together with the rulesets and a demo league, so you can skip the rest of this step and step 3. Anywhere else, while no admin exists yet, make the signed-in player the first admin by sending `POST /api/bootstrap` with the JSON body `{ "secret": "<BOOTSTRAP_SECRET>" }` (for example with `fetch` from the browser console on your deployment), then sign out and back in. The route promotes your existing player row, whichever sign-in method created it, and turns itself off for good as soon as any admin exists.
 3. Seed the site rulesets with `POST /api/seed-rulesets` (one shared ruleset per standard Smogon format, each published as version 1; the Ruleset Studio, [docs/ruleset-studio.md](docs/ruleset-studio.md), is where they are edited afterwards). As an admin, no body is needed. Before any admin exists, set `BOOTSTRAP_MODE_ENABLED=true` and send `{ "secret": "<BOOTSTRAP_SECRET>" }`; set it back to `false` afterwards.
 
 ### 5. Scheduled jobs
