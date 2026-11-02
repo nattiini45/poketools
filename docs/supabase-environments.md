@@ -22,6 +22,18 @@ Put the printed values into `.env.local`:
 
 `supabase/config.toml` holds the local stack's settings. It contains no hosted-project values.
 
+### Zero-setup sign-in (no Discord)
+
+Discord is optional. Leave `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` blank (set both or neither) and the sign-in page offers email and password only. On the local stack:
+
+```bash
+npm run dev:seed   # a local admin (local-admin@poketools.test, password poketools-local-admin), the standard rulesets, one demo league; safe to run again
+npm run dev
+```
+
+- The seed is the first-admin route on a local stack. On a hosted project (or a stack you did not seed) use `POST /api/bootstrap` with `BOOTSTRAP_SECRET` instead (README, "First run"). Neither route involves `SUPERADMIN_DISCORD_ID`, and `SUPERADMIN_EMAIL` alone never makes an email/password account superadmin (`docs/auth-email-password.md`).
+- The local stack requires email confirmation (`enable_confirmations = true`): a new email/password sign-up gets its confirmation mail in Mailpit at http://127.0.0.1:54324. The seed refuses any Supabase URL that is not the loopback interface and never reads `.env`.
+
 If `.env.local` points at a hosted project, you can still run the dev server against the local stack without editing it:
 the `dev-localdb` configuration in `.claude/launch.json` (or
 `node --require ./.claude/local-db.cjs node_modules/next/dist/bin/next dev --port 3010`) overrides the three Supabase

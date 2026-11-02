@@ -21,6 +21,8 @@ npm run dev
 
 Then sign in at `/auth/signin` as `local-admin@poketools.test` with the password the seed prints (`poketools-local-admin`). Those credentials open nothing but a local stack: the seed refuses any Supabase URL that is not the loopback interface and never reads `.env`. The local stack requires email confirmation for new sign-ups; read the confirmation link in Mailpit at http://127.0.0.1:54324.
 
+The seeded account is the first admin. Without the seed, use `POST /api/bootstrap` with `BOOTSTRAP_SECRET` (README, "First run"). `SUPERADMIN_DISCORD_ID` is not needed for either, and `SUPERADMIN_EMAIL` alone never makes an email/password account superadmin.
+
 ## Development Workflow
 
 1. Create a feature branch from `main`
@@ -40,7 +42,7 @@ Never commit secrets, real user data, or values from your own deployment (Supaba
 
 ## End-to-end tests
 
-`npm run test:e2e` runs a Playwright smoke suite in Chromium (`e2e/`): the public pages, email sign-up through the Mailpit confirmation mail and sign-in/out, a player reporting a result that the opponent confirms (standings move), the admin match page and its history, a broadcast overlay without the navigation bar, and the German language switch. Every page fails the test on an uncaught error or a hydration warning, and the suite refuses any run that touches a host other than the loopback interface or any Supabase Storage bucket object.
+`npm run test:e2e` runs a Playwright smoke suite in Chromium (`e2e/`): the public pages, email sign-up through the Mailpit confirmation mail and sign-in/out, a player reporting a result that the opponent confirms (standings move), the admin match page and its history, a broadcast overlay without the navigation bar, and the German language switch. Every page fails the test on an uncaught error, any console error (there is no allowlist: fix the cause) or a hydration warning, and the suite refuses any run that touches a host other than the loopback interface or any Supabase Storage bucket object.
 
 Prerequisites, all local (nothing reaches a hosted Supabase project):
 

@@ -6,6 +6,12 @@ import { assertNoBucketEgress, assetOriginSummary } from '../../scripts/lib/look
 const HYDRATION_PROBLEM =
   /hydration|did not match|text content does not match|Minified React error #(418|419|422|423|425)\b/i;
 
+/** A 1x1 transparent PNG. */
+const BLANK_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const isLocal = (rawUrl: string): boolean => {
   const { protocol, hostname } = new URL(rawUrl);
@@ -22,9 +28,10 @@ interface Watcher {
 }
 
 /**
- * Every page of a test is watched, and the test fails when one of them throws an uncaught error, logs a hydration
- * warning, or reaches a host outside the machine. Requests to a host that is not loopback are aborted (the suite is
- * hermetic); one to Supabase, or any request for a Storage bucket object, fails the test.
+ * Every page of a test is watched, and the test fails when one of them throws an uncaught error, logs ANY console
+ * error (no allowlist), logs a hydration warning, or reaches a host outside the machine. Requests to a host that is
+ * not loopback never leave it (the suite is hermetic): images get a blank stand-in, anything else is aborted; one to
+ * Supabase, or any request for a Storage bucket object, fails the test.
  */
 export const test = base.extend<{ watcher: Watcher; page: Page; newPage: () => Promise<Page> }>({
   watcher: async ({ browser, baseURL }, use, testInfo) => {
@@ -36,15 +43,27 @@ export const test = base.extend<{ watcher: Watcher; page: Page; newPage: () => P
       await context.route('**/*', (route) => {
         const url = route.request().url();
         if (isLocal(url)) return route.continue();
-        if (/\.supabase\.(co|in)$/i.test(new URL(url).hostname)) problems.push(`request to Supabase: ${url}`);
+        if (/\.supabase\.(co|in)$/i.test(new URL(url).hostname)) {
+          problems.push(`request to Supabase: ${url}`);
+          return route.abort();
+        }
+        // Sprites that production serves from public CDNs (the CSP allows them) are answered locally with a blank
+        // image: an aborted request would make the browser log a console error that says nothing about the app.
+        if (route.request().resourceType() === 'image') {
+          return route.fulfill({ status: 200, contentType: 'image/png', body: BLANK_PNG });
+        }
         return route.abort();
       });
     };
     const watch = (page: Page) => {
       page.on('pageerror', (error) => problems.push(`uncaught page error: ${error.message}`));
       page.on('console', (message) => {
-        if ((message.type() === 'error' || message.type() === 'warning') && HYDRATION_PROBLEM.test(message.text())) {
-          problems.push(`hydration problem: ${message.text().slice(0, 300)}`);
+        const text = message.text();
+        if (message.type() === 'error') {
+          const where = message.location().url;
+          problems.push(`console error: ${text.slice(0, 300)}${where ? ` (${where})` : ''}`);
+        } else if (message.type() === 'warning' && HYDRATION_PROBLEM.test(text)) {
+          problems.push(`hydration problem: ${text.slice(0, 300)}`);
         }
       });
       page.on('request', (request) => requests.push({ url: request.url() }));

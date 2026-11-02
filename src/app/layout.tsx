@@ -8,6 +8,7 @@ import PwaRegistrar from "@/components/shared/PwaRegistrar";
 import SitePaletteGuard from "@/components/shared/SitePaletteGuard";
 import { SITE_PALETTE_PREPAINT_SCRIPT } from "@/lib/design/site-palette-script";
 import { Analytics } from '@vercel/analytics/next';
+import { isVercelDeployment } from "@/lib/vercel-deployment";
 import { I18nProvider } from "@/i18n/client";
 import { getI18nProviderProps, getT } from "@/i18n/server";
 import { metaMessages } from "@/i18n/messages/meta";
@@ -103,7 +104,7 @@ export default async function RootLayout({
             </SessionProvider>
           </ThemeProvider>
         </I18nProvider>
-        <Analytics />
+        {isVercelDeployment() ? <Analytics /> : null}
       </body>
     </html>
   );

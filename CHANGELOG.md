@@ -83,6 +83,9 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Fixed
 
+- Vercel Analytics is rendered only on a Vercel deployment (`VERCEL=1`). Anywhere else (a local `next start`, CI, the
+  e2e suite) its `/_vercel/insights/script.js` is a 404 and every page logged console errors. Production behaviour is
+  unchanged.
 - `.claude/local-assets.cjs` refused every `next start` of a local build: it took the placeholder URL in the sprite-base
   error message (`https://<project>.supabase.co/...`) for a baked Storage bucket. It now needs a real host.
 - `scripts/route-manifest.mjs` held a raw NUL byte, so git treated it as binary and its diff was hidden; a NUL byte in
