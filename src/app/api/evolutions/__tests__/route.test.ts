@@ -31,6 +31,7 @@ vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({
 
 import { GET, POST } from '@/app/api/evolutions/route';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { toID } from '@/lib/pkmn/i18n/id';
 import { requireAuth, requireResourceAdmin } from '@/lib/auth/helpers';
 import {
   getTierList,
@@ -219,26 +220,136 @@ describe('POST /api/evolutions', () => {
     );
   });
 
-  it('bulk create still saves the tiers when a concurrent writer lists a Pokémon first, and writes the entries still missing', async () => {
-    vi.mocked(bulkCreateTiers).mockResolvedValue([{ id: 'tier-1' }, { id: 'tier-2' }] as never);
-    vi.mocked(getPoolEntries)
-      .mockResolvedValueOnce([] as never)
-      .mockResolvedValueOnce([{ id: 'e1', pokemon_name: 'pichu' }] as never);
-    vi.mocked(bulkCreatePoolEntries)
-      .mockRejectedValueOnce(new UserFacingError('Pichu is already in the draft pool', { code: 'pool_entry_duplicate_name', status: 409 }))
-      .mockResolvedValueOnce([] as never);
+  describe('bulk auto-sync under concurrent writers', () => {
+    const SEASON = '00000000-0000-4000-a000-000000000001';
+    const duplicate = (name: string) =>
+      new UserFacingError(`${name} is already in the draft pool`, { code: 'pool_entry_duplicate_name', status: 409 });
     const tier = (base_pokemon: string) => ({
-      season_id: '00000000-0000-4000-a000-000000000001',
+      season_id: SEASON,
       base_pokemon,
       stage2_pokemon: 'X',
       stage2_kos: 3,
     });
+    const post = (...bases: string[]) =>
+      POST({ json: vi.fn().mockResolvedValue(bases.map(tier)) } as unknown as NextRequest);
 
-    const response = await POST({ json: vi.fn().mockResolvedValue([tier('Pichu'), tier('Eevee')]) } as unknown as NextRequest);
+    // The pool list as the database keeps it: one row per folded name, a batch insert all-or-nothing, and a
+    // `racers` queue of other writers that list a Pokémon just before the nth write reaches the database.
+    let pool: string[];
+    let racers: Array<{ before: number; name: string }>;
+    let writes: number;
+    const listed = (name: string) => pool.some((p) => toID(p) === toID(name));
+    const arrive = () => {
+      writes += 1;
+      for (const racer of racers.filter((r) => r.before === writes)) if (!listed(racer.name)) pool.push(racer.name);
+    };
 
-    expect(response.status).toBe(201);
-    expect(vi.mocked(bulkCreatePoolEntries)).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(bulkCreatePoolEntries).mock.calls[1][0]).toEqual([expect.objectContaining({ pokemon_name: 'Eevee' })]);
+    beforeEach(() => {
+      pool = [];
+      racers = [];
+      writes = 0;
+      vi.mocked(bulkCreateTiers).mockResolvedValue([{ id: 'tier-1' }] as never);
+      vi.mocked(getPoolEntries).mockImplementation((async () =>
+        pool.map((pokemon_name, i) => ({ id: `e${i}`, pokemon_name }))) as never);
+      vi.mocked(bulkCreatePoolEntries).mockImplementation((async (entries: Array<{ pokemon_name: string }>) => {
+        arrive();
+        const clash = entries.find((e) => listed(e.pokemon_name));
+        if (clash) throw duplicate(clash.pokemon_name);
+        pool.push(...entries.map((e) => e.pokemon_name));
+        return [];
+      }) as never);
+      vi.mocked(createPoolEntry).mockImplementation((async (entry: { pokemon_name: string }) => {
+        arrive();
+        if (listed(entry.pokemon_name)) throw duplicate(entry.pokemon_name);
+        pool.push(entry.pokemon_name);
+        return {};
+      }) as never);
+    });
+
+    it('lists every committed tier when one writer lists a Pokémon first, and the entries still missing are written', async () => {
+      racers = [{ before: 1, name: 'pichu' }];
+
+      const response = await post('Pichu', 'Eevee');
+
+      expect(response.status).toBe(201);
+      expect(pool.map(toID).sort()).toEqual(['eevee', 'pichu']);
+    });
+
+    it('lists every committed tier when a second writer collides with another entry that is still missing', async () => {
+      // Writer 1 lists A before the batch; writer 2 lists B after the first retry read. C is the one nobody listed.
+      racers = [
+        { before: 1, name: 'Aipom' },
+        { before: 2, name: 'bulbasaur' },
+      ];
+
+      const response = await post('Aipom', 'Bulbasaur', 'Charmander');
+      const payload = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(payload.success).toBe(true);
+      expect(pool.map(toID).sort()).toEqual(['aipom', 'bulbasaur', 'charmander']);
+      expect(bulkCreateTiers).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports the entries it could not list instead of answering 201, with the tiers already saved', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      racers = [{ before: 1, name: 'Aipom' }];
+      const failure = new Error('connection reset');
+      vi.mocked(createPoolEntry).mockImplementation((async (entry: { pokemon_name: string }) => {
+        arrive();
+        if (entry.pokemon_name === 'Charmander') throw failure;
+        pool.push(entry.pokemon_name);
+        return {};
+      }) as never);
+
+      const response = await post('Aipom', 'Bulbasaur', 'Charmander');
+      const payload = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(payload.success).toBe(false);
+      expect(payload.code).toBe('evolution_pool_sync_incomplete');
+      expect(payload.params).toEqual({ pokemon: 'Charmander', count: 1 });
+      expect(payload.error).toContain('Charmander');
+      expect(bulkCreateTiers).toHaveBeenCalledTimes(1);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('pool entry'), failure);
+      error.mockRestore();
+    });
+
+    it('names every unresolved entry, and treats an entry that is gone again at the final read as unresolved', async () => {
+      racers = [{ before: 1, name: 'Aipom' }];
+      vi.mocked(createPoolEntry).mockImplementation((async (entry: { pokemon_name: string }) => {
+        arrive();
+        // Answers success, but another writer removes the row before the final read.
+        if (entry.pokemon_name !== 'Bulbasaur') pool.push(entry.pokemon_name);
+        return {};
+      }) as never);
+
+      const response = await post('Aipom', 'Bulbasaur', 'Charmander');
+      const payload = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(payload.code).toBe('evolution_pool_sync_incomplete');
+      expect(payload.params).toEqual({ pokemon: 'Bulbasaur', count: 1 });
+    });
+
+    it('does not retry per entry when the whole batch is written', async () => {
+      const response = await post('Aipom', 'Bulbasaur');
+
+      expect(response.status).toBe(201);
+      expect(bulkCreatePoolEntries).toHaveBeenCalledTimes(1);
+      expect(createPoolEntry).not.toHaveBeenCalled();
+    });
+
+    it('lets a failure of the first batch that is not a duplicate propagate as it did', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(bulkCreatePoolEntries).mockRejectedValue(new Error('statement timeout'));
+
+      const response = await post('Aipom');
+
+      expect(response.status).toBe(500);
+      expect(createPoolEntry).not.toHaveBeenCalled();
+      error.mockRestore();
+    });
   });
 
   it('single create answers 201 when a concurrent writer lists the Pokémon between the read and the write', async () => {

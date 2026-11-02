@@ -52,6 +52,8 @@ export default {
   evolution_tiers_mixed_season: 'All bulk tiers must share the same season_id',
   evolution_stage2_required: 'stage2_pokemon is required',
   evolution_tier_not_found: 'Evolution tier not found',
+  evolution_pool_sync_incomplete:
+    'The tiers were saved, but {pokemon} could not be added to the draft pool. Add them to the pool list by hand.',
 
   // Draft pool entries and templates
   pool_entries_empty: 'At least one entry is required',
