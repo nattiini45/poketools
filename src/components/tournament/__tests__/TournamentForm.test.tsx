@@ -26,6 +26,12 @@ const escapeRe = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g,
 const isDisabled = (tag: string): boolean => /\sdisabled(=""|\s|>)/.test(tag);
 
 /** The opening tag of the element with the given id. */
+/** The id the control labelled 	ext carries: the primitives generate it, so a test follows the label's or. */
+function idForLabel(html: string, text: string): string {
+  const match = html.match(new RegExp('<label for="([^"]+)"[^>]*>' + escapeRe(text) + '</label>'));
+  expect(match).not.toBeNull();
+  return match ? match[1] : '';
+}
 function tagWithId(html: string, id: string): string {
   const match = html.match(new RegExp(`<[a-z]+[^>]*id="${escapeRe(id)}"[^>]*>`));
   expect(match).not.toBeNull();
@@ -60,7 +66,7 @@ describe('TournamentForm create mode', () => {
 
   it('offers the odd best-of values from 1 to 15', () => {
     const html = renderToStaticMarkup(<TournamentForm rulesets={rulesets} onSubmit={noopSubmit} />);
-    expect(optionValues(html, 'best-of-(default)')).toEqual([1, 3, 5, 7, 9, 11, 13, 15]);
+    expect(optionValues(html, idForLabel(html, 'Best of (default)'))).toEqual([1, 3, 5, 7, 9, 11, 13, 15]);
   });
 });
 
@@ -87,7 +93,7 @@ describe('TournamentForm edit mode', () => {
     const html = renderToStaticMarkup(
       <TournamentForm rulesets={rulesets} onSubmit={noopSubmit} mode="edit" initialData={stored} />,
     );
-    expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(false);
+    expect(isDisabled(tagWithId(html, idForLabel(html, 'Bracket Type')))).toBe(false);
     expect(isDisabled(tagWithId(html, 'tournament-ruleset'))).toBe(false);
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(false);
     expect(html).not.toContain('Locked: the tournament has started.');
@@ -104,13 +110,13 @@ describe('TournamentForm edit mode', () => {
       />,
     );
 
-    expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(true);
+    expect(isDisabled(tagWithId(html, idForLabel(html, 'Bracket Type')))).toBe(true);
     expect(isDisabled(tagWithId(html, 'tournament-ruleset'))).toBe(true);
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(true);
     expect(html.match(/Locked: the tournament has started\./g)).toHaveLength(3);
     // Best-of, visibility and the name stay editable.
-    expect(isDisabled(tagWithId(html, 'best-of-(default)'))).toBe(false);
-    expect(isDisabled(tagWithId(html, 'team-visibility'))).toBe(false);
+    expect(isDisabled(tagWithId(html, idForLabel(html, 'Best of (default)')))).toBe(false);
+    expect(isDisabled(tagWithId(html, idForLabel(html, 'Team Visibility')))).toBe(false);
   });
 
   it('locks only the requested controls', () => {
@@ -124,7 +130,7 @@ describe('TournamentForm edit mode', () => {
       />,
     );
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(true);
-    expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(false);
+    expect(isDisabled(tagWithId(html, idForLabel(html, 'Bracket Type')))).toBe(false);
     expect(html.match(/Locked: the tournament has started\./g)).toHaveLength(1);
   });
 
@@ -137,7 +143,7 @@ describe('TournamentForm edit mode', () => {
         initialData={{ ...stored, best_of_default: 4 }}
       />,
     );
-    expect(optionValues(html, 'best-of-(default)')).toEqual([1, 3, 4, 5, 7, 9, 11, 13, 15]);
+    expect(optionValues(html, idForLabel(html, 'Best of (default)'))).toEqual([1, 3, 4, 5, 7, 9, 11, 13, 15]);
     expect(html).toMatch(/<option value="4" selected="">Bo4<\/option>/);
   });
 

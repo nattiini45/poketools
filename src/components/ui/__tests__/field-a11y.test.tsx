@@ -135,3 +135,10 @@ describe.each([
     expect(region?.textContent).toBe('Required');
   });
 });
+
+describe('caller aria-invalid', () => {
+  it('is kept when the field has no error of its own', () => {
+    render(<Input label="Rounds" aria-invalid />);
+    expect(screen.getByRole('textbox', { name: 'Rounds' }).getAttribute('aria-invalid')).toBe('true');
+  });
+});

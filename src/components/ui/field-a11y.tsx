@@ -12,10 +12,12 @@ interface FieldA11y {
   controlId: string;
   errorId: string;
   hintId: string;
-  /** Spread on the control AFTER the caller's props, so the merged `aria-describedby` wins. */
+  /**
+   * Spread on the control AFTER the caller's props (the control sets `id={controlId}` itself, first, so the attribute order stays stable), so the merged `aria-describedby` wins. `aria-invalid` is present
+   * only for an `error`: a caller that passes its own `aria-invalid` keeps it.
+   */
   controlProps: {
-    id: string;
-    "aria-invalid": true | undefined;
+    "aria-invalid"?: true;
     "aria-describedby": string | undefined;
   };
 }
@@ -36,8 +38,7 @@ export function useFieldA11y({ id, error, hint, describedBy }: FieldA11yInput): 
     errorId,
     hintId,
     controlProps: {
-      id: controlId,
-      "aria-invalid": error ? true : undefined,
+      ...(error ? { "aria-invalid": true as const } : {}),
       "aria-describedby": describedByIds || undefined,
     },
   };

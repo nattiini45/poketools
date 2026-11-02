@@ -33,6 +33,12 @@ const escapeRe = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g,
 /** Whether an opening tag carries the `disabled` attribute (not the `disabled:` utility classes). */
 const isDisabled = (tag: string): boolean => /\sdisabled(=""|\s|>)/.test(tag);
 
+/** The id the control labelled 	ext carries: the primitives generate it, so a test follows the label's or. */
+function idForLabel(html: string, text: string): string {
+  const match = html.match(new RegExp('<label for="([^"]+)"[^>]*>' + escapeRe(text) + '</label>'));
+  expect(match).not.toBeNull();
+  return match ? match[1] : '';
+}
 function tagWithId(html: string, id: string): string {
   const match = html.match(new RegExp(`<[a-z]+[^>]*id="${escapeRe(id)}"[^>]*>`));
   expect(match).not.toBeNull();
@@ -75,7 +81,7 @@ describe('TournamentSettingsEditor render', () => {
     const html = renderToStaticMarkup(
       <TournamentSettingsEditor tournament={tournament} rulesets={rulesets} started={false} />,
     );
-    expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(false);
+    expect(isDisabled(tagWithId(html, idForLabel(html, 'Bracket Type')))).toBe(false);
     expect(isDisabled(tagWithId(html, 'tournament-ruleset'))).toBe(false);
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(false);
   });
@@ -84,7 +90,7 @@ describe('TournamentSettingsEditor render', () => {
     const html = renderToStaticMarkup(
       <TournamentSettingsEditor tournament={tournament} rulesets={rulesets} started />,
     );
-    expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(true);
+    expect(isDisabled(tagWithId(html, idForLabel(html, 'Bracket Type')))).toBe(true);
     expect(isDisabled(tagWithId(html, 'tournament-ruleset'))).toBe(true);
     expect(isDisabled(tagWithId(html, 'isDoubles'))).toBe(true);
     expect(html.match(/Locked: the tournament has started\./g)).toHaveLength(3);
@@ -94,7 +100,7 @@ describe('TournamentSettingsEditor render', () => {
     const html = renderToStaticMarkup(
       <TournamentSettingsEditor tournament={tournament} rulesets={rulesets} started lockReason="rounds" />,
     );
-    expect(isDisabled(tagWithId(html, 'bracket-type'))).toBe(true);
+    expect(isDisabled(tagWithId(html, idForLabel(html, 'Bracket Type')))).toBe(true);
     expect(html.match(/Locked: rounds have been generated\./g)).toHaveLength(3);
     expect(html).not.toContain('the tournament has started');
   });

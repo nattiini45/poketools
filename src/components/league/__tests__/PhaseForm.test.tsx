@@ -173,7 +173,8 @@ describe('PhaseForm doubles checkbox', () => {
 
 /** The best-of `<select>` (labelled "Best of (default)"), as HTML. */
 function bestOfSelect(html: string): string {
-  const match = html.match(/<select[^>]*id="best-of-\(default\)"[^>]*>.*?<\/select>/s);
+  const id = html.match(/<label for="([^"]+)"[^>]*>Best of \(default\)<\/label>/)?.[1] ?? '';
+  const match = html.match(new RegExp(`<select[^>]*id="${id}"[^>]*>.*?</select>`, 's'));
   expect(match).not.toBeNull();
   return match ? match[0] : '';
 }
