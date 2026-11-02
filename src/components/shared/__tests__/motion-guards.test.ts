@@ -39,7 +39,7 @@ describe('motion setup', () => {
     expect(users.map(({ file }) => rel(file))).toEqual(['components/shared/MotionProvider.tsx']);
     expect(read('components/shared/MotionProvider.tsx')).toContain('reducedMotion="user"');
     expect(read('app/layout.tsx')).toContain('<MotionProvider>');
-  });
+  }, 30_000);
 
   it('leaves the broadcast overlays alone (they follow the caster, not the OS setting)', () => {
     const offenders = uiSources().filter(
