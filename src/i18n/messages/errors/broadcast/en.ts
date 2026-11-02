@@ -25,6 +25,8 @@ export default {
 
   // Overlay data (`api/broadcast/{recap,solo,storylines}/**`)
   recap_params_required: 'tournament_id and round_id query parameters are required',
+  // A query string the public overlay data routes do not read (it would mint a new CDN cache entry)
+  broadcast_query_invalid: 'Unsupported query parameter',
   solo_session_not_found: 'Solo session not found',
   storyline_season_id_required: 'season_id required',
 

@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { usePollLoop } from '@/lib/broadcast/poll-loop';
+import { pollResultFromResponse, type PollTickResult } from '@/lib/broadcast/poll-schedule';
 import OverlayPlayerBadge from '../shared/OverlayPlayerBadge';
 import OverlayPokemonSprite from '../shared/OverlayPokemonSprite';
 import AnimatedReveal from '../shared/AnimatedReveal';
@@ -21,28 +23,14 @@ export default function H2HHistory({ config, matchId }: H2HHistoryProps) {
   const formatter = useFormatter();
   const [data, setData] = useState<EnrichedMatchState | null>(null);
 
-  useEffect(() => {
-    let active = true;
-
-    async function load() {
-      try {
-        const res = await fetch(`/api/broadcast/state/${matchId}?enrich=true`);
-        const json = await res.json();
-        if (active && json.success) {
-          setData(json.data);
-        }
-      } catch {
-        // Silently fail
-      }
-    }
-
-    load();
-    const interval = setInterval(load, config.poll);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [matchId, config.poll]);
+  usePollLoop(matchId, config.poll, async (): Promise<PollTickResult> => {
+    const res = await fetch(`/api/broadcast/state/${matchId}?enrich=true`);
+    if (!res.ok) return pollResultFromResponse(res);
+    const json = await res.json();
+    if (!json.success) return { ok: false };
+    setData(json.data);
+    return { ok: true };
+  });
 
   if (!data || !data.enriched_player1 || !data.enriched_player2) return null;
 

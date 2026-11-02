@@ -1,7 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { usePollLoop } from '@/lib/broadcast/poll-loop';
+import { pollResultFromResponse, type PollTickResult } from '@/lib/broadcast/poll-schedule';
 import BrandWatermark from '../shared/BrandWatermark';
 import AnimatedReveal from '../shared/AnimatedReveal';
 import OverlayPokemonSprite from '../shared/OverlayPokemonSprite';
@@ -44,54 +46,41 @@ export default function StandingsTicker({
   const dl = useDataLocale();
   const [standings, setStandings] = useState<StandingsEntry[]>([]);
 
-  useEffect(() => {
-    let active = true;
+  usePollLoop(`${seasonId}:${top}`, config.poll, async (): Promise<PollTickResult> => {
+    const res = await fetch(`/api/broadcast/standings/${seasonId}`);
+    if (!res.ok) return pollResultFromResponse(res);
+    const json = await res.json();
+    if (!json.success) return { ok: false };
 
-    async function load() {
-      try {
-        const res = await fetch(`/api/broadcast/standings/${seasonId}`);
-        const json = await res.json();
-        if (!active || !json.success) return;
+    const rows: StandingsEntry[] = (json.data?.standings ?? []).map(
+      (r: {
+        player_name: string;
+        wins: number;
+        losses: number;
+        draws?: number;
+        points?: number;
+        kill_differential?: number;
+        player_avatar_url?: string | null;
+        rating?: number | null;
+        signature_pokemon?: string | null;
+        signature_sprite_url?: string | null;
+      }) => ({
+        player_name: r.player_name,
+        wins: r.wins,
+        losses: r.losses,
+        draws: r.draws ?? 0,
+        points: r.points ?? r.wins * 3,
+        diff: r.kill_differential ?? 0,
+        avatar_url: r.player_avatar_url ?? null,
+        rating: r.rating ?? null,
+        signature_pokemon: r.signature_pokemon ?? null,
+        signature_sprite_url: r.signature_sprite_url ?? null,
+      }),
+    );
 
-        const rows: StandingsEntry[] = (json.data?.standings ?? []).map(
-          (r: {
-            player_name: string;
-            wins: number;
-            losses: number;
-            draws?: number;
-            points?: number;
-            kill_differential?: number;
-            player_avatar_url?: string | null;
-            rating?: number | null;
-            signature_pokemon?: string | null;
-            signature_sprite_url?: string | null;
-          }) => ({
-            player_name: r.player_name,
-            wins: r.wins,
-            losses: r.losses,
-            draws: r.draws ?? 0,
-            points: r.points ?? r.wins * 3,
-            diff: r.kill_differential ?? 0,
-            avatar_url: r.player_avatar_url ?? null,
-            rating: r.rating ?? null,
-            signature_pokemon: r.signature_pokemon ?? null,
-            signature_sprite_url: r.signature_sprite_url ?? null,
-          }),
-        );
-
-        setStandings(top > 0 ? rows.slice(0, top) : rows);
-      } catch {
-        // Silently fail
-      }
-    }
-
-    load();
-    const interval = setInterval(load, config.poll);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [seasonId, config.poll, top]);
+    setStandings(top > 0 ? rows.slice(0, top) : rows);
+    return { ok: true };
+  });
 
   if (standings.length === 0) return null;
 

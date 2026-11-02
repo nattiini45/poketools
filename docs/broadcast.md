@@ -9,8 +9,11 @@ src/lib/broadcast/
 ├── animations.ts  # Overlay animation presets
 ├── draft-replay.ts  # Draft replay state/reducer helpers
 ├── overlay-config.ts  # Overlay configuration helpers
+├── poll-loop.ts  # `usePollLoop`: chained polling with backoff and Retry-After
+├── poll-schedule.ts  # Pure backoff and Retry-After maths
 ├── polling.ts  # Polling utilities
 ├── recap-engine.ts  # Weekly recap composition
+├── request-guard.ts  # Per-IP limits and query refusal of the public data routes
 └── tracker-reducer.ts  # Live battle tracker state transitions
 ```
 
@@ -53,7 +56,29 @@ src/lib/broadcast/
 - `/api/broadcast/preview/[mid]`
 - `/api/broadcast/recap/[sid]`
 - `/api/broadcast/standings/[sid]`
+- `/api/broadcast/solo/[sessionId]`
 - `/api/broadcast/presets` + `/api/broadcast/presets/[id]`
+
+### Limits on the public data routes
+The overlay data routes need no session, and a miss runs the whole database fan-out, so each is limited per client IP (`guardBroadcastRequest`, `src/lib/broadcast/request-guard.ts`, limits in `BROADCAST_ROUTE_LIMITS`). One OBS machine is one IP and runs several overlays, so the limits are sized from the polling: five state-driven overlays at `?poll=1000` make 300 calls a minute.
+
+| Route | Bucket | Requests per IP per minute |
+|-------|--------|----------------------------|
+| `state/[mid]` | `broadcast-state` | 300 |
+| `solo/[sessionId]` | `broadcast-solo` | 150 |
+| `preview/[mid]` | `broadcast-preview` | 60 |
+| `standings/[sid]` | `broadcast-standings` | 60 |
+| `recap/[sid]` | `broadcast-recap` | 30 (its own, older limit) |
+
+- Every bucket is its own: exhausting one route does not limit another. Past the limit the answer is `429` with `Retry-After` and the standard `rate_limited` body.
+- Unknown query parameters are refused with `400 broadcast_query_invalid` before any read and before the limiter, and a refused request does not spend the bucket. `state` accepts only `enrich=true|false`; `solo`, `preview` and `standings` accept no parameter at all. The CDN keys its cache on the full URL, so a random `?x=1` would otherwise be a cache miss; a repeated name or another value for `enrich` is refused for the same reason. Overlay options (`poll`, `lang`, `transparent`, ...) belong to the overlay page URL, never to these calls.
+- Random valid UUIDs in the path also miss the CDN; the limiter is the control for that.
+- The limiter fails open: a limiter outage (it is a Postgres RPC on Vercel) lets requests through rather than blacking out a live broadcast. The query refusal protects the database either way.
+- A request without a client IP (a local run, the capture harness) is not limited on the in-memory store.
+- `Cache-Control` of the 200 responses is unchanged (state 2 s, or 5 s with `enrich=true`; preview 30 s; standings 60 s; solo 2 s).
+
+### Client behaviour under a limit
+Polling overlays run on `usePollLoop` (`poll-loop.ts`, schedule in `poll-schedule.ts`): ticks chain on `setTimeout`, a failed poll doubles the wait up to 30 s (never below the caster's `?poll=`), and a `429`'s `Retry-After` is honoured (at most 120 s). The overlay keeps its last good data and returns to the normal interval after the first good answer. One-shot overlays (preview, results, story, moments, team comparison) fetch once and are not affected.
 
 ## Overlay Types (url-builder.ts)
 - **Match**: preview, live, results, story, teams, h2h, moments

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { usePollLoop } from './poll-loop';
+import { pollResultFromResponse, type PollTickResult } from './poll-schedule';
 
 interface UseBroadcastPollOptions<T> {
   /** Pause polling (e.g., when tab hidden or overlay inactive). */
@@ -24,7 +26,8 @@ interface UseBroadcastPollResult<T> {
  * Features:
  * - Change detection: only re-renders when data actually changes
  * - Visibility API: pauses when tab is hidden (OBS sources are always "visible")
- * - Error resilience: maintains last good data, exponential backoff on failure
+ * - Error resilience: maintains last good data; failures back off exponentially
+ *   (max 30 s) and a 429's `Retry-After` is honoured (`usePollLoop`)
  */
 export function useBroadcastPoll<T>(
   url: string,
@@ -39,14 +42,16 @@ export function useBroadcastPoll<T>(
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const dataRef = useRef<T | null>(null);
-  const backoffRef = useRef(intervalMs);
   const visibleRef = useRef(true);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (): Promise<PollTickResult> => {
+    if (!visibleRef.current) return { ok: true };
     try {
       const res = await fetch(url);
       if (!res.ok) {
-        throw new Error(`Poll failed: ${res.status} ${res.statusText}`);
+        setError(new Error(`Poll failed: ${res.status} ${res.statusText}`));
+        setLoading(false);
+        return pollResultFromResponse(res);
       }
       const raw = await res.json();
       const next = transform ? transform(raw) : (raw as T);
@@ -68,15 +73,13 @@ export function useBroadcastPoll<T>(
 
       setError(null);
       setLoading(false);
-      // Reset backoff on success
-      backoffRef.current = intervalMs;
+      return { ok: true };
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
       setLoading(false);
-      // Exponential backoff: double interval, max 30s
-      backoffRef.current = Math.min(backoffRef.current * 2, 30000);
+      return { ok: false };
     }
-  }, [url, intervalMs, transform, onUpdate]);
+  }, [url, transform, onUpdate]);
 
   // Visibility API: track tab visibility
   useEffect(() => {
@@ -87,21 +90,7 @@ export function useBroadcastPoll<T>(
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
-  // Polling loop
-  useEffect(() => {
-    if (!enabled) return;
-
-    // Initial fetch
-    void fetchData();
-
-    const id = setInterval(() => {
-      if (visibleRef.current && enabled) {
-        void fetchData();
-      }
-    }, backoffRef.current);
-
-    return () => clearInterval(id);
-  }, [enabled, fetchData]);
+  usePollLoop(url, intervalMs, fetchData, enabled);
 
   return { data, loading, error, lastUpdated };
 }

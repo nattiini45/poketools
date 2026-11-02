@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { usePollLoop } from '@/lib/broadcast/poll-loop';
+import { pollResultFromResponse, type PollTickResult } from '@/lib/broadcast/poll-schedule';
 import OverlayPlayerBadge from '../shared/OverlayPlayerBadge';
 import OverlayPokemonSprite from '../shared/OverlayPokemonSprite';
 import OverlayMomentBanner from '../shared/OverlayMomentBanner';
@@ -20,39 +22,26 @@ export default function LiveStatBar({ config, matchId }: LiveStatBarProps) {
   const [pulse, setPulse] = useState<'p1' | 'p2' | null>(null);
   const prevKosRef = useRef<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
 
-  // Polling
-  useEffect(() => {
-    let active = true;
+  // A failed or rate-limited poll keeps the last good data on screen and slows the next poll.
+  usePollLoop(matchId, config.poll, async (): Promise<PollTickResult> => {
+    const res = await fetch(`/api/broadcast/state/${matchId}`);
+    if (!res.ok) return pollResultFromResponse(res);
+    const json = await res.json();
+    if (!json.success) return { ok: false };
 
-    async function poll() {
-      try {
-        const res = await fetch(`/api/broadcast/state/${matchId}`);
-        const json = await res.json();
-        if (!active || !json.success) return;
+    const state: LiveMatchState = json.data;
+    setData(state);
 
-        const state: LiveMatchState = json.data;
-        setData(state);
-
-        // Detect KO changes for pulse animation
-        if (state.current_game) {
-          const newP1 = state.current_game.player1_kos;
-          const newP2 = state.current_game.player2_kos;
-          if (newP1 > prevKosRef.current.p1) setPulse('p1');
-          if (newP2 > prevKosRef.current.p2) setPulse('p2');
-          prevKosRef.current = { p1: newP1, p2: newP2 };
-        }
-      } catch {
-        // Silently fail
-      }
+    // Detect KO changes for pulse animation
+    if (state.current_game) {
+      const newP1 = state.current_game.player1_kos;
+      const newP2 = state.current_game.player2_kos;
+      if (newP1 > prevKosRef.current.p1) setPulse('p1');
+      if (newP2 > prevKosRef.current.p2) setPulse('p2');
+      prevKosRef.current = { p1: newP1, p2: newP2 };
     }
-
-    poll();
-    const interval = setInterval(poll, config.poll);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [matchId, config.poll]);
+    return { ok: true };
+  });
 
   // Clear pulse after animation
   useEffect(() => {

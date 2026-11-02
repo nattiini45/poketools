@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { BROADCAST_ROUTE_LIMITS, guardBroadcastRequest } from '@/lib/broadcast/request-guard';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getStagesBySeasonId, getParticipants } from '@/lib/supabase/queries/tournaments';
 import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
@@ -49,12 +50,14 @@ interface RouteContext {
 
 /** Public endpoint: enriched standings for broadcast overlays */
 // Public: no auth required
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { sid } = await context.params;
     // A malformed id names no row: 404 before the query (Postgres would reject the filter with a 500).
     const invalidId = rejectInvalidPathId(sid, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
+    const guarded = await guardBroadcastRequest(request, BROADCAST_ROUTE_LIMITS.standings);
+    if (guarded) return guarded;
 
     const season = await getSeasonById(sid);
     if (!season) {

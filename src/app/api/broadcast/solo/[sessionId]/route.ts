@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { BROADCAST_ROUTE_LIMITS, guardBroadcastRequest } from '@/lib/broadcast/request-guard';
 import { getCastSessionById } from '@/lib/supabase/queries/cast-sessions';
 import { createInitialState, normalizeSoloTrackerState } from '@/lib/broadcast/tracker-reducer';
 import { soloPlayerDefaults } from '@/lib/broadcast/solo-defaults';
@@ -80,12 +81,14 @@ function buildPublicState(
 }
 
 // Public: no auth required — the solo overlay polls it; only the public solo state is returned
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const { sessionId } = await context.params;
     // A malformed id names no row: 404 before the query (Postgres would reject the filter with a 500).
     const invalidId = rejectInvalidPathId(sessionId, 'INVALID_SESSION_ID');
     if (invalidId) return invalidId;
+    const guarded = await guardBroadcastRequest(request, BROADCAST_ROUTE_LIMITS.solo);
+    if (guarded) return guarded;
     const session = await getCastSessionById(sessionId);
 
     if (!session || session.mode !== 'solo') {
