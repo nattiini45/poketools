@@ -93,35 +93,6 @@ describe('GET /api/draft-pool-entries', () => {
 describe('POST /api/draft-pool-entries', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getPoolEntries).mockResolvedValue([]);
-  });
-
-  const SEASON = '00000000-0000-4000-a000-000000000001';
-  const listed = (pokemon_name: string) => ({ id: pokemon_name, season_id: SEASON, pokemon_name, power_tier: null, point_cost: null, created_at: '' });
-
-  it('refuses a single entry that names a listed Pokémon in another spelling, before any write', async () => {
-    vi.mocked(getPoolEntries).mockResolvedValue([listed('Mr. Mime')]);
-
-    const response = await POST({ json: vi.fn().mockResolvedValue({ season_id: SEASON, pokemon_name: 'mrmime' }) } as unknown as NextRequest);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ success: false, code: 'pool_entry_duplicate_name', params: { pokemon: 'mrmime' } });
-    expect(vi.mocked(createPoolEntry)).not.toHaveBeenCalled();
-  });
-
-  it('refuses a bulk create with a spelling of a listed Pokémon, or two spellings of one, before any write', async () => {
-    vi.mocked(getPoolEntries).mockResolvedValue([listed('Garchomp')]);
-    const existing = await POST({
-      json: vi.fn().mockResolvedValue([{ season_id: SEASON, pokemon_name: 'Eevee' }, { season_id: SEASON, pokemon_name: 'GARCHOMP' }]),
-    } as unknown as NextRequest);
-    expect(existing.status).toBe(409);
-    expect(await existing.json()).toMatchObject({ code: 'pool_entry_duplicate_name', params: { pokemon: 'GARCHOMP' } });
-
-    const batch = await POST({
-      json: vi.fn().mockResolvedValue([{ season_id: SEASON, pokemon_name: 'Ho-Oh' }, { season_id: SEASON, pokemon_name: 'hooh' }]),
-    } as unknown as NextRequest);
-    expect(batch.status).toBe(409);
-    expect(vi.mocked(bulkCreatePoolEntries)).not.toHaveBeenCalled();
   });
 
   it('rejects mixed-season bulk payloads', async () => {

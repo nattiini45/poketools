@@ -78,12 +78,10 @@ CREATE OR REPLACE FUNCTION public.season_participants__group_guard() RETURNS tri
 LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE v_grouped boolean;
 BEGIN
-  v_grouped := EXISTS (SELECT 1 FROM public.season_groups WHERE season_id = NEW.season_id);
-  -- A league with neither groups nor a legacy pool (almost every insert) takes no lock.
-  IF NOT v_grouped AND NOT EXISTS (SELECT 1 FROM public.draft_pools WHERE season_id = NEW.season_id AND engine = 'legacy') THEN
-    RETURN NEW;
-  END IF;
+  -- The lock comes first, for every league: a "no groups, no legacy pool" read taken before it could be stale by the
+  -- time a pool is created and started, and the join would then change the roster of a live draft.
   PERFORM pg_advisory_xact_lock(hashtext(NEW.season_id::text));
+  v_grouped := EXISTS (SELECT 1 FROM public.season_groups WHERE season_id = NEW.season_id);
   IF public.season__legacy_draft_live(NEW.season_id) THEN
     RAISE EXCEPTION 'SEASON_DRAFT_LOCKED' USING ERRCODE = 'P0001';
   END IF;

@@ -594,6 +594,45 @@ describe('POST /api/drafts', () => {
       expect(createDraftPool).not.toHaveBeenCalled();
     });
 
+    describe('for every trainer of the roster', () => {
+      const twoTrainers = () =>
+        vi.mocked(getSeasonParticipants).mockResolvedValue([{ player_id: 'p1' }, { player_id: 'p2' }] as never);
+
+      afterEach(() => {
+        vi.mocked(getSeasonParticipants).mockResolvedValue([]);
+      });
+
+      it('refuses a list with fewer Pokémon than the trainers need picks: one entry, two trainers, one round', async () => {
+        twoTrainers();
+        vi.mocked(getPoolEntries).mockResolvedValue([entry('Rattata', 1)]);
+
+        const response = await post({ season_id: SEASON, draft_type: 'budget', pick_order: 'free', budget: 1, rounds: 1 });
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+          code: 'draft_pool_list_too_small',
+          params: { listed: 1, players: 2, rounds: 1, needed: 2 },
+        });
+        expect(createDraftPool).not.toHaveBeenCalled();
+      });
+
+      it('refuses when the cheapest picks of all trainers cost more than their budgets together, and accepts at the edge', async () => {
+        twoTrainers();
+        vi.mocked(getPoolEntries).mockResolvedValue([entry('A', 3), entry('B', 3), entry('C', 3), entry('D', 3), entry('E', 90)]);
+        const body = { season_id: SEASON, draft_type: 'budget', pick_order: 'snake', default_point_cost: 5, rounds: 2 };
+
+        const refused = await post({ ...body, budget: 5 });
+        expect(refused.status).toBe(400);
+        expect(await refused.json()).toMatchObject({
+          code: 'draft_budget_below_listed_rounds',
+          params: { budget: 5, rounds: 2, players: 2, needed: 4, minimum: 12, available: 10 },
+        });
+
+        const accepted = await post({ ...body, budget: 6 });
+        expect(accepted.status).toBe(201);
+      });
+    });
+
     it('prices an unpriced entry at the default price, or 0 without one', async () => {
       vi.mocked(getPoolEntries).mockResolvedValue([entry('Rattata', null), entry('Pidgey', null)]);
 

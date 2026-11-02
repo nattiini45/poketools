@@ -9,7 +9,8 @@
 -- 2. Substitution. A league-scope substitution moves a roster row with an UPDATE of season_participants.player_id,
 --    which had no database guard (the route read the pool before it wrote). The same check now runs in a trigger
 --    under the same lock, so an activation between the route's read and the swap is refused too:
---    SEASON_DRAFT_LOCKED (P0001, HTTP 409), as for a join or a removal. A league without a legacy pool takes no lock.
+--    SEASON_DRAFT_LOCKED (P0001, HTTP 409), as for a join or a removal. A substitution is rare, so every swap takes
+--    the lock before it looks at the pool.
 --
 -- Two triggers on existing tables, none of them an INSERT trigger, so league_trash__inventory() needs no change
 -- (a restore inserts season_participants before draft_pools and never updates either). Functions only: no table,
@@ -31,9 +32,8 @@ CREATE TRIGGER trg_draft_pools_serialize_activation BEFORE UPDATE OF status ON p
 CREATE OR REPLACE FUNCTION public.season_participants__swap_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.draft_pools WHERE season_id = NEW.season_id AND engine = 'legacy') THEN
-    RETURN NEW;
-  END IF;
+  -- The lock comes first, for every league: a "no legacy pool" read taken before it could be stale by the time a
+  -- pool is created and started, and the swap would then change the roster of a live draft.
   PERFORM pg_advisory_xact_lock(hashtext(NEW.season_id::text));
   IF public.season__legacy_draft_live(NEW.season_id) THEN
     RAISE EXCEPTION 'SEASON_DRAFT_LOCKED' USING ERRCODE = 'P0001';

@@ -353,20 +353,37 @@ export async function POST(request: NextRequest) {
     // Fixed costs: a player who cannot afford their remaining rounds can never finish them (in a turn order
     // that also stalls everyone), so a budget below what the rounds cost at the cheapest prices could never
     // fill the pool, whatever the pick order. A season with a pool list only offers its entries, each at its own
-    // price (else the default price); without a list any Pokémon costs the default price. Entries added after
-    // the pool exists are not seen here.
+    // price (else the default price) and each to one trainer only, so the whole roster must fit: enough entries
+    // for every trainer's rounds, and the cheapest of them within the trainers' budgets together (a necessary
+    // condition: a pool it passes can still be unfillable by how the prices split, which the board reports as a
+    // stall). Without a list any Pokémon costs the default price. The roster and the entries added after the pool
+    // exists are not seen here.
     const rounds = body.rounds ?? getDefaultRounds(body.draft_type);
     if (body.draft_type === 'budget' && body.budget != null) {
       const listedPrices = availablePricesSorted(await getPoolEntries(body.season_id), [], body.default_point_cost ?? 0);
       if (listedPrices !== null) {
-        const minimum = minCompletion(listedPrices, rounds).cost;
-        if (body.budget < minimum) {
+        const players = Math.max(1, (await getSeasonParticipants(body.season_id)).length);
+        const needed = players * rounds;
+        if (listedPrices.length < needed) {
           return NextResponse.json<ApiResult<never>>(
             {
               success: false,
-              error: `A budget of ${body.budget} cannot fill ${rounds} picks: the ${rounds} cheapest Pokémon on the pool list cost ${minimum}`,
+              error: `The pool list has ${listedPrices.length} Pokémon, but ${players} trainer${players === 1 ? '' : 's'} need${players === 1 ? 's' : ''} ${needed} picks (${rounds} each)`,
+              code: 'draft_pool_list_too_small',
+              params: { listed: listedPrices.length, players, rounds, needed },
+            },
+            { status: 400 }
+          );
+        }
+        const minimum = minCompletion(listedPrices, needed).cost;
+        const available = players * body.budget;
+        if (available < minimum) {
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `A budget of ${body.budget} per trainer cannot fill ${rounds} picks for ${players} trainer${players === 1 ? '' : 's'}: the ${needed} cheapest Pokémon on the pool list cost ${minimum} together, against ${available} in total`,
               code: 'draft_budget_below_listed_rounds',
-              params: { budget: body.budget, rounds, minimum },
+              params: { budget: body.budget, rounds, players, needed, minimum, available },
             },
             { status: 400 }
           );

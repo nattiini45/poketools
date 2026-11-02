@@ -60,14 +60,17 @@ describe('20261102140000_legacy_draft_roster_lock.sql', () => {
     expect(kept.filter((l) => !have.has(l))).toEqual([]);
   });
 
-  it('the join guard checks the live legacy pool before the no-groups early return, and takes no lock for a plain league', () => {
-    const early = guard.indexOf('RETURN NEW;');
+  it('the join guard takes the season lock before it reads anything, then refuses a live legacy pool before any group rule', () => {
+    const lock = guard.indexOf('pg_advisory_xact_lock(hashtext(NEW.season_id::text))');
+    const grouped = guard.indexOf('FROM public.season_groups');
     const refusal = guard.indexOf("RAISE EXCEPTION 'SEASON_DRAFT_LOCKED'");
-    expect(early).toBeGreaterThan(-1);
-    expect(refusal).toBeGreaterThan(early);
-    expect(guard).toContain("engine = 'legacy'");
-    expect(guard.indexOf('pg_advisory_xact_lock')).toBeGreaterThan(early);
-    expect(guard).toContain("RAISE EXCEPTION 'SEASON_GROUPS_SCHEDULED'");
+    const scheduled = guard.indexOf("RAISE EXCEPTION 'SEASON_GROUPS_SCHEDULED'");
+    expect(lock).toBeGreaterThan(-1);
+    expect(grouped).toBeGreaterThan(lock);
+    expect(refusal).toBeGreaterThan(lock);
+    expect(scheduled).toBeGreaterThan(refusal);
+    expect(guard).not.toContain("engine = 'legacy'");
+    expect(guard).toContain('public.season__legacy_draft_live(NEW.season_id)');
   });
 
   it('adds no trigger and no table, so league_trash__inventory() stays complete', () => {
@@ -103,13 +106,15 @@ describe('20261102150100_legacy_draft_roster_lock_serialize.sql', () => {
     expect(SERIALIZE).toMatch(/BEFORE UPDATE OF status ON public\.draft_pools/);
   });
 
-  it('the substitution swap takes the same lock before it looks for a live legacy pool, and a plain league takes none', () => {
-    const early = swap.indexOf('RETURN NEW;');
+  it('the substitution swap takes the same lock before it reads the pool, with no unlocked early return', () => {
     const lock = swap.indexOf('pg_advisory_xact_lock(hashtext(NEW.season_id::text))');
+    const read = swap.indexOf('public.season__legacy_draft_live(NEW.season_id)');
     const refusal = swap.indexOf("RAISE EXCEPTION 'SEASON_DRAFT_LOCKED'");
-    expect(early).toBeGreaterThan(-1);
-    expect(lock).toBeGreaterThan(early);
-    expect(refusal).toBeGreaterThan(lock);
+    expect(lock).toBeGreaterThan(-1);
+    expect(read).toBeGreaterThan(lock);
+    expect(refusal).toBeGreaterThan(read);
+    expect(swap.indexOf('RETURN NEW;')).toBeGreaterThan(refusal);
+    expect(swap).not.toContain('NOT EXISTS');
     expect(swap).toContain('public.season__legacy_draft_live(NEW.season_id)');
     expect(SERIALIZE).toMatch(/BEFORE UPDATE OF player_id ON public\.season_participants[\s\S]*WHEN \(OLD\.player_id IS DISTINCT FROM NEW\.player_id\)/);
   });

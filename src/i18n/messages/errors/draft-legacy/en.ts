@@ -34,7 +34,9 @@ export default {
   draft_budget_below_rounds:
     'A budget of {budget} cannot fill {rounds} picks at the default price of {price} (needs {minimum})',
   draft_budget_below_listed_rounds:
-    'A budget of {budget} cannot fill {rounds} picks: the {rounds} cheapest Pokémon on the pool list cost {minimum}',
+    'A budget of {budget} per trainer cannot fill {rounds} picks for {players} trainers: the {needed} cheapest Pokémon on the pool list cost {minimum} together, against {available} in total',
+  draft_pool_list_too_small:
+    'The pool list has {listed} Pokémon, but {players} trainers need {needed} picks ({rounds} each)',
   draft_pick_strands_roster:
     'After this pick only {remaining_after} points would be left, but the remaining {slots} picks cost at least {min_cost} points.',
   // Switch to free order (api/drafts/[id]/free-order)

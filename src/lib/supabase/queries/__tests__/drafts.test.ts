@@ -868,6 +868,37 @@ describe('queries/draft-pool-entries', () => {
     });
   });
 
+  describe('a pool entry that repeats a listed Pokémon under another spelling (23505)', () => {
+    const unique = { code: '23505', message: 'duplicate key value violates unique constraint "uq_draft_pool_entries_season_folded_name"' };
+
+    it('answers a single create with 409 pool_entry_duplicate_name naming the entry', async () => {
+      mockBuilder.single.mockResolvedValue({ data: null, error: unique });
+      mockBuilder.range.mockResolvedValueOnce({ data: [{ ...poolEntryRow, pokemon_name: 'Mr. Mime' }], error: null, count: 1 });
+
+      const err = await createPoolEntry({ season_id: 's-1', pokemon_name: 'mrmime' }).catch((e: unknown) => e);
+
+      expect(err).toMatchObject({ statusCode: 409, code: 'pool_entry_duplicate_name', params: { pokemon: 'mrmime' } });
+    });
+
+    it('answers a bulk create with the entry that clashes, whether with a listed entry or inside the batch', async () => {
+      mockBuilder.select.mockReturnValueOnce({ data: null, error: unique });
+      mockBuilder.range.mockResolvedValueOnce({ data: [{ ...poolEntryRow, pokemon_name: 'Garchomp' }], error: null, count: 1 });
+      const withListed = await bulkCreatePoolEntries([
+        { season_id: 's-1', pokemon_name: 'Eevee' },
+        { season_id: 's-1', pokemon_name: 'GARCHOMP' },
+      ]).catch((e: unknown) => e);
+      expect(withListed).toMatchObject({ statusCode: 409, code: 'pool_entry_duplicate_name', params: { pokemon: 'GARCHOMP' } });
+
+      mockBuilder.select.mockReturnValueOnce({ data: null, error: unique });
+      mockBuilder.range.mockResolvedValueOnce({ data: [], error: null, count: 0 });
+      const inBatch = await bulkCreatePoolEntries([
+        { season_id: 's-1', pokemon_name: 'Ho-Oh' },
+        { season_id: 's-1', pokemon_name: 'hooh' },
+      ]).catch((e: unknown) => e);
+      expect(inBatch).toMatchObject({ statusCode: 409, params: { pokemon: 'hooh' } });
+    });
+  });
+
   describe('bulkCreatePoolEntries', () => {
     it('returns empty array for empty input', async () => {
       const result = await bulkCreatePoolEntries([]);
