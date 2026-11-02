@@ -381,7 +381,7 @@ One row per Pokémon per player per game: unique index `battle_stats_game_player
 > turn from the pick count, so a skip would need stored state (a schema change).
 > Every order caps a player at the round count (`draft_roster_full`; free order has no turn to do it).
 > `POST /api/drafts` takes an optional `pick_order` (omitted = snake for snake pricing, free otherwise), refuses an auction in
-> a turn order (`draft_auction_order_not_free`), and refuses fixed prices in a turn order when the budget is below rounds ×
+> a turn order (`draft_auction_order_not_free`), and refuses fixed prices (any pick order) when the budget is below rounds ×
 > default price (`draft_budget_below_rounds`). Its optional `rounds` (1 to 50, 11 when omitted) is stored as the pool's exact
 > team size (`team_size_mode = 'exact'`, `team_size_exact`) and is the round count both of the picks cap and of that budget
 > check; a point-buy season maps it to the queue pool's roster size (`INVALID_CONFIG` on `roster_size` above 20). `name` and

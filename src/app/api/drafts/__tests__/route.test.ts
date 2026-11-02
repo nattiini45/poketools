@@ -518,10 +518,56 @@ describe('POST /api/drafts', () => {
     });
     expect(vi.mocked(createDraftPool)).not.toHaveBeenCalled();
 
-    // Free order has no turn to stall: the same pool is created as before.
-    vi.mocked(createDraftPool).mockResolvedValue({ ...mockPool, draft_type: 'budget', pick_order: 'free' });
+    // A free order cannot fill its rounds either: every pick still costs the default price.
     const free = await POST({ json: vi.fn().mockResolvedValue(body('free')) } as unknown as NextRequest);
-    expect(free.status).toBe(201);
+    expect(free.status).toBe(400);
+    expect(await free.json()).toMatchObject({
+      code: 'draft_budget_below_rounds',
+      params: { budget: 100, rounds: 11, price: 10, minimum: 110 },
+    });
+    expect(vi.mocked(createDraftPool)).not.toHaveBeenCalled();
+  });
+
+  it('refuses budget 60 at price 10 for 11 rounds when the pick order is omitted (derived free order)', async () => {
+    vi.mocked(createDraftPool).mockClear();
+    vi.mocked(requireResourceAdmin).mockResolvedValue(adminPlayer);
+    vi.mocked(getDraftPoolBySeason).mockResolvedValue(null);
+
+    const response = await POST({
+      json: vi.fn().mockResolvedValue({
+        season_id: '00000000-0000-4000-a000-000000000001',
+        draft_type: 'budget',
+        budget: 60,
+        default_point_cost: 10,
+        rounds: 11,
+      }),
+    } as unknown as NextRequest);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      code: 'draft_budget_below_rounds',
+      params: { budget: 60, rounds: 11, price: 10, minimum: 110 },
+    });
+    expect(vi.mocked(createDraftPool)).not.toHaveBeenCalled();
+  });
+
+  it('accepts a free-order budget pool whose budget covers the rounds', async () => {
+    vi.mocked(createDraftPool).mockClear();
+    vi.mocked(requireResourceAdmin).mockResolvedValue(adminPlayer);
+    vi.mocked(getDraftPoolBySeason).mockResolvedValue(null);
+    vi.mocked(createDraftPool).mockResolvedValue({ ...mockPool, draft_type: 'budget', pick_order: 'free' });
+
+    const response = await POST({
+      json: vi.fn().mockResolvedValue({
+        season_id: '00000000-0000-4000-a000-000000000001',
+        draft_type: 'budget',
+        pick_order: 'free',
+        budget: 110,
+        default_point_cost: 10,
+      }),
+    } as unknown as NextRequest);
+
+    expect(response.status).toBe(201);
   });
 
   describe('rounds (#55)', () => {

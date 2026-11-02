@@ -7,7 +7,7 @@ import { DraftRuleError } from '@/lib/draft/errors';
 import { draftErrorResponse } from '@/lib/draft/http';
 import { getDefaultRounds } from '@/lib/draft/engine';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
-import { defaultPickOrder, isPickOrderAllowed, isTurnEnforced } from '@/lib/draft/pool-format';
+import { defaultPickOrder, isPickOrderAllowed } from '@/lib/draft/pool-format';
 import { seasonRosterIds } from '@/lib/draft/pool-roster';
 import { computeRedraftSeats } from '@/lib/draft/redraft-order';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
@@ -348,12 +348,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fixed costs in a turn order: a player who cannot afford their remaining rounds stalls everyone, so a
-    // budget below rounds × default price (what an unpriced Pokémon costs) could never finish. Pool entries
-    // are added after creation, so only the default price is checked here.
+    // Fixed costs: a player who cannot afford their remaining rounds can never finish them (in a turn order
+    // that also stalls everyone), so a budget below rounds × default price (what an unpriced Pokémon costs)
+    // could never fill the pool, whatever the pick order. Pool entries are added after creation, so only the
+    // default price is checked here.
     const rounds = body.rounds ?? getDefaultRounds(body.draft_type);
     if (
-      body.draft_type === 'budget' && isTurnEnforced(pickOrder) && body.budget != null &&
+      body.draft_type === 'budget' && body.budget != null &&
       body.default_point_cost != null && body.budget < rounds * body.default_point_cost
     ) {
       const minimum = rounds * body.default_point_cost;
