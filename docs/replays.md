@@ -130,3 +130,8 @@ npm run test -- src/lib/supabase/queries/__tests__/replay-library.test.ts
   Visitors who want detail follow the per-row links.
 - Pagination uses shared `TablePagination` (20/50/100). Sort uses clickable
   column headers (Date, Players, League, Round) — no separate Sort dropdown.
+- **Doubles.** The parser attributes moves, faints, KOs and active turns per field slot, so a doubles replay credits each
+  Pokémon its own KOs and turns (#53; details in [PKMN](./pkmn.md#replay-parsing)). This applies to replays imported
+  after that fix. A doubles game imported earlier keeps its stored stats until an organizer re-parses it with
+  `scripts/reparse-game.ts` (dry run by default, one game at a time). Playback (`replay-frames.ts`) still follows one
+  active Pokémon per side.

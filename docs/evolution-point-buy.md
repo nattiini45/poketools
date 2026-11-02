@@ -193,6 +193,11 @@ battle can be recorded for only one game (`games.replay_hash`, see
 [Match](./match.md#replay-binding)), so the same battle cannot add real kills
 twice either.
 
+Point-buy battles are singles, so this credit never meets a doubles log. For the record, the replay parser attributes a
+doubles replay's KOs per field slot since #53, for new imports only (see [PKMN](./pkmn.md#replay-parsing)). A doubles
+game imported before that keeps its stored kills unless an organizer re-parses it with `scripts/reparse-game.ts`
+(dry run first), which re-applies the tracker credit through `editGame`.
+
 Match completion (`finalizeMatchCompletion`, called from confirm-match, the
 auto-confirm cron and an admin's dispute resolution through confirm-match)
 runs, for EPB seasons only, with `matchday` = the match's

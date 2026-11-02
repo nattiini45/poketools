@@ -57,8 +57,8 @@
  *     with `stats_locked` (an admin corrected its stats by hand).
  *   - Writes nothing when the re-parse matches the stored rows, and requires
  *     `--actor` to be an active admin.
- *   - Doubles: the parser attributes moves and KOs per side, not per slot
- *     (#53), so an Illusion split in a doubles game is not reliable yet.
+ *   - Doubles: the parser attributes moves, faints, KOs and active turns per field slot (#53),
+ *     so re-parsing a doubles game corrects its stats; the Illusion split stays off in doubles.
  *
  * This script is READ-ONLY by default (dry-run). It only mutates data with
  * `--apply`. It never applies migrations.

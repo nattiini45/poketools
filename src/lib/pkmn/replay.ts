@@ -104,8 +104,13 @@ interface AttributionState {
   lastOpposingDamager: Map<string, PokemonRef>;
   /** Most recent move user */
   lastMoveUser: PokemonRef | null;
-  /** Currently active Pokémon per side */
-  activePokemon: Record<string, PokemonRef | null>;
+  /**
+   * The Pokémon in each field slot (p1a, p1b, ...). A fainted Pokémon stays until its slot is refilled, so a faint
+   * that resolves after its attacker went down (Explosion, Destiny Bond) still finds it.
+   */
+  activeBySlot: Map<string, PokemonRef>;
+  /** The Pokémon credited for each faint (null = nobody), by the fainted Pokémon's key: Destiny Bond names its killer. */
+  faintCredit: Map<string, PokemonRef | null>;
 }
 
 const PARTIAL_TRAP_MOVES = new Set([
@@ -178,7 +183,8 @@ export function parseReplayLog(log: string): ParsedBattleStats {
     lastDamageSource: new Map(),
     lastOpposingDamager: new Map(),
     lastMoveUser: null,
-    activePokemon: { p1: null, p2: null },
+    activeBySlot: new Map(),
+    faintCredit: new Map(),
   };
 
   // Maps ident slot (e.g. "p1a") to tracker key for attribution (first-seen species name)
@@ -186,9 +192,10 @@ export function parseReplayLog(log: string): ParsedBattleStats {
   // Maps slot to tracker map key — enables same-slot forme continuity (Mimikyu / Mimikyu-Busted)
   const slotToTrackerKey = new Map<string, string>();
   /**
-   * A battle with more than one active slot per side (doubles, triples, multi). Moves and KOs are attributed per side
-   * there, not per slot (#53), so an Illusion split cannot tell the disguised mon's activity from its allies' and is
-   * not attempted.
+   * A battle with more than one active slot per side: `|gametype|` says so, and a switch into a slot other than `a` is
+   * the fallback for a log without that line. Fallbacks that name "the opposing active Pokémon" are ambiguous there, so
+   * they credit nobody unless exactly one is left on the field. An Illusion split is not attempted: no doubles fixture
+   * covers it yet, and an unsplit row is the safe outcome.
    */
   let multiSlot = false;
 
@@ -226,16 +233,44 @@ export function parseReplayLog(log: string): ParsedBattleStats {
     return species + '|' + side;
   }
 
+  /**
+   * The one Pokémon standing for a side, when the battle leaves no doubt about which: the side's only slot in singles,
+   * the only one still on the field in doubles. Null when two are out, or none.
+   */
+  function soleActive(side: string): PokemonRef | null {
+    const refs = Array.from(attr.activeBySlot.values()).filter((ref) => ref.side === side);
+    if (!multiSlot) return refs[0] ?? null;
+    const onField = refs.filter((ref) => trackers[ref.side]?.get(ref.pokemon)?.is_active);
+    return onField.length === 1 ? onField[0] : null;
+  }
+
+  function soleActiveOpponent(side: string): PokemonRef | null {
+    return soleActive(opposingSide(side));
+  }
+
   /** Resolve a Pokémon ident to a PokemonRef using species from slot map */
   function identToRef(ident: string): PokemonRef {
     const side = extractSide(ident);
     const slot = extractSlot(ident);
     const species = slotToSpecies.get(slot);
     if (species) return { side, pokemon: species };
-    // Fallback: check if active Pokémon on that side matches
-    const active = attr.activePokemon[side];
-    if (active) return active;
-    return { side, pokemon: extractName(ident) };
+    return soleActive(side) ?? { side, pokemon: extractName(ident) };
+  }
+
+  /** The tracker of the Pokémon in a slot, or undefined when the slot was never filled. */
+  function trackerInSlot(ident: string): PokemonTracker | undefined {
+    const key = slotToTrackerKey.get(extractSlot(ident));
+    return key === undefined ? undefined : trackers[extractSide(ident)]?.get(key);
+  }
+
+  /** Ally Switch and the like: two slots of one side trade the Pokémon they hold. */
+  function swapSlots(a: string, b: string): void {
+    for (const map of [slotToSpecies, slotToTrackerKey, attr.activeBySlot] as Map<string, unknown>[]) {
+      const first = map.get(a);
+      const second = map.get(b);
+      if (second === undefined) map.delete(a); else map.set(a, second);
+      if (first === undefined) map.delete(b); else map.set(b, first);
+    }
   }
 
   function getOrCreateTracker(side: string, pokemonName: string, brought = false): PokemonTracker {
@@ -308,7 +343,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
     const trackerKey = prevKey ?? stripHiddenPreviewSuffix(rawSpecies);
     slotToSpecies.set(slot, trackerKey);
     if (prevKey) {
-      attr.activePokemon[side] = { side, pokemon: prevKey };
+      attr.activeBySlot.set(slot, { side, pokemon: prevKey });
     }
   }
 
@@ -325,13 +360,6 @@ export function parseReplayLog(log: string): ParsedBattleStats {
       first_seen_turn: currentTurn,
       activationBaseline: null,
     };
-  }
-
-  function findActiveTracker(side: string): PokemonTracker | undefined {
-    for (const t of Array.from(trackers[side].values())) {
-      if (t.is_active) return t;
-    }
-    return undefined;
   }
 
   /**
@@ -401,8 +429,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
 
     const illusionTracker = sideTrackers.get(illusionKey);
     if (!illusionTracker) return;
-    // Doubles: the activity on this tracker may be an ally's (per-side attribution, #53), so moving it would credit the
-    // wrong mon. Leave the rows as they were before Illusion handling existed.
+    // Doubles: no fixture covers a split with two slots per side yet, so the rows stay as the log's own slots left them.
     if (multiSlot) return;
     // No switch-in baseline (already consumed by an earlier reveal on this slot): nothing was recorded under a disguise
     // since, so there is nothing to split, and remapping the slot alone would half-apply the reveal.
@@ -439,8 +466,8 @@ export function parseReplayLog(log: string): ParsedBattleStats {
     revealed.is_active = illusionTracker.is_active;
     illusionTracker.is_active = false;
 
-    if (attr.activePokemon[side]?.pokemon === illusionKey) {
-      attr.activePokemon[side] = { side, pokemon: revealed.pokemon_name };
+    if (attr.activeBySlot.get(slot)?.pokemon === illusionKey) {
+      attr.activeBySlot.set(slot, { side, pokemon: revealed.pokemon_name });
     }
     if (attr.lastMoveUser?.side === side && attr.lastMoveUser.pokemon === illusionKey) {
       attr.lastMoveUser = { side, pokemon: revealed.pokemon_name };
@@ -556,7 +583,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
 
   /**
    * Resolve the Pokémon to credit for a kill.
-   * For self-inflicted damage: use lastOpposingDamager, then fallback to opposing active.
+   * For self-inflicted damage: use lastOpposingDamager, then fallback to the sole opposing active Pokémon.
    */
   function resolveKillCredit(
     dmgSource: DamageSource | undefined,
@@ -571,8 +598,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
       if (isSelfInflicted) {
         // Self-inflicted: credit last opposing Pokémon that damaged this one
         return attr.lastOpposingDamager.get(targetKey)
-          ?? attr.activePokemon[opposingSide(targetSide)]
-          ?? null;
+          ?? soleActiveOpponent(targetSide);
       }
 
       // Non-self-inflicted: credit the tracked attacker
@@ -580,16 +606,15 @@ export function parseReplayLog(log: string): ParsedBattleStats {
 
       // Attacker unknown but damage was from an external source — fallback
       return attr.lastOpposingDamager.get(targetKey)
-        ?? attr.activePokemon[opposingSide(targetSide)]
-        ?? null;
+        ?? soleActiveOpponent(targetSide);
     }
 
     // No damage source recorded (Perish Song, Destiny Bond, or edge case)
     const perishUser = attr.perishSongUser.get(targetKey);
     if (perishUser) return perishUser;
 
-    // Final fallback: opposing active Pokémon
-    return attr.activePokemon[opposingSide(targetSide)] ?? null;
+    // Final fallback: the opposing active Pokémon, when there is only one
+    return soleActiveOpponent(targetSide);
   }
 
   // ─── Main Parse Loop ────────────────────────────────────────────
@@ -612,6 +637,12 @@ export function parseReplayLog(log: string): ParsedBattleStats {
     const kw = kwArgs as { from?: string; of?: string; upkeep?: true };
 
     switch (cmd) {
+      // ── Game type ────────────────────────────────────────────
+      case 'gametype': {
+        if (args[1] !== 'singles') multiSlot = true;
+        break;
+      }
+
       // ── Turn ──────────────────────────────────────────────────
       case 'turn': {
         currentTurn = parseInt(args[1] as string, 10);
@@ -646,12 +677,9 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         if (!slot.endsWith('a')) multiSlot = true;
         const species = extractSpeciesFromDetails(details);
 
-        // Mark previous active Pokémon on this side as inactive
-        for (const tracker of Array.from(trackers[side].values())) {
-          if (tracker.is_active) {
-            tracker.is_active = false;
-          }
-        }
+        // Only the Pokémon leaving this slot comes off the field: its partner stays.
+        const leaving = trackerInSlot(ident);
+        if (leaving) leaving.is_active = false;
 
         const tracker = getOrCreateTrackerForSwitch(side, slot, species);
         tracker.is_active = true;
@@ -660,7 +688,26 @@ export function parseReplayLog(log: string): ParsedBattleStats {
           tracker.was_lead = true;
         }
 
-        attr.activePokemon[side] = { side, pokemon: tracker.pokemon_name };
+        attr.activeBySlot.set(slot, { side, pokemon: tracker.pokemon_name });
+        break;
+      }
+
+      // ── Ally Switch: two slots of a side trade places ──────────
+      case 'swap': {
+        const ident = args[1] as string;
+        const side = extractSide(ident);
+        const target = args[2] as string;
+        const identSlot = extractSlot(ident);
+        let slots: [string, string] | null = null;
+        if (Number.isNaN(Number(target))) {
+          slots = [identSlot, extractSlot(target)];
+        } else {
+          // The ident and the position name where the Pokémon now stands: the other occupied slot is where it came from.
+          const arrived = side + 'abc'.charAt(Number(target));
+          const others = Array.from(slotToTrackerKey.keys()).filter((slot) => slot.startsWith(side) && slot !== arrived);
+          if (others.length === 1) slots = [arrived, others[0]];
+        }
+        if (slots && slots[0] !== slots[1]) swapSlots(slots[0], slots[1]);
         break;
       }
 
@@ -702,7 +749,8 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         const moveName = args[2] as string;
         const side = extractSide(ident);
 
-        const tracker = findActiveTracker(side) ?? trackers[side].get(extractName(ident));
+        const inSlot = trackerInSlot(ident);
+        const tracker = (inSlot?.is_active ? inSlot : undefined) ?? trackers[side].get(extractName(ident));
         if (tracker) {
           tracker.moves_used.add(moveName);
           tracker.activationBaseline?.window_moves.add(moveName);
@@ -793,7 +841,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
             if (setter) attr.statusInflicter.set(targetKey, setter);
           } else if (kw.from.startsWith('ability:') || kw.from.startsWith('item:')) {
             // Contact abilities (Flame Body, Static, etc.) — source is opposing active
-            const opp = attr.activePokemon[opposingSide(targetSide)];
+            const opp = soleActiveOpponent(targetSide);
             if (opp) attr.statusInflicter.set(targetKey, opp);
           } else if (attr.lastMoveUser) {
             attr.statusInflicter.set(targetKey, { ...attr.lastMoveUser });
@@ -869,14 +917,20 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         const effect = args[2] as string;
 
         if (effect === 'move: Destiny Bond' || effect === 'Destiny Bond') {
-          // The next faint of the opponent should be credited to this Pokémon
+          // The next faint of the opponent should be credited to this Pokémon. In doubles that opponent is the one that
+          // took this Pokémon down: the faint line comes first, so its credit is on record (or still pending if not).
           const ref = identToRef(ident);
-          const oppSide = opposingSide(ref.side);
-          const oppActive = attr.activePokemon[oppSide];
-          if (oppActive) {
-            const oppKey = oppActive.pokemon + '|' + oppSide;
-            attr.lastDamageSource.set(oppKey, { kind: 'move', attacker: ref });
-            attr.lastOpposingDamager.set(oppKey, ref);
+          const selfKey = ref.pokemon + '|' + ref.side;
+          let killer: PokemonRef | null = null;
+          if (multiSlot) {
+            const pending = attr.lastDamageSource.get(selfKey)?.attacker ?? attr.lastOpposingDamager.get(selfKey);
+            killer = (pending && pending.side !== ref.side ? pending : null) ?? attr.faintCredit.get(selfKey) ?? null;
+          }
+          killer ??= soleActiveOpponent(ref.side);
+          if (killer) {
+            const killerKey = killer.pokemon + '|' + killer.side;
+            attr.lastDamageSource.set(killerKey, { kind: 'move', attacker: ref });
+            attr.lastOpposingDamager.set(killerKey, ref);
           }
         }
         break;
@@ -888,8 +942,8 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         const side = extractSide(ident);
         const targetKey = pokemonKey(ident);
 
-        // Mark the fainted Pokémon
-        const faintedTracker = findActiveTracker(side);
+        // Mark the fainted Pokémon: the one in the ident's slot, whatever its partner is doing
+        const faintedTracker = trackerInSlot(ident);
         if (faintedTracker) {
           faintedTracker.was_koed = true;
           faintedTracker.is_active = false;
@@ -898,6 +952,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         // Determine kill attribution
         const dmgSource = attr.lastDamageSource.get(targetKey);
         const attacker = resolveKillCredit(dmgSource, targetKey, side);
+        attr.faintCredit.set(targetKey, attacker && attacker.side !== side ? attacker : null);
 
         if (attacker && attacker.side !== side) {
           const attackerTracker = trackers[attacker.side].get(attacker.pokemon);

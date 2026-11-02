@@ -1,0 +1,402 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parses the singles battle "Destiny Bond activation without a preceding damage line" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 1,
+          "moves_used": [],
+          "pokemon_name": "Gengar",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 1",
+    },
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [],
+          "pokemon_name": "Garchomp",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 2",
+    },
+  ],
+  "winner_ps_username": "Alice",
+}
+`;
+
+exports[`parses the singles battle "Destiny Bond after a KO" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 1,
+          "moves_used": [
+            "Destiny Bond",
+          ],
+          "pokemon_name": "Gengar",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 1",
+    },
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 1,
+          "moves_used": [
+            "Earthquake",
+          ],
+          "pokemon_name": "Garchomp",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 2",
+    },
+  ],
+  "winner_ps_username": "Nobody",
+}
+`;
+
+exports[`parses the singles battle "Illusion reveal splits the disguise window" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [],
+          "pokemon_name": "Alpha",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 1",
+    },
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 1,
+          "moves_used": [
+            "Bitter Malice",
+            "Night Daze",
+          ],
+          "pokemon_name": "Zoroark",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": true,
+        },
+        {
+          "kos_dealt": 0,
+          "moves_used": [],
+          "pokemon_name": "Lycanroc",
+          "turns_active": 0,
+          "was_brought": false,
+          "was_koed": false,
+          "was_lead": false,
+        },
+      ],
+      "ps_username": "Player 2",
+    },
+  ],
+  "winner_ps_username": "Bob",
+}
+`;
+
+exports[`parses the singles battle "KO, hazards, weather and status credit" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [
+            "Stealth Rock",
+            "Earthquake",
+          ],
+          "pokemon_name": "Garchomp",
+          "turns_active": 3,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+        {
+          "kos_dealt": 0,
+          "moves_used": [],
+          "pokemon_name": "Gliscor",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": false,
+        },
+      ],
+      "ps_username": "Alice",
+    },
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [
+            "Thunder Wave",
+            "Crunch",
+          ],
+          "pokemon_name": "Tyranitar",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+        {
+          "kos_dealt": 1,
+          "moves_used": [
+            "Toxic",
+          ],
+          "pokemon_name": "Toxapex",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": false,
+        },
+      ],
+      "ps_username": "Bob",
+    },
+  ],
+  "winner_ps_username": "Bob",
+}
+`;
+
+exports[`parses the singles battle "Mimikyu forme change and re-entry" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [],
+          "pokemon_name": "Alpha",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+        {
+          "kos_dealt": 0,
+          "moves_used": [],
+          "pokemon_name": "Beta",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": false,
+        },
+      ],
+      "ps_username": "Player 1",
+    },
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 2,
+          "moves_used": [
+            "Play Rough",
+            "Shadow Sneak",
+          ],
+          "pokemon_name": "Mimikyu",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 2",
+    },
+  ],
+  "winner_ps_username": "Bob",
+}
+`;
+
+exports[`parses the singles battle "Perish Song, Leech Seed, Curse and traps" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 1,
+          "moves_used": [
+            "Perish Song",
+            "Curse",
+          ],
+          "pokemon_name": "Gengar",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 1",
+    },
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [
+            "Leech Seed",
+          ],
+          "pokemon_name": "Ferrothorn",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 2",
+    },
+  ],
+  "winner_ps_username": "Alice",
+}
+`;
+
+exports[`parses the singles battle "recoil and Life Orb credit the last opposing damager" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [
+            "Double-Edge",
+          ],
+          "pokemon_name": "Garchomp",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 1",
+    },
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 1,
+          "moves_used": [
+            "U-turn",
+          ],
+          "pokemon_name": "Landorus-Therian",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 2",
+    },
+  ],
+  "winner_ps_username": "Bob",
+}
+`;
+
+exports[`parses the singles battle "switches, drags, Rocky Helmet and Rough Skin credit" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [
+            "Quick Attack",
+          ],
+          "pokemon_name": "Pikachu",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+        {
+          "kos_dealt": 0,
+          "moves_used": [
+            "Roar",
+          ],
+          "pokemon_name": "Charizard",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": false,
+        },
+      ],
+      "ps_username": "Player 1",
+    },
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 1,
+          "moves_used": [
+            "Dragon Tail",
+          ],
+          "pokemon_name": "Garchomp",
+          "turns_active": 2,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": true,
+        },
+        {
+          "kos_dealt": 0,
+          "moves_used": [],
+          "pokemon_name": "Ferrothorn",
+          "turns_active": 1,
+          "was_brought": true,
+          "was_koed": false,
+          "was_lead": false,
+        },
+      ],
+      "ps_username": "Player 2",
+    },
+  ],
+  "winner_ps_username": "Alice",
+}
+`;
+
+exports[`parses the singles battle "unreadable and out-of-order lines" as before 1`] = `
+{
+  "players": [
+    {
+      "pokemon": [
+        {
+          "kos_dealt": 0,
+          "moves_used": [],
+          "pokemon_name": "Pikachu",
+          "turns_active": 0,
+          "was_brought": true,
+          "was_koed": true,
+          "was_lead": true,
+        },
+      ],
+      "ps_username": "Player 1",
+    },
+    {
+      "pokemon": [],
+      "ps_username": "Player 2",
+    },
+  ],
+  "winner_ps_username": "Bob",
+}
+`;
