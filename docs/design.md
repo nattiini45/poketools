@@ -144,6 +144,7 @@ duration or easing curve in a component.
 
 | Token | Value | Use |
 |---|---|---|
+| `DURATION.instant` | 0ms | No tween; reduced motion on a height tween (`CollapsibleSection`) |
 | `DURATION.micro` | 140ms | Hover, press — must feel instantaneous |
 | `DURATION.state` | 220ms | Toggle, select, discrete state change |
 | `DURATION.overlay` | 280ms | Popover, toast, dialog |
@@ -176,7 +177,9 @@ Rules:
   re-exported through the motion barrel) is mounted in the root layout and turns
   transform animations off for every `motion` primitive. A primitive that moves
   on its own clock (`CountUpNumber`) or that should not stagger (`PageTransitionWrapper`,
-  `AnimatedList`) reads `useReducedMotion()` as well; Tailwind enter/exit
+  `AnimatedList`) reads `useReducedMotion()` as well; `CollapsibleSection`
+  does too, because `MotionConfig` leaves a height tween running, and it opens and
+  closes at `DURATION.instant`; Tailwind enter/exit
   animations drop their slide with `motion-reduce:` (`BottomSheet`). No
   `transition={{ duration: <number> }}` literal in `src/components`
   (`motion-guards.test.ts`). Broadcast overlays use no motion primitive: they
