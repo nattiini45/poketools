@@ -90,6 +90,38 @@ describe('20261102140000_legacy_draft_roster_lock.sql', () => {
   });
 });
 
+describe('20261102150100_legacy_draft_roster_lock_serialize.sql', () => {
+  const SERIALIZE = read('20261102150100_legacy_draft_roster_lock_serialize.sql');
+  const activation = fnBody(SERIALIZE, 'draft_pools__serialize_activation(');
+  const swap = fnBody(SERIALIZE, 'season_participants__swap_guard(');
+
+  it('a pool going live takes the season lock of the roster guards, only for a legacy pool entering in_progress', () => {
+    expect(activation).toContain("NEW.engine = 'legacy'");
+    expect(activation).toContain("NEW.status = 'in_progress'");
+    expect(activation).toContain('OLD.status IS DISTINCT FROM NEW.status');
+    expect(activation).toContain('pg_advisory_xact_lock(hashtext(NEW.season_id::text))');
+    expect(SERIALIZE).toMatch(/BEFORE UPDATE OF status ON public\.draft_pools/);
+  });
+
+  it('the substitution swap takes the same lock before it looks for a live legacy pool, and a plain league takes none', () => {
+    const early = swap.indexOf('RETURN NEW;');
+    const lock = swap.indexOf('pg_advisory_xact_lock(hashtext(NEW.season_id::text))');
+    const refusal = swap.indexOf("RAISE EXCEPTION 'SEASON_DRAFT_LOCKED'");
+    expect(early).toBeGreaterThan(-1);
+    expect(lock).toBeGreaterThan(early);
+    expect(refusal).toBeGreaterThan(lock);
+    expect(swap).toContain('public.season__legacy_draft_live(NEW.season_id)');
+    expect(SERIALIZE).toMatch(/BEFORE UPDATE OF player_id ON public\.season_participants[\s\S]*WHEN \(OLD\.player_id IS DISTINCT FROM NEW\.player_id\)/);
+  });
+
+  it('adds no INSERT trigger, table or policy, so league_trash__inventory() stays complete', () => {
+    expect(SERIALIZE).not.toMatch(/CREATE TRIGGER[^;]*INSERT/i);
+    expect(SERIALIZE).not.toMatch(/CREATE TABLE|CREATE POLICY/i);
+    expect(SERIALIZE).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*FROM PUBLIC, anon, authenticated;/);
+    expect(SERIALIZE).not.toMatch(/TO\s+(anon|authenticated|PUBLIC)/);
+  });
+});
+
 describe('league recycle bin restore order', () => {
   const restore = read('20261026091000_league_trash.sql');
   const plan = fnBody(restore, 'league_trash__restore_plan(');

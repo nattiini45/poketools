@@ -8,7 +8,8 @@ import {
   createTier,
   bulkCreateTiers,
 } from '@/lib/supabase/queries/evolutions';
-import { createPoolEntry, getPoolEntry } from '@/lib/supabase/queries/draft-pool-entries';
+import { createPoolEntry, getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
+import { toID } from '@/lib/pkmn/i18n/id';
 import type { ApiResult } from '@/types/api';
 import type { EvolutionTier, EvolutionTierFormData } from '@/types/evolution';
 import { evolutionCreateSchema, formatZodErrors } from '@/lib/validation';
@@ -99,13 +100,19 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
       // Auto-sync: create matching draft pool entries for non-wildcard tiers
       const nonWildcards = items.filter((i) => !i.player_id);
       if (nonWildcards.length > 0) {
-        const { bulkCreatePoolEntries, getPoolEntries } = await import(
+        const { bulkCreatePoolEntries } = await import(
           '@/lib/supabase/queries/draft-pool-entries'
         );
         const existing = await getPoolEntries(seasonId);
-        const existingNames = new Set(existing.map((e) => e.pokemon_name.toLowerCase()));
+        // Compared by id, as the picks route does: a second spelling of a listed Pokémon is no new pool entry.
+        const seen = new Set(existing.map((e) => toID(e.pokemon_name)));
         const newEntries = nonWildcards
-          .filter((i) => !existingNames.has(i.base_pokemon.toLowerCase()))
+          .filter((i) => {
+            const id = toID(i.base_pokemon);
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          })
           .map((i) => ({
             season_id: i.season_id,
             pokemon_name: i.base_pokemon,
@@ -141,7 +148,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
 
     // Auto-sync: create a matching draft pool entry (skip wildcards — they're player-specific)
     if (!input.player_id) {
-      const existing = await getPoolEntry(input.season_id, input.base_pokemon);
+      const baseId = toID(input.base_pokemon);
+      const existing = (await getPoolEntries(input.season_id)).find((e) => toID(e.pokemon_name) === baseId);
       if (!existing) {
         await createPoolEntry({
           season_id: input.season_id,

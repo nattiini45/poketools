@@ -17,6 +17,8 @@ export default defineDe<typeof en>()({
     'Diese Liga hat Gruppen. Gruppen draften getrennt, und das geht nur in Evolution-Point-Buy-Ligen. Entferne die Gruppen im Tab Teilnehmer, um einen gemeinsamen Draft für alle anzulegen.',
   draft_budget_below_rounds:
     'Ein Budget von {budget} reicht nicht für {rounds} Picks zum Standardpreis von {price} (nötig: {minimum}).',
+  draft_budget_below_listed_rounds:
+    'Ein Budget von {budget} reicht nicht für {rounds} Picks: die {rounds} günstigsten Pokémon der Pool-Liste kosten zusammen {minimum}.',
   draft_pick_strands_roster:
     'Nach diesem Pick blieben nur {remaining_after} Punkte, die restlichen {slots} Picks kosten aber mindestens {min_cost} Punkte.',
   draft_free_order_not_running: 'Nur ein laufender Draft kann auf freie Reihenfolge wechseln.',
@@ -30,6 +32,8 @@ export default defineDe<typeof en>()({
   pool_entries_empty: 'Gib mindestens einen Eintrag an.',
   pool_entries_mixed_season: 'Alle Einträge eines Sammelimports müssen zur selben Saison gehören.',
   pool_entry_not_found: 'Pool-Eintrag nicht gefunden.',
+  pool_entry_duplicate_name:
+    '{pokemon} steht schon im Draft-Pool (Namen werden ohne Groß-/Kleinschreibung, Leerzeichen und Satzzeichen verglichen).',
   pool_template_not_found: 'Vorlage nicht gefunden.',
 
   point_buy_list_not_found: 'Point-Buy-Liste nicht gefunden.',

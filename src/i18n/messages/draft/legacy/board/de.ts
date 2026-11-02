@@ -18,6 +18,12 @@ export default defineDe<typeof en>()({
       statusChange: 'Der Draft-Status konnte nicht geändert werden.',
       freeOrder: 'Der Draft konnte nicht auf freie Reihenfolge umgestellt werden.',
     },
+    pickWarnings: {
+      TRACKER_NOT_CREATED:
+        'Der Pick wurde gespeichert, aber sein Evolutions-Tracker konnte nicht angelegt werden. Nicht erneut picken: Bitte einen Admin den Tracker prüfen lassen.',
+      POOL_COMPLETION_PENDING:
+        'Der letzte Pick wurde gespeichert, aber der Draft ist noch nicht als abgeschlossen markiert. Er schließt sich beim nächsten Neuladen ab; falls nicht, kann ein Admin ihn abschließen.',
+    },
     epb: {
       pointsUsed: 'Punkte ausgegeben',
       pointsRemaining: 'Punkte übrig',

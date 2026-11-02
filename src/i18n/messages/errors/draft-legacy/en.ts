@@ -33,6 +33,8 @@ export default {
     'This league has groups. Groups draft separately, which only Evolution Point Buy leagues support. Remove the groups on the Participants tab to run one draft for everyone.',
   draft_budget_below_rounds:
     'A budget of {budget} cannot fill {rounds} picks at the default price of {price} (needs {minimum})',
+  draft_budget_below_listed_rounds:
+    'A budget of {budget} cannot fill {rounds} picks: the {rounds} cheapest Pokémon on the pool list cost {minimum}',
   draft_pick_strands_roster:
     'After this pick only {remaining_after} points would be left, but the remaining {slots} picks cost at least {min_cost} points.',
   // Switch to free order (api/drafts/[id]/free-order)
@@ -49,6 +51,8 @@ export default {
   pool_entries_empty: 'At least one entry is required',
   pool_entries_mixed_season: 'All bulk entries must share the same season_id',
   pool_entry_not_found: 'Pool entry not found',
+  pool_entry_duplicate_name:
+    '{pokemon} is already in the draft pool (names are compared without case, spaces or punctuation)',
   pool_template_not_found: 'Template not found',
 
   // Point-buy lists

@@ -8,6 +8,7 @@ import PickSelector from './PickSelector';
 import EvolutionRosterCard from './EvolutionRosterCard';
 import EvolutionEventBanner from './EvolutionEventBanner';
 import DraftStallNotice from './DraftStallNotice';
+import PickWarnings, { knownPickWarnings, type PickWarning } from './PickWarnings';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -98,6 +99,8 @@ export default function DraftBoard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<BoardError | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  // Follow-up steps that failed after a pick was saved; kept until the next pick (a poll must not hide them).
+  const [pickWarnings, setPickWarnings] = useState<PickWarning[]>([]);
   // Free pick order, admins: whose pick to enter (null = the suggested next seat).
   const [pickFor, setPickFor] = useState<string | null>(null);
   // Admin confirmations: switch a stalled draft to free order, end a free-order draft.
@@ -175,6 +178,7 @@ export default function DraftBoard({
         return;
       }
 
+      setPickWarnings(knownPickWarnings(json.warnings));
       setShowPicker(false);
       await fetchState();
     } catch (err) {
@@ -517,6 +521,8 @@ export default function DraftBoard({
       {errorText && (
         <Alert variant="error">{errorText}</Alert>
       )}
+
+      <PickWarnings warnings={pickWarnings} />
 
       {/* Evolution events banner */}
       {evolutionEvents.length > 0 && (

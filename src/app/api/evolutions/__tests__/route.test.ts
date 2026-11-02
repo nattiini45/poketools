@@ -25,7 +25,6 @@ vi.mock('@/lib/supabase/queries/evolutions', () => ({
 
 vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({
   createPoolEntry: vi.fn(),
-  getPoolEntry: vi.fn(),
   bulkCreatePoolEntries: vi.fn(),
   getPoolEntries: vi.fn(),
 }));
@@ -41,7 +40,6 @@ import {
 } from '@/lib/supabase/queries/evolutions';
 import {
   createPoolEntry,
-  getPoolEntry,
   bulkCreatePoolEntries,
   getPoolEntries,
 } from '@/lib/supabase/queries/draft-pool-entries';
@@ -276,7 +274,7 @@ describe('POST /api/evolutions', () => {
       created_at: '2026-01-01T00:00:00.000Z',
     };
     vi.mocked(createTier).mockResolvedValue(created);
-    vi.mocked(getPoolEntry).mockResolvedValue(null);
+    vi.mocked(getPoolEntries).mockResolvedValue([]);
     vi.mocked(createPoolEntry).mockResolvedValue({} as never);
 
     const request = {
@@ -331,7 +329,7 @@ describe('POST /api/evolutions', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    expect(vi.mocked(getPoolEntry)).not.toHaveBeenCalled();
+    expect(vi.mocked(getPoolEntries)).not.toHaveBeenCalled();
     expect(vi.mocked(createPoolEntry)).not.toHaveBeenCalled();
   });
 
@@ -349,7 +347,8 @@ describe('POST /api/evolutions', () => {
       power_tier: null as never as never,
       created_at: '',
     });
-    vi.mocked(getPoolEntry).mockResolvedValue({ id: 'existing-entry' } as never);
+    // Listed under another spelling: one Pokémon by id, so no second entry is created.
+    vi.mocked(getPoolEntries).mockResolvedValue([{ id: 'existing-entry', pokemon_name: 'pichu' }] as never);
 
     const request = {
       json: vi.fn().mockResolvedValue({
@@ -362,7 +361,7 @@ describe('POST /api/evolutions', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    expect(vi.mocked(getPoolEntry)).toHaveBeenCalledWith('00000000-0000-4000-a000-000000000001', 'Pichu');
+    expect(vi.mocked(getPoolEntries)).toHaveBeenCalledWith('00000000-0000-4000-a000-000000000001');
     expect(vi.mocked(createPoolEntry)).not.toHaveBeenCalled();
   });
 });

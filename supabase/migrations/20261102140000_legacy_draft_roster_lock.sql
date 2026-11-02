@@ -21,8 +21,8 @@
 -- No new trigger: the existing INSERT trigger function is replaced, so league_trash__inventory() needs no change.
 --
 -- The check and the write run under the season's advisory lock (the draft__lock key), as the group rules do. The status
--- flip of the pool itself (PATCH /api/drafts/[id]) does not take that lock, so a roster write that commits in the same
--- instant a pool goes live is not refused; the window is one statement long and the admin can still end the draft.
+-- flip of the pool and the substitution UPDATE take the same lock through the triggers of
+-- 20261102150100_legacy_draft_roster_lock_serialize.sql.
 --
 -- Deploy order: before the code that maps SEASON_DRAFT_LOCKED (the guard is inert without it, the old code would
 -- answer a raw 500). Functions only: no table, no data, RLS unchanged; both functions stay service_role only.

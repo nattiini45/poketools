@@ -26,6 +26,13 @@ export default {
       statusChange: 'Failed to update draft status',
       freeOrder: 'Failed to switch the draft to free order',
     },
+    /** A pick that was saved, followed by a step that failed: the pick stands, so it is never retried. */
+    pickWarnings: {
+      TRACKER_NOT_CREATED:
+        'The pick was saved, but its evolution tracker could not be created. Do not pick again: ask an admin to check the tracker.',
+      POOL_COMPLETION_PENDING:
+        'The last pick was saved, but the draft was not marked complete yet. It completes when the board reloads; if it does not, an admin can complete it.',
+    },
     epb: {
       pointsUsed: 'Points used',
       pointsRemaining: 'Points remaining',

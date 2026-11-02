@@ -5,7 +5,8 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { DraftRuleError } from '@/lib/draft/errors';
 import { draftErrorResponse } from '@/lib/draft/http';
-import { getDefaultRounds } from '@/lib/draft/engine';
+import { minCompletion } from '@/lib/draft/budget';
+import { availablePricesSorted, getDefaultRounds } from '@/lib/draft/engine';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import { defaultPickOrder, isPickOrderAllowed } from '@/lib/draft/pool-format';
 import { seasonRosterIds } from '@/lib/draft/pool-roster';
@@ -28,6 +29,7 @@ import {
   getDraftPoolsBySeason,
   createDraftPool,
 } from '@/lib/supabase/queries/drafts';
+import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
@@ -349,24 +351,38 @@ export async function POST(request: NextRequest) {
     }
 
     // Fixed costs: a player who cannot afford their remaining rounds can never finish them (in a turn order
-    // that also stalls everyone), so a budget below rounds × default price (what an unpriced Pokémon costs)
-    // could never fill the pool, whatever the pick order. Pool entries are added after creation, so only the
-    // default price is checked here.
+    // that also stalls everyone), so a budget below what the rounds cost at the cheapest prices could never
+    // fill the pool, whatever the pick order. A season with a pool list only offers its entries, each at its own
+    // price (else the default price); without a list any Pokémon costs the default price. Entries added after
+    // the pool exists are not seen here.
     const rounds = body.rounds ?? getDefaultRounds(body.draft_type);
-    if (
-      body.draft_type === 'budget' && body.budget != null &&
-      body.default_point_cost != null && body.budget < rounds * body.default_point_cost
-    ) {
-      const minimum = rounds * body.default_point_cost;
-      return NextResponse.json<ApiResult<never>>(
-        {
-          success: false,
-          error: `A budget of ${body.budget} cannot fill ${rounds} picks at the default price of ${body.default_point_cost} (needs ${minimum})`,
-          code: 'draft_budget_below_rounds',
-          params: { budget: body.budget, rounds, price: body.default_point_cost, minimum },
-        },
-        { status: 400 }
-      );
+    if (body.draft_type === 'budget' && body.budget != null) {
+      const listedPrices = availablePricesSorted(await getPoolEntries(body.season_id), [], body.default_point_cost ?? 0);
+      if (listedPrices !== null) {
+        const minimum = minCompletion(listedPrices, rounds).cost;
+        if (body.budget < minimum) {
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `A budget of ${body.budget} cannot fill ${rounds} picks: the ${rounds} cheapest Pokémon on the pool list cost ${minimum}`,
+              code: 'draft_budget_below_listed_rounds',
+              params: { budget: body.budget, rounds, minimum },
+            },
+            { status: 400 }
+          );
+        }
+      } else if (body.default_point_cost != null && body.budget < rounds * body.default_point_cost) {
+        const minimum = rounds * body.default_point_cost;
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: `A budget of ${body.budget} cannot fill ${rounds} picks at the default price of ${body.default_point_cost} (needs ${minimum})`,
+            code: 'draft_budget_below_rounds',
+            params: { budget: body.budget, rounds, price: body.default_point_cost, minimum },
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // A league with groups drafts per group, which only the queue engine runs (a legacy pool has no seats, so

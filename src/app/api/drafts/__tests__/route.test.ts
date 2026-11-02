@@ -38,6 +38,9 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonParticipants: vi.fn(async () => []),
 }));
 
+// The season's pool list: none by default (any Pokémon may be picked at the default price).
+vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({ getPoolEntries: vi.fn(async () => []) }));
+
 // Queue-engine creation (EPB seasons).
 vi.mock('@/lib/revalidation', () => ({ expireDraftReads: vi.fn() }));
 vi.mock('@/lib/season/epb-phase', () => ({ getEpbPhaseStatus: vi.fn() }));
@@ -72,6 +75,7 @@ import {
   GroupedLeaguePoolLookupError,
 } from '@/lib/supabase/queries/drafts';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
+import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
 import { expireDraftReads } from '@/lib/revalidation';
 import { getEpbPhaseStatus } from '@/lib/season/epb-phase';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
@@ -549,6 +553,57 @@ describe('POST /api/drafts', () => {
       params: { budget: 60, rounds: 11, price: 10, minimum: 110 },
     });
     expect(vi.mocked(createDraftPool)).not.toHaveBeenCalled();
+  });
+
+  describe('with a pool list on the season', () => {
+    const SEASON = '00000000-0000-4000-a000-000000000001';
+    const post = (body: unknown) => POST({ json: vi.fn().mockResolvedValue(body) } as unknown as NextRequest);
+    const entry = (pokemon_name: string, point_cost: number | null) =>
+      ({ id: pokemon_name, season_id: SEASON, pokemon_name, power_tier: null, point_cost }) as never;
+
+    beforeEach(() => {
+      vi.mocked(createDraftPool).mockClear();
+      vi.mocked(requireResourceAdmin).mockResolvedValue(adminPlayer);
+      vi.mocked(getDraftPoolBySeason).mockResolvedValue(null);
+      vi.mocked(createDraftPool).mockResolvedValue({ ...mockPool, draft_type: 'budget', pick_order: 'free' });
+    });
+
+    afterEach(() => {
+      vi.mocked(getPoolEntries).mockResolvedValue([]);
+    });
+
+    it('prices the rounds from the cheapest listed entries, not from the default price', async () => {
+      // 3 rounds at a default of 10 would need 30, but the three cheapest listed entries cost 2 + 3 + 5 = 10.
+      vi.mocked(getPoolEntries).mockResolvedValue([entry('Rattata', 2), entry('Pidgey', 3), entry('Zubat', 5), entry('Mewtwo', 90)]);
+
+      const response = await post({ season_id: SEASON, draft_type: 'budget', pick_order: 'free', budget: 10, default_point_cost: 10, rounds: 3 });
+
+      expect(response.status).toBe(201);
+    });
+
+    it('refuses with its own code when even the cheapest listed entries exceed the budget', async () => {
+      vi.mocked(getPoolEntries).mockResolvedValue([entry('Rattata', 2), entry('Pidgey', 3), entry('Zubat', 5), entry('Mewtwo', 90)]);
+
+      const response = await post({ season_id: SEASON, draft_type: 'budget', pick_order: 'snake', budget: 9, default_point_cost: 9, rounds: 3 });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        code: 'draft_budget_below_listed_rounds',
+        params: { budget: 9, rounds: 3, minimum: 10 },
+      });
+      expect(createDraftPool).not.toHaveBeenCalled();
+    });
+
+    it('prices an unpriced entry at the default price, or 0 without one', async () => {
+      vi.mocked(getPoolEntries).mockResolvedValue([entry('Rattata', null), entry('Pidgey', null)]);
+
+      const noDefault = await post({ season_id: SEASON, draft_type: 'budget', pick_order: 'free', budget: 5, rounds: 2 });
+      expect(noDefault.status).toBe(201);
+
+      const refused = await post({ season_id: SEASON, draft_type: 'budget', pick_order: 'free', budget: 15, default_point_cost: 10, rounds: 2 });
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toMatchObject({ code: 'draft_budget_below_listed_rounds', params: { minimum: 20 } });
+    });
   });
 
   it('accepts a free-order budget pool whose budget covers the rounds', async () => {

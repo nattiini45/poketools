@@ -255,8 +255,9 @@ async function assertSeasonOpen(seasonId: string): Promise<void> {
 /**
  * A legacy pool stores no seats and recomputes every turn from the current roster, so swapping a trainer mid-draft
  * would hand the outgoing trainer's seat, picks and turn to someone else's order. Refused before the first write
- * (the preview included): 409 `SEASON_DRAFT_LOCKED`. An UPDATE of the roster row has no database guard (the join and
- * removal guards of 20261102140000 cover INSERT and DELETE), so this read is the only check for a substitution.
+ * (the preview included): 409 `SEASON_DRAFT_LOCKED`. The roster swap itself is guarded under the season lock by the
+ * trigger of 20261102150100, so a draft that starts after this read is refused at the swap; this read keeps the
+ * preview and the earlier writes (matches, enrollments) from running for a substitution that cannot finish.
  */
 async function assertLegacyDraftNotRunning(seasonId: string): Promise<void> {
   if (await seasonHasLiveLegacyDraft(seasonId)) throw new DraftRuleError('SEASON_DRAFT_LOCKED');

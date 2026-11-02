@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin, requireAuth } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { foldedPoolEntryDuplicate } from '@/lib/draft/pool-entry-names';
 import {
   getPoolEntries,
   createPoolEntry,
@@ -11,6 +13,20 @@ import type { ApiResult } from '@/types/api';
 import type { DraftPoolEntry } from '@/types/draft-pool';
 import { draftPoolEntryCreateSchema, formatZodErrors } from '@/lib/validation';
 import type { DraftPoolEntryCreateInput } from '@/lib/validation';
+
+/**
+ * A pool lists a Pokémon once: the picks route compares names by id, so a second spelling of a listed Pokémon would
+ * count toward the pool's size without ever being pickable. 409 `pool_entry_duplicate_name`.
+ */
+async function assertNoFoldedDuplicate(seasonId: string, names: readonly string[]): Promise<void> {
+  const duplicate = foldedPoolEntryDuplicate(await getPoolEntries(seasonId), names);
+  if (duplicate === null) return;
+  throw new UserFacingError(`${duplicate} is already in the draft pool (names are compared without case, spaces or punctuation)`, {
+    code: 'pool_entry_duplicate_name',
+    params: { pokemon: duplicate },
+    status: 409,
+  });
+}
 
 /**
  * GET /api/draft-pool-entries?season_id=X
@@ -81,6 +97,7 @@ export async function POST(
       }
 
       await requireResourceAdmin('season', seasonId);
+      await assertNoFoldedDuplicate(seasonId, items.map((i) => i.pokemon_name));
       const entries = await bulkCreatePoolEntries(items);
       return NextResponse.json({ success: true, data: entries }, { status: 201 });
     }
@@ -96,6 +113,7 @@ export async function POST(
     const input = zodResult.data;
 
     await requireResourceAdmin('season', input.season_id);
+    await assertNoFoldedDuplicate(input.season_id, [input.pokemon_name]);
     const entry = await createPoolEntry(input);
     return NextResponse.json({ success: true, data: entry }, { status: 201 });
   } catch (err) {

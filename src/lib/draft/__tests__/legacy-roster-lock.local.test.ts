@@ -157,6 +157,37 @@ describe.skipIf(!optIn)('legacy draft roster lock (local stack)', () => {
     expect(pool?.id).toBe(poolId);
   });
 
+  it('refuses the roster swap of a substitution while a legacy pool is in progress, and allows it otherwise', async () => {
+    const live = await seedLeague('swap-live', { engine: 'legacy', status: 'in_progress' });
+    const incoming = await newPlayer('swap-live-in');
+    const refused = await db
+      .from('season_participants')
+      .update({ player_id: incoming })
+      .eq('season_id', live.seasonId)
+      .eq('player_id', live.a);
+    expect(refused.error?.message).toContain('SEASON_DRAFT_LOCKED');
+    expect(refused.error?.code).toBe('P0001');
+    const { data: still } = await must(
+      'still',
+      db.from('season_participants').select('player_id').eq('season_id', live.seasonId).eq('player_id', live.a),
+    );
+    expect(still).toHaveLength(1);
+
+    for (const [label, pool] of [
+      ['swap-pending', { engine: 'legacy', status: 'pending' } as const],
+      ['swap-nopool', null],
+    ] as const) {
+      const league = await seedLeague(label, pool);
+      const other = await newPlayer(`${label}-in`);
+      const swapped = await db
+        .from('season_participants')
+        .update({ player_id: other })
+        .eq('season_id', league.seasonId)
+        .eq('player_id', league.a);
+      expect(swapped.error, label).toBeNull();
+    }
+  });
+
   it('season__legacy_draft_live is executable by service_role only', async () => {
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!anon) return;
