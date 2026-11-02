@@ -144,6 +144,7 @@ duration or easing curve in a component.
 
 | Token | Value | Use |
 |---|---|---|
+| `DURATION.instant` | 0ms | No tween; reduced motion on a height tween (`CollapsibleSection`) |
 | `DURATION.micro` | 140ms | Hover, press — must feel instantaneous |
 | `DURATION.state` | 220ms | Toggle, select, discrete state change |
 | `DURATION.overlay` | 280ms | Popover, toast, dialog |
@@ -172,6 +173,18 @@ Rules:
 - **Reduced motion is not "no feedback".** Under
   `prefers-reduced-motion: reduce`, translation and stagger drop but opacity
   cross-fades remain — content stays legible and state changes stay visible.
+  One `MotionConfig reducedMotion="user"` (`components/shared/MotionProvider.tsx`,
+  re-exported through the motion barrel) is mounted in the root layout and turns
+  transform animations off for every `motion` primitive. A primitive that moves
+  on its own clock (`CountUpNumber`) or that should not stagger (`PageTransitionWrapper`,
+  `AnimatedList`, an animated `Table`, the dashboard) reads `useReducedMotion()`
+  as well and sets its stagger to 0; `CollapsibleSection` does too, because
+  `MotionConfig` leaves a height tween running, and its height snaps at
+  `DURATION.instant` while the opacity fade stays; Tailwind enter/exit
+  animations drop their slide with `motion-reduce:` (`BottomSheet`). No
+  `transition={{ duration: <number> }}` literal in `src/components`
+  (`motion-guards.test.ts`). Broadcast overlays use no motion primitive: they
+  follow the caster's `anim=` option, not the viewer's OS setting.
 
 `WORLD_MOTION` in the same file carries the route-world constants (camera
 damping, pointer parallax clamp, sway and bob amplitudes, reveal duration) so
@@ -189,10 +202,11 @@ interactivity) and consume the tokens above.
 | `Button` | Primary/secondary/ghost/danger variants × sm/md/lg sizes |
 | `buttonStyles.ts` | `getButtonClasses(variant, size)` for non-`<Button>` callers (e.g. anchor tags) |
 | `Badge` | Status/type chip with color variants (green/gray/blue/red/yellow/purple/…) |
-| `Input` / `Select` / `Textarea` | Form controls with label + poke styling (Select keeps native `<select>` for GET forms) |
+| `Input` / `Select` / `Textarea` | Form controls with label + poke styling (Select keeps native `<select>` for GET forms). Ids come from `useId` (an explicit `id` wins), never from the label text. An `error` sets `aria-invalid` and describes the control through an always-rendered `aria-live="polite"` region; a `hint` (all three take one) describes it while there is no error; a caller's `aria-describedby` is kept and the field's id is appended (`field-a11y.tsx`) |
 | `Table` | Data table with optional client sort; exports `SortableTableHeader` + `TablePagination` |
 | `Tooltip` / `Popover` | Overlay primitives (Radix for click; custom portal for hover popovers) |
 | `Modal` / `ConfirmDialog` | Dialog surfaces (Radix Dialog) |
+| `BottomSheet` (`components/shared`) | Mobile sheet on the same Radix Dialog: dialog role named by its title, focus trap, visible close button, swipe-down handle; it restores focus to the element that had it when the sheet opened (Radix only restores to a `Dialog.Trigger`) |
 | `Alert` | Inline message banners |
 | `Section` / `CollapsibleSection` | Content grouping |
 | `Combobox` | Searchable select |

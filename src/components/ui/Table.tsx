@@ -9,8 +9,9 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { motion, type Variants } from "@/components/shared/motion";
+import { motion, useReducedMotion, type Variants } from "@/components/shared/motion";
 import { cn } from "@/lib/utils/cn";
+import { DURATION, EASE, OFFSET, STAGGER } from "@/lib/motion/tokens";
 import {
   cycleColumnSort,
   type ColumnSortState,
@@ -113,12 +114,17 @@ const alignClass = {
 
 const tbodyVariants: Variants = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.04 } },
+  visible: { transition: { staggerChildren: STAGGER.mobile } },
+};
+
+const tbodyVariantsReduced: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0 } },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  hidden: { opacity: 0, y: OFFSET.sm },
+  visible: { opacity: 1, y: 0, transition: { duration: DURATION.state, ease: EASE.out } },
 };
 
 export interface SortableTableHeaderProps {
@@ -450,11 +456,12 @@ export default function Table<T extends object>({
     }
   }
 
+  const reduceMotion = useReducedMotion() ?? false;
   const Tbody = animated ? motion.tbody : "tbody";
   const Tr = animated ? motion.tr : "tr";
 
   const tbodyProps = animated
-    ? { variants: tbodyVariants, initial: "hidden" as const, animate: "visible" as const }
+    ? { variants: reduceMotion ? tbodyVariantsReduced : tbodyVariants, initial: "hidden" as const, animate: "visible" as const }
     : {};
 
   return (

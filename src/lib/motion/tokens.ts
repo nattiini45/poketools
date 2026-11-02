@@ -12,6 +12,8 @@
 
 /** Duration scale, in seconds, by the job the motion is doing. */
 export const DURATION = {
+  /** No tween: the end state at once. For reduced motion on properties `MotionConfig` leaves alone (height). */
+  instant: 0,
   /** Hover, press, and any feedback that must feel instantaneous. */
   micro: 0.14,
   /** Toggle, select, and other discrete state changes. */

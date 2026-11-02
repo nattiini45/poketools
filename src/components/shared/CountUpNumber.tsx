@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useInView } from "@/components/shared/motion";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useInView, useReducedMotion } from "@/components/shared/motion";
+
+const noopSubscribe = () => () => {};
+const isClient = () => true;
+const isServer = () => false;
 
 interface CountUpNumberProps {
   value: number;
@@ -16,10 +20,13 @@ export default function CountUpNumber({
 }: CountUpNumberProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true });
+  const reduceMotion = useReducedMotion();
   const [display, setDisplay] = useState(0);
+  // false while hydrating, so the first client render matches the server's 0 even when the viewer prefers reduced motion.
+  const hydrated = useSyncExternalStore(noopSubscribe, isClient, isServer);
 
   useEffect(() => {
-    if (!inView || value === 0) return;
+    if (reduceMotion || !inView || value === 0) return;
 
     const start = performance.now();
     let raf: number;
@@ -38,9 +45,9 @@ export default function CountUpNumber({
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [inView, value, duration]);
+  }, [reduceMotion, inView, value, duration]);
 
-  const renderedValue = inView && value === 0 ? 0 : display;
+  const renderedValue = (reduceMotion && hydrated) || (inView && value === 0) ? value : display;
 
   return (
     <span ref={ref} className={className}>

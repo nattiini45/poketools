@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence, useReducedMotion, slideInRight } from '@/components/shared/motion';
-import { SPRING } from '@/lib/motion/tokens';
+import { DURATION, SPRING } from '@/lib/motion/tokens';
 import { FOCUS_RING } from '@/components/ui/panel';
 import DiscordLoginButton from './DiscordLoginButton';
 import PlayerAvatar from './PlayerAvatar';
@@ -271,7 +271,7 @@ export default function NavBar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: DURATION.state }}
               className="fixed inset-0 z-40 bg-poke-inverse/30 backdrop-blur-sm xl:hidden"
               onClick={() => setMobileOpen(false)}
             />

@@ -76,6 +76,7 @@ export default function MovesIndexClient({ data }: { data: readonly MoveRow[] })
     () => [
       {
         key: 'name',
+        primary: true,
         header: t('index.name'),
         width: '200px',
         sortable: true,

@@ -9,7 +9,13 @@ import type { SeasonFormatType, SeasonStatus } from '@/types/season';
 import type { PlayerStandingSnapshot } from '@/lib/stats/standings-preview';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import type { TeamUsed } from './teams-used';
-import { motion, staggerContainer, staggerItem } from '@/components/shared/motion';
+import {
+  motion,
+  staggerContainer,
+  staggerContainerReduced,
+  staggerItem,
+  useReducedMotion,
+} from '@/components/shared/motion';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
 import Button from '@/components/ui/Button';
@@ -153,6 +159,7 @@ export default function DashboardContent({
   const te = useT(enumMessages);
   const tl = useT(leaguesMessages);
   const formatter = useFormatter();
+  const reduceMotion = useReducedMotion() ?? false;
   // The request time, not Date.now(): server render and hydration agree (rule T4).
   const requestTime = useRequestTime();
   const greeting = greetingKey(hourInZone(formatter, requestTime));
@@ -190,7 +197,7 @@ export default function DashboardContent({
   return (
     <motion.div
       className="space-y-6"
-      variants={staggerContainer}
+      variants={reduceMotion ? staggerContainerReduced : staggerContainer}
       initial="initial"
       animate="animate"
     >

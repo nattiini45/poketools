@@ -12,6 +12,7 @@
 export {
   motion,
   AnimatePresence,
+  MotionConfig,
   useAnimation,
   useInView,
   useMotionValue,
@@ -34,6 +35,15 @@ export const staggerContainer = {
   animate: {
     transition: {
       staggerChildren: STAGGER.desktop,
+    },
+  },
+} as const;
+
+/** The container for a viewer who asks for reduced motion: the items still fade in, all together. */
+export const staggerContainerReduced = {
+  animate: {
+    transition: {
+      staggerChildren: 0,
     },
   },
 } as const;

@@ -60,6 +60,7 @@ export default function PokemonIndexClient({ data }: { data: readonly PokemonRow
     () => [
       {
         key: 'name',
+        primary: true,
         header: t('index.name'),
         width: '180px',
         sortable: true,

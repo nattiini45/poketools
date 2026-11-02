@@ -36,6 +36,7 @@ export default {
     install: 'Install PokéTools App',
     iosHint: "Add to Home Screen from Safari's Share menu for the app experience.",
   },
+  skipToContent: 'Skip to content',
   guest: 'Guest',
   admin: {
     navLabel: 'Admin',

@@ -9,6 +9,7 @@ import Badge from '@/components/ui/Badge';
 import MovesOverflowList from '@/components/match/MovesOverflowList';
 import GameDetailEditForm from '@/components/match/GameDetailEditForm';
 import { motion, AnimatePresence } from '@/components/shared/motion';
+import { DURATION, EASE } from '@/lib/motion/tokens';
 import { useDataLocale, useT } from '@/i18n/client';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
@@ -232,7 +233,7 @@ export default function GameDetailCard({
           )}
           <motion.span
             animate={{ rotate: bodyExpanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: DURATION.state }}
             className={`text-sm ${editing ? 'text-poke-text-muted/40' : 'text-poke-text-muted'}`}
           >
             ▾
@@ -247,7 +248,7 @@ export default function GameDetailCard({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            transition={{ duration: DURATION.state, ease: EASE.standard }}
             style={{ overflow: 'hidden' }}
           >
             {editing ? (

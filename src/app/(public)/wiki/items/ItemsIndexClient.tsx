@@ -67,6 +67,7 @@ export default function ItemsIndexClient({ data }: { data: readonly ItemRow[] })
     () => [
       {
         key: 'name',
+        primary: true,
         header: t('index.name'),
         width: '200px',
         sortable: true,

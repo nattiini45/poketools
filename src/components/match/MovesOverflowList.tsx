@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from '@/components/shared/motion';
+import { DURATION } from '@/lib/motion/tokens';
 import { useDataLocale, useT } from '@/i18n/client';
 import { matchMessages } from '@/i18n/messages/match';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
@@ -195,7 +196,7 @@ export default function MovesOverflowList({ moves: englishMoves, className }: Mo
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.12 }}
+                transition={{ duration: DURATION.micro }}
                 className="fixed z-[9999] max-w-xs px-3 py-2 rounded-poke-md bg-poke-inverse text-poke-text-inverse text-xs font-medium shadow-poke-md"
                 style={
                   coords

@@ -4,6 +4,7 @@ import "./globals.css";
 import SessionProvider from "@/components/shared/SessionProvider";
 import ThemeProvider from "@/components/shared/ThemeProvider";
 import AppTooltipProvider from "@/components/ui/AppTooltipProvider";
+import MotionProvider from "@/components/shared/MotionProvider";
 import PwaRegistrar from "@/components/shared/PwaRegistrar";
 import SitePaletteGuard from "@/components/shared/SitePaletteGuard";
 import { SITE_PALETTE_PREPAINT_SCRIPT } from "@/lib/design/site-palette-script";
@@ -96,9 +97,11 @@ export default async function RootLayout({
               <SpriteStyleProvider initialPreference={spriteStyle}>
                 <SpriteStyleAccountSync />
                 <AppTooltipProvider>
-                  {children}
-                  <PwaRegistrar />
-                  <SitePaletteGuard />
+                  <MotionProvider>
+                    {children}
+                    <PwaRegistrar />
+                    <SitePaletteGuard />
+                  </MotionProvider>
                 </AppTooltipProvider>
               </SpriteStyleProvider>
             </SessionProvider>
