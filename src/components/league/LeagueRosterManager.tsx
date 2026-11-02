@@ -250,7 +250,8 @@ export default function LeagueRosterManager({
   const t = useT(leagueRosterMessages);
   const dataLocale = useDataLocale();
   // errorsDraft: the league-group refusals of adding and removing a trainer (SEASON_GROUPS_SCHEDULED,
-  // SEASON_GROUP_LOCKED, SEASON_GROUP_TOO_SMALL) and of a substitution mid-draft (SEASON_GROUP_SUBSTITUTION_LOCKED).
+  // SEASON_GROUP_LOCKED, SEASON_GROUP_TOO_SMALL), of a substitution mid-draft (SEASON_GROUP_SUBSTITUTION_LOCKED) and
+  // of any roster change while a legacy draft is in progress (SEASON_DRAFT_LOCKED).
   const errorText = useApiErrorText(errorsSeasons, errorsPlayers, errorsDraft);
   const [participants, setParticipants] = useState<SeasonParticipant[]>([]);
   const [phases, setPhases] = useState<LeaguePhase[]>([]);

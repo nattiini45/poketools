@@ -358,6 +358,24 @@ describe('validatePick', () => {
     expect(err?.code).toBe('POKEMON_TAKEN');
   });
 
+  it.each([
+    ['another case', 'Garchomp', 'GARCHOMP'],
+    ['punctuation and spaces', 'Mr. Mime', 'mr mime'],
+    ['no separator at all', 'Mr. Mime', 'MrMime'],
+    ['an accent', 'Flabébé', 'flabebe'],
+    ['a gender sign', 'Nidoran♀', 'nidoranf'],
+  ])('returns POKEMON_TAKEN for the same Pokémon spelled with %s (compared by id)', (_label, stored, requested) => {
+    const state = buildState(undefined, [makePick('p1', stored, 1)]);
+    const input: MakePickInput = { draft_pool_id: 'pool-1', player_id: 'p2', pokemon_name: requested };
+    expect(validatePick(state, input, false)?.code).toBe('POKEMON_TAKEN');
+  });
+
+  it('does not confuse two different Pokémon whose names share a prefix', () => {
+    const state = buildState(undefined, [makePick('p1', 'Mr. Mime', 1)]);
+    const input: MakePickInput = { draft_pool_id: 'pool-1', player_id: 'p2', pokemon_name: 'Mr. Mime-Galar' };
+    expect(validatePick(state, input, false)).toBeNull();
+  });
+
   it('skips the name-taken check with skipNameTakenCheck (EPB branched base)', () => {
     // EPB stores the line's base as pokemon_name: the second branch of
     // Oshawott (→ Samurott-Hisui) shares the name with the first.
@@ -367,7 +385,6 @@ describe('validatePick', () => {
       draft_pool_id: 'pool-1',
       player_id: 'p2',
       pokemon_name: 'Oshawott',
-      stage3_pokemon: 'Samurott-Hisui',
     };
     expect(validatePick(state, input, true, { skipNameTakenCheck: true })).toBeNull();
     // Without the option the legacy name check still applies.
@@ -553,6 +570,42 @@ describe('legacySeatOrder', () => {
   });
 });
 
+// ── Roster changes mid-draft ─────────────────────────────────────────
+// A legacy pool stores no seats: every request recomputes the turn from the CURRENT roster. These cases pin what
+// that does, which is why the roster is frozen while the pool is in progress (SEASON_DRAFT_LOCKED, 20261102140000).
+
+describe('computeDraftState — a roster that changes mid-draft', () => {
+  const pool = makePool({ pick_order: 'snake' });
+  const seats = ['A', 'B', 'C', 'D'];
+  const picks = [makePick('A', 'Pikachu', 1), makePick('B', 'Eevee', 2), makePick('C', 'Mew', 3), makePick('D', 'Ditto', 4)];
+
+  it('with the roster unchanged, round 2 of a snake opens with the last seat', () => {
+    const state = computeDraftState(pool, picks, seats, 2);
+    expect(state.current_round).toBe(2);
+    expect(state.current_picker).toBe('D');
+  });
+
+  it('removing a trainer after round 1 hands the turn to another seat and shortens the draft', () => {
+    const state = computeDraftState(pool, picks, ['A', 'C', 'D'], 2);
+    expect(state.current_picker).toBe('C');
+    // 3 seats x 2 rounds: the draft is complete after 6 picks, though 8 were planned with 4 seats.
+    expect(isDraftComplete(6, 3, 2)).toBe(true);
+    expect(isDraftComplete(6, 4, 2)).toBe(false);
+  });
+
+  it('the removed trainer keeps a roster entry from the stored picks but is never asked again', () => {
+    const state = computeDraftState(pool, picks, ['A', 'C', 'D'], 2);
+    expect(state.rosters.B).toEqual(['Eevee']);
+    expect(state.pick_order).not.toContain('B');
+  });
+
+  it('adding a trainer moves every later turn: the same picks now ask a different player', () => {
+    const state = computeDraftState(pool, picks, [...seats, 'E'], 2);
+    expect(state.current_round).toBe(1);
+    expect(state.current_picker).toBe('E');
+  });
+});
+
 // ── availablePricesSorted / legacyPickerStall ────────────────────────
 
 describe('availablePricesSorted', () => {
@@ -562,8 +615,9 @@ describe('availablePricesSorted', () => {
     { pokemon_name: 'Ditto', point_cost: null },
   ];
 
-  it('drops taken Pokémon (case-insensitive) and the excluded entry, prices missing costs at the fallback', () => {
+  it('drops taken Pokémon (compared by id) and the excluded entry, prices missing costs at the fallback', () => {
     expect(availablePricesSorted(entries, ['PIKACHU'], 5)).toEqual([5, 90]);
+    expect(availablePricesSorted([...entries, { pokemon_name: 'Mr. Mime', point_cost: 30 }], ['mr mime'], 5)).toEqual([5, 20, 90]);
     expect(availablePricesSorted(entries, [], 5, entries[0])).toEqual([5, 20]);
   });
 

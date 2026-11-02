@@ -32,6 +32,10 @@ vi.mock('@/lib/supabase/queries/season-groups', () => ({
   seasonGroupHasDraftingPool: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/drafts', () => ({
+  seasonHasLiveLegacyDraft: vi.fn(),
+}));
+
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getScheduledMatchesForPlayerInTournament: vi.fn(),
   repairScheduledMatchPairing: vi.fn(),
@@ -69,6 +73,7 @@ import {
 } from '@/lib/supabase/queries/matches';
 import { cancelPendingMatchProposalsForMatch } from '@/lib/supabase/queries/match-proposals';
 import { getSeasonGroupOfPlayer, seasonGroupHasDraftingPool } from '@/lib/supabase/queries/season-groups';
+import { seasonHasLiveLegacyDraft } from '@/lib/supabase/queries/drafts';
 import { DraftRuleError } from '@/lib/draft/errors';
 
 const SEASON_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01';
@@ -119,6 +124,7 @@ describe('substituteParticipant', () => {
     vi.mocked(cancelPendingMatchProposalsForMatch).mockResolvedValue([]);
     vi.mocked(getSeasonGroupOfPlayer).mockResolvedValue(null);
     vi.mocked(seasonGroupHasDraftingPool).mockResolvedValue(false);
+    vi.mocked(seasonHasLiveLegacyDraft).mockResolvedValue(false);
     vi.mocked(getPlayerById).mockImplementation(async (id) => {
       if (id === OUT_ID) return { id: OUT_ID, name: 'Out' } as never;
       if (id === IN_ID) return { id: IN_ID, name: 'In' } as never;
@@ -1327,6 +1333,40 @@ describe('substituteParticipant', () => {
       expect(log.enrollments_swapped).toEqual([]);
       expect(log.phases_touched).toEqual([]);
       expect(substituteApplyWrote(log)).toBe(false);
+    });
+  });
+
+  describe('legacy draft in progress (SEASON_DRAFT_LOCKED)', () => {
+    it('refuses a league-scope substitution while a legacy pool is in progress, preview included, before any write', async () => {
+      vi.mocked(seasonHasLiveLegacyDraft).mockResolvedValue(true);
+
+      for (const dryRun of [true, false]) {
+        const log = emptySubstituteApplyLog();
+        const err = await substituteParticipant({
+          seasonId: SEASON_ID,
+          outPlayerId: OUT_ID,
+          inPlayerId: IN_ID,
+          scope: 'league',
+          dryRun,
+          log,
+        }).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(DraftRuleError);
+        expect(err).toMatchObject({ code: 'SEASON_DRAFT_LOCKED', statusCode: 409 });
+        expect(substituteApplyWrote(log)).toBe(false);
+      }
+      expect(seasonHasLiveLegacyDraft).toHaveBeenCalledWith(SEASON_ID);
+      expect(writeSequence()).toEqual([]);
+    });
+
+    it('lets a league-scope substitution through when no legacy pool is in progress', async () => {
+      await substituteParticipant({ seasonId: SEASON_ID, outPlayerId: OUT_ID, inPlayerId: IN_ID, scope: 'league', dryRun: false });
+      expect(swapSeasonParticipant).toHaveBeenCalledTimes(1);
+    });
+
+    it('phase scope leaves the roster alone, so a legacy draft does not block it', async () => {
+      vi.mocked(seasonHasLiveLegacyDraft).mockResolvedValue(true);
+      await substituteParticipant({ seasonId: SEASON_ID, outPlayerId: OUT_ID, inPlayerId: IN_ID, scope: PHASE_ID, dryRun: true });
+      expect(seasonHasLiveLegacyDraft).not.toHaveBeenCalled();
     });
   });
 

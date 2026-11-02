@@ -13,6 +13,7 @@ import EvolutionRosterCard from '../EvolutionRosterCard';
 import EvolutionEventBanner from '../EvolutionEventBanner';
 import TierListDisplay from '../TierListDisplay';
 import DraftPoolManager from '../DraftPoolManager';
+import PickWarnings, { knownPickWarnings } from '../PickWarnings';
 import type { EvolutionTier, EvolutionTrackerWithTier } from '@/types/evolution';
 
 const tier: EvolutionTier = {
@@ -128,6 +129,28 @@ describe('TierListDisplay', () => {
     const de = renderWithI18n(element, { locale: 'de' });
     expect(de).toContain('1 verfügbar · max. 2 pro Spieler');
     expect(de).toContain('→ Glurak (6 KOs)');
+  });
+});
+
+describe('PickWarnings', () => {
+  it('words a saved pick whose follow-up failed, in English and German, without offering a retry', () => {
+    const element = <PickWarnings warnings={['TRACKER_NOT_CREATED', 'POOL_COMPLETION_PENDING']} />;
+    const en = renderToStaticMarkup(element);
+    expect(en).toContain('The pick was saved, but its evolution tracker could not be created. Do not pick again');
+    expect(en).toContain('The last pick was saved, but the draft was not marked complete yet');
+    const de = renderWithI18n(element, { locale: 'de' });
+    expect(de).toContain('Der Pick wurde gespeichert');
+    expect(de).toContain('Der letzte Pick wurde gespeichert');
+  });
+
+  it('renders nothing without warnings', () => {
+    expect(renderToStaticMarkup(<PickWarnings warnings={[]} />)).toBe('');
+  });
+
+  it('keeps only the warnings a pick response is known to carry', () => {
+    expect(knownPickWarnings(['TRACKER_NOT_CREATED', 'SOMETHING_NEW', 7])).toEqual(['TRACKER_NOT_CREATED']);
+    expect(knownPickWarnings(undefined)).toEqual([]);
+    expect(knownPickWarnings('POOL_COMPLETION_PENDING')).toEqual([]);
   });
 });
 

@@ -113,6 +113,9 @@ export default {
   /** A group pool going live whose seats are not exactly the group's members (20261018202000, trigger on draft_pools). */
   SEASON_GROUP_SEATS_STALE:
     'This group’s trainers changed since the draft was set up, so its seats no longer match the group. Delete the draft that has not started and create it again.',
+  /** A legacy draft derives every seat from the roster (20261102140000), so the roster is frozen while it is in progress. */
+  SEASON_DRAFT_LOCKED:
+    'A draft is in progress, and its pick order follows the roster, so trainers cannot be added, removed or substituted now. End the draft, or move it back to pending, to change the roster.',
   SEATS_INVALID: 'The draft order is invalid.',
   INVALID_CONFIG: 'Invalid setting: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft Kill Tokens cannot be bought now.',
@@ -131,6 +134,10 @@ export default {
   // §9.2 legacy api/drafts/** branches (English = the routes' existing text)
   POINT_BUDGET_REQUIRED: 'point_budget is required for auction/budget drafts',
   NOT_IN_POOL: '{pokemon} is not in the draft pool',
+  /** A league without a pool list takes any real species; anything else is refused (#47). */
+  UNKNOWN_SPECIES: '{pokemon} is not a known Pokémon',
+  /** Two picks raced for the same pick number and this one lost (#48). */
+  PICK_CONFLICT: 'Another pick was made at the same moment. Reload the draft and try again.',
   TIER_LIMIT_REACHED: '{tier}-tier limit reached (max {max})',
   PICK_CAP_REACHED: 'Draft pick cap reached ({max} evolution lines per trainer)',
   POINTS_CAP_EXCEEDED: 'Not enough points. Would spend {spend}/{budget} ({price} for this line)',

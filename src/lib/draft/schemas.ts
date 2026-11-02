@@ -207,7 +207,7 @@ export const auditCursorSchema = z
 
 /**
  * Legacy-engine `POST /api/drafts/[id]/picks` extras beside `draftPickSchema`
- * (`pokemon_name`, `stage3_pokemon`): who the pick is for, and the client's
+ * (`pokemon_name`): who the pick is for, and the client's
  * price. The route derives the real cost (pool entry cost, EPB list price);
  * the client value is only a free auction bid or a cross-check, so it must be
  * a non-negative integer.

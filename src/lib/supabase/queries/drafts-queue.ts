@@ -7,7 +7,6 @@
  */
 import 'server-only';
 
-import { supabase } from '@/lib/supabase/client';
 import { DraftRuleError } from '@/lib/draft/errors';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
 import { uuidSchema } from '@/lib/draft/schemas';
@@ -109,15 +108,21 @@ export async function applyDraftExtension(a: {
   return { deadline_at: str(r.deadline_at), state_version: num(r.state_version) };
 }
 
-/** Queue pools the cron ticks: open submissions or a running draft (the draft-ticks cron). */
+/**
+ * Queue pools with work due, earliest due first (the draft-ticks cron): an overdue slot in an unpaused draft, or a
+ * Redraft past its submission deadline whose publish is not in backoff. The database decides, with the same predicate
+ * `draft__tick` re-checks under the lock (`draft_list_due_pools`, 20261102150000), so idle pools are never ticked and
+ * can never crowd a due pool out of the limit.
+ */
 export async function listTickablePools(limit: number): Promise<{ id: string; season_id: string }[]> {
-  const { data, error } = await supabase
-    .from('draft_pools')
-    .select('id, season_id')
-    .eq('engine', 'queue')
-    .in('phase', ['submissions', 'drafting'])
-    .order('updated_at', { ascending: true })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? []).map((row) => ({ id: row.id, season_id: row.season_id }));
+  const rows = await callDraftRpc<unknown>('draft_list_due_pools', { p_limit: limit });
+  if (rows === null || rows === undefined) return [];
+  if (!Array.isArray(rows)) throw new Error('draft_list_due_pools returned a non-array');
+  return rows.map((row: unknown) => {
+    const { id, season_id: seasonId } = (row ?? {}) as { id?: unknown; season_id?: unknown };
+    if (typeof id !== 'string' || typeof seasonId !== 'string') {
+      throw new Error('draft_list_due_pools returned a row without id and season_id');
+    }
+    return { id, season_id: seasonId };
+  });
 }

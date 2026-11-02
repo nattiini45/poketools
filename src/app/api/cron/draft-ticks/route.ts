@@ -6,7 +6,7 @@ import { dispatchDraftNotifications, listTickablePools } from '@/lib/draft/notif
 import { expireDraftReads } from '@/lib/revalidation';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { formatZodErrors } from '@/lib/validation';
-import type { ApiResult } from '@/types/api';
+import type { ApiError, ApiResult } from '@/types/api';
 
 /** Response of one cron run. */
 interface DraftTicksResult {
@@ -25,6 +25,13 @@ interface DraftTicksResult {
    * 20261018140200 section 0): the gate search is not repeated, so they are counted, not logged again.
    */
   publishBackoff: number;
+}
+
+/** The answer of a run in which a pool's tick threw: 500 (so the cron shows as failed), the counts of the run, the failed ids. */
+interface DraftTicksFailure extends ApiError {
+  code: 'cron_draft_ticks_failed';
+  failedPools: string[];
+  data: DraftTicksResult;
 }
 
 const DEFAULT_LIMIT = 25;
@@ -50,10 +57,11 @@ function tickCounts(raw: unknown): {
 }
 
 /**
- * Draft ticker: resolves overdue pick clocks and passed
- * redraft submission deadlines in every open queue pool, then sends the
- * claimed Discord events (each exactly once, claim markers in SQL). Protected
- * like the other cron routes: `Authorization: Bearer $CRON_SECRET`.
+ * Draft ticker: resolves overdue pick clocks and passed redraft submission deadlines in the queue pools that have
+ * work due (`draft_list_due_pools`: idle, paused and backed-off pools are not ticked), then sends the claimed Discord
+ * events of every pool (each exactly once, claim markers in SQL). A pool whose tick throws does not stop the others;
+ * the run then answers 500 with the failed pool ids. Protected like the other cron routes:
+ * `Authorization: Bearer $CRON_SECRET`.
  */
 async function handle(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -94,6 +102,7 @@ async function handle(request: Request) {
       publishRefused: 0,
       publishBackoff: 0,
     };
+    const failedPools: string[] = [];
     for (const pool of pools) {
       try {
         const tick = tickCounts(await callDraftRpc('draft_tick', { p_pool_id: pool.id }));
@@ -111,7 +120,8 @@ async function handle(request: Request) {
           expireDraftReads(pool.season_id);
         }
       } catch (err) {
-        // One broken pool must not stall the others.
+        // One broken pool must not stall the others; the run still answers non-2xx below.
+        failedPools.push(pool.id);
         console.error(`[cron/draft-ticks] tick failed for pool ${pool.id}:`, err);
       }
     }
@@ -119,6 +129,21 @@ async function handle(request: Request) {
     // Claims of every pool at once (also the events the pick routes' after() did not reach).
     const claims = await callDraftRpc('draft_claim_notifications', {});
     result.notifications = await dispatchDraftNotifications(claims);
+
+    if (failedPools.length > 0) {
+      const poolList = failedPools.join(', ');
+      return NextResponse.json<DraftTicksFailure>(
+        {
+          success: false,
+          error: `Draft ticks failed for these pools: ${poolList}`,
+          code: 'cron_draft_ticks_failed',
+          params: { pools: poolList },
+          failedPools,
+          data: result,
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json<ApiResult<DraftTicksResult>>({ success: true, data: result });
   } catch (err) {

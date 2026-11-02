@@ -3,6 +3,7 @@ import { getDefaultRounds } from '@/lib/draft/engine';
 import { DRAFT_CONFIG_LIMITS } from '@/lib/draft/schemas';
 import type { EngineGapCode } from '@/lib/format-studio/library-types';
 import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
+import { draftPoolCreateSchema } from '@/lib/validation/schemas';
 import { PLAN_ENGINE_SUPPORT } from '../../plans/engine-support';
 import { ENGINE_GAP_ROWS, ENGINE_SUPPORT_ROWS } from '../engine-support';
 
@@ -29,9 +30,16 @@ describe('engine_support rows describe the code as it is', () => {
     expect(getRoundRobinTotalRounds(12)).not.toBe(22);
   });
 
-  it('legacy draft roster: fixed at 11 for every draft type', () => {
+  it('legacy draft roster: 11 rounds by default for every draft type, 1 to 50 from the draft panel', () => {
     expect(row('legacy_draft_roster_size').limit).toBe(11);
     for (const type of ['snake', 'auction', 'budget'] as const) expect(getDefaultRounds(type)).toBe(11);
+    // The statement's 1 to 50 is the create body's own range.
+    const body = { season_id: '11111111-1111-4111-8111-111111111111', draft_type: 'snake' };
+    expect(draftPoolCreateSchema.safeParse({ ...body, rounds: 1 }).success).toBe(true);
+    expect(draftPoolCreateSchema.safeParse({ ...body, rounds: 50 }).success).toBe(true);
+    expect(draftPoolCreateSchema.safeParse({ ...body, rounds: 0 }).success).toBe(false);
+    expect(draftPoolCreateSchema.safeParse({ ...body, rounds: 51 }).success).toBe(false);
+    expect(row('legacy_draft_roster_size').statement).toContain('1 to 50 rounds');
   });
 
   it('queue-engine roster size: configurable from 1 to 20, as the row says', () => {

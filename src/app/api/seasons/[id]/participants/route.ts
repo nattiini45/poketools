@@ -95,7 +95,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json<ApiResult<null>>({ success: true, data: null }, { status: 201 });
   } catch (err) {
     // A grouped league that already has rounds refuses new trainers (SEASON_GROUPS_SCHEDULED, 409): they could join
-    // no group and would have no fixtures.
+    // no group and would have no fixtures. A league whose legacy draft is in progress refuses them too
+    // (SEASON_DRAFT_LOCKED, 409): the draft's seats follow the roster.
     return safeErrorResponse(toRosterAddError(err), 'Failed to add participant');
   }
 }
@@ -119,7 +120,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Leaving the league leaves the league group too: the database refuses it once the league has a round
     // (SEASON_GROUPS_SCHEDULED), while the group has a live pool or drafted lines (SEASON_GROUP_LOCKED) and when the
-    // group would keep fewer than two trainers (SEASON_GROUP_TOO_SMALL). A trainer not on the roster: nothing to do.
+    // group would keep fewer than two trainers (SEASON_GROUP_TOO_SMALL); for any league, while its legacy draft is in
+    // progress (SEASON_DRAFT_LOCKED). A trainer not on the roster: nothing to do.
     await removeLeagueParticipant(id, zodResult.data.player_id);
     expireSeasonReads(id);
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });

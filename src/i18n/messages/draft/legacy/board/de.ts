@@ -18,6 +18,12 @@ export default defineDe<typeof en>()({
       statusChange: 'Der Draft-Status konnte nicht geändert werden.',
       freeOrder: 'Der Draft konnte nicht auf freie Reihenfolge umgestellt werden.',
     },
+    pickWarnings: {
+      TRACKER_NOT_CREATED:
+        'Der Pick wurde gespeichert, aber sein Evolutions-Tracker konnte nicht angelegt werden. Nicht erneut picken: Bitte einen Admin den Tracker prüfen lassen.',
+      POOL_COMPLETION_PENDING:
+        'Der letzte Pick wurde gespeichert, aber der Draft ist noch nicht als abgeschlossen markiert. Er schließt sich beim nächsten Neuladen ab; falls nicht, kann ein Admin ihn abschließen.',
+    },
     epb: {
       pointsUsed: 'Punkte ausgegeben',
       pointsRemaining: 'Punkte übrig',
@@ -110,6 +116,8 @@ export default defineDe<typeof en>()({
       one: 'Du erstellst: {order}, {pricing}, {count} Punkt pro Spieler.',
       other: 'Du erstellst: {order}, {pricing}, {count} Punkte pro Spieler.',
     },
+    rounds: 'Runden',
+    roundsHint: 'So viele Pokémon draftet jeder Spieler, von {min} bis {max}. Standard sind {standard}.',
     pointBudget: 'Punktebudget pro Spieler',
     defaultPrice: 'Standardpreis (optional)',
     defaultPriceHint: 'So viel kosten Pokémon ohne eigenen Preis. Leer lassen für 0.',
@@ -117,6 +125,7 @@ export default defineDe<typeof en>()({
       budgetInvalid: 'Gib eine ganze Zahl von 1 bis {max} ein.',
       priceInvalid: 'Gib eine ganze Zahl von 0 bis {max} ein oder lass das Feld leer.',
       priceAboveBudget: 'Der Standardpreis darf nicht höher sein als das Punktebudget ({budget} Pkt.).',
+      roundsInvalid: 'Gib eine ganze Zahl von {min} bis {max} ein.',
     },
     createFailed: 'Der Draft-Pool konnte nicht erstellt werden.',
   },

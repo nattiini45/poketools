@@ -8,7 +8,7 @@ import { draftStateQuerySchema, uuidSchema } from '@/lib/draft/schemas';
 import { getDraftSnapshot, type DraftSnapshotUnchanged } from '@/lib/draft/snapshot';
 import { expireDraftReads } from '@/lib/revalidation';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
-import { getDraftPoolById, getPicksByPool } from '@/lib/supabase/queries/drafts';
+import { completeLegacyPoolIfRunning, getDraftPoolById, getPicksByPool } from '@/lib/supabase/queries/drafts';
 import { getSeasonParticipants, getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { epbPack } from '@/lib/format-pack';
@@ -17,6 +17,7 @@ import { getAllTiers, getPlayerWildcards, getSeasonTrackers } from '@/lib/supaba
 import {
   availablePricesSorted,
   computeDraftState,
+  isDraftComplete,
   legacyPickerStall,
   legacySeatOrder,
   resolveTotalRounds,
@@ -31,6 +32,7 @@ import {
   loadDraftTokenLedger,
 } from '@/lib/draft/progress-engine';
 import { collectTakenLineIdentities } from '@/lib/draft/line-identity';
+import { toID } from '@/lib/pkmn/i18n/id';
 import { toPublicPicks, type PublicDraftPick } from '@/lib/draft/public-pick';
 import type { ApiResult } from '@/types/api';
 import type { DraftSnapshotDTO } from '@/types/draft-queue';
@@ -54,6 +56,8 @@ interface DraftStateResponse {
   stalled_picker: PickerStall | null;
   next_pick_number: number;
   current_round: number;
+  /** Rounds every trainer drafts (the pool's exact team size, else the engine default). */
+  total_rounds: number;
   taken_pokemon: string[];
   /**
    * EPB: drafted line identities (base|stage3) from evolution trackers.
@@ -147,7 +151,8 @@ function groupTrackersWithTiers(
  * `state_version`. A publish in this request expires the draft reads; a
  * publish or a resolved timeout schedules the Discord notification claim.
  *
- * Legacy pools: the computed legacy state; `include=trackers` (optional) adds
+ * Legacy pools: the computed legacy state (a running pool whose last pick committed is completed here when the pick
+ * route's own completion write failed); `include=trackers` (optional) adds
  * the EPB `evolution` section. A legacy pool of a league group answers
  * 409 POOL_ENGINE_LEGACY (its season-wide `taken` would not be group-scoped).
  */
@@ -219,7 +224,27 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       epbDraftPicks: isEpb ? (rules?.draft_picks ?? SQL_DRAFT_PICKS_FALLBACK) : null,
     });
 
-    const state = computeDraftState(pool, picks, participantIds, totalRounds);
+    // The pick route completes the pool right after the last pick; when that write failed, the pool would stay
+    // `in_progress` with no picker left, so the first state read after it finishes the job. Conditional on the
+    // pool still running, so an admin's move back to `pending` is not overwritten.
+    let statePool = pool;
+    if (
+      !isEpb &&
+      pool.status === 'in_progress' &&
+      participantIds.length > 0 &&
+      isDraftComplete(picks.length, participantIds.length, totalRounds)
+    ) {
+      try {
+        if (await completeLegacyPoolIfRunning(pool.id)) {
+          statePool = { ...pool, status: 'complete' };
+          expireDraftReads(pool.season_id);
+        }
+      } catch (err) {
+        console.error('[api/drafts/state] every pick is made but the pool could not be set to complete:', err);
+      }
+    }
+
+    const state = computeDraftState(statePool, picks, participantIds, totalRounds);
 
     let stalledPicker: PickerStall | null = null;
     if (poolEntries !== null) {
@@ -234,11 +259,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       // Evo leagues: the picks route also takes the picker's own wildcard outside the pool list (at the pool
       // default). The picker's wildcards are read only once the pool list alone leaves them stuck.
       if (stalledPicker && stallInput.availablePrices !== null) {
-        const listed = new Set(poolEntries.map((e) => e.pokemon_name.toLowerCase()));
-        const taken = new Set(Array.from(state.taken_pokemon, (name) => name.toLowerCase()));
+        const listed = new Set(poolEntries.map((e) => toID(e.pokemon_name)));
+        const taken = new Set(Array.from(state.taken_pokemon, toID));
         const wildcards = await getPlayerWildcards(pool.season_id, stalledPicker.player_id);
         const hasWildcard = wildcards.some((w) => {
-          const base = w.base_pokemon.toLowerCase();
+          const base = toID(w.base_pokemon);
           return !listed.has(base) && !taken.has(base);
         });
         if (hasWildcard) stalledPicker = legacyPickerStall({ ...stallInput, wildcardPrice: fallbackPrice });
@@ -252,6 +277,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const response: DraftStateResponse = {
       ...state,
       picks: toPublicPicks(state.picks),
+      total_rounds: totalRounds,
       taken_pokemon: Array.from(state.taken_pokemon),
       stalled_picker: stalledPicker,
     };

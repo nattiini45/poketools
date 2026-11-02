@@ -74,7 +74,7 @@ export const ENGINE_SUPPORT_ROWS: readonly EngineSupportRow[] = [
     key: 'legacy_draft_roster_size',
     supported: false,
     limit: 11,
-    statement: 'The legacy draft engine plays a fixed roster of 11. The queue engine used by Evolution Point Buy has a configurable roster size from 1 to 20',
+    statement: 'The legacy draft engine plays 11 rounds by default; an admin can set 1 to 50 rounds in the league draft panel when creating the pool, a plan cannot. The queue engine used by Evolution Point Buy has a configurable roster size from 1 to 20',
     offer: '',
   },
   {

@@ -1,4 +1,6 @@
 import { supabase } from '../client';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { foldedPoolEntryDuplicate } from '@/lib/draft/pool-entry-names';
 import type { Tables, TablesInsert } from '@/types/database';
 import type { DraftPoolEntry, DraftPoolEntryFormData } from '@/types/draft-pool';
 
@@ -75,6 +77,23 @@ export async function getPoolEntry(
   return data ? toEntry(data) : null;
 }
 
+/**
+ * A pool list names each Pokémon once by id (`uq_draft_pool_entries_season_folded_name`, next to the exact-name key):
+ * the picks route folds names the same way, so a second spelling would count toward the pool's size without ever
+ * being pickable. The unique index is the arbiter, so two writers racing with different spellings cannot both win.
+ * A 23505 becomes 409 `pool_entry_duplicate_name`, naming the incoming entry that clashes (with a listed one or an
+ * earlier one of the same batch); any other error passes through.
+ */
+async function poolEntryConflict(err: unknown, seasonId: string, names: readonly string[]): Promise<unknown> {
+  if ((err as { code?: unknown } | null)?.code !== '23505') return err;
+  console.error('[draft-pool-entries] duplicate pool entry:', err);
+  const duplicate = foldedPoolEntryDuplicate(await getPoolEntries(seasonId), names) ?? names[0];
+  return new UserFacingError(
+    `${duplicate} is already in the draft pool (names are compared without case, spaces or punctuation)`,
+    { code: 'pool_entry_duplicate_name', params: { pokemon: duplicate }, status: 409 },
+  );
+}
+
 /** Add a single Pokemon to the draft pool. */
 export async function createPoolEntry(
   input: DraftPoolEntryFormData
@@ -92,7 +111,7 @@ export async function createPoolEntry(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw await poolEntryConflict(error, input.season_id, [input.pokemon_name]);
   return toEntry(data);
 }
 
@@ -114,7 +133,10 @@ export async function bulkCreatePoolEntries(
     .insert(inserts)
     .select();
 
-  if (error) throw error;
+  if (error) {
+    // The route checks that the entries share one season.
+    throw await poolEntryConflict(error, entries[0].season_id, entries.map((e) => e.pokemon_name));
+  }
   return data.map(toEntry);
 }
 

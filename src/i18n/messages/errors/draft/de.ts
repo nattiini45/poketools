@@ -94,6 +94,8 @@ export default defineDe<typeof en>()({
     'Die Gruppe dieses Trainers hat einen laufenden Draft (Redraft-Abgaben oder Picks), deshalb lässt er sich erst ersetzen, wenn dieser Draft abgeschlossen oder abgebrochen ist.',
   SEASON_GROUP_SEATS_STALE:
     'Die Trainer dieser Gruppe haben sich seit dem Einrichten des Drafts geändert, deshalb passen seine Plätze nicht mehr zur Gruppe. Lösche den Draft, der noch nicht gestartet ist, und lege ihn neu an.',
+  SEASON_DRAFT_LOCKED:
+    'Ein Draft läuft gerade, und seine Pick-Reihenfolge folgt dem Kader, deshalb lassen sich jetzt keine Trainer hinzufügen, entfernen oder ersetzen. Beende den Draft oder setze ihn auf „Ausstehend“ zurück, um den Kader zu ändern.',
   SEATS_INVALID: 'Die Draft-Reihenfolge ist ungültig.',
   INVALID_CONFIG: 'Ungültige Einstellung: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft-Kill-Tokens kannst du gerade nicht kaufen.',
@@ -113,6 +115,8 @@ export default defineDe<typeof en>()({
   // §9.2 legacy api/drafts/** branches
   POINT_BUDGET_REQUIRED: 'Für Auktions- und Budget-Drafts ist ein Punktebudget nötig.',
   NOT_IN_POOL: '{pokemon} ist nicht im Draft-Pool.',
+  UNKNOWN_SPECIES: '{pokemon} ist kein bekanntes Pokémon.',
+  PICK_CONFLICT: 'Gleichzeitig wurde ein anderer Pick gemacht. Lade den Draft neu und versuche es erneut.',
   TIER_LIMIT_REACHED: 'Limit für Tier {tier} erreicht (max. {max}).',
   PICK_CAP_REACHED: 'Pick-Limit erreicht ({max} Linien pro Trainer).',
   POINTS_CAP_EXCEEDED: 'Nicht genug Punkte: Du würdest {spend}/{budget} ausgeben ({price} für diese Linie).',

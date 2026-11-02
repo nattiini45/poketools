@@ -80,6 +80,10 @@ vi.mock('@/lib/supabase/queries/players', () => ({
   getPlayerById: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/rulesets', () => ({
+  getRulesetById: vi.fn(),
+}));
+
 // ─── Imports (after mocks) ──────────────────────────────────────────
 
 import { GET, POST } from '@/app/api/drafts/[id]/picks/route';
@@ -89,6 +93,7 @@ import {
   getDraftPoolById,
   getPicksByPool,
   createDraftPick,
+  updateDraftPoolStatus,
 } from '@/lib/supabase/queries/drafts';
 import { getSeasonParticipants, getSeasonById } from '@/lib/supabase/queries/seasons';
 import {
@@ -99,10 +104,11 @@ import {
   getRoundForPick,
 } from '@/lib/draft/engine';
 import { isEvoLeague } from '@/lib/draft/evolution-engine';
-import { createTracker } from '@/lib/supabase/queries/evolutions';
+import { createTracker, getTierByBasePokemon } from '@/lib/supabase/queries/evolutions';
 import { getListEntryByBaseAndStage3 } from '@/lib/supabase/queries/point-buy-lists';
 import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
 import { getPlayerById } from '@/lib/supabase/queries/players';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { revalidateTag } from 'next/cache';
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -633,5 +639,358 @@ describe('POST /api/drafts/[id]/picks — legacy pool of a standard draft season
     expect(input).not.toHaveProperty('line_id');
     expect(input).not.toHaveProperty('line_entry_id');
     expect(getListEntryByBaseAndStage3).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/drafts/[id]/picks — legacy pick names (#47)', () => {
+  const POOL = '11111111-1111-4111-8111-111111111111';
+  const pick = (playerId: string, pokemon: string, n: number) => ({
+    id: `pick-${n}`,
+    draft_pool_id: POOL,
+    player_id: playerId,
+    pokemon_name: pokemon,
+    pick_number: n,
+    round: 1,
+    points_spent: null,
+    timestamp: '2026-10-01T00:00:00Z',
+    player_name: playerId,
+  });
+  const entry = (pokemon_name: string) => ({ pokemon_name, point_cost: null, power_tier: null, stage3_pokemon: null });
+  const storedName = () => vi.mocked(createDraftPick).mock.calls[0][0].pokemon_name;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const actual = await vi.importActual<typeof import('@/lib/draft/engine')>('@/lib/draft/engine');
+    vi.mocked(computeDraftState).mockImplementation(actual.computeDraftState);
+    vi.mocked(validatePick).mockImplementation(actual.validatePick);
+    vi.mocked(getRoundForPick).mockImplementation(actual.getRoundForPick);
+    vi.mocked(isDraftComplete).mockReturnValue(false);
+    vi.mocked(resolveTotalRounds).mockReturnValue(9);
+    vi.mocked(isEvoLeague).mockResolvedValue(false);
+    vi.mocked(getPoolEntries).mockResolvedValue([]);
+    vi.mocked(getPicksByPool).mockResolvedValue([]);
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', point_budget: null } as never);
+    vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: 'player-1' }, { id: 'player-2' }] as never);
+    vi.mocked(getSeasonById).mockResolvedValue({ id: 'season-1', name: 'S', format_type: 'draft', ruleset_id: null } as never);
+    vi.mocked(getRulesetById).mockResolvedValue(null);
+    vi.mocked(getPlayerById).mockResolvedValue(null);
+    vi.mocked(isResourceAdminFor).mockResolvedValue(false);
+    vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'player-1' } as never);
+    vi.mocked(createDraftPick).mockImplementation(async (input) => ({ id: 'new-pick', ...input }) as never);
+  });
+
+  describe('a league with a pool list', () => {
+    beforeEach(() => {
+      vi.mocked(getPoolEntries).mockResolvedValue([entry('Garchomp'), entry('Mr. Mime'), entry('Flabébé')] as never);
+    });
+
+    it('stores the pool entry spelling for a pick sent in another case', async () => {
+      const res = await POST(makeRequest({ pokemon_name: 'garchomp' }), routeParams);
+
+      expect(res.status).toBe(201);
+      expect(storedName()).toBe('Garchomp');
+    });
+
+    it.each([
+      ['mrmime', 'Mr. Mime'],
+      ['MR MIME', 'Mr. Mime'],
+      ['flabebe', 'Flabébé'],
+    ])('resolves %s to the entry %s', async (sent, canonical) => {
+      const res = await POST(makeRequest({ pokemon_name: sent }), routeParams);
+
+      expect(res.status).toBe(201);
+      expect(storedName()).toBe(canonical);
+    });
+
+    it('refuses a Pokémon taken in another spelling with POKEMON_TAKEN and writes nothing', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'player-2' } as never);
+      vi.mocked(getPicksByPool).mockResolvedValue([pick('player-1', 'Garchomp', 1)] as never);
+
+      const res = await POST(makeRequest({ pokemon_name: 'garchomp' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.code).toBe('POKEMON_TAKEN');
+      expect(createDraftPick).not.toHaveBeenCalled();
+    });
+
+    it('treats a legacy row stored in another spelling as taken (availability maths use the same fold)', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'player-2' } as never);
+      vi.mocked(getPicksByPool).mockResolvedValue([pick('player-1', 'mr mime', 1)] as never);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Mr. Mime' }), routeParams);
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('POKEMON_TAKEN');
+    });
+
+    it('a pick outside the list is still NOT_IN_POOL, not an unknown species', async () => {
+      const res = await POST(makeRequest({ pokemon_name: 'Pikachu' }), routeParams);
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('NOT_IN_POOL');
+      expect(createDraftPick).not.toHaveBeenCalled();
+    });
+
+    it('stores the tier base name of an evolution wildcard and still creates its tracker', async () => {
+      vi.mocked(isEvoLeague).mockResolvedValue(true);
+      vi.mocked(getTierByBasePokemon).mockResolvedValue({ base_pokemon: 'Eevee', stage2_pokemon: 'Vaporeon' } as never);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Eevee' }), routeParams);
+
+      expect(res.status).toBe(201);
+      expect(storedName()).toBe('Eevee');
+      expect(createTracker).toHaveBeenCalledWith(expect.objectContaining({ base_pokemon: 'Eevee', player_id: 'player-1' }));
+    });
+  });
+
+  describe('a league without a pool list', () => {
+    it.each([
+      ['garchomp', 'Garchomp'],
+      ['GARCHOMP', 'Garchomp'],
+      ['mrmime', 'Mr. Mime'],
+      ['Charizard-Mega-X', 'Charizard-Mega-X'],
+    ])('accepts %s and stores the species name %s', async (sent, canonical) => {
+      const res = await POST(makeRequest({ pokemon_name: sent }), routeParams);
+
+      expect(res.status).toBe(201);
+      expect(storedName()).toBe(canonical);
+    });
+
+    it.each(['Notamon', 'asdf qwer', 'Pikachu; DROP TABLE'])('refuses %s with UNKNOWN_SPECIES and writes nothing', async (sent) => {
+      const res = await POST(makeRequest({ pokemon_name: sent }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json).toMatchObject({ success: false, code: 'UNKNOWN_SPECIES', params: { pokemon: sent } });
+      expect(createDraftPick).not.toHaveBeenCalled();
+    });
+
+    it('refuses a Pokémon already taken in another spelling', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'player-2' } as never);
+      vi.mocked(getPicksByPool).mockResolvedValue([pick('player-1', 'Garchomp', 1)] as never);
+
+      const res = await POST(makeRequest({ pokemon_name: 'GARCHOMP' }), routeParams);
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('POKEMON_TAKEN');
+    });
+
+    it("resolves the species in the season ruleset's generation, else Gen 9", async () => {
+      vi.mocked(getSeasonById).mockResolvedValue({ id: 'season-1', name: 'S', format_type: 'draft', ruleset_id: 'rs-1' } as never);
+      vi.mocked(getRulesetById).mockResolvedValue({ gen: 1, universe: 'standard' } as never);
+
+      // Chikorita is a Gen 2 species: it does not exist in a Gen 1 ruleset.
+      const res = await POST(makeRequest({ pokemon_name: 'Chikorita' }), routeParams);
+
+      expect(getRulesetById).toHaveBeenCalledWith('rs-1');
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('UNKNOWN_SPECIES');
+    });
+
+    it('does not read a ruleset for a league whose pool has a list', async () => {
+      vi.mocked(getPoolEntries).mockResolvedValue([entry('Garchomp')] as never);
+      vi.mocked(getSeasonById).mockResolvedValue({ id: 'season-1', name: 'S', format_type: 'draft', ruleset_id: 'rs-1' } as never);
+
+      await POST(makeRequest({ pokemon_name: 'garchomp' }), routeParams);
+
+      expect(getRulesetById).not.toHaveBeenCalled();
+    });
+  });
+
+  it('no longer takes stage3_pokemon: the key is dropped, not stored and not refused', async () => {
+    const res = await POST(makeRequest({ pokemon_name: 'Garchomp', stage3_pokemon: 'Garchomp-Mega' }), routeParams);
+
+    expect(res.status).toBe(201);
+    expect(vi.mocked(createDraftPick).mock.calls[0][0]).not.toHaveProperty('stage3_pokemon');
+  });
+});
+
+describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#48)', () => {
+  const POOL = '11111111-1111-4111-8111-111111111111';
+  const pgUnique = (index: string) => ({
+    code: '23505',
+    message: `duplicate key value violates unique constraint "${index}"`,
+    details: 'Key already exists.',
+    hint: null,
+  });
+  const pick = (playerId: string, pokemon: string, n: number) => ({
+    id: `pick-${n}`,
+    draft_pool_id: POOL,
+    player_id: playerId,
+    pokemon_name: pokemon,
+    pick_number: n,
+    round: 1,
+    points_spent: null,
+    timestamp: '2026-10-01T00:00:00Z',
+    player_name: playerId,
+  });
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const actual = await vi.importActual<typeof import('@/lib/draft/engine')>('@/lib/draft/engine');
+    vi.mocked(computeDraftState).mockImplementation(actual.computeDraftState);
+    vi.mocked(validatePick).mockImplementation(actual.validatePick);
+    vi.mocked(getRoundForPick).mockImplementation(actual.getRoundForPick);
+    vi.mocked(isDraftComplete).mockImplementation(actual.isDraftComplete);
+    vi.mocked(resolveTotalRounds).mockReturnValue(9);
+    vi.mocked(isEvoLeague).mockResolvedValue(false);
+    vi.mocked(getPoolEntries).mockResolvedValue([{ pokemon_name: 'Garchomp', point_cost: null, power_tier: null }, { pokemon_name: 'Gengar', point_cost: null, power_tier: null }] as never);
+    vi.mocked(getPicksByPool).mockResolvedValue([]);
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', point_budget: null } as never);
+    vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: 'player-1' }, { id: 'player-2' }] as never);
+    vi.mocked(getSeasonById).mockResolvedValue({ id: 'season-1', name: 'S', format_type: 'draft', ruleset_id: null } as never);
+    vi.mocked(getPlayerById).mockResolvedValue(null);
+    vi.mocked(isResourceAdminFor).mockResolvedValue(false);
+    vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'player-1' } as never);
+    vi.mocked(createDraftPick).mockImplementation(async (input) => ({ id: 'new-pick', ...input }) as never);
+    vi.mocked(updateDraftPoolStatus).mockResolvedValue({} as never);
+  });
+
+  describe('a collision on the pick number', () => {
+    it('answers 409 PICK_CONFLICT after one re-validation when the pick is still legal, and logs the original error', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const collision = pgUnique('uq_draft_picks_pool_number_live');
+      vi.mocked(createDraftPick).mockRejectedValue(collision);
+      // Free order: the competing pick took pick 1, this one would still be legal as pick 2.
+      vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', pick_order: 'free', point_budget: null } as never);
+      vi.mocked(getPicksByPool)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([pick('player-2', 'Gengar', 1)] as never);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(json).toMatchObject({ success: false, code: 'PICK_CONFLICT' });
+      expect(json.error).toBe('Another pick was made at the same moment. Reload the draft and try again.');
+      expect(getPicksByPool).toHaveBeenCalledTimes(2);
+      expect(createDraftPick).toHaveBeenCalledTimes(1);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('uq_draft_picks_pool_number_live'), collision);
+      error.mockRestore();
+    });
+
+    it('answers the precise refusal when the re-validation now fails: NOT_YOUR_TURN', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(createDraftPick).mockRejectedValue(pgUnique('uq_draft_picks_pool_number_live'));
+      vi.mocked(getPicksByPool)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([pick('player-1', 'Gengar', 1)] as never);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.code).toBe('NOT_YOUR_TURN');
+    });
+
+    it('answers the precise refusal when the competing pick took the same Pokémon: POKEMON_TAKEN', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(createDraftPick).mockRejectedValue(pgUnique('uq_draft_picks_pool_number_live'));
+      vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', pick_order: 'free', point_budget: null } as never);
+      vi.mocked(getPicksByPool)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([pick('player-2', 'Garchomp', 1)] as never);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('POKEMON_TAKEN');
+    });
+
+    it('never answers 500 and writes no audit row, tracker or completion for the loser', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(createDraftPick).mockRejectedValue(pgUnique('uq_draft_picks_pool_number_live'));
+      vi.mocked(getPicksByPool).mockResolvedValue([]);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+
+      expect(res.status).toBeLessThan(500);
+      expect(createTracker).not.toHaveBeenCalled();
+      expect(updateDraftPoolStatus).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a collision on the Pokémon name', () => {
+    it('answers 400 POKEMON_TAKEN, distinguishing the index by name, and logs the original error', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const collision = pgUnique('uq_draft_picks_legacy_name_live');
+      vi.mocked(createDraftPick).mockRejectedValue(collision);
+
+      const res = await POST(makeRequest({ pokemon_name: 'garchomp' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json).toMatchObject({ success: false, code: 'POKEMON_TAKEN', error: 'Garchomp has already been drafted' });
+      expect(getPicksByPool).toHaveBeenCalledTimes(1);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('uq_draft_picks_legacy_name_live'), collision);
+      error.mockRestore();
+    });
+  });
+
+  it('still fails a unique violation of an unknown index (nothing is swallowed)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(createDraftPick).mockRejectedValue(pgUnique('some_other_index'));
+
+    const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+
+    expect(res.status).toBe(500);
+  });
+
+  describe('failures after the pick committed', () => {
+    it('answers 201 with a coded warning and a log line when the tracker is not created', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(isEvoLeague).mockResolvedValue(true);
+      vi.mocked(getTierByBasePokemon).mockResolvedValue({ base_pokemon: 'Garchomp' } as never);
+      const failure = new Error('connection reset');
+      vi.mocked(createTracker).mockRejectedValue(failure);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(json.success).toBe(true);
+      expect(json.data.pokemon_name).toBe('Garchomp');
+      expect(json.warnings).toEqual(['TRACKER_NOT_CREATED']);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('tracker'), failure);
+      expect(vi.mocked(revalidateTag).mock.calls).toEqual([['season:season-1', { expire: 0 }]]);
+      error.mockRestore();
+    });
+
+    it('treats a tracker that already exists as created (idempotent), with no warning', async () => {
+      vi.mocked(isEvoLeague).mockResolvedValue(true);
+      vi.mocked(getTierByBasePokemon).mockResolvedValue({ base_pokemon: 'Garchomp' } as never);
+      vi.mocked(createTracker).mockRejectedValue(pgUnique('uq_evolution_tracker_legacy_base'));
+
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(json.warnings).toBeUndefined();
+    });
+
+    it('answers 201 with a coded warning and a log line when the pool is not flipped to complete', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: 'player-1' }] as never);
+      vi.mocked(resolveTotalRounds).mockReturnValue(1);
+      const failure = new Error('statement timeout');
+      vi.mocked(updateDraftPoolStatus).mockRejectedValue(failure);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(json.warnings).toEqual(['POOL_COMPLETION_PENDING']);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('complete'), failure);
+      error.mockRestore();
+    });
+
+    it('carries no warnings on a clean pick', async () => {
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+
+      expect(res.status).toBe(201);
+      expect((await res.json()).warnings).toBeUndefined();
+    });
   });
 });

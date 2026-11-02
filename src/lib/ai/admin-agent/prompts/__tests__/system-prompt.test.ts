@@ -12,7 +12,7 @@ import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from '../index';
  * version it started with, and an edit sends every open conversation to "continue in a new conversation". Change the
  * prompt on purpose, then update this constant in the same commit.
  */
-const COMMITTED_VERSION = '761e10c0a952a77f';
+const COMMITTED_VERSION = '9d83e860953758ac';
 
 describe('the frozen system prompt', () => {
   it('is versioned by the hash of its exact text', () => {
@@ -40,7 +40,7 @@ describe('the frozen system prompt', () => {
     // No tier-to-points data; the four options; the legacy roster size.
     expect(text).toContain('no table of draft points per Pokémon');
     expect(text).toContain('prepared file');
-    expect(text).toContain('fixed at 11');
+    expect(text).toContain('plays 11 rounds by default');
   });
 
   it('states the class rules and who approves', () => {

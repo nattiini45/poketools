@@ -37,6 +37,7 @@ export type DraftRpcName =
   | 'draft_snapshot'
   | 'draft_my_turn'
   | 'draft_tick'
+  | 'draft_list_due_pools'
   | 'draft_claim_notifications'
   | 'redraft_set_submission'
   | 'redraft_publish'
@@ -62,6 +63,7 @@ const RPC_NAMES_EXIST: Record<DraftRpcName, DbFunctionName> = {
   draft_snapshot: 'draft_snapshot',
   draft_my_turn: 'draft_my_turn',
   draft_tick: 'draft_tick',
+  draft_list_due_pools: 'draft_list_due_pools',
   draft_claim_notifications: 'draft_claim_notifications',
   redraft_set_submission: 'redraft_set_submission',
   redraft_publish: 'redraft_publish',

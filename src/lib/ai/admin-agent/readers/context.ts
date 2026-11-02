@@ -374,7 +374,7 @@ export const engineSupport = defineRunnable('any', {
   name: 'engine_support',
   class: 'R',
   description:
-    'State plainly what the tournament engine can and cannot run today: a round robin is one circle (no double round robin), wildcard and threshold advancement are not run, Format Studio groups, legs, third place and bottom-N are recorded but not run, the legacy draft roster is fixed at 11, Swiss round count cannot be set, and standalone tournaments have no registration or check-in. Call it before promising anything the admin asked for that touches these limits.',
+    'State plainly what the tournament engine can and cannot run today: a round robin is one circle (no double round robin), wildcard and threshold advancement are not run, Format Studio groups, legs, third place and bottom-N are recorded but not run, the legacy draft plays 11 rounds unless set in the draft panel, Swiss round count cannot be set, and standalone tournaments have no registration or check-in. Call it before promising anything the admin asked for that touches these limits.',
   args: z.strictObject({}),
   phase: 0,
   guard: () => ({ kind: 'any' }),

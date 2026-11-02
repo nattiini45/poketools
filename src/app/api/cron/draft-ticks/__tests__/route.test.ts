@@ -165,17 +165,51 @@ describe('/api/cron/draft-ticks run', () => {
     expect(emitDiscordEvent).toHaveBeenCalledTimes(2);
   });
 
-  it('one failing pool does not stop the others', async () => {
+  it('one failing pool does not stop the others, and the run then answers 500 with the failed pool ids', async () => {
     rpc({
       tick: (poolId) => {
         if (poolId === 'pool-a') throw new Error('pool-a broke');
         return { timeouts: 1, published: false };
       },
+      claims: () => [turnClaim],
     });
     const res = await GET(request('Bearer cron-secret'));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      success: false,
+      error: 'Draft ticks failed for these pools: pool-a',
+      code: 'cron_draft_ticks_failed',
+      params: { pools: 'pool-a' },
+      failedPools: ['pool-a'],
+      data: { pools: 2, timeouts: 1, published: 0, notifications: 1, publishRefused: 0, publishBackoff: 0 },
+    });
+    // The remaining pool was ticked, the claim pass still ran, and the original error is logged.
+    expect(vi.mocked(callDraftRpc).mock.calls.map(([fn]) => fn)).toEqual([
+      'draft_tick',
+      'draft_tick',
+      'draft_claim_notifications',
+    ]);
+    expect(console.error).toHaveBeenCalledWith('[cron/draft-ticks] tick failed for pool pool-a:', expect.any(Error));
+  });
+
+  it('names every failed pool in the message, params and body', async () => {
+    rpc({
+      tick: () => {
+        throw new Error('all broke');
+      },
+    });
+    const res = await GET(request('Bearer cron-secret'));
+    const json = await res.json();
+    expect(res.status).toBe(500);
+    expect(json.failedPools).toEqual(['pool-a', 'pool-b']);
+    expect(json.error).toBe('Draft ticks failed for these pools: pool-a, pool-b');
+    expect(json.params).toEqual({ pools: 'pool-a, pool-b' });
+  });
+
+  it('a run without failures answers 200 with no failedPools key', async () => {
+    const res = await GET(request('Bearer cron-secret'));
     expect(res.status).toBe(200);
-    expect((await res.json()).data).toMatchObject({ pools: 2, timeouts: 1 });
-    expect(callDraftRpc).toHaveBeenCalledWith('draft_claim_notifications', {});
+    expect(await res.json()).not.toHaveProperty('failedPools');
   });
 
   it('honours ?limit= within 1..100 and rejects anything else with 400 validation_failed', async () => {

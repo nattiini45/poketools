@@ -17,6 +17,14 @@ export default defineDe<typeof en>()({
     'Diese Liga hat Gruppen. Gruppen draften getrennt, und das geht nur in Evolution-Point-Buy-Ligen. Entferne die Gruppen im Tab Teilnehmer, um einen gemeinsamen Draft für alle anzulegen.',
   draft_budget_below_rounds:
     'Ein Budget von {budget} reicht nicht für {rounds} Picks zum Standardpreis von {price} (nötig: {minimum}).',
+  draft_budget_below_listed_rounds:
+    'Ein Budget von {budget} pro Trainer reicht nicht für {rounds} Picks von {players} Trainern: die {needed} günstigsten Pokémon der Pool-Liste kosten zusammen {minimum}, verfügbar sind insgesamt {available}.',
+  draft_budget_list_unassignable:
+    'Die Preise der Pool-Liste lassen sich nicht auf {players} Kader mit je {rounds} Pokémon verteilen, die jeweils höchstens {budget} Punkte kosten.',
+  draft_budget_list_unverifiable:
+    'Es konnte nicht geprüft werden, ob sich die Preise der Pool-Liste auf {players} Kader mit je {rounds} Pokémon und höchstens {budget} Punkten verteilen lassen. Erhöhe das Budget oder kürze die Liste.',
+  draft_pool_list_too_small:
+    'Die Pool-Liste hat {listed} Pokémon, aber {players} Trainer brauchen {needed} Picks ({rounds} pro Trainer).',
   draft_pick_strands_roster:
     'Nach diesem Pick blieben nur {remaining_after} Punkte, die restlichen {slots} Picks kosten aber mindestens {min_cost} Punkte.',
   draft_free_order_not_running: 'Nur ein laufender Draft kann auf freie Reihenfolge wechseln.',
@@ -30,6 +38,8 @@ export default defineDe<typeof en>()({
   pool_entries_empty: 'Gib mindestens einen Eintrag an.',
   pool_entries_mixed_season: 'Alle Einträge eines Sammelimports müssen zur selben Saison gehören.',
   pool_entry_not_found: 'Pool-Eintrag nicht gefunden.',
+  pool_entry_duplicate_name:
+    '{pokemon} steht schon im Draft-Pool (Namen werden ohne Groß-/Kleinschreibung, Leerzeichen und Satzzeichen verglichen).',
   pool_template_not_found: 'Vorlage nicht gefunden.',
 
   point_buy_list_not_found: 'Point-Buy-Liste nicht gefunden.',

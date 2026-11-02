@@ -25,12 +25,12 @@ vi.mock('@/lib/supabase/queries/evolutions', () => ({
 
 vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({
   createPoolEntry: vi.fn(),
-  getPoolEntry: vi.fn(),
   bulkCreatePoolEntries: vi.fn(),
   getPoolEntries: vi.fn(),
 }));
 
 import { GET, POST } from '@/app/api/evolutions/route';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { requireAuth, requireResourceAdmin } from '@/lib/auth/helpers';
 import {
   getTierList,
@@ -41,7 +41,6 @@ import {
 } from '@/lib/supabase/queries/evolutions';
 import {
   createPoolEntry,
-  getPoolEntry,
   bulkCreatePoolEntries,
   getPoolEntries,
 } from '@/lib/supabase/queries/draft-pool-entries';
@@ -220,6 +219,48 @@ describe('POST /api/evolutions', () => {
     );
   });
 
+  it('bulk create still saves the tiers when a concurrent writer lists a Pokémon first, and writes the entries still missing', async () => {
+    vi.mocked(bulkCreateTiers).mockResolvedValue([{ id: 'tier-1' }, { id: 'tier-2' }] as never);
+    vi.mocked(getPoolEntries)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([{ id: 'e1', pokemon_name: 'pichu' }] as never);
+    vi.mocked(bulkCreatePoolEntries)
+      .mockRejectedValueOnce(new UserFacingError('Pichu is already in the draft pool', { code: 'pool_entry_duplicate_name', status: 409 }))
+      .mockResolvedValueOnce([] as never);
+    const tier = (base_pokemon: string) => ({
+      season_id: '00000000-0000-4000-a000-000000000001',
+      base_pokemon,
+      stage2_pokemon: 'X',
+      stage2_kos: 3,
+    });
+
+    const response = await POST({ json: vi.fn().mockResolvedValue([tier('Pichu'), tier('Eevee')]) } as unknown as NextRequest);
+
+    expect(response.status).toBe(201);
+    expect(vi.mocked(bulkCreatePoolEntries)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bulkCreatePoolEntries).mock.calls[1][0]).toEqual([expect.objectContaining({ pokemon_name: 'Eevee' })]);
+  });
+
+  it('single create answers 201 when a concurrent writer lists the Pokémon between the read and the write', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(createTier).mockResolvedValue({ id: 'tier-1' } as never);
+    vi.mocked(getPoolEntries).mockResolvedValue([] as never);
+    vi.mocked(createPoolEntry).mockRejectedValue(
+      new UserFacingError('Pichu is already in the draft pool', { code: 'pool_entry_duplicate_name', status: 409 }),
+    );
+
+    const response = await POST({
+      json: vi.fn().mockResolvedValue({
+        season_id: '00000000-0000-4000-a000-000000000001',
+        base_pokemon: 'Pichu',
+        stage2_pokemon: 'Pikachu',
+        stage2_kos: 3,
+      }),
+    } as unknown as NextRequest);
+
+    expect(response.status).toBe(201);
+  });
+
   it('bulk create skips pool-entry sync for wildcards (player_id present)', async () => {
     vi.mocked(bulkCreateTiers).mockResolvedValue([
       { id: 'tier-1', season_id: '00000000-0000-4000-a000-000000000001', base_pokemon: 'Pichu', player_id: 'player-1' },
@@ -276,7 +317,7 @@ describe('POST /api/evolutions', () => {
       created_at: '2026-01-01T00:00:00.000Z',
     };
     vi.mocked(createTier).mockResolvedValue(created);
-    vi.mocked(getPoolEntry).mockResolvedValue(null);
+    vi.mocked(getPoolEntries).mockResolvedValue([]);
     vi.mocked(createPoolEntry).mockResolvedValue({} as never);
 
     const request = {
@@ -331,7 +372,7 @@ describe('POST /api/evolutions', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    expect(vi.mocked(getPoolEntry)).not.toHaveBeenCalled();
+    expect(vi.mocked(getPoolEntries)).not.toHaveBeenCalled();
     expect(vi.mocked(createPoolEntry)).not.toHaveBeenCalled();
   });
 
@@ -349,7 +390,8 @@ describe('POST /api/evolutions', () => {
       power_tier: null as never as never,
       created_at: '',
     });
-    vi.mocked(getPoolEntry).mockResolvedValue({ id: 'existing-entry' } as never);
+    // Listed under another spelling: one Pokémon by id, so no second entry is created.
+    vi.mocked(getPoolEntries).mockResolvedValue([{ id: 'existing-entry', pokemon_name: 'pichu' }] as never);
 
     const request = {
       json: vi.fn().mockResolvedValue({
@@ -362,7 +404,7 @@ describe('POST /api/evolutions', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    expect(vi.mocked(getPoolEntry)).toHaveBeenCalledWith('00000000-0000-4000-a000-000000000001', 'Pichu');
+    expect(vi.mocked(getPoolEntries)).toHaveBeenCalledWith('00000000-0000-4000-a000-000000000001');
     expect(vi.mocked(createPoolEntry)).not.toHaveBeenCalled();
   });
 });

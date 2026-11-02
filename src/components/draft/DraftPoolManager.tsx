@@ -11,7 +11,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsDraft } from '@/i18n/messages/errors/draft';
 import { errorsDraftLegacy } from '@/i18n/messages/errors/draft-legacy';
 import { draftLegacyBoardMessages } from '@/i18n/messages/draft/legacy/board';
-import { LEGACY_POINTS_MAX } from '@/lib/draft/points-limits';
+import { LEGACY_POINTS_MAX, LEGACY_ROUNDS } from '@/lib/draft/points-limits';
 import { isPickOrderAllowed, pricingOfDraftType } from '@/lib/draft/pool-format';
 import { postDraftCreate, type DraftCreateError, type DraftCreateOutcome } from '@/lib/draft-ui/create-pool';
 import { DRAFT_PICK_ORDERS, type DraftPickOrder, type DraftType } from '@/types/draft';
@@ -25,6 +25,8 @@ export interface PoolCreateBody {
   pick_order?: DraftPickOrder;
   budget?: number;
   default_point_cost?: number;
+  /** Rounds per trainer; omitted = the engine default (`LEGACY_ROUNDS.default`). */
+  rounds?: number;
 }
 
 /** The order a pool is created with: the admin's choice, except that an auction always runs in free order. */
@@ -37,13 +39,15 @@ export function effectivePickOrder(draftType: DraftType, chosen: DraftPickOrder)
  * only for auction/budget pools, the default price only for budget pools of a non-point-buy season
  * and only when filled in (empty = the pool keeps no default, so an unpriced Pokémon costs 0).
  * Point-buy seasons price picks from their point-buy list; the route refuses a default price for them.
+ * The rounds go with the body only when they differ from the default and the season is not point-buy
+ * (its draft room sizes the roster itself), so an untouched form creates the pool it always created.
  */
 export function buildPoolCreateBody(
   seasonId: string,
   draftType: DraftType,
   pointBudget: number,
   defaultPrice: string,
-  opts: { pointBuy?: boolean; pickOrder?: DraftPickOrder } = {},
+  opts: { pointBuy?: boolean; pickOrder?: DraftPickOrder; rounds?: string } = {},
 ): PoolCreateBody {
   const body: PoolCreateBody = { season_id: seasonId, draft_type: draftType };
   if (opts.pickOrder) body.pick_order = effectivePickOrder(draftType, opts.pickOrder);
@@ -51,6 +55,8 @@ export function buildPoolCreateBody(
   if (draftType === 'budget' && !opts.pointBuy && defaultPrice.trim() !== '') {
     body.default_point_cost = Number(defaultPrice);
   }
+  const rounds = opts.rounds === undefined ? null : parseRounds(opts.rounds);
+  if (!opts.pointBuy && rounds !== null && rounds !== LEGACY_ROUNDS.default) body.rounds = rounds;
   return body;
 }
 
@@ -65,7 +71,20 @@ export interface NumberFieldState {
 }
 
 /** Why a pool-create field is invalid; each maps to `poolManager.errors.*`. */
-export type PoolFieldError = 'budgetInvalid' | 'priceInvalid' | 'priceAboveBudget';
+export type PoolFieldError = 'budgetInvalid' | 'priceInvalid' | 'priceAboveBudget' | 'roundsInvalid';
+
+/** The rounds as a whole number in LEGACY_ROUNDS.min..max, or null when it is not one. */
+function parseRounds(value: string): number | null {
+  if (value.trim() === '') return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= LEGACY_ROUNDS.min && n <= LEGACY_ROUNDS.max ? n : null;
+}
+
+/** The rounds field: required, a whole number from 1 to 50. */
+export function validateRounds(field: NumberFieldState): PoolFieldError | null {
+  if (field.badInput) return 'roundsInvalid';
+  return parseRounds(field.value) === null ? 'roundsInvalid' : null;
+}
 
 /** The value as a whole number in `min..LEGACY_POINTS_MAX`, or null when it is not one. */
 function parsePoints(value: string, min: number): number | null {
@@ -104,13 +123,16 @@ export function validatePoolCreateForm(input: {
   budget: NumberFieldState;
   defaultPrice: NumberFieldState;
   pointBuy?: boolean;
-}): { budget: PoolFieldError | null; defaultPrice: PoolFieldError | null; valid: boolean } {
+  /** The rounds field; left out where the form shows none (point-buy seasons). */
+  rounds?: NumberFieldState;
+}): { budget: PoolFieldError | null; defaultPrice: PoolFieldError | null; rounds: PoolFieldError | null; valid: boolean } {
   const needsBudget = input.draftType === 'auction' || input.draftType === 'budget';
   const budget = needsBudget ? validatePoolBudget(input.budget) : null;
   const showsPrice = showsDefaultPriceField(input.draftType, input.pointBuy);
   const budgetValue = needsBudget && budget === null ? parsePoints(input.budget.value, 1) : null;
   const defaultPrice = showsPrice ? validateDefaultPrice(input.defaultPrice, budgetValue) : null;
-  return { budget, defaultPrice, valid: budget === null && defaultPrice === null };
+  const rounds = input.rounds && !input.pointBuy ? validateRounds(input.rounds) : null;
+  return { budget, defaultPrice, rounds, valid: budget === null && defaultPrice === null && rounds === null };
 }
 
 /** An untouched, empty number field. */
@@ -139,6 +161,9 @@ export function poolFieldIds(baseId: string) {
     price: `${baseId}-default-price`,
     priceHint: `${baseId}-default-price-hint`,
     priceError: `${baseId}-default-price-error`,
+    rounds: `${baseId}-rounds`,
+    roundsHint: `${baseId}-rounds-hint`,
+    roundsError: `${baseId}-rounds-error`,
   };
 }
 
@@ -186,6 +211,7 @@ export default function DraftPoolManager({
   const [draftType, setDraftType] = useState<DraftType>('snake');
   const [pointBudget, setPointBudget] = useState<NumberFieldState>({ value: '100', badInput: false });
   const [defaultPrice, setDefaultPrice] = useState<NumberFieldState>({ value: '', badInput: false });
+  const [rounds, setRounds] = useState<NumberFieldState>({ value: String(LEGACY_ROUNDS.default), badInput: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<DraftCreateError | null>(null);
 
@@ -200,7 +226,8 @@ export default function DraftPoolManager({
     setPriceFieldShown(showsDefaultPrice);
     setDefaultPrice((current) => defaultPriceForVisibility(current, showsDefaultPrice));
   }
-  const fieldErrors = validatePoolCreateForm({ draftType, budget: pointBudget, defaultPrice, pointBuy });
+  const fieldErrors = validatePoolCreateForm({ draftType, budget: pointBudget, defaultPrice, pointBuy, rounds });
+  const roundsIds = poolFieldIds(idBase);
 
   function fieldErrorText(err: PoolFieldError): string {
     switch (err) {
@@ -210,6 +237,8 @@ export default function DraftPoolManager({
         return t('poolManager.errors.priceInvalid', { max: LEGACY_POINTS_MAX });
       case 'priceAboveBudget':
         return t('poolManager.errors.priceAboveBudget', { budget: Number(pointBudget.value) });
+      case 'roundsInvalid':
+        return t('poolManager.errors.roundsInvalid', { min: LEGACY_ROUNDS.min, max: LEGACY_ROUNDS.max });
     }
   }
 
@@ -220,6 +249,7 @@ export default function DraftPoolManager({
     const body = buildPoolCreateBody(seasonId, draftType, Number(pointBudget.value), defaultPrice.value, {
       pointBuy,
       pickOrder,
+      rounds: rounds.value,
     });
     let outcome: DraftCreateOutcome;
     try {
@@ -299,6 +329,37 @@ export default function DraftPoolManager({
           onDefaultPriceChange={setDefaultPrice}
           defaultPriceError={fieldErrors.defaultPrice ? fieldErrorText(fieldErrors.defaultPrice) : null}
         />
+      )}
+
+      {!pointBuy && (
+        <div>
+          <label htmlFor={roundsIds.rounds} className="block text-sm font-heading font-semibold text-poke-text-primary mb-1">
+            {t('poolManager.rounds')}
+          </label>
+          {/* onInput as well: a badInput change can leave `value` at '' and skip React's onChange. */}
+          <input
+            id={roundsIds.rounds}
+            type="number"
+            inputMode="numeric"
+            min={LEGACY_ROUNDS.min}
+            max={LEGACY_ROUNDS.max}
+            step={1}
+            value={rounds.value}
+            onChange={(e) => setRounds(readNumberField(e.currentTarget))}
+            onInput={(e) => setRounds(readNumberField(e.currentTarget))}
+            aria-invalid={fieldErrors.rounds !== null || undefined}
+            aria-describedby={fieldErrors.rounds ? `${roundsIds.roundsHint} ${roundsIds.roundsError}` : roundsIds.roundsHint}
+            className={`${INPUT_CLASS} ${fieldErrors.rounds ? 'border-poke-danger' : 'border-poke-border'}`}
+          />
+          <p id={roundsIds.roundsHint} className="text-xs text-poke-text-muted mt-1">
+            {t('poolManager.roundsHint', { min: LEGACY_ROUNDS.min, max: LEGACY_ROUNDS.max, standard: LEGACY_ROUNDS.default })}
+          </p>
+          {fieldErrors.rounds && (
+            <p id={roundsIds.roundsError} className="text-xs text-poke-danger-ink mt-1">
+              {fieldErrorText(fieldErrors.rounds)}
+            </p>
+          )}
+        </div>
       )}
 
       <p className="text-sm text-poke-text-secondary">

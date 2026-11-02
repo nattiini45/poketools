@@ -31,7 +31,7 @@ vi.mock('@/lib/discord/notify', () => ({ emitDiscordEvent: vi.fn() }));
 vi.mock('@/lib/supabase/queries/players', () => ({ getPlayersByIds: vi.fn() }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
 
-import { dispatchDraftNotifications, listTickablePools, parseNotificationClaims } from '../notify';
+import { dispatchDraftNotifications, parseNotificationClaims } from '../notify';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { getPlayersByIds } from '@/lib/supabase/queries/players';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
@@ -168,20 +168,5 @@ describe('dispatchDraftNotifications', () => {
     await expect(dispatchDraftNotifications([turnClaim])).resolves.toBe(0);
     expect(emitDiscordEvent).not.toHaveBeenCalled();
     expect(console.error).toHaveBeenCalled();
-  });
-});
-
-describe('listTickablePools', () => {
-  it('selects open queue pools (submissions or drafting) up to the limit', async () => {
-    hoisted.tables.draft_pools = { data: [{ id: POOL, season_id: SEASON }], error: null };
-    await expect(listTickablePools(25)).resolves.toEqual([{ id: POOL, season_id: SEASON }]);
-    expect(hoisted.calls).toContainEqual({ table: 'draft_pools', method: 'eq', args: ['engine', 'queue'] });
-    expect(hoisted.calls).toContainEqual({ table: 'draft_pools', method: 'in', args: ['phase', ['submissions', 'drafting']] });
-    expect(hoisted.calls).toContainEqual({ table: 'draft_pools', method: 'limit', args: [25] });
-  });
-
-  it('throws a read error', async () => {
-    hoisted.tables.draft_pools = { data: null, error: new Error('boom') };
-    await expect(listTickablePools(5)).rejects.toThrow('boom');
   });
 });

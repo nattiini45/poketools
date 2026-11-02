@@ -5,9 +5,11 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { DraftRuleError } from '@/lib/draft/errors';
 import { draftErrorResponse } from '@/lib/draft/http';
-import { getDefaultRounds } from '@/lib/draft/engine';
+import { minCompletion } from '@/lib/draft/budget';
+import { availablePricesSorted, getDefaultRounds } from '@/lib/draft/engine';
+import { splitIntoRosters } from '@/lib/draft/roster-split';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
-import { defaultPickOrder, isPickOrderAllowed, isTurnEnforced } from '@/lib/draft/pool-format';
+import { defaultPickOrder, isPickOrderAllowed } from '@/lib/draft/pool-format';
 import { seasonRosterIds } from '@/lib/draft/pool-roster';
 import { computeRedraftSeats } from '@/lib/draft/redraft-order';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
@@ -28,6 +30,7 @@ import {
   getDraftPoolsBySeason,
   createDraftPool,
 } from '@/lib/supabase/queries/drafts';
+import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
@@ -261,7 +264,8 @@ async function createQueuePool(
  * → `201 { pool_id }`. A body in the legacy shape (`draft_type`, `budget`) for
  * an EPB season creates the initial queue pool with that budget; a `default_point_cost`
  * in it is refused (`400 validation_failed`), since point-buy seasons price from their list.
- * Other seasons take the legacy path: `{ season_id, draft_type, pick_order?, budget?, default_point_cost? }`
+ * Other seasons take the legacy path: `{ season_id, draft_type, pick_order?, budget?, default_point_cost?, rounds? }`
+ * (`rounds`, 1 to 50, is the pool's exact team size and 11 when omitted; a point-buy season maps it to the queue roster size)
  * (`default_point_cost` only for `budget` pools; on any other type it is `400 validation_failed`).
  * `draft_type` is the pricing, `pick_order` the turn order (omitted = snake for snake, free otherwise);
  * an auction with a non-free order is `400 draft_auction_order_not_free`.
@@ -301,10 +305,15 @@ export async function POST(request: NextRequest) {
               { status: 400 }
             );
           }
+          // `rounds` is the queue pool's roster size (an out-of-range value is `INVALID_CONFIG` on `roster_size`).
+          const config: DraftConfigInput = {
+            ...(legacy.budget != null && legacy.budget >= 1 ? { budget: legacy.budget } : {}),
+            ...(legacy.rounds !== undefined ? { roster_size: legacy.rounds } : {}),
+          };
           input = {
             season_id: legacy.season_id,
             kind: 'initial',
-            config: legacy.budget != null && legacy.budget >= 1 ? { budget: legacy.budget } : undefined,
+            config: Object.keys(config).length > 0 ? config : undefined,
           };
         }
         const group = resolveCreateGroup(await getSeasonGroups(seasonId), input.season_group_id);
@@ -342,24 +351,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fixed costs in a turn order: a player who cannot afford their remaining rounds stalls everyone, so a
-    // budget below rounds × default price (what an unpriced Pokémon costs) could never finish. Pool entries
-    // are added after creation, so only the default price is checked here.
-    const rounds = getDefaultRounds(body.draft_type);
-    if (
-      body.draft_type === 'budget' && isTurnEnforced(pickOrder) && body.budget != null &&
-      body.default_point_cost != null && body.budget < rounds * body.default_point_cost
-    ) {
-      const minimum = rounds * body.default_point_cost;
-      return NextResponse.json<ApiResult<never>>(
-        {
-          success: false,
-          error: `A budget of ${body.budget} cannot fill ${rounds} picks at the default price of ${body.default_point_cost} (needs ${minimum})`,
-          code: 'draft_budget_below_rounds',
-          params: { budget: body.budget, rounds, price: body.default_point_cost, minimum },
-        },
-        { status: 400 }
-      );
+    // Fixed costs: a player who cannot afford their remaining rounds can never finish them (in a turn order
+    // that also stalls everyone), so a budget below what the rounds cost at the cheapest prices could never
+    // fill the pool, whatever the pick order. A season with a pool list only offers its entries, each at its own
+    // price (else the default price) and each to one trainer only, so the whole roster must fit: enough entries
+    // for every trainer's rounds, and the cheapest of them within the trainers' budgets together (a necessary
+    // condition: a pool it passes can still be unfillable by how the prices split, which the board reports as a
+    // stall). Without a list any Pokémon costs the default price. The roster and the entries added after the pool
+    // exists are not seen here.
+    const rounds = body.rounds ?? getDefaultRounds(body.draft_type);
+    if (body.draft_type === 'budget' && body.budget != null) {
+      const listedPrices = availablePricesSorted(await getPoolEntries(body.season_id), [], body.default_point_cost ?? 0);
+      if (listedPrices !== null) {
+        const players = Math.max(1, (await getSeasonParticipants(body.season_id)).length);
+        const needed = players * rounds;
+        if (listedPrices.length < needed) {
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `The pool list has ${listedPrices.length} Pokémon, but ${players} trainer${players === 1 ? '' : 's'} need${players === 1 ? 's' : ''} ${needed} picks (${rounds} each)`,
+              code: 'draft_pool_list_too_small',
+              params: { listed: listedPrices.length, players, rounds, needed },
+            },
+            { status: 400 }
+          );
+        }
+        const minimum = minCompletion(listedPrices, needed).cost;
+        const available = players * body.budget;
+        if (available < minimum) {
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `A budget of ${body.budget} per trainer cannot fill ${rounds} picks for ${players} trainer${players === 1 ? '' : 's'}: the ${needed} cheapest Pokémon on the pool list cost ${minimum} together, against ${available} in total`,
+              code: 'draft_budget_below_listed_rounds',
+              params: { budget: body.budget, rounds, players, needed, minimum, available },
+            },
+            { status: 400 }
+          );
+        }
+        // Enough in total is not enough: the Pokémon are dealt out whole, so the prices must split into rosters.
+        // A pool is created only when a split is found; a search that runs out of nodes is refused as unverified.
+        const split = splitIntoRosters(listedPrices, players, rounds, body.budget);
+        if (split === 'no') {
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `The prices on the pool list cannot be split into ${players} roster${players === 1 ? '' : 's'} of ${rounds} Pokémon that each stay within ${body.budget} points`,
+              code: 'draft_budget_list_unassignable',
+              params: { budget: body.budget, rounds, players },
+            },
+            { status: 400 }
+          );
+        }
+        if (split === 'unknown') {
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `Could not verify that the prices on the pool list can be split into ${players} roster${players === 1 ? '' : 's'} of ${rounds} Pokémon within ${body.budget} points each; raise the budget or trim the list`,
+              code: 'draft_budget_list_unverifiable',
+              params: { budget: body.budget, rounds, players },
+            },
+            { status: 400 }
+          );
+        }
+      } else if (body.default_point_cost != null && body.budget < rounds * body.default_point_cost) {
+        const minimum = rounds * body.default_point_cost;
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: `A budget of ${body.budget} cannot fill ${rounds} picks at the default price of ${body.default_point_cost} (needs ${minimum})`,
+            code: 'draft_budget_below_rounds',
+            params: { budget: body.budget, rounds, price: body.default_point_cost, minimum },
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // A league with groups drafts per group, which only the queue engine runs (a legacy pool has no seats, so
@@ -391,6 +457,8 @@ export async function POST(request: NextRequest) {
       pick_order: pickOrder,
       point_budget: body.budget ?? null,
       default_point_cost: body.default_point_cost ?? null,
+      // Without `rounds` the pool keeps no stored team size and plays the engine default.
+      ...(body.rounds !== undefined ? { team_size_mode: 'exact' as const, team_size_exact: body.rounds } : {}),
     });
     // The league page's cached `hasDraftPool` flips now, not when the entry ages out (D37).
     expireDraftReads(body.season_id);

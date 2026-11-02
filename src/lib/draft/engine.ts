@@ -6,7 +6,9 @@ import type {
   DraftType,
   MakePickInput,
 } from '@/types/draft';
+import { toID } from '@/lib/pkmn/i18n/id';
 import { minCompletion } from './budget';
+import { LEGACY_ROUNDS } from './points-limits';
 import { isTurnEnforced } from './pool-format';
 
 // ─── Snake Draft Order ──────────────────────────────────────────────
@@ -66,7 +68,8 @@ function fnv1a(text: string): number {
  * Seat order of a legacy pool: a draw seeded by the pool id, so it is the same on every request and every server
  * (the participant read has no order, and `season_participants` stores neither seats nor a join time). Each pool
  * draws again, so no player sits first in every league. Ties fall back to the player id. A participant who joins
- * or leaves mid-draft still moves the seats after theirs.
+ * or leaves mid-draft would move the seats after theirs, so the roster is frozen while the pool is in progress
+ * (SEASON_DRAFT_LOCKED, 20261102140000).
  */
 export function legacySeatOrder(poolId: string, playerIds: readonly string[]): string[] {
   return playerIds
@@ -169,6 +172,17 @@ export interface ValidatePickOptions {
 }
 
 /**
+ * Whether a Pokémon is among the taken names, compared by id (`toID`): `Mr. Mime`, `Mr.Mime` and `mrmime` are one
+ * Pokémon, as in the database index `uq_draft_picks_legacy_name_live` (`epb_fold_id`). `DraftState.taken_pokemon` keeps
+ * the stored spellings.
+ */
+export function isNameTaken(taken: ReadonlySet<string>, pokemonName: string): boolean {
+  const id = toID(pokemonName);
+  for (const name of taken) if (toID(name) === id) return true;
+  return false;
+}
+
+/**
  * Validate that a pick can be made. Returns null if valid, or an error.
  */
 export function validatePick(
@@ -191,7 +205,7 @@ export function validatePick(
     return { code: 'NOT_YOUR_TURN', message: 'It is not your turn.' };
   }
 
-  if (!opts?.skipNameTakenCheck && state.taken_pokemon.has(input.pokemon_name)) {
+  if (!opts?.skipNameTakenCheck && isNameTaken(state.taken_pokemon, input.pokemon_name)) {
     return {
       code: 'POKEMON_TAKEN',
       message: `${input.pokemon_name} has already been drafted`,
@@ -261,8 +275,8 @@ export function rosterCompletionShortfall(i: RosterCompletionInput): RosterCompl
 }
 
 /**
- * Ascending prices of every Pokémon still available in a legacy fixed-price pool (names compared case-insensitively,
- * as the picks route does), leaving out `exclude` (the candidate of a pick). `null` = the season has no pool list:
+ * Ascending prices of every Pokémon still available in a legacy fixed-price pool (names compared by id, as the picks
+ * route does), leaving out `exclude` (the candidate of a pick). `null` = the season has no pool list:
  * any Pokémon may be picked at `fallbackPrice`.
  */
 export function availablePricesSorted(
@@ -272,9 +286,9 @@ export function availablePricesSorted(
   exclude?: { pokemon_name: string; point_cost: number | null },
 ): number[] | null {
   if (entries.length === 0) return null;
-  const taken = new Set(Array.from(takenNames, (name) => name.toLowerCase()));
+  const taken = new Set(Array.from(takenNames, toID));
   return entries
-    .filter((e) => e !== exclude && !taken.has(e.pokemon_name.toLowerCase()))
+    .filter((e) => e !== exclude && !taken.has(toID(e.pokemon_name)))
     .map((e) => e.point_cost ?? fallbackPrice)
     .sort((a, b) => a - b);
 }
@@ -361,16 +375,9 @@ export function isDraftComplete(
  * EPB seasons override with format_rules.draft_picks (default 9).
  * This can be overridden by the admin at pool creation.
  */
-export function getDefaultRounds(draftType: DraftType): number {
-  switch (draftType) {
-    case 'snake':
-      return 11; // Standard draft league roster size
-    case 'auction':
-    case 'budget':
-      return 11;
-    default:
-      return 11;
-  }
+export function getDefaultRounds(_draftType: DraftType): number {
+  // The same standard roster size for every pricing.
+  return LEGACY_ROUNDS.default;
 }
 
 /** Resolve total draft rounds, preferring explicit EPB/format overrides. */

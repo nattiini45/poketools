@@ -222,6 +222,29 @@ describe('POST /api/seasons/[id]/participants', () => {
     expect(json.code).toBe('SEASON_GROUPS_SCHEDULED');
     expect(expireSeasonReads).not.toHaveBeenCalled();
   });
+
+  it('a league with a legacy draft in progress refuses a new trainer: the trigger refusal is the catalogued 409', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    // What PostgREST hands back for the season_participants__group_guard refusal (20261102140000).
+    vi.mocked(addSeasonParticipant).mockRejectedValue({ code: 'P0001', message: 'SEASON_DRAFT_LOCKED', details: null });
+
+    const res = await POST(makeRequest({ player_id: VALID_PLAYER_ID }), { params: makeParams({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }) });
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.code).toBe('SEASON_DRAFT_LOCKED');
+    expect(expireSeasonReads).not.toHaveBeenCalled();
+  });
+
+  it('a bulk add stops at the refusal with the same 409', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(addSeasonParticipant).mockRejectedValue({ code: 'P0001', message: 'SEASON_DRAFT_LOCKED', details: null });
+
+    const res = await POST(makeRequest({ player_ids: [VALID_PLAYER_ID] }), { params: makeParams({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }) });
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('SEASON_DRAFT_LOCKED');
+  });
 });
 
 describe('DELETE /api/seasons/[id]/participants', () => {
@@ -292,7 +315,8 @@ describe('DELETE /api/seasons/[id]/participants', () => {
     ['SEASON_GROUPS_SCHEDULED', 409],
     ['SEASON_GROUP_LOCKED', 409],
     ['SEASON_GROUP_TOO_SMALL', 422],
-  ] as const)('the group rules refuse the removal: %s -> %i, the cache is not expired', async (code, status) => {
+    ['SEASON_DRAFT_LOCKED', 409],
+  ] as const)('the group and draft rules refuse the removal: %s -> %i, the cache is not expired', async (code, status) => {
     vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
     vi.mocked(removeLeagueParticipant).mockRejectedValue(new DraftRuleError(code));
 

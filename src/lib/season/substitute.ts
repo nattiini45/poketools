@@ -11,6 +11,7 @@ import {
 } from '@/lib/supabase/queries/seasons';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { getSeasonGroupOfPlayer, seasonGroupHasDraftingPool } from '@/lib/supabase/queries/season-groups';
+import { seasonHasLiveLegacyDraft } from '@/lib/supabase/queries/drafts';
 import { DraftRuleError } from '@/lib/draft/errors';
 import {
   getParticipants,
@@ -252,6 +253,17 @@ async function assertSeasonOpen(seasonId: string): Promise<void> {
 }
 
 /**
+ * A legacy pool stores no seats and recomputes every turn from the current roster, so swapping a trainer mid-draft
+ * would hand the outgoing trainer's seat, picks and turn to someone else's order. Refused before the first write
+ * (the preview included): 409 `SEASON_DRAFT_LOCKED`. The roster swap itself is guarded under the season lock by the
+ * trigger of 20261102150100, so a draft that starts after this read is refused at the swap; this read keeps the
+ * preview and the earlier writes (matches, enrollments) from running for a substitution that cannot finish.
+ */
+async function assertLegacyDraftNotRunning(seasonId: string): Promise<void> {
+  if (await seasonHasLiveLegacyDraft(seasonId)) throw new DraftRuleError('SEASON_DRAFT_LOCKED');
+}
+
+/**
  * League scope moves the roster row, and the league group slot moves with it (the membership's participant key
  * cascades). While the outgoing trainer's group has a pool in submissions (a Redraft) or drafting, that pool keeps the
  * outgoing seat, so the membership trigger refuses that slot change (20261018202000_league_groups_locks.sql). Checked here, before the
@@ -370,6 +382,7 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
         code: 'IN_ALREADY_ON_ROSTER',
       });
     }
+    await assertLegacyDraftNotRunning(seasonId);
     await assertGroupNotDrafting(seasonId, outPlayerId);
   } else {
     // Phase scope moves the phase enrollment only (the roster stays as it

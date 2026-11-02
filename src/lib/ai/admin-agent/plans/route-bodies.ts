@@ -94,8 +94,9 @@ export function toGroupsBody(groupCount: number): Body {
 
 /**
  * `POST /api/drafts`. The queue engine (Evolution Point Buy) creates the initial pool with an optional config and, for a
- * league with groups, the group it seats; the legacy engine takes the pricing type, turn order and budget. `rounds`,
- * `name` and `pool_template_id` are never sent (the legacy route ignores them).
+ * league with groups, the group it seats; the legacy engine takes the pricing type, turn order and budget. `rounds` (the legacy
+ * round count, 11 when omitted) is set from the draft panel, not by a plan; `name` and `pool_template_id` are never
+ * sent (the route refuses them).
  */
 export function toDraftCreateBody(seasonId: string | PlanRefObject, entry: PlanDraftEntry): Body {
   if (entry.engine === 'queue') {

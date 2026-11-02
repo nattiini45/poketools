@@ -172,11 +172,11 @@ describe('DraftPoolManager request body', () => {
     expect(draftPoolCreateSchema.parse(await create())).toMatchObject({ budget: LEGACY_POINTS_MAX });
   });
 
-  it('both number fields ask for the numeric keyboard (as InstanceConfigForm does)', () => {
+  it('every number field (budget, price, rounds) asks for the numeric keyboard (as InstanceConfigForm does)', () => {
     form.draftType = 'budget';
     const html = renderToStaticMarkup(element);
-    expect(html.match(/<input[^>]*type="number"[^>]*>/g)).toHaveLength(2);
-    expect(html.match(/<input[^>]*inputmode="numeric"[^>]*>/gi)).toHaveLength(2);
+    expect(html.match(/<input[^>]*type="number"[^>]*>/g)).toHaveLength(3);
+    expect(html.match(/<input[^>]*inputmode="numeric"[^>]*>/gi)).toHaveLength(3);
   });
 
   it('names the allowed range in the error, in English and German', () => {

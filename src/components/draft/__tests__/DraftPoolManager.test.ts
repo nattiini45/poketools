@@ -14,6 +14,7 @@ import {
   validateDefaultPrice,
   validatePoolBudget,
   validatePoolCreateForm,
+  validateRounds,
   type NumberFieldState,
 } from '../DraftPoolManager';
 
@@ -110,22 +111,22 @@ describe('validatePoolCreateForm', () => {
     validatePoolCreateForm({ draftType, budget: field(budget), defaultPrice: field(price), pointBuy });
 
   it('snake checks nothing (no budget or price fields)', () => {
-    expect(form('snake', 'abc', 'abc')).toEqual({ budget: null, defaultPrice: null, valid: true });
+    expect(form('snake', 'abc', 'abc')).toEqual({ budget: null, defaultPrice: null, rounds: null, valid: true });
   });
 
   it('auction checks the budget only', () => {
-    expect(form('auction', '0', 'abc')).toEqual({ budget: 'budgetInvalid', defaultPrice: null, valid: false });
+    expect(form('auction', '0', 'abc')).toEqual({ budget: 'budgetInvalid', defaultPrice: null, rounds: null, valid: false });
     expect(form('auction', '120', 'abc').valid).toBe(true);
   });
 
   it('budget checks both, and the price against the budget', () => {
-    expect(form('budget', '180', '')).toEqual({ budget: null, defaultPrice: null, valid: true });
-    expect(form('budget', '180', '200')).toEqual({ budget: null, defaultPrice: 'priceAboveBudget', valid: false });
-    expect(form('budget', '', '5')).toEqual({ budget: 'budgetInvalid', defaultPrice: null, valid: false });
+    expect(form('budget', '180', '')).toEqual({ budget: null, defaultPrice: null, rounds: null, valid: true });
+    expect(form('budget', '180', '200')).toEqual({ budget: null, defaultPrice: 'priceAboveBudget', rounds: null, valid: false });
+    expect(form('budget', '', '5')).toEqual({ budget: 'budgetInvalid', defaultPrice: null, rounds: null, valid: false });
   });
 
   it('a point-buy season never checks the (hidden) default price', () => {
-    expect(form('budget', '180', '200', true)).toEqual({ budget: null, defaultPrice: null, valid: true });
+    expect(form('budget', '180', '200', true)).toEqual({ budget: null, defaultPrice: null, rounds: null, valid: true });
   });
 
   it('every valid form builds a body the route schema accepts', () => {
@@ -152,6 +153,7 @@ describe('defaultPriceForVisibility (stale default-price state)', () => {
     expect(validatePoolCreateForm({ draftType: 'budget', budget: field('180'), defaultPrice: price })).toEqual({
       budget: null,
       defaultPrice: null,
+      rounds: null,
       valid: true,
     });
   });
@@ -223,5 +225,45 @@ describe('pick order in the create body', () => {
 
   it('omits the order when none is given (the route derives it)', () => {
     expect(buildPoolCreateBody(SEASON, 'budget', 100, '')).not.toHaveProperty('pick_order');
+  });
+});
+
+describe('rounds (#55)', () => {
+  it('validateRounds: a whole number from 1 to 50', () => {
+    for (const ok of ['1', '6', '11', '50']) expect(validateRounds(field(ok))).toBeNull();
+    for (const bad of ['0', '51', '2.5', '-3', '', 'abc']) expect(validateRounds(field(bad))).toBe('roundsInvalid');
+    expect(validateRounds(field('', true))).toBe('roundsInvalid');
+  });
+
+  it('sends rounds only when they differ from the default, so an untouched form builds the old body', () => {
+    expect(buildPoolCreateBody(SEASON, 'snake', 100, '', { rounds: '11' })).toEqual({ season_id: SEASON, draft_type: 'snake' });
+    expect(buildPoolCreateBody(SEASON, 'snake', 100, '', { rounds: '6' })).toEqual({ season_id: SEASON, draft_type: 'snake', rounds: 6 });
+    expect(buildPoolCreateBody(SEASON, 'budget', 90, '10', { pickOrder: 'snake', rounds: '8' })).toEqual({
+      season_id: SEASON,
+      draft_type: 'budget',
+      pick_order: 'snake',
+      budget: 90,
+      default_point_cost: 10,
+      rounds: 8,
+    });
+  });
+
+  it('never sends rounds for a point-buy season, nor an invalid value', () => {
+    expect(buildPoolCreateBody(SEASON, 'snake', 100, '', { pointBuy: true, rounds: '6' })).not.toHaveProperty('rounds');
+    expect(buildPoolCreateBody(SEASON, 'snake', 100, '', { rounds: '99' })).not.toHaveProperty('rounds');
+  });
+
+  it('the form is invalid on a bad rounds field, and a point-buy form never checks it', () => {
+    const check = (rounds: string, pointBuy = false) =>
+      validatePoolCreateForm({ draftType: 'snake', budget: field('100'), defaultPrice: field(''), rounds: field(rounds), pointBuy });
+    expect(check('0')).toEqual({ budget: null, defaultPrice: null, rounds: 'roundsInvalid', valid: false });
+    expect(check('6').valid).toBe(true);
+    expect(check('0', true)).toEqual({ budget: null, defaultPrice: null, rounds: null, valid: true });
+  });
+
+  it('every valid rounds value builds a body the route schema accepts', () => {
+    for (const rounds of ['1', '6', '12', '50']) {
+      expect(draftPoolCreateSchema.safeParse(buildPoolCreateBody(SEASON, 'snake', 100, '', { rounds })).success).toBe(true);
+    }
   });
 });
