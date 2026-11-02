@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { readBoundedPages } from '../read-bounded-pages';
 import type { Tables, TablesInsert } from '@/types/database';
 import type {
   DraftPool,
@@ -26,6 +27,7 @@ import { DraftRuleError } from '@/lib/draft/errors';
 
 type DraftPoolRow = Tables<'draft_pools'>;
 type DraftPickRow = Tables<'draft_picks'>;
+type DraftPickRowWithPlayer = DraftPickRow & { players: { name: string } | null };
 
 function narrow<T extends string>(value: string | null | undefined, allowed: readonly T[]): T | undefined {
   return value !== null && value !== undefined && (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
@@ -489,21 +491,27 @@ async function refuseLostDeleteRace(id: string, queue: boolean): Promise<never> 
 
 // ─── Draft Picks ────────────────────────────────────────────────────
 
+/**
+ * Every pick of a pool, voided ones included, in pick order. Paged to the end: a pool of 21 trainers over 50 rounds
+ * holds 1,050 picks, and a pick count that stops at the 1,000 row cap would make every later pick insert collide on
+ * the same pick number and keep the pool from ever completing.
+ */
 export async function getPicksByPool(poolId: string): Promise<DraftPickWithPlayer[]> {
-  const { data, error } = await supabase
-    .from('draft_picks')
-    .select(`
-      *,
-      players!draft_picks_player_id_fkey ( name )
-    `)
-    .eq('draft_pool_id', poolId)
-    .order('pick_number');
+  const { rows } = await readBoundedPages<DraftPickRowWithPlayer>(
+    (from, to) =>
+      supabase
+        .from('draft_picks')
+        .select('*, players!draft_picks_player_id_fkey ( name )')
+        .eq('draft_pool_id', poolId)
+        .order('pick_number', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: 'getPicksByPool' },
+  );
 
-  if (error) throw error;
-
-  return data.map((row) => ({
+  return rows.map((row) => ({
     ...toDraftPick(row),
-    player_name: (row.players as { name: string } | null)?.name ?? '',
+    player_name: row.players?.name ?? '',
   }));
 }
 
