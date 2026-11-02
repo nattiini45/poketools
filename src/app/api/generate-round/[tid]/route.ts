@@ -18,6 +18,7 @@ import {
   createMatchBatch,
   getCompletedMatchRecords,
   getMatchesByTournament,
+  getPairedMatchRecords,
 } from '@/lib/supabase/queries/matches';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import {
@@ -29,6 +30,7 @@ import {
 } from '@/lib/tournament/group-rounds';
 import { generateRound } from '@/lib/tournament';
 import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
+import { assertNoScheduleDrift } from '@/lib/tournament/schedule-drift';
 import { parseGenerateOptions } from '@/lib/tournament/generate-options';
 import { byeRecordsFromRounds } from '@/lib/tournament/byes';
 import {
@@ -111,6 +113,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { code: 'BRACKET_V2_MANAGED' }
       );
     }
+    // A new elimination bracket is built whole by the bracket engine. This route only continues legacy brackets that
+    // already hold rounds, so the per-round generator below (which loses the bracket positions) never starts one.
+    if (isElimination && existingRounds.length === 0) {
+      throw new UserFacingError('Elimination brackets are built by the bracket engine. Use Generate Bracket instead.', {
+        code: 'BRACKET_V2_REQUIRED',
+      });
+    }
 
     if (tournament.bracket_type !== 'round_robin') {
       const currentRound = existingRounds.find(
@@ -126,6 +135,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           },
           { status: 400 }
         );
+      }
+    }
+
+    // The legacy elimination generator reads results only: a player whose match is unfinished looks like a bye
+    // recipient and would advance with their opponent. A round forced to `completed` is refused here too.
+    if (isElimination) {
+      const previousRound = existingRounds.find((r) => r.round_number === tournament.current_round);
+      if (previousRound) {
+        const unfinished = (await getMatchesByTournament(tid)).filter(
+          (match) => match.round_id === previousRound.id && match.status !== 'completed'
+        );
+        if (unfinished.length > 0) {
+          throw new UserFacingError(
+            `${previousRound.name} still has ${unfinished.length} unfinished match(es), so the next round cannot be built from it. Finish them first.`,
+            {
+              code: 'rounds_previous_matches_unfinished',
+              params: { round: previousRound.name, count: unfinished.length },
+              status: 409,
+            }
+          );
+        }
       }
     }
 
@@ -149,6 +179,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // 4. Fetch match history and groups. A phase of a league with groups mirrors them (rebuilt from the league
     // groups while the phase has no round yet); every other phase keeps its own groups.
     const matchHistory = await getCompletedMatchRecords(tid);
+    // Who has been paired, whatever the match's status: a round forced to completed may hold an unfinished match, and
+    // its two players must not meet again (Swiss), nor may a round robin repeat a pairing (drift guard below).
+    const pairedMatches =
+      tournament.bracket_type === 'swiss' || tournament.bracket_type === 'round_robin'
+        ? await getPairedMatchRecords(tid)
+        : [];
     const groups = tournament.season_id
       ? await ensurePhaseGroupsFromLeague(tournament.season_id, tournament)
       : await getGroupsByTournament(tid);
@@ -230,6 +266,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           {
             startingBrackets,
             byeHistory: byeHistory.filter((b) => groupPlayerIds.includes(b.player_id)),
+            pairedMatches: pairedMatches.filter(
+              (m) => groupPlayerIds.includes(m.player_1_id) && groupPlayerIds.includes(m.player_2_id)
+            ),
           }
         );
         allPairings.push(...generated.pairings);
@@ -253,11 +292,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         participantNames,
         matchHistory,
         nextRoundNumber,
-        { startingBrackets, byeHistory }
+        { startingBrackets, byeHistory, pairedMatches }
       );
       allPairings = generated.pairings;
       allByePlayerIds = generated.bye_player_ids;
       roundName = generated.round_name;
+      // The circle schedule is rebuilt on every call from the current participant order, so a rename or a substitute
+      // after the first round can rebuild a round that repeats a scheduled pairing. Refuse before any write.
+      if (tournament.bracket_type === 'round_robin') {
+        assertNoScheduleDrift(roundName, allPairings, pairedMatches, { ignoreRoundNumber: nextRoundNumber });
+      }
     }
 
     // A round and its matches are two writes, and `current_round` moves only after both. A retry after an interrupted

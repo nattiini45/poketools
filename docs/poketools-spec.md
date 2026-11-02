@@ -166,7 +166,7 @@ A **phase** is stored as a `tournaments` row with `season_id` set. League admin 
 |---|---|---|
 | name | Title | e.g. "Round 3", "Semifinals" |
 | tournament | Relation → Tournaments | |
-| round_number | Number | |
+| round_number | Number | Unique per tournament (`rounds_tournament_round_number_key`) |
 | best_of | Number | Overrides tournament default |
 | status | Select | pending / active / completed |
 | pairings_generated | Checkbox | |
@@ -937,8 +937,10 @@ POST /api/manual-result         Write manually entered match result + stats to d
 
 POST /api/confirm-match/[mid]   Player B confirms result → set match to completed
 
-POST /api/generate-round/[tid]  Admin: generate next round pairings (Swiss/RR; legacy per-round elim).
-                                Returns 400 BRACKET_V2_MANAGED when structure elim rounds exist.
+POST /api/generate-round/[tid]  Admin: generate next round pairings (Swiss/RR; continues legacy per-round elim).
+                                Returns 400 BRACKET_V2_MANAGED when structure elim rounds exist, 400
+                                BRACKET_V2_REQUIRED for an elimination phase with no round yet, 409
+                                rounds_round_already_written when another call wrote the round number first.
 
 POST /api/tournaments/[id]/generate-bracket   Admin: full SE/DE bracket (all rounds + R1 matches)
 POST /api/tournaments/[id]/regenerate-bracket Admin: wipe and rebuild SE/DE bracket from current seeds
@@ -1243,7 +1245,8 @@ Undo / repair paths:
   - POST /api/tournaments/[id]/regenerate-bracket → wipe all rounds/matches and rebuild
     (409 REGENERATE_PLAYED without cascade: true; cascade resets played matches first)
 
-Legacy elim (pre-structure rows): flat bracket rendering + per-round generate;
+Legacy elim (pre-structure rows): flat bracket rendering + per-round generate (only continues an existing
+legacy bracket; a new elimination bracket always goes through generate-bracket, 400 BRACKET_V2_REQUIRED);
 POST /api/generate-round/[tid] returns 400 BRACKET_V2_MANAGED when structure rounds exist.
 ```
 

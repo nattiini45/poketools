@@ -16,6 +16,8 @@ export interface GenerateRoundOptions {
   startingBrackets?: StartingBrackets;
   /** Byes stored on the tournament's earlier rounds (Swiss only; others ignore it). */
   byeHistory?: ByeRecord[];
+  /** Every match already paired, whatever its status (Swiss only): the no-rematch history; scores use `matchHistory`. */
+  pairedMatches?: MatchRecord[];
 }
 
 /**
@@ -32,13 +34,11 @@ export function generateRound(
 ): GeneratedRound {
   switch (bracketType) {
     case 'swiss':
-      return generateSwissRound(
-        participantIds,
-        participantNames,
-        matchHistory,
-        roundNumber,
-        options?.byeHistory
-      );
+      return options?.pairedMatches
+        ? generateSwissRound(participantIds, participantNames, matchHistory, roundNumber, options.byeHistory, {
+            pairedMatches: options.pairedMatches,
+          })
+        : generateSwissRound(participantIds, participantNames, matchHistory, roundNumber, options?.byeHistory);
 
     case 'round_robin':
       return generateRoundRobinRound(participantIds, roundNumber);

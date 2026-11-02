@@ -1862,6 +1862,34 @@ export async function getCompletedMatchRecords(
 }
 
 /**
+ * Every match of a tournament, whatever its status: the records of who has been paired, not of who won. A scheduled,
+ * in-progress or disputed match is still "these two have met" for the Swiss no-rematch history and the round robin
+ * drift guard; it must never feed a score (its `winner_id` is null, which scoring reads as a draw), so standings keep
+ * `getCompletedMatchRecords`. Pages past `max_rows`, oldest first.
+ */
+export async function getPairedMatchRecords(tournamentId: string): Promise<MatchRecord[]> {
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .eq('tournament_id', tournamentId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `getPairedMatchRecords tournament ${tournamentId}` },
+  );
+
+  return rows.map((row) => ({
+    match_id: row.id,
+    player_1_id: row.player_1_id,
+    player_2_id: row.player_2_id,
+    winner_id: row.winner_id,
+    round_number: (row.rounds as { round_number: number }).round_number,
+  }));
+}
+
+/**
  * Batch-fetch completed match records for multiple tournaments in one paged read.
  * Returns a Map keyed by tournament_id. Used by profile composition
  * to avoid N+1 queries when computing standings.

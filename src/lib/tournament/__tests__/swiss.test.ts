@@ -229,3 +229,36 @@ describe('generateSwissRound without avoidable rematches (#39)', () => {
     expect(round.bye_player_ids[0]).not.toBe('e');
   });
 });
+
+describe('generateSwissRound with unfinished matches', () => {
+  const four = ['p1', 'p2', 'p3', 'p4'];
+  // Round 1 was force-completed with both matches unfinished: no result exists, but both pairs have been paired.
+  const unfinished: MatchRecord[] = [
+    { player_1_id: 'p1', player_2_id: 'p2', winner_id: null, round_number: 1 },
+    { player_1_id: 'p3', player_2_id: 'p4', winner_id: null, round_number: 1 },
+  ];
+  const pairs = (round: ReturnType<typeof generateSwissRound>) =>
+    round.pairings.map((p) => [p.player_1_id, p.player_2_id].sort().join('-'));
+
+  it('pairs the same players again when only completed matches are history', () => {
+    expect(pairs(generateSwissRound(four, names, [], 2))).toEqual(['p1-p2', 'p3-p4']);
+  });
+
+  it('never pairs them again when the paired history holds the unfinished matches', () => {
+    const round = generateSwissRound(four, names, [], 2, [], { pairedMatches: unfinished });
+    expect(pairs(round)).not.toContain('p1-p2');
+    expect(pairs(round)).not.toContain('p3-p4');
+    expect(round.pairings).toHaveLength(2);
+  });
+
+  it('keeps scoring from the completed matches only: an unfinished match moves no standing', () => {
+    const completed: MatchRecord[] = [{ player_1_id: 'p3', player_2_id: 'p4', winner_id: 'p3', round_number: 1 }];
+    const round = generateSwissRound(four, names, completed, 2, [], {
+      pairedMatches: [...completed, { player_1_id: 'p1', player_2_id: 'p2', winner_id: null, round_number: 1 }],
+    });
+    // p3 (a win) leads the standings and is paired first; the p1-p2 pair is excluded by the paired history.
+    expect(pairs(round)).not.toContain('p1-p2');
+    expect(pairs(round)).not.toContain('p3-p4');
+    expect(round.pairings[0].player_1_id).toBe('p3');
+  });
+});

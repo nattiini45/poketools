@@ -55,6 +55,7 @@ import { createMatchBatch } from '@/lib/supabase/queries/matches';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
 import { revalidateTag } from 'next/cache';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -360,6 +361,37 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     expect(createMatchBatch).toHaveBeenCalledTimes(1);
     expect(updateTournament).toHaveBeenCalledWith('a5cb20ac-a127-482d-855d-d802e29185bc', { current_round: 2 });
     expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
+  });
+
+  it('answers 409 rounds_round_already_written, writing no match, when a concurrent call took the round number', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([{ round_number: 1, status: 'completed' }] as never);
+    vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
+    vi.mocked(createRound).mockRejectedValue(
+      new UserFacingError('Round 2 already exists with its matches. Delete it to generate it again.', {
+        code: 'rounds_round_already_written',
+        params: { round: 'Round 2' },
+        status: 409,
+      }),
+    );
+
+    const res = await POST(
+      makeRequest({
+        pairings: [
+          { player_1_id: P1, player_2_id: P2 },
+          { player_1_id: P3, player_2_id: P4 },
+        ],
+      }),
+      routeParams,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.code).toBe('rounds_round_already_written');
+    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(updateTournament).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
   });
 
   describe('bye storage', () => {

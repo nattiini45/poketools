@@ -19,6 +19,7 @@ vi.mock('@/lib/supabase/client', () => ({
 import {
   getCompletedMatchRecords,
   getCompletedMatchRecordsBatch,
+  getPairedMatchRecords,
   getPlayerIdsWithCompletedMatches,
 } from '../matches';
 
@@ -240,5 +241,28 @@ describe('getPlayerIdsWithCompletedMatches', () => {
 
     expect((await getPlayerIdsWithCompletedMatches([])).size).toBe(0);
     expect(f.queries).toHaveLength(0);
+  });
+});
+
+describe('getPairedMatchRecords', () => {
+  it('returns every match of the tournament whatever its status, with no status filter, oldest first', async () => {
+    const statuses = ['scheduled', 'in_progress', 'pending_confirmation', 'disputed', 'completed'];
+    const rows = completedRows(5).map((row, k) => ({ ...row, status: statuses[k % statuses.length] }));
+    const f = use([...rows, ...completedRows(2, 'other-stage', 9000)]);
+
+    const records = await getPairedMatchRecords(T);
+
+    expect(records.map((r) => r.match_id)).toEqual([0, 1, 2, 3, 4].map(idOf));
+    expect(f.queries).toHaveLength(1);
+    expect(f.queries[0].filters).toEqual([{ op: 'eq', column: 'tournament_id', value: T }]);
+  });
+
+  it('pages past the 1000-row ceiling', async () => {
+    const f = use(completedRows(2345));
+
+    const records = await getPairedMatchRecords(T);
+
+    expect(records).toHaveLength(2345);
+    expect(f.queries).toHaveLength(3);
   });
 });

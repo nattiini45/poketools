@@ -265,6 +265,27 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
       expect(robin.store.proposals).toHaveLength(0);
     });
 
+    it.each(['single_elim', 'double_elim'] as const)(
+      'refuses to start a %s phase with no round: the route answers BRACKET_V2_REQUIRED, so no card is staged',
+      async (bracketType) => {
+        const h = makeHarness({ source: { phase: { bracketType } } });
+        seeIt(h);
+        expect(refused(await h.stage('propose_start_phase', args)).code).toBe('BRACKET_V2_REQUIRED');
+        expect(h.store.proposals).toHaveLength(0);
+      },
+    );
+
+    it('still stages a bracket card for an elimination phase, and a start for Swiss or round robin', async () => {
+      const bracket = makeHarness({ source: { phase: { bracketType: 'single_elim' } } });
+      seeIt(bracket);
+      staged(await bracket.stage('propose_generate_bracket', args));
+      for (const bracketType of ['swiss', 'round_robin'] as const) {
+        const h = makeHarness({ source: { phase: { bracketType } } });
+        seeIt(h);
+        staged(await h.stage('propose_start_phase', args));
+      }
+    });
+
     it('fails closed when the app cannot fingerprint the startup checklist or the channel set', async () => {
       for (const read of ['startup_checklist', 'channel_set']) {
         const h = makeHarness();
@@ -298,8 +319,8 @@ describe('Go-live cards: one exact call each, derived from live state', () => {
           { id: 'groups', state: 'blocked', params: { count: 3 } },
         ],
       };
-      for (const tool of ['propose_start_phase', 'propose_generate_bracket']) {
-        const h = makeHarness({ source: { startup: blocked, phase: { bracketType: 'single_elim' } } });
+      for (const [tool, bracketType] of [['propose_start_phase', 'swiss'], ['propose_generate_bracket', 'single_elim']] as const) {
+        const h = makeHarness({ source: { startup: blocked, phase: { bracketType } } });
         seeIt(h);
         const result = refused(await h.stage(tool, args));
         expect(result).toMatchObject({ code: 'startup_not_ready', params: { blocked: 2 } });
