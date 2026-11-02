@@ -138,6 +138,23 @@ export default {
     bestOfSaving: 'Saving…',
     bestOfSaved: 'Saved.',
     complete: 'Complete',
+    completeBlocked: {
+      one: '{count} match is still open',
+      other: '{count} matches are still open',
+    },
+    forceComplete: {
+      open: 'Complete anyway',
+      title: 'Complete round with open matches',
+      message: {
+        one: '{count} match in this round is not finished. It stays as it is. Completing the round anyway is recorded in the audit log with your reason.',
+        other:
+          '{count} matches in this round are not finished. They stay as they are. Completing the round anyway is recorded in the audit log with your reason.',
+      },
+      reasonLabel: 'Reason',
+      reasonHint: 'Required. Up to 500 characters.',
+      cancel: 'Cancel',
+      confirm: 'Complete round',
+    },
     reset: 'Reset',
     delete: 'Delete',
     deadline: {

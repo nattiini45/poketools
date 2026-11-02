@@ -16,6 +16,8 @@
 export default {
   STRUCTURE_ELIM_ROUND_DELETE:
     'Structure-generated elimination rounds cannot be deleted individually. Use Regenerate Bracket to rebuild the slot graph.',
+  BRACKET_V2_REQUIRED:
+    'Elimination brackets are built by the bracket engine. Use Generate Bracket instead.',
   BRACKET_V2_MANAGED:
     'This tournament bracket is managed by the bracket engine. Use Generate Bracket or Regenerate Bracket instead.',
   BRACKET_LOCKED_USE_SUBSTITUTE:
@@ -65,6 +67,16 @@ export default {
   rounds_round_robin_only: 'Generate-all-rounds is only supported for round_robin tournaments',
   rounds_all_generated: 'All rounds have already been generated',
   rounds_round_already_written: '{round} already exists with its matches. Delete it to generate it again.',
+  round_matches_unfinished: {
+    one: '{round} still has {count} unfinished match. Finish it, or complete the round anyway with a reason.',
+    other: '{round} still has {count} unfinished matches. Finish them, or complete the round anyway with a reason.',
+  },
+  rounds_previous_matches_unfinished: {
+    one: '{round} still has {count} unfinished match, so the next round cannot be built from it. Finish it first.',
+    other: '{round} still has {count} unfinished matches, so the next round cannot be built from it. Finish them first.',
+  },
+  round_robin_schedule_drift:
+    '{round} would repeat a pairing that is already scheduled in this tournament. A participant was renamed or replaced after the first round; create this round by hand instead.',
   // League groups: placement weeks pair the same-placed trainers by the group tables after the week before
   rounds_group_placement_not_ready:
     'Week {week} is a placement week. Finish every match of the weeks before it, then generate it.',

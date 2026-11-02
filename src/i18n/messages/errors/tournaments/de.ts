@@ -4,6 +4,8 @@ import type en from './en';
 export default defineDe<typeof en>()({
   STRUCTURE_ELIM_ROUND_DELETE:
     'Vom Turnierbaum erzeugte K.-o.-Runden lassen sich nicht einzeln löschen. Nutze „Turnierbaum neu erstellen“, um die Plätze neu aufzubauen.',
+  BRACKET_V2_REQUIRED:
+    'K.-o.-Turnierbäume werden automatisch aufgebaut. Nutze stattdessen „Turnierbaum erstellen“.',
   BRACKET_V2_MANAGED:
     'Dieser Turnierbaum wird automatisch verwaltet. Erstelle ihn stattdessen über „Turnierbaum erstellen“ oder „Turnierbaum neu erstellen“.',
   BRACKET_LOCKED_USE_SUBSTITUTE:
@@ -51,6 +53,16 @@ export default defineDe<typeof en>()({
   rounds_round_robin_only: 'Alle Runden auf einmal lassen sich nur im Modus „Jeder gegen jeden“ erstellen.',
   rounds_all_generated: 'Alle Runden wurden bereits erstellt.',
   rounds_round_already_written: '{round} gibt es schon mit ihren Matches. Lösche sie, um sie neu zu erstellen.',
+  round_matches_unfinished: {
+    one: '{round} hat noch {count} unfertiges Match. Schließe es ab oder beende die Runde trotzdem mit einer Begründung.',
+    other: '{round} hat noch {count} unfertige Matches. Schließe sie ab oder beende die Runde trotzdem mit einer Begründung.',
+  },
+  rounds_previous_matches_unfinished: {
+    one: '{round} hat noch {count} unfertiges Match, daher lässt sich die nächste Runde daraus nicht erstellen. Schließe es zuerst ab.',
+    other: '{round} hat noch {count} unfertige Matches, daher lässt sich die nächste Runde daraus nicht erstellen. Schließe sie zuerst ab.',
+  },
+  round_robin_schedule_drift:
+    '{round} würde eine Paarung wiederholen, die in diesem Turnier schon angesetzt ist. Ein Teilnehmer wurde nach der ersten Runde umbenannt oder ersetzt; erstelle diese Runde stattdessen von Hand.',
   rounds_group_placement_not_ready:
     'Woche {week} ist eine Platzierungswoche. Schließe zuerst jedes Match der Wochen davor ab und erstelle sie dann.',
   rounds_group_layout_invalid:

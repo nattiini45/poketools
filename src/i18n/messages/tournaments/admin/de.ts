@@ -135,6 +135,23 @@ export default defineDe<typeof en>()({
     bestOfSaving: 'Wird gespeichert …',
     bestOfSaved: 'Gespeichert.',
     complete: 'Abschließen',
+    completeBlocked: {
+      one: '{count} Spiel ist noch offen',
+      other: '{count} Spiele sind noch offen',
+    },
+    forceComplete: {
+      open: 'Trotzdem abschließen',
+      title: 'Runde mit offenen Spielen abschließen',
+      message: {
+        one: '{count} Spiel dieser Runde ist nicht beendet. Es bleibt unverändert. Wenn du die Runde trotzdem abschließt, wird das mit deiner Begründung im Audit-Log festgehalten.',
+        other:
+          '{count} Spiele dieser Runde sind nicht beendet. Sie bleiben unverändert. Wenn du die Runde trotzdem abschließt, wird das mit deiner Begründung im Audit-Log festgehalten.',
+      },
+      reasonLabel: 'Begründung',
+      reasonHint: 'Pflichtfeld. Höchstens 500 Zeichen.',
+      cancel: 'Abbrechen',
+      confirm: 'Runde abschließen',
+    },
     reset: 'Zurücksetzen',
     delete: 'Löschen',
     deadline: {

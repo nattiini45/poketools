@@ -527,12 +527,167 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]', () => {
     });
   });
 
+  describe('completing a round with unfinished matches', () => {
+    const patchBody = (body: Record<string, unknown>) =>
+      ({ json: vi.fn().mockResolvedValue(body) }) as unknown as NextRequest;
+    const call = (body: Record<string, unknown>) =>
+      PATCH(patchBody(body), { params: Promise.resolve({ id: T_ID, rid: R_ID }) });
+
+    beforeEach(() => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound({ status: 'active', round_number: 2 }));
+      vi.mocked(updateRoundStatus).mockResolvedValue(makeRound({ status: 'completed', round_number: 2 }));
+      vi.mocked(getTournamentById).mockResolvedValue({ id: T_ID, name: 'Cup', season_id: 'season-1' } as never);
+      vi.mocked(getCompletedMatchRecords).mockResolvedValue([] as never);
+      vi.mocked(getParticipants).mockResolvedValue([] as never);
+      vi.mocked(computeStandingsForSeason).mockResolvedValue([] as never);
+    });
+
+    function expectNothingWritten() {
+      expect(updateRoundStatus).not.toHaveBeenCalled();
+      expect(updateRoundBestOf).not.toHaveBeenCalled();
+      expect(updateRoundDeadline).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      expect(emitDiscordEvent).not.toHaveBeenCalled();
+      expect(emitSocialEvent).not.toHaveBeenCalled();
+      expect(triggerTournamentReport).not.toHaveBeenCalled();
+    }
+
+    it.each(['scheduled', 'in_progress', 'pending_confirmation', 'disputed'])(
+      'refuses with 409 round_matches_unfinished while a match is %s, and writes nothing',
+      async (status) => {
+        vi.mocked(getMatchesByRound).mockResolvedValue([
+          makeMatchForRound({ id: 'm-1' }),
+          makeMatchForRound({ id: 'm-2', status }),
+        ] as never);
+
+        const response = await call({ status: 'completed' });
+        const payload = await response.json();
+
+        expect(response.status).toBe(409);
+        expect(payload.code).toBe('round_matches_unfinished');
+        expect(payload.params).toEqual({ round: 'Round 1', count: 1 });
+        expectNothingWritten();
+      }
+    );
+
+    it('counts every unfinished match', async () => {
+      vi.mocked(getMatchesByRound).mockResolvedValue([
+        makeMatchForRound({ id: 'm-1', status: 'scheduled' }),
+        makeMatchForRound({ id: 'm-2', status: 'disputed' }),
+        makeMatchForRound({ id: 'm-3' }),
+      ] as never);
+
+      const payload = await (await call({ status: 'completed' })).json();
+
+      expect(payload.params).toEqual({ round: 'Round 1', count: 2 });
+    });
+
+    it('refuses before any other field of the same request is written', async () => {
+      vi.mocked(getRoundById).mockResolvedValue(makeRound({ status: 'pending' }));
+      vi.mocked(getMatchesByRound).mockResolvedValue([makeMatchForRound({ status: 'scheduled' })] as never);
+
+      const response = await call({ status: 'completed', best_of: 5, deadline: '2026-11-01T18:00:00Z' });
+
+      expect(response.status).toBe(409);
+      expectNothingWritten();
+    });
+
+    it('completes a round whose matches are all completed, firing the event and the recap (no audit of a force)', async () => {
+      vi.mocked(getMatchesByRound).mockResolvedValue([makeMatchForRound({ id: 'm-1' }), makeMatchForRound({ id: 'm-2' })] as never);
+
+      const response = await call({ status: 'completed' });
+
+      expect(response.status).toBe(200);
+      expect(updateRoundStatus).toHaveBeenCalledWith(R_ID, 'completed');
+      expect(emitDiscordEvent).toHaveBeenCalledTimes(1);
+      expect(triggerTournamentReport).toHaveBeenCalledWith(T_ID, R_ID, 'round_recap');
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('treats force on a fully finished round like a normal completion: no force audit', async () => {
+      vi.mocked(getMatchesByRound).mockResolvedValue([makeMatchForRound()] as never);
+
+      const response = await call({ status: 'completed', force: true, reason: 'Not needed' });
+
+      expect(response.status).toBe(200);
+      expect(emitDiscordEvent).toHaveBeenCalledTimes(1);
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('force-completes with a reason: writes, audits round.force_complete once, and still fires the event', async () => {
+      vi.mocked(getMatchesByRound).mockResolvedValue([
+        makeMatchForRound({ id: 'm-1' }),
+        makeMatchForRound({ id: 'm-2', status: 'disputed' }),
+      ] as never);
+
+      const response = await call({ status: 'completed', force: true, reason: '  Opponent never showed up  ' });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload.data.status).toBe('completed');
+      expect(updateRoundStatus).toHaveBeenCalledWith(R_ID, 'completed');
+      expect(vi.mocked(logAuditEvent).mock.calls.filter(([e]) => e.action === 'round.force_complete')).toHaveLength(1);
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actor_id: 'admin-1',
+          actor_name: 'Admin One',
+          action: 'round.force_complete',
+          resource_type: 'round',
+          resource_id: R_ID,
+          changes: { status: { before: 'active', after: 'completed' } },
+          metadata: expect.objectContaining({
+            tournament_id: T_ID,
+            unfinished_matches: 1,
+            reason: 'Opponent never showed up',
+          }),
+        })
+      );
+      expect(emitDiscordEvent).toHaveBeenCalledTimes(1);
+      expect(triggerTournamentReport).toHaveBeenCalledWith(T_ID, R_ID, 'round_recap');
+    });
+
+    it.each([
+      ['no reason', { status: 'completed', force: true }],
+      ['a blank reason', { status: 'completed', force: true, reason: '   ' }],
+      ['an over-long reason', { status: 'completed', force: true, reason: 'x'.repeat(501) }],
+    ])('answers 400 validation_failed for force with %s, reading no matches', async (_label, body) => {
+      const response = await call(body);
+      const payload = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(payload.code).toBe('validation_failed');
+      expect(getMatchesByRound).not.toHaveBeenCalled();
+      expectNothingWritten();
+    });
+
+    it('does not read the matches for any other status change', async () => {
+      const response = await call({ status: 'active' });
+
+      expect(response.status).toBe(200);
+      expect(getMatchesByRound).not.toHaveBeenCalled();
+    });
+
+    it('lets a denied admin write and audit nothing (403 from the live guard, before the body is read)', async () => {
+      vi.mocked(requireResourceAdmin).mockRejectedValue(
+        Object.assign(new Error('Forbidden'), { name: 'AuthError', statusCode: 403 })
+      );
+
+      const response = await call({ status: 'completed', force: true, reason: 'x' });
+
+      expect(response.status).toBe(403);
+      expect(getMatchesByRound).not.toHaveBeenCalled();
+      expectNothingWritten();
+    });
+  });
+
   it('does not break when Discord event assembly throws', async () => {
     const round = makeRound({ status: 'active' });
     const completedRound = makeRound({ status: 'completed' });
     vi.mocked(getRoundById).mockResolvedValue(round);
     vi.mocked(updateRoundStatus).mockResolvedValue(completedRound);
     vi.mocked(getTournamentById).mockResolvedValue({ id: T_ID, season_id: null, name: 'Cup' } as never);
+    vi.mocked(getMatchesByRound).mockResolvedValue([] as never);
     vi.mocked(getCompletedMatchRecords).mockRejectedValueOnce(new Error('DB failure'));
 
     const request = {

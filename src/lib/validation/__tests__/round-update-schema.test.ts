@@ -44,6 +44,34 @@ describe('roundUpdateSchema deadline', () => {
     expect(roundUpdateSchema.safeParse({}).success).toBe(false);
   });
 
+  describe('force completion', () => {
+    it('accepts force with a reason on a completion, and trims the reason', () => {
+      expect(roundUpdateSchema.safeParse({ status: 'completed', force: true, reason: '  Opponent left  ' })).toMatchObject({
+        success: true,
+        data: { status: 'completed', force: true, reason: 'Opponent left' },
+      });
+    });
+
+    it.each([
+      ['no reason', { status: 'completed', force: true }],
+      ['an empty reason', { status: 'completed', force: true, reason: '' }],
+      ['a whitespace-only reason', { status: 'completed', force: true, reason: '   ' }],
+      ['an over-long reason', { status: 'completed', force: true, reason: 'x'.repeat(501) }],
+    ])('rejects force with %s', (_label, body) => {
+      expect(roundUpdateSchema.safeParse(body).success).toBe(false);
+    });
+
+    it('rejects force on any other status, or without one', () => {
+      expect(roundUpdateSchema.safeParse({ status: 'active', force: true, reason: 'x' }).success).toBe(false);
+      expect(roundUpdateSchema.safeParse({ force: true, reason: 'x', deadline: null }).success).toBe(false);
+    });
+
+    it('leaves a plain completion, and force: false, as they were', () => {
+      expect(roundUpdateSchema.safeParse({ status: 'completed' }).success).toBe(true);
+      expect(roundUpdateSchema.safeParse({ status: 'completed', force: false }).success).toBe(true);
+    });
+  });
+
   it('keeps accepting status and best_of alone, and still bounds them', () => {
     expect(roundUpdateSchema.safeParse({ status: 'active' }).success).toBe(true);
     expect(roundUpdateSchema.safeParse({ best_of: 3 }).success).toBe(true);

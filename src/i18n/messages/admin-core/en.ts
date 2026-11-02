@@ -59,6 +59,7 @@ const auditActions = {
   round__reset: 'Round reset',
   round__delete: 'Round deleted',
   round__generate: 'Round generated',
+  round__force_complete: 'Round completed with open matches',
   bracket__generate: 'Bracket generated',
   tournament__seeds__update: 'Seeding saved',
   phase__create: 'Phase created',

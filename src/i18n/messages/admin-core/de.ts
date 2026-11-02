@@ -78,6 +78,7 @@ export default defineDe<typeof en>()({
     round__reset: 'Runde zurückgesetzt',
     round__delete: 'Runde gelöscht',
     round__generate: 'Runde erstellt',
+    round__force_complete: 'Runde trotz offener Matches beendet',
     bracket__generate: 'Turnierbaum erstellt',
     tournament__seeds__update: 'Setzliste gespeichert',
     phase__create: 'Phase angelegt',

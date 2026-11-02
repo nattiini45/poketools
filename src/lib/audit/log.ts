@@ -53,6 +53,7 @@ export type AuditAction =
   | 'round.reset'
   | 'round.delete'
   | 'round.generate'
+  | 'round.force_complete'
   | 'bracket.generate'
   | 'tournament.seeds.update'
   | 'phase.create'
