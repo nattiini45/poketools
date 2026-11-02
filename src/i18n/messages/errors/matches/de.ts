@@ -45,6 +45,10 @@ export default defineDe<typeof en>()({
   replay_winner_unknown: 'Aus dem Replay ließ sich kein Sieger ermitteln.',
   replay_already_recorded:
     'Mit diesem Replay wurde schon ein Partieergebnis eingetragen. Jeder Kampf kann nur einmal eingetragen werden.',
+  replay_not_found: 'Pokémon Showdown kennt kein Replay mit diesem Link oder dieser ID. Prüfe die Eingabe und versuche es erneut.',
+  replay_fetch_failed: 'Das Replay konnte nicht von Pokémon Showdown geladen werden. Versuche es gleich noch einmal.',
+  replay_fetch_timeout: 'Pokémon Showdown hat zu lange gebraucht. Versuche es gleich noch einmal.',
+  replay_unparseable: 'Dieses Replay ließ sich nicht lesen. Es ist vielleicht unvollständig oder kein Kampf-Replay.',
   replay_sides_not_distinct: 'Beide Seiten des Replays gehören zum selben Spieler.',
   battle_stats_duplicate_pokemon:
     'Ein Pokémon steht für denselben Spieler zweimal in dieser Partie. Jedes Pokémon kann pro Spieler und Partie nur einmal eingetragen werden.',

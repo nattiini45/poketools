@@ -8,7 +8,7 @@ import Alert from '@/components/ui/Alert';
 import { useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
-import { errorsMatches } from '@/i18n/messages/errors';
+import { errorsMatches, errorsStats } from '@/i18n/messages/errors';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
 
 import type { ApiResult } from '@/types/api';
@@ -56,7 +56,7 @@ export default function ReplaySubmitForm({
 }: ReplaySubmitFormProps) {
   const router = useRouter();
   const t = useT(matchFormsMessages);
-  const apiErrorText = useApiErrorText(errorsMatches);
+  const apiErrorText = useApiErrorText(errorsMatches, errorsStats);
   const [replayUrl, setReplayUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<FormError | null>(null);

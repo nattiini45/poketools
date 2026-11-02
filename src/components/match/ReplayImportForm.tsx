@@ -9,7 +9,7 @@ import Input from '@/components/ui/Input';
 import { useDataLocale, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
-import { errorsAdmin, errorsMatches } from '@/i18n/messages/errors';
+import { errorsAdmin, errorsMatches, errorsStats } from '@/i18n/messages/errors';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
@@ -66,7 +66,7 @@ export default function ReplayImportForm({
   const router = useRouter();
   const t = useT(matchFormsMessages);
   const dataLocale = useDataLocale();
-  const apiErrorText = useApiErrorText(errorsAdmin, errorsMatches);
+  const apiErrorText = useApiErrorText(errorsAdmin, errorsMatches, errorsStats);
 
   const [replayUrl, setReplayUrl] = useState(initialReplayUrl ?? '');
   const [parsing, setParsing] = useState(false);

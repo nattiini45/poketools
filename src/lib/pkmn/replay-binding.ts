@@ -1,4 +1,5 @@
 import { fetchReplay, parseReplayLog } from '@/lib/pkmn/replay';
+import { ReplayUnparseableError } from '@/lib/pkmn/replay-reference';
 import { computeReplayHash } from '@/lib/pkmn/replay-identity';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { BattleStatInsert, ParsedBattleStats } from '@/types/game';
@@ -25,13 +26,16 @@ export interface BoundReplay {
   readonly [boundReplayBrand]: true;
 }
 
-/** Hash and parse ONE log: the only way to make a `BoundReplay`. */
+/** Hash and parse ONE log: the only way to make a `BoundReplay`. A log the parser rejects is a 422 `replay_unparseable`. */
 export function bindReplay(url: string, log: string): BoundReplay {
-  return {
-    url,
-    hash: computeReplayHash(log),
-    parsed: parseReplayLog(log),
-  } as BoundReplay;
+  let parsed: ParsedBattleStats;
+  try {
+    parsed = parseReplayLog(log);
+  } catch (err) {
+    console.error(`[replay] the battle log of ${url} could not be parsed:`, err);
+    throw new ReplayUnparseableError('The replay log could not be parsed');
+  }
+  return { url, hash: computeReplayHash(log), parsed } as BoundReplay;
 }
 
 /** Fetch a Showdown replay once and bind it (`fetchReplay` + `bindReplay`). */

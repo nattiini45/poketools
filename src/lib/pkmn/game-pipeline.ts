@@ -45,7 +45,8 @@ import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
 import { cleanMatchChildren } from '@/lib/match/match-children';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { normalizeReplayUrlOrId } from '@/lib/pkmn/replay';
+import { MatchSubmitForbiddenError } from '@/lib/auth/match-access';
+import { normalizeReplayUrlOrId } from '@/lib/pkmn/replay-reference';
 import { resultFromBoundReplay, type BoundReplay } from '@/lib/pkmn/replay-binding';
 import type { MatchStatus, MatchWithPlayers } from '@/types/match';
 import type { Round } from '@/types/round';
@@ -152,19 +153,13 @@ function getAutoConfirmAt(source: GameSource, screenshotUrl?: string): string | 
   return null;
 }
 
+export { MatchSubmitForbiddenError };
+
 /** The match does not exist (or was deleted meanwhile). HTTP 404. */
 export class MatchNotFoundError extends UserFacingError {
   constructor() {
     super('Match not found', { code: 'match_not_found', status: 404 });
     this.name = 'MatchNotFoundError';
-  }
-}
-
-/** The submitter is neither a participant nor an admin of the match (a site admin or a resource admin of its tournament or league). HTTP 403. */
-export class MatchSubmitForbiddenError extends UserFacingError {
-  constructor() {
-    super('Only match participants or admins can submit results', { code: 'match_submit_forbidden', status: 403 });
-    this.name = 'MatchSubmitForbiddenError';
   }
 }
 
