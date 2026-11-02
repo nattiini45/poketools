@@ -31,6 +31,7 @@ import {
 import { generateRound } from '@/lib/tournament';
 import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { assertNoScheduleDrift } from '@/lib/tournament/schedule-drift';
+import { assertLegacyEliminationRoundSettled } from '@/lib/tournament/previous-round-guard';
 import { parseGenerateOptions } from '@/lib/tournament/generate-options';
 import { byeRecordsFromRounds } from '@/lib/tournament/byes';
 import {
@@ -138,25 +139,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // The legacy elimination generator reads results only: a player whose match is unfinished looks like a bye
-    // recipient and would advance with their opponent. A round forced to `completed` is refused here too.
     if (isElimination) {
-      const previousRound = existingRounds.find((r) => r.round_number === tournament.current_round);
-      if (previousRound) {
-        const unfinished = (await getMatchesByTournament(tid)).filter(
-          (match) => match.round_id === previousRound.id && match.status !== 'completed'
-        );
-        if (unfinished.length > 0) {
-          throw new UserFacingError(
-            `${previousRound.name} still has ${unfinished.length} unfinished match(es), so the next round cannot be built from it. Finish them first.`,
-            {
-              code: 'rounds_previous_matches_unfinished',
-              params: { round: previousRound.name, count: unfinished.length },
-              status: 409,
-            }
-          );
-        }
-      }
+      await assertLegacyEliminationRoundSettled(
+        tid,
+        existingRounds.find((r) => r.round_number === tournament.current_round)
+      );
     }
 
     // 3. Get participants
