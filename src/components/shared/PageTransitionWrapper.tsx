@@ -17,7 +17,7 @@ export default function PageTransitionWrapper({
     // `initial={false}`: the server cannot know the reduced-motion preference, so the first paint must not carry the
     // slide's starting offset (a reduced-motion client would never animate it away and keep the page shifted).
     <AnimatePresence mode="popLayout" initial={false}>
-      <motion.div key={pathname} {...pageTransition(reduceMotion)}>
+      <motion.div key={pathname} suppressHydrationWarning {...pageTransition(reduceMotion)}>
         {children}
       </motion.div>
     </AnimatePresence>
