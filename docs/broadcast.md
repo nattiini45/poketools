@@ -8,6 +8,7 @@ The Broadcast module powers live overlay state, draft replay playback, and weekl
 src/lib/broadcast/
 ├── animations.ts  # Overlay animation presets
 ├── draft-replay.ts  # Draft replay state/reducer helpers
+├── error-retry.ts  # Back-off schedule of the overlay error boundary
 ├── overlay-config.ts  # Overlay configuration helpers
 ├── poll-loop.ts  # `usePollLoop`: chained polling with backoff and Retry-After
 ├── poll-schedule.ts  # Pure backoff and Retry-After maths
@@ -79,6 +80,15 @@ The overlay data routes need no session, and a miss runs the whole database fan-
 
 ### Client behaviour under a limit
 Polling overlays run on `usePollLoop` (`poll-loop.ts`, schedule in `poll-schedule.ts`): ticks chain on `setTimeout`, a failed poll doubles the wait up to 30 s (never below the caster's `?poll=`), and a `429`'s `Retry-After` is honoured (at most 120 s). The overlay keeps its last good data and returns to the normal interval after the first good answer. One-shot overlays (preview, results, story, moments, team comparison) fetch once and are not affected.
+
+## Overlay pages (`src/app/(broadcast)`)
+
+**Transparency guarantee.** `<html>` and `<body>` are transparent on every overlay URL with no caster CSS: `(broadcast)/layout.tsx` renders `html,body{background:transparent!important}` as a server-rendered `<style>` (`BROADCAST_TRANSPARENCY_CSS`). It is in the first HTML, so it needs no JavaScript and no `:has()` (OBS builds older than Chromium 105 have none), and it holds while the page loads or fails. `!important` beats the site palette script's inline style on `<html>`. Site pages do not carry the rule.
+
+- `loading.tsx` and `not-found.tsx` render nothing; `error.tsx` renders nothing, logs the error, and calls `reset()` on a back-off of 2 s doubling to 30 s (`src/lib/broadcast/error-retry.ts`), so an overlay that threw recovers on its own once its data is valid. It never shows `error.message`.
+- Only the wiki overlays (`/broadcast/wiki/{moves,items,abilities,tera}/...`) call `notFound()` (HTTP 404, empty page). An unknown match, league or solo id renders the transparent shell with HTTP 200: checking existence would cost a query on every load. A URL outside the overlay tree (`/broadcast/nonsense`) is served by the root not-found page.
+- `SiteExtras` (root layout) skips the service worker registrar, the palette guard and Vercel Analytics under `/broadcast`: an OBS browser source is a viewerless embed.
+- Frame protections stay: `/broadcast/*` is sent with `X-Frame-Options: DENY` and `frame-ancestors 'none'`. A browser source is a top-level page, not a frame, so OBS is unaffected; embedding an overlay in a page is intentionally not supported.
 
 ## Overlay Types (url-builder.ts)
 - **Match**: preview, live, results, story, teams, h2h, moments

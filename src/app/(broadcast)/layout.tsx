@@ -1,6 +1,16 @@
 import { SpriteStyleProvider } from '@/components/shared/SpriteStyleProvider';
 
 /**
+ * The root layout paints `bg-poke-base` on <body> (and the site palette script
+ * may set a colour on <html>), so an overlay is only see-through if both are
+ * overridden. It is a server-rendered <style> rather than a `:has()` rule or a
+ * client effect: OBS browser sources older than Chromium 105 have no `:has()`,
+ * and the style is in the first HTML so the loading, error and not-found
+ * states are transparent too. `!important` beats the palette script's inline style.
+ */
+export const BROADCAST_TRANSPARENCY_CSS = 'html,body{background:transparent!important}';
+
+/**
  * Broadcast overlays are viewerless (an OBS browser source): they render in the
  * site default sprite style whatever `plc_sprite_style` cookie that browser
  * carries (docs/pkmn.md, "Sprite styles"; src/app/AGENTS.md). This provider
@@ -13,6 +23,7 @@ export default function BroadcastLayout({
 }>) {
   return (
     <SpriteStyleProvider initialPreference="site">
+      <style>{BROADCAST_TRANSPARENCY_CSS}</style>
       <div className="min-h-screen bg-transparent">{children}</div>
     </SpriteStyleProvider>
   );

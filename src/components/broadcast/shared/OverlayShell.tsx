@@ -26,6 +26,13 @@ interface OverlayShellProps {
  * loads animation keyframes, and provides a transparent background
  * suitable for OBS browser sources.
  *
+ * Transparency guarantee: `<html>` and `<body>` are transparent on every
+ * overlay URL, with no caster CSS. The shell only styles its own box; the page
+ * background comes from the `(broadcast)` layout's server-rendered
+ * `html,body{background:transparent!important}` rule (no `:has()`, so old OBS
+ * builds work), and `loading.tsx`, `error.tsx` and `not-found.tsx` in that
+ * group render nothing so no state shows a site card.
+ *
  * OBS compatibility:
  * - Transparent background (no chroma key needed)
  * - Fixed viewport (no responsive breakpoints)
