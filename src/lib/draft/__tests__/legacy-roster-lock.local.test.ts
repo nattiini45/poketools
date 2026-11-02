@@ -85,9 +85,20 @@ describe.skipIf(!optIn)('legacy draft roster lock (local stack)', () => {
 
   afterAll(async () => {
     if (!db) return;
-    if (trashIds.length > 0) await db.from('league_trash').delete().in('id', trashIds);
-    if (seasonIds.length > 0) await db.from('seasons').delete().in('id', seasonIds);
-    if (playerIds.length > 0) await db.from('players').delete().in('id', playerIds);
+    // A restore leaves a tombstone until the app confirms its rebuild. Without this delete every run leaves a
+    // pending restore rebuild behind in the shared local database.
+    // draft_pools.season_id restricts the season delete, so the pools go first; every failure is reported, not dropped.
+    const failures: string[] = [];
+    const attempt = async (what: string, op: PromiseLike<{ error: { message: string } | null }>) => {
+      const { error } = await op;
+      if (error) failures.push(`${what}: ${error.message}`);
+    };
+    if (seasonIds.length > 0) await attempt('restore rebuilds', db.from('league_trash_restore_rebuilds').delete().in('season_id', seasonIds));
+    if (trashIds.length > 0) await attempt('league_trash', db.from('league_trash').delete().in('id', trashIds));
+    if (seasonIds.length > 0) await attempt('draft_pools', db.from('draft_pools').delete().in('season_id', seasonIds));
+    if (seasonIds.length > 0) await attempt('seasons', db.from('seasons').delete().in('id', seasonIds));
+    if (playerIds.length > 0) await attempt('players', db.from('players').delete().in('id', playerIds));
+    if (failures.length > 0) throw new Error(`[legacy-roster-lock.local] cleanup left fixture rows behind: ${failures.join('; ')}`);
   });
 
   it('refuses a removal and a join while a legacy pool is in progress, and writes nothing', async () => {
@@ -152,6 +163,7 @@ describe.skipIf(!optIn)('legacy draft roster lock (local stack)', () => {
 
     const restored = await db.rpc('league_trash_restore', { p_trash_id: trashId });
     expect(restored.error).toBeNull();
+    await must('restore rebuild', db.rpc('league_trash_restore_rebuild_done', { p_season_id: seasonId }));
     expect(await rosterSize(seasonId)).toBe(2);
     const { data: pool } = await must('pool', db.from('draft_pools').select('id').eq('id', poolId!).maybeSingle());
     expect(pool?.id).toBe(poolId);

@@ -46,7 +46,14 @@ describe.skipIf(!optIn)('uq_draft_pool_entries_season_folded_name (local stack)'
   });
 
   afterAll(async () => {
-    if (db && seasonIds.length > 0) await db.from('seasons').delete().in('id', seasonIds);
+    if (!db || seasonIds.length === 0) return;
+    // draft_pools.season_id restricts the season delete, so a pool a future case adds must not strand the season.
+    const failures: string[] = [];
+    const pools = await db.from('draft_pools').delete().in('season_id', seasonIds);
+    if (pools.error) failures.push(`draft_pools: ${pools.error.message}`);
+    const seasons = await db.from('seasons').delete().in('id', seasonIds);
+    if (seasons.error) failures.push(`seasons: ${seasons.error.message}`);
+    if (failures.length > 0) throw new Error(`[pool-entry-name-unique.local] cleanup left fixture rows behind: ${failures.join('; ')}`);
   });
 
   it('refuses a second spelling of a listed Pokémon with 23505 on the folded-name index', async () => {

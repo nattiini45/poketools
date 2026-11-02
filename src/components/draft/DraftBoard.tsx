@@ -349,6 +349,25 @@ export default function DraftBoard({
     isEpb,
   });
 
+  const totalRounds = state.total_rounds;
+  // A complete draft has no next pick: its counter has run past the last round ("Round 7 · Pick #13"),
+  // so it shows the result instead.
+  let progressLabel: string;
+  if (state.pool.status === 'complete') {
+    progressLabel =
+      totalRounds !== undefined
+        ? t('board.completeSummary', { count: totalRounds, picks: state.picks.length })
+        : t('board.completeNoRounds', { picks: state.picks.length });
+  } else if (totalRounds !== undefined) {
+    progressLabel = t('board.roundPickOf', {
+      round: state.current_round,
+      total: totalRounds,
+      pick: state.next_pick_number,
+    });
+  } else {
+    progressLabel = t('board.roundPick', { round: state.current_round, pick: state.next_pick_number });
+  }
+
   return (
     <div className="space-y-6">
       {isEpb && epbMeta && (
@@ -389,7 +408,7 @@ export default function DraftBoard({
         <div className="flex items-center">
           <StatusBadge status={state.pool.status} label={enumLabel(tEnums, 'draftPoolStatus', state.pool.status)} />
           <span className="ml-3 text-sm text-poke-text-muted">
-            {t('board.roundPick', { round: state.current_round, pick: state.next_pick_number })}
+            {progressLabel}
           </span>
         </div>
 

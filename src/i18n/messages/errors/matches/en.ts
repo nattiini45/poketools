@@ -62,6 +62,15 @@ export default {
   replay_winner_unknown: 'Could not determine winner from replay',
   // A replay's battle is bound to at most one game, in any match (games.replay_hash, unique; 409, nothing written)
   replay_already_recorded: 'This replay was already used to record a game result. Each battle can be recorded only once.',
+  // replay_url_invalid (not a Showdown replay link or id; 400, checked before the match is read or any fetch) lives in errors/stats
+  // Showdown has no such replay (404 upstream)
+  replay_not_found: 'Pokémon Showdown has no replay with this link or id. Check it and try again.',
+  // Showdown could not be reached or answered with an error (502)
+  replay_fetch_failed: 'The replay could not be loaded from Pokémon Showdown. Try again in a moment.',
+  // Showdown did not answer within the deadline (504)
+  replay_fetch_timeout: 'Pokémon Showdown took too long to answer. Try again in a moment.',
+  // Showdown answered, but the payload or battle log is not a replay this app can read (422)
+  replay_unparseable: 'This replay could not be read. It may be incomplete or not a battle replay.',
   // Both replay sides resolved (or were assigned) to the same registered player (400, nothing written)
   replay_sides_not_distinct: 'Both sides of the replay belong to the same player.',
   // battle_stats unique (game_id, player_id, lower(btrim(pokemon_name))): one Pokémon twice for one player in a game (409, nothing written)

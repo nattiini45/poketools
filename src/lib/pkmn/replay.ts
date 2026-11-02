@@ -2,6 +2,14 @@ import { Generations } from '@pkmn/data';
 import { Dex } from '@pkmn/dex';
 import { Battle } from '@pkmn/client';
 import { Protocol } from '@pkmn/protocol';
+import {
+  normalizeReplayUrlOrId,
+  parseReplayReference,
+  ReplayFetchFailedError,
+  ReplayFetchTimeoutError,
+  ReplayNotFoundError,
+  ReplayUnparseableError,
+} from '@/lib/pkmn/replay-reference';
 import type { ParsedBattleStats, ParsedPokemonStat, ReplayData } from '@/types/game';
 import {
   isSameReplayPokemonEntity,
@@ -11,43 +19,65 @@ import {
 
 const gens = new Generations(Dex);
 
-/**
- * Normalizes a Showdown replay URL or bare ID for fetching.
- * Strips fragments, query strings, host prefix, trailing slashes, and `.json`.
- */
-export function normalizeReplayUrlOrId(urlOrId: string): string {
-  const withoutFragmentOrQuery = urlOrId.split('#')[0].split('?')[0];
-  return withoutFragmentOrQuery
-    .replace(/^https?:\/\/replay\.pokemonshowdown\.com\//, '')
-    .replace(/\.json$/, '')
-    .replace(/\/$/, '');
+export { normalizeReplayUrlOrId };
+
+/** The fetch deadline; an `AbortSignal.timeout` abort surfaces as a `TimeoutError`. */
+const REPLAY_FETCH_TIMEOUT_MS = 15_000;
+
+function transportError(err: unknown): ReplayFetchTimeoutError | ReplayFetchFailedError {
+  if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+    return new ReplayFetchTimeoutError();
+  }
+  return new ReplayFetchFailedError();
 }
 
 /**
  * Fetches a replay from Pokémon Showdown.
- * Accepts full URLs or bare replay IDs.
+ * Accepts full URLs or bare replay IDs; anything else is refused before the request
+ * (`ReplayUrlInvalidError`). A failed fetch is a typed `UserFacingError` per cause (not found,
+ * unreachable, timed out, unreadable); the original error is logged.
  */
 export async function fetchReplay(urlOrId: string): Promise<ReplayData> {
-  const id = normalizeReplayUrlOrId(urlOrId);
+  const id = parseReplayReference(urlOrId);
 
-  const res = await fetch(`https://replay.pokemonshowdown.com/${id}.json`, {
-    signal: AbortSignal.timeout(15_000),
-    cache: 'no-store',
-  });
+  let res: Response;
+  try {
+    res = await fetch(`https://replay.pokemonshowdown.com/${id}.json`, {
+      signal: AbortSignal.timeout(REPLAY_FETCH_TIMEOUT_MS),
+      cache: 'no-store',
+    });
+  } catch (err) {
+    console.error(`[replay] fetching replay ${id} failed:`, err);
+    throw transportError(err);
+  }
   if (!res.ok) {
-    throw new Error(`Failed to fetch replay: ${res.status} ${res.statusText}`);
+    console.error(`[replay] Showdown answered ${res.status} ${res.statusText} for replay ${id}`);
+    if (res.status === 404) throw new ReplayNotFoundError(res.status, res.statusText);
+    throw new ReplayFetchFailedError(res.status, res.statusText);
   }
 
-  const json = await res.json();
+  let json: Record<string, unknown> & { log?: string; players?: unknown[] };
+  try {
+    json = await res.json();
+  } catch (err) {
+    // The deadline also covers the body, so a stalled or cut-off read is a transport failure, not a malformed replay.
+    if (err instanceof SyntaxError) {
+      console.error(`[replay] replay ${id} is not valid JSON:`, err);
+      throw new ReplayUnparseableError();
+    }
+    console.error(`[replay] reading the body of replay ${id} failed:`, err);
+    throw transportError(err);
+  }
   if (!json.log || !json.players) {
-    throw new Error('Invalid replay format: missing log or players');
+    console.error(`[replay] replay ${id} has no log or players`);
+    throw new ReplayUnparseableError();
   }
 
   return {
-    id: json.id ?? id,
-    format: json.format ?? '',
-    players: [json.players[0] ?? json.p1, json.players[1] ?? json.p2],
-    winner: json.winner ?? '',
+    id: (json.id as string | undefined) ?? id,
+    format: (json.format as string | undefined) ?? '',
+    players: [(json.players[0] ?? json.p1) as string, (json.players[1] ?? json.p2) as string],
+    winner: (json.winner as string | undefined) ?? '',
     log: json.log,
   };
 }

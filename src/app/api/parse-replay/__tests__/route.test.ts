@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextResponse, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: vi.fn(),
@@ -10,10 +10,6 @@ vi.mock('@/lib/auth/helpers', () => ({
       this.statusCode = statusCode;
     }
   },
-}));
-
-vi.mock('@/lib/api/error-response', () => ({
-  safeErrorResponse: vi.fn((_err: unknown, fallback: string) => NextResponse.json({ success: false, error: fallback }, { status: 500 })),
 }));
 
 vi.mock('@/lib/pkmn/replay', () => ({
@@ -92,9 +88,15 @@ import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { buildGamePokemonStats, computePokemonScoreFromGameStats } from '@/lib/discord/helpers';
 import { computeReplayHash } from '@/lib/pkmn/replay-identity';
+import {
+  ReplayFetchFailedError,
+  ReplayFetchTimeoutError,
+  ReplayNotFoundError,
+  ReplayUnparseableError,
+} from '@/lib/pkmn/replay-reference';
 
 const MATCH_ID = '12345678-1234-4123-8123-123456789abc';
-const REPLAY_URL = 'https://replay.pokemonshowdown.com/test';
+const REPLAY_URL = 'https://replay.pokemonshowdown.com/gen9ou-123456789';
 const REPLAY_LOG = ['|player|p1|alice_ps', '|player|p2|bob_ps', '|turn|1', '|win|alice_ps'].join('\n');
 
 const PLAYER = { playerId: 'p1', name: 'Alice', isAdmin: false, isResourceAdmin: false, isCreator: false, psUsername: '', championsUsername: '', avatarUrl: null, status: 'active' } as const;
@@ -186,18 +188,114 @@ describe('POST /api/parse-replay', () => {
       expect(vi.mocked(recordGameResult).mock.calls[0][0]).toMatchObject({ submitter_id: 'organizer', is_admin: true });
     });
 
-    it('passes no admin authority for a non-participant who administers nothing here', async () => {
-      vi.mocked(requirePlayer).mockResolvedValue(ORGANIZER);
-
-      await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
-
-      expect(vi.mocked(recordGameResult).mock.calls[0][0]).toMatchObject({ is_admin: false });
-    });
-
     it('does not look up resource roles for a participant', async () => {
       await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
 
       expect(isResourceAdminFor).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Authorize and validate before any fetch ───────────────
+
+  describe('order: validate, authorize, then fetch', () => {
+    const STRANGER = { ...PLAYER, playerId: 'stranger', name: 'Stranger' };
+
+    beforeEach(() => {
+      vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
+      vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'] as [string, string], winner: 'alice_ps' });
+      vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
+    });
+
+    it.each(['not-a-replay', 'https://example.invalid/x', 'https://replay.pokemonshowdown.com/', '../gen9ou-1'])(
+      'answers 400 replay_url_invalid for %s from an authorized participant, without a fetch',
+      async (replayUrl) => {
+        const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: replayUrl }));
+
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('replay_url_invalid');
+        expect(fetchReplay).not.toHaveBeenCalled();
+        expect(recordGameResult).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['not-a-replay', 'https://example.invalid/x'])(
+      'answers 400 replay_url_invalid for %s from a caller with no access to the match, never a 500',
+      async (replayUrl) => {
+        vi.mocked(requirePlayer).mockResolvedValue(STRANGER);
+
+        const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: replayUrl }));
+
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('replay_url_invalid');
+        expect(fetchReplay).not.toHaveBeenCalled();
+      },
+    );
+
+    it('answers 403 match_submit_forbidden and never fetches for a non-participant who administers nothing here', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue(STRANGER);
+
+      const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+
+      expect(res.status).toBe(403);
+      expect((await res.json()).code).toBe('match_submit_forbidden');
+      expect(isResourceAdminFor).toHaveBeenCalledWith('stranger', 'tournament', 't1');
+      expect(fetchReplay).not.toHaveBeenCalled();
+      expect(parseReplayLog).not.toHaveBeenCalled();
+      expect(getPlayerByPsUsername).not.toHaveBeenCalled();
+      expect(recordGameResult).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 match_not_found without a fetch when the match does not exist', async () => {
+      vi.mocked(getMatchById).mockResolvedValue(null);
+
+      const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+
+      expect(res.status).toBe(404);
+      expect((await res.json()).code).toBe('match_not_found');
+      expect(fetchReplay).not.toHaveBeenCalled();
+    });
+
+    it('fetches only after an organizer of the match passed authorization', async () => {
+      vi.mocked(requirePlayer).mockResolvedValue(STRANGER);
+      vi.mocked(isResourceAdminFor).mockResolvedValue(true);
+      vi.mocked(getPlayerByPsUsername).mockImplementation(async (username: string) =>
+        (username === 'alice_ps' ? { id: 'p1', name: 'Alice' } : { id: 'p2', name: 'Bob' }) as never);
+      vi.mocked(recordGameResult).mockResolvedValue({ game_id: 'g1', bo_reached: false } as never);
+
+      const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+
+      expect(res.status).toBe(200);
+      expect(fetchReplay).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      [new ReplayNotFoundError(404, 'Not Found'), 404, 'replay_not_found'],
+      [new ReplayFetchFailedError(), 502, 'replay_fetch_failed'],
+      [new ReplayFetchTimeoutError(), 504, 'replay_fetch_timeout'],
+      [new ReplayUnparseableError(), 422, 'replay_unparseable'],
+    ])('answers a distinct coded error for an unreachable or unparseable replay (%s)', async (error, status, code) => {
+      vi.mocked(fetchReplay).mockRejectedValue(error);
+
+      const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+
+      expect(res.status).toBe(status);
+      expect((await res.json()).code).toBe(code);
+      expect(recordGameResult).not.toHaveBeenCalled();
+    });
+
+    it('answers 422 replay_unparseable when the log cannot be parsed, and logs the original error', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const cause = new Error('unexpected token in log');
+      vi.mocked(parseReplayLog).mockImplementation(() => {
+        throw cause;
+      });
+
+      const res = await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+
+      expect(res.status).toBe(422);
+      expect((await res.json()).code).toBe('replay_unparseable');
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('[replay]'), cause);
+      spy.mockRestore();
     });
   });
 
@@ -372,6 +470,6 @@ describe('POST /api/parse-replay', () => {
     const res = await POST(
       makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }),
     );
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(401);
   });
 });

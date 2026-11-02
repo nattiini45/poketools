@@ -166,34 +166,117 @@ describe('fetchReplay', () => {
     );
   });
 
-  it('throws on non-OK response', async () => {
+  it('answers a missing replay with a typed 404 and logs the upstream status', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found' });
+
+    await expect(fetchReplay('gen9ou-404')).rejects.toMatchObject({
+      message: 'Failed to fetch replay: 404 Not Found',
+      code: 'replay_not_found',
+      statusCode: 404,
+    });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('404 Not Found'));
+    spy.mockRestore();
+  });
+
+  it('answers another upstream error status with a typed 502', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable' });
+
+    await expect(fetchReplay('gen9ou-503')).rejects.toMatchObject({ code: 'replay_fetch_failed', statusCode: 502 });
+    spy.mockRestore();
+  });
+
+  it('answers a network failure with a typed 502 and logs the original error', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const cause = new TypeError('fetch failed');
+    mockFetch.mockRejectedValueOnce(cause);
+
+    await expect(fetchReplay('gen9ou-1')).rejects.toMatchObject({ code: 'replay_fetch_failed', statusCode: 502 });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('[replay]'), cause);
+    spy.mockRestore();
+  });
+
+  it('answers a deadline abort with a typed 504', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockRejectedValueOnce(Object.assign(new Error('timed out'), { name: 'TimeoutError' }));
+
+    await expect(fetchReplay('gen9ou-1')).rejects.toMatchObject({ code: 'replay_fetch_timeout', statusCode: 504 });
+    spy.mockRestore();
+  });
+
+  it.each(['not-a-replay', 'https://example.invalid/x', 'gen9ou-12/../../x'])(
+    'refuses %s before any request',
+    async (input) => {
+      await expect(fetchReplay(input)).rejects.toMatchObject({ code: 'replay_url_invalid', statusCode: 400 });
+      expect(mockFetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('answers a non-JSON body with a typed 422', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
+      ok: true,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <');
+      },
     });
 
-    await expect(fetchReplay('nonexistent')).rejects.toThrow('Failed to fetch replay: 404 Not Found');
+    await expect(fetchReplay('gen9ou-9')).rejects.toMatchObject({ code: 'replay_unparseable', statusCode: 422 });
+    spy.mockRestore();
+  });
+
+  it('answers a body read cut off by the deadline with a typed 504, not a 422', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => {
+        throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+      },
+    });
+
+    await expect(fetchReplay('gen9ou-9')).rejects.toMatchObject({ code: 'replay_fetch_timeout', statusCode: 504 });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('[replay]'), expect.any(Error));
+    spy.mockRestore();
+  });
+
+  it('answers a body read that fails mid-stream with a typed 502, not a 422', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => {
+        throw new TypeError('terminated');
+      },
+    });
+
+    await expect(fetchReplay('gen9ou-9')).rejects.toMatchObject({ code: 'replay_fetch_failed', statusCode: 502 });
+    spy.mockRestore();
   });
 
   it('throws on invalid replay format (missing log)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ players: ['A', 'B'] }),
     });
 
-    await expect(fetchReplay('bad-format')).rejects.toThrow('Invalid replay format');
+    await expect(fetchReplay('gen9ou-10')).rejects.toMatchObject({
+      message: expect.stringContaining('Invalid replay format'),
+      code: 'replay_unparseable',
+    });
+    spy.mockRestore();
   });
 
   it('throws on invalid replay format (missing players)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ log: '|start' }),
     });
 
-    await expect(fetchReplay('bad-format')).rejects.toThrow('Invalid replay format');
+    await expect(fetchReplay('gen9ou-11')).rejects.toMatchObject({ code: 'replay_unparseable' });
+    spy.mockRestore();
   });
-
   it('uses fallback player names (p1/p2) when players array is sparse', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -207,7 +290,7 @@ describe('fetchReplay', () => {
       }),
     });
 
-    const result = await fetchReplay('test-fallback');
+    const result = await fetchReplay('gen9ou-12');
     expect(result.players).toEqual(['FallbackP1', 'FallbackP2']);
   });
 });

@@ -44,6 +44,14 @@ export default {
       },
     },
     roundPick: 'Round {round} · Pick #{pick}',
+    /** A running or pending draft of a known length. */
+    roundPickOf: 'Round {round} of {total} · Pick #{pick}',
+    /** A complete draft: the round counter has run past the last round, so it shows the result instead. */
+    completeSummary: {
+      one: 'Draft complete · {count} round · {picks} picks',
+      other: 'Draft complete · {count} rounds · {picks} picks',
+    },
+    completeNoRounds: 'Draft complete · {picks} picks',
     startDraft: 'Start Draft',
     undoLastPick: 'Undo Last Pick',
     yourTurn: "It's your turn to pick!",

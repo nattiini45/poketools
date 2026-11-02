@@ -49,6 +49,8 @@ export interface DraftBoardState {
   stalled_picker?: { player_id: string; remaining: number; open_slots: number; min_cost: number } | null;
   next_pick_number: number;
   current_round: number;
+  /** Rounds every trainer drafts. Absent from older servers. */
+  total_rounds?: number;
   taken_pokemon: string[];
   /** EPB: server-computed drafted line identities (base|stage3) */
   taken_line_identities?: string[];

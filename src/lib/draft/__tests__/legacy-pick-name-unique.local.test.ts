@@ -68,8 +68,16 @@ describe.skipIf(!optIn)('uq_draft_picks_legacy_name_live (local stack)', () => {
 
   afterAll(async () => {
     if (!db) return;
-    if (seasonId) await db.from('seasons').delete().eq('id', seasonId);
-    if (playerIds.length > 0) await db.from('players').delete().in('id', playerIds);
+    // draft_pools.season_id restricts the season delete: the pools (and their picks) go first.
+    const failures: string[] = [];
+    const attempt = async (what: string, op: PromiseLike<{ error: { message: string } | null }>) => {
+      const { error } = await op;
+      if (error) failures.push(`${what}: ${error.message}`);
+    };
+    if (seasonId) await attempt('draft_pools', db.from('draft_pools').delete().eq('season_id', seasonId));
+    if (seasonId) await attempt('seasons', db.from('seasons').delete().eq('id', seasonId));
+    if (playerIds.length > 0) await attempt('players', db.from('players').delete().in('id', playerIds));
+    if (failures.length > 0) throw new Error(`[legacy-pick-name-unique.local] cleanup left fixture rows behind: ${failures.join('; ')}`);
   });
 
   it('refuses a second live legacy pick of the same Pokémon in another spelling (23505 on the index name)', async () => {
@@ -112,7 +120,8 @@ describe.skipIf(!optIn)('uq_draft_picks_legacy_name_live (local stack)', () => {
       await must('pool', db.from('draft_pools').insert({ id: otherPool, season_id: otherSeason, draft_type: 'snake', engine: 'legacy', status: 'pending' }));
       await must('pick', insertPick(otherPool, 'Garchomp'));
     } finally {
-      await db.from('seasons').delete().eq('id', otherSeason);
+      await must('other pools', db.from('draft_pools').delete().eq('season_id', otherSeason));
+      await must('other season', db.from('seasons').delete().eq('id', otherSeason));
     }
   });
 
