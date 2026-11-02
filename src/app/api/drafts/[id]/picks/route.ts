@@ -331,6 +331,45 @@ async function resolveSpeciesName(seasonRulesetId: string | null | undefined, po
   return getNationalSpecies(pokemonName, ruleset?.gen ?? 9)?.name ?? null;
 }
 
+/** The turn and availability refusal of `validatePick`, in the legacy answer shape (400, English text unchanged). */
+function validationRefusal(refusal: NonNullable<ReturnType<typeof validatePick>>): PickOutcome {
+  return {
+    response: NextResponse.json<ApiResult<never>>(
+      { success: false, error: refusal.message, code: refusal.code },
+      { status: 400 },
+    ),
+    expireSeasonId: null,
+  };
+}
+
+/** The two unique indexes a legacy pick insert can collide on, told apart by name (both raise 23505). */
+const PICK_NUMBER_INDEX = 'uq_draft_picks_pool_number_live';
+const PICK_NAME_INDEX = 'uq_draft_picks_legacy_name_live';
+const TRACKER_LEGACY_BASE_INDEX = 'uq_evolution_tracker_legacy_base';
+
+/** The unique index a 23505 error names (`message` first, then `details`), among `candidates`; null for anything else. */
+function violatedIndex(err: unknown, candidates: readonly string[]): string | null {
+  if (typeof err !== 'object' || err === null || (err as { code?: unknown }).code !== '23505') return null;
+  const { message, details } = err as { message?: unknown; details?: unknown };
+  const text = `${typeof message === 'string' ? message : ''} ${typeof details === 'string' ? details : ''}`;
+  return candidates.find((name) => text.includes(name)) ?? null;
+}
+
+/**
+ * A committed legacy pick whose follow-up step failed. The pick stands (201), so the failure is a warning in the body
+ * and a log line, never a 500 that would invite a retry on a taken Pokémon.
+ * - `TRACKER_NOT_CREATED`: the evolution tracker of a tiered Pokémon was not created.
+ * - `POOL_COMPLETION_PENDING`: the last pick committed but the pool is still `in_progress`;
+ *   `GET /api/drafts/[id]/state` completes it.
+ */
+type LegacyPickWarning = 'TRACKER_NOT_CREATED' | 'POOL_COMPLETION_PENDING';
+
+interface LegacyPickResponse {
+  success: true;
+  data: DraftPick;
+  warnings?: LegacyPickWarning[];
+}
+
 /**
  * Server-side price of a non-EPB legacy pick. Snake pools and pools without a
  * budget store no points. Otherwise the client's value is checked, never
@@ -444,15 +483,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
   // Snake and linear order enforce the turn; free order lets anyone pick (admins on behalf of anyone).
   const enforceOrder = state.turn_enforced;
   const validationError = validatePick(state, input, enforceOrder);
-  if (validationError) {
-    return {
-      response: NextResponse.json<ApiResult<never>>(
-        { success: false, error: validationError.message, code: validationError.code },
-        { status: 400 }
-      ),
-      expireSeasonId: null,
-    };
-  }
+  if (validationError) return validationRefusal(validationError);
   // Every player drafts at most `totalRounds` Pokémon. Turn order guarantees it; free order does not (with no
   // budget to run out, one player could otherwise take the whole pool).
   const pickerPickCount = picks.filter((p) => p.player_id === pickPlayerId).length;
@@ -532,7 +563,36 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
 
   const round = getRoundForPick(state.next_pick_number, participantIds.length);
 
-  const pick = await createDraftPick({ ...input, pick_number: state.next_pick_number, round });
+  let pick: DraftPick;
+  try {
+    pick = await createDraftPick({ ...input, pick_number: state.next_pick_number, round });
+  } catch (err) {
+    const index = violatedIndex(err, [PICK_NUMBER_INDEX, PICK_NAME_INDEX]);
+    if (index === null) throw err;
+    console.error(`[api/drafts/picks] legacy pick collided on ${index}:`, err);
+    // Another request committed first. The Pokémon index means the species is gone: the same refusal a
+    // pre-insert check gives.
+    if (index === PICK_NAME_INDEX) {
+      return validationRefusal({ code: 'POKEMON_TAKEN', message: `${input.pokemon_name} has already been drafted` });
+    }
+    // The pick-number index means the turn went to someone else's pick. Re-validate once against the picks as
+    // they are now: a precise refusal (not your turn, taken, draft complete, roster full) beats a generic conflict.
+    const freshPicks = await getPicksByPool(id);
+    const freshState = computeDraftState(pool, freshPicks, participantIds, totalRounds);
+    const refusal = validatePick(freshState, input, enforceOrder);
+    if (refusal) return validationRefusal(refusal);
+    if (freshPicks.filter((p) => p.player_id === pickPlayerId).length >= totalRounds) {
+      return legacyError(`This player already has all ${totalRounds} picks`, 'draft_roster_full', 400, {
+        max: totalRounds,
+      });
+    }
+    return legacyError(
+      'Another pick was made at the same moment. Reload the draft and try again.',
+      'PICK_CONFLICT',
+      409,
+    );
+  }
+  const warnings: LegacyPickWarning[] = [];
 
   // An admin pick for another player is audited (fire-and-forget; never blocks the pick).
   if (onBehalf) {
@@ -553,22 +613,38 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
   }
 
   // Legacy evo-leagues (evolution_tiers) get a tracker for a tiered Pokémon.
-  if (await isEvoLeague(pool.season_id)) {
-    const tier = await getTierByBasePokemon(pool.season_id, input.pokemon_name, pickPlayerId)
-      ?? await getTierByBasePokemon(pool.season_id, input.pokemon_name);
-    if (tier) {
-      await createTracker({
-        season_id: pool.season_id,
-        player_id: pickPlayerId,
-        base_pokemon: input.pokemon_name,
-      });
+  // The pick is committed, so a failing step from here on is a warning (a retry would only meet POKEMON_TAKEN).
+  try {
+    if (await isEvoLeague(pool.season_id)) {
+      const tier = await getTierByBasePokemon(pool.season_id, input.pokemon_name, pickPlayerId)
+        ?? await getTierByBasePokemon(pool.season_id, input.pokemon_name);
+      if (tier) {
+        try {
+          await createTracker({
+            season_id: pool.season_id,
+            player_id: pickPlayerId,
+            base_pokemon: input.pokemon_name,
+          });
+        } catch (err) {
+          // One tracker per (season, player, base): an existing one is the tracker this pick needs.
+          if (violatedIndex(err, [TRACKER_LEGACY_BASE_INDEX]) === null) throw err;
+        }
+      }
     }
+  } catch (err) {
+    console.error('[api/drafts/picks] pick committed but its evolution tracker was not created:', err);
+    warnings.push('TRACKER_NOT_CREATED');
   }
 
-  // Auto-complete draft if all picks are made
+  // Auto-complete draft if all picks are made; if the flip fails, `GET /api/drafts/[id]/state` completes the pool.
   const draftDone = isDraftComplete(state.next_pick_number, participantIds.length, totalRounds);
   if (draftDone) {
-    await updateDraftPoolStatus(id, 'complete');
+    try {
+      await updateDraftPoolStatus(id, 'complete');
+    } catch (err) {
+      console.error('[api/drafts/picks] last pick committed but the pool was not set to complete:', err);
+      warnings.push('POOL_COMPLETION_PENDING');
+    }
   }
 
   // Discord notifications (fire-and-forget). The pick is committed: a failure
@@ -629,7 +705,10 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
   }
 
   return {
-    response: NextResponse.json<ApiResult<DraftPick>>({ success: true, data: pick }, { status: 201 }),
+    response: NextResponse.json<LegacyPickResponse>(
+      { success: true, data: pick, ...(warnings.length > 0 ? { warnings } : {}) },
+      { status: 201 },
+    ),
     expireSeasonId: pool.season_id,
   };
 }
@@ -643,7 +722,10 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
  *
  * Legacy pools: `{ player_id, pokemon_name, points_spent? }`;
  * for snake drafts the requesting player must be the current picker, OR an
- * admin can pick on behalf of a player.
+ * admin can pick on behalf of a player. Two requests for the same turn: the
+ * database lets one insert; the other answers 409 `PICK_CONFLICT` (or the
+ * precise refusal its re-validation now gives). The success body of a legacy pick
+ * may carry `warnings` (see `LegacyPickWarning`).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {

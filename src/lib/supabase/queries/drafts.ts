@@ -395,6 +395,25 @@ export async function updateDraftPoolStatus(
 }
 
 /**
+ * Legacy pools: set a running pool to `complete` once its last pick has committed. The WHERE re-checks engine and
+ * status in the same statement, so a pool an admin moved back to `pending` meanwhile is not completed; false = no row
+ * matched (already complete, moved, or gone).
+ */
+export async function completeLegacyPoolIfRunning(id: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('draft_pools')
+    .update({ status: 'complete' })
+    .eq('id', id)
+    .eq('engine', 'legacy')
+    .eq('status', 'in_progress')
+    .select('id')
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
  * Legacy pools: switch a running draft in snake/linear order to free order (`POST /api/drafts/[id]/free-order`).
  * The WHERE re-checks engine, status and order in the same statement, so a concurrent change cannot be overwritten;
  * null = no row matched (the caller re-reads the pool to say why).

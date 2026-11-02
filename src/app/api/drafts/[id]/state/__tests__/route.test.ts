@@ -14,9 +14,13 @@ vi.mock('@/lib/auth/helpers', () => ({
   },
 }));
 
+// The route expires public read-cache tags after the lazy completion; outside a Next request `revalidateTag` throws.
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
+
 vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolById: vi.fn(),
   getPicksByPool: vi.fn(),
+  completeLegacyPoolIfRunning: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({
@@ -37,6 +41,7 @@ vi.mock('@/lib/supabase/queries/evolutions', () => ({
 vi.mock('@/lib/draft/engine', () => ({
   computeDraftState: vi.fn(),
   resolveTotalRounds: vi.fn(),
+  isDraftComplete: vi.fn((count: number, participants: number, rounds: number) => count >= participants * rounds),
   availablePricesSorted: vi.fn(() => null),
   legacyPickerStall: vi.fn(() => null),
   // Seat order is the engine's seeded draw (tested in engine.test.ts); here the read order stands.
@@ -61,7 +66,7 @@ vi.mock('@/lib/draft/progress-engine', () => ({
 
 import { GET } from '@/app/api/drafts/[id]/state/route';
 import { requirePlayer, AuthError } from '@/lib/auth/helpers';
-import { getDraftPoolById, getPicksByPool } from '@/lib/supabase/queries/drafts';
+import { completeLegacyPoolIfRunning, getDraftPoolById, getPicksByPool } from '@/lib/supabase/queries/drafts';
 import { getSeasonParticipants, getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { getAllTiers, getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
@@ -481,5 +486,119 @@ describe('GET /api/drafts/[id]/state — EPB extras', () => {
     expect(res.status).toBe(500);
     expect(json.error).toBe('Failed to compute draft state');
     errorSpy.mockRestore();
+  });
+});
+
+describe('GET /api/drafts/[id]/state — a legacy pool whose last pick committed (lazy completion)', () => {
+  const stateOf = (pool: Record<string, unknown>, pickCount: number) =>
+    ({
+      pool,
+      picks: [],
+      rosters: {},
+      budgets: null,
+      pick_order: ['p1', 'p2'],
+      current_picker: pickCount >= 4 ? null : 'p1',
+      turn_enforced: true,
+      next_pick_number: pickCount + 1,
+      current_round: 1,
+      taken_pokemon: new Set<string>(),
+    }) as never;
+  const pickRows = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `pick-${i}`, pick_number: i + 1 })) as never;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requirePlayer).mockResolvedValue(undefined as never);
+    vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }] as never);
+    vi.mocked(getSeasonById).mockResolvedValue({ format_type: 'draft' } as never);
+    vi.mocked(getFormatRules).mockResolvedValue(null);
+    vi.mocked(resolveTotalRounds).mockReturnValue(2);
+    vi.mocked(computeDraftState).mockImplementation(((pool: Record<string, unknown>, picks: unknown[]) =>
+      stateOf(pool, picks.length)) as never);
+  });
+
+  it('completes an in-progress pool with every pick made, answers it as complete, and expires the draft reads', async () => {
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy' } as never);
+    vi.mocked(getPicksByPool).mockResolvedValue(pickRows(4));
+    vi.mocked(completeLegacyPoolIfRunning).mockResolvedValue(true);
+    const { revalidateTag } = await import('next/cache');
+
+    const res = await GET(makeRequest(), routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(completeLegacyPoolIfRunning).toHaveBeenCalledWith(mockPool.id);
+    expect(json.data.pool.status).toBe('complete');
+    expect(json.data.current_picker).toBeNull();
+    expect(vi.mocked(revalidateTag).mock.calls).toEqual([['season:season-1', { expire: 0 }]]);
+  });
+
+  it('leaves a pool with picks still to make alone', async () => {
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy' } as never);
+    vi.mocked(getPicksByPool).mockResolvedValue(pickRows(3));
+
+    const res = await GET(makeRequest(), routeParams);
+
+    expect(completeLegacyPoolIfRunning).not.toHaveBeenCalled();
+    expect((await res.json()).data.pool.status).toBe('in_progress');
+  });
+
+  it.each(['pending', 'complete'])('does not touch a %s pool', async (status) => {
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', status } as never);
+    vi.mocked(getPicksByPool).mockResolvedValue(pickRows(4));
+
+    const res = await GET(makeRequest(), routeParams);
+
+    expect(completeLegacyPoolIfRunning).not.toHaveBeenCalled();
+    expect((await res.json()).data.pool.status).toBe(status);
+  });
+
+  it('does not complete a league with no participants', async () => {
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy' } as never);
+    vi.mocked(getSeasonParticipants).mockResolvedValue([] as never);
+    vi.mocked(getPicksByPool).mockResolvedValue(pickRows(0));
+
+    await GET(makeRequest(), routeParams);
+
+    expect(completeLegacyPoolIfRunning).not.toHaveBeenCalled();
+  });
+
+  it('answers the state as it is when the pool was moved meanwhile (the conditional update matched no row)', async () => {
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy' } as never);
+    vi.mocked(getPicksByPool).mockResolvedValue(pickRows(4));
+    vi.mocked(completeLegacyPoolIfRunning).mockResolvedValue(false);
+    const { revalidateTag } = await import('next/cache');
+
+    const res = await GET(makeRequest(), routeParams);
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.pool.status).toBe('in_progress');
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it('still answers the state, and logs, when the completion write fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy' } as never);
+    vi.mocked(getPicksByPool).mockResolvedValue(pickRows(4));
+    const failure = new Error('statement timeout');
+    vi.mocked(completeLegacyPoolIfRunning).mockRejectedValue(failure);
+
+    const res = await GET(makeRequest(), routeParams);
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.pool.status).toBe('in_progress');
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('complete'), failure);
+    error.mockRestore();
+  });
+
+  it('does not complete a point-buy season pool lazily (its seats and rounds are not the legacy ones)', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue({ format_type: 'evolution_point_buy' } as never);
+    vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy' } as never);
+    vi.mocked(getPicksByPool).mockResolvedValue(pickRows(4));
+    vi.mocked(getFormatRules).mockResolvedValue({ draft_picks: 2 } as never);
+    vi.mocked(getSeasonTrackers).mockResolvedValue([]);
+
+    await GET(makeRequest(), routeParams);
+
+    expect(completeLegacyPoolIfRunning).not.toHaveBeenCalled();
   });
 });
