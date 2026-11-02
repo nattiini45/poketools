@@ -59,6 +59,7 @@ describe('component inks', () => {
 
 describe('error boundaries use the button recipe', () => {
   const BOUNDARIES = [
+    'app/error.tsx',
     'app/admin/error.tsx',
     'app/(player)/dashboard/broadcast/error.tsx',
     'app/(player)/teambuilder/error.tsx',
@@ -72,11 +73,19 @@ describe('error boundaries use the button recipe', () => {
     for (const key of ['primary', 'card', 'hover']) expect(poke[key], key).toBeUndefined();
   });
 
+  it('ErrorState owns the primary + secondary buttonVariants, with no undefined tokens or text-white', () => {
+    const source = read('components/shared/ErrorState.tsx');
+    expect(source).toContain('buttonVariants({ variant: "primary", size: "md" })');
+    expect(source).toContain('buttonVariants({ variant: "secondary", size: "md" })');
+    expect(source).not.toMatch(/poke-(primary|card|hover)\b/);
+    expect(source).not.toContain('text-white');
+  });
+
   for (const file of BOUNDARIES) {
-    it(`${file}: primary + secondary buttonVariants, no undefined tokens or text-white`, () => {
+    it(`${file}: renders through ErrorState, with no markup of its own`, () => {
       const source = read(file);
-      expect(source).toContain('buttonVariants({ variant: "primary", size: "md" })');
-      expect(source).toContain('buttonVariants({ variant: "secondary", size: "md" })');
+      expect(source).toContain('<ErrorState');
+      expect(source).not.toContain('buttonVariants');
       expect(source).not.toMatch(/poke-(primary|card|hover)\b/);
       expect(source).not.toContain('text-white');
     });
