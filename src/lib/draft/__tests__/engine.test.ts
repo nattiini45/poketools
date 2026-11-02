@@ -358,6 +358,24 @@ describe('validatePick', () => {
     expect(err?.code).toBe('POKEMON_TAKEN');
   });
 
+  it.each([
+    ['another case', 'Garchomp', 'GARCHOMP'],
+    ['punctuation and spaces', 'Mr. Mime', 'mr mime'],
+    ['no separator at all', 'Mr. Mime', 'MrMime'],
+    ['an accent', 'Flabébé', 'flabebe'],
+    ['a gender sign', 'Nidoran♀', 'nidoranf'],
+  ])('returns POKEMON_TAKEN for the same Pokémon spelled with %s (compared by id)', (_label, stored, requested) => {
+    const state = buildState(undefined, [makePick('p1', stored, 1)]);
+    const input: MakePickInput = { draft_pool_id: 'pool-1', player_id: 'p2', pokemon_name: requested };
+    expect(validatePick(state, input, false)?.code).toBe('POKEMON_TAKEN');
+  });
+
+  it('does not confuse two different Pokémon whose names share a prefix', () => {
+    const state = buildState(undefined, [makePick('p1', 'Mr. Mime', 1)]);
+    const input: MakePickInput = { draft_pool_id: 'pool-1', player_id: 'p2', pokemon_name: 'Mr. Mime-Galar' };
+    expect(validatePick(state, input, false)).toBeNull();
+  });
+
   it('skips the name-taken check with skipNameTakenCheck (EPB branched base)', () => {
     // EPB stores the line's base as pokemon_name: the second branch of
     // Oshawott (→ Samurott-Hisui) shares the name with the first.
@@ -367,7 +385,6 @@ describe('validatePick', () => {
       draft_pool_id: 'pool-1',
       player_id: 'p2',
       pokemon_name: 'Oshawott',
-      stage3_pokemon: 'Samurott-Hisui',
     };
     expect(validatePick(state, input, true, { skipNameTakenCheck: true })).toBeNull();
     // Without the option the legacy name check still applies.
@@ -598,8 +615,9 @@ describe('availablePricesSorted', () => {
     { pokemon_name: 'Ditto', point_cost: null },
   ];
 
-  it('drops taken Pokémon (case-insensitive) and the excluded entry, prices missing costs at the fallback', () => {
+  it('drops taken Pokémon (compared by id) and the excluded entry, prices missing costs at the fallback', () => {
     expect(availablePricesSorted(entries, ['PIKACHU'], 5)).toEqual([5, 90]);
+    expect(availablePricesSorted([...entries, { pokemon_name: 'Mr. Mime', point_cost: 30 }], ['mr mime'], 5)).toEqual([5, 20, 90]);
     expect(availablePricesSorted(entries, [], 5, entries[0])).toEqual([5, 20]);
   });
 

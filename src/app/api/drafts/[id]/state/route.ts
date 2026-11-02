@@ -31,6 +31,7 @@ import {
   loadDraftTokenLedger,
 } from '@/lib/draft/progress-engine';
 import { collectTakenLineIdentities } from '@/lib/draft/line-identity';
+import { toID } from '@/lib/pkmn/i18n/id';
 import { toPublicPicks, type PublicDraftPick } from '@/lib/draft/public-pick';
 import type { ApiResult } from '@/types/api';
 import type { DraftSnapshotDTO } from '@/types/draft-queue';
@@ -234,11 +235,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       // Evo leagues: the picks route also takes the picker's own wildcard outside the pool list (at the pool
       // default). The picker's wildcards are read only once the pool list alone leaves them stuck.
       if (stalledPicker && stallInput.availablePrices !== null) {
-        const listed = new Set(poolEntries.map((e) => e.pokemon_name.toLowerCase()));
-        const taken = new Set(Array.from(state.taken_pokemon, (name) => name.toLowerCase()));
+        const listed = new Set(poolEntries.map((e) => toID(e.pokemon_name)));
+        const taken = new Set(Array.from(state.taken_pokemon, toID));
         const wildcards = await getPlayerWildcards(pool.season_id, stalledPicker.player_id);
         const hasWildcard = wildcards.some((w) => {
-          const base = w.base_pokemon.toLowerCase();
+          const base = toID(w.base_pokemon);
           return !listed.has(base) && !taken.has(base);
         });
         if (hasWildcard) stalledPicker = legacyPickerStall({ ...stallInput, wildcardPrice: fallbackPrice });

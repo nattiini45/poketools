@@ -39,6 +39,9 @@ import { getTierLimits } from '@/lib/supabase/queries/draft-tier-limits';
 import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
+import { getNationalSpecies } from '@/lib/pkmn/dex';
+import { toID } from '@/lib/pkmn/i18n/id';
+import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { expireDraftReads } from '@/lib/revalidation';
@@ -312,9 +315,20 @@ function draftCompletedData(pool: DraftPool, seasonName: string) {
   };
 }
 
+/** The pool entry of a Pokémon, compared by id (`Mr. Mime`, `mrmime` and `MR MIME` are one entry). */
 function findPoolEntry(entries: readonly DraftPoolEntry[], pokemonName: string): DraftPoolEntry | undefined {
-  const name = pokemonName.toLowerCase();
-  return entries.find((e) => e.pokemon_name.toLowerCase() === name);
+  const id = toID(pokemonName);
+  return entries.find((e) => toID(e.pokemon_name) === id);
+}
+
+/**
+ * The canonical species name of a pick in a league without a pool list: the name of the species in the National Dex
+ * of the season ruleset's generation (Gen 9 without a ruleset), so `garchomp` is stored as `Garchomp` and a Mega
+ * Evolution resolves. Existence only, not legality: `null` for a string that names no species.
+ */
+async function resolveSpeciesName(seasonRulesetId: string | null | undefined, pokemonName: string): Promise<string | null> {
+  const ruleset = seasonRulesetId ? await getRulesetById(seasonRulesetId) : null;
+  return getNationalSpecies(pokemonName, ruleset?.gen ?? 9)?.name ?? null;
 }
 
 /**
@@ -402,6 +416,20 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
   }
 
   const poolEntry = findPoolEntry(poolEntries, body.pokemon_name);
+  const hasPool = poolEntries.length > 0;
+  // The pick is stored under one canonical spelling, whatever the client typed: the pool entry's name, the species
+  // name in a league without a pool list, or (below) an evolution wildcard's tier base name. The taken check and the
+  // database index both compare by id, so a second spelling of the same Pokémon never gets through.
+  let pokemonName = poolEntry?.pokemon_name ?? body.pokemon_name;
+  if (!hasPool) {
+    const species = await resolveSpeciesName(season?.ruleset_id, body.pokemon_name);
+    if (!species) {
+      return legacyError(`${body.pokemon_name} is not a known Pokémon`, 'UNKNOWN_SPECIES', 400, {
+        pokemon: body.pokemon_name,
+      });
+    }
+    pokemonName = species;
+  }
   // The server prices the pick: budget pools from the pool entry's cost (or the pool default),
   // auctions from a checked bid; pools without a budget store no points.
   const cost = legacyPickCost(pool, poolEntry, body.points_spent);
@@ -409,8 +437,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
   const input: MakePickInput = {
     draft_pool_id: id,
     player_id: pickPlayerId,
-    pokemon_name: body.pokemon_name,
-    stage3_pokemon: body.stage3_pokemon ?? null,
+    pokemon_name: pokemonName,
     points_spent: 'points' in cost ? cost.points : null,
   };
 
@@ -435,8 +462,6 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
     });
   }
   // ── Pool entry enforcement (universal — all draft types) ───────
-  const hasPool = poolEntries.length > 0;
-
   if (hasPool) {
     // Check the picked Pokémon is in the draft pool
     if (!poolEntry) {
@@ -449,6 +474,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
           pokemon: body.pokemon_name,
         });
       }
+      input.pokemon_name = wildcardTier.base_pokemon;
     }
 
     // Enforce tier limits (if any exist)
@@ -521,7 +547,6 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
         target_player_id: pickPlayerId,
         pick_id: pick.id,
         pokemon_name: pick.pokemon_name,
-        stage3_pokemon: input.stage3_pokemon,
         points_spent: input.points_spent,
       },
     });
@@ -529,13 +554,13 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
 
   // Legacy evo-leagues (evolution_tiers) get a tracker for a tiered Pokémon.
   if (await isEvoLeague(pool.season_id)) {
-    const tier = await getTierByBasePokemon(pool.season_id, body.pokemon_name, pickPlayerId)
-      ?? await getTierByBasePokemon(pool.season_id, body.pokemon_name);
+    const tier = await getTierByBasePokemon(pool.season_id, input.pokemon_name, pickPlayerId)
+      ?? await getTierByBasePokemon(pool.season_id, input.pokemon_name);
     if (tier) {
       await createTracker({
         season_id: pool.season_id,
         player_id: pickPlayerId,
-        base_pokemon: body.pokemon_name,
+        base_pokemon: input.pokemon_name,
       });
     }
   }
@@ -577,7 +602,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
         data: {
           kind: 'draft_pick' as const,
           player_name: pickPlayer?.name ?? 'Unknown',
-          pokemon_name: body.pokemon_name,
+          pokemon_name: input.pokemon_name,
           pick_number: state.next_pick_number,
           round,
           season_name: season.name,
@@ -616,7 +641,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
  * client_request_id, redraft_slot_id?, on_behalf_of?, override_reason? }`;
  * picking for another player needs the draft admin guard and a reason.
  *
- * Legacy pools: `{ player_id, pokemon_name, stage3_pokemon?, points_spent? }`;
+ * Legacy pools: `{ player_id, pokemon_name, points_spent? }`;
  * for snake drafts the requesting player must be the current picker, OR an
  * admin can pick on behalf of a player.
  */

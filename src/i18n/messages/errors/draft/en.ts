@@ -134,6 +134,10 @@ export default {
   // §9.2 legacy api/drafts/** branches (English = the routes' existing text)
   POINT_BUDGET_REQUIRED: 'point_budget is required for auction/budget drafts',
   NOT_IN_POOL: '{pokemon} is not in the draft pool',
+  /** A league without a pool list takes any real species; anything else is refused (#47). */
+  UNKNOWN_SPECIES: '{pokemon} is not a known Pokémon',
+  /** Two picks raced for the same pick number and this one lost (#48). */
+  PICK_CONFLICT: 'Another pick was made at the same moment. Reload the draft and try again.',
   TIER_LIMIT_REACHED: '{tier}-tier limit reached (max {max})',
   PICK_CAP_REACHED: 'Draft pick cap reached ({max} evolution lines per trainer)',
   POINTS_CAP_EXCEEDED: 'Not enough points. Would spend {spend}/{budget} ({price} for this line)',

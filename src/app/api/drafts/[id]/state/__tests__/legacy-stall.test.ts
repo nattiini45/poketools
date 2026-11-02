@@ -112,6 +112,19 @@ describe('GET /api/drafts/[id]/state — stalled_picker', () => {
     expect((await getState()).stalled_picker).toMatchObject({ player_id: FIRST, min_cost: 130 });
   });
 
+  it('compares wildcard, pool list and taken names by id, not by lower-case text', async () => {
+    vi.mocked(getDraftPoolById).mockResolvedValue(pool({ default_point_cost: 10 }) as never);
+    vi.mocked(getPoolEntries).mockResolvedValue([entry('Mr. Mime', 50), entry('B', 40), entry('C', 40), entry('D', 90)] as never);
+
+    // `mr mime` is the listed `Mr. Mime`: it is not a wildcard outside the list.
+    vi.mocked(getPlayerWildcards).mockResolvedValue([{ base_pokemon: 'mr mime', player_id: FIRST }] as never);
+    expect((await getState()).stalled_picker).toMatchObject({ player_id: FIRST, min_cost: 130 });
+
+    // A wildcard outside the list stays a way out.
+    vi.mocked(getPlayerWildcards).mockResolvedValue([{ base_pokemon: 'Flabébé', player_id: FIRST }] as never);
+    expect((await getState()).stalled_picker).toBeNull();
+  });
+
   it('prices entries without a cost at the pool default, and every open pick at it without a pool list', async () => {
     vi.mocked(getDraftPoolById).mockResolvedValue(pool({ default_point_cost: 40 }) as never);
     vi.mocked(getPoolEntries).mockResolvedValue([] as never);

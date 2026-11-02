@@ -6,6 +6,7 @@ import type {
   DraftType,
   MakePickInput,
 } from '@/types/draft';
+import { toID } from '@/lib/pkmn/i18n/id';
 import { minCompletion } from './budget';
 import { isTurnEnforced } from './pool-format';
 
@@ -170,6 +171,17 @@ export interface ValidatePickOptions {
 }
 
 /**
+ * Whether a Pokémon is among the taken names, compared by id (`toID`): `Mr. Mime`, `Mr.Mime` and `mrmime` are one
+ * Pokémon, as in the database index `uq_draft_picks_legacy_name_live` (`epb_fold_id`). `DraftState.taken_pokemon` keeps
+ * the stored spellings.
+ */
+export function isNameTaken(taken: ReadonlySet<string>, pokemonName: string): boolean {
+  const id = toID(pokemonName);
+  for (const name of taken) if (toID(name) === id) return true;
+  return false;
+}
+
+/**
  * Validate that a pick can be made. Returns null if valid, or an error.
  */
 export function validatePick(
@@ -192,7 +204,7 @@ export function validatePick(
     return { code: 'NOT_YOUR_TURN', message: 'It is not your turn.' };
   }
 
-  if (!opts?.skipNameTakenCheck && state.taken_pokemon.has(input.pokemon_name)) {
+  if (!opts?.skipNameTakenCheck && isNameTaken(state.taken_pokemon, input.pokemon_name)) {
     return {
       code: 'POKEMON_TAKEN',
       message: `${input.pokemon_name} has already been drafted`,
@@ -262,8 +274,8 @@ export function rosterCompletionShortfall(i: RosterCompletionInput): RosterCompl
 }
 
 /**
- * Ascending prices of every Pokémon still available in a legacy fixed-price pool (names compared case-insensitively,
- * as the picks route does), leaving out `exclude` (the candidate of a pick). `null` = the season has no pool list:
+ * Ascending prices of every Pokémon still available in a legacy fixed-price pool (names compared by id, as the picks
+ * route does), leaving out `exclude` (the candidate of a pick). `null` = the season has no pool list:
  * any Pokémon may be picked at `fallbackPrice`.
  */
 export function availablePricesSorted(
@@ -273,9 +285,9 @@ export function availablePricesSorted(
   exclude?: { pokemon_name: string; point_cost: number | null },
 ): number[] | null {
   if (entries.length === 0) return null;
-  const taken = new Set(Array.from(takenNames, (name) => name.toLowerCase()));
+  const taken = new Set(Array.from(takenNames, toID));
   return entries
-    .filter((e) => e !== exclude && !taken.has(e.pokemon_name.toLowerCase()))
+    .filter((e) => e !== exclude && !taken.has(toID(e.pokemon_name)))
     .map((e) => e.point_cost ?? fallbackPrice)
     .sort((a, b) => a - b);
 }

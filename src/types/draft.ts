@@ -144,8 +144,6 @@ export interface MakePickInput {
   draft_pool_id: string;
   player_id: string;
   pokemon_name: string;
-  /** Stage-3 branch for EPB branched lines (disambiguates same-base entries) */
-  stage3_pokemon?: string | null;
   /** Required for auction/budget drafts; set server-side for EPB */
   points_spent?: number | null;
 }

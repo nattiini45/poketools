@@ -155,14 +155,13 @@ export default function DraftBoard({
     resetKey: `${poolId}|${withTrackers}`,
   });
 
-  async function handlePick(pokemonName: string, pointsSpent?: number, stage3Pokemon?: string | null) {
+  async function handlePick(pokemonName: string, pointsSpent?: number) {
     try {
       const body: Record<string, unknown> = {
         player_id: (state && pickerOf(state, { currentPlayerId, isAdmin, pickFor })) ?? currentPlayerId,
         pokemon_name: pokemonName,
       };
       if (pointsSpent !== undefined) body.points_spent = pointsSpent;
-      if (stage3Pokemon !== undefined) body.stage3_pokemon = stage3Pokemon;
 
       const res = await fetch(`/api/drafts/${poolId}/picks`, {
         method: 'POST',

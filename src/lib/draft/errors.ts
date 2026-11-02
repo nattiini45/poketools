@@ -115,6 +115,8 @@ export const DRAFT_ERROR_STATUS: { readonly [C in DraftErrorCode]: number } = {
   // §9.2 legacy api/drafts/** branches
   POINT_BUDGET_REQUIRED: 400,
   NOT_IN_POOL: 422,
+  UNKNOWN_SPECIES: 400,
+  PICK_CONFLICT: 409,
   TIER_LIMIT_REACHED: 422,
   PICK_CAP_REACHED: 422,
   POINTS_CAP_EXCEEDED: 422,

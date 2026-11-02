@@ -1004,9 +1004,10 @@ export const draftPoolTemplateCreateSchema = z.object({
   })).min(1),
 });
 
+// A legacy pick has no stage-3 branch: the field was never stored, and an Evolution Point Buy league picks through the
+// queue engine. Unknown keys are stripped, so a client that still sends `stage3_pokemon` is not refused.
 export const draftPickSchema = z.object({
   pokemon_name: z.string().trim().min(1).max(FIELD_LIMITS.NAME),
-  stage3_pokemon: z.string().trim().min(1).max(FIELD_LIMITS.NAME).nullable().optional(),
 });
 
 // ─── Team payload shape (every API boundary that takes a team) ───────

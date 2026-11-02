@@ -115,6 +115,8 @@ export default defineDe<typeof en>()({
   // §9.2 legacy api/drafts/** branches
   POINT_BUDGET_REQUIRED: 'Für Auktions- und Budget-Drafts ist ein Punktebudget nötig.',
   NOT_IN_POOL: '{pokemon} ist nicht im Draft-Pool.',
+  UNKNOWN_SPECIES: '{pokemon} ist kein bekanntes Pokémon.',
+  PICK_CONFLICT: 'Gleichzeitig wurde ein anderer Pick gemacht. Lade den Draft neu und versuche es erneut.',
   TIER_LIMIT_REACHED: 'Limit für Tier {tier} erreicht (max. {max}).',
   PICK_CAP_REACHED: 'Pick-Limit erreicht ({max} Linien pro Trainer).',
   POINTS_CAP_EXCEEDED: 'Nicht genug Punkte: Du würdest {spend}/{budget} ausgeben ({price} für diese Linie).',
