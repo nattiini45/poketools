@@ -8,7 +8,7 @@
 
 The `(public)` route group is the unauthenticated face of PokéTools. It renders
 under `src/app/(public)/layout.tsx`, which wraps every child page in `<NavBar />`
-plus a `<PageTransitionWrapper>`. No route in this group requires Discord login
+plus a `<PageTransitionWrapper>`; the layout opens with `<SkipToContent />` (the first Tab stop) and its `<main>` is `main#main-content` (`tabIndex={-1}`, `MAIN_CONTENT_ID` in `src/lib/ui/main-content.ts`; the `(player)`, `creator` and `admin` layouts do the same, `auth` carries only the id). Pages and the private overlay's mirrored pages never render their own `<main>`. No route in this group requires Discord login
 to view, though several (wiki notes, full player profiles) gate *parts* of their
 content behind `requirePlayer()`-protected API calls.
 
