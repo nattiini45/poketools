@@ -79,7 +79,7 @@ Implements Glicko-2 rating updates and a presentation-tier classifier.
 Three subsystems:
 
 1. **Achievements** — Condition-based awards triggered by match results, streaks, or milestones. Admin CRUD at `/api/admin/achievements`. Player-facing at `/api/achievements/[playerId]`.
-2. **Streaks** — Consecutive win/loss tracking. `src/lib/gamification/streaks.ts`. API: `/api/streaks/[playerId]`.
+2. **Streaks** — Consecutive win/loss/KO/flawless tracking. `src/lib/gamification/streaks.ts`: a finalize or repair rebuilds the player's row from their whole completed history in one fenced write (`recomputeStreaks`, RPC `streaks_replace_player`); a match with no battle stats leaves KO/flawless unchanged; test leagues do not count. API: `/api/streaks/[playerId]`.
 3. **Signatures** — Player signature Pokémon and moves. `src/lib/gamification/signatures.ts`. API: `/api/signatures/[playerId]`.
 
 ## Social Integration

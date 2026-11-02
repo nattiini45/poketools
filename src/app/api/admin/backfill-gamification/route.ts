@@ -115,7 +115,10 @@ function failureLine(subject: string, step: BackfillStep | 'streak recompute', e
  *   chronological streak state streak achievements need. After the loop,
  *   `recomputeStreaks` rebuilds every touched row from the full history (it
  *   also replays draws and matches this loop skipped), so the stored state is
- *   the same however the loop ended.
+ *   the same however the loop ended. The reset-and-advance loop zeroes rows
+ *   while it runs, so it is not the way to rebuild streaks on a live league:
+ *   run the season reconcile (`docs/reconcile.md`), which rebuilds through
+ *   `recomputeStreaks` alone and re-awards nothing.
  * - signatures: recomputed from all-time aggregates, once per player before
  *   that player's first achievement check (the same state the live path sees).
  * - achievements: one-time achievements deduplicate through their unique

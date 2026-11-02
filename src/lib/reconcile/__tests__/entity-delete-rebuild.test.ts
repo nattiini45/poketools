@@ -120,7 +120,13 @@ beforeEach(() => {
       changed: false,
     }))
   );
-  mockRecomputeStreaks.mockResolvedValue(undefined);
+  mockRecomputeStreaks.mockResolvedValue({
+    win_streak: { before: 0, after: 0 },
+    loss_streak: { before: 0, after: 0 },
+    ko_streak: { before: 0, after: 0 },
+    flawless_streak: { before: 0, after: 0 },
+    new_records: [],
+  });
   mockRatingsSettled.mockResolvedValue({ rebuiltPlayerIds: PLAYERS, passes: 2, settled: true, unratedMatches: 0 });
   mockDrain.mockResolvedValue({
     processed: 4,

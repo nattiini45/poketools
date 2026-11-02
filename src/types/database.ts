@@ -6777,6 +6777,14 @@ export type Database = {
         Args: { p_player_id: string; p_season_id: string }
         Returns: boolean
       }
+      streaks_replace_player: {
+        Args: {
+          p_expected_match_ids: string[]
+          p_player_id: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
       subtract_move_counts: {
         Args: { existing: Json; removed: Json }
         Returns: Json
