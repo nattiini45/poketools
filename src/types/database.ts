@@ -6117,6 +6117,10 @@ export type Database = {
         }
         Returns: Json
       }
+      draft__due_timeout: {
+        Args: { p_pool: Database["public"]["Tables"]["draft_pools"]["Row"] }
+        Returns: boolean
+      }
       draft__legal_lines: {
         Args: { p_player_id: string; p_pool_id: string }
         Returns: {
@@ -6221,6 +6225,10 @@ export type Database = {
         Returns: string
       }
       draft__pool_completable: { Args: { p_pool_id: string }; Returns: Json }
+      draft__publish_deadline_passed: {
+        Args: { p_pool: Database["public"]["Tables"]["draft_pools"]["Row"] }
+        Returns: boolean
+      }
       draft__publish_retry_due: {
         Args: { p_pool: Database["public"]["Tables"]["draft_pools"]["Row"] }
         Returns: boolean
@@ -6329,6 +6337,13 @@ export type Database = {
       draft_end: {
         Args: { p_actor_id: string; p_pool_id: string; p_reason: string }
         Returns: Json
+      }
+      draft_list_due_pools: {
+        Args: { p_limit: number }
+        Returns: {
+          id: string
+          season_id: string
+        }[]
       }
       draft_my_turn: {
         Args: { p_player_id: string; p_pool_id: string }

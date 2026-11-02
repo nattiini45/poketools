@@ -140,6 +140,8 @@ export default {
   // Cron routes (auto-confirm, process-aggregates, refresh-usage-stats)
   cron_not_configured: 'Cron not configured',
   cron_unauthorized: 'Unauthorized',
+  // draft-ticks: a pool's draft_tick threw (the other pools were still ticked); {pools} lists the failed pool ids
+  cron_draft_ticks_failed: 'Draft ticks failed for these pools: {pools}',
   // process-aggregates: queue rows that can never drain (pending with attempts exhausted, or stuck processing)
   aggregate_jobs_stranded: 'Aggregate jobs are stranded ({stranded} unclaimable, {stale} stuck processing)',
   // process-aggregates: the claim RPC failed (nothing was applied)

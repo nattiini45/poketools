@@ -105,6 +105,7 @@ export default defineDe<typeof en>()({
 
   cron_not_configured: 'Der Cronjob ist nicht konfiguriert.',
   cron_unauthorized: 'Nicht autorisiert.',
+  cron_draft_ticks_failed: 'Die Zeitprüfung der Drafts ist für diese Pools fehlgeschlagen: {pools}.',
   aggregate_jobs_stranded:
     'Statistik-Aufträge hängen fest ({stranded} nicht mehr abholbar, {stale} bleiben in Bearbeitung).',
   aggregate_claim_failed: 'Statistik-Aufträge konnten nicht abgeholt werden.',
