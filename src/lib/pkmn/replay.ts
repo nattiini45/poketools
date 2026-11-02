@@ -24,6 +24,13 @@ export { normalizeReplayUrlOrId };
 /** The fetch deadline; an `AbortSignal.timeout` abort surfaces as a `TimeoutError`. */
 const REPLAY_FETCH_TIMEOUT_MS = 15_000;
 
+function transportError(err: unknown): ReplayFetchTimeoutError | ReplayFetchFailedError {
+  if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+    return new ReplayFetchTimeoutError();
+  }
+  return new ReplayFetchFailedError();
+}
+
 /**
  * Fetches a replay from Pokémon Showdown.
  * Accepts full URLs or bare replay IDs; anything else is refused before the request
@@ -41,10 +48,7 @@ export async function fetchReplay(urlOrId: string): Promise<ReplayData> {
     });
   } catch (err) {
     console.error(`[replay] fetching replay ${id} failed:`, err);
-    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      throw new ReplayFetchTimeoutError();
-    }
-    throw new ReplayFetchFailedError();
+    throw transportError(err);
   }
   if (!res.ok) {
     console.error(`[replay] Showdown answered ${res.status} ${res.statusText} for replay ${id}`);
@@ -56,8 +60,13 @@ export async function fetchReplay(urlOrId: string): Promise<ReplayData> {
   try {
     json = await res.json();
   } catch (err) {
-    console.error(`[replay] replay ${id} is not valid JSON:`, err);
-    throw new ReplayUnparseableError();
+    // The deadline also covers the body, so a stalled or cut-off read is a transport failure, not a malformed replay.
+    if (err instanceof SyntaxError) {
+      console.error(`[replay] replay ${id} is not valid JSON:`, err);
+      throw new ReplayUnparseableError();
+    }
+    console.error(`[replay] reading the body of replay ${id} failed:`, err);
+    throw transportError(err);
   }
   if (!json.log || !json.players) {
     console.error(`[replay] replay ${id} has no log or players`);

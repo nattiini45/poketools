@@ -226,6 +226,33 @@ describe('fetchReplay', () => {
     spy.mockRestore();
   });
 
+  it('answers a body read cut off by the deadline with a typed 504, not a 422', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => {
+        throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+      },
+    });
+
+    await expect(fetchReplay('gen9ou-9')).rejects.toMatchObject({ code: 'replay_fetch_timeout', statusCode: 504 });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('[replay]'), expect.any(Error));
+    spy.mockRestore();
+  });
+
+  it('answers a body read that fails mid-stream with a typed 502, not a 422', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => {
+        throw new TypeError('terminated');
+      },
+    });
+
+    await expect(fetchReplay('gen9ou-9')).rejects.toMatchObject({ code: 'replay_fetch_failed', statusCode: 502 });
+    spy.mockRestore();
+  });
+
   it('throws on invalid replay format (missing log)', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockResolvedValueOnce({
