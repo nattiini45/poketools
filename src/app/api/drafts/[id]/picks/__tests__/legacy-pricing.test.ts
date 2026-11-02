@@ -34,6 +34,7 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonParticipants: vi.fn(
 vi.mock('@/lib/draft/evolution-engine', () => ({ isEvoLeague: vi.fn() }));
 vi.mock('@/lib/supabase/queries/evolutions', () => ({
   getTierByBasePokemon: vi.fn(),
+  getPlayerWildcards: vi.fn(async () => []),
   createTracker: vi.fn(),
   getSeasonTrackers: vi.fn(),
 }));
@@ -57,7 +58,7 @@ import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/sea
 import { isEvoLeague } from '@/lib/draft/evolution-engine';
 import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
 import { getTierLimits } from '@/lib/supabase/queries/draft-tier-limits';
-import { getTierByBasePokemon } from '@/lib/supabase/queries/evolutions';
+import { getPlayerWildcards, getTierByBasePokemon } from '@/lib/supabase/queries/evolutions';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import { legacySeatOrder } from '@/lib/draft/engine';
@@ -127,6 +128,7 @@ beforeEach(() => {
   vi.mocked(getPoolEntries).mockResolvedValue([]);
   vi.mocked(getTierLimits).mockResolvedValue([]);
   vi.mocked(getTierByBasePokemon).mockResolvedValue(null);
+  vi.mocked(getPlayerWildcards).mockResolvedValue([]);
   vi.mocked(isEvoLeague).mockResolvedValue(false);
   vi.mocked(getPlayerById).mockResolvedValue(null);
   vi.mocked(createDraftPick).mockImplementation(async (input) => ({ id: 'new-pick', ...input }) as never);
@@ -282,7 +284,7 @@ describe('legacy error precedence', () => {
     vi.mocked(getDraftPoolById).mockResolvedValue(legacyPool('budget', 100) as never);
     vi.mocked(getPoolEntries).mockResolvedValue([entry('Pikachu', 20)] as never);
     vi.mocked(isEvoLeague).mockResolvedValue(true);
-    vi.mocked(getTierByBasePokemon).mockResolvedValue({ base_pokemon: 'Mewtwo' } as never);
+    vi.mocked(getPlayerWildcards).mockResolvedValue([{ base_pokemon: 'Mewtwo' }] as never);
 
     const { status, json } = await post({ pokemon_name: 'Mewtwo', points_spent: 3 });
 

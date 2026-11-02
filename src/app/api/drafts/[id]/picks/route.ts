@@ -31,7 +31,7 @@ import {
 import { poolFormat } from '@/lib/draft/pool-format';
 import { draftPoolFormatLabel } from '@/lib/discord/embeds';
 import { isEvoLeague } from '@/lib/draft/evolution-engine';
-import { getTierByBasePokemon, createTracker } from '@/lib/supabase/queries/evolutions';
+import { getPlayerWildcards, getTierByBasePokemon, createTracker } from '@/lib/supabase/queries/evolutions';
 import { getListEntryByLineId } from '@/lib/supabase/queries/point-buy-lists';
 import { toPublicPicks, type PublicDraftPick } from '@/lib/draft/public-pick';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
@@ -50,6 +50,7 @@ import type { ApiErrorCode } from '@/i18n/messages/errors';
 import type { ApiResult } from '@/types/api';
 import type { SessionPlayer } from '@/types/auth';
 import type { DraftPick, DraftPool, MakePickInput } from '@/types/draft';
+import type { EvolutionTier } from '@/types/evolution';
 import type { DraftSnapshotDTO, LineId } from '@/types/draft-queue';
 import type { PointBuyListEntry } from '@/types/point-buy';
 import type { DraftPoolEntry } from '@/types/draft-pool';
@@ -496,10 +497,15 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
   if (hasPool) {
     // Check the picked Pokémon is in the draft pool
     if (!poolEntry) {
-      // For evo-leagues, also check wildcards assigned to this player
-      const wildcardTier = (await isEvoLeague(pool.season_id))
-        ? await getTierByBasePokemon(pool.season_id, body.pokemon_name, pickPlayerId)
-        : null;
+      // For evo-leagues, also check wildcards assigned to this player. They match by the same folded identity as the
+      // pool list (the stored tier base is the canonical spelling), not by the raw text the client typed.
+      let wildcardTier: EvolutionTier | undefined;
+      if (await isEvoLeague(pool.season_id)) {
+        const wanted = toID(body.pokemon_name);
+        wildcardTier = (await getPlayerWildcards(pool.season_id, pickPlayerId)).find(
+          (tier) => toID(tier.base_pokemon) === wanted,
+        );
+      }
       if (!wildcardTier) {
         return legacyError(`${body.pokemon_name} is not in the draft pool`, 'NOT_IN_POOL', 400, {
           pokemon: body.pokemon_name,

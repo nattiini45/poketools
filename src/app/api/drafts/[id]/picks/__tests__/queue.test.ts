@@ -44,6 +44,7 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonParticipants: vi.fn(
 vi.mock('@/lib/supabase/queries/players', () => ({ getPlayerById: vi.fn() }));
 vi.mock('@/lib/supabase/queries/evolutions', () => ({
   getTierByBasePokemon: vi.fn(),
+  getPlayerWildcards: vi.fn(async () => []),
   createTracker: vi.fn(),
   getSeasonTrackers: vi.fn(),
 }));
