@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Input from '@/components/ui/Input';
 import Table, { TablePagination, type Column } from '@/components/ui/Table';
@@ -20,8 +21,17 @@ import {
 
 const URL_WRITE_DEBOUNCE_MS = 150;
 
-/** Sortable column extension over the shared Table column shape. */
-export type WikiIndexColumn<T> = Column<T>;
+/**
+ * Sortable column extension over the shared Table column shape. The `primary` column (the first one when none is
+ * flagged) holds the row's link: its content becomes the anchor text.
+ */
+export type WikiIndexColumn<T> = Column<T> & { primary?: boolean };
+
+/** The row's only focusable element; its `::after` covers the row so a click anywhere on it opens the entry. */
+const ROW_LINK_CLASS =
+  'font-medium text-poke-text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus after:absolute after:inset-0 after:content-[""]';
+
+const ROW_PROPS = { className: 'relative' };
 
 export interface WikiIndexFacetOption {
   value: string;
@@ -157,6 +167,21 @@ export default function WikiIndexTable<T extends object>({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, page, perPage, sort, selectedFacets, router, searchParams]);
+
+  const linkedColumns = useMemo(() => {
+    const primaryKey = (columns.find((c) => c.primary) ?? columns[0])?.key;
+    return columns.map((col): WikiIndexColumn<T> => {
+      if (col.key !== primaryKey) return col;
+      return {
+        ...col,
+        render: (row, index) => (
+          <Link href={hrefFn(row)} className={ROW_LINK_CLASS}>
+            {col.render ? col.render(row, index) : ((row as Record<string, unknown>)[col.key] as ReactNode)}
+          </Link>
+        ),
+      };
+    });
+  }, [columns, hrefFn]);
 
   const filtered = useMemo(() => {
     let rows: readonly T[] = data;
@@ -299,7 +324,7 @@ export default function WikiIndexTable<T extends object>({
       />
 
       <Table
-        columns={columns}
+        columns={linkedColumns}
         data={pageData}
         keyExtractor={keyExtractor}
         emptyMessage={t('index.noMatches')}
@@ -307,7 +332,7 @@ export default function WikiIndexTable<T extends object>({
         sort={sort}
         onSort={handleSort}
         hidePagination
-        onRowClick={(row) => router.push(hrefFn(row))}
+        getRowProps={() => ROW_PROPS}
       />
 
       <TablePagination

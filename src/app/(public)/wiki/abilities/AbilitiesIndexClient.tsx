@@ -58,6 +58,7 @@ export default function AbilitiesIndexClient({ data }: { data: readonly AbilityR
     () => [
       {
         key: 'name',
+        primary: true,
         header: t('index.name'),
         width: '200px',
         sortable: true,
