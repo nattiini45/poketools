@@ -390,13 +390,25 @@ export async function POST(request: NextRequest) {
           );
         }
         // Enough in total is not enough: the Pokémon are dealt out whole, so the prices must split into rosters.
-        // Only a proven impossibility refuses; a search that runs out of nodes lets the pool through.
-        if (splitIntoRosters(listedPrices, players, rounds, body.budget) === 'no') {
+        // A pool is created only when a split is found; a search that runs out of nodes is refused as unverified.
+        const split = splitIntoRosters(listedPrices, players, rounds, body.budget);
+        if (split === 'no') {
           return NextResponse.json<ApiResult<never>>(
             {
               success: false,
               error: `The prices on the pool list cannot be split into ${players} roster${players === 1 ? '' : 's'} of ${rounds} Pokémon that each stay within ${body.budget} points`,
               code: 'draft_budget_list_unassignable',
+              params: { budget: body.budget, rounds, players },
+            },
+            { status: 400 }
+          );
+        }
+        if (split === 'unknown') {
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `Could not verify that the prices on the pool list can be split into ${players} roster${players === 1 ? '' : 's'} of ${rounds} Pokémon within ${body.budget} points each; raise the budget or trim the list`,
+              code: 'draft_budget_list_unverifiable',
               params: { budget: body.budget, rounds, players },
             },
             { status: 400 }

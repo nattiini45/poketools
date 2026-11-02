@@ -37,6 +37,8 @@ export default {
     'A budget of {budget} per trainer cannot fill {rounds} picks for {players} trainers: the {needed} cheapest Pokémon on the pool list cost {minimum} together, against {available} in total',
   draft_budget_list_unassignable:
     'The prices on the pool list cannot be split into {players} rosters of {rounds} Pokémon that each stay within {budget} points',
+  draft_budget_list_unverifiable:
+    'Could not verify that the prices on the pool list can be split into {players} rosters of {rounds} Pokémon within {budget} points each; raise the budget or trim the list',
   draft_pool_list_too_small:
     'The pool list has {listed} Pokémon, but {players} trainers need {needed} picks ({rounds} each)',
   draft_pick_strands_roster:

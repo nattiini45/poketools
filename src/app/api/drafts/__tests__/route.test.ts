@@ -40,6 +40,11 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 
 // The season's pool list: none by default (any Pokémon may be picked at the default price).
 vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({ getPoolEntries: vi.fn(async () => []) }));
+// The real search, as a spy: one test makes it run out of nodes.
+vi.mock('@/lib/draft/roster-split', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/draft/roster-split')>('@/lib/draft/roster-split');
+  return { ...actual, splitIntoRosters: vi.fn(actual.splitIntoRosters) };
+});
 
 // Queue-engine creation (EPB seasons).
 vi.mock('@/lib/revalidation', () => ({ expireDraftReads: vi.fn() }));
@@ -76,6 +81,7 @@ import {
 } from '@/lib/supabase/queries/drafts';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
+import { splitIntoRosters } from '@/lib/draft/roster-split';
 import { expireDraftReads } from '@/lib/revalidation';
 import { getEpbPhaseStatus } from '@/lib/season/epb-phase';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
@@ -626,6 +632,21 @@ describe('POST /api/drafts', () => {
         expect(await response.json()).toMatchObject({
           code: 'draft_budget_list_unassignable',
           params: { budget: 50, rounds: 1, players: 2 },
+        });
+        expect(createDraftPool).not.toHaveBeenCalled();
+      });
+
+      it('refuses, as unverified, a list whose split the search could not decide, and creates nothing', async () => {
+        twoTrainers();
+        vi.mocked(getPoolEntries).mockResolvedValue([entry('A', 20), entry('B', 80)]);
+        vi.mocked(splitIntoRosters).mockReturnValueOnce('unknown');
+
+        const response = await post({ season_id: SEASON, draft_type: 'budget', pick_order: 'free', budget: 100, rounds: 1 });
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+          code: 'draft_budget_list_unverifiable',
+          params: { budget: 100, rounds: 1, players: 2 },
         });
         expect(createDraftPool).not.toHaveBeenCalled();
       });

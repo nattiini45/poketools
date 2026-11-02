@@ -4,12 +4,14 @@
  * entries are the best candidates (swapping one for a cheaper one never breaks a split), so the question is whether
  * those prices split into `players` groups of `rounds` with every group at or under `budget`.
  *
- * That is a bin-packing question, so the search is bounded: `'no'` is a proof (the search ran dry), `'yes'` is a
- * found split, and `'unknown'` means the node limit ran out first. Callers refuse only on `'no'`.
+ * That is a bin-packing question, so the search is bounded: `'yes'` is a found split, `'no'` is a proof (the search
+ * ran dry), and `'unknown'` means the node limit ran out first. The pool-creation route creates only on `'yes'`.
+ * The search deals the biggest price first, into the least loaded roster first, so a pool with room to spare is
+ * solved on the first descent; `'unknown'` is left for a list that is close to the limit and large.
  */
 export type RosterSplit = 'yes' | 'no' | 'unknown';
 
-export const ROSTER_SPLIT_NODE_LIMIT = 200_000;
+export const ROSTER_SPLIT_NODE_LIMIT = 300_000;
 
 export function splitIntoRosters(
   ascendingPrices: readonly number[],
@@ -22,9 +24,9 @@ export function splitIntoRosters(
   if (players < 1 || rounds < 1) return 'yes';
   if (ascendingPrices.length < needed) return 'no';
 
-  // Biggest first: the items that fit the fewest groups are placed (and refused) first.
   const items = ascendingPrices.slice(0, needed).reverse();
   if (items[0] > budget) return 'no';
+  const cheapest = items[needed - 1];
 
   const sums = new Array<number>(players).fill(0);
   const counts = new Array<number>(players).fill(0);
@@ -39,13 +41,18 @@ export function splitIntoRosters(
       exhausted = true;
       return false;
     }
-    // The points still to spend can never exceed the points the groups have left.
+    // The points still to spend can never exceed the points the rosters have left.
     if (remaining > free) return false;
-    const price = items[index];
-    const tried = new Set<string>();
+    // Every roster still has to take its open slots, and no Pokémon left costs less than the cheapest one.
     for (let g = 0; g < players; g++) {
+      if (sums[g] + (rounds - counts[g]) * cheapest > budget) return false;
+    }
+    const price = items[index];
+    const order = Array.from({ length: players }, (_, g) => g).sort((a, b) => sums[a] - sums[b]);
+    const tried = new Set<string>();
+    for (const g of order) {
       if (counts[g] >= rounds || sums[g] + price > budget) continue;
-      // Groups in the same state are interchangeable: one of them is enough.
+      // Rosters in the same state are interchangeable: one of them is enough.
       const state = `${sums[g]}:${counts[g]}`;
       if (tried.has(state)) continue;
       tried.add(state);
