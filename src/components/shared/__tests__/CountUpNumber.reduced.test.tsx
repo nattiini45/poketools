@@ -3,7 +3,9 @@
  * `CountUpNumber` drives its own requestAnimationFrame loop, which motion's reduced-motion config cannot reach, so it
  * reads the preference itself and shows the final value at once.
  */
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ reduced: false }));
@@ -29,6 +31,23 @@ describe('CountUpNumber', () => {
     state.reduced = true;
     render(<CountUpNumber value={42} />);
     expect(screen.getByText('42')).toBeTruthy();
+  });
+
+  it('hydrates server markup that held 0 and then shows the final value under reduced motion', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    container.innerHTML = renderToString(<CountUpNumber value={42} />);
+    expect(container.textContent).toBe('0');
+
+    state.reduced = true;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await act(async () => {
+      hydrateRoot(container, <CountUpNumber value={42} />);
+    });
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
+    expect(container.textContent).toBe('42');
+    container.remove();
   });
 
   it('follows a changed value immediately under reduced motion', () => {

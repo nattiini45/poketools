@@ -24,7 +24,7 @@ const MOVES = [
 function anchors(html: string): { href: string; text: string }[] {
   return [...html.matchAll(/<a [^>]*href="(\/(?:wiki|pokemon)\/[^"]+)"[^>]*>(.*?)<\/a>/g)].map((m) => ({
     href: m[1],
-    text: m[2].replace(/<[^>]+>/g, ''),
+    text: m[2].split(/<[^>]*>/).join(''),
   }));
 }
 

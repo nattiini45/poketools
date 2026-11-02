@@ -104,7 +104,7 @@ export default function CollapsibleSection({
               exit={{ height: 0, opacity: 0 }}
               transition={
                 reduceMotion
-                  ? { duration: DURATION.instant }
+                  ? { height: { duration: DURATION.instant }, opacity: { duration: DURATION.state, ease: EASE.standard } }
                   : { duration: DURATION.state, ease: EASE.standard }
               }
               style={{ overflow: "hidden" }}

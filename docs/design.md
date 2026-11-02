@@ -177,9 +177,10 @@ Rules:
   re-exported through the motion barrel) is mounted in the root layout and turns
   transform animations off for every `motion` primitive. A primitive that moves
   on its own clock (`CountUpNumber`) or that should not stagger (`PageTransitionWrapper`,
-  `AnimatedList`) reads `useReducedMotion()` as well; `CollapsibleSection`
-  does too, because `MotionConfig` leaves a height tween running, and it opens and
-  closes at `DURATION.instant`; Tailwind enter/exit
+  `AnimatedList`, an animated `Table`, the dashboard) reads `useReducedMotion()`
+  as well and sets its stagger to 0; `CollapsibleSection` does too, because
+  `MotionConfig` leaves a height tween running, and its height snaps at
+  `DURATION.instant` while the opacity fade stays; Tailwind enter/exit
   animations drop their slide with `motion-reduce:` (`BottomSheet`). No
   `transition={{ duration: <number> }}` literal in `src/components`
   (`motion-guards.test.ts`). Broadcast overlays use no motion primitive: they

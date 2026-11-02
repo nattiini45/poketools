@@ -39,6 +39,15 @@ export const staggerContainer = {
   },
 } as const;
 
+/** The container for a viewer who asks for reduced motion: the items still fade in, all together. */
+export const staggerContainerReduced = {
+  animate: {
+    transition: {
+      staggerChildren: 0,
+    },
+  },
+} as const;
+
 export const staggerItem = {
   initial: { opacity: 0, y: OFFSET.md },
   animate: { opacity: 1, y: 0 },

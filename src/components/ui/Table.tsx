@@ -9,7 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { motion, type Variants } from "@/components/shared/motion";
+import { motion, useReducedMotion, type Variants } from "@/components/shared/motion";
 import { cn } from "@/lib/utils/cn";
 import { DURATION, EASE, OFFSET, STAGGER } from "@/lib/motion/tokens";
 import {
@@ -115,6 +115,11 @@ const alignClass = {
 const tbodyVariants: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: STAGGER.mobile } },
+};
+
+const tbodyVariantsReduced: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0 } },
 };
 
 const rowVariants: Variants = {
@@ -451,11 +456,12 @@ export default function Table<T extends object>({
     }
   }
 
+  const reduceMotion = useReducedMotion() ?? false;
   const Tbody = animated ? motion.tbody : "tbody";
   const Tr = animated ? motion.tr : "tr";
 
   const tbodyProps = animated
-    ? { variants: tbodyVariants, initial: "hidden" as const, animate: "visible" as const }
+    ? { variants: reduceMotion ? tbodyVariantsReduced : tbodyVariants, initial: "hidden" as const, animate: "visible" as const }
     : {};
 
   return (

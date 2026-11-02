@@ -33,7 +33,7 @@ vi.mock('@/components/shared/motion', () => ({
 
 import CollapsibleSection from '../CollapsibleSection';
 
-function transitionOf(html: string): { duration: number; ease?: unknown } {
+function transitionOf(html: string): Record<string, unknown> {
   const raw = /data-transition="([^"]*)"/.exec(html)?.[1] ?? '';
   return JSON.parse(raw.replace(/&quot;/g, '"'));
 }
@@ -55,9 +55,12 @@ describe('CollapsibleSection motion', () => {
     });
   });
 
-  it('opens and closes instantly under reduced motion', () => {
+  it('snaps the height under reduced motion and keeps the opacity fade', () => {
     state.reduced = true;
-    expect(transitionOf(renderToStaticMarkup(section))).toEqual({ duration: 0 });
+    expect(transitionOf(renderToStaticMarkup(section))).toMatchObject({
+      height: { duration: 0 },
+      opacity: { duration: DURATION.state },
+    });
     expect(DURATION.instant).toBe(0);
   });
 });
