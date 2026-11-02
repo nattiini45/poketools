@@ -98,8 +98,16 @@ export function generateSwissRound(
   matchHistory: MatchRecord[],
   roundNumber: number,
   byeHistory: ByeRecord[] = [],
-  /** Overrides `SWISS_SEARCH_STEP_LIMIT` (tests). */
-  options: { stepLimit?: number } = {},
+  options: {
+    /** Overrides `SWISS_SEARCH_STEP_LIMIT` (tests). */
+    stepLimit?: number;
+    /**
+     * Every match already paired, whatever its status (`getPairedMatchRecords`). It feeds only the no-rematch
+     * history: a scheduled or disputed match is still "these two have met", but it has no result and scores nothing.
+     * Defaults to `matchHistory`.
+     */
+    pairedMatches?: MatchRecord[];
+  } = {},
 ): GeneratedRound {
   const stepLimit = options.stepLimit ?? SWISS_SEARCH_STEP_LIMIT;
   const standings = computeStandings(
@@ -109,7 +117,7 @@ export function generateSwissRound(
     {},
     { byes: byeHistory },
   );
-  const history = buildPairingHistory(matchHistory, byeHistory);
+  const history = buildPairingHistory(options.pairedMatches ?? matchHistory, byeHistory);
   const ranked = standings.map((s) => s.player_id);
 
   // The bye candidates, best first: the lowest-ranked players without a bye, then the lowest-ranked with one.

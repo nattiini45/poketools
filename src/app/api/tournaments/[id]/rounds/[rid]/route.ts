@@ -19,6 +19,7 @@ import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { toPublicMatches } from '@/lib/match/public-match';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { ApiResult } from '@/types/api';
 import type { RoundWithMatches } from '@/types/round';
 import type { RoundCompletedData } from '@/types/discord';
@@ -114,6 +115,29 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // and the round_completed event below reuses it.
     const tournament = await getTournamentById(id);
 
+    // `rounds.status` is a manual flag that every generate route trusts, so completing is where unfinished matches
+    // are caught: before any write, in every format. A resource admin can force it with a reason (audited below),
+    // which is the only way to close a round whose match can never be played.
+    let forcedOpenMatches = 0;
+    let roundMatches: Awaited<ReturnType<typeof getMatchesByRound>> = [];
+    if (body.status === 'completed') {
+      roundMatches = await getMatchesByRound(rid);
+      const unfinished = roundMatches.filter((match) => match.status !== 'completed');
+      if (unfinished.length > 0) {
+        if (body.force !== true) {
+          throw new UserFacingError(
+            `${round.name} still has ${unfinished.length} unfinished match(es). Finish them, or complete the round anyway with a reason.`,
+            {
+              code: 'round_matches_unfinished',
+              params: { round: round.name, count: unfinished.length },
+              status: 409,
+            }
+          );
+        }
+        forcedOpenMatches = unfinished.length;
+      }
+    }
+
     // best_of can only be changed on pending rounds
     if (body.best_of) {
       if (round.status !== 'pending') {
@@ -125,6 +149,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       round = await updateRoundBestOf(rid, body.best_of);
     }
 
+    const statusBefore = round.status;
     if (body.status) {
       round = await updateRoundStatus(rid, body.status);
     }
@@ -149,12 +174,29 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    if (forcedOpenMatches > 0) {
+      logAuditEvent({
+        actor_id: admin.playerId,
+        actor_name: admin.name,
+        action: 'round.force_complete',
+        resource_type: 'round',
+        resource_id: rid,
+        resource_name: round.name,
+        changes: { status: { before: statusBefore, after: round.status } },
+        metadata: {
+          tournament_id: id,
+          round_number: round.round_number,
+          unfinished_matches: forcedOpenMatches,
+          reason: body.reason,
+        },
+      });
+    }
+
     // Emit round_completed Discord event when round is marked completed
     if (body.status === 'completed') {
       try {
         if (tournament) {
-          const [roundMatches, allMatchRecords, participants] = await Promise.all([
-            getMatchesByRound(rid),
+          const [allMatchRecords, participants] = await Promise.all([
             getCompletedMatchRecords(id),
             getParticipants(id),
           ]);

@@ -242,6 +242,38 @@ describe('queries/rounds', () => {
       ).rejects.toMatchObject({ code: 'PHASE_GROUPS_STALE', statusCode: 409 });
     });
 
+    it('maps the round number unique violation to 409 rounds_round_already_written', async () => {
+      mockBuilder.single.mockResolvedValue({
+        data: null,
+        error: {
+          code: '23505',
+          message: 'duplicate key value violates unique constraint "rounds_tournament_round_number_key"',
+          details: 'Key (tournament_id, round_number)=(t-1, 2) already exists.',
+          hint: null,
+        },
+      });
+      await expect(
+        createRound({ tournament_id: 't-1', name: 'Round 2', round_number: 2, best_of: 3 }),
+      ).rejects.toMatchObject({
+        code: 'rounds_round_already_written',
+        statusCode: 409,
+        params: { round: 'Round 2' },
+      });
+    });
+
+    it('does not rewrite a unique violation of another constraint', async () => {
+      const other = {
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "rounds_pkey"',
+        details: null,
+        hint: null,
+      };
+      mockBuilder.single.mockResolvedValue({ data: null, error: other });
+      await expect(
+        createRound({ tournament_id: 't-1', name: 'Round 1', round_number: 1, best_of: 3 }),
+      ).rejects.toBe(other);
+    });
+
     it('rethrows any other P0001 unchanged', async () => {
       const other = { code: 'P0001', message: 'SOMETHING_ELSE', details: null, hint: null };
       mockBuilder.single.mockResolvedValue({ data: null, error: other });

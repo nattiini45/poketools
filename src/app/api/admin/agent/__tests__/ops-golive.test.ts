@@ -184,6 +184,7 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
     db.matches.push(...inputs);
   }),
   getCompletedMatchRecords: vi.fn(async () => []),
+  getPairedMatchRecords: vi.fn(async () => []),
   getMatchesByTournament: vi.fn(async () => db.matches),
 }));
 vi.mock('@/lib/supabase/queries/tournament-groups', () => ({
@@ -890,6 +891,9 @@ describe('the error catalogs hold every code the four routes answer, in English 
     'bracket_already_generated',
     'bracket_generate_elim_only',
     'BRACKET_V2_MANAGED',
+    'BRACKET_V2_REQUIRED',
+    'rounds_previous_matches_unfinished',
+    'round_robin_schedule_drift',
     // the harness
     'agent_harness_error',
     'unknown_outcome',

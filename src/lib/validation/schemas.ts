@@ -1310,9 +1310,18 @@ export const roundUpdateSchema = z.object({
   // ISO 8601 with an explicit offset (`Z` or `+02:00`): a timezone-less string
   // would be read in the server's zone, not the admin's. `null` clears it.
   deadline: z.string().trim().datetime({ offset: true }).nullable().optional(),
+  // Completes a round whose matches are not all finished. Always audited with the reason.
+  force: z.boolean().optional(),
+  reason: reasonSchema.optional(),
 }).refine(
   (data) => data.status !== undefined || data.best_of !== undefined || data.deadline !== undefined,
   { message: 'Provide status, best_of and/or deadline to update' },
+).refine(
+  (data) => data.force !== true || data.status === 'completed',
+  { message: 'force applies only to status "completed"', path: ['force'] },
+).refine(
+  (data) => data.force !== true || data.reason !== undefined,
+  { message: 'A reason is required to force-complete a round', path: ['reason'] },
 );
 
 /**

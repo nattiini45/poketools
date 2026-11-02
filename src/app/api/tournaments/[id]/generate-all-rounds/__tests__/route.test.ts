@@ -34,6 +34,7 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
 vi.mock('@/lib/supabase/queries/matches', () => ({
   createMatchBatch: vi.fn(),
   getMatchesByTournament: vi.fn(),
+  getPairedMatchRecords: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/lib/supabase/queries/tournament-groups', () => ({
@@ -70,7 +71,12 @@ import {
   updateRoundByePlayers,
   updateRoundStatus,
 } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import {
+  createMatchBatch,
+  getMatchesByTournament,
+  getPairedMatchRecords,
+} from '@/lib/supabase/queries/matches';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { revalidateTag } from 'next/cache';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -217,6 +223,86 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     expect(updateTournament).toHaveBeenCalledWith('a5cb20ac-a127-482d-855d-d802e29185bc', expect.objectContaining({ status: 'active' }));
     // D37: the new pairings show on the next view.
     expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
+  });
+
+  describe('schedule drift (a rename or substitute after the first round)', () => {
+    const setup = () => {
+      vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
+      vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, current_round: 1 } as never);
+      vi.mocked(getParticipants).mockResolvedValue([
+        { id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' },
+      ] as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'round-1', name: 'Round 1', round_number: 1, bye_player_ids: [] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'round-1' }] as never);
+      vi.mocked(getGroupsByTournament).mockResolvedValue([]);
+      vi.mocked(getRoundRobinTotalRounds).mockReturnValue(3);
+      vi.mocked(createRound).mockImplementation(async (input) => ({ id: `round-${input.round_number}`, ...input }) as never);
+    };
+
+    it('answers 409 round_robin_schedule_drift and writes nothing at all when ANY missing round repeats a pairing', async () => {
+      setup();
+      // Rounds 2 is clean, round 3 would repeat the still scheduled p1-p2 of round 1: nothing is written, not even round 2.
+      vi.mocked(getPairedMatchRecords).mockResolvedValue([
+        { player_1_id: 'p2', player_2_id: 'p1', winner_id: null, round_number: 1 },
+      ] as never);
+      vi.mocked(generateRoundRobinRound).mockImplementation((_ids, round) => ({
+        pairings: round === 2 ? [{ player_1_id: 'p1', player_2_id: 'p3' }] : [{ player_1_id: 'p1', player_2_id: 'p2' }],
+        bye_player_ids: [],
+      }) as never);
+
+      const res = await POST({} as NextRequest, routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(json.code).toBe('round_robin_schedule_drift');
+      expect(json.params).toEqual({ round: 'Round 3' });
+      expect(createRound).not.toHaveBeenCalled();
+      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it('writes the missing rounds when no pairing repeats', async () => {
+      setup();
+      vi.mocked(getPairedMatchRecords).mockResolvedValue([
+        { player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1', round_number: 1 },
+      ] as never);
+      vi.mocked(generateRoundRobinRound).mockImplementation((_ids, round) => ({
+        pairings: [{ player_1_id: 'p1', player_2_id: round === 2 ? 'p3' : 'p4' }],
+        bye_player_ids: [],
+      }) as never);
+
+      const res = await POST({} as NextRequest, routeParams);
+
+      expect(res.status).toBe(201);
+      expect(createRound).toHaveBeenCalledTimes(2);
+    });
+
+    it('answers 409 rounds_round_already_written, writing no match, when a round insert loses a race', async () => {
+      setup();
+      vi.mocked(getPairedMatchRecords).mockResolvedValue([]);
+      vi.mocked(generateRoundRobinRound).mockReturnValue({
+        pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
+        bye_player_ids: [],
+      } as never);
+      vi.mocked(createRound).mockRejectedValue(
+        new UserFacingError('Round 2 already exists with its matches. Delete it to generate it again.', {
+          code: 'rounds_round_already_written',
+          params: { round: 'Round 2' },
+          status: 409,
+        })
+      );
+
+      const res = await POST({} as NextRequest, routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(json.code).toBe('rounds_round_already_written');
+      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+    });
   });
 
   it('refills a round an interrupted call wrote without matches instead of skipping it', async () => {

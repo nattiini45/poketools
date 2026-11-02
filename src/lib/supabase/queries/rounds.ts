@@ -1,5 +1,6 @@
 import { supabase } from '../client';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { isUniqueViolationOf } from '../unique-violation';
 import type { Tables } from '@/types/database';
 import type { Round, RoundStatus } from '@/types/round';
 import type { RoundByeSource } from '@/lib/tournament/byes';
@@ -128,6 +129,28 @@ function isPhaseGroupsStale(error: { code?: string; message?: string }): boolean
   return error.code === 'P0001' && error.message === 'PHASE_GROUPS_STALE';
 }
 
+/**
+ * UNIQUE (tournament_id, round_number) on `rounds`
+ * (supabase/migrations/20261102122000_rounds_tournament_round_number_key.sql).
+ */
+export const ROUNDS_TOURNAMENT_ROUND_NUMBER_KEY = 'rounds_tournament_round_number_key';
+
+/**
+ * A concurrent (or repeated) generation wrote this round number first. The losing request wrote nothing
+ * for the round, so the client reloads and, if the round is wrong, deletes it before generating again.
+ * HTTP 409, code `rounds_round_already_written`.
+ */
+export class RoundAlreadyWrittenError extends UserFacingError {
+  constructor(roundName: string) {
+    super(`${roundName} already exists with its matches. Delete it to generate it again.`, {
+      code: 'rounds_round_already_written',
+      params: { round: roundName },
+      status: 409,
+    });
+    this.name = 'RoundAlreadyWrittenError';
+  }
+}
+
 export async function createRound(input: {
   tournament_id: string;
   name: string;
@@ -155,6 +178,13 @@ export async function createRound(input: {
     .single();
 
   if (error) {
+    if (isUniqueViolationOf(error, ROUNDS_TOURNAMENT_ROUND_NUMBER_KEY)) {
+      console.error(
+        `[createRound] round ${input.round_number} of tournament ${input.tournament_id} already exists (concurrent generation)`,
+        error
+      );
+      throw new RoundAlreadyWrittenError(input.name);
+    }
     if (isPhaseGroupsStale(error)) {
       console.error('[createRound] phase groups changed before the first round:', error);
       throw new UserFacingError('The league groups changed while the round was being generated; generate it again', {

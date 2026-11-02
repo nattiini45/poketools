@@ -19,6 +19,7 @@ vi.mock('@/lib/supabase/client', () => ({
 import {
   getCompletedMatchRecords,
   getCompletedMatchRecordsBatch,
+  getPairedMatchRecords,
   getPlayerIdsWithCompletedMatches,
 } from '../matches';
 
@@ -240,5 +241,40 @@ describe('getPlayerIdsWithCompletedMatches', () => {
 
     expect((await getPlayerIdsWithCompletedMatches([])).size).toBe(0);
     expect(f.queries).toHaveLength(0);
+  });
+});
+
+describe('getPairedMatchRecords', () => {
+  it('returns every match of the tournament whatever its status, with no status filter, oldest first', async () => {
+    const statuses = ['scheduled', 'in_progress', 'pending_confirmation', 'disputed', 'completed'];
+    const rows = completedRows(5).map((row, k) => ({ ...row, status: statuses[k % statuses.length] }));
+    const f = use([...rows, ...completedRows(2, 'other-stage', 9000)]);
+
+    const records = await getPairedMatchRecords(T);
+
+    expect(records.map((r) => r.match_id)).toEqual([0, 1, 2, 3, 4].map(idOf));
+    // A short first page cannot prove the end (it may be the server cap), so one empty page settles it.
+    expect(f.queries).toHaveLength(2);
+    expect(f.queries[0].filters).toEqual([{ op: 'eq', column: 'tournament_id', value: T }]);
+  });
+
+  it('pages past the 1000-row ceiling', async () => {
+    const f = use(completedRows(2345));
+
+    const records = await getPairedMatchRecords(T);
+
+    expect(records).toHaveLength(2345);
+    expect(f.queries).toHaveLength(3);
+  });
+
+  it('reads every pairing of a tournament past the 20,000-row bound of the bounded readers, with no warning', async () => {
+    use(completedRows(20_500));
+
+    const records = await getPairedMatchRecords(T);
+
+    expect(records).toHaveLength(20_500);
+    expect(records[0].match_id).toBe(idOf(0));
+    expect(records[20_499].match_id).toBe(idOf(20_499));
+    expect(warn).not.toHaveBeenCalled();
   });
 });

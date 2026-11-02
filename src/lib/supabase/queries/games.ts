@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { isUniqueViolationOf } from '../unique-violation';
 import type { Tables, TablesInsert } from '@/types/database';
 import type { Game, GameCreateInput, BattleStat, BattleStatInsert, AggregateScope } from '@/types/game';
 import type { PlayerBattleStatRow } from '@/types/profile';
@@ -142,16 +143,6 @@ export class BattleStatsDuplicatePokemonError extends UserFacingError {
   }
 }
 
-/** A Postgres unique violation of exactly `constraint` (others are not ours to map). */
-function isUniqueViolationOf(error: unknown, constraint: string): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const { code, message, details } = error as { code?: unknown; message?: unknown; details?: unknown };
-  if (code !== '23505') return false;
-  return (
-    (typeof message === 'string' && message.includes(constraint)) ||
-    (typeof details === 'string' && details.includes(constraint))
-  );
-}
 
 export async function createGame(input: GameCreateInput): Promise<Game> {
   const insert: TablesInsert<'games'> = {

@@ -23,6 +23,7 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
 vi.mock('@/lib/supabase/queries/matches', () => ({
   createMatchBatch: vi.fn(),
   getMatchesByTournament: vi.fn(),
+  getPairedMatchRecords: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/lib/supabase/queries/tournament-groups', () => ({
   getGroupsByTournament: vi.fn(),

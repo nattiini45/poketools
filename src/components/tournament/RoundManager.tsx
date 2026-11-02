@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Round, RoundStatus, RoundWithMatches } from '@/types/round';
 import type { PublicMatch } from '@/lib/match/public-match';
@@ -11,6 +11,8 @@ import Badge from '@/components/ui/Badge';
 import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import Modal from '@/components/ui/Modal';
+import Textarea from '@/components/ui/Textarea';
 import ManualRoundForm from './ManualRoundForm';
 import { isLegacyElimBracketData } from '@/components/bracket/legacy';
 import { useLocale, useT } from '@/i18n/client';
@@ -31,6 +33,9 @@ import { apiFailure, type UiError } from './ui-error';
 import type { ParticipantsSummary } from './participants-events';
 import { StartupChecklistView, STARTUP_CHECKLIST_REGION_ID_PREFIX, type StartupChecklistLinks } from './StartupChecklist';
 import { useParticipantsSummary } from './useParticipantsSummary';
+
+/** The reason's length limit on the round PATCH (`reasonSchema`). */
+const FORCE_REASON_MAX_LENGTH = 500;
 
 type RoundErrorKey = `rounds.errors.${keyof typeof tournamentsAdminMessages.en.rounds.errors}`;
 
@@ -346,6 +351,11 @@ export default function RoundManager({
   const [resettingRound, setResettingRound] = useState(false);
   const [deleteRoundId, setDeleteRoundId] = useState<string | null>(null);
   const [deletingRound, setDeletingRound] = useState(false);
+  const [forceRoundId, setForceRoundId] = useState<string | null>(null);
+  const [forceReason, setForceReason] = useState('');
+  const [forcing, setForcing] = useState(false);
+  // Rounds whose matches the open-match check already asked for, so a failed read is not retried in a loop.
+  const checkedRounds = useRef(new Set<string>());
   const [generatingBracket, setGeneratingBracket] = useState(false);
   const [regeneratingBracket, setRegeneratingBracket] = useState(false);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
@@ -385,6 +395,24 @@ export default function RoundManager({
       cancelled = true;
     };
   }, [hasByes, participantNamesSettled, tournament.id]);
+
+  // The Complete control needs the open-match count of every active round, so their matches load up front.
+  useEffect(() => {
+    for (const round of rounds) {
+      if (round.status !== 'active' || matchesByRound[round.id] || checkedRounds.current.has(round.id)) continue;
+      checkedRounds.current.add(round.id);
+      void fetchRoundMatches(tournament.id, round.id).then((result) => {
+        if (!result.ok) return;
+        setMatchesByRound((prev) => ({ ...prev, [round.id]: result.matches }));
+      });
+    }
+  }, [rounds, matchesByRound, tournament.id]);
+
+  /** Matches of a round that are not completed: the server's own rule for refusing to complete it. */
+  function openMatchCount(roundId: string): number | null {
+    const matches = matchesByRound[roundId];
+    return matches ? matches.filter((m) => m.status !== 'completed').length : null;
+  }
 
   const isRoundRobin = tournament.bracket_type === 'round_robin';
   const isElimination =
@@ -650,7 +678,8 @@ export default function RoundManager({
     }
   }
 
-  async function updateRoundStatus(roundId: string, status: RoundStatus) {
+  /** True when the server accepted the change. `forceReason` completes a round that still has open matches. */
+  async function updateRoundStatus(roundId: string, status: RoundStatus, forceReason?: string): Promise<boolean> {
     setError(null);
     try {
       const res = await fetch(
@@ -658,21 +687,46 @@ export default function RoundManager({
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status }),
+          body: JSON.stringify(forceReason === undefined ? { status } : { status, force: true, reason: forceReason }),
         }
       );
       const result: ApiResult<Round> = await res.json();
 
       if (!result.success) {
         setError(apiFailure(result));
-        return;
+        if (result.code === 'round_matches_unfinished') {
+          // The list this control was built on is out of date: read it again.
+          checkedRounds.current.delete(roundId);
+          setMatchesByRound((prev) => {
+            const next = { ...prev };
+            delete next[roundId];
+            return next;
+          });
+        }
+        return false;
       }
 
+      checkedRounds.current.delete(roundId);
       setRounds((prev) =>
         prev.map((r) => (r.id === roundId ? result.data : r))
       );
+      return true;
     } catch {
       setError({ key: 'rounds.errors.updateStatus' });
+      return false;
+    }
+  }
+
+  async function handleForceComplete() {
+    if (!forceRoundId || !forceReason.trim()) return;
+    setForcing(true);
+    try {
+      await updateRoundStatus(forceRoundId, 'completed', forceReason.trim());
+      // A failure shows in the page's error alert, which the open dialog would cover.
+      setForceRoundId(null);
+      setForceReason('');
+    } finally {
+      setForcing(false);
     }
   }
 
@@ -902,7 +956,7 @@ export default function RoundManager({
           variant="ghost"
           size="sm"
           onClick={() => setShowManualForm((v) => !v)}
-          disabled={!canGenerate || isBusy}
+          disabled={!canGenerate || isBusy || showsGenerateBracket}
           className="border border-poke-border"
         >
           {showManualForm ? t('rounds.cancelManual') : t('rounds.createManual')}
@@ -1036,15 +1090,42 @@ export default function RoundManager({
                         {t('rounds.start')}
                       </Button>
                     )}
-                    {round.status === 'active' && (
-                      <Button
-                        variant="success"
-                        size="sm"
-                        onClick={() => updateRoundStatus(round.id, 'completed')}
-                      >
-                        {t('rounds.complete')}
-                      </Button>
-                    )}
+                    {round.status === 'active' && (() => {
+                      const open = openMatchCount(round.id);
+                      const blocked = open !== null && open > 0;
+                      const blockedId = `${startNowHintId}-open-${round.id}`;
+                      return (
+                        <>
+                          <Button
+                            variant="success"
+                            size="sm"
+                            disabled={blocked}
+                            aria-describedby={blocked ? blockedId : undefined}
+                            onClick={() => void updateRoundStatus(round.id, 'completed')}
+                          >
+                            {t('rounds.complete')}
+                          </Button>
+                          {blocked && (
+                            <>
+                              <span id={blockedId} className="text-xs text-poke-text-muted">
+                                {t('rounds.completeBlocked', { count: open })}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-poke-danger"
+                                onClick={() => {
+                                  setForceReason('');
+                                  setForceRoundId(round.id);
+                                }}
+                              >
+                                {t('rounds.forceComplete.open')}
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
                     {round.status !== 'pending' && (
                       <Button
                         variant="danger"
@@ -1153,6 +1234,43 @@ export default function RoundManager({
         confirmLabel={resetNeedsCascade ? t('rounds.resetDialog.cascadeConfirm') : t('rounds.resetDialog.confirm')}
         loading={resettingRound}
       />
+      <Modal
+        open={forceRoundId !== null}
+        onClose={() => {
+          if (!forcing) setForceRoundId(null);
+        }}
+        title={t('rounds.forceComplete.title')}
+        size="sm"
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleForceComplete();
+          }}
+        >
+          <p className="text-sm text-poke-text-secondary">
+            {t('rounds.forceComplete.message', { count: forceRoundId ? (openMatchCount(forceRoundId) ?? 0) : 0 })}
+          </p>
+          <Textarea
+            id={`${startNowHintId}-force-reason`}
+            label={t('rounds.forceComplete.reasonLabel')}
+            hint={t('rounds.forceComplete.reasonHint')}
+            value={forceReason}
+            onChange={(e) => setForceReason(e.target.value)}
+            maxLength={FORCE_REASON_MAX_LENGTH}
+            required
+          />
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setForceRoundId(null)} disabled={forcing}>
+              {t('rounds.forceComplete.cancel')}
+            </Button>
+            <Button type="submit" variant="danger" size="sm" loading={forcing} disabled={!forceReason.trim()}>
+              {t('rounds.forceComplete.confirm')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

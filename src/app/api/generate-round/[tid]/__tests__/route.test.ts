@@ -39,6 +39,7 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
 vi.mock('@/lib/supabase/queries/matches', () => ({
   createMatchBatch: vi.fn(),
   getCompletedMatchRecords: vi.fn(),
+  getPairedMatchRecords: vi.fn(),
   getMatchesByTournament: vi.fn(),
 }));
 
@@ -99,6 +100,7 @@ import {
 import {
   createMatchBatch,
   getCompletedMatchRecords,
+  getPairedMatchRecords,
   getMatchesByTournament,
 } from '@/lib/supabase/queries/matches';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
@@ -109,6 +111,7 @@ import { revalidateTag } from 'next/cache';
 import { logAuditEvent } from '@/lib/audit/log';
 import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { FormatStudioError } from '@/lib/format-studio/errors';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 
 // --------------- helpers ---------------
 
@@ -148,6 +151,7 @@ describe('POST /api/generate-round/[tid]', () => {
     ] as never);
     vi.mocked(getParticipants).mockResolvedValue(participants as never);
     vi.mocked(getCompletedMatchRecords).mockResolvedValue([] as never);
+    vi.mocked(getPairedMatchRecords).mockResolvedValue([] as never);
     vi.mocked(getGroupsByTournament).mockResolvedValue([] as never);
     // A league without groups: the phase keeps its own groups (none here).
     vi.mocked(getSeasonGroups).mockResolvedValue([]);
@@ -863,6 +867,201 @@ describe('POST /api/generate-round/[tid]', () => {
 
       expect(response.status).toBe(201);
       expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 3 }));
+    });
+  });
+
+  // ---- #38: a concurrent call wrote this round number first ----
+
+  describe('round written by a concurrent call', () => {
+    it('answers 409 rounds_round_already_written when the round insert loses the race, and writes no match', async () => {
+      vi.mocked(createRound).mockRejectedValue(
+        new UserFacingError('Round 2 already exists with its matches. Delete it to generate it again.', {
+          code: 'rounds_round_already_written',
+          params: { round: 'Round 2' },
+          status: 409,
+        })
+      );
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_round_already_written');
+      expect(payload.params).toEqual({ round: 'Round 2' });
+      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---- #42: generate-round never starts an elimination bracket ----
+
+  describe('elimination tournament without rounds', () => {
+    it.each(['single_elim', 'double_elim'] as const)(
+      'answers 400 BRACKET_V2_REQUIRED for %s before it reads participants or writes',
+      async (bracketType) => {
+        vi.mocked(getTournamentById).mockResolvedValue({
+          ...baseTournament,
+          bracket_type: bracketType,
+          status: 'upcoming',
+          current_round: 0,
+        } as never);
+        vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
+
+        const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+        const payload = await response.json();
+
+        expect(response.status).toBe(400);
+        expect(payload.code).toBe('BRACKET_V2_REQUIRED');
+        expect(getParticipants).not.toHaveBeenCalled();
+        expect(generateRound).not.toHaveBeenCalled();
+        expect(createRound).not.toHaveBeenCalled();
+        expect(createMatchBatch).not.toHaveBeenCalled();
+        expect(updateTournament).not.toHaveBeenCalled();
+      }
+    );
+
+    it('still starts a Swiss or round robin tournament without rounds', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({
+        ...baseTournament,
+        status: 'upcoming',
+        current_round: 0,
+      } as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
+    });
+  });
+
+  // ---- #40: unfinished matches ----
+
+  describe('unfinished matches of the previous round', () => {
+    const legacyElim = { ...baseTournament, bracket_type: 'single_elim' as const };
+    const legacyRound = { id: 'r-1', name: 'Quarterfinals', round_number: 1, status: 'completed', bracket_side: null };
+
+    it('refuses a legacy elimination round while a previous-round match is unfinished (nothing advances)', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(legacyElim as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([legacyRound] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([
+        { id: 'm-1', round_id: 'r-1', status: 'completed' },
+        { id: 'm-2', round_id: 'r-1', status: 'disputed' },
+        { id: 'm-3', round_id: 'r-other', status: 'scheduled' },
+      ] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_previous_matches_unfinished');
+      expect(payload.params).toEqual({ round: 'Quarterfinals', count: 1 });
+      expect(generateRound).not.toHaveBeenCalled();
+      expect(createRound).not.toHaveBeenCalled();
+      expect(createMatchBatch).not.toHaveBeenCalled();
+    });
+
+    it('generates a legacy elimination round once every previous-round match is completed', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(legacyElim as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([legacyRound] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([
+        { id: 'm-1', round_id: 'r-1', status: 'completed' },
+        { id: 'm-2', round_id: 'r-1', status: 'completed' },
+      ] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
+      expect(generateRound).toHaveBeenCalled();
+    });
+
+    it('scores Swiss from completed matches but pairs against every match, whatever its status', async () => {
+      const completed = [{ player_1_id: 'p3', player_2_id: 'p4', winner_id: 'p3', round_number: 1 }];
+      const paired = [
+        ...completed,
+        { player_1_id: 'p1', player_2_id: 'p2', winner_id: null, round_number: 1 },
+      ];
+      vi.mocked(getCompletedMatchRecords).mockResolvedValue(completed as never);
+      vi.mocked(getPairedMatchRecords).mockResolvedValue(paired as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
+      expect(generateRound).toHaveBeenCalledWith(
+        'swiss',
+        expect.any(Array),
+        expect.any(Object),
+        completed,
+        2,
+        expect.objectContaining({ pairedMatches: paired })
+      );
+    });
+  });
+
+  // ---- #41: round robin schedule drift ----
+
+  describe('ungrouped round robin schedule drift', () => {
+    const rr = { ...baseTournament, bracket_type: 'round_robin' as const, current_round: 1 };
+    const round1 = { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] };
+
+    it('answers 409 round_robin_schedule_drift, writing nothing, when a pairing is already scheduled', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(rr as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([round1] as never);
+      // Round 1 holds p2-p1 (still scheduled); the rebuilt round 2 pairs p1-p2 again.
+      vi.mocked(getPairedMatchRecords).mockResolvedValue([
+        { player_1_id: 'p2', player_2_id: 'p1', winner_id: null, round_number: 1 },
+      ] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('round_robin_schedule_drift');
+      expect(payload.params).toEqual({ round: 'Round 2' });
+      expect(createRound).not.toHaveBeenCalled();
+      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it('generates normally when no pairing repeats', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(rr as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([round1] as never);
+      vi.mocked(getPairedMatchRecords).mockResolvedValue([
+        { player_1_id: 'p1', player_2_id: 'p4', winner_id: 'p1', round_number: 1 },
+        { player_1_id: 'p2', player_2_id: 'p3', winner_id: null, round_number: 1 },
+      ] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
+      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 2 }));
+    });
+
+    it('does not count the matches of the round it refills', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(rr as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        round1,
+        { id: 'r-2', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: [] },
+      ] as never);
+      vi.mocked(getPairedMatchRecords).mockResolvedValue([
+        { player_1_id: 'p1', player_2_id: 'p2', winner_id: null, round_number: 2 },
+      ] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      // The interrupted round at this number has no match of its own in `getMatchesByTournament`: it is refilled.
+      expect(response.status).toBe(201);
+    });
+
+    it('is not applied to a Swiss tournament', async () => {
+      vi.mocked(getPairedMatchRecords).mockResolvedValue([
+        { player_1_id: 'p1', player_2_id: 'p2', winner_id: null, round_number: 1 },
+      ] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(201);
     });
   });
 

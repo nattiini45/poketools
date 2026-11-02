@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import { ilikeAnyOf, postgrestQuoted } from '@/lib/supabase/postgrest-filter';
 import { readBoundedPages } from '@/lib/supabase/read-bounded-pages';
+import { readAllPages } from '@/lib/supabase/read-all-pages';
 import { releaseTeamsFromMatches } from './teams';
 import type { Tables } from '@/types/database';
 import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
@@ -1850,6 +1851,33 @@ export async function getCompletedMatchRecords(
         .order('id', { ascending: true })
         .range(from, to),
     { label: `getCompletedMatchRecords tournament ${tournamentId}` },
+  );
+
+  return rows.map((row) => ({
+    match_id: row.id,
+    player_1_id: row.player_1_id,
+    player_2_id: row.player_2_id,
+    winner_id: row.winner_id,
+    round_number: (row.rounds as { round_number: number }).round_number,
+  }));
+}
+
+/**
+ * Every match of a tournament, whatever its status: the records of who has been paired, not of who won. A scheduled,
+ * in-progress or disputed match is still "these two have met" for the Swiss no-rematch history and the round robin
+ * drift guard; it must never feed a score (its `winner_id` is null, which scoring reads as a draw), so standings keep
+ * `getCompletedMatchRecords`. Pages past `max_rows` with no row bound, oldest first: a pairing left out of the
+ * history would let a rematch or a repeated pair through the guards.
+ */
+export async function getPairedMatchRecords(tournamentId: string): Promise<MatchRecord[]> {
+  const rows = await readAllPages((from, to) =>
+    supabase
+      .from('matches')
+      .select('id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+      .eq('tournament_id', tournamentId)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
   );
 
   return rows.map((row) => ({

@@ -12,10 +12,11 @@ import {
   updateRoundByePlayers,
   updateRoundStatus,
 } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { createMatchBatch, getMatchesByTournament, getPairedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { generateRoundRobinRound, getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { parseGenerateOptions } from '@/lib/tournament/generate-options';
+import { assertNoScheduleDrift } from '@/lib/tournament/schedule-drift';
 import {
   ensurePhaseGroupsFromLeague,
   pendingWeeks,
@@ -127,11 +128,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const totalRounds = getRoundRobinTotalRounds(participants.length);
       const participantIds = participants.map((p) => p.id);
       const withMatches = new Set((await getMatchesByTournament(id)).map((match) => match.round_id));
+      // The circle schedule is rebuilt from the current participant order. A rename or a substitute after the first
+      // round can make a missing round repeat a pairing that is already scheduled (any status): refuse before the
+      // first write, so no round of a drifted schedule is written.
+      const scheduled = await getPairedMatchRecords(id);
       for (let r = 1; r <= totalRounds; r++) {
         const written = existingRounds.filter((round) => round.round_number === r);
         if (written.length > 0 && written.some((round) => withMatches.has(round.id))) continue;
         if (written.length > 0) emptyRounds.set(r, written[0]);
         const generated = generateRoundRobinRound(participantIds, r);
+        assertNoScheduleDrift(`Round ${r}`, generated.pairings, scheduled, { ignoreRoundNumber: r });
         weeksToWrite.push({ roundNumber: r, pairings: generated.pairings, byePlayerIds: generated.bye_player_ids });
       }
     }

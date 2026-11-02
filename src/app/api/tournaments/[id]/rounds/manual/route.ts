@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { manualRoundSchema, formatZodErrors } from '@/lib/validation';
 import {
   getTournamentById,
@@ -82,6 +83,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // 3. Validate current round is completed (if any)
     //    Round Robin pairings are deterministic, so skip this check for RR.
     const existingRounds = await getRoundsByTournament(id);
+    // A new elimination bracket is built whole by the bracket engine. A manual first round would be an unstructured
+    // one, after which the legacy per-round generator could carry on and build a bracket without its slot graph.
+    if (
+      (tournament.bracket_type === 'single_elim' || tournament.bracket_type === 'double_elim') &&
+      existingRounds.length === 0
+    ) {
+      throw new UserFacingError('Elimination brackets are built by the bracket engine. Use Generate Bracket instead.', {
+        code: 'BRACKET_V2_REQUIRED',
+      });
+    }
     if (tournament.bracket_type !== 'round_robin') {
       const currentRound = existingRounds.find(
         (r) => r.round_number === tournament.current_round

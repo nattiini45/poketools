@@ -59,8 +59,9 @@ import {
   regenerateEliminationBracket,
 } from '../bracket-generate';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { getRoundsByTournament, updateRoundStatus } from '@/lib/supabase/queries/rounds';
-import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { createRound, getRoundsByTournament, updateRoundStatus } from '@/lib/supabase/queries/rounds';
+import { createMatchBatch, getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { updateTournament } from '@/lib/supabase/queries/tournaments';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import type { MatchWithPlayers } from '@/types/match';
 import type { ParticipantWithSeed, Tournament } from '@/types/tournament';
@@ -274,6 +275,24 @@ describe('generateEliminationBracket', () => {
       statusCode: 409,
     });
     expect(updateRoundStatus).not.toHaveBeenCalled();
+  });
+
+  it('stops at the first round insert that loses a race (409 rounds_round_already_written), writing no match', async () => {
+    vi.mocked(createRound).mockRejectedValueOnce(
+      new UserFacingError('Round 1 already exists with its matches. Delete it to generate it again.', {
+        code: 'rounds_round_already_written',
+        params: { round: 'Round 1' },
+        status: 409,
+      }),
+    );
+
+    await expect(generateEliminationBracket(makeTournament(), makeParticipants(4))).rejects.toMatchObject({
+      code: 'rounds_round_already_written',
+      statusCode: 409,
+    });
+    expect(createRound).toHaveBeenCalledTimes(1);
+    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 
   it('refuses fewer than 2 participants with the typed tournament_participants_too_few (400)', async () => {
