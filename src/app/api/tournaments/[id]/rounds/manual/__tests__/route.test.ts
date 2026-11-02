@@ -447,6 +447,53 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     });
   });
 
+  it.each(['single_elim', 'double_elim'])(
+    'answers 400 BRACKET_V2_REQUIRED for a first manual %s round and writes nothing',
+    async (bracketType) => {
+      vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(getTournamentById).mockResolvedValue({
+        ...mockTournament,
+        bracket_type: bracketType,
+        status: 'upcoming',
+        current_round: 0,
+      } as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+      vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
+
+      const res = await POST(
+        makeRequest({ pairings: [{ player_1_id: P1, player_2_id: P2 }, { player_1_id: P3, player_2_id: P4 }] }),
+        routeParams,
+      );
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.code).toBe('BRACKET_V2_REQUIRED');
+      expect(createRound).not.toHaveBeenCalled();
+      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['swiss', 'round_robin'])('still lets a first manual %s round through', async (bracketType) => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(getTournamentById).mockResolvedValue({
+      ...mockTournament,
+      bracket_type: bracketType,
+      status: 'upcoming',
+      current_round: 0,
+    } as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
+    vi.mocked(createRound).mockResolvedValue({ id: 'round-1', round_number: 1, name: 'Round 1' } as never);
+
+    const res = await POST(
+      makeRequest({ pairings: [{ player_1_id: P1, player_2_id: P2 }, { player_1_id: P3, player_2_id: P4 }] }),
+      routeParams,
+    );
+
+    expect(res.status).toBe(201);
+  });
+
   it('activates upcoming tournament when creating first round', async () => {
     vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
     vi.mocked(getTournamentById).mockResolvedValue({

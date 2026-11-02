@@ -286,6 +286,14 @@ describe('RoundManager start-now option', () => {
     expect(buttonTag(html, 'Generate Bracket')).not.toBeNull();
     expect(textOf(html)).toContain('Start the new round right away');
   });
+
+  it.each(['single_elim', 'double_elim'] as const)(
+    'disables Create Manual Round for a %s bracket that is not built yet',
+    (bracketType) => {
+      const html = render({ tournament: makeTournament({ bracket_type: bracketType }), participants: summary(8) });
+      expect(isDisabled(buttonTag(html, 'Create Manual Round'))).toBe(true);
+    },
+  );
 });
 
 describe('generateRequestInit', () => {

@@ -1246,7 +1246,8 @@ Undo / repair paths:
     (409 REGENERATE_PLAYED without cascade: true; cascade resets played matches first)
 
 Legacy elim (pre-structure rows): flat bracket rendering + per-round generate (only continues an existing
-legacy bracket; a new elimination bracket always goes through generate-bracket, 400 BRACKET_V2_REQUIRED);
+legacy bracket; a new elimination bracket always goes through generate-bracket, 400 BRACKET_V2_REQUIRED,
+also for a first manual round via POST /api/tournaments/[id]/rounds/manual);
 POST /api/generate-round/[tid] returns 400 BRACKET_V2_MANAGED when structure rounds exist.
 ```
 

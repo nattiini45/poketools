@@ -253,7 +253,8 @@ describe('getPairedMatchRecords', () => {
     const records = await getPairedMatchRecords(T);
 
     expect(records.map((r) => r.match_id)).toEqual([0, 1, 2, 3, 4].map(idOf));
-    expect(f.queries).toHaveLength(1);
+    // A short first page cannot prove the end (it may be the server cap), so one empty page settles it.
+    expect(f.queries).toHaveLength(2);
     expect(f.queries[0].filters).toEqual([{ op: 'eq', column: 'tournament_id', value: T }]);
   });
 
@@ -264,5 +265,16 @@ describe('getPairedMatchRecords', () => {
 
     expect(records).toHaveLength(2345);
     expect(f.queries).toHaveLength(3);
+  });
+
+  it('reads every pairing of a tournament past the 20,000-row bound of the bounded readers, with no warning', async () => {
+    use(completedRows(20_500));
+
+    const records = await getPairedMatchRecords(T);
+
+    expect(records).toHaveLength(20_500);
+    expect(records[0].match_id).toBe(idOf(0));
+    expect(records[20_499].match_id).toBe(idOf(20_499));
+    expect(warn).not.toHaveBeenCalled();
   });
 });

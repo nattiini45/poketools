@@ -956,7 +956,7 @@ export default function RoundManager({
           variant="ghost"
           size="sm"
           onClick={() => setShowManualForm((v) => !v)}
-          disabled={!canGenerate || isBusy}
+          disabled={!canGenerate || isBusy || showsGenerateBracket}
           className="border border-poke-border"
         >
           {showManualForm ? t('rounds.cancelManual') : t('rounds.createManual')}
