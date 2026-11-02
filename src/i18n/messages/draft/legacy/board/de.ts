@@ -35,6 +35,12 @@ export default defineDe<typeof en>()({
       },
     },
     roundPick: 'Runde {round} · Pick Nr. {pick}',
+    roundPickOf: 'Runde {round} von {total} · Pick Nr. {pick}',
+    completeSummary: {
+      one: 'Draft abgeschlossen · {count} Runde · {picks} Picks',
+      other: 'Draft abgeschlossen · {count} Runden · {picks} Picks',
+    },
+    completeNoRounds: 'Draft abgeschlossen · {picks} Picks',
     startDraft: 'Draft starten',
     undoLastPick: 'Letzten Pick zurücknehmen',
     yourTurn: 'Du bist am Zug!',
