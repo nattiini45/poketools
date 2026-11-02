@@ -48,6 +48,8 @@ const DESIGN_CODES = [
   // league groups, round 4 (20261018202000)
   'SEASON_GROUPS_SCHEDULED', 'SEASON_GROUP_TOO_SMALL', 'SEASON_GROUP_SUBSTITUTION_LOCKED',
   'SEASON_GROUP_SEATS_STALE',
+  // legacy roster lock (20261102140000)
+  'SEASON_DRAFT_LOCKED',
 ] as const;
 
 /** Params column of §9 (placeholders of the en message). */

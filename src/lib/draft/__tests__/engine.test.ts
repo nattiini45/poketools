@@ -553,6 +553,42 @@ describe('legacySeatOrder', () => {
   });
 });
 
+// ── Roster changes mid-draft ─────────────────────────────────────────
+// A legacy pool stores no seats: every request recomputes the turn from the CURRENT roster. These cases pin what
+// that does, which is why the roster is frozen while the pool is in progress (SEASON_DRAFT_LOCKED, 20261102140000).
+
+describe('computeDraftState — a roster that changes mid-draft', () => {
+  const pool = makePool({ pick_order: 'snake' });
+  const seats = ['A', 'B', 'C', 'D'];
+  const picks = [makePick('A', 'Pikachu', 1), makePick('B', 'Eevee', 2), makePick('C', 'Mew', 3), makePick('D', 'Ditto', 4)];
+
+  it('with the roster unchanged, round 2 of a snake opens with the last seat', () => {
+    const state = computeDraftState(pool, picks, seats, 2);
+    expect(state.current_round).toBe(2);
+    expect(state.current_picker).toBe('D');
+  });
+
+  it('removing a trainer after round 1 hands the turn to another seat and shortens the draft', () => {
+    const state = computeDraftState(pool, picks, ['A', 'C', 'D'], 2);
+    expect(state.current_picker).toBe('C');
+    // 3 seats x 2 rounds: the draft is complete after 6 picks, though 8 were planned with 4 seats.
+    expect(isDraftComplete(6, 3, 2)).toBe(true);
+    expect(isDraftComplete(6, 4, 2)).toBe(false);
+  });
+
+  it('the removed trainer keeps a roster entry from the stored picks but is never asked again', () => {
+    const state = computeDraftState(pool, picks, ['A', 'C', 'D'], 2);
+    expect(state.rosters.B).toEqual(['Eevee']);
+    expect(state.pick_order).not.toContain('B');
+  });
+
+  it('adding a trainer moves every later turn: the same picks now ask a different player', () => {
+    const state = computeDraftState(pool, picks, [...seats, 'E'], 2);
+    expect(state.current_round).toBe(1);
+    expect(state.current_picker).toBe('E');
+  });
+});
+
 // ── availablePricesSorted / legacyPickerStall ────────────────────────
 
 describe('availablePricesSorted', () => {

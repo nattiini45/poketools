@@ -66,7 +66,8 @@ function fnv1a(text: string): number {
  * Seat order of a legacy pool: a draw seeded by the pool id, so it is the same on every request and every server
  * (the participant read has no order, and `season_participants` stores neither seats nor a join time). Each pool
  * draws again, so no player sits first in every league. Ties fall back to the player id. A participant who joins
- * or leaves mid-draft still moves the seats after theirs.
+ * or leaves mid-draft would move the seats after theirs, so the roster is frozen while the pool is in progress
+ * (SEASON_DRAFT_LOCKED, 20261102140000).
  */
 export function legacySeatOrder(poolId: string, playerIds: readonly string[]): string[] {
   return playerIds

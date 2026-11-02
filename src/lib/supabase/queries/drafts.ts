@@ -190,6 +190,23 @@ export async function getDraftPoolBySeason(seasonId: string): Promise<DraftPool 
 }
 
 /**
+ * Whether the league has a legacy pool in progress (one head count). While it does, the roster is frozen: a legacy
+ * pool stores no seats and recomputes every turn from the current roster (SEASON_DRAFT_LOCKED, 20261102140000). The
+ * database refuses the same writes; this read lets the substitution refuse before its first write.
+ */
+export async function seasonHasLiveLegacyDraft(seasonId: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('draft_pools')
+    .select('id', { count: 'exact', head: true })
+    .eq('season_id', seasonId)
+    .eq('engine', 'legacy')
+    .eq('status', 'in_progress');
+
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+/**
  * A league group's pool of one kind: its initial pool, or its live (not cancelled) redraft pool. `seasonGroupId`
  * null = a league without groups (the pool whose group is NULL). At most one row matches either way (unique keys
  * `uq_draft_pools_season_initial` / `uq_draft_pools_season_redraft`, NULLS NOT DISTINCT).

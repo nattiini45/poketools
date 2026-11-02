@@ -211,6 +211,15 @@ A league may split its trainers into league groups (draft side: [draft-room.md](
     that already has a round is refused too (**409** `SEASON_GROUPS_SCHEDULED`, insert trigger on `season_participants`): they
     could join no group and would have no fixtures (lead ruling round 5: a replacement uses the substitution flow). A league without groups adds and removes trainers as before, and deleting a
     league still cascades through its groups (no delete guard). The roster manager shows each refusal in the viewer's language.
+  - **Legacy draft in progress (any league).** While the league's legacy pool has status `in_progress`, a trainer cannot be added,
+    removed or substituted: **409** `SEASON_DRAFT_LOCKED`, nothing written. A legacy pool recomputes every turn from the current
+    roster, so a roster change would move everybody's seat. The check runs first in `season_participant_remove` (before the group
+    rules), in the insert trigger `season_participants__group_guard` (before its no-groups early return, so it covers ungrouped
+    leagues), and in `substituteParticipant` for the league scope, preview included (`seasonHasLiveLegacyDraft`; an UPDATE of the
+    roster row has no database guard). Phase-scope substitution moves no roster row and is allowed. `pending` and `complete` pools,
+    leagues without a pool and queue pools are unaffected, and so are a league delete and the recycle-bin restore (participants are
+    restored before pools; `legacy-roster-lock-migration.test.ts` pins that order). End the draft or move it back to `pending` first
+    ([Draft](./draft.md#legacy-draft-the-roster-is-frozen)).
   - **Draft lock.** Re-splitting and removing are refused while any group has a live (not cancelled) draft pool or drafted lines
     (**409** `SEASON_GROUP_LOCKED`): `season_groups_replace` rewrites every membership, so it locks the whole league. A single move is
     refused only while the old or the new group has a live pool, or the trainer holds lines of the old group.

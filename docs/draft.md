@@ -31,6 +31,9 @@ src/lib/draft/
   4. Recompute evolution progression where applicable
 - **Output**: Updated draft picks/state and optional evolution events
 
+### Legacy draft: the roster is frozen
+A legacy pool (`draft_pools.engine = 'legacy'`, every league that is not Evolution Point Buy) stores no seats. Every request recomputes the seat order (`legacySeatOrder`), the round, the current picker and the pick total from the **current** roster, so a trainer who joins or leaves mid-draft moves everybody's turn and the pool can skip or double-ask a trainer, jump rounds, or complete early or never (pinned by the `computeDraftState — a roster that changes mid-draft` cases in `engine.test.ts`). While the league's legacy pool has status `in_progress`, adding, removing or substituting a trainer is therefore refused with **409** `SEASON_DRAFT_LOCKED` (`season_participant_remove`, the INSERT trigger `season_participants__group_guard`, and `assertLegacyDraftNotRunning` in `src/lib/season/substitute.ts` for a league-scope substitution, preview included; migration `20261102140000_legacy_draft_roster_lock.sql`). There is no override: end the draft (free order, then complete) or move the pool back to `pending` first. `pending` and `complete` pools, leagues without a pool, Evolution Point Buy queue pools (their seats live in `draft_participants`) and a league delete or its recycle-bin restore are unaffected. Stored seats for legacy pools are a possible later step, not part of this rule.
+
 ## Dependencies
 - **External Libraries**: None
 - **Internal Modules**:

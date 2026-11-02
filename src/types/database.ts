@@ -6776,6 +6776,10 @@ export type Database = {
           out_version_no: number
         }[]
       }
+      season__legacy_draft_live: {
+        Args: { p_season_id: string }
+        Returns: boolean
+      }
       season_group__has_live_pool: {
         Args: { p_group_id: string }
         Returns: boolean

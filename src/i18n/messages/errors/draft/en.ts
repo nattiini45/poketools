@@ -113,6 +113,9 @@ export default {
   /** A group pool going live whose seats are not exactly the group's members (20261018202000, trigger on draft_pools). */
   SEASON_GROUP_SEATS_STALE:
     'This group’s trainers changed since the draft was set up, so its seats no longer match the group. Delete the draft that has not started and create it again.',
+  /** A legacy draft derives every seat from the roster (20261102140000), so the roster is frozen while it is in progress. */
+  SEASON_DRAFT_LOCKED:
+    'A draft is in progress, and its pick order follows the roster, so trainers cannot be added, removed or substituted now. End the draft, or move it back to pending, to change the roster.',
   SEATS_INVALID: 'The draft order is invalid.',
   INVALID_CONFIG: 'Invalid setting: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft Kill Tokens cannot be bought now.',

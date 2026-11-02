@@ -257,8 +257,10 @@ export async function placeSeasonGroupMember(seasonId: string, playerId: string,
  * trainer who holds a group the database refuses, under the season's draft lock: once a phase of the league has a
  * round (SEASON_GROUPS_SCHEDULED), while that group has a live pool or the trainer holds lines drafted in it
  * (SEASON_GROUP_LOCKED), and when the group would keep fewer than two trainers (SEASON_GROUP_TOO_SMALL), all
- * `DraftRuleError`. A trainer in no group, or in a league without groups, is removed as before. Returns whether a
- * roster row was removed (false: the trainer was not on the roster).
+ * `DraftRuleError`. Before every group rule, for any league, the removal is refused while a legacy pool is in progress
+ * (SEASON_DRAFT_LOCKED, 20261102140000): a legacy draft derives its seats from the roster. A trainer in no group, or in
+ * a league without groups, is removed as before. Returns whether a roster row was removed (false: the trainer was not
+ * on the roster).
  */
 export async function removeLeagueParticipant(seasonId: string, playerId: string): Promise<boolean> {
   const removed = await callDraftRpc<unknown>('season_participant_remove', {
@@ -272,9 +274,9 @@ export async function removeLeagueParticipant(seasonId: string, playerId: string
 }
 
 /**
- * The refusal of a roster insert into a grouped league that already has rounds (trigger
- * `season_participants__group_guard`, 20261018202100: SEASON_GROUPS_SCHEDULED) as its `DraftRuleError`; any other
- * error unchanged. The caller rethrows the result.
+ * The refusal of a roster insert (trigger `season_participants__group_guard`: SEASON_GROUPS_SCHEDULED for a grouped
+ * league that already has rounds, 20261018202100; SEASON_DRAFT_LOCKED while a legacy pool is in progress,
+ * 20261102140000) as its `DraftRuleError`; any other error unchanged. The caller rethrows the result.
  */
 export function toRosterAddError(err: unknown): unknown {
   return toDraftRuleError(err) ?? err;
