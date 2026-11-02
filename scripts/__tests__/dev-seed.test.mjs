@@ -47,6 +47,55 @@ describe('seedEnv', () => {
     const out = seedEnv({ NODE_ENV: 'production' }, () => STATUS);
     expect(out).toMatchObject({ ok: false });
   });
+
+  const neverAskTheCli = () => {
+    throw new Error('the CLI must not be asked');
+  };
+
+  it.each([
+    ['a hosted URL', 'https://example.supabase.co'],
+    ['a URL that only starts like the loopback host', 'http://127.0.0.1.example.com:54321'],
+    ['a URL that hides the real host behind loopback userinfo', 'http://127.0.0.1@example.supabase.co'],
+    ['a value that is not a URL', 'not a url'],
+  ])('refuses %s without a service key, instead of falling back to the local stack', (_name, url) => {
+    const out = seedEnv({ NEXT_PUBLIC_SUPABASE_URL: url }, neverAskTheCli);
+    expect(out.ok).toBe(false);
+    expect(out.ok === false && out.message).toContain('NEXT_PUBLIC_SUPABASE_URL');
+    expect(out.ok === false && out.message).toContain('loopback');
+  });
+
+  it('refuses a hosted URL that comes with a service key, without echoing the key', () => {
+    const out = seedEnv({ NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'secret-key' }, neverAskTheCli);
+    expect(out.ok).toBe(false);
+    expect(JSON.stringify(out)).not.toContain('secret-key');
+  });
+
+  it.each(['http://127.0.0.1:54321', 'http://localhost:54321', 'http://[::1]:54321'])(
+    'accepts the loopback URL %s and takes the stack keys from the status output when the key is absent',
+    (url) => {
+      const out = seedEnv({ NEXT_PUBLIC_SUPABASE_URL: url }, () => STATUS);
+      expect(out).toMatchObject({ ok: true, env: { NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321', SUPABASE_SERVICE_ROLE_KEY: 'service-key' } });
+    },
+  );
+
+  it('treats an empty URL as not supplied and falls back to the status output', () => {
+    expect(seedEnv({ NEXT_PUBLIC_SUPABASE_URL: '  ' }, () => STATUS)).toMatchObject({ ok: true });
+  });
+});
+
+describe('dev-seed.mjs', () => {
+  it('exits non-zero with a hosted URL and no service key, before it reads the local stack or runs the seed', () => {
+    const { SUPABASE_SERVICE_ROLE_KEY: _key, ...rest } = process.env;
+    const run = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts', 'dev-seed.mjs')], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      windowsHide: true,
+      env: { ...rest, NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co' },
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('loopback');
+    expect(run.stdout).not.toContain('[dev-seed]');
+  }, 60_000);
 });
 
 describe('dev-seed-run.ts', () => {
