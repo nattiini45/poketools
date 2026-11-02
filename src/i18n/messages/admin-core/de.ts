@@ -63,6 +63,7 @@ export default defineDe<typeof en>()({
     match__dispute: 'Spiel als strittig markiert',
     match__reopen: 'Spiel wieder geöffnet',
     match__override: 'Admin-Eingriff in ein Spiel',
+    match__admin_result: 'Ergebnis von einem Admin eingetragen',
     match__bulk_confirm: 'Spiel gesammelt bestätigt',
     match__bulk_schedule: 'Spielzeit gesammelt gesetzt',
     match__bulk_note: 'Notiz gesammelt zu einem Spiel hinzugefügt',

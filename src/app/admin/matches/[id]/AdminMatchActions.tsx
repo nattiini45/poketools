@@ -46,11 +46,11 @@ interface AdminMatchActionsProps {
   backSuffix?: string;
 }
 
-type LocalError = 'selectWinner' | 'updateFailed' | 'resetFailed' | 'deleteFailed';
+type LocalError = 'selectWinner' | 'updateFailed' | 'resetFailed' | 'deleteFailed' | 'settleSelectWinner' | 'settleFailed';
 /** An API failure (translated by its code) or a local message key; never translated text (i18n-core §1.7). */
 type ActionError = { api: ApiErrorLike } | { local: LocalError };
 type ActionSuccess =
-  | { kind: 'completed' | 'disputed' }
+  | { kind: 'completed' | 'disputed' | 'settled' }
   | { kind: 'reset' | 'gameDeleted'; count: number };
 
 /** The reset dialog's read of what a reset touches. */
@@ -186,6 +186,9 @@ export default function AdminMatchActions({
   const [resetPreview, setResetPreview] = useState<ResetPreviewState>({ status: 'loading' });
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [settleWinnerId, setSettleWinnerId] = useState('');
+  const [settleDialogOpen, setSettleDialogOpen] = useState(false);
+  const [settling, setSettling] = useState(false);
 
   const isTerminal = currentStatus === 'completed';
   const isScheduled = currentStatus === 'scheduled';
@@ -266,6 +269,45 @@ export default function AdminMatchActions({
     } finally {
       setLoading(false);
       setConfirmKind(null);
+    }
+  }
+
+  function requestSettle() {
+    setError(null);
+    setSuccess(null);
+    setWarnings([]);
+    if (!settleWinnerId) {
+      setError({ local: 'settleSelectWinner' });
+      return;
+    }
+    setSettleDialogOpen(true);
+  }
+
+  async function handleSettle(reason: string) {
+    setError(null);
+    setSuccess(null);
+    setWarnings([]);
+    setSettling(true);
+    try {
+      const res = await fetch(`/api/admin/matches/${matchId}/result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winner_id: settleWinnerId, reason }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSuccess({ kind: 'settled' });
+        setTimeout(() => router.refresh(), 1500);
+      } else {
+        const apiError = toApiErrorLike(json);
+        setError({ api: apiError });
+        if (gameChangeFailureHints(apiError).reload || errorNeedsRefresh(apiError.code)) router.refresh();
+      }
+    } catch {
+      setError({ local: 'settleFailed' });
+    } finally {
+      setSettling(false);
+      setSettleDialogOpen(false);
     }
   }
 
@@ -383,6 +425,8 @@ export default function AdminMatchActions({
         return t('actions.success.completed');
       case 'disputed':
         return t('actions.success.disputed');
+      case 'settled':
+        return tMatch('actions.settle.success');
       case 'reset':
         return t('actions.success.reset', { count: s.count });
       case 'gameDeleted':
@@ -537,6 +581,38 @@ export default function AdminMatchActions({
         </Section>
       )}
 
+      {/* A match that has not started: settle it directly (admin-only, audited) */}
+      {isScheduled && (
+        <Section title={tMatch('actions.settle.section')}>
+          <p className="text-sm text-poke-text-muted mb-4">{tMatch('actions.settle.hint')}</p>
+          <div>
+            <p className="block text-sm font-heading text-poke-text-muted mb-2">{tMatch('actions.settle.winnerLabel')}</p>
+            <div className="flex gap-3" role="group" aria-label={tMatch('actions.settle.winnerLabel')}>
+              {[player1, player2].map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={settleWinnerId === p.id}
+                  onClick={() => setSettleWinnerId(p.id)}
+                  className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
+                    settleWinnerId === p.id
+                      ? 'bg-poke-accent text-poke-surface border-poke-accent shadow-poke-sm'
+                      : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
+                  }`}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4">
+            <Button variant="success" loading={settling} onClick={requestSettle}>
+              {tMatch('actions.settle.button')}
+            </Button>
+          </div>
+        </Section>
+      )}
+
       {/* Completed match — show reset option only */}
       {isTerminal && (
         <Section title={t('actions.adminActions')}>
@@ -554,7 +630,9 @@ export default function AdminMatchActions({
       {/* Feedback */}
       {error && 'local' in error && (
         <Alert variant="error" className="mt-4">
-          {t(`actions.errors.${error.local}`)}
+          {error.local === 'settleSelectWinner' || error.local === 'settleFailed'
+            ? tMatch(error.local === 'settleFailed' ? 'actions.settle.failed' : 'actions.settle.selectWinner')
+            : t(`actions.errors.${error.local}`)}
         </Alert>
       )}
       {/* API failures with their recovery (reload after a concurrent change, data tools
@@ -660,6 +738,21 @@ export default function AdminMatchActions({
         reasonLabel={tMatch('actions.resetReasonLabel')}
         reasonPlaceholder={tMatch('actions.resetReasonPlaceholder')}
         initialReason={resetReason}
+      />
+
+      <ReasonDialog
+        open={settleDialogOpen}
+        onClose={() => setSettleDialogOpen(false)}
+        onConfirm={handleSettle}
+        title={tMatch('actions.settle.dialogTitle')}
+        message={tMatch('actions.settle.dialogMessage', {
+          winner: settleWinnerId === player1.id ? player1.name : player2.name,
+        })}
+        confirmLabel={tMatch('actions.settle.button')}
+        confirmVariant="primary"
+        loading={settling}
+        reasonLabel={tMatch('actions.settle.reasonLabel')}
+        reasonPlaceholder={tMatch('actions.settle.reasonPlaceholder')}
       />
 
       {/* Delete game dialog */}

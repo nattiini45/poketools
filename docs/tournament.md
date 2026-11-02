@@ -80,6 +80,7 @@ src/lib/tournament/
 
   | From | Admin may also go to |
   |---|---|
+  | `scheduled` | `completed` (the admin settle, `POST /api/admin/matches/[id]/result`; refused for a non-admin with `match_settle_admin_only`) |
   | `in_progress` | `scheduled`, `completed`, `disputed` |
   | `pending_confirmation` | `in_progress`, `scheduled` |
   | `completed` | `scheduled`, `in_progress` |

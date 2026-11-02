@@ -1410,6 +1410,10 @@ pending_confirmation  (Bo threshold reached, winner determined)
            completed  (admin manual override)
 ```
 
+An admin (a site admin, or a resource admin of the match's tournament or league) can also settle a match that has not reached `pending_confirmation`: `scheduled → completed` (and `in_progress → completed`) through `POST /api/admin/matches/[id]/result` with a winner and a required reason. The settle takes the finalize path of any other completion (ratings, streaks, standings, bracket advancement) and records the audit event `match.admin_result`. The transition is admin-only: `validateTransition` refuses it for a player with `match_settle_admin_only`.
+
+Who may submit a result: a participant, a site admin, or a resource admin of the match's tournament or league. An organizer's submission is recorded as an admin submission (`is_admin`), so it follows the admin path of the confirm step; a participant's own submission stays a participant one even when that player also holds an admin role.
+
 **Evolution progress follows the confirmed result** (EPB seasons). A game's real kills reach the evolution trackers only when its match enters `completed` (opponent confirm, auto-confirm timeout, admin dispute resolution), in the finalize step `epb_real_kills` that runs before the EPB matchday hooks; `pending_confirmation` and `disputed` results move no tracker. Each game is credited exactly once (`games.evolution_applied_at`, §4.6), so the finalize heal and a re-confirm never count it twice. A game edit that moves a completed match back debits its credited kills (the next completion credits the edited stats); a game delete, match reset or season reconcile rebuilds the season from its completed matches and re-syncs the markers. Aggregates are unaffected: they are still counted at submission.
 
 ---
