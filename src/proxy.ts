@@ -75,9 +75,11 @@ export function proxy(request: NextRequest) {
 }
 
 // Pages only. The API answers with its own headers, `_next/static` and `_next/image` are immutable assets, and the
-// `public/` folders and the service worker files are served as they are.
+// `public/` folders and the service worker files are served as they are. Folders are skipped at a segment boundary and
+// files exactly, so a lookalike such as `/favicon.ico/x` is still a page here and gets a policy, in step with the
+// `next.config.mjs` sources of `PROXY_SKIPPED_SOURCES`.
 export const config = {
   matcher: [
-    '/((?!api(?:/|$)|_next/static|_next/image|favicon\\.ico|manifest\\.webmanifest|avatar/|basis/|characters/|fonts/|models/|pwa/|textures/|offline\\.html|sw\\.js|sw-routing\\.js).*)',
+    '/((?!(?:api|_next/static|avatar|basis|characters|fonts|models|pwa|textures)(?:/|$)|(?:_next/image|favicon\\.ico|manifest\\.webmanifest|offline\\.html|sw\\.js|sw-routing\\.js)$).*)',
   ],
 };

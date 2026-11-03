@@ -82,6 +82,23 @@ describe('next.config.mjs security headers (#37)', () => {
     }
   });
 
+  it('treats a lookalike of a skipped path as a page: the proxy runs and the config sends no policy', async () => {
+    const lookalikes = [
+      '/favicon.ico/unknown',
+      '/sw.js/x',
+      '/manifest.webmanifest/x',
+      '/_next/image/x',
+      '/_next/staticfoo',
+      '/apixyz',
+      '/avatars',
+      '/models-list',
+    ];
+    for (const path of lookalikes) {
+      expect(doesProxyMatch({ config, nextConfig: {}, url: path }), `proxy ${path}`).toBe(true);
+      expect(await configHeader(path, 'content-security-policy'), path).toBeNull();
+    }
+  });
+
   it('keeps the other security headers on pages', async () => {
     for (const key of ['x-frame-options', 'strict-transport-security', 'x-content-type-options', 'reporting-endpoints']) {
       expect(await configHeader('/leagues', key), key).not.toBeNull();
