@@ -32,7 +32,7 @@ vi.mock('@/components/teambuilder/TeambuilderClient', () => ({
     return createElement('div', { 'data-testid': 'editor' });
   },
 }));
-vi.mock('@/lib/auth/helpers', () => ({ getSessionPlayer: vi.fn(async () => mocks.player) }));
+vi.mock('@/lib/auth/helpers', () => ({ getLiveSessionPlayer: vi.fn(async () => mocks.player) }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({ getRulesetById: vi.fn(async () => null) }));
 vi.mock('@/lib/supabase/queries/teams', () => ({ getPlayerTeamForTournament: vi.fn(async () => null) }));

@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ─── Mocks ──────────────────────────────────────────────────────────
 
 const mocks = vi.hoisted(() => ({
-  getSession: vi.fn(),
+  getLiveSessionPlayer: vi.fn(),
   isSuperadminNow: vi.fn(),
   getMatchById: vi.fn(),
   getTournamentById: vi.fn(),
@@ -42,7 +42,7 @@ vi.mock('@/components/match/MatchPrepClient', () => ({ default: () => null }));
 vi.mock('@/components/match/MatchStatusBadge', () => ({ default: () => null }));
 vi.mock('@/components/ui/PageContainer', () => ({ default: () => null }));
 vi.mock('@/lib/auth/helpers', () => ({
-  getSession: mocks.getSession,
+  getLiveSessionPlayer: mocks.getLiveSessionPlayer,
   isSuperadminNow: mocks.isSuperadminNow,
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: mocks.getMatchById }));
@@ -85,9 +85,7 @@ function findProps(node: ReactNode, type: unknown): Record<string, unknown> | nu
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getSession.mockResolvedValue({
-    player: { playerId: PLAYER_ID, name: 'Ash', isAdmin: false },
-  });
+  mocks.getLiveSessionPlayer.mockResolvedValue({ playerId: PLAYER_ID, name: 'Ash', isAdmin: false });
   mocks.isSuperadminNow.mockResolvedValue(false);
   mocks.getMatchById.mockResolvedValue({
     id: MATCH_ID,

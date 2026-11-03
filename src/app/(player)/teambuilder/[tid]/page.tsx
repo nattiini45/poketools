@@ -4,7 +4,7 @@ import TeambuilderClient from '@/components/teambuilder/TeambuilderClient';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
-import { getSessionPlayer } from '@/lib/auth/helpers';
+import { getLiveSessionPlayer } from '@/lib/auth/helpers';
 import { getPlayerTeamForTournament } from '@/lib/supabase/queries/teams';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,7 @@ export default async function TournamentTeambuilderPage({ params }: PageProps) {
 
   // The ruleset is the phase's own pin: an immutable version, so the rules the player builds against are the rules
   // the league validates against.
-  const playerRead = getSessionPlayer();
+  const playerRead = getLiveSessionPlayer();
   const [ruleset, player, draftPool] = await Promise.all([
     getRulesetById(tournament.ruleset_id),
     playerRead,

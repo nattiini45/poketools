@@ -1,6 +1,6 @@
 import AuthGuard from '@/components/shared/AuthGuard';
 import PageContainer from '@/components/ui/PageContainer';
-import { getSession } from '@/lib/auth/helpers';
+import { getLiveSessionPlayer } from '@/lib/auth/helpers';
 import { getMatchesByPlayer } from '@/lib/supabase/queries/matches';
 import Link from 'next/link';
 import { getT } from '@/i18n/server';
@@ -13,10 +13,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function BroadcastHubPage() {
-  const session = await getSession();
+  const player = await getLiveSessionPlayer();
   const t = await getT(creatorMessages);
 
-  if (!session?.player) {
+  if (!player) {
     return (
       <AuthGuard>
         <PageContainer title={t('broadcastHub.title')}>
@@ -26,7 +26,7 @@ export default async function BroadcastHubPage() {
     );
   }
 
-  const matches = await getMatchesByPlayer(session.player.playerId);
+  const matches = await getMatchesByPlayer(player.playerId);
   const tEnum = await getT(enumMessages);
 
   // Show pending and in_progress matches — these are trackable
