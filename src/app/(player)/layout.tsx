@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { NOINDEX } from '@/lib/seo/robots';
-import { requireLivePlayerOrSignIn } from '@/lib/auth/redirect-to-sign-in';
+import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import NavBar from '@/components/shared/NavBar';
 import SkipToContent from '@/components/shared/SkipToContent';
 import { MAIN_CONTENT_ID } from '@/lib/ui/main-content';
@@ -14,7 +14,7 @@ export default async function PlayerLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requireLivePlayerOrSignIn();
+  await requireLiveIdentityOrSignIn();
   const navExtraLinks = await siteNavExtraLinks();
 
   return (

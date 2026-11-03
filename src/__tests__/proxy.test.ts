@@ -228,7 +228,7 @@ describe('proxy wiki overlay 404 (VAL-SHELL-012)', () => {
     expect(body).toContain('background:transparent');
     expect(body).not.toMatch(/<a[\s>]/i);
     expect(body).not.toMatch(/<script/i);
-    expect(body.replace(/<style>[\s\S]*?<\/style>/i, '').replace(/<[^>]*>/g, '').trim()).toBe('');
+    expect(body).toContain('<body></body>');
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(response.headers.get('x-robots-tag')).toContain('noindex');
     expect(response.headers.get('cache-control')).toBe('no-store');

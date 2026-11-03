@@ -23,3 +23,8 @@ export function parseShareLimitMark(value: string | null | undefined): ShareLimi
   const denied = value ? DENIED.exec(value) : null;
   return denied ? { allowed: false, retryAfterSeconds: Number(denied[1]) } : null;
 }
+
+/** Next's router prefetch: it warms a link the visitor has not opened, so it must not spend the interactive allowance. */
+export function isRouterPrefetch(headers: Pick<Headers, 'get'>): boolean {
+  return headers.get('next-router-prefetch') !== null || headers.get('purpose') === 'prefetch';
+}

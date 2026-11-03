@@ -66,6 +66,14 @@ describe('loadSharedTeam', () => {
     expect(mocks.checkPublicRateLimit).toHaveBeenCalledWith('team-shared', { headers: REQUEST_HEADERS }, { limit: 60, windowSeconds: 60 });
   });
 
+  it('counts a router prefetch in its own bucket, never the interactive allowance', async () => {
+    mocks.headers.mockResolvedValue(new Headers({ 'x-forwarded-for': '203.0.113.7', 'next-router-prefetch': '1' }));
+    mocks.getTeamByShareToken.mockResolvedValue(team());
+    expect((await loadSharedTeam(SHARE_LINK_ID)).status).toBe('ok');
+    expect(mocks.checkPublicRateLimit).toHaveBeenCalledTimes(1);
+    expect(mocks.checkPublicRateLimit).toHaveBeenCalledWith('team-shared-prefetch', expect.anything(), { limit: 60, windowSeconds: 60 });
+  });
+
   it('does not charge a request the proxy already charged', async () => {
     mocks.headers.mockResolvedValue(new Headers({ 'x-forwarded-for': '203.0.113.7', 'x-poketools-share-limit': 'allowed' }));
     mocks.getTeamByShareToken.mockResolvedValue(team());

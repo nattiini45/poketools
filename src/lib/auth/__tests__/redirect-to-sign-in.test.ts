@@ -11,15 +11,16 @@ vi.mock('next/headers', () => ({
   headers: async () => ({ get: (name: string) => (name === 'x-poketools-path' ? headerJar.value : null) }),
 }));
 vi.mock('next/navigation', () => ({ redirect }));
-const live = vi.hoisted(() => ({ getLiveSessionPlayer: vi.fn() }));
+const live = vi.hoisted(() => ({ getLiveSessionPlayer: vi.fn(), getLiveAccess: vi.fn() }));
 vi.mock('@/lib/auth/helpers', () => live);
 
-import { currentSignInPath, redirectToSignIn, requireLivePlayerOrSignIn } from '../redirect-to-sign-in';
+import { currentSignInPath, redirectToSignIn, requireLiveIdentityOrSignIn, requireLivePlayerOrSignIn } from '../redirect-to-sign-in';
 
 beforeEach(() => {
   headerJar.value = null;
   redirect.mockClear();
   live.getLiveSessionPlayer.mockReset();
+  live.getLiveAccess.mockReset();
 });
 
 describe('requireLivePlayerOrSignIn (VAL-CROSS-002)', () => {
@@ -41,6 +42,29 @@ describe('requireLivePlayerOrSignIn (VAL-CROSS-002)', () => {
   it('fails closed when the live read fails', async () => {
     live.getLiveSessionPlayer.mockRejectedValue(new Error('db down'));
     await expect(requireLivePlayerOrSignIn()).rejects.toThrow('db down');
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe('requireLiveIdentityOrSignIn', () => {
+  it('lets an authenticated identity with no linked player through', async () => {
+    const access = { player: null, isSiteAdmin: false };
+    live.getLiveAccess.mockResolvedValue(access);
+    await expect(requireLiveIdentityOrSignIn()).resolves.toBe(access);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('sends a signed-out or revoked session to sign-in with the return path', async () => {
+    live.getLiveAccess.mockResolvedValue(null);
+    headerJar.value = '/dashboard/broadcast';
+    await expect(requireLiveIdentityOrSignIn()).rejects.toThrow(
+      `redirect:/auth/signin?callbackUrl=${encodeURIComponent('/dashboard/broadcast')}`,
+    );
+  });
+
+  it('fails closed when the live read fails', async () => {
+    live.getLiveAccess.mockRejectedValue(new Error('db down'));
+    await expect(requireLiveIdentityOrSignIn()).rejects.toThrow('db down');
     expect(redirect).not.toHaveBeenCalled();
   });
 });

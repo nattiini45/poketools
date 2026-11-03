@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatShareLimitMark, parseShareLimitMark } from '../share-limit-marker';
+import { formatShareLimitMark, isRouterPrefetch, parseShareLimitMark } from '../share-limit-marker';
 
 describe('share limit marker', () => {
   it('round-trips an allowed and a denied verdict', () => {
@@ -21,4 +21,16 @@ describe('share limit marker', () => {
       expect(parseShareLimitMark(value)).toBeNull();
     },
   );
+});
+
+describe('isRouterPrefetch', () => {
+  it('recognises both prefetch markers', () => {
+    expect(isRouterPrefetch(new Headers({ 'next-router-prefetch': '1' }))).toBe(true);
+    expect(isRouterPrefetch(new Headers({ purpose: 'prefetch' }))).toBe(true);
+  });
+
+  it('treats a plain navigation as interactive', () => {
+    expect(isRouterPrefetch(new Headers({ 'x-forwarded-for': '203.0.113.7' }))).toBe(false);
+    expect(isRouterPrefetch(new Headers({ purpose: 'navigate' }))).toBe(false);
+  });
 });
