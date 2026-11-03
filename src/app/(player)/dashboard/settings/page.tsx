@@ -1,5 +1,4 @@
-import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
-import { getSession } from '@/lib/auth/helpers';
+import { requireLivePlayerOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { packExtensions } from '@/lib/pack-extensions';
 import PageContainer from '@/components/ui/PageContainer';
 import AgentSettingsForm from '@/components/player/AgentSettingsForm';
@@ -15,8 +14,7 @@ import { commonMessages } from '@/i18n/messages/common';
 export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
-  const session = await getSession();
-  if (!session?.player) return redirectToSignIn();
+  await requireLivePlayerOrSignIn();
   const t = await getT(commonMessages);
   // Pack extensions (docs/format-packs.md): absent in the example pack.
   const ExtensionSettingsSection = packExtensions.SettingsSection;

@@ -20,6 +20,7 @@ vi.mock('@/lib/auth/helpers', () => ({
   getSession: async () => ({ user: { id: 'p1' } }),
   getSessionPlayer: async () => ({ name: 'Ash' }),
   getLiveAccess: async () => null,
+  getLiveSessionPlayer: async () => ({ playerId: 'p1', name: 'Ash' }),
 }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn(), usePathname: () => '/' }));
 
