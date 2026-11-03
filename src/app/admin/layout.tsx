@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { NOINDEX } from '@/lib/seo/robots';
 import NavBar from '@/components/shared/NavBar';
 import SkipToContent from '@/components/shared/SkipToContent';
 import { MAIN_CONTENT_ID } from '@/lib/ui/main-content';
@@ -9,6 +11,8 @@ import { getLiveAccess } from '@/lib/auth/helpers';
 import { agentEnabledFor, parseAdminAgentEnv } from '@/lib/ai/admin-agent/env';
 import { ENABLE_ADMIN_ASSISTANT } from '@/lib/feature-flags';
 import { extensionAdminLinks, siteNavExtraLinks } from '@/lib/pack-extensions';
+
+export const metadata: Metadata = { robots: NOINDEX };
 
 export default async function AdminLayout({
   children,

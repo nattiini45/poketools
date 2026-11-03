@@ -1,5 +1,9 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { NOINDEX } from '@/lib/seo/robots';
 import { MAIN_CONTENT_ID } from '@/lib/ui/main-content';
+
+export const metadata: Metadata = { robots: NOINDEX };
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -3,6 +3,7 @@ import type en from './en';
 
 export default defineDe<typeof en>()({
   title: 'PokéTools',
+  titleTemplate: '%s | PokéTools',
   description: 'Verwaltung für kompetitive Pokémon-Ligen und -Turniere',
   appleTitle: 'PokéTools',
 });

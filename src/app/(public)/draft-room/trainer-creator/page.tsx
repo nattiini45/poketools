@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { NOINDEX } from '@/lib/seo/robots';
 import { getSessionPlayer } from '@/lib/auth/helpers';
 import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getT } from '@/i18n/server';
@@ -5,6 +7,11 @@ import { trainerCreatorMessages } from '@/i18n/messages/trainer-creator';
 import TrainerCreatorClient from './client';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(trainerCreatorMessages);
+  return { title: t('title'), robots: NOINDEX };
+}
 
 export default async function TrainerCreatorPage() {
   const player = await getSessionPlayer();

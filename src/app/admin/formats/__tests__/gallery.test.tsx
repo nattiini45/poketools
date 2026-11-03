@@ -339,8 +339,8 @@ describe('format gallery: the cap', () => {
 
 describe('format gallery: metadata', () => {
   it.each([
-    ['en', 'Formats | PokéTools'],
-    ['de', 'Formate | PokéTools'],
+    ['en', 'Formats'],
+    ['de', 'Formate'],
   ] as const)('has a page title in %s', async (locale, title) => {
     mocks.locale = locale;
     expect(await generateMetadata()).toEqual({ title });

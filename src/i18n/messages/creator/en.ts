@@ -10,10 +10,10 @@
  */
 export default {
   meta: {
-    hubTitle: 'Creator Hub | PokeTools',
-    studioTitle: 'Cast Studio | PokéTools',
+    hubTitle: 'Creator Hub',
+    studioTitle: 'Cast Studio',
     studioDescription: 'Create and manage broadcast sessions for livecasts, replaycasts, and solo streams',
-    overlaysTitle: 'Overlay Manager | PokeTools',
+    overlaysTitle: 'Overlay Manager',
   },
   nav: {
     studio: 'Studio',

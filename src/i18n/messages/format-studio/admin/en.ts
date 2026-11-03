@@ -12,9 +12,9 @@ export default {
   title: 'Formats',
   subtitle: 'Build leagues and tournaments from formats, or read how existing ones are set up.',
   meta: {
-    galleryTitle: 'Formats | PokéTools',
-    leagueTitle: 'League format | PokéTools',
-    exampleTitle: '{name} | PokéTools',
+    galleryTitle: 'Formats',
+    leagueTitle: 'League format',
+    exampleTitle: '{name}',
   },
   gallery: {
     heading: 'Examples',
