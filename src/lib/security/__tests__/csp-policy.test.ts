@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getScriptNonceFromHeader } from 'next/dist/server/app-render/get-script-nonce-from-header';
 import {
   CSP_REPORT_PATH,
   buildNoncePolicy,
@@ -53,6 +54,43 @@ describe('buildStaticPolicy (the enforced default, #37)', () => {
     expect(dev).not.toHaveProperty('upgrade-insecure-requests');
     expect(dev['script-src']).toContain("'unsafe-eval'");
     expect(prod['script-src']).not.toContain("'unsafe-eval'");
+  });
+});
+
+describe('buildStaticPolicy with a nonce (the enforced default as the render reads it)', () => {
+  const withNonce = buildStaticPolicy({ dev: false, nonce: NONCE });
+  const parsed = directives(withNonce);
+
+  it('lets the render find the nonce in the first script directive, which is the one Next.js reads', () => {
+    expect(getScriptNonceFromHeader(withNonce)).toBe(NONCE);
+    expect(withNonce.split(';')[0]?.trim()).toBe("default-src 'self'");
+    expect(withNonce.split(';').map((part) => part.trim()).find((part) => part.startsWith('script-src'))).toContain(`'nonce-${NONCE}'`);
+  });
+
+  it('keeps script-src exactly as the static policy has it: no nonce, so unsafe-inline stays in force', () => {
+    expect(parsed['script-src']).toEqual(directives(buildStaticPolicy({ dev: false }))['script-src']);
+    expect(parsed['script-src']).toContain("'unsafe-inline'");
+    expect(parsed['script-src']).not.toContain(`'nonce-${NONCE}'`);
+  });
+
+  it('carries the nonce only in script-src-attr, where a nonce does not change what inline handlers may do', () => {
+    expect(parsed['script-src-attr']).toEqual(["'unsafe-inline'", `'nonce-${NONCE}'`]);
+    for (const [name, values] of Object.entries(parsed)) {
+      if (name !== 'script-src-attr') expect(values.join(' '), name).not.toContain('nonce-');
+    }
+  });
+
+  it('is the static policy plus that one directive', () => {
+    const { 'script-src-attr': _attr, ...rest } = parsed;
+    expect(rest).toEqual(directives(buildStaticPolicy({ dev: false })));
+  });
+
+  it('refuses a nonce that could break out of the directive', () => {
+    expect(() => buildStaticPolicy({ dev: false, nonce: "a'; script-src *" })).toThrow(/nonce/);
+  });
+
+  it('is the plain static policy without a nonce', () => {
+    expect(directives(buildStaticPolicy({ dev: false }))).not.toHaveProperty('script-src-attr');
   });
 });
 

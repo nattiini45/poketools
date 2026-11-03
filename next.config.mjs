@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { examplePackProductionWarning } from './scripts/format-pack-notice.mjs';
-import { CSP_REPORT_GROUP, CSP_REPORT_PATH, buildStaticPolicy } from './src/lib/security/csp-policy.mjs';
+import { CSP_REPORT_GROUP, CSP_REPORT_PATH, PROXY_SKIPPED_SOURCES, buildStaticPolicy } from './src/lib/security/csp-policy.mjs';
 
 // Format pack (docs/format-packs.md): `@format-pack` resolves to exactly one pack entry. The
 // private pack (companion overlay, gitignored; fetched by scripts/fetch-private-assets.mjs on the
@@ -42,9 +42,13 @@ if (examplePackWarning) console.warn(examplePackWarning);
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== 'production';
 
-// The enforced policy while CSP_ENFORCE is off. The per-request nonce policy comes from src/proxy.ts; both are built by
-// src/lib/security/csp-policy.mjs (docs/security-patterns.md, "Content-Security-Policy").
-const contentSecurityPolicy = buildStaticPolicy({ dev: isDev });
+// The static policy, for the paths the proxy does not run for. A page gets its policy (and its nonce) from src/proxy.ts,
+// and must not get one here: on Vercel a `Content-Security-Policy` header of this config reaches the render in place of
+// the proxy's, and Next.js then finds no nonce. Both are built by src/lib/security/csp-policy.mjs
+// (docs/security-patterns.md, "Content-Security-Policy").
+const contentSecurityPolicyHeaders = [{ key: 'Content-Security-Policy', value: buildStaticPolicy({ dev: isDev }) }];
+
+const RULES_WITH_OWN_POLICY = new Set(['/api/:path*', '/sw.js', '/sw-routing.js']);
 
 const securityHeaders = [
   {
@@ -74,10 +78,6 @@ const securityHeaders = [
   {
     key: 'Cross-Origin-Opener-Policy',
     value: 'same-origin',
-  },
-  {
-    key: 'Content-Security-Policy',
-    value: contentSecurityPolicy,
   },
   {
     // Names the endpoint that the policy's `report-to` directive points at.
@@ -147,6 +147,7 @@ const nextConfig = {
         source,
         headers: [
           ...securityHeaders,
+          ...contentSecurityPolicyHeaders,
           {
             key: 'Cache-Control',
             value: 'no-cache, no-store, must-revalidate',
@@ -155,8 +156,13 @@ const nextConfig = {
       })),
       {
         source: '/api/:path*',
-        headers: [...securityHeaders, ...apiHeaders],
+        headers: [...securityHeaders, ...contentSecurityPolicyHeaders, ...apiHeaders],
       },
+      // The rest of the paths the proxy skips (assets, images, public folders).
+      ...PROXY_SKIPPED_SOURCES.filter((source) => !RULES_WITH_OWN_POLICY.has(source)).map((source) => ({
+        source,
+        headers: contentSecurityPolicyHeaders,
+      })),
       {
         source: '/:path*',
         headers: securityHeaders,
