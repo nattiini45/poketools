@@ -115,20 +115,24 @@ function withScriptSrc(directives, scriptSrc) {
  * `Content-Security-Policy` header (the report-only header only when that one is absent), and a deployment platform
  * can hand the render the response header of that name instead of the proxy's request override (Vercel does: the
  * static policy of `next.config.mjs` reached the render and no Next script got a nonce). So the enforced header has to
- * carry the nonce itself. It goes in `script-src-attr`, which Next.js reads when it is the first `script-src*`
- * directive: a nonce in `script-src` would make a browser ignore `'unsafe-inline'`, so the policy would stop being the
- * one that is already in force, but a nonce never changes what a `script-src-attr` source list allows.
+ * carry the nonce itself, and a nonce in `script-src` would make a browser ignore its `'unsafe-inline'` (the policy
+ * would stop being the one that is already in force). With a nonce, `Script-Src` is therefore written with a capital:
+ * directive names are case-insensitive to a browser, but Next.js only recognises a lowercase `script-src` and otherwise
+ * reads `default-src`, where the nonce goes. A nonce in `default-src` changes nothing for the directives that fall back
+ * to it (`frame-src`, `media-src`, ...): a nonce-source only ever matches scripts and styles, and both have their own
+ * directive here.
  * @param {{ dev: boolean, nonce?: string }} options
  */
 export function buildStaticPolicy({ dev, nonce }) {
   // Next.js + React 19 dev mode (Fast Refresh, error overlay, stack reconstruction) needs eval(); production does not.
-  const scriptSrc = dev
-    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: ${VERCEL_SCRIPTS}`
-    : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${VERCEL_SCRIPTS}`;
+  const sources = dev
+    ? `'self' 'unsafe-inline' 'unsafe-eval' blob: ${VERCEL_SCRIPTS}`
+    : `'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${VERCEL_SCRIPTS}`;
   const directives = commonDirectives({ dev, enforced: true });
-  if (nonce === undefined) return withScriptSrc(directives, scriptSrc);
+  if (nonce === undefined) return withScriptSrc(directives, `script-src ${sources}`);
   assertNonce(nonce);
-  return withScriptSrc(directives, `script-src-attr 'unsafe-inline' 'nonce-${nonce}'; ${scriptSrc}`);
+  const [, ...rest] = directives;
+  return [`default-src 'self' 'nonce-${nonce}'`, `Script-Src ${sources}`, ...rest].join('; ');
 }
 
 /**

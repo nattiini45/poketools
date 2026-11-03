@@ -39,7 +39,7 @@ describe('proxy request path (#56)', () => {
 const NONCE_IN_POLICY = /'nonce-([A-Za-z0-9+/]+={0,2})'/;
 
 function scriptSrcOf(policy: string | null) {
-  return (policy ?? '').split(';').map((d) => d.trim()).find((d) => d.startsWith('script-src ')) ?? '';
+  return (policy ?? '').split(';').map((d) => d.trim()).find((d) => /^script-src /i.test(d)) ?? '';
 }
 
 describe('proxy CSP (#37)', () => {

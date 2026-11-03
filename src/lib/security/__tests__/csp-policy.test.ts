@@ -59,30 +59,34 @@ describe('buildStaticPolicy (the enforced default, #37)', () => {
 
 describe('buildStaticPolicy with a nonce (the enforced default as the render reads it)', () => {
   const withNonce = buildStaticPolicy({ dev: false, nonce: NONCE });
-  const parsed = directives(withNonce);
+  const plain = directives(buildStaticPolicy({ dev: false }));
+  /** The directives the way a browser reads them: names are case-insensitive. */
+  const asBrowser = Object.fromEntries(Object.entries(directives(withNonce)).map(([name, values]) => [name.toLowerCase(), values]));
 
-  it('lets the render find the nonce in the first script directive, which is the one Next.js reads', () => {
+  it('lets the render find the nonce: Next.js reads the first lowercase script-src, else default-src', () => {
     expect(getScriptNonceFromHeader(withNonce)).toBe(NONCE);
-    expect(withNonce.split(';')[0]?.trim()).toBe("default-src 'self'");
-    expect(withNonce.split(';').map((part) => part.trim()).find((part) => part.startsWith('script-src'))).toContain(`'nonce-${NONCE}'`);
+    expect(withNonce.split(';')[0]?.trim()).toBe(`default-src 'self' 'nonce-${NONCE}'`);
+    expect(withNonce.split(';').some((part) => part.trim().startsWith('script-src'))).toBe(false);
   });
 
-  it('keeps script-src exactly as the static policy has it: no nonce, so unsafe-inline stays in force', () => {
-    expect(parsed['script-src']).toEqual(directives(buildStaticPolicy({ dev: false }))['script-src']);
-    expect(parsed['script-src']).toContain("'unsafe-inline'");
-    expect(parsed['script-src']).not.toContain(`'nonce-${NONCE}'`);
+  it('is, to a browser, the plain static policy: script-src keeps unsafe-inline and has no nonce', () => {
+    expect(asBrowser['script-src']).toEqual(plain['script-src']);
+    expect(asBrowser['script-src']).toContain("'unsafe-inline'");
+    expect(asBrowser['script-src']).not.toContain(`'nonce-${NONCE}'`);
+    const { 'default-src': nonced, ...rest } = asBrowser;
+    const { 'default-src': plainDefault, ...plainRest } = plain;
+    expect(rest).toEqual(plainRest);
+    expect(nonced).toEqual([...plainDefault!, `'nonce-${NONCE}'`]);
   });
 
-  it('carries the nonce only in script-src-attr, where a nonce does not change what inline handlers may do', () => {
-    expect(parsed['script-src-attr']).toEqual(["'unsafe-inline'", `'nonce-${NONCE}'`]);
-    for (const [name, values] of Object.entries(parsed)) {
-      if (name !== 'script-src-attr') expect(values.join(' '), name).not.toContain('nonce-');
+  it('puts the nonce nowhere else, and every directive that falls back to default-src is a kind a nonce never matches', () => {
+    for (const [name, values] of Object.entries(asBrowser)) {
+      if (name !== 'default-src') expect(values.join(' '), name).not.toContain('nonce-');
     }
-  });
-
-  it('is the static policy plus that one directive', () => {
-    const { 'script-src-attr': _attr, ...rest } = parsed;
-    expect(rest).toEqual(directives(buildStaticPolicy({ dev: false })));
+    // A nonce-source only matches script and style requests; both have a directive of their own.
+    for (const name of ['script-src', 'style-src', 'worker-src', 'connect-src', 'img-src', 'font-src', 'object-src']) {
+      expect(asBrowser, name).toHaveProperty(name);
+    }
   });
 
   it('refuses a nonce that could break out of the directive', () => {
@@ -90,10 +94,10 @@ describe('buildStaticPolicy with a nonce (the enforced default as the render rea
   });
 
   it('is the plain static policy without a nonce', () => {
-    expect(directives(buildStaticPolicy({ dev: false }))).not.toHaveProperty('script-src-attr');
+    expect(buildStaticPolicy({ dev: false })).toContain("script-src 'self' 'unsafe-inline'");
+    expect(buildStaticPolicy({ dev: false })).not.toContain('nonce-');
   });
 });
-
 describe('buildNoncePolicy', () => {
   const prod = directives(buildNoncePolicy({ nonce: NONCE, dev: false }));
 

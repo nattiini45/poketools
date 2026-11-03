@@ -13,7 +13,7 @@ import { buildNoncePolicy, buildStaticPolicy, cspEnforced, newNonce } from '@/li
  *  - `x-nonce` and a per-request nonce policy (issue #37). Next.js reads the nonce from the request's
  *    `Content-Security-Policy` header and stamps it on its own scripts; the root layout reads `x-nonce` for the two
  *    inline scripts it writes itself. The nonce policy goes out as `Content-Security-Policy-Report-Only` next to the
- *    enforced static policy (which carries the same nonce in `script-src-attr`, because the render may be handed this
+ *    enforced static policy (which carries the same nonce in `default-src`, because the render may be handed this
  *    response's header, not the request override), or as the enforced `Content-Security-Policy` when `CSP_ENFORCE` is
  *    set. A page gets no policy from `next.config.mjs` (docs/security-patterns.md).
  *  - A signed-out request (no session cookie at all) for a page behind a sign-in guard gets the 307 to sign-in here,
