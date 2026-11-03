@@ -29,9 +29,11 @@ export type WikiIndexColumn<T> = Column<T> & { primary?: boolean };
 
 /** The row's only focusable element; its `::after` covers the row so a click anywhere on it opens the entry. */
 const ROW_LINK_CLASS =
-  'font-medium text-poke-text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus after:absolute after:inset-0 after:content-[""]';
+  'font-medium text-poke-text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus after:absolute after:inset-0 after:z-10 after:content-[""]';
 
-const ROW_PROPS = { className: 'relative' };
+// `isolate` makes the row its own stacking context: the link's `z-10` then stays inside the row (the sticky header and
+// popovers are not covered) and still paints above positioned cell content such as a type badge.
+const ROW_PROPS = { className: 'relative isolate' };
 
 export interface WikiIndexFacetOption {
   value: string;
