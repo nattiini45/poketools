@@ -59,7 +59,7 @@ src/lib/utils/
 ### Hidden Text
 - **File**: `hidden-text.ts`
 - **Purpose**: One definition of the characters a reader cannot see but a model reads (bidi marks, zero-width characters, Unicode tag characters, blank fillers), so every place that strips, counts or refuses them agrees. Pure and dependency-free.
-- **Key Methods**: `hasHiddenChars()`, `stripHiddenChars()`, `countHiddenChars()`, `HIDDEN_CLASS_BODY`. Its callers are in the Admin Assistant (`src/lib/ai/admin-agent/`, [i-agent.md](./ai-agent.md)).
+- **Key Methods**: `hasHiddenChars()`, `stripHiddenChars()`, `countHiddenChars()`, `HIDDEN_CLASS_BODY`. Its callers are in the Admin Assistant (`src/lib/ai/admin-agent/`, [ai-agent.md](./ai-agent.md)).
 
 ### Dates and numbers
 Dates and numbers render through the formatter of [`i18n.md`](./i18n.md) (`src/i18n/format.ts`, `useFormatter()`, `<LocalTime>`); `src/lib/utils` holds no date helpers.

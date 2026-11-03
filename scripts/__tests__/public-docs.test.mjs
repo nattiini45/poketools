@@ -423,6 +423,26 @@ const citingDocs = () =>
       !DEAD_PATH_EXEMPT.some((e) => e.match(f))
   );
 
+describe('docs hold no control characters', () => {
+  // A "\a" in a replacement string (a "\a" escape turned into BEL) corrupts a link label or a name.
+  const CONTROL = {
+    test: (text) => [...text].some((ch) => {
+      const code = ch.charCodeAt(0);
+      return (code < 32 && ![9, 10, 13].includes(code)) || code === 127;
+    }),
+  };
+
+  it('no markdown file under docs/, openwiki/ or the root carries one', () => {
+    const bad = publicFiles('docs', 'openwiki', ':(glob)*.md', ':(glob)**/AGENTS.md')
+      .filter((f) => f.endsWith('.md') && CONTROL.test(read(f)));
+    expect(bad).toEqual([]);
+  });
+
+  it('flags a planted BEL character', () => {
+    expect(CONTROL.test('[\u0007i-agent.md](./ai-agent.md)')).toBe(true);
+    expect(CONTROL.test('line one\r\nline two\tcolumn')).toBe(false);
+  });
+});
 describe('docs cite source paths that exist', () => {
   it('scans the canonical instruction files and the module docs', () => {
     const docs = citingDocs();
