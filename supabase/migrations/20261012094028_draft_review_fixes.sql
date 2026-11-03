@@ -1,4 +1,4 @@
--- Draft review fixes (Kilo review, group K2-sql).
+-- Draft review fixes (Kilo review of PR #73, group K2-sql).
 --
 -- M5 (20261012024916_draft_rpcs.sql), M6 (20261012025023_redraft_rpcs.sql) and M4 (20261012024254_epb_progress_sources.sql)
 -- are applied and immutable; this migration CREATE OR REPLACEs three functions with the same signatures, search_path and
