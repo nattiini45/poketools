@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { unstable_doesMiddlewareMatch as doesProxyMatch } from 'next/experimental/testing/server';
 import { buildStaticPolicy } from '@/lib/security/csp-policy.mjs';
-import { pageNotFoundGate } from '@/lib/seo/page-gate';
+import { pageGate } from '@/lib/seo/page-gate';
 import { config, proxy } from '../proxy';
 
-vi.mock('@/lib/seo/page-gate', () => ({ pageNotFoundGate: vi.fn(async () => null) }));
+vi.mock('@/lib/seo/page-gate', () => ({ pageGate: vi.fn(async () => ({ status: null, shareLimit: null })) }));
 
 function pageRequest(path: string, headers: Record<string, string> = {}) {
   return new NextRequest(`https://poketools.test${path}`, { headers });
@@ -249,7 +249,8 @@ describe('proxy matcher', () => {
   const matches = (url: string) => doesProxyMatch({ config, nextConfig: {}, url });
 
   it('runs for pages', () => {
-    for (const url of ['/', '/leagues', '/dashboard/settings', '/broadcast/match/m1/live', '/auth/signin']) {
+    // The share page trusts `x-poketools-share-limit` only because the proxy runs for every request to it.
+    for (const url of ['/', '/leagues', '/dashboard/settings', '/broadcast/match/m1/live', '/auth/signin', '/teams/shared/00000000-0000-4000-8000-000000000065']) {
       expect(matches(url), url).toBe(true);
     }
   });
@@ -273,17 +274,17 @@ describe('proxy matcher', () => {
 describe('proxy missing page 404 (#58, #65)', () => {
   const SHARE_LINK_ID = '00000000-0000-4000-8000-000000000065';
 
-  afterEach(() => vi.mocked(pageNotFoundGate).mockReset().mockResolvedValue(null));
+  afterEach(() => vi.mocked(pageGate).mockReset().mockResolvedValue({ status: null, shareLimit: null }));
 
   it('rewrites a dead team page to the not-found page with a 404 and the same nonce policy', async () => {
-    vi.mocked(pageNotFoundGate).mockResolvedValue('not_found');
+    vi.mocked(pageGate).mockResolvedValue({ status: 'not_found', shareLimit: null });
     const response = await proxy(pageRequest(`/teams/shared/${SHARE_LINK_ID}`));
     expect(response.status).toBe(404);
     expect(response.headers.get('x-middleware-rewrite')).toContain('/_not-found');
     const nonce = NONCE_IN_POLICY.exec(response.headers.get('content-security-policy-report-only') ?? '')?.[1];
     expect(nonce).toBeTruthy();
     expect(forwardedRequestHeader(response, 'x-nonce')).toBe(nonce);
-    expect(pageNotFoundGate).toHaveBeenCalledWith(`/teams/shared/${SHARE_LINK_ID}`, expect.any(Headers));
+    expect(pageGate).toHaveBeenCalledWith(`/teams/shared/${SHARE_LINK_ID}`, expect.any(Headers));
   });
 
   it('lets a live team page through to the page', async () => {
@@ -292,10 +293,35 @@ describe('proxy missing page 404 (#58, #65)', () => {
     expect(response.headers.get('x-middleware-next')).toBe('1');
   });
 
+  it('tells the page it charged a share link, so the page does not charge it again', async () => {
+    vi.mocked(pageGate).mockResolvedValue({ status: null, shareLimit: { allowed: true } });
+    const response = await proxy(pageRequest(`/teams/shared/${SHARE_LINK_ID}`));
+    expect(forwardedRequestHeader(response, 'x-poketools-share-limit')).toBe('allowed');
+  });
+
+  it('hands the page the retry time of a spent allowance', async () => {
+    vi.mocked(pageGate).mockResolvedValue({ status: null, shareLimit: { allowed: false, retryAfterSeconds: 41 } });
+    const response = await proxy(pageRequest(`/teams/shared/${SHARE_LINK_ID}`));
+    expect(forwardedRequestHeader(response, 'x-poketools-share-limit')).toBe('denied:41');
+  });
+
+  it('never forwards a share-limit header the client sent when nothing was charged', async () => {
+    for (const path of [`/teams/shared/${SHARE_LINK_ID}`, '/leagues', `/teams/library/${SHARE_LINK_ID}`]) {
+      const response = await proxy(pageRequest(path, { 'x-poketools-share-limit': 'allowed' }));
+      expect(forwardedRequestHeader(response, 'x-poketools-share-limit'), path).toBeNull();
+    }
+  });
+
+  it('replaces a spoofed share-limit header with its own verdict', async () => {
+    vi.mocked(pageGate).mockResolvedValue({ status: null, shareLimit: { allowed: false, retryAfterSeconds: 7 } });
+    const response = await proxy(pageRequest(`/teams/shared/${SHARE_LINK_ID}`, { 'x-poketools-share-limit': 'allowed' }));
+    expect(forwardedRequestHeader(response, 'x-poketools-share-limit')).toBe('denied:7');
+  });
+
   it('checks reads only: a POST goes straight to the page', async () => {
-    vi.mocked(pageNotFoundGate).mockResolvedValue('not_found');
+    vi.mocked(pageGate).mockResolvedValue({ status: 'not_found', shareLimit: null });
     const response = await proxy(new NextRequest(`https://poketools.test/teams/shared/${SHARE_LINK_ID}`, { method: 'POST' }));
     expect(response.status).toBe(200);
-    expect(pageNotFoundGate).not.toHaveBeenCalled();
+    expect(pageGate).not.toHaveBeenCalled();
   });
 });

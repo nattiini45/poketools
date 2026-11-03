@@ -3,7 +3,8 @@ import { isUnknownWikiOverlayName } from '@/lib/broadcast/wiki-overlay-lookup';
 import { REQUEST_PATH_HEADER, requestPathOf } from '@/lib/auth/request-path';
 import { signInPath } from '@/lib/auth/safe-callback-url';
 import { hasSessionCookie, isSignInGatedPath } from '@/lib/auth/sign-in-gate';
-import { pageNotFoundGate } from '@/lib/seo/page-gate';
+import { pageGate, type PageGateResult } from '@/lib/seo/page-gate';
+import { formatShareLimitMark, SHARE_LIMIT_HEADER } from '@/lib/seo/share-limit-marker';
 import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newNonce } from '@/lib/security/csp-policy.mjs';
 
 /**
@@ -21,7 +22,9 @@ import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newN
  *    because the guard's own redirect comes after the root `loading.tsx` has committed a 200 (`sign-in-gate.ts`).
  *  - An unknown name under `/broadcast/wiki/{moves,abilities,items,tera}/` gets an empty 404 here.
  *  - A page whose subject is missing (a malformed, disabled or unknown team link, an unknown league, tournament, species
- *    or wiki entry) is rewritten to the not-found page with a real 404 (`pageNotFoundGate`, `src/lib/seo/page-gate.ts`).
+ *    or wiki entry) is rewritten to the not-found page with a real 404 (`pageGate`, `src/lib/seo/page-gate.ts`).
+ *  - A shared team page request spends the common `team-shared` allowance here, once, and the page is told through
+ *    `x-poketools-share-limit` (`src/lib/seo/share-limit-marker.ts`).
  */
 export async function proxy(request: NextRequest) {
   const dev = process.env.NODE_ENV !== 'production';
@@ -65,9 +68,17 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set('content-security-policy', policy);
   requestHeaders.delete('content-security-policy-report-only');
 
+  // The share page only counts a request the proxy did not (`share-limit-marker.ts`), so the header is always the
+  // proxy's own verdict: the delete above the gate drops a client-supplied one, and only a charge sets it again.
+  requestHeaders.delete(SHARE_LIMIT_HEADER);
+  const gate: PageGateResult =
+    request.method === 'GET' || request.method === 'HEAD'
+      ? await pageGate(request.nextUrl.pathname, request.headers)
+      : { status: null, shareLimit: null };
+  if (gate.shareLimit) requestHeaders.set(SHARE_LIMIT_HEADER, formatShareLimitMark(gate.shareLimit));
+
   // The not-found page renders for the rewritten request, so it gets the same nonce and policy as any page.
-  const pageMissing =
-    (request.method === 'GET' || request.method === 'HEAD') && (await pageNotFoundGate(request.nextUrl.pathname, request.headers)) === 'not_found';
+  const pageMissing = gate.status === 'not_found';
   const response = pageMissing
     ? NextResponse.rewrite(new URL('/_not-found', request.url), { request: { headers: requestHeaders }, status: 404 })
     : NextResponse.next({ request: { headers: requestHeaders } });
