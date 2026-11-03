@@ -48,6 +48,7 @@ vi.mock('@/lib/supabase/queries/drafts-redraft', () => ({
   listRedraftSubmissions: mocks.listRedraftSubmissions,
 }));
 vi.mock('@/lib/auth/helpers', () => ({ getSessionPlayer: mocks.getSessionPlayer }));
+vi.mock('@/lib/auth/redirect-to-sign-in', () => ({ currentSignInPath: async () => '/auth/signin?callbackUrl=%2Fleagues%2Fs1%2Fredraft' }));
 vi.mock('@/lib/draft/snapshot', () => ({ getDraftSnapshot: mocks.getDraftSnapshot }));
 vi.mock('@/components/draft-redraft/RedraftCenter', () => ({ default: function RedraftCenterStub() { return null; } }));
 
@@ -102,6 +103,22 @@ const SNAPSHOT = {
   ],
   redraft: { phase: 'submissions', deadline_at: '2026-10-12T21:59:00.000Z', published_at: null, drops: null, viewer_slots: [] },
 } as unknown as DraftSnapshotDTO;
+
+function hrefsOf(node: ReactNode): string[] {
+  const found: string[] = [];
+  const visit = (n: ReactNode) => {
+    if (Array.isArray(n)) {
+      n.forEach(visit);
+      return;
+    }
+    if (isValidElement<Record<string, unknown>>(n)) {
+      if (typeof n.props.href === 'string') found.push(n.props.href);
+      visit(n.props.children as ReactNode);
+    }
+  };
+  visit(node);
+  return found;
+}
 
 function findByType(node: ReactNode, type: unknown): ReactElement<Record<string, unknown>>[] {
   const found: ReactElement<Record<string, unknown>>[] = [];
@@ -209,6 +226,7 @@ describe('RedraftPage: sign-in prompt (EN/DE)', () => {
     mocks.getSessionPlayer.mockResolvedValue(null);
     const tree = await render();
     expect(textOf(tree)).toContain('Sign in to choose the lines you drop.');
+    expect(hrefsOf(tree)).toContain('/auth/signin?callbackUrl=%2Fleagues%2Fs1%2Fredraft');
     const [center] = findByType(tree, RedraftCenter);
     expect(center.props.viewer).toEqual({ playerId: null });
     expect(mocks.getDraftSnapshot).toHaveBeenCalledWith(REDRAFT_ID, null, { tick: false });

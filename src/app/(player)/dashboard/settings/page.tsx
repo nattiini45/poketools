@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getSession } from '@/lib/auth/helpers';
 import { packExtensions } from '@/lib/pack-extensions';
 import PageContainer from '@/components/ui/PageContainer';
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   const session = await getSession();
-  if (!session?.player) redirect('/auth/signin');
+  if (!session?.player) return redirectToSignIn();
   const t = await getT(commonMessages);
   // Pack extensions (docs/format-packs.md): absent in the example pack.
   const ExtensionSettingsSection = packExtensions.SettingsSection;

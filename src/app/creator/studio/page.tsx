@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import { requireCreator } from '@/lib/auth/helpers';
-import { redirect } from 'next/navigation';
+import { gateCreatorPage } from '@/components/shared/creator-page-gate';
 import SessionManager from '@/components/creator/studio/SessionManager';
 import { getT } from '@/i18n/server';
 import { creatorMessages } from '@/i18n/messages/creator';
@@ -14,11 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function CastStudioPage() {
-  try {
-    await requireCreator();
-  } catch {
-    redirect('/');
-  }
+  const gate = await gateCreatorPage();
+  if (!gate.ok) return gate.view;
 
   const t = await getT(creatorMessages);
 

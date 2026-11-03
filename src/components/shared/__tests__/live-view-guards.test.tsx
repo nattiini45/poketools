@@ -31,6 +31,7 @@ const cookieJar = vi.hoisted(() => ({ locale: undefined as string | undefined })
 vi.mock('@/lib/auth/helpers', () => auth);
 vi.mock('next/navigation', () => ({ redirect }));
 vi.mock('next/headers', () => ({
+  headers: async () => ({ get: (name: string) => (name === 'x-poketools-path' ? '/admin/formats?tab=x' : null) }),
   cookies: async () => ({
     get: (name: string) =>
       name === 'plc_locale' && cookieJar.locale !== undefined ? { name, value: cookieJar.locale } : undefined,
@@ -44,6 +45,7 @@ vi.mock('@/components/admin/AdminSidebar', () => ({ default: () => null }));
 
 import AdminGuard from '../AdminGuard';
 import CreatorGuard from '../CreatorGuard';
+import AuthGuard from '../AuthGuard';
 import AdminLayout from '@/app/admin/layout';
 
 const ADMIN_SESSION = { player: { id: 'p1', isAdmin: true, isCreator: true } };
@@ -101,7 +103,9 @@ describe('AdminGuard', () => {
 
   it('sends a signed-out visitor to sign-in', async () => {
     auth.getLiveAccess.mockResolvedValue(null);
-    await expect(AdminGuard({ children: 'SECRET' })).rejects.toThrow('redirect:/api/auth/signin');
+    await expect(AdminGuard({ children: 'SECRET' })).rejects.toThrow(
+      'redirect:/auth/signin?callbackUrl=%2Fadmin%2Fformats%3Ftab%3Dx',
+    );
   });
 
   it('fails closed when the live read fails', async () => {
@@ -128,6 +132,13 @@ describe('CreatorGuard', () => {
     expect(html).not.toContain('SECRET');
   });
 
+  it('sends a signed-out visitor to sign-in with the page they wanted', async () => {
+    auth.getLiveAccess.mockResolvedValue(null);
+    await expect(CreatorGuard({ children: 'SECRET' })).rejects.toThrow(
+      'redirect:/auth/signin?callbackUrl=%2Fadmin%2Fformats%3Ftab%3Dx',
+    );
+  });
+
   it('renders for a live creator (site admins included via isCreator)', async () => {
     auth.getLiveAccess.mockResolvedValue(access({ isCreator: true }));
     expect(renderToStaticMarkup(await CreatorGuard({ children: 'SECRET' }))).toBe('SECRET');
@@ -151,5 +162,18 @@ describe('admin layout', () => {
 
     auth.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true, isSiteAdmin: true, isSuperadmin: true }));
     expect(findRoles(await AdminLayout({ children: null }))).toMatchObject({ isSiteAdmin: true, isSuperadmin: true });
+  });
+});
+
+describe('AuthGuard', () => {
+  it('sends a signed-out visitor to sign-in with the page they wanted', async () => {
+    auth.getSession.mockResolvedValue(null);
+    await expect(AuthGuard({ children: 'SECRET' })).rejects.toThrow(
+      'redirect:/auth/signin?callbackUrl=%2Fadmin%2Fformats%3Ftab%3Dx',
+    );
+  });
+
+  it('renders for a signed-in visitor', async () => {
+    expect(renderToStaticMarkup(await AuthGuard({ children: 'SECRET' }))).toBe('SECRET');
   });
 });
