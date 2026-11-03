@@ -7,6 +7,9 @@ import { pageGate, type PageGateResult } from '@/lib/seo/page-gate';
 import { formatShareLimitMark, SHARE_LIMIT_HEADER } from '@/lib/seo/share-limit-marker';
 import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newNonce } from '@/lib/security/csp-policy.mjs';
 
+const TRANSPARENT_404_DOCUMENT =
+  '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><style>html,body{background:transparent}</style></head><body></body></html>';
+
 /**
  * The single proxy (Next allows one `proxy.ts` per app). It only reads the request URL and writes headers, so it never
  * reads the session: the root layout's "never read the session here" rule still holds.
@@ -20,7 +23,10 @@ import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newN
  *    set. A page gets no policy from `next.config.mjs` (docs/security-patterns.md).
  *  - A signed-out request (no session cookie at all) for a page behind a sign-in guard gets the 307 to sign-in here,
  *    because the guard's own redirect comes after the root `loading.tsx` has committed a 200 (`sign-in-gate.ts`).
- *  - An unknown name under `/broadcast/wiki/{moves,abilities,items,tera}/` gets an empty 404 here.
+ *  - An unknown name under `/broadcast/wiki/{moves,abilities,items,tera}/` gets a 404 with a transparent document here.
+ *  - A router prefetch (`next-router-prefetch` or `purpose: prefetch`) skips the proxy altogether (see the matcher): it
+ *    returns an RSC payload, not a document, so it needs no nonce policy, and the real navigation that follows runs
+ *    every step above.
  *  - A page whose subject is missing (a malformed, disabled or unknown team link, an unknown league, tournament, species
  *    or wiki entry) is rewritten to the not-found page with a real 404 (`pageGate`, `src/lib/seo/page-gate.ts`).
  *  - A shared team page request spends the common `team-shared` allowance here, once, and the page is told through
@@ -35,8 +41,9 @@ export async function proxy(request: NextRequest) {
     isUnknownWikiOverlayName(request.nextUrl.pathname)
   ) {
     // The root loading.tsx makes every page stream with 200 before `notFound()` runs, so the status is decided here.
-    // The body stays empty: an overlay sits on a transparent OBS browser source.
-    return new NextResponse(null, {
+    // The body is a transparent document, never empty: Chromium (and OBS's browser source) replaces a 4xx response
+    // with an empty body by its own opaque "HTTP ERROR 404" page, and an overlay sits on a transparent browser source.
+    return new NextResponse(TRANSPARENT_404_DOCUMENT, {
       status: 404,
       headers: {
         'content-type': 'text/html; charset=utf-8',
@@ -96,9 +103,18 @@ export async function proxy(request: NextRequest) {
 // Pages only. The API answers with its own headers, `_next/static` and `_next/image` are immutable assets, and the
 // `public/` folders and the service worker files are served as they are. Folders are skipped at a segment boundary and
 // files exactly, so a lookalike such as `/favicon.ico/x` is still a page here and gets a policy, in step with the
-// `next.config.mjs` sources of `PROXY_SKIPPED_SOURCES`.
+// `next.config.mjs` sources of `PROXY_SKIPPED_SOURCES`. A router prefetch is skipped too (the `missing` headers, from
+// the Next CSP guide): it gets no nonce and no gate, and neither is needed because the navigation it prepares runs the
+// proxy in full. The path complement in `PROXY_SKIPPED_SOURCES` is unchanged; a prefetch is an RSC payload, not a page.
 export const config = {
   matcher: [
-    '/((?!(?:api|_next/static|avatar|basis|characters|fonts|models|pwa|textures)(?:/|$)|(?:_next/image|favicon\\.ico|manifest\\.webmanifest|offline\\.html|sw\\.js|sw-routing\\.js)$).*)',
+    {
+      source:
+        '/((?!(?:api|_next/static|avatar|basis|characters|fonts|models|pwa|textures)(?:/|$)|(?:_next/image|favicon\\.ico|manifest\\.webmanifest|offline\\.html|sw\\.js|sw-routing\\.js)$).*)',
+      missing: [
+        { type: 'header', key: 'next-router-prefetch' },
+        { type: 'header', key: 'purpose', value: 'prefetch' },
+      ],
+    },
   ],
 };
