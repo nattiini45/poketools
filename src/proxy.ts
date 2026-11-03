@@ -4,7 +4,7 @@ import { REQUEST_PATH_HEADER, requestPathOf } from '@/lib/auth/request-path';
 import { signInPath } from '@/lib/auth/safe-callback-url';
 import { hasSessionCookie, isSignInGatedPath } from '@/lib/auth/sign-in-gate';
 import { pageGate, type PageGateResult } from '@/lib/seo/page-gate';
-import { formatShareLimitMark, SHARE_LIMIT_HEADER } from '@/lib/seo/share-limit-marker';
+import { formatShareLimitMark, isRouterPrefetch, SHARE_LIMIT_HEADER } from '@/lib/seo/share-limit-marker';
 import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newNonce } from '@/lib/security/csp-policy.mjs';
 
 const TRANSPARENT_404_DOCUMENT =
@@ -24,9 +24,10 @@ const TRANSPARENT_404_DOCUMENT =
  *  - A signed-out request (no session cookie at all) for a page behind a sign-in guard gets the 307 to sign-in here,
  *    because the guard's own redirect comes after the root `loading.tsx` has committed a 200 (`sign-in-gate.ts`).
  *  - An unknown name under `/broadcast/wiki/{moves,abilities,items,tera}/` gets a 404 with a transparent document here.
- *  - A router prefetch (`next-router-prefetch` or `purpose: prefetch`) skips the proxy altogether (see the matcher): it
- *    returns an RSC payload, not a document, so it needs no nonce policy, and the real navigation that follows runs
- *    every step above.
+ *  - A router prefetch (`next-router-prefetch` or `purpose: prefetch`) returns an RSC payload, not a document, so it gets
+ *    no nonce policy, sign-in redirect, 404 gate or share-link charge (the real navigation that follows runs every
+ *    step). The proxy still runs for it, only to overwrite `x-poketools-path` and drop `x-nonce`, the CSP request
+ *    headers and `x-poketools-share-limit`, so a client cannot choose the return path or fake a share verdict.
  *  - A page whose subject is missing (a malformed, disabled or unknown team link, an unknown league, tournament, species
  *    or wiki entry) is rewritten to the not-found page with a real 404 (`pageGate`, `src/lib/seo/page-gate.ts`).
  *  - A shared team page request spends the common `team-shared` allowance here, once, and the page is told through
@@ -35,6 +36,18 @@ const TRANSPARENT_404_DOCUMENT =
 export async function proxy(request: NextRequest) {
   const dev = process.env.NODE_ENV !== 'production';
   const previewToolbar = isVercelPreview();
+
+  if (isRouterPrefetch(request.headers)) {
+    // Only the headers a page trusts are rewritten here. A prefetch renders an RSC payload, so it gets no nonce, policy,
+    // gate or redirect, but it still reaches the same pages, and a client-supplied `x-poketools-path` or share verdict
+    // must not survive into them.
+    const prefetchHeaders = new Headers(request.headers);
+    prefetchHeaders.set(REQUEST_PATH_HEADER, requestPathOf(request.nextUrl));
+    for (const name of ['x-nonce', 'content-security-policy', 'content-security-policy-report-only', SHARE_LIMIT_HEADER]) {
+      prefetchHeaders.delete(name);
+    }
+    return NextResponse.next({ request: { headers: prefetchHeaders } });
+  }
 
   if (
     (request.method === 'GET' || request.method === 'HEAD') &&
@@ -103,18 +116,11 @@ export async function proxy(request: NextRequest) {
 // Pages only. The API answers with its own headers, `_next/static` and `_next/image` are immutable assets, and the
 // `public/` folders and the service worker files are served as they are. Folders are skipped at a segment boundary and
 // files exactly, so a lookalike such as `/favicon.ico/x` is still a page here and gets a policy, in step with the
-// `next.config.mjs` sources of `PROXY_SKIPPED_SOURCES`. A router prefetch is skipped too (the `missing` headers, from
-// the Next CSP guide): it gets no nonce and no gate, and neither is needed because the navigation it prepares runs the
-// proxy in full. The path complement in `PROXY_SKIPPED_SOURCES` is unchanged; a prefetch is an RSC payload, not a page.
+// `next.config.mjs` sources of `PROXY_SKIPPED_SOURCES`. A router prefetch is NOT excluded here: a request that skipped
+// the proxy would hand the page whatever `x-poketools-path` the client sent, so the proxy answers it itself (first
+// branch above) with the trusted headers only.
 export const config = {
   matcher: [
-    {
-      source:
-        '/((?!(?:api|_next/static|avatar|basis|characters|fonts|models|pwa|textures)(?:/|$)|(?:_next/image|favicon\\.ico|manifest\\.webmanifest|offline\\.html|sw\\.js|sw-routing\\.js)$).*)',
-      missing: [
-        { type: 'header', key: 'next-router-prefetch' },
-        { type: 'header', key: 'purpose', value: 'prefetch' },
-      ],
-    },
+    '/((?!(?:api|_next/static|avatar|basis|characters|fonts|models|pwa|textures)(?:/|$)|(?:_next/image|favicon\\.ico|manifest\\.webmanifest|offline\\.html|sw\\.js|sw-routing\\.js)$).*)',
   ],
 };

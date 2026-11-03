@@ -266,7 +266,7 @@ Token usage in className:
   ([Site palettes](#site-palettes)).
 - The 18 Pokémon type colors live in `tailwind.config.ts` as HSL-tuned
   `poke-type-*` classes (normal … fairy); per-type contrast pairings
-  (`text-white` vs `text-poke-text-primary`) are fixed in `TypeBadge.tsx`.
+  (`text-white` vs `text-poke-text-primary`) are fixed in `TypeBadgeView.tsx` (the hook-free half that `TypeBadge.tsx` wraps with the localized label; a server component renders the view directly so no name table reaches the client).
 - When adding a new primitive, document it in the table above.
 
 ## Site palettes

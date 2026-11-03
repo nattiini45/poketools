@@ -10,7 +10,7 @@ const MATCH_ID = '33333333-3333-4333-8333-333333333333';
 const auth = vi.hoisted(() => ({
   getSession: vi.fn(),
   getSessionPlayer: vi.fn(),
-  getLiveSessionPlayer: vi.fn(),
+  getLiveAccess: vi.fn(),
   isSuperadminNow: vi.fn(),
 }));
 const reads = vi.hoisted(() => ({
@@ -25,6 +25,7 @@ const redirect = vi.hoisted(() =>
 );
 
 vi.mock('@/lib/auth/helpers', () => auth);
+vi.mock('next/headers', () => ({ headers: async () => ({ get: () => null }) }));
 vi.mock('next/navigation', () => ({ redirect, notFound: () => { throw new Error('NOT_FOUND'); } }));
 vi.mock('next/link', () => ({ default: () => null }));
 vi.mock('@/i18n/server', () => ({ getT: async () => (key: string) => key }));
@@ -60,7 +61,7 @@ beforeEach(() => {
 
 describe.each(pages)('%s page', (_name, render) => {
   it('does not open for a valid token whose player link is gone', async () => {
-    auth.getLiveSessionPlayer.mockResolvedValue(null);
+    auth.getLiveAccess.mockResolvedValue({ player: null });
     await expect(render()).rejects.toThrow('redirect:/');
     expect(reads.getMatchById).not.toHaveBeenCalled();
   });
@@ -68,13 +69,13 @@ describe.each(pages)('%s page', (_name, render) => {
 
 describe('broadcast hub', () => {
   it('shows the not-registered note and reads no matches for a stale token player', async () => {
-    auth.getLiveSessionPlayer.mockResolvedValue(null);
+    auth.getLiveAccess.mockResolvedValue({ player: null });
     await BroadcastHubPage();
     expect(reads.getMatchesByPlayer).not.toHaveBeenCalled();
   });
 
   it('reads the matches of the live player id', async () => {
-    auth.getLiveSessionPlayer.mockResolvedValue({ playerId: 'live' });
+    auth.getLiveAccess.mockResolvedValue({ player: { playerId: 'live' } });
     await BroadcastHubPage();
     expect(reads.getMatchesByPlayer).toHaveBeenCalledWith('live');
   });

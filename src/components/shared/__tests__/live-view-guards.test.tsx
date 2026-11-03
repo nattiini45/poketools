@@ -167,13 +167,20 @@ describe('admin layout', () => {
 
 describe('AuthGuard', () => {
   it('sends a signed-out visitor to sign-in with the page they wanted', async () => {
-    auth.getSession.mockResolvedValue(null);
+    auth.getLiveAccess.mockResolvedValue(null);
     await expect(AuthGuard({ children: 'SECRET' })).rejects.toThrow(
       'redirect:/auth/signin?callbackUrl=%2Fadmin%2Fformats%3Ftab%3Dx',
     );
   });
 
-  it('renders for a signed-in visitor', async () => {
+  it('sends a revoked session to sign-in even though the token copy still says signed in', async () => {
+    auth.getSession.mockResolvedValue(ADMIN_SESSION);
+    auth.getLiveAccess.mockResolvedValue(null);
+    await expect(AuthGuard({ children: 'SECRET' })).rejects.toThrow('redirect:/auth/signin?callbackUrl=');
+  });
+
+  it('renders for a signed-in visitor, with or without a linked player', async () => {
+    auth.getLiveAccess.mockResolvedValue(access({}));
     expect(renderToStaticMarkup(await AuthGuard({ children: 'SECRET' }))).toBe('SECRET');
   });
 });

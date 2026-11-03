@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
-import { getLiveSessionPlayer } from '@/lib/auth/helpers';
+import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import GameList from '@/components/match/GameList';
@@ -22,7 +22,7 @@ interface PageProps {
 
 export default async function ConfirmMatchPage({ params }: PageProps) {
   const { mid } = await params;
-  const player = await getLiveSessionPlayer();
+  const { player } = await requireLiveIdentityOrSignIn();
   if (!player) redirect('/');
 
   const match = await getMatchById(mid);
