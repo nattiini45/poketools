@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAnyAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { seasonCreateRequestSchema, formatZodErrors } from '@/lib/validation';
 import { listSeasons, listArchivedSeasons, createSeason } from '@/lib/supabase/queries/seasons';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
@@ -167,10 +168,16 @@ export async function POST(request: NextRequest) {
               metadata: { point_buy_list_id: activeList.id },
             });
           } catch (bindErr) {
-            console.error(bindErr);
+            logger.error('api/seasons', 'auto-bind of the active point-buy list version failed', {
+              seasonId: season.id,
+              pointBuyListId: activeList.id,
+              error: bindErr,
+            });
           }
         } else {
-          console.warn('No active point-buy list version; EPB season created unbound:', season.id);
+          logger.warn('api/seasons', 'No active point-buy list version; EPB season created unbound', {
+            seasonId: season.id,
+          });
         }
       }
 

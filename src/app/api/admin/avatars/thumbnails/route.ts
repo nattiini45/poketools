@@ -4,14 +4,13 @@ import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { formatZodErrors } from '@/lib/validation';
-import { supabase } from '@/lib/supabase/client';
+import { getAvatarBucket } from '@/lib/supabase/storage/avatars';
 import {
   listGalleryItemsForThumbs,
   listPlayersNeedingAvatarThumb,
   swapPlayerAvatarUrl,
 } from '@/lib/supabase/queries/avatar-gallery';
 import {
-  AVATAR_BUCKET,
   avatarOriginalPath,
   avatarStoragePathFromUrl,
   avatarThumbPath,
@@ -26,6 +25,7 @@ import {
 } from '@/lib/avatar/thumbnail';
 import { expirePublicTags, publicTags } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 
 /**
@@ -117,7 +117,7 @@ async function readJsonBody(request: NextRequest): Promise<{ ok: true; value: un
   try {
     return { ok: true, value: JSON.parse(text) };
   } catch (err) {
-    console.error('[admin/avatars/thumbnails] Request body is not valid JSON:', err);
+    logger.error('admin/avatars/thumbnails', 'Request body is not valid JSON', { error: err });
     return { ok: false };
   }
 }
@@ -147,7 +147,9 @@ async function backfillPlayers(bucket: AvatarBucket, options: BatchOptions): Pro
     const classified = originalPathFor(row.avatar_url, options.origin);
     if ('reason' in classified) {
       if (classified.reason === 'unsafe_path') {
-        console.warn(`[admin/avatars/thumbnails] player ${row.id}: unsafe_path, skipped without touching Storage`);
+        logger.warn('admin/avatars/thumbnails', 'unsafe_path, skipped without touching Storage', {
+          playerId: row.id,
+        });
       }
       items.push({ id: row.id, action: 'skipped', reason: classified.reason });
       continue;
@@ -171,7 +173,7 @@ async function backfillPlayers(bucket: AvatarBucket, options: BatchOptions): Pro
       try {
         swapped = await swapPlayerAvatarUrl(row.id, row.avatar_url, thumbUrl);
       } catch (err) {
-        console.error(`[admin/avatars/thumbnails] player ${row.id}: avatar_url update failed:`, err);
+        logger.error('admin/avatars/thumbnails', 'avatar_url update failed', { playerId: row.id, error: err });
         items.push({ ...base, action: 'failed', reason: 'update_failed' });
         continue;
       }
@@ -187,7 +189,7 @@ async function backfillPlayers(bucket: AvatarBucket, options: BatchOptions): Pro
       });
     } catch (err) {
       const reason = failureReason(err, 'thumbnail');
-      console.error(`[admin/avatars/thumbnails] player ${row.id}: ${reason}:`, err);
+      logger.error('admin/avatars/thumbnails', reason, { playerId: row.id, error: err });
       items.push({ ...base, action: 'failed', reason });
     }
   }
@@ -203,7 +205,9 @@ async function backfillGallery(bucket: AvatarBucket, options: BatchOptions): Pro
     const classified = originalPathFor(row.image_url, options.origin);
     if ('reason' in classified) {
       if (classified.reason === 'unsafe_path') {
-        console.warn(`[admin/avatars/thumbnails] gallery ${row.id}: unsafe_path, skipped without touching Storage`);
+        logger.warn('admin/avatars/thumbnails', 'unsafe_path, skipped without touching Storage', {
+          galleryId: row.id,
+        });
       }
       items.push({ id: row.id, action: 'skipped', reason: classified.reason });
       continue;
@@ -227,7 +231,7 @@ async function backfillGallery(bucket: AvatarBucket, options: BatchOptions): Pro
         : { ...base, action: 'skipped', reason: 'thumbnail_exists' });
     } catch (err) {
       const reason = failureReason(err, 'thumbnail');
-      console.error(`[admin/avatars/thumbnails] gallery ${row.id}: ${reason}:`, err);
+      logger.error('admin/avatars/thumbnails', reason, { galleryId: row.id, error: err });
       items.push({ ...base, action: 'failed', reason });
     }
   }
@@ -276,7 +280,7 @@ export async function POST(request: NextRequest) {
 
     const { scope, dryRun, limit } = parsed.data;
     const cursor = parsed.data.cursor ?? null;
-    const bucket = supabase.storage.from(AVATAR_BUCKET);
+    const bucket = getAvatarBucket();
     const options: BatchOptions = { dryRun, limit, cursor, origin };
 
     const items = scope === 'players'

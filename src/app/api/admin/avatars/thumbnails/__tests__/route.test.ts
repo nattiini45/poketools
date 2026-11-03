@@ -81,6 +81,7 @@ import { POST } from '../route';
 import { requireAdmin, AuthError } from '@/lib/auth/helpers';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import {
   listGalleryItemsForThumbs,
   listPlayersNeedingAvatarThumb,
@@ -201,17 +202,16 @@ describe('POST /api/admin/avatars/thumbnails — input', () => {
   });
 
   it('rejects a body that is not JSON, logging the parse error first', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const { res, json } = await call(undefined, '{dryRun: false');
 
     expect(res.status).toBe(400);
     expect(json.error).toBe('Request body must be valid JSON');
     expect(json.code).toBe('invalid_json');
-    expect(consoleError).toHaveBeenCalledWith(
-      '[admin/avatars/thumbnails] Request body is not valid JSON:',
-      expect.any(SyntaxError),
-    );
+    expect(consoleError).toHaveBeenCalledWith('admin/avatars/thumbnails', 'Request body is not valid JSON', {
+      error: expect.any(SyntaxError),
+    });
     expect(listPlayersNeedingAvatarThumb).not.toHaveBeenCalled();
   });
 });
@@ -383,7 +383,7 @@ describe('POST /api/admin/avatars/thumbnails — live run (dryRun: false)', () =
   });
 
   it('reports a per-item failure with its stage and carries on with the batch', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
     seedPlayers();
     fake.objects.delete(galleryPath(1)); // original missing → download fails
 
@@ -394,10 +394,10 @@ describe('POST /api/admin/avatars/thumbnails — live run (dryRun: false)', () =
     expect(json.data.items[2]).toMatchObject({ id: uuid(3), action: 'created' });
     // The audit entry names only the rows whose avatar_url changed.
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata?.player_ids).toEqual([uuid(2), uuid(3)]);
-    expect(consoleError).toHaveBeenCalledWith(
-      expect.stringContaining(`player ${uuid(1)}: download_failed`),
-      expect.anything(),
-    );
+    expect(consoleError).toHaveBeenCalledWith('admin/avatars/thumbnails', 'download_failed', {
+      playerId: uuid(1),
+      error: expect.any(Error),
+    });
   });
 
   it('reports a failed avatar_url update distinctly', async () => {
@@ -437,7 +437,7 @@ describe('POST /api/admin/avatars/thumbnails — path safety', () => {
     ['another bucket of this project', `${TEST_SUPABASE_URL}/storage/v1/object/public/world-assets/${galleryPath(1)}`],
     ['a name off the whitelist', `${TEST_AVATAR_PUBLIC_BASE}/gallery/p1/a.png`],
   ])('players, live: skips %s as unsafe_path with no Storage call', async (_label, url) => {
-    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleWarn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     fake.objects.set('../world-assets/x.png', png);
     fake.objects.set(galleryPath(1), png);
     db.players.push({ id: uuid(1), avatar_url: url });
@@ -453,7 +453,9 @@ describe('POST /api/admin/avatars/thumbnails — path safety', () => {
     expect(fake.api.upload).not.toHaveBeenCalled();
     expect(swapPlayerAvatarUrl).not.toHaveBeenCalled();
     expect(db.players[0].avatar_url).toBe(url);
-    expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining(`player ${uuid(1)}: unsafe_path`));
+    expect(consoleWarn).toHaveBeenCalledWith('admin/avatars/thumbnails', 'unsafe_path, skipped without touching Storage', {
+      playerId: uuid(1),
+    });
   });
 
   it('players, dry run: the Showdown-prefixed traversal URL is unsafe_path with no Storage call', async () => {
@@ -494,7 +496,7 @@ describe('POST /api/admin/avatars/thumbnails — path safety', () => {
   });
 
   it('fails closed (500, no reads) when NEXT_PUBLIC_SUPABASE_URL is missing', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
 
     const { res, json } = await call({ dryRun: false });
@@ -503,7 +505,9 @@ describe('POST /api/admin/avatars/thumbnails — path safety', () => {
     expect(json).toEqual({ success: false, error: 'Failed to backfill avatar thumbnails' });
     expect(listPlayersNeedingAvatarThumb).not.toHaveBeenCalled();
     expect(fake.api.exists).not.toHaveBeenCalled();
-    expect(consoleError).toHaveBeenCalledWith('[API] Failed to backfill avatar thumbnails:', expect.any(Error));
+    expect(consoleError).toHaveBeenCalledWith('api', 'Failed to backfill avatar thumbnails', expect.objectContaining({
+      error: expect.any(Error),
+    }));
   });
 });
 
@@ -511,13 +515,15 @@ describe('POST /api/admin/avatars/thumbnails — path safety', () => {
 
 describe('POST /api/admin/avatars/thumbnails — errors', () => {
   it('returns the static fallback through safeErrorResponse when the row query fails', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
     vi.mocked(listPlayersNeedingAvatarThumb).mockRejectedValueOnce(new Error('relation missing'));
 
     const { res, json } = await call();
 
     expect(res.status).toBe(500);
     expect(json).toEqual({ success: false, error: 'Failed to backfill avatar thumbnails' });
-    expect(consoleError).toHaveBeenCalledWith('[API] Failed to backfill avatar thumbnails:', expect.any(Error));
+    expect(consoleError).toHaveBeenCalledWith('api', 'Failed to backfill avatar thumbnails', expect.objectContaining({
+      error: expect.any(Error),
+    }));
   });
 });

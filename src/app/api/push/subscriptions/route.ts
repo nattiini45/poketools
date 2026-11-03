@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { getRequestLocale } from '@/i18n/server';
 import { readPushConfig } from '@/lib/push/config';
@@ -43,7 +44,9 @@ function sameOrigin(request: NextRequest): boolean {
 }
 
 function crossOriginResponse(request: NextRequest): NextResponse<ApiResult<never>> {
-  console.error('[api/push/subscriptions] cross-origin push subscription change refused:', request.headers.get('origin'));
+  logger.error('api/push/subscriptions', 'cross-origin push subscription change refused', {
+    origin: request.headers.get('origin'),
+  });
   return NextResponse.json<ApiResult<never>>(
     { success: false, error: 'Cross-origin push subscription change refused.', code: 'push_cross_origin' },
     { status: 403 },
@@ -103,10 +106,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
 
     // A distinct code per cause: a valid-looking subscription on a push service we do not accept is not "invalid".
     if (!isAllowedPushEndpoint(body.endpoint) || (body.replaces !== undefined && !isAllowedPushEndpoint(body.replaces))) {
-      console.error(
-        '[api/push/subscriptions] push service not on the allow-list was refused:',
-        pushEndpointHost(body.endpoint),
-      );
+      logger.error('api/push/subscriptions', 'push service not on the allow-list was refused', {
+        endpointHost: pushEndpointHost(body.endpoint),
+      });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'This browser’s push service is not supported.', code: 'push_endpoint_not_allowed' },
         { status: 400 },
@@ -127,7 +129,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
       try {
         await deletePushSubscriptionByEndpoint(player.playerId, body.replaces);
       } catch (err) {
-        console.error('[api/push/subscriptions] removing the replaced push subscription failed:', err);
+        logger.error('api/push/subscriptions', 'removing the replaced push subscription failed', {
+          playerId: player.playerId,
+          error: err,
+        });
       }
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { seasonParticipantSubstituteSchema, formatZodErrors } from '@/lib/validation';
 import {
@@ -47,7 +48,7 @@ async function expireAfterFailedApply(seasonId: string): Promise<void> {
     const stages = await getStagesBySeasonId(seasonId);
     expireSeasonReads(seasonId, stages.map((stage) => stage.id));
   } catch (expireErr) {
-    console.error('[substitute] read-cache expiry after a failed apply failed:', expireErr);
+    logger.error('substitute', 'read-cache expiry after a failed apply failed', { error: expireErr });
   }
 }
 

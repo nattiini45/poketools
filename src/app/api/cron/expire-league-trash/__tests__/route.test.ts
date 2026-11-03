@@ -18,6 +18,7 @@ import { SUPABASE_STORAGE_TIMEOUT_MS } from '@/lib/supabase/timeout-fetch';
 import { sweepLeagueSocialImages, type SocialImageSweepResult } from '@/lib/league-trash/social-image-sweep';
 import { expireLeagueTrash, type LeagueTrashExpiredRow } from '@/lib/supabase/queries/league-trash';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 
 const originalCronSecret = process.env.CRON_SECRET;
 
@@ -54,14 +55,14 @@ describe('/api/cron/expire-league-trash', () => {
 
   it('returns cron_not_configured and logs when CRON_SECRET is missing', async () => {
     delete process.env.CRON_SECRET;
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const res = await POST(request());
     const body = await res.json();
 
     expect(res.status).toBe(500);
     expect(body.code).toBe('cron_not_configured');
-    expect(errorSpy).toHaveBeenCalledWith('[cron/expire-league-trash] CRON_SECRET not configured');
+    expect(errorSpy).toHaveBeenCalledWith('cron/expire-league-trash', 'CRON_SECRET not configured');
     expect(expireLeagueTrash).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });

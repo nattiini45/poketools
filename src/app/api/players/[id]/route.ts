@@ -5,8 +5,9 @@ import {
   superadminPlayerProtectedBody,
   superadminPlayerProtectedResponse,
 } from '@/lib/auth/superadmin-player-guard';
-import { supabase } from '@/lib/supabase/client';
+import { deleteAuthUser } from '@/lib/supabase/queries/auth-users';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { playerUpdateSchema, formatZodErrors } from '@/lib/validation';
 import {
   getPlayerById,
@@ -249,9 +250,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     // Cascade: remove the linked Supabase Auth user so no orphaned login
     // remains (no FK exists — see the email_password_auth migration).
     if (before.auth_user_id) {
-      const { error: authDeleteError } = await supabase.auth.admin.deleteUser(before.auth_user_id);
-      if (authDeleteError) {
-        console.error('[players] failed to delete linked auth user:', authDeleteError.message);
+      try {
+        await deleteAuthUser(before.auth_user_id);
+      } catch (authDeleteError) {
+        logger.error('players', 'failed to delete linked auth user', { playerId: id, error: authDeleteError });
       }
     }
 
@@ -275,7 +277,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const trashBlock = leagueTrashBlockError(err);
     if (trashBlock) return safeErrorResponse(trashBlock, 'Failed to delete player');
     if ((err as { code?: string })?.code === '23503') {
-      console.error('[players] delete blocked by residual FK reference:', err);
+      logger.error('players', 'delete blocked by residual FK reference', { error: err });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Cannot delete this player because other records still reference them.', code: 'player_still_referenced' },
         { status: 409 }

@@ -9,6 +9,7 @@ import { emitMatchResultEffects } from '@/lib/match/result-effects';
 import { replayImportSchema, formatZodErrors } from '@/lib/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -74,10 +75,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // the preview of `body.replay_hash`, so a different battle is refused.
     const replay = await fetchBoundReplay(body.replay_url);
     if (replay.hash !== body.replay_hash) {
-      console.error(
-        `[replay-import] replay ${body.replay_url} for match ${matchId} hashes to ${replay.hash}, ` +
-          `the preview had ${body.replay_hash}`
-      );
+      logger.error('replay-import', 'the replay changed since it was previewed', {
+        matchId,
+        replayUrl: body.replay_url,
+        replayHash: replay.hash,
+        previewHash: body.replay_hash,
+      });
       return NextResponse.json<ApiResult<never>>(
         {
           success: false,

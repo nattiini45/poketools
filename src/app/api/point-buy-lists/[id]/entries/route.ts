@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import {
   getPointBuyListById,
@@ -93,7 +94,9 @@ export async function POST(
       typeof err === 'object' && err !== null &&
       'code' in err && (err as { code?: unknown }).code === 'P0001'
     ) {
-      console.error('List entry import rejected by immutability trigger', err);
+      logger.error('api/point-buy-lists', 'List entry import rejected by immutability trigger', {
+        error: err,
+      });
       return NextResponse.json<ApiResult<never>>(
         {
           success: false,

@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { adminExportSchema, formatZodErrors, type AdminExportInput } from '@/lib/validation';
-import { supabase } from '@/lib/supabase/client';
+import { readExportTable, type ExportTable } from '@/lib/supabase/queries/admin-export';
 import { logAuditEvent } from '@/lib/audit/log';
 import { checkAndRecordAdminExport } from '@/lib/admin/export-rate-limit';
 import { recordsToCsv } from '@/lib/utils/csv';
-import { readExportRows } from '@/lib/admin/export-rows';
 import type { ApiResult } from '@/types/api';
 
 type ExportResource = AdminExportInput['resource'];
@@ -18,7 +17,7 @@ const TABLE_MAP = {
   seasons: 'seasons',
   games: 'games',
   battle_stats: 'battle_stats',
-} as const satisfies Record<ExportResource, ExportResource>;
+} as const satisfies Record<ExportResource, ExportTable>;
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,18 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Paged under PostgREST `max_rows`, in a total order (`created_at`, then `id`) so pages neither
-    // overlap nor skip. All exportable tables carry both columns.
-    const result = await readExportRows(
-      (from, to, withCount) =>
-        supabase
-          .from(TABLE_MAP[resource])
-          .select('*', withCount ? { count: 'exact' } : undefined)
-          .order('created_at', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to),
-      limit,
-    );
+    const result = await readExportTable(TABLE_MAP[resource], limit);
     const data = result.rows;
     const countHeaders = {
       'X-Export-Count': String(data.length),

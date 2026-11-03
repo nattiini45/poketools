@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { phaseCreateSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -135,7 +136,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       try {
         await addResourceAdmin(admin.playerId, 'tournament', tournament.id);
       } catch (adminErr) {
-        console.error('Failed to assign resource admin:', adminErr);
+        logger.error('api/seasons', 'Failed to assign resource admin', {
+          seasonId: id,
+          tournamentId: tournament.id,
+          playerId: admin.playerId,
+          error: adminErr,
+        });
       }
     }
 

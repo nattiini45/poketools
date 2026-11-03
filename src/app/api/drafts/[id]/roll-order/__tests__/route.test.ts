@@ -33,6 +33,7 @@ import { expireDraftReads } from '@/lib/revalidation';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
 import { drawSeatOrder } from '@/lib/draft/seat-draw';
 import { DraftRuleError } from '@/lib/draft/errors';
+import { logger } from '@/lib/logger';
 
 const POOL = '11111111-1111-4111-8111-111111111111';
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -55,7 +56,7 @@ const storedPool = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  vi.spyOn(logger, 'error').mockImplementation(() => undefined);
   vi.mocked(requireDraftAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
   vi.mocked(getDraftPoolById).mockResolvedValue(storedPool as never);
   vi.mocked(callDraftRpc).mockResolvedValue({ state_version: 5 });
@@ -166,7 +167,11 @@ describe('POST /api/drafts/[id]/roll-order', () => {
     const res = await roll('{not json');
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ code: 'invalid_json' });
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('malformed JSON body'), expect.any(SyntaxError));
+    expect(logger.error).toHaveBeenCalledWith(
+      'api/drafts/roll-order',
+      'malformed JSON body',
+      { error: expect.any(SyntaxError) },
+    );
     expect(callDraftRpc).not.toHaveBeenCalled();
   });
 });

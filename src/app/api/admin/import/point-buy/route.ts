@@ -6,6 +6,7 @@ import {
   bindSeasonToList,
   bulkCreateListEntries,
   createListVersion,
+  findListVersionId,
   isVersionBoundToActiveSeason,
 } from '@/lib/supabase/queries/point-buy-lists';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
@@ -15,7 +16,6 @@ import {
   type PointBuyImportReport,
 } from '@/lib/import/point-buy-xlsx';
 import { fileToBuffer, assertXlsxMagicBytes, validateXlsxFile } from '@/lib/import/xlsx-upload';
-import { supabase } from '@/lib/supabase/client';
 import { expirePublicTags, expireSeasonReads, publicTags } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { PointBuyListEntryFormData } from '@/types/point-buy';
@@ -88,17 +88,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiResult
       return NextResponse.json({ success: true, data: { report, dry_run: true } });
     }
 
-    const { data: existing, error: findErr } = await supabase
-      .from('point_buy_list_versions')
-      .select('id')
-      .eq('name', name)
-      .eq('version', version)
-      .maybeSingle();
-    if (findErr) throw findErr;
+    const existingId = await findListVersionId(name, version);
 
     let versionId: string;
-    if (existing) {
-      versionId = existing.id;
+    if (existingId) {
+      versionId = existingId;
       if (await isVersionBoundToActiveSeason(versionId)) {
         throw new UserFacingError(
           `"${name}" v${version} is bound to an active or completed season — bump version to import a new snapshot.`,

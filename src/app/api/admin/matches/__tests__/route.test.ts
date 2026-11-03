@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
+import { logger } from '@/lib/logger';
 
 vi.mock('@/lib/auth/helpers', () => {
   class AuthError extends Error {
@@ -619,11 +620,13 @@ describe('GET /api/admin/matches: player filter and resolved names', () => {
 
   it('keeps a failed name lookup distinguishable in the log, with the same safe response', async () => {
     vi.mocked(listMatchFilterPlayers).mockRejectedValue(new Error('players table unavailable'));
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const res = await GET(req(`?player_id=${PLAYER_ID_1}`));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ success: false, error: 'Failed to list matches' });
-    expect(spy.mock.calls.flat().some((arg) => arg instanceof Error && arg.message === 'players table unavailable')).toBe(true);
+    expect(spy).toHaveBeenCalledWith('api', 'Failed to list matches', expect.objectContaining({
+      error: expect.objectContaining({ message: 'players table unavailable' }),
+    }));
     spy.mockRestore();
   });
 });
@@ -650,10 +653,12 @@ describe('GET /api/admin/matches: errors', () => {
 
   it('keeps a failed player search distinguishable in the log, with the same safe response', async () => {
     vi.mocked(findPlayerIdsForMatchSearch).mockRejectedValue(new Error('players table unavailable'));
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const res = await GET(req('?q=mara'));
     expect(res.status).toBe(500);
-    expect(spy.mock.calls.flat().some((arg) => arg instanceof Error && arg.message === 'players table unavailable')).toBe(true);
+    expect(spy).toHaveBeenCalledWith('api', 'Failed to list matches', expect.objectContaining({
+      error: expect.objectContaining({ message: 'players table unavailable' }),
+    }));
     spy.mockRestore();
   });
 });

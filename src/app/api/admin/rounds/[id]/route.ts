@@ -11,6 +11,7 @@ import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { updateTournament } from '@/lib/supabase/queries/tournaments';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -102,7 +103,11 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     try {
       await rebuildAggregatesForScope('tournament', round.tournament_id);
     } catch (err) {
-      console.error('round delete aggregate rebuild failed:', err);
+      logger.error('api/rounds', 'round delete aggregate rebuild failed', {
+        roundId: id,
+        tournamentId: round.tournament_id,
+        error: err,
+      });
     }
 
     logAuditEvent({

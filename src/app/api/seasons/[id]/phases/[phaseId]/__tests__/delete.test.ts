@@ -6,6 +6,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { logger } from '@/lib/logger';
 
 vi.mock('@/lib/auth/helpers', () => ({
   requireResourceAdmin: vi.fn(),
@@ -132,7 +133,7 @@ describe('DELETE /api/seasons/[id]/phases/[phaseId]', () => {
 
   it('reports a failed rebuild as rebuild_warning with the generic code (the delete committed)', async () => {
     vi.mocked(rebuildAfterTournamentDelete).mockRejectedValue(new Error('aggregate rebuild timed out'));
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logged = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const response = await DELETE(request(), args());
     const json = await response.json();
@@ -144,7 +145,11 @@ describe('DELETE /api/seasons/[id]/phases/[phaseId]', () => {
       error: expect.stringContaining('rebuilding the derived data'),
     });
     expect(JSON.stringify(json)).not.toContain('timed out');
-    expect(logged).toHaveBeenCalledWith('phase delete derived-data rebuild failed:', expect.any(Error));
+    expect(logged).toHaveBeenCalledWith(
+      'api/seasons',
+      'phase delete derived-data rebuild failed',
+      expect.objectContaining({ seasonId: SEASON_ID, phaseId: PHASE_ID, error: expect.any(Error) }),
+    );
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ metadata: expect.objectContaining({ rebuild_error: 'derived_data_rebuild_failed' }) })
     );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer, requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { getSeasonTrackers, getTrackerById, applyTrackerProgressWithLog } from '@/lib/supabase/queries/evolutions';
 import { getLatestProgressEntry } from '@/lib/supabase/queries/progress-log';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
@@ -104,7 +105,10 @@ export async function POST(
     const entry = await getLatestProgressEntry(tracker_id);
     if (!entry) {
       // The RPC committed the log row; a missing read-back is unexpected
-      console.error(`Progress correction applied but log entry not found for tracker ${tracker_id}`);
+      logger.error('api/seasons', 'Progress correction applied but log entry not found', {
+        seasonId: id,
+        trackerId: tracker_id,
+      });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Correction applied but audit entry could not be read back', code: 'progress_audit_unreadable' },
         { status: 500 }

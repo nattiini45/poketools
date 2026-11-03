@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 // ─── Mocks ──────────────────────────────────────────────────────────
 
@@ -294,7 +295,7 @@ describe('POST /api/admin/backfill-gamification', () => {
     vi.mocked(getTournamentById).mockResolvedValue({ id: 't1', season_id: 's1' } as never);
     const err = new Error('rating_apply_match_result failed');
     vi.mocked(updateRatings).mockRejectedValueOnce(err);
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logged = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const res = await POST();
     const json = await res.json();
@@ -303,7 +304,11 @@ describe('POST /api/admin/backfill-gamification', () => {
     // The step names the cause; the internal message stays in the log.
     expect(json.data.errors).toEqual(['Match match-1: ratings failed']);
     expect(JSON.stringify(json)).not.toContain('rating_apply_match_result');
-    expect(logged).toHaveBeenCalledWith('[backfill] Match match-1 failed in step "ratings":', err);
+    expect(logged).toHaveBeenCalledWith('backfill', 'match failed in step', {
+      matchId: 'match-1',
+      step: 'ratings',
+      error: err,
+    });
     logged.mockRestore();
   });
 

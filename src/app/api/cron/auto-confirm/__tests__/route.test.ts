@@ -32,6 +32,7 @@ import {
   updateMatchStatus,
 } from '@/lib/supabase/queries/matches';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 
 const originalCronSecret = process.env.CRON_SECRET;
 const match = {
@@ -73,7 +74,7 @@ describe('POST /api/cron/auto-confirm', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     process.env.CRON_SECRET = 'secret';
     vi.mocked(listMatchesReadyForAutoConfirm).mockResolvedValue([match] as never);
     vi.mocked(listMatchesNeedingFinalize).mockResolvedValue([]);
@@ -101,7 +102,7 @@ describe('POST /api/cron/auto-confirm', () => {
 
     expect(res.status).toBe(500);
     expect(body.code).toBe('cron_not_configured');
-    expect(errorSpy).toHaveBeenCalledWith('[cron/auto-confirm] CRON_SECRET not configured');
+    expect(errorSpy).toHaveBeenCalledWith('cron/auto-confirm', 'CRON_SECRET not configured');
     expect(listMatchesReadyForAutoConfirm).not.toHaveBeenCalled();
   });
 
@@ -225,12 +226,17 @@ describe('POST /api/cron/auto-confirm', () => {
     expect(finalizeMatchCompletion).toHaveBeenCalledWith(
       expect.objectContaining({ winnerId: 'player-2' })
     );
-    expect(errorSpy).toHaveBeenCalledWith('[cron/auto-confirm] could not auto-confirm match match-1', boom);
+    expect(errorSpy).toHaveBeenCalledWith('cron/auto-confirm', 'could not auto-confirm match', {
+      matchId: 'match-1',
+      error: boom,
+    });
     // The match is re-read so the log tells a write that never landed from a
     // committed-but-unfinalized completion.
     expect(getMatchById).toHaveBeenCalledWith('match-1');
     expect(errorSpy).toHaveBeenCalledWith(
-      '[cron/auto-confirm] match match-1 is still pending_confirmation: the auto-confirm write did not commit'
+      'cron/auto-confirm',
+      'match is still not completed: the auto-confirm write did not commit',
+      { matchId: 'match-1', status: 'pending_confirmation' }
     );
     expect(safeErrorResponse).not.toHaveBeenCalled();
   });
@@ -246,7 +252,11 @@ describe('POST /api/cron/auto-confirm', () => {
     expect(JSON.parse(body.details).failed).toEqual([{ match_id: 'match-1', steps: ['confirm'] }]);
     expect(finalizeMatchCompletion).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('match match-1 is completed although the auto-confirm failed')
+      'cron/auto-confirm',
+      'match is completed although the auto-confirm failed: the completion committed but finalize did not run ' +
+        'in this request; the heal takes it over after the grace period (it shows up under needsAdmin unless ' +
+        'rating_history exists)',
+      { matchId: 'match-1' }
     );
   });
 
@@ -259,10 +269,14 @@ describe('POST /api/cron/auto-confirm', () => {
     const res = await POST(request());
 
     expect(res.status).toBe(500);
-    expect(errorSpy).toHaveBeenCalledWith('[cron/auto-confirm] could not auto-confirm match match-1', boom);
+    expect(errorSpy).toHaveBeenCalledWith('cron/auto-confirm', 'could not auto-confirm match', {
+      matchId: 'match-1',
+      error: boom,
+    });
     expect(errorSpy).toHaveBeenCalledWith(
-      '[cron/auto-confirm] could not re-read match match-1 after the failed auto-confirm',
-      readErr
+      'cron/auto-confirm',
+      'could not re-read match after the failed auto-confirm',
+      { matchId: 'match-1', error: readErr }
     );
   });
 
@@ -273,7 +287,9 @@ describe('POST /api/cron/auto-confirm', () => {
     await POST(request());
 
     expect(errorSpy).toHaveBeenCalledWith(
-      '[cron/auto-confirm] match match-1 no longer exists after the failed auto-confirm'
+      'cron/auto-confirm',
+      'match no longer exists after the failed auto-confirm',
+      { matchId: 'match-1' }
     );
   });
 
@@ -371,7 +387,7 @@ describe('POST /api/cron/auto-confirm', () => {
     vi.mocked(healMatchFinalization)
       .mockResolvedValueOnce({ healed: false, skipped: true, reason: 'not_completed', failed_steps: [] })
       .mockResolvedValueOnce({ healed: true, failed_steps: [] });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
     const res = await POST(request());
     const body = await res.json();
@@ -380,7 +396,10 @@ describe('POST /api/cron/auto-confirm', () => {
     expect(body.data.heal).toEqual({
       checked: 2, healed: 1, skipped: 1, failed: [], needs_admin: [], scan_truncated: false,
     });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('heal skipped match match-a: not_completed'));
+    expect(warn).toHaveBeenCalledWith('cron/auto-confirm', 'heal skipped match', {
+      matchId: 'match-a',
+      reason: 'not_completed',
+    });
     warn.mockRestore();
   });
 
@@ -415,9 +434,13 @@ describe('POST /api/cron/auto-confirm', () => {
     expect(healMatchFinalization).toHaveBeenCalledTimes(1);
     expect(healMatchFinalization).toHaveBeenCalledWith(c);
     // One error line per run lists them.
-    expect(errorSpy).toHaveBeenCalledWith(
-      '[cron/auto-confirm] 2 completed match(es) need an admin: match-a (ratings_missing), match-b (winner_not_participant)'
-    );
+    expect(errorSpy).toHaveBeenCalledWith('cron/auto-confirm', 'completed matches need an admin', {
+      count: 2,
+      matches: [
+        { matchId: 'match-a', reason: 'ratings_missing' },
+        { matchId: 'match-b', reason: 'winner_not_participant' },
+      ],
+    });
   });
 
   it('lists a heal that turns needs-admin after the classification (state changed in between)', async () => {
@@ -549,7 +572,11 @@ describe('POST /api/cron/auto-confirm', () => {
     // 10 pages plus the one-row probe.
     expect(listMatchesNeedingFinalize).toHaveBeenCalledTimes(11);
     expect(healMatchFinalization).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('heal scan stopped after 1000 worklist rows'));
+    expect(errorSpy).toHaveBeenCalledWith(
+      'cron/auto-confirm',
+      'heal scan stopped with worklist rows left; needs-admin rows are crowding the worklist',
+      { rowsScanned: 1000 }
+    );
   });
 
   it('does not report scan_truncated when the worklist ends exactly at the page cap', async () => {

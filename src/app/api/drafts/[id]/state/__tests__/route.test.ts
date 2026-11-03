@@ -77,6 +77,7 @@ import {
   hasAllocatedDraftTokensFromLedger,
   loadDraftTokenLedger,
 } from '@/lib/draft/progress-engine';
+import { logger } from '@/lib/logger';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -361,7 +362,7 @@ describe('GET /api/drafts/[id]/state — EPB extras', () => {
   });
 
   it('omits (and logs) a player whose tracker has no tier, like the old per-player call', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     wireEpb('in_progress');
     vi.mocked(getSeasonTrackers).mockResolvedValue([
       tracker('p1', 'Eevee'),
@@ -374,12 +375,16 @@ describe('GET /api/drafts/[id]/state — EPB extras', () => {
 
     expect(res.status).toBe(200);
     expect(Object.keys(json.data.evolution.trackers_by_player)).toEqual(['p1']);
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('No evolution tier found for Missingno'));
+    expect(errorSpy).toHaveBeenCalledWith('api/drafts/state', 'No evolution tier found; trackers omitted', {
+      missingTier: 'Missingno',
+      playerId: 'p2',
+      seasonId: 'season-1',
+    });
     errorSpy.mockRestore();
   });
 
   it('reports is_evo_league false when the season has no tiers, and logs the trackers it omits', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     wireEpb('in_progress');
     vi.mocked(getSeasonTrackers).mockResolvedValue([tracker('p1', 'Eevee'), tracker('p2', 'Gastly')] as never);
     vi.mocked(getAllTiers).mockResolvedValue([]);
@@ -389,14 +394,15 @@ describe('GET /api/drafts/[id]/state — EPB extras', () => {
 
     expect(json.data.evolution).toEqual({ is_evo_league: false, trackers_by_player: {} });
     // Before: the trackers were dropped without a log line.
-    expect(errorSpy).toHaveBeenCalledWith(
-      '[api/drafts/state] No evolution tiers in season season-1; 2 trackers omitted',
-    );
+    expect(errorSpy).toHaveBeenCalledWith('api/drafts/state', 'No evolution tiers; trackers omitted', {
+      seasonId: 'season-1',
+      trackers: 2,
+    });
     errorSpy.mockRestore();
   });
 
   it('no tiers and no trackers yet (a season still being set up) is not logged', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     wireEpb('in_progress');
     vi.mocked(getSeasonTrackers).mockResolvedValue([] as never);
     vi.mocked(getAllTiers).mockResolvedValue([]);
@@ -578,7 +584,7 @@ describe('GET /api/drafts/[id]/state — a legacy pool whose last pick committed
   });
 
   it('still answers the state, and logs, when the completion write fails', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
     vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy' } as never);
     vi.mocked(getPicksByPool).mockResolvedValue(pickRows(4));
     const failure = new Error('statement timeout');
@@ -588,7 +594,11 @@ describe('GET /api/drafts/[id]/state — a legacy pool whose last pick committed
 
     expect(res.status).toBe(200);
     expect((await res.json()).data.pool.status).toBe('in_progress');
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('complete'), failure);
+    expect(error).toHaveBeenCalledWith(
+      'api/drafts/state',
+      'every pick is made but the pool could not be set to complete',
+      { error: failure }
+    );
     error.mockRestore();
   });
 

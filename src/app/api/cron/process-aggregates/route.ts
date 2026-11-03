@@ -30,6 +30,7 @@ import {
   type ProcessAggregateJobsResult,
 } from '@/lib/match/aggregate-queue';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
@@ -58,7 +59,7 @@ async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error('[cron/process-aggregates] CRON_SECRET not configured');
+    logger.error('cron/process-aggregates', 'CRON_SECRET not configured');
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Cron not configured', code: 'cron_not_configured' },
       { status: 500 }
@@ -105,7 +106,7 @@ async function handle(request: Request) {
     }
 
     if (health.strandedPending > 0 || health.staleProcessing > 0) {
-      console.error('[cron/process-aggregates] Aggregate jobs cannot drain:', { ...health, failedJobs, run: result });
+      logger.error('cron/process-aggregates', 'Aggregate jobs cannot drain', { ...health, failedJobs, run: result });
       return NextResponse.json<ApiResult<never>>(
         {
           success: false,
@@ -122,9 +123,10 @@ async function handle(request: Request) {
     if (failedJobs > 0) {
       // Not a failed run (ruling CR-3): these games stay uncounted until an
       // admin re-queues them or rebuilds the scope.
-      console.error(
-        `[cron/process-aggregates] ${failedJobs} aggregate job(s) ended failed (attempts exhausted); ` +
-          'their games are not counted until an admin rebuilds the affected scopes'
+      logger.error(
+        'cron/process-aggregates',
+        'aggregate job(s) ended failed (attempts exhausted); their games are not counted until an admin rebuilds the affected scopes',
+        { failedJobs }
       );
     }
 

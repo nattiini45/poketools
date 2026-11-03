@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { seasonUpdateSchema, formatZodErrors } from '@/lib/validation';
@@ -229,13 +230,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       try {
         ratingRebuild = await rebuildRatingsAfterTestFlagChange(id, season.is_test_season);
         if (!ratingRebuild.settled) {
-          console.error(
-            `test-league flag of league ${id}: rating rebuild not settled after ${ratingRebuild.passes} passes`
-          );
+          logger.error('api/seasons', 'test-league flag: rating rebuild not settled', {
+            seasonId: id,
+            passes: ratingRebuild.passes,
+          });
           rebuildWarning = testFlagRebuildUnsettledWarning();
         }
       } catch (err) {
-        console.error(`test-league flag of league ${id}: rating rebuild failed:`, err);
+        logger.error('api/seasons', 'test-league flag: rating rebuild failed', {
+          seasonId: id,
+          error: err,
+        });
         rebuildWarning = toTestFlagRebuildWarning(err);
       }
       logAuditEvent({

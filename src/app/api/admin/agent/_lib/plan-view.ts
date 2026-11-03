@@ -27,6 +27,7 @@ import {
   type RulesetDocumentDelta,
 } from '@/lib/ai/admin-agent/plans/schema';
 import type { PlanRecord } from '@/lib/ai/admin-agent/store/types';
+import { logger } from '@/lib/logger';
 
 type SectionName = Exclude<PlanSection, 'plan'>;
 const SECTIONS: readonly SectionName[] = ['ruleset', 'format', 'league', 'phases', 'roster', 'groups', 'draft', 'tournament'];
@@ -182,7 +183,7 @@ function assumptionValue(value: unknown): PlanRowValue | null {
 export function toPlanView(record: PlanRecord): PlanView | null {
   const parsed = parsePlanDocument(record.doc);
   if (!parsed.ok) {
-    console.error('[admin-agent] a stored plan no longer matches its schema', record.id);
+    logger.error('admin-agent', 'a stored plan no longer matches its schema', { planId: record.id });
     return null;
   }
   const plan = parsed.plan;

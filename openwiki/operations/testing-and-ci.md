@@ -102,11 +102,11 @@ Build and tests use placeholder env vars (`NEXT_PUBLIC_SUPABASE_URL=https://plac
 
 **Files:** `scripts/check-safe-error-response.mjs`, `scripts/safe-error-scan.mjs`
 
-Custom CI guard that scans all route handler files for catch blocks that return a `NextResponse` or `Response` without first calling `console.error` or `safeErrorResponse()`.
+Custom CI guard that scans all route handler files for catch blocks that return a `NextResponse` or `Response` without first logging the caught error (`logger.error`) or calling `safeErrorResponse()`.
 
 ### What it enforces
 - Every catch block that returns a response must log the error server-side first
-- Prefers `safeErrorResponse()` over manual `console.error` + `NextResponse.json()`
+- Prefers `safeErrorResponse()` over a manual log call + `NextResponse.json()`
 - Escape hatch: `// safe-error-response-allow: <reason>` on the line before the return
 
 ### Running locally

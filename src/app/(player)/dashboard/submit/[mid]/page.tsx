@@ -5,9 +5,8 @@ import { getLiveAccess } from '@/lib/auth/helpers';
 import { canAdministerMatchAccess } from '@/lib/auth/match-access';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getMatchPrepTeams } from '@/lib/supabase/queries/match-prep-teams';
-import { supabase } from '@/lib/supabase/client';
+import { getTournamentSubmitContext } from '@/lib/supabase/queries/tournaments';
 import { selectVisibleMatchPrepRosters } from '@/lib/team/visibility';
-import type { TeamVisibility } from '@/types/tournament';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import SubmitResultClient from './SubmitResultClient';
 import PageContainer from '@/components/ui/PageContainer';
@@ -49,18 +48,12 @@ export default async function SubmitResultPage({ params }: PageProps) {
 
   const canSubmit = match.status === 'scheduled' || match.status === 'in_progress';
 
-  const [prepTeamRows, tournamentResult] = await Promise.all([
+  const [prepTeamRows, tournament] = await Promise.all([
     getMatchPrepTeams(mid),
-    supabase
-      .from('tournaments')
-      .select('team_visibility, ruleset:ruleset_definition_versions ( gen )')
-      .eq('id', match.tournament_id)
-      .maybeSingle(),
+    getTournamentSubmitContext(match.tournament_id),
   ]);
-  if (tournamentResult.error) throw tournamentResult.error;
-  const tournament = tournamentResult.data;
-  const tournamentVisibility: TeamVisibility | null = tournament?.team_visibility ?? null;
-  const generation = (tournament?.ruleset as { gen: number } | null)?.gen ?? 9;
+  const tournamentVisibility = tournament?.teamVisibility ?? null;
+  const generation = tournament?.generation ?? 9;
 
   // Spec §7 per side: a participant sees only their own planned roster until
   // the match is completed (or the tournament is always_public); admins see both.

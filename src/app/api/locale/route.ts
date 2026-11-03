@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import {
   DEFAULT_LOCALE,
   LANGUAGE_COOKIE_MAX_AGE,
@@ -57,7 +58,9 @@ function sameOrigin(request: NextRequest): boolean {
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResult<LocaleData>>> {
   try {
     if (!sameOrigin(request)) {
-      console.error('[api/locale] cross-origin language change refused:', request.headers.get('origin'));
+      logger.error('api/locale', 'cross-origin language change refused', {
+        origin: request.headers.get('origin'),
+      });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Cross-origin language change refused.', code: 'locale_cross_origin' },
         { status: 403 },

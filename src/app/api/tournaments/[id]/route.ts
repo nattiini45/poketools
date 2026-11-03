@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { tournamentUpdateSchema, formatZodErrors } from '@/lib/validation';
@@ -205,7 +206,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           await getParticipants(id)
         );
       } catch (err) {
-        console.error('bracket reset sync failed after tournament update', err);
+        logger.error('api/tournaments', 'bracket reset sync failed after tournament update', {
+          tournamentId: id,
+          error: err,
+        });
         bracketResetSyncError = 'bracket_reset_sync_failed';
       }
     }
@@ -321,7 +325,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
         playerIds: participants.map((p) => p.id),
       });
     } catch (err) {
-      console.error('tournament delete derived-data rebuild failed:', err);
+      logger.error('api/tournaments', 'tournament delete derived-data rebuild failed', {
+        tournamentId: id,
+        error: err,
+      });
       // Reported to the admin in the response (catalogued code, e.g.
       // rating_history_incomplete) and kept in the audit record.
       rebuildWarning = toDeleteRebuildWarning(err);

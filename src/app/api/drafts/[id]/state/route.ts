@@ -8,6 +8,7 @@ import { draftStateQuerySchema, uuidSchema } from '@/lib/draft/schemas';
 import { getDraftSnapshot, type DraftSnapshotUnchanged } from '@/lib/draft/snapshot';
 import { expireDraftReads } from '@/lib/revalidation';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
+import { logger } from '@/lib/logger';
 import { completeLegacyPoolIfRunning, getDraftPoolById, getPicksByPool } from '@/lib/supabase/queries/drafts';
 import { getSeasonParticipants, getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
@@ -131,9 +132,11 @@ function groupTrackersWithTiers(
     }
 
     if (missingTier !== null) {
-      console.error(
-        `[api/drafts/state] No evolution tier found for ${missingTier} (player ${playerId}) in season ${seasonId}; trackers omitted`,
-      );
+      logger.error('api/drafts/state', 'No evolution tier found; trackers omitted', {
+        missingTier,
+        playerId,
+        seasonId,
+      });
       continue;
     }
     byPlayer[playerId] = withTiers;
@@ -240,7 +243,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           expireDraftReads(pool.season_id);
         }
       } catch (err) {
-        console.error('[api/drafts/state] every pick is made but the pool could not be set to complete:', err);
+        logger.error('api/drafts/state', 'every pick is made but the pool could not be set to complete', {
+          error: err,
+        });
       }
     }
 
@@ -332,9 +337,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       // Trackers without any tier are the missing-tier data error for every
       // line, so they are logged like groupTrackersWithTiers logs one.
       if (tiers.length === 0 && trackers.length > 0) {
-        console.error(
-          `[api/drafts/state] No evolution tiers in season ${pool.season_id}; ${trackers.length} trackers omitted`,
-        );
+        logger.error('api/drafts/state', 'No evolution tiers; trackers omitted', {
+          seasonId: pool.season_id,
+          trackers: trackers.length,
+        });
       }
       response.evolution =
         tiers.length > 0

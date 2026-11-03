@@ -145,3 +145,82 @@ describe('findCatchBlocks', () => {
     expect(blocks[0].body).toContain('safeErrorResponse');
   });
 });
+
+describe('scanSource with the structured logger', () => {
+  const wrap = (body) => `
+try {
+  work();
+} catch (err) {
+${body}
+}`;
+
+  it('does not flag a raw return preceded by logger.error of the caught error', () => {
+    const src = wrap(`  logger.error('players', 'delete blocked', { error: err });
+  return NextResponse.json({ success: false, error: 'Referenced elsewhere.' }, { status: 409 });`);
+    expect(scanSource(src)).toHaveLength(0);
+  });
+
+  it('accepts logger.warn and a multi-line logger.error call', () => {
+    const warn = wrap(`  logger.warn('auth', 'refused', { error: err });
+  return NextResponse.json({ success: false }, { status: 403 });`);
+    const multiline = wrap(`  logger.error('players', 'delete blocked', {
+    playerId,
+    error: err,
+  });
+  return NextResponse.json({ success: false }, { status: 409 });`);
+    expect(scanSource(warn)).toHaveLength(0);
+    expect(scanSource(multiline)).toHaveLength(0);
+  });
+
+  it('flags a raw return when the logger call does not mention the caught error', () => {
+    const src = wrap(`  logger.error('players', 'delete blocked');
+  return NextResponse.json({ success: false }, { status: 500 });`);
+    expect(scanSource(src)).toHaveLength(1);
+  });
+
+  it('flags a raw return when the logged error belongs to another identifier', () => {
+    const src = wrap(`  logger.error('players', 'delete blocked', { error: otherErr });
+  return NextResponse.json({ success: false }, { status: 500 });`);
+    expect(scanSource(src)).toHaveLength(1);
+  });
+
+  it('flags a raw 500 with no log call at all (the planted-violation case)', () => {
+    const src = wrap(`  return NextResponse.json({ success: false, error: 'Something broke' }, { status: 500 });`);
+    expect(scanSource(src)).toHaveLength(1);
+  });
+
+  it('flags a raw return when the caught name only appears inside a string literal of the log call', () => {
+    const single = wrap(`  logger.error('players', 'delete failed: err', { playerId });
+  return NextResponse.json({ success: false }, { status: 500 });`);
+    const template = wrap("  logger.error('players', `delete failed: err`, { playerId });\n  return NextResponse.json({ success: false }, { status: 500 });");
+    const comment = wrap(`  logger.error('players', 'delete failed', { playerId /* err */ });
+  return NextResponse.json({ success: false }, { status: 500 });`);
+    expect(scanSource(single)).toHaveLength(1);
+    expect(scanSource(template)).toHaveLength(1);
+    expect(scanSource(comment)).toHaveLength(1);
+  });
+
+  it('flags a raw return when the caught name is used after the log call, not inside it', () => {
+    const src = wrap(`  logger.error('players', 'delete failed')
+  const reason = err
+  return NextResponse.json({ success: false, reason }, { status: 500 });`);
+    expect(scanSource(src)).toHaveLength(1);
+  });
+
+  it('accepts the caught error as a shorthand property, a member access or a template expression', () => {
+    const shorthand = wrap(`  logger.error('players', 'delete failed', { err });
+  return NextResponse.json({ success: false }, { status: 500 });`);
+    const member = wrap(`  logger.error('players', 'delete failed', { message: err.message });
+  return NextResponse.json({ success: false }, { status: 500 });`);
+    const template = wrap("  logger.error('players', `delete failed: ${err}`);\n  return NextResponse.json({ success: false }, { status: 500 });");
+    expect(scanSource(shorthand)).toHaveLength(0);
+    expect(scanSource(member)).toHaveLength(0);
+    expect(scanSource(template)).toHaveLength(0);
+  });
+
+  it('does not accept a logger.info call as the error log', () => {
+    const src = wrap(`  logger.info('players', 'note', { error: err });
+  return NextResponse.json({ success: false }, { status: 500 });`);
+    expect(scanSource(src)).toHaveLength(1);
+  });
+});

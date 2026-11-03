@@ -59,21 +59,16 @@ vi.mock('@/lib/supabase/client', () => ({
         getPublicUrl: storageMocks.getPublicUrl,
       }),
     },
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
-            data: { id: 'gallery-1' },
-            error: undefined,
-          }),
-        }),
-      }),
-    }),
   },
+}));
+
+vi.mock('@/lib/supabase/queries/avatar-gallery', () => ({
+  insertGalleryItem: vi.fn(),
 }));
 
 import { POST } from '@/app/api/avatar/transform/route';
 import { tryWriteAvatarThumbnail } from '@/lib/avatar/thumbnail';
+import { insertGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
 import { requireAuth } from '@/lib/auth/helpers';
 import { checkAndRecordGeneration } from '@/lib/avatar/rate-limit';
 import {
@@ -105,6 +100,7 @@ describe('POST /api/avatar/transform', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireAuth).mockResolvedValue(SESSION_WITH_PLAYER as never);
+    vi.mocked(insertGalleryItem).mockResolvedValue({ id: 'gallery-1' } as never);
     storageMocks.upload.mockResolvedValue({ error: undefined });
     storageMocks.getPublicUrl.mockReturnValue({
       data: { publicUrl: 'https://cdn.example.com/avatars/gallery/p1/img.png' },

@@ -29,6 +29,7 @@ import {
   buildPostMatchAnalysisMessage,
   buildScoutingAnalysisMessage,
 } from '@/lib/ai/agent/prompts/linden';
+import { logger } from '@/lib/logger';
 import type { AgentRequest } from '@/lib/ai/agent/types';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorCode } from '@/i18n/messages/errors';
@@ -255,7 +256,7 @@ function runPostMatchAnalysis(playerId: string, match: LoadedMatch, force: boole
         try {
           existing = await getMatchAnalysis(match.id);
         } catch (readError) {
-          console.error('[ai/agent/analyze-match] post_match stored-analysis read failed:', readError);
+          logger.error('ai/agent/analyze-match', 'post_match stored-analysis read failed', { error: readError });
           controller.enqueue(encoder.encode(failedFrame(CACHE_READ_FAILED_MESSAGE, CACHE_READ_FAILED_CODE)));
           return;
         }
@@ -322,7 +323,7 @@ function runPostMatchAnalysis(playerId: string, match: LoadedMatch, force: boole
           controller.enqueue(encoder.encode('data: {"status":"done"}\n\n'));
         } catch (llmError) {
           const message = llmError instanceof Error ? llmError.message : 'Unknown error';
-          console.error('[ai/agent/analyze-match] post_match error:', llmError);
+          logger.error('ai/agent/analyze-match', 'post_match error', { error: llmError });
           await updateMatchAnalysis(record.id, {
             status: 'failed',
             error: message,
@@ -331,7 +332,7 @@ function runPostMatchAnalysis(playerId: string, match: LoadedMatch, force: boole
           controller.enqueue(encoder.encode(failedFrame(FAILED_MESSAGE, FAILED_CODE)));
         }
       } catch (setupError) {
-        console.error('[ai/agent/analyze-match] post_match setup error:', setupError);
+        logger.error('ai/agent/analyze-match', 'post_match setup error', { error: setupError });
         controller.enqueue(encoder.encode(failedFrame(FAILED_MESSAGE, FAILED_CODE)));
       } finally {
         clearInterval(fallbackHeartbeat);
@@ -394,7 +395,7 @@ function runOpponentScout(playerId: string, match: LoadedMatch, force: boolean):
         try {
           existing = await getMatchPrepAnalysis(match.id, playerId);
         } catch (readError) {
-          console.error('[ai/agent/analyze-match] opponent_scout stored-report read failed:', readError);
+          logger.error('ai/agent/analyze-match', 'opponent_scout stored-report read failed', { error: readError });
           controller.enqueue(encoder.encode(failedFrame(CACHE_READ_FAILED_MESSAGE, CACHE_READ_FAILED_CODE)));
           return;
         }
@@ -468,7 +469,7 @@ function runOpponentScout(playerId: string, match: LoadedMatch, force: boolean):
           controller.enqueue(encoder.encode('data: {"status":"done"}\n\n'));
         } catch (llmError) {
           const message = llmError instanceof Error ? llmError.message : 'Unknown error';
-          console.error('[ai/agent/analyze-match] opponent_scout error:', llmError);
+          logger.error('ai/agent/analyze-match', 'opponent_scout error', { error: llmError });
           await updateMatchPrepAnalysis(record.id, {
             status: 'failed',
             error: message,
@@ -477,7 +478,7 @@ function runOpponentScout(playerId: string, match: LoadedMatch, force: boolean):
           controller.enqueue(encoder.encode(failedFrame(FAILED_MESSAGE, FAILED_CODE)));
         }
       } catch (setupError) {
-        console.error('[ai/agent/analyze-match] opponent_scout setup error:', setupError);
+        logger.error('ai/agent/analyze-match', 'opponent_scout setup error', { error: setupError });
         controller.enqueue(encoder.encode(failedFrame(FAILED_MESSAGE, FAILED_CODE)));
       } finally {
         clearInterval(fallbackHeartbeat);

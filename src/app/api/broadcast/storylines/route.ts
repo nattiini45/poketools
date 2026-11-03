@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCreator } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { supabase } from '@/lib/supabase/client';
+import { createStoryline, listStorylinesBySeason } from '@/lib/supabase/queries/storylines';
 import { storylineInsertSchema, formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
-import type { Storyline } from '@/types/storyline';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,15 +18,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('season_storylines')
-      .select('*')
-      .eq('season_id', seasonId)
-      .order('featured', { ascending: false })
-      .order('updated_at', { ascending: false });
-
-    if (error) throw error;
-    return NextResponse.json({ success: true, data: data as Storyline[] });
+    return NextResponse.json({ success: true, data: await listStorylinesBySeason(seasonId) });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch storylines');
   }
@@ -47,23 +38,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = zodResult.data;
-
-    const { data, error } = await supabase
-      .from('season_storylines')
-      .insert({
-        season_id: body.season_id,
-        title: body.title,
-        body: body.body,
-        tags: body.tags ?? [],
-        featured: body.featured ?? false,
-        created_by: player.playerId,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return NextResponse.json({ success: true, data: data as Storyline }, { status: 201 });
+    const storyline = await createStoryline({ ...zodResult.data, created_by: player.playerId });
+    return NextResponse.json({ success: true, data: storyline }, { status: 201 });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to create storyline');
   }

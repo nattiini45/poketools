@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCreator } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
-import { supabase } from '@/lib/supabase/client';
+import { deleteStoryline, getStorylineById, updateStoryline } from '@/lib/supabase/queries/storylines';
 import { storylineUpdateSchema, formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
-import type { Storyline } from '@/types/storyline';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,21 +18,15 @@ export async function GET(
     // A malformed id names no row: 404 before the query (Postgres would reject the filter with a 500).
     const invalidId = rejectInvalidPathId(id, 'INVALID_STORYLINE_ID');
     if (invalidId) return invalidId;
-    const { data, error } = await supabase
-      .from('season_storylines')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) {
+    const storyline = await getStorylineById(id);
+    if (!storyline) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Not found', code: 'not_found_generic' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ success: true, data: data as Storyline });
+    return NextResponse.json({ success: true, data: storyline });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch storyline');
   }
@@ -59,15 +52,7 @@ export async function PATCH(
       );
     }
 
-    const { data, error } = await supabase
-      .from('season_storylines')
-      .update({ ...zodResult.data, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return NextResponse.json({ success: true, data: data as Storyline });
+    return NextResponse.json({ success: true, data: await updateStoryline(id, zodResult.data) });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update storyline');
   }
@@ -83,12 +68,7 @@ export async function DELETE(
     const invalidId = rejectInvalidPathId(id, 'INVALID_STORYLINE_ID');
     if (invalidId) return invalidId;
 
-    const { error } = await supabase
-      .from('season_storylines')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+    await deleteStoryline(id);
     return NextResponse.json({ success: true });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to delete storyline');

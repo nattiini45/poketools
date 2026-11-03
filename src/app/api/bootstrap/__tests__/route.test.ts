@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse, type NextRequest } from 'next/server';
+import { logger } from '@/lib/logger';
 
 // Save original env
 const originalEnv = { ...process.env };
@@ -123,7 +124,7 @@ describe('POST /api/bootstrap', () => {
   });
 
   it('returns 403 when the secret is wrong (no session read, no promotion)', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const res = await POST(makeRequest({ secret: 'wrong-secret' }));
     expect(res.status).toBe(403);
     const body = await res.json();
@@ -133,8 +134,8 @@ describe('POST /api/bootstrap', () => {
     expect(rpc).not.toHaveBeenCalled();
     // The rejection leaves a value-free server-side trace.
     expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith('bootstrap', 'rejected an invalid bootstrap secret');
     const logged = warnSpy.mock.calls.flat().map(String).join(' ');
-    expect(logged).toContain('[bootstrap]');
     expect(logged).not.toContain(SECRET);
     expect(logged).not.toContain('wrong-secret');
     warnSpy.mockRestore();

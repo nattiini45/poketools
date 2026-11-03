@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { matchPrepSchema, formatZodErrors } from '@/lib/validation';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -156,7 +157,11 @@ export async function POST(request: NextRequest) {
       );
     } catch (syncErr) {
       // Non-fatal — the prep team is already saved; log for observability
-      console.error('[API] Failed to sync prep team to teams table:', syncErr);
+      logger.error('api', 'Failed to sync prep team to teams table', {
+        matchId: body.match_id,
+        playerId: targetPlayerId,
+        error: syncErr,
+      });
     }
 
     // Item usage (H9) counts match-linked rows of COMPLETED matches: a rewrite

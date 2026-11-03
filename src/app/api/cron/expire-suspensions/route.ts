@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { clearExpiredSuspensions } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import { secretsEqual } from '@/lib/utils/crypto';
@@ -26,7 +27,7 @@ async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error('[cron/expire-suspensions] CRON_SECRET not configured');
+    logger.error('cron/expire-suspensions', 'CRON_SECRET not configured');
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Cron not configured', code: 'cron_not_configured' },
       { status: 500 }

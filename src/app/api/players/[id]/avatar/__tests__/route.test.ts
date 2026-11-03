@@ -74,6 +74,7 @@ import { validateAvatarConfig } from '@/lib/avatar/manifest';
 import { legacyPlayerAvatarPaths } from '@/lib/avatar/thumbnail';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { SupabaseTimeoutError } from '@/lib/supabase/timeout-fetch';
+import { logger } from '@/lib/logger';
 
 // ── Fixtures ───────────────────────────────────────────────────────────
 
@@ -394,7 +395,7 @@ describe('POST /api/players/[id]/avatar', () => {
   });
 
   it('falls back to the original (and logs the stage) when the gallery thumbnail cannot be made', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
     vi.mocked(getGalleryItem).mockResolvedValue(galleryItem()); // original missing → download fails
 
     const res = await POST(makeRequest({ gallery_id: GALLERY_ID }), makeRouteParams(PLAYER_ID));
@@ -404,8 +405,9 @@ describe('POST /api/players/[id]/avatar', () => {
       avatar_url: publicAvatarUrl(GALLERY_ORIGINAL_PATH),
     }));
     expect(consoleError).toHaveBeenCalledWith(
-      expect.stringContaining('Gallery avatar thumbnail failed at download'),
-      expect.anything(),
+      'api',
+      'Gallery avatar thumbnail failed; using the original',
+      expect.objectContaining({ stage: 'download', error: expect.anything() }),
     );
   });
 
@@ -608,7 +610,7 @@ describe('POST /api/players/[id]/avatar', () => {
   });
 
   it('returns a distinct 500 and removes the new original when the thumbnail upload fails', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
     fake.api.upload
       .mockImplementationOnce(async (path: string, body: Buffer) => {
         fake.objects.set(path, body);
@@ -626,11 +628,15 @@ describe('POST /api/players/[id]/avatar', () => {
     expect(fake.api.remove).toHaveBeenCalledWith([originalPath]);
     expect(fake.objects.has(originalPath)).toBe(false);
     expect(updatePlayer).not.toHaveBeenCalled();
-    expect(consoleError).toHaveBeenCalledWith('[API] Avatar thumbnail upload failed:', expect.anything());
+    expect(consoleError).toHaveBeenCalledWith(
+      'api',
+      'Avatar thumbnail upload failed',
+      expect.objectContaining({ playerId: PLAYER_ID, error: expect.anything() }),
+    );
   });
 
   it('removes the new original and thumbnail when the player update fails', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
     vi.mocked(updatePlayer).mockRejectedValue(new Error('db down'));
 
     const res = await POST(makeRequest({ image: toDataUrl('image/png', realPng), config: {} }), makeRouteParams(PLAYER_ID));
@@ -646,7 +652,11 @@ describe('POST /api/players/[id]/avatar', () => {
     expect(fake.objects.has(originalPath)).toBe(false);
     expect(fake.objects.has(thumbPath)).toBe(false);
     expect(revalidateTag).not.toHaveBeenCalled();
-    expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining('Unsaved avatar upload'), expect.anything());
+    expect(consoleError).not.toHaveBeenCalledWith(
+      'api',
+      expect.stringContaining('Unsaved avatar upload'),
+      expect.anything(),
+    );
   });
 
   it('keeps the uploaded objects when the current avatar is that same image', async () => {
@@ -685,7 +695,7 @@ describe('POST /api/players/[id]/avatar', () => {
   });
 
   it('keeps the uploaded objects (and logs) when the row cannot be re-read', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
     vi.mocked(updatePlayer).mockRejectedValue(new Error('db down'));
     let reads = 0;
     vi.mocked(getPlayerById).mockImplementation(async () => {
@@ -700,7 +710,11 @@ describe('POST /api/players/[id]/avatar', () => {
     expect(res.status).toBe(500);
     expect(fake.api.remove).not.toHaveBeenCalled();
     expect(fake.objects.has(originalPath)).toBe(true);
-    expect(consoleError).toHaveBeenCalledWith('[API] Unsaved avatar upload cleanup threw:', expect.anything());
+    expect(consoleError).toHaveBeenCalledWith(
+      'api',
+      'Unsaved avatar upload cleanup threw',
+      expect.objectContaining({ playerId: PLAYER_ID, error: expect.anything() }),
+    );
   });
 
   it('treats an existing thumbnail (same image uploaded again) as success', async () => {
@@ -803,13 +817,17 @@ describe('DELETE /api/players/[id]/avatar', () => {
   });
 
   it('still succeeds (and logs) when the storage cleanup fails', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
     fake.api.remove.mockResolvedValueOnce({ data: [], error: { message: 'boom' } } as never);
 
     const res = await DELETE({} as NextRequest, makeRouteParams(PLAYER_ID));
 
     expect((await res.json()).success).toBe(true);
-    expect(consoleError).toHaveBeenCalledWith('[API] Old avatar files could not be removed:', 'boom');
+    expect(consoleError).toHaveBeenCalledWith(
+      'api',
+      'Old avatar files could not be removed',
+      expect.objectContaining({ playerId: PLAYER_ID, error: expect.objectContaining({ message: 'boom' }) }),
+    );
   });
 
   it('returns 403 when deleting another player avatar as non-admin', async () => {

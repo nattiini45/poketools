@@ -23,6 +23,7 @@ vi.mock('@/lib/utils/crypto', async (importOriginal) => {
 });
 
 import { GET, POST } from '@/app/api/cron/expire-suspensions/route';
+import { logger } from '@/lib/logger';
 import { clearExpiredSuspensions } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
 import { safeErrorResponse } from '@/lib/api/error-response';
@@ -51,14 +52,14 @@ describe('/api/cron/expire-suspensions', () => {
 
   it('returns cron_not_configured and logs when CRON_SECRET is missing', async () => {
     delete process.env.CRON_SECRET;
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const res = await POST(request());
     const body = await res.json();
 
     expect(res.status).toBe(500);
     expect(body.code).toBe('cron_not_configured');
-    expect(errorSpy).toHaveBeenCalledWith('[cron/expire-suspensions] CRON_SECRET not configured');
+    expect(errorSpy).toHaveBeenCalledWith('cron/expire-suspensions', 'CRON_SECRET not configured');
     expect(clearExpiredSuspensions).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });

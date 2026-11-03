@@ -3,6 +3,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
 import { draftTicksQuerySchema } from '@/lib/draft/schemas';
 import { dispatchDraftNotifications, listTickablePools } from '@/lib/draft/notify';
+import { logger } from '@/lib/logger';
 import { expireDraftReads } from '@/lib/revalidation';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { formatZodErrors } from '@/lib/validation';
@@ -68,7 +69,7 @@ async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error('[cron/draft-ticks] CRON_SECRET not configured');
+    logger.error('cron/draft-ticks', 'CRON_SECRET not configured');
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Cron not configured', code: 'cron_not_configured' },
       { status: 500 }
@@ -111,7 +112,10 @@ async function handle(request: Request) {
           // The pool stays in its submission phase; an admin moves the deadline so the drops can change. Logged once
           // per refusal: the tick backs off until the pool changes or an hour passes, so this repeats at most hourly.
           result.publishRefused += 1;
-          console.error(`[cron/draft-ticks] redraft publish refused for pool ${pool.id}: ${tick.publishRefused}`);
+          logger.error('cron/draft-ticks', 'redraft publish refused for pool', {
+            poolId: pool.id,
+            reason: tick.publishRefused,
+          });
         }
         if (tick.publishBackoff) result.publishBackoff += 1;
         if (tick.published) {
@@ -122,7 +126,7 @@ async function handle(request: Request) {
       } catch (err) {
         // One broken pool must not stall the others; the run still answers non-2xx below.
         failedPools.push(pool.id);
-        console.error(`[cron/draft-ticks] tick failed for pool ${pool.id}:`, err);
+        logger.error('cron/draft-ticks', 'tick failed for pool', { poolId: pool.id, error: err });
       }
     }
 

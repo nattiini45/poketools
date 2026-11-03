@@ -8,6 +8,7 @@ import { getMatchById } from '@/lib/supabase/queries/matches';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { replayPreviewSchema, formatZodErrors } from '@/lib/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import type { ReplayPreviewResult, ReplaySideSuggestion } from '@/types/game';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -72,7 +73,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // The import would refuse this battle; say so before the organizer reviews it.
     const existingGameId = await findGameIdByReplayHash(replay.hash);
     if (existingGameId) {
-      console.error(`[replay-preview] replay hash ${replay.hash} is already bound to game ${existingGameId}`);
+      logger.error('replay-preview', 'replay hash is already bound to a game', {
+        replayHash: replay.hash,
+        gameId: existingGameId,
+        matchId,
+      });
       throw new ReplayAlreadyRecordedError();
     }
 

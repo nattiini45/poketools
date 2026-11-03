@@ -108,7 +108,7 @@ Webhook-based event fan-out to configured Discord channels.
 `src/lib/api/error-response.ts` — `safeErrorResponse(err, fallbackMessage)` is mandatory for every API route catch block. It:
 1. Passes `UserFacingError` subclasses through (specific message + optional `code` + status)
 2. Passes `AuthError` messages through
-3. Logs everything else with `console.error` and returns the static fallback
+3. Logs everything else with `logger.error` (tag `api`, `requestId`, `x-request-id` header) and returns the static fallback
 
 `src/lib/api/user-facing-error.ts` — `UserFacingError` base class for domain errors that are safe to surface.
 

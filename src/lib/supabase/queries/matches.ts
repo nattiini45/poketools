@@ -3,6 +3,7 @@ import { assertValidUuid } from '@/lib/utils/uuid';
 import { ilikeAnyOf, postgrestQuoted } from '@/lib/supabase/postgrest-filter';
 import { readBoundedPages } from '@/lib/supabase/read-bounded-pages';
 import { readAllPages } from '@/lib/supabase/read-all-pages';
+import { compareReplayOrder } from '@/lib/rating/replay-order';
 import { releaseTeamsFromMatches } from './teams';
 import type { Tables } from '@/types/database';
 import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
@@ -1968,4 +1969,47 @@ export async function getPlayerIdsWithCompletedMatches(
     result.add(row.player_2_id);
   }
   return result;
+}
+
+/** A completed match with a winner, as the gamification backfill replays it. */
+export interface CompletedMatchForReplay {
+  id: string;
+  player_1_id: string;
+  player_2_id: string;
+  winner_id: string | null;
+  tournament_id: string;
+  date_played: string | null;
+  created_at: string;
+}
+
+const REPLAY_PAGE_SIZE = 1000;
+
+/**
+ * Every completed match with a winner, in the canonical replay order
+ * (`compareReplayOrder`: `date_played ?? created_at`, oldest first), the same
+ * order the rating rebuild and reconcile replay each player's curve in.
+ * `updated_at` is NOT a chronology: a match confirmed, edited or entered after
+ * it was played would sort late.
+ *
+ * Pages past the row cap on a total server order (`date_played` asc nulls
+ * last, `created_at`, `id`), then sorts the whole list with the shared
+ * comparator, so the replay order does not depend on how pages split.
+ */
+export async function listCompletedMatchesInReplayOrder(): Promise<CompletedMatchForReplay[]> {
+  const matches: CompletedMatchForReplay[] = [];
+  for (let from = 0; ; from += REPLAY_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('matches')
+      .select('id, player_1_id, player_2_id, winner_id, tournament_id, date_played, created_at')
+      .eq('status', 'completed')
+      .not('winner_id', 'is', null)
+      .order('date_played', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + REPLAY_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    matches.push(...data);
+    if (data.length < REPLAY_PAGE_SIZE) return matches.sort(compareReplayOrder);
+  }
 }

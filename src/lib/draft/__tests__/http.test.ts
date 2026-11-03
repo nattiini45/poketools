@@ -26,6 +26,16 @@ describe('draftErrorResponse', () => {
       snapshot: { state_version: 3 },
     });
     expect(errorSpy).toHaveBeenCalledOnce();
+    const line = JSON.parse(String(errorSpy.mock.calls[0][0]));
+    expect(line).toMatchObject({
+      level: 'error',
+      tag: 'api',
+      message: 'Failed to make pick',
+      status: 422,
+      code: 'INSUFFICIENT_BUDGET',
+      error: { name: 'DraftRuleError' },
+    });
+    expect(line.error.stack).toEqual(expect.any(String));
   });
 
   it('omits params, detail and snapshot when absent', async () => {

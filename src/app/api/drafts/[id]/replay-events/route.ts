@@ -7,9 +7,9 @@ import {
   getReplayEventsByPool,
   createReplayEvent,
   getNextSequenceNumber,
+  getLineIdsByPick,
 } from '@/lib/supabase/queries/draft-replay-events';
 import { getDraftPoolById } from '@/lib/supabase/queries/drafts';
-import { supabase } from '@/lib/supabase/client';
 import type { ApiResult } from '@/types/api';
 import type { DraftReplayEvent } from '@/types/broadcast';
 import { formatZodErrors } from '@/lib/validation';
@@ -20,20 +20,6 @@ interface RouteContext {
 
 /** A replay event plus the drafted line id of its pick (EPB pools; null otherwise). */
 type ReplayEventWithLine = DraftReplayEvent & { line_id: string | null };
-
-/**
- * pick id → line id of a pool's picks. A narrow select (`id, line_id`): no other
- * pick column and no player join is read, so nothing private can leak.
- */
-async function lineIdsByPick(poolId: string): Promise<Map<string, string>> {
-  const { data, error } = await supabase.from('draft_picks').select('id, line_id').eq('draft_pool_id', poolId);
-  if (error) throw error;
-  const lineByPick = new Map<string, string>();
-  for (const pick of data ?? []) {
-    if (pick.line_id) lineByPick.set(pick.id, pick.line_id);
-  }
-  return lineByPick;
-}
 
 /**
  * GET /api/drafts/[id]/replay-events — public, for replay playback. Each event carries the `line_id` of its
@@ -47,7 +33,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (!uuidSchema.safeParse(id).success) {
       throw new UserFacingError('Draft pool not found', { code: 'POOL_NOT_FOUND', status: 404 });
     }
-    const [events, lineByPick] = await Promise.all([getReplayEventsByPool(id), lineIdsByPick(id)]);
+    const [events, lineByPick] = await Promise.all([getReplayEventsByPool(id), getLineIdsByPick(id)]);
     const data: ReplayEventWithLine[] = events.map((event) => ({
       ...event,
       line_id: event.pick_id ? (lineByPick.get(event.pick_id) ?? null) : null,

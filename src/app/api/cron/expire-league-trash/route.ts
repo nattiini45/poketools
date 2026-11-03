@@ -22,6 +22,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import { LEAGUE_TRASH_EXPIRE_BATCH, LEAGUE_TRASH_SWEEP_BUDGET_MS } from '@/lib/league-trash/constants';
 import { sweepLeagueSocialImages, type SocialImageSweepResult } from '@/lib/league-trash/social-image-sweep';
 import { expireLeagueTrash } from '@/lib/supabase/queries/league-trash';
@@ -48,7 +49,7 @@ async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error('[cron/expire-league-trash] CRON_SECRET not configured');
+    logger.error('cron/expire-league-trash', 'CRON_SECRET not configured');
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Cron not configured', code: 'cron_not_configured' },
       { status: 500 }

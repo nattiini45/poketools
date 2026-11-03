@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { submitsAsMatchAdmin } from '@/lib/auth/match-access';
@@ -113,11 +114,12 @@ export async function POST(request: NextRequest) {
         );
         momentsOutcome.moments_saved = count;
       } catch (momentsError) {
-        console.error(
-          '[manual-result] failed to save broadcast moments',
-          { match_id: body.match_id, game_id: result.game_id, count },
-          momentsError
-        );
+        logger.error('manual-result', 'failed to save broadcast moments', {
+          matchId: body.match_id,
+          gameId: result.game_id,
+          count,
+          error: momentsError,
+        });
         momentsOutcome.warning = {
           code: MOMENTS_NOT_SAVED_WARNING,
           error: `The game was recorded, but its ${count} marked moment${count === 1 ? '' : 's'} could not be saved. The failure was logged.`,

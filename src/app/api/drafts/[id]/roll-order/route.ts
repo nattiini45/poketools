@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { requireDraftAdmin } from '@/lib/auth/helpers';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import { DraftRuleError } from '@/lib/draft/errors';
 import { draftErrorResponse } from '@/lib/draft/http';
 import { poolRosterIds } from '@/lib/draft/pool-roster';
@@ -23,7 +24,7 @@ async function optionalJsonBody(request: Request): Promise<unknown> {
   try {
     return JSON.parse(text) as unknown;
   } catch (err) {
-    console.error('[api/drafts/roll-order] malformed JSON body:', err);
+    logger.error('api/drafts/roll-order', 'malformed JSON body', { error: err });
     throw new UserFacingError('Invalid JSON body', { code: 'invalid_json', status: 400 });
   }
 }

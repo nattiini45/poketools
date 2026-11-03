@@ -22,6 +22,7 @@
 import 'server-only';
 
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { logger } from '@/lib/logger';
 import { effectiveThresholds } from '@/lib/draft/line-catalog-data';
 import { lineIdOfEntry } from '@/lib/draft/line-identity';
 import {
@@ -125,7 +126,7 @@ export async function readJsonBody(request: Request): Promise<unknown> {
   try {
     return await request.json();
   } catch (err) {
-    console.error('[api/seasons/tokens] malformed JSON body:', err);
+    logger.error('api/seasons/tokens', 'malformed JSON body', { error: err });
     throw new UserFacingError('Invalid JSON body', { code: 'invalid_json', status: 400 });
   }
 }
@@ -373,9 +374,12 @@ export function buildTokenOverview(ctx: TokenSeasonContext, playerId: string, no
   // Σ spends (tokens; no legacy kill_token grant stock: no carried-over comeback stock): the same `v_spent` as epb_spend_comeback_tokens.
   const spent = comebackSpentTotal(ctx.spends, playerId);
   if (earned - spent < 0) {
-    console.error(
-      `[api/seasons/tokens] Comeback Token balance below zero for player ${playerId} in season ${ctx.seasonId}: earned ${earned}, spent ${spent}`,
-    );
+    logger.error('api/seasons/tokens', 'Comeback Token balance below zero', {
+      playerId,
+      seasonId: ctx.seasonId,
+      earned,
+      spent,
+    });
   }
 
   return {

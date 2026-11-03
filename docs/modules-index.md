@@ -17,7 +17,7 @@ This is the central documentation index for all major PokéTools modules.
 ### Core Modules
 
 - **Auth** — User authentication and authorization (Discord OAuth primary + email/password alternative). See [Auth](./auth.md), [Email/Password Auth](./auth-email-password.md).
-- **Database (Supabase)** — Typed persistence and query layer. See [Supabase](./supabase.md); backups, restore and lock-safe migrations: [Operations: Backups](./operations-backup.md).
+- **Database (Supabase)** — Typed persistence and query layer. See [Supabase](./supabase.md); backups, restore and lock-safe migrations: [Operations: Backups](./operations-backup.md). Server logs, request ids and the error digest: [Operations: Logging](./operations-logging.md).
 - **Tournament** — Pairings, standings, advancement, match-state validation. See [Tournament](./tournament.md).
 - **Draft** — Draft pools, picks, and evo-league helpers. See [Draft](./draft.md).
 - **Evolution Point Buy** — EPB format engine (mechanics only): point-buy lists, progress sources and tokens, redraft, format gating; the league's numbers and rulings come from the active format pack. See [Evolution Point Buy](./evolution-point-buy.md) and the [EPB Admin Guide](./ADMIN_GUIDE_EVOLUTION_POINT_BUY.md).
@@ -146,7 +146,7 @@ Test suites live in `__tests__/` directories adjacent to the modules they cover.
 | i18n core | `src/i18n/__tests__/*.test.ts(x)`, `src/i18n/content/__tests__/engine-labels.test.ts`, `src/app/api/locale/__tests__/route.test.ts` | Translator, plurals, rich text, formatter presets, provider-less hooks, cookie readers, `de`/`en` parity, error-code catalogs, cache boundary |
 | CI Guard / i18n strings | `scripts/__tests__/check-i18n-strings.test.mjs` | One fixture per rule (JSX text, text attributes, setters/dialogs, label objects, locale hazards) and per ignore case; allowlist globs |
 | CI Guard / route manifest | `scripts/__tests__/route-manifest.test.mjs` | Parser fixtures (aliased, namespace, re-exported and dynamic-import guards; re-exported handlers; schemas, buckets, audit/emit/expire calls; import-name fingerprint stability), overlay and untracked-file skipping, `--write`/`--check` on a scratch repo, the declared-guard comparison, and the drift check of the committed `scripts/data/route-manifest.json` |
-| CI Guard / safe-error-scan | `scripts/__tests__/safe-error-scan.test.mjs` | Per-return catch-block enforcement — flags raw `NextResponse`/`Response` returns unless preceded by `console.error` or a `// safe-error-response-allow:` comment |
+| CI Guard / safe-error-scan | `scripts/__tests__/safe-error-scan.test.mjs` | Per-return catch-block enforcement — flags raw `NextResponse`/`Response` returns unless preceded by a `logger.error` / `logger.warn` call that includes the caught error, or a `// safe-error-response-allow:` comment |
 
 ## Getting Started
 

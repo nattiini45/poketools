@@ -10,6 +10,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 import type { Season } from '@/types/season';
+import { logger } from '@/lib/logger';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 
@@ -113,7 +114,7 @@ beforeEach(() => {
   vi.mocked(requireResourceAdmin).mockResolvedValue(siteAdmin);
   // The route reads the stored league once, before any guard or write.
   vi.mocked(getSeasonById).mockResolvedValue(season);
-  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
   return () => errorSpy.mockRestore();
 });
 
@@ -208,7 +209,11 @@ describe('PATCH /api/seasons/[id] — test-league flag and ratings', () => {
     });
     // The internal message stays in the server log, not the response.
     expect(JSON.stringify(body)).not.toContain('replace RPC failed');
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('rating rebuild failed'), error);
+    expect(errorSpy).toHaveBeenCalledWith(
+      'api/seasons',
+      'test-league flag: rating rebuild failed',
+      expect.objectContaining({ seasonId: SEASON_ID, error }),
+    );
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({ changed: true, rating_rebuild_error: 'test_flag_rating_rebuild_failed' }),
@@ -232,7 +237,11 @@ describe('PATCH /api/seasons/[id] — test-league flag and ratings', () => {
       code: 'test_flag_rating_rebuild_unsettled',
       error: errorsAdmin.en.test_flag_rating_rebuild_unsettled,
     });
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('rating rebuild not settled after 8 passes'));
+    expect(errorSpy).toHaveBeenCalledWith(
+      'api/seasons',
+      'test-league flag: rating rebuild not settled',
+      expect.objectContaining({ seasonId: SEASON_ID, passes: 8 }),
+    );
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({

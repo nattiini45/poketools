@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
@@ -156,7 +157,7 @@ describe('POST /api/seed-rulesets', () => {
     process.env.BOOTSTRAP_MODE_ENABLED = 'true';
     process.env.BOOTSTRAP_SECRET = 'correct-secret';
 
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
     const req = makeRequest({ secret: 'wrong-secret' });
     const res = await POST(req);
@@ -167,8 +168,8 @@ describe('POST /api/seed-rulesets', () => {
     expect(json.code).toBe('seed_rulesets_secret_invalid');
     // The rejection leaves a value-free server-side trace.
     expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith('seed-rulesets', 'rejected an invalid bootstrap secret');
     const logged = warnSpy.mock.calls.flat().map(String).join(' ');
-    expect(logged).toContain('[seed-rulesets]');
     expect(logged).not.toContain('correct-secret');
     expect(logged).not.toContain('wrong-secret');
     warnSpy.mockRestore();

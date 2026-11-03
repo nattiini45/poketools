@@ -3,13 +3,13 @@ import { revalidatePath } from 'next/cache';
 import { requireAuth } from '@/lib/auth/helpers';
 import { superadminPlayerProtectedResponse } from '@/lib/auth/superadmin-player-guard';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { avatarUploadSchema, formatZodErrors } from '@/lib/validation';
 import { getPlayerById, updatePlayer } from '@/lib/supabase/queries/players';
 import { getGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
-import { supabase } from '@/lib/supabase/client';
+import { getAvatarBucket } from '@/lib/supabase/storage/avatars';
 import { validateAvatarConfig } from '@/lib/avatar/manifest';
 import {
-  AVATAR_BUCKET,
   avatarStoragePathFromUrl,
   avatarThumbPath,
   avatarThumbUrl,
@@ -63,9 +63,9 @@ async function removeStalePlayerAvatarFiles(
   if (stale.length === 0) return;
   try {
     const { error } = await bucket.remove(stale);
-    if (error) console.error('[API] Old avatar files could not be removed:', error.message);
+    if (error) logger.error('api', 'Old avatar files could not be removed', { playerId, error });
   } catch (err) {
-    console.error('[API] Old avatar file cleanup threw:', err);
+    logger.error('api', 'Old avatar file cleanup threw', { playerId, error: err });
   }
 }
 
@@ -90,9 +90,9 @@ async function removeUnsavedAvatarUpload(
       : null;
     if (currentPath && uploaded.includes(currentPath)) return;
     const { error } = await bucket.remove(uploaded);
-    if (error) console.error('[API] Unsaved avatar upload could not be removed:', error.message);
+    if (error) logger.error('api', 'Unsaved avatar upload could not be removed', { playerId, error });
   } catch (err) {
-    console.error('[API] Unsaved avatar upload cleanup threw:', err);
+    logger.error('api', 'Unsaved avatar upload cleanup threw', { playerId, error: err });
   }
 }
 
@@ -112,7 +112,7 @@ async function galleryAvatarUrl(bucket: AvatarBucket, imageUrl: string): Promise
     return thumbUrl;
   } catch (err) {
     const stage = err instanceof AvatarThumbnailError ? err.stage : 'unknown';
-    console.error(`[API] Gallery avatar thumbnail failed at ${stage}; using the original:`, err);
+    logger.error('api', 'Gallery avatar thumbnail failed; using the original', { stage, error: err });
     return imageUrl;
   }
 }
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
     const body = zodResult.data;
 
-    const avatarBucket = supabase.storage.from(AVATAR_BUCKET);
+    const avatarBucket = getAvatarBucket();
     // Storage names use the id read from the DB, never the raw route param.
     const storagePlayerId = player.id;
     const previousAvatarUrl = player.avatar_url;
@@ -319,7 +319,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     try {
       thumbnail = await createAvatarThumbnail(buffer);
     } catch (err) {
-      console.error('[API] Avatar thumbnail could not be created:', err);
+      logger.error('api', 'Avatar thumbnail could not be created', { playerId, error: err });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Avatar image could not be processed', code: 'avatar_image_unprocessable' },
         { status: 400 }
@@ -344,7 +344,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (uploadError) {
       // A Storage request deadline is its own cause (504 upstream_timeout), not the upload failure.
       if (isSupabaseTimeoutError(uploadError)) return safeErrorResponse(uploadError, 'Failed to upload avatar');
-      console.error('[API] Avatar upload failed:', uploadError.message);
+      logger.error('api', 'Avatar upload failed', { playerId, error: uploadError });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Failed to upload avatar', code: 'avatar_upload_failed' },
         { status: 500 }
@@ -354,7 +354,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     try {
       await putAvatarThumbnail(avatarBucket, filePath, thumbnail);
     } catch (err) {
-      console.error('[API] Avatar thumbnail upload failed:', err);
+      logger.error('api', 'Avatar thumbnail upload failed', { playerId, error: err });
       // Best effort: do not leave an unreferenced original behind — unless the
       // current avatar is this same image (same content hash), which must stay.
       const previousPath = previousAvatarUrl
@@ -363,7 +363,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (previousPath !== filePath && previousPath !== thumbPath) {
         const { error: rollbackError } = await avatarBucket.remove([filePath]);
         if (rollbackError) {
-          console.error('[API] Avatar original rollback failed:', rollbackError.message);
+          logger.error('api', 'Avatar original rollback failed', { playerId, error: rollbackError });
         }
       }
       if (isSupabaseTimeoutError(err)) return safeErrorResponse(err, 'Failed to upload avatar thumbnail');
@@ -438,7 +438,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     // Then delete the player's own avatar objects (legacy names + current version).
     // Gallery images are left alone: the gallery owns them.
     await removeStalePlayerAvatarFiles(
-      supabase.storage.from(AVATAR_BUCKET),
+      getAvatarBucket(),
       player.id,
       player.avatar_url,
       [],

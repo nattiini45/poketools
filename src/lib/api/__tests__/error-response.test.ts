@@ -7,6 +7,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Re-create the class inside the factory (vi.mock is hoisted, so it
 // cannot reference top-level variables).
 
+// Next installs `AsyncLocalStorage` on the global in its own server; its request store module asserts it on load.
+await vi.hoisted(async () => {
+  const g = globalThis as { AsyncLocalStorage?: unknown };
+  g.AsyncLocalStorage ??= (await import('node:async_hooks')).AsyncLocalStorage;
+});
+
 vi.mock('@/lib/auth/helpers', () => ({
   AuthError: (() => {
     class AuthError extends Error {
@@ -23,12 +29,30 @@ vi.mock('@/lib/auth/helpers', () => ({
   })(),
 }));
 
+import {
+  workUnitAsyncStorage,
+  type WorkUnitStore,
+} from 'next/dist/server/app-render/work-unit-async-storage.external';
 import { safeErrorResponse } from '../error-response';
 import { UserFacingError } from '../user-facing-error';
 import { AuthError } from '@/lib/auth/helpers';
 import { SupabaseTimeoutError } from '@/lib/supabase/timeout-fetch';
 
 // ── Setup ────────────────────────────────────────────────────────────
+
+type ConsoleSpy = ReturnType<typeof vi.spyOn>;
+
+/** The one JSON line the logger wrote through the spied console method. */
+interface LoggedLine {
+  requestId?: string;
+  error: { stack: string };
+  [key: string]: unknown;
+}
+
+function loggedLine(spy: ConsoleSpy): LoggedLine {
+  expect(spy).toHaveBeenCalledTimes(1);
+  return JSON.parse(String(spy.mock.calls[0][0]));
+}
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -73,18 +97,30 @@ describe('safeErrorResponse', () => {
     const err = new Error('Internal kaboom');
     safeErrorResponse(err, 'Failed to process');
 
-    expect(consoleSpy).toHaveBeenCalledTimes(1);
-    expect(consoleSpy).toHaveBeenCalledWith('[API] Failed to process:', err);
+    const line = loggedLine(consoleSpy);
+    expect(line).toMatchObject({ level: 'error', tag: 'api', message: 'Failed to process', status: 500 });
+    expect(line.error).toMatchObject({ name: 'Error', message: 'Internal kaboom' });
+    expect(line.error.stack).toContain('Internal kaboom');
     consoleSpy.mockRestore();
   });
 
-  it('does not log AuthError to console.error', () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const err = new AuthError('Forbidden', 403);
-    safeErrorResponse(err, 'Fallback');
+  it('logs an AuthError as one warn line with the request id, status and code, never as an error line', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const err = new AuthError('Forbidden', 403, 'account_banned');
+    const response = safeErrorResponse(err, 'Fallback');
 
-    expect(consoleSpy).not.toHaveBeenCalled();
-    consoleSpy.mockRestore();
+    expect(errorSpy).not.toHaveBeenCalled();
+    const line = loggedLine(warnSpy);
+    expect(line).toMatchObject({
+      level: 'warn',
+      tag: 'api',
+      message: 'Fallback',
+      status: 403,
+      code: 'account_banned',
+      requestId: response.headers.get('x-request-id'),
+    });
+    expect(JSON.stringify(line)).not.toContain('stack');
   });
 
   it('uses default 500 status for non-auth errors when no status provided', () => {
@@ -108,7 +144,7 @@ describe('safeErrorResponse', () => {
 
     expect(response.status).toBe(500);
     expect(body).toEqual({ success: false, error: 'Something failed' });
-    expect(consoleSpy).toHaveBeenCalledWith('[API] Something failed:', 'string error');
+    expect(loggedLine(consoleSpy)).toMatchObject({ tag: 'api', message: 'Something failed', error: 'string error' });
     consoleSpy.mockRestore();
   });
 
@@ -156,8 +192,7 @@ describe('safeErrorResponse', () => {
     const err = new UserFacingError('Domain failure', { code: 'PHASE_NOT_FOUND' });
     safeErrorResponse(err, 'Fallback');
 
-    expect(consoleSpy).toHaveBeenCalledTimes(1);
-    expect(consoleSpy).toHaveBeenCalledWith('[API] Fallback:', err);
+    expect(loggedLine(consoleSpy)).toMatchObject({ tag: 'api', message: 'Fallback', error: { message: 'Domain failure' } });
     consoleSpy.mockRestore();
   });
 
@@ -254,7 +289,7 @@ describe('safeErrorResponse', () => {
       error: 'Failed to save the language setting',
       code: 'locale_save_failed',
     });
-    expect(consoleSpy).toHaveBeenCalledWith('[API] Failed to save the language setting:', err);
+    expect(loggedLine(consoleSpy)).toMatchObject({ tag: 'api', message: 'Failed to save the language setting', error: { message: 'db exploded' } });
     consoleSpy.mockRestore();
   });
 
@@ -285,6 +320,107 @@ describe('safeErrorResponse', () => {
     consoleSpy.mockRestore();
   });
 
+  describe('request id', () => {
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+    it('sets x-request-id on the response and logs the same id on the matching line', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = safeErrorResponse(new Error('SQL syntax error near line 42'), 'Failed to create resource');
+
+      const id = response.headers.get('x-request-id');
+      expect(id).toMatch(UUID);
+      expect(loggedLine(consoleSpy).requestId).toBe(id);
+      // The client still gets only the static fallback.
+      const raw = await response.text();
+      expect(JSON.parse(raw)).toEqual({ success: false, error: 'Failed to create resource' });
+      expect(raw).not.toContain('SQL');
+    });
+
+    it('issues a different id for each failure', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const a = safeErrorResponse(new Error('a'), 'F').headers.get('x-request-id');
+      const b = safeErrorResponse(new Error('b'), 'F').headers.get('x-request-id');
+      expect(a).not.toBe(b);
+    });
+
+    it('reuses an incoming x-request-id when the route passes its request', () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const request = new Request('http://localhost/api/x', { headers: { 'x-request-id': 'req-abc-12345' } });
+      const response = safeErrorResponse(new Error('boom'), 'F', 500, undefined, request);
+
+      expect(response.headers.get('x-request-id')).toBe('req-abc-12345');
+      expect(loggedLine(consoleSpy).requestId).toBe('req-abc-12345');
+    });
+
+    it('replaces an incoming id that is not a plain token', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const request = new Request('http://localhost/api/x', { headers: { 'x-request-id': 'bad id\twith spaces' } });
+      const response = safeErrorResponse(new Error('boom'), 'F', 500, undefined, request);
+
+      expect(response.headers.get('x-request-id')).toMatch(UUID);
+    });
+
+    describe('request in scope (no request argument)', () => {
+      const inRequest = <T,>(headers: Record<string, string>, run: () => T): T =>
+        workUnitAsyncStorage.run(
+          { type: 'request', headers: new Headers(headers) } as unknown as WorkUnitStore,
+          run
+        );
+
+      it('reuses the incoming x-request-id of the request the handler is serving', () => {
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = inRequest({ 'x-request-id': 'req-abc-12345' }, () =>
+          safeErrorResponse(new Error('boom'), 'F')
+        );
+
+        expect(response.headers.get('x-request-id')).toBe('req-abc-12345');
+        expect(loggedLine(consoleSpy).requestId).toBe('req-abc-12345');
+      });
+
+      it('replaces a malformed incoming id with a fresh one', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = inRequest({ 'x-request-id': 'bad id with spaces' }, () =>
+          safeErrorResponse(new Error('boom'), 'F')
+        );
+
+        expect(response.headers.get('x-request-id')).toMatch(UUID);
+      });
+
+      it('issues a fresh id when the request sent none', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = inRequest({}, () => safeErrorResponse(new Error('boom'), 'F'));
+
+        expect(response.headers.get('x-request-id')).toMatch(UUID);
+      });
+
+      it('prefers an explicitly passed request over the request in scope', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const explicit = new Request('http://localhost/api/x', { headers: { 'x-request-id': 'explicit-id-1234' } });
+        const response = inRequest({ 'x-request-id': 'ambient-id-1234' }, () =>
+          safeErrorResponse(new Error('boom'), 'F', 500, undefined, explicit)
+        );
+
+        expect(response.headers.get('x-request-id')).toBe('explicit-id-1234');
+      });
+
+      it('issues a fresh id inside a store that is not a request (a cache callback)', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = workUnitAsyncStorage.run({ type: 'cache' } as unknown as WorkUnitStore, () =>
+          safeErrorResponse(new Error('boom'), 'F')
+        );
+
+        expect(response.headers.get('x-request-id')).toMatch(UUID);
+      });
+    });
+
+    it('is also set on UserFacingError, timeout and AuthError responses', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const timeoutErr = new SupabaseTimeoutError('rest', 'GET', '/rest/v1/seasons', 10_000, new Error('aborted'));
+      for (const err of [new UserFacingError('Nope'), timeoutErr, new AuthError('No', 401)]) {
+        expect(safeErrorResponse(err, 'F').headers.get('x-request-id')).toMatch(UUID);
+      }
+    });
+  });
   describe('Supabase request deadline', () => {
     const timeout = new SupabaseTimeoutError('rest', 'GET', '/rest/v1/seasons', 10_000, new Error('aborted'));
 
@@ -295,7 +431,11 @@ describe('safeErrorResponse', () => {
 
       expect(res.status).toBe(504);
       expect(await res.json()).toEqual({ success: false, error: 'Failed to fetch season', code: 'upstream_timeout' });
-      expect(consoleSpy).toHaveBeenCalledWith('[API] Failed to fetch season (Supabase request deadline):', timeout);
+      expect(loggedLine(consoleSpy)).toMatchObject({
+        tag: 'api',
+        message: 'Failed to fetch season (Supabase request deadline)',
+        error: { name: 'SupabaseTimeoutError' },
+      });
     });
 
     it('recognises the PostgREST copy a query module rethrows (a plain object)', async () => {

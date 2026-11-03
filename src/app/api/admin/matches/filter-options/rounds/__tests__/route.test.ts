@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
+import { logger } from '@/lib/logger';
 
 vi.mock('@/lib/auth/helpers', () => {
   class AuthError extends Error {
@@ -157,11 +158,13 @@ describe('GET /api/admin/matches/filter-options/rounds: payload', () => {
 describe('GET /api/admin/matches/filter-options/rounds: errors', () => {
   it('returns 500 with the fallback message on an unexpected error, and logs the cause', async () => {
     vi.mocked(listAdminMatchRounds).mockRejectedValue(new Error('rounds table unavailable'));
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const res = await GET(req(`?tournament_id=${TOURNAMENT}`));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ success: false, error: 'Failed to load match rounds' });
-    expect(spy.mock.calls.flat().some((arg) => arg instanceof Error && arg.message === 'rounds table unavailable')).toBe(true);
+    expect(spy).toHaveBeenCalledWith('api', 'Failed to load match rounds', expect.objectContaining({
+      error: expect.objectContaining({ message: 'rounds table unavailable' }),
+    }));
     spy.mockRestore();
   });
 });

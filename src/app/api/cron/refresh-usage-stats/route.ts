@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server';
 import { importAllStats } from '@/lib/smogon/import-stats';
 import { importAllSets } from '@/lib/smogon/import-sets';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { expirePublicTags, publicTags } from '@/lib/revalidation';
 import { secretsEqual } from '@/lib/utils/crypto';
 import type { ApiResult } from '@/types/api';
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error('[cron/refresh-usage-stats] CRON_SECRET not configured');
+    logger.error('cron/refresh-usage-stats', 'CRON_SECRET not configured');
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Cron not configured', code: 'cron_not_configured' },
       { status: 500 }

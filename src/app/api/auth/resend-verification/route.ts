@@ -5,6 +5,7 @@ import { readJsonBody } from '@/lib/api/json-body';
 import { checkAuthRateLimit } from '@/lib/auth/rate-limits';
 import { rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { resendVerificationSchema, formatZodErrors } from '@/lib/validation';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 
 // Public: no auth required
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       // Swallow per-email failures (unknown address, already confirmed,
       // rate limit) — same generic response either way.
-      console.warn('[auth] resend verification failed:', error.code ?? error.message);
+      logger.warn('auth', 'resend verification failed', { reason: error.code ?? error.message });
     }
 
     return NextResponse.json<ApiResult<{ message: string }>>({

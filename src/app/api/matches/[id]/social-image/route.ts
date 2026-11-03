@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { socialImageSchema, formatZodErrors } from '@/lib/validation';
 import { getMatchById, updateMatchSocialImageUrl } from '@/lib/supabase/queries/matches';
-import { supabase } from '@/lib/supabase/client';
+import { removeSocialImage, uploadSocialImage } from '@/lib/supabase/storage/social-images';
 import { isSupabaseTimeoutError } from '@/lib/supabase/timeout-fetch';
 import { isValidUuid } from '@/lib/utils/uuid';
 import type { ApiResult } from '@/types/api';
 import {
-  SOCIAL_IMAGE_BUCKET,
-  SOCIAL_IMAGE_CACHE_CONTROL,
   SOCIAL_IMAGE_MAX_BYTES,
   socialImagePath,
   socialImagePathFromUrl,
@@ -93,30 +92,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // A new immutable name per upload: never overwrite an object in place.
     const filePath = socialImagePath(match.id);
 
-    const { error: uploadError } = await supabase.storage
-      .from(SOCIAL_IMAGE_BUCKET)
-      .upload(filePath, buffer, {
-        contentType: 'image/png',
-        cacheControl: SOCIAL_IMAGE_CACHE_CONTROL,
-        upsert: false,
-      });
+    const upload = await uploadSocialImage(filePath, buffer);
 
-    if (uploadError) {
+    if (upload.error) {
       // A Storage request deadline is its own cause (504 upstream_timeout), not the upload failure.
-      if (isSupabaseTimeoutError(uploadError)) return safeErrorResponse(uploadError, 'Failed to upload social image');
-      console.error('[API] Social image upload failed:', uploadError.message);
+      if (isSupabaseTimeoutError(upload.error)) return safeErrorResponse(upload.error, 'Failed to upload social image');
+      logger.error('api', 'Social image upload failed', { matchId: match.id, error: upload.error });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Failed to upload social image', code: 'match_social_image_upload_failed' },
         { status: 500 },
       );
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(SOCIAL_IMAGE_BUCKET)
-      .getPublicUrl(filePath);
-
-    const publicUrl = urlData.publicUrl;
+    const publicUrl = upload.publicUrl;
 
     // Store URL on match record
     await updateMatchSocialImageUrl(match.id, publicUrl);
@@ -155,18 +143,20 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       ? socialImagePathFromUrl(match.social_image_url, match.id)
       : null;
     if (filePath) {
-      const { error: removeError } = await supabase.storage.from(SOCIAL_IMAGE_BUCKET).remove([filePath]);
+      const { error: removeError } = await removeSocialImage(filePath);
       if (removeError) {
         // Keep the URL so the delete can be retried; clearing it would orphan the object.
         if (isSupabaseTimeoutError(removeError)) return safeErrorResponse(removeError, 'Failed to remove social image file');
-        console.error('[API] Social image removal failed:', filePath, removeError.message);
+        logger.error('api', 'Social image removal failed', { matchId: match.id, filePath, error: removeError });
         return NextResponse.json<ApiResult<never>>(
           { success: false, error: 'Failed to remove social image file', code: 'STORAGE_REMOVE_FAILED' },
           { status: 500 },
         );
       }
     } else if (match.social_image_url) {
-      console.warn('[API] Social image URL names no removable object; clearing the column only:', match.id);
+      logger.warn('api', 'Social image URL names no removable object; clearing the column only', {
+        matchId: match.id,
+      });
     }
     await updateMatchSocialImageUrl(match.id, null);
 
