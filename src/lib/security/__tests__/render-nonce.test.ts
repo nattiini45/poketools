@@ -1,14 +1,9 @@
+import { nextConfigHeaders } from './next-config-response';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { parseRequestHeaders } from 'next/dist/server/route-modules/app-page/parse-request-headers';
 import { proxy } from '../../../proxy';
 
-// Next's work-store module picks a stub unless the runtime exposes this global, as its own servers do.
-await vi.hoisted(async () => {
-  const { AsyncLocalStorage } = await import('node:async_hooks');
-  Object.assign(globalThis, { AsyncLocalStorage });
-});
-const { unstable_getResponseFromNextConfig: responseFromNextConfig } = await import('next/experimental/testing/server');
 
 /**
  * What the app-page render parses its nonce from (issue #37). On Vercel no Next script got the nonce: the platform hands
@@ -22,9 +17,7 @@ async function headersSeenByRender(request: NextRequest, response: Response) {
   for (const key of Object.keys(seen)) if (!overridden.has(key)) delete seen[key];
   for (const key of overridden) seen[key] = response.headers.get(`x-middleware-request-${key}`) ?? '';
   for (const [key, value] of response.headers) if (!key.startsWith('x-middleware-')) seen[key] = value;
-  const config = (await import('../../../../next.config.mjs')).default;
-  const fromConfig = await responseFromNextConfig({ url: request.url, nextConfig: config });
-  for (const [key, value] of fromConfig.headers) seen[key] = value;
+  for (const [key, value] of await nextConfigHeaders(new URL(request.url).pathname)) seen[key] = value;
   return seen;
 }
 

@@ -1,14 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { nextConfigHeaders } from './next-config-response';
+import { describe, expect, it } from 'vitest';
+import { unstable_doesMiddlewareMatch as doesProxyMatch } from 'next/experimental/testing/server';
 import { config } from '../../../proxy';
 import { buildStaticPolicy } from '../csp-policy.mjs';
-
-// Next's work-store module picks a stub unless the runtime exposes this global, as its own servers do.
-await vi.hoisted(async () => {
-  const { AsyncLocalStorage } = await import('node:async_hooks');
-  Object.assign(globalThis, { AsyncLocalStorage });
-});
-const { unstable_doesMiddlewareMatch: doesProxyMatch, unstable_getResponseFromNextConfig: responseFromNextConfig } =
-  await import('next/experimental/testing/server');
 
 type HeaderRule = { source: string; headers: Array<{ key: string; value: string }> };
 
@@ -23,8 +17,7 @@ async function headerRules(): Promise<HeaderRule[]> {
 const value = (rule: HeaderRule, key: string) => rule.headers.find((header) => header.key === key)?.value;
 
 async function configHeader(path: string, key: string) {
-  const response = await responseFromNextConfig({ url: `https://poketools.test${path}`, nextConfig: await nextConfig() });
-  return response.headers.get(key);
+  return (await nextConfigHeaders(path)).get(key);
 }
 
 const PAGES = ['/', '/leagues', '/leagues/abc', '/wiki', '/auth/signin', '/dashboard/settings', '/broadcast/match/m1/live'];
