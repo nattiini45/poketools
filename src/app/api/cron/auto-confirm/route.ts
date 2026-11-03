@@ -15,6 +15,7 @@ import {
   type FinalizeWorklistCursor,
 } from '@/lib/supabase/queries/matches';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
@@ -96,20 +97,26 @@ async function logStatusAfterConfirmError(matchId: string): Promise<void> {
   try {
     const latest = await getMatchById(matchId);
     if (!latest) {
-      console.error(`[cron/auto-confirm] match ${matchId} no longer exists after the failed auto-confirm`);
+      logger.error('cron/auto-confirm', 'match no longer exists after the failed auto-confirm', { matchId });
     } else if (latest.status === 'completed') {
-      console.error(
-        `[cron/auto-confirm] match ${matchId} is completed although the auto-confirm failed: ` +
+      logger.error(
+        'cron/auto-confirm',
+        'match is completed although the auto-confirm failed: ' +
           'the completion committed but finalize did not run in this request; the heal takes it over ' +
-          'after the grace period (it shows up under needsAdmin unless rating_history exists)'
+          'after the grace period (it shows up under needsAdmin unless rating_history exists)',
+        { matchId }
       );
     } else {
-      console.error(
-        `[cron/auto-confirm] match ${matchId} is still ${latest.status}: the auto-confirm write did not commit`
-      );
+      logger.error('cron/auto-confirm', 'match is still not completed: the auto-confirm write did not commit', {
+        matchId,
+        status: latest.status,
+      });
     }
   } catch (readErr) {
-    console.error(`[cron/auto-confirm] could not re-read match ${matchId} after the failed auto-confirm`, readErr);
+    logger.error('cron/auto-confirm', 'could not re-read match after the failed auto-confirm', {
+      matchId,
+      error: readErr,
+    });
   }
 }
 
@@ -118,7 +125,7 @@ async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error('[cron/auto-confirm] CRON_SECRET not configured');
+    logger.error('cron/auto-confirm', 'CRON_SECRET not configured');
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Cron not configured', code: 'cron_not_configured' },
       { status: 500 }
@@ -202,9 +209,10 @@ async function handle(request: Request) {
         result.completed += 1;
 
         if (!finalize.finalized) {
-          console.error(
-            `[cron/auto-confirm] finalize did not run for match ${match.id}: ${finalize.reason ?? 'unknown'}`
-          );
+          logger.error('cron/auto-confirm', 'finalize did not run for match', {
+            matchId: match.id,
+            reason: finalize.reason ?? 'unknown',
+          });
           result.failed.push({ match_id: match.id, steps: ['confirm'] });
         } else if (finalize.failed_steps && finalize.failed_steps.length > 0) {
           // Each step already logged its own error; the heal pass picks the
@@ -212,7 +220,7 @@ async function handle(request: Request) {
           result.failed.push({ match_id: match.id, steps: finalize.failed_steps });
         }
       } catch (err) {
-        console.error(`[cron/auto-confirm] could not auto-confirm match ${match.id}`, err);
+        logger.error('cron/auto-confirm', 'could not auto-confirm match', { matchId: match.id, error: err });
         await logStatusAfterConfirmError(match.id);
         result.failed.push({ match_id: match.id, steps: ['confirm'] });
       }
@@ -252,7 +260,10 @@ async function handle(request: Request) {
         try {
           const heal = await healMatchFinalization(match);
           if (heal.skipped) {
-            console.warn(`[cron/auto-confirm] heal skipped match ${match.id}: ${heal.reason ?? 'unknown'}`);
+            logger.warn('cron/auto-confirm', 'heal skipped match', {
+              matchId: match.id,
+              reason: heal.reason ?? 'unknown',
+            });
             result.heal.skipped += 1;
             continue;
           }
@@ -270,15 +281,16 @@ async function handle(request: Request) {
           if (heal.healed) {
             result.heal.healed += 1;
           } else {
-            console.error(
-              `[cron/auto-confirm] heal incomplete for match ${match.id}: ` +
-                (heal.failed_steps.length > 0 ? heal.failed_steps.join(', ') : heal.reason ?? 'unknown')
-            );
+            logger.error('cron/auto-confirm', 'heal incomplete for match', {
+              matchId: match.id,
+              steps: heal.failed_steps,
+              ...(heal.failed_steps.length > 0 ? {} : { reason: heal.reason ?? 'unknown' }),
+            });
             result.heal.failed.push({ match_id: match.id, steps: heal.failed_steps });
           }
         } catch (err) {
           healAttempts += 1;
-          console.error(`[cron/auto-confirm] heal threw for match ${match.id}`, err);
+          logger.error('cron/auto-confirm', 'heal threw for match', { matchId: match.id, error: err });
           result.heal.failed.push({ match_id: match.id, steps: [] });
         }
       }
@@ -289,15 +301,19 @@ async function handle(request: Request) {
     if (result.needsAdmin.length > 0) {
       // One line per run (not one per match): these rows stay on the worklist
       // until an admin repairs them (docs/match.md runbook).
-      console.error(
-        `[cron/auto-confirm] ${result.needsAdmin.length} completed match(es) need an admin: ` +
-          result.heal.needs_admin.map((entry) => `${entry.match_id} (${entry.reason ?? 'unknown'})`).join(', ')
-      );
+      logger.error('cron/auto-confirm', 'completed matches need an admin', {
+        count: result.needsAdmin.length,
+        matches: result.heal.needs_admin.map((entry) => ({
+          matchId: entry.match_id,
+          reason: entry.reason ?? 'unknown',
+        })),
+      });
     }
     if (result.heal.scan_truncated) {
-      console.error(
-        `[cron/auto-confirm] heal scan stopped after ${HEAL_MAX_PAGES * HEAL_PAGE_SIZE} worklist rows with more left; ` +
-          'needs-admin rows are crowding the worklist'
+      logger.error(
+        'cron/auto-confirm',
+        'heal scan stopped with worklist rows left; needs-admin rows are crowding the worklist',
+        { rowsScanned: HEAL_MAX_PAGES * HEAL_PAGE_SIZE }
       );
     }
 
@@ -306,7 +322,7 @@ async function handle(request: Request) {
       // Non-2xx so the cron run shows as failed (Vercel 5xx alert); the per-match
       // causes are in the log lines above and in this summary. Needs-admin rows
       // alone never get here (lead ruling CR-2).
-      console.error('[cron/auto-confirm] run finished with failures', JSON.stringify(result));
+      logger.error('cron/auto-confirm', 'run finished with failures', { result });
       return NextResponse.json<ApiResult<never>>(
         {
           success: false,

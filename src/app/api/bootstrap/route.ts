@@ -4,6 +4,7 @@ import { SessionRevokedError } from '@/lib/auth/session-epoch';
 import { promoteFirstAdmin, siteAdminExists } from '@/lib/supabase/queries/bootstrap';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
+import { logger } from '@/lib/logger';
 import { bootstrapSchema, formatZodErrors } from '@/lib/validation';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { checkRateLimit, getClientIp, getClientRateLimitIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     const expectedSecret = readEnv(bootstrapEnvSchema).BOOTSTRAP_SECRET;
     if (!expectedSecret) {
-      console.error('[bootstrap] BOOTSTRAP_SECRET is not set; refusing to bootstrap');
+      logger.error('bootstrap', 'BOOTSTRAP_SECRET is not set; refusing to bootstrap');
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'BOOTSTRAP_SECRET not configured on server.', code: 'bootstrap_not_configured' },
         { status: 500 }
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
     // 2. Secret.
     if (!secretsEqual(zodResult.data.secret, expectedSecret)) {
       // Value-free: never log the submitted or the expected secret.
-      console.warn('[bootstrap] rejected an invalid bootstrap secret');
+      logger.warn('bootstrap', 'rejected an invalid bootstrap secret');
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Invalid or missing bootstrap secret.', code: 'bootstrap_secret_invalid' },
         { status: 403 }

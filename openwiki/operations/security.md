@@ -60,7 +60,7 @@ All security rules are defined in `AGENTS.md` (always-needed subset) and `docs/s
 
 - `safeErrorResponse()` logs real errors server-side, returns safe fallback.
 - Never expose stack traces, SQL errors, or internal paths.
-- Every error branch that returns without `safeErrorResponse()` must `console.error` first.
+- Every error branch that returns without `safeErrorResponse()` must `logger.error` first.
 - Distinct failure causes must stay distinguishable.
 - AI endpoints log token usage via Braintrust (optional).
 
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 ### `safeErrorResponse` behavior
 1. `UserFacingError` subclasses → passes through (specific message + optional `code` + status), logged server-side
 2. `AuthError` → passes through (user-facing by design, not logged)
-3. Everything else → `console.error` + static fallback string
+3. Everything else → `logger.error` (with an `x-request-id`) + static fallback string
 
 ### Error transparency rules
 - **No generalization** — never collapse distinct failure causes into one generic message
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 - Use `UserFacingError` (`src/lib/api/user-facing-error.ts`) for new user-facing error types
 
 ### CI enforcement
-`ENFORCE=1 node scripts/check-safe-error-response.mjs` fails the build on any raw `NextResponse` return inside a catch block that doesn't `console.error` first. Escape hatch: `// safe-error-response-allow: <reason>`.
+`ENFORCE=1 node scripts/check-safe-error-response.mjs` fails the build on any raw `NextResponse` return inside a catch block that doesn't `logger.error` first. Escape hatch: `// safe-error-response-allow: <reason>`.
 
 ## Input Validation
 

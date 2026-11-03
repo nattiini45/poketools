@@ -102,6 +102,7 @@ import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { triggerMatchAnalysis } from '@/lib/ai/trigger';
 import { createMomentsBatch } from '@/lib/supabase/queries/broadcast-moments';
+import { logger } from '@/lib/logger';
 
 // --------------- helpers ---------------
 
@@ -525,7 +526,7 @@ describe('POST /api/manual-result moments', () => {
   it('returns 200 with the catalogued warning and logs the original error with context when the moment insert fails', async () => {
     const dbError = new Error('insert failed');
     vi.mocked(createMomentsBatch).mockRejectedValue(dbError);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     try {
       const response = await POST(makeRequest({ ...validBody, moments: [{ moment_type: 'misplay' }] }));
@@ -545,9 +546,9 @@ describe('POST /api/manual-result moments', () => {
       });
       expect(recordGameResult).toHaveBeenCalledTimes(1);
       expect(errorSpy).toHaveBeenCalledWith(
-        '[manual-result] failed to save broadcast moments',
-        { match_id: MATCH_ID, game_id: 'g-1', count: 1 },
-        dbError
+        'manual-result',
+        'failed to save broadcast moments',
+        { matchId: MATCH_ID, gameId: 'g-1', count: 1, error: dbError }
       );
     } finally {
       errorSpy.mockRestore();
@@ -556,7 +557,7 @@ describe('POST /api/manual-result moments', () => {
 
   it('counts every unsaved moment in the warning', async () => {
     vi.mocked(createMomentsBatch).mockRejectedValue(new Error('insert failed'));
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     try {
       const moments = [{ moment_type: 'misplay' }, { moment_type: 'clutch' }, { moment_type: 'big_ko' }];
@@ -568,9 +569,9 @@ describe('POST /api/manual-result moments', () => {
         params: { count: 3 },
       });
       expect(errorSpy).toHaveBeenCalledWith(
-        '[manual-result] failed to save broadcast moments',
-        { match_id: MATCH_ID, game_id: 'g-1', count: 3 },
-        expect.any(Error)
+        'manual-result',
+        'failed to save broadcast moments',
+        { matchId: MATCH_ID, gameId: 'g-1', count: 3, error: expect.any(Error) }
       );
     } finally {
       errorSpy.mockRestore();

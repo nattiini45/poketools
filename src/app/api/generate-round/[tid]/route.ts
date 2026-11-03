@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import {
   getTournamentById,
@@ -380,7 +381,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         round = await updateRoundStatus(round.id, 'active');
         started = true;
       } catch (startErr) {
-        console.error('[generate-round] Failed to start the new round:', startErr);
+        logger.error('generate-round', 'Failed to start the new round', { tournamentId: tid, roundId: round.id, error: startErr });
       }
     }
 

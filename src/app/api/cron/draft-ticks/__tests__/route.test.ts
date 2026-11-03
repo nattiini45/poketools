@@ -29,6 +29,7 @@ import { emitDiscordEvent } from '@/lib/discord/notify';
 import { getPlayersByIds } from '@/lib/supabase/queries/players';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 
 const originalCronSecret = process.env.CRON_SECRET;
 
@@ -53,7 +54,7 @@ function rpc(answers: { tick?: (poolId: string) => unknown; claims?: () => unkno
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = 'cron-secret';
-  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  vi.spyOn(logger, 'error').mockImplementation(() => undefined);
   vi.mocked(listTickablePools).mockResolvedValue([
     { id: 'pool-a', season_id: 'season-a' },
     { id: 'pool-b', season_id: 'season-b' },
@@ -135,10 +136,11 @@ describe('/api/cron/draft-ticks run', () => {
     expect(res.status).toBe(200);
     expect((await res.json()).data).toMatchObject({ published: 0, publishRefused: 1, publishBackoff: 0 });
     expect(expireDraftReads).not.toHaveBeenCalled();
-    expect(console.error).toHaveBeenCalledTimes(1);
-    expect(console.error).toHaveBeenCalledWith(
-      '[cron/draft-ticks] redraft publish refused for pool pool-b: REDRAFT_NOT_COMPLETABLE',
-    );
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith('cron/draft-ticks', 'redraft publish refused for pool', {
+      poolId: 'pool-b',
+      reason: 'REDRAFT_NOT_COMPLETABLE',
+    });
   });
 
   it('a backed-off publish (refused before, pool unchanged) is counted, not logged again', async () => {
@@ -151,7 +153,7 @@ describe('/api/cron/draft-ticks run', () => {
     const res = await GET(request('Bearer cron-secret'));
     expect(res.status).toBe(200);
     expect((await res.json()).data).toMatchObject({ published: 0, publishRefused: 0, publishBackoff: 1 });
-    expect(console.error).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
     expect(expireDraftReads).not.toHaveBeenCalled();
   });
 
@@ -189,7 +191,10 @@ describe('/api/cron/draft-ticks run', () => {
       'draft_tick',
       'draft_claim_notifications',
     ]);
-    expect(console.error).toHaveBeenCalledWith('[cron/draft-ticks] tick failed for pool pool-a:', expect.any(Error));
+    expect(logger.error).toHaveBeenCalledWith('cron/draft-ticks', 'tick failed for pool', {
+      poolId: 'pool-a',
+      error: expect.any(Error),
+    });
   });
 
   it('names every failed pool in the message, params and body', async () => {

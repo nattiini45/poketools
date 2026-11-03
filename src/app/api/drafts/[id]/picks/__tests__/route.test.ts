@@ -111,6 +111,7 @@ import { getPoolEntries } from '@/lib/supabase/queries/draft-pool-entries';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { revalidateTag } from 'next/cache';
+import { logger } from '@/lib/logger';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -896,7 +897,7 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
 
   describe('a collision on the pick number', () => {
     it('answers 409 PICK_CONFLICT after one re-validation when the pick is still legal, and logs the original error', async () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
       const collision = pgUnique('uq_draft_picks_pool_number_live');
       vi.mocked(createDraftPick).mockRejectedValue(collision);
       // Free order: the competing pick took pick 1, this one would still be legal as pick 2.
@@ -913,7 +914,10 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
       expect(json.error).toBe('Another pick was made at the same moment. Reload the draft and try again.');
       expect(getPicksByPool).toHaveBeenCalledTimes(2);
       expect(createDraftPick).toHaveBeenCalledTimes(1);
-      expect(error).toHaveBeenCalledWith(expect.stringContaining('uq_draft_picks_pool_number_live'), collision);
+      expect(error).toHaveBeenCalledWith('api/drafts/picks', 'legacy pick collided on a unique index', {
+        index: 'uq_draft_picks_pool_number_live',
+        error: collision,
+      });
       error.mockRestore();
     });
 
@@ -961,7 +965,7 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
 
   describe('a collision on the Pokémon name', () => {
     it('answers 400 POKEMON_TAKEN, distinguishing the index by name, and logs the original error', async () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
       const collision = pgUnique('uq_draft_picks_legacy_name_live');
       vi.mocked(createDraftPick).mockRejectedValue(collision);
 
@@ -971,7 +975,10 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
       expect(res.status).toBe(400);
       expect(json).toMatchObject({ success: false, code: 'POKEMON_TAKEN', error: 'Garchomp has already been drafted' });
       expect(getPicksByPool).toHaveBeenCalledTimes(1);
-      expect(error).toHaveBeenCalledWith(expect.stringContaining('uq_draft_picks_legacy_name_live'), collision);
+      expect(error).toHaveBeenCalledWith('api/drafts/picks', 'legacy pick collided on a unique index', {
+        index: 'uq_draft_picks_legacy_name_live',
+        error: collision,
+      });
       error.mockRestore();
     });
   });
@@ -987,7 +994,7 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
 
   describe('failures after the pick committed', () => {
     it('answers 201 with a coded warning and a log line when the tracker is not created', async () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
       vi.mocked(isEvoLeague).mockResolvedValue(true);
       vi.mocked(getTierByBasePokemon).mockResolvedValue({ base_pokemon: 'Garchomp' } as never);
       const failure = new Error('connection reset');
@@ -1000,7 +1007,11 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
       expect(json.success).toBe(true);
       expect(json.data.pokemon_name).toBe('Garchomp');
       expect(json.warnings).toEqual(['TRACKER_NOT_CREATED']);
-      expect(error).toHaveBeenCalledWith(expect.stringContaining('tracker'), failure);
+      expect(error).toHaveBeenCalledWith(
+        'api/drafts/picks',
+        'pick committed but its evolution tracker was not created',
+        { error: failure }
+      );
       expect(vi.mocked(revalidateTag).mock.calls).toEqual([['season:season-1', { expire: 0 }]]);
       error.mockRestore();
     });
@@ -1018,7 +1029,7 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
     });
 
     it('answers 201 with a coded warning and a log line when the pool is not flipped to complete', async () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
       vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: 'player-1' }] as never);
       vi.mocked(resolveTotalRounds).mockReturnValue(1);
       const failure = new Error('statement timeout');
@@ -1029,7 +1040,11 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
 
       expect(res.status).toBe(201);
       expect(json.warnings).toEqual(['POOL_COMPLETION_PENDING']);
-      expect(error).toHaveBeenCalledWith(expect.stringContaining('complete'), failure);
+      expect(error).toHaveBeenCalledWith(
+        'api/drafts/picks',
+        'last pick committed but the pool was not set to complete',
+        { error: failure }
+      );
       error.mockRestore();
     });
 

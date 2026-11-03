@@ -18,6 +18,7 @@ import { withOutputLanguage } from '@/lib/ai/language';
 import { describeAiFailure } from '@/lib/ai/failure';
 import { createSafeSseSender } from '@/lib/ai/sse';
 import { resolveContentLocale } from '@/i18n/content-locale';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorCode } from '@/i18n/messages/errors';
 import type { MatchPrepAnalysis } from '@/types/game';
@@ -239,8 +240,7 @@ export async function POST(request: NextRequest) {
           // Saved as completed: a closed stream cannot flip it to failed.
           sse.send({ status: 'done' });
         } catch (llmError) {
-          const errorMessage = llmError instanceof Error ? llmError.message : 'Unknown LLM error';
-          console.error('[ai/match-prep-analysis] LLM error:', errorMessage);
+          logger.error('ai/match-prep-analysis', 'LLM error', { error: llmError });
 
           const failure = describeAiFailure(llmError, { code: FAILED_CODE, message: FAILED_MESSAGE });
           await updateMatchPrepAnalysis(record.id, {
@@ -252,8 +252,7 @@ export async function POST(request: NextRequest) {
           sse.send({ status: 'failed', error: failure.message, code: failure.code });
         }
       } catch (setupError) {
-        const message = setupError instanceof Error ? setupError.message : 'Internal error';
-        console.error('[ai/match-prep-analysis] Setup error:', message);
+        logger.error('ai/match-prep-analysis', 'Setup error', { error: setupError });
         sse.send({ status: 'failed', error: FAILED_MESSAGE, code: FAILED_CODE });
       } finally {
         clearInterval(fallbackHeartbeat);

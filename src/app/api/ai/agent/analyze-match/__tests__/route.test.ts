@@ -74,6 +74,7 @@ import {
 } from '@/lib/supabase/queries/match-prep-analyses';
 import { gatherMatchContext, gatherMatchPrepContext } from '@/lib/ai/context-builder';
 import { revalidateMatchPages } from '@/lib/revalidation';
+import { logger } from '@/lib/logger';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -310,7 +311,7 @@ describe('POST /api/ai/agent/analyze-match', () => {
   it('streams failed and logs when the cached scout-report read fails (never treated as "no report")', async () => {
     vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
     vi.mocked(getMatchById).mockResolvedValue(scheduledMatch as never);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const readError = new Error('db down');
     vi.mocked(getMatchPrepAnalysis).mockRejectedValueOnce(readError);
 
@@ -326,7 +327,9 @@ describe('POST /api/ai/agent/analyze-match', () => {
     expect(createMatchPrepAnalysis).not.toHaveBeenCalled();
     expect(runAgent).not.toHaveBeenCalled();
     // The original error object is logged, not only its message.
-    expect(errorSpy).toHaveBeenCalledWith('[ai/agent/analyze-match] opponent_scout stored-report read failed:', readError);
+    expect(errorSpy).toHaveBeenCalledWith('ai/agent/analyze-match', 'opponent_scout stored-report read failed', {
+      error: readError,
+    });
     errorSpy.mockRestore();
   });
 
@@ -389,7 +392,7 @@ describe('POST /api/ai/agent/analyze-match', () => {
   it('streams failed and logs when the cached analysis read fails (never treated as "no analysis")', async () => {
     vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
     vi.mocked(getMatchById).mockResolvedValue(completedMatch as never);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const readError = new Error('db down');
     vi.mocked(getMatchAnalysis).mockRejectedValueOnce(readError);
 
@@ -405,7 +408,9 @@ describe('POST /api/ai/agent/analyze-match', () => {
     expect(createMatchAnalysis).not.toHaveBeenCalled();
     expect(runAgent).not.toHaveBeenCalled();
     // The original error object is logged, not only its message.
-    expect(errorSpy).toHaveBeenCalledWith('[ai/agent/analyze-match] post_match stored-analysis read failed:', readError);
+    expect(errorSpy).toHaveBeenCalledWith('ai/agent/analyze-match', 'post_match stored-analysis read failed', {
+      error: readError,
+    });
     errorSpy.mockRestore();
   });
 

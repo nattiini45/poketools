@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import {
   phaseUpdateSchema,
   phaseDeleteSchema,
@@ -219,7 +220,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         playerIds: participants.map((p) => p.id),
       });
     } catch (err) {
-      console.error('phase delete derived-data rebuild failed:', err);
+      logger.error('api/seasons', 'phase delete derived-data rebuild failed', {
+        seasonId: id,
+        phaseId,
+        error: err,
+      });
       // Reported to the admin in the response (catalogued code, e.g.
       // rating_history_incomplete) and kept in the audit record.
       rebuildWarning = toDeleteRebuildWarning(err);

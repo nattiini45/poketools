@@ -68,9 +68,10 @@ CI runs the suite in an **advisory** `e2e` job (not a required check, never in t
 
 - **TypeScript strict, no `any`** — row types in `src/types/database.ts`, domain types in per-entity files
 - **Server components by default** — only add `'use client'` when interactivity is required
-- **Supabase queries go through `src/lib/supabase/queries/`** — never import the Supabase client directly in pages or API routes
+- **Supabase queries go through `src/lib/supabase/queries/`, Storage calls through `src/lib/supabase/storage/`** — route handlers, pages and components never import the service-role client (`@/lib/supabase/client`) or `@supabase/*`; only `src/lib` does, and ESLint fails on it (the allow-list in `eslint.config.mjs` is empty). The browser's only Supabase path is the Realtime-only exception in `AGENTS.md`
 - **Auth guards on all protected routes** — `requireAuth()`, `requireAdmin()`, `requireCreator()`
 - **All API errors use `safeErrorResponse()`** — and never generalize or mask distinct failure causes
+- **Server logs go through `logger` (`src/lib/logger.ts`)** — `console.*` is a lint error in `src/app/api`; see `docs/operations-logging.md`
 - **User-facing text goes through `src/i18n`** (English source, German translation)
 - **No hardcoded Pokémon data** — always query `@pkmn/data` via `src/lib/pkmn/`
 

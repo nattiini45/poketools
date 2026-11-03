@@ -103,6 +103,7 @@ export default [
     ignores: [...API_TEST_FILES],
     rules: {
       'no-restricted-imports': ['error', { patterns: [SUPABASE_PACKAGE_PATTERN, SERVICE_ROLE_CLIENT_PATTERN] }],
+      'no-console': 'error',
     },
   },
   // Documented exceptions: the file keeps the raw client, the console rule still applies.

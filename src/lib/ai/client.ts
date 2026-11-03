@@ -166,7 +166,7 @@ function surfaceError(err: unknown, model: string): unknown {
   return err;
 }
 
-function describeError(err: unknown): string {
+function describeModelFailure(err: unknown): string {
   if (err instanceof APIError) {
     return `${err.name} (status ${err.status ?? 'none'}, type ${err.type ?? 'none'})`;
   }
@@ -243,7 +243,7 @@ export async function complete(
   try {
     return await callModel(client, primaryModel, call, PRIMARY_TIMEOUT_MS, false);
   } catch (primaryError) {
-    console.error(`[ai/client] Primary model ${primaryModel} failed: ${describeError(primaryError)}`);
+    console.error(`[ai/client] Primary model ${primaryModel} failed: ${describeModelFailure(primaryError)}`);
     if (!isTransientModelError(primaryError)) throw surfaceError(primaryError, primaryModel);
   }
 
@@ -252,7 +252,7 @@ export async function complete(
   try {
     return await callModel(client, fallbackModel, call, FALLBACK_TIMEOUT_MS, true);
   } catch (fallbackError) {
-    console.error(`[ai/client] Fallback model ${fallbackModel} failed: ${describeError(fallbackError)}`);
+    console.error(`[ai/client] Fallback model ${fallbackModel} failed: ${describeModelFailure(fallbackError)}`);
     throw surfaceError(fallbackError, fallbackModel);
   }
 }
@@ -318,7 +318,7 @@ export async function completeStreaming(
   try {
     return await callModelStreaming(client, primaryModel, call, PRIMARY_TIMEOUT_MS, false, onChunk);
   } catch (primaryError) {
-    console.error(`[ai/client] Primary streaming model ${primaryModel} failed: ${describeError(primaryError)}`);
+    console.error(`[ai/client] Primary streaming model ${primaryModel} failed: ${describeModelFailure(primaryError)}`);
     if (!isTransientModelError(primaryError)) throw surfaceError(primaryError, primaryModel);
   }
 
@@ -327,7 +327,7 @@ export async function completeStreaming(
   try {
     return await callModelStreaming(client, fallbackModel, call, FALLBACK_TIMEOUT_MS, true, onChunk);
   } catch (fallbackError) {
-    console.error(`[ai/client] Fallback streaming model ${fallbackModel} failed: ${describeError(fallbackError)}`);
+    console.error(`[ai/client] Fallback streaming model ${fallbackModel} failed: ${describeModelFailure(fallbackError)}`);
     throw surfaceError(fallbackError, fallbackModel);
   }
 }

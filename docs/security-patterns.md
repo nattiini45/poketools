@@ -25,7 +25,7 @@ Every agent writing code in this repo must follow these patterns. They map to th
 
 - All secrets live in environment variables (`.env.local`). Template: `.env.example`.
 - Social integration credentials encrypted with `encryptJson()` / `decryptJson()` from `src/lib/social/encryption.ts`.
-- Never log secrets, tokens, or API keys — even in `console.error`.
+- Never log secrets, tokens, or API keys — even in a log call.
 
 ### A03 — Injection
 
@@ -69,7 +69,7 @@ Every agent writing code in this repo must follow these patterns. They map to th
 
 - Use `safeErrorResponse()` for all API route error handling — it logs the real error server-side and returns a safe fallback message.
 - Never expose stack traces, SQL errors, or internal paths in API responses.
-- Every error branch that returns a response WITHOUT `safeErrorResponse()` must `console.error` the original error first. An early-return error branch that logs nothing makes the failure undiagnosable — that is a bug, not a style choice.
+- Every error branch that returns a response WITHOUT `safeErrorResponse()` must log the original error first (`logger.error`, `src/lib/logger.ts`). An early-return error branch that logs nothing makes the failure undiagnosable — that is a bug, not a style choice.
 - Distinct failure causes must stay distinguishable — via specific safe messages or per-cause `code` values — in both the response and the server logs.
 - AI analysis endpoints log token usage via Braintrust (optional).
 
@@ -91,12 +91,12 @@ export async function POST(request: Request) {
 }
 ```
 
-This helper: (1) passes `UserFacingError` subclasses through — specific message + optional `code` + status, logged server-side, (2) passes `AuthError` messages through (they're user-facing by design; not logged), (3) logs everything else server-side with `console.error` and returns the static fallback string to the client.
+This helper: (1) passes `UserFacingError` subclasses through — specific message + optional `code` + status, logged server-side, (2) passes `AuthError` messages through (they're user-facing by design; not logged), (3) logs everything else server-side through `logger.error` (tag `api`, with a `requestId` that it also sets as the `x-request-id` response header) and returns the static fallback string to the client.
 
 **Error transparency (mandatory):** generalization, suppression, and masking of errors are forbidden — we need to know what's wrong.
 
 - **No generalization** — never collapse distinct failure causes into one generic message. If four different failures can reach a branch, the client and the server log must both be able to tell which one happened: pass the specific message through when it is safe, or give each cause its own `code`. One shared `code` for all causes disambiguates nothing.
-- **No suppression** — never swallow an error. Empty catch blocks, catches that return without logging, and early-return error branches that skip both `safeErrorResponse()` and `console.error` are bugs. A branch that returns its own `NextResponse` instead of calling `safeErrorResponse()` must `console.error(err)` first.
+- **No suppression** — never swallow an error. Empty catch blocks, catches that return without logging, and early-return error branches that skip both `safeErrorResponse()` and `logger.error` are bugs. A branch that returns its own `NextResponse` instead of calling `safeErrorResponse()` must `logger.error('<tag>', '<message>', { error: err })` first.
 - **No masking** — domain error classes whose messages are constructed to be user-facing (no internals: `AuthError`, and domain errors like the core-assignment errors built from pool/participant counts) keep their specific messages end-to-end. Do not overwrite them with hand-written generic strings in individual routes. The mechanism: extend `UserFacingError` from `src/lib/api/user-facing-error.ts` (carries the safe message + optional `code` + status; `safeErrorResponse()` passes it through and logs it server-side) rather than hand-patching each route. Example: the core-assignment errors in `src/lib/season/core-assignment.ts`.
 - The static-fallback rule protects against leaking *internals* (stack traces, SQL errors, unexpected exceptions). It is not a license to hide *domain* errors. When in doubt: log the real error server-side, and return the most specific message that contains no internals.
 

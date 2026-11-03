@@ -6,6 +6,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
 import { bootstrapEnvSchema, bootstrapModeEnvSchema, readEnv } from '@/lib/env';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import { seedStandardRulesets } from '@/lib/ruleset-studio/seed-standard';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { checkRateLimit, getClientRateLimitIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
 
       if (!expectedSecret || !secret || !secretsEqual(secret, expectedSecret)) {
         // Value-free: never log the submitted or the expected secret.
-        console.warn('[seed-rulesets] rejected an invalid bootstrap secret');
+        logger.warn('seed-rulesets', 'rejected an invalid bootstrap secret');
         return NextResponse.json<ApiResult<never>>(
           { success: false, error: 'Invalid or missing bootstrap secret.', code: 'seed_rulesets_secret_invalid' },
           { status: 403 }

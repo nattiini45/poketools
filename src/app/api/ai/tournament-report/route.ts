@@ -18,6 +18,7 @@ import { revalidateMatchPages } from '@/lib/revalidation';
 import { checkAndRecordAiGeneration, type AiRateLimitResult } from '@/lib/ai/rate-limit';
 import { describeAiFailure } from '@/lib/ai/failure';
 import { createSafeSseSender } from '@/lib/ai/sse';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorCode } from '@/i18n/messages/errors';
 import type { TournamentReport } from '@/types/tournament-report';
@@ -198,8 +199,7 @@ export async function POST(request: NextRequest) {
           });
         } catch (pipelineError) {
           pipelineResult = null;
-          const errorMessage = pipelineError instanceof Error ? pipelineError.message : 'Unknown pipeline error';
-          console.error('[ai/tournament-report] Pipeline error:', errorMessage);
+          logger.error('ai/tournament-report', 'Pipeline error', { error: pipelineError });
 
           const failure = describeAiFailure(pipelineError, { code: FAILED_CODE, message: FAILED_MESSAGE });
           await updateTournamentReport(record.id, {
@@ -217,16 +217,14 @@ export async function POST(request: NextRequest) {
           try {
             await revalidateMatchPages(tournamentId);
           } catch (revalidateError) {
-            console.error(
-              '[ai/tournament-report] Revalidation failed after the report was stored:',
-              revalidateError instanceof Error ? revalidateError.message : revalidateError,
-            );
+            logger.error('ai/tournament-report', 'Revalidation failed after the report was stored', {
+              error: revalidateError,
+            });
           }
           sse.send({ status: 'done', model: pipelineResult.modelUsed });
         }
       } catch (setupError) {
-        const message = setupError instanceof Error ? setupError.message : 'Internal error';
-        console.error('[ai/tournament-report] Setup error:', message);
+        logger.error('ai/tournament-report', 'Setup error', { error: setupError });
         sse.send({ status: 'failed', error: FAILED_MESSAGE, code: FAILED_CODE });
       } finally {
         clearInterval(fallbackHeartbeat);

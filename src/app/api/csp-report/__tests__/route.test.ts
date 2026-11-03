@@ -7,6 +7,7 @@ vi.mock('@/lib/supabase/client', () => ({ supabase: { rpc, from: rpc, storage: {
 import { POST } from '../route';
 import { resetMemoryRateLimits } from '@/lib/utils/rate-limit';
 import { CSP_REPORT_MAX_BYTES } from '@/lib/security/csp-report';
+import { logger } from '@/lib/logger';
 
 const legacyBody = {
   'csp-report': {
@@ -34,7 +35,7 @@ let error: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   resetMemoryRateLimits();
   rpc.mockReset();
-  warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
   error = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 afterEach(() => {
@@ -59,7 +60,7 @@ describe('POST /api/csp-report (#37)', () => {
     await POST(report(legacyBody));
     expect(warn).toHaveBeenCalledTimes(1);
     const [tag, line] = warn.mock.calls[0] as [string, string];
-    expect(tag).toBe('[csp-report]');
+    expect(tag).toBe('csp-report');
     expect(line.length).toBeLessThanOrEqual(600);
     expect(line).toContain('script-src-elem');
     expect(line).not.toContain('SECRET');

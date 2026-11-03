@@ -4,7 +4,11 @@ import type { ApiErrorCode } from '@/i18n/messages/errors';
 import commonErrors from '@/i18n/messages/errors/common/en';
 import type { ApiResult, ExtensionErrorCode } from '@/types/api';
 import { isSupabaseTimeoutError } from '@/lib/supabase/timeout-fetch';
+import { logger } from '@/lib/logger';
 import { UserFacingError } from './user-facing-error';
+
+/** Response header that carries the id of a failed request; the matching server log line holds the same id. */
+export const REQUEST_ID_HEADER = 'x-request-id';
 
 /** HTTP status for a Supabase request that hit its deadline (`timeout-fetch.ts`). */
 export const SUPABASE_TIMEOUT_STATUS = 504;
@@ -37,6 +41,14 @@ function authErrorCode(err: Error & { code?: unknown }): CommonErrorCode | undef
   return isCommonErrorCode(err.code) ? err.code : undefined;
 }
 
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
+
+/** An incoming id is echoed into a header and a log line, so only a plain token is reused. */
+function resolveRequestId(request: { headers: Headers } | undefined): string {
+  const incoming = request?.headers.get(REQUEST_ID_HEADER);
+  return incoming && REQUEST_ID_PATTERN.test(incoming) ? incoming : crypto.randomUUID();
+}
+
 /**
  * Build a safe error response that never leaks internal details to clients.
  * UserFacingError and AuthError messages are user-facing by design and passed
@@ -50,38 +62,47 @@ function authErrorCode(err: Error & { code?: unknown }): CommonErrorCode | undef
  * the query layer wrapped it) is its own cause: it answers 504 with the
  * catalogued `upstream_timeout` code and the route's fallback text, and is
  * logged with the original error, never folded into the generic 500.
+ *
+ * Every response carries an `x-request-id` header, and the server log line
+ * (`logger.error('api', ...)`, field `requestId`) holds the same id, so a
+ * support report that quotes the header leads straight to the log. A route
+ * that passes its `request` has an incoming `x-request-id` reused (a malformed
+ * one is replaced); otherwise a fresh UUID is issued.
  */
 export function safeErrorResponse(
   err: unknown,
   fallback: string,
   status = 500,
-  fallbackCode?: ApiErrorCode | ExtensionErrorCode
+  fallbackCode?: ApiErrorCode | ExtensionErrorCode,
+  request?: { headers: Headers }
 ): NextResponse<ApiResult<never>> {
+  const requestId = resolveRequestId(request);
+  const headers = { [REQUEST_ID_HEADER]: requestId };
   // Must run before the AuthError duck-type check: UserFacingError also has a
   // numeric `statusCode`, so the duck-type would absorb it and drop `code`.
   if (err instanceof UserFacingError) {
-    console.error(`[API] ${fallback}:`, err);
+    logger.error('api', fallback, { requestId, status: err.statusCode, error: err });
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: err.message, code: err.code, params: err.params },
-      { status: err.statusCode }
+      { status: err.statusCode, headers }
     );
   }
   if (isSupabaseTimeoutError(err)) {
-    console.error(`[API] ${fallback} (Supabase request deadline):`, err);
+    logger.error('api', `${fallback} (Supabase request deadline)`, { requestId, status: SUPABASE_TIMEOUT_STATUS, error: err });
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: fallback, code: 'upstream_timeout' },
-      { status: SUPABASE_TIMEOUT_STATUS }
+      { status: SUPABASE_TIMEOUT_STATUS, headers }
     );
   }
   if (isAuthError(err)) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: err.message, code: authErrorCode(err) },
-      { status: err.statusCode }
+      { status: err.statusCode, headers }
     );
   }
-  console.error(`[API] ${fallback}:`, err);
+  logger.error('api', fallback, { requestId, status, error: err });
   return NextResponse.json<ApiResult<never>>(
     { success: false, error: fallback, code: fallbackCode },
-    { status }
+    { status, headers }
   );
 }

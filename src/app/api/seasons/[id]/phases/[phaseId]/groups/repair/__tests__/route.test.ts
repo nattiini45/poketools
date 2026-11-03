@@ -50,6 +50,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { makeRequest, makeParams } from '@/lib/__tests__/helpers/api-request';
 import { expectNoPrivatePlayerData, fullPlayerRow } from '@/lib/players/__tests__/private-player-fields';
 import { revalidateTag } from 'next/cache';
+import { logger } from '@/lib/logger';
 import type { TournamentGroupWithMembers } from '@/types/season';
 
 const SEASON_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01';
@@ -109,7 +110,7 @@ function post(body: Record<string, unknown>, phaseId = PHASE_ID) {
 }
 
 describe('POST /api/seasons/[id]/phases/[phaseId]/groups/repair', () => {
-  let consoleError: MockInstance<typeof console.error>;
+  let consoleError: MockInstance<typeof logger.error>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -139,7 +140,7 @@ describe('POST /api/seasons/[id]/phases/[phaseId]/groups/repair', () => {
       held_group_ids: [groupId],
     }));
     // safeErrorResponse logs server-side.
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -586,8 +587,9 @@ describe('POST /api/seasons/[id]/phases/[phaseId]/groups/repair', () => {
       expect(res.status).toBe(409);
       expect(json.code).toBe('PLAN_CHANGED');
       expect(consoleError).toHaveBeenCalledWith(
-        '[groups/repair] read-cache expiry after a failed apply failed:',
-        expireError,
+        'groups/repair',
+        'read-cache expiry after a failed apply failed',
+        expect.objectContaining({ error: expireError }),
       );
       expect(logAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({ metadata: expect.objectContaining({ partial: true, moves: [FIRST_MOVE_AUDIT] }) }),

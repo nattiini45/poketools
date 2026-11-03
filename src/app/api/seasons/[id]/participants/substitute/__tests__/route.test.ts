@@ -38,6 +38,7 @@ import { getStagesBySeasonId } from '@/lib/supabase/queries/tournaments';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { makeRequest, makeParams } from '@/lib/__tests__/helpers/api-request';
 import { revalidateTag } from 'next/cache';
+import { logger } from '@/lib/logger';
 
 const SEASON_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01';
 const OUT_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
@@ -74,7 +75,7 @@ const previewSummary = {
 };
 
 describe('POST /api/seasons/[id]/participants/substitute', () => {
-  let consoleError: MockInstance<typeof console.error>;
+  let consoleError: MockInstance<typeof logger.error>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -88,7 +89,7 @@ describe('POST /api/seasons/[id]/participants/substitute', () => {
       { id: STAGE_2_ID },
     ] as never);
     // safeErrorResponse and the expiry fallback log server-side.
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleError = vi.spyOn(logger, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -321,8 +322,9 @@ describe('POST /api/seasons/[id]/participants/substitute', () => {
         partial: null,
       });
       expect(consoleError).toHaveBeenCalledWith(
-        '[substitute] read-cache expiry after a failed apply failed:',
-        stagesError,
+        'substitute',
+        'read-cache expiry after a failed apply failed',
+        expect.objectContaining({ error: stagesError }),
       );
       expect(revalidateTag).not.toHaveBeenCalled();
     });
@@ -340,8 +342,9 @@ describe('POST /api/seasons/[id]/participants/substitute', () => {
       expect(res.status).toBe(409);
       expect(json.code).toBe('GROUP_SLOT_CHANGED');
       expect(consoleError).toHaveBeenCalledWith(
-        '[substitute] read-cache expiry after a failed apply failed:',
-        expireError,
+        'substitute',
+        'read-cache expiry after a failed apply failed',
+        expect.objectContaining({ error: expireError }),
       );
     });
   });

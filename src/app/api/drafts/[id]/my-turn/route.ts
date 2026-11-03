@@ -6,6 +6,7 @@ import { scheduleDraftNotifications } from '@/lib/draft/notify';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
 import { uuidSchema } from '@/lib/draft/schemas';
 import { toMyTurnDTO } from '@/lib/draft/snapshot';
+import { logger } from '@/lib/logger';
 import { expireDraftReads } from '@/lib/revalidation';
 import { getDraftPoolById } from '@/lib/supabase/queries/drafts';
 import type { ApiResult } from '@/types/api';
@@ -43,7 +44,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         const pool = await getDraftPoolById(id);
         if (pool) expireDraftReads(pool.season_id);
       } catch (err) {
-        console.error('[api/drafts/my-turn] pool read after a published redraft failed:', err);
+        logger.error('api/drafts/my-turn', 'pool read after a published redraft failed', { error: err });
       }
     }
     if (publishedNow || timeoutsResolved > 0) scheduleDraftNotifications(id);

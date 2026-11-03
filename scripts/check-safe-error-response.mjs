@@ -6,7 +6,8 @@
 //
 // Per-occurrence semantics (see scripts/safe-error-scan.mjs): EVERY
 // `return NextResponse...` / `return new Response...` inside a catch block is
-// an offender unless the block first `console.error`s the caught error, or the
+// an offender unless the block first logs the caught error (`logger.error` /
+// `logger.warn` from src/lib/logger.ts, or `console.error`), or the
 // preceding line carries `// safe-error-response-allow: <reason>`. There is no
 // block-level exemption — a `safeErrorResponse` call elsewhere in the block or
 // a trailing `throw` does NOT excuse a raw return branch.

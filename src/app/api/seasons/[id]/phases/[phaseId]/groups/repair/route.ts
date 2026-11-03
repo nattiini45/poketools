@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { phaseGroupsRepairSchema, formatZodErrors } from '@/lib/validation';
@@ -52,7 +53,7 @@ function expireAfterFailedApply(phaseId: string, seasonId: string): void {
   try {
     expireTournamentReads(phaseId, seasonId);
   } catch (expireErr) {
-    console.error('[groups/repair] read-cache expiry after a failed apply failed:', expireErr);
+    logger.error('groups/repair', 'read-cache expiry after a failed apply failed', { error: expireErr });
   }
 }
 

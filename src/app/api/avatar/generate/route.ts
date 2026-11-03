@@ -8,6 +8,7 @@ import { getAvatarBucket } from '@/lib/supabase/storage/avatars';
 import { insertGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
 import { AVATAR_IMMUTABLE_CACHE_CONTROL, tryWriteAvatarThumbnail } from '@/lib/avatar/thumbnail';
 import { avatarGenerateSchema, formatZodErrors } from '@/lib/validation';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import type { AiAvatarChoices } from '@/types/avatar';
 
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (uploadError) {
-      console.error('Gallery upload failed:', uploadError.message);
+      logger.error('api/avatar/generate', 'Gallery upload failed', { error: uploadError });
       // Don't fail the whole request — the user still gets the image
       return NextResponse.json<ApiResult<GenerateResponse>>({
         success: true,

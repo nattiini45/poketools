@@ -4,6 +4,7 @@ import { draftErrorResponse } from '@/lib/draft/http';
 import { dispatchDraftNotifications } from '@/lib/draft/notify';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
 import { redraftPublishSchema } from '@/lib/draft/schemas';
+import { logger } from '@/lib/logger';
 import { expireDraftReads } from '@/lib/revalidation';
 import { getQueuePool } from '@/lib/supabase/queries/drafts-queue';
 import type { ApiResult } from '@/types/api';
@@ -50,7 +51,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       try {
         await dispatchDraftNotifications(await callDraftRpc('draft_claim_notifications', { p_pool_id: pool.id }));
       } catch (err) {
-        console.error('[api/drafts/redraft/publish] claiming draft notifications failed:', err);
+        logger.error('api/drafts/redraft/publish', 'claiming draft notifications failed', { error: err });
       }
     });
 

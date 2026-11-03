@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import {
   getRoundById,
   updateRoundStatus,
@@ -310,7 +311,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         }
       } catch (err) {
         // Discord event assembly failure should not break the round update response
-        console.error('[Discord] Failed to assemble round_completed event:', err);
+        logger.error('discord', 'Failed to assemble round_completed event', {
+          tournamentId: id,
+          roundId: rid,
+          error: err,
+        });
       }
 
       // Trigger AI round recap (fire-and-forget)

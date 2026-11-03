@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import {
   getTournamentById,
   getParticipants,
@@ -208,7 +209,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         createdRounds[createdRounds.indexOf(first)] = started;
         startedRoundNumber = first.round_number;
       } catch (startErr) {
-        console.error('[generate-all-rounds] Failed to start the first new round:', startErr);
+        logger.error('generate-all-rounds', 'Failed to start the first new round', {
+          tournamentId: id,
+          roundId: first.id,
+          error: startErr,
+        });
       }
     }
 

@@ -7,6 +7,7 @@ import { readJsonBody } from '@/lib/api/json-body';
 import { checkAuthRateLimit } from '@/lib/auth/rate-limits';
 import { rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { resetPasswordSchema, formatZodErrors } from '@/lib/validation';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 
 // Public: no auth required
@@ -41,7 +42,9 @@ export async function POST(request: NextRequest) {
 
     if (error || !data.user) {
       // Expected for an expired or reused link; log the cause (never the token) before the generic 400.
-      console.warn('[auth] reset-password: recovery token rejected:', error ? (error.code ?? error.name) : 'no user in verifyOtp result');
+      logger.warn('auth', 'reset-password: recovery token rejected', {
+        reason: error ? (error.code ?? error.name) : 'no user in verifyOtp result',
+      });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Reset link is invalid or has expired. Request a new one.', code: 'reset_link_invalid' },
         { status: 400 }
@@ -62,7 +65,7 @@ export async function POST(request: NextRequest) {
     try {
       await revokeSessionsOfAuthUser(data.user.id);
     } catch (firstErr) {
-      console.error('[auth] reset-password: second session revocation failed, retrying:', firstErr);
+      logger.error('auth', 'reset-password: second session revocation failed, retrying', { error: firstErr });
       await revokeSessionsOfAuthUser(data.user.id);
     }
 

@@ -4,8 +4,9 @@
 //
 // Semantics (per-occurrence, not per-block): every `return NextResponse...` /
 // `return new Response...` INSIDE a catch block is an offender unless
-//   (1) the same catch block calls `console.error(<caught identifier>)`
-//       somewhere BEFORE that return (the CLAUDE.md "log the original error
+//   (1) the same catch block calls `logger.error(...)` (or `logger.warn(...)`,
+//       or the legacy `console.error(...)`) with the caught identifier among its
+//       arguments somewhere BEFORE that return (the CLAUDE.md "log the original error
 //       first" escape hatch), or
 //   (2) the line immediately above the return carries an explicit
 //       `// safe-error-response-allow: <reason>` annotation.
@@ -15,6 +16,9 @@
 
 const RAW_RETURN = /\breturn\s+(?:NextResponse\b|new\s+NextResponse\b|new\s+Response\b)/g;
 export const ALLOW_MARKER = 'safe-error-response-allow:';
+
+// A call that logs the caught error: the structured logger (src/lib/logger.ts) or console.error.
+const LOG_CALL = String.raw`(?:logger\.(?:error|warn)|console\.error)\s*\(`;
 
 // Find the matching `}` for an opening `{` at index `open` in `src`.
 // Returns the index of the closing brace, or -1 if unbalanced.
@@ -96,8 +100,8 @@ function escapeRegExp(s) {
 }
 
 // Scan one file's source. Returns [{ index, line }] for each raw response
-// return inside a catch block that is neither preceded by a console.error of
-// the caught error nor explicitly annotated with the allow marker.
+// return inside a catch block that is neither preceded by a log call (see
+// LOG_CALL) that includes the caught error nor explicitly annotated with the allow marker.
 export function scanSource(src) {
   const blocks = findCatchBlocks(src);
   const offenders = [];
@@ -120,8 +124,8 @@ export function scanSource(src) {
 
       const before = b.body.slice(0, m.index);
       const logged = b.param
-        ? new RegExp('console\\.error\\s*\\([^;]*\\b' + escapeRegExp(b.param) + '\\b').test(before)
-        : /console\.error\s*\(/.test(before);
+        ? new RegExp(LOG_CALL + '[^;]*\\b' + escapeRegExp(b.param) + '\\b').test(before)
+        : new RegExp(LOG_CALL).test(before);
       if (logged) continue;
 
       const lineStart = src.lastIndexOf('\n', abs);

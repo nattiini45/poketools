@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAnyAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { tournamentCreateSchema, formatZodErrors } from '@/lib/validation';
 import {
   listTournaments,
@@ -93,7 +94,11 @@ export async function POST(request: NextRequest) {
       try {
         await addResourceAdmin(player.playerId, 'tournament', tournament.id);
       } catch (adminErr) {
-        console.error('Failed to assign resource admin:', adminErr);
+        logger.error('api/tournaments', 'Failed to assign resource admin', {
+          tournamentId: tournament.id,
+          playerId: player.playerId,
+          error: adminErr,
+        });
       }
     }
 

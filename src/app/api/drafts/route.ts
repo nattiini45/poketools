@@ -23,6 +23,7 @@ import {
 } from '@/lib/draft/schemas';
 import { defaultRedraftDeadline, isValidQuietHours } from '@/lib/draft/time';
 import { draftQuietHours } from '@/lib/format-pack';
+import { logger } from '@/lib/logger';
 import { expireDraftReads } from '@/lib/revalidation';
 import {
   listDraftPools,
@@ -433,7 +434,9 @@ export async function POST(request: NextRequest) {
     if ((await getSeasonGroups(body.season_id)).length > 0) {
       const error =
         'This league has groups. Groups draft separately, which only Evolution Point Buy leagues support. Remove the groups on the Participants tab to run one draft for everyone.';
-      console.error(`[API] legacy draft pool refused for league ${body.season_id}: the league has groups`);
+      logger.error('api/drafts', 'legacy draft pool refused: the league has groups', {
+        seasonId: body.season_id,
+      });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error, code: 'draft_groups_need_point_buy' },
         { status: 409 }

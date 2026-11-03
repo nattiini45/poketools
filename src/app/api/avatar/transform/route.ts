@@ -9,6 +9,7 @@ import { getAvatarBucket } from '@/lib/supabase/storage/avatars';
 import { insertGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
 import { AVATAR_IMMUTABLE_CACHE_CONTROL, tryWriteAvatarThumbnail } from '@/lib/avatar/thumbnail';
 import { avatarTransformSchema, formatZodErrors } from '@/lib/validation';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 
 interface TransformResponse {
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
           { status: 503 }
         );
       }
-      console.warn('Moderation unavailable — proceeding because AVATAR_MODERATION_REQUIRED=false');
+      logger.warn('api/avatar/transform', 'Moderation unavailable — proceeding because AVATAR_MODERATION_REQUIRED=false');
     } else if (!moderation.safe) {
       return NextResponse.json<ApiResult<never>>(
         {
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (uploadError) {
-      console.error('Transform gallery upload failed:', uploadError.message);
+      logger.error('api/avatar/transform', 'Transform gallery upload failed', { error: uploadError });
       // Still return the image — gallery persistence is non-critical
       return NextResponse.json<ApiResult<TransformResponse>>({
         success: true,
@@ -179,7 +180,7 @@ export async function POST(request: NextRequest) {
       });
       galleryId = galleryItem.id;
     } catch (galleryError) {
-      console.error('Gallery insert failed:', (galleryError as { message?: string }).message);
+      logger.error('api/avatar/transform', 'Gallery insert failed', { error: galleryError });
     }
 
     const remaining = rateLimit.remaining - 1;

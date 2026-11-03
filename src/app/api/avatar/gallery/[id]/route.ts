@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { getGalleryItem, deleteGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
 import { removeGalleryObject } from '@/lib/supabase/storage/avatars';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -46,7 +47,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
     const removal = await removeGalleryObject(item.image_url);
     if (removal.error) {
-      console.error('Gallery storage delete failed:', removal.error.message);
+      logger.error('api/avatar/gallery', 'Gallery storage delete failed', {
+        galleryId: id,
+        error: removal.error,
+      });
     }
 
     const deleted = await deleteGalleryItem(id, playerId);

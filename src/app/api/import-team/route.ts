@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { importTeamSchema, formatZodErrors } from '@/lib/validation';
 import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { parseTeamText } from '@/lib/pkmn/teams';
@@ -25,31 +26,35 @@ async function fetchPokepaste(pasteId: string): Promise<string | null> {
       cache: 'no-store',
     });
   } catch (err) {
-    console.error(`[api/import-team] pokepast.es fetch failed (network/timeout) for paste ${pasteId}:`, err);
+    logger.error('api/import-team', 'pokepast.es fetch failed (network/timeout)', { pasteId, error: err });
     return null;
   }
   if (!res.ok) {
-    console.error(`[api/import-team] pokepast.es returned HTTP ${res.status} for paste ${pasteId}`);
+    logger.error('api/import-team', 'pokepast.es returned a non-2xx status', { pasteId, status: res.status });
     return null;
   }
   const declared = parseInt(res.headers.get('content-length') ?? '0', 10);
   if (declared > IMPORT_TEAM_TEXT_MAX) {
-    console.error(
-      `[api/import-team] pokepast.es paste ${pasteId} declares Content-Length ${declared} > ${IMPORT_TEAM_TEXT_MAX}`
-    );
+    logger.error('api/import-team', 'pokepast.es paste declares a Content-Length above the limit', {
+      pasteId,
+      declared,
+      max: IMPORT_TEAM_TEXT_MAX,
+    });
     return null;
   }
   let text: string;
   try {
     text = await res.text();
   } catch (err) {
-    console.error(`[api/import-team] pokepast.es body read failed for paste ${pasteId}:`, err);
+    logger.error('api/import-team', 'pokepast.es body read failed', { pasteId, error: err });
     return null;
   }
   if (text.length > IMPORT_TEAM_TEXT_MAX) {
-    console.error(
-      `[api/import-team] pokepast.es paste ${pasteId} body is ${text.length} chars > ${IMPORT_TEAM_TEXT_MAX}`
-    );
+    logger.error('api/import-team', 'pokepast.es paste body is longer than the limit', {
+      pasteId,
+      length: text.length,
+      max: IMPORT_TEAM_TEXT_MAX,
+    });
     return null;
   }
   return text;

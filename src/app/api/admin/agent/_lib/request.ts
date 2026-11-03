@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createBodyReaders } from '@/lib/studio-core/api-body';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { logger } from '@/lib/logger';
 import { agentError } from './errors';
 
 /**
@@ -18,7 +19,7 @@ export function assertSameOriginRequest(request: Request & { nextUrl: { origin: 
   const origin = request.headers.get('origin');
   const fetchSite = request.headers.get('sec-fetch-site');
   if (origin === null || origin === 'null' || origin !== request.nextUrl.origin || fetchSite !== 'same-origin') {
-    console.error('[admin-agent] cross-site or origin-less request refused', { origin, fetchSite });
+    logger.error('admin-agent', 'cross-site or origin-less request refused', { origin, fetchSite });
     throw new UserFacingError('You do not have permission to do this.', { code: 'forbidden', status: 403 });
   }
 }

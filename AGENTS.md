@@ -31,7 +31,7 @@ Do not recursively open every linked markdown by default. Load only the docs req
 
 Non-negotiable. Violations must be caught and corrected immediately.
 
-- **Supabase is the sole writer** — all writes go through API routes, never the dashboard. Client: `src/lib/supabase/client.ts`. Queries: `src/lib/supabase/queries/*.ts` (one module per table or domain; `ls` the folder for the current list).
+- **Supabase is the sole writer** — all writes go through API routes, never the dashboard. The service-role client is `src/lib/supabase/client.ts`, and only code under `src/lib` imports it: queries live in `src/lib/supabase/queries/*.ts` (one module per table or domain; `ls` the folder for the current list) and Storage calls in `src/lib/supabase/storage/*.ts`. Route handlers, pages and components never import `@/lib/supabase/client` or `@supabase/*`; ESLint fails on it (`eslint.config.mjs`: `no-restricted-imports` for `src/app/api`, pages, layouts and `src/components`; `SERVICE_ROLE_CLIENT_ALLOWLIST` is the only exception list and is empty). The only browser Supabase path is the Realtime-only exception below.
 - **Service role key stays server-side** — `SUPABASE_SERVICE_ROLE_KEY` must NEVER reach the client. Client components fetch from API routes only.
 - **Browser Supabase exception is Realtime-only** — `NEXT_PUBLIC_SUPABASE_ANON_KEY` is allowed in the browser only through `src/lib/supabase/realtime-client.ts` and `src/lib/broadcast/channel.ts` for Cast Studio broadcast channels. Do not use browser Supabase for table reads or writes. On the server it is read only by the stateless GoTrue client `src/lib/supabase/auth-client.ts` (email/password sign-in) through the env schema in `src/lib/env.ts`.
 - **RLS enabled as defense-in-depth** — all tables have RLS; the service role key bypasses RLS entirely, so auth guards in API routes remain the primary authorization layer. `anon` and `authenticated` hold no privilege on any table, sequence or function in `public`, now or created later by `postgres` (`supabase/migrations/20261008081443_close_public_api_roles.sql`; `public.matches` was closed first by `20261008081402_revoke_anon_private_match_columns.sql`; both applied in production 2026-10-08), so the public SELECT policies left from the baseline have no effect and the browser anon key reads nothing from `public`. Exception: postgres cannot change `supabase_admin`'s default privileges, and on a hosted project they still grant ALL to both API roles, so an object created from the dashboard (as `supabase_admin`) is open from the start. After creating one that way, run checks V7 and V10 from `docs/security/anon-match-columns.md` and revoke whatever the API roles received in a migration. A policy only filters rows: it exposes every column the role holds a privilege on. A new table's migration enables RLS on it and grants it to `service_role` explicitly (Supabase stops doing that automatically from 2026-10-30). Restricted tables (teams, credentials, cast sessions) are service-role-only. Policies and grants: `supabase/migrations/20260608100000_baseline_professional_schema.sql`, `20260608100003_advisor_fixes.sql` and the two files above; background, the live post-checks and the read-only checks: `docs/security/anon-match-columns.md`.
@@ -115,9 +115,9 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
    ```
    Public routes must have a comment: `// Public: no auth required`
 2. **Validate all input** — required fields and types; enums against `VALID_*` whitelists; string length limits; numeric ranges; regex for structured strings (URLs, IDs).
-3. **Use `safeErrorResponse()`** for all catch blocks (import from `src/lib/api/error-response.ts`); never `console.error(err); return NextResponse.json(...)`.
+3. **Use `safeErrorResponse()`** for all catch blocks (import from `src/lib/api/error-response.ts`); never log with `console.*` and hand-build the error response (`console` is a lint error in `src/app/api`: log through `logger` from `src/lib/logger.ts`).
 4. **Never leak internals** — error responses use static fallback messages, not `err.message` or stack traces. Applies to *unexpected* errors only — rule 5 covers the opposite failure mode.
-5. **Never generalize, suppress, or mask errors** — distinct failure causes must remain distinguishable (specific safe message, or a distinct `code` per cause) in the response and the server logs; any branch that returns an error response without `safeErrorResponse()` must `console.error` the original error first; domain errors whose messages are user-facing by design extend `UserFacingError` from `src/lib/api/user-facing-error.ts` instead of hardcoded generic replacement strings in routes. CI enforces this: `ENFORCE=1 node scripts/check-safe-error-response.mjs` fails the build on any raw `NextResponse` return inside a route catch block that doesn't `console.error` the caught error first (escape hatch: `// safe-error-response-allow: <reason>` on the preceding line).
+5. **Never generalize, suppress, or mask errors** — distinct failure causes must remain distinguishable (specific safe message, or a distinct `code` per cause) in the response and the server logs; any branch that returns an error response without `safeErrorResponse()` must `logger.error` (or `logger.warn`) the original error first; domain errors whose messages are user-facing by design extend `UserFacingError` from `src/lib/api/user-facing-error.ts` instead of hardcoded generic replacement strings in routes. CI enforces this: `ENFORCE=1 node scripts/check-safe-error-response.mjs` fails the build on any raw `NextResponse` return inside a route catch block that doesn't `logger.error` the caught error first (escape hatch: `// safe-error-response-allow: <reason>` on the preceding line).
 6. **Verify resource ownership** — check that the authenticated user owns/has access to the resource they're modifying.
 
 ### Never Do
@@ -165,11 +165,11 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
 |------|-------|
 | Auth helpers | `src/lib/auth/helpers.ts` |
 | Auth configuration | `src/auth.ts` |
-| Supabase client (service role) | `src/lib/supabase/client.ts` |
+| Supabase client (service role; imported only by `src/lib`, never by routes, pages or components) | `src/lib/supabase/client.ts` |
 | Supabase request meter (dev only, `SUPABASE_METER=1`) | `src/lib/supabase/metering.ts`, report: `scripts/data/meter-report.mjs` |
 | World-asset publish (dry run unless `--live`) | `scripts/world-assets/upload-supabase.mjs`, `scripts/world-assets/publish-set.mjs` |
 | Pokémon sprite styles (every sprite URL; viewer preference) / broadcast-render mirror and publish (download only with `--download`, upload dry run unless `--live`) | `src/lib/pkmn/sprite-styles.ts` / `scripts/sprites/mirror-broadcast.mjs`, `scripts/sprites/upload-supabase.mjs` |
-| Supabase query modules | `src/lib/supabase/queries/` |
+| Supabase query modules / Storage modules (the only callers of the client) | `src/lib/supabase/queries/` / `src/lib/supabase/storage/` |
 | Public player shapes and mappers (client and public-response boundary) | `src/lib/players/public-player.ts` |
 | Public match shape and mapper (client, public-cache and public-response boundary) | `src/lib/match/public-match.ts` |
 | Public read cache (tags and write-side helpers `expireTournamentReads` / `expireSeasonReads` / `expireDraftReads`: `src/lib/revalidation.ts`) | `src/lib/cache/public-reads.ts` |
@@ -193,6 +193,7 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
 | Draft pool completability (twin of `draft__pool_completable`) | `src/lib/draft/completability.ts` |
 | Draft clock and quiet hours (TS mirror of the SQL clock) | `src/lib/draft/time.ts` |
 | Backups, restore drill, migration lock safety | `docs/operations-backup.md` |
+| Structured logger, request ids, `onRequestError`, operator grep recipes | `src/lib/logger.ts`, `src/instrumentation.ts`, `docs/operations-logging.md` |
 | Social credential encryption | `src/lib/social/encryption.ts` |
 | Web Push (config, endpoint allow-list, payloads, sender, browser layer; devices API `/api/push/subscriptions`; module doc `docs/push.md`) | `src/lib/push/`, `src/lib/supabase/queries/push-subscriptions.ts` |
 | Database types | `src/types/database.ts` |
@@ -214,9 +215,9 @@ Apply to every line of code you write. Violations are blocking. Full OWASP catal
 ## AI Debug Route
 
 - **Local:** `npm run dev` logs to the same stdout as the `next dev` banner; focused tests run via `npx vitest run <path>` and print to stdout (no log capture configured).
-- **Tags:** API errors log with `[API]` through `safeErrorResponse()`; AI routes log `[ai/*]` tags; Supabase query modules rethrow query errors (`if (error) throw error`) and the route's `safeErrorResponse()` logs them (a few modules also log a `[<query-name>] Query error:` line first); `src/lib/logger.ts` emits JSON logs for AI/Kale paths (`KALE_DEBUG=true` enables truncated request/response body logging).
+- **Tags:** server code logs through `logger` (`src/lib/logger.ts`), one JSON line per call: `{timestamp, level, tag, message, ...meta}`, and an `Error` in the meta (or under `error`) is serialised to name, message, stack, `code`, Supabase `details`/`hint` and `cause`. `safeErrorResponse()` logs with tag `api` and a `requestId` that it also returns in the `x-request-id` response header; route code uses its own tag (`cron/auto-confirm`, `ai/*`, `api/<area>`); Supabase query modules rethrow query errors (`if (error) throw error`) and the route's `safeErrorResponse()` logs them. `onRequestError` in `src/instrumentation.ts` writes one line (tag `request`) with the `digest` of every unhandled render, route or action error. `KALE_DEBUG=true` enables truncated request/response body logging on the Kale paths. `console.*` is a lint error under `src/app/api`. Operator recipes: `docs/operations-logging.md`.
 - **Deployed:** Vercel runtime logs (cron routes in `vercel.json`; Function 5xx alerts per the README's Deployment notes). AI token usage goes to Braintrust.
-- **Known gap:** no request/correlation id exists — do not assume one when diagnosing.
+- **Correlating a report:** the error page shows a `digest`; an API failure returns an `x-request-id` header. Grep the runtime logs for that value (`docs/operations-logging.md`). An unhandled error has only the digest (the `onRequestError` line).
 - Logging policy: `docs/security-patterns.md` (A10 — Logging & Monitoring).
 
 ## Branching

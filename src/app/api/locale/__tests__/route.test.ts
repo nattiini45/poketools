@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/locale/route';
+import { logger } from '@/lib/logger';
 
 const ORIGIN = 'https://poketools.test';
 
@@ -115,7 +116,7 @@ describe('POST /api/locale', () => {
   });
 
   it('500 locale_save_failed (fallbackCode) when the handler throws', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const req = makeRequest({ locale: 'de' });
     vi.spyOn(req.headers, 'get').mockImplementation(() => {
       throw new Error('boom');
@@ -128,7 +129,12 @@ describe('POST /api/locale', () => {
       code: 'locale_save_failed',
     });
     expect(setCookies(res)).toEqual([]);
-    expect(error).toHaveBeenCalledWith('[API] Failed to save the language setting:', expect.any(Error));
+    // `safeErrorResponse` logs one entry: the fallback as the message, the caught error under `error`.
+    expect(error).toHaveBeenCalledWith(
+      'api',
+      'Failed to save the language setting',
+      expect.objectContaining({ status: 500, error: expect.objectContaining({ message: 'boom' }) }),
+    );
     error.mockRestore();
   });
 });

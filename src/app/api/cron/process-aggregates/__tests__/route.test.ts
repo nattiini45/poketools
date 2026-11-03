@@ -25,6 +25,7 @@ import {
   processAggregateJobs,
 } from '@/lib/match/aggregate-queue';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -227,7 +228,7 @@ describe('POST /api/cron/process-aggregates', () => {
   it('reports exhausted failed jobs in the body and logs them, but answers 200 (ruling CR-3)', async () => {
     vi.mocked(processAggregateJobs).mockResolvedValueOnce({ processed: 2, failed: 0, reclaimed: 0 });
     vi.mocked(countFailedAggregateJobs).mockResolvedValueOnce(3);
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const response = await POST(makeCronRequest(URL_BASE, { headers: AUTH }));
     const body = await response.json();
@@ -235,7 +236,9 @@ describe('POST /api/cron/process-aggregates', () => {
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, data: { processed: 2, failed: 0, reclaimed: 0, failedJobs: 3 } });
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('3 aggregate job(s) ended failed (attempts exhausted)')
+      'cron/process-aggregates',
+      expect.stringContaining('aggregate job(s) ended failed (attempts exhausted)'),
+      { failedJobs: 3 }
     );
     consoleErrorSpy.mockRestore();
   });
@@ -264,7 +267,7 @@ describe('POST /api/cron/process-aggregates', () => {
   ])('returns 500 aggregate_jobs_stranded when jobs can never drain (%j)', async (health) => {
     vi.mocked(processAggregateJobs).mockResolvedValueOnce({ processed: 4, failed: 0, reclaimed: 0 });
     vi.mocked(getAggregateJobHealth).mockResolvedValueOnce(health);
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const response = await POST(makeCronRequest(URL_BASE, { headers: AUTH }));
     const body = await response.json();
@@ -274,8 +277,9 @@ describe('POST /api/cron/process-aggregates', () => {
     expect(body.code).toBe('aggregate_jobs_stranded');
     expect(body.params).toEqual({ stranded: health.strandedPending, stale: health.staleProcessing });
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      '[cron/process-aggregates] Aggregate jobs cannot drain:',
-      expect.objectContaining({ ...health, run: { processed: 4, failed: 0, reclaimed: 0 } }),
+      'cron/process-aggregates',
+      'Aggregate jobs cannot drain',
+      expect.objectContaining({ ...health, run: { processed: 4, failed: 0, reclaimed: 0 } })
     );
     consoleErrorSpy.mockRestore();
   });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { getSession, requireAuth } from '@/lib/auth/helpers';
 import {
   SPRITE_STYLE_COOKIE,
@@ -77,7 +78,9 @@ function sameOrigin(request: NextRequest): boolean {
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResult<SpriteStyleData>>> {
   try {
     if (!sameOrigin(request)) {
-      console.error('[api/sprite-style] cross-origin sprite style change refused:', request.headers.get('origin'));
+      logger.error('api/sprite-style', 'cross-origin sprite style change refused', {
+        origin: request.headers.get('origin'),
+      });
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Cross-origin sprite style change refused.', code: 'sprite_style_cross_origin' },
         { status: 403 },

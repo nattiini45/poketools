@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { superadminPlayerProtectedResponse } from '@/lib/auth/superadmin-player-guard';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { playerClaimSchema, formatZodErrors } from '@/lib/validation';
 import {
@@ -122,11 +123,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         // A league in the recycle bin that the source appears in blocks the delete through its junction table; the
         // answer is the same (the source has activity), the log says which kind of reference it was.
         const inTrashedLeague = leagueTrashBlockOf(err) === 'player';
-        console.error(
+        logger.error(
+          'players',
           inTrashedLeague
-            ? '[players] guest claim blocked: the source account appears in a league in the trash:'
-            : '[players] guest claim blocked by a reference to the source account:',
-          err,
+            ? 'guest claim blocked: the source account appears in a league in the trash'
+            : 'guest claim blocked by a reference to the source account',
+          { guestId, sourcePlayerId, error: err },
         );
         throw new UserFacingError(
           'Source account has existing activity — use substitute instead',
@@ -135,7 +137,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       // The source was banned or suspended between the pre-check and the locked re-check.
       if ((err as { code?: string } | null)?.code === '55000') {
-        console.error('[players] guest claim refused: source account not in good standing:', err);
+        logger.error('players', 'guest claim refused: source account not in good standing', {
+          guestId,
+          sourcePlayerId,
+          error: err,
+        });
         throw new UserFacingError('Source account is banned or suspended', {
           code: 'SOURCE_NOT_ACTIVE',
           status: 409,
@@ -168,7 +174,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     try {
       await revokePlayerSessions(guestId);
     } catch (firstErr) {
-      console.error('[players] guest claim committed; second session revocation failed, retrying:', firstErr);
+      logger.error('players', 'guest claim committed; second session revocation failed, retrying', {
+        guestId,
+        error: firstErr,
+      });
       await revokePlayerSessions(guestId);
     }
 

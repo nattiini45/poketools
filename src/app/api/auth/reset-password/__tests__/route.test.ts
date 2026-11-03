@@ -22,6 +22,7 @@ import { POST } from '@/app/api/auth/reset-password/route';
 import { revokeSessionsOfAuthUser } from '@/lib/supabase/queries/players';
 import { rateLimitKey } from '@/lib/utils/rate-limit';
 import { AUTH_RATE_LIMITS } from '@/lib/auth/rate-limits';
+import { logger } from '@/lib/logger';
 
 function makeRequest(body: Record<string, unknown>): NextRequest {
   return { json: vi.fn().mockResolvedValue(body), headers: new Headers() } as unknown as NextRequest;
@@ -46,13 +47,15 @@ describe('POST /api/auth/reset-password', () => {
       error: { code: 'otp_expired', message: 'expired' },
     });
 
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const res = await POST(makeRequest({ token_hash: 'stale', password: 'newpassword1' }));
     expect(res.status).toBe(400);
     expect((await res.json()).code).toBe('reset_link_invalid');
     expect(updateUserById).not.toHaveBeenCalled();
     // The GoTrue cause is logged (code only), never the token.
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reset-password'), 'otp_expired');
+    expect(warnSpy).toHaveBeenCalledWith('auth', 'reset-password: recovery token rejected', {
+      reason: 'otp_expired',
+    });
     expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('stale');
     warnSpy.mockRestore();
   });

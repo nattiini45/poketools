@@ -44,28 +44,11 @@ const resolveCached = cache(
     } catch (err) {
       // Viewerless text still goes out, in the default league language, rather
       // than being dropped because the language read failed.
-      logger.warn('i18n', 'resolveContentLocale: language read failed; using default', describeError(err));
+      logger.warn('i18n', 'resolveContentLocale: language read failed; using default', { error: err });
     }
     return DEFAULT_CONTENT_LOCALE;
   },
 );
-
-/**
- * Log fields for a thrown value. Supabase throws a `PostgrestError`, a plain
- * object (not an `Error`) whose `String()` is "[object Object]", so its
- * `message` and `code` are read directly.
- */
-function describeError(err: unknown): { error: string; code?: string } {
-  if (err instanceof Error) return { error: err.message };
-  if (typeof err === 'object' && err !== null) {
-    const { message, code } = err as { message?: unknown; code?: unknown };
-    return {
-      error: typeof message === 'string' ? message : 'unknown error',
-      ...(typeof code === 'string' ? { code } : {}),
-    };
-  }
-  return { error: String(err) };
-}
 
 /**
  * First non-null of season → tournament → match language, read lazily in that

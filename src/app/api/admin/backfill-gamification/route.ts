@@ -11,6 +11,7 @@ import { recomputeStreaks, updateStreaks } from '@/lib/gamification/streaks';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { checkAchievements } from '@/lib/gamification/achievements';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 
 /** The streak row a player starts the chronological replay from. */
@@ -162,7 +163,7 @@ export async function POST() {
 
         processed++;
       } catch (err) {
-        console.error(`[backfill] Match ${match.id} failed in step "${step}":`, err);
+        logger.error('backfill', 'match failed in step', { matchId: match.id, step, error: err });
         errors.push(failureLine(`Match ${match.id}`, step, err));
       }
     }
@@ -172,7 +173,7 @@ export async function POST() {
       try {
         await recomputeStreaks(playerId);
       } catch (err) {
-        console.error(`[backfill] Player ${playerId} streak recompute failed:`, err);
+        logger.error('backfill', 'player streak recompute failed', { playerId, error: err });
         errors.push(failureLine(`Player ${playerId}`, 'streak recompute', err));
       }
     }

@@ -9,6 +9,7 @@ import { legacyPickExtrasSchema, queuePickSchema, uuidSchema, type QueuePickInpu
 import { getDraftSnapshot, type ViewerContext } from '@/lib/draft/snapshot';
 import { dispatchDraftNotifications } from '@/lib/draft/notify';
 import { callDraftRpc } from '@/lib/draft/rpc-errors';
+import { logger } from '@/lib/logger';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import {
   getDraftPoolById,
@@ -251,7 +252,7 @@ async function queuePick(player: SessionPlayer, pool: DraftPool, rawBody: unknow
           const snapshot = committedSnapshot ?? (await fullSnapshot(pool.id, viewer)).dto;
           await notifyQueuePick(pool, result, snapshot, entry);
         } catch (err) {
-          console.error('[api/drafts/picks] pick notification failed:', err);
+          logger.error('api/drafts/picks', 'pick notification failed', { error: err });
         }
         // The next slot's turn ping (slow drafts) goes out now, not at the next cron run (§8.3, B-CRON).
         // Awaited inside after() so its reads finish before the function is frozen; the Discord posts
@@ -259,7 +260,7 @@ async function queuePick(player: SessionPlayer, pool: DraftPool, rawBody: unknow
         try {
           await dispatchDraftNotifications(await callDraftRpc('draft_claim_notifications', { p_pool_id: pool.id }));
         } catch (err) {
-          console.error('[api/drafts/picks] claiming draft notifications failed:', err);
+          logger.error('api/drafts/picks', 'claiming draft notifications failed', { error: err });
         }
       });
     }
@@ -268,7 +269,7 @@ async function queuePick(player: SessionPlayer, pool: DraftPool, rawBody: unknow
     try {
       committedSnapshot = (await fullSnapshot(pool.id, viewer)).dto;
     } catch (snapErr) {
-      console.error('[api/drafts/picks] snapshot after a committed pick failed:', snapErr);
+      logger.error('api/drafts/picks', 'snapshot after a committed pick failed', { error: snapErr });
     }
 
     const data: QueuePickResponse = {
@@ -296,7 +297,7 @@ async function queuePick(player: SessionPlayer, pool: DraftPool, rawBody: unknow
     try {
       ({ dto: snapshot, publishedNow } = await fullSnapshot(pool.id, viewer));
     } catch (snapErr) {
-      console.error('[api/drafts/picks] snapshot after a refused pick failed:', snapErr);
+      logger.error('api/drafts/picks', 'snapshot after a refused pick failed', { error: snapErr });
     }
     return {
       response: draftErrorResponse(err, 'Failed to make pick', snapshot ? { snapshot } : undefined),
@@ -575,7 +576,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
   } catch (err) {
     const index = violatedIndex(err, [PICK_NUMBER_INDEX, PICK_NAME_INDEX]);
     if (index === null) throw err;
-    console.error(`[api/drafts/picks] legacy pick collided on ${index}:`, err);
+    logger.error('api/drafts/picks', 'legacy pick collided on a unique index', { index, error: err });
     // Another request committed first. The Pokémon index means the species is gone: the same refusal a
     // pre-insert check gives.
     if (index === PICK_NAME_INDEX) {
@@ -638,7 +639,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
       }
     }
   } catch (err) {
-    console.error('[api/drafts/picks] pick committed but its evolution tracker was not created:', err);
+    logger.error('api/drafts/picks', 'pick committed but its evolution tracker was not created', { error: err });
     warnings.push('TRACKER_NOT_CREATED');
   }
 
@@ -648,7 +649,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
     try {
       await updateDraftPoolStatus(id, 'complete');
     } catch (err) {
-      console.error('[api/drafts/picks] last pick committed but the pool was not set to complete:', err);
+      logger.error('api/drafts/picks', 'last pick committed but the pool was not set to complete', { error: err });
       warnings.push('POOL_COMPLETION_PENDING');
     }
   }
@@ -707,7 +708,7 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
       }
     }
   } catch (err) {
-    console.error('[api/drafts/picks] pick notification failed:', err);
+    logger.error('api/drafts/picks', 'pick notification failed', { error: err });
   }
 
   return {

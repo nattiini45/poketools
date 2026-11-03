@@ -5,6 +5,7 @@ import { adminAgentStore } from '@/lib/ai/admin-agent/store';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import { authorizeAgent } from '../../../_lib/auth';
 import { agentRateLimited, assertSameOriginRequest } from '../../../_lib/request';
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // A turn that was cut off between a tool call and its results is answered first (`appendHarnessEvent`): an event
         // between the two would make every later turn of the conversation a bad history.
         await appendHarnessEvent(store, auth.adminId, row.conversation_id, 'proposal_declined', { proposal_id: row.id, plan_code: row.proposal_hash.slice(0, 8) }).catch((error: unknown) =>
-          console.error('[admin-agent] could not record the decline for the model', error),
+          logger.error('admin-agent', 'could not record the decline for the model', { error }),
         );
         return row;
       },

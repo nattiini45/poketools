@@ -20,6 +20,7 @@ import {
 } from '@/lib/ai/admin-agent/proposals/executor';
 import { buildToolSet } from '@/lib/ai/admin-agent/registry';
 import { adminAgentStore } from '@/lib/ai/admin-agent/store';
+import { logger } from '@/lib/logger';
 import { logAuditEvent } from '@/lib/audit/log';
 import { requireEnv } from '@/lib/env';
 import { checkRateLimit, findClientIp } from '@/lib/utils/rate-limit';
@@ -39,7 +40,7 @@ function hashClientIp(request: NextRequest): string | null {
     return createHmac('sha256', secret).update(`admin-agent/approval-ip/v1\n${ip}`).digest('hex');
   } catch (error) {
     // The stamp is evidence, not a gate: a missing secret must not block an approval that the token already authorised.
-    console.error('[admin-agent] could not hash the approver address', error);
+    logger.error('admin-agent', 'could not hash the approver address', { error });
     return null;
   }
 }

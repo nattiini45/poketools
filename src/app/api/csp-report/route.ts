@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { logger } from '@/lib/logger';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { cspReportLogLines, readReportJson } from '@/lib/security/csp-report';
 import { checkMemoryRateLimit, getClientRateLimitIp, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         status: 400,
       });
     }
-    for (const line of lines) console.warn('[csp-report]', line);
+    for (const line of lines) logger.warn('csp-report', line);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to record the CSP report');

@@ -85,7 +85,7 @@ These rules are absolute. Violations are blocking. See `AGENTS.md` for the full 
 9. **Schema changes require type regen** — update `src/types/database.ts` after any Supabase schema change (`npm run db:types` generates it from the local stack).
 
 ### Error Handling
-10. **All API errors use `safeErrorResponse()`** — from `src/lib/api/error-response.ts`. Never use bare `console.error` + manual `NextResponse.json()`.
+10. **All API errors use `safeErrorResponse()`** — from `src/lib/api/error-response.ts`. Never hand-build the error response after a bare log call; `console` is a lint error in `src/app/api` (use `logger`).
 11. **No error generalization, suppression, or masking** — distinct failure causes must remain distinguishable. User-facing domain errors (e.g., `UserFacingError` subclasses) pass through intact.
 12. **AI stays server-side** — Anthropic SDK wrapper at `src/lib/ai/client.ts`.
 

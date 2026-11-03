@@ -6,6 +6,7 @@ import { cancelPendingMatchProposalsForMatch } from '@/lib/supabase/queries/matc
 import { updateOpenMatchSchedule } from '@/lib/supabase/queries/matches';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import type { ScheduleResult } from '@/lib/admin/match-detail';
 import type { ApiResult } from '@/types/api';
 
@@ -87,7 +88,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       proposalsCancelled = (await cancelPendingMatchProposalsForMatch(id)).length;
     } catch (err) {
       proposalsCancelFailed = true;
-      console.error(`[admin schedule] match ${id}: the time was saved but cancelling its pending proposals failed:`, err);
+      logger.error('admin/schedule', 'the time was saved but cancelling its pending proposals failed', {
+        matchId: id,
+        error: err,
+      });
     }
 
     logAuditEvent({
@@ -110,7 +114,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     try {
       await revalidateMatchPages(match.tournament_id, id);
     } catch (err) {
-      console.error(`[admin schedule] match ${id}: the time was saved but the page revalidation failed:`, err);
+      logger.error('admin/schedule', 'the time was saved but the page revalidation failed', {
+        matchId: id,
+        error: err,
+      });
     }
 
     return NextResponse.json<ApiResult<ScheduleResult>>({
