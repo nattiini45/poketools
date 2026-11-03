@@ -7,6 +7,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Re-create the class inside the factory (vi.mock is hoisted, so it
 // cannot reference top-level variables).
 
+// Next installs `AsyncLocalStorage` on the global in its own server; its request store module asserts it on load.
+await vi.hoisted(async () => {
+  const g = globalThis as { AsyncLocalStorage?: unknown };
+  g.AsyncLocalStorage ??= (await import('node:async_hooks')).AsyncLocalStorage;
+});
+
 vi.mock('@/lib/auth/helpers', () => ({
   AuthError: (() => {
     class AuthError extends Error {
@@ -23,6 +29,10 @@ vi.mock('@/lib/auth/helpers', () => ({
   })(),
 }));
 
+import {
+  workUnitAsyncStorage,
+  type WorkUnitStore,
+} from 'next/dist/server/app-render/work-unit-async-storage.external';
 import { safeErrorResponse } from '../error-response';
 import { UserFacingError } from '../user-facing-error';
 import { AuthError } from '@/lib/auth/helpers';
@@ -338,6 +348,59 @@ describe('safeErrorResponse', () => {
       const response = safeErrorResponse(new Error('boom'), 'F', 500, undefined, request);
 
       expect(response.headers.get('x-request-id')).toMatch(UUID);
+    });
+
+    describe('request in scope (no request argument)', () => {
+      const inRequest = <T,>(headers: Record<string, string>, run: () => T): T =>
+        workUnitAsyncStorage.run(
+          { type: 'request', headers: new Headers(headers) } as unknown as WorkUnitStore,
+          run
+        );
+
+      it('reuses the incoming x-request-id of the request the handler is serving', () => {
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = inRequest({ 'x-request-id': 'req-abc-12345' }, () =>
+          safeErrorResponse(new Error('boom'), 'F')
+        );
+
+        expect(response.headers.get('x-request-id')).toBe('req-abc-12345');
+        expect(loggedLine(consoleSpy).requestId).toBe('req-abc-12345');
+      });
+
+      it('replaces a malformed incoming id with a fresh one', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = inRequest({ 'x-request-id': 'bad id with spaces' }, () =>
+          safeErrorResponse(new Error('boom'), 'F')
+        );
+
+        expect(response.headers.get('x-request-id')).toMatch(UUID);
+      });
+
+      it('issues a fresh id when the request sent none', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = inRequest({}, () => safeErrorResponse(new Error('boom'), 'F'));
+
+        expect(response.headers.get('x-request-id')).toMatch(UUID);
+      });
+
+      it('prefers an explicitly passed request over the request in scope', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const explicit = new Request('http://localhost/api/x', { headers: { 'x-request-id': 'explicit-id-1234' } });
+        const response = inRequest({ 'x-request-id': 'ambient-id-1234' }, () =>
+          safeErrorResponse(new Error('boom'), 'F', 500, undefined, explicit)
+        );
+
+        expect(response.headers.get('x-request-id')).toBe('explicit-id-1234');
+      });
+
+      it('issues a fresh id inside a store that is not a request (a cache callback)', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = workUnitAsyncStorage.run({ type: 'cache' } as unknown as WorkUnitStore, () =>
+          safeErrorResponse(new Error('boom'), 'F')
+        );
+
+        expect(response.headers.get('x-request-id')).toMatch(UUID);
+      });
     });
 
     it('is also set on UserFacingError, timeout and AuthError responses', () => {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { workUnitAsyncStorage } from 'next/dist/server/app-render/work-unit-async-storage.external';
 import type { ApiErrorCode } from '@/i18n/messages/errors';
 // The plain EN catalog object only (no define/runtime imports): keeps this helper light.
 import commonErrors from '@/i18n/messages/errors/common/en';
@@ -43,9 +44,26 @@ function authErrorCode(err: Error & { code?: unknown }): CommonErrorCode | undef
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
 
-/** An incoming id is echoed into a header and a log line, so only a plain token is reused. */
+/**
+ * The headers of the request the handler is serving. `headers()` from `next/headers` is async and this helper is
+ * sync (291 callers), so it reads the same request store `headers()` reads. Outside a request (a unit test, a cache
+ * callback, a build-time generator) there is no store and the caller gets a fresh id.
+ */
+function ambientRequestHeaders(): Headers | undefined {
+  try {
+    const store = workUnitAsyncStorage.getStore();
+    return store?.type === 'request' ? store.headers : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * An incoming id is echoed into a header and a log line, so only a plain token is reused. An explicit `request`
+ * wins over the request in scope.
+ */
 function resolveRequestId(request: { headers: Headers } | undefined): string {
-  const incoming = request?.headers.get(REQUEST_ID_HEADER);
+  const incoming = (request?.headers ?? ambientRequestHeaders())?.get(REQUEST_ID_HEADER);
   return incoming && REQUEST_ID_PATTERN.test(incoming) ? incoming : crypto.randomUUID();
 }
 
@@ -65,9 +83,10 @@ function resolveRequestId(request: { headers: Headers } | undefined): string {
  *
  * Every response carries an `x-request-id` header, and the server log line
  * (`logger.error('api', ...)`, field `requestId`) holds the same id, so a
- * support report that quotes the header leads straight to the log. A route
- * that passes its `request` has an incoming `x-request-id` reused (a malformed
- * one is replaced); otherwise a fresh UUID is issued.
+ * support report that quotes the header leads straight to the log. An
+ * incoming `x-request-id` is reused (a malformed one is replaced) whether the
+ * route passes its `request` or not: the request in scope is read when none is
+ * passed. Outside a request a fresh UUID is issued.
  */
 export function safeErrorResponse(
   err: unknown,

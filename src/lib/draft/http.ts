@@ -15,6 +15,7 @@ import { ZodError } from 'zod';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { DraftRuleError } from '@/lib/draft/errors';
+import { logger } from '@/lib/logger';
 import { formatZodErrors } from '@/lib/validation';
 import type { DraftApiErrorBody, DraftSnapshotDTO } from '@/types/draft-queue';
 
@@ -26,7 +27,7 @@ export function draftErrorResponse(
   extra?: { snapshot?: DraftSnapshotDTO },
 ): NextResponse {
   if (err instanceof DraftRuleError) {
-    console.error(`[API] ${fallback}:`, err);
+    logger.error('api', fallback, { status: err.statusCode, code: err.code, error: err });
     const body: DraftApiErrorBody = { success: false, error: err.message, code: err.code };
     if (err.params !== undefined) body.params = { ...err.params };
     if (err.detail !== undefined) body.detail = { ...err.detail };
