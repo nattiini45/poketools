@@ -68,6 +68,27 @@ describe('proxy CSP (#37)', () => {
     expect(response.headers.get('content-security-policy-report-only')).toBeNull();
   });
 
+  it('allows the Vercel preview toolbar script on a preview deployment only, in every policy the proxy sends', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const policies = (response: Response) => [
+      response.headers.get('content-security-policy'),
+      response.headers.get('content-security-policy-report-only'),
+      forwardedRequestHeader(response, 'content-security-policy'),
+    ];
+
+    for (const env of [undefined, 'production', 'development']) {
+      vi.stubEnv('VERCEL_ENV', env);
+      for (const policy of policies(proxy(pageRequest('/leagues')))) expect(policy, String(env)).not.toContain('vercel.live');
+    }
+
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    for (const policy of policies(proxy(pageRequest('/leagues')))) {
+      expect(scriptSrcOf(policy)).toContain('https://vercel.live');
+    }
+    vi.stubEnv('CSP_ENFORCE', '1');
+    expect(scriptSrcOf(proxy(pageRequest('/leagues')).headers.get('content-security-policy'))).toContain('https://vercel.live');
+  });
+
   it('keeps upgrade-insecure-requests out of the report-only header in production, where browsers log an error for it', () => {
     vi.stubEnv('NODE_ENV', 'production');
     const reportOnly = proxy(pageRequest('/leagues')).headers.get('content-security-policy-report-only');

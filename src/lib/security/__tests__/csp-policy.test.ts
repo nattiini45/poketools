@@ -5,6 +5,7 @@ import {
   buildNoncePolicy,
   buildStaticPolicy,
   cspEnforced,
+  isVercelPreview,
   newNonce,
 } from '../csp-policy.mjs';
 
@@ -144,6 +145,46 @@ describe('newNonce', () => {
     for (const nonce of nonces) {
       expect(nonce).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
       expect(Buffer.from(nonce, 'base64').length).toBeGreaterThanOrEqual(16);
+    }
+  });
+});
+
+describe('the Vercel preview toolbar (script-src only, preview deployments only)', () => {
+  const TOOLBAR = 'https://vercel.live';
+
+  it('is never in a policy unless asked for', () => {
+    expect(buildStaticPolicy({ dev: false })).not.toContain('vercel.live');
+    expect(buildStaticPolicy({ dev: false, nonce: NONCE })).not.toContain('vercel.live');
+    expect(buildNoncePolicy({ nonce: NONCE, dev: false })).not.toContain('vercel.live');
+  });
+
+  it('adds the host to script-src, and to no other directive', () => {
+    const policies = [
+      buildStaticPolicy({ dev: false, previewToolbar: true }),
+      buildStaticPolicy({ dev: false, nonce: NONCE, previewToolbar: true }),
+      buildNoncePolicy({ nonce: NONCE, dev: false, previewToolbar: true }),
+      buildNoncePolicy({ nonce: NONCE, dev: false, enforce: true, previewToolbar: true }),
+    ];
+    for (const policy of policies) {
+      const entries = Object.entries(directives(policy)).map(([name, values]) => [name.toLowerCase(), values] as const);
+      for (const [name, values] of entries) {
+        if (name === 'script-src') expect(values).toContain(TOOLBAR);
+        else expect(values, name).not.toContain(TOOLBAR);
+      }
+    }
+  });
+
+  it('keeps the rest of the script policy as it is', () => {
+    const without = directives(buildStaticPolicy({ dev: false }))['script-src']!;
+    expect(directives(buildStaticPolicy({ dev: false, previewToolbar: true }))['script-src']).toEqual([...without, TOOLBAR]);
+  });
+});
+
+describe('isVercelPreview', () => {
+  it('is true for VERCEL_ENV=preview only', () => {
+    expect(isVercelPreview({ VERCEL_ENV: 'preview' })).toBe(true);
+    for (const value of [undefined, '', 'production', 'development', 'Preview-x']) {
+      expect(isVercelPreview({ VERCEL_ENV: value }), String(value)).toBe(false);
     }
   });
 });

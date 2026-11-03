@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { examplePackProductionWarning } from './scripts/format-pack-notice.mjs';
-import { CSP_REPORT_GROUP, CSP_REPORT_PATH, PROXY_SKIPPED_SOURCES, buildStaticPolicy } from './src/lib/security/csp-policy.mjs';
+import { CSP_REPORT_GROUP, CSP_REPORT_PATH, PROXY_SKIPPED_SOURCES, buildStaticPolicy, isVercelPreview } from './src/lib/security/csp-policy.mjs';
 
 // Format pack (docs/format-packs.md): `@format-pack` resolves to exactly one pack entry. The
 // private pack (companion overlay, gitignored; fetched by scripts/fetch-private-assets.mjs on the
@@ -46,7 +46,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 // and must not get one here: on Vercel a `Content-Security-Policy` header of this config reaches the render in place of
 // the proxy's, and Next.js then finds no nonce. Both are built by src/lib/security/csp-policy.mjs
 // (docs/security-patterns.md, "Content-Security-Policy").
-const contentSecurityPolicyHeaders = [{ key: 'Content-Security-Policy', value: buildStaticPolicy({ dev: isDev }) }];
+const contentSecurityPolicyHeaders = [{ key: 'Content-Security-Policy', value: buildStaticPolicy({ dev: isDev, previewToolbar: isVercelPreview() }) }];
 
 const RULES_WITH_OWN_POLICY = new Set(['/api/:path*', '/sw.js', '/sw-routing.js']);
 

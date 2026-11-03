@@ -41,12 +41,24 @@ export const PROXY_SKIPPED_SOURCES = [
 const NONCE_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 const FALSE_VALUES = new Set(['', '0', 'false', 'off', 'no']);
 
+/** The Vercel preview toolbar script host (`/_next-live/feedback/feedback.js`). */
+const VERCEL_LIVE = 'https://vercel.live';
+
 /**
  * Whether the nonce policy is enforced instead of only reported: `CSP_ENFORCE` set to anything but an off value.
  * @param {Record<string, string | undefined>} [env]
  */
 export function cspEnforced(env = process.env) {
   return !FALSE_VALUES.has((env.CSP_ENFORCE ?? '').trim().toLowerCase());
+}
+
+/**
+ * Whether this is a Vercel preview deployment (`VERCEL_ENV=preview`). Vercel injects its toolbar script into preview
+ * pages only; production and local runs never get it, so only a preview policy names its host.
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function isVercelPreview(env = process.env) {
+  return (env.VERCEL_ENV ?? '').trim() === 'preview';
 }
 
 /** @param {string} nonce */
@@ -121,13 +133,15 @@ function withScriptSrc(directives, scriptSrc) {
  * reads `default-src`, where the nonce goes. A nonce in `default-src` changes nothing for the directives that fall back
  * to it (`frame-src`, `media-src`, ...): a nonce-source only ever matches scripts and styles, and both have their own
  * directive here.
- * @param {{ dev: boolean, nonce?: string }} options
+ * @param {{ dev: boolean, nonce?: string, previewToolbar?: boolean }} options `previewToolbar`: also allow the Vercel
+ *   preview toolbar script (`isVercelPreview()`); never set in production.
  */
-export function buildStaticPolicy({ dev, nonce }) {
+export function buildStaticPolicy({ dev, nonce, previewToolbar = false }) {
   // Next.js + React 19 dev mode (Fast Refresh, error overlay, stack reconstruction) needs eval(); production does not.
-  const sources = dev
-    ? `'self' 'unsafe-inline' 'unsafe-eval' blob: ${VERCEL_SCRIPTS}`
-    : `'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${VERCEL_SCRIPTS}`;
+  const sources =
+    (dev
+      ? `'self' 'unsafe-inline' 'unsafe-eval' blob: ${VERCEL_SCRIPTS}`
+      : `'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${VERCEL_SCRIPTS}`) + (previewToolbar ? ` ${VERCEL_LIVE}` : '');
   const directives = commonDirectives({ dev, enforced: true });
   if (nonce === undefined) return withScriptSrc(directives, `script-src ${sources}`);
   assertNonce(nonce);
@@ -138,11 +152,11 @@ export function buildStaticPolicy({ dev, nonce }) {
 /**
  * The per-request policy: scripts run only with this request's nonce, or when a nonced script loaded them.
  * 'self' and the Vercel host stay for browsers that do not know 'strict-dynamic' (it makes the others ignore host lists).
- * @param {{ nonce: string, dev: boolean, enforce?: boolean }} options `enforce`: the policy is sent as the enforced
- *   header (`CSP_ENFORCE`), not as report-only.
+ * @param {{ nonce: string, dev: boolean, enforce?: boolean, previewToolbar?: boolean }} options `enforce`: the policy is
+ *   sent as the enforced header (`CSP_ENFORCE`), not as report-only. `previewToolbar`: see `buildStaticPolicy`.
  */
-export function buildNoncePolicy({ nonce, dev, enforce = false }) {
+export function buildNoncePolicy({ nonce, dev, enforce = false, previewToolbar = false }) {
   assertNonce(nonce);
-  const scriptSrc = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ''} ${VERCEL_SCRIPTS}`;
+  const scriptSrc = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ''} ${VERCEL_SCRIPTS}${previewToolbar ? ` ${VERCEL_LIVE}` : ''}`;
   return withScriptSrc(commonDirectives({ dev, enforced: enforce }), scriptSrc);
 }

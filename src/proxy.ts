@@ -3,7 +3,7 @@ import { isUnknownWikiOverlayName } from '@/lib/broadcast/wiki-overlay-lookup';
 import { REQUEST_PATH_HEADER, requestPathOf } from '@/lib/auth/request-path';
 import { signInPath } from '@/lib/auth/safe-callback-url';
 import { hasSessionCookie, isSignInGatedPath } from '@/lib/auth/sign-in-gate';
-import { buildNoncePolicy, buildStaticPolicy, cspEnforced, newNonce } from '@/lib/security/csp-policy.mjs';
+import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newNonce } from '@/lib/security/csp-policy.mjs';
 
 /**
  * The single proxy (Next allows one `proxy.ts` per app). It only reads the request URL and writes headers, so it never
@@ -22,6 +22,7 @@ import { buildNoncePolicy, buildStaticPolicy, cspEnforced, newNonce } from '@/li
  */
 export function proxy(request: NextRequest) {
   const dev = process.env.NODE_ENV !== 'production';
+  const previewToolbar = isVercelPreview();
 
   if (
     (request.method === 'GET' || request.method === 'HEAD') &&
@@ -35,7 +36,7 @@ export function proxy(request: NextRequest) {
         'content-type': 'text/html; charset=utf-8',
         'x-robots-tag': 'noindex',
         'cache-control': 'no-store',
-        'content-security-policy': buildStaticPolicy({ dev }),
+        'content-security-policy': buildStaticPolicy({ dev, previewToolbar }),
       },
     });
   }
@@ -46,13 +47,13 @@ export function proxy(request: NextRequest) {
     !hasSessionCookie(request.cookies.getAll().map((cookie) => cookie.name))
   ) {
     const redirect = NextResponse.redirect(new URL(signInPath(requestPathOf(request.nextUrl)), request.url), 307);
-    redirect.headers.set('content-security-policy', buildStaticPolicy({ dev }));
+    redirect.headers.set('content-security-policy', buildStaticPolicy({ dev, previewToolbar }));
     return redirect;
   }
 
   const nonce = newNonce();
   const enforce = cspEnforced();
-  const policy = buildNoncePolicy({ nonce, dev, enforce });
+  const policy = buildNoncePolicy({ nonce, dev, enforce, previewToolbar });
 
   // `set` and `delete` replace whatever the client sent, so a guard or the layout only ever sees values made here.
   const requestHeaders = new Headers(request.headers);
@@ -67,7 +68,7 @@ export function proxy(request: NextRequest) {
   } else {
     // The enforced header carries the nonce too (see `buildStaticPolicy`): the platform may hand the render this
     // response header, and Next.js prefers it to the report-only one.
-    response.headers.set('content-security-policy', buildStaticPolicy({ nonce, dev }));
+    response.headers.set('content-security-policy', buildStaticPolicy({ nonce, dev, previewToolbar }));
     response.headers.set('content-security-policy-report-only', policy);
   }
   return response;
