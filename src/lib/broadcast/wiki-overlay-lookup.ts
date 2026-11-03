@@ -75,9 +75,11 @@ const POKEMON_PATH = /^\/pokemon\/([^/]+)\/?$/;
  * the overlays, so the move, item and ability rules above apply unchanged; the tera pages stay with the page, which
  * matches a spelling more loosely than the overlay does.
  *
- * A species name is checked by its id. @pkmn also resolves a few spellings that are not ids: Mega-<name>, Primal-<name>
- * and Gigantamax-<name> are left to the page, and Nidoran♀ / Nidoran♂ and accented letters (Flabébé) are mapped to
- * their ids by `toSpeciesId`. Any other non-ASCII name resolves to no id and gets the 404.
+ * A species name is checked by its id. @pkmn also resolves a few spellings that are not ids: Nidoran♀ / Nidoran♂ and
+ * accented letters (Flabébé) are mapped to their ids by `toSpeciesId`, and Mega-<name>, Primal-<name> and
+ * Gigantamax-<name> are read as the form's id. The generated list holds every such spelling the page resolves (the
+ * generator tries each prefixed id against the same NatDex walk), so a prefix is no exemption: Mega-not-a-real-pokemon
+ * gets the 404 like any other unknown name. Any other non-ASCII name resolves to no id and gets the 404.
  */
 export function isUnknownWikiDetailName(pathname: string): boolean {
   const wiki = PUBLIC_WIKI_PATH.exec(pathname);
@@ -93,6 +95,5 @@ export function isUnknownWikiDetailName(pathname: string): boolean {
   }
   const id = toSpeciesId(name);
   if (id === '') return true;
-  if (/^(mega|primal|gigantamax)/.test(id)) return false;
   return !KNOWN_SPECIES_IDS.has(id);
 }
