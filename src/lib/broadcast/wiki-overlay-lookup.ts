@@ -1,4 +1,4 @@
-import { ABILITY_IDS, HIDDEN_POWER_TYPES, ITEM_IDS, MOVE_IDS } from './wiki-overlay-ids.generated';
+import { ABILITY_IDS, HIDDEN_POWER_TYPES, ITEM_IDS, MOVE_IDS, SPECIES_IDS } from './wiki-overlay-ids.generated';
 
 /**
  * English type names the tera overlay accepts (the URL segment and the TypeBadge key). The proxy checks them before the
@@ -15,6 +15,8 @@ const KNOWN_IDS = {
   items: new Set(ITEM_IDS.split('|')),
   abilities: new Set(ABILITY_IDS.split('|')),
 };
+
+const KNOWN_SPECIES_IDS = new Set(SPECIES_IDS.split('|'));
 
 const HIDDEN_POWER_TYPE_IDS = new Set(HIDDEN_POWER_TYPES.split('|'));
 
@@ -56,4 +58,35 @@ export function isUnknownWikiOverlayName(pathname: string): boolean {
     return type !== '' && !HIDDEN_POWER_TYPE_IDS.has(type);
   }
   return !KNOWN_IDS[kind].has(id);
+}
+
+const PUBLIC_WIKI_PATH = /^\/wiki\/(moves|abilities|items)\/([^/]+)\/?$/;
+const POKEMON_PATH = /^\/pokemon\/([^/]+)\/?$/;
+
+/**
+ * True when pathname is a public wiki detail page (/wiki/{moves,abilities,items}/<name>) or a species page
+ * (/pokemon/<name>) whose name resolves to no entity. The public pages resolve a name with the same NatDex walk as
+ * the overlays, so the move, item and ability rules above apply unchanged; the tera pages stay with the page, which
+ * matches a spelling more loosely than the overlay does.
+ *
+ * A species name is checked by its id only. @pkmn also resolves a few spellings that are not ids (Mega-<name>,
+ * Primal-<name>, Gigantamax-<name>, Nidoran♀); those and anything with a non-ASCII character are left to the page,
+ * so a valid species never gets a false 404 here.
+ */
+export function isUnknownWikiDetailName(pathname: string): boolean {
+  const wiki = PUBLIC_WIKI_PATH.exec(pathname);
+  if (wiki) return isUnknownWikiOverlayName('/broadcast' + pathname);
+
+  const species = POKEMON_PATH.exec(pathname);
+  if (!species) return false;
+  let name: string;
+  try {
+    name = decodeURIComponent(species[1]);
+  } catch {
+    return true;
+  }
+  const id = toId(name);
+  if (id === '') return true;
+  if (/[^\x00-\x7f]/.test(name) || /^(mega|primal|gigantamax)/.test(id)) return false;
+  return !KNOWN_SPECIES_IDS.has(id);
 }

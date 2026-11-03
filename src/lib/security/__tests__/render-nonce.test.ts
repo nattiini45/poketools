@@ -23,7 +23,7 @@ async function headersSeenByRender(request: NextRequest, response: Response) {
 
 async function nonceOfRender(path: string) {
   const request = new NextRequest(`https://poketools.test${path}`);
-  const response = proxy(request);
+  const response = await proxy(request);
   const parsed = parseRequestHeaders(await headersSeenByRender(request, response), {
     isRoutePPREnabled: false,
     previewModeId: undefined,

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Writes src/lib/broadcast/wiki-overlay-ids.generated.ts: every move, item and ability id that the broadcast wiki
- * overlays resolve (a NatDex walk of generations 1-9, the same rule as getMoveNatDex / getItemNatDex /
- * getAbilityNatDex in src/lib/pkmn/dex.ts), including the alias spellings @pkmn accepts.
+ * Writes src/lib/broadcast/wiki-overlay-ids.generated.ts: every move, item, ability and species id that the broadcast
+ * wiki overlays and the public wiki pages resolve (a NatDex walk of generations 1-9, the same rule as getMoveNatDex /
+ * getItemNatDex / getAbilityNatDex / getSpeciesNatDex in src/lib/pkmn/dex.ts), including the alias spellings @pkmn
+ * accepts.
  *
- * The proxy answers 404 for an unknown overlay name before the page streams, and it must not bundle @pkmn/dex (2 MB+),
+ * The proxy answers 404 for an unknown overlay or wiki name before the page streams, and it must not bundle @pkmn/dex (2 MB+),
  * so it reads this compact list instead. src/lib/broadcast/__tests__/wiki-overlay-ids.test.ts fails when the file is
  * out of date after a @pkmn upgrade; run `node scripts/generate-wiki-overlay-ids.mjs` to refresh it.
  */
@@ -17,11 +18,20 @@ const MIN_GEN = 1;
 const MAX_GEN = 9;
 const OUTPUT = fileURLToPath(new URL('../src/lib/broadcast/wiki-overlay-ids.generated.ts', import.meta.url));
 
-const KINDS = /** @type {const} */ ({ moves: 'MOVE_IDS', items: 'ITEM_IDS', abilities: 'ABILITY_IDS' });
+const KINDS = /** @type {const} */ ({ moves: 'MOVE_IDS', items: 'ITEM_IDS', abilities: 'ABILITY_IDS', species: 'SPECIES_IDS' });
+
+/** An alias key that points at a non-species makes @pkmn's species lookup throw; the page would 500 on it, so it never resolves. */
+function lookup(table, id) {
+  try {
+    return table.get(id);
+  } catch {
+    return undefined;
+  }
+}
 
 export function collectWikiOverlayIds() {
   const gens = new Generations(Dex);
-  const candidates = { moves: new Set(), items: new Set(), abilities: new Set() };
+  const candidates = { moves: new Set(), items: new Set(), abilities: new Set(), species: new Set() };
   const aliasKeys = new Set();
   for (let g = MIN_GEN; g <= MAX_GEN; g++) {
     const gen = gens.get(g);
@@ -30,14 +40,14 @@ export function collectWikiOverlayIds() {
     }
     for (const key of Object.keys(Dex.forGen(g).data.Aliases)) aliasKeys.add(key);
   }
-  /** @type {Record<'moves' | 'items' | 'abilities', string[]>} */
-  const ids = { moves: [], items: [], abilities: [] };
+  /** @type {Record<'moves' | 'items' | 'abilities' | 'species', string[]>} */
+  const ids = { moves: [], items: [], abilities: [], species: [] };
   for (const kind of Object.keys(candidates)) {
     const resolved = new Set();
     for (const id of [...candidates[kind], ...aliasKeys]) {
       for (let g = MIN_GEN; g <= MAX_GEN; g++) {
-        const entity = gens.get(g)[kind].get(id);
-        if (entity && entity.exists) {
+        const entity = lookup(gens.get(g)[kind], id);
+        if (entity && entity.exists && !(kind === 'species' && (entity.battleOnly || entity.isNonstandard))) {
           resolved.add(toID(id));
           break;
         }
