@@ -79,6 +79,29 @@ describe('usePollLoop', () => {
     expect(tick).toHaveBeenCalledTimes(afterUnmount);
   });
 
+  it('aborts the signal of a pending tick when the key changes or the overlay unmounts', async () => {
+    const signals: AbortSignal[] = [];
+    const tick = vi.fn(async (signal: AbortSignal) => {
+      signals.push(signal);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return { ok: true };
+    });
+    const { rerender, unmount } = renderHook(({ key }) => usePollLoop(key, 1000, tick), {
+      initialProps: { key: 'a' },
+    });
+    await advance(0);
+    expect(signals[0].aborted).toBe(false);
+    rerender({ key: 'b' });
+    expect(signals[0].aborted).toBe(true);
+    await advance(0);
+    expect(signals[1].aborted).toBe(false);
+    // The superseded tick settles after the abort and must not schedule another poll for the old key.
+    await advance(500);
+    expect(tick).toHaveBeenCalledTimes(2);
+    unmount();
+    expect(signals[1].aborted).toBe(true);
+  });
+
   it('restarts for a new key and uses the latest tick closure', async () => {
     const first = vi.fn(async () => ({ ok: true }));
     const second = vi.fn(async () => ({ ok: true }));

@@ -23,10 +23,11 @@ export default function H2HHistory({ config, matchId }: H2HHistoryProps) {
   const formatter = useFormatter();
   const [data, setData] = useState<EnrichedMatchState | null>(null);
 
-  usePollLoop(matchId, config.poll, async (): Promise<PollTickResult> => {
-    const res = await fetch(`/api/broadcast/state/${matchId}?enrich=true`);
+  usePollLoop(matchId, config.poll, async (signal): Promise<PollTickResult> => {
+    const res = await fetch(`/api/broadcast/state/${matchId}?enrich=true`, { signal });
     if (!res.ok) return pollResultFromResponse(res);
     const json = await res.json();
+    if (signal.aborted) return { ok: true };
     if (!json.success) return { ok: false };
     setData(json.data);
     return { ok: true };

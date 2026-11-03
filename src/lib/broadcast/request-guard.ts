@@ -24,7 +24,14 @@ export const BROADCAST_ROUTE_LIMITS = {
   standings: { bucket: 'broadcast-standings', limit: 60, allowedParams: {} },
 } as const satisfies Record<string, BroadcastGuardOptions>;
 
-function queryIsAccepted(url: URL, allowed: BroadcastGuardOptions['allowedParams']): boolean {
+function queryIsAccepted(rawUrl: string, allowed: BroadcastGuardOptions['allowedParams']): boolean {
+  const url = new URL(rawUrl);
+  // `%65nrich=true`, a trailing `&` or a bare `?` parse like the canonical query but are other raw URLs for the CDN.
+  const marker = rawUrl.indexOf('?');
+  if (marker >= 0) {
+    const raw = rawUrl.slice(marker + 1).split('#', 1)[0];
+    if (raw === '' || raw !== url.searchParams.toString()) return false;
+  }
   const seen = new Set<string>();
   for (const [name, value] of url.searchParams) {
     // A repeated name or an unlisted value is another URL for the CDN, so another cache entry.
@@ -51,7 +58,7 @@ export async function guardBroadcastRequest(
   request: Pick<Request, 'url' | 'headers'>,
   options: BroadcastGuardOptions,
 ): Promise<NextResponse<ApiResult<never>> | null> {
-  if (!queryIsAccepted(new URL(request.url), options.allowedParams)) {
+  if (!queryIsAccepted(request.url, options.allowedParams)) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Unsupported query parameter', code: 'broadcast_query_invalid' },
       { status: 400 },

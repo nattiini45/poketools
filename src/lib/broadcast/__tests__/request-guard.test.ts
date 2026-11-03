@@ -64,6 +64,12 @@ describe('guardBroadcastRequest', () => {
     expect(await guardBroadcastRequest(requestFrom('203.0.113.1', '?enrich=false'), STATE)).toBeNull();
   });
 
+  it('refuses other raw spellings of an accepted query (encoded name, trailing "&", bare "?")', async () => {
+    for (const query of ['?%65nrich=true', '?enrich=%74rue', '?enrich=true&', '?&enrich=true', '?']) {
+      expect((await guardBroadcastRequest(requestFrom('203.0.113.1', query), STATE))?.status, query).toBe(400);
+    }
+  });
+
   it('does not spend the bucket on refused requests', async () => {
     for (let i = 0; i < 20; i += 1) {
       expect((await guardBroadcastRequest(requestFrom('203.0.113.1', '?x=1'), STATE))?.status).toBe(400);

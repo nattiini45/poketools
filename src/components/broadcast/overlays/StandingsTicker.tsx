@@ -46,10 +46,11 @@ export default function StandingsTicker({
   const dl = useDataLocale();
   const [standings, setStandings] = useState<StandingsEntry[]>([]);
 
-  usePollLoop(`${seasonId}:${top}`, config.poll, async (): Promise<PollTickResult> => {
-    const res = await fetch(`/api/broadcast/standings/${seasonId}`);
+  usePollLoop(`${seasonId}:${top}`, config.poll, async (signal): Promise<PollTickResult> => {
+    const res = await fetch(`/api/broadcast/standings/${seasonId}`, { signal });
     if (!res.ok) return pollResultFromResponse(res);
     const json = await res.json();
+    if (signal.aborted) return { ok: true };
     if (!json.success) return { ok: false };
 
     const rows: StandingsEntry[] = (json.data?.standings ?? []).map(

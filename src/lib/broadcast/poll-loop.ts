@@ -12,11 +12,16 @@ import { nextPollDelayMs, type PollTickResult } from './poll-schedule';
  *
  * `key` identifies what is polled (a match id, a URL): a new key restarts the
  * loop. `tick` itself may change on every render; the latest one runs.
+ *
+ * `tick` receives an `AbortSignal` that fires when the key changes or the
+ * overlay unmounts. A tick passes it to `fetch` and checks `signal.aborted`
+ * after each `await`, before it commits state: a late answer for the previous
+ * key must not replace the data of the current one.
  */
 export function usePollLoop(
   key: string,
   baseMs: number,
-  tick: () => Promise<PollTickResult | void>,
+  tick: (signal: AbortSignal) => Promise<PollTickResult | void>,
   enabled = true,
 ): void {
   const tickRef = useRef(tick);
@@ -26,25 +31,26 @@ export function usePollLoop(
 
   useEffect(() => {
     if (!enabled) return;
-    let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let failures = 0;
 
     const run = async () => {
       let result: PollTickResult;
       try {
-        result = (await tickRef.current()) ?? { ok: true };
+        result = (await tickRef.current(signal)) ?? { ok: true };
       } catch {
         result = { ok: false };
       }
-      if (cancelled) return;
+      if (signal.aborted) return;
       failures = result.ok ? 0 : failures + 1;
       timer = setTimeout(run, nextPollDelayMs(baseMs, failures, result.retryAfterMs));
     };
     void run();
 
     return () => {
-      cancelled = true;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [key, baseMs, enabled]);

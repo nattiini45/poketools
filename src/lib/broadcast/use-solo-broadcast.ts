@@ -17,10 +17,11 @@ export function useSoloBroadcastPoll(
 ): PublicSoloBroadcastState | null {
   const [state, setState] = useState<PublicSoloBroadcastState | null>(null);
 
-  usePollLoop(sessionId, pollInterval, async (): Promise<PollTickResult> => {
-    const res = await fetch(`/api/broadcast/solo/${sessionId}`);
+  usePollLoop(sessionId, pollInterval, async (signal): Promise<PollTickResult> => {
+    const res = await fetch(`/api/broadcast/solo/${sessionId}`, { signal });
     if (!res.ok) return pollResultFromResponse(res);
     const json = await res.json();
+    if (signal.aborted) return { ok: true };
     if (!json.success) return { ok: false };
     setState(json.data);
     return { ok: true };

@@ -23,10 +23,11 @@ export default function LiveStatBar({ config, matchId }: LiveStatBarProps) {
   const prevKosRef = useRef<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
 
   // A failed or rate-limited poll keeps the last good data on screen and slows the next poll.
-  usePollLoop(matchId, config.poll, async (): Promise<PollTickResult> => {
-    const res = await fetch(`/api/broadcast/state/${matchId}`);
+  usePollLoop(matchId, config.poll, async (signal): Promise<PollTickResult> => {
+    const res = await fetch(`/api/broadcast/state/${matchId}`, { signal });
     if (!res.ok) return pollResultFromResponse(res);
     const json = await res.json();
+    if (signal.aborted) return { ok: true };
     if (!json.success) return { ok: false };
 
     const state: LiveMatchState = json.data;
