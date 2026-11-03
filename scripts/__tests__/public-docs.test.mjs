@@ -403,8 +403,12 @@ export function citedSrcPaths(text) {
   return found;
 }
 
+/** The gitignored companion overlay: its files exist on a maintainer's machine only, and the docs name them on purpose. */
+export const OVERLAY_PATH_PREFIX = 'src/format-packs/private/';
+
 /** A cited path resolves to a file or directory; a glob resolves when the directory before its first star does. */
 export function srcPathExists(path, exists = (p) => existsSync(join(REPO_ROOT, p))) {
+  if (path.startsWith(OVERLAY_PATH_PREFIX)) return true;
   const star = path.indexOf('*');
   if (star < 0) return exists(path.replace(/\/+$/, ''));
   const dir = path.slice(0, star).replace(/[^/]*$/, '').replace(/\/+$/, '');
@@ -440,6 +444,11 @@ describe('docs cite source paths that exist', () => {
     const planted = citedSrcPaths('see `src/lib/utils/date.ts` and `src/lib/utils/cn.ts:12` and `src/lib/utils/*.ts`');
     expect(planted.map((p) => p.path)).toEqual(['src/lib/utils/date.ts', 'src/lib/utils/cn.ts', 'src/lib/utils/*.ts']);
     expect(planted.filter((p) => !srcPathExists(p.path)).map((p) => p.path)).toEqual(['src/lib/utils/date.ts']);
+  });
+
+  it('accepts a path of the private overlay, which a public checkout does not hold', () => {
+    expect(srcPathExists('src/format-packs/private/index.ts', () => false)).toBe(true);
+    expect(srcPathExists('src/format-packs/example-gone/index.ts', () => false)).toBe(false);
   });
 
   it('keeps every exemption reasoned', () => {
