@@ -81,6 +81,14 @@ describe('redactReportUrl', () => {
     );
   });
 
+  it('masks a token with percent-encoded characters, and a segment that is not valid percent-encoding', () => {
+    expect(redactReportUrl('https://poketools.test/teams/shared/AbCdEfGhIjKlMnOpQrSt%55vWx')).toBe('https://poketools.test/teams/shared/:id');
+    expect(redactReportUrl('https://poketools.test/c/3f2b8c1e%2D9a4d-4e55-8b7a-1c2d3e4f5a6b')).toBe('https://poketools.test/c/:id');
+    expect(redactReportUrl('https://poketools.test/x/AbCdEfGhIjKlMnOpQrStUvWx%2Fy')).toBe('https://poketools.test/x/:id');
+    expect(redactReportUrl('https://poketools.test/x/%E0%A4%A')).toBe('https://poketools.test/x/:id');
+    expect(redactReportUrl('https://poketools.test/wiki/pok%C3%A9mon')).toBe('https://poketools.test/wiki/pok%C3%A9mon');
+  });
+
   it('passes the keywords browsers use for a blocked source, and refuses anything else that is not a URL', () => {
     for (const keyword of ['inline', 'eval', 'data', 'blob', 'wasm-eval', 'trusted-types-policy']) {
       expect(redactReportUrl(keyword)).toBe(keyword);

@@ -62,6 +62,14 @@ describe('proxy CSP (#37)', () => {
     expect(response.headers.get('content-security-policy-report-only')).toBeNull();
   });
 
+  it('keeps upgrade-insecure-requests out of the report-only header in production, where browsers log an error for it', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const reportOnly = proxy(pageRequest('/leagues')).headers.get('content-security-policy-report-only');
+    expect(reportOnly).not.toContain('upgrade-insecure-requests');
+    vi.stubEnv('CSP_ENFORCE', '1');
+    expect(proxy(pageRequest('/leagues')).headers.get('content-security-policy')).toContain('upgrade-insecure-requests');
+  });
+
   it('turns report-only back on when the flag is switched off', () => {
     vi.stubEnv('CSP_ENFORCE', '1');
     vi.stubEnv('CSP_ENFORCE', '0');

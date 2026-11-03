@@ -36,7 +36,7 @@ describe('RootLayout inline scripts (#37)', () => {
   it('stamps the proxy nonce on the palette prepaint script and the next-themes script', async () => {
     headerJar.nonce = 'bm9uY2UtMTIz';
     const html = renderToStaticMarkup(await RootLayout({ children: 'page' }));
-    const scripts = html.match(/<script[^>]*>/g) ?? [];
+    const scripts = html.match(/<script[^>]*>/gi) ?? [];
     expect(scripts.length).toBeGreaterThanOrEqual(2);
     for (const tag of scripts) expect(tag, tag).toContain('nonce="bm9uY2UtMTIz"');
     expect(html).toContain(SITE_PALETTE_PREPAINT_SCRIPT.slice(0, 40));

@@ -1,4 +1,4 @@
-import { ABILITY_IDS, ITEM_IDS, MOVE_IDS } from './wiki-overlay-ids.generated';
+import { ABILITY_IDS, HIDDEN_POWER_TYPES, ITEM_IDS, MOVE_IDS } from './wiki-overlay-ids.generated';
 
 /**
  * English type names the tera overlay accepts (the URL segment and the TypeBadge key). The proxy checks them before the
@@ -15,6 +15,8 @@ const KNOWN_IDS = {
   items: new Set(ITEM_IDS.split('|')),
   abilities: new Set(ABILITY_IDS.split('|')),
 };
+
+const HIDDEN_POWER_TYPE_IDS = new Set(HIDDEN_POWER_TYPES.split('|'));
 
 const TERA_IDS = new Set(WIKI_OVERLAY_TERA_TYPES.map((type) => type.toLowerCase()));
 
@@ -46,7 +48,12 @@ export function isUnknownWikiOverlayName(pathname: string): boolean {
   // The tera page matches the lowercased name as written, the dex pages match its @pkmn id.
   if (kind === 'tera') return !TERA_IDS.has(name.toLowerCase());
   const id = toId(name);
-  // @pkmn builds "Hidden Power <Type> <base>" spellings on demand; the page resolves them, the list does not.
-  if (kind === 'moves' && id.startsWith('hiddenpower')) return false;
+  // @pkmn reads "Hidden Power <Type> <base>" by its leading letters: a known type resolves however it is followed, an
+  // unknown type or anything glued on without a digit does not. The id list holds only the base move.
+  if (kind === 'moves' && id.startsWith('hiddenpower')) {
+    const head = /^[a-z]*/.exec(id)![0];
+    const type = head.slice('hiddenpower'.length);
+    return type !== '' && !HIDDEN_POWER_TYPE_IDS.has(type);
+  }
   return !KNOWN_IDS[kind].has(id);
 }

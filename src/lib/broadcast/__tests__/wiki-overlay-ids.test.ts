@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Dex } from '@pkmn/dex';
 import { getAbilityNatDex, getItemNatDex, getMoveNatDex } from '@/lib/pkmn/dex';
-import { collectWikiOverlayIds } from '../../../../scripts/generate-wiki-overlay-ids.mjs';
+import { collectHiddenPowerTypes, collectWikiOverlayIds } from '../../../../scripts/generate-wiki-overlay-ids.mjs';
 import { isUnknownWikiOverlayName, WIKI_OVERLAY_TERA_TYPES } from '../wiki-overlay-lookup';
 
 const base = '/broadcast/wiki';
@@ -14,6 +14,17 @@ describe('wiki overlay id list', () => {
     expect(file).toContain(JSON.stringify(ids.moves.join('|')));
     expect(file).toContain(JSON.stringify(ids.items.join('|')));
     expect(file).toContain(JSON.stringify(ids.abilities.join('|')));
+    expect(file).toContain(JSON.stringify(collectHiddenPowerTypes().join('|')));
+  });
+
+  it('agrees with the NatDex move resolver for every Hidden Power spelling', () => {
+    const types = [...Dex.types.all()].map((type) => type.id);
+    const spellings = ['hiddenpower', 'hiddenpower60', 'hiddenpowerx', 'hiddenpowerfire60x', 'hiddenpowerfirex', 'hiddenpowerstellar'];
+    for (const type of ['', ...types]) for (const power of ['', '60', '70', '30']) spellings.push(`hiddenpower${type}${power}`);
+    const mismatches = spellings.filter(
+      (id) => isUnknownWikiOverlayName(`/broadcast/wiki/moves/${id}`) !== (getMoveNatDex(id) === null),
+    );
+    expect(mismatches).toEqual([]);
   });
 
   it('agrees with the NatDex resolvers the pages use for every id and alias the dex knows', () => {
@@ -27,7 +38,7 @@ describe('wiki overlay id list', () => {
       const unknownMove = isUnknownWikiOverlayName(`${base}/moves/${id}`);
       const unknownItem = isUnknownWikiOverlayName(`${base}/items/${id}`);
       const unknownAbility = isUnknownWikiOverlayName(`${base}/abilities/${id}`);
-      if (!id.startsWith('hiddenpower') && unknownMove !== (getMoveNatDex(id) === null)) mismatches.push(`moves/${id}`);
+      if (unknownMove !== (getMoveNatDex(id) === null)) mismatches.push(`moves/${id}`);
       if (unknownItem !== (getItemNatDex(id) === null)) mismatches.push(`items/${id}`);
       if (unknownAbility !== (getAbilityNatDex(id) === null)) mismatches.push(`abilities/${id}`);
     }

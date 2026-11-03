@@ -47,10 +47,11 @@ export function newNonce() {
 const VERCEL_SCRIPTS = 'https://va.vercel-scripts.com';
 
 /**
- * Every directive except `script-src` and `upgrade-insecure-requests`.
- * @param {{ dev: boolean }} options
+ * Every directive except `script-src`. `upgrade-insecure-requests` is only valid in an enforced policy: a browser
+ * logs a console error for it in a report-only one.
+ * @param {{ dev: boolean, enforced: boolean }} options
  */
-function commonDirectives({ dev }) {
+function commonDirectives({ dev, enforced }) {
   return [
     "default-src 'self'",
     "style-src 'self' 'unsafe-inline'",
@@ -62,7 +63,7 @@ function commonDirectives({ dev }) {
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    ...(dev ? [] : ['upgrade-insecure-requests']),
+    ...(dev || !enforced ? [] : ['upgrade-insecure-requests']),
     `report-uri ${CSP_REPORT_PATH}`,
     `report-to ${CSP_REPORT_GROUP}`,
   ];
@@ -87,16 +88,17 @@ export function buildStaticPolicy({ dev }) {
   const scriptSrc = dev
     ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: ${VERCEL_SCRIPTS}`
     : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${VERCEL_SCRIPTS}`;
-  return withScriptSrc(commonDirectives({ dev }), scriptSrc);
+  return withScriptSrc(commonDirectives({ dev, enforced: true }), scriptSrc);
 }
 
 /**
  * The per-request policy: scripts run only with this request's nonce, or when a nonced script loaded them.
  * 'self' and the Vercel host stay for browsers that do not know 'strict-dynamic' (it makes the others ignore host lists).
- * @param {{ nonce: string, dev: boolean }} options
+ * @param {{ nonce: string, dev: boolean, enforce?: boolean }} options `enforce`: the policy is sent as the enforced
+ *   header (`CSP_ENFORCE`), not as report-only.
  */
-export function buildNoncePolicy({ nonce, dev }) {
+export function buildNoncePolicy({ nonce, dev, enforce = false }) {
   if (!NONCE_PATTERN.test(nonce)) throw new Error('CSP nonce must be base64');
   const scriptSrc = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ''} ${VERCEL_SCRIPTS}`;
-  return withScriptSrc(commonDirectives({ dev }), scriptSrc);
+  return withScriptSrc(commonDirectives({ dev, enforced: enforce }), scriptSrc);
 }

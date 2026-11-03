@@ -24,6 +24,20 @@ const BLOCKED_KEYWORDS = new Set(['inline', 'eval', 'data', 'blob', 'wasm-eval',
 const OPAQUE_SCHEME = /^(?:data|blob|filesystem|about|javascript):/i;
 const TOKEN_SEGMENT = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{20,})$/i;
 
+/**
+ * Whether a path segment is, or decodes to, a token or id. A share link still resolves with some of its characters
+ * percent-encoded, so the raw segment is not enough; a segment that is not valid percent-encoding is masked too.
+ */
+function isTokenSegment(segment: string): boolean {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    return true;
+  }
+  return decoded.split('/').some((part) => TOKEN_SEGMENT.test(part));
+}
+
 function clip(value: string, max = MAX_VALUE_CHARS): string {
   return value.length > max ? `${value.slice(0, max)}…` : value;
 }
@@ -43,7 +57,7 @@ export function redactReportUrl(value: unknown): string {
   if (!/^(?:https?|wss?):$/.test(url.protocol)) return '[unparsable]';
   const path = url.pathname
     .split('/')
-    .map((segment) => (TOKEN_SEGMENT.test(segment) ? ':id' : segment))
+    .map((segment) => (isTokenSegment(segment) ? ':id' : segment))
     .join('/');
   return clip(`${url.origin}${path}`);
 }

@@ -41,8 +41,8 @@ export function proxy(request: NextRequest) {
   }
 
   const nonce = newNonce();
-  const policy = buildNoncePolicy({ nonce, dev: process.env.NODE_ENV !== 'production' });
   const enforce = cspEnforced();
+  const policy = buildNoncePolicy({ nonce, dev: process.env.NODE_ENV !== 'production', enforce });
 
   // `set` and `delete` replace whatever the client sent, so a guard or the layout only ever sees values made here.
   const requestHeaders = new Headers(request.headers);

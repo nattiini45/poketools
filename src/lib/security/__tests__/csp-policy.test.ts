@@ -69,10 +69,18 @@ describe('buildNoncePolicy', () => {
 
   it('keeps every other directive of the static policy', () => {
     const base = directives(buildStaticPolicy({ dev: false }));
+    const enforced = directives(buildNoncePolicy({ nonce: NONCE, dev: false, enforce: true }));
     for (const name of Object.keys(base)) {
       if (name === 'script-src') continue;
-      expect(prod[name], name).toEqual(base[name]);
+      expect(enforced[name], name).toEqual(base[name]);
+      if (name !== 'upgrade-insecure-requests') expect(prod[name], name).toEqual(base[name]);
     }
+  });
+
+  it('leaves upgrade-insecure-requests out of the report-only policy, where browsers reject it, and puts it in the enforced one', () => {
+    expect(prod).not.toHaveProperty('upgrade-insecure-requests');
+    expect(directives(buildNoncePolicy({ nonce: NONCE, dev: false, enforce: true }))).toHaveProperty('upgrade-insecure-requests');
+    expect(directives(buildNoncePolicy({ nonce: NONCE, dev: true, enforce: true }))).not.toHaveProperty('upgrade-insecure-requests');
   });
 
   it('adds unsafe-eval only in development', () => {
