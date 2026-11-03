@@ -1,8 +1,14 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import TypeBadge from '@/components/shared/TypeBadge';
 import { getT } from '@/i18n/server';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import { getWikiTeraTypes } from '@/lib/wiki/index-rows.server';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(wikiMessages);
+  return { title: t('tera.title') };
+}
 
 export default async function WikiTeraIndexPage() {
   const t = await getT(wikiMessages);

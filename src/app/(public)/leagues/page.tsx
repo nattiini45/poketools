@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { publicReads } from '@/lib/cache/public-reads';
 import PageContainer from '@/components/ui/PageContainer';
@@ -22,6 +23,11 @@ const statusVariant: Record<string, 'green' | 'accent' | 'gray'> = {
   upcoming: 'accent',
   completed: 'gray',
 };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(leaguesMessages);
+  return { title: t('list.title') };
+}
 
 export default async function LeaguesPage() {
   // Test leagues are listed too (after the real ones, `listSeasons` sorts

@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { unstable_doesMiddlewareMatch as doesProxyMatch } from 'next/experimental/testing/server';
 import { buildStaticPolicy } from '@/lib/security/csp-policy.mjs';
+import { pageNotFoundGate } from '@/lib/seo/page-gate';
 import { config, proxy } from '../proxy';
+
+vi.mock('@/lib/seo/page-gate', () => ({ pageNotFoundGate: vi.fn(async () => null) }));
 
 function pageRequest(path: string, headers: Record<string, string> = {}) {
   return new NextRequest(`https://poketools.test${path}`, { headers });
@@ -15,23 +18,23 @@ function forwardedRequestHeader(response: Response, name: string) {
 
 describe('proxy request path (#56)', () => {
   const signedIn = { cookie: 'authjs.session-token=a' };
-  it('records the requested path and query for the guards', () => {
-    const response = proxy(pageRequest('/dashboard/submit/m1?tab=y', signedIn));
+  it('records the requested path and query for the guards', async () => {
+    const response = await proxy(pageRequest('/dashboard/submit/m1?tab=y', signedIn));
     expect(forwardedRequestHeader(response, 'x-poketools-path')).toBe('/dashboard/submit/m1?tab=y');
   });
 
-  it('overwrites a path header the client sent', () => {
-    const response = proxy(pageRequest('/dashboard/settings', { ...signedIn, 'x-poketools-path': 'https://evil.example/' }));
+  it('overwrites a path header the client sent', async () => {
+    const response = await proxy(pageRequest('/dashboard/settings', { ...signedIn, 'x-poketools-path': 'https://evil.example/' }));
     expect(forwardedRequestHeader(response, 'x-poketools-path')).toBe('/dashboard/settings');
   });
 
-  it('does not put the path header on the response a client sees', () => {
-    const response = proxy(pageRequest('/dashboard', signedIn));
+  it('does not put the path header on the response a client sees', async () => {
+    const response = await proxy(pageRequest('/dashboard', signedIn));
     expect(response.headers.get('x-poketools-path')).toBeNull();
   });
 
-  it('drops the _rsc parameter of a client navigation', () => {
-    const response = proxy(pageRequest('/dashboard?tab=a&_rsc=abc12', signedIn));
+  it('drops the _rsc parameter of a client navigation', async () => {
+    const response = await proxy(pageRequest('/dashboard?tab=a&_rsc=abc12', signedIn));
     expect(forwardedRequestHeader(response, 'x-poketools-path')).toBe('/dashboard?tab=a');
   });
 });
@@ -45,8 +48,8 @@ function scriptSrcOf(policy: string | null) {
 describe('proxy CSP (#37)', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it('reports the nonce policy and enforces the static policy beside it, by default', () => {
-    const response = proxy(pageRequest('/leagues'));
+  it('reports the nonce policy and enforces the static policy beside it, by default', async () => {
+    const response = await proxy(pageRequest('/leagues'));
     const reportOnly = response.headers.get('content-security-policy-report-only');
     expect(scriptSrcOf(reportOnly)).toMatch(/'nonce-[^']+' 'strict-dynamic'/);
     expect(scriptSrcOf(reportOnly)).not.toContain("'unsafe-inline'");
@@ -59,16 +62,16 @@ describe('proxy CSP (#37)', () => {
     expect(scriptSrcOf(enforced)).not.toContain('nonce-');
   });
 
-  it('enforces the nonce policy, and only that, when CSP_ENFORCE is set', () => {
+  it('enforces the nonce policy, and only that, when CSP_ENFORCE is set', async () => {
     vi.stubEnv('CSP_ENFORCE', '1');
-    const response = proxy(pageRequest('/leagues'));
+    const response = await proxy(pageRequest('/leagues'));
     const enforced = response.headers.get('content-security-policy');
     expect(scriptSrcOf(enforced)).toMatch(/'nonce-[^']+' 'strict-dynamic'/);
     expect(scriptSrcOf(enforced)).not.toContain("'unsafe-inline'");
     expect(response.headers.get('content-security-policy-report-only')).toBeNull();
   });
 
-  it('allows the Vercel preview toolbar script on a preview deployment only, in every policy the proxy sends', () => {
+  it('allows the Vercel preview toolbar script on a preview deployment only, in every policy the proxy sends', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     const policies = (response: Response) => [
       response.headers.get('content-security-policy'),
@@ -78,35 +81,35 @@ describe('proxy CSP (#37)', () => {
 
     for (const env of [undefined, 'production', 'development']) {
       vi.stubEnv('VERCEL_ENV', env);
-      for (const policy of policies(proxy(pageRequest('/leagues')))) expect(policy, String(env)).not.toContain('vercel.live');
+      for (const policy of policies(await proxy(pageRequest('/leagues')))) expect(policy, String(env)).not.toContain('vercel.live');
     }
 
     vi.stubEnv('VERCEL_ENV', 'preview');
-    for (const policy of policies(proxy(pageRequest('/leagues')))) {
+    for (const policy of policies(await proxy(pageRequest('/leagues')))) {
       expect(scriptSrcOf(policy)).toContain('https://vercel.live');
     }
     vi.stubEnv('CSP_ENFORCE', '1');
-    expect(scriptSrcOf(proxy(pageRequest('/leagues')).headers.get('content-security-policy'))).toContain('https://vercel.live');
+    expect(scriptSrcOf((await proxy(pageRequest('/leagues'))).headers.get('content-security-policy'))).toContain('https://vercel.live');
   });
 
-  it('keeps upgrade-insecure-requests out of the report-only header in production, where browsers log an error for it', () => {
+  it('keeps upgrade-insecure-requests out of the report-only header in production, where browsers log an error for it', async () => {
     vi.stubEnv('NODE_ENV', 'production');
-    const reportOnly = proxy(pageRequest('/leagues')).headers.get('content-security-policy-report-only');
+    const reportOnly = (await proxy(pageRequest('/leagues'))).headers.get('content-security-policy-report-only');
     expect(reportOnly).not.toContain('upgrade-insecure-requests');
     vi.stubEnv('CSP_ENFORCE', '1');
-    expect(proxy(pageRequest('/leagues')).headers.get('content-security-policy')).toContain('upgrade-insecure-requests');
+    expect((await proxy(pageRequest('/leagues'))).headers.get('content-security-policy')).toContain('upgrade-insecure-requests');
   });
 
-  it('turns report-only back on when the flag is switched off', () => {
+  it('turns report-only back on when the flag is switched off', async () => {
     vi.stubEnv('CSP_ENFORCE', '1');
     vi.stubEnv('CSP_ENFORCE', '0');
-    const response = proxy(pageRequest('/leagues'));
+    const response = await proxy(pageRequest('/leagues'));
     expect(scriptSrcOf(response.headers.get('content-security-policy'))).toContain("'unsafe-inline'");
     expect(response.headers.get('content-security-policy-report-only')).not.toBeNull();
   });
 
-  it('hands the render the same nonce the header carries, in x-nonce and in the request policy', () => {
-    const response = proxy(pageRequest('/leagues'));
+  it('hands the render the same nonce the header carries, in x-nonce and in the request policy', async () => {
+    const response = await proxy(pageRequest('/leagues'));
     const nonce = NONCE_IN_POLICY.exec(response.headers.get('content-security-policy-report-only') ?? '')?.[1];
     expect(nonce).toBeTruthy();
     expect(forwardedRequestHeader(response, 'x-nonce')).toBe(nonce);
@@ -114,15 +117,17 @@ describe('proxy CSP (#37)', () => {
     expect(NONCE_IN_POLICY.exec(forwardedRequestHeader(response, 'content-security-policy') ?? '')?.[1]).toBe(nonce);
   });
 
-  it('uses a different nonce for every request', () => {
-    const nonces = Array.from({ length: 20 }, () =>
-      NONCE_IN_POLICY.exec(proxy(pageRequest('/')).headers.get('content-security-policy-report-only') ?? '')?.[1],
+  it('uses a different nonce for every request', async () => {
+    const nonces = await Promise.all(
+      Array.from({ length: 20 }, async () =>
+        NONCE_IN_POLICY.exec((await proxy(pageRequest('/'))).headers.get('content-security-policy-report-only') ?? '')?.[1],
+      ),
     );
     expect(new Set(nonces).size).toBe(20);
   });
 
-  it('ignores a nonce or policy the client sent', () => {
-    const response = proxy(
+  it('ignores a nonce or policy the client sent', async () => {
+    const response = await proxy(
       pageRequest('/', {
         'x-nonce': 'attacker',
         'content-security-policy': "script-src 'nonce-attacker'",
@@ -134,8 +139,8 @@ describe('proxy CSP (#37)', () => {
     expect(response.headers.get('content-security-policy-report-only')).not.toContain('attacker');
   });
 
-  it('never puts the nonce in a response header of its own', () => {
-    expect(proxy(pageRequest('/')).headers.get('x-nonce')).toBeNull();
+  it('never puts the nonce in a response header of its own', async () => {
+    expect((await proxy(pageRequest('/'))).headers.get('x-nonce')).toBeNull();
   });
 });
 
@@ -153,21 +158,21 @@ describe('proxy sign-in redirect for signed-out visitors (#56)', () => {
     ['/admin', '/auth/signin?callbackUrl=%2Fadmin'],
     ['/admin/leagues?x=1', '/auth/signin?callbackUrl=%2Fadmin%2Fleagues%3Fx%3D1'],
     ['/draft-room/trainer-creator', '/auth/signin?callbackUrl=%2Fdraft-room%2Ftrainer-creator'],
-  ])('answers a cookieless %s with a 307 to %s', (path, target) => {
-    const response = proxy(pageRequest(path));
+  ])('answers a cookieless %s with a 307 to %s', async (path, target) => {
+    const response = await proxy(pageRequest(path));
     expect(response.status).toBe(307);
     const location = new URL(response.headers.get('location') ?? '');
     expect(location.origin).toBe('https://poketools.test');
     expect(location.pathname + location.search).toBe(target);
   });
 
-  it('keeps the return path from a spoofed path header out of the redirect', () => {
-    const response = proxy(pageRequest('/dashboard/settings', { 'x-poketools-path': 'https://evil.example/' }));
+  it('keeps the return path from a spoofed path header out of the redirect', async () => {
+    const response = await proxy(pageRequest('/dashboard/settings', { 'x-poketools-path': 'https://evil.example/' }));
     expect(new URL(response.headers.get('location') ?? '').search).toBe('?callbackUrl=%2Fdashboard%2Fsettings');
   });
 
-  it('drops the _rsc parameter of a client navigation from the return path', () => {
-    const response = proxy(pageRequest('/dashboard?tab=a&_rsc=abc12'));
+  it('drops the _rsc parameter of a client navigation from the return path', async () => {
+    const response = await proxy(pageRequest('/dashboard?tab=a&_rsc=abc12'));
     expect(new URL(response.headers.get('location') ?? '').search).toBe('?callbackUrl=%2Fdashboard%3Ftab%3Da');
   });
 
@@ -176,33 +181,33 @@ describe('proxy sign-in redirect for signed-out visitors (#56)', () => {
     '__Secure-authjs.session-token=a',
     'authjs.session-token.0=a; authjs.session-token.1=b',
     'next-auth.session-token=a',
-  ])('leaves a request with the cookie %s to the guard', (cookie) => {
-    const response = proxy(pageRequest('/dashboard', { cookie }));
+  ])('leaves a request with the cookie %s to the guard', async (cookie) => {
+    const response = await proxy(pageRequest('/dashboard', { cookie }));
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
   });
 
-  it('does not take another cookie for a session', () => {
-    expect(proxy(pageRequest('/dashboard', { cookie: 'authjs.csrf-token=a; authjs.callback-url=b' })).status).toBe(307);
+  it('does not take another cookie for a session', async () => {
+    expect((await proxy(pageRequest('/dashboard', { cookie: 'authjs.csrf-token=a; authjs.callback-url=b' }))).status).toBe(307);
   });
 
-  it('leaves public pages, the sign-in page and lookalike prefixes alone', () => {
+  it('leaves public pages, the sign-in page and lookalike prefixes alone', async () => {
     for (const path of ['/', '/leagues', '/auth/signin', '/dashboards', '/administrators', '/creator', '/creator/studio-x', '/draft-room']) {
-      expect(proxy(pageRequest(path)).status, path).toBe(200);
+      expect((await proxy(pageRequest(path))).status, path).toBe(200);
     }
   });
 
-  it('redirects only reads, and not a request that has a session cookie', () => {
-    expect(proxy(new NextRequest('https://poketools.test/dashboard', { method: 'POST' })).status).toBe(200);
-    expect(proxy(pageRequest('/dashboard', sessionCookie)).status).toBe(200);
+  it('redirects only reads, and not a request that has a session cookie', async () => {
+    expect((await proxy(new NextRequest('https://poketools.test/dashboard', { method: 'POST' }))).status).toBe(200);
+    expect((await proxy(pageRequest('/dashboard', sessionCookie))).status).toBe(200);
   });
 });
 
 describe('proxy CSP on the responses it answers itself (#37)', () => {
-  it('keeps the static policy on the overlay 404 and on the sign-in redirect, which next.config.mjs no longer covers', () => {
+  it('keeps the static policy on the overlay 404 and on the sign-in redirect, which next.config.mjs no longer covers', async () => {
     const expected = buildStaticPolicy({ dev: process.env.NODE_ENV !== 'production' });
-    expect(proxy(pageRequest('/broadcast/wiki/moves/NotAMove')).headers.get('content-security-policy')).toBe(expected);
-    const redirect = proxy(pageRequest('/dashboard'));
+    expect((await proxy(pageRequest('/broadcast/wiki/moves/NotAMove'))).headers.get('content-security-policy')).toBe(expected);
+    const redirect = await proxy(pageRequest('/dashboard'));
     expect(redirect.status).toBe(307);
     expect(redirect.headers.get('content-security-policy')).toBe(expected);
   });
@@ -215,7 +220,7 @@ describe('proxy wiki overlay 404 (VAL-SHELL-012)', () => {
     '/broadcast/wiki/items/NotAnItem',
     '/broadcast/wiki/tera/NotAType',
   ])('answers %s with an empty 404 before the page streams', async (path) => {
-    const response = proxy(pageRequest(path));
+    const response = await proxy(pageRequest(path));
     expect(response.status).toBe(404);
     expect(await response.text()).toBe('');
     expect(response.headers.get('x-robots-tag')).toContain('noindex');
@@ -228,15 +233,15 @@ describe('proxy wiki overlay 404 (VAL-SHELL-012)', () => {
     '/broadcast/wiki/items/Leftovers',
     '/broadcast/wiki/tera/Fire',
     '/broadcast/wiki/pokemon/NotAMon',
-  ])('lets %s through to the page', (path) => {
-    const response = proxy(pageRequest(path));
+  ])('lets %s through to the page', async (path) => {
+    const response = await proxy(pageRequest(path));
     expect(response.status).toBe(200);
     expect(response.headers.get('x-middleware-next')).toBe('1');
   });
 
-  it('keeps the 404 for a HEAD request and leaves other methods to the page', () => {
-    expect(proxy(new NextRequest('https://poketools.test/broadcast/wiki/moves/NotAMove', { method: 'HEAD' })).status).toBe(404);
-    expect(proxy(new NextRequest('https://poketools.test/broadcast/wiki/moves/NotAMove', { method: 'POST' })).status).toBe(200);
+  it('keeps the 404 for a HEAD request and leaves other methods to the page', async () => {
+    expect((await proxy(new NextRequest('https://poketools.test/broadcast/wiki/moves/NotAMove', { method: 'HEAD' }))).status).toBe(404);
+    expect((await proxy(new NextRequest('https://poketools.test/broadcast/wiki/moves/NotAMove', { method: 'POST' }))).status).toBe(200);
   });
 });
 
@@ -262,5 +267,35 @@ describe('proxy matcher', () => {
     ]) {
       expect(matches(url), url).toBe(false);
     }
+  });
+});
+
+describe('proxy missing page 404 (#58, #65)', () => {
+  const SHARE_LINK_ID = '00000000-0000-4000-8000-000000000065';
+
+  afterEach(() => vi.mocked(pageNotFoundGate).mockReset().mockResolvedValue(null));
+
+  it('rewrites a dead team page to the not-found page with a 404 and the same nonce policy', async () => {
+    vi.mocked(pageNotFoundGate).mockResolvedValue('not_found');
+    const response = await proxy(pageRequest(`/teams/shared/${SHARE_LINK_ID}`));
+    expect(response.status).toBe(404);
+    expect(response.headers.get('x-middleware-rewrite')).toContain('/_not-found');
+    const nonce = NONCE_IN_POLICY.exec(response.headers.get('content-security-policy-report-only') ?? '')?.[1];
+    expect(nonce).toBeTruthy();
+    expect(forwardedRequestHeader(response, 'x-nonce')).toBe(nonce);
+    expect(pageNotFoundGate).toHaveBeenCalledWith(`/teams/shared/${SHARE_LINK_ID}`, expect.any(Headers));
+  });
+
+  it('lets a live team page through to the page', async () => {
+    const response = await proxy(pageRequest(`/teams/library/${SHARE_LINK_ID}`));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+  });
+
+  it('checks reads only: a POST goes straight to the page', async () => {
+    vi.mocked(pageNotFoundGate).mockResolvedValue('not_found');
+    const response = await proxy(new NextRequest(`https://poketools.test/teams/shared/${SHARE_LINK_ID}`, { method: 'POST' }));
+    expect(response.status).toBe(200);
+    expect(pageNotFoundGate).not.toHaveBeenCalled();
   });
 });

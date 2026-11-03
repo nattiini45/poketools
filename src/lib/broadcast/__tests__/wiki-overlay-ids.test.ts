@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Dex } from '@pkmn/dex';
-import { getAbilityNatDex, getItemNatDex, getMoveNatDex } from '@/lib/pkmn/dex';
+import { getAbilityNatDex, getItemNatDex, getMoveNatDex, getSpeciesNatDex } from '@/lib/pkmn/dex';
 import { collectHiddenPowerTypes, collectWikiOverlayIds } from '../../../../scripts/generate-wiki-overlay-ids.mjs';
-import { isUnknownWikiOverlayName, WIKI_OVERLAY_TERA_TYPES } from '../wiki-overlay-lookup';
+import { isUnknownWikiDetailName, isUnknownWikiOverlayName, WIKI_OVERLAY_TERA_TYPES } from '../wiki-overlay-lookup';
 
 const base = '/broadcast/wiki';
 
@@ -14,6 +14,7 @@ describe('wiki overlay id list', () => {
     expect(file).toContain(JSON.stringify(ids.moves.join('|')));
     expect(file).toContain(JSON.stringify(ids.items.join('|')));
     expect(file).toContain(JSON.stringify(ids.abilities.join('|')));
+    expect(file).toContain(JSON.stringify(ids.species.join('|')));
     expect(file).toContain(JSON.stringify(collectHiddenPowerTypes().join('|')));
   });
 
@@ -86,5 +87,60 @@ describe('isUnknownWikiOverlayName', () => {
     expect(isUnknownWikiOverlayName(`${base}/moves/a/b`)).toBe(false);
     expect(isUnknownWikiOverlayName('/wiki/moves/NotAMove')).toBe(false);
     expect(isUnknownWikiOverlayName('/broadcast/match/abc')).toBe(false);
+  });
+});
+
+describe('isUnknownWikiDetailName', () => {
+  it('404s an unknown species, move, ability and item and nothing the pages resolve', () => {
+    expect(isUnknownWikiDetailName('/pokemon/not-a-real-pokemon')).toBe(true);
+    expect(isUnknownWikiDetailName('/wiki/moves/not-a-move')).toBe(true);
+    expect(isUnknownWikiDetailName('/wiki/abilities/nope')).toBe(true);
+    expect(isUnknownWikiDetailName('/wiki/items/nope/')).toBe(true);
+    expect(isUnknownWikiDetailName('/pokemon/%E0%A4%A')).toBe(true);
+
+    expect(isUnknownWikiDetailName('/pokemon/Garchomp')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Mr.%20Mime')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Ho-Oh')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Mega-Charizard-X')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Nidoran%E2%99%80')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Nidoran%E2%99%82')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Flab%C3%A9b%C3%A9')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Farfetch%E2%80%99d')).toBe(false);
+    expect(isUnknownWikiDetailName('/wiki/moves/Close%20Combat')).toBe(false);
+  });
+
+  it('404s an unknown species written with non-ASCII characters', () => {
+    expect(isUnknownWikiDetailName('/pokemon/%E3%83%94%E3%82%AB%E3%83%81%E3%83%A5%E3%82%A6')).toBe(true);
+    expect(isUnknownWikiDetailName('/pokemon/Pok%C3%A9mon')).toBe(true);
+    expect(isUnknownWikiDetailName('/pokemon/Foo%E2%99%80')).toBe(true);
+    expect(isUnknownWikiDetailName('/pokemon/%E2%99%80')).toBe(true);
+  });
+
+  it('ignores every other path, the tera pages included', () => {
+    for (const path of ['/', '/pokemon', '/pokemon/a/b', '/wiki/tera/nope', '/wiki/moves', '/wiki/pokemon/nope', '/leagues/nope']) {
+      expect(isUnknownWikiDetailName(path), path).toBe(false);
+    }
+  });
+
+  it('never 404s a species the page resolves, for every id, alias and name the dex knows', () => {
+    const candidates = new Set<string>(Object.keys(Dex.data.Aliases));
+    for (const key of Object.keys(Dex.data.Species)) candidates.add(key);
+    for (const species of Dex.species.all()) candidates.add(species.name);
+
+    const falseNotFound: string[] = [];
+    const missed: string[] = [];
+    for (const name of candidates) {
+      let resolves: boolean;
+      try {
+        resolves = getSpeciesNatDex(name) !== null;
+      } catch {
+        continue;
+      }
+      const gate = isUnknownWikiDetailName('/pokemon/' + encodeURIComponent(name));
+      if (resolves && gate) falseNotFound.push(name);
+      if (!resolves && !gate && !/^(mega|primal|gigantamax)/i.test(name.replace(/[^a-z]/gi, ''))) missed.push(name);
+    }
+    expect(falseNotFound).toEqual([]);
+    expect(missed).toEqual([]);
   });
 });

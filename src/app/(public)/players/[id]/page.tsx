@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import PageContainer from '@/components/ui/PageContainer';
@@ -19,6 +20,8 @@ import Button from '@/components/ui/Button';
 import { getSessionPlayer } from '@/lib/auth/helpers';
 import { currentSignInPath } from '@/lib/auth/redirect-to-sign-in';
 import { publicReads } from '@/lib/cache/public-reads';
+import { playerMetadata } from '@/lib/seo/page-metadata';
+import { readPlayerProfile } from '@/lib/seo/page-reads';
 import { packExtensions } from '@/lib/pack-extensions';
 import { getT } from '@/i18n/server';
 import { profileMessages } from '@/i18n/messages/profile';
@@ -34,12 +37,16 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  return playerMetadata((await params).id);
+}
+
 export default async function PlayerProfilePage({ params }: PageProps) {
   const { id } = await params;
   const viewer = await getSessionPlayer();
 
   const [profile, ratingHistory, achievementDefinitions, t] = await Promise.all([
-    publicReads.playerProfile(id),
+    readPlayerProfile(id),
     publicReads.playerRatingHistory(id, 60),
     publicReads.achievementDefinitions(),
     getT(profileMessages),

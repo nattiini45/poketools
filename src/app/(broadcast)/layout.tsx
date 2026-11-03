@@ -1,4 +1,6 @@
+import type { Metadata } from 'next';
 import { SpriteStyleProvider } from '@/components/shared/SpriteStyleProvider';
+import { NOINDEX } from '@/lib/seo/robots';
 
 /**
  * The root layout paints `bg-poke-base` on <body> (and the site palette script
@@ -9,6 +11,8 @@ import { SpriteStyleProvider } from '@/components/shared/SpriteStyleProvider';
  * states are transparent too. `!important` beats the palette script's inline style.
  */
 export const BROADCAST_TRANSPARENCY_CSS = 'html,body{background:transparent!important}';
+
+export const metadata: Metadata = { robots: NOINDEX };
 
 /**
  * Broadcast overlays are viewerless (an OBS browser source): they render in the

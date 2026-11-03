@@ -3,10 +3,10 @@ import type en from './en';
 
 export default defineDe<typeof en>()({
   meta: {
-    hubTitle: 'Creator Hub | PokeTools',
-    studioTitle: 'Cast Studio | PokéTools',
+    hubTitle: 'Creator Hub',
+    studioTitle: 'Cast Studio',
     studioDescription: 'Erstelle und verwalte Broadcast-Sessions für Livecasts, Replaycasts und Solo-Streams',
-    overlaysTitle: 'Overlay-Verwaltung | PokeTools',
+    overlaysTitle: 'Overlay-Verwaltung',
   },
   nav: {
     studio: 'Studio',

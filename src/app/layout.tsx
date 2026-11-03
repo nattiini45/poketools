@@ -44,9 +44,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     // Absolute base for canonical/OG URLs: the deployment's public origin.
     metadataBase: siteUrl(),
-    title: "PokéTools",
+    title: { default: t("title"), template: t("titleTemplate") },
     description: t("description"),
     applicationName: "PokéTools",
+    openGraph: { siteName: t("title"), type: "website" },
+    twitter: { card: "summary" },
     manifest: "/manifest.webmanifest",
     formatDetection: {
       telephone: false,

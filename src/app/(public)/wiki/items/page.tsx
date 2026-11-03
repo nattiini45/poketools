@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { getLocale, getT } from '@/i18n/server';
@@ -5,6 +6,11 @@ import { wikiMessages } from '@/i18n/messages/wiki';
 import { localizeDesc } from '@/lib/pkmn/i18n/descriptions.server';
 import { getWikiIndexRows } from '@/lib/wiki/index-rows.server';
 import ItemsIndexClient, { type ItemRow } from './ItemsIndexClient';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(wikiMessages);
+  return { title: t('index.title.items') };
+}
 
 export default async function WikiItemsIndexPage() {
   const [t, locale] = await Promise.all([getT(wikiMessages), getLocale()]);

@@ -3,6 +3,7 @@ import { isUnknownWikiOverlayName } from '@/lib/broadcast/wiki-overlay-lookup';
 import { REQUEST_PATH_HEADER, requestPathOf } from '@/lib/auth/request-path';
 import { signInPath } from '@/lib/auth/safe-callback-url';
 import { hasSessionCookie, isSignInGatedPath } from '@/lib/auth/sign-in-gate';
+import { pageNotFoundGate } from '@/lib/seo/page-gate';
 import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newNonce } from '@/lib/security/csp-policy.mjs';
 
 /**
@@ -19,8 +20,10 @@ import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newN
  *  - A signed-out request (no session cookie at all) for a page behind a sign-in guard gets the 307 to sign-in here,
  *    because the guard's own redirect comes after the root `loading.tsx` has committed a 200 (`sign-in-gate.ts`).
  *  - An unknown name under `/broadcast/wiki/{moves,abilities,items,tera}/` gets an empty 404 here.
+ *  - A page whose subject is missing (a malformed, disabled or unknown team link, an unknown league, tournament, species
+ *    or wiki entry) is rewritten to the not-found page with a real 404 (`pageNotFoundGate`, `src/lib/seo/page-gate.ts`).
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const dev = process.env.NODE_ENV !== 'production';
   const previewToolbar = isVercelPreview();
 
@@ -62,7 +65,12 @@ export function proxy(request: NextRequest) {
   requestHeaders.set('content-security-policy', policy);
   requestHeaders.delete('content-security-policy-report-only');
 
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  // The not-found page renders for the rewritten request, so it gets the same nonce and policy as any page.
+  const pageMissing =
+    (request.method === 'GET' || request.method === 'HEAD') && (await pageNotFoundGate(request.nextUrl.pathname, request.headers)) === 'not_found';
+  const response = pageMissing
+    ? NextResponse.rewrite(new URL('/_not-found', request.url), { request: { headers: requestHeaders }, status: 404 })
+    : NextResponse.next({ request: { headers: requestHeaders } });
   if (enforce) {
     response.headers.set('content-security-policy', policy);
   } else {

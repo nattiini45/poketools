@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import PageContainer from '@/components/ui/PageContainer';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
@@ -14,6 +15,11 @@ import { discoverMessages } from '@/i18n/messages/discover';
 
 interface PageProps {
   searchParams: Promise<{ q?: string; page?: string }>;
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(discoverMessages);
+  return { title: t('players.title') };
 }
 
 export default async function PlayersDirectoryPage({ searchParams }: PageProps) {

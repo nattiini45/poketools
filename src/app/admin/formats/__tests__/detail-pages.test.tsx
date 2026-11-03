@@ -320,9 +320,9 @@ describe('example format page', () => {
 
 describe('detail page titles', () => {
   it('the league page has a fixed title and reads no league data for it', async () => {
-    expect(await leagueMetadata()).toEqual({ title: 'League format | PokéTools' });
+    expect(await leagueMetadata()).toEqual({ title: 'League format' });
     mocks.locale = 'de';
-    expect(await leagueMetadata()).toEqual({ title: 'Liga-Format | PokéTools' });
+    expect(await leagueMetadata()).toEqual({ title: 'Liga-Format' });
     for (const read of leagueReads()) expect(read).not.toHaveBeenCalled();
   });
 
@@ -332,11 +332,11 @@ describe('detail page titles', () => {
     for (const locale of ['en', 'de'] as const) {
       mocks.locale = locale;
       const name = resolveLText(cup.definition.identity.name, { viewer: locale })?.value;
-      expect(await exampleMetadata(exampleParams('cup'))).toEqual({ title: `${name} | PokéTools` });
+      expect(await exampleMetadata(exampleParams('cup'))).toEqual({ title: name });
     }
   });
 
   it('an unknown example id falls back to the gallery title', async () => {
-    expect(await exampleMetadata(exampleParams('nope'))).toEqual({ title: 'Formats | PokéTools' });
+    expect(await exampleMetadata(exampleParams('nope'))).toEqual({ title: 'Formats' });
   });
 });

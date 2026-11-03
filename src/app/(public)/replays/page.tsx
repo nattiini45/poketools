@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
@@ -118,6 +119,11 @@ function replayRowLabel(row: ReplayLibraryRow, t: Translator<typeof discoverEn>,
 
 function roundLabel(round: string, t: Translator<typeof discoverEn>, locale: Locale): string {
   return round === UNKNOWN_ROUND ? t('replays.unknownRound') : translateEngineLabel('round', round, locale);
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(discoverMessages);
+  return { title: t('replays.title') };
 }
 
 export default async function ReplaysPage({ searchParams }: PageProps) {

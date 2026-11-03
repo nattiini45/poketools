@@ -6,9 +6,9 @@ export default defineDe<typeof en>()({
   title: 'Formate',
   subtitle: 'Baue Ligen und Turniere aus Formaten oder lies nach, wie bestehende aufgebaut sind.',
   meta: {
-    galleryTitle: 'Formate | PokéTools',
-    leagueTitle: 'Liga-Format | PokéTools',
-    exampleTitle: '{name} | PokéTools',
+    galleryTitle: 'Formate',
+    leagueTitle: 'Liga-Format',
+    exampleTitle: '{name}',
   },
   gallery: {
     heading: 'Beispiele',

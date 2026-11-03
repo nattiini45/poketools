@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { teraMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth/helpers';
@@ -12,6 +14,11 @@ import { getDataLocale, getT } from '@/i18n/server';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import TypeBadge from '@/components/shared/TypeBadge';
 import WikiNotesSection from '@/components/wiki/WikiNotesSection';
+
+export async function generateMetadata({ params }: { params: Promise<{ type: string }> }): Promise<Metadata> {
+  const { type } = await params;
+  return teraMetadata(decodeURIComponent(type));
+}
 
 export default async function WikiTeraTypePage({
   params,

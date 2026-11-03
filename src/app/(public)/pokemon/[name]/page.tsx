@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { speciesMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
 import { getStatBarColor, getStatBarWidth } from '@/lib/pkmn/stat-calc';
 import { localizeAbility } from '@/lib/pkmn/i18n/names/abilities';
@@ -28,6 +30,11 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ name: string }>;
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ name: string }> }): Promise<Metadata> {
+  const { name } = await params;
+  return speciesMetadata(decodeURIComponent(name));
 }
 
 export default async function PokemonDetailPage({ params }: PageProps) {

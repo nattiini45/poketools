@@ -859,8 +859,8 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 ### Public team pages (`(public)` group)
 ```
 /teams/library                 Public team library — browse/search published teams
-/teams/library/[id]            Published team detail with a fork button
-/teams/shared/[token]          Public share link — read-only team view (only while the link is enabled)
+/teams/library/[id]            Published team detail, server-rendered, with a fork button
+/teams/shared/[token]          Public share link — server-rendered read-only team view (only while the link is enabled; noindex)
 ```
 
 ### Admin pages
