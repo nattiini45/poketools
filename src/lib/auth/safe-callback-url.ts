@@ -20,3 +20,17 @@ export function sanitizeCallbackUrl(raw: string | null | undefined, fallback = '
   if (parsed.origin !== PLACEHOLDER_ORIGIN) return fallback;
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
+
+const SIGN_IN_PATH = '/auth/signin';
+
+/**
+ * The sign-in page for a visitor who wanted `returnTo` (issue #56). The return path goes through
+ * {@link sanitizeCallbackUrl}, so a hostile or malformed value is dropped rather than encoded. No `callbackUrl` is added
+ * when there is nothing worth returning to: no path, the home page (the default landing), or any `/auth/*` page (a
+ * sign-in page that returned to itself, or to sign-up, would trap the visitor).
+ */
+export function signInPath(returnTo?: string | null): string {
+  const safe = sanitizeCallbackUrl(returnTo, '/');
+  if (safe === '/' || safe === '/auth' || safe.startsWith('/auth/') || safe.startsWith('/auth?')) return SIGN_IN_PATH;
+  return `${SIGN_IN_PATH}?callbackUrl=${encodeURIComponent(safe)}`;
+}

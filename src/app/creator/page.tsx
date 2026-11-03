@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getSessionPlayer } from '@/lib/auth/helpers';
+import { currentSignInPath } from '@/lib/auth/redirect-to-sign-in';
 import QuickActions from '@/components/creator/QuickActions';
 import RecentSessions from '@/components/creator/RecentSessions';
 import OverlayGallery from '@/components/creator/OverlayGallery';
@@ -27,7 +28,7 @@ export default async function CreatorHubPage() {
         </p>
         <div className="flex gap-3">
           <Link
-            href="/api/auth/signin"
+            href={await currentSignInPath()}
             className="px-4 py-2 bg-poke-accent text-poke-surface font-heading font-semibold rounded-poke-md hover:opacity-90 transition-opacity"
           >
             {t('hub.signIn')}

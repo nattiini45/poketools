@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useFormatter, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
@@ -8,6 +8,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsStats } from '@/i18n/messages/errors/stats';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import type { WikiNote, WikiEntityType } from '@/types/wiki';
+import { useSignInHref } from '@/components/shared/use-sign-in-href';
 
 /** Report reasons the API accepts; labels come from `wiki.notes.reasons.<reason>`. */
 const REPORT_REASONS = ['inaccurate', 'spam', 'abusive', 'off_topic', 'other'] as const;
@@ -48,6 +49,19 @@ function apiFailure(json: { error?: unknown; code?: unknown; params?: unknown })
   return like.error || like.code ? like : null;
 }
 
+function WikiNotesSignInLink({ href }: { href: string }) {
+  const t = useT(wikiMessages);
+  return (
+    <Link href={href} className="inline-block text-sm font-heading font-semibold text-poke-accent hover:underline">
+      {t('notes.signIn')}
+    </Link>
+  );
+}
+
+function WikiNotesSignInLinkForPage() {
+  return <WikiNotesSignInLink href={useSignInHref()} />;
+}
+
 function WikiNotesSignInPrompt() {
   const t = useT(wikiMessages);
   return (
@@ -56,12 +70,9 @@ function WikiNotesSignInPrompt() {
         {t('notes.title')}
       </h2>
       <p className="text-sm text-poke-text-muted">{t('notes.signInPrompt')}</p>
-      <Link
-        href="/api/auth/signin"
-        className="inline-block text-sm font-heading font-semibold text-poke-accent hover:underline"
-      >
-        {t('notes.signIn')}
-      </Link>
+      <Suspense fallback={<WikiNotesSignInLink href="/auth/signin" />}>
+        <WikiNotesSignInLinkForPage />
+      </Suspense>
     </div>
   );
 }

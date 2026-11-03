@@ -17,6 +17,7 @@ import SupplementaryRecordSection from '@/components/supplementary/Supplementary
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { getSessionPlayer } from '@/lib/auth/helpers';
+import { currentSignInPath } from '@/lib/auth/redirect-to-sign-in';
 import { publicReads } from '@/lib/cache/public-reads';
 import { packExtensions } from '@/lib/pack-extensions';
 import { getT } from '@/i18n/server';
@@ -160,7 +161,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
             <p className="text-sm text-poke-text-secondary">
               {t('page.signInPrompt')}
             </p>
-            <Link href="/api/auth/signin">
+            <Link href={await currentSignInPath()}>
               <Button variant="primary" size="sm">
                 {t('page.signIn')}
               </Button>

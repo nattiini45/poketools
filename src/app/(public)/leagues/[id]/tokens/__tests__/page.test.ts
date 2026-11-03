@@ -28,6 +28,7 @@ vi.mock('@/i18n/server', async () => {
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonWithDetails: mocks.getSeasonWithDetails }));
 vi.mock('@/lib/supabase/queries/point-buy-lists', () => ({ getListEntries: mocks.getListEntries }));
 vi.mock('@/lib/auth/helpers', () => ({ getSessionPlayer: mocks.getSessionPlayer }));
+vi.mock('@/lib/auth/redirect-to-sign-in', () => ({ currentSignInPath: async () => '/auth/signin?callbackUrl=%2Fleagues%2Fs1%2Ftokens' }));
 // The page must never read a snapshot (no tick during a render).
 vi.mock('@/lib/draft/snapshot', () => ({ getDraftSnapshot: mocks.getDraftSnapshot }));
 vi.mock('@/components/draft-tokens/TokenCenter', () => ({ default: function TokenCenterStub() { return null; } }));
@@ -62,6 +63,22 @@ function entry(overrides: Partial<PointBuyListEntry> = {}): PointBuyListEntry {
     species_ids: null,
     ...overrides,
   } as PointBuyListEntry;
+}
+
+function hrefsOf(node: ReactNode): string[] {
+  const found: string[] = [];
+  const visit = (n: ReactNode) => {
+    if (Array.isArray(n)) {
+      n.forEach(visit);
+      return;
+    }
+    if (isValidElement<Record<string, unknown>>(n)) {
+      if (typeof n.props.href === 'string') found.push(n.props.href);
+      visit(n.props.children as ReactNode);
+    }
+  };
+  visit(node);
+  return found;
 }
 
 function findByType(node: ReactNode, type: unknown): ReactElement<Record<string, unknown>>[] {
@@ -140,6 +157,7 @@ describe('TokensPage: sign-in prompt (EN/DE)', () => {
     const tree = await render();
     expect(findByType(tree, TokenCenter)).toHaveLength(0);
     expect(textOf(tree)).toContain('Sign in to see and use your tokens.');
+    expect(hrefsOf(tree)).toContain('/auth/signin?callbackUrl=%2Fleagues%2Fs1%2Ftokens');
     expect(mocks.getListEntries).not.toHaveBeenCalled();
   });
 

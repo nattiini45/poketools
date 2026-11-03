@@ -1,4 +1,4 @@
-import { requireCreator, AuthError } from '@/lib/auth/helpers';
+import { gateCreatorPage } from '@/components/shared/creator-page-gate';
 import { getCastSessionById } from '@/lib/supabase/queries/cast-sessions';
 import { redirect, notFound } from 'next/navigation';
 import ToolsLayout from '@/components/creator/studio/tools/ToolsLayout';
@@ -12,14 +12,9 @@ interface Props {
 export default async function CastStudioToolsPage({ params }: Props) {
   const { sessionId } = await params;
 
-  let playerId: string;
-  try {
-    const player = await requireCreator();
-    playerId = player.playerId;
-  } catch (err) {
-    if (err instanceof AuthError) redirect('/');
-    throw err;
-  }
+  const gate = await gateCreatorPage();
+  if (!gate.ok) return gate.view;
+  const playerId = gate.playerId;
 
   const session = await getCastSessionById(sessionId);
   if (!session) notFound();

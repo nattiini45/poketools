@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getSession } from '@/lib/auth/helpers';
 
 interface AuthGuardProps {
@@ -9,7 +9,7 @@ export default async function AuthGuard({ children }: AuthGuardProps) {
   const session = await getSession();
 
   if (!session) {
-    redirect('/auth/signin');
+    return redirectToSignIn();
   }
 
   return <>{children}</>;

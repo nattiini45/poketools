@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { getT } from '@/i18n/server';
 import { shellMessages } from '@/i18n/messages/shell';
@@ -17,7 +17,7 @@ export default async function SiteAdminGuard({ children }: SiteAdminGuardProps) 
   const access = await getLiveAccess();
 
   if (!access) {
-    redirect('/api/auth/signin');
+    return redirectToSignIn();
   }
 
   if (!access.isSiteAdmin) {

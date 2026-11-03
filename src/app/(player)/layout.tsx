@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
 import NavBar from '@/components/shared/NavBar';
 import SkipToContent from '@/components/shared/SkipToContent';
 import { MAIN_CONTENT_ID } from '@/lib/ui/main-content';
@@ -13,7 +13,7 @@ export default async function PlayerLayout({
 }>) {
   const session = await getSession();
   if (!session) {
-    redirect('/api/auth/signin');
+    return redirectToSignIn();
   }
   const navExtraLinks = await siteNavExtraLinks();
 

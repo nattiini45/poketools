@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { getSessionPlayer } from '@/lib/auth/helpers';
+import { currentSignInPath } from '@/lib/auth/redirect-to-sign-in';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { lineThresholdsFromEntries } from '@/lib/draft/epb-thresholds';
 import { buildLineCatalog } from '@/lib/draft-finder/line-catalog';
@@ -65,7 +66,7 @@ export default async function TokensPage({ params }: PageProps) {
       <EmptyState>
         <h1 className="mb-2 text-2xl font-bold">{t('page.title', { league: league.name })}</h1>
         <p className="text-poke-text-secondary">{t('page.signIn')}</p>
-        <Link href="/api/auth/signin" className={LINK}>
+        <Link href={await currentSignInPath()} className={LINK}>
           {t('page.signInLink')}
         </Link>
       </EmptyState>

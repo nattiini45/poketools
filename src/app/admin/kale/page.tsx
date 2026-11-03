@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getSession, isSuperadminNow } from '@/lib/auth/helpers';
 import { listAllTournaments } from '@/lib/supabase/queries/tournaments';
 import PageContainer from '@/components/ui/PageContainer';
@@ -10,7 +10,7 @@ export default async function KaleAdminPage() {
   const session = await getSession();
 
   if (!session) {
-    redirect('/api/auth/signin');
+    return redirectToSignIn();
   }
 
   if (!(await isSuperadminNow())) {

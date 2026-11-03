@@ -17,6 +17,7 @@ const cookieJar = vi.hoisted(() => ({ locale: undefined as string | undefined })
 vi.mock('@/lib/auth/helpers', () => auth);
 vi.mock('next/navigation', () => ({ redirect }));
 vi.mock('next/headers', () => ({
+  headers: async () => ({ get: (name: string) => (name === 'x-poketools-path' ? '/admin/formats?tab=x' : null) }),
   cookies: async () => ({
     get: (name: string) =>
       name === 'plc_locale' && cookieJar.locale !== undefined ? { name, value: cookieJar.locale } : undefined,
@@ -37,7 +38,9 @@ beforeEach(() => {
 describe('SuperadminGuard', () => {
   it('sends a signed-out visitor to sign-in', async () => {
     auth.getLiveAccess.mockResolvedValue(null);
-    await expect(SuperadminGuard({ children: 'SECRET' })).rejects.toThrow('redirect:/api/auth/signin');
+    await expect(SuperadminGuard({ children: 'SECRET' })).rejects.toThrow(
+      'redirect:/auth/signin?callbackUrl=%2Fadmin%2Fformats%3Ftab%3Dx',
+    );
   });
 
   it('denies a non-admin', async () => {

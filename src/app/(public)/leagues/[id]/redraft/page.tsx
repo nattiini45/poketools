@@ -7,6 +7,7 @@ import { getSeasonGroupOfPlayer, isLeagueParticipant } from '@/lib/supabase/quer
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getSessionPlayer } from '@/lib/auth/helpers';
+import { currentSignInPath } from '@/lib/auth/redirect-to-sign-in';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { getDraftSnapshot, type ViewerContext } from '@/lib/draft/snapshot';
 import { lineThresholdsFromEntries } from '@/lib/draft/epb-thresholds';
@@ -176,7 +177,7 @@ export default async function RedraftPage({ params, searchParams }: PageProps) {
       {!player ? (
         <div className="rounded-lg border border-poke-border bg-poke-card p-3 text-sm">
           <p>{t('page.signIn')}</p>
-          <Link href="/api/auth/signin" className={LINK}>
+          <Link href={await currentSignInPath()} className={LINK}>
             {t('page.signInLink')}
           </Link>
         </div>

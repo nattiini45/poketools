@@ -300,9 +300,11 @@ Ids, labels and the token-name list live in `src/lib/design/site-palettes.ts`
   `dangerouslySetInnerHTML`). It sets the attribute only when the stored value
   exactly matches a non-default id, swallows storage errors (the page renders
   plaza), never touches `data-theme`, and exits early on `/broadcast/*`.
-  The CSP allows it through `script-src 'unsafe-inline'`; if the CSP ever moves
-  to hashes, `site-palette-script.test.ts` pins the `sha256-…` value (a script
-  change must update it on purpose).
+  The layout stamps the request's CSP nonce (`x-nonce`, set by `src/proxy.ts`)
+  on the tag, which the nonce policy requires; the static policy of
+  `next.config.mjs` still allows it through `script-src 'unsafe-inline'`.
+  `site-palette-script.test.ts` pins the `sha256-…` value (a script change must
+  update it on purpose).
 - **Store and hook** (`src/lib/design/site-palette-store.ts`, `'use client'`).
   `useSitePalette()` is a `useSyncExternalStore` over the `<html>` attribute
   (the truth after first paint; `null` on the server and before hydration).

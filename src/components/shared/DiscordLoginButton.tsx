@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
+import { Suspense, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import Button from '@/components/ui/Button';
@@ -8,6 +8,7 @@ import { getButtonClasses } from '@/components/ui/buttonStyles';
 import { useT } from '@/i18n/client';
 import { shellMessages } from '@/i18n/messages/shell';
 import { clearPwaCaches } from '@/lib/pwa/caches';
+import { useSignInHref } from './use-sign-in-href';
 
 const subscribe = () => () => {};
 
@@ -15,6 +16,19 @@ const subscribe = () => () => {};
 async function signOutAndClearCaches() {
   await clearPwaCaches();
   await signOut();
+}
+
+function SignInLink({ href }: { href: string }) {
+  const t = useT(shellMessages);
+  return (
+    <Link href={href} className={getButtonClasses('secondary', 'sm')}>
+      {t('session.signIn')}
+    </Link>
+  );
+}
+
+function SignInLinkForPage() {
+  return <SignInLink href={useSignInHref()} />;
 }
 
 export default function DiscordLoginButton() {
@@ -39,10 +53,10 @@ export default function DiscordLoginButton() {
     );
   }
 
-  // Signed-out: link to the sign-in page (Discord OAuth or email/password)
+  // Signed-out: link to the sign-in page (Discord OAuth or email/password) that returns to this page
   return (
-    <Link href="/auth/signin" className={getButtonClasses('secondary', 'sm')}>
-      {t('session.signIn')}
-    </Link>
+    <Suspense fallback={<SignInLink href="/auth/signin" />}>
+      <SignInLinkForPage />
+    </Suspense>
   );
 }

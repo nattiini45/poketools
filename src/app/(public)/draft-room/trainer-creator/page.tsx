@@ -1,5 +1,5 @@
 import { getSessionPlayer } from '@/lib/auth/helpers';
-import { redirect } from 'next/navigation';
+import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getT } from '@/i18n/server';
 import { trainerCreatorMessages } from '@/i18n/messages/trainer-creator';
 import TrainerCreatorClient from './client';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function TrainerCreatorPage() {
   const player = await getSessionPlayer();
-  if (!player) redirect('/login');
+  if (!player) return redirectToSignIn();
 
   const t = await getT(trainerCreatorMessages);
 

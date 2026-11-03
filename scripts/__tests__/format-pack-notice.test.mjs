@@ -56,6 +56,11 @@ describe('next.config.mjs prints the warning', () => {
     mkdirSync(join(dir, 'scripts'));
     copyFileSync(join(REPO_ROOT, 'next.config.mjs'), join(dir, 'next.config.mjs'));
     copyFileSync(join(REPO_ROOT, 'scripts', 'format-pack-notice.mjs'), join(dir, 'scripts', 'format-pack-notice.mjs'));
+    mkdirSync(join(dir, 'src', 'lib', 'security'), { recursive: true });
+    copyFileSync(
+      join(REPO_ROOT, 'src', 'lib', 'security', 'csp-policy.mjs'),
+      join(dir, 'src', 'lib', 'security', 'csp-policy.mjs'),
+    );
     // next.config.mjs only checks that the entry files exist; their content is never loaded here.
     mkdirSync(join(dir, 'src', 'format-packs', 'example', 'extensions'), { recursive: true });
     writeFileSync(join(dir, 'src', 'format-packs', 'example', 'index.ts'), 'export default {};\n');

@@ -4,6 +4,7 @@ const rpc = vi.fn();
 vi.mock('@/lib/supabase/client', () => ({ supabase: { rpc: (...args: unknown[]) => rpc(...args) } }));
 
 import {
+  checkMemoryRateLimit,
   checkPublicRateLimit,
   checkRateLimit,
   emailIdentity,
@@ -419,5 +420,35 @@ describe('checkPublicRateLimit (per-IP limit of a public route)', () => {
   it('still rejects a bad bucket name on the skip path (programming errors stay loud)', async () => {
     vi.stubEnv('RATE_LIMIT_STORE', 'memory');
     await expect(checkPublicRateLimit('Bad Bucket', headers({}), opts)).rejects.toThrow(/invalid bucket/);
+  });
+});
+
+describe('checkMemoryRateLimit', () => {
+  const opts = { limit: 2, windowSeconds: 60 };
+
+  beforeEach(() => {
+    rpc.mockReset();
+    resetMemoryRateLimits();
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('counts in process and never calls the database, even where the Postgres store is selected', async () => {
+    vi.stubEnv('RATE_LIMIT_STORE', 'postgres');
+    expect(await checkMemoryRateLimit('csp-report', '203.0.113.7', opts)).toEqual({ allowed: true, remaining: 1, retryAfterSeconds: 0 });
+    expect((await checkMemoryRateLimit('csp-report', '203.0.113.7', opts)).allowed).toBe(true);
+    const denied = await checkMemoryRateLimit('csp-report', '203.0.113.7', opts);
+    expect(denied.allowed).toBe(false);
+    expect(denied.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('keeps identities and buckets apart', async () => {
+    await checkMemoryRateLimit('a', 'x', { limit: 1, windowSeconds: 60 });
+    expect((await checkMemoryRateLimit('a', 'y', { limit: 1, windowSeconds: 60 })).allowed).toBe(true);
+    expect((await checkMemoryRateLimit('b', 'x', { limit: 1, windowSeconds: 60 })).allowed).toBe(true);
+  });
+
+  it('rejects a bad bucket name', async () => {
+    await expect(checkMemoryRateLimit('Bad Bucket', 'x', opts)).rejects.toThrow(/invalid bucket/);
   });
 });
