@@ -267,7 +267,7 @@ export function ciRunSteps(text, job = JOB) {
 /**
  * The `env:` block lines of the build step, so the BUILD_ENV check cannot be
  * satisfied by a key appearing anywhere else in ci.yml — a comment, another
- * job, or another step's env (PR #63 review).
+ * job, or another step's env (an earlier review).
  */
 function buildStepEnvLines(text) {
   const lines = text.split(/\r?\n/);
@@ -353,7 +353,7 @@ export function checkDrift(text) {
         'scripts/verify-ci.mjs has drifted from the build step.',
     );
   }
-  // Values count too: NODE_OPTIONS' heap size is build behaviour, not a placeholder (PR #73 review).
+  // Values count too: NODE_OPTIONS' heap size is build behaviour, not a placeholder (an earlier review).
   const changedEnv = Object.keys(stepEnv).filter((key) => stepEnv[key] !== BUILD_ENV[key]);
   if (changedEnv.length > 0) {
     drift(

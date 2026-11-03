@@ -72,7 +72,7 @@ describe('paint queue (ENGINE r3: one canvas face per task)', () => {
     expect(ran).toEqual(['after']);
   });
 
-  it('a throwing job is logged in a production build too (PR #65 review)', async () => {
+  it('a throwing job is logged in a production build too (test-pass review)', async () => {
     // A failed paint leaves its face's residency pending, and the load
     // resolves to Lite: the console line is the production record of why.
     vi.stubEnv('NODE_ENV', 'production');
@@ -92,7 +92,7 @@ describe('paint queue (ENGINE r3: one canvas face per task)', () => {
   });
 });
 
-describe('queued face painters record a missing 2D context (PR #65 review)', () => {
+describe('queued face painters record a missing 2D context (test-pass review)', () => {
   const WORLD = join(__dirname, '..', '..');
   // Each queued paint job's detached canvas: no context means no publish (the
   // face stays pending and the load resolves to Lite), so the branch must log.

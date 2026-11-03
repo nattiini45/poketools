@@ -23,7 +23,7 @@ import { useWorldState } from './WorldStateProvider';
  * every re-measure — so the state still commits before the next frame (the
  * capture harness's FBO present must never land in the commit gap), and a
  * resize or a programmatic jump no longer leaves the index stale until the
- * visitor next scrolls (the gap escalated at useStationWindow.ts, PR #63).
+ * visitor next scrolls (the gap escalated at useStationWindow.ts, the route-world review).
  *
  * Per-frame consumers read `conductor.progress.current.nearest` directly.
  *

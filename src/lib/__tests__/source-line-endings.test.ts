@@ -6,7 +6,7 @@
  * tool that translated LF to CRLF twice) makes git's `text=auto` treat the file
  * as binary: `git diff` prints "Binary files differ", review tools hide the
  * change, and no `.gitattributes` rule normalises it. The sync-standings route
- * carried CR CR LF until the PR #65 follow-ups (see `.gitattributes`).
+ * carried CR CR LF until the follow-ups (see `.gitattributes`).
  *
  * CRLF on its own is allowed here: a Windows checkout made before the
  * `eol=lf` rule still has CRLF working files, and git stores them as LF.

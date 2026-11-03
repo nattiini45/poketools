@@ -196,7 +196,7 @@ describe('mountain rule plaque with an empty rule list', () => {
     // Pins output totality only: with `rows: []` both colW consumers (the
     // hairline loop and the row forEach) are zero-iteration, so the guarded
     // divide is unobservable through this recording — removing the guard in
-    // `mountain/content/paint.ts` keeps this green (PR #63 review).
+    // `mountain/content/paint.ts` keeps this green (route-world review).
     const rec: Recording = { texts: [], fonts: [], positions: [], arcs: [] };
     paintPlaque(
       recordingContext(rec),

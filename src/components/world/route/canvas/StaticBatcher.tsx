@@ -169,7 +169,7 @@ export function StaticBatcher({
       } else if (batch.merged instanceof THREE.InstancedMesh) {
         // An instanced family's merged mesh (the only `ownsGeometry: false`
         // build path). Its GEOMETRY is the source shared with the originals
-        // this teardown just re-showed, so that must survive (PR #63 review —
+        // this teardown just re-showed, so that must survive (route-world review —
         // disposing it stripped the GPU buffers out from under them). Its
         // instanceMatrix/instanceColor are batcher-allocated, though, and
         // three frees those ONLY on the InstancedMesh 'dispose' event —
@@ -202,7 +202,7 @@ export function StaticBatcher({
           // Stamp a COPY, never the live `instanceMatrix.array` reference: a
           // reference compares equal to itself on every tick, so the mover
           // guard degenerates to a no-op and animated instanced meshes get
-          // frozen into static batches (PR #63 review). Same discipline the
+          // frozen into static batches (route-world review). Same discipline the
           // build path's `frozen` blocks keep.
           if (!was || !sameMatrix(was, block)) stableSince.set(instanced, block.slice());
           seen.add(instanced);
@@ -303,7 +303,7 @@ export function StaticBatcher({
           // Same count-window `observe` stamps: a count below the constructed
           // capacity is legal in three.js, and comparing the stamp against the
           // full backing array would length-mismatch forever, silently never
-          // batching that family (PR #63 review).
+          // batching that family (route-world review).
           const block = (instanced.instanceMatrix.array as Float32Array).subarray(
             0,
             instanced.count * 16,

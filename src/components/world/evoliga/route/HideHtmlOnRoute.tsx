@@ -76,7 +76,7 @@ function sampleCanvas(): CompositeSample {
  * The trust latch itself lives in the provider: this component can remount
  * (key/layout change) while the scene is legitimately presented, and a local
  * latch initialized in that state would suppress the handover for the rest
- * of the session (PR #63 review).
+ * of the session (route-world review).
  *
  * Wave-2 r3 (Lite floor): the handoff is written ONLY from that commit and
  * never under the Lite tier (`routeHandoffAllowed`) — a reduced-motion

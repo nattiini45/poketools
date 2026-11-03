@@ -156,7 +156,7 @@ describe('paintBoardPage — the DOM shell guards its environment', () => {
   });
 });
 
-describe('paintBoardPage — a reused canvas survives a painter that throws (PR #65 review)', () => {
+describe('paintBoardPage — a reused canvas survives a painter that throws (test-pass review)', () => {
   /** A 2D context that keeps the save / restore stack, a clip flag and globalAlpha like the real one. */
   function fakeCanvas() {
     const clears: string[] = [];

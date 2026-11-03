@@ -1,6 +1,6 @@
 /**
  * The query helpers the substitution and the group repair write and read
- * through (PR #65 test-pass follow-ups): the server-filtered, paged reads,
+ * through (test-pass follow-ups): the server-filtered, paged reads,
  * the conditional writes, and the 409s a concurrent change maps to.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

@@ -176,7 +176,7 @@ function cameraMoved(camera: Camera, state: { last: number[] | null }): boolean 
  * (the superseded materials dispose in that commit); `Material.dispose` then
  * runs at once again — the patch is page-wide, and left on until the floor
  * it swallowed every disposal on the page (theme-swap releases, other
- * canvases) for the rest of a visit that never reached it (Kilo, PR #65).
+ * canvases) for the rest of a visit that never reached it (Kilo review).
  * The captured materials stay undisposed until the ladder's floor (the same
  * frames after the last step) or until the canvas unmounts; they are then
  * disposed in call order.

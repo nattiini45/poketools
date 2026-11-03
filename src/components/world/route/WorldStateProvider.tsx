@@ -424,7 +424,7 @@ export interface WorldStateValue {
    * can mount a provider while the previous world's `'presented'` is still
    * current; the trust latch lives here — above every `HideHtmlOnRoute` — so
    * a layout change that remounts the hider alone can never strand a stale
-   * latch and suppress the handover (PR #63 review).
+   * latch and suppress the handover (route-world review).
    */
   routeSceneLive: boolean;
   /** Clear a recoverable Lite failure and attempt the route tier again. */
@@ -553,7 +553,7 @@ export default function WorldStateProvider({
    * root, the token namespace, the station manifest and the DOM sections all
    * come from ONE world. Re-resolving the theme from the store would repaint
    * this theme's palette/stations/camera over the previous world's
-   * still-mounted furniture during the navigation round trip (PR #63 review —
+   * still-mounted furniture during the navigation round trip (route-world review —
    * the mixed-theme window).
    */
   const resolvedTheme = useMemo(
@@ -628,7 +628,7 @@ export default function WorldStateProvider({
    * 'presented' is still current — before this provider's effects have begun
    * their own generation. Any render observing a non-presented phase arms the
    * latch, so a stale 'presented' at mount cannot hand the page over
-   * (PR #63 review). Monotonic false→true: the (tier, themeId) effect always
+   * (route-world review). Monotonic false→true: the (tier, themeId) effect always
    * transitions the phase away from an inherited 'presented', so the latch
    * arms before the new scene can legitimately present. Living here rather
    * than in `HideHtmlOnRoute` makes it impossible for a future layout to
@@ -680,7 +680,7 @@ export default function WorldStateProvider({
    * itself as ready for the new one. `beginSceneGeneration` is idempotent
    * while this theme's generation is already loading, so a re-entry in the
    * same round trip (retry) can never bump past the number the canvas
-   * reporter captured (PR #63 review).
+   * reporter captured (route-world review).
    */
   const nightKey = nightKeyOf(palette);
   /**
@@ -731,7 +731,7 @@ export default function WorldStateProvider({
    * between the DOM mutation and the passive effects; without this it calls
    * `markScenePresented()` there and hands `world-route-live` to the incoming
    * world for one task — HTML hidden over a canvas that has not painted yet
-   * (PR #63 review).
+   * (route-world review).
    */
   // `'unmount'`: a StrictMode / remount re-begin continues the visitor's
   // attempt clock (world-readiness `ATTEMPT_CHAIN_MS`).
@@ -762,7 +762,7 @@ export default function WorldStateProvider({
    * does NOT begin one here: a retry clicked after the device flipped to a
    * hard-floor Lite mid-session would otherwise arm a loading generation no
    * canvas ever answers — a 10 s no-op loop whose timeout then masks the true
-   * Lite reason (PR #63 review).
+   * Lite reason (route-world review).
    */
   const retryRouteScene = useCallback(() => {
     setForcedLite(null);
@@ -927,7 +927,7 @@ export default function WorldStateProvider({
    * generation / milestone notification so one long task that pre-empts the
    * timer cannot let the attempt outlive it. Gated on the route tier: the
    * deadline governs an ACTUAL scene attempt, and a 'loading' phase that
-   * outlives a flip to Lite must not overwrite the true Lite reason (PR #63
+   * outlives a flip to Lite must not overwrite the true Lite reason (route-world
    * review).
    *
    * D23: it governs every generation that is not yet ARMED — loading, or
@@ -953,7 +953,7 @@ export default function WorldStateProvider({
     });
     // `sceneGeneration` keys the budget to the ATTEMPT: a mid-load theme
     // switch bumps the generation without a phase change, and the new scene
-    // gets its own budget, not the abandoned attempt's remainder (PR #63
+    // gets its own budget, not the abandoned attempt's remainder (route-world
     // review). `sceneProgress` re-checks the wall clock on every milestone.
   }, [tier, scenePhase, sceneGeneration, sceneProgress, armedForCurrent, degradeToLite]);
 

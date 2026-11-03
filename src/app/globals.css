@@ -743,7 +743,7 @@ html.world-route-live [data-world-ground] {
 /* `:not(dialog *)`: the docked overlays (`?rules=gate`, `?board=…`) are
    <dialog>s inside `[data-world-route]`, and their bodies use <section>s.
    Matched here they were forced to 100vh with every child hidden — the
-   panel opened as a blank title bar (PR #65 test pass, R4). A dialog is the
+   panel opened as a blank title bar (test pass, R4). A dialog is the
    one thing on the route tier that is NOT a station, so its subtree is left
    alone; the station sections (and so the conductor's offsets) are matched
    exactly as before. */

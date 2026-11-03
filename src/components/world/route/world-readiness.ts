@@ -183,7 +183,7 @@ let generation = 0;
  * already loading: the provider's (theme, tier) effect and a retry re-entry
  * ask for a generation inside one round trip, and a double bump would strand
  * the canvas reporter one generation stale — `presented` would never commit
- * and the readiness deadline would kill a healthy scene (PR #63 review).
+ * and the readiness deadline would kill a healthy scene (route-world review).
  */
 let loadingThemeKey: string | null = null;
 
@@ -378,7 +378,7 @@ export function beginSceneGeneration(themeKey: string): number | null {
   readyDeadline = resolveCurrentDeadline();
   // Notify even when the phase is unchanged: the generation moved, and the
   // provider's readiness deadline re-arms on it — a mid-load theme switch
-  // must not inherit the abandoned attempt's remaining budget (PR #63
+  // must not inherit the abandoned attempt's remaining budget (route-world
   // review).
   if (phase === 'loading') notify();
   else setPhase('loading');

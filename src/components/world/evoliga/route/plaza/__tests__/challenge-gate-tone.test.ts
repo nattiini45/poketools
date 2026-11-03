@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { GATE_DAY_MATERIAL_TONE, materialTone, toneFor } from '../ChallengeGate';
 
 /**
- * PR #65 test pass, R18d: the plaza route scene logged
+ * Test pass, R18d: the plaza route scene logged
  * "[paint] 4 lit material(s) unpatched after world-route-live" once a second.
  *
  * `useGateMaterials` memoizes the seven challenge-gate materials on

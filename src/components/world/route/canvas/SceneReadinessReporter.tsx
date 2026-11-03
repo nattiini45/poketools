@@ -42,7 +42,7 @@ export function SceneReadinessReporter() {
    * capture is one generation stale whenever the scene chunk is already
    * resolved (a retry, a cached soft navigation) — the settle callback would
    * refuse `markScenePresented()` forever, `HideHtmlOnRoute` would never
-   * commit, and the 10 s deadline would kill a healthy scene (PR #63 review).
+   * commit, and the 10 s deadline would kill a healthy scene (route-world review).
    * Frame callbacks run after the full passive-effect flush, so this always
    * sees the provider's bump.
    */
@@ -69,7 +69,7 @@ export function SceneReadinessReporter() {
     // scene is no longer the one on screen and must not vouch for itself.
     // Returning WITHOUT recording the refusal is what keeps the handshake
     // alive: the next painted frame re-arms against the live generation
-    // (PR #63 review).
+    // (route-world review).
     if (armed !== currentSceneGeneration() || presented.current === armed) return;
     presented.current = armed;
     markScenePresented();

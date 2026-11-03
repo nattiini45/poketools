@@ -3,7 +3,7 @@
  * inside it. The avatars sit beside the printed player names, so they are
  * decorative: their English "X's avatar" text must not join the link's name,
  * least of all on the German plaza hub, whose subtree is lang="de" and whose
- * card labels are German (PR #65 review, hub localisation).
+ * card labels are German (test-pass review, hub localisation).
  *
  * Rendered through react-dom/server; the accessible name is approximated by
  * walking the markup and skipping aria-hidden subtrees, as browsers do.

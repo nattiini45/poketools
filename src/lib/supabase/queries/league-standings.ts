@@ -355,7 +355,7 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
   // snapshots. The context is resolved once, so the second table costs no
   // read; it is skipped entirely until a second matchday has results.
   //
-  // KNOWN LIMITATION (escalated, Kilo PR #63 finding): `getSeasonEvolutionPoints`
+  // KNOWN LIMITATION (escalated, Kilo review finding): `getSeasonEvolutionPoints`
   // sums `evolution_tracker.evolution_points_awarded` as of NOW — there is no
   // as-of-matchday award ledger — so the previous-matchday EPB snapshot uses
   // CURRENT evolution points. Match points are historical, but when the EPB

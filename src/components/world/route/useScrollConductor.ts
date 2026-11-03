@@ -203,7 +203,7 @@ export interface RouteConductor {
    * The station ids the conductor measures, in route order — the index space
    * of `activeIndex` / `progress.index`. Nav consumers whose own section list
    * may be a subset (or a different list entirely) must map through these ids
-   * rather than using the raw index (PR #63 review).
+   * rather than using the raw index (route-world review).
    */
   stationIds: readonly string[];
   /** Force a re-measure — call after content changes section heights. */
@@ -566,7 +566,7 @@ export function useScrollConductor(
     // captured at subscribe time never updates inside the closure, so
     // guarding on it directly re-ran the first-measurement settle on every
     // remeasure (resize, ResizeObserver, font swap) — snapping the damped
-    // camera channel to `exact` mid-scroll (PR #63 review).
+    // camera channel to `exact` mid-scroll (route-world review).
     let settledOnce = measured;
     let layout = readSectionLayout();
 

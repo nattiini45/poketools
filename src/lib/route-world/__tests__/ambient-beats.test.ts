@@ -391,7 +391,7 @@ describe('ambient-beats: clock, pin, reset and events', () => {
     expect(seen).toEqual([{ kind: 'rollCall', participants: ['p1', 'p2'], columnOffsetsS: [0, 0.18], t: 1 }]);
   });
 
-  it('PR #65 review: a granted ticket never expires; only its owner\'s release (the actor unmount) frees the bus', () => {
+  it('Test-pass review: a granted ticket never expires; only its owner\'s release (the actor unmount) frees the bus', () => {
     const bus = createAmbientBeatBus();
     const flyover = bus.request('flyover', 'flyer-1', S);
     expect(run(bus, 1 / 30)).toHaveLength(1);

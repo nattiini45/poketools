@@ -843,7 +843,7 @@ export interface RevealGateInput {
  * that arms before it still gets a ceremony (scaled, or the crossfade); from
  * it on the ball may already be leaving and the outcome is Lite at the
  * deadline, never a world popping in without its ceremony. The bound itself
- * is excluded (PR #65 review): `stepBall` aborts an unarmed loading ball at
+ * is excluded (test-pass review): `stepBall` aborts an unarmed loading ball at
  * `nowMs >= loadingExitAt` — its wake lands at the first observed instant at
  * or past it — so an arm read at that same instant could follow an abort
  * that already ran.

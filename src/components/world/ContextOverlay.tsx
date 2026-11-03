@@ -121,7 +121,7 @@ export default function ContextOverlay({
   // dialog would wear the docked styling and keep blocking the canvas, and a
   // still-non-modal one loses both ESC paths (no `cancel` event, docked
   // listener gone) — the overlay could only be closed by its button
-  // (PR #63 review).
+  // (route-world review).
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;

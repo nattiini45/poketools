@@ -117,7 +117,7 @@ export interface ThemeSectionCopy {
   rulesPlaqueNote: string;
   /**
    * Rules: the same note for every other format, whose plaque carries the
-   * format and best-of instead of the EPB draft ledger (PR #65 test pass,
+   * format and best-of instead of the EPB draft ledger (test pass,
    * R18e: the sakura note described the EPB ledger on a two-row plaque).
    */
   rulesFormatNote: string;

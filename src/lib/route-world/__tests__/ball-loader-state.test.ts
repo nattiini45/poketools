@@ -562,7 +562,7 @@ describe('reveal gate (D3, D23 complete at reveal)', () => {
     const last = revealArmLastAt(1000, SCENE_READY_TIMEOUT_MS);
     // The last arm point is the loading ball's own exit (the machine's `loadingExitAt`).
     expect(last).toBe(LOADING_EXIT);
-    // PR #65 review: the bound is EXCLUSIVE on the gate's side. At exactly `last` an unarmed loading
+    // Test-pass review: the bound is EXCLUSIVE on the gate's side. At exactly `last` an unarmed loading
     // ball already aborts (`nowMs >= loadingExitAt`; its wake lands at the first instant at or past it,
     // and both sides read `performance.now()` at 0.1 ms), so an arm read at that same instant could
     // follow the abort: a world without its ceremony. The machine's `>=` is the one that must stay (a

@@ -166,7 +166,7 @@ describe.skipIf(!HAS_MANIFEST)('N7b: manifest-known GLBs at generation begin', (
     expect(drei.preloads).toEqual([]);
   });
 
-  it('a throwing selector loses only its own prefetch: the others run, nothing rejects (Kilo PR #65)', async () => {
+  it('a throwing selector loses only its own prefetch: the others run, nothing rejects (Kilo review)', async () => {
     const { readiness, prefetch } = await modules();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const rejections: unknown[] = [];

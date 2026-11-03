@@ -1,5 +1,5 @@
 /**
- * The substitution controls (PR #65 test-pass follow-ups): when Confirm is
+ * The substitution controls (test-pass follow-ups): when Confirm is
  * offered, how a partial apply is told apart, what a done apply left as it
  * was, and which players and scopes the roster manager offers. Rendered
  * through react-dom/server (vitest 'node' env, no DOM).

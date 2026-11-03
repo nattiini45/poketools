@@ -2228,7 +2228,7 @@ describe('hub markup inside the world', () => {
   );
 });
 
-// ─── PR #65 test-pass follow-ups ──────────────────────────────────────────
+// ─── test-pass follow-ups ──────────────────────────────────────────
 
 describe('anchor landing and the tab strip', () => {
   it('clears the sticky navs when #league-hub is the anchor target', () => {

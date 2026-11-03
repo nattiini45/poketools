@@ -153,7 +153,7 @@ export function useTreeSkinMaterials(skin: TreeSkin): TreeSkinMaterials {
   // lockstep). The advance is an ASSIGNMENT from the shared render clock, not
   // a `+= delta` accumulation: one hook instance mounts per skin, so N
   // accumulating instances would run the wind at N× speed (2× in every
-  // two-skin world — PR #63 review). R3F updates `clock.elapsedTime` once per
+  // two-skin world — route-world review). R3F updates `clock.elapsedTime` once per
   // frame before the subscribers run, so every writer in a frame writes the
   // identical value and the clock is idempotent by construction.
   useFrame(({ clock }) => {

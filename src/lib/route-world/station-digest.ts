@@ -319,7 +319,7 @@ export function formatStationDigest(
       if (facts.rules.draftBudget !== null) return t('digest.draftBudget', { budget: facts.rules.draftBudget });
       // Off EPB there are no league default rules to name (only EPB has a
       // rulebook of defaults): the format, and the hub Rules tab's own notice
-      // (PR #65 test pass, 5B-1 — the card said 'Liga-Standardregeln' while
+      // (test pass, 5B-1 — the card said 'Liga-Standardregeln' while
       // the tab said 'Kein Regelwerk zugewiesen.').
       if (facts.rules.format && !isEvolutionPointBuy(facts.rules.format)) {
         const copy = leagueHubCopy(locale);

@@ -59,7 +59,7 @@ function groupVariants(reduced: boolean, mobile: boolean): Variants {
 /**
  * Whether the element sits entirely above the viewport. One with no box
  * (mounted under `display: none`) reads an all-zero rect — not above, so it
- * keeps the default rise (Kilo, PR #65).
+ * keeps the default rise (Kilo review).
  */
 export function startsAboveViewport(element: Pick<Element, 'getClientRects' | 'getBoundingClientRect'>): boolean {
   return element.getClientRects().length > 0 && element.getBoundingClientRect().bottom <= 0;

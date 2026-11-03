@@ -57,7 +57,7 @@ function runFor(themeId: string): void {
     for (const select of pending) {
       // A selector that throws loses only its own prefetch (the mounts still
       // load their GLBs): the others run, and nothing escapes as an
-      // unhandled rejection (Kilo, PR #65).
+      // unhandled rejection (Kilo review).
       try {
         for (const url of select(manifest)) prefetchFigureGLB(url);
       } catch (error) {

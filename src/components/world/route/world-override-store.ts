@@ -29,7 +29,7 @@ import { getRegisteredRouteThemeIds, WORLD_OVERRIDE_STORAGE_KEY } from '@/lib/wo
  * never the theme-package registry or the DB CHECK list (which may name
  * themes whose packages have not landed yet). This store decides whether a
  * stored pick is honored and whether an explicit `?world=` beats it, so a
- * client/server list divergence here would invert that precedence (PR #63
+ * client/server list divergence here would invert that precedence (route-world
  * review).
  */
 export function isRegisteredRouteThemeId(id: string): boolean {

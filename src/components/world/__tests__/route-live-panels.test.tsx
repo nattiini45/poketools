@@ -1,5 +1,5 @@
 /**
- * PR #65 test pass follow-ups on the route tier's page chrome:
+ * Test pass follow-ups on the route tier's page chrome:
  *
  *  - R4: the route-live rules that size every station `<section>` to 100vh
  *    and hide its children also matched the `<section>`s inside the docked
