@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { BROADCAST_ROUTE_LIMITS, guardBroadcastRequest } from '@/lib/broadcast/request-guard';
 import { getMatchById, getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
@@ -33,12 +34,14 @@ interface RouteContext {
  * `always_public` or the team is published to the library.
  */
 // Public: no auth required
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { mid } = await context.params;
     // A malformed id names no row: 404 before the query (Postgres would reject the filter with a 500).
     const invalidId = rejectInvalidPathId(mid, 'INVALID_MATCH_ID');
     if (invalidId) return invalidId;
+    const guarded = await guardBroadcastRequest(request, BROADCAST_ROUTE_LIMITS.preview);
+    if (guarded) return guarded;
     const match = await getMatchById(mid);
 
     if (!match) {

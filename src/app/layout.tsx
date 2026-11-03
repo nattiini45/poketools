@@ -5,10 +5,8 @@ import SessionProvider from "@/components/shared/SessionProvider";
 import ThemeProvider from "@/components/shared/ThemeProvider";
 import AppTooltipProvider from "@/components/ui/AppTooltipProvider";
 import MotionProvider from "@/components/shared/MotionProvider";
-import PwaRegistrar from "@/components/shared/PwaRegistrar";
-import SitePaletteGuard from "@/components/shared/SitePaletteGuard";
+import SiteExtras from "@/components/shared/SiteExtras";
 import { SITE_PALETTE_PREPAINT_SCRIPT } from "@/lib/design/site-palette-script";
-import { Analytics } from '@vercel/analytics/next';
 import { isVercelDeployment } from "@/lib/vercel-deployment";
 import { I18nProvider } from "@/i18n/client";
 import { getI18nProviderProps, getT } from "@/i18n/server";
@@ -99,15 +97,13 @@ export default async function RootLayout({
                 <AppTooltipProvider>
                   <MotionProvider>
                     {children}
-                    <PwaRegistrar />
-                    <SitePaletteGuard />
+                    <SiteExtras analytics={isVercelDeployment()} />
                   </MotionProvider>
                 </AppTooltipProvider>
               </SpriteStyleProvider>
             </SessionProvider>
           </ThemeProvider>
         </I18nProvider>
-        {isVercelDeployment() ? <Analytics /> : null}
       </body>
     </html>
   );

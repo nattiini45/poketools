@@ -10,6 +10,7 @@ export default defineDe<typeof en>()({
   preset_delete_forbidden: 'Du darfst dieses Preset nicht löschen.',
 
   recap_params_required: 'Die Abfrageparameter tournament_id und round_id sind erforderlich.',
+  broadcast_query_invalid: 'Nicht unterstützter Abfrageparameter.',
   solo_session_not_found: 'Solo-Session nicht gefunden.',
   storyline_season_id_required: 'season_id ist erforderlich.',
 

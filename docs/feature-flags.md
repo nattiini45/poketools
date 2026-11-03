@@ -8,8 +8,7 @@ Feature flags are centralized in `src/lib/feature-flags.ts`. Public flags use th
 | Flag | Default | Purpose | Status |
 |------|---------|---------|--------|
 | `NEXT_PUBLIC_ENABLE_KALE_CABBAGE` | `false` | Shows and triggers legacy Kale Cabbage tournament report surfaces | Soft-deprecated |
-| `NEXT_PUBLIC_PWA_ENABLED` | `false` | Enables service worker registration | Active |
-| `NEXT_PUBLIC_PWA_CACHE_LEVEL` | `shell` | Reserved for future PWA cache tiers (`shell`, `read`, `sync`); not read by the code yet | Reserved |
+| `NEXT_PUBLIC_PWA_ENABLED` | `false` | Enables the offline shell: service worker registration (`/sw.js?v=<build id>`), the install prompt. The only read is `ENABLE_PWA` in `src/lib/feature-flags.ts`. The worker never stores a page (README, "PWA") | Active |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (+ `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) | unset | Web Push for draft turn alerts: all three set and valid enables it, otherwise the server sends nothing and the draft room hides the push control ([`push.md`](./push.md)) | Active |
 | `NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT` | `false` | Shows the Admin Assistant UI (admin nav item; the drawer and `/admin/assistant` as they ship). UI only: the server switch `ADMIN_AGENT_ENABLED` and the route guards are the real gate | Planned (P0 flag) |
 

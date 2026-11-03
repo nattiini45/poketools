@@ -16,6 +16,12 @@ vi.mock('@/lib/supabase/queries/cast-sessions', () => ({
   getCastSessionById: vi.fn(),
 }));
 
+// The limiter decision is covered in roadcast/__tests__/overlay-limits.test.ts.
+vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
+  checkPublicRateLimit: vi.fn(async () => ({ allowed: true, remaining: 1, retryAfterSeconds: 0 })),
+}));
+
 import { GET } from '@/app/api/broadcast/solo/[sessionId]/route';
 import { getCastSessionById } from '@/lib/supabase/queries/cast-sessions';
 

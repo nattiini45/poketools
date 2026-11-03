@@ -69,6 +69,12 @@ vi.mock('@/lib/pkmn/sprite-styles', () => ({
   siteSpriteUrl: vi.fn((name: string) => `https://sprites/${name}.png`),
 }));
 
+// The limiter decision is covered in roadcast/__tests__/overlay-limits.test.ts.
+vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
+  checkPublicRateLimit: vi.fn(async () => ({ allowed: true, remaining: 1, retryAfterSeconds: 0 })),
+}));
+
 import { GET } from '@/app/api/broadcast/state/[mid]/route';
 import { getMatchById, getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
@@ -148,7 +154,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(getRecentMomentsByMatch).mockResolvedValue([]);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -175,7 +181,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(getRecentMomentsByMatch).mockResolvedValue([]);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -189,7 +195,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(getMatchById).mockResolvedValue(null as never);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/nonexistent');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -202,7 +208,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(getMatchById).mockRejectedValue(new Error('DB timeout'));
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     await GET(request, routeContext);
 
@@ -218,7 +224,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(getRecentMomentsByMatch).mockResolvedValue([]);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
 
@@ -259,7 +265,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(computePokemonScore).mockReturnValue({ p1Score: 5, p2Score: 3 } as never);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -294,7 +300,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(getMatchAnalysis).mockRejectedValueOnce(dbError);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const res = await GET({ nextUrl: url } as unknown as NextRequest, routeContext);
+    const res = await GET({ nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest, routeContext);
 
     expect(res.status).toBe(500);
     expect(safeErrorResponse).toHaveBeenCalledWith(dbError, 'Failed to fetch broadcast state');
@@ -317,7 +323,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(computePokemonScore).mockReturnValue({ p1Score: 0, p2Score: 0 } as never);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -344,7 +350,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(computePokemonScore).mockReturnValue({ p1Score: 0, p2Score: 0 } as never);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -373,7 +379,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     ] as never);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -410,7 +416,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     ] as never);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -437,7 +443,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(computePokemonScore).mockReturnValue({ p1Score: 0, p2Score: 0 } as never);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -459,7 +465,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(getH2HBetweenPlayers).mockRejectedValue(h2hError);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const res = await GET({ nextUrl: url } as unknown as NextRequest, routeContext);
+    const res = await GET({ nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest, routeContext);
     const body = await res.json();
 
     expect(res.status).toBe(500);
@@ -495,7 +501,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     vi.mocked(computePokemonScore).mockReturnValue({ p1Score: 4, p2Score: 2 } as never);
 
     const url = new URL('http://localhost:3000/api/broadcast/state/33333333-3333-4333-8333-333333333333?enrich=true');
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, routeContext);
     const body = await res.json();
@@ -525,7 +531,7 @@ describe('GET /api/broadcast/state/[mid]', () => {
     ['33333333-3333-4333-8333-333333333333x', true],
   ])('returns 404 INVALID_MATCH_ID for malformed id %j (enrich=%s) without querying', async (mid, enrich) => {
     const url = new URL(`http://localhost:3000/api/broadcast/state/${mid}${enrich ? '?enrich=true' : ''}`);
-    const request = { nextUrl: url } as unknown as NextRequest;
+    const request = { nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest;
 
     const res = await GET(request, { params: Promise.resolve({ mid }) });
     const body = await res.json();

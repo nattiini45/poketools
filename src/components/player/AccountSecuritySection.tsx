@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { signIn, signOut } from 'next-auth/react';
+import { clearPwaCaches } from '@/lib/pwa/caches';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -136,6 +137,7 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
         setSigningOutEverywhere(false);
         return;
       }
+      await clearPwaCaches();
       // The epoch already ended this session too; this clears the cookie at once.
       await signOut({ callbackUrl: '/' });
     } catch {

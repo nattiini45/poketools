@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { BROADCAST_ROUTE_LIMITS, guardBroadcastRequest } from '@/lib/broadcast/request-guard';
 import { getMatchById, getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getRecentMomentsByMatch } from '@/lib/supabase/queries/broadcast-moments';
@@ -35,8 +36,11 @@ interface RouteContext {
  * Public endpoint polled by OBS overlays. Returns current match state.
  * No auth required — overlay data is public.
  *
+ * Limited to 300 requests a minute per IP. Any query parameter other than
+ * `enrich`, or any other value for it, is a 400 (see `guardBroadcastRequest`).
+ *
  * Query params:
- * - enrich=true: Returns EnrichedMatchState with full player profiles,
+ * - enrich=true|false: true returns EnrichedMatchState with full player profiles,
  *   team data, pokemon scores, signatures, ratings, achievements, etc.
  */
 // Public: no auth required — OBS overlays poll it without a session
@@ -48,6 +52,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     // rejects a non-UUID filter on matches.id, which would surface as a 500.
     const invalidId = rejectInvalidPathId(mid, 'INVALID_MATCH_ID');
     if (invalidId) return invalidId;
+
+    const guarded = await guardBroadcastRequest(request, BROADCAST_ROUTE_LIMITS.state);
+    if (guarded) return guarded;
 
     const enrich = request.nextUrl.searchParams.get('enrich') === 'true';
     const match = await getMatchById(mid);

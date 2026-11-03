@@ -10,6 +10,8 @@ export default {
     fallback: 'An unexpected error occurred.',
     retry: 'Try again',
     back: 'Go back',
+    /** Muted line under the error text; {digest} is Next's server log reference. */
+    reference: 'Reference: {digest}',
   },
   notFound: {
     title: 'Page not found',

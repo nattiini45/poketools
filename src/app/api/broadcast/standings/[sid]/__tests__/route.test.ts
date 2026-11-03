@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 vi.mock('@/lib/auth/helpers', () => {
   class AuthError extends Error {
@@ -53,6 +53,12 @@ vi.mock('@/lib/pkmn/sprite-styles', () => ({
   siteSpriteUrl: vi.fn((name: string) => `https://sprites/${name}.png`),
 }));
 
+// The limiter decision is covered in roadcast/__tests__/overlay-limits.test.ts.
+vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
+  checkPublicRateLimit: vi.fn(async () => ({ allowed: true, remaining: 1, retryAfterSeconds: 0 })),
+}));
+
 import { GET } from '@/app/api/broadcast/standings/[sid]/route';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import {
@@ -66,6 +72,7 @@ import { getPlayerSignaturesBatch } from '@/lib/supabase/queries/signatures';
 import { getAggregates } from '@/lib/supabase/queries/aggregates';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { makeRequest } from '@/lib/__tests__/helpers/api-request';
 
 const routeContext = { params: Promise.resolve({ sid: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }) };
 
@@ -151,7 +158,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
     vi.mocked(getPlayerSignaturesBatch).mockResolvedValue(sigsMap as never);
     vi.mocked(getAggregates).mockResolvedValue([]);
 
-    const request = {} as NextRequest;
+    const request = makeRequest();
     const res = await GET(request, routeContext);
     const body = await res.json();
 
@@ -190,7 +197,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
         { round_number: 1, bye_player_ids: ['p2'] },
       ] as never);
 
-      const res = await GET({} as NextRequest, routeContext);
+      const res = await GET(makeRequest(), routeContext);
 
       expect((await res.json()).success).toBe(true);
       expect(getRoundsByTournament).toHaveBeenCalledWith('tourn-1');
@@ -202,7 +209,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
     it('reads no rounds in an Evolution Point Buy league, which scores no byes', async () => {
       arrange('evolution_point_buy');
 
-      const res = await GET({} as NextRequest, routeContext);
+      const res = await GET(makeRequest(), routeContext);
 
       expect((await res.json()).success).toBe(true);
       expect(getRoundsByTournament).not.toHaveBeenCalled();
@@ -213,7 +220,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
   it('returns 404 when season not found', async () => {
     vi.mocked(getSeasonById).mockResolvedValue(null as never);
 
-    const request = {} as NextRequest;
+    const request = makeRequest();
     const res = await GET(request, routeContext);
     const body = await res.json();
 
@@ -225,7 +232,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
     vi.mocked(getSeasonById).mockResolvedValue(mockSeason as never);
     vi.mocked(getStagesBySeasonId).mockResolvedValue([]);
 
-    const request = {} as NextRequest;
+    const request = makeRequest();
     const res = await GET(request, routeContext);
     const body = await res.json();
 
@@ -260,7 +267,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
       },
     ] as never);
 
-    const request = {} as NextRequest;
+    const request = makeRequest();
     const res = await GET(request, routeContext);
     const body = await res.json();
 
@@ -283,7 +290,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
     vi.mocked(getPlayerSignaturesBatch).mockResolvedValue(new Map() as never);
     vi.mocked(getAggregates).mockResolvedValue([]);
 
-    const request = {} as NextRequest;
+    const request = makeRequest();
     const res = await GET(request, routeContext);
 
     expect(res.headers.get('Cache-Control')).toBe(
@@ -294,7 +301,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
   it('delegates to safeErrorResponse on unexpected error', async () => {
     vi.mocked(getSeasonById).mockRejectedValue(new Error('DB error'));
 
-    const request = {} as NextRequest;
+    const request = makeRequest();
     await GET(request, routeContext);
 
     expect(safeErrorResponse).toHaveBeenCalled();

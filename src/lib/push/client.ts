@@ -7,17 +7,19 @@
  * - `detectPushSupport()` tells apart: not possible in this browser (`unsupported`), possible once PokéTools is on
  *   the Home Screen (`install-required`, iOS/iPadOS Safari: Apple exposes Web Push to installed web apps only),
  *   blocked by the user (`denied`), and available.
- * - `swScriptUrl()` is the one URL every registration uses. With the PWA flag off the worker is registered in
- *   `?mode=push` form, which caches nothing (`public/sw.js`), so push never turns the offline shell on.
+ * - `swScriptUrl()` is the one URL every registration uses. With the PWA flag on it is `/sw.js?v=<build id>` (the id
+ *   names the worker's cache); with the flag off the worker is registered in `?mode=push` form, which caches nothing
+ *   (`public/sw.js`), so push never turns the offline shell on.
  * - `enablePush()` / `disablePush()` / `readPushState()` talk to the browser's PushManager and to
  *   `/api/push/subscriptions`. Permission is requested inside `enablePush()` only, which callers run from a click.
  */
 
 import { LOCALES, type Locale } from '@/i18n/config';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
+import { ENABLE_PWA } from '@/lib/feature-flags';
+import { pwaBuildId } from '@/lib/pwa/build-id';
 
 export const PUSH_API_PATH = '/api/push/subscriptions';
-const PWA_ENABLED = process.env.NEXT_PUBLIC_PWA_ENABLED === 'true';
 const LOCALE_SYNC_KEY = 'push:locale:v1';
 
 /** The VAPID public key (base64url), or '' when push is not configured for this build. */
@@ -26,7 +28,7 @@ export function pushPublicKey(): string {
 }
 
 export function swScriptUrl(): string {
-  return PWA_ENABLED ? '/sw.js' : '/sw.js?mode=push';
+  return ENABLE_PWA ? `/sw.js?v=${encodeURIComponent(pwaBuildId())}` : '/sw.js?mode=push';
 }
 
 /** True when the service worker should be registered even though the PWA flag is off. */

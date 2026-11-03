@@ -7,8 +7,15 @@ import Button from '@/components/ui/Button';
 import { getButtonClasses } from '@/components/ui/buttonStyles';
 import { useT } from '@/i18n/client';
 import { shellMessages } from '@/i18n/messages/shell';
+import { clearPwaCaches } from '@/lib/pwa/caches';
 
 const subscribe = () => () => {};
+
+// The worker's caches can hold what this session saw; they go before the session does.
+async function signOutAndClearCaches() {
+  await clearPwaCaches();
+  await signOut();
+}
 
 export default function DiscordLoginButton() {
   const { data: session, status } = useSession();
@@ -26,7 +33,7 @@ export default function DiscordLoginButton() {
 
   if (session) {
     return (
-      <Button variant="ghost" size="sm" onClick={() => signOut()}>
+      <Button variant="ghost" size="sm" onClick={() => void signOutAndClearCaches()}>
         {t('session.signOut')}
       </Button>
     );
