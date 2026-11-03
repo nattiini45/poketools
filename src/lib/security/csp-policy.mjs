@@ -3,8 +3,8 @@
  * module because `next.config.mjs` (the static policy) and `src/proxy.ts` (the per-request nonce policy) both import it.
  *
  * Two policies share every directive except `script-src`:
- *  - the static policy is what `next.config.mjs` sends on every response. Its `script-src` still allows
- *    `'unsafe-inline'`, so a page keeps working however the nonce rollout goes;
+ *  - the static policy is the enforced default. Its `script-src` still allows `'unsafe-inline'`, so a page keeps
+ *    working however the nonce rollout goes. `next.config.mjs` sends it on the paths the proxy skips, the proxy on pages;
  *  - the nonce policy drops `'unsafe-inline'` for a per-request `'nonce-...'` plus `'strict-dynamic'`. The proxy sends
  *    it as `Content-Security-Policy-Report-Only`, or as the enforced `Content-Security-Policy` when `CSP_ENFORCE` is set.
  */
@@ -15,8 +15,34 @@ export const CSP_REPORT_PATH = '/api/csp-report';
 /** The Reporting API endpoint name that `report-to` refers to; defined by the `Reporting-Endpoints` header. */
 export const CSP_REPORT_GROUP = 'csp';
 
+/**
+ * The `next.config.mjs` header sources the proxy does not run for: the complement of `config.matcher` in `src/proxy.ts`
+ * (a test holds the two together). These get the static policy from `next.config.mjs`; a page gets it from the proxy,
+ * because a `Content-Security-Policy` header from the config would shadow the proxy's one in the render's request.
+ */
+export const PROXY_SKIPPED_SOURCES = [
+  '/api/:path*',
+  '/_next/static/:path*',
+  '/_next/image',
+  '/favicon.ico',
+  '/manifest.webmanifest',
+  '/avatar/:path*',
+  '/basis/:path*',
+  '/characters/:path*',
+  '/fonts/:path*',
+  '/models/:path*',
+  '/pwa/:path*',
+  '/textures/:path*',
+  '/offline.html',
+  '/sw.js',
+  '/sw-routing.js',
+];
+
 const NONCE_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 const FALSE_VALUES = new Set(['', '0', 'false', 'off', 'no']);
+
+/** The Vercel preview toolbar script host (`/_next-live/feedback/feedback.js`). */
+const VERCEL_LIVE = 'https://vercel.live';
 
 /**
  * Whether the nonce policy is enforced instead of only reported: `CSP_ENFORCE` set to anything but an off value.
@@ -24,6 +50,20 @@ const FALSE_VALUES = new Set(['', '0', 'false', 'off', 'no']);
  */
 export function cspEnforced(env = process.env) {
   return !FALSE_VALUES.has((env.CSP_ENFORCE ?? '').trim().toLowerCase());
+}
+
+/**
+ * Whether this is a Vercel preview deployment (`VERCEL_ENV=preview`). Vercel injects its toolbar script into preview
+ * pages only; production and local runs never get it, so only a preview policy names its host.
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function isVercelPreview(env = process.env) {
+  return (env.VERCEL_ENV ?? '').trim() === 'preview';
+}
+
+/** @param {string} nonce */
+function assertNonce(nonce) {
+  if (!NONCE_PATTERN.test(nonce)) throw new Error('CSP nonce must be base64');
 }
 
 /** A fresh nonce: 16 random bytes, base64. Never reused across requests. */
@@ -80,25 +120,43 @@ function withScriptSrc(directives, scriptSrc) {
 }
 
 /**
- * The policy `next.config.mjs` sends on every response (the enforced policy while `CSP_ENFORCE` is off).
- * @param {{ dev: boolean }} options
+ * The enforced policy while `CSP_ENFORCE` is off.
+ *
+ * `next.config.mjs` sends it, without a nonce, on the paths the proxy does not run for. The proxy sends it, with the
+ * request's nonce, on pages. Next.js stamps its own scripts with the nonce it finds in the request's
+ * `Content-Security-Policy` header (the report-only header only when that one is absent), and a deployment platform
+ * can hand the render the response header of that name instead of the proxy's request override (Vercel does: the
+ * static policy of `next.config.mjs` reached the render and no Next script got a nonce). So the enforced header has to
+ * carry the nonce itself, and a nonce in `script-src` would make a browser ignore its `'unsafe-inline'` (the policy
+ * would stop being the one that is already in force). With a nonce, `Script-Src` is therefore written with a capital:
+ * directive names are case-insensitive to a browser, but Next.js only recognises a lowercase `script-src` and otherwise
+ * reads `default-src`, where the nonce goes. A nonce in `default-src` changes nothing for the directives that fall back
+ * to it (`frame-src`, `media-src`, ...): a nonce-source only ever matches scripts and styles, and both have their own
+ * directive here.
+ * @param {{ dev: boolean, nonce?: string, previewToolbar?: boolean }} options `previewToolbar`: also allow the Vercel
+ *   preview toolbar script (`isVercelPreview()`); never set in production.
  */
-export function buildStaticPolicy({ dev }) {
+export function buildStaticPolicy({ dev, nonce, previewToolbar = false }) {
   // Next.js + React 19 dev mode (Fast Refresh, error overlay, stack reconstruction) needs eval(); production does not.
-  const scriptSrc = dev
-    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: ${VERCEL_SCRIPTS}`
-    : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${VERCEL_SCRIPTS}`;
-  return withScriptSrc(commonDirectives({ dev, enforced: true }), scriptSrc);
+  const sources =
+    (dev
+      ? `'self' 'unsafe-inline' 'unsafe-eval' blob: ${VERCEL_SCRIPTS}`
+      : `'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${VERCEL_SCRIPTS}`) + (previewToolbar ? ` ${VERCEL_LIVE}` : '');
+  const directives = commonDirectives({ dev, enforced: true });
+  if (nonce === undefined) return withScriptSrc(directives, `script-src ${sources}`);
+  assertNonce(nonce);
+  const [, ...rest] = directives;
+  return [`default-src 'self' 'nonce-${nonce}'`, `Script-Src ${sources}`, ...rest].join('; ');
 }
 
 /**
  * The per-request policy: scripts run only with this request's nonce, or when a nonced script loaded them.
  * 'self' and the Vercel host stay for browsers that do not know 'strict-dynamic' (it makes the others ignore host lists).
- * @param {{ nonce: string, dev: boolean, enforce?: boolean }} options `enforce`: the policy is sent as the enforced
- *   header (`CSP_ENFORCE`), not as report-only.
+ * @param {{ nonce: string, dev: boolean, enforce?: boolean, previewToolbar?: boolean }} options `enforce`: the policy is
+ *   sent as the enforced header (`CSP_ENFORCE`), not as report-only. `previewToolbar`: see `buildStaticPolicy`.
  */
-export function buildNoncePolicy({ nonce, dev, enforce = false }) {
-  if (!NONCE_PATTERN.test(nonce)) throw new Error('CSP nonce must be base64');
-  const scriptSrc = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ''} ${VERCEL_SCRIPTS}`;
+export function buildNoncePolicy({ nonce, dev, enforce = false, previewToolbar = false }) {
+  assertNonce(nonce);
+  const scriptSrc = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ''} ${VERCEL_SCRIPTS}${previewToolbar ? ` ${VERCEL_LIVE}` : ''}`;
   return withScriptSrc(commonDirectives({ dev, enforced: enforce }), scriptSrc);
 }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { getScriptNonceFromHeader } from 'next/dist/server/app-render/get-script-nonce-from-header';
 import {
   CSP_REPORT_PATH,
   buildNoncePolicy,
   buildStaticPolicy,
   cspEnforced,
+  isVercelPreview,
   newNonce,
 } from '../csp-policy.mjs';
 
@@ -56,6 +58,47 @@ describe('buildStaticPolicy (the enforced default, #37)', () => {
   });
 });
 
+describe('buildStaticPolicy with a nonce (the enforced default as the render reads it)', () => {
+  const withNonce = buildStaticPolicy({ dev: false, nonce: NONCE });
+  const plain = directives(buildStaticPolicy({ dev: false }));
+  /** The directives the way a browser reads them: names are case-insensitive. */
+  const asBrowser = Object.fromEntries(Object.entries(directives(withNonce)).map(([name, values]) => [name.toLowerCase(), values]));
+
+  it('lets the render find the nonce: Next.js reads the first lowercase script-src, else default-src', () => {
+    expect(getScriptNonceFromHeader(withNonce)).toBe(NONCE);
+    expect(withNonce.split(';')[0]?.trim()).toBe(`default-src 'self' 'nonce-${NONCE}'`);
+    expect(withNonce.split(';').some((part) => part.trim().startsWith('script-src'))).toBe(false);
+  });
+
+  it('is, to a browser, the plain static policy: script-src keeps unsafe-inline and has no nonce', () => {
+    expect(asBrowser['script-src']).toEqual(plain['script-src']);
+    expect(asBrowser['script-src']).toContain("'unsafe-inline'");
+    expect(asBrowser['script-src']).not.toContain(`'nonce-${NONCE}'`);
+    const { 'default-src': nonced, ...rest } = asBrowser;
+    const { 'default-src': plainDefault, ...plainRest } = plain;
+    expect(rest).toEqual(plainRest);
+    expect(nonced).toEqual([...plainDefault!, `'nonce-${NONCE}'`]);
+  });
+
+  it('puts the nonce nowhere else, and every directive that falls back to default-src is a kind a nonce never matches', () => {
+    for (const [name, values] of Object.entries(asBrowser)) {
+      if (name !== 'default-src') expect(values.join(' '), name).not.toContain('nonce-');
+    }
+    // A nonce-source only matches script and style requests; both have a directive of their own.
+    for (const name of ['script-src', 'style-src', 'worker-src', 'connect-src', 'img-src', 'font-src', 'object-src']) {
+      expect(asBrowser, name).toHaveProperty(name);
+    }
+  });
+
+  it('refuses a nonce that could break out of the directive', () => {
+    expect(() => buildStaticPolicy({ dev: false, nonce: "a'; script-src *" })).toThrow(/nonce/);
+  });
+
+  it('is the plain static policy without a nonce', () => {
+    expect(buildStaticPolicy({ dev: false })).toContain("script-src 'self' 'unsafe-inline'");
+    expect(buildStaticPolicy({ dev: false })).not.toContain('nonce-');
+  });
+});
 describe('buildNoncePolicy', () => {
   const prod = directives(buildNoncePolicy({ nonce: NONCE, dev: false }));
 
@@ -102,6 +145,46 @@ describe('newNonce', () => {
     for (const nonce of nonces) {
       expect(nonce).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
       expect(Buffer.from(nonce, 'base64').length).toBeGreaterThanOrEqual(16);
+    }
+  });
+});
+
+describe('the Vercel preview toolbar (script-src only, preview deployments only)', () => {
+  const TOOLBAR = 'https://vercel.live';
+
+  it('is never in a policy unless asked for', () => {
+    expect(buildStaticPolicy({ dev: false })).not.toContain('vercel.live');
+    expect(buildStaticPolicy({ dev: false, nonce: NONCE })).not.toContain('vercel.live');
+    expect(buildNoncePolicy({ nonce: NONCE, dev: false })).not.toContain('vercel.live');
+  });
+
+  it('adds the host to script-src, and to no other directive', () => {
+    const policies = [
+      buildStaticPolicy({ dev: false, previewToolbar: true }),
+      buildStaticPolicy({ dev: false, nonce: NONCE, previewToolbar: true }),
+      buildNoncePolicy({ nonce: NONCE, dev: false, previewToolbar: true }),
+      buildNoncePolicy({ nonce: NONCE, dev: false, enforce: true, previewToolbar: true }),
+    ];
+    for (const policy of policies) {
+      const entries = Object.entries(directives(policy)).map(([name, values]) => [name.toLowerCase(), values] as const);
+      for (const [name, values] of entries) {
+        if (name === 'script-src') expect(values).toContain(TOOLBAR);
+        else expect(values, name).not.toContain(TOOLBAR);
+      }
+    }
+  });
+
+  it('keeps the rest of the script policy as it is', () => {
+    const without = directives(buildStaticPolicy({ dev: false }))['script-src']!;
+    expect(directives(buildStaticPolicy({ dev: false, previewToolbar: true }))['script-src']).toEqual([...without, TOOLBAR]);
+  });
+});
+
+describe('isVercelPreview', () => {
+  it('is true for VERCEL_ENV=preview only', () => {
+    expect(isVercelPreview({ VERCEL_ENV: 'preview' })).toBe(true);
+    for (const value of [undefined, '', 'production', 'development', 'Preview-x']) {
+      expect(isVercelPreview({ VERCEL_ENV: value }), String(value)).toBe(false);
     }
   });
 });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { unstable_doesMiddlewareMatch as doesProxyMatch } from 'next/experimental/testing/server';
+import { buildStaticPolicy } from '@/lib/security/csp-policy.mjs';
 import { config, proxy } from '../proxy';
 
 function pageRequest(path: string, headers: Record<string, string> = {}) {
@@ -38,19 +39,24 @@ describe('proxy request path (#56)', () => {
 const NONCE_IN_POLICY = /'nonce-([A-Za-z0-9+/]+={0,2})'/;
 
 function scriptSrcOf(policy: string | null) {
-  return (policy ?? '').split(';').map((d) => d.trim()).find((d) => d.startsWith('script-src')) ?? '';
+  return (policy ?? '').split(';').map((d) => d.trim()).find((d) => /^script-src /i.test(d)) ?? '';
 }
 
 describe('proxy CSP (#37)', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it('reports the nonce policy and leaves the static policy to enforce, by default', () => {
+  it('reports the nonce policy and enforces the static policy beside it, by default', () => {
     const response = proxy(pageRequest('/leagues'));
     const reportOnly = response.headers.get('content-security-policy-report-only');
     expect(scriptSrcOf(reportOnly)).toMatch(/'nonce-[^']+' 'strict-dynamic'/);
     expect(scriptSrcOf(reportOnly)).not.toContain("'unsafe-inline'");
-    // next.config.mjs sends the enforced static policy; the proxy must not replace it while the flag is off.
-    expect(response.headers.get('content-security-policy')).toBeNull();
+    // Same enforcement as before the proxy took the header over from next.config.mjs: unsafe-inline, and no nonce in script-src.
+    const enforced = response.headers.get('content-security-policy');
+    expect(enforced).toBe(
+      buildStaticPolicy({ dev: process.env.NODE_ENV !== 'production', nonce: NONCE_IN_POLICY.exec(reportOnly ?? '')?.[1] }),
+    );
+    expect(scriptSrcOf(enforced)).toContain("'unsafe-inline'");
+    expect(scriptSrcOf(enforced)).not.toContain('nonce-');
   });
 
   it('enforces the nonce policy, and only that, when CSP_ENFORCE is set', () => {
@@ -60,6 +66,27 @@ describe('proxy CSP (#37)', () => {
     expect(scriptSrcOf(enforced)).toMatch(/'nonce-[^']+' 'strict-dynamic'/);
     expect(scriptSrcOf(enforced)).not.toContain("'unsafe-inline'");
     expect(response.headers.get('content-security-policy-report-only')).toBeNull();
+  });
+
+  it('allows the Vercel preview toolbar script on a preview deployment only, in every policy the proxy sends', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const policies = (response: Response) => [
+      response.headers.get('content-security-policy'),
+      response.headers.get('content-security-policy-report-only'),
+      forwardedRequestHeader(response, 'content-security-policy'),
+    ];
+
+    for (const env of [undefined, 'production', 'development']) {
+      vi.stubEnv('VERCEL_ENV', env);
+      for (const policy of policies(proxy(pageRequest('/leagues')))) expect(policy, String(env)).not.toContain('vercel.live');
+    }
+
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    for (const policy of policies(proxy(pageRequest('/leagues')))) {
+      expect(scriptSrcOf(policy)).toContain('https://vercel.live');
+    }
+    vi.stubEnv('CSP_ENFORCE', '1');
+    expect(scriptSrcOf(proxy(pageRequest('/leagues')).headers.get('content-security-policy'))).toContain('https://vercel.live');
   });
 
   it('keeps upgrade-insecure-requests out of the report-only header in production, where browsers log an error for it', () => {
@@ -74,7 +101,7 @@ describe('proxy CSP (#37)', () => {
     vi.stubEnv('CSP_ENFORCE', '1');
     vi.stubEnv('CSP_ENFORCE', '0');
     const response = proxy(pageRequest('/leagues'));
-    expect(response.headers.get('content-security-policy')).toBeNull();
+    expect(scriptSrcOf(response.headers.get('content-security-policy'))).toContain("'unsafe-inline'");
     expect(response.headers.get('content-security-policy-report-only')).not.toBeNull();
   });
 
@@ -168,6 +195,16 @@ describe('proxy sign-in redirect for signed-out visitors (#56)', () => {
   it('redirects only reads, and not a request that has a session cookie', () => {
     expect(proxy(new NextRequest('https://poketools.test/dashboard', { method: 'POST' })).status).toBe(200);
     expect(proxy(pageRequest('/dashboard', sessionCookie)).status).toBe(200);
+  });
+});
+
+describe('proxy CSP on the responses it answers itself (#37)', () => {
+  it('keeps the static policy on the overlay 404 and on the sign-in redirect, which next.config.mjs no longer covers', () => {
+    const expected = buildStaticPolicy({ dev: process.env.NODE_ENV !== 'production' });
+    expect(proxy(pageRequest('/broadcast/wiki/moves/NotAMove')).headers.get('content-security-policy')).toBe(expected);
+    const redirect = proxy(pageRequest('/dashboard'));
+    expect(redirect.status).toBe(307);
+    expect(redirect.headers.get('content-security-policy')).toBe(expected);
   });
 });
 
