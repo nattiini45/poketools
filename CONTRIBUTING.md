@@ -84,7 +84,7 @@ See [`AGENTS.md`](AGENTS.md) for the full list of architecture and security rule
   an orphaned row in `supabase_migrations.schema_migrations` and cause
   re-apply/drift on the next `supabase db push`.
 - **Never edit the SQL statements of an applied migration** — add a new one.
-- One historical rename shipped in PR #47:
+- One historical rename shipped in the 2026-07-23 fix:
   `20260723100000_fix_claim_aggregate_jobs.sql` →
   `20260723205115_fix_claim_aggregate_jobs.sql` (reconciled with the remote
   history). If your local dev database recorded the old timestamp, run

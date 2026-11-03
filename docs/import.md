@@ -11,7 +11,8 @@ src/lib/import/
 ├── xlsx.ts             # Zero-dependency OOXML (.xlsx) reader
 ├── xlsx-upload.ts      # Server-side upload validation helpers
 ├── point-buy-xlsx.ts   # EPB point-buy list parse + validate
-└── team-roles-xlsx.ts  # Team-role table parse + validate (@pkmn/data)
+├── team-roles-xlsx.ts  # Team-role table parse + validate (@pkmn/data)
+└── utility-sheet-xlsx.ts  # Utility sheet parser and its label normalisation
 ```
 
 ## Core Functions/Classes

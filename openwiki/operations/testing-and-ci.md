@@ -36,7 +36,7 @@ src/lib/ai/agent/__tests__/*.test.ts         # Agent orchestrator, context pack,
 src/lib/ai/__tests__/*.test.ts               # Legacy AI, league context, scouting parse
 src/lib/supabase/queries/__tests__/*.test.ts # Query module tests
 src/lib/api/__tests__/*.test.ts              # Error response, pagination
-src/lib/utils/__tests__/*.test.ts            # LRU cache, date helpers
+src/lib/utils/__tests__/*.test.ts            # LRU cache, crypto, csv, rate limit, uuid
 src/lib/validation/__tests__/*.test.ts       # Input validation
 src/lib/season/__tests__/*.test.ts           # Core assignment
 src/lib/social/__tests__/*.test.ts           # Social crypto

@@ -5,10 +5,20 @@ The Auth module handles authentication and authorization with NextAuth v5 and sh
 
 ## File Structure
 ```
-src/
-├── auth.ts  # NextAuth config and exported handlers/auth/signIn/signOut
-└── lib/auth/
-    └── helpers.ts  # Session + role/resource guard helpers
+src/auth.ts  # NextAuth config and exported handlers/auth/signIn/signOut
+src/proxy.ts  # Request proxy: path header for sign-in redirects, CSP nonce
+src/lib/auth/
+├── helpers.ts  # Session + role/resource guard helpers (the live `require*` guards)
+├── admin-scope.ts  # The seasons and tournaments an admin may manage, for lists and counts
+├── match-access.ts, match-admin.ts  # May act as an admin on a match; gate of the per-match admin routes
+├── resource-gate.ts  # Live view gate for pages scoped to one season or tournament
+├── credentials.ts  # Email and password sign-in (Credentials provider)
+├── rate-limits.ts  # Rate limits of the public auth endpoints
+├── redirect-to-sign-in.ts, request-path.ts, safe-callback-url.ts, sign-in-gate.ts  # Sign-in redirects: the request path header, same-origin return targets, gated page prefixes
+├── session-epoch.ts  # Account-level session epoch (players.sessions_valid_after)
+├── session-override.ts  # Verified-session override for the Admin Assistant's dispatch layer
+├── superadmin.ts, superadmin-player-guard.ts  # The superadmin identity and its protected player row
+└── __tests__/
 ```
 
 ## Core Functions/Classes
@@ -64,8 +74,8 @@ export async function GET() {
 ```
 
 ## Testing
-- **Test Files**: No dedicated auth unit test file currently
-- **Testing Approach**: Integration tests through guarded API routes
+- **Test Files**: `src/lib/auth/__tests__/` (18 test files): the guards (`helpers.test.ts`, `resource-gate.test.ts`, `admin-scope.test.ts`, `match-access.test.ts`, `match-admin.test.ts`, `require-format-owner.test.ts`, `live-access-render.test.ts`), sign-in and redirects (`credentials.test.ts`, `sign-in-redirects.test.ts`, `redirect-to-sign-in.test.ts`, `request-path.test.ts`, `safe-callback-url.test.ts`), `rate-limits.test.ts`, the session epoch (`session-epoch.test.ts`) and the verified-session override (`session-override.test.ts`, `session-override-equivalence.test.ts`, `session-override-static.test.ts`), plus `superadmin-player-id.test.ts`. `src/auth.ts` is covered by `src/__tests__/`.
+- **Testing Approach**: Unit tests of every guard and gate with a mocked player read, plus route tests of the guarded API routes.
 
 ## Related Modules
 - [Supabase Module](./supabase.md)

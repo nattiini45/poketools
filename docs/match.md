@@ -9,8 +9,26 @@ src/lib/match/
 ├── aggregation.ts  # Match/team aggregation helpers
 ├── aggregate-queue.ts  # Deferred aggregate processing
 ├── finalize.ts  # Shared completion side effects for manual/cron finalization
-└── public-match.ts  # PublicMatch shape + allowlist mapper (client, cache and public-response boundary)
+├── public-match.ts  # PublicMatch shape + allowlist mapper (client, cache and public-response boundary)
+├── aggregate-rebuild.ts  # Admin aggregate maintenance: drain jobs, rebuild scopes from battle_stats
+├── schedule-aggregate-processing.ts  # Schedules aggregate processing after a write
+├── bulk-actions.ts  # The bulk processor behind POST /api/admin/matches/batch
+├── compare-scheduled-at.ts  # scheduled_at ordering, safe for client and server
+├── epb-matchday.ts  # EPB matchday orchestration: stage recheck, lock, points, snapshots
+├── epb-stage-resolution.ts  # Pure EPB stage-transition resolution
+├── epb-tracker-apply.ts  # Shared EPB tracker apply helpers
+├── evolution-match-evaluator.ts  # The Evolution Point Buy match evaluator
+├── snapshot-lines.ts  # Which point-buy line a match evolution snapshot belongs to
+├── game-change-outcome.ts  # How the admin game UI reports the outcome of a game change
+├── match-children.ts  # Match children cleanup
+├── match-kos.ts  # One player's KO totals across the games of a match
+├── reopen.ts  # Reopening a completed match
+├── result-effects.ts  # The effects of a result: events, recap, AI analysis gate
+├── series-tally.ts  # The series tally checked before completing or disputing a match
+└── social-image-path.ts  # Naming of the match social cards in the social-images bucket
 ```
+
+The Evolution Point Buy files (`epb-*.ts`, `evolution-match-evaluator.ts`, `snapshot-lines.ts`) are described with the format in [`evolution-point-buy.md`](./evolution-point-buy.md).
 
 ## Core Functions/Classes
 

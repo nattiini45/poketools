@@ -13,11 +13,12 @@ src/lib/social/
 ├── image-fetch.ts  # Remote image fetching helpers
 ├── notify.ts  # Event fan-out orchestration
 ├── validation.ts  # Social integration input validation
-└── providers/
+├── providers/
     ├── bluesky.ts  # Bluesky publishing
     ├── index.ts  # Provider dispatcher
     ├── threads.ts  # Threads publishing
     └── x.ts  # X publishing
+└── matchers.ts  # Whether a social integration receives an event
 ```
 
 ## Core Functions/Classes

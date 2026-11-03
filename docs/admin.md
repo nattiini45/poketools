@@ -37,7 +37,16 @@ src/lib/admin/
 ├── format-drift.ts       # format drift report: custom tiebreaker orders and advancement rule comparison
 ├── match-list.ts         # matches list query contract and URL state
 ├── match-list-dates.ts   # viewer-zone date windows for the matches list
-└── match-row-actions.ts  # which buttons a matches-list row shows to the viewer
+├── match-row-actions.ts  # which buttons a matches-list row shows to the viewer
+├── export-rows.ts  # Bounded paged read for the admin exports
+├── match-bulk.ts  # Contract of the matches list bulk actions
+├── match-context.ts  # Where a match sits (league, phase, round, best of, deadline) and who may act
+├── match-detail.ts  # Shared contract of the admin match page and its API
+├── match-export.ts  # CSV export of the admin match list
+├── match-history-view.ts  # How the History panel reads the changes of an audit entry
+├── match-list-request.ts  # The request side of the admin match list
+├── optional-read.ts  # Reads that only add to a page and must not fail it
+└── outward-recipients.ts  # Which Discord webhooks and social integrations an event would reach
 ```
 
 ## Core Functions/Classes
@@ -60,7 +69,7 @@ src/lib/admin/
 
 ## Layout and navigation
 - **Sidebar** — `src/components/admin/AdminSidebar.tsx` renders the role-filtered groups from `adminNav.ts` (`visibleAdminNav`). The **Formats** item (`/admin/formats`, competitions group after Rulesets, label `shell` `admin.items.formats`) is not `siteAdminOnly`: site admins and resource admins (league or tournament admins) both see it. The **League trash** item (`/admin/leagues/trash`, a sub-item of Leagues, label `admin.items.leagueTrash`) is `superadminOnly`: only the superadmin sees it, and the admin layout takes both roles from one `getLiveAccess()` read. At `lg` (1024 px) and up it is a sticky 224 px side rail beside the content column. Below `lg` it renders one horizontally scrolling chip row per group instead. The first item is Overview (`/admin`, the dashboard). Exactly one item is active, the one with the longest matching href (`activeAdminNavHref`), on the rail and on the chips alike, so Archived leagues does not light up Leagues too.
-- **Responsive shell** — `src/app/admin/layout.tsx` lays out the sidebar and the content column as a column below `lg` (`flex flex-col`), so the chip rows sit above the content, and as a top-aligned row from `lg` (`lg:flex-row lg:items-start lg:gap-8`). The mobile nav is capped at the column width (`min-w-0 w-full`) and each chip row scrolls inside it, so the page never scrolls sideways at phone or tablet widths. The content column keeps `min-w-0` (and `lg:flex-1` beside the rail), so its flex minimum is never its content's intrinsic width; wide content (tables) still needs its own `overflow-x-auto` wrapper on the page. Before the PR #65 test-pass fix the chip nav sat beside the content below `lg`: at 390 px the content column got zero width, the page widened to 1331 px and dialogs (Substitute) centred off-screen. Regression test: `src/components/admin/__tests__/admin-layout-responsive.test.tsx`.
+- **Responsive shell** — `src/app/admin/layout.tsx` lays out the sidebar and the content column as a column below `lg` (`flex flex-col`), so the chip rows sit above the content, and as a top-aligned row from `lg` (`lg:flex-row lg:items-start lg:gap-8`). The mobile nav is capped at the column width (`min-w-0 w-full`) and each chip row scrolls inside it, so the page never scrolls sideways at phone or tablet widths. The content column keeps `min-w-0` (and `lg:flex-1` beside the rail), so its flex minimum is never its content's intrinsic width; wide content (tables) still needs its own `overflow-x-auto` wrapper on the page. Before the test-pass fix the chip nav sat beside the content below `lg`: at 390 px the content column got zero width, the page widened to 1331 px and dialogs (Substitute) centred off-screen. Regression test: `src/components/admin/__tests__/admin-layout-responsive.test.tsx`.
 
 ## League admin page (`/admin/leagues/[id]`)
 One league's admin page is split into URL tabs (`?tab=`), like the public league hub (`src/lib/league-hub/tabs.ts`). Tab logic: `src/lib/league-admin/tabs.ts` (`availableLeagueAdminTabs`, the whitelist parser `parseLeagueAdminTab`, the old-id aliases `LEAGUE_ADMIN_TAB_ALIASES`, `leagueAdminHref`); page: `src/app/admin/leagues/[id]/page.tsx`; strip: `_components/LeagueAdminTabs.tsx`; one renderer per tab in `_components/panels/`.
@@ -159,7 +168,7 @@ The Studio shows the format of a league as a generated outline and rules text, w
   - [Audit](./audit.md) — `logAuditEvent` used by export and other mutations
   - [Reconcile](./reconcile.md) — `reconcileSeasonDerivedData` / `reconcileAllSeasons`
   - [Import](./import.md) — import routes and backfill jobs
-  - `src/lib/match/aggregate-queue` and `aggregate-rebuild` — aggregate maintenance
+  - `src/lib/match/aggregate-queue.ts` and `aggregate-rebuild.ts` — aggregate maintenance
   - [Security Patterns](./security-patterns.md) — auth guards
 
 ## API Routes

@@ -61,8 +61,8 @@ const result = await importFormatStats('gen9ou');
 ```
 
 ## Testing
-- **Test Files**: No dedicated `src/lib/smogon/__tests__` file currently
-- **Testing Approach**: Admin route + importer integration testing
+- **Test Files**: `src/lib/smogon/__tests__/` (3 test files): `format-registry.test.ts`, `import-sets.test.ts` and `import-stats.test.ts`
+- **Testing Approach**: Unit tests of the format registry and the two importers; the admin import routes have their own route tests.
 
 ## Related Modules
 - [PKMN Module](./pkmn.md)

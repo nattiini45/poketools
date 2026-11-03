@@ -102,7 +102,7 @@ return result.toUIMessageStreamResponse(
 
 ### Eval Harness
 
-`src/lib/ai/agent/eval/` runs the agent end-to-end against a golden set using `eval-<modelId>` dry-run ids (no DB writes, no `players` FK). The id suffix becomes the sole `model_priority` entry so a chosen model leads while the real escalation chain still falls through (lets the harness measure escalation rate). See the eval directory's runner for invocation.
+`scripts/agent-eval.ts` (scoring in `src/lib/ai/agent/eval-scoring.ts`, cases in `src/lib/ai/agent/__tests__/evals/golden-set.ts`) runs the agent end-to-end against a golden set using `eval-<modelId>` dry-run ids (no DB writes, no `players` FK). The id suffix becomes the sole `model_priority` entry so a chosen model leads while the real escalation chain still falls through (lets the harness measure escalation rate). Run it with the script above.
 
 ### Testing
 

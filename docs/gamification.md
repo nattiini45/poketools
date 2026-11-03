@@ -73,7 +73,7 @@ const changes = await recomputeStreaks(playerId); // StreakChanges (before/after
 ```
 
 ## Testing
-- **Test Files**: `src/lib/gamification/__tests__/streaks.test.ts` (compute rules, rebuild, retry), `src/lib/supabase/queries/__tests__/streaks-replace.test.ts` (RPC wrapper, paged stats read), `streaks-replace.local.test.ts` (`npm run test:db`: fence refusal, two concurrent finalizes both counted, replay safety)
+- **Test Files**: `src/lib/gamification/__tests__/` (3 test files): `streaks.test.ts` (compute rules, rebuild, retry), `achievements.test.ts` and `signatures.test.ts`; plus `src/lib/supabase/queries/__tests__/streaks-replace.test.ts` (RPC wrapper, paged stats read), `streaks-replace.local.test.ts` (`npm run test:db`: fence refusal, two concurrent finalizes both counted, replay safety)
 - **Testing Approach**: Pure compute tests, mocked-reader rebuild tests (history over 1,000 matches), a local-stack concurrency suite, plus route-level and match-completion integration testing
 
 ## Related Modules

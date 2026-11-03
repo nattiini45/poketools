@@ -7,7 +7,39 @@ The Draft module handles draft pool lifecycle, pick validation/order, and evolut
 ```
 src/lib/draft/
 ├── engine.ts  # Draft order/state/validation helpers
-└── evolution-engine.ts  # Evolution progression + evo-league helpers
+├── evolution-engine.ts  # Evolution progression + evo-league helpers
+├── schemas.ts  # Request schemas of the queue-engine draft, redraft and token routes
+├── errors.ts  # Client-safe draft error contract
+├── rpc-errors.ts  # Draft RPC error glue (server)
+├── http.ts  # Draft route responses (server)
+├── snapshot.ts  # Draft snapshot glue (server)
+├── sql-fallbacks.ts  # Literal fallbacks of the applied draft RPCs, mirrored for the app
+├── completability.ts  # Pool completability gate (twin of draft__pool_completable)
+├── draftability.ts  # Viewer draftability
+├── time.ts  # League time helpers and quiet hours (TS mirror of the SQL clock)
+├── use-visible-poll.ts  # Visibility-aware poller of the live draft screens
+├── notify.ts  # Draft-tool Discord notifications
+├── tokens.ts  # Draft token rules
+├── budget.ts  # Draft budget rules
+├── points-limits.ts  # Point limits of the legacy (pre-queue) engine
+├── roster-split.ts  # Can a fixed-price pool list fill every roster
+├── seat-draw.ts  # Random opening order of a queue draft (server)
+├── redraft-engine.ts, redraft-order.ts  # Redraft helpers and redraft seat order
+├── pool-format.ts  # A pool's two setup axes: turn order and pricing
+├── pool-roster.ts  # The players a queue pool seats (server)
+├── pool-entry-names.ts, pool-entry-sync.ts  # Same-Pokémon detection of the pool-entry writers
+├── player-pool.ts  # A trainer's initial draft pool in a league
+├── price-tabs.ts, utility-categories.ts  # Draft finder price tabs and utility categories
+├── public-pick.ts  # The public shape of a draft pick
+├── epb-team-validation.ts, epb-thresholds.ts  # EPB team validation and season line thresholds
+├── evolution-points-engine.ts  # Evolution-point accounting of EPB seasons
+├── point-buy-engine.ts, point-buy-pool.ts  # Point-buy format functions and tracker-to-list-line matching
+├── progress-engine.ts, progress-sources.ts  # Evolution progress engine and its sources
+├── league-overrides.ts  # League-level threshold overrides on the imported point-buy list
+├── line-catalog-data.ts, line-identity.ts  # Line catalog data and the draft line identity
+├── special-rules.ts, special-rules-text.ts  # Per-line rulings and their prose
+├── reconciliation-report.ts  # EPB list reconciliation report
+└── utility-matches.server.ts  # Stage-specific utility matches of a line (server)
 ```
 
 ## Core Functions/Classes
@@ -80,8 +112,8 @@ const error = validatePick(state, input, true);
 ```
 
 ## Testing
-- **Test Files**: No dedicated `src/lib/draft/__tests__` files currently
-- **Testing Approach**: API route and end-to-end draft flow testing
+- **Test Files**: `src/lib/draft/__tests__/` (68 test files; `fixtures/` holds the vector files). Engines and rules: `engine.test.ts`, `budget.test.ts`, `points-limits.test.ts`, `roster-split.test.ts`, `tokens.test.ts`, `redraft-engine.test.ts`, `redraft-order.test.ts`, `seat-draw.test.ts`, `completability.test.ts`, `draftability.test.ts`, `quiet-hours.test.ts`, `time.test.ts`. Evolution Point Buy: `epb-*.test.ts`, `evolution-engine.test.ts`, `point-buy-*.test.ts`, `progress-*.test.ts`, `line-*.test.ts`, `special-rules*.test.ts`, `reconciliation-report.server.test.ts`. Glue: `schemas.test.ts`, `errors.test.ts`, `http.test.ts`, `rpc-errors.test.ts`, `snapshot*.test.ts`, `notify*.test.ts`, `use-visible-poll.test.ts`. Migrations and SQL twins: nine `*-migration.test.ts` files read the migration text, and eight `*.local.test.ts` / `*.live-db.test.ts` files run only against a local stack (`npm run test:db`, [`AGENTS.md`](../AGENTS.md) "Automation never spends the Supabase quota").
+- **Testing Approach**: Pure unit tests of the engines, SQL-text tests of the migrations, local-stack tests of the RPCs, and the route tests of `src/app/api/drafts/` for the end-to-end flow.
 
 ## Related Modules
 - [PKMN Module](./pkmn.md)

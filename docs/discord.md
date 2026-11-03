@@ -12,7 +12,9 @@ src/lib/discord/
 ├── match-card-image.tsx  # Match card PNG renderer
 ├── notify.ts  # Webhook dispatch/event fan-out
 ├── webhook-test.ts  # Server-side test post for one stored webhook
-└── webhook-view.ts  # Masked webhook shape the admin API returns
+├── webhook-view.ts  # Masked webhook shape the admin API returns
+├── draft-embeds.ts  # Discord embeds of the draft tool
+└── matchers.ts  # Which webhook receives an event, shared by the sender and the admin preview
 ```
 
 ## Core Functions/Classes

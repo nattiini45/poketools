@@ -48,7 +48,7 @@
 - League phases are created via `POST /api/seasons/[id]/phases`; `POST /api/tournaments` no longer accepts `season_id`.
 - `src/components/league/StageManager.tsx` deleted — recover from git history if needed.
 
-## SeedingBoard (PR #54 drag-and-drop board)
+## SeedingBoard (retired drag-and-drop board)
 - Status: **retired** (2026-08-22).
 - Replaced by `SeedingTable` as the canonical seeding UI (drag reorder, manual seeds, shuffle, rating, standings re-import, and per-player losers-bracket start toggles for double-elim).
 - Deleted: `SeedingBoard.tsx`, `SeedingSlot.tsx`, `PlayerChip.tsx`, `src/lib/tournament/seeding.ts`, `seeding-board.ts`, and their tests (`seeding.test.ts`, `seeding-board.test.ts`, `double-elim-lb-start.test.ts`).

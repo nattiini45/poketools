@@ -12,9 +12,11 @@ src/lib/utils/
 ├── csv.ts  # parseCsv / recordsToCsv
 ├── rate-limit.ts  # fixed-window checkRateLimit (Postgres rate_limit_hit RPC or in-process, RATE_LIMIT_STORE), getClientIp, checkPublicRateLimit (per-IP limit of a public route; a local run without an address header is not throttled), 429 helper
 ├── export-node.ts  # DOM node export to PNG blob URL
+├── hidden-text.ts  # Invisible-character matcher (bidi, zero-width, Unicode tag characters) shared by the Admin Assistant fences
+├── node-image.ts  # Cross-origin image proxying shared by both exporters
 ├── uuid.ts  # UUID assertion helpers
 ├── lru-cache.ts  # Shared in-memory LRU cache with TTL expiry
-└── date.ts  # Shared date/time formatting helpers
+└── __tests__/  # crypto, csv, lru-cache, node-image, rate-limit and uuid tests
 ```
 
 ## Core Functions/Classes
@@ -54,15 +56,13 @@ src/lib/utils/
   - `set(key: string, value: unknown): void` — stores a value, evicting the oldest entry first if at `maxEntries`.
   - `clear(): void` — empties the cache.
 
-### Date Formatting
-- **File**: `date.ts`
-- **Purpose**: Shared date/time formatting helpers, extracted from inline helpers that used to live in `MatchSchedulingPanel`, `DashboardContent`, `AuditLogBrowser`, `AdminDashboardContent`, and the public replays page, so the `Intl` options and null-handling contracts don't drift.
-- **Key Methods**:
-  - `formatDateTime(value: string | null, fallback = 'Not scheduled'): string` — "Mon D, H:MM AM/PM" (host locale); returns `fallback` for null/empty input.
-  - `formatDateTimeOrNull(value: string | null): string | null` — delegates to `formatDateTime`, returning `null` instead of a fallback string when `value` is null/empty (`value ? formatDateTime(value) : null`), so callers can branch on the null return themselves.
-  - `formatDate(value: string): string` — medium date + short time style (host locale); input is non-nullable.
-  - `formatDateOnly(value: string): string` — "Mon D, YYYY" with a hardcoded `'en-US'` locale so server-rendered output (e.g. the replays table) stays stable across deploys/hydration.
-  - `formatTimeAgo(dateStr: string, now: Date = new Date()): string` — relative time ("just now" / "Nm ago" / "Nh ago" / "Nd ago"); accepts an explicit `now` for deterministic server rendering/tests.
+### Hidden Text
+- **File**: `hidden-text.ts`
+- **Purpose**: One definition of the characters a reader cannot see but a model reads (bidi marks, zero-width characters, Unicode tag characters, blank fillers), so every place that strips, counts or refuses them agrees. Pure and dependency-free.
+- **Key Methods**: `hasHiddenChars()`, `stripHiddenChars()`, `countHiddenChars()`, `HIDDEN_CLASS_BODY`. Its callers are in the Admin Assistant (`src/lib/ai/admin-agent/`, [i-agent.md](./ai-agent.md)).
+
+### Dates and numbers
+Dates and numbers render through the formatter of [`i18n.md`](./i18n.md) (`src/i18n/format.ts`, `useFormatter()`, `<LocalTime>`); `src/lib/utils` holds no date helpers.
 
 ## Data Flows
 - **Input**: DOM node references/IDs, image URLs, IDs
@@ -88,8 +88,8 @@ assertValidUuid(tournamentId, 'Tournament ID');
 ```
 
 ## Testing
-- **Test Files**: `src/lib/utils/__tests__/lru-cache.test.ts` (get/set/clear, TTL expiry, LRU eviction, and `getEntry()`'s cached-undefined-vs-miss distinction), `src/lib/utils/__tests__/date.test.ts` (`formatDateTime`, `formatDateTimeOrNull` delegation, `formatDate`, `formatDateOnly`, `formatTimeAgo`), plus `uuid.test.ts` and `crypto.test.ts` in the same directory
-- **Testing Approach**: Unit tests for `lru-cache.ts` and `date.ts`; remaining helpers rely on feature integration testing
+- **Test Files**: `src/lib/utils/__tests__/lru-cache.test.ts` (get/set/clear, TTL expiry, LRU eviction, and `getEntry()`'s cached-undefined-vs-miss distinction), `crypto.test.ts`, `csv.test.ts`, `node-image.test.ts`, `rate-limit.test.ts` and `uuid.test.ts` in the same directory
+- **Testing Approach**: Unit tests for the cache, crypto, CSV, rate-limit, UUID and image-proxy helpers; `cn.ts`, `hidden-text.ts` (covered through the Admin Assistant fence tests) and the two exporters rely on feature integration testing
 
 ## Related Modules
 - Used by multiple feature modules across `src/lib` and `src/components`

@@ -24,7 +24,7 @@ Every agent writing code in this repo must follow these patterns. They map to th
 ### A02 — Cryptographic Failures
 
 - All secrets live in environment variables (`.env.local`). Template: `.env.example`.
-- Social integration credentials encrypted with `encryptJson()` / `decryptJson()` from `src/lib/social/encryption.ts`.
+- Social integration credentials encrypted with `encryptJson()` / `decryptJson()` from `src/lib/social/crypto.ts`.
 - Never log secrets, tokens, or API keys — even in a log call.
 
 ### A03 — Injection
@@ -102,7 +102,7 @@ This helper: (1) passes `UserFacingError` subclasses through — specific messag
 
 ## Input Validation Pattern
 
-No centralized schema library for most routes — validation is manual and domain-specific (Zod is used in `src/lib/validation/schemas.ts`; see the date-encoding rule in [`src/lib/AGENTS.md`](../src/lib/AGENTS.md)). Follow these patterns:
+Request-body schemas are Zod, in `src/lib/validation/schemas.ts` ([`validation.md`](./validation.md)); routes without one validate by hand and domain-specifically (see the date-encoding rule in [`src/lib/AGENTS.md`](../src/lib/AGENTS.md)). Follow these patterns:
 
 1. **Whitelist enums** — define `VALID_*` constants, check with `.includes()`:
    ```typescript
