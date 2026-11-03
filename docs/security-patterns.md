@@ -91,7 +91,7 @@ export async function POST(request: Request) {
 }
 ```
 
-This helper: (1) passes `UserFacingError` subclasses through — specific message + optional `code` + status, logged server-side, (2) passes `AuthError` messages through (they're user-facing by design; not logged), (3) logs everything else server-side through `logger.error` (tag `api`, with a `requestId` that it also sets as the `x-request-id` response header) and returns the static fallback string to the client.
+This helper: (1) passes `UserFacingError` subclasses through — specific message + optional `code` + status, logged server-side, (2) passes `AuthError` messages through (they're user-facing by design) and logs one `logger.warn` line with the `requestId`, status and code, no stack, (3) logs everything else server-side through `logger.error` (tag `api`, with a `requestId` that it also sets as the `x-request-id` response header) and returns the static fallback string to the client.
 
 **Error transparency (mandatory):** generalization, suppression, and masking of errors are forbidden — we need to know what's wrong.
 

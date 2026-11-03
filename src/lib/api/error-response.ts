@@ -114,8 +114,12 @@ export function safeErrorResponse(
     );
   }
   if (isAuthError(err)) {
+    const code = authErrorCode(err);
+    // The message is user-facing and carries no stack, so the line holds the status and code only: enough to find
+    // the request id a client quotes after a 401 or 403 without turning every expired session into an error line.
+    logger.warn('api', fallback, { requestId, status: err.statusCode, code });
     return NextResponse.json<ApiResult<never>>(
-      { success: false, error: err.message, code: authErrorCode(err) },
+      { success: false, error: err.message, code },
       { status: err.statusCode, headers }
     );
   }

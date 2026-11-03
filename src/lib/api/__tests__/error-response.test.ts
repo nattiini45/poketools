@@ -104,13 +104,23 @@ describe('safeErrorResponse', () => {
     consoleSpy.mockRestore();
   });
 
-  it('does not log AuthError to console.error', () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const err = new AuthError('Forbidden', 403);
-    safeErrorResponse(err, 'Fallback');
+  it('logs an AuthError as one warn line with the request id, status and code, never as an error line', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const err = new AuthError('Forbidden', 403, 'account_banned');
+    const response = safeErrorResponse(err, 'Fallback');
 
-    expect(consoleSpy).not.toHaveBeenCalled();
-    consoleSpy.mockRestore();
+    expect(errorSpy).not.toHaveBeenCalled();
+    const line = loggedLine(warnSpy);
+    expect(line).toMatchObject({
+      level: 'warn',
+      tag: 'api',
+      message: 'Fallback',
+      status: 403,
+      code: 'account_banned',
+      requestId: response.headers.get('x-request-id'),
+    });
+    expect(JSON.stringify(line)).not.toContain('stack');
   });
 
   it('uses default 500 status for non-auth errors when no status provided', () => {

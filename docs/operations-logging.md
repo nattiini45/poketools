@@ -30,7 +30,7 @@ An `Error` anywhere in the meta is serialised the same way (`serializeError` in 
 
 ## Request ids
 
-`safeErrorResponse()` sets `x-request-id` on every response it builds and logs the same value as `requestId` in its `tag: "api"` line. An incoming `x-request-id` of 8 to 128 plain characters (`A-Z a-z 0-9 . _ -`) is reused, so a caller can supply its own id; any other value is replaced by a fresh UUID. The helper reads the header from the request the handler is serving (the same request store `headers()` reads), so no route passes anything; the optional fifth argument (`request`) overrides it. Outside a request (a test, a cache callback) the id is always fresh. `draftErrorResponse` logs a `DraftRuleError` with tag `api` as well. The response body keeps only the static fallback text: no id, no `err.message`, no stack.
+`safeErrorResponse()` sets `x-request-id` on every response it builds and logs the same value as `requestId` in its `tag: "api"` line. An incoming `x-request-id` of 8 to 128 plain characters (`A-Z a-z 0-9 . _ -`) is reused, so a caller can supply its own id; any other value is replaced by a fresh UUID. The helper reads the header from the request the handler is serving (the same request store `headers()` reads), so no route passes anything; the optional fifth argument (`request`) overrides it. Outside a request (a test, a cache callback) the id is always fresh. `draftErrorResponse` logs a `DraftRuleError` with tag `api` as well. A 401 or 403 `AuthError` is logged as one `level: "warn"` line (`requestId`, `status`, `code`, no stack), so the id a client quotes after a refused request is greppable too. The response body keeps only the static fallback text: no id, no `err.message`, no stack.
 
 ## Unhandled errors and the digest
 
