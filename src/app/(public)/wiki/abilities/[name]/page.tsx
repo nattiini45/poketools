@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { abilityMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth/helpers';
@@ -8,6 +10,11 @@ import { getDataLocale, getLocale, getT } from '@/i18n/server';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import WikiAbilityContent from '@/components/wiki/WikiAbilityContent';
 import WikiNotesSection from '@/components/wiki/WikiNotesSection';
+
+export async function generateMetadata({ params }: { params: Promise<{ name: string }> }): Promise<Metadata> {
+  const { name } = await params;
+  return abilityMetadata(decodeURIComponent(name));
+}
 
 export default async function WikiAbilityPage({
   params,

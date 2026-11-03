@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { moveMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth/helpers';
@@ -9,6 +11,11 @@ import { wikiMessages } from '@/i18n/messages/wiki';
 import WikiMoveContent from '@/components/wiki/WikiMoveContent';
 import WikiMoveUsageStats from '@/components/wiki/WikiMoveUsageStats';
 import WikiNotesSection from '@/components/wiki/WikiNotesSection';
+
+export async function generateMetadata({ params }: { params: Promise<{ name: string }> }): Promise<Metadata> {
+  const { name } = await params;
+  return moveMetadata(decodeURIComponent(name));
+}
 
 export default async function WikiMovePage({
   params,

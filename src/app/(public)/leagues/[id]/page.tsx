@@ -1,6 +1,9 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { publicReads } from '@/lib/cache/public-reads';
+import { leagueMetadata } from '@/lib/seo/page-metadata';
+import { readLeague } from '@/lib/seo/page-reads';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
@@ -64,6 +67,10 @@ interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+export async function generateMetadata({ params }: Pick<PageProps, 'params'>): Promise<Metadata> {
+  return leagueMetadata((await params).id);
+}
+
 /**
  * League detail page.
  *
@@ -88,7 +95,7 @@ interface PageProps {
 export default async function LeagueDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const query = await searchParams;
-  const league = await publicReads.season(id);
+  const league = await readLeague(id);
   if (!league) notFound();
 
   const caps = getFormatCapabilities(league.format_type);

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import PageContainer from '@/components/ui/PageContainer';
 import ScopeSelector from '@/components/shared/ScopeSelector';
@@ -273,6 +274,11 @@ async function InsightsPageContent({ searchParams }: PageProps) {
       />
     </PageContainer>
   );
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(insightsMessages);
+  return { title: t('page.title') };
 }
 
 export default async function InsightsPage(props: PageProps) {

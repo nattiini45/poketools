@@ -1,6 +1,9 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { publicReads } from '@/lib/cache/public-reads';
+import { tournamentMetadata } from '@/lib/seo/page-metadata';
+import { readTournament } from '@/lib/seo/page-reads';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
 import { scoringByeRecords } from '@/lib/tournament/byes';
@@ -38,6 +41,10 @@ interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+export async function generateMetadata({ params }: Pick<PageProps, 'params'>): Promise<Metadata> {
+  return tournamentMetadata((await params).id);
+}
+
 /**
  * Tournament / league-phase detail page.
  *
@@ -53,7 +60,7 @@ interface PageProps {
 export default async function TournamentPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const query = await searchParams;
-  const tournament = await publicReads.tournament(id);
+  const tournament = await readTournament(id);
   if (!tournament) notFound();
 
   const isRoundRobin = tournament.bracket_type === 'round_robin';

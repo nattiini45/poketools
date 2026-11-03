@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import WikiSearchBar from '@/components/wiki/WikiSearchBar';
 import { getT } from '@/i18n/server';
@@ -11,6 +12,11 @@ const CATEGORIES = [
   { key: 'abilities', href: '/wiki/abilities' },
   { key: 'tera', href: '/wiki/tera' },
 ] as const;
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(wikiMessages);
+  return { title: t('home.title') };
+}
 
 export default async function WikiBrowserPage() {
   const t = await getT(wikiMessages);
