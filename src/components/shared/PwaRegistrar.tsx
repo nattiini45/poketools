@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { ENABLE_PWA } from '@/lib/feature-flags';
 import { pushRegistersServiceWorker, swScriptUrl } from '@/lib/push/client';
-import { clearPwaCaches } from '@/lib/pwa/caches';
+import { deletePwaCaches } from '@/lib/pwa/caches';
 
 async function unregisterPwaWorker(): Promise<void> {
   const registrations = await navigator.serviceWorker.getRegistrations();
@@ -21,7 +21,7 @@ async function unregisterPwaWorker(): Promise<void> {
   });
 
   await Promise.all(pwaRegistrations.map((registration) => registration.unregister()));
-  await clearPwaCaches();
+  await deletePwaCaches();
 }
 
 export default function PwaRegistrar() {
