@@ -1,5 +1,5 @@
 import SpriteImg from '@/components/shared/SpriteImg';
-import TypeBadge from '@/components/shared/TypeBadge';
+import TypeBadgeView from '@/components/shared/TypeBadgeView';
 import type { Translator } from '@/i18n/core';
 import type { teamsLibraryMessages } from '@/i18n/messages/teams-library';
 import type { DataLocale } from '@/lib/pkmn/i18n/types';
@@ -7,7 +7,7 @@ import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import { localizeItem } from '@/lib/pkmn/i18n/names/items';
 import { localizeAbility } from '@/lib/pkmn/i18n/names/abilities';
-import { localizeNature } from '@/lib/pkmn/i18n/names/misc';
+import { localizeNature, localizeType } from '@/lib/pkmn/i18n/names/misc';
 import { formatStatSpread, hasCustomIv, hasEv } from '@/lib/team/stat-spread';
 import type { PokemonSet } from '@/types/team';
 
@@ -63,7 +63,7 @@ export default function TeamSetCard({
       {set.tera_type && (
         <div className="flex items-center gap-1 mb-2">
           <span className="text-[10px] text-poke-text-muted">{t('set.tera')}</span>
-          <TypeBadge type={set.tera_type} locale={dl} className="!text-[9px] !px-1.5 !py-0" />
+          <TypeBadgeView type={set.tera_type} label={localizeType(set.tera_type, dl)} className="!text-[9px] !px-1.5 !py-0" />
         </div>
       )}
 
