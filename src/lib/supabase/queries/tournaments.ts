@@ -183,6 +183,29 @@ export async function getTournamentById(id: string): Promise<Tournament | null> 
   };
 }
 
+/** What the result-submission page needs of a tournament: who may see planned rosters, and the ruleset generation. */
+export interface TournamentSubmitContext {
+  teamVisibility: TeamVisibility | null;
+  /** Generation of the pinned ruleset version; 9 when the tournament pins none. */
+  generation: number;
+}
+
+/** Narrow read for the submit-result page (visibility and generation only), or null when the tournament is gone. */
+export async function getTournamentSubmitContext(id: string): Promise<TournamentSubmitContext | null> {
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select('team_visibility, ruleset:ruleset_definition_versions ( gen )')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    teamVisibility: (data.team_visibility as TeamVisibility | null) ?? null,
+    generation: (data.ruleset as { gen: number } | null)?.gen ?? 9,
+  };
+}
+
 export async function getTournamentWithDetails(
   id: string
 ): Promise<TournamentWithDetails | null> {

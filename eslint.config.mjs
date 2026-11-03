@@ -46,6 +46,47 @@ export const SCRIPT_BROWSER_CONTEXT_FILES = [
   'scripts/world-assets/capture-props-c107.mjs',
 ];
 
+/**
+ * Files under src/app/api that may import the service-role client or `@supabase/*` directly. A route
+ * handler reads and writes through `src/lib/supabase/queries/*`, `src/lib/supabase/storage/*` and the
+ * helpers under `src/lib/auth`; a file listed here has no such home. Each entry names its reason.
+ * @type {ReadonlyArray<{ file: string, reason: string }>}
+ */
+export const SERVICE_ROLE_CLIENT_ALLOWLIST = [
+  { file: 'src/app/api/account/identities/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/admin/avatars/thumbnails/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/admin/backfill-gamification/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/admin/dashboard/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/admin/export/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/admin/import/point-buy/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/admin/rounds/[id]/reset/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/auth/reset-password/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/avatar/gallery/[id]/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/avatar/generate/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/avatar/transform/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/bootstrap/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/broadcast/storylines/[id]/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/broadcast/storylines/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/draft-pool-entries/[id]/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/drafts/[id]/replay-events/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/matches/[id]/social-image/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/players/[id]/avatar/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+  { file: 'src/app/api/players/[id]/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
+];
+
+const SUPABASE_PACKAGE_PATTERN = {
+  group: ['@supabase/supabase-js', '@supabase/*'],
+  message: 'Do not import Supabase directly in components, pages or route handlers. Use server-side query modules (src/lib/supabase/queries/*) or storage modules (src/lib/supabase/storage/*).',
+};
+
+const SERVICE_ROLE_CLIENT_PATTERN = {
+  group: ['@/lib/supabase/client', '**/supabase/client'],
+  message: 'The service-role client stays inside src/lib. Query through src/lib/supabase/queries/* or src/lib/supabase/storage/*, or add the file to SERVICE_ROLE_CLIENT_ALLOWLIST in eslint.config.mjs with a reason.',
+};
+
+const API_SOURCE_FILES = ['src/app/api/**/*.{ts,tsx}'];
+const API_TEST_FILES = ['src/app/api/**/__tests__/**', 'src/app/api/**/*.test.{ts,tsx}'];
+
 export default [
   ...tseslint.configs.recommended,
   {
@@ -72,24 +113,34 @@ export default [
   {
     files: ['src/components/**/*', 'src/app/**/page.tsx', 'src/app/**/layout.tsx'],
     rules: {
-      'no-restricted-imports': ['error', {
-        patterns: [{
-          group: ['@supabase/supabase-js', '@supabase/*'],
-          message: 'Do not import Supabase directly in components or pages. Use API routes or server-side query modules (src/lib/supabase/queries/*).',
-        }],
-      }],
+      'no-restricted-imports': ['error', { patterns: [SUPABASE_PACKAGE_PATTERN, SERVICE_ROLE_CLIENT_PATTERN] }],
     },
   },
+  // Architecture: route handlers and their helpers never import the service-role client, and log
+  // through src/lib/logger.ts (structured JSON with the request id) instead of console.
+  {
+    files: API_SOURCE_FILES,
+    ignores: [...API_TEST_FILES],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [SUPABASE_PACKAGE_PATTERN, SERVICE_ROLE_CLIENT_PATTERN] }],
+    },
+  },
+  // Documented exceptions: the file keeps the raw client, the console rule still applies.
+  ...(SERVICE_ROLE_CLIENT_ALLOWLIST.length > 0
+    ? [{
+        // `[id]` route folders are glob character classes unless bracketed.
+        files: SERVICE_ROLE_CLIENT_ALLOWLIST.map((entry) => entry.file.replace(/\[([^\]]*)\]/g, '[[]$1[]]')),
+        rules: { 'no-restricted-imports': 'off' },
+      }]
+    : []),
   // Architecture: block @pkmn/dex in client components (2MB+ bundle)
   {
     files: ['src/components/**/*'],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [
-          {
-            group: ['@supabase/supabase-js', '@supabase/*'],
-            message: 'Do not import Supabase directly in components. Use API routes or server-side query modules.',
-          },
+          SUPABASE_PACKAGE_PATTERN,
+          SERVICE_ROLE_CLIENT_PATTERN,
           {
             group: ['@pkmn/dex'],
             message: 'Do not import @pkmn/dex in client components (2MB+ bundle). Use /api/pkmn/* routes instead.',
