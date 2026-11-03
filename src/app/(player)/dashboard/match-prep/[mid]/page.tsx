@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
-import { getSession, isSuperadminNow } from '@/lib/auth/helpers';
+import { getLiveSessionPlayer, isSuperadminNow } from '@/lib/auth/helpers';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
@@ -25,8 +25,7 @@ interface PageProps {
 
 export default async function MatchPrepPage({ params }: PageProps) {
   const { mid } = await params;
-  const session = await getSession();
-  const player = session?.player;
+  const player = await getLiveSessionPlayer();
   if (!player) redirect('/');
 
   // A malformed id is a missing page, not a database error (22P02).

@@ -1,5 +1,4 @@
-import { redirectToSignIn } from '@/lib/auth/redirect-to-sign-in';
-import { getSession } from '@/lib/auth/helpers';
+import { redirectToSignIn, requireLivePlayerOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import type { AvatarConfig } from '@/types/avatar';
 import AvatarBuilderPage from './AvatarBuilderPage';
@@ -7,10 +6,9 @@ import AvatarBuilderPage from './AvatarBuilderPage';
 export const dynamic = 'force-dynamic';
 
 export default async function AvatarPage() {
-  const session = await getSession();
-  if (!session?.player) return redirectToSignIn();
+  const live = await requireLivePlayerOrSignIn();
 
-  const player = await getPlayerById(session.player.playerId);
+  const player = await getPlayerById(live.playerId);
   if (!player) return redirectToSignIn();
 
   return (

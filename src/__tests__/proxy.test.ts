@@ -219,11 +219,19 @@ describe('proxy wiki overlay 404 (VAL-SHELL-012)', () => {
     '/broadcast/wiki/abilities/NotAnAbility',
     '/broadcast/wiki/items/NotAnItem',
     '/broadcast/wiki/tera/NotAType',
-  ])('answers %s with an empty 404 before the page streams', async (path) => {
+  ])('answers %s with a transparent 404 document before the page streams', async (path) => {
     const response = await proxy(pageRequest(path));
     expect(response.status).toBe(404);
-    expect(await response.text()).toBe('');
+    // An empty 4xx body makes Chromium (and OBS's browser source) paint its own opaque "HTTP ERROR 404" page.
+    const body = await response.text();
+    expect(body.length).toBeGreaterThan(0);
+    expect(body).toContain('background:transparent');
+    expect(body).not.toMatch(/<a[\s>]/i);
+    expect(body).not.toMatch(/<script/i);
+    expect(body).toContain('<body></body>');
+    expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(response.headers.get('x-robots-tag')).toContain('noindex');
+    expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('x-middleware-next')).toBeNull();
   });
 
@@ -268,6 +276,28 @@ describe('proxy matcher', () => {
     ]) {
       expect(matches(url), url).toBe(false);
     }
+  });
+
+  it('skips a prefetch (either header the router sends) and still runs for the navigation it prepares', () => {
+    for (const url of ['/leagues', '/dashboard/settings', '/teams/shared/00000000-0000-4000-8000-000000000065']) {
+      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { 'next-router-prefetch': '1' } }), url).toBe(false);
+      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { purpose: 'prefetch' } }), url).toBe(false);
+      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { rsc: '1', 'next-url': '/' } }), url).toBe(true);
+      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { purpose: 'navigate' } }), url).toBe(true);
+      expect(matches(url), url).toBe(true);
+    }
+  });
+
+  it('adds only the prefetch conditions to the path pattern', () => {
+    expect(config.matcher).toHaveLength(1);
+    const [entry] = config.matcher;
+    expect(entry).toEqual({
+      source: expect.any(String),
+      missing: [
+        { type: 'header', key: 'next-router-prefetch' },
+        { type: 'header', key: 'purpose', value: 'prefetch' },
+      ],
+    });
   });
 });
 

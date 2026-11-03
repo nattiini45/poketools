@@ -1,4 +1,4 @@
-import { getSession } from '@/lib/auth/helpers';
+import { getLiveSessionPlayer, getSession } from '@/lib/auth/helpers';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { getMatchesByPlayer } from '@/lib/supabase/queries/matches';
 import { getTournamentsByPlayer, listTournamentsByIds } from '@/lib/supabase/queries/tournaments';
@@ -19,9 +19,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0; // Dashboard is user-specific, always fresh
 
 export default async function DashboardPage() {
-  const session = await getSession();
+  // The player (id, name, avatar) is read live; the token's provider image is display-only.
+  const [livePlayer, session] = await Promise.all([getLiveSessionPlayer(), getSession()]);
 
-  if (!session?.player) {
+  if (!livePlayer) {
     const t = await getT(dashboardMessages);
     return (
       <PageContainer title={t('pageTitle')}>
@@ -34,7 +35,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const playerId = session.player.playerId;
+  const playerId = livePlayer.playerId;
 
   const [player, matches, tournaments, leagues, rating, streaks, scopeUsage] = await Promise.all([
     getPlayerById(playerId),
@@ -88,9 +89,9 @@ export default async function DashboardPage() {
   return (
     <DashboardContent
       playerId={playerId}
-      playerName={session.player.name}
-      avatarUrl={session.user?.image || undefined}
-      customAvatarUrl={session.player.avatarUrl || undefined}
+      playerName={livePlayer.name}
+      avatarUrl={session?.user?.image || undefined}
+      customAvatarUrl={livePlayer.avatarUrl || undefined}
       initialPlayer={player}
       initialMatches={matches}
       initialTournaments={tournaments}

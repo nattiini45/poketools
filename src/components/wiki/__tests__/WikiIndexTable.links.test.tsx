@@ -71,6 +71,22 @@ describe('wiki index rows are links', () => {
     expect(row.split(' ')).toContain('relative');
   });
 
+  it('keeps the stretched link above later cells (a positioned type badge must not cover it)', () => {
+    const html = renderWithI18n(
+      <PokemonIndexClient
+        data={[{ name: 'Garchomp', types: ['Dragon', 'Ground'], hp: 108, atk: 130, def: 95, spa: 80, spd: 85, spe: 102, bst: 600, earliestGen: 4 }]}
+      />,
+    );
+    const link = /<a [^>]*href="\/pokemon\/Garchomp"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(link.match(/class="([^"]*)"/)?.[1].split(' ')).toContain('after:z-10');
+    const rowTag = /<tr class="([^"]*)">(?:(?!<\/tr>)[\s\S])*Garchomp/.exec(html)?.[1] ?? '';
+    const rowClasses = rowTag.split(' ');
+    expect(rowClasses).toContain('relative');
+    expect(rowClasses).toContain('isolate');
+    expect(html).toContain('Dragon');
+    expect(html.match(/after:absolute/g)).toHaveLength(1);
+  });
+
   it('keeps every other cell on the row as plain content', () => {
     const html = renderWithI18n(<MovesIndexClient data={MOVES} />);
     expect(anchors(html)).toHaveLength(MOVES.length);
