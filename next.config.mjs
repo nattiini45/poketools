@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { examplePackProductionWarning } from './scripts/format-pack-notice.mjs';
+import { CSP_REPORT_GROUP, CSP_REPORT_PATH, buildStaticPolicy } from './src/lib/security/csp-policy.mjs';
 
 // Format pack (docs/format-packs.md): `@format-pack` resolves to exactly one pack entry. The
 // private pack (companion overlay, gitignored; fetched by scripts/fetch-private-assets.mjs on the
@@ -41,22 +42,9 @@ if (examplePackWarning) console.warn(examplePackWarning);
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== 'production';
 
-// Next.js + React 19 dev mode (Fast Refresh, error overlay, cross-realm stack
-// reconstruction) requires eval(). Production must keep the strict policy.
-//
-// The 3D draft room (three.js) additionally needs:
-//  - blob:        — DRACOLoader spawns its decode worker from a blob: URL, and
-//                   some browsers check that worker script against script-src.
-//  - wasm-unsafe-eval (prod) — the Draco decoder and the KTX2/Basis transcoder
-//                   (route-world textures) instantiate WebAssembly.
-//                   (dev's 'unsafe-eval' already permits WASM.)
-//
-// The EvoLiga route world fetches GLBs, KTX2 textures, HDRIs and manifest.json
-// from the Supabase Storage public bucket (NEXT_PUBLIC_WORLD_ASSETS_URL); that
-// origin is already covered by https://*.supabase.co in img-src / connect-src.
-const scriptSrc = isDev
-  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://va.vercel-scripts.com"
-  : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://va.vercel-scripts.com";
+// The enforced policy while CSP_ENFORCE is off. The per-request nonce policy comes from src/proxy.ts; both are built by
+// src/lib/security/csp-policy.mjs (docs/security-patterns.md, "Content-Security-Policy").
+const contentSecurityPolicy = buildStaticPolicy({ dev: isDev });
 
 const securityHeaders = [
   {
@@ -89,25 +77,12 @@ const securityHeaders = [
   },
   {
     key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      scriptSrc,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://img.pokemondb.net https://play.pokemonshowdown.com https://*.supabase.co",
-      "font-src 'self'",
-      // three.js DRACOLoader / MeshoptDecoder spawn their decode workers from blob: URLs.
-      // Without blob: here, worker-src falls back to script-src and the workers are blocked,
-      // which breaks loading of the 3D draft room models.
-      "worker-src 'self' blob:",
-      // three.js loads GLB textures (WebP) via fetch(blob:) in production builds, so
-      // connect-src must allow blob: or every texture fails with a CSP NetworkError.
-      // troika-three-text (drei <Text>) additionally fetches its unicode font-fallback
-      // resolver from cdn.jsdelivr.net and fallback glyphs from fonts.gstatic.com.
-      "connect-src 'self' blob: https://cdn.jsdelivr.net https://fonts.gstatic.com https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; '),
+    value: contentSecurityPolicy,
+  },
+  {
+    // Names the endpoint that the policy's `report-to` directive points at.
+    key: 'Reporting-Endpoints',
+    value: `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"`,
   },
 ];
 

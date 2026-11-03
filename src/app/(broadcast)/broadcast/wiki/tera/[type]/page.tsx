@@ -5,13 +5,8 @@ import { resolveOverlayLocale } from '@/lib/broadcast/overlay-locale';
 import { createTranslator } from '@/i18n/core';
 import { broadcastOverlaysMessages } from '@/i18n/messages/broadcast-overlays';
 import TypeBadge from '@/components/shared/TypeBadge';
+import { WIKI_OVERLAY_TERA_TYPES } from '@/lib/broadcast/wiki-overlay-lookup';
 
-// English type names: the URL segment and the TypeBadge key; TypeBadge localizes the label.
-const VALID_TYPES = [
-  'Normal', 'Fire', 'Water', 'Electric', 'Grass', 'Ice',
-  'Fighting', 'Poison', 'Ground', 'Flying', 'Psychic', 'Bug',
-  'Rock', 'Ghost', 'Dragon', 'Dark', 'Steel', 'Fairy', 'Stellar',
-];
 
 interface PageProps {
   params: Promise<{ type: string }>;
@@ -24,7 +19,7 @@ export default async function WikiTeraOverlay({ params, searchParams }: PageProp
   const decodedType = decodeURIComponent(type);
 
   // Match case-insensitively against valid types
-  const matched = VALID_TYPES.find((t) => t.toLowerCase() === decodedType.toLowerCase());
+  const matched = WIKI_OVERLAY_TERA_TYPES.find((t) => t.toLowerCase() === decodedType.toLowerCase());
   if (!matched) return notFound();
 
   const config = parseOverlayConfig(

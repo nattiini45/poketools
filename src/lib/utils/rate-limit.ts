@@ -262,6 +262,18 @@ export async function checkRateLimit(
   };
 }
 
+/**
+ * {@link checkRateLimit} on the in-process store whatever RATE_LIMIT_STORE says: no database call. For a public route
+ * whose traffic is noise nobody should pay a query for (/api/csp-report), where a per-instance cap is enough.
+ */
+export async function checkMemoryRateLimit(
+  bucket: string,
+  identity: string,
+  options: RateLimitOptions,
+): Promise<RateLimitResult> {
+  assertValidCall(bucket, options);
+  return memoryHit(rateLimitKey(bucket, identity), options);
+}
 /** Shared identity of every request without a client address header. */
 export const UNKNOWN_CLIENT_IP = 'unknown';
 

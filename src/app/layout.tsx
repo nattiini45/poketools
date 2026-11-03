@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import localFont from "next/font/local";
 import "./globals.css";
 import SessionProvider from "@/components/shared/SessionProvider";
@@ -36,7 +37,8 @@ const dmSans = localFont({
 
 // The root layout reads only the language cookies (i18n-core D6, §2.4) and the
 // sprite-style cookie (docs/pkmn.md, "Sprite styles"), so every route renders
-// dynamically by design. Never read the session here.
+// dynamically by design. Never read the session here. The only request header it reads is the
+// nonce that src/proxy.ts sets (the CSP nonce for the two inline scripts below), nothing about the viewer.
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT(metaMessages);
   return {
@@ -78,19 +80,20 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [i18n, spriteStyle] = await Promise.all([getI18nProviderProps(), getSpriteStylePreference()]);
+  const [i18n, spriteStyle, requestHeaders] = await Promise.all([getI18nProviderProps(), getSpriteStylePreference(), headers()]);
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
   return (
     <html lang={i18n.locale} suppressHydrationWarning>
       <head>
         {/* Site palette before first paint (docs/design.md § Site palettes).
             Static constant built from module constants — no user content. */}
-        <script dangerouslySetInnerHTML={{ __html: SITE_PALETTE_PREPAINT_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SITE_PALETTE_PREPAINT_SCRIPT }} />
       </head>
       <body
         className={`${nunito.variable} ${dmSans.variable} font-body antialiased bg-poke-base text-poke-text-primary`}
       >
         <I18nProvider {...i18n}>
-          <ThemeProvider>
+          <ThemeProvider nonce={nonce}>
             <SessionProvider>
               <SpriteStyleProvider initialPreference={spriteStyle}>
                 <SpriteStyleAccountSync />

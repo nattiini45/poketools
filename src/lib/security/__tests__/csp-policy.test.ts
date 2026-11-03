@@ -1,0 +1,110 @@
+import { describe, expect, it } from 'vitest';
+import {
+  CSP_REPORT_PATH,
+  buildNoncePolicy,
+  buildStaticPolicy,
+  cspEnforced,
+  newNonce,
+} from '../csp-policy.mjs';
+
+/** Directive values by name: `script-src 'self' 'nonce-x'` becomes `{ 'script-src': ["'self'", "'nonce-x'"] }`. */
+function directives(policy: string): Record<string, string[]> {
+  return Object.fromEntries(
+    policy
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const [name, ...values] = part.split(/\s+/);
+        return [name, values];
+      }),
+  );
+}
+
+const NONCE = 'dGVzdC1ub25jZS0xMjM0NQ==';
+
+describe('buildStaticPolicy (the enforced default, #37)', () => {
+  const prod = directives(buildStaticPolicy({ dev: false }));
+
+  it('hardens object-src, framing and mixed content', () => {
+    expect(prod['object-src']).toEqual(["'none'"]);
+    expect(prod['frame-ancestors']).toEqual(["'none'"]);
+    expect(prod['base-uri']).toEqual(["'self'"]);
+    expect(prod['form-action']).toEqual(["'self'"]);
+    expect(prod).toHaveProperty('upgrade-insecure-requests');
+  });
+
+  it('keeps the blob: entries three.js needs', () => {
+    expect(prod['worker-src']).toEqual(["'self'", 'blob:']);
+    expect(prod['connect-src']).toContain('blob:');
+  });
+
+  it('reports violations to the report endpoint', () => {
+    expect(prod['report-uri']).toEqual([CSP_REPORT_PATH]);
+    expect(prod['report-to']).toEqual(['csp']);
+  });
+
+  it('keeps the existing script policy by default, so enforcing nothing new cannot blank a page', () => {
+    expect(prod['script-src']).toEqual(["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", 'blob:', 'https://va.vercel-scripts.com']);
+  });
+
+  it('does not upgrade requests in development and allows eval there', () => {
+    const dev = directives(buildStaticPolicy({ dev: true }));
+    expect(dev).not.toHaveProperty('upgrade-insecure-requests');
+    expect(dev['script-src']).toContain("'unsafe-eval'");
+    expect(prod['script-src']).not.toContain("'unsafe-eval'");
+  });
+});
+
+describe('buildNoncePolicy', () => {
+  const prod = directives(buildNoncePolicy({ nonce: NONCE, dev: false }));
+
+  it('allows scripts by nonce and strict-dynamic, never unsafe-inline', () => {
+    expect(prod['script-src']).toContain(`'nonce-${NONCE}'`);
+    expect(prod['script-src']).toContain("'strict-dynamic'");
+    expect(prod['script-src']).toContain("'wasm-unsafe-eval'");
+    expect(prod['script-src']).not.toContain("'unsafe-inline'");
+    expect(prod['script-src']).not.toContain('blob:');
+  });
+
+  it('keeps every other directive of the static policy', () => {
+    const base = directives(buildStaticPolicy({ dev: false }));
+    for (const name of Object.keys(base)) {
+      if (name === 'script-src') continue;
+      expect(prod[name], name).toEqual(base[name]);
+    }
+  });
+
+  it('adds unsafe-eval only in development', () => {
+    expect(directives(buildNoncePolicy({ nonce: NONCE, dev: true }))['script-src']).toContain("'unsafe-eval'");
+    expect(prod['script-src']).not.toContain("'unsafe-eval'");
+  });
+
+  it('refuses a nonce that could break out of the directive', () => {
+    for (const bad of ['', "a'; script-src *", 'a b', 'a;b', 'é']) {
+      expect(() => buildNoncePolicy({ nonce: bad, dev: false }), JSON.stringify(bad)).toThrow(/nonce/);
+    }
+  });
+});
+
+describe('newNonce', () => {
+  it('is base64, long enough to guess never, and different every time', () => {
+    const nonces = new Set(Array.from({ length: 50 }, () => newNonce()));
+    expect(nonces.size).toBe(50);
+    for (const nonce of nonces) {
+      expect(nonce).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
+      expect(Buffer.from(nonce, 'base64').length).toBeGreaterThanOrEqual(16);
+    }
+  });
+});
+
+describe('cspEnforced', () => {
+  it('is off unless CSP_ENFORCE is set to a truthy value', () => {
+    for (const value of [undefined, '', ' ', '0', 'false', 'FALSE', 'off', 'no']) {
+      expect(cspEnforced({ CSP_ENFORCE: value }), String(value)).toBe(false);
+    }
+    for (const value of ['1', 'true', 'TRUE', 'on', 'yes', ' 1 ']) {
+      expect(cspEnforced({ CSP_ENFORCE: value }), value).toBe(true);
+    }
+  });
+});
