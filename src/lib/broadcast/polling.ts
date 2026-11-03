@@ -46,16 +46,21 @@ export function useBroadcastPoll<T>(
 
   const fetchData = useCallback(async (signal: AbortSignal): Promise<PollTickResult> => {
     if (!visibleRef.current) return { ok: true };
+    // A superseded tick drops its answer, but still ends the initial wait: "loading" must not outlive the request.
+    const superseded = (): PollTickResult => {
+      setLoading(false);
+      return { ok: true };
+    };
     try {
       const res = await fetch(url, { signal });
-      if (signal.aborted) return { ok: true };
+      if (signal.aborted) return superseded();
       if (!res.ok) {
         setError(new Error(`Poll failed: ${res.status} ${res.statusText}`));
         setLoading(false);
         return pollResultFromResponse(res);
       }
       const raw = await res.json();
-      if (signal.aborted) return { ok: true };
+      if (signal.aborted) return superseded();
       const next = transform ? transform(raw) : (raw as T);
 
       // Change detection via JSON comparison
@@ -77,7 +82,7 @@ export function useBroadcastPoll<T>(
       setLoading(false);
       return { ok: true };
     } catch (err) {
-      if (signal.aborted) return { ok: true };
+      if (signal.aborted) return superseded();
       setError(err instanceof Error ? err : new Error(String(err)));
       setLoading(false);
       return { ok: false };
