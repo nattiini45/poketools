@@ -27,8 +27,8 @@ League world pages keep their own world palette whatever the site palette.
 ## File Structure
 
 ```
-components.json              # ShadCN config (RSC-safe, aliases @/components/ui, @/lib/utils)
-src/lib/utils.ts             # cn() helper (clsx + tailwind-merge)
+components.json              # ShadCN config (RSC-safe, aliases @/components/ui, @/lib/utils/cn)
+src/lib/utils/cn.ts          # cn() helper (clsx + tailwind-merge)
 src/lib/ui/table-params.ts   # parseTableParams(), pagination + sort helpers
 src/lib/ui/use-client-table.ts # Client-side sort + pagination hook for data tables
 src/app/globals.css          # CSS custom properties (--poke-*, ShadCN semantic bridge)

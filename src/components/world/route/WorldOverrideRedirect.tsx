@@ -19,7 +19,7 @@ import { clearInvalidStoredWorldOverride, isRegisteredRouteThemeId, readStoredWo
  * keeps scroll position. It only fires when the URL carries no valid pick of
  * its own — an explicit, registered `?world=` (e.g. from a shared link) beats
  * the stored preference per the documented precedence (URL param, then
- * localStorage) and is never overwritten (PR #63 review). A viewer who never
+ * localStorage) and is never overwritten (route-world review). A viewer who never
  * changed the theme never pays for the replace, and neither does SSR.
  *
  * It re-checks on every same-page navigation (the search params are a

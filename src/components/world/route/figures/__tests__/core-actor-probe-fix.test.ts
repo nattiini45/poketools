@@ -135,7 +135,7 @@ describe('R49 fix D-R1 / D-R2: the actors\' latch contract', () => {
   });
 });
 
-describe('PR #65 review: an actor hands its open hero ticket back to the bus on unmount', () => {
+describe('Test-pass review: an actor hands its open hero ticket back to the bus on unmount', () => {
   it('both actors capture the step\'s bus before requesting and release an open ticket in the cleanup, before unregistering', () => {
     // The bus never expires a ticket (ambient-beats.test.ts): a granted one left by an unmount held
     // every later hero beat `busy` for the rest of the generation.

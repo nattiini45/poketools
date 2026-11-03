@@ -33,7 +33,7 @@ import type { RulesCopyContext } from './types';
  * else null. The Pulse sections ('Aktuelle Etappe' on the plaza, the
  * masthead on the English worlds), the board panels and every rules surface
  * read it, so the best-of on a plaque always belongs to the stage Pulse
- * names. (PR #65 test pass, R10: the rules surfaces fell back to the FIRST
+ * names. (test pass, R10: the rules surfaces fell back to the FIRST
  * stage while the plaza Pulse fell back to the last — a finished league read
  * 'Best-of: 1' from its group stage under 'Aktuelle Etappe: … Playoffs'.)
  */
@@ -103,7 +103,7 @@ function formatName(context: RulesCopyContext, locale: Locale): string {
  * its first stage's) ruleset, else the league's FORMAT — the rules that
  * actually apply, as the plaza's 'Regelwerk' row already does. It used to
  * fall back to an invented 'League Standard' while the hub's Rules tab said
- * 'No ruleset assigned.' (PR #65 test pass, 5A-3).
+ * 'No ruleset assigned.' (test pass, 5A-3).
  */
 export function rulesOfRecordName(rulesetName: string | null, context: RulesCopyContext, locale: Locale = 'en'): string {
   return rulesetName ?? formatName(context, locale);

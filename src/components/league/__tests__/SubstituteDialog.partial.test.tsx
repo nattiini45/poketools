@@ -1,5 +1,5 @@
 /**
- * Telling a failed substitution apply apart (PR #65 review follow-up): an
+ * Telling a failed substitution apply apart (test-pass review follow-up): an
  * apply that handed the group row over and then failed at the enrollment swap
  * leaves a re-checked preview equal to the confirmed one, yet the dialog must
  * still warn that the slot may already be held by the incoming player. The

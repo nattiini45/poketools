@@ -388,7 +388,7 @@ export function focusStepLimit(dt: number): number {
  * frame, which starts from the clamped position and chases the target again.
  * A frame with no time (limit 0: the driver's first frame after an unpark,
  * the capture pin's forced advance) holds `previous` — it never jumps the
- * whole remainder at once (PR #65 review). `out` may alias `target`. Returns
+ * whole remainder at once (test-pass review). `out` may alias `target`. Returns
  * true when it clamped (still lagging).
  */
 export function clampFocusStep(

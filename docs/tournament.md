@@ -22,7 +22,7 @@ src/lib/tournament/
 ├── startup-checklist.ts     # Pure start-up checklist of the round manager (what blocks Generate)
 ├── swiss.ts                 # Swiss pairings
 ├── types.ts                 # Shared tournament engine types
-└── __tests__/
+├── __tests__/
     ├── bracket-propagation.test.ts
     ├── bracket-structure.test.ts
     ├── generate-options.test.ts
@@ -34,6 +34,18 @@ src/lib/tournament/
     ├── standings.test.ts
     ├── startup-checklist.test.ts
     └── swiss.test.ts
+├── best-of.ts  # Best-of values of a match series
+├── byes.ts, scoring-byes.ts  # Round byes and the byes a tournament's standings score
+├── clinch-scenarios.ts  # Playoff clinch and elimination status of each player
+├── evolution-standings.ts, head-to-head.ts  # Evolution Point Buy standings and head-to-head tiebreaker
+├── group-first-half.ts, group-rounds.ts, group-schedule.ts, group-standings.ts  # League groups: first half, rounds, week plan and tables
+├── phase-week-plan.ts  # The planned weeks of a phase whose groups mirror league groups
+├── previous-round-guard.ts  # Refuses legacy elimination generation over unfinished matches
+├── schedule-drift.ts  # Drift guard of the round-robin schedule
+├── season-standings.ts, standings-rules.ts  # Format-aware standings entry point and the scoring rules it follows
+├── seed-errors.ts  # Domain errors of the participant seed update
+├── settings-patch.ts, standalone-lock.ts  # Standalone settings fields and their lock after the start
+└── startup-checklist.server.ts  # The server side of the start-up checklist
 ```
 
 ## Core Functions/Classes
@@ -50,7 +62,7 @@ src/lib/tournament/
     - **Rendering**: `ElimBracketView` (phase page and league hub) always builds the graph with the reset slot and drops it through `unneededResetSlotKeys()`: when the GF went to the WB champion, or when the toggle is off and no reset match exists. A reset match that exists always renders.
   - **DE losers-bracket starts**: keep one seed-ordered participant list. `bracketStructureInputsFromParticipants()` derives `{ participantCount, lbStarterSeeds }` (1-indexed positions). WB is sized by WB starters and uses traditional seeding on that cohort; LB starters play a seeded Losers Round 1 **among themselves** (`buildSeededLosersRound1`, traditional seeding on the LB cohort; an odd starter gets a bye); WB R1 losers drop into Losers Round 2, and later WB rounds' losers drop in every other LB round. A single WB starter auto-advances and the LB starters consolidate alone. Extra LR1 width consolidates back to the standard drop-in width so every WB slot still feeds exactly one LB slot. All-LB rosters fall back to the standard all-WB graph. Every generate/propagate/repair/reset/public-render callsite must use `buildBracketStructureForParticipants()` so the graph stays identical.
   - **DE loss marks**: every double-elimination match card (the tournament phase page and the league hub share `ElimBracketView`) shows each entrant's losses going INTO that match as a small `{n} L` mark (German `{n} N`) with an sr-only "Losses before this match: n". `lossesEnteringMatches()` (`src/components/bracket/entry-losses.ts`) counts a losers-side starter's nominal loss plus the completed matches the player lost earlier in bracket order (round number, then `bracket_pos`; a match's own result never counts), so the Grand Final reads 0 against 1 and the reset 1 against 1. Single-elimination cards carry no mark. Tests: `src/components/bracket/__tests__/entry-losses.test.tsx`.
-  - **Seeding UI**: `SeedingTable` is canonical (including the DE “start in losers” toggle). The PR #54 `SeedingBoard` was retired — see `docs/deprecations.md`.
+  - **Seeding UI**: `SeedingTable` is canonical (including the DE “start in losers” toggle). The retired `SeedingBoard` is gone — see `docs/deprecations.md`.
   - **DB**: `matches (tournament_id, bracket_side, bracket_pos)` is unique when both are set (migration `20260822210000_matches_bracket_slot_unique.sql`).
 - **Propagation**: `finalizeMatchCompletion` surfaces `propagation_failed: true` and audits `match.propagation_failed` when slot materialization fails after the match is already complete; admins can heal via repair-bracket.
 
@@ -109,7 +121,7 @@ League phases advance through `syncStandingsEnrollment()` in `enrollment-sync.ts
 
 ### Seeding
 - **UI**: `SeedingTable` (via `ParticipantManager`) is the only seeding surface. Double-elim phases expose a per-player “start in losers” toggle while `status = 'upcoming'` (locked once rounds exist).
-- **Persistence**: `PATCH /api/tournaments/[id]/participants` accepts `{ seeds: [{ player_id, seed, starting_bracket? }] }` (`seed` is a positive integer or `null`; duplicate non-null seeds are refused with **400** `tournament_seed_duplicate`). The `starting_bracket` column is the data model; the PR #54 board modules were deleted. A successful save is audited as `tournament.seeds.update` (participant and seeded counts); a refused or partly failed save writes no event.
+- **Persistence**: `PATCH /api/tournaments/[id]/participants` accepts `{ seeds: [{ player_id, seed, starting_bracket? }] }` (`seed` is a positive integer or `null`; duplicate non-null seeds are refused with **400** `tournament_seed_duplicate`). The `starting_bracket` column is the data model; the board modules of the retired `SeedingBoard` were deleted. A successful save is audited as `tournament.seeds.update` (participant and seeded counts); a refused or partly failed save writes no event.
 - **The visible order is authoritative**: what the table shows is what Save writes. Dragging, moving up or down, shuffling and auto-seeding renumber every row 1..n by position (a previously unseeded row that is dragged becomes seeded at its position); typing a seed number re-sorts the list when the input is committed (blur or Enter), so list order and numbers never disagree. Duplicates a typed number creates are still reported on Save, never silently renumbered. Clear sends `null` for every row.
 
 ### Start-up checklist

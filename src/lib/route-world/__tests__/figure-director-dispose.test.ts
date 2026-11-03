@@ -1,5 +1,5 @@
 /**
- * PR #65 test-pass follow-ups on the figure director:
+ * Test-pass follow-ups on the figure director:
  *  - `dispose()` detaches the director's roll-call listener from its bus, so
  *    a bus that outlives the director (one handed in via `options.bus`) does
  *    not accumulate listeners across director lifetimes.

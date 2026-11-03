@@ -4,7 +4,7 @@
  *
  *   - A failed tab read is optional to the page: it is logged under its tab
  *     and the panel becomes `{ tab: 'unavailable' }`, so the world, roster,
- *     schedule and rules still render (the PR #65 preflight found any failed
+ *     schedule and rules still render (the preflight found any failed
  *     tab read 500ing the whole league page). The world payload is not
  *     optional: its failure still rejects.
  *   - The phase cards list the members the group tables list (enrolled

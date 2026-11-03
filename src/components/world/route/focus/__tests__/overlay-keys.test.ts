@@ -7,7 +7,7 @@ import { hasOverlayKey, ROSTER_BOARD_VALUE } from '../overlay-keys';
 const HERE = join(fileURLToPath(import.meta.url), '..');
 
 /**
- * PR #63 review (critical) — `OverlaySwitch` picks its content by a search
+ * Route-world review (critical) — `OverlaySwitch` picks its content by a search
  * param value (`?rules=…`, `?team=…`), which is untrusted URL input. The old
  * `value in contents` check also matched prototype-chain keys, so a crafted
  * param (`constructor`, `toString`, `__proto__`) passed membership and handed
@@ -25,7 +25,7 @@ describe('hasOverlayKey — own-property membership for URL-driven overlay keys'
   it('rejects every Object.prototype key a crafted ?param= could carry', () => {
     // Derived, not hand-enumerated: a literal list silently misses engine
     // additions (the four accessor keys were missing) and a security test
-    // whose title overstates its enumeration invites trust (PR #63 review).
+    // whose title overstates its enumeration invites trust (route-world review).
     const prototypeKeys = Object.getOwnPropertyNames(Object.prototype);
     expect(prototypeKeys).toContain('constructor');
     expect(prototypeKeys).toContain('__proto__');

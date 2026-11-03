@@ -15,7 +15,10 @@ src/lib/avatar/
 ├── rate-limit.ts  # Generation rate-limit checks
 ├── renderer.ts  # Layer composition rendering
 ├── showdown-trainers.json  # Showdown trainer presets
-└── transform.ts  # Image transform helpers
+├── transform.ts  # Image transform helpers
+├── showdown-sprite.ts  # Showdown trainer sprites as avatars: the canonical URL parser
+├── thumbnail-path.ts  # Avatar thumbnail naming (client-safe)
+└── thumbnail.ts  # Server-side 256 px WebP thumbnails (sharp)
 ```
 
 ## Core Functions/Classes

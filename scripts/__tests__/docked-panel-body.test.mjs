@@ -1,6 +1,6 @@
 /**
  * The capture harness's docked-panel arm must fail a panel whose body is
- * blank (PR #65 test pass, R4): on the route tier the docked Rulebook opened
+ * blank (test pass, R4): on the route tier the docked Rulebook opened
  * as a bare title bar — the route-live section rule hid every <section> in
  * it — and the arm passed it with `minFont=18px`, the title's own size.
  */

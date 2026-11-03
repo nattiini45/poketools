@@ -1,5 +1,5 @@
 /**
- * Double-elimination loss counts on the match cards (PR #65 test plan 1.1).
+ * Double-elimination loss counts on the match cards (test plan 1.1).
  *
  * A card prints each entrant's losses going INTO that match, not the
  * player's count today: printing today's count would label the Winners Final

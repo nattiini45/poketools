@@ -473,7 +473,7 @@ const dayMaterialTones = new WeakMap<GateTone, GateTone>();
 
 /**
  * The gate's MATERIAL tone: the paint tone at night, the honey day stone by
- * day. Identity-stable per `tone` (PR #65 test pass, R18d): the day branch
+ * day. Identity-stable per `tone` (test pass, R18d): the day branch
  * used to spread a NEW object on every call, so `useGateMaterials`' memo
  * (keyed on it) rebuilt all seven gate materials on every ChallengeGate
  * render. After the reveal the paint sweep no longer patches, so each

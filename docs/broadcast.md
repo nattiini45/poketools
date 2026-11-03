@@ -15,7 +15,21 @@ src/lib/broadcast/
 ├── polling.ts  # Polling utilities
 ├── recap-engine.ts  # Weekly recap composition
 ├── request-guard.ts  # Per-IP limits and query refusal of the public data routes
-└── tracker-reducer.ts  # Live battle tracker state transitions
+├── tracker-reducer.ts  # Live battle tracker state transitions
+├── caster-data.ts  # Fetches the caster data (teams, stats, standings) of a match
+├── channel.ts  # Cast Studio Realtime channel and message types (the browser Supabase exception)
+├── commentary-prompts.ts  # Commentary prompts from caster data and the current game state
+├── manual-result-response.ts  # Reads the body of a manual-result response for the battle tracker
+├── moment-limits.ts  # Bounds on a moment marked in the tracker
+├── momentum-calc.ts  # Momentum score from -100 to +100
+├── overlay-locale.ts  # The language of an OBS overlay
+├── solo-defaults.ts  # Stored placeholder names of solo sessions
+├── standings-impact.ts  # Rank deltas of both outcomes of a match
+├── url-builder.ts  # Overlay type registry and overlay URL builder
+├── use-solo-broadcast.ts  # useSoloBroadcastPoll, the hook the solo overlays share
+├── wiki-overlay-ids.generated.ts  # Generated id lists of the wiki overlays (scripts/generate-wiki-overlay-ids.mjs, never edited by hand)
+├── wiki-overlay-lookup.ts  # The names the wiki overlays accept
+└── win-conditions.ts  # Win conditions of each team from type matchups
 ```
 
 ## Core Functions/Classes
@@ -107,8 +121,8 @@ const next = trackerReducer(createInitialState(match), action);
 ```
 
 ## Testing
-- **Test Files**: No dedicated broadcast unit test file currently
-- **Testing Approach**: Overlay integration + route validation
+- **Test Files**: `src/lib/broadcast/__tests__/` (25 test files), one per helper: the polling stack (`poll-loop.test.tsx`, `poll-schedule.test.ts`, `polling.test.ts`, `polling-hook.test.tsx`, `error-retry.test.ts`, `use-solo-broadcast.test.ts`), the overlay config, language and URL builder (`overlay-config.test.ts`, `overlay-lang-url.test.ts`, `overlay-locale.test.ts`, `url-builder.test.ts`, `wiki-overlay-ids.test.ts`), the tracker and commentary (`tracker-reducer.test.ts`, `commentary-prompts.test.ts`, `caster-data.test.ts`, `momentum-calc.test.ts`, `standings-impact.test.ts`, `win-conditions.test.ts`, `moment-limits.test.ts`, `manual-result-response.test.ts`, `solo-defaults.test.ts`), and `channel.test.ts`, `animations.test.ts`, `draft-replay.test.ts`, `recap-engine.test.ts`, `request-guard.test.ts`.
+- **Testing Approach**: Unit tests of the pure helpers, the reducer and the poll loop; the overlay pages and routes have their own tests next to them.
 
 ## Related Modules
 - [Match Module](./match.md)

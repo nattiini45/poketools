@@ -1,5 +1,5 @@
 /**
- * The substitute route's exact partial signal in the dialog (PR #65 test-pass
+ * The substitute route's exact partial signal in the dialog (test-pass
  * follow-ups, round 3): a failed apply that answered says exactly what it
  * wrote, the warning comes from that signal and survives a failed re-check,
  * and only an unanswered request falls back to inferring it from the

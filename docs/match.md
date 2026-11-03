@@ -9,8 +9,26 @@ src/lib/match/
 ├── aggregation.ts  # Match/team aggregation helpers
 ├── aggregate-queue.ts  # Deferred aggregate processing
 ├── finalize.ts  # Shared completion side effects for manual/cron finalization
-└── public-match.ts  # PublicMatch shape + allowlist mapper (client, cache and public-response boundary)
+├── public-match.ts  # PublicMatch shape + allowlist mapper (client, cache and public-response boundary)
+├── aggregate-rebuild.ts  # Admin aggregate maintenance: drain jobs, rebuild scopes from battle_stats
+├── schedule-aggregate-processing.ts  # Schedules aggregate processing after a write
+├── bulk-actions.ts  # The bulk processor behind POST /api/admin/matches/batch
+├── compare-scheduled-at.ts  # scheduled_at ordering, safe for client and server
+├── epb-matchday.ts  # EPB matchday orchestration: stage recheck, lock, points, snapshots
+├── epb-stage-resolution.ts  # Pure EPB stage-transition resolution
+├── epb-tracker-apply.ts  # Shared EPB tracker apply helpers
+├── evolution-match-evaluator.ts  # The Evolution Point Buy match evaluator
+├── snapshot-lines.ts  # Which point-buy line a match evolution snapshot belongs to
+├── game-change-outcome.ts  # How the admin game UI reports the outcome of a game change
+├── match-children.ts  # Match children cleanup
+├── match-kos.ts  # One player's KO totals across the games of a match
+├── reopen.ts  # Reopening a completed match
+├── result-effects.ts  # The effects of a result: events, recap, AI analysis gate
+├── series-tally.ts  # The series tally checked before completing or disputing a match
+└── social-image-path.ts  # Naming of the match social cards in the social-images bucket
 ```
+
+The Evolution Point Buy files (`epb-*.ts`, `evolution-match-evaluator.ts`, `snapshot-lines.ts`) are described with the format in [`evolution-point-buy.md`](./evolution-point-buy.md).
 
 ## Core Functions/Classes
 
@@ -175,7 +193,7 @@ Since 0.2.3; migration `supabase/migrations/20261020100000_games_replay_hash.sql
 - **One battle, one game.** A game recorded from a Showdown replay stores the replay's hash (`games.replay_hash`, SHA-256 of the canonical battle log, `src/lib/pkmn/replay-identity.ts`) in the insert that records the result. The hash is unique wherever it is set, across all matches and tournaments. A battle already bound to a game is refused with 409 `replay_already_recorded` before anything is written: the pipeline reads first, and `createGame` maps a violation of the unique index `games_replay_hash_key` to the same error, so two concurrent submissions of one battle cannot both land. The per-match URL check (409 `duplicate_replay`) still runs first.
 - **The result comes from the hashed replay.** `recordGameResult` takes a replay result as `{ source: 'ps_replay', replay: BoundReplay, side_player_ids }`. The winner is the player of the side the log's `|win|` line names; the battle stats are the parsed rows of each side. No client-supplied winner or stats reach a replay game. A log that names no winner is 400 `replay_winner_unknown`; a side outside the match is 400 `match_player_not_participant`; both sides on one player is 400 `replay_sides_not_distinct`.
 - **`POST /api/parse-replay`**: the sides come from the PS usernames (the legibility gate: `name_mismatch`, `replay_player_not_in_match`).
-- **Order of checks (parse-replay)**: auth guard, body schema, then the replay reference (parseReplayReference, src/lib/pkmn/replay-reference.ts: a replay.pokemonshowdown.com link or an id such as gen9ou-123; anything else is 400 `replay_url_invalid`), then the match (404 `match_not_found`) and the submitter (403 `match_submit_forbidden`, ssertMayRecordResult), and only then the outbound fetch. An unauthorized caller therefore costs no request to Showdown. A failed fetch is typed per cause and the original error is logged: 404 `replay_not_found`, 502 `replay_fetch_failed`, 504 `replay_fetch_timeout`, 422 `replay_unparseable` (not JSON, no log, or a log the parser rejects). The admin preview and import routes authorize first as well and share the same fetch errors.
+- **Order of checks (parse-replay)**: auth guard, body schema, then the replay reference (parseReplayReference, src/lib/pkmn/replay-reference.ts: a replay.pokemonshowdown.com link or an id such as gen9ou-123; anything else is 400 `replay_url_invalid`), then the match (404 `match_not_found`) and the submitter (403 `match_submit_forbidden`, assertMayRecordResult), and only then the outbound fetch. An unauthorized caller therefore costs no request to Showdown. A failed fetch is typed per cause and the original error is logged: 404 `replay_not_found`, 502 `replay_fetch_failed`, 504 `replay_fetch_timeout`, 422 `replay_unparseable` (not JSON, no log, or a log the parser rejects). The admin preview and import routes authorize first as well and share the same fetch errors.
 - **`POST /api/admin/matches/[id]/replay-preview`**: parses without the gate and returns the stats, side suggestions and `replay_hash`; a battle already recorded is 409 `replay_already_recorded` here already.
 - **`POST /api/admin/matches/[id]/replay-import`**: the body is `{ replay_url, replay_hash, side_player_ids: [p1Player, p2Player] }`. The organizer only assigns the sides (the form shows the replay's winner and stats read-only); the route fetches the replay again and refuses it with 409 `replay_changed_since_preview` when it no longer hashes like the preview. Corrections after the import go through the admin game editor (`/admin/matches/[id]/games/[gid]/edit`), which marks the game `stats_locked`. The audit event `game.import_replay` records the hash, the winner and each side's PS name and player.
 - **Manual results** (`POST /api/manual-result`) carry no replay and no hash.

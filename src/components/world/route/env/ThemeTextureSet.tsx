@@ -83,7 +83,7 @@ export function useThemeTextureSet(role: string, repeat: readonly [number, numbe
   // Every `tiled()` clone is its own GPU texture: dispose the previous set
   // when the memo recomputes (theme/URL/repeat change) and on unmount — the
   // same discipline the sibling `useWorldTextureSet` keeps in
-  // world-textures.ts (PR #63 review).
+  // world-textures.ts (route-world review).
   useEffect(
     () => () => {
       set?.map.dispose();

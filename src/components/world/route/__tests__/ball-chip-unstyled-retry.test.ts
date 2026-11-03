@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Kilo PR #65 (BallLoader chip placement): while the loader's CSS module has
+ * Kilo review (BallLoader chip placement): while the loader's CSS module has
  * not applied (the root is not yet `position: fixed`), the placement pass
  * re-checks every frame only for a bounded number of tries, then at the
  * resize cadence — a stylesheet that never applies must not cost a style

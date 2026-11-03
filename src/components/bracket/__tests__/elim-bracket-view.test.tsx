@@ -119,7 +119,7 @@ function records(matches: MatchWithPlayers[], rounds: Round[]): MatchRecord[] {
 /**
  * The tournament page's inline bracket prep before the extraction, verbatim
  * in substance. One addition since: double elimination cards print each
- * entrant's losses going into the match (PR #65 test plan 1.1, pinned in
+ * entrant's losses going into the match (test plan 1.1, pinned in
  * entry-losses.test.tsx), so the double elimination render passes them too.
  */
 function legacyPageMarkup(

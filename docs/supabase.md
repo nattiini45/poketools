@@ -8,6 +8,12 @@ The Supabase module provides the typed server-side client and table-specific que
 src/lib/supabase/
 ├── client.ts  # Typed service-role client singleton
 ├── realtime-client.ts  # Browser anon client for Cast Studio Realtime broadcasts only
+├── auth-client.ts  # Server-side stateless GoTrue client (anon key)
+├── metering.ts  # Dev-only request meter (SUPABASE_METER=1)
+├── postgrest-filter.ts  # Safe building blocks for string-built PostgREST filters
+├── read-all-pages.ts, read-bounded-pages.ts  # Complete reads under PostgREST max_rows
+├── timeout-fetch.ts  # Request deadline of the server-side Supabase clients
+├── unique-violation.ts  # Matches a Postgres unique violation of one constraint
 └── queries/          # one module per table or feature (see src/lib/supabase/queries/ for the current list)
 ```
 

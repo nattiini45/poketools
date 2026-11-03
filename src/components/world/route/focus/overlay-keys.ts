@@ -7,7 +7,7 @@
  * `record[key]` read) also matches prototype-chain keys, so a crafted param
  * like `?rules=constructor`, `?rules=toString` or `?rules=__proto__` would
  * pass the membership check and hand React a function as a child — a client
- * render crash from a shareable URL (PR #63 review, critical). Only a
+ * render crash from a shareable URL (route-world review, critical). Only a
  * registered OWN key may open an overlay.
  *
  * Extracted as a pure module so the guard is regression-testable without a

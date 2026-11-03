@@ -15,11 +15,11 @@ src/lib/pkmn/
 ├── format-catalog.ts  # The dex-free rule preset catalog (PRESETS, families, generations, tier labels, rule facts); client-safe
 ├── format-id.ts  # The one format-id parser (gen + one digit + tier key: gen91v1 is generation 9)
 ├── clauses.ts  # Clause catalog by id; which clauses are enforced (Species, Item) and which informational
-├── preset-rules(.server).ts  # The rules a preset resolves to (types; per-mod resolution against the dex)
+├── preset-rules.ts, preset-rules.server.ts  # The rules a preset resolves to (types; per-mod resolution against the dex)
 ├── known-ids.server.ts  # Dex id sets per category, generation and universe (the unknown_entry warning)
 ├── seed-format-ids.ts  # The frozen 88 ids POST /api/seed-rulesets seeds
 ├── preset-data/  # Transcribed rule tables, the generated Champions roster, the Smogon tour overlay, pin.ts (data pins and PRESET_RULES_VERSION)
-├── catalog-index(.server).ts  # The entry catalog the Ruleset Studio pickers read (rows as short arrays)
+├── catalog-index.ts, catalog-index.server.ts  # The entry catalog the Ruleset Studio pickers read (rows as short arrays)
 ├── sheet-cells.server.ts  # Icon sheet cell numbers from the installed @pkmn/img
 ├── game-pipeline.ts  # Replay/manual game result pipeline helpers
 ├── german-names.ts  # German → English species name map (incl. import aliases), derived from i18n/data/species.de.json
@@ -41,8 +41,19 @@ src/lib/pkmn/
 ├── threat-list.ts  # Threat list generation helpers
 ├── tiers.ts  # Tier metadata helpers (competitive tiers; not the rating-badge tiers in src/lib/rating/tiers.ts)
 ├── validation.ts  # Team validation helpers
-└── __tests__/
+├── __tests__/
     └── speed-calc.test.ts
+├── archetype.ts  # Team archetype and weather detection
+├── calc-engine.ts, calc-request.ts, calc-route.ts  # Shared core, request contract and request gate of the /api/calc/* routes
+├── replay-reference.ts, replay-species.ts  # Replay id pattern and replay roster dedup
+├── ruleset-preset-catalog.ts  # The preset catalog as the Ruleset Studio reads it
+├── set-bounds.ts  # Keeps a set inside the bounds the team boundaries enforce
+├── species-list.ts  # Format-aware species listing
+├── sprite-style-signin.server.ts  # Sign-in sync of the sprite style
+├── team-constraints.ts  # Client-safe helpers of the optional team-constraints block of a ruleset
+├── team-legality.ts  # The learnset-dependent part of team legality
+├── tier-constants.ts  # Dependency-free tier constants
+└── type-chart.ts  # Static 18-type effectiveness chart
 ```
 
 ## Core Functions/Classes

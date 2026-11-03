@@ -1,6 +1,6 @@
 # Replays
 
-> Spoiler-free public replay library at `/replays`. Shipped in PR #39
+> Spoiler-free public replay library at `/replays`. Shipped in 2026-08
 > (commit `fc844aa`). Route contract: [`poketools-spec.md`](./poketools-spec.md) §5.
 
 ## Overview

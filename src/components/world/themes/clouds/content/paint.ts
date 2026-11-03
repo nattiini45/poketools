@@ -225,7 +225,7 @@ const RULESET_MASTHEAD_PX = [96, 80, 64] as const;
  * frame (`maxW`): at 96 px when it fits — exactly the old call, so every
  * name that fit paints byte-identically — else at the first smaller step
  * that fits, else ellipsized at the smallest. The old unbounded call cut a
- * 20-odd-character name at both texture edges (PR #65 test pass, 5A-7).
+ * 20-odd-character name at both texture edges (test pass, 5A-7).
  */
 function fillRulesetMasthead(
   ctx: CanvasRenderingContext2D,

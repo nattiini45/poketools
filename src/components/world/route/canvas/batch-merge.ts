@@ -198,7 +198,7 @@ export interface BatchRecord {
    * True when `merged.geometry` was CREATED by the batcher (a mergeGeometries
    * output) and may be disposed at teardown. False for instanced families:
    * their merged mesh deliberately shares the source geometry with the
-   * still-mounted originals (PR #63 review — disposing it stripped the GPU
+   * still-mounted originals (route-world review — disposing it stripped the GPU
    * buffers out from under the re-shown originals).
    */
   ownsGeometry: boolean;

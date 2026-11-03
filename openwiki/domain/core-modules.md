@@ -88,7 +88,7 @@ Three subsystems:
 
 Publishing to X (Twitter), Threads, and Bluesky from match results and tournament events.
 
-- **Credential encryption:** `src/lib/social/encryption.ts` — `encryptJson()` / `decryptJson()` with `SOCIAL_INTEGRATION_ENCRYPTION_KEY`
+- **Credential encryption:** `src/lib/social/crypto.ts` — `encryptJson()` / `decryptJson()` with `SOCIAL_INTEGRATION_ENCRYPTION_KEY`
 - **API routes:** `/api/social-integrations` — CRUD for per-player platform credentials
 - **Publishing:** Fire-and-forget from match completion workflows (no `await` on Discord/social sends)
 
@@ -116,7 +116,7 @@ Webhook-based event fan-out to configured Discord channels.
 `src/lib/api/pagination.ts` — `parsePagination(searchParams, maxLimit)` — clamps limit to `[1, maxLimit]` with sensible defaults.
 
 ### Input Validation
-Manual, domain-specific. No centralized Zod/Joi. Patterns:
+Request-body schemas are Zod, in `src/lib/validation/schemas.ts` ([`docs/validation.md`](../../docs/validation.md)); routes without one validate by hand. Patterns:
 - Whitelist enums with `VALID_*` constants and `.includes()`
 - Length/bounds checks on strings and numbers
 - `parseCreateBody()` style helpers for complex payloads
@@ -126,5 +126,5 @@ Manual, domain-specific. No centralized Zod/Joi. Patterns:
 ### LRU Cache
 `src/lib/utils/lru-cache.ts` — TTL-based LRU cache used by the AI agent tool executor (5-minute result cache). Distinguishes cached `undefined` from cache miss via `getEntry()`.
 
-### Date Utilities
-`src/lib/utils/date.ts` — `formatDateTime`, `formatDateTimeOrNull`, `formatDate`, `formatDateOnly`, `formatTimeAgo`.
+### Dates and numbers
+Rendered through the i18n formatter (`src/i18n/format.ts`, `useFormatter()`, `<LocalTime>`); `src/lib/utils` holds no date helpers.

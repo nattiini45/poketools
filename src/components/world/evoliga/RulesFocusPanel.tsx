@@ -167,7 +167,7 @@ export default function RulesFocusPanel({
  * 'Regelwerk — Format'): the format rows, the format row selected. Tafel II
  * (`right`, 'Regelwerk — Klauseln'): the clause rows (Klauseln, Verbote,
  * Eigene Regeln — 'im Regeln-Tab', or 'nicht hinterlegt' without a ruleset),
- * the Klauseln row selected. (PR #65 test pass, R11: both plaques opened the
+ * the Klauseln row selected. (test pass, R11: both plaques opened the
  * format page, under a 'Klauseln' title.) Either way the sentence and the
  * link to the Regeln tab close the page.
  */

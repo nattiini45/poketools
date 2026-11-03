@@ -6,7 +6,8 @@ The Profile module composes full player profile views by aggregating player, mat
 ## File Structure
 ```
 src/lib/profile/
-└── compose.ts  # Player profile composition logic
+├── compose.ts  # Player profile composition logic
+└── redact.ts  # The player row a visitor may see: the PublicPlayer profile card
 ```
 
 ## Core Functions/Classes
@@ -44,8 +45,8 @@ const profile = await composePlayerProfile(playerId);
 ```
 
 ## Testing
-- **Test Files**: No dedicated `src/lib/profile/__tests__` file currently
-- **Testing Approach**: API/profile page integration verification
+- **Test Files**: `src/lib/profile/__tests__/compose.test.ts` and `redact.test.ts` (the profile card allowlist)
+- **Testing Approach**: Unit tests of the composition and redaction; the profile pages and API routes have route and page tests next to them.
 
 ## Related Modules
 - [Gamification Module](./gamification.md)

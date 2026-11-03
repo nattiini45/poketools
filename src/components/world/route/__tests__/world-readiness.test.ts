@@ -25,7 +25,7 @@ import {
 } from '../world-readiness';
 
 /**
- * PR #63 review (critical) — the retry/theme-remount race. The provider's
+ * Route-world review (critical) — the retry/theme-remount race. The provider's
  * (theme, tier) effect and the retry round trip used to bump the generation
  * TWICE for one scene attempt, while the canvas reporter captured its
  * generation number once; the settle callback then refused
@@ -66,7 +66,7 @@ describe('world-readiness — generation lifecycle', () => {
     expect(currentSceneGeneration()).not.toBe(before + 1);
   });
 
-  it('holds ONE generation across the retry round trip (regression: PR #63)', () => {
+  it('holds ONE generation across the retry round trip (regression: the route-world review)', () => {
     // First entry: the provider effect begins the generation.
     beginSceneGeneration('plaza');
     // The scene fails; the degrade flips the tier to Lite and the effect resets.
@@ -126,7 +126,7 @@ describe('world-readiness — generation lifecycle', () => {
   it('notifies on a mid-load DIFFERENT-theme bump — the phase is unchanged but the generation moved', () => {
     // The readiness deadline in WorldStateProvider re-arms on the generation,
     // so this notify is what stops a theme switch from inheriting the
-    // abandoned attempt's remaining 10 s budget (PR #63 review). Without it
+    // abandoned attempt's remaining 10 s budget (route-world review). Without it
     // the store stays silent and the old deadline kills the healthy new
     // scene.
     const seen: ScenePhase[] = [];

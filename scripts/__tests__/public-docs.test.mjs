@@ -374,3 +374,314 @@ describe('public docs (owner rulings)', () => {
     expect(broken).toEqual([]);
   });
 });
+
+// ── Source paths cited by the docs ───────────────────────────────────────────────────────────────
+
+/**
+ * Docs that may name paths that no longer exist, each with its reason. Anything else that cites
+ * a missing `src/...` path fails.
+ */
+export const DEAD_PATH_EXEMPT = [
+  { match: (f) => f.startsWith('docs/archive/'), reason: 'archived records describe the tree as it was' },
+  { match: (f) => f.startsWith('docs/superpowers/'), reason: 'dated plans and specs describe the tree as it was' },
+  { match: (f) => f === 'docs/deprecations.md', reason: 'its job is to name files that were deleted' },
+  { match: (f) => f === 'docs/teambuilder-reference.md', reason: 'describes the removed /teambuilder route; rewrite tracked separately' },
+  { match: (f) => f === 'docs/teambuilder-broadcast.md', reason: 'describes the removed /teambuilder route; rewrite tracked separately' },
+];
+
+/** Backticked `src/...` paths of a markdown text with their 1-based line numbers. */
+export function citedSrcPaths(text) {
+  const found = [];
+  text.split('\n').forEach((line, i) => {
+    for (const m of line.matchAll(/`(src\/[^`\s]+)`/g)) {
+      const path = m[1].replace(/(?::\d+(?:-\d+)?|#L\d+(?:-L\d+)?)$/, '').replace(/[.,;:]+$/, '');
+      // `a|b` alternations, placeholders and ellipses name no single path.
+      if (/[|<>{}$…]|\.\.\./.test(path)) continue;
+      found.push({ line: i + 1, path });
+    }
+  });
+  return found;
+}
+
+/** The gitignored companion overlay: its files exist on a maintainer's machine only, and the docs name them on purpose. */
+export const OVERLAY_PATH_PREFIX = 'src/format-packs/private/';
+
+/** A cited path resolves to a file or directory; a glob resolves when the directory before its first star does. */
+export function srcPathExists(path, exists = (p) => existsSync(join(REPO_ROOT, p))) {
+  if (path.startsWith(OVERLAY_PATH_PREFIX)) return true;
+  const star = path.indexOf('*');
+  if (star < 0) return exists(path.replace(/\/+$/, ''));
+  const dir = path.slice(0, star).replace(/[^/]*$/, '').replace(/\/+$/, '');
+  return dir === '' || exists(dir);
+}
+
+const citingDocs = () =>
+  publicFiles('docs', 'openwiki', ':(glob)*.md', ':(glob)**/AGENTS.md').filter(
+    (f) =>
+      f.endsWith('.md') &&
+      (f.startsWith('docs/') || f.startsWith('openwiki/') || /(^|\/)AGENTS\.md$/.test(f) || ['CONTRIBUTING.md', 'README.md'].includes(f)) &&
+      !DEAD_PATH_EXEMPT.some((e) => e.match(f))
+  );
+
+describe('docs hold no control characters', () => {
+  // A "\a" in a replacement string (a "\a" escape turned into BEL) corrupts a link label or a name.
+  const CONTROL = {
+    test: (text) => [...text].some((ch) => {
+      const code = ch.charCodeAt(0);
+      return (code < 32 && ![9, 10, 13].includes(code)) || code === 127;
+    }),
+  };
+
+  it('no markdown file under docs/, openwiki/ or the root carries one', () => {
+    const bad = publicFiles('docs', 'openwiki', ':(glob)*.md', ':(glob)**/AGENTS.md')
+      .filter((f) => f.endsWith('.md') && CONTROL.test(read(f)));
+    expect(bad).toEqual([]);
+  });
+
+  it('flags a planted BEL character', () => {
+    expect(CONTROL.test('[\u0007i-agent.md](./ai-agent.md)')).toBe(true);
+    expect(CONTROL.test('line one\r\nline two\tcolumn')).toBe(false);
+  });
+});
+describe('docs cite source paths that exist', () => {
+  it('scans the canonical instruction files and the module docs', () => {
+    const docs = citingDocs();
+    for (const f of ['AGENTS.md', 'README.md', 'CONTRIBUTING.md', 'docs/utils.md', 'openwiki/domain/core-modules.md']) {
+      expect(docs).toContain(f);
+    }
+    expect(docs).not.toContain('docs/deprecations.md');
+  });
+
+  it('every backticked src/ path in a live doc resolves', () => {
+    const dead = [];
+    for (const f of citingDocs()) {
+      for (const { line, path } of citedSrcPaths(read(f))) if (!srcPathExists(path)) dead.push(`${f}:${line} ${path}`);
+    }
+    expect(dead).toEqual([]);
+  });
+
+  it('fails on a path that was deleted (a planted date.ts), and ignores :line suffixes and globs', () => {
+    const planted = citedSrcPaths('see `src/lib/utils/date.ts` and `src/lib/utils/cn.ts:12` and `src/lib/utils/*.ts`');
+    expect(planted.map((p) => p.path)).toEqual(['src/lib/utils/date.ts', 'src/lib/utils/cn.ts', 'src/lib/utils/*.ts']);
+    expect(planted.filter((p) => !srcPathExists(p.path)).map((p) => p.path)).toEqual(['src/lib/utils/date.ts']);
+  });
+
+  it('accepts a path of the private overlay, which a public checkout does not hold', () => {
+    expect(srcPathExists('src/format-packs/private/index.ts', () => false)).toBe(true);
+    expect(srcPathExists('src/format-packs/example-gone/index.ts', () => false)).toBe(false);
+  });
+
+  it('keeps every exemption reasoned', () => {
+    expect(DEAD_PATH_EXEMPT.map((e) => e.reason).every((r) => r.length > 10)).toBe(true);
+    expect(DEAD_PATH_EXEMPT).toHaveLength(5);
+  });
+});
+
+// ── Feature-flag registry ────────────────────────────────────────────────────────────────────────
+
+/** `NEXT_PUBLIC_*` keys a flag module reads from `process.env`. */
+export function flagKeys(source) {
+  return [...new Set([...source.matchAll(/process\.env\.(NEXT_PUBLIC_[A-Z0-9_]+)/g)].map((m) => m[1]))].sort();
+}
+
+/** Flag keys that open a row of the `## Flags` table. */
+export function flagRows(doc) {
+  const rows = section(doc, '## Flags')
+    .split('\n')
+    .map((l) => l.match(/^\|\s*`(NEXT_PUBLIC_[A-Z0-9_]+)`/))
+    .filter(Boolean)
+    .map((m) => m[1]);
+  return [...new Set(rows)].sort();
+}
+
+describe('docs/feature-flags.md', () => {
+  const code = flagKeys(read('src/lib/feature-flags.ts'));
+  const rows = flagRows(read('docs/feature-flags.md'));
+
+  it('has a row for every flag of src/lib/feature-flags.ts and none for a flag it does not define', () => {
+    expect(code.length).toBeGreaterThan(0);
+    expect(rows).toEqual(code);
+  });
+
+  it('every flag is an .env.example key', () => {
+    const keys = new Set([...read('.env.example').matchAll(/^#?\s*([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]));
+    expect(code.filter((k) => !keys.has(k))).toEqual([]);
+  });
+
+  it('notices a flag that was added to the code without a row', () => {
+    const planted = flagKeys(`${read('src/lib/feature-flags.ts')}\nexport const ZZ = process.env.NEXT_PUBLIC_ZZ_TEST === 'true';`);
+    expect(planted).not.toEqual(rows);
+    expect(planted).toContain('NEXT_PUBLIC_ZZ_TEST');
+  });
+});
+
+// ── Module doc trees and test-file claims ────────────────────────────────────────────────────────
+
+/** The first fenced block under `## File Structure`, or null. */
+export function fileStructureBlock(doc) {
+  let body;
+  try {
+    body = section(doc, '## File Structure');
+  } catch {
+    return null;
+  }
+  return body.match(/```[a-z]*\n([\s\S]*?)```/)?.[1] ?? null;
+}
+
+/** Modules whose trees a doc owns when its name is not the module's: the ruleset doc covers both halves of the ruleset code. */
+const DOC_MODULES = { 'ruleset-studio': ['ruleset-kit', 'ruleset-studio'] };
+
+/** Directory roots of a tree: lines that start at column 0 with `src/lib/<module>/` and name no file. */
+export function treeRoots(block) {
+  return block
+    .split('\n')
+    .map((l) => l.match(/^src\/lib\/([\w-]+)\/?(?:\s+.*)?$/)?.[1])
+    .filter(Boolean);
+}
+
+/** The modules a doc is answerable for: its own name, or the ones DOC_MODULES lists, when its tree has their roots. */
+export function ownedModules(docName, block) {
+  const roots = new Set(treeRoots(block));
+  return (DOC_MODULES[docName] ?? [docName]).filter((m) => roots.has(m));
+}
+
+const globToRegExp = (g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[\\w.-]*')}$`);
+
+/** Top-level files a tree names, directly or through a `*` pattern (`epb-*.ts`), as matchers. */
+export function treeMatchers(block) {
+  const tokens = block.match(/[\w.*-]*[\w*]\.(?:tsx?|mjs)\b/g) ?? [];
+  return tokens.map(globToRegExp);
+}
+
+export function uncoveredFiles(block, files) {
+  const matchers = treeMatchers(block);
+  return files.filter((f) => !matchers.some((re) => re.test(f)));
+}
+
+const topLevelFiles = (name) =>
+  publicFiles(`src/lib/${name}`)
+    .filter((f) => f.split('/').length === 4 && /\.tsx?$/.test(f))
+    .map((f) => f.split('/').pop());
+
+const testFilesIn = (dir) =>
+  publicFiles(dir).filter((f) => posix.dirname(f) === dir && /\.test\.(tsx?|mjs)$/.test(f));
+
+describe('module docs: file structure trees', () => {
+  const moduleDocs = publicFiles('docs')
+    .filter((f) => /^docs\/[^/]+\.md$/.test(f))
+    .map((f) => {
+      const block = fileStructureBlock(read(f));
+      return { f, block, modules: block ? ownedModules(posix.basename(f, '.md'), block) : [] };
+    })
+    .filter(({ modules }) => modules.length > 0);
+
+  it('finds the module docs', () => {
+    const names = moduleDocs.map(({ f }) => f);
+    for (const f of ['docs/ai.md', 'docs/admin.md', 'docs/auth.md', 'docs/draft.md', 'docs/match.md', 'docs/profile.md', 'docs/ruleset-studio.md', 'docs/utils.md']) {
+      expect(names).toContain(f);
+    }
+  });
+
+  it('names every top-level file of its module, directly or through a pattern', () => {
+    const missing = [];
+    for (const { f, block, modules } of moduleDocs) {
+      for (const name of modules) {
+        for (const file of uncoveredFiles(block, topLevelFiles(name))) missing.push(`${f}: src/lib/${name}/${file}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('notices a new top-level file that no tree line covers (a planted zz-scratch.ts)', () => {
+    const profile = fileStructureBlock(read('docs/profile.md'));
+    expect(uncoveredFiles(profile, [...topLevelFiles('profile'), 'zz-scratch.ts'])).toEqual(['zz-scratch.ts']);
+    expect(uncoveredFiles('src/lib/x/\n├── epb-*.ts  # EPB\n└── a.ts', ['epb-matchday.ts', 'a.ts', 'b.ts'])).toEqual(['b.ts']);
+  });
+});
+/** Lines that say a module has no dedicated test directory, with the module the doc describes. */
+export function noDedicatedClaims(doc, docName = '') {
+  const block = fileStructureBlock(doc);
+  const owner = block ? (ownedModules(docName, block)[0] ?? null) : null;
+  return doc
+    .split('\n')
+    .map((line, i) => ({ line: i + 1, text: line, module: owner }))
+    .filter((c) => /no dedicated/i.test(c.text));
+}
+
+describe('module docs: test-file claims', () => {
+  const docs = publicFiles('docs', 'openwiki').filter((f) => f.endsWith('.md') && !f.startsWith('docs/archive/') && !f.startsWith('docs/superpowers/'));
+
+  it('never says a module has no dedicated tests while its __tests__ directory is populated', () => {
+    const stale = [];
+    for (const f of docs) {
+      for (const c of noDedicatedClaims(read(f), posix.basename(f, '.md'))) {
+        const cited = c.text.match(/`(src\/lib\/[\w-]+\/__tests__)\/?`/)?.[1];
+        const dir = cited ?? (c.module ? `src/lib/${c.module}/__tests__` : null);
+        if (dir && testFilesIn(dir).length > 0) stale.push(`${f}:${c.line}`);
+      }
+    }
+    expect(stale).toEqual([]);
+  });
+
+  it('notices the claim when it is planted in a module doc', () => {
+    const doc = '# Profile\n\n## File Structure\n```\nsrc/lib/profile/\n└── a.ts\n```\n\n- **Test Files**: No dedicated test files; see `__tests__`.\n';
+    expect(noDedicatedClaims(doc, 'profile')).toHaveLength(1);
+    expect(noDedicatedClaims(doc, 'profile')[0].module).toBe('profile');
+    expect(testFilesIn('src/lib/profile/__tests__').length).toBeGreaterThan(0);
+  });
+
+  it('every "(N test files)" count after a __tests__ path equals the files in that directory', () => {
+    const wrong = [];
+    for (const f of docs) {
+      for (const m of read(f).matchAll(/`(src\/[\w\-/[\]]+\/__tests__)\/?`\s*\((\d+) test files?\b/g)) {
+        const actual = testFilesIn(m[1]).length;
+        if (actual !== Number(m[2])) wrong.push(`${f}: ${m[1]} says ${m[2]}, has ${actual}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+});
+
+// ── Validation catalogue ─────────────────────────────────────────────────────────────────────────
+
+/** Exported `z.enum` schemas of a schemas source, and those inside its Database Enums block. */
+export function enumSchemas(source) {
+  const all = [...source.matchAll(/^export const (\w+Schema) = z\.enum\(/gm)].map((m) => m[1]);
+  const start = source.indexOf('// ─── Database Enums');
+  const end = source.indexOf('// ─── Domain Enums');
+  const block = start >= 0 && end > start ? source.slice(start, end) : '';
+  const database = [...block.matchAll(/^export const (\w+Schema) = z\.enum\(/gm)].map((m) => m[1]);
+  return { all, database };
+}
+
+describe('docs/validation.md', () => {
+  const schemas = enumSchemas(read('src/lib/validation/schemas.ts'));
+  const doc = read('docs/validation.md');
+  const rowOf = (name) => doc.split('\n').find((l) => l.startsWith(`| \`${name}\` |`));
+
+  it('lists every database-enum schema in its catalogue table', () => {
+    expect(schemas.database).toContain('draftPickOrderSchema');
+    expect(schemas.database.filter((n) => !rowOf(n))).toEqual([]);
+  });
+
+  it('names every exported enum schema somewhere', () => {
+    expect(schemas.all.filter((n) => !doc.includes(`\`${n}\``))).toEqual([]);
+  });
+
+  it('notices a new enum schema that the doc does not name (a planted zzTestSchema)', () => {
+    const planted = enumSchemas(`${read('src/lib/validation/schemas.ts')}\nexport const zzTestSchema = z.enum(['a', 'b']);\n`);
+    expect(planted.all.filter((n) => !doc.includes(`\`${n}\``))).toEqual(['zzTestSchema']);
+  });
+
+  it('every migration the catalogue cites exists', () => {
+    const missing = [...doc.matchAll(/`(\d{14}_[\w]+\.sql)`/g)].map((m) => m[1]).filter((m) => !existsSync(join(REPO_ROOT, 'supabase/migrations', m)));
+    expect(missing).toEqual([]);
+  });
+
+  it('its Testing section names every test file of the module, and the count it states', () => {
+    const testing = section(doc, '## Testing');
+    const actual = testFilesIn('src/lib/validation/__tests__').map((f) => posix.basename(f));
+    expect(actual.filter((n) => !testing.includes(`\`${n}\``))).toEqual([]);
+    expect(testing).toContain(`the ${actual.length} files of`);
+  });
+});

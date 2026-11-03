@@ -149,7 +149,7 @@ export function rulesNoneNote(locale: Locale): string {
  * With no ruleset (neither the season nor its first stage names one — the
  * hub reads the same fallback and shows 'Kein Regelwerk zugewiesen.') the
  * clause rows say so ('nicht hinterlegt') instead of pointing at a tab that
- * lists none (PR #65 test pass, 5B-2). Same rows, so the layout is unchanged.
+ * lists none (test pass, 5B-2). Same rows, so the layout is unchanged.
  */
 function formatRuleSet(rulesetName: string | null, formatLabel: string, bestOf: number | null, locale: Locale): RuleSet {
   const t = paintT(locale);
@@ -480,7 +480,7 @@ export function wrapTwoLines(ctx: CanvasRenderingContext2D, text: string, max: n
  * Smallest px a plaque row value shrinks to on one line. Below it a value
  * (a long ruleset name on non-EPB Tafel I) wraps to two lines at this size
  * instead — the old 12 px floor left it illegible or, past ~47 characters,
- * running over its label (PR #65 test pass, 5B-3).
+ * running over its label (test pass, 5B-3).
  */
 export const PLAQUE_VALUE_MIN_PX = 22;
 

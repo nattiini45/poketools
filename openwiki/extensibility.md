@@ -13,14 +13,14 @@ Runtime gates defined in `src/lib/feature-flags.ts`. All flags are `NEXT_PUBLIC_
 | `NEXT_PUBLIC_AGENT_POST_MATCH` | `false` | Routes post-match analysis through AI agent |
 | `NEXT_PUBLIC_AGENT_MATCH_ANALYSIS` | `false` | Routes scouting card through AI agent |
 | `NEXT_PUBLIC_ENABLE_KALE_CABBAGE` | `false` | Legacy Kale report testing |
+| `NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT` | `false` | Shows the Admin Assistant UI (the server switch `ADMIN_AGENT_ENABLED` is the real gate) |
 | `NEXT_PUBLIC_PWA_ENABLED` | `false` | PWA installable shell (`ENABLE_PWA`): service worker with an offline page, no cached pages |
 
 ### Feature flag pattern
 ```typescript
 // src/lib/feature-flags.ts
-export function isAgentPostMatchEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_AGENT_POST_MATCH === 'true';
-}
+export const ENABLE_AGENT_POST_MATCH =
+  process.env.NEXT_PUBLIC_AGENT_POST_MATCH === 'true';
 ```
 
 Use in API routes and components to gate new behavior. Always keep legacy paths as rollback until the flag default flips and hard-removal is approved.

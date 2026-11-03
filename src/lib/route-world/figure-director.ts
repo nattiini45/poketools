@@ -428,7 +428,7 @@ export interface FigureDirector {
    * Releases what the director holds on things that can outlive it: today its
    * roll-call listener on `bus` (a bus passed in `options.bus` may outlive the
    * director). Idempotent; the director is not stepped after it. (Additive to
-   * the frozen interface, PR #65 test-pass follow-up.)
+   * the frozen interface, test-pass follow-up.)
    */
   dispose(): void;
 }

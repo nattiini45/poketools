@@ -126,7 +126,7 @@ function drainOne(): void {
     try {
       rest = job.run();
     } catch (error) {
-      // Logged in every build (PR #65 review): a failed job never publishes
+      // Logged in every build (test-pass review): a failed job never publishes
       // its result, so a face whose residency waits on it stays pending and
       // the D23 stall detector resolves the load to Lite. This line is the
       // production record of why.

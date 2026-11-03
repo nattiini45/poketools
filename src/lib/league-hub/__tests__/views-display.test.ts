@@ -1,5 +1,5 @@
 /**
- * League hub view builders added after the PR #65 test pass:
+ * League hub view builders added after the test pass:
  *
  *   - displayed round and phase statuses: the stored status, unless the
  *     matches prove the round or phase further along (a finished playoff

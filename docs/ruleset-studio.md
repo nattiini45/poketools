@@ -24,15 +24,19 @@ src/lib/ruleset-kit/              Pure, client-safe ruleset logic (the "kit")
 ├── changes.ts / describe.ts      Counts against the base ("+3 banned"), the change list, plain-sentence description
 ├── overlay.ts                    "Add Smogon tour bans": applyTourOverlay
 ├── resolved.ts / legacy.ts       Strict reader of the stored resolved column; the flat legacy builder shape as a document
+├── client.ts / index.ts          The client-safe barrel (types, limits, validator) and the full kit barrel
 └── limits.ts                     3000 ids per list, 64-character ids, 256 KiB document
 
 src/lib/ruleset-studio/           Server orchestration and rules around the library
 ├── access.ts / guards.ts         Who may do what; the live route guards (requireRulesetViewer / requireRulesetOwner)
 ├── gate.ts                       Live gate of the /admin/rulesets/[id] pages
 ├── library.ts / materialise.ts   Create, fork, save draft, publish, visibility, delete; the rulesets behind a format's preset stages
+├── document.ts / library-types.ts  New documents (blank skeleton, from a catalog preset); the types of definitions, versions and library API answers
+├── compile.server.ts / describe.server.ts  The compile and the rules text with the data only the server has (dex names, catalog ids)
+├── seed-standard.ts              The standard site rulesets: one gallery definition per standard Smogon format
 ├── pins.ts / pin-change.ts       listUsage, movePins (compare-and-set), the check every ruleset_id change runs
 ├── pin-impact.server.ts          How many submitted teams a pin move would invalidate
-├── pin-info(.server).ts          What a league shows about its pin: the version, a newer one, the change counts
+├── pin-info.ts / pin-info.server.ts  What a league shows about its pin: the version, a newer one, the change counts
 ├── staleness.ts                  isCatalogStale: the version was computed from older catalog data than this build has
 ├── version-changes.server.ts     What each recent version changed against the one before
 ├── exposure.ts                   Reading a version by an id nobody vouched for (public API, free validator, AI tools)

@@ -7,7 +7,8 @@ The UI Tables module provides the shared primitives for client-side table sortin
 ```
 src/lib/ui/
 ├── table-params.ts  # Pure table param/sort helpers (page sizes, sort cycle, comparator)
-└── use-client-table.ts  # Client-side sortable + paginated table hook
+├── use-client-table.ts  # Client-side sortable + paginated table hook
+└── main-content.ts  # The id of every layout's main element, the skip link target
 ```
 
 ## Core Functions/Classes

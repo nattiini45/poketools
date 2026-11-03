@@ -326,7 +326,7 @@ describe('portrait focus (W6 round 3: no whip, no dive under the floor)', () => 
     expect(far.x / far.y).toBeCloseTo(0.75, 9);
   });
 
-  it('a frame with no time (dt 0, negative or NaN) holds the rendered position, never snaps to the target (PR #65 review)', () => {
+  it('a frame with no time (dt 0, negative or NaN) holds the rendered position, never snaps to the target (test-pass review)', () => {
     // dt 0 is a real frame: the frame-cap driver's first frame after an unpark, the capture pin's advance.
     for (const dt of [0, -1 / 60, Number.NaN]) {
       expect(focusStepLimit(dt), String(dt)).toBe(0);

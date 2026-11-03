@@ -761,7 +761,7 @@ export const PANEL_MIN_FONT_PX = 14;
  * rendered text inside it is under 14 px, the panel box leaves the viewport,
  * or its BODY (everything but the title bar) renders no text at all.
  *
- * The body check (PR #65 test pass, R4): the route-live section rule hid the
+ * The body check (test pass, R4): the route-live section rule hid the
  * <section>s of the docked rulebook, so the panel opened as a bare title bar
  * — the title's 18 px was the smallest visible text and the arm passed.
  * A read without `bodyTextNodes` (an older sidecar) is not judged on it.

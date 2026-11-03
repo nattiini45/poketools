@@ -30,7 +30,7 @@ interface WorldNavProps {
  * Map the conductor's active station onto the nav's OWN section list. The two
  * lists can disagree — the default world drops content-less sections, and the
  * tournament sections layout anchors panels that are not world stations — so
- * the raw `activeIndex` would highlight the wrong chip (PR #63 review). Walks
+ * the raw `activeIndex` would highlight the wrong chip (route-world review). Walks
  * back to the nearest station the nav actually renders; -1 when it renders
  * none of them (no highlight beats a wrong one).
  */

@@ -8,9 +8,17 @@ Feature flags are centralized in `src/lib/feature-flags.ts`. Public flags use th
 | Flag | Default | Purpose | Status |
 |------|---------|---------|--------|
 | `NEXT_PUBLIC_ENABLE_KALE_CABBAGE` | `false` | Shows and triggers legacy Kale Cabbage tournament report surfaces | Soft-deprecated |
+| `NEXT_PUBLIC_AGENT_MATCH_ANALYSIS` | `false` | Routes the scouting card through the tool-driven agent endpoint `/api/ai/agent/analyze-match` (`opponent_scout`). The legacy `/api/ai/match-prep-analysis` route stays the rollback ([`ai-agent.md`](./ai-agent.md), [`deprecations.md`](./deprecations.md)) | Rollout |
+| `NEXT_PUBLIC_AGENT_POST_MATCH` | `false` | Routes the post-match recap card through the same endpoint (`post_match`). The legacy `/api/ai/match-analysis` route stays the rollback; it has its own flag so the two cards cut over independently ([`ai-agent.md`](./ai-agent.md), [`deprecations.md`](./deprecations.md)) | Rollout |
 | `NEXT_PUBLIC_PWA_ENABLED` | `false` | Enables the offline shell: service worker registration (`/sw.js?v=<build id>`), the install prompt. The only read is `ENABLE_PWA` in `src/lib/feature-flags.ts`. The worker never stores a page (README, "PWA") | Active |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (+ `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) | unset | Web Push for draft turn alerts: all three set and valid enables it, otherwise the server sends nothing and the draft room hides the push control ([`push.md`](./push.md)) | Active |
 | `NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT` | `false` | Shows the Admin Assistant UI (admin nav item; the drawer and `/admin/assistant` as they ship). UI only: the server switch `ADMIN_AGENT_ENABLED` and the route guards are the real gate | Planned (P0 flag) |
+
+## Related switches
+Not flags of `src/lib/feature-flags.ts`:
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (+ `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) | unset | Web Push for draft turn alerts: all three set and valid enables it, otherwise the server sends nothing and the draft room hides the push control ([`push.md`](./push.md)) |
 
 ## Admin Assistant
 The assistant (spec section 18, `docs/poketools-spec.md`) is off unless both switches are set, and every setting fails closed. Only `NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT` lives in `src/lib/feature-flags.ts`; the server settings are parsed in `src/lib/ai/admin-agent/env.ts` (`parseAdminAgentEnv`), the nav item is shown by `agentEnabledFor` in the admin layout, and `src/instrumentation.ts` runs `assertAdminAgentBootEnv` beside `assertBootEnv`.

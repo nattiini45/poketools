@@ -34,7 +34,7 @@ export const PLAZA = {
  * pulseBoard — so any resurfaced legacy import would have compiled and
  * silently aimed the camera at the wrong anchor. Nothing in the repo
  * imported it; a resurfaced import now fails the type check instead, which
- * is the point — PR #63 review.)
+ * is the point — route-world review.)
  */
 export const FURNITURE: Record<
   'desk' | 'pulseBoard' | 'scheduleBoard' | 'statues' | 'gate' | 'tower',

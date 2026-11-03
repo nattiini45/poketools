@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 
 /**
- * Kilo PR #65 (QualityGovernor): the step's `Material.prototype.dispose`
+ * Kilo review (QualityGovernor): the step's `Material.prototype.dispose`
  * capture is bounded. A step above the floor used to leave the page-wide
  * patch on until the canvas unmounted, so every later disposal on the page
  * (theme-swap releases, other canvases) was swallowed for the rest of the
@@ -111,7 +111,7 @@ afterEach(() => {
   governor.releaseDataTextureDisposals();
 });
 
-describe('governor step: the material-dispose capture is bounded (Kilo PR #65)', () => {
+describe('governor step: the material-dispose capture is bounded (Kilo review)', () => {
   it('a step above the floor stops capturing after the hold frames, but keeps what it captured', () => {
     const log: string[] = [];
     render(0);

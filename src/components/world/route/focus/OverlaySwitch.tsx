@@ -47,7 +47,7 @@ export default function OverlaySwitch({
   // Own-property check, NOT `value in contents`: the param is URL input, and
   // prototype keys (`constructor`, `toString`, `__proto__`) pass `in` — the
   // "matching" value would be an inherited function, crashing the render
-  // (PR #63 review, critical; see overlay-keys.ts).
+  // (route-world review, critical; see overlay-keys.ts).
   const live = value && hasOverlayKey(contents, value) ? value : null;
 
   // The last live value, kept only for a docked exit. Adjusting state while

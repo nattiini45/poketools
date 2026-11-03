@@ -66,7 +66,7 @@ export function useStationIndex(): number {
     };
     readNearest();
     // The conductor's change channel fires on every scroll sample AND every
-    // re-measure — the gap once escalated here (PR #63 review: a resize or
+    // re-measure — the gap once escalated here (route-world review: a resize or
     // programmatic jump left the index stale until the next scroll) is closed
     // by the W6 channel rather than a per-consumer scroll listener.
     return conductor.subscribe(readNearest);

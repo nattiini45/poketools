@@ -147,4 +147,4 @@ The legacy AI module (`src/lib/ai/`) provides single-shot match analysis, scouti
 
 ## Eval Harness
 
-`src/lib/ai/agent/eval/` — Golden set evaluation for agent quality. Uses `eval-` prefix conversations to avoid persisting test data.
+`scripts/agent-eval.ts` and `src/lib/ai/agent/eval-scoring.ts` — Golden set evaluation for agent quality. Uses `eval-` prefix conversations to avoid persisting test data.

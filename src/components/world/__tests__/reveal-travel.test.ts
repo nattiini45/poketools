@@ -3,7 +3,7 @@ import { startsAboveViewport } from '../Reveal';
 
 /**
  * Bar W6 direction of travel, read once at mount: an item entirely above the
- * viewport drops in from above; anything else rises. Kilo PR #65: an element
+ * viewport drops in from above; anything else rises. Kilo review: an element
  * with no box (mounted under `display: none`) reads an all-zero rect, whose
  * `bottom` of 0 must not count as "above the viewport".
  */

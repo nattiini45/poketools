@@ -19,8 +19,10 @@ src/lib/season/
 ├── season-started.ts       # isSeasonStarted: the started rule (SQL twin: format_season_started)
 ├── group-repair.ts         # Planner: group rows left by pre-handover substitutions
 ├── repair-phase-groups.ts  # Loads the planner's inputs, applies its moves
-└── __tests__/              # core-assignment, format-capabilities,
+├── __tests__/              # core-assignment, format-capabilities,
                             #   format-rules-defaults, format-utils, group-repair
+├── clone.ts  # Start a league from an existing one (POST /api/seasons with clone_from)
+└── substitute.ts  # Substituting a participant: the affected matches and the apply steps
 
 src/lib/supabase/queries/seasons.ts  # Typed season/participant/core queries
 src/lib/league-trash/                # League recycle bin: constants, service, errors, social-image sweep (below)

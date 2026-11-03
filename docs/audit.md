@@ -8,7 +8,8 @@ The Audit module records who did what to which resource, with optional before/af
 ```
 src/lib/audit/
 ├── log.ts       # AuditAction type, AuditLogEntry type, logAuditEvent writer, diffField helper
-└── queries.ts   # listAuditLogEntries query helper + result record types
+├── queries.ts   # listAuditLogEntries query helper + result record types
+└── agent-context.ts  # Who stands behind a write the Admin Assistant makes (audit actor context)
 
 src/app/
 ├── api/admin/audit-log/route.ts  # GET endpoint (admin-only)

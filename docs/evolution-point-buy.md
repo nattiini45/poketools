@@ -459,7 +459,7 @@ tracker columns.
   `redraft_history` rows with `transfer_type = 'trade'` and their
   `transferred_evo_progress` stay as they are.
 
-## API Payload Notes (drift since PR #47)
+## API Payload Notes (drift since the 2026-07 rename)
 
 - `GET /api/seasons*` responses include `point_buy_list_id` (null for
   non-EPB seasons).

@@ -15,7 +15,7 @@ import {
  * The mountain and clouds rules plaques paint the ruleset of record on one
  * masthead line at 96 px. It had no width bound, so a 20-odd-character
  * ruleset name (the seeded 'Core Liga: Hinrunde (NFE Phase)' is 31) ran off
- * both texture edges (PR #65 test pass, 5A-7). The name now steps down to 80
+ * both texture edges (test pass, 5A-7). The name now steps down to 80
  * and 64 px, then ellipsizes, always inside the inner frame — and a name that
  * fits paints exactly the old single 96 px call.
  *

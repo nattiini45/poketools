@@ -16,7 +16,7 @@ All security rules are defined in `AGENTS.md` (always-needed subset) and `docs/s
 ### A02 — Cryptographic Failures
 
 - All secrets in environment variables (`.env.local`). Template: `.env.example`.
-- Social credentials encrypted with `encryptJson()` / `decryptJson()` from `src/lib/social/encryption.ts`.
+- Social credentials encrypted with `encryptJson()` / `decryptJson()` from `src/lib/social/crypto.ts`.
 - Never log secrets, tokens, or API keys.
 
 ### A03 — Injection
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 
 ## Input Validation
 
-Manual and domain-specific. No centralized schema library.
+Zod request-body schemas in `src/lib/validation/schemas.ts` (`docs/validation.md`); routes without one validate by hand with whitelists.
 
 ### Patterns
 1. **Whitelist enums** — `VALID_*` constants with `.includes()`

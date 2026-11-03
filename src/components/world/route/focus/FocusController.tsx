@@ -71,7 +71,7 @@ export default function FocusController() {
       // finger lifted over HUD chrome (nav pill, docked panels above the
       // canvas) sends its pointerup to that element instead of the canvas,
       // leaving a phantom map entry that pins every later solo drag in pinch
-      // mode (PR #63 review).
+      // mode (route-world review).
       try {
         canvas.setPointerCapture?.(event.pointerId);
       } catch {
