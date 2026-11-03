@@ -68,6 +68,16 @@ paths = ['''^src/app/api/teams/shared/\[token\]/__tests__/route\.test\.ts$''']
 regexes = ['''^3f2b8c1e-9a4d-4e6f-8b2a-7c5d1e0f9a3b$''']
 targetRules = ["generic-api-key"]
 
+# Share-link allowance test fixture. generic-api-key fires on the mocked `token === '<uuid>'` comparisons in the
+# local-stack share-limit test (f16b0372): the value is a made-up UUID v4 standing in for a live share token, not a
+# credential. Pinned to that one test file and the exact value so a real secret there still fires.
+[[allowlists]]
+description = "Synthetic share-token UUID in the share-limit local-stack test"
+condition = "AND"
+paths = ['''^src/lib/seo/__tests__/share-limit\.local\.test\.ts$''']
+regexes = ['''^3f2c1a9e-7b4d-4c8a-9e61-5d0a2b7c4e11$''']
+targetRules = ["generic-api-key"]
+
 # Admin Assistant redaction test. The jwt rule fires on a sample token the grader must redact (5e4012ea): header
 # {"alg":"HS256"}, payload {"sub":"1234567890"}, signature "abcdefghijk", not a credential. Pinned to the test file and
 # the exact value so a real token there still fires.

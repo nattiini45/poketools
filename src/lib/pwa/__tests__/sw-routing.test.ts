@@ -6,12 +6,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
+import { isPwaShellEntry } from '../caches';
 
 const SOURCE = readFileSync(path.join(process.cwd(), 'public', 'sw-routing.js'), 'utf8');
 const ORIGIN = 'https://poketools.test';
 
 interface Routing {
   isStaticAsset(pathname: string): boolean;
+  isShellEntry(pathname: string): boolean;
   shouldCacheNavigation(pathname: string, response: { ok: boolean; status: number }): boolean;
   routeRequest(request: { method: string; url: string; mode?: string }, origin: string): 'navigation' | 'static' | 'pass';
 }
@@ -50,6 +52,24 @@ describe('isStaticAsset', () => {
     '/models/world/a.glb',
   ])('%s is not', (pathname) => {
     expect(routing.isStaticAsset(pathname)).toBe(false);
+  });
+});
+
+describe('isShellEntry', () => {
+  it.each(['/offline.html', '/_next/static/chunks/app.js', '/pwa/icon-192.png'])('%s is kept for every visitor', (pathname) => {
+    expect(routing.isShellEntry(pathname)).toBe(true);
+  });
+
+  it.each(['/', '/dashboard', '/teams/shared/token', '/offline.html/x', '/api/players'])('%s is not', (pathname) => {
+    expect(routing.isShellEntry(pathname)).toBe(false);
+  });
+
+  it('is the rule sign-out applies to the worker caches (src/lib/pwa/caches.ts)', () => {
+    for (const pathname of [
+      '/offline.html', '/pwa/icon-512.png', '/_next/static/a.js', '/', '/dashboard', '/_next/image', '/offline.html/x', '/pwa', '/manifest.webmanifest',
+    ]) {
+      expect(isPwaShellEntry(`${ORIGIN}${pathname}`), pathname).toBe(routing.isShellEntry(pathname));
+    }
   });
 });
 

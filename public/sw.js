@@ -57,6 +57,17 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+async function ensureOfflineFallback() {
+  try {
+    const cache = await caches.open(SHELL_CACHE);
+    if (!(await cache.match(OFFLINE_FALLBACK))) {
+      await cache.add(OFFLINE_FALLBACK);
+    }
+  } catch {
+    // Storage blocked or full, or the network dropped in between: the next page load tries again.
+  }
+}
+
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) {
@@ -81,9 +92,17 @@ self.addEventListener('fetch', (event) => {
   const route = routing.routeRequest(request, self.location.origin);
 
   if (route === 'navigation') {
-    // Network first, and nothing is stored: a failed navigation shows the offline page, never an earlier render.
+    // Network first, and no page is stored: a failed navigation shows the offline page, never an earlier render.
     event.respondWith(
-      fetch(request).catch(async () => (await caches.match(OFFLINE_FALLBACK)) || Response.error()),
+      fetch(request).then(
+        (response) => {
+          // Install is the only other place the offline page is stored, and a cache the page or the browser emptied
+          // is not refilled by a worker that stays registered unchanged, so a page that loads restores it.
+          event.waitUntil(ensureOfflineFallback());
+          return response;
+        },
+        async () => (await caches.match(OFFLINE_FALLBACK)) || Response.error(),
+      ),
     );
     return;
   }

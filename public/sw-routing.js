@@ -17,6 +17,16 @@
     return false;
   }
 
+  var OFFLINE_FALLBACK = '/offline.html';
+
+  /**
+   * True for the entries the worker may keep in Cache Storage whoever is signed in: the offline page and the static
+   * files above. Nothing else is ever stored, so any other entry (an older worker's page HTML) is removable.
+   */
+  function isShellEntry(pathname) {
+    return pathname === OFFLINE_FALLBACK || isStaticAsset(pathname);
+  }
+
   /**
    * Whether a navigation response may be written to Cache Storage. Never: the HTML of `/dashboard`, `/admin`, a
    * shared team link or any signed-in page would outlive the session and show the next person on the device
@@ -39,7 +49,12 @@
     return isStaticAsset(url.pathname) ? 'static' : 'pass';
   }
 
-  var api = { isStaticAsset: isStaticAsset, shouldCacheNavigation: shouldCacheNavigation, routeRequest: routeRequest };
+  var api = {
+    isStaticAsset: isStaticAsset,
+    isShellEntry: isShellEntry,
+    shouldCacheNavigation: shouldCacheNavigation,
+    routeRequest: routeRequest,
+  };
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;

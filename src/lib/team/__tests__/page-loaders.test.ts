@@ -66,6 +66,30 @@ describe('loadSharedTeam', () => {
     expect(mocks.checkPublicRateLimit).toHaveBeenCalledWith('team-shared', { headers: REQUEST_HEADERS }, { limit: 60, windowSeconds: 60 });
   });
 
+  it('does not charge a request the proxy already charged', async () => {
+    mocks.headers.mockResolvedValue(new Headers({ 'x-forwarded-for': '203.0.113.7', 'x-poketools-share-limit': 'allowed' }));
+    mocks.getTeamByShareToken.mockResolvedValue(team());
+    expect((await loadSharedTeam(SHARE_LINK_ID)).status).toBe('ok');
+    expect(mocks.checkPublicRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('shows the proxy verdict when the proxy spent the allowance', async () => {
+    mocks.headers.mockResolvedValue(new Headers({ 'x-poketools-share-limit': 'denied:33' }));
+    expect(await loadSharedTeam(SHARE_LINK_ID)).toEqual({ status: 'rate_limited', retryAfterSeconds: 33 });
+    expect(mocks.checkPublicRateLimit).not.toHaveBeenCalled();
+    expect(mocks.getTeamByShareToken).not.toHaveBeenCalled();
+  });
+
+  it('charges itself when the header is not a verdict it can read', async () => {
+    mocks.getTeamByShareToken.mockResolvedValue(team());
+    for (const value of ['', 'true', 'denied:0', 'denied:abc', 'allowed:1', 'ALLOWED']) {
+      mocks.checkPublicRateLimit.mockClear();
+      mocks.headers.mockResolvedValue(new Headers({ 'x-poketools-share-limit': value }));
+      await loadSharedTeam(SHARE_LINK_ID);
+      expect(mocks.checkPublicRateLimit, value).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it('serves no team data past the limit', async () => {
     mocks.checkPublicRateLimit.mockResolvedValue({ allowed: false, remaining: 0, retryAfterSeconds: 41 });
     expect(await loadSharedTeam(SHARE_LINK_ID)).toEqual({ status: 'rate_limited', retryAfterSeconds: 41 });

@@ -101,12 +101,33 @@ describe('isUnknownWikiDetailName', () => {
     expect(isUnknownWikiDetailName('/pokemon/Garchomp')).toBe(false);
     expect(isUnknownWikiDetailName('/pokemon/Mr.%20Mime')).toBe(false);
     expect(isUnknownWikiDetailName('/pokemon/Ho-Oh')).toBe(false);
-    expect(isUnknownWikiDetailName('/pokemon/Mega-Charizard-X')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Mega-Yan')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Megayanma')).toBe(false);
     expect(isUnknownWikiDetailName('/pokemon/Nidoran%E2%99%80')).toBe(false);
     expect(isUnknownWikiDetailName('/pokemon/Nidoran%E2%99%82')).toBe(false);
     expect(isUnknownWikiDetailName('/pokemon/Flab%C3%A9b%C3%A9')).toBe(false);
     expect(isUnknownWikiDetailName('/pokemon/Farfetch%E2%80%99d')).toBe(false);
     expect(isUnknownWikiDetailName('/wiki/moves/Close%20Combat')).toBe(false);
+  });
+
+  it('404s an unknown Mega, Primal or Gigantamax name instead of exempting the prefix', () => {
+    for (const name of [
+      'Mega-not-a-real-pokemon', 'mega-not-a-real-pokemon', 'Megaxyz', 'Mega', 'Mega-', 'Primal-not-a-real-pokemon',
+      'Primal', 'Gigantamax-not-a-real-pokemon', 'Gigantamax', 'Gigantamax-', 'MegaPrimalGigantamax',
+    ]) {
+      expect(isUnknownWikiDetailName('/pokemon/' + encodeURIComponent(name)), name).toBe(true);
+    }
+  });
+
+  it('404s the Mega and Primal forms the page itself does not resolve, and lets through the spellings it does', () => {
+    // Mega Charizard X and Primal Groudon are battle-only formes: getSpeciesNatDex answers null, so the page is a 404.
+    for (const name of ['Mega-Charizard-X', 'Primal-Groudon', 'Gigantamax-Charizard']) {
+      expect(getSpeciesNatDex(name), name).toBeNull();
+      expect(isUnknownWikiDetailName('/pokemon/' + encodeURIComponent(name)), name).toBe(true);
+    }
+    // @pkmn reads "Mega-Yan" as Yanmega (the id "yanmega" is "mega" moved behind "yan").
+    expect(getSpeciesNatDex('Mega-Yan')).not.toBeNull();
+    expect(isUnknownWikiDetailName('/pokemon/Mega-Yan')).toBe(false);
   });
 
   it('404s an unknown species written with non-ASCII characters', () => {
@@ -122,10 +143,19 @@ describe('isUnknownWikiDetailName', () => {
     }
   });
 
-  it('never 404s a species the page resolves, for every id, alias and name the dex knows', () => {
-    const candidates = new Set<string>(Object.keys(Dex.data.Aliases));
-    for (const key of Object.keys(Dex.data.Species)) candidates.add(key);
-    for (const species of Dex.species.all()) candidates.add(species.name);
+  it('agrees with the page resolver for every id, alias, name and Mega, Primal or Gigantamax spelling the dex knows', () => {
+    const bases = new Set<string>(Object.keys(Dex.data.Aliases));
+    for (const key of Object.keys(Dex.data.Species)) bases.add(key);
+    for (const species of Dex.species.all()) bases.add(species.name);
+
+    const candidates = new Set<string>(bases);
+    for (const base of bases) {
+      const stripped = base.replace(/(mega[xyz]?|primal|gmax)$/i, '');
+      for (const prefix of ['mega', 'primal', 'gigantamax', 'Mega-', 'Primal-', 'Gigantamax-']) {
+        candidates.add(prefix + base);
+        candidates.add(prefix + stripped);
+      }
+    }
 
     const falseNotFound: string[] = [];
     const missed: string[] = [];
@@ -138,7 +168,7 @@ describe('isUnknownWikiDetailName', () => {
       }
       const gate = isUnknownWikiDetailName('/pokemon/' + encodeURIComponent(name));
       if (resolves && gate) falseNotFound.push(name);
-      if (!resolves && !gate && !/^(mega|primal|gigantamax)/i.test(name.replace(/[^a-z]/gi, ''))) missed.push(name);
+      if (!resolves && !gate) missed.push(name);
     }
     expect(falseNotFound).toEqual([]);
     expect(missed).toEqual([]);

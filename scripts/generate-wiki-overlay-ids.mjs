@@ -20,6 +20,9 @@ const OUTPUT = fileURLToPath(new URL('../src/lib/broadcast/wiki-overlay-ids.gene
 
 const KINDS = /** @type {const} */ ({ moves: 'MOVE_IDS', items: 'ITEM_IDS', abilities: 'ABILITY_IDS', species: 'SPECIES_IDS' });
 
+const SPECIES_PREFIXES = ['mega', 'primal', 'gigantamax'];
+const FORM_SUFFIX = /(mega[xyz]?|primal|gmax)$/;
+
 /** An alias key that points at a non-species makes @pkmn's species lookup throw; the page would 500 on it, so it never resolves. */
 function lookup(table, id) {
   try {
@@ -40,11 +43,24 @@ export function collectWikiOverlayIds() {
     }
     for (const key of Object.keys(Dex.forGen(g).data.Aliases)) aliasKeys.add(key);
   }
+  // @pkmn reads "Mega-<name>", "Primal-<name>" and "Gigantamax-<name>" as the form's id. The gate has no prefix rule of
+  // its own: a prefixed spelling is a valid species name only when it lands in this list, so every one is tried here
+  // (the base forms of the Mega, Primal and Gigantamax ids included) and kept only when the NatDex walk resolves it.
+  const speciesIds = [...candidates.species];
+  const prefixed = new Set();
+  for (const prefix of SPECIES_PREFIXES) {
+    for (const id of [...speciesIds, ...aliasKeys]) {
+      prefixed.add(prefix + id);
+      prefixed.add(prefix + id.replace(FORM_SUFFIX, ''));
+    }
+  }
+
   /** @type {Record<'moves' | 'items' | 'abilities' | 'species', string[]>} */
   const ids = { moves: [], items: [], abilities: [], species: [] };
   for (const kind of Object.keys(candidates)) {
     const resolved = new Set();
-    for (const id of [...candidates[kind], ...aliasKeys]) {
+    const tried = kind === 'species' ? [...candidates[kind], ...aliasKeys, ...prefixed] : [...candidates[kind], ...aliasKeys];
+    for (const id of tried) {
       for (let g = MIN_GEN; g <= MAX_GEN; g++) {
         const entity = lookup(gens.get(g)[kind], id);
         if (entity && entity.exists && !(kind === 'species' && (entity.battleOnly || entity.isNonstandard))) {

@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { headers } from 'next/headers';
 import { getTeamById, getTeamByShareToken } from '@/lib/supabase/queries/teams';
 import { filterTeamForShare, filterLibraryEntryForDisplay } from '@/lib/team/visibility';
+import { parseShareLimitMark, SHARE_LIMIT_HEADER } from '@/lib/seo/share-limit-marker';
 import { checkPublicRateLimit } from '@/lib/utils/rate-limit';
 import { isValidUuid } from '@/lib/utils/uuid';
 import type { SharedTeamView, TeamLibraryEntry } from '@/types/team';
@@ -25,9 +26,21 @@ export type LibraryEntryResult =
  * Same bucket and limit as `GET /api/teams/shared/[token]`, so a client cannot
  * double its allowance by alternating the page and the API. Runs before the
  * token is looked at, like the route.
+ *
+ * The proxy already charged the request when it passes its verdict in
+ * `x-poketools-share-limit` (it deletes a client-sent copy), so the page takes
+ * that verdict instead of charging again. Without one (a render the proxy did
+ * not gate, or a charge that failed there) the page charges for itself.
  */
 async function sharedTeamRateLimit() {
-  return checkPublicRateLimit('team-shared', { headers: await headers() }, { limit: 60, windowSeconds: 60 });
+  const requestHeaders = await headers();
+  const charged = parseShareLimitMark(requestHeaders.get(SHARE_LIMIT_HEADER));
+  if (charged) {
+    return charged.allowed
+      ? { allowed: true, remaining: 0, retryAfterSeconds: 0 }
+      : { allowed: false, remaining: 0, retryAfterSeconds: charged.retryAfterSeconds };
+  }
+  return checkPublicRateLimit('team-shared', { headers: requestHeaders }, { limit: 60, windowSeconds: 60 });
 }
 
 /**
