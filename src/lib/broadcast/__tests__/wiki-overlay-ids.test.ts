@@ -103,7 +103,17 @@ describe('isUnknownWikiDetailName', () => {
     expect(isUnknownWikiDetailName('/pokemon/Ho-Oh')).toBe(false);
     expect(isUnknownWikiDetailName('/pokemon/Mega-Charizard-X')).toBe(false);
     expect(isUnknownWikiDetailName('/pokemon/Nidoran%E2%99%80')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Nidoran%E2%99%82')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Flab%C3%A9b%C3%A9')).toBe(false);
+    expect(isUnknownWikiDetailName('/pokemon/Farfetch%E2%80%99d')).toBe(false);
     expect(isUnknownWikiDetailName('/wiki/moves/Close%20Combat')).toBe(false);
+  });
+
+  it('404s an unknown species written with non-ASCII characters', () => {
+    expect(isUnknownWikiDetailName('/pokemon/%E3%83%94%E3%82%AB%E3%83%81%E3%83%A5%E3%82%A6')).toBe(true);
+    expect(isUnknownWikiDetailName('/pokemon/Pok%C3%A9mon')).toBe(true);
+    expect(isUnknownWikiDetailName('/pokemon/Foo%E2%99%80')).toBe(true);
+    expect(isUnknownWikiDetailName('/pokemon/%E2%99%80')).toBe(true);
   });
 
   it('ignores every other path, the tera pages included', () => {

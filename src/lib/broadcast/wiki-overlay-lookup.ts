@@ -28,6 +28,12 @@ function toId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+// Nidoran♀ and Nidoran♂ are the only species names whose id needs a symbol read as a letter; @pkmn reads
+// them as nidoranf and nidoranm. Accents are dropped so Flabébé reaches flabebe.
+function toSpeciesId(name: string): string {
+  return toId(name.normalize('NFD').replace(/\p{M}+/gu, '').replace(/♀/g, 'f').replace(/♂/g, 'm'));
+}
+
 /**
  * True when `pathname` is a broadcast wiki overlay for a move, ability, item or tera type that does not resolve.
  * Valid names, every other path and the species redirect answer false, so the page stays in charge of them.
@@ -69,9 +75,9 @@ const POKEMON_PATH = /^\/pokemon\/([^/]+)\/?$/;
  * the overlays, so the move, item and ability rules above apply unchanged; the tera pages stay with the page, which
  * matches a spelling more loosely than the overlay does.
  *
- * A species name is checked by its id only. @pkmn also resolves a few spellings that are not ids (Mega-<name>,
- * Primal-<name>, Gigantamax-<name>, Nidoran♀); those and anything with a non-ASCII character are left to the page,
- * so a valid species never gets a false 404 here.
+ * A species name is checked by its id. @pkmn also resolves a few spellings that are not ids: Mega-<name>, Primal-<name>
+ * and Gigantamax-<name> are left to the page, and Nidoran♀ / Nidoran♂ and accented letters (Flabébé) are mapped to
+ * their ids by `toSpeciesId`. Any other non-ASCII name resolves to no id and gets the 404.
  */
 export function isUnknownWikiDetailName(pathname: string): boolean {
   const wiki = PUBLIC_WIKI_PATH.exec(pathname);
@@ -85,8 +91,8 @@ export function isUnknownWikiDetailName(pathname: string): boolean {
   } catch {
     return true;
   }
-  const id = toId(name);
+  const id = toSpeciesId(name);
   if (id === '') return true;
-  if (/[^\x00-\x7f]/.test(name) || /^(mega|primal|gigantamax)/.test(id)) return false;
+  if (/^(mega|primal|gigantamax)/.test(id)) return false;
   return !KNOWN_SPECIES_IDS.has(id);
 }
