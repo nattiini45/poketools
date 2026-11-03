@@ -28,7 +28,12 @@ function client(url: string, withNavigate = true): FakeClient {
 
 function loadWorker(script = '/sw.js') {
   const handlers = new Map<string, (event: unknown) => void>();
-  const cacheStore = { addAll: vi.fn(async () => undefined), put: vi.fn(async () => undefined) };
+  const cacheStore = {
+    addAll: vi.fn(async () => undefined),
+    add: vi.fn(async (_url: string) => undefined),
+    match: vi.fn(async (_url: string): Promise<unknown> => undefined),
+    put: vi.fn(async () => undefined),
+  };
   const caches = {
     open: vi.fn(async () => cacheStore),
     keys: vi.fn(async () => ['poketools-shell-v1', 'poketools-shell-v2', 'poketools-shell-build-2', 'other-cache']),
@@ -288,7 +293,7 @@ describe('caching modes', () => {
   });
 
   it.each(['/leagues', '/dashboard', '/admin/players', '/broadcast/match/1/live', '/teams/shared/abc'])(
-    'a navigation to %s is fetched from the network and never stored',
+    'a navigation to %s is fetched from the network and never stored (only the offline page is restored)',
     async (pathname) => {
       const sw = loadWorker('/sw.js?v=build-2');
       const page = { ok: true, status: 200, clone: () => page };
@@ -298,7 +303,7 @@ describe('caching modes', () => {
       expect(result.responded).toBe(1);
       await expect(result.response).resolves.toBe(page);
       expect(sw.cacheStore.put).not.toHaveBeenCalled();
-      expect(sw.caches.open).not.toHaveBeenCalled();
+      expect(sw.cacheStore.add.mock.calls).toEqual([['/offline.html']]);
     },
   );
 
