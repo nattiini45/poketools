@@ -278,26 +278,64 @@ describe('proxy matcher', () => {
     }
   });
 
-  it('skips a prefetch (either header the router sends) and still runs for the navigation it prepares', () => {
+  it('runs for a prefetch (either header the router sends) too, so a page never sees a client-supplied path header', () => {
     for (const url of ['/leagues', '/dashboard/settings', '/teams/shared/00000000-0000-4000-8000-000000000065']) {
-      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { 'next-router-prefetch': '1' } }), url).toBe(false);
-      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { purpose: 'prefetch' } }), url).toBe(false);
+      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { 'next-router-prefetch': '1' } }), url).toBe(true);
+      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { purpose: 'prefetch' } }), url).toBe(true);
       expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { rsc: '1', 'next-url': '/' } }), url).toBe(true);
-      expect(doesProxyMatch({ config, nextConfig: {}, url, headers: { purpose: 'navigate' } }), url).toBe(true);
       expect(matches(url), url).toBe(true);
     }
   });
 
-  it('adds only the prefetch conditions to the path pattern', () => {
-    expect(config.matcher).toHaveLength(1);
-    const [entry] = config.matcher;
-    expect(entry).toEqual({
-      source: expect.any(String),
-      missing: [
-        { type: 'header', key: 'next-router-prefetch' },
-        { type: 'header', key: 'purpose', value: 'prefetch' },
-      ],
-    });
+  it('has the path pattern only, with no header condition that would let a request skip the proxy', () => {
+    expect(config.matcher).toEqual([expect.any(String)]);
+  });
+});
+
+describe('proxy prefetch requests (VAL-CSP-005)', () => {
+  const PREFETCH = { 'next-router-prefetch': '1' };
+
+  it.each([
+    ['next-router-prefetch', PREFETCH],
+    ['purpose: prefetch', { purpose: 'prefetch' }],
+  ])('overwrites a forged x-poketools-path on a %s request', async (_label, marker) => {
+    const response = await proxy(pageRequest('/dashboard/confirm/m1?tab=y', { ...marker, 'x-poketools-path': '/forged' }));
+    expect(forwardedRequestHeader(response, 'x-poketools-path')).toBe('/dashboard/confirm/m1?tab=y');
+  });
+
+  it('drops a forged nonce, policy and share verdict from a prefetch, and adds none', async () => {
+    const response = await proxy(
+      pageRequest('/teams/shared/t1', {
+        ...PREFETCH,
+        'x-nonce': 'forged',
+        'content-security-policy': "script-src 'nonce-forged'",
+        'content-security-policy-report-only': "script-src 'nonce-forged'",
+        'x-poketools-share-limit': 'ok',
+      }),
+    );
+    for (const name of ['x-nonce', 'content-security-policy', 'content-security-policy-report-only', 'x-poketools-share-limit']) {
+      expect(forwardedRequestHeader(response, name), name).toBeNull();
+    }
+    expect(response.headers.get('content-security-policy')).toBeNull();
+    expect(response.headers.get('content-security-policy-report-only')).toBeNull();
+  });
+
+  it('keeps a prefetch out of the gates: no sign-in redirect, no page gate read, no 404', async () => {
+    vi.mocked(pageGate).mockClear();
+    const response = await proxy(pageRequest('/dashboard/settings', PREFETCH));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(pageGate).not.toHaveBeenCalled();
+  });
+
+  it('drops the _rsc parameter from the recorded path of a prefetch', async () => {
+    const response = await proxy(pageRequest('/dashboard?tab=a&_rsc=abc12', PREFETCH));
+    expect(forwardedRequestHeader(response, 'x-poketools-path')).toBe('/dashboard?tab=a');
+  });
+
+  it('still overwrites the path header on a request without a prefetch marker', async () => {
+    const response = await proxy(pageRequest('/dashboard/settings', { cookie: 'authjs.session-token=a', 'x-poketools-path': '/forged' }));
+    expect(forwardedRequestHeader(response, 'x-poketools-path')).toBe('/dashboard/settings');
   });
 });
 

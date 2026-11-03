@@ -82,13 +82,11 @@ describe('next.config.mjs security headers (#37)', () => {
     }
   });
 
-  it('keeps the path complement exact: the only extra clause of the matcher is the prefetch exclusion, which no config source answers', async () => {
-    const [entry] = config.matcher;
-    expect(Object.keys(entry).sort()).toEqual(['missing', 'source']);
+  it('keeps the path complement exact: the matcher is the path pattern alone, so a prefetch reaches the proxy like any request', async () => {
+    expect(config.matcher).toEqual([expect.any(String)]);
     for (const path of PAGES) {
       const prefetch = { 'next-router-prefetch': '1' };
-      expect(doesProxyMatch({ config, nextConfig: {}, url: path, headers: prefetch }), `prefetch ${path}`).toBe(false);
-      // A prefetch response is an RSC payload, not a document, so the config does not need to cover it either.
+      expect(doesProxyMatch({ config, nextConfig: {}, url: path, headers: prefetch }), `prefetch ${path}`).toBe(true);
       expect(await configHeader(path, 'content-security-policy'), path).toBeNull();
     }
   });

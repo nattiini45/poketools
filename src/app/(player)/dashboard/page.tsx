@@ -1,4 +1,5 @@
-import { getLiveSessionPlayer, getSession } from '@/lib/auth/helpers';
+import { getSession } from '@/lib/auth/helpers';
+import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { getMatchesByPlayer } from '@/lib/supabase/queries/matches';
 import { getTournamentsByPlayer, listTournamentsByIds } from '@/lib/supabase/queries/tournaments';
@@ -19,8 +20,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0; // Dashboard is user-specific, always fresh
 
 export default async function DashboardPage() {
-  // The player (id, name, avatar) is read live; the token's provider image is display-only.
-  const [livePlayer, session] = await Promise.all([getLiveSessionPlayer(), getSession()]);
+  // The layout is not re-rendered on a client navigation, so this page is the gate that sees a revoked session: only a
+  // signed-in identity without a player gets the not-registered note. The player (id, name, avatar) is read live; the
+  // token's provider image is display-only.
+  const [{ player: livePlayer }, session] = await Promise.all([requireLiveIdentityOrSignIn(), getSession()]);
 
   if (!livePlayer) {
     const t = await getT(dashboardMessages);

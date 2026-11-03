@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ─── Mocks ──────────────────────────────────────────────────────────
 
 const mocks = vi.hoisted(() => ({
-  getLiveSessionPlayer: vi.fn(),
+  getLiveAccess: vi.fn(),
   isSuperadminNow: vi.fn(),
   getMatchById: vi.fn(),
   getTournamentById: vi.fn(),
@@ -37,12 +37,13 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 vi.mock('next/link', () => ({ default: () => null }));
+vi.mock('next/headers', () => ({ headers: async () => ({ get: () => null }) }));
 vi.mock('@/components/shared/AuthGuard', () => ({ default: () => null }));
 vi.mock('@/components/match/MatchPrepClient', () => ({ default: () => null }));
 vi.mock('@/components/match/MatchStatusBadge', () => ({ default: () => null }));
 vi.mock('@/components/ui/PageContainer', () => ({ default: () => null }));
 vi.mock('@/lib/auth/helpers', () => ({
-  getLiveSessionPlayer: mocks.getLiveSessionPlayer,
+  getLiveAccess: mocks.getLiveAccess,
   isSuperadminNow: mocks.isSuperadminNow,
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: mocks.getMatchById }));
@@ -85,7 +86,7 @@ function findProps(node: ReactNode, type: unknown): Record<string, unknown> | nu
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getLiveSessionPlayer.mockResolvedValue({ playerId: PLAYER_ID, name: 'Ash', isAdmin: false });
+  mocks.getLiveAccess.mockResolvedValue({ player: { playerId: PLAYER_ID, name: 'Ash', isAdmin: false } });
   mocks.isSuperadminNow.mockResolvedValue(false);
   mocks.getMatchById.mockResolvedValue({
     id: MATCH_ID,

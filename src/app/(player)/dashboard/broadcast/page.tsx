@@ -1,6 +1,6 @@
 import AuthGuard from '@/components/shared/AuthGuard';
 import PageContainer from '@/components/ui/PageContainer';
-import { getLiveSessionPlayer } from '@/lib/auth/helpers';
+import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getMatchesByPlayer } from '@/lib/supabase/queries/matches';
 import Link from 'next/link';
 import { getT } from '@/i18n/server';
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function BroadcastHubPage() {
-  const player = await getLiveSessionPlayer();
+  const { player } = await requireLiveIdentityOrSignIn();
   const t = await getT(creatorMessages);
 
   if (!player) {
