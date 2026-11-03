@@ -93,6 +93,18 @@ export async function getPointBuyListById(id: string): Promise<PointBuyListVersi
   return data ? toVersion(data) : null;
 }
 
+/** The id of the list version with this name and version number, or null when none exists. */
+export async function findListVersionId(name: string, version: number): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('point_buy_list_versions')
+    .select('id')
+    .eq('name', name)
+    .eq('version', version)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id ?? null;
+}
 /** Get the currently active list version (if any). */
 export async function getActiveListVersion(): Promise<PointBuyListVersion | null> {
   const { data, error } = await supabase

@@ -61,6 +61,17 @@ export async function getPoolEntries(seasonId: string): Promise<DraftPoolEntry[]
     .map(toEntry);
 }
 
+/** The id and season of a pool entry, for the authorization check before it is changed; null when it does not exist. */
+export async function getPoolEntrySeason(id: string): Promise<{ id: string; season_id: string } | null> {
+  const { data, error } = await supabase
+    .from('draft_pool_entries')
+    .select('id, season_id')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
 /** Get a single pool entry by season + pokemon name. */
 export async function getPoolEntry(
   seasonId: string,

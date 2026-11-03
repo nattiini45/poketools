@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, loadSessionPlayer } from '@/auth';
 import { SessionRevokedError } from '@/lib/auth/session-epoch';
-import { supabase } from '@/lib/supabase/client';
+import { promoteFirstAdmin, siteAdminExists } from '@/lib/supabase/queries/bootstrap';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
 import { bootstrapSchema, formatZodErrors } from '@/lib/validation';
@@ -63,13 +63,7 @@ export async function POST(request: NextRequest) {
     if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
 
     // 1. Eligibility: bootstrap is over for good once any admin exists.
-    const { data: admins, error: adminError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('is_admin', true)
-      .limit(1);
-    if (adminError) throw adminError;
-    if ((admins ?? []).length > 0) {
+    if (await siteAdminExists()) {
       return NextResponse.json<ApiResult<never>>(
         {
           success: false,
@@ -121,10 +115,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Atomic check-and-promote.
-    const { data: outcome, error: rpcError } = await supabase.rpc('bootstrap_first_admin', {
-      p_player_id: player.playerId,
-    });
-    if (rpcError) throw rpcError;
+    const outcome = await promoteFirstAdmin(player.playerId);
 
     if (outcome === 'admin_exists') {
       // Lost a race with a concurrent bootstrap.

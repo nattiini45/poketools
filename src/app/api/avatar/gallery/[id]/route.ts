@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { getGalleryItem, deleteGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
-import { supabase } from '@/lib/supabase/client';
+import { removeGalleryObject } from '@/lib/supabase/storage/avatars';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -44,15 +44,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const storagePath = extractAvatarStoragePath(item.image_url);
-    if (storagePath) {
-      const { error: removeError } = await supabase.storage
-        .from('avatars')
-        .remove([storagePath]);
-
-      if (removeError) {
-        console.error('Gallery storage delete failed:', removeError.message);
-      }
+    const removal = await removeGalleryObject(item.image_url);
+    if (removal.error) {
+      console.error('Gallery storage delete failed:', removal.error.message);
     }
 
     const deleted = await deleteGalleryItem(id, playerId);
@@ -69,21 +63,5 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     return safeErrorResponse(error, 'Failed to delete gallery item', 500, 'gallery_item_delete_failed');
-  }
-}
-
-function extractAvatarStoragePath(publicUrl: string): string | null {
-  try {
-    const { pathname } = new URL(publicUrl);
-    const marker = '/storage/v1/object/public/avatars/';
-    const markerIndex = pathname.indexOf(marker);
-    if (markerIndex < 0) return null;
-
-    const encodedPath = pathname.slice(markerIndex + marker.length);
-    if (!encodedPath) return null;
-
-    return decodeURIComponent(encodedPath);
-  } catch {
-    return null;
   }
 }

@@ -18,13 +18,8 @@ vi.mock('@/lib/api/error-response', () => ({
   safeErrorResponse: vi.fn((_err: unknown, fallback: string) => NextResponse.json({ success: false, error: fallback }, { status: 500 })),
 }));
 
-vi.mock('@/lib/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(),
-  },
-}));
-
 vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({
+  getPoolEntrySeason: vi.fn(),
   updatePoolEntry: vi.fn(),
   deletePoolEntry: vi.fn(),
 }));
@@ -33,8 +28,7 @@ vi.mock('@/lib/supabase/queries/draft-pool-entries', () => ({
 
 import { PATCH, DELETE } from '@/app/api/draft-pool-entries/[id]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
-import { supabase } from '@/lib/supabase/client';
-import { updatePoolEntry, deletePoolEntry } from '@/lib/supabase/queries/draft-pool-entries';
+import { getPoolEntrySeason, updatePoolEntry, deletePoolEntry } from '@/lib/supabase/queries/draft-pool-entries';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -44,12 +38,7 @@ const makeRequest = (body: Record<string, unknown>) =>
 const routeParams = { params: Promise.resolve({ id: 'a3b6ab9a-81f1-4983-891c-e23dacad0ce3' }) };
 
 function mockSupabaseEntry(data: unknown) {
-  const chain = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
-  };
-  vi.mocked(supabase.from).mockReturnValue(chain as never);
+  vi.mocked(getPoolEntrySeason).mockResolvedValue(data as never);
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────

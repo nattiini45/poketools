@@ -5,7 +5,7 @@ import { cascadeActionSchema, formatZodErrors } from '@/lib/validation';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { resetRound } from '@/lib/pkmn/game-pipeline';
 import { revalidateMatchPages } from '@/lib/revalidation';
-import { supabase } from '@/lib/supabase/client';
+import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import type { ResetRoundResult } from '@/types/game';
@@ -24,13 +24,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (invalidId) return invalidId;
 
     // Get round → tournament_id for auth check
-    const { data: round, error: roundErr } = await supabase
-      .from('rounds')
-      .select('name, tournament_id')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (roundErr) throw roundErr;
+    const round = await getRoundById(id);
     if (!round) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Round not found', code: 'round_not_found' },

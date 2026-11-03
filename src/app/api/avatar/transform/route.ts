@@ -5,12 +5,11 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { checkAndRecordGeneration } from '@/lib/avatar/rate-limit';
 import { validateUpload, moderateImage, transformToTrainer, isModerationRequired } from '@/lib/avatar/transform';
 import { PHOTO_TRANSFORM_CONSENT_VERSION } from '@/lib/avatar/consent';
-import { supabase } from '@/lib/supabase/client';
-import { AVATAR_BUCKET } from '@/lib/avatar/thumbnail-path';
+import { getAvatarBucket } from '@/lib/supabase/storage/avatars';
+import { insertGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
 import { AVATAR_IMMUTABLE_CACHE_CONTROL, tryWriteAvatarThumbnail } from '@/lib/avatar/thumbnail';
 import { avatarTransformSchema, formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
-import type { Database } from '@/types/database';
 
 interface TransformResponse {
   image: string; // base64 data URL
@@ -18,8 +17,6 @@ interface TransformResponse {
   gallery_id: string;
   gallery_url: string;
 }
-
-type GalleryInsertRow = Database['public']['Tables']['ai_avatar_gallery']['Insert'];
 
 /**
  * POST /api/avatar/transform — Transform a photo into a Pokemon trainer sprite.
@@ -142,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     const fileId = crypto.randomUUID();
     const filePath = `gallery/${playerId}/${fileId}.${ext}`;
-    const avatarBucket = supabase.storage.from(AVATAR_BUCKET);
+    const avatarBucket = getAvatarBucket();
 
     // UUID path = immutable object, so it can be cached for a year.
     const { error: uploadError } = await avatarBucket.upload(filePath, resultBuffer, {
@@ -171,22 +168,18 @@ export async function POST(request: NextRequest) {
 
     const { data: urlData } = avatarBucket.getPublicUrl(filePath);
 
-    // Store in gallery with a marker for photo transforms
-    const galleryPayload: GalleryInsertRow = {
-      player_id: playerId,
-      image_url: urlData.publicUrl,
-      choices: { type: 'photo_transform' } as GalleryInsertRow['choices'],
-      style: 'pixel_sprite',
-    };
-
-    const { data: galleryItem, error: galleryError } = await supabase
-      .from('ai_avatar_gallery')
-      .insert(galleryPayload)
-      .select('id')
-      .single();
-
-    if (galleryError) {
-      console.error('Gallery insert failed:', galleryError.message);
+    // Store in gallery with a marker for photo transforms; the image is returned even when this fails
+    let galleryId = '';
+    try {
+      const galleryItem = await insertGalleryItem({
+        player_id: playerId,
+        image_url: urlData.publicUrl,
+        choices: { type: 'photo_transform' },
+        style: 'pixel_sprite',
+      });
+      galleryId = galleryItem.id;
+    } catch (galleryError) {
+      console.error('Gallery insert failed:', (galleryError as { message?: string }).message);
     }
 
     const remaining = rateLimit.remaining - 1;
@@ -196,7 +189,7 @@ export async function POST(request: NextRequest) {
       data: {
         image: result.image,
         remaining,
-        gallery_id: galleryItem?.id ?? '',
+        gallery_id: galleryId,
         gallery_url: urlData.publicUrl,
       },
     });

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { supabase } from '@/lib/supabase/client';
-import { updatePoolEntry, deletePoolEntry } from '@/lib/supabase/queries/draft-pool-entries';
+import { getPoolEntrySeason, updatePoolEntry, deletePoolEntry } from '@/lib/supabase/queries/draft-pool-entries';
 import type { ApiResult } from '@/types/api';
 import type { DraftPoolEntry } from '@/types/draft-pool';
 import { draftPoolEntryUpdateSchema, formatZodErrors } from '@/lib/validation';
@@ -10,18 +9,6 @@ import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
-}
-
-/** Helper to get entry and its season_id for auth check. */
-async function getEntryWithSeason(id: string) {
-  const { data, error } = await supabase
-    .from('draft_pool_entries')
-    .select('id, season_id')
-    .eq('id', id)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
 }
 
 /**
@@ -36,7 +23,7 @@ export async function PATCH(
     const { id } = await params;
     const invalidId = rejectInvalidPathId(id, 'INVALID_POOL_ENTRY_ID');
     if (invalidId) return invalidId;
-    const entry = await getEntryWithSeason(id);
+    const entry = await getPoolEntrySeason(id);
     if (!entry) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Pool entry not found', code: 'pool_entry_not_found' },
@@ -82,7 +69,7 @@ export async function DELETE(
     const { id } = await params;
     const invalidId = rejectInvalidPathId(id, 'INVALID_POOL_ENTRY_ID');
     if (invalidId) return invalidId;
-    const entry = await getEntryWithSeason(id);
+    const entry = await getPoolEntrySeason(id);
     if (!entry) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Pool entry not found', code: 'pool_entry_not_found' },

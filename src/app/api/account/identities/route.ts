@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { getPlayerById } from '@/lib/supabase/queries/players';
-import { supabase } from '@/lib/supabase/client';
+import { getAuthUserEmailState } from '@/lib/supabase/queries/auth-users';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import type { ApiResult } from '@/types/api';
 
@@ -33,10 +33,10 @@ export async function GET() {
     let email: string | null = null;
     let emailConfirmed = false;
     if (player.auth_user_id) {
-      const { data, error } = await supabase.auth.admin.getUserById(player.auth_user_id);
-      if (!error && data.user) {
-        email = data.user.email ?? null;
-        emailConfirmed = !!data.user.email_confirmed_at;
+      const state = await getAuthUserEmailState(player.auth_user_id);
+      if (state) {
+        email = state.email;
+        emailConfirmed = state.emailConfirmed;
       }
     }
 

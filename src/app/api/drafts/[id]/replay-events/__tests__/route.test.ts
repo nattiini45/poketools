@@ -22,29 +22,18 @@ vi.mock('@/lib/supabase/queries/draft-replay-events', () => ({
   getReplayEventsByPool: vi.fn(),
   createReplayEvent: vi.fn(),
   getNextSequenceNumber: vi.fn(),
+  getLineIdsByPick: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolById: vi.fn(),
 }));
 
-// The narrow pick read: `from('draft_picks').select('id, line_id').eq('draft_pool_id', id)`.
-const pickRead = vi.hoisted(() => {
-  const eq = vi.fn();
-  const select = vi.fn(() => ({ eq }));
-  const from = vi.fn(() => ({ select }));
-  return { from, select, eq };
-});
-
-vi.mock('@/lib/supabase/client', () => ({
-  supabase: { from: pickRead.from },
-}));
-
 // ─── Imports (after mocks) ──────────────────────────────────────────
 
 import { GET, POST } from '@/app/api/drafts/[id]/replay-events/route';
 import { requireAdmin } from '@/lib/auth/helpers';
-import { getReplayEventsByPool, createReplayEvent, getNextSequenceNumber } from '@/lib/supabase/queries/draft-replay-events';
+import { getReplayEventsByPool, createReplayEvent, getNextSequenceNumber, getLineIdsByPick } from '@/lib/supabase/queries/draft-replay-events';
 import { getDraftPoolById } from '@/lib/supabase/queries/drafts';
 import { safeErrorResponse } from '@/lib/api/error-response';
 
@@ -68,13 +57,7 @@ describe('GET /api/drafts/[id]/replay-events', () => {
       { id: 'ev-3', event_type: 'pick', draft_pool_id: '55555555-5555-4555-8555-555555555555', pick_id: 'pk-legacy' },
     ];
     vi.mocked(getReplayEventsByPool).mockResolvedValue(events as never);
-    pickRead.eq.mockResolvedValue({
-      data: [
-        { id: 'pk-1', line_id: 'oshawott--samurott' },
-        { id: 'pk-legacy', line_id: null },
-      ],
-      error: null,
-    });
+    vi.mocked(getLineIdsByPick).mockResolvedValue(new Map([['pk-1', 'oshawott--samurott']]));
 
     const res = await GET({} as NextRequest, routeContext);
     const json = await res.json();
@@ -89,14 +72,12 @@ describe('GET /api/drafts/[id]/replay-events', () => {
     // Only the pick id and line id are read from the pick rows (no player join, no other column).
     expect(JSON.stringify(json.data)).not.toContain('player');
     expect(getReplayEventsByPool).toHaveBeenCalledWith('55555555-5555-4555-8555-555555555555');
-    expect(pickRead.from).toHaveBeenCalledWith('draft_picks');
-    expect(pickRead.select).toHaveBeenCalledWith('id, line_id');
-    expect(pickRead.eq).toHaveBeenCalledWith('draft_pool_id', '55555555-5555-4555-8555-555555555555');
+    expect(getLineIdsByPick).toHaveBeenCalledWith('55555555-5555-4555-8555-555555555555');
   });
 
   it('delegates to safeErrorResponse when the pick read fails', async () => {
     vi.mocked(getReplayEventsByPool).mockResolvedValue([] as never);
-    pickRead.eq.mockResolvedValue({ data: null, error: new Error('DB error') });
+    vi.mocked(getLineIdsByPick).mockRejectedValue(new Error('DB error'));
 
     await GET({} as NextRequest, routeContext);
     expect(safeErrorResponse).toHaveBeenCalled();
@@ -104,7 +85,7 @@ describe('GET /api/drafts/[id]/replay-events', () => {
 
   it('delegates to safeErrorResponse on failure', async () => {
     vi.mocked(getReplayEventsByPool).mockRejectedValue(new Error('DB error'));
-    pickRead.eq.mockResolvedValue({ data: [], error: null });
+    vi.mocked(getLineIdsByPick).mockResolvedValue(new Map());
 
     await GET({} as NextRequest, routeContext);
     expect(safeErrorResponse).toHaveBeenCalled();

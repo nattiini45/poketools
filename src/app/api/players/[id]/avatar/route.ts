@@ -6,10 +6,9 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { avatarUploadSchema, formatZodErrors } from '@/lib/validation';
 import { getPlayerById, updatePlayer } from '@/lib/supabase/queries/players';
 import { getGalleryItem } from '@/lib/supabase/queries/avatar-gallery';
-import { supabase } from '@/lib/supabase/client';
+import { getAvatarBucket } from '@/lib/supabase/storage/avatars';
 import { validateAvatarConfig } from '@/lib/avatar/manifest';
 import {
-  AVATAR_BUCKET,
   avatarStoragePathFromUrl,
   avatarThumbPath,
   avatarThumbUrl,
@@ -170,7 +169,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
     const body = zodResult.data;
 
-    const avatarBucket = supabase.storage.from(AVATAR_BUCKET);
+    const avatarBucket = getAvatarBucket();
     // Storage names use the id read from the DB, never the raw route param.
     const storagePlayerId = player.id;
     const previousAvatarUrl = player.avatar_url;
@@ -438,7 +437,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     // Then delete the player's own avatar objects (legacy names + current version).
     // Gallery images are left alone: the gallery owns them.
     await removeStalePlayerAvatarFiles(
-      supabase.storage.from(AVATAR_BUCKET),
+      getAvatarBucket(),
       player.id,
       player.avatar_url,
       [],

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase/auth-client';
-import { supabase } from '@/lib/supabase/client';
+import { setAuthUserPassword } from '@/lib/supabase/queries/auth-users';
 import { revokeSessionsOfAuthUser } from '@/lib/supabase/queries/players';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readJsonBody } from '@/lib/api/json-body';
@@ -54,12 +54,7 @@ export async function POST(request: NextRequest) {
     // owner out early.
     await revokeSessionsOfAuthUser(data.user.id);
 
-    const { error: updateError } = await supabase.auth.admin.updateUserById(
-      data.user.id,
-      { password: parsed.data.password }
-    );
-
-    if (updateError) throw updateError;
+    await setAuthUserPassword(data.user.id, parsed.data.password);
 
     // Revoke once more: an old-password sign-in that finished between the first write and the password change was
     // stamped after the first epoch. Its `authAt` is the time its attempt started (`authStartedAt`), which precedes

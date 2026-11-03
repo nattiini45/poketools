@@ -1,61 +1,17 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { supabase } from '@/lib/supabase/client';
+import { listCompletedMatchesInReplayOrder } from '@/lib/supabase/queries/matches';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { upsertPlayerStreaks, type PlayerStreaksUpsertInput } from '@/lib/supabase/queries/streaks';
 import { updateRatings } from '@/lib/rating/updateRatings';
-import { compareReplayOrder } from '@/lib/rating/replay-order';
 import { aggregateMatchKOs } from '@/lib/match/match-kos';
 import { recomputeStreaks, updateStreaks } from '@/lib/gamification/streaks';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { checkAchievements } from '@/lib/gamification/achievements';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { ApiResult } from '@/types/api';
-
-/** PostgREST caps every response at `max_rows` (1000) and truncates silently. */
-const PAGE_SIZE = 1000;
-
-interface BackfillMatch {
-  id: string;
-  player_1_id: string;
-  player_2_id: string;
-  winner_id: string | null;
-  tournament_id: string;
-  date_played: string | null;
-  created_at: string;
-}
-
-/**
- * Every completed match with a winner, in the canonical replay order
- * (`compareReplayOrder`: `date_played ?? created_at`, oldest first), the same
- * order the rating rebuild and reconcile replay each player's curve in.
- * `updated_at` is NOT a chronology: a match confirmed, edited or entered after
- * it was played would sort late.
- *
- * Pages past the row cap on a total server order (`date_played` asc nulls
- * last, `created_at`, `id`), then sorts the whole list with the shared
- * comparator, so the replay order does not depend on how pages split.
- */
-async function listCompletedMatches(): Promise<BackfillMatch[]> {
-  const matches: BackfillMatch[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from('matches')
-      .select('id, player_1_id, player_2_id, winner_id, tournament_id, date_played, created_at')
-      .eq('status', 'completed')
-      .not('winner_id', 'is', null)
-      .order('date_played', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) throw error;
-    matches.push(...data);
-    if (data.length < PAGE_SIZE) return matches.sort(compareReplayOrder);
-  }
-}
 
 /** The streak row a player starts the chronological replay from. */
 const EMPTY_STREAKS: Readonly<PlayerStreaksUpsertInput> = {
@@ -129,7 +85,7 @@ export async function POST() {
   try {
     await requireAdmin();
 
-    const matches = await listCompletedMatches();
+    const matches = await listCompletedMatchesInReplayOrder();
     if (matches.length === 0) {
       return NextResponse.json<ApiResult<BackfillResult>>({
         success: true,

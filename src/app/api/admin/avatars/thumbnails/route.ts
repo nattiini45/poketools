@@ -4,14 +4,13 @@ import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { formatZodErrors } from '@/lib/validation';
-import { supabase } from '@/lib/supabase/client';
+import { getAvatarBucket } from '@/lib/supabase/storage/avatars';
 import {
   listGalleryItemsForThumbs,
   listPlayersNeedingAvatarThumb,
   swapPlayerAvatarUrl,
 } from '@/lib/supabase/queries/avatar-gallery';
 import {
-  AVATAR_BUCKET,
   avatarOriginalPath,
   avatarStoragePathFromUrl,
   avatarThumbPath,
@@ -276,7 +275,7 @@ export async function POST(request: NextRequest) {
 
     const { scope, dryRun, limit } = parsed.data;
     const cursor = parsed.data.cursor ?? null;
-    const bucket = supabase.storage.from(AVATAR_BUCKET);
+    const bucket = getAvatarBucket();
     const options: BatchOptions = { dryRun, limit, cursor, origin };
 
     const items = scope === 'players'

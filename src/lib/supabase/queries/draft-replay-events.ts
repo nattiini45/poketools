@@ -119,3 +119,17 @@ export async function deleteReplayEvent(id: string): Promise<void> {
 
   if (error) throw error;
 }
+
+/**
+ * pick id → line id of a pool's picks (EPB pools; a pick without a line is left out). A narrow select
+ * (`id, line_id`): no other pick column and no player join is read, so nothing private can leak.
+ */
+export async function getLineIdsByPick(draftPoolId: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from('draft_picks').select('id, line_id').eq('draft_pool_id', draftPoolId);
+  if (error) throw error;
+  const lineByPick = new Map<string, string>();
+  for (const pick of data ?? []) {
+    if (pick.line_id) lineByPick.set(pick.id, pick.line_id);
+  }
+  return lineByPick;
+}

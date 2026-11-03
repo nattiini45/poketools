@@ -17,6 +17,7 @@ vi.mock('@/lib/supabase/queries/point-buy-lists', () => ({
   bindSeasonToList: vi.fn(),
   bulkCreateListEntries: vi.fn(),
   createListVersion: vi.fn(),
+  findListVersionId: vi.fn(),
   isVersionBoundToActiveSeason: vi.fn(),
 }));
 
@@ -36,16 +37,6 @@ vi.mock('@/lib/import/point-buy-xlsx', () => ({
   pointBuyEntriesToRows: vi.fn(() => []),
 }));
 
-/** The route looks up an existing (name, version) row directly; none exists here. */
-vi.mock('@/lib/supabase/client', () => {
-  const chain = {
-    select: () => chain,
-    eq: () => chain,
-    maybeSingle: async () => ({ data: null, error: null }),
-  };
-  return { supabase: { from: vi.fn(() => chain) } };
-});
-
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
@@ -54,7 +45,7 @@ vi.mock('next/cache', () => ({
 import { POST } from '../route';
 import { revalidateTag } from 'next/cache';
 import { requireAdmin } from '@/lib/auth/helpers';
-import { bindSeasonToList, bulkCreateListEntries, createListVersion } from '@/lib/supabase/queries/point-buy-lists';
+import { bindSeasonToList, bulkCreateListEntries, createListVersion, findListVersionId } from '@/lib/supabase/queries/point-buy-lists';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { validatePointBuyImport } from '@/lib/import/point-buy-xlsx';
 import { assertXlsxMagicBytes, validateXlsxFile } from '@/lib/import/xlsx-upload';
@@ -98,6 +89,7 @@ describe('POST /api/admin/import/point-buy', () => {
       },
       validEntries: [],
     } as never);
+    vi.mocked(findListVersionId).mockResolvedValue(null);
     vi.mocked(createListVersion).mockResolvedValue({ id: VERSION_ID } as never);
     vi.mocked(bulkCreateListEntries).mockResolvedValue(1);
     vi.mocked(getSeasonById).mockResolvedValue({ id: SEASON_ID, status: 'upcoming', point_buy_list_id: null } as never);

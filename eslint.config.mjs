@@ -52,27 +52,7 @@ export const SCRIPT_BROWSER_CONTEXT_FILES = [
  * helpers under `src/lib/auth`; a file listed here has no such home. Each entry names its reason.
  * @type {ReadonlyArray<{ file: string, reason: string }>}
  */
-export const SERVICE_ROLE_CLIENT_ALLOWLIST = [
-  { file: 'src/app/api/account/identities/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/admin/avatars/thumbnails/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/admin/backfill-gamification/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/admin/dashboard/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/admin/export/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/admin/import/point-buy/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/admin/rounds/[id]/reset/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/auth/reset-password/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/avatar/gallery/[id]/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/avatar/generate/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/avatar/transform/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/bootstrap/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/broadcast/storylines/[id]/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/broadcast/storylines/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/draft-pool-entries/[id]/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/drafts/[id]/replay-events/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/matches/[id]/social-image/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/players/[id]/avatar/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-  { file: 'src/app/api/players/[id]/route.ts', reason: 'inline query not yet moved into src/lib/supabase' },
-];
+export const SERVICE_ROLE_CLIENT_ALLOWLIST = [];
 
 const SUPABASE_PACKAGE_PATTERN = {
   group: ['@supabase/supabase-js', '@supabase/*'],
