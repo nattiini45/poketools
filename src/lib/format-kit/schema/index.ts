@@ -3,17 +3,50 @@
  * the hand-written types in `../types.ts`: if the two drift, `tsc` fails in this file.
  */
 import type { z } from 'zod';
-import type { AdvanceSelect, Edge, FormatDefinition, Pairing, RankStep, RuleCard, Stage } from '../types';
+import type {
+  AdjustRule,
+  AdvanceSelect,
+  AttributeDef,
+  CheckRule,
+  DomainDef,
+  Edge,
+  Effect,
+  EventSpec,
+  FormatDefinition,
+  MetricEntry,
+  OnEventRule,
+  Pairing,
+  PlayerActionRule,
+  RankStep,
+  RelationDef,
+  ResourceDef,
+  RuleCard,
+  RuleEntry,
+  Stage,
+  TunableDef,
+} from '../types';
 import type { LText } from '@/lib/studio-core/ltext';
-import { documentShape } from './document';
 import { ltextSchema } from '@/lib/studio-core/text-schema';
+import { documentShape, ruleEntrySchema } from './document';
 import {
+  adjustRuleSchema,
   advanceSelectSchema,
+  attributeDefSchema,
+  checkRuleSchema,
+  domainDefSchema,
   edgeSchema,
+  effectSchema,
+  eventSpecSchema,
+  metricEntrySchema,
+  onEventRuleSchema,
   pairingSchema,
+  playerActionRuleSchema,
   rankStepSchema,
+  relationDefSchema,
+  resourceDefSchema,
   ruleCardSchema,
   stageSchema,
+  tunableDefSchema,
 } from './primitives';
 
 export * from './common';
@@ -32,6 +65,19 @@ export type SchemaMatchesTypes = [
   Expect<Same<z.output<typeof rankStepSchema>, RankStep>>,
   Expect<Same<z.output<typeof advanceSelectSchema>, AdvanceSelect>>,
   Expect<Same<z.output<typeof ruleCardSchema>, RuleCard>>,
+  Expect<Same<z.output<typeof ruleEntrySchema>, RuleEntry>>,
+  Expect<Same<z.output<typeof attributeDefSchema>, AttributeDef>>,
+  Expect<Same<z.output<typeof domainDefSchema>, DomainDef>>,
+  Expect<Same<z.output<typeof relationDefSchema>, RelationDef>>,
+  Expect<Same<z.output<typeof resourceDefSchema>, ResourceDef>>,
+  Expect<Same<z.output<typeof metricEntrySchema>, MetricEntry>>,
+  Expect<Same<z.output<typeof tunableDefSchema>, TunableDef>>,
+  Expect<Same<z.output<typeof eventSpecSchema>, EventSpec>>,
+  Expect<Same<z.output<typeof effectSchema>, Effect>>,
+  Expect<Same<z.output<typeof onEventRuleSchema>, OnEventRule>>,
+  Expect<Same<z.output<typeof playerActionRuleSchema>, PlayerActionRule>>,
+  Expect<Same<z.output<typeof checkRuleSchema>, CheckRule>>,
+  Expect<Same<z.output<typeof adjustRuleSchema>, AdjustRule>>,
   Expect<Same<z.output<typeof ltextSchema>, LText>>,
 ];
 

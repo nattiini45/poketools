@@ -42,6 +42,12 @@ const KNOWN_TOP_LEVEL: ReadonlySet<string> = new Set([
   'text',
   'theme',
   'modules',
+  'attributes',
+  'domains',
+  'relations',
+  'resources',
+  'metrics',
+  'tunables',
 ]);
 
 /** The value of an optional list member: absent gives `[]`, a list is kept, anything else is a bad shape. */
@@ -104,7 +110,11 @@ function normalizeEdge(edge: Rec): Rec | null {
   return withDefaults(edge, { seeding: 'rank', gate: 'admin_confirm' });
 }
 
+/** Rule kinds other than the rule card; the editor has no form for them yet and keeps them as they are. */
+const OPAQUE_RULE_KINDS: ReadonlySet<string> = new Set(['rule.on_event', 'player.action', 'check.assisted', 'adjust.manual']);
+
 function normalizeRule(rule: Rec): Rec | null {
+  if (typeof rule.kind === 'string' && OPAQUE_RULE_KINDS.has(rule.kind)) return rule;
   if (!isRec(rule.text)) return null;
   if (rule.scope !== undefined && !isRec(rule.scope)) return null;
   return withDefaults(rule, { scope: { kind: 'season' }, verify: 'admin_checklist', when: 'once', visible_to_players: true });

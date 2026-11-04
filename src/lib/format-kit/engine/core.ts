@@ -6,8 +6,9 @@
  *  3. validate; an invalid document yields schema diagnostics only and nothing else runs;
  *  4. turn validator notes into warnings;
  *  5. structure checks, 6. stage graph, 7. plan, 8. stage checks, 9. edge checks (expression type checks),
- *  10. translation coverage, 11. capabilities;
- *  12. sort the diagnostics, deep-freeze the result and store it.
+ *  10. runtime-section checks (attributes, domains, relations, resources, metrics, tunables, events, actions),
+ *  11. translation coverage, 12. capabilities;
+ *  13. sort the diagnostics, deep-freeze the result and store it.
  *
  * Compile is pure: no clock, no randomness, no I/O. The result carries codes and params only, never localized
  * text, so a cached result is locale-free; `render.ts` produces sentences after the read.
@@ -18,6 +19,7 @@ import type { SchemaIssueCode, ValidationResult } from '../issues';
 import type { FormatDefinition } from '../types';
 import { deriveCapabilities } from './capabilities';
 import { checkEdges } from './checks-edge';
+import { checkRuntime } from './checks-runtime';
 import { checkStages } from './checks-stage';
 import { checkLTextCoverage, checkStructure } from './checks-structure';
 import { diag, sortDiagnostics, type Diagnostic, type DiagnosticCode } from './diagnostics';
@@ -76,7 +78,7 @@ export interface Analysis {
   capabilities: FormatCapabilities;
 }
 
-/** Steps 5 to 11 on an already valid definition. Exported so the checks can be exercised without a validator. */
+/** Steps 5 to 12 on an already valid definition. Exported so the checks can be exercised without a validator. */
 export function analyzeDefinition(def: FormatDefinition, env: CompileEnv): Analysis {
   const diagnostics: Diagnostic[] = [...checkStructure(def, env)];
   const graphBuild = buildStageGraph(def);
@@ -85,6 +87,7 @@ export function analyzeDefinition(def: FormatDefinition, env: CompileEnv): Analy
   diagnostics.push(...planBuild.diagnostics);
   diagnostics.push(...checkStages(def, env, planBuild));
   diagnostics.push(...checkEdges(def, env, graphBuild, planBuild));
+  diagnostics.push(...checkRuntime(def, env));
   diagnostics.push(...checkLTextCoverage(def));
   return {
     diagnostics,

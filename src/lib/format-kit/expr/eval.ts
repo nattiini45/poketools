@@ -1,5 +1,5 @@
 import { KEY_PATTERN } from '@/lib/studio-core/keys';
-import { valueType, type EvalContext, type Expr, type ExprIssue, type ExprIssueCode, type ExprType, type ExprValue } from './ast';
+import { isPlainRefName, valueType, type EvalContext, type Expr, type ExprIssue, type ExprIssueCode, type ExprType, type ExprValue } from './ast';
 import { exceededLimit, measureExpr } from './measure';
 import {
   EXPR_MAX_ARGS,
@@ -233,11 +233,11 @@ export function evaluate(e: Expr, ctx: EvalContext, expected?: ExprType): EvalRe
       if (typeof name !== 'string') return fail('expr_shape', `${ptr}/name`);
       if (t !== 'number' && t !== 'boolean' && t !== 'text') return fail('expr_shape', `${ptr}/t`);
       let value: ExprValue | undefined;
-      const dot = name.indexOf('.');
-      if (dot < 0) {
+      if (isPlainRefName(name)) {
         value = ctx.refs.get(name);
         if (value === undefined) return fail('expr_unknown_ref', `${ptr}/name`, { name });
       } else {
+        const dot = name.indexOf('.');
         if (name.slice(0, dot) !== 'item' || !inAgg || row === null) return fail('expr_item_scope', `${ptr}/name`, { name });
         value = row.get(name.slice(dot + 1));
         if (value === undefined) return fail('expr_unknown_field', `${ptr}/name`, { name });

@@ -129,6 +129,10 @@ export default {
   format_detach_blocked: 'Teams still point to a phase of this format, so it cannot be detached.',
   season_format_type_locked:
     'The league type cannot be switched to or from a custom format while a format is attached or after the league has started.',
+  action_locked: 'This action is locked, so it can no longer be changed.',
+  resource_item_taken: 'Another player already holds this item, so it cannot be picked again.',
+  domain_amendment_locked: 'This list cannot be amended because an action that uses it is already locked.',
+  reason_required: 'A reason is required for this adjustment.',
 
   // League trash (src/lib/league-trash/errors.ts): the signals of league_trash_delete / league_trash_restore, the
   // restore of a league whose delete rebuild is still pending, and the junction blocks. The internal inventory

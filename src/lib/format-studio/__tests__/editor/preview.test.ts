@@ -59,7 +59,8 @@ describe('editorEnv and compileDraft', () => {
 describe('issue rows', () => {
   const doc = (): DraftDocument => {
     const base = preset('classic-league') as unknown as Record<string, unknown>;
-    return { ...base, note: 1, attributes: [] } as unknown as DraftDocument;
+    const stages = (base.stages as Array<Record<string, unknown>>).map((s, i) => (i === 0 ? { ...s, constraints: [] } : s));
+    return { ...base, note: 1, stages } as unknown as DraftDocument;
   };
 
   it('keeps the compiler order and gives every row a unique id', () => {
@@ -74,7 +75,7 @@ describe('issue rows', () => {
     const rows = toIssueRows(compileDraft(doc()).diagnostics);
     const removable = rows.filter((r) => r.canRemove);
     expect(removable.map((r) => r.code).sort()).toEqual(['schema_not_available_yet', 'schema_unknown_key']);
-    expect(removable.map((r) => r.pointer).sort()).toEqual(['/attributes', '/note']);
+    expect(removable.map((r) => r.pointer).sort()).toEqual(['/note', '/stages/0/constraints']);
     expect(rows.filter((r) => !r.canRemove).every((r) => r.code !== 'schema_unknown_key')).toBe(true);
   });
 
@@ -204,13 +205,13 @@ describe('applyFix twin of the kit fixes test', () => {
 });
 
 describe('removeAtPointer clears what the schema does not know', () => {
-  it('removes an unknown top-level member, a nested one and a reserved section', () => {
+  it('removes an unknown top-level member, a nested one and a reserved field', () => {
     const base = preset('swiss-top-cut') as unknown as Record<string, unknown>;
-    const stages = (base.stages as Array<Record<string, unknown>>).map((s, i) => (i === 0 ? { ...s, mystery: true } : s));
-    const doc = { ...base, stages, extra: 'x', attributes: [{ key: 'a' }] } as unknown as DraftDocument;
+    const stages = (base.stages as Array<Record<string, unknown>>).map((s, i) => (i === 0 ? { ...s, mystery: true, constraints: [] } : s));
+    const doc = { ...base, stages, extra: 'x' } as unknown as DraftDocument;
 
     const before = compileDraft(doc).diagnostics.filter((d) => d.code === 'schema_unknown_key' || d.code === 'schema_not_available_yet');
-    expect(before.map((d) => d.json_pointer).sort()).toEqual(['/attributes', '/extra', '/stages/0/mystery']);
+    expect(before.map((d) => d.json_pointer).sort()).toEqual(['/extra', '/stages/0/constraints', '/stages/0/mystery']);
 
     let current = doc;
     for (const d of before) {

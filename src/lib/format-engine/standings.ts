@@ -17,9 +17,12 @@
  * tied after the chain keeps participant order. An empty chain (a bracket stage) ranks like the legacy table:
  * points, KO differential, Buchholz, wins.
  */
+import { PLAYER_ROW_FIELDS } from '@/lib/format-kit/engine/runtime-names';
+import type { Expr, ExprValue } from '@/lib/format-kit/expr/ast';
+import { evaluate } from '@/lib/format-kit/expr/eval';
+import { seededRand } from '@/lib/format-kit/expr/rand';
 import { forfeitScoringOf, perOpponentFaintOf } from '@/lib/format-kit/scoring';
 import type { RankStep, Scoring, Stage } from '@/lib/format-kit/types';
-import { seededRand } from '@/lib/format-kit/expr/rand';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import type { ByeRecord, MatchRecord, Standing } from '@/lib/tournament/types';
 import type { MatchOutcome } from '@/types/match-outcome';
@@ -41,6 +44,20 @@ export interface KitStanding extends Standing {
   needs_decision_match: boolean;
   /** Rows still tied after the whole chain share an id (1, 2, ...); null for a row that is ranked alone. */
   tie_group: number | null;
+  /** Custom metric values (`metric.define`, `score.placement`) by key; absent when the stage has none. */
+  metrics?: Record<string, number>;
+}
+
+/** A `metric.define` of a player: an expression over the standings row (player env), evaluated once per row. */
+export interface StandingsMetricDef {
+  key: string;
+  expr: Expr;
+}
+
+/** A `score.placement` of the stage: points by final place in this table. */
+export interface StandingsPlacement {
+  key: string;
+  points: readonly number[];
 }
 
 export interface StageStandingsInput {
@@ -72,6 +89,23 @@ export interface StageStandingsInput {
   scoringOf?: (match: MatchRecord) => Scoring;
   /** The admin's order of the players (`rank.manual`); unlisted players stay tied behind the listed ones. */
   manualOrder?: readonly string[];
+  /**
+   * Points an admin or an event added per player (`format_adjustments`, kind `points`). They are added to `points`
+   * after the Buchholz sums (which stay the opponents' match points) and before any metric or rank step reads them.
+   */
+  pointAdjustments?: Readonly<Record<string, number>>;
+  /** Metric values computed elsewhere, per player and metric key; a `metric.define` of the same key overrides them. */
+  customMetrics?: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  /** `metric.define` of player: evaluated per row before ranking, so a rank step or a column may name the key. */
+  metricDefs?: readonly StandingsMetricDef[];
+  /**
+   * The refs a metric expression reads besides the row, per player: `attr.*`, `tunable.*`, `track.*`
+   * (`runtime/expr-env.ts` `playerExtraRefMap`). `player` is added here. `rank` and `group_rank` read 0 while the
+   * metrics are evaluated (the table is not ranked yet), and `rel()` answers false: the hidden links stay server-side.
+   */
+  playerRefs?: Readonly<Record<string, Readonly<Record<string, ExprValue>>>>;
+  /** `score.placement` metrics of this stage: set on the ranked rows (a stage cannot rank by its own placement). */
+  placements?: readonly StandingsPlacement[];
 }
 
 /** The order a stage without a rank chain uses: the legacy table's sort. */
@@ -158,7 +192,7 @@ export function metricValue(row: KitStanding, metric: string, input: Pick<StageS
     case 'faints_taken':
       return row.faints_taken;
     default:
-      return null;
+      return row.metrics !== undefined && Object.prototype.hasOwnProperty.call(row.metrics, metric) ? row.metrics[metric] : null;
   }
 }
 
@@ -338,8 +372,46 @@ export function computeStageStandings(input: StageStandingsInput): KitStanding[]
     if (stat.was_koed) row.kill_differential -= 1;
   }
 
+  for (const [playerId, extra] of Object.entries(input.pointAdjustments ?? {})) {
+    const row = rows.get(playerId);
+    if (row) row.points += extra;
+  }
+  attachCustomMetrics([...rows.values()], input);
+
   const chain = stage.rank.length > 0 ? stage.rank : LEGACY_RANK_CHAIN;
-  return rankRows([...rows.values()], chain, { input, scored });
+  const table = rankRows([...rows.values()], chain, { input, scored });
+  for (const placement of input.placements ?? []) {
+    for (const row of table) {
+      row.metrics = { ...row.metrics, [placement.key]: placement.points[row.rank - 1] ?? 0 };
+    }
+  }
+  return table;
+}
+
+/** Sets `row.metrics` from the precomputed values and the `metric.define` expressions; rows stay bare without either. */
+function attachCustomMetrics(rows: KitStanding[], input: StageStandingsInput): void {
+  const defs = input.metricDefs ?? [];
+  if (defs.length === 0 && input.customMetrics === undefined) return;
+  for (const row of rows) {
+    const given = input.customMetrics?.[row.player_id];
+    if (defs.length === 0 && given === undefined) continue;
+    const metrics: Record<string, number> = { ...given };
+    if (defs.length > 0) {
+      const refs = new Map<string, ExprValue>(
+        PLAYER_ROW_FIELDS.map((field) => [field, field === 'participants' ? rows.length : ((row as unknown as Record<string, number | undefined>)[field] ?? 0)]),
+      );
+      refs.set('rank', 0);
+      refs.set('group_rank', 0);
+      refs.set('player', row.player_id);
+      for (const [name, value] of Object.entries(input.playerRefs?.[row.player_id] ?? {})) refs.set(name, value);
+      const ctx = { refs, collections: new Map(), relations: new Map(), seed: input.seed ?? '', scope: `metric:${input.stage.key}` };
+      for (const def of defs) {
+        const result = evaluate(def.expr, ctx, 'number');
+        metrics[def.key] = result.ok && typeof result.value === 'number' ? result.value : 0;
+      }
+    }
+    row.metrics = metrics;
+  }
 }
 
 export interface ViewRow {

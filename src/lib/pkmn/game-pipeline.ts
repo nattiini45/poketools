@@ -229,6 +229,18 @@ export class MatchReplayUnresolvedError extends UserFacingError {
   }
 }
 
+/** Best effort: a custom league's `unresolved_outcome` check rules open a check for the disputed match. */
+async function openUnresolvedCheck(match: MatchWithPlayers): Promise<void> {
+  try {
+    const tournament = await getTournamentById(match.tournament_id);
+    if (!tournament || tournament.season_format_type !== 'custom' || !tournament.season_id) return;
+    const { onMatchUnresolved } = await import('@/lib/format-engine/runtime/hooks');
+    await onMatchUnresolved({ tournament, matchId: match.id, player1Id: match.player_1_id, player2Id: match.player_2_id });
+  } catch (err) {
+    logger.error('match/outcome', 'format runtime hook failed for an unresolved match', { matchId: match.id, error: err });
+  }
+}
+
 /**
  * An engine tie is never scored: the match moves to `disputed` (through `in_progress` when it had not started)
  * with an `unresolved` outcome whose reason is the engine's code, and no game is written, so the replay stays free
@@ -277,6 +289,7 @@ async function disputeUnresolvedMatch(match: MatchWithPlayers, input: ReplayGame
   });
 
   await revalidateMatchPages(match.tournament_id, match.id);
+  await openUnresolvedCheck(match);
   logger.warn('match/outcome', 'replay was an engine tie; match disputed with an unresolved outcome', {
     matchId: match.id,
     replayUrl: input.replay.url,

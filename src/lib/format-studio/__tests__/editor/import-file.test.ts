@@ -109,10 +109,11 @@ describe('the report', () => {
     expect(report.issues).toHaveLength(2);
   });
 
-  it('reports a reserved section apart from the unknown members', () => {
-    const doc = { ...minimalDoc(), attributes: [], extra: 1 };
+  it('reports a reserved field apart from the unknown members', () => {
+    const doc = { ...minimalDoc(), extra: 1 } as Record<string, unknown>;
+    (doc.stages as Array<Record<string, unknown>>)[0].constraints = [];
     const report = prepared(text(doc));
-    expect(report.reserved).toEqual(['/attributes']);
+    expect(report.reserved).toEqual(['/stages/0/constraints']);
     expect(report.unknownFields).toEqual(['/extra']);
     expect(report.errorCount).toBe(0);
   });
@@ -144,14 +145,12 @@ describe('the report', () => {
 
 describe('stripUnknownFields', () => {
   it('removes unknown members and reserved sections and leaves nothing unknown', () => {
-    const doc = { ...minimalDoc(), extra: 1, attributes: [], tunables: {} } as Record<string, unknown>;
+    const doc = { ...minimalDoc(), extra: 1 } as Record<string, unknown>;
     (doc.stages as Array<Record<string, unknown>>)[0].mystery = true;
     (doc.stages as Array<Record<string, unknown>>)[0].constraints = [];
     const report = prepared(text(doc));
     const stripped = stripUnknownFields(report);
     expect(stripped).not.toHaveProperty('extra');
-    expect(stripped).not.toHaveProperty('attributes');
-    expect(stripped).not.toHaveProperty('tunables');
     const after = validateBrowser(stripped);
     expect(after.ok).toBe(true);
     expect(prepared(text(stripped)).unknownFields).toEqual([]);

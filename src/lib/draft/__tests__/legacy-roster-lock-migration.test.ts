@@ -145,6 +145,10 @@ describe('league recycle bin restore order', () => {
   });
 
   it('reads the last of the reviewed definitions of the plan', () => {
-    expect(definitions).toEqual(['20261026091000_league_trash.sql', '20261104090000_match_outcomes.sql']);
+    expect(definitions).toEqual([
+      '20261026091000_league_trash.sql',
+      '20261104090000_match_outcomes.sql',
+      '20261105090000_format_runtime.sql',
+    ]);
   });
 });

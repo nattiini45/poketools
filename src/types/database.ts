@@ -2638,6 +2638,175 @@ export type Database = {
           },
         ]
       }
+      format_action_submissions: {
+        Row: {
+          action_key: string
+          actor_player_id: string
+          created_at: string
+          id: string
+          locked_at: string | null
+          picks: Json
+          season_id: string
+          status: string
+          submitted_at: string | null
+          target_player_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_key: string
+          actor_player_id: string
+          created_at?: string
+          id?: string
+          locked_at?: string | null
+          picks?: Json
+          season_id: string
+          status?: string
+          submitted_at?: string | null
+          target_player_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_key?: string
+          actor_player_id?: string
+          created_at?: string
+          id?: string
+          locked_at?: string | null
+          picks?: Json
+          season_id?: string
+          status?: string
+          submitted_at?: string | null
+          target_player_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_action_submissions_actor_player_id_fkey"
+            columns: ["actor_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_action_submissions_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_action_submissions_target_player_id_fkey"
+            columns: ["target_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      format_adjustments: {
+        Row: {
+          admin_id: string | null
+          created_at: string
+          delta: Json
+          id: string
+          kind: string
+          reason: string
+          season_id: string
+          target: Json
+        }
+        Insert: {
+          admin_id?: string | null
+          created_at?: string
+          delta?: Json
+          id?: string
+          kind: string
+          reason: string
+          season_id: string
+          target?: Json
+        }
+        Update: {
+          admin_id?: string | null
+          created_at?: string
+          delta?: Json
+          id?: string
+          kind?: string
+          reason?: string
+          season_id?: string
+          target?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_adjustments_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_adjustments_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      format_checks: {
+        Row: {
+          dedupe_key: string
+          id: string
+          note: string | null
+          opened_at: string
+          resolved_at: string | null
+          resolved_by: string | null
+          rule_id: string
+          season_id: string
+          source: string
+          status: string
+          subject: Json
+        }
+        Insert: {
+          dedupe_key: string
+          id?: string
+          note?: string | null
+          opened_at?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          rule_id: string
+          season_id: string
+          source: string
+          status?: string
+          subject?: Json
+        }
+        Update: {
+          dedupe_key?: string
+          id?: string
+          note?: string | null
+          opened_at?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          rule_id?: string
+          season_id?: string
+          source?: string
+          status?: string
+          subject?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_checks_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_checks_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       format_definition_versions: {
         Row: {
           changelog: Json | null
@@ -2762,6 +2931,228 @@ export type Database = {
           },
         ]
       }
+      format_event_log: {
+        Row: {
+          event: string
+          event_key: string
+          fired_at: string
+          fired_by: string | null
+          id: string
+          ops: Json
+          payload: Json
+          season_id: string
+        }
+        Insert: {
+          event: string
+          event_key: string
+          fired_at?: string
+          fired_by?: string | null
+          id?: string
+          ops?: Json
+          payload?: Json
+          season_id: string
+        }
+        Update: {
+          event?: string
+          event_key?: string
+          fired_at?: string
+          fired_by?: string | null
+          id?: string
+          ops?: Json
+          payload?: Json
+          season_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_event_log_fired_by_fkey"
+            columns: ["fired_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_event_log_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      format_flags: {
+        Row: {
+          key: string
+          season_id: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          season_id: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          season_id?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_flags_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      format_player_attrs: {
+        Row: {
+          attr_key: string
+          player_id: string
+          season_id: string
+          source: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          attr_key: string
+          player_id: string
+          season_id: string
+          source: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          attr_key?: string
+          player_id?: string
+          season_id?: string
+          source?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_player_attrs_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_player_attrs_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      format_relation_links: {
+        Row: {
+          created_at: string
+          from_player_id: string
+          relation_key: string
+          revealed_at: string | null
+          season_id: string
+          to_player_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_player_id: string
+          relation_key: string
+          revealed_at?: string | null
+          season_id: string
+          to_player_id: string
+        }
+        Update: {
+          created_at?: string
+          from_player_id?: string
+          relation_key?: string
+          revealed_at?: string | null
+          season_id?: string
+          to_player_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_relation_links_from_player_id_fkey"
+            columns: ["from_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_relation_links_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_relation_links_to_player_id_fkey"
+            columns: ["to_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      format_resource_items: {
+        Row: {
+          amount: number
+          created_at: string
+          exclusive: boolean
+          id: string
+          item_id: string | null
+          player_id: string
+          resource_key: string
+          season_id: string
+          source: string
+          source_ref: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          exclusive?: boolean
+          id?: string
+          item_id?: string | null
+          player_id: string
+          resource_key: string
+          season_id: string
+          source: string
+          source_ref?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          exclusive?: boolean
+          id?: string
+          item_id?: string | null
+          player_id?: string
+          resource_key?: string
+          season_id?: string
+          source?: string
+          source_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_resource_items_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_resource_items_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       format_rules: {
         Row: {
           banned_items: string[]
@@ -2816,6 +3207,45 @@ export type Database = {
             foreignKeyName: "format_rules_season_id_fkey"
             columns: ["season_id"]
             isOneToOne: true
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      format_track_progress: {
+        Row: {
+          player_id: string
+          season_id: string
+          step: number
+          track_key: string
+          updated_at: string
+        }
+        Insert: {
+          player_id: string
+          season_id: string
+          step?: number
+          track_key: string
+          updated_at?: string
+        }
+        Update: {
+          player_id?: string
+          season_id?: string
+          step?: number
+          track_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_track_progress_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_track_progress_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
             referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
@@ -6550,6 +6980,98 @@ export type Database = {
         }
         Returns: string
       }
+      format__action_flag_locked: {
+        Args: { p_action_key: string; p_season_id: string }
+        Returns: boolean
+      }
+      format__apply_ops: {
+        Args: { p_ops: Json; p_season_id: string }
+        Returns: undefined
+      }
+      format__insert_item: {
+        Args: {
+          p_amount: number
+          p_exclusive: boolean
+          p_item: string
+          p_player: string
+          p_resource: string
+          p_season_id: string
+          p_source: string
+          p_source_ref: string
+        }
+        Returns: undefined
+      }
+      format_action_save: {
+        Args: {
+          p_action_key: string
+          p_actor: string
+          p_picks: Json
+          p_season_id: string
+          p_target: string
+        }
+        Returns: {
+          action_key: string
+          actor_player_id: string
+          created_at: string
+          id: string
+          locked_at: string | null
+          picks: Json
+          season_id: string
+          status: string
+          submitted_at: string | null
+          target_player_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "format_action_submissions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      format_action_submit: {
+        Args: {
+          p_action_key: string
+          p_actor: string
+          p_items: Json
+          p_lock: boolean
+          p_picks: Json
+          p_season_id: string
+          p_target: string
+        }
+        Returns: {
+          action_key: string
+          actor_player_id: string
+          created_at: string
+          id: string
+          locked_at: string | null
+          picks: Json
+          season_id: string
+          status: string
+          submitted_at: string | null
+          target_player_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "format_action_submissions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      format_apply_adjustment: {
+        Args: {
+          p_admin: string
+          p_delta: Json
+          p_guard_actions: string[]
+          p_kind: string
+          p_ops: Json
+          p_reason: string
+          p_season_id: string
+          p_target: Json
+        }
+        Returns: string
+      }
       format_attach_season: {
         Args: {
           p_definition_id: string
@@ -6563,11 +7085,41 @@ export type Database = {
         }
         Returns: Json
       }
+      format_check_open: {
+        Args: {
+          p_dedupe_key: string
+          p_rule_id: string
+          p_season_id: string
+          p_source: string
+          p_subject: Json
+        }
+        Returns: string
+      }
+      format_check_resolve: {
+        Args: {
+          p_admin: string
+          p_check_id: string
+          p_note: string
+          p_status: string
+        }
+        Returns: boolean
+      }
       format_delete_unused_preset_rulesets: {
         Args: { p_kept: Json; p_recorded: Json }
         Returns: string[]
       }
       format_detach_season: { Args: { p_season_id: string }; Returns: Json }
+      format_fire_event: {
+        Args: {
+          p_event: string
+          p_event_key: string
+          p_fired_by: string
+          p_ops: Json
+          p_payload: Json
+          p_season_id: string
+        }
+        Returns: boolean
+      }
       format_publish_version: {
         Args: {
           p_actor: string

@@ -29,6 +29,7 @@ import {
   type Pairing,
   type RankStep,
   type RuleCard,
+  type RuleEntry,
   type RulesetRef,
   type SeriesOverride,
   type Stage,
@@ -157,7 +158,7 @@ export function previewRemoveStage(doc: DraftDocument, index: number): RemovalSu
   const key = doc.stages[index].key;
   return {
     edges: doc.edges.filter((e) => e.from === key || e.to === key).length,
-    ruleCards: doc.rules.filter((r) => r.scope?.kind === 'stage' && r.scope.stage === key).length,
+    ruleCards: doc.rules.filter((r) => r.kind === 'rule.custom' && r.scope?.kind === 'stage' && r.scope.stage === key).length,
     textSections: doc.text.sections.filter((s) => s.stage === key).length,
     views: doc.views.filter((v) => v.stages.includes(key)).length,
   };
@@ -171,8 +172,8 @@ export function removeStage(doc: DraftDocument, index: number): { doc: DraftDocu
   if (keyIsShared(doc, index)) return { doc: { ...doc, stages }, removed };
 
   const edges = doc.edges.filter((e) => e.from !== key && e.to !== key);
-  const rules = doc.rules.map((r): RuleCard =>
-    r.scope?.kind === 'stage' && r.scope.stage === key ? { ...r, scope: { kind: 'season' } } : r,
+  const rules = doc.rules.map((r): RuleEntry =>
+    r.kind === 'rule.custom' && r.scope?.kind === 'stage' && r.scope.stage === key ? { ...r, scope: { kind: 'season' } } : r,
   );
   const sections = doc.text.sections.map((s): TextSection => {
     if (s.stage !== key) return s;
@@ -211,8 +212,8 @@ export function renameStageKey(
       ...doc,
       stages,
       edges: doc.edges.map((e) => (e.from === previous || e.to === previous ? { ...e, from: rename(e.from), to: rename(e.to) } : e)),
-      rules: doc.rules.map((r): RuleCard =>
-        r.scope?.kind === 'stage' && r.scope.stage === previous ? { ...r, scope: { kind: 'stage', stage: next } } : r,
+      rules: doc.rules.map((r): RuleEntry =>
+        r.kind === 'rule.custom' && r.scope?.kind === 'stage' && r.scope.stage === previous ? { ...r, scope: { kind: 'stage', stage: next } } : r,
       ),
       views: doc.views.map((v) => (v.stages.includes(previous) ? { ...v, stages: v.stages.map(rename) } : v)),
       text: {
@@ -520,8 +521,10 @@ export function addRuleCard(doc: DraftDocument, authorBase: Locale): { doc: Draf
 
 export function updateRuleCard(doc: DraftDocument, i: number, fn: (c: RuleCard) => RuleCard): DraftDocument {
   if (!inRange(doc.rules, i)) return doc;
-  const next = fn(doc.rules[i]);
-  return next === doc.rules[i] ? doc : { ...doc, rules: replaceAt(doc.rules, i, next) };
+  const current = doc.rules[i];
+  if (current.kind !== 'rule.custom') return doc;
+  const next = fn(current);
+  return next === current ? doc : { ...doc, rules: replaceAt(doc.rules, i, next) };
 }
 
 export function removeRuleCard(doc: DraftDocument, i: number): DraftDocument {
@@ -530,13 +533,13 @@ export function removeRuleCard(doc: DraftDocument, i: number): DraftDocument {
 
 export function moveRuleCard(doc: DraftDocument, from: number, to: number): DraftDocument {
   const rules = moveIn(doc.rules, from, to);
-  return rules === doc.rules ? doc : { ...doc, rules: rules as RuleCard[] };
+  return rules === doc.rules ? doc : { ...doc, rules: rules as RuleEntry[] };
 }
 
 export function duplicateRuleCard(doc: DraftDocument, i: number): { doc: DraftDocument; index: number; id: string } {
   if (!inRange(doc.rules, i) || doc.rules.length >= MAX_RULES) return { doc, index: -1, id: '' };
   const id = uniqueKey(idsOf(doc.rules), `${doc.rules[i].id}_copy`);
-  const copy: RuleCard = { ...structuredClone(doc.rules[i]), id };
+  const copy: RuleEntry = { ...structuredClone(doc.rules[i]), id };
   return { doc: { ...doc, rules: insertAt(doc.rules, i + 1, copy) }, index: i + 1, id };
 }
 

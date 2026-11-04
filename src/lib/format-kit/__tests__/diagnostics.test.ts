@@ -26,10 +26,10 @@ const fixture = (id: string) => {
 };
 
 describe('diagnostic vocabulary', () => {
-  it('lists 59 distinct codes', () => {
-    expect(DIAGNOSTIC_CODES).toHaveLength(59);
+  it('lists 85 distinct codes', () => {
+    expect(DIAGNOSTIC_CODES).toHaveLength(85);
     expect(new Set(DIAGNOSTIC_CODES).size).toBe(DIAGNOSTIC_CODES.length);
-    expect(DIAGNOSTIC_SEVERITY.size).toBe(59);
+    expect(DIAGNOSTIC_SEVERITY.size).toBe(85);
   });
 
   it('has at least one negative fixture for every code, and none for an unknown code', () => {
@@ -259,7 +259,7 @@ describe('swiss rounds against the field size', () => {
 });
 
 describe('threshold expressions', () => {
-  it.each(NEGATIVE_FIXTURES.filter((f) => f.code.startsWith('expr_')).map((f) => [f.id, f] as const))(
+  it.each(NEGATIVE_FIXTURES.filter((f) => f.code.startsWith('expr_') && f.code !== 'expr_invalid').map((f) => [f.id, f] as const))(
     '%s surfaces at the pointer of the expression plus its own pointer',
     (_id, f) => {
       expect(f.pointer.startsWith('/edges/0/select/0/when')).toBe(true);

@@ -306,12 +306,20 @@ describe('strictness', () => {
 });
 
 describe('reserved sections and kinds', () => {
-  it('every reserved top-level section is not_available_yet and nothing else', () => {
+  it('the Phase 3 sections are validated as lists, never reported as not available', () => {
     for (const name of ['attributes', 'domains', 'relations', 'resources', 'metrics', 'tunables']) {
-      for (const content of [{}, [], null, { deep: { deeper: [1, 2] } }]) {
+      for (const content of [{}, null, { deep: { deeper: [1, 2] } }]) {
         const issues = expectInvalid({ ...minimalDoc(), [name]: content });
-        expect(issues, name).toEqual([{ code: 'not_available_yet', pointer: `/${name}`, params: { what: name } }]);
+        expect(issues, name).toEqual([{ code: 'type', pointer: `/${name}`, params: { expected: 'array' } }]);
       }
+      expect(expectValid({ ...minimalDoc(), [name]: [] }).value).toHaveProperty(name, []);
+    }
+  });
+
+  it('leaves the Phase 3 sections out of a document that does not use them', () => {
+    const value = expectValid(minimalDoc()).value as unknown as Record<string, unknown>;
+    for (const name of ['attributes', 'domains', 'relations', 'resources', 'metrics', 'tunables']) {
+      expect(Object.prototype.hasOwnProperty.call(value, name), name).toBe(false);
     }
   });
 
@@ -329,19 +337,20 @@ describe('reserved sections and kinds', () => {
     }
   });
 
-  it('every reserved rule kind, with the other rules still validated', () => {
+  it('the Phase 3 rule kinds are validated as themselves, with the other rules still validated', () => {
     for (const kind of ['rule.on_event', 'player.action', 'check.assisted', 'adjust.manual']) {
       const doc = setAt(minimalDoc(), ['rules'], [{ kind: 'rule.custom', id: 'ok', text: lt('Fine') }, { kind, whatever: 1 }, { kind: 'rule.custom' }]);
       const issues = expectInvalid(doc);
-      expect(issues).toContainEqual({ code: 'not_available_yet', pointer: '/rules/1', params: { what: kind } });
       expect(codes(issues)).toContain('required /rules/2/id');
-      expect(codes(issues).filter((c) => c.includes('/rules/1'))).toEqual([`not_available_yet /rules/1`]);
+      expect(codes(issues)).toContain('required /rules/1/id');
+      expect(codes(issues)).toContain('unknown_key /rules/1/whatever');
+      expect(issues.some((issue) => issue.code === 'not_available_yet')).toBe(false);
     }
   });
 
   it('other parts of the document are still validated next to a reserved section', () => {
-    const doc = { ...setAt(minimalDoc(), ['stages', 0, 'series', 'best_of'], 0), attributes: {} };
-    expect(codes(expectInvalid(doc))).toEqual(['not_available_yet /attributes', 'range /stages/0/series/best_of']);
+    const doc = setAt(setAt(minimalDoc(), ['stages', 0, 'series', 'best_of'], 0), ['stages', 0, 'end_when'], {});
+    expect(codes(expectInvalid(doc))).toEqual(['not_available_yet /stages/0/end_when', 'range /stages/0/series/best_of']);
   });
 });
 
@@ -377,7 +386,7 @@ describe('unknown rule kinds degrade to manual rule cards', () => {
 
   it('falls back to the machine text of the kind when the entry text is invalid', () => {
     const doc = setAt(minimalDoc(), ['rules'], [{ kind: 'rule.future', id: 'x', text: { base: 'de' } }]);
-    expect(expectValid(doc).value.rules[0].text).toEqual({ base: 'en', en: { v: 'rule.future', s: 'machine' } });
+    expect(expectValid(doc).value.rules[0]).toMatchObject({ text: { base: 'en', en: { v: 'rule.future', s: 'machine' } } });
   });
 
   it('does not read hostile keys of a degraded entry', () => {
@@ -392,7 +401,7 @@ describe('unknown rule kinds degrade to manual rule cards', () => {
   it('keeps a known rule card with its own degraded_from', () => {
     const doc = setAt(minimalDoc(), ['rules'], [{ kind: 'rule.custom', id: 'x', text: lt('T'), degraded_from: 'rule.old' }]);
     const result = expectValid(doc);
-    expect(result.value.rules[0].degraded_from).toBe('rule.old');
+    expect(result.value.rules[0]).toMatchObject({ degraded_from: 'rule.old' });
     expect(result.notes).toEqual([]);
   });
 

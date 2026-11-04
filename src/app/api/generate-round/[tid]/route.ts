@@ -49,6 +49,7 @@ import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
 import { loadKitPhase } from '@/lib/format-engine/load';
 import { kitPairsRounds, legRoundRange, pairNextRound } from '@/lib/format-engine/pairing';
 import { ensureKitPhaseGroups } from '@/lib/format-engine/groups';
+import { onRoundGenerated } from '@/lib/format-engine/runtime/hooks';
 import { mirrorsLeagueGroups } from '@/lib/tournament/phase-week-plan';
 import type { ApiResult, ApiWarning } from '@/types/api';
 import type { Round } from '@/types/round';
@@ -469,6 +470,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // The new pairings show on the next view of the public pages.
     expireTournamentReads(tid, tournament.season_id);
+
+    // A kit league's format reacts to the new round (stage_start for the first one, round_start, rematch checks). Best
+    // effort and logged inside: the hook never fails the write.
+    if (kitPhase?.engine === 'kit') {
+      await onRoundGenerated({
+        tournament,
+        roundNumber,
+        rematches,
+        startsPhase: tournament.status === 'upcoming',
+      });
+    }
 
     logAuditEvent({
       actor_id: admin.playerId,

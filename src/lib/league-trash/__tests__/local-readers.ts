@@ -36,7 +36,7 @@ const scoped = (scopeColumn: string, idColumn: string, typeValues: [string, stri
   { column: idColumn, keys: 'phases', where: { [scopeColumn]: typeValues[1] } },
 ];
 
-/** The 50 owned tables of `league_trash__inventory()` (the local test compares this list with the database). */
+/** The owned tables of `league_trash__inventory()` (the local test compares this list with the database). */
 export const OWNED_SPECS: readonly TableSpec[] = [
   { table: 'seasons', order: ['id'], by: [{ column: 'id', keys: 'season' }] },
   { table: 'season_participants', order: ['season_id', 'player_id'], by: [bySeason()] },
@@ -89,6 +89,15 @@ export const OWNED_SPECS: readonly TableSpec[] = [
   { table: 'social_integrations', order: ['id'], by: scoped('scope_type', 'scope_id', ['season', 'tournament']) },
   { table: 'wiki_notes', order: ['id'], by: scoped('scope_type', 'scope_id', ['league', 'tournament']) },
   { table: 'wiki_note_reports', order: ['id'], by: [{ column: 'note_id', keys: 'notes' }] },
+  { table: 'format_relation_links', order: ['relation_key', 'from_player_id'], by: [bySeason()] },
+  { table: 'format_resource_items', order: ['id'], by: [bySeason()] },
+  { table: 'format_action_submissions', order: ['id'], by: [bySeason()] },
+  { table: 'format_event_log', order: ['id'], by: [bySeason()] },
+  { table: 'format_flags', order: ['key'], by: [bySeason()] },
+  { table: 'format_player_attrs', order: ['player_id', 'attr_key'], by: [bySeason()] },
+  { table: 'format_track_progress', order: ['player_id', 'track_key'], by: [bySeason()] },
+  { table: 'format_checks', order: ['id'], by: [bySeason()] },
+  { table: 'format_adjustments', order: ['id'], by: [bySeason()] },
 ];
 
 /** Deleted with the league but never captured: rebuilt by the app. */

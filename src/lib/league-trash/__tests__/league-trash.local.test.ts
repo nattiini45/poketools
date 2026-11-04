@@ -234,7 +234,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       expect(Object.keys(listed ?? {})).not.toContain('unlinked');
       expect(listed?.counts.matches).toBe(league.counts.matches);
       expect(new Date(listed?.purge_after ?? 0).getTime() - new Date(listed?.deleted_at ?? 0).getTime()).toBe(90 * DAY);
-      expect(await count('league_trash_tables', (query) => query.eq('trash_id', trash.trash_id))).toBe(51);
+      expect(await count('league_trash_tables', (query) => query.eq('trash_id', trash.trash_id))).toBe(OWNED_SPECS.length);
       expect(await count('league_trash_players', (query) => query.eq('trash_id', trash.trash_id))).toBe(league.playerIds.length);
       expect(await count('league_trash_rulesets', (query) => query.eq('trash_id', trash.trash_id))).toBe(1);
       expect(await count('league_trash_point_buy_versions', (query) => query.eq('trash_id', trash.trash_id))).toBe(1);

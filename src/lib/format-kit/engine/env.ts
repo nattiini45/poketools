@@ -14,6 +14,8 @@ export interface CompileEnv {
   rosterSize?: number;
   /** Ruleset ids that exist. When absent, `ruleset` references are not checked. */
   rulesetIds?: ReadonlySet<string>;
+  /** @pkmn species ids that exist. When absent, domain entry ids are not checked. */
+  speciesIds?: ReadonlySet<string>;
 }
 
 export const CURRENT_ENV: CompileEnv = {
@@ -24,6 +26,7 @@ export const CURRENT_ENV: CompileEnv = {
 /** Canonical string of an environment (sets sorted), used as part of the memo key. */
 export function envKey(env: CompileEnv): string {
   const ids = env.rulesetIds === undefined ? null : [...env.rulesetIds].sort();
+  const species = env.speciesIds === undefined ? null : [...env.speciesIds].sort();
   return JSON.stringify([
     env.matchModel.draws,
     env.matchModel.forfeits,
@@ -32,5 +35,6 @@ export function envKey(env: CompileEnv): string {
     env.features.rating,
     env.rosterSize ?? null,
     ids,
+    species,
   ]);
 }

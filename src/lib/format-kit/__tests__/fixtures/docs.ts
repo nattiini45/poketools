@@ -291,6 +291,206 @@ export function degradedRulesDoc(): Json {
   return doc;
 }
 
+const ref = (name: string, t: 'number' | 'boolean' | 'text'): Json => ({ k: 'ref', name, t });
+const num = (v: number): Json => ({ k: 'num', v });
+const cmp = (op: string, a: Json, b: Json): Json => ({ k: 'cmp', op, a, b });
+
+/**
+ * A gift exchange: every Phase 3 section and every Phase 3 kind. Players get a house, a secret recipient and picks from
+ * a locked list that opens when the stage starts. Defaults are left out, as an author would write it.
+ */
+export function giftExchangeDoc(): Json {
+  return {
+    schema_version: 1,
+    identity: { name: lt('Gift Exchange', 'Wichtelcup') },
+    stages: [
+      {
+        key: 'main',
+        name: lt('Exchange', 'Wichteln'),
+        participants: { from: 'roster', seeding: 'signup' },
+        pairing: { kind: 'round_robin' },
+        series: { best_of: 1 },
+        scoring: { win: 3 },
+        rank: [
+          { kind: 'metric', metric: 'points', direction: 'desc' },
+          { kind: 'metric', metric: 'gift_score', direction: 'desc' },
+          { kind: 'coin_flip' },
+        ],
+        columns: ['points', 'gift_score'],
+      },
+    ],
+    attributes: [
+      {
+        key: 'house',
+        label: lt('House', 'Haus'),
+        on: 'player',
+        type: 'enum',
+        values: ['ember', 'tide', 'grove'],
+        assign: { kind: 'random_seeded' },
+      },
+      {
+        key: 'level',
+        label: lt('Level', 'Stufe'),
+        on: 'player',
+        type: 'number',
+        assign: { kind: 'expr', expr: ref('tunable.base_level', 'number') },
+      },
+      { key: 'veteran', label: lt('Veteran', 'Veteran'), on: 'player', type: 'bool', assign: { kind: 'manual' } },
+      { key: 'nick', label: lt('Nickname', 'Spitzname'), on: 'player', type: 'text' },
+      { key: 'role', label: lt('Role', 'Rolle'), on: 'entry', type: 'enum', values: ['attacker', 'support', 'tank'] },
+      { key: 'tags', label: lt('Tags', 'Tags'), on: 'entry', type: 'enum', values: ['fast', 'bulky'], multi: true },
+      { key: 'bonus', label: lt('Bonus', 'Bonus'), on: 'entry', type: 'number' },
+    ],
+    domains: [
+      {
+        key: 'pool',
+        label: lt('Gift pool', 'Geschenkepool'),
+        initially: 'locked',
+        visibility: 'when_unlocked',
+        entries: [
+          {
+            id: 'garchomp',
+            attrs: [
+              { key: 'role', value: 'attacker' },
+              { key: 'tags', value: ['fast', 'bulky'] },
+              { key: 'bonus', value: 2 },
+            ],
+          },
+          { id: 'blissey', attrs: [{ key: 'role', value: 'support' }, { key: 'bonus', value: 1 }] },
+          { id: 'corviknight', attrs: [{ key: 'role', value: 'tank' }, { key: 'bonus', value: 3 }] },
+        ],
+      },
+    ],
+    relations: [
+      {
+        key: 'santa',
+        label: lt('Secret recipient', 'Geheimer Beschenkter'),
+        shape: 'derangement',
+        reveal_on: { event: 'action_locked', action: 'choose_gift' },
+      },
+    ],
+    resources: [
+      { key: 'picks', label: lt('Picks', 'Picks'), holds: { kind: 'domain', domain: 'pool' }, capacity: 2, exclusive: 'global' },
+      { key: 'coins', label: lt('Coins', 'Münzen'), holds: { kind: 'counter' }, capacity: 10, visibility: 'all' },
+    ],
+    metrics: [
+      {
+        kind: 'metric.define',
+        key: 'gift_score',
+        label: lt('Gift score', 'Geschenkwertung'),
+        of: 'player',
+        expr: { k: 'arith', op: '*', a: ref('wins', 'number'), b: ref('tunable.bonus_factor', 'number') },
+      },
+      {
+        kind: 'track.progression',
+        key: 'milestones',
+        label: lt('Milestones', 'Meilensteine'),
+        stage: 'main',
+        steps: [
+          { label: lt('First win', 'Erster Sieg'), when: ref('won', 'boolean') },
+          { label: lt('Round three', 'Runde drei'), when: cmp('>=', ref('round', 'number'), num(3)) },
+        ],
+      },
+      { kind: 'score.placement', key: 'placement_points', label: lt('Placement', 'Platzierung'), stage: 'main', points: [5, 3, 1] },
+    ],
+    tunables: [
+      { key: 'base_level', label: lt('Base level', 'Grundstufe'), type: 'number', default: 1, min: 0, max: 10 },
+      { key: 'bonus_factor', label: lt('Bonus factor', 'Bonusfaktor'), type: 'number', default: 2 },
+      { key: 'mode', label: lt('Mode', 'Modus'), type: 'enum', default: 'cozy', values: ['cozy', 'fierce'], editable_until: 'lock' },
+      { key: 'curve', label: lt('Curve', 'Kurve'), type: 'table', default: [3, 2, 1], status: 'approved' },
+      { key: 'open', label: lt('Open', 'Offen'), type: 'bool', default: true, editable_until: 'always' },
+    ],
+    rules: [
+      {
+        kind: 'rule.on_event',
+        id: 'kickoff',
+        on: { event: 'stage_start', stage: 'main' },
+        effects: [
+          { effect: 'unlock_domain', domain: 'pool' },
+          { effect: 'generate_relation', relation: 'santa' },
+          { effect: 'grant_resource', resource: 'coins', amount: 3 },
+          { effect: 'open_action', action: 'choose_gift' },
+          { effect: 'notify', message: lt('The pool is open.', 'Der Pool ist offen.') },
+        ],
+      },
+      {
+        kind: 'rule.on_event',
+        id: 'midway',
+        on: { event: 'round_end', stage: 'main', round: 2 },
+        when: cmp('>=', ref('round', 'number'), num(2)),
+        effects: [
+          {
+            effect: 'adjust_points',
+            stage: 'main',
+            to: { who: 'event_players', where: cmp('>=', ref('wins', 'number'), num(1)) },
+            points: 1,
+          },
+          { effect: 'set_attr', attr: 'veteran', to: { who: 'event_players' }, value: true },
+          { effect: 'revoke_resource', resource: 'coins', amount: 1 },
+          { effect: 'grant_resource', resource: 'picks', item: 'blissey' },
+          { effect: 'reveal_relation', relation: 'santa' },
+          { effect: 'lock_action', action: 'choose_gift' },
+          { effect: 'lock_domain', domain: 'pool' },
+        ],
+      },
+      {
+        kind: 'rule.on_event',
+        id: 'deadline',
+        on: { event: 'time', mark: 'gift_deadline' },
+        effects: [{ effect: 'lock_action', action: 'choose_gift' }],
+      },
+      {
+        kind: 'rule.on_event',
+        id: 'after_match',
+        on: { event: 'match_completed', stage: 'main' },
+        effects: [{ effect: 'notify', message: lt('A match is done.') }],
+      },
+      {
+        kind: 'rule.on_event',
+        id: 'wrap_up',
+        on: { event: 'stage_end', stage: 'main' },
+        effects: [{ effect: 'reveal_relation', relation: 'santa' }],
+      },
+      {
+        kind: 'rule.on_event',
+        id: 'new_round',
+        on: { event: 'round_start', stage: 'main' },
+        effects: [{ effect: 'notify', message: lt('Round starts.') }],
+      },
+      {
+        kind: 'player.action',
+        id: 'choose_gift',
+        label: lt('Choose a gift', 'Geschenk wählen'),
+        via: 'santa',
+        window: {
+          opens_on: { event: 'stage_start', stage: 'main' },
+          closes_on: { event: 'round_start', stage: 'main', round: 2 },
+        },
+        steps: [
+          {
+            resource: 'picks',
+            domain: 'pool',
+            count: 2,
+            where: cmp('>=', ref('attr.bonus', 'number'), num(1)),
+            distinct_attr: 'role',
+          },
+        ],
+        lock: 'on_close',
+      },
+      { kind: 'check.assisted', id: 'unresolved', source: { kind: 'unresolved_outcome' } },
+      { kind: 'check.assisted', id: 'ties', label: lt('Ties', 'Gleichstände'), source: { kind: 'standings_tie', stage: 'main' } },
+      { kind: 'check.assisted', id: 'rematches', source: { kind: 'pairing_rematch' } },
+      {
+        kind: 'check.assisted',
+        id: 'vets',
+        source: { kind: 'expr', of: 'player', when: ref('attr.veteran', 'boolean') },
+      },
+      { kind: 'adjust.manual', id: 'admin_tools', allow: ['points', 'resource', 'relation', 'outcome', 'action', 'domain', 'rank'] },
+      { kind: 'rule.custom', id: 'be_kind', text: lt('Be kind.', 'Seid nett.') },
+    ],
+  };
+}
+
 export const VALID_DOCS: ReadonlyArray<{ id: string; build: () => Json }> = [
   { id: 'minimal', build: minimalDoc },
   { id: 'league', build: leagueDoc },
@@ -298,6 +498,7 @@ export const VALID_DOCS: ReadonlyArray<{ id: string; build: () => Json }> = [
   { id: 'swiss', build: swissDoc },
   { id: 'kitchen-sink', build: kitchenSinkDoc },
   { id: 'degraded-rules', build: degradedRulesDoc },
+  { id: 'gift-exchange', build: giftExchangeDoc },
 ];
 
 /** One valid node per available primitive kind (values are what the validators produce, defaults included). */
@@ -357,5 +558,83 @@ export function sampleNodes(): Record<string, unknown> {
     'text.rules': (sink.text as { sections: Json[] }).sections[0],
     'theme.hint': { world: 'forest' },
     'module.legacy': (sink.modules as Json[])[0],
+    'attr.define': {
+      key: 'house',
+      label: lt('House', 'Haus'),
+      on: 'player',
+      type: 'enum',
+      values: ['ember', 'tide'],
+      assign: { kind: 'random_seeded' },
+    },
+    'attr.assign': { kind: 'expr', expr: ref('tunable.base_level', 'number') },
+    'domain.define': {
+      key: 'pool',
+      label: lt('Gift pool', 'Geschenkepool'),
+      entries: [
+        { id: 'garchomp', attrs: [{ key: 'role', value: 'attacker' }, { key: 'tags', value: ['fast'] }] },
+        { id: 'blissey', attrs: [] },
+      ],
+      initially: 'locked',
+      visibility: 'when_unlocked',
+    },
+    'relation.define': {
+      key: 'santa',
+      label: lt('Secret recipient', 'Geheimer Beschenkter'),
+      shape: 'derangement',
+      visibility: { from: 'hidden', to: 'own' },
+      reveal_on: { event: 'round_end', stage: 'main', round: 2 },
+    },
+    'resource.define': {
+      key: 'picks',
+      label: lt('Picks', 'Picks'),
+      holds: { kind: 'domain', domain: 'pool' },
+      capacity: 2,
+      visibility: 'own',
+      exclusive: 'global',
+    },
+    'metric.define': {
+      kind: 'metric.define',
+      key: 'gift_score',
+      label: lt('Gift score', 'Geschenkwertung'),
+      of: 'player',
+      expr: { k: 'arith', op: '*', a: ref('wins', 'number'), b: num(2) },
+    },
+    'rule.on_event': {
+      kind: 'rule.on_event',
+      id: 'kickoff',
+      on: { event: 'stage_start', stage: 'main' },
+      when: cmp('>=', ref('round', 'number'), num(0)),
+      effects: [
+        { effect: 'unlock_domain', domain: 'pool' },
+        { effect: 'grant_resource', resource: 'coins', to: { who: 'all' }, amount: 3 },
+      ],
+    },
+    'effect.apply': { effect: 'grant_resource', resource: 'coins', to: { who: 'event_players' }, amount: 2 },
+    'player.action': {
+      kind: 'player.action',
+      id: 'choose_gift',
+      label: lt('Choose a gift', 'Geschenk wählen'),
+      via: 'santa',
+      window: { opens_on: { event: 'stage_start', stage: 'main' } },
+      steps: [{ resource: 'picks', domain: 'pool', count: 2, distinct_attr: 'role' }],
+      review: true,
+      lock: 'on_submit',
+    },
+    'track.progression': {
+      kind: 'track.progression',
+      key: 'milestones',
+      label: lt('Milestones', 'Meilensteine'),
+      stage: 'main',
+      steps: [{ label: lt('First win', 'Erster Sieg'), when: ref('won', 'boolean') }],
+    },
+    'score.placement': {
+      kind: 'score.placement',
+      key: 'placement_points',
+      label: lt('Placement', 'Platzierung'),
+      stage: 'main',
+      points: [5, 3, 1],
+    },
+    'check.assisted': { kind: 'check.assisted', id: 'ties', label: lt('Ties', 'Gleichstände'), source: { kind: 'standings_tie', stage: 'main' } },
+    'adjust.manual': { kind: 'adjust.manual', id: 'admin_tools', allow: ['points', 'resource'] },
   };
 }

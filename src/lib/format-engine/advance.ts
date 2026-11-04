@@ -6,9 +6,10 @@ import 'server-only';
 
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
-import { getKitPhases, getOutcomesByPhases } from '@/lib/supabase/queries/format-engine';
+import { getKitPhases, getOutcomesByPhases, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import { resolveAdvancement, type AdvancedPlayer } from './advancement';
+import { standingAdjustments } from './runtime/adjustments';
 import { stageOf } from './load';
 import { coinFlipDraws, computeStageStandings, type KitOutcome } from './standings';
 
@@ -41,7 +42,12 @@ export async function kitAdvancingPlayers(input: KitAdvanceInput): Promise<Advan
   const edge = format.spec.edges.find((e) => e.from === source.format_stage_key && e.to === target.format_stage_key);
   if (!edge) return null;
 
-  const [stage, outcomeRows] = await Promise.all([stageOf(source), getOutcomesByPhases([source.id])]);
+  const [stage, outcomeRows, adjustmentRows] = await Promise.all([
+    stageOf(source),
+    getOutcomesByPhases([source.id]),
+    getStandingAdjustments(input.seasonId),
+  ]);
+  const { adjustments, manualOrder } = standingAdjustments(adjustmentRows, new Map([[stage.key, source.id]]));
   const outcomes: Record<string, KitOutcome> = {};
   for (const row of outcomeRows) outcomes[row.match_id] = { kind: row.kind, p1_faints: row.p1_faints, p2_faints: row.p2_faints };
   const table = computeStageStandings({
@@ -52,6 +58,8 @@ export async function kitAdvancingPlayers(input: KitAdvanceInput): Promise<Advan
     outcomes,
     byes: input.byes,
     coinFlips: coinFlipDraws(format.seed, stage.key, input.participantIds),
+    pointAdjustments: adjustments[source.id],
+    manualOrder: manualOrder[source.id],
   });
 
   const result = resolveAdvancement({

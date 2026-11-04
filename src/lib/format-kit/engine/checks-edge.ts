@@ -14,6 +14,7 @@ import { fixAddWildcard } from './fixes';
 import { metricProblem } from './checks-stage';
 import type { GraphBuild } from './graph';
 import { fixedRequest, isElimination, type PlanBuild } from './plan';
+import { playerExtraRefs, relationKeys } from './runtime-names';
 
 /** The code for an expression issue the catalog has no sentence of its own for (parse-only codes). */
 const UNKNOWN_EXPR_CODE: DiagnosticCode = 'expr_shape';
@@ -21,8 +22,16 @@ const UNKNOWN_EXPR_CODE: DiagnosticCode = 'expr_shape';
 const BASE_FIELDS: readonly string[] = ['points', 'wins', 'losses', 'games_played', 'rank', 'group_rank', 'faints_dealt', 'faints_taken'];
 const OPTIONAL_FIELDS: readonly string[] = ['kill_differential', 'buchholz'];
 
-/** The names a threshold expression on an edge may read: the standings of the SOURCE stage. */
-export function thresholdTypeEnv(source: Stage, env: CompileEnv, sourceMax: number | null): TypeEnv {
+/**
+ * The names a threshold expression on an edge may read: the standings of the SOURCE stage, and with `runtime` the
+ * document's player attributes, tunables, tracks, the `player` id and its relations.
+ */
+export function thresholdTypeEnv(
+  source: Stage,
+  env: CompileEnv,
+  sourceMax: number | null,
+  runtime?: FormatDefinition,
+): TypeEnv {
   const fields = new Map<string, ExprType>();
   for (const name of BASE_FIELDS) fields.set(name, 'number');
   for (const name of OPTIONAL_FIELDS) {
@@ -30,8 +39,9 @@ export function thresholdTypeEnv(source: Stage, env: CompileEnv, sourceMax: numb
   }
   const refs = new Map<string, ExprType>(fields);
   refs.set('participants', 'number');
+  if (runtime !== undefined) for (const [name, type] of playerExtraRefs(runtime)) refs.set(name, type);
   const standings: CollectionType = { fields, maxSize: sourceMax ?? COLLECTION_ASSUMED_MAX };
-  return { refs, collections: new Map([['standings', standings]]), relations: new Set<string>() };
+  return { refs, collections: new Map([['standings', standings]]), relations: runtime === undefined ? new Set<string>() : relationKeys(runtime) };
 }
 
 export function checkEdges(def: FormatDefinition, env: CompileEnv, graphBuild: GraphBuild, plan: PlanBuild): Diagnostic[] {
@@ -63,7 +73,7 @@ export function checkEdges(def: FormatDefinition, env: CompileEnv, graphBuild: G
         );
       }
       if (select.kind === 'threshold') {
-        const result = typeCheck(select.when, thresholdTypeEnv(source, env, available), 'boolean');
+        const result = typeCheck(select.when, thresholdTypeEnv(source, env, available, def), 'boolean');
         if (!result.ok) {
           for (const issue of result.issues) {
             const code: DiagnosticCode = isDiagnosticCode(issue.code) ? issue.code : UNKNOWN_EXPR_CODE;

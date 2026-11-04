@@ -44,6 +44,7 @@ vi.mock('@/lib/ai/trigger', () => ({ triggerTournamentReport: vi.fn() }));
 vi.mock('@/lib/feature-flags', () => ({ ENABLE_KALE_CABBAGE: false }));
 vi.mock('@/lib/format-studio/attach', () => ({ assertSeasonFormatAttached: vi.fn() }));
 vi.mock('@/lib/format-engine/load', () => ({ loadKitPhase: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/hooks', () => ({ onRoundGenerated: vi.fn() }));
 
 import { POST } from '@/app/api/generate-round/[tid]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
@@ -60,6 +61,7 @@ import { getSeasonGroups, seasonHasGroups } from '@/lib/supabase/queries/season-
 import { generateRound } from '@/lib/tournament';
 import { logAuditEvent } from '@/lib/audit/log';
 import { loadKitPhase, type KitPhase } from '@/lib/format-engine/load';
+import { onRoundGenerated } from '@/lib/format-engine/runtime/hooks';
 import { generateRoundRobinRound } from '@/lib/tournament/round-robin';
 import type { Pairing, Stage } from '@/lib/format-kit/types';
 
@@ -179,6 +181,30 @@ describe('generate-round on a kit phase', () => {
 
     expect(response.status).toBe(201);
     expect(body.warnings).toEqual([{ code: 'swiss_rematches', params: { count: 1 } }]);
+    expect(onRoundGenerated).toHaveBeenCalledWith(expect.objectContaining({ roundNumber: 2, rematches: 1, startsPhase: false }));
+  });
+
+  it('tells the format runtime about the round, and the phase start for an upcoming phase', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({ ...tournament('swiss', 0), status: 'upcoming' } as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
+    vi.mocked(loadKitPhase).mockResolvedValue(phase({ kind: 'swiss', rounds: 3, avoid_repeats: true }));
+
+    const response = await POST(request, routeParams);
+
+    expect(response.status).toBe(201);
+    expect(onRoundGenerated).toHaveBeenCalledTimes(1);
+    expect(onRoundGenerated).toHaveBeenCalledWith(expect.objectContaining({ roundNumber: 1, rematches: 0, startsPhase: true }));
+  });
+
+  it('does not call the format runtime for a shadow phase', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament('swiss', 1) as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([{ round_number: 1, status: 'completed', bye_player_ids: [] }] as never);
+    vi.mocked(loadKitPhase).mockResolvedValue(phase({ kind: 'swiss', rounds: 3, avoid_repeats: true }, 'shadow'));
+    vi.mocked(generateRound).mockReturnValue({ pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }], round_name: 'Round 2', bye_player_ids: [] } as never);
+
+    await POST(request, routeParams);
+
+    expect(onRoundGenerated).not.toHaveBeenCalled();
   });
 
   it('plays a second round robin leg with sides swapped, without a drift refusal', async () => {

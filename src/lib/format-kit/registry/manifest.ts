@@ -16,20 +16,33 @@
  */
 import { deepFreeze } from '@/lib/studio-core/json';
 import {
+  MAX_ACTION_STEPS,
   MAX_BEST_OF,
+  MAX_CAPACITY,
   MAX_COLUMNS,
+  MAX_DOMAIN_ENTRIES,
+  MAX_EFFECTS,
+  MAX_ENTRY_ATTRS,
+  MAX_ENUM_VALUES,
+  MAX_EVENT_ROUND,
   MAX_EXPECTED_COUNT,
   MAX_FACTS,
+  MAX_GRANT,
   MAX_GROUPS,
   MAX_LEGS,
+  MAX_MULTI_VALUES,
   MAX_N,
   MAX_N_PER_GROUP,
   MAX_OVERRIDE_ROUND,
   MAX_OVERRIDES,
+  MAX_PLACEMENT_POINTS,
   MAX_PLAYERS_PER_MATCH,
   MAX_RANK_STEPS,
   MAX_SELECTS,
+  MAX_STEP_COUNT,
   MAX_SWISS_ROUNDS,
+  MAX_TABLE_VALUES,
+  MAX_TRACK_STEPS,
   MAX_VIEW_STAGES,
   MIN_GROUPS,
   MIN_PLAYERS_PER_MATCH,
@@ -38,6 +51,7 @@ import {
 import { LTEXT_MAX_CHARS } from '@/lib/studio-core/ltext';
 import {
   AVAILABLE_KINDS,
+  ADJUST_KINDS,
   PRIMITIVE_KINDS,
   RESERVED_KINDS,
   kindKey,
@@ -50,28 +64,18 @@ import { NO_MAX, NUM_MAX, NUM_MIN, type FieldSpec, type JsonDefault, type Spec }
 export { kindKey };
 
 /** Top-level document sections that are reserved for later phases. */
-export const RESERVED_SECTIONS = ['attributes', 'domains', 'relations', 'resources', 'metrics', 'tunables'] as const;
+export const RESERVED_SECTIONS: readonly string[] = [];
 /** Stage fields that are reserved for later phases. */
 export const RESERVED_STAGE_FIELDS = ['constraints', 'acquire', 'calendar', 'end_when', 'foreach_group'] as const;
 /** Pairing kinds (the tag after `pairing.`) that are reserved for later phases. */
 export const RESERVED_PAIRING_TAGS = ['bipartite', 'filter', 'challenge'] as const;
 /** Rule kinds that are reserved for later phases. */
-export const RESERVED_RULE_KINDS = ['rule.on_event', 'player.action', 'check.assisted', 'adjust.manual'] as const;
+export const RESERVED_RULE_KINDS: readonly string[] = [];
 
 /**
- * Reserved kinds that are neither a pairing tag nor a rule kind, with the document field (or rule
- * kind) that will carry them. `tunables` has no kind of its own.
+ * Reserved kinds that are neither a pairing tag nor a rule kind, with the stage field that will carry them.
  */
 export const RESERVED_KIND_OWNERS: ReadonlyMap<ReservedKind, string> = new Map<ReservedKind, string>([
-  ['attr.define', 'attributes'],
-  ['domain.define', 'domains'],
-  ['attr.assign', 'attributes'],
-  ['relation.define', 'relations'],
-  ['resource.define', 'resources'],
-  ['metric.define', 'metrics'],
-  ['effect.apply', 'rule.on_event'],
-  ['track.progression', 'metrics'],
-  ['score.placement', 'metrics'],
   ['constraint.type_quota', 'constraints'],
   ['constraint.tera', 'constraints'],
   ['constraint.evolution_stage', 'constraints'],
@@ -99,6 +103,13 @@ export type ManifestSlot =
   | 'text'
   | 'theme'
   | 'module'
+  | 'attribute'
+  | 'assign'
+  | 'domain'
+  | 'relation'
+  | 'resource'
+  | 'metric'
+  | 'effect'
   | 'reserved';
 
 export type PrimitiveLevel = 'auto' | 'checked' | 'honor';
@@ -262,6 +273,189 @@ const MODULE_LEGACY = variant('kind', 'module.legacy', [
   dflt('facts', arr(LEGACY_FACT, 0, MAX_FACTS), []),
 ]);
 
+// --- Phase 3 leaf specs ---------------------------------------------------------------------------
+
+const EXPR_BOOL: Spec = { t: 'expr', type: 'boolean' };
+const NUMBER: Spec = { t: 'num', min: NUM_MIN, max: NUM_MAX };
+const TEXT_VALUE: Spec = { t: 'str', min: 0, max: LTEXT_MAX_CHARS, pattern: 'text' };
+/** A scalar attribute or flag value. */
+const SCALAR: Spec = { t: 'oneof', options: [TEXT_VALUE, NUMBER, BOOL] };
+
+const ATTR_ASSIGN: Spec = {
+  t: 'union',
+  tag: 'kind',
+  variants: [
+    { tag: 'manual', spec: variant('kind', 'manual', []) },
+    { tag: 'random_seeded', spec: variant('kind', 'random_seeded', []) },
+    { tag: 'expr', spec: variant('kind', 'expr', [req('expr', { t: 'expr', type: 'any' })]) },
+  ],
+};
+const ATTRIBUTE_DEF = obj([
+  req('key', KEY),
+  req('label', LTEXT),
+  req('on', oneOf('player', 'entry')),
+  req('type', oneOf('enum', 'number', 'text', 'bool')),
+  opt('values', arr(KEY, 1, MAX_ENUM_VALUES)),
+  opt('multi', BOOL),
+  opt('assign', ATTR_ASSIGN),
+]);
+
+const ENTRY_ATTR = obj([
+  req('key', KEY),
+  req('value', { t: 'oneof', options: [TEXT_VALUE, NUMBER, BOOL, arr(KEY, 1, MAX_MULTI_VALUES)] }),
+]);
+const DOMAIN_ENTRY = obj([req('id', KEY), dflt('attrs', arr(ENTRY_ATTR, 0, MAX_ENTRY_ATTRS), [])]);
+const DOMAIN_DEF = obj([
+  req('key', KEY),
+  req('label', LTEXT),
+  req('entries', arr(DOMAIN_ENTRY, 1, MAX_DOMAIN_ENTRIES)),
+  dflt('initially', oneOf('locked', 'unlocked'), 'unlocked'),
+  dflt('visibility', oneOf('public', 'when_unlocked', 'admins'), 'public'),
+]);
+
+const STAGE_SCOPED_EVENT = (event: string): Spec => variant('event', event, [opt('stage', KEY)]);
+const ROUND_EVENT = (event: string): Spec =>
+  variant('event', event, [opt('stage', KEY), opt('round', int(1, MAX_EVENT_ROUND))]);
+const EVENT_SPEC: Spec = {
+  t: 'union',
+  tag: 'event',
+  variants: [
+    { tag: 'stage_start', spec: STAGE_SCOPED_EVENT('stage_start') },
+    { tag: 'round_start', spec: ROUND_EVENT('round_start') },
+    { tag: 'round_end', spec: ROUND_EVENT('round_end') },
+    { tag: 'match_completed', spec: STAGE_SCOPED_EVENT('match_completed') },
+    { tag: 'action_locked', spec: variant('event', 'action_locked', [req('action', KEY)]) },
+    { tag: 'stage_end', spec: STAGE_SCOPED_EVENT('stage_end') },
+    { tag: 'time', spec: variant('event', 'time', [req('mark', KEY)]) },
+  ],
+};
+
+const RELATION_VISIBILITY = oneOf('hidden', 'own', 'all');
+const RELATION_DEF = obj([
+  req('key', KEY),
+  req('label', LTEXT),
+  req('shape', oneOf('derangement', 'pairs', 'manual')),
+  dflt('visibility', obj([req('from', RELATION_VISIBILITY), req('to', RELATION_VISIBILITY)]), { from: 'hidden', to: 'own' }),
+  opt('reveal_on', EVENT_SPEC),
+]);
+
+const RESOURCE_DEF = obj([
+  req('key', KEY),
+  req('label', LTEXT),
+  req('holds', {
+    t: 'union',
+    tag: 'kind',
+    variants: [
+      { tag: 'domain', spec: variant('kind', 'domain', [req('domain', KEY)]) },
+      { tag: 'counter', spec: variant('kind', 'counter', []) },
+    ],
+  }),
+  opt('capacity', int(1, MAX_CAPACITY)),
+  dflt('visibility', oneOf('own', 'all'), 'own'),
+  dflt('exclusive', oneOf('none', 'global'), 'none'),
+]);
+
+const METRIC_DEFINE = variant('kind', 'metric.define', [
+  req('key', KEY),
+  req('label', LTEXT),
+  req('of', oneOf('player', 'match')),
+  req('expr', { t: 'expr', type: 'number' }),
+]);
+const TRACK_PROGRESSION = variant('kind', 'track.progression', [
+  req('key', KEY),
+  req('label', LTEXT),
+  opt('stage', KEY),
+  req('steps', arr(obj([req('label', LTEXT), req('when', EXPR_BOOL)]), 1, MAX_TRACK_STEPS)),
+]);
+const SCORE_PLACEMENT = variant('kind', 'score.placement', [
+  req('key', KEY),
+  req('label', LTEXT),
+  req('stage', KEY),
+  req('points', arr(SCORE_NUM, 1, MAX_PLACEMENT_POINTS)),
+]);
+
+const TUNABLE_DEF = obj([
+  req('key', KEY),
+  req('label', LTEXT),
+  req('type', oneOf('number', 'bool', 'enum', 'table')),
+  req('default', { t: 'oneof', options: [NUMBER, BOOL, KEY, arr(NUMBER, 1, MAX_TABLE_VALUES)] }),
+  opt('min', NUMBER),
+  opt('max', NUMBER),
+  opt('values', arr(KEY, 1, MAX_ENUM_VALUES)),
+  dflt('editable_until', oneOf('start', 'lock', 'always'), 'start'),
+  dflt('status', oneOf('experimental', 'approved'), 'experimental'),
+]);
+
+const EFFECT_TARGET = obj([dflt('who', oneOf('all', 'event_players'), 'all'), opt('where', EXPR_BOOL)]);
+const TARGET_FIELD = (): FieldSpec => dflt('to', EFFECT_TARGET, { who: 'all' });
+const RESOURCE_EFFECT = (effect: string): Spec =>
+  variant('effect', effect, [
+    req('resource', KEY),
+    TARGET_FIELD(),
+    dflt('amount', int(1, MAX_GRANT), 1),
+    opt('item', KEY),
+  ]);
+const EFFECT: Spec = {
+  t: 'union',
+  tag: 'effect',
+  variants: [
+    { tag: 'unlock_domain', spec: variant('effect', 'unlock_domain', [req('domain', KEY)]) },
+    { tag: 'lock_domain', spec: variant('effect', 'lock_domain', [req('domain', KEY)]) },
+    { tag: 'reveal_relation', spec: variant('effect', 'reveal_relation', [req('relation', KEY)]) },
+    { tag: 'generate_relation', spec: variant('effect', 'generate_relation', [req('relation', KEY)]) },
+    { tag: 'grant_resource', spec: RESOURCE_EFFECT('grant_resource') },
+    { tag: 'revoke_resource', spec: RESOURCE_EFFECT('revoke_resource') },
+    {
+      tag: 'adjust_points',
+      spec: variant('effect', 'adjust_points', [req('stage', KEY), TARGET_FIELD(), req('points', SCORE_NUM)]),
+    },
+    { tag: 'set_attr', spec: variant('effect', 'set_attr', [req('attr', KEY), TARGET_FIELD(), req('value', SCALAR)]) },
+    { tag: 'open_action', spec: variant('effect', 'open_action', [req('action', KEY)]) },
+    { tag: 'lock_action', spec: variant('effect', 'lock_action', [req('action', KEY)]) },
+    { tag: 'notify', spec: variant('effect', 'notify', [req('message', LTEXT), TARGET_FIELD()]) },
+  ],
+};
+
+const RULE_ON_EVENT = variant('kind', 'rule.on_event', [
+  req('id', KEY),
+  req('on', EVENT_SPEC),
+  opt('when', EXPR_BOOL),
+  req('effects', arr(EFFECT, 1, MAX_EFFECTS)),
+]);
+const ACTION_STEP = obj([
+  req('resource', KEY),
+  req('domain', KEY),
+  req('count', int(1, MAX_STEP_COUNT)),
+  opt('where', EXPR_BOOL),
+  opt('distinct_attr', KEY),
+]);
+const PLAYER_ACTION = variant('kind', 'player.action', [
+  req('id', KEY),
+  req('label', LTEXT),
+  opt('via', KEY),
+  dflt('window', obj([opt('opens_on', EVENT_SPEC), opt('closes_on', EVENT_SPEC)]), {}),
+  req('steps', arr(ACTION_STEP, 1, MAX_ACTION_STEPS)),
+  dflt('review', BOOL, true),
+  dflt('lock', oneOf('on_submit', 'on_close'), 'on_submit'),
+]);
+const CHECK_ASSISTED = variant('kind', 'check.assisted', [
+  req('id', KEY),
+  opt('label', LTEXT),
+  req('source', {
+    t: 'union',
+    tag: 'kind',
+    variants: [
+      { tag: 'unresolved_outcome', spec: variant('kind', 'unresolved_outcome', []) },
+      { tag: 'standings_tie', spec: variant('kind', 'standings_tie', [opt('stage', KEY)]) },
+      { tag: 'pairing_rematch', spec: variant('kind', 'pairing_rematch', [opt('stage', KEY)]) },
+      { tag: 'expr', spec: variant('kind', 'expr', [req('of', oneOf('player', 'match')), req('when', EXPR_BOOL)]) },
+    ],
+  }),
+]);
+const ADJUST_MANUAL = variant('kind', 'adjust.manual', [
+  req('id', KEY),
+  req('allow', arr(oneOf(...ADJUST_KINDS), 1, ADJUST_KINDS.length)),
+]);
 // --- Entries ------------------------------------------------------------------------------------
 
 function available(
@@ -372,17 +566,19 @@ const ENTRY_BY_KIND: ReadonlyMap<PrimitiveKind, ManifestEntry> = new Map<Primiti
     available('text.rules', 'text', null, TEXT_SECTION),
     available('theme.hint', 'theme', null, THEME),
     available('module.legacy', 'module', null, MODULE_LEGACY),
-    reservedEntry('attr.define', 3),
-    reservedEntry('domain.define', 3),
-    reservedEntry('attr.assign', 3),
-    reservedEntry('relation.define', 3),
-    reservedEntry('resource.define', 3),
-    reservedEntry('metric.define', 3),
-    reservedEntry('rule.on_event', 3),
-    reservedEntry('player.action', 3),
-    reservedEntry('effect.apply', 3),
-    reservedEntry('track.progression', 3),
-    reservedEntry('score.placement', 3),
+    available('attr.define', 'attribute', null, ATTRIBUTE_DEF, { phase: 3 }),
+    available('attr.assign', 'assign', null, ATTR_ASSIGN, { phase: 3 }),
+    available('domain.define', 'domain', null, DOMAIN_DEF, { phase: 3 }),
+    available('relation.define', 'relation', null, RELATION_DEF, { phase: 3 }),
+    available('resource.define', 'resource', null, RESOURCE_DEF, { phase: 3 }),
+    available('metric.define', 'metric', 'metric.define', METRIC_DEFINE, { phase: 3 }),
+    available('rule.on_event', 'rule', 'rule.on_event', RULE_ON_EVENT, { phase: 3 }),
+    available('effect.apply', 'effect', null, EFFECT, { phase: 3 }),
+    available('player.action', 'rule', 'player.action', PLAYER_ACTION, { phase: 3 }),
+    available('track.progression', 'metric', 'track.progression', TRACK_PROGRESSION, { phase: 3 }),
+    available('score.placement', 'metric', 'score.placement', SCORE_PLACEMENT, { phase: 3 }),
+    available('check.assisted', 'rule', 'check.assisted', CHECK_ASSISTED, { level: 'checked', phase: 3 }),
+    available('adjust.manual', 'rule', 'adjust.manual', ADJUST_MANUAL, { level: 'checked', phase: 3 }),
     reservedEntry('pairing.bipartite', 4),
     reservedEntry('pairing.filter', 4),
     reservedEntry('pairing.challenge', 4),
@@ -393,8 +589,6 @@ const ENTRY_BY_KIND: ReadonlyMap<PrimitiveKind, ManifestEntry> = new Map<Primiti
     reservedEntry('constraint.distinct', 4),
     reservedEntry('constraint.roster_size', 4),
     reservedEntry('acquire.draft', 4),
-    reservedEntry('check.assisted', 3),
-    reservedEntry('adjust.manual', 3),
     reservedEntry('time.schedule', 4),
     reservedEntry('time.deadline_policy', 4),
     reservedEntry('stage.end_when', 4),
@@ -426,6 +620,11 @@ export function specOf(kind: AvailableKind): Spec {
   const spec = ENTRY_BY_KIND.get(kind)?.spec;
   if (!spec) throw new Error(`no spec for ${kind}`);
   return spec;
+}
+
+/** The Spec of one `tunables` entry (a tunable has no kind of its own). */
+export function tunableSpec(): Spec {
+  return TUNABLE_DEF;
 }
 
 export { AVAILABLE_KINDS, RESERVED_KINDS };

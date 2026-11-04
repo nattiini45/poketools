@@ -362,7 +362,7 @@ describe('prepareDocument', () => {
   });
 
   it('copies on write and never mutates the input', () => {
-    const doc = { ...minimalDoc(), attributes: {}, rules: [{ kind: 'rule.future', id: 'x' }, { kind: 'rule.custom', id: 'y', text: lt('T') }] };
+    const doc = { ...minimalDoc(), rules: [{ kind: 'rule.future', id: 'x' }, { kind: 'rule.custom', id: 'y', text: lt('T') }] };
     setAt(doc, ['stages', 0, 'constraints'], []);
     setAt(doc, ['stages', 0, 'pairing'], { kind: 'filter' });
     const before = canonicalizeJson(doc);
@@ -370,13 +370,12 @@ describe('prepareDocument', () => {
     expect(canonicalizeJson(doc)).toBe(before);
     expect(prepared.doc).not.toBe(doc);
     const out = prepared.doc as Record<string, unknown>;
-    expect('attributes' in out).toBe(false);
     const stage = (out.stages as Record<string, unknown>[])[0];
     expect('constraints' in stage).toBe(false);
     expect(stage.pairing).toEqual({ kind: 'manual' });
     expect((out.rules as Record<string, unknown>[])[1]).toBe((doc.rules as Record<string, unknown>[])[1]);
     expect(prepared.issues.map((i) => `${i.code} ${i.pointer} ${String(i.params.what)}`).sort()).toEqual(
-      ['not_available_yet /attributes attributes', 'not_available_yet /stages/0/constraints constraints', 'not_available_yet /stages/0/pairing pairing.filter'].sort(),
+      ['not_available_yet /stages/0/constraints constraints', 'not_available_yet /stages/0/pairing pairing.filter'].sort(),
     );
     expect(prepared.notes).toEqual([{ code: 'unknown_primitive', pointer: '/rules/0', params: { kind: 'rule.future' } }]);
   });
@@ -403,7 +402,9 @@ describe('classifyRuleEntry', () => {
     expect(classifyRuleEntry({ kind: 'rule.custom' }, '/r')).toEqual({ action: 'keep' });
     expect(classifyRuleEntry({}, '/r')).toMatchObject({ action: 'issue', issue: { code: 'required', pointer: '/r/kind' } });
     expect(classifyRuleEntry({ kind: 1 }, '/r')).toMatchObject({ action: 'issue', issue: { code: 'type' } });
-    expect(classifyRuleEntry({ kind: 'player.action' }, '/r')).toMatchObject({ action: 'issue', issue: { code: 'not_available_yet', pointer: '/r' } });
+    for (const kind of ['rule.on_event', 'player.action', 'check.assisted', 'adjust.manual']) {
+      expect(classifyRuleEntry({ kind }, '/r')).toEqual({ action: 'keep' });
+    }
     expect(classifyRuleEntry({ kind: 'BAD' }, '/r')).toMatchObject({ action: 'issue', issue: { code: 'pattern' } });
     const degraded = classifyRuleEntry({ kind: 'rule.new', text: lt('Mine') }, '/r');
     expect(degraded.action).toBe('degrade');

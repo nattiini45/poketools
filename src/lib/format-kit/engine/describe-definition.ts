@@ -97,6 +97,8 @@ export interface DefinitionDescription {
   views: string[];
   rules: RuleCardDescription[];
   modules: ModuleDescription[];
+  /** One sentence per attribute, list, relation, resource and custom metric, in that order. */
+  runtime: string[];
   /** `stage` is the display name of the stage a section belongs to, or null for a section of the whole format. */
   sections: { id: string; title: string; body: string; stage: string | null }[];
   coverage: Coverage;
@@ -134,6 +136,14 @@ const squash = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
 type Bucket = 'auto' | 'checked' | 'honor';
 
+/** The document sections whose entries are all of one kind (metrics carry their own `kind`). */
+const RUNTIME_SECTIONS: readonly (readonly [string, string])[] = [
+  ['attributes', 'attr.define'],
+  ['domains', 'domain.define'],
+  ['relations', 'relation.define'],
+  ['resources', 'resource.define'],
+];
+
 function levelOf(kind: string): Bucket {
   const level = manifestEntry(kind)?.level;
   return level === 'checked' || level === 'honor' ? level : 'auto';
@@ -143,7 +153,9 @@ function levelOf(kind: string): Bucket {
  * Counts the rule units of a definition. Per stage: one pairing, one series, one scoring, one groups unit when the
  * stage splits into groups, one per rank step and one when the stage names a ruleset (a stored one or a rule
  * preset). Per advancement rule: one per selection, `checked` under the `admin_confirm` gate and `auto` otherwise.
- * Per combined standings view: one. Every rule card is an `honor` unit and every module a `legacy` unit.
+ * Per combined standings view: one. A rule counts by its kind's level (`rule.custom` is an `honor` unit, an unknown
+ * kind too), each attribute, list, relation, resource and metric is one unit by its kind's level, and every module
+ * is a `legacy` unit.
  * Locale-free; any value is safe.
  */
 export function computeCoverage(def: FormatDefinition): Coverage {
@@ -175,7 +187,17 @@ export function computeCoverage(def: FormatDefinition): Coverage {
     if (isRec(view)) cov[levelOf('standings.view')] += 1;
   }
   for (const rule of listOf(root.rules)) {
-    if (isRec(rule)) cov.honor += 1;
+    if (!isRec(rule)) continue;
+    const kind = strOf(rule, 'kind') ?? '';
+    cov[manifestEntry(kind)?.slot === 'rule' ? levelOf(kind) : 'honor'] += 1;
+  }
+  for (const [section, kind] of RUNTIME_SECTIONS) {
+    for (const entry of listOf(root[section])) {
+      if (isRec(entry)) cov[levelOf(kind)] += 1;
+    }
+  }
+  for (const entry of listOf(root.metrics)) {
+    if (isRec(entry)) cov[levelOf(strOf(entry, 'kind') ?? 'metric.define')] += 1;
   }
   for (const entry of listOf(root.modules)) {
     if (isRec(entry)) cov.legacy += 1;
@@ -270,7 +292,8 @@ function rankItem(step: Rec, c: Ctx): string | null {
       const direction = strOf(step, 'direction');
       if (metric === null || direction === null) return null;
       return c.p.dynamic('item.rank_metric', {
-        metric: c.p.dynamic(`metric.${metric}`, undefined, metric),
+        // A custom metric (`metric.define`, `score.placement`) has no catalog label: it shows its key.
+        metric: c.p.has(`metric.${metric}`) ? c.p.dynamic(`metric.${metric}`, undefined, metric) : metric,
         direction: c.p.dynamic(`option.direction_${direction}`, undefined, direction),
       });
     }
@@ -434,6 +457,10 @@ function buildModule(entry: Rec, c: Ctx): ModuleDescription {
 }
 
 function buildRule(entry: Rec, c: Ctx): RuleCardDescription {
+  const kind = strOf(entry, 'kind') ?? 'rule.custom';
+  if (kind !== 'rule.custom') {
+    return { id: strOf(entry, 'id') ?? '', text: describe(kind, entry, c.locale), verify: '', when: '', visibleToPlayers: true };
+  }
   const verifyKey = `rule.verify_${strOf(entry, 'verify')}`;
   const whenKey = `rule.when_${strOf(entry, 'when')}`;
   const scope = recOf(entry.scope);
@@ -448,6 +475,19 @@ function buildRule(entry: Rec, c: Ctx): RuleCardDescription {
     when: squash(when.join(' ')),
     visibleToPlayers: entry.visible_to_players !== false,
   };
+}
+
+function buildRuntime(root: Rec, locale: Locale): string[] {
+  const lines: string[] = [];
+  for (const [section, kind] of RUNTIME_SECTIONS) {
+    for (const entry of listOf(root[section])) {
+      if (isRec(entry)) lines.push(describe(kind, entry, locale));
+    }
+  }
+  for (const entry of listOf(root.metrics)) {
+    if (isRec(entry)) lines.push(describe(strOf(entry, 'kind') ?? 'metric.define', entry, locale));
+  }
+  return lines;
 }
 
 function coverageSentence(cov: Coverage, locale: Locale): string {
@@ -520,6 +560,7 @@ export function describeDefinition(def: FormatDefinition, locale: Locale, opts?:
     ),
     rules: safe(() => listOf(root.rules).filter(isRec).map((rule) => buildRule(rule, c)), []),
     modules: safe(() => listOf(root.modules).filter(isRec).map((entry) => buildModule(entry, c)), []),
+    runtime: safe(() => buildRuntime(root, locale), []),
     sections: safe(
       () =>
         listOf(recOf(root.text).sections)
@@ -581,6 +622,10 @@ export function definitionToPlainText(d: DefinitionDescription): string {
       lines.push(`- ${entry.label}`, `  ${entry.summary}`);
       for (const fact of entry.facts) lines.push(`  ${fact.label}: ${fact.value}`);
     }
+  }
+  if (d.runtime.length > 0) {
+    lines.push('', t('heading.runtime'));
+    for (const line of d.runtime) lines.push(`- ${line}`);
   }
   if (d.sections.length > 0) {
     lines.push('', t('heading.sections'));

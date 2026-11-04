@@ -17,6 +17,7 @@ import { cup } from '../../presets/cup';
 import { swissTopCut } from '../../presets/swiss-top-cut';
 import { ltext } from '@/lib/studio-core/ltext';
 import type { AdvanceSelect, Edge, FormatDefinition, Stage } from '../../types';
+import { giftExchangeDoc } from './docs';
 
 /** A valid stage (a single-elimination stage fed by edges) with any field overridden. */
 export function makeStage(key: string, over: Partial<Stage> = {}): Stage {
@@ -174,6 +175,15 @@ const fx = (
 const C = classicLeague;
 const U = cup;
 const S = swissTopCut;
+
+/** The gift exchange as a compiled definition (defaults filled in): the base of the Phase 3 fixtures. */
+const G: FormatDefinition = (() => {
+  const { definition } = compile(giftExchangeDoc());
+  if (definition === null) throw new Error('the gift exchange fixture must compile');
+  return definition;
+})();
+
+const withSpecies = (ids: readonly string[]): CompileEnv => ({ ...CURRENT_ENV, speciesIds: new Set(ids) });
 const setRank = (steps: unknown[]): PatchOp => ({ op: 'replace', path: '/stages/0/rank', value: steps as JsonValue });
 const points = { kind: 'metric', metric: 'points', direction: 'desc' };
 const wins = { kind: 'metric', metric: 'wins', direction: 'desc' };
@@ -195,8 +205,8 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     '/identity/name',
     mutate(C, [{ op: 'replace', path: '/identity/name', value: { base: 'de', en: { v: 'Classic league', s: 'human' } } }]),
   ),
-  fx('error', 'schema-not-available-yet', 'schema_not_available_yet', '/attributes', mutate(C, [{ op: 'add', path: '/attributes', value: [] }]), {
-    params: { what: 'attributes' },
+  fx('error', 'schema-not-available-yet', 'schema_not_available_yet', '/stages/0/end_when', mutate(C, [{ op: 'add', path: '/stages/0/end_when', value: {} }]), {
+    params: { what: 'end_when' },
   }),
   fx('warning', 'rule-unknown-primitive', 'rule_unknown_primitive', '/rules/1', mutate(C, [
     { op: 'add', path: '/rules/-', value: { kind: 'custom.mystery', id: 'mystery' } },
@@ -410,6 +420,127 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     mutate(C, threshold(anyOver('standings', anyOver('standings', bool(true))))),
     { params: { edge: 'to_playoffs' } },
   ),
+
+  // Phase 3: attributes, domains, relations, resources, tunables, metrics.
+  fx('error', 'key-duplicate-attribute', 'key_duplicate', '/attributes/7/key', mutate(G, [
+    { op: 'add', path: '/attributes/-', value: JSON.parse(JSON.stringify(G.attributes?.[0])) as JsonValue },
+  ]), { params: { scope: 'attributes', key: 'house' } }),
+  fx('error', 'ref-unknown-domain', 'ref_unknown', '/rules/0/effects/0/domain', mutate(G, [
+    { op: 'replace', path: '/rules/0/effects/0/domain', value: 'nowhere' },
+  ]), { params: { ref: 'domain', key: 'nowhere', where: 'effect' } }),
+  fx('error', 'ref-unknown-resource-domain', 'ref_unknown', '/resources/0/holds/domain', mutate(G, [
+    { op: 'replace', path: '/resources/0/holds/domain', value: 'nowhere' },
+  ]), { params: { ref: 'domain', key: 'nowhere', where: 'resource' } }),
+  fx('error', 'ref-unknown-relation', 'ref_unknown', '/rules/0/effects/1/relation', mutate(G, [
+    { op: 'replace', path: '/rules/0/effects/1/relation', value: 'nowhere' },
+  ]), { params: { ref: 'relation', key: 'nowhere', where: 'effect' } }),
+  fx('error', 'ref-unknown-resource', 'ref_unknown', '/rules/0/effects/2/resource', mutate(G, [
+    { op: 'replace', path: '/rules/0/effects/2/resource', value: 'nowhere' },
+  ]), { params: { ref: 'resource', key: 'nowhere', where: 'effect' } }),
+  fx('error', 'ref-unknown-action', 'ref_unknown', '/rules/0/effects/3/action', mutate(G, [
+    { op: 'replace', path: '/rules/0/effects/3/action', value: 'nowhere' },
+  ]), { params: { ref: 'action', key: 'nowhere', where: 'effect' } }),
+  fx('error', 'ref-unknown-via', 'ref_unknown', '/rules/6/via', mutate(G, [
+    { op: 'replace', path: '/rules/6/via', value: 'nowhere' },
+  ]), { params: { ref: 'relation', key: 'nowhere', where: 'action' } }),
+  fx('error', 'ref-unknown-event-action', 'ref_unknown', '/relations/0/reveal_on/action', mutate(G, [
+    { op: 'replace', path: '/relations/0/reveal_on/action', value: 'nowhere' },
+  ]), { params: { ref: 'action', key: 'nowhere', where: 'event' } }),
+  fx('error', 'ref-unknown-stage-metric', 'ref_unknown_stage', '/metrics/2/stage', mutate(G, [
+    { op: 'replace', path: '/metrics/2/stage', value: 'nowhere' },
+  ]), { params: { key: 'nowhere', where: 'metric' } }),
+  fx('error', 'expr-invalid-metric', 'expr_invalid', '/metrics/0/expr/a/name', mutate(G, [
+    { op: 'replace', path: '/metrics/0/expr/a/name', value: 'missing' },
+  ]), { params: { context: 'metric', issue: 'expr_unknown_ref' } }),
+  fx('error', 'expr-invalid-action-step', 'expr_invalid', '/rules/6/steps/0/where/a/name', mutate(G, [
+    { op: 'replace', path: '/rules/6/steps/0/where/a/name', value: 'attr.missing' },
+  ]), { params: { context: 'action_step', issue: 'expr_unknown_ref' } }),
+  fx('error', 'attr-values-required', 'attr_values_required', '/attributes/0/type', mutate(G, [
+    { op: 'remove', path: '/attributes/0/values' },
+  ]), { params: { attr: 'house' } }),
+  fx('error', 'attr-values-unexpected', 'attr_values_unexpected', '/attributes/2/values', mutate(G, [
+    { op: 'add', path: '/attributes/2/values', value: ['yes'] },
+  ]), { params: { attr: 'veteran', type: 'bool' } }),
+  fx('error', 'attr-value-duplicate', 'attr_value_duplicate', '/attributes/0/values/1', mutate(G, [
+    { op: 'replace', path: '/attributes/0/values', value: ['ember', 'ember', 'grove'] },
+  ]), { params: { attr: 'house', value: 'ember' } }),
+  fx('error', 'attr-multi-invalid', 'attr_multi_invalid', '/attributes/0/multi', mutate(G, [
+    { op: 'add', path: '/attributes/0/multi', value: true },
+  ]), { params: { attr: 'house' } }),
+  fx('error', 'attr-assign-on-entry', 'attr_assign_on_entry', '/attributes/6/assign', mutate(G, [
+    { op: 'add', path: '/attributes/6/assign', value: { kind: 'manual' } },
+  ]), { params: { attr: 'bonus' } }),
+  fx('error', 'attr-random-type', 'attr_random_type', '/attributes/1/assign/kind', mutate(G, [
+    { op: 'replace', path: '/attributes/1/assign', value: { kind: 'random_seeded' } },
+  ]), { params: { attr: 'level', type: 'number' } }),
+  fx('error', 'domain-entry-duplicate', 'domain_entry_duplicate', '/domains/0/entries/3/id', mutate(G, [
+    { op: 'add', path: '/domains/0/entries/-', value: { id: 'garchomp', attrs: [] } },
+  ]), { params: { domain: 'pool', id: 'garchomp' } }),
+  fx('error', 'domain-entry-unknown-species', 'domain_entry_unknown_species', '/domains/0/entries/2/id', mutate(G, []), {
+    env: withSpecies(['garchomp', 'blissey']),
+    params: { domain: 'pool', id: 'corviknight' },
+  }),
+  fx('error', 'domain-attr-unknown', 'domain_attr_unknown', '/domains/0/entries/1/attrs/0/key', mutate(G, [
+    { op: 'replace', path: '/domains/0/entries/1/attrs/0/key', value: 'nothing' },
+  ]), { params: { domain: 'pool', id: 'blissey', attr: 'nothing' } }),
+  fx('error', 'domain-attr-duplicate', 'domain_attr_duplicate', '/domains/0/entries/1/attrs/2/key', mutate(G, [
+    { op: 'add', path: '/domains/0/entries/1/attrs/-', value: { key: 'role', value: 'tank' } },
+  ]), { params: { domain: 'pool', id: 'blissey', attr: 'role' } }),
+  fx('error', 'domain-attr-value-invalid', 'domain_attr_value_invalid', '/domains/0/entries/1/attrs/0/value', mutate(G, [
+    { op: 'replace', path: '/domains/0/entries/1/attrs/0/value', value: 'wizard' },
+  ]), { params: { domain: 'pool', id: 'blissey', attr: 'role', reason: 'enum_value' } }),
+  fx('warning', 'relation-roster-too-small', 'relation_roster_too_small', '/relations/0/shape', mutate(G, []), {
+    env: rosterEnv(1),
+    params: { relation: 'santa', roster: 1 },
+  }),
+  fx('error', 'resource-exclusive-needs-domain', 'resource_exclusive_needs_domain', '/resources/1/exclusive', mutate(G, [
+    { op: 'replace', path: '/resources/1/exclusive', value: 'global' },
+  ]), { params: { resource: 'coins' } }),
+  fx('error', 'metric-key-builtin', 'metric_key_builtin', '/metrics/0/key', mutate(G, [
+    { op: 'replace', path: '/metrics/0/key', value: 'points' },
+  ]), { params: { metric: 'points' } }),
+  fx('error', 'tunable-values-required', 'tunable_values_mismatch', '/tunables/2/values', mutate(G, [
+    { op: 'remove', path: '/tunables/2/values' },
+  ]), { params: { tunable: 'mode', reason: 'required' } }),
+  fx('error', 'tunable-values-unexpected', 'tunable_values_mismatch', '/tunables/0/values', mutate(G, [
+    { op: 'add', path: '/tunables/0/values', value: ['a'] },
+  ]), { params: { tunable: 'base_level', reason: 'unexpected' } }),
+  fx('error', 'tunable-bounds-min-over-max', 'tunable_bounds_invalid', '/tunables/0/min', mutate(G, [
+    { op: 'replace', path: '/tunables/0/min', value: 20 },
+  ]), { params: { tunable: 'base_level', reason: 'min_over_max' } }),
+  fx('error', 'tunable-bounds-not-number', 'tunable_bounds_invalid', '/tunables/4/type', mutate(G, [
+    { op: 'add', path: '/tunables/4/min', value: 0 },
+  ]), { params: { tunable: 'open', reason: 'not_number' } }),
+  fx('error', 'tunable-default-invalid', 'tunable_default_invalid', '/tunables/0/default', mutate(G, [
+    { op: 'replace', path: '/tunables/0/default', value: 99 },
+  ]), { params: { tunable: 'base_level', reason: 'range' } }),
+  fx('error', 'effect-item-missing', 'effect_item_invalid', '/rules/1/effects/3/item', mutate(G, [
+    { op: 'remove', path: '/rules/1/effects/3/item' },
+  ]), { params: { resource: 'picks', reason: 'missing' } }),
+  fx('error', 'effect-item-on-counter', 'effect_item_invalid', '/rules/0/effects/2/item', mutate(G, [
+    { op: 'add', path: '/rules/0/effects/2/item', value: 'blissey' },
+  ]), { params: { resource: 'coins', reason: 'counter' } }),
+  fx('error', 'effect-item-unknown', 'effect_item_invalid', '/rules/1/effects/3/item', mutate(G, [
+    { op: 'replace', path: '/rules/1/effects/3/item', value: 'mew' },
+  ]), { params: { resource: 'picks', reason: 'unknown' } }),
+  fx('error', 'effect-set-attr-invalid', 'effect_set_attr_invalid', '/rules/1/effects/1/attr', mutate(G, [
+    { op: 'replace', path: '/rules/1/effects/1/value', value: 'maybe' },
+  ]), { params: { attr: 'veteran', reason: 'type' } }),
+  fx('error', 'action-step-mismatch', 'action_step_mismatch', '/rules/6/steps/0/resource', mutate(G, [
+    { op: 'replace', path: '/rules/6/steps/0/resource', value: 'coins' },
+  ]), { params: { action: 'choose_gift', resource: 'coins', reason: 'counter' } }),
+  fx('error', 'action-distinct-attr-invalid', 'action_distinct_attr_invalid', '/rules/6/steps/0/distinct_attr', mutate(G, [
+    { op: 'replace', path: '/rules/6/steps/0/distinct_attr', value: 'house' },
+  ]), { params: { action: 'choose_gift', attr: 'house', reason: 'player' } }),
+  fx('warning', 'action-exceeds-capacity', 'action_exceeds_capacity', '/rules/6/steps', mutate(G, [
+    { op: 'replace', path: '/rules/6/steps/0/count', value: 3 },
+  ]), { params: { action: 'choose_gift', resource: 'picks', count: 3, capacity: 2 } }),
+  fx('warning', 'action-close-missing', 'action_close_missing', '/rules/6/lock', mutate(G, [
+    { op: 'remove', path: '/rules/6/window/closes_on' },
+  ]), { params: { action: 'choose_gift' } }),
+  fx('error', 'adjust-kind-duplicate', 'adjust_kind_duplicate', '/rules/11/allow/1', mutate(G, [
+    { op: 'replace', path: '/rules/11/allow', value: ['points', 'points'] },
+  ]), { params: { rule: 'admin_tools', adjust: 'points' } }),
 ];
 
 /** The diagnostics a fixture is meant to produce: through `compile`, or straight from the engine for `engineOnly`. */

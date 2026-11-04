@@ -42,7 +42,22 @@ export type SeasonDeleteGroup = (typeof SEASON_DELETE_GROUPS)[number];
 export const SEASON_DELETE_OWNED: Readonly<Record<SeasonDeleteGroup, readonly string[]>> = {
   participants: ['season_participants'],
   groups: ['season_groups', 'season_group_members'],
-  rules: ['format_rules', 'season_formats', 'evolution_tiers', 'draft_tier_limits', 'draft_pool_entries'],
+  rules: [
+    'format_rules',
+    'season_formats',
+    'evolution_tiers',
+    'draft_tier_limits',
+    'draft_pool_entries',
+    'format_relation_links',
+    'format_resource_items',
+    'format_action_submissions',
+    'format_event_log',
+    'format_flags',
+    'format_player_attrs',
+    'format_track_progress',
+    'format_checks',
+    'format_adjustments',
+  ],
   phases: ['tournaments', 'tournament_participants', 'tournament_groups', 'tournament_group_members', 'rounds', 'tournament_reports'],
   matches: [
     'matches',

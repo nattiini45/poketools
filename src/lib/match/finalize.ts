@@ -206,6 +206,27 @@ class StepRunner {
 }
 
 /**
+ * The format runtime of a custom league (`match_completed`, track progress, assisted checks). Best effort and not a
+ * finalize step: the hook is idempotent per match, logs its own failures and never fails or delays the marker.
+ */
+async function runFormatHook(match: MatchWithPlayers, winnerId: string, tournament: Tournament | null): Promise<void> {
+  if (!tournament || tournament.season_format_type !== 'custom' || !tournament.season_id) return;
+  try {
+    const { onMatchCompleted } = await import('@/lib/format-engine/runtime/hooks');
+    await onMatchCompleted({
+      tournament,
+      matchId: match.id,
+      roundId: match.round_id,
+      player1Id: match.player_1_id,
+      player2Id: match.player_2_id,
+      winnerId,
+    });
+  } catch (err) {
+    console.error(`[match-finalize] format runtime hook failed for match ${match.id}`, err);
+  }
+}
+
+/**
  * The outcome of a played match: the faint tally of its battle stats (null when it has none). Never replaces an
  * admin row (a forfeit, no-show or played result the admin result route wrote before the completion), so a re-run
  * or a heal writes the same row again.
@@ -697,6 +718,8 @@ export async function finalizeMatchCompletion({
     }
   }
 
+  await runFormatHook(match, winnerId, tournament);
+
   let complete = false;
   if (runner.failed.length === 0) {
     complete = await markFinalized(runner, match.id);
@@ -832,6 +855,8 @@ export async function healMatchFinalization(
   if (runner.failed.length > 0) {
     return { healed: false, failed_steps: [...runner.failed] };
   }
+
+  await runFormatHook(match, winnerId, tournament);
 
   const marked = await markFinalized(runner, match.id);
   if (!marked) {

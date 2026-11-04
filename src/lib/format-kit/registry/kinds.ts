@@ -1,5 +1,5 @@
 /**
- * Primitive kinds: the vocabulary of format building blocks. 27 are available today; 27 more are
+ * Primitive kinds: the vocabulary of format building blocks. 40 are available today; 14 more are
  * reserved so documents can name them and fail with `not_available_yet` instead of being
  * misread. A kind is `<family>.<name>`; `kindKey` turns it into a catalog key segment.
  */
@@ -32,20 +32,22 @@ export const AVAILABLE_KINDS = [
   'text.rules',
   'theme.hint',
   'module.legacy',
-] as const;
-
-export const RESERVED_KINDS = [
   'attr.define',
-  'domain.define',
   'attr.assign',
+  'domain.define',
   'relation.define',
   'resource.define',
   'metric.define',
   'rule.on_event',
-  'player.action',
   'effect.apply',
+  'player.action',
   'track.progression',
   'score.placement',
+  'check.assisted',
+  'adjust.manual',
+] as const;
+
+export const RESERVED_KINDS = [
   'pairing.bipartite',
   'pairing.filter',
   'pairing.challenge',
@@ -56,8 +58,6 @@ export const RESERVED_KINDS = [
   'constraint.distinct',
   'constraint.roster_size',
   'acquire.draft',
-  'check.assisted',
-  'adjust.manual',
   'time.schedule',
   'time.deadline_policy',
   'stage.end_when',
@@ -74,3 +74,6 @@ export const PRIMITIVE_KINDS: readonly PrimitiveKind[] = [...AVAILABLE_KINDS, ..
 export function kindKey(kind: string): string {
   return kind.split('.').join('_');
 }
+
+/** What an `adjust.manual` rule can allow an admin to change by hand. */
+export const ADJUST_KINDS = ['points', 'resource', 'relation', 'outcome', 'action', 'domain', 'rank'] as const;

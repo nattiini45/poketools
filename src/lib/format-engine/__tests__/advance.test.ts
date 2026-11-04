@@ -8,11 +8,12 @@ vi.mock('@/lib/supabase/queries/format-engine', () => ({
   getSeasonKitHead: vi.fn(),
   getPhaseMatchIds: vi.fn(),
   getPhaseMembers: vi.fn(),
+  getStandingAdjustments: vi.fn(),
 }));
 
 import { kitAdvancingPlayers, type KitAdvanceInput } from '../advance';
 import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
-import { getKitPhases, getOutcomesByPhases } from '@/lib/supabase/queries/format-engine';
+import { getKitPhases, getOutcomesByPhases, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
 import type { AdvanceSelect, Edge, Stage } from '@/lib/format-kit/types';
 
 const SEASON = '11111111-1111-4111-8111-111111111111';
@@ -41,6 +42,7 @@ function arrange(select: AdvanceSelect[], engine: 'kit' | 'shadow' = 'kit', seed
     { id: 'tgt', format_stage_key: 'finals', stage_order: 2, stage_spec: { v: 1, stage: stage('finals') } },
   ] as never);
   vi.mocked(getOutcomesByPhases).mockResolvedValue([]);
+  vi.mocked(getStandingAdjustments).mockResolvedValue([]);
 }
 
 const rec = (match_id: string, p1: string, p2: string, winner: string) => ({

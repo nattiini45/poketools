@@ -105,6 +105,7 @@ export default defineDe<typeof en>()({
     advancement: 'Weiterkommen',
     rules: 'Regeln',
     modules: 'Legacy-Module',
+    runtime: 'Attribute, Listen und Beziehungen',
     sections: 'Hinweise',
     coverage: 'Abdeckung',
   },

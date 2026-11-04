@@ -1,7 +1,8 @@
 /**
- * Loads what a kit league's standings need (`KitStandingsData`) in five reads: the attached format's engine and seed,
- * the phases it generated, then their matches, match outcomes and members in parallel. Server only: the season seed is read here and
- * turned into per-player coin flip draws, so it never reaches a client or a cached value.
+ * Loads what a kit league's standings need (`KitStandingsData`) in six reads: the attached format's engine and seed,
+ * the phases it generated, then their matches, match outcomes, members and standings adjustments in parallel. A stage
+ * that ranks by or shows a custom metric adds the spec and the runtime rows (`loadStageMetrics`). Server only: the season
+ * seed is read here and turned into per-player coin flip draws, so it never reaches a client or a cached value.
  */
 import 'server-only';
 
@@ -11,10 +12,18 @@ import {
   getPhaseMatchIds,
   getPhaseMembers,
   getSeasonKitHead,
+  getStandingAdjustments,
   type KitPhaseRow,
 } from '@/lib/supabase/queries/format-engine';
+import { getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
+import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
+import { BUILTIN_METRICS } from '@/lib/format-kit/engine/runtime-names';
+import type { Json } from '@/types/database';
 import type { Stage } from '@/lib/format-kit/types';
-import type { KitStageRules, KitStandingsData } from './context';
+import type { KitStageMetrics, KitStageRules, KitStandingsData } from './context';
+import { standingAdjustments } from './runtime/adjustments';
+import { stageMetricsFor } from './runtime/metrics';
+import { buildRuntimeState } from './runtime/state';
 import type { KitOutcome } from './standings';
 import { coinFlipDraws } from './standings';
 
@@ -84,14 +93,20 @@ export async function loadKitStandingsData(
   const engine = head.engine === 'kit' ? 'kit' : 'shadow';
   const phases = await getKitPhases(seasonId);
   const ids = phases.map((phase) => phase.id);
-  const [matchRows, outcomeRows, members] = await Promise.all([
+  const [matchRows, outcomeRows, members, adjustmentRows] = await Promise.all([
     getPhaseMatchIds(ids),
     getOutcomesByPhases(ids),
     getPhaseMembers(ids),
+    getStandingAdjustments(seasonId),
   ]);
 
   const stages: Record<string, KitStageRules> = {};
-  for (const phase of phases) stages[phase.id] = await stageRulesOf(phase);
+  const full: Stage[] = [];
+  for (const phase of phases) {
+    const stage = await stageOf(phase);
+    full.push(stage);
+    stages[phase.id] = { key: stage.key, scoring: stage.scoring, rank: stage.rank };
+  }
 
   const stageOfMatch: Record<string, string> = {};
   for (const row of matchRows) stageOfMatch[row.id] = row.tournament_id;
@@ -111,5 +126,51 @@ export async function loadKitStandingsData(
     coinFlips[phase.id] = coinFlipDraws(head.seed, stages[phase.id].key, playersOf.get(phase.id) ?? []);
   }
 
-  return { engine, stages, stageOfMatch, outcomes, coinFlips };
+  const phaseOfStage = new Map(phases.map((phase, i) => [full[i].key, phase.id]));
+  const { adjustments, manualOrder } = standingAdjustments(adjustmentRows, phaseOfStage);
+  const metrics = full.some(usesCustomMetric) ? await loadStageMetrics(seasonId, head.seed, phases, full, playersOf) : undefined;
+
+  return {
+    engine,
+    stages,
+    stageOfMatch,
+    outcomes,
+    coinFlips,
+    ...(Object.keys(adjustments).length > 0 ? { adjustments } : {}),
+    ...(Object.keys(manualOrder).length > 0 ? { manualOrder } : {}),
+    ...(metrics !== undefined ? { metrics } : {}),
+  };
+}
+
+/** Whether a stage ranks by, or shows as a column, a metric that the standings engine does not produce itself. */
+function usesCustomMetric(stage: Stage): boolean {
+  return (
+    stage.rank.some((step) => step.kind === 'metric' && !BUILTIN_METRICS.has(step.metric)) ||
+    stage.columns.some((column) => !BUILTIN_METRICS.has(column))
+  );
+}
+
+/**
+ * The custom metrics of the phases whose stage uses one: reads the attached spec and the runtime rows (attributes and
+ * track progress feed the expressions). Public values only: no seed, no relation.
+ */
+async function loadStageMetrics(
+  seasonId: string,
+  seed: string,
+  phases: readonly KitPhaseRow[],
+  stages: readonly Stage[],
+  playersOf: ReadonlyMap<string, string[]>,
+): Promise<Record<string, KitStageMetrics> | undefined> {
+  const [format, runtime] = await Promise.all([getSeasonFormat(seasonId), getFormatRuntime(seasonId)]);
+  if (format === null) return undefined;
+  const { state } = buildRuntimeState(format.spec, runtime, {
+    tunables: format.tunables as Json,
+    amendments: format.amendments as Json,
+  });
+  const out: Record<string, KitStageMetrics> = {};
+  phases.forEach((phase, i) => {
+    const metrics = stageMetricsFor(format.spec, state, seed, stages[i].key, playersOf.get(phase.id) ?? []);
+    if (metrics !== undefined) out[phase.id] = metrics;
+  });
+  return Object.keys(out).length > 0 ? out : undefined;
 }

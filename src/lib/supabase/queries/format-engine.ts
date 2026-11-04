@@ -94,6 +94,38 @@ export async function getOutcomesByPhases(phaseIds: readonly string[]): Promise<
   return out;
 }
 
+export interface StandingAdjustmentRow {
+  kind: 'points' | 'rank';
+  /** `{ stage, player_id }` for points, `{ stage }` for rank. */
+  target: Json;
+  /** `{ points }` for points, `{ order }` for rank. */
+  delta: Json;
+  created_at: string;
+}
+
+/**
+ * The adjustments the standings read: every `points` row and every `rank` row of the league, oldest first (a later
+ * `rank` row replaces an earlier one). Reason and admin stay out.
+ */
+export async function getStandingAdjustments(seasonId: string): Promise<StandingAdjustmentRow[]> {
+  if (!isValidUuid(seasonId)) return [];
+  const rows = await readAllPages((from, to) =>
+    supabase
+      .from('format_adjustments')
+      .select('id, kind, target, delta, created_at')
+      .eq('season_id', seasonId)
+      .in('kind', ['points', 'rank'])
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  return rows.flatMap((row) =>
+    row.kind === 'points' || row.kind === 'rank'
+      ? [{ kind: row.kind, target: row.target, delta: row.delta, created_at: row.created_at }]
+      : [],
+  );
+}
+
 /** The id of every match of the phases, with its phase. */
 export async function getPhaseMatchIds(phaseIds: readonly string[]): Promise<{ id: string; tournament_id: string }[]> {
   const ids = [...new Set(phaseIds)];

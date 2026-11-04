@@ -41,6 +41,27 @@ export const MAX_EXPECTED_COUNT = 4096;
 export const MAX_VIEW_STAGES = 50;
 export const SCORE_ABS_MAX = 1000;
 
+// Phase 3 primitives: attributes, domains, relations, resources, metrics, tunables, events and actions.
+export const MAX_ATTRIBUTES = 32;
+export const MAX_ENUM_VALUES = 32;
+export const MAX_DOMAINS = 16;
+export const MAX_DOMAIN_ENTRIES = 512;
+export const MAX_ENTRY_ATTRS = 16;
+export const MAX_MULTI_VALUES = 8;
+export const MAX_RELATIONS = 8;
+export const MAX_RESOURCES = 16;
+export const MAX_CAPACITY = 64;
+export const MAX_METRICS = 32;
+export const MAX_TRACK_STEPS = 16;
+export const MAX_PLACEMENT_POINTS = 64;
+export const MAX_TUNABLES = 32;
+export const MAX_TABLE_VALUES = 64;
+export const MAX_EFFECTS = 16;
+export const MAX_ACTION_STEPS = 8;
+export const MAX_STEP_COUNT = 16;
+export const MAX_EVENT_ROUND = 64;
+export const MAX_GRANT = 64;
+
 export {
   COLLECTION_ASSUMED_MAX,
   EXPR_MAX_ARGS,
@@ -85,4 +106,23 @@ export const DOCUMENT_LIMITS = {
   maxViewStages: MAX_VIEW_STAGES,
   ltextMaxChars: LTEXT_MAX_CHARS,
   scoreAbsMax: SCORE_ABS_MAX,
+  maxAttributes: MAX_ATTRIBUTES,
+  maxEnumValues: MAX_ENUM_VALUES,
+  maxDomains: MAX_DOMAINS,
+  maxDomainEntries: MAX_DOMAIN_ENTRIES,
+  maxEntryAttrs: MAX_ENTRY_ATTRS,
+  maxMultiValues: MAX_MULTI_VALUES,
+  maxRelations: MAX_RELATIONS,
+  maxResources: MAX_RESOURCES,
+  maxCapacity: MAX_CAPACITY,
+  maxMetrics: MAX_METRICS,
+  maxTrackSteps: MAX_TRACK_STEPS,
+  maxPlacementPoints: MAX_PLACEMENT_POINTS,
+  maxTunables: MAX_TUNABLES,
+  maxTableValues: MAX_TABLE_VALUES,
+  maxEffects: MAX_EFFECTS,
+  maxActionSteps: MAX_ACTION_STEPS,
+  maxStepCount: MAX_STEP_COUNT,
+  maxEventRound: MAX_EVENT_ROUND,
+  maxGrant: MAX_GRANT,
 } as const;

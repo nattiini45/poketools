@@ -116,6 +116,110 @@ function pairingKind(node: unknown): string | null {
   return tag === null ? null : `pairing.${tag}`;
 }
 
+const exprText = (value: unknown): string => (isRec(value) ? printExpr(value as unknown as Expr) : '');
+
+/** The phrase of an event ("round 2 of stage swiss starts"), or null for an event of the wrong shape. */
+function eventPhrase(event: unknown, ctx: Ctx): string | null {
+  if (!isRec(event)) return null;
+  const tag = str(event, 'event');
+  if (tag === null) return null;
+  switch (tag) {
+    case 'stage_start':
+    case 'stage_end':
+    case 'match_completed': {
+      const stage = str(event, 'stage');
+      return stage === null
+        ? ctx.word('item', `event_${tag}`, tag)
+        : ctx.word('item', `event_${tag}_of`, tag, { stage });
+    }
+    case 'round_start':
+    case 'round_end': {
+      const stage = str(event, 'stage');
+      const round = num(event, 'round');
+      const suffix = `${stage === null ? '' : '_stage'}${round === null ? '' : '_round'}`;
+      return ctx.word('item', `event_${tag}${suffix}`, tag, { ...(stage === null ? {} : { stage }), ...(round === null ? {} : { round }) });
+    }
+    case 'action_locked': {
+      const action = str(event, 'action');
+      return action === null ? null : ctx.word('item', 'event_action_locked', tag, { action });
+    }
+    case 'time': {
+      const mark = str(event, 'mark');
+      return mark === null ? null : ctx.word('item', 'event_time', tag, { mark });
+    }
+    default:
+      return null;
+  }
+}
+
+function targetPhrase(target: unknown, ctx: Ctx): string {
+  const rec = isRec(target) ? target : {};
+  const where = exprText(rec.where);
+  if (where !== '') return ctx.word('item', 'target_where', where, { where });
+  return ctx.word('option', `who_${str(rec, 'who') ?? 'all'}`, 'all');
+}
+
+/** The short phrase of one effect, or null for an effect of the wrong shape. */
+function effectItem(effect: unknown, ctx: Ctx): string | null {
+  if (!isRec(effect)) return null;
+  const tag = str(effect, 'effect');
+  if (tag === null) return null;
+  const who = targetPhrase(effect.to, ctx);
+  switch (tag) {
+    case 'unlock_domain':
+    case 'lock_domain': {
+      const domain = str(effect, 'domain');
+      return domain === null ? null : ctx.word('item', `effect_${tag}`, tag, { domain });
+    }
+    case 'reveal_relation':
+    case 'generate_relation': {
+      const relation = str(effect, 'relation');
+      return relation === null ? null : ctx.word('item', `effect_${tag}`, tag, { relation });
+    }
+    case 'grant_resource':
+    case 'revoke_resource': {
+      const resource = str(effect, 'resource');
+      if (resource === null) return null;
+      const item = str(effect, 'item');
+      const amount = num(effect, 'amount') ?? 1;
+      return item === null
+        ? ctx.word('item', `effect_${tag}`, tag, { resource, amount, who })
+        : ctx.word('item', `effect_${tag}_item`, tag, { resource, item, who });
+    }
+    case 'adjust_points': {
+      const stage = str(effect, 'stage');
+      const points = num(effect, 'points');
+      return stage === null || points === null ? null : ctx.word('item', 'effect_adjust_points', tag, { stage, points, who });
+    }
+    case 'set_attr': {
+      const attr = str(effect, 'attr');
+      const value = effect.value;
+      if (attr === null || (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean')) return null;
+      return ctx.word('item', 'effect_set_attr', tag, { attr, value: String(value), who });
+    }
+    case 'open_action':
+    case 'lock_action': {
+      const action = str(effect, 'action');
+      return action === null ? null : ctx.word('item', `effect_${tag}`, tag, { action });
+    }
+    case 'notify': {
+      const message = ctx.text(effect.message);
+      return message === null ? null : ctx.word('item', 'effect_notify', tag, { message, who });
+    }
+    default:
+      return null;
+  }
+}
+
+function actionStepItem(step: unknown, ctx: Ctx): string | null {
+  if (!isRec(step)) return null;
+  const resource = str(step, 'resource');
+  const domain = str(step, 'domain');
+  const count = num(step, 'count');
+  if (resource === null || domain === null || count === null) return null;
+  return ctx.word('item', 'action_step', '', { resource, domain, count });
+}
+
 const d = (kind: AvailableKind, fn: Describer): [AvailableKind, Describer] => [kind, fn];
 
 const DESCRIBERS: ReadonlyMap<AvailableKind, Describer> = new Map<AvailableKind, Describer>([
@@ -299,6 +403,168 @@ const DESCRIBERS: ReadonlyMap<AvailableKind, Describer> = new Map<AvailableKind,
       if (adapter === null) return null;
       const count = Array.isArray(n.facts) ? n.facts.length : 0;
       return { params: { adapter: c.word('option', `adapter_${adapter}`, adapter), count } };
+    },
+  ),
+  d(
+    'attr.define',
+    (n, c): Described | null => {
+      const label = c.text(n.label);
+      const on = str(n, 'on');
+      const type = str(n, 'type');
+      if (label === null || on === null || type === null) return null;
+      const params: Params = {
+        label,
+        on: c.word('option', `on_${on}`, on),
+        type: c.word('option', `type_${type}`, type),
+      };
+      const assign = isRec(n.assign) ? str(n.assign, 'kind') : null;
+      if (assign === null) return { params };
+      return { key: 'attr_define_assigned', params: { ...params, assign: c.word('option', `kind_${assign}`, assign) } };
+    },
+  ),
+  d(
+    'attr.assign',
+    (n): Described | null => {
+      const kind = str(n, 'kind');
+      if (kind === 'manual') return { params: {} };
+      if (kind === 'random_seeded') return { key: 'attr_assign_random_seeded', params: {} };
+      if (kind === 'expr') return { key: 'attr_assign_expr', params: { expr: exprText(n.expr) } };
+      return null;
+    },
+  ),
+  d(
+    'domain.define',
+    (n, c): Described | null => {
+      const label = c.text(n.label);
+      if (label === null || !Array.isArray(n.entries)) return null;
+      return {
+        params: {
+          label,
+          count: n.entries.length,
+          initially: c.word('option', `initially_${str(n, 'initially') ?? 'unlocked'}`, 'unlocked'),
+          visibility: c.word('option', `visibility_${str(n, 'visibility') ?? 'public'}`, 'public'),
+        },
+      };
+    },
+  ),
+  d(
+    'relation.define',
+    (n, c): Described | null => {
+      const label = c.text(n.label);
+      const shape = str(n, 'shape');
+      if (label === null || shape === null) return null;
+      const visibility = isRec(n.visibility) ? n.visibility : {};
+      const params: Params = {
+        label,
+        shape: c.word('option', `shape_${shape}`, shape),
+        from: c.word('option', `from_${str(visibility, 'from') ?? 'hidden'}`, 'hidden'),
+        to: c.word('option', `to_${str(visibility, 'to') ?? 'own'}`, 'own'),
+      };
+      const reveal = n.reveal_on === undefined ? null : eventPhrase(n.reveal_on, c);
+      return reveal === null ? { params } : { key: 'relation_define_reveal', params: { ...params, event: reveal } };
+    },
+  ),
+  d(
+    'resource.define',
+    (n, c): Described | null => {
+      const label = c.text(n.label);
+      if (label === null || !isRec(n.holds)) return null;
+      const holds = str(n.holds, 'kind');
+      const extras: string[] = [];
+      const capacity = num(n, 'capacity');
+      if (capacity !== null) extras.push(c.word('item', 'resource_capacity', '', { n: capacity }));
+      if (str(n, 'visibility') === 'all') extras.push(c.word('item', 'resource_visible_all', ''));
+      if (str(n, 'exclusive') === 'global') extras.push(c.word('item', 'resource_exclusive', ''));
+      const shown = extras.filter((extra) => extra !== '');
+      const params: Params = { label };
+      if (shown.length > 0) params.extra = c.list(shown);
+      const suffix = shown.length > 0 ? '_extra' : '';
+      if (holds === 'domain') {
+        const domain = str(n.holds, 'domain');
+        return domain === null ? null : { key: `resource_define${suffix}`, params: { ...params, domain } };
+      }
+      return holds === 'counter' ? { key: `resource_counter${suffix}`, params } : null;
+    },
+  ),
+  d(
+    'metric.define',
+    (n, c): Described | null => {
+      const label = c.text(n.label);
+      const of = str(n, 'of');
+      if (label === null || of === null) return null;
+      return { params: { label, of: c.word('option', `of_${of}`, of), expr: exprText(n.expr) } };
+    },
+  ),
+  d(
+    'track.progression',
+    (n, c): Described | null => {
+      const label = c.text(n.label);
+      if (label === null || !Array.isArray(n.steps)) return null;
+      const stage = str(n, 'stage');
+      const params: Params = { label, count: n.steps.length };
+      return stage === null ? { params } : { key: 'track_progression_stage', params: { ...params, stage } };
+    },
+  ),
+  d(
+    'score.placement',
+    (n, c): Described | null => {
+      const label = c.text(n.label);
+      const stage = str(n, 'stage');
+      if (label === null || stage === null || !Array.isArray(n.points)) return null;
+      const points = n.points.filter((p): p is number => typeof p === 'number').map(String);
+      return { params: { label, stage, points: c.list(points) } };
+    },
+  ),
+  d(
+    'rule.on_event',
+    (n, c): Described | null => {
+      const event = eventPhrase(n.on, c);
+      if (event === null || !Array.isArray(n.effects)) return null;
+      const effects = n.effects.map((effect) => effectItem(effect, c)).filter((s): s is string => s !== null);
+      const params: Params = { event, effects: c.list(effects) };
+      const condition = exprText(n.when);
+      return condition === '' ? { params } : { key: 'rule_on_event_when', params: { ...params, condition } };
+    },
+  ),
+  d(
+    'effect.apply',
+    (n, c): Described | null => {
+      const effect = effectItem(n, c);
+      return effect === null ? null : { params: { effect } };
+    },
+  ),
+  d(
+    'player.action',
+    (n, c): Described | null => {
+      const label = c.text(n.label);
+      if (label === null || !Array.isArray(n.steps)) return null;
+      const steps = n.steps.map((step) => actionStepItem(step, c)).filter((s): s is string => s !== null);
+      const params: Params = { label, steps: c.list(steps) };
+      const via = str(n, 'via');
+      return via === null ? { params } : { key: 'player_action_via', params: { ...params, via } };
+    },
+  ),
+  d(
+    'check.assisted',
+    (n, c): Described | null => {
+      const name = c.text(n.label) ?? str(n, 'id');
+      if (name === null || !isRec(n.source)) return null;
+      const source = str(n.source, 'kind');
+      if (source === null) return null;
+      if (source === 'expr') {
+        const of = str(n.source, 'of');
+        if (of === null) return null;
+        return { key: 'check_assisted_expr', params: { name, of: c.word('option', `of_${of}`, of), condition: exprText(n.source.when) } };
+      }
+      return { params: { name, source: c.word('option', `kind_${source}`, source) } };
+    },
+  ),
+  d(
+    'adjust.manual',
+    (n, c): Described | null => {
+      if (!Array.isArray(n.allow)) return null;
+      const allow = n.allow.filter((a): a is string => typeof a === 'string').map((a) => c.word('option', `allow_${a}`, a));
+      return { params: { allow: c.list(allow) } };
     },
   ),
 ]);

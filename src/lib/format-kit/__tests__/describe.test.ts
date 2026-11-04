@@ -131,7 +131,40 @@ describe('describePrimitive: labels and robustness', () => {
       expect(en).toContain('(Not available yet)');
       expect(de).toContain('(Noch nicht verfügbar)');
     }
-    expect(describePrimitive('attr.define', null, 'en')).toBe('Attribute definition (Not available yet)');
+    expect(describePrimitive('pairing.bipartite', null, 'en')).toBe('Bipartite pairing (Not available yet)');
+  });
+
+  it('describes the Phase 3 kinds with their values, in both languages', () => {
+    const s = sampleNodes();
+    const text = (kind: PrimitiveKind, locale: Locale) => describePrimitive(kind, s[kind], locale);
+    expect(text('attr.define', 'en')).toBe('Attribute House (choice) for players, assigned with a seeded random draw.');
+    expect(text('attr.define', 'de')).toBe('Attribut Haus (Auswahl) für Spieler, vergeben per Zufall mit festem Startwert.');
+    expect(text('attr.assign', 'en')).toBe('Values are calculated by the formula tunable.base_level.');
+    expect(text('domain.define', 'en')).toBe('List Gift pool with 2 entries. It starts locked and is visible to everyone once it is unlocked.');
+    expect(text('relation.define', 'en')).toContain('Everything is revealed when round 2 of stage main ends.');
+    expect(text('resource.define', 'en')).toBe('Resource Picks: holds entries of the list pool; up to 2 per player and each item can be held by one player only.');
+    expect(text('metric.define', 'en')).toBe('Custom metric Gift score, calculated per player as wins * 2.');
+    expect(text('rule.on_event', 'en')).toBe('When stage main starts and round >= 0: unlock the list pool and grant 3 of coins to all players.');
+    expect(text('effect.apply', 'en')).toBe('Effect: grant 2 of coins to the players of the event.');
+    expect(text('player.action', 'en')).toBe('Action Choose a gift, through the relation santa: take 2 from pool into picks.');
+    expect(text('track.progression', 'en')).toBe('Progression track Milestones with 1 step, counted in stage main.');
+    expect(text('score.placement', 'en')).toBe('Placement scoring Placement for stage main: 5, 3 and 1 points by final place.');
+    expect(text('check.assisted', 'en')).toBe('Assisted check Ties: flags ties in the standings for an admin to review.');
+    expect(text('adjust.manual', 'en')).toBe('Admins may adjust by hand, with a recorded reason: points and resources.');
+    expect(text('adjust.manual', 'de')).toBe('Admins dürfen von Hand anpassen, mit festgehaltener Begründung: Punkte und Ressourcen.');
+  });
+
+  it('picks the variant sentence of the Phase 3 kinds', () => {
+    const d = (kind: PrimitiveKind, node: unknown) => describePrimitive(kind, node, 'en');
+    expect(d('attr.assign', { kind: 'manual' })).toBe('Values are entered by hand.');
+    expect(d('domain.define', { label: lt('Pool'), entries: [{ id: 'mew', attrs: [] }], initially: 'unlocked', visibility: 'admins' })).toBe(
+      'List Pool with 1 entry. It starts unlocked and is visible to admins only.',
+    );
+    expect(d('resource.define', { label: lt('Coins'), holds: { kind: 'counter' }, visibility: 'own', exclusive: 'none' })).toBe('Resource Coins: a counter.');
+    expect(d('track.progression', { kind: 'track.progression', key: 't', label: lt('T'), steps: [{}, {}] })).toBe('Progression track T with 2 steps.');
+    expect(d('check.assisted', { kind: 'check.assisted', id: 'vets', source: { kind: 'expr', of: 'match', when: { k: 'ref', name: 'forfeit', t: 'boolean' } } })).toBe(
+      'Assisted check vets: flags every match where forfeit for an admin to review.',
+    );
   });
 
   it('never throws on a node of the wrong shape and returns the label', () => {

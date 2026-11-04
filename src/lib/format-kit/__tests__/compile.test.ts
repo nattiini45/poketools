@@ -87,10 +87,16 @@ describe('negative fixtures', () => {
     expect(result.definition?.rules[1]).toMatchObject({ kind: 'rule.custom', id: 'mystery', degraded_from: 'custom.mystery' });
   });
 
-  it('reports a reserved section as not available yet and nothing else for it', () => {
-    const result = compile(mutate(classicLeague, [{ op: 'add', path: '/attributes', value: [{ key: 'tera' }] }]));
+  it('reports a reserved stage field as not available yet and nothing else for it', () => {
+    const result = compile(mutate(classicLeague, [{ op: 'add', path: '/stages/0/end_when', value: { kind: 'later' } }]));
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]).toMatchObject({ code: 'schema_not_available_yet', json_pointer: '/attributes', params: { what: 'attributes' } });
+    expect(result.diagnostics[0]).toMatchObject({ code: 'schema_not_available_yet', json_pointer: '/stages/0/end_when', params: { what: 'end_when' } });
+  });
+
+  it('accepts the Phase 3 sections that used to be reserved', () => {
+    const result = compile(mutate(classicLeague, [{ op: 'add', path: '/attributes', value: [{ key: 'tera', label: { base: 'en', en: { v: 'Tera', s: 'human' } }, on: 'player', type: 'bool' }] }]));
+    expect(result.diagnostics.filter((d) => d.code.startsWith('schema_'))).toEqual([]);
+    expect(result.definition?.attributes).toHaveLength(1);
   });
 });
 

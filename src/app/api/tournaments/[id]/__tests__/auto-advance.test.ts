@@ -32,12 +32,14 @@ vi.mock('@/lib/audit/log', () => ({
   },
 }));
 vi.mock('@/lib/format-engine/auto-advance', () => ({ runAutoAdvance: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/hooks', () => ({ onPhaseStatusChanged: vi.fn() }));
 
 import { PATCH } from '@/app/api/tournaments/[id]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { logAuditEvent } from '@/lib/audit/log';
 import { runAutoAdvance } from '@/lib/format-engine/auto-advance';
+import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
 const ID = '22222222-2222-4222-8222-222222222222';
@@ -96,6 +98,15 @@ describe('PATCH /api/tournaments/[id]: auto advance', () => {
       auto_advance: [],
       auto_advance_error: 'advance_manual_list_required',
     });
+  });
+
+  it('tells the format runtime about a status change, and only a change', async () => {
+    vi.mocked(runAutoAdvance).mockResolvedValue([]);
+    await patch({ status: 'completed' });
+    expect(onPhaseStatusChanged).toHaveBeenCalledWith({ tournament: phase, from: 'active', to: 'completed' });
+    vi.mocked(onPhaseStatusChanged).mockClear();
+    await patch({ status: 'active' });
+    expect(onPhaseStatusChanged).not.toHaveBeenCalled();
   });
 
   it('runs nothing for another status, a phase already completed or another league type', async () => {

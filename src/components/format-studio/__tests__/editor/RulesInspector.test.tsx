@@ -8,10 +8,17 @@ import type { Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
 import { MAX_RULES, MAX_TEXT_SECTIONS, computeCoverage, describeCoverage } from '@/lib/format-kit/client';
+import type { LText } from '@/lib/studio-core/ltext';
 import type { DraftDocument } from '@/lib/format-studio/editor/document';
 import { addRuleCard, addTextSection, updateRuleCard } from '@/lib/format-studio/editor/ops';
 import RulesInspector, { type RulesPart } from '../../editor/inspectors/RulesInspector';
 import { compiled, esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, presetDoc, stageNameOf } from './test-helpers';
+
+function cardText(doc: DraftDocument): LText {
+  const rule = doc.rules[0];
+  if (rule.kind !== 'rule.custom') throw new Error('expected a manual rule card');
+  return rule.text;
+}
 
 function render(doc: DraftDocument, locale: Locale = 'en', part?: RulesPart) {
   return renderWithI18n(<RulesInspector doc={doc} diagnostics={compiled(doc).diagnostics} authorBase={locale} part={part} onChange={() => undefined} />, {
@@ -23,7 +30,7 @@ describe('RulesInspector', () => {
   it.each(['en', 'de'] as const)('shows the card, the section and the coverage line (%s)', (locale) => {
     const doc = presetDoc();
     const html = render(doc, locale);
-    expect(html).toContain(esc(doc.rules[0].text[locale]?.v ?? ''));
+    expect(html).toContain(esc(cardText(doc)[locale]?.v ?? ''));
     expect(html).toContain(esc(doc.text.sections[0].title[locale]?.v ?? ''));
     expect(html).toContain(esc(describeCoverage(computeCoverage(doc), locale)));
     expect(html).toContain(esc(createTranslator(formatStudioPrimitivesMessages, locale)('level.honor')));

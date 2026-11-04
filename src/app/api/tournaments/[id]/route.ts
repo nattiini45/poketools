@@ -42,6 +42,7 @@ import {
 } from '@/lib/reconcile/entity-delete-rebuild';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
 import { runAutoAdvance, type AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
+import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
 import type { ApiResult } from '@/types/api';
 import type { Tournament, TournamentWithDetails } from '@/types/tournament';
 import type { TournamentUpdateInput } from '@/lib/validation';
@@ -253,6 +254,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         autoAdvanceError = err instanceof UserFacingError && err.code ? err.code : 'auto_advance_failed';
       }
       for (const entry of autoAdvance) expireTournamentReads(entry.target_phase_id, before.season_id);
+    }
+
+    // A kit league's format reacts to a phase that starts or completes (stage_start, stage_end, standings tie checks).
+    // Best effort and logged inside: the hook never fails the status change.
+    if (body.status !== undefined && body.status !== before.status) {
+      await onPhaseStatusChanged({ tournament: before, from: before.status, to: body.status });
     }
 
     // Status, name and settings show on the next view of the public pages.

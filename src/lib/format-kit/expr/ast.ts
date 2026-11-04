@@ -59,6 +59,18 @@ export interface CollectionType {
   readonly maxSize: number;
 }
 
+/**
+ * Ref names `<owner>.<key>` that resolve in the environment's plain ref table by their full name (a player or entry
+ * attribute, a tunable, a progression track). Any other dotted name is an `item.<field>` read inside an aggregate.
+ */
+export const NAMESPACED_REF_OWNERS: ReadonlySet<string> = new Set(['attr', 'tunable', 'track']);
+
+/** Whether a ref name is looked up as a whole in the plain ref table. */
+export function isPlainRefName(name: string): boolean {
+  const dot = name.indexOf('.');
+  return dot < 0 || NAMESPACED_REF_OWNERS.has(name.slice(0, dot));
+}
+
 export interface TypeEnv {
   readonly refs: ReadonlyMap<string, ExprType>;
   readonly collections: ReadonlyMap<string, CollectionType>;

@@ -59,7 +59,8 @@ export type Spec =
   | { t: 'enum'; values: readonly (string | number)[] }
   /** A bilingual text, see `ltext.ts`. */
   | { t: 'ltext' }
-  | { t: 'expr'; type: ExprType }
+  /** `any` leaves the result type to the compiler (an attribute assignment: the type is the attribute's). */
+  | { t: 'expr'; type: ExprType | 'any' }
   | { t: 'obj'; fields: readonly FieldSpec[]; reserved?: readonly string[] }
   | { t: 'arr'; item: Spec; min: number; max: number }
   /**

@@ -222,14 +222,13 @@ describe('NewFormatForm: import', () => {
     const { container, user, choose } = open();
     await choose('import');
     const document = baseDocument();
-    // Two unknown members, one reserved section and two schema errors.
+    // Two unknown members, one reserved field and two schema errors.
     const messy = {
       ...document,
       colour: 'red',
-      attributes: {},
       modules: 5,
       edges: 'x',
-      stages: document.stages.map((stage, index) => (index === 0 ? { ...stage, extra: 1 } : stage)),
+      stages: document.stages.map((stage, index) => (index === 0 ? { ...stage, extra: 1, constraints: [] } : stage)),
     };
     await user.upload(fileInput(), jsonFile(messy));
     const status = await screen.findByRole('status');
@@ -238,7 +237,7 @@ describe('NewFormatForm: import', () => {
     expect(within(status).getByText('/colour')).toBeTruthy();
     expect(within(status).getByText('/stages/0/extra')).toBeTruthy();
     expect(within(status).getByText('1 section reserved for later')).toBeTruthy();
-    expect(within(status).getByText('/attributes')).toBeTruthy();
+    expect(within(status).getByText('/stages/0/constraints')).toBeTruthy();
     expect(within(status).queryByText(/note/)).toBeNull();
     expect((within(status).getByLabelText('Remove unknown fields') as HTMLInputElement).checked).toBe(true);
     expect(screen.getByRole('button', { name: 'Import as a private draft' })).toBeTruthy();

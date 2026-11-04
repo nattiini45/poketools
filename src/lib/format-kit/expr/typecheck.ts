@@ -1,4 +1,4 @@
-import { valueType, type CollectionType, type Expr, type ExprIssue, type ExprIssueCode, type ExprType, type TypeEnv } from './ast';
+import { isPlainRefName, valueType, type CollectionType, type Expr, type ExprIssue, type ExprIssueCode, type ExprType, type TypeEnv } from './ast';
 import { KEY_PATTERN } from '@/lib/studio-core/keys';
 import { exceededLimit, measureExpr } from './measure';
 import {
@@ -211,8 +211,7 @@ function typeCheckUnsafe(e: Expr, env: TypeEnv, expected?: ExprType): TypeCheckR
       return null;
     }
     const declared = t as ExprType;
-    const dot = name.indexOf('.');
-    if (dot < 0) {
+    if (isPlainRefName(name)) {
       const actual = env.refs.get(name);
       if (actual === undefined) {
         report('expr_unknown_ref', `${ptr}/name`, { name });
@@ -221,6 +220,7 @@ function typeCheckUnsafe(e: Expr, env: TypeEnv, expected?: ExprType): TypeCheckR
       if (actual !== declared) report('expr_ref_type', `${ptr}/t`, { name, expected: actual, actual: declared });
       return actual;
     }
+    const dot = name.indexOf('.');
     // `scope.field`: only `item.field`, and only inside an aggregate's of/where.
     const owner = name.slice(0, dot);
     const field = name.slice(dot + 1);

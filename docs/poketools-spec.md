@@ -429,7 +429,16 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `season_storylines` | Caster-maintained season storylines |
 | `season_groups` | League groups: one row per group of a league; groups persist across its phases and draft their own pools (`season_groups_replace` is the editor's atomic write) |
 | `season_group_members` | League group membership: one group per trainer per league, the trainer must be a league participant |
-| `season_formats` | The Format Studio format attached to a custom league: a frozen copy of the spec with its hash, the seed (server only), tunables and amendments (both empty today) and the engine (`kit`). One row per league (`season_id` is the key); gone with the league |
+| `season_formats` | The Format Studio format attached to a custom league: a frozen copy of the spec with its hash, the seed (server only), tunables, amendments (domain edits appended by `format_apply_adjustment`) and the engine (`legacy`, `shadow` or `kit`). One row per league (`season_id` is the key); gone with the league |
+| `format_relation_links` | Format runtime: player-to-player links of a relation (a hidden gift giver, a pairing), with the time a link was revealed (`20261105090000`) |
+| `format_resource_items` | Format runtime: what a player holds of a resource (a domain item or a counter); an exclusive item can be held once per league (partial unique index) |
+| `format_action_submissions` | Format runtime: one player action per actor (draft, submitted, locked) and its picks; written by `format_action_save` / `format_action_submit` |
+| `format_event_log` | Format runtime: every fired event once (unique event key), with the ops it applied; written by `format_fire_event` |
+| `format_flags` | Format runtime: domain lock state and action window state per league |
+| `format_player_attrs` | Format runtime: player attribute values (manual, seeded or computed) |
+| `format_track_progress` | Format runtime: the step each player reached on a progression track |
+| `format_checks` | Format runtime: assisted checks an admin confirms or rejects (unresolved outcome, standings tie, rematch, expression); deduplicated per league |
+| `format_adjustments` | Format runtime: admin corrections (points, resource, relation, outcome, action, domain, rank) with a required reason |
 | `tournaments` | Standalone tournaments and league phases (4.3) |
 | `tournament_participants` | Phase or tournament enrollment and seeds (4.3) |
 | `tournament_groups` | Groups of a group-stage phase (`season_group_id` links one to the league group it mirrors) |

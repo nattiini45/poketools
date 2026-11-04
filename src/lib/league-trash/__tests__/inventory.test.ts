@@ -117,7 +117,7 @@ describe('the replay sees the schema (sanity)', () => {
   });
 
   it('parses the four lists', () => {
-    expect(OWNED.size).toBe(51);
+    expect(OWNED.size).toBe(60);
     expect(sorted([...INVENTORY].filter(([, c]) => c === 'derived').map(([r]) => r))).toEqual([
       'aggregate_jobs',
       'aggregates',

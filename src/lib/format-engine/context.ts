@@ -5,12 +5,30 @@
  * `KitStandingsData` holds no secret: stage rules are public, outcomes are public (kind and faint tally; the reason
  * and the admin stay server-side), and the coin flip comes as precomputed draws, never as the season seed.
  */
+import type { ExprValue } from '@/lib/format-kit/expr/ast';
 import type { RankStep, Scoring, Stage } from '@/lib/format-kit/types';
 import type { StandingsOptions } from '@/lib/tournament/standings';
 import type { MatchRecord, Standing } from '@/lib/tournament/types';
-import { computeStageStandings, type KitOutcome, type KitStanding } from './standings';
+import {
+  computeStageStandings,
+  type KitOutcome,
+  type KitStanding,
+  type StandingsMetricDef,
+  type StandingsPlacement,
+} from './standings';
 
 export type KitStageRules = Pick<Stage, 'key' | 'scoring' | 'rank'>;
+
+/**
+ * The custom metrics of one phase's stage (`metric.define` of player, `score.placement`): expressions are public rules,
+ * and the refs are the players' attribute, tunable and track values, never the season seed or a hidden relation.
+ */
+export interface KitStageMetrics {
+  defs: StandingsMetricDef[];
+  placements: StandingsPlacement[];
+  /** `attr.*`, `tunable.*`, `track.*` per player id. */
+  playerRefs: Record<string, Record<string, ExprValue>>;
+}
 
 export interface KitStandingsData {
   /** `kit` ranks with the kit; `shadow` keeps the legacy tables and lets admins compare (`diffStandings`). */
@@ -24,6 +42,10 @@ export interface KitStandingsData {
   coinFlips: Record<string, Record<string, number>>;
   /** An admin's order of the players per phase id (`rank.manual`); absent until one is set. */
   manualOrder?: Record<string, string[]>;
+  /** Points added per phase id and player id (`format_adjustments`, kind `points`); absent until one exists. */
+  adjustments?: Record<string, Record<string, number>>;
+  /** Custom metrics per phase id; absent when the format defines none that the phase's stage uses. */
+  metrics?: Record<string, KitStageMetrics>;
 }
 
 /** Whether a standings call of a league should rank with the kit. */
@@ -53,7 +75,19 @@ export function kitForPhase(kit: KitStandingsData | null | undefined, phaseId: s
     outcomes,
     coinFlips: { [phaseId]: kit.coinFlips[phaseId] ?? {} },
     ...(kit.manualOrder?.[phaseId] ? { manualOrder: { [phaseId]: kit.manualOrder[phaseId] } } : {}),
+    ...(kit.adjustments?.[phaseId] ? { adjustments: { [phaseId]: kit.adjustments[phaseId] } } : {}),
+    ...(kit.metrics?.[phaseId] ? { metrics: { [phaseId]: kit.metrics[phaseId] } } : {}),
   };
+}
+
+/** The adjustments of every phase added up per player: what a season-wide table adds to its points. */
+function seasonAdjustments(kit: KitStandingsData): Record<string, number> | undefined {
+  if (kit.adjustments === undefined) return undefined;
+  const total: Record<string, number> = {};
+  for (const byPlayer of Object.values(kit.adjustments)) {
+    for (const [playerId, points] of Object.entries(byPlayer)) total[playerId] = (total[playerId] ?? 0) + points;
+  }
+  return total;
 }
 
 /** The phase a list of matches belongs to, or null when it mixes phases (a season-wide table) or says nothing. */
@@ -101,11 +135,14 @@ export function kitStandings(
     maxRound: options.maxRound,
   };
   if (phase !== null && kit.stages[phase] !== undefined) {
+    const metrics = kit.metrics?.[phase];
     return computeStageStandings({
       ...common,
       stage: kit.stages[phase],
       coinFlips: kit.coinFlips[phase],
       manualOrder: kit.manualOrder?.[phase],
+      pointAdjustments: kit.adjustments?.[phase],
+      ...(metrics ? { metricDefs: metrics.defs, placements: metrics.placements, playerRefs: metrics.playerRefs } : {}),
     });
   }
   const first = Object.values(kit.stages)[0];
@@ -114,7 +151,12 @@ export function kitStandings(
     const own = match.match_id === undefined ? undefined : kit.stageOfMatch[match.match_id];
     return (own === undefined ? undefined : kit.stages[own]?.scoring) ?? fallback;
   };
-  return computeStageStandings({ ...common, stage: { key: 'season', scoring: fallback, rank: [...SEASON_RANK] }, scoringOf });
+  return computeStageStandings({
+    ...common,
+    stage: { key: 'season', scoring: fallback, rank: [...SEASON_RANK] },
+    scoringOf,
+    pointAdjustments: seasonAdjustments(kit),
+  });
 }
 
 export interface StandingsDiffRow {

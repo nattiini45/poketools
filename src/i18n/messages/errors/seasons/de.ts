@@ -112,6 +112,10 @@ export default defineDe<typeof en>()({
     'Teams verweisen noch auf eine Phase dieses Formats, deshalb lässt es sich nicht abhängen.',
   season_format_type_locked:
     'Der Ligatyp lässt sich nicht auf oder von einem eigenen Format umstellen, solange ein Format angehängt ist oder nachdem die Liga begonnen hat.',
+  action_locked: 'Diese Aktion ist gesperrt, deshalb lässt sie sich nicht mehr ändern.',
+  resource_item_taken: 'Ein anderer Spieler hat dieses Item schon, deshalb kannst du es nicht noch einmal wählen.',
+  domain_amendment_locked: 'Diese Liste lässt sich nicht ändern, weil eine Aktion, die sie nutzt, schon gesperrt ist.',
+  reason_required: 'Für diese Anpassung ist eine Begründung nötig.',
   LEAGUE_TRASH_NOT_FOUND: 'Diese Liga liegt nicht im Papierkorb (sie wurde schon wiederhergestellt oder endgültig entfernt).',
   LEAGUE_TRASH_EXPIRED: 'Die Frist zum Wiederherstellen dieser Liga ist abgelaufen, sie lässt sich nicht mehr wiederherstellen.',
   LEAGUE_TRASH_SEASON_EXISTS:
