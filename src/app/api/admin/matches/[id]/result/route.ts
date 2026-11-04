@@ -31,8 +31,10 @@ interface RouteParams {
  * two simultaneous requests one wins and the other answers 409
  * `match_state_changed`; only the winner runs `finalizeMatchCompletion` (ratings,
  * streaks, bracket propagation, announcements), exactly once. The reason is
- * required and lands in the `match.admin_result` audit event. A real forfeit
- * (scored differently) is out of scope while `CURRENT_ENV.forfeits` is off.
+ * required and lands in the `match.admin_result` audit event. `outcome` (played,
+ * forfeit or no_show; default played) and the reason become the match's admin
+ * `match_outcomes` row, written by finalize's outcome step: a format with
+ * forfeit scoring scores a forfeit or no-show apart from a played win.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    const { winner_id: winnerId, reason } = parsed.data;
+    const { winner_id: winnerId, reason, outcome } = parsed.data;
 
     if (match.status !== 'scheduled' && match.status !== 'in_progress') {
       return NextResponse.json<ApiResult<never>>(
@@ -138,6 +140,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       metadata: {
         tournament_id: match.tournament_id,
         reason,
+        outcome,
         from_status: previousStatus,
         games_recorded: match.games.length,
       },
@@ -147,6 +150,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       match: { ...match, winner_id: winnerId, status: 'completed' },
       winnerId,
       previousStatus,
+      adminOutcome: { kind: outcome, reason, setBy: player.playerId },
     });
     if (!finalize.finalized) {
       // Unreachable after the checks above (the winner is a participant and the

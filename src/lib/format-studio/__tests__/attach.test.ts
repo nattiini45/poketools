@@ -379,7 +379,7 @@ describe('attachFormatToSeason: the write', () => {
     expect(env).toBeDefined();
     expect(env).not.toHaveProperty('rosterSize');
     expect(env?.rulesetIds).toBeInstanceOf(Set);
-    expect(env?.matchModel).toEqual({ draws: false, forfeits: false, maxPlayersPerMatch: 2 });
+    expect(env?.matchModel).toEqual({ draws: false, forfeits: true, maxPlayersPerMatch: 2 });
   });
 
   it('draws a new seed on every attach', async () => {

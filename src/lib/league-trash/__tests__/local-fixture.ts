@@ -421,6 +421,15 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
   );
   const every = <T,>(rows: T[], n: number) => rows.filter((_, i) => i % n === 0);
   await insert(client, 'match_analyses', every(completed, 3).map((m) => ({ match_id: m.id, model_id: 'mdl' })));
+  await insert(
+    client,
+    'match_outcomes',
+    every(completed, 2).map((m, i) =>
+      i % 4 === 3
+        ? { match_id: m.id, kind: 'forfeit', source: 'admin', reason: 'no show', set_by: adminId }
+        : { match_id: m.id, kind: 'played', p1_faints: i % 6, p2_faints: 6, source: 'replay' },
+    ),
+  );
   await insert(client, 'match_prep_analyses', every(scheduled, 3).map((m) => ({ match_id: m.id, player_id: m.player_1_id, model_id: 'mdl' })));
   await insert(client, 'match_prep_teams', every(scheduled, 3).map((m) => ({ match_id: m.id, player_id: m.player_1_id })));
   await insert(client, 'match_proposals', every(scheduled, 3).map((m) => ({ match_id: m.id, proposer_id: m.player_1_id, responder_id: m.player_2_id, proposed_at: at(0), expires_at: at(2 * DAY), status: 'pending' })));

@@ -52,6 +52,17 @@ export class ReplayWinnerUnknownError extends UserFacingError {
   }
 }
 
+/**
+ * Showdown ended the battle as a tie (`|tie`). The app scores no draws: the game pipeline moves the match to
+ * `disputed` with an `unresolved` outcome instead of answering with this error.
+ */
+export class ReplayEngineTieError extends UserFacingError {
+  constructor() {
+    super('Pokémon Showdown ended this battle as a tie', { code: 'replay_engine_tie', status: 400 });
+    this.name = 'ReplayEngineTieError';
+  }
+}
+
 /** Both replay sides resolve or were assigned to the same registered player. */
 export class ReplaySidesNotDistinctError extends UserFacingError {
   constructor() {
@@ -102,6 +113,7 @@ export function resultFromBoundReplay(
 
   const sides = replay.parsed.players;
   if (sides.length !== 2) throw new ReplayWinnerUnknownError();
+  if (replay.parsed.tie) throw new ReplayEngineTieError();
   const winnerSide = sides.findIndex((side) => side.ps_username === replay.parsed.winner_ps_username);
   if (!replay.parsed.winner_ps_username || winnerSide === -1) throw new ReplayWinnerUnknownError();
 

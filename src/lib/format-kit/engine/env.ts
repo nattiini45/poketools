@@ -2,8 +2,9 @@
  * The compile environment: what the surrounding product can do today.
  *
  * `CURRENT_ENV.matchModel` is the ONLY place the match-model limits are encoded. A match still needs a winner to
- * complete and finalize writes no draw, so draws and forfeits are refused and a match has two players. When the
- * match-model change lands, these three values flip here and nowhere else.
+ * complete and finalize writes no draw, so draws are refused and a match has two players. Forfeits are recorded
+ * (`match_outcomes`, an admin result with kind forfeit or no_show), so forfeit scoring compiles. When draws or
+ * larger matches land, those values flip here and nowhere else.
  */
 
 export interface CompileEnv {
@@ -16,7 +17,7 @@ export interface CompileEnv {
 }
 
 export const CURRENT_ENV: CompileEnv = {
-  matchModel: { draws: false, forfeits: false, maxPlayersPerMatch: 2 },
+  matchModel: { draws: false, forfeits: true, maxPlayersPerMatch: 2 },
   features: { killStats: true, rating: true },
 };
 

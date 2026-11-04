@@ -45,6 +45,7 @@ const auditActions = {
   match__reopen: 'Match reopened',
   match__override: 'Match overridden',
   match__admin_result: 'Match result recorded by an admin',
+  match__replay_unresolved: 'Match disputed: the replay was a tie',
   match__bulk_confirm: 'Match confirmed in bulk',
   match__bulk_schedule: 'Match time set in bulk',
   match__bulk_note: 'Match note added in bulk',

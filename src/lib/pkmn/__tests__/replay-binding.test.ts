@@ -70,4 +70,11 @@ describe('resultFromBoundReplay', () => {
       expect.objectContaining({ code: 'replay_winner_unknown', statusCode: 400 }),
     );
   });
+
+  it('names an engine tie apart from a log without a winner', () => {
+    vi.mocked(parseReplayLog).mockReturnValue({ ...PARSED, winner_ps_username: '', tie: true });
+    expect(() => resultFromBoundReplay(bindReplay('gen9ou-1', LOG), ['u1', 'u2'], ['u1', 'u2'])).toThrow(
+      expect.objectContaining({ name: 'ReplayEngineTieError', code: 'replay_engine_tie' }),
+    );
+  });
 });

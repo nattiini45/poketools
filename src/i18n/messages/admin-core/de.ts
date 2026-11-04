@@ -64,6 +64,7 @@ export default defineDe<typeof en>()({
     match__reopen: 'Spiel wieder geöffnet',
     match__override: 'Admin-Eingriff in ein Spiel',
     match__admin_result: 'Ergebnis von einem Admin eingetragen',
+    match__replay_unresolved: 'Spiel angefochten: Das Replay endete unentschieden',
     match__bulk_confirm: 'Spiel gesammelt bestätigt',
     match__bulk_schedule: 'Spielzeit gesammelt gesetzt',
     match__bulk_note: 'Notiz gesammelt zu einem Spiel hinzugefügt',

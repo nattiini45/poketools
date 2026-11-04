@@ -65,6 +65,7 @@ export const OWNED_SPECS: readonly TableSpec[] = [
   { table: 'match_prep_teams', order: ['id'], by: [byMatches()] },
   { table: 'match_proposals', order: ['id'], by: [byMatches()] },
   { table: 'match_evolution_snapshots', order: ['id'], by: [byMatches()] },
+  { table: 'match_outcomes', order: ['match_id'], by: [byMatches()] },
   { table: 'epb_animation_views', order: ['id'], by: [byMatches()] },
   { table: 'broadcast_moments', order: ['id'], by: [byMatches(), { column: 'game_id', keys: 'games' }] },
   { table: 'draft_pools', order: ['id'], by: [bySeason()] },

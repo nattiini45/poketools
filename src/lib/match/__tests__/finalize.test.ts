@@ -62,6 +62,10 @@ vi.mock('@/lib/supabase/queries/match-snapshots', () => ({
   getMatchSnapshots: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
+  recordMatchOutcome: vi.fn(async () => 'written'),
+}));
+
 vi.mock('@/lib/rating/updateRatings', () => ({
   updateRatings: vi.fn(),
 }));
@@ -103,6 +107,7 @@ import { checkAchievements } from '@/lib/gamification/achievements';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { recomputeStreaks, updateStreaks } from '@/lib/gamification/streaks';
 import { updateRatings } from '@/lib/rating/updateRatings';
+import { recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import type { MatchWithPlayers } from '@/types/match';
 import type { StreakChanges } from '@/types/streak';
 
@@ -191,6 +196,90 @@ describe('finalizeMatchCompletion', () => {
     expect(emitDiscordEvent).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'match_confirmed' }));
     expect(markMatchFinalized).toHaveBeenCalledWith('match-1');
     expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  describe('the outcome step', () => {
+    const stat = (player_id: string, was_koed: boolean) => ({ player_id, was_koed }) as never;
+
+    it('records a played outcome with the faint tally of every game, from a replay', async () => {
+      vi.mocked(getBattleStatsByMatch).mockResolvedValue({
+        'game-1': [stat('player-1', true), stat('player-1', false), stat('player-2', true), stat('player-2', true)],
+        'game-2': [stat('player-2', true)],
+      });
+
+      await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(recordMatchOutcome).toHaveBeenCalledWith({
+        matchId: 'match-1',
+        kind: 'played',
+        p1Faints: 1,
+        p2Faints: 3,
+        source: 'replay',
+        reason: null,
+        setBy: null,
+        force: false,
+      });
+    });
+
+    it('records unknown faints (null, not zero) for a match without battle stats, from a manual result', async () => {
+      await finalizeMatchCompletion({
+        match: { ...match, games: [{ ...match.games[0], source: 'manual' }] },
+        winnerId: 'player-1',
+        previousStatus: 'pending_confirmation',
+      });
+
+      expect(recordMatchOutcome).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'played', p1Faints: null, p2Faints: null, source: 'manual', force: false })
+      );
+    });
+
+    it.each(['forfeit', 'no_show'] as const)('writes an admin %s with force and no faints, even without battle stats', async (kind) => {
+      vi.mocked(getBattleStatsByMatch).mockRejectedValue(new Error('stats read failed'));
+
+      const result = await finalizeMatchCompletion({
+        match,
+        winnerId: 'player-2',
+        previousStatus: 'scheduled',
+        adminOutcome: { kind, reason: 'Alice did not show up', setBy: 'admin-1' },
+      });
+
+      expect(recordMatchOutcome).toHaveBeenCalledWith({
+        matchId: 'match-1',
+        kind,
+        p1Faints: null,
+        p2Faints: null,
+        source: 'admin',
+        reason: 'Alice did not show up',
+        setBy: 'admin-1',
+        force: true,
+      });
+      expect(result.failed_steps).not.toContain('outcome');
+    });
+
+    it('gives an admin played result the faint tally of the recorded games', async () => {
+      vi.mocked(getBattleStatsByMatch).mockResolvedValue({ 'game-1': [stat('player-1', true), stat('player-2', false)] });
+
+      await finalizeMatchCompletion({
+        match,
+        winnerId: 'player-2',
+        previousStatus: 'in_progress',
+        adminOutcome: { kind: 'played', reason: 'Agreed in Discord', setBy: 'admin-1' },
+      });
+
+      expect(recordMatchOutcome).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'played', p1Faints: 1, p2Faints: 0, source: 'admin', force: true })
+      );
+    });
+
+    it('fails the outcome step on a write error and keeps the match off the finalized marker', async () => {
+      vi.mocked(recordMatchOutcome).mockRejectedValueOnce(new Error('rpc failed'));
+
+      const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(result.failed_steps).toEqual(['outcome']);
+      expect(result.complete).toBe(false);
+      expect(markMatchFinalized).not.toHaveBeenCalled();
+    });
   });
 
   it('sends the achievement key with gold/platinum unlocks so embeds can localize the name', async () => {
@@ -574,7 +663,8 @@ describe('finalizeMatchCompletion', () => {
       previousStatus: 'pending_confirmation',
     });
 
-    expect(result.failed_steps).toEqual(['battle_stats', 'announcements', 'epb_real_kills', 'epb_hooks']);
+    expect(result.failed_steps).toEqual(['battle_stats', 'outcome', 'announcements', 'epb_real_kills', 'epb_hooks']);
+    expect(recordMatchOutcome).not.toHaveBeenCalled();
     expect(updateRatings).toHaveBeenCalled();
     expect(recomputeStreaks).toHaveBeenCalledTimes(2);
     expect(updateSignatures).toHaveBeenCalledTimes(2);
@@ -740,6 +830,8 @@ describe('finalizeMatchCompletion', () => {
       expect(emitDiscordEvent).not.toHaveBeenCalled();
       expect(emitSocialEvent).not.toHaveBeenCalled();
       expect(markMatchFinalized).toHaveBeenCalledWith('match-1');
+      // The played outcome is rewritten without force, so an admin row survives the heal.
+      expect(recordMatchOutcome).toHaveBeenCalledWith(expect.objectContaining({ kind: 'played', force: false }));
       expect(logAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'match.finalize_healed',

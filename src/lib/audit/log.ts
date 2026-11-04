@@ -38,6 +38,7 @@ export type AuditAction =
   | 'match.reopen'
   | 'match.override'
   | 'match.admin_result'
+  | 'match.replay_unresolved'
   // Matches list bulk actions: one event per changed match, plus one `match.bulk_action` summary per batch.
   | 'match.bulk_confirm'
   | 'match.bulk_schedule'

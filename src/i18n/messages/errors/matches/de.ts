@@ -43,6 +43,9 @@ export default defineDe<typeof en>()({
   manual_result_winner_not_participant: 'Der Sieger muss einer der beiden Spieler dieses Spiels sein.',
   replay_player_not_in_match: 'Spieler „{username}“ ({player}) gehört nicht zu diesem Spiel.',
   replay_winner_unknown: 'Aus dem Replay ließ sich kein Sieger ermitteln.',
+  replay_engine_tie: 'Pokémon Showdown hat diesen Kampf als Unentschieden beendet.',
+  match_replay_unresolved:
+    'Pokémon Showdown hat diesen Kampf als Unentschieden beendet, deshalb wurde kein Ergebnis eingetragen. Das Spiel ist jetzt angefochten und ein Admin entscheidet es.',
   replay_already_recorded:
     'Mit diesem Replay wurde schon ein Partieergebnis eingetragen. Jeder Kampf kann nur einmal eingetragen werden.',
   replay_not_found: 'Pokémon Showdown kennt kein Replay mit diesem Link oder dieser ID. Prüfe die Eingabe und versuche es erneut.',

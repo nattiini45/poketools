@@ -16,6 +16,7 @@ import { LOCALES } from '@/i18n/config';
 import { LEGACY_POINTS_MAX, LEGACY_ROUNDS } from '@/lib/draft/points-limits';
 import { formatPack } from '@/lib/format-pack';
 import type { BroadcastMomentType } from '@/types/broadcast';
+import { ADMIN_OUTCOME_KINDS } from '@/types/match-outcome';
 import {
   MOMENT_DESCRIPTION_MAX_LENGTH,
   MOMENT_MAX_PER_GAME,
@@ -641,6 +642,8 @@ export const matchReopenSchema = z.object({
 export const matchResultSchema = z.object({
   winner_id: uuid,
   reason: reasonSchema,
+  /** How the match ended; a format with forfeit scoring scores `forfeit` and `no_show` apart from a played win. */
+  outcome: z.enum(ADMIN_OUTCOME_KINDS).default('played'),
 });
 
 /** Match reset: cascade flag plus an optional reason (the admin UI requires it). */

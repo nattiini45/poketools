@@ -153,6 +153,8 @@ describe('POST /api/admin/matches/[id]/result', () => {
       ['a missing winner', { reason: 'no show' }],
       ['a winner that is not a uuid', { winner_id: 'alice', reason: 'no show' }],
       ['no body', null],
+      ['an unresolved outcome (never set by an admin)', { winner_id: P1, reason: 'no show', outcome: 'unresolved' }],
+      ['an unknown outcome', { winner_id: P1, reason: 'no show', outcome: 'draw' }],
     ])('answers 400 validation_failed for %s', async (_label, body) => {
       const res = await POST(request(body), routeParams);
 
@@ -217,7 +219,21 @@ describe('POST /api/admin/matches/[id]/result', () => {
         match: expect.objectContaining({ id: MATCH_ID, status: 'completed', winner_id: P1 }),
         winnerId: P1,
         previousStatus: status,
+        adminOutcome: { kind: 'played', reason: 'Bob did not show up', setBy: siteAdmin.playerId },
       });
+    });
+
+    it.each(['forfeit', 'no_show'])('hands a %s outcome with the reason to finalize and audits it', async (outcome) => {
+      await POST(request({ ...validBody, outcome }), routeParams);
+
+      expect(finalizeMatchCompletion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminOutcome: { kind: outcome, reason: 'Bob did not show up', setBy: siteAdmin.playerId },
+        })
+      );
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: expect.objectContaining({ outcome }) })
+      );
     });
 
     it('audits match.admin_result with the reason and the status and winner change', async () => {

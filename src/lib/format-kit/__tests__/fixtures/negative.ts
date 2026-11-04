@@ -287,7 +287,7 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   ]), { params: { stage: 'league', where: 'series' } }),
   fx('error', 'forfeits', 'forfeits_unsupported', '/stages/0/scoring/forfeit', mutate(C, [
     { op: 'add', path: '/stages/0/scoring/forfeit', value: -1 },
-  ]), { params: { stage: 'league' } }),
+  ]), { env: envWith({ forfeits: false }), params: { stage: 'league' } }),
   fx('error', 'players-per-match', 'players_per_match_unsupported', '/stages/0/players_per_match', mutate(C, [
     { op: 'replace', path: '/stages/0/players_per_match', value: 3 },
   ]), { params: { stage: 'league', players: 3, max: 2 } }),

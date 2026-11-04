@@ -55,6 +55,7 @@ export const SEASON_DELETE_OWNED: Readonly<Record<SeasonDeleteGroup, readonly st
     'match_evolution_snapshots',
     'epb_animation_views',
     'broadcast_moments',
+    'match_outcomes',
   ],
   draft: ['draft_pools', 'draft_participants', 'draft_slots', 'draft_picks', 'draft_replay_events', 'draft_line_restrictions'],
   teams: ['teams'],

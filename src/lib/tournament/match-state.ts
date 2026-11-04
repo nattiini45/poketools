@@ -16,7 +16,9 @@ import type { MatchStatus } from '@/types/match';
  * games are kept, only the result is withdrawn), and the forward overrides
  * scheduled / in_progress → completed (a result an admin sets directly: a
  * no-show, a dropped player, or a result agreed outside the app; no
- * confirmation step, the admin's decision is the confirmation).
+ * confirmation step, the admin's decision is the confirmation). The game
+ * pipeline also takes in_progress → disputed on the admins' behalf when a
+ * replay is an engine tie (no draws are scored).
  */
 
 const VALID_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {

@@ -7,6 +7,8 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { markMatchFinalized } from '@/lib/supabase/queries/matches';
 import { getMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
+import { recordMatchOutcome, type RecordMatchOutcomeResult } from '@/lib/supabase/queries/match-outcomes';
+import { faintTally, playedOutcomeSource } from '@/lib/match/outcome';
 import { getRatingHistoryByMatch, getRatingHistoryByMatches, loadRatingScope } from '@/lib/supabase/queries/ratings';
 import { matchCountsForRatings } from '@/lib/rating/rating-scope';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -19,6 +21,7 @@ import { updateSignatures } from '@/lib/gamification/signatures';
 import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { updateRatings, type RatingUpdateResult } from '@/lib/rating/updateRatings';
 import type { MatchStatus, MatchWithPlayers } from '@/types/match';
+import type { AdminOutcomeKind } from '@/types/match-outcome';
 import type { BattleStat } from '@/types/game';
 import type { Tournament } from '@/types/tournament';
 import type { StreakChanges } from '@/types/streak';
@@ -45,6 +48,7 @@ export const FINALIZE_STEPS = [
   'tournament',
   'ratings',
   'battle_stats',
+  'outcome',
   'streaks',
   'signatures',
   'achievements',
@@ -73,7 +77,10 @@ export type FinalizeStep = (typeof FINALIZE_STEPS)[number];
  *   checks are state-based, snapshots go through the replace RPC, and the
  *   orchestrator rolls its own writes back on failure; re-run only while the
  *   match has no snapshots, since they are its last write), bracket_propagation
- *   (materializes only missing downstream slots), mark_finalized.
+ *   (materializes only missing downstream slots), outcome (`match_outcome_record`
+ *   without force rewrites the same played row and never replaces an admin row;
+ *   an admin result whose own outcome write failed heals to a played row, and
+ *   its `match.finalize_failed` event names the step), mark_finalized.
  * - `verify`: never re-applied, only checked. ratings: the heal requires
  *   both rating_history rows (a test-league match stays out of ratings and
  *   requires none); when they are missing it stops before every
@@ -94,6 +101,7 @@ export const FINALIZE_HEAL_POLICY: Readonly<Record<FinalizeStep, 'rerun' | 'veri
   tournament: 'rerun',
   ratings: 'verify',
   battle_stats: 'rerun',
+  outcome: 'rerun',
   streaks: 'rerun',
   signatures: 'rerun',
   achievements: 'not_rerun',
@@ -109,10 +117,19 @@ const NOT_RERUN_STEPS: FinalizeStep[] = FINALIZE_STEPS.filter(
   (step) => FINALIZE_HEAL_POLICY[step] === 'not_rerun'
 );
 
+/** The outcome an admin set with the result route; written with force, so it replaces any earlier row. */
+export interface AdminMatchOutcome {
+  kind: AdminOutcomeKind;
+  reason: string;
+  setBy: string;
+}
+
 interface FinalizeMatchCompletionInput {
   match: MatchWithPlayers;
   winnerId: string;
   previousStatus: MatchStatus;
+  /** Absent: a played result (faints from the battle stats, source replay or manual). */
+  adminOutcome?: AdminMatchOutcome;
 }
 
 export interface FinalizeMatchCompletionResult {
@@ -186,6 +203,51 @@ class StepRunner {
       `[match-${this.mode}] step "${step}" not run for match ${this.matchId}: "${missing}" failed`
     );
   }
+}
+
+/**
+ * The outcome of a played match: the faint tally of its battle stats (null when it has none). Never replaces an
+ * admin row (a forfeit, no-show or played result the admin result route wrote before the completion), so a re-run
+ * or a heal writes the same row again.
+ */
+function recordPlayedOutcome(
+  match: MatchWithPlayers,
+  statsByGame: Record<string, BattleStat[]>
+): Promise<RecordMatchOutcomeResult> {
+  const tally = faintTally(statsByGame, match.player_1_id, match.player_2_id);
+  return recordMatchOutcome({
+    matchId: match.id,
+    kind: 'played',
+    p1Faints: tally?.p1 ?? null,
+    p2Faints: tally?.p2 ?? null,
+    source: playedOutcomeSource(match.games ?? []),
+    reason: null,
+    setBy: null,
+    force: false,
+  });
+}
+
+/**
+ * The admin's outcome. Faints come from the battle stats only for a played result (null without stats); a forfeit
+ * or no-show never carries faints.
+ */
+function recordAdminOutcome(
+  match: MatchWithPlayers,
+  outcome: AdminMatchOutcome,
+  statsByGame: Record<string, BattleStat[]> | null
+): Promise<RecordMatchOutcomeResult> {
+  const tally =
+    outcome.kind === 'played' && statsByGame ? faintTally(statsByGame, match.player_1_id, match.player_2_id) : null;
+  return recordMatchOutcome({
+    matchId: match.id,
+    kind: outcome.kind,
+    p1Faints: tally?.p1 ?? null,
+    p2Faints: tally?.p2 ?? null,
+    source: 'admin',
+    reason: outcome.reason,
+    setBy: outcome.setBy,
+    force: true,
+  });
 }
 
 async function loadTournament(tournamentId: string): Promise<Tournament> {
@@ -501,6 +563,7 @@ export async function finalizeMatchCompletion({
   match,
   winnerId,
   previousStatus,
+  adminOutcome,
 }: FinalizeMatchCompletionInput): Promise<FinalizeMatchCompletionResult> {
   if (previousStatus === 'completed') {
     return { finalized: false, reason: 'already_completed' };
@@ -524,6 +587,14 @@ export async function finalizeMatchCompletion({
   const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
   const statsByGame = statsStep.ok ? statsStep.value : null;
   const flatStats = statsByGame ? Object.values(statsByGame).flat() : null;
+
+  if (adminOutcome && (adminOutcome.kind !== 'played' || statsByGame)) {
+    await runner.run('outcome', () => recordAdminOutcome(match, adminOutcome, statsByGame));
+  } else if (statsByGame) {
+    await runner.run('outcome', () => recordPlayedOutcome(match, statsByGame));
+  } else {
+    runner.blocked('outcome', 'battle_stats');
+  }
 
   // Rebuilt from each player's whole history in one fenced write: two finalizations
   // sharing a player both end up counted, and a rerun lands on the same numbers.
@@ -705,6 +776,14 @@ export async function healMatchFinalization(
   const tournamentStep = await runner.run('tournament', () => loadTournament(match.tournament_id));
   const tournament = tournamentStep.ok ? tournamentStep.value : null;
 
+  const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
+  const statsByGame = statsStep.ok ? statsStep.value : null;
+  if (statsByGame) {
+    await runner.run('outcome', () => recordPlayedOutcome(match, statsByGame));
+  } else {
+    runner.blocked('outcome', 'battle_stats');
+  }
+
   // Rebuilt from the history: correct whether or not the first run's write landed.
   await runner.run('streaks', async () => {
     await recomputeStreaks(match.player_1_id);
@@ -723,9 +802,7 @@ export async function healMatchFinalization(
     if (isEpbTournament(tournament)) {
       // Real kills first, always: every game is credited at most once (its
       // marker), so a re-run credits only the games the first run did not.
-      const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
-      if (statsStep.ok) {
-        const statsByGame = statsStep.value;
+      if (statsByGame) {
         const kills = await runner.run('epb_real_kills', () =>
           runEpbRealKillsStep(match, tournament.season_id, statsByGame)
         );

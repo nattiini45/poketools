@@ -91,11 +91,15 @@ describe('the match-model gate', () => {
   const players = fixture('players-per-match').input;
   const flip = (change: Partial<typeof CURRENT_ENV.matchModel>) => ({ ...CURRENT_ENV, matchModel: { ...CURRENT_ENV.matchModel, ...change } });
 
-  it('refuses draws and forfeits with the current environment', () => {
+  it('refuses draws with the current environment and accepts forfeits (match_outcomes records them)', () => {
     expect(codesOf(draws)).toContain('draws_unsupported@/stages/0/scoring/draw');
     expect(codesOf(series)).toContain('draws_unsupported@/stages/0/series/allow_draw');
-    expect(codesOf(forfeits)).toContain('forfeits_unsupported@/stages/0/scoring/forfeit');
+    expect(codesOf(forfeits).some((c) => c.startsWith('forfeits_unsupported'))).toBe(false);
     expect(compile(draws).ok).toBe(false);
+  });
+
+  it('refuses forfeits in an environment without them', () => {
+    expect(codesOf(forfeits, flip({ forfeits: false }))).toContain('forfeits_unsupported@/stages/0/scoring/forfeit');
   });
 
   it('accepts them once the match model records them', () => {
@@ -108,7 +112,7 @@ describe('the match-model gate', () => {
 
   it('only lets a draw through where the flag it needs is on', () => {
     expect(codesOf(draws, flip({ forfeits: true }))).toContain('draws_unsupported@/stages/0/scoring/draw');
-    expect(codesOf(forfeits, flip({ draws: true }))).toContain('forfeits_unsupported@/stages/0/scoring/forfeit');
+    expect(codesOf(forfeits, flip({ draws: true, forfeits: false }))).toContain('forfeits_unsupported@/stages/0/scoring/forfeit');
   });
 
   it('errors for three players per match with the current environment and passes with room for three', () => {

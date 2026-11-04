@@ -36,6 +36,10 @@ vi.mock('@/lib/tournament/match-state', () => ({
   validateTransition: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
+  recordMatchOutcome: vi.fn(async () => 'written'),
+}));
+
 vi.mock('@/lib/revalidation', () => ({
   revalidateMatchPages: vi.fn(),
 }));
@@ -766,7 +770,8 @@ describe('POST /api/confirm-match/[mid]', () => {
   it('counts every failed step in match_finalize_incomplete', async () => {
     arrangeConfirm();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    // battle_stats fails, so the announcement cannot run either (streaks read their own history).
+    // battle_stats fails, so neither the outcome (it tallies the faints) nor the announcement
+    // (streaks read their own history) can run.
     vi.mocked(getBattleStatsByMatch).mockRejectedValueOnce(new Error('stats read failed'));
 
     const response = await POST(makeRequest({ action: 'confirm' }), routeParams('642bef26-17c2-466f-8eca-61a394f687ca'));
@@ -774,7 +779,7 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     expect(response.status).toBe(500);
     expect(payload.code).toBe('match_finalize_incomplete');
-    expect(payload.params).toEqual({ count: 2 });
+    expect(payload.params).toEqual({ count: 3 });
     consoleError.mockRestore();
   });
 

@@ -47,7 +47,11 @@ import { cleanMatchChildren } from '@/lib/match/match-children';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { MatchSubmitForbiddenError } from '@/lib/auth/match-access';
 import { normalizeReplayUrlOrId } from '@/lib/pkmn/replay-reference';
-import { resultFromBoundReplay, type BoundReplay } from '@/lib/pkmn/replay-binding';
+import { ReplayEngineTieError, resultFromBoundReplay, type BoundReplay } from '@/lib/pkmn/replay-binding';
+import { deleteMatchOutcome, recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { revalidateMatchPages } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import type { MatchStatus, MatchWithPlayers } from '@/types/match';
 import type { Round } from '@/types/round';
 import type { ParticipantWithSeed } from '@/types/tournament';
@@ -212,6 +216,91 @@ export class MatchStateConflictError extends UserFacingError {
 }
 
 /**
+ * A replay was an engine tie: the match moved to `disputed` with an `unresolved` outcome, and no game was
+ * recorded. An admin decides the match (dispute resolution or reopen).
+ */
+export class MatchReplayUnresolvedError extends UserFacingError {
+  constructor() {
+    super(
+      'Pokémon Showdown ended this battle as a tie, so no result was recorded. The match is now disputed and an admin decides it.',
+      { code: 'match_replay_unresolved', status: 409 },
+    );
+    this.name = 'MatchReplayUnresolvedError';
+  }
+}
+
+/**
+ * An engine tie is never scored: the match moves to `disputed` (through `in_progress` when it had not started)
+ * with an `unresolved` outcome whose reason is the engine's code, and no game is written, so the replay stays free
+ * for nothing else to claim. Always throws: `MatchReplayUnresolvedError` once the match is disputed,
+ * `MatchStateConflictError` when a concurrent write moved the match first (nothing written then).
+ */
+async function disputeUnresolvedMatch(match: MatchWithPlayers, input: ReplayGameInput): Promise<never> {
+  const context = {
+    actor_id: input.submitter_id,
+    player_1_id: match.player_1_id,
+    player_2_id: match.player_2_id,
+  };
+  let status: MatchStatus = match.status;
+  if (status === 'scheduled') {
+    const start = validateTransition('scheduled', 'in_progress', { ...context, is_admin: input.is_admin ?? false });
+    if (!start.valid) throw new Error(start.error ?? 'Cannot start match');
+    const started = await updateMatchStatus(match.id, 'in_progress', undefined, undefined, undefined, 'scheduled');
+    if (!started) {
+      const latest = await getMatchById(match.id);
+      if (latest?.status !== 'in_progress') throw new MatchStateConflictError();
+    }
+    status = 'in_progress';
+  }
+
+  // No player chose this move: the engine disputes the match on the admins' behalf, and in_progress -> disputed
+  // is an admin transition.
+  const transition = validateTransition(status, 'disputed', { ...context, is_admin: true });
+  if (!transition.valid) throw new Error(transition.error ?? 'Cannot dispute match');
+  const disputed = await transitionMatchStatus(match.id, {
+    expectedStatus: status,
+    status: 'disputed',
+    autoConfirmAt: null,
+  });
+  if (!disputed) throw new MatchStateConflictError();
+
+  // After the status, so a lost race leaves no outcome row behind.
+  await recordMatchOutcome({
+    matchId: match.id,
+    kind: 'unresolved',
+    p1Faints: null,
+    p2Faints: null,
+    source: 'replay',
+    reason: 'replay_engine_tie',
+    setBy: null,
+    force: false,
+  });
+
+  await revalidateMatchPages(match.tournament_id, match.id);
+  logger.warn('match/outcome', 'replay was an engine tie; match disputed with an unresolved outcome', {
+    matchId: match.id,
+    replayUrl: input.replay.url,
+    fromStatus: match.status,
+  });
+  logAuditEvent({
+    actor_id: null,
+    actor_name: 'System',
+    action: 'match.replay_unresolved',
+    resource_type: 'match',
+    resource_id: match.id,
+    resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+    changes: { status: { before: match.status, after: 'disputed' } },
+    metadata: {
+      tournament_id: match.tournament_id,
+      replay_url: input.replay.url,
+      submitter_id: input.submitter_id,
+      reason: 'replay_engine_tie',
+    },
+  });
+  throw new MatchReplayUnresolvedError();
+}
+
+/**
  * The match's round, read through the typed query (throws on a read error).
  * `best_of` decides when a match is over, so a failed or empty read must stop
  * the caller BEFORE it writes anything, never fall back to Bo1.
@@ -311,7 +400,15 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
 
   // Winner and stats: from the bound replay for a replay result, as entered otherwise. Throws
   // (nothing written) when the replay's sides are not the two participants or it names no winner.
-  const recorded = resolveRecordedResult(input, match);
+  let recorded: RecordedResult;
+  try {
+    recorded = resolveRecordedResult(input, match);
+  } catch (err) {
+    if (err instanceof ReplayEngineTieError && input.source === 'ps_replay') {
+      await disputeUnresolvedMatch(match, input);
+    }
+    throw err;
+  }
 
   assertReplayNotDuplicate(match, recorded.replay_url);
   await assertReplayHashUnused(recorded.replay_hash);
@@ -880,6 +977,7 @@ async function reevaluateMatchStatus(
   if (totalGames === 0) {
     // No games left → reset to scheduled
     await resetMatchFields(matchId);
+    await deleteMatchOutcome(matchId);
     return { status: 'scheduled', winnerId: null, statusConflict: false };
   }
 
@@ -1300,6 +1398,7 @@ export async function resetMatch(
   await Promise.all([
     deleteMatchAnalysis(matchId),
     deleteMatchPrepAnalysesByMatch(matchId),
+    deleteMatchOutcome(matchId),
   ]);
   await deleteMatchSnapshots(matchId);
 

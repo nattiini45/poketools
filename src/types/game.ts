@@ -111,6 +111,8 @@ export interface ReplayData {
 
 export interface ParsedBattleStats {
   winner_ps_username: string;
+  /** Present when Showdown ended the battle as a tie (`|tie`): no side won. */
+  tie?: true;
   players: {
     ps_username: string;
     pokemon: ParsedPokemonStat[];

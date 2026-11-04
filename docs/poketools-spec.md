@@ -438,6 +438,7 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `matches` | Matches (4.5) |
 | `match_proposals` | Proposed match times and their answers |
 | `games` | Games of a match (4.6) |
+| `match_outcomes` | How a match ended: played (with each side's faints), forfeit, no-show or unresolved (an engine tie); written through `match_outcome_record` (`20261104090000`) |
 | `ruleset_definitions` | Ruleset Studio library: one row per ruleset with slug, bilingual name, owner, visibility (`private`, `league`, `gallery`), the draft being edited and its revision, and the head version (4.7) |
 | `ruleset_definition_versions` | Immutable published versions of a ruleset: document, frozen effective rules, hashes, catalog version. A league or phase pins one (4.7, 9) |
 | `ruleset_pin_backfill_log` | The previous `ruleset_id` of every league and phase the one-time pin replay changed (revert source) |
@@ -1412,6 +1413,8 @@ pending_confirmation  (Bo threshold reached, winner determined)
               ▼
            completed  (admin manual override)
 ```
+
+A replay that Showdown ended as a tie is never scored: the game pipeline moves the match from `in_progress` (after starting a `scheduled` one) to `disputed` on the admins' behalf, records an `unresolved` row in `match_outcomes` and writes no game (409 `match_replay_unresolved`). An admin decides it like any other dispute.
 
 An admin (a site admin, or a resource admin of the match's tournament or league) can also settle a match that has not reached `pending_confirmation`: `scheduled → completed` (and `in_progress → completed`) through `POST /api/admin/matches/[id]/result` with a winner and a required reason. The settle takes the finalize path of any other completion (ratings, streaks, standings, bracket advancement) and records the audit event `match.admin_result`. The transition is admin-only: `validateTransition` refuses it for a player with `match_settle_admin_only`. `POST /api/confirm-match/[mid]` does not settle an unplayed match: it answers 409 `match_settle_use_result_route`, so every direct completion of a `scheduled` match carries a reason and the audit event.
 

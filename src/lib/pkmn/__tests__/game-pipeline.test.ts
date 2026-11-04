@@ -100,6 +100,19 @@ vi.mock('@/lib/supabase/queries/match-snapshots', () => ({
   deleteMatchSnapshots: vi.fn(async () => {}),
 }));
 
+vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
+  recordMatchOutcome: vi.fn(async () => 'written'),
+  deleteMatchOutcome: vi.fn(async () => 0),
+}));
+
+vi.mock('@/lib/revalidation', () => ({
+  revalidateMatchPages: vi.fn(async () => {}),
+}));
+
+vi.mock('@/lib/audit/log', () => ({
+  logAuditEvent: vi.fn(),
+}));
+
 vi.mock('@/lib/rating/updateRatings', () => ({
   // T5: rebuildRatingsForPlayers (chronological replay) is the reset's rating path.
   // recordGameResult's live rating write path is out of scope for this suite.
@@ -224,16 +237,20 @@ import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { cleanMatchChildren } from '@/lib/match/match-children';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
+import { deleteMatchOutcome, recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { revalidateMatchPages } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
 
 const REPLAY_HASH = 'ab'.repeat(32);
 
 /** A bound replay as `bindReplay` returns it (stats as the parser emits them). */
-function boundReplay(overrides: Partial<{ url: string; hash: string; winner: string }> = {}): BoundReplay {
+function boundReplay(overrides: Partial<{ url: string; hash: string; winner: string; tie: true }> = {}): BoundReplay {
   return {
     url: overrides.url ?? 'https://replay.pokemonshowdown.com/gen9ou-42',
     hash: overrides.hash ?? REPLAY_HASH,
     parsed: {
       winner_ps_username: overrides.winner ?? 'bob_ps',
+      ...(overrides.tie ? { tie: true } : {}),
       players: [
         {
           ps_username: 'alice_ps',
@@ -325,6 +342,83 @@ describe('recordGameResult: replay binding', () => {
       submitter_id: 'player-1',
     })).rejects.toMatchObject({ code: 'replay_winner_unknown', statusCode: 400 });
     expect(createGame).not.toHaveBeenCalled();
+  });
+
+  describe('an engine tie', () => {
+    const tieInput = () => ({
+      match_id: 'match-1',
+      source: 'ps_replay' as const,
+      replay: boundReplay({ winner: '', tie: true }),
+      side_player_ids: ['player-1', 'player-2'] as [string, string],
+      submitter_id: 'player-1',
+    });
+
+    beforeEach(() => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    it('disputes the in-progress match with an unresolved outcome and writes no game (409 match_replay_unresolved)', async () => {
+      await expect(recordGameResult(tieInput())).rejects.toMatchObject({
+        name: 'MatchReplayUnresolvedError',
+        code: 'match_replay_unresolved',
+        statusCode: 409,
+      });
+
+      expect(transitionMatchStatus).toHaveBeenCalledWith('match-1', {
+        expectedStatus: 'in_progress',
+        status: 'disputed',
+        autoConfirmAt: null,
+      });
+      expect(recordMatchOutcome).toHaveBeenCalledWith({
+        matchId: 'match-1',
+        kind: 'unresolved',
+        p1Faints: null,
+        p2Faints: null,
+        source: 'replay',
+        reason: 'replay_engine_tie',
+        setBy: null,
+        force: false,
+      });
+      expect(vi.mocked(recordMatchOutcome).mock.invocationCallOrder[0]).toBeGreaterThan(
+        vi.mocked(transitionMatchStatus).mock.invocationCallOrder[0]
+      );
+      expect(revalidateMatchPages).toHaveBeenCalledWith('tourney-1', 'match-1');
+      expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: 'match.replay_unresolved', resource_id: 'match-1' }));
+      expect(createGame).not.toHaveBeenCalled();
+      expect(createBattleStats).not.toHaveBeenCalled();
+      expect(enqueueAggregateJob).not.toHaveBeenCalled();
+    });
+
+    it('starts a scheduled match first, then disputes it', async () => {
+      vi.mocked(getMatchById).mockResolvedValueOnce({
+        id: 'match-1', tournament_id: 'tourney-1', round_id: 'round-1',
+        player_1_id: 'player-1', player_2_id: 'player-2',
+        status: 'scheduled', winner_id: null, player_1_name: 'Alice', player_2_name: 'Bob', games: [],
+      } as never);
+
+      await expect(recordGameResult(tieInput())).rejects.toMatchObject({ code: 'match_replay_unresolved' });
+
+      expect(updateMatchStatus).toHaveBeenCalledWith('match-1', 'in_progress', undefined, undefined, undefined, 'scheduled');
+      expect(transitionMatchStatus).toHaveBeenCalledWith('match-1', expect.objectContaining({ expectedStatus: 'in_progress', status: 'disputed' }));
+    });
+
+    it('writes no outcome when a concurrent write moved the match first (409 match_result_conflict)', async () => {
+      vi.mocked(transitionMatchStatus).mockResolvedValueOnce(null);
+
+      await expect(recordGameResult(tieInput())).rejects.toMatchObject({ code: 'match_result_conflict', statusCode: 409 });
+
+      expect(recordMatchOutcome).not.toHaveBeenCalled();
+      expect(createGame).not.toHaveBeenCalled();
+    });
+
+    it('keeps a log without a winner and without a tie a plain 400 (nothing written, match untouched)', async () => {
+      await expect(recordGameResult({ ...tieInput(), replay: boundReplay({ winner: '' }) })).rejects.toMatchObject({
+        code: 'replay_winner_unknown',
+      });
+
+      expect(transitionMatchStatus).not.toHaveBeenCalled();
+      expect(recordMatchOutcome).not.toHaveBeenCalled();
+    });
   });
 
   it('refuses a side assigned to a player outside the match', async () => {
@@ -888,6 +982,7 @@ describe('resetMatch', () => {
 
     const result = await resetMatch('match-1', 'admin-1');
 
+    expect(deleteMatchOutcome).toHaveBeenCalledWith('match-1');
     expect(cleanMatchChildren).toHaveBeenCalledTimes(1);
     expect(cleanMatchChildren).toHaveBeenCalledWith('match-1');
     // The cleanup summary is forwarded on the result.

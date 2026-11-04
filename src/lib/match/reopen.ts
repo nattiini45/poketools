@@ -8,6 +8,7 @@ import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tourn
 import { deleteMatchAnalysis } from '@/lib/supabase/queries/match-analyses';
 import { deleteMatchPrepAnalysesByMatch } from '@/lib/supabase/queries/match-prep-analyses';
 import { deleteMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
+import { deleteMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { unpropagateBracketOnMatchReset } from '@/lib/tournament/bracket-propagation';
 import { canReopenMatch, validateTransition } from '@/lib/tournament/match-state';
 import {
@@ -70,10 +71,12 @@ export class MatchReopenDownstreamPlayedError extends UserFacingError {
  *      rebuild must not be refused halfway (`RatingHistoryIntegrityError`),
  *      and a played later bracket match refuses the reopen outright
  *   3. one compare-and-set status write (`MatchStateChangedError` on a miss)
- *   4. post-commit steps, only for a match that WAS completed (pending and
- *      disputed matches never finalized, so the status write is all they
- *      need). Each step is isolated and logged; a failed one is reported in
- *      `failed_steps` and the others still run. Achievements are permanent and
+ *   4. post-commit steps. The outcome row goes for every status (an admin
+ *      forfeit, or the unresolved row of a disputed replay tie, must not
+ *      outlive the result it described); the rest only for a match that WAS
+ *      completed (pending and disputed matches never finalized). Each step is
+ *      isolated and logged; a failed one is reported in `failed_steps` and the
+ *      others still run. Achievements are permanent and
  *      a Discord / social announcement already sent cannot be retracted.
  */
 export async function reopenMatch(matchId: string, adminId: string): Promise<ReopenMatchResult> {
@@ -135,7 +138,6 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
     bracket_matches_removed: 0,
     failed_steps: [],
   };
-  if (!wasCompleted) return result;
 
   const runStep = async <T>(step: ReopenStep, run: () => Promise<T>): Promise<T | undefined> => {
     try {
@@ -146,6 +148,9 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
       return undefined;
     }
   };
+
+  await runStep('outcome', () => deleteMatchOutcome(matchId));
+  if (!wasCompleted) return result;
 
   await runStep('round', () => revertRoundIfCompleted(match.round_id));
 

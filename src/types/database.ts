@@ -3299,6 +3299,54 @@ export type Database = {
           },
         ]
       }
+      match_outcomes: {
+        Row: {
+          kind: string
+          match_id: string
+          p1_faints: number | null
+          p2_faints: number | null
+          reason: string | null
+          set_at: string
+          set_by: string | null
+          source: string
+        }
+        Insert: {
+          kind: string
+          match_id: string
+          p1_faints?: number | null
+          p2_faints?: number | null
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          source: string
+        }
+        Update: {
+          kind?: string
+          match_id?: string
+          p1_faints?: number | null
+          p2_faints?: number | null
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_outcomes_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_outcomes_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_prep_analyses: {
         Row: {
           analysis: Json
@@ -6678,6 +6726,19 @@ export type Database = {
       }
       league_trash_schema_version: { Args: never; Returns: string }
       match_in_test_season: { Args: { p_match_id: string }; Returns: boolean }
+      match_outcome_record: {
+        Args: {
+          p_force: boolean
+          p_kind: string
+          p_match_id: string
+          p_p1_faints?: number
+          p_p2_faints?: number
+          p_reason?: string
+          p_set_by?: string
+          p_source: string
+        }
+        Returns: string
+      }
       merge_move_counts: {
         Args: { existing: Json; incoming: Json }
         Returns: Json

@@ -60,6 +60,11 @@ export default {
   manual_result_winner_not_participant: 'Winner must be a match participant',
   replay_player_not_in_match: 'Player "{username}" ({player}) is not a participant in this match',
   replay_winner_unknown: 'Could not determine winner from replay',
+  // Showdown ended the battle as a tie (no draws are scored); the pipeline turns it into match_replay_unresolved
+  replay_engine_tie: 'Pokémon Showdown ended this battle as a tie',
+  // recordGameResult: the replay is an engine tie, so the match went to disputed with an unresolved outcome (409, no game written)
+  match_replay_unresolved:
+    'Pokémon Showdown ended this battle as a tie, so no result was recorded. The match is now disputed and an admin decides it.',
   // A replay's battle is bound to at most one game, in any match (games.replay_hash, unique; 409, nothing written)
   replay_already_recorded: 'This replay was already used to record a game result. Each battle can be recorded only once.',
   // replay_url_invalid (not a Showdown replay link or id; 400, checked before the match is read or any fetch) lives in errors/stats
