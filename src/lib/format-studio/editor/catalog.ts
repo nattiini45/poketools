@@ -17,6 +17,8 @@ export const METRIC_KEYS = [
   'buchholz',
   'seed',
   'rating',
+  'faints_dealt',
+  'faints_taken',
 ] as const satisfies readonly BuiltinMetric[];
 
 /** Pairing kinds the form offers (`label.pairing_<kind>`). */

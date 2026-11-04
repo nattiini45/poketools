@@ -121,7 +121,6 @@ export interface StageSpecSnapshot {
 export type EngineGapCode =
   | 'override_unmapped'
   | 'rr_legs_not_run'
-  | 'third_place_not_run'
   | 'edge_select_not_run'
   | 'groups_not_created';
 

@@ -46,7 +46,11 @@ import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
-import type { ApiResult } from '@/types/api';
+import { loadKitPhase } from '@/lib/format-engine/load';
+import { kitPairsRounds, legRoundRange, pairNextRound } from '@/lib/format-engine/pairing';
+import { ensureKitPhaseGroups } from '@/lib/format-engine/groups';
+import { mirrorsLeagueGroups } from '@/lib/tournament/phase-week-plan';
+import type { ApiResult, ApiWarning } from '@/types/api';
 import type { Round } from '@/types/round';
 import type { Pairing } from '@/lib/tournament/types';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -89,6 +93,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // type is already joined onto the tournament, so every other league type takes no extra read.
     if (tournament.season_format_type === 'custom' && tournament.season_id) {
       await assertSeasonFormatAttached(tournament.season_id);
+    }
+    // A phase of a kit league pairs by its own stage: Swiss ranks by the stage's scoring and chain and stops after its
+    // rounds; a round robin plays its legs. Shadow and legacy leagues keep the legacy pairing.
+    const kitPhase =
+      tournament.season_format_type === 'custom' && tournament.season_id
+        ? await loadKitPhase(tournament.season_id, tid)
+        : null;
+    const kit = kitPhase?.engine === 'kit' && kitPairsRounds(kitPhase.stage) ? kitPhase : null;
+    const warnings: ApiWarning[] = [];
+    // A manual stage is paired by hand (the manual round editor); no generator may pair it.
+    if (kitPhase?.engine === 'kit' && kitPhase.stage.pairing.kind === 'manual') {
+      throw new UserFacingError('This phase is paired by hand. Create its rounds in the manual round editor.', {
+        code: 'rounds_manual_pairing',
+        status: 409,
+      });
     }
 
     if (tournament.status === 'completed') {
@@ -173,9 +192,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       tournament.bracket_type === 'swiss' || tournament.bracket_type === 'round_robin'
         ? await getPairedMatchRecords(tid)
         : [];
-    const groups = tournament.season_id
+    let groups = tournament.season_id
       ? await ensurePhaseGroupsFromLeague(tournament.season_id, tournament)
       : await getGroupsByTournament(tid);
+    // A kit stage with groups forms them before its first round (league groups, when the league has any, win).
+    if (kit && tournament.season_id && groups.length === 0) {
+      groups = await ensureKitPhaseGroups({ seasonId: tournament.season_id, phaseId: tid, stage: kit.stage, seed: kit.seed });
+    }
 
     // 5. Generate pairings (group-scoped if groups exist)
     const nextRoundNumber = tournament.current_round + 1;
@@ -211,8 +234,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // The week this call writes: the next one after `current_round`, except in a grouped round robin phase, where it
     // is the first planned week still to write (`pendingWeeks`), never derived from `current_round`.
     let roundNumber = nextRoundNumber;
+    // Swiss pairings of a kit stage that repeat an earlier pairing because no other pairing was left.
+    let rematches = 0;
 
-    if (groups.length > 0 && tournament.bracket_type === 'round_robin') {
+    // A kit round robin pairs each of its own groups by the stage (legs included); groups that mirror league groups
+    // keep the league week plan with its cross-group weeks.
+    if (groups.length > 0 && tournament.bracket_type === 'round_robin' && !(kit && !mirrorsLeagueGroups(groups))) {
       // Grouped round robin: the week plan (group-schedule.ts). Each group plays its own round count inside the
       // shared weeks (rest weeks for a smaller group); groups that mirror league groups also get the cross-group
       // weeks, and a placement week is paired here from the group tables after the week before.
@@ -245,22 +272,77 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             groupPlayerIds.includes(m.player_2_id)
         );
 
+        const groupByes = byeHistory.filter((b) => groupPlayerIds.includes(b.player_id));
+        const groupPaired = pairedMatches.filter(
+          (m) => groupPlayerIds.includes(m.player_1_id) && groupPlayerIds.includes(m.player_2_id)
+        );
+        if (kit) {
+          const result = pairNextRound({
+            stage: kit.stage,
+            participantIds: groupPlayerIds,
+            participantNames: groupNames,
+            matches: groupMatches,
+            pairedMatches: groupPaired,
+            byeHistory: groupByes,
+            roundNumber: nextRoundNumber,
+            outcomes: kit.outcomes,
+            seed: kit.seed,
+          });
+          // A group that has played all its rounds rests while a larger one plays on.
+          if (result.kind !== 'round') continue;
+          allPairings.push(...result.round.pairings);
+          allByePlayerIds.push(...result.round.bye_player_ids);
+          rematches += result.round.rematches ?? 0;
+          continue;
+        }
         const generated = generateRound(
           tournament.bracket_type,
           groupPlayerIds,
           groupNames,
           groupMatches,
           nextRoundNumber,
-          {
-            startingBrackets,
-            byeHistory: byeHistory.filter((b) => groupPlayerIds.includes(b.player_id)),
-            pairedMatches: pairedMatches.filter(
-              (m) => groupPlayerIds.includes(m.player_1_id) && groupPlayerIds.includes(m.player_2_id)
-            ),
-          }
+          { startingBrackets, byeHistory: groupByes, pairedMatches: groupPaired }
         );
         allPairings.push(...generated.pairings);
         allByePlayerIds.push(...generated.bye_player_ids);
+      }
+      if (kit && allPairings.length === 0 && allByePlayerIds.length === 0) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'All rounds have already been generated', code: 'rounds_all_generated' },
+          { status: 400 }
+        );
+      }
+    } else if (kit) {
+      const result = pairNextRound({
+        stage: kit.stage,
+        participantIds,
+        participantNames,
+        matches: matchHistory,
+        pairedMatches,
+        byeHistory,
+        roundNumber: nextRoundNumber,
+        outcomes: kit.outcomes,
+        seed: kit.seed,
+      });
+      if (result.kind !== 'round') {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'All rounds have already been generated', code: 'rounds_all_generated' },
+          { status: 400 }
+        );
+      }
+      allPairings = result.round.pairings;
+      allByePlayerIds = result.round.bye_player_ids;
+      roundName = result.round.round_name;
+      rematches = result.round.rematches ?? 0;
+      // A later leg repeats the first leg's pairings on purpose: the drift guard looks inside this round's leg only.
+      if (kit.stage.pairing.kind === 'round_robin') {
+        const leg = legRoundRange(participantIds.length, nextRoundNumber);
+        assertNoScheduleDrift(
+          roundName,
+          allPairings,
+          pairedMatches.filter((m) => m.round_number >= leg.first && m.round_number <= leg.last),
+          { ignoreRoundNumber: nextRoundNumber }
+        );
       }
     } else {
       // A round robin has a fixed number of rounds (circle method): past the last one there is nothing to pair.
@@ -401,8 +483,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         matches: allPairings.length,
         byes: allByePlayerIds.length,
         started,
+        ...(kit ? { engine: 'kit', rematches } : {}),
       },
     });
+    if (rematches > 0) warnings.push({ code: 'swiss_rematches', params: { count: rematches } });
 
     // Discord + social notification (fire-and-forget)
     const roundPayload = {
@@ -444,7 +528,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json<ApiResult<Round>>(
-      { success: true, data: round },
+      { success: true, data: round, ...(warnings.length > 0 ? { warnings } : {}) },
       { status: 201 }
     );
   } catch (err) {

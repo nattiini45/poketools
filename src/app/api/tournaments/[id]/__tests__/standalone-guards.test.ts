@@ -44,6 +44,7 @@ vi.mock('@/lib/reconcile/entity-delete-rebuild', () => ({
 
 vi.mock('@/lib/tournament/bracket-propagation', () => ({
   syncBracketResetSetting: vi.fn(),
+  syncThirdPlaceSetting: vi.fn(),
 }));
 
 vi.mock('@/lib/discord/notify', () => ({ emitDiscordEvent: vi.fn() }));
@@ -67,7 +68,9 @@ import {
   getTournamentById,
   updateTournament,
   getStagesBySeasonId,
+  getParticipants,
 } from '@/lib/supabase/queries/tournaments';
+import { syncThirdPlaceSetting } from '@/lib/tournament/bracket-propagation';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { logAuditEvent } from '@/lib/audit/log';
 
@@ -309,5 +312,48 @@ describe('PATCH /api/tournaments/[id]: league phase rename', () => {
 
     expect(response.status).toBe(200);
     expect(getRoundsByTournament).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/tournaments/[id]: third-place toggle', () => {
+  const single = { ...standalone, bracket_type: 'single_elim' as const, status: 'active' as const, third_place_enabled: false };
+
+  it('syncs the bracket and audits the change when the toggle flips', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(single as never);
+    vi.mocked(getParticipants).mockResolvedValue([]);
+    vi.mocked(syncThirdPlaceSetting).mockResolvedValue({ third_place_matches_removed: 0, slots_materialized: 1 });
+
+    const response = await patch({ third_place_enabled: true });
+
+    expect(response.status).toBe(200);
+    expect(syncThirdPlaceSetting).toHaveBeenCalledWith(expect.objectContaining({ third_place_enabled: true }), []);
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: { third_place_enabled: { before: false, after: true } },
+        metadata: { third_place_sync: { third_place_matches_removed: 0, slots_materialized: 1 }, third_place_sync_error: null },
+      }),
+    );
+  });
+
+  it('does not sync when the stored value is resent', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(single as never);
+
+    const response = await patch({ third_place_enabled: false });
+
+    expect(response.status).toBe(200);
+    expect(syncThirdPlaceSetting).not.toHaveBeenCalled();
+  });
+
+  it('keeps the saved setting and records the failure when the sync throws', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(single as never);
+    vi.mocked(getParticipants).mockResolvedValue([]);
+    vi.mocked(syncThirdPlaceSetting).mockRejectedValue(new Error('boom'));
+
+    const response = await patch({ third_place_enabled: true });
+
+    expect(response.status).toBe(200);
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { third_place_sync: null, third_place_sync_error: 'third_place_sync_failed' } }),
+    );
   });
 });

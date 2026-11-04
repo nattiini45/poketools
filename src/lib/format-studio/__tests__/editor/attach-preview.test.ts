@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CURRENT_ENV, PRESETS, compile, deepFreeze, type FormatDefinition } from '@/lib/format-kit/client';
-import { planStages } from '../../materialise';
+import { engineGaps, planStages } from '../../materialise';
 import { previewAttach, rulesetLabelsOf, type AttachPreview } from '../../editor/attach-preview';
 
 const RULESET = '3f2b8c1e-5a47-4d09-9b6e-7c1d2a4e8f10';
@@ -71,13 +71,13 @@ describe('warnings', () => {
       seasonLanguage: 'en',
       specHash: HASH,
     });
-    expect(okPreview(source).warnings).toEqual(planned.warnings);
+    expect(okPreview(source, { engine: 'legacy' }).warnings).toEqual(planned.warnings);
+    expect(okPreview(source).warnings).toEqual(engineGaps(planned.warnings, 'kit'));
   });
 
-  it('names the parts the engine does not run yet', () => {
-    const codes = okPreview(spec('classic-league')).warnings.map((w) => w.code);
-    expect(codes).toContain('rr_legs_not_run');
-    expect(okPreview(spec('swiss-top-cut')).warnings.map((w) => w.code)).toContain('third_place_not_run');
+  it('names the parts the engine does not run: legs only on legacy, groups on every engine', () => {
+    expect(okPreview(spec('classic-league'), { engine: 'legacy' }).warnings.map((w) => w.code)).toContain('rr_legs_not_run');
+    expect(okPreview(spec('classic-league')).warnings.map((w) => w.code)).not.toContain('rr_legs_not_run');
     expect(okPreview(spec('cup')).warnings.map((w) => w.code)).toContain('groups_not_created');
   });
 });

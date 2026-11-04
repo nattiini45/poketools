@@ -1198,10 +1198,12 @@ export async function collectPlayedDownstreamMatches(
     return [];
   }
 
-  const structure = buildBracketStructureForParticipants(
-    tournament.bracket_type,
-    participants
-  );
+  // Both optional slots stay in whatever the settings say now: a reset or third-place match played while the
+  // setting was on is still downstream of its feeders. A slot without a match adds nothing.
+  const structure = buildBracketStructureForParticipants(tournament.bracket_type, participants, {
+    bracketResetEnabled: true,
+    thirdPlaceEnabled: true,
+  });
   if (!structure) return [];
 
   const rounds = await getRoundsByTournament(tournament.id);

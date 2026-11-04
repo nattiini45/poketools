@@ -107,18 +107,19 @@ export function generateSwissRound(
      * Defaults to `matchHistory`.
      */
     pairedMatches?: MatchRecord[];
+    /**
+     * The players in standings order, best first, when the caller ranks them itself (the format kit ranks by the
+     * stage's own scoring and chain). Defaults to the generic table of `matchHistory` and `byeHistory`.
+     */
+    ranked?: readonly string[];
   } = {},
 ): GeneratedRound {
   const stepLimit = options.stepLimit ?? SWISS_SEARCH_STEP_LIMIT;
-  const standings = computeStandings(
-    participantIds,
-    participantNames,
-    matchHistory,
-    {},
-    { byes: byeHistory },
-  );
   const history = buildPairingHistory(options.pairedMatches ?? matchHistory, byeHistory);
-  const ranked = standings.map((s) => s.player_id);
+  const ranked =
+    options.ranked !== undefined
+      ? [...options.ranked]
+      : computeStandings(participantIds, participantNames, matchHistory, {}, { byes: byeHistory }).map((s) => s.player_id);
 
   // The bye candidates, best first: the lowest-ranked players without a bye, then the lowest-ranked with one.
   const byeCandidates: Array<string | null> =
@@ -173,5 +174,6 @@ export function generateSwissRound(
     round_name: `Round ${roundNumber}`,
     pairings: chosen.matching.pairs.map(([player_1_id, player_2_id]): Pairing => ({ player_1_id, player_2_id })),
     bye_player_ids: chosen.bye === null ? [] : [chosen.bye],
+    rematches: chosen.matching.rematches,
   };
 }

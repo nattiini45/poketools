@@ -190,11 +190,28 @@ const DESCRIBERS: ReadonlyMap<AvailableKind, Describer> = new Map<AvailableKind,
   ),
   d(
     'score.match',
-    (n) => {
+    (n, c): Described | null => {
       const win = num(n, 'win');
       const loss = num(n, 'loss');
       const bye = num(n, 'bye');
-      return win === null || loss === null || bye === null ? null : { params: { win, loss, bye } };
+      if (win === null || loss === null || bye === null) return null;
+      const extras: string[] = [];
+      const perFaint = num(n, 'per_opponent_faint');
+      if (perFaint !== null && perFaint !== 0) extras.push(c.word('item', 'score_per_faint', '', { n: perFaint }));
+      const forfeit = n.forfeit;
+      if (typeof forfeit === 'number' && Number.isFinite(forfeit)) {
+        extras.push(c.word('item', 'score_forfeit', '', { win: forfeit, loss }));
+      } else if (isRec(forfeit)) {
+        const forfeitWin = num(forfeit, 'win');
+        const forfeitLoss = num(forfeit, 'loss') ?? 0;
+        if (forfeitWin !== null) {
+          const key = bool(forfeit, 'faint_bonus') === true ? 'score_forfeit_bonus' : 'score_forfeit';
+          extras.push(c.word('item', key, '', { win: forfeitWin, loss: forfeitLoss }));
+        }
+      }
+      const shown = extras.filter((extra) => extra !== '');
+      if (shown.length === 0) return { params: { win, loss, bye } };
+      return { key: 'score_match_extra', params: { win, loss, bye, extra: c.list(shown) } };
     },
   ),
   d(

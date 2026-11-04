@@ -314,6 +314,7 @@ export const tournamentCreateSchema = z.object({
   team_visibility: teamVisibilitySchema.default('hidden_until_match'),
   stage_order: z.number().int().min(0).optional(),
   bracket_reset_enabled: z.boolean().optional(),
+  third_place_enabled: z.boolean().optional(),
 });
 
 export const tournamentUpdateSchema = z.object({
@@ -329,6 +330,7 @@ export const tournamentUpdateSchema = z.object({
   archived: z.boolean().optional(),
   stage_order: z.number().int().min(0).optional(),
   bracket_reset_enabled: z.boolean().optional(),
+  third_place_enabled: z.boolean().optional(),
 });
 
 const advancementRuleSchema = z.object({
@@ -376,6 +378,8 @@ export const syncStandingsSchema = z.object({
 
 export const seasonAdvanceSchema = z.object({
   force: z.boolean().optional(),
+  /** A kit edge with a `manual_list` selection: the players who move on, in order. */
+  manual_list: z.array(uuid).max(256).optional(),
 });
 
 /** Optional destructive confirmation for reset / regenerate paths. */

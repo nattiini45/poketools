@@ -108,8 +108,25 @@ export interface Scoring {
   bye: number;
   /** representable, gated by the compiler */
   draw?: number;
-  /** representable, gated by the compiler */
-  forfeit?: number;
+  /**
+   * Gated by the compiler (`env.matchModel.forfeits`). A number is the older shorthand: the winner of a forfeit or
+   * no-show gets it and the loser the stage's `loss`, with no faint bonus.
+   */
+  forfeit?: number | ForfeitScoring;
+  /**
+   * Points per fainted Pokémon of the opponent in a played match (`match_outcomes` faint tally). Absent means 0; the
+   * field is optional rather than defaulted so documents stored before it keep their hash.
+   */
+  per_opponent_faint?: number;
+}
+
+/** Points of a match settled by forfeit or no-show. */
+export interface ForfeitScoring {
+  win: number;
+  /** default 0 */
+  loss: number;
+  /** default false. Whether the faint bonus applies on top; a forfeit has no faint tally, so it adds nothing yet. */
+  faint_bonus: boolean;
 }
 
 export type BuiltinMetric =
@@ -120,7 +137,9 @@ export type BuiltinMetric =
   | 'kill_differential'
   | 'buchholz'
   | 'seed'
-  | 'rating';
+  | 'rating'
+  | 'faints_dealt'
+  | 'faints_taken';
 
 export type RankStep =
   | { kind: 'metric'; metric: Key; direction: 'desc' | 'asc' }

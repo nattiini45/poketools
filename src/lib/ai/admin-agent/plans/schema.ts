@@ -235,6 +235,7 @@ export const planPhaseSchema = z
     bo_overrides: boOverridesSchema.optional(),
     is_doubles: z.boolean(),
     bracket_reset_enabled: z.boolean().optional(),
+    third_place_enabled: z.boolean().optional(),
     team_visibility: teamVisibilitySchema.optional(),
     advancement_rule: advancementRuleSchema.optional(),
     ruleset: rulesetRefSchema,
@@ -360,6 +361,7 @@ export const planTournamentSchema = z
     bo_overrides: boOverridesSchema.optional(),
     is_doubles: z.boolean(),
     bracket_reset_enabled: z.boolean().optional(),
+    third_place_enabled: z.boolean().optional(),
     team_visibility: teamVisibilitySchema,
     ruleset: rulesetRefSchema,
   })

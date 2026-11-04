@@ -17,12 +17,15 @@ import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { splitGroupTables } from '@/lib/tournament/group-standings';
 import { scoringByeRecords } from '@/lib/tournament/byes';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
+import { kitAdvancingPlayers } from '@/lib/format-engine/advance';
 
 export interface SyncStandingsOptions {
   source_phase_id?: string;
   top_n?: number;
   per_group?: boolean;
   force?: boolean;
+  /** A kit edge with a `manual_list` selection: the players an admin moves on, in order. */
+  manual_list?: string[];
 }
 
 export interface SyncStandingsResult {
@@ -214,6 +217,8 @@ export async function syncStandingsEnrollment(
   const sourcePhase = resolveSourcePhase(stages, phaseId, options.source_phase_id);
 
   let playerIds: string[] = [];
+  // Target seed per player when the kit decides it (seeding `rank`, `cross_group`, `random`, `manual`).
+  let kitSeeds: Map<string, number> | null = null;
   let sourceType: EnrollmentSource['type'] = 'roster';
   let sourcePhaseId: string | null = null;
   let sourcePhaseName: string | null = null;
@@ -237,16 +242,39 @@ export async function syncStandingsEnrollment(
       await getRoundsByTournament(sourcePhase.id)
     );
 
-    playerIds = await resolveAdvancingPlayerIds(
-      seasonId,
-      phase,
-      participantIds,
-      participantNames,
-      matchRecords,
-      groups,
-      options,
-      byes
-    );
+    // A kit league moves players along the edge of its attached format that joins the two stages; any other
+    // league, or a kit league without such an edge, keeps the phase's advancement rule.
+    const kitPlayers =
+      season.format_type === 'custom'
+        ? await kitAdvancingPlayers({
+            seasonId,
+            sourcePhaseId: sourcePhase.id,
+            targetPhaseId: phaseId,
+            participantIds,
+            participantNames,
+            matches: matchRecords,
+            byes,
+            groupOf: Object.fromEntries(
+              groups.flatMap((group) => group.members.map((m) => [m.player_id, group.group_number] as const))
+            ),
+            manualList: options.manual_list,
+          })
+        : null;
+    if (kitPlayers) {
+      playerIds = kitPlayers.map((p) => p.player_id);
+      kitSeeds = new Map(kitPlayers.map((p) => [p.player_id, p.seed]));
+    } else {
+      playerIds = await resolveAdvancingPlayerIds(
+        seasonId,
+        phase,
+        participantIds,
+        participantNames,
+        matchRecords,
+        groups,
+        options,
+        byes
+      );
+    }
   } else {
     const roster = await getSeasonParticipants(seasonId);
     playerIds = roster.map((p) => p.id);
@@ -255,7 +283,7 @@ export async function syncStandingsEnrollment(
 
   const entries = playerIds.map((player_id, index) => ({
     player_id,
-    seed: index + 1,
+    seed: kitSeeds?.get(player_id) ?? index + 1,
   }));
 
   await replacePhaseParticipants(phaseId, entries);

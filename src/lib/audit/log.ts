@@ -106,6 +106,7 @@ export type AuditAction =
   | 'season.rebuild'
   | 'season.format.attach'
   | 'season.format.detach'
+  | 'season.format.engine'
   | 'format.create'
   | 'format.fork'
   | 'format.publish'

@@ -18,7 +18,7 @@ import { fixedRequest, isElimination, type PlanBuild } from './plan';
 /** The code for an expression issue the catalog has no sentence of its own for (parse-only codes). */
 const UNKNOWN_EXPR_CODE: DiagnosticCode = 'expr_shape';
 
-const BASE_FIELDS: readonly string[] = ['points', 'wins', 'losses', 'games_played', 'rank', 'group_rank'];
+const BASE_FIELDS: readonly string[] = ['points', 'wins', 'losses', 'games_played', 'rank', 'group_rank', 'faints_dealt', 'faints_taken'];
 const OPTIONAL_FIELDS: readonly string[] = ['kill_differential', 'buchholz'];
 
 /** The names a threshold expression on an edge may read: the standings of the SOURCE stage. */

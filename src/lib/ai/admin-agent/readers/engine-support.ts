@@ -22,7 +22,6 @@ export interface EngineSupportRow {
 /** Engine gaps a Format Studio attach reports (`EngineGapCode`); the table below names each one. */
 export const ENGINE_GAP_ROWS = [
   'rr_legs_not_run',
-  'third_place_not_run',
   'edge_select_not_run',
   'override_unmapped',
   'groups_not_created',
@@ -59,7 +58,8 @@ export const ENGINE_SUPPORT_ROWS: readonly EngineSupportRow[] = [
     key: 'wildcard_threshold_advancement',
     supported: false,
     limit: null,
-    statement: 'Wildcard and threshold advancement between phases are not run',
+    statement:
+      'Wildcard, threshold and bottom-N advancement between phases run only in a custom league whose attached Format Studio format runs on the kit engine; a plan cannot build one',
     offer: 'Offer top N per group or top N overall',
   },
   {
@@ -67,7 +67,7 @@ export const ENGINE_SUPPORT_ROWS: readonly EngineSupportRow[] = [
     supported: false,
     limit: null,
     statement:
-      'A Format Studio format may declare groups, legs, third place and bottom-N cuts, but attaching it only warns: they are recorded and not run (rr_legs_not_run, third_place_not_run, edge_select_not_run, groups_not_created)',
+      'A Format Studio format may declare groups, legs, a third-place match and bottom-N cuts. Every engine plays the third-place match; the kit engine also plays every leg and runs every cut. On the legacy or shadow engine attaching warns that legs and cuts are recorded and not run (rr_legs_not_run, edge_select_not_run); groups are never created by the attach (groups_not_created)',
     offer: 'Say so before attaching and show the attach warnings',
   },
   {

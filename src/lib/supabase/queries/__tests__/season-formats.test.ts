@@ -247,6 +247,7 @@ describe('attachSeasonFormat', () => {
     bo_overrides: {},
     is_doubles: false,
     bracket_reset_enabled: true,
+    third_place_enabled: false,
     stage_order: 1,
     stage_spec: { v: 1, spec_hash: 'h', stage: {} as never, mapped_bracket_type: 'round_robin' },
   };

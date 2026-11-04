@@ -3,6 +3,7 @@ import type { MatchWithPlayers } from '@/types/match';
 import type { Tournament } from '@/types/tournament';
 import type { ParticipantWithSeed } from '@/types/tournament';
 import {
+  bracketStructureOptionsOf,
   buildBracketStructureForParticipants,
   buildSlotIndexMap,
   feederLabel,
@@ -301,7 +302,7 @@ export async function propagateBracketOnMatchComplete(
   const structure = buildBracketStructureForParticipants(
     tournament.bracket_type,
     participants,
-    { bracketResetEnabled: tournament.bracket_reset_enabled ?? true }
+    bracketStructureOptionsOf(tournament)
   );
   const winnerId = match.winner_id;
   if (!structure || !winnerId) return;
@@ -395,6 +396,52 @@ export async function syncBracketResetSetting(
   };
 }
 
+export interface ThirdPlaceSyncResult {
+  /** The scheduled (unplayed) third-place match removed after disabling. */
+  third_place_matches_removed: number;
+  /** Matches materialized after enabling (via the repair path). */
+  slots_materialized: number;
+}
+
+/**
+ * Apply a `third_place_enabled` toggle to an existing single-elimination
+ * bracket. Disabling deletes a scheduled zero-game third-place match; enabling
+ * runs the repair path, so the match appears at once when both semifinals are
+ * decided. A played third-place match is never removed. Non-single-elim
+ * brackets are a no-op.
+ */
+export async function syncThirdPlaceSetting(
+  tournament: Tournament,
+  participants: ParticipantWithSeed[]
+): Promise<ThirdPlaceSyncResult> {
+  if (tournament.bracket_type !== 'single_elim') {
+    return { third_place_matches_removed: 0, slots_materialized: 0 };
+  }
+
+  if (tournament.third_place_enabled ?? false) {
+    const repaired = await repairBracket(tournament, participants);
+    return { third_place_matches_removed: 0, slots_materialized: repaired.slots_materialized };
+  }
+
+  const structure = buildBracketStructureForParticipants('single_elim', participants, {
+    thirdPlaceEnabled: true,
+  });
+  const slot = structure?.slots.find((s) => s.isThirdPlace);
+  if (!slot) return { third_place_matches_removed: 0, slots_materialized: 0 };
+
+  const rounds = await getRoundsByTournament(tournament.id);
+  const roundIdByGlobalNumber = new Map(rounds.map((r) => [r.round_number, r.id]));
+  const match = findMatchForSlot(await getMatchesByTournament(tournament.id), roundIdByGlobalNumber, slot);
+  if (!match || match.status !== 'scheduled') {
+    return { third_place_matches_removed: 0, slots_materialized: 0 };
+  }
+  if ((await getGamesByMatch(match.id)).length > 0) {
+    return { third_place_matches_removed: 0, slots_materialized: 0 };
+  }
+  await deleteMatchesByIds([match.id]);
+  return { third_place_matches_removed: 1, slots_materialized: 0 };
+}
+
 /**
  * Reload participants + matches and re-run bye resolution + materialization
  * to heal a bracket after a failed propagation.
@@ -410,7 +457,7 @@ export async function repairBracket(
   const structure = buildBracketStructureForParticipants(
     tournament.bracket_type,
     participants,
-    { bracketResetEnabled: tournament.bracket_reset_enabled ?? true }
+    bracketStructureOptionsOf(tournament)
   );
   if (!structure) return { slots_materialized: 0 };
 
@@ -477,7 +524,7 @@ export async function unpropagateBracketOnMatchReset(
   const structure = buildBracketStructureForParticipants(
     tournament.bracket_type,
     participants,
-    { bracketResetEnabled: tournament.bracket_reset_enabled ?? true }
+    bracketStructureOptionsOf(tournament)
   );
   if (!structure) return [];
 

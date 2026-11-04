@@ -4,7 +4,11 @@ import { isLegacyElimBracketData } from '@/components/bracket/legacy';
 import { unneededResetSlotKeys } from '@/components/bracket/bracket-reset';
 import { lossesEnteringMatches } from '@/components/bracket/entry-losses';
 import type { BracketCopy } from '@/components/bracket/labels';
-import { buildBracketStructureForParticipants, buildSlotIndexMap } from '@/lib/tournament/bracket-structure';
+import {
+  buildBracketStructureForParticipants,
+  buildSlotIndexMap,
+  type BracketStructure,
+} from '@/lib/tournament/bracket-structure';
 import { getBracketSlotLabels } from '@/lib/tournament/bracket-propagation';
 import { computeBracketState, startingBracketsFromParticipants } from '@/lib/tournament/double-elim';
 import type { MatchRecord } from '@/lib/tournament/types';
@@ -34,6 +38,27 @@ interface ElimBracketViewProps {
    * slot is not drawn; a reset match that already exists always is.
    */
   bracketResetEnabled?: boolean;
+  /**
+   * Single elimination: the tournament's third-place match
+   * (`tournaments.third_place_enabled`, default off). Off, the slot is not
+   * drawn unless a third-place match already exists.
+   */
+  thirdPlaceEnabled?: boolean;
+}
+
+/** The structure without its third-place slot, unless a match already sits in it. */
+function withoutUnusedThirdPlace(
+  structure: BracketStructure,
+  rounds: readonly Round[],
+  matches: readonly PublicMatch[],
+): BracketStructure {
+  const slot = structure.slots.find((s) => s.isThirdPlace);
+  if (!slot) return structure;
+  const roundId = rounds.find((round) => round.round_number === slot.global_round_number)?.id;
+  const hasMatch = matches.some(
+    (m) => m.round_id === roundId && m.bracket_side === slot.bracket_side && m.bracket_pos === slot.bracket_pos,
+  );
+  return hasMatch ? structure : { ...structure, slots: structure.slots.filter((s) => s !== slot) };
 }
 
 /**
@@ -59,6 +84,7 @@ export default function ElimBracketView({
   matchRecords,
   copy,
   bracketResetEnabled = true,
+  thirdPlaceEnabled = false,
 }: ElimBracketViewProps) {
   const matchesByRound: Record<string, PublicMatch[]> = {};
   for (const match of matches) {
@@ -66,12 +92,18 @@ export default function ElimBracketView({
   }
 
   const legacyMode = isLegacyElimBracketData(rounds, matches);
-  // Always built WITH the reset slot, so a reset match played before the
-  // reset was switched off still finds its slot; `unneededResetSlotKeys`
-  // drops the slot when it should not be drawn.
-  const structure = legacyMode
+  // Always built WITH the reset and third-place slots, so a match played
+  // before its setting was switched off still finds its slot;
+  // `unneededResetSlotKeys` and `withoutUnusedThirdPlace` drop a slot that
+  // should not be drawn.
+  const fullStructure = legacyMode
     ? null
-    : buildBracketStructureForParticipants(bracketType, participants, { bracketResetEnabled: true });
+    : buildBracketStructureForParticipants(bracketType, participants, {
+        bracketResetEnabled: true,
+        thirdPlaceEnabled: true,
+      });
+  const structure =
+    fullStructure && !thirdPlaceEnabled ? withoutUnusedThirdPlace(fullStructure, rounds, matches) : fullStructure;
   const slotIndexByKey = structure ? buildSlotIndexMap(structure.slots) : undefined;
   const engineLabels = structure ? getBracketSlotLabels(structure) : undefined;
   const slotLabels =

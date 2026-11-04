@@ -192,12 +192,14 @@ const RULESET: Spec = {
   ],
 };
 const SCORE_NUM: Spec = { t: 'num', min: -SCORE_ABS_MAX, max: SCORE_ABS_MAX };
+const FORFEIT_SCORING = obj([req('win', SCORE_NUM), dflt('loss', SCORE_NUM, 0), dflt('faint_bonus', BOOL, false)]);
 const SCORING = obj([
   req('win', SCORE_NUM),
   dflt('loss', SCORE_NUM, 0),
   dflt('bye', SCORE_NUM, 0),
   opt('draw', SCORE_NUM),
-  opt('forfeit', SCORE_NUM),
+  opt('forfeit', { t: 'oneof', options: [SCORE_NUM, FORFEIT_SCORING] }),
+  opt('per_opponent_faint', { t: 'num', min: 0, max: SCORE_ABS_MAX }),
 ]);
 const PARTICIPANTS: Spec = {
   t: 'union',

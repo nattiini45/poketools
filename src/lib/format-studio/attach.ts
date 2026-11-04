@@ -43,7 +43,7 @@ import type { SeasonFormatType } from '@/types/season';
 import { canAttachDefinition, type FormatActor } from './access';
 import { FormatStudioError } from './errors';
 import type { EngineGap, SeasonFormatSummary } from './library-types';
-import { planStages } from './materialise';
+import { engineGaps, planStages } from './materialise';
 import { canUseDefinitions } from '@/lib/ruleset-studio/guards';
 import { discardMaterialised, ensurePresetRulesets } from '@/lib/ruleset-studio/materialise';
 
@@ -205,7 +205,7 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
     replaced: result.replaced,
     season_format: summary,
     stages,
-    warnings: planned.warnings,
+    warnings: engineGaps(planned.warnings, summary.engine),
     definition: { id: meta.id, slug: meta.slug },
     version_no: version.version_no,
     spec_hash: version.content_hash,

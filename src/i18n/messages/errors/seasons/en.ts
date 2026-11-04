@@ -46,6 +46,8 @@ export default {
   advance_needs_two_phases: 'Need at least 2 phases to advance',
   advance_no_transition:
     'No valid phase transition found. Need a completed phase followed by an upcoming phase.',
+  advance_manual_list_required: 'This advancement needs the list of players who move on.',
+  advance_threshold_failed: 'The advancement condition could not be checked for every player.',
   // Seasons, roster, cores, format
   season_not_found: 'Season not found',
   // Path ids that are not UUIDs name no row (404 before the query; src/lib/api/invalid-path-id.ts)

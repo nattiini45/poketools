@@ -67,6 +67,7 @@ export default defineDe<typeof en>()({
     bestOfDefault: 'Best of (Standard)',
     doubles: 'Doppel-Format (erfasst Einsatz-, Lead- und Siegquoten)',
     bracketReset: 'Bracket-Reset im Großen Finale (zweites Set „falls nötig“)',
+    thirdPlace: 'Spiel um Platz 3 (die Verlierer der Halbfinals spielen um Platz 3; ab 4 Spielern)',
     teamVisibility: 'Sichtbarkeit der Teams',
     submit: 'Turnier erstellen',
     saveChanges: 'Änderungen speichern',

@@ -10,6 +10,7 @@
  * enforces it for the Studio components and pages).
  */
 export * from './types';
+export * from './scoring';
 export * from './limits';
 export * from '@/lib/studio-core/keys';
 export * from '@/lib/studio-core/json';

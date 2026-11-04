@@ -48,10 +48,10 @@ describe('engine_support rows describe the code as it is', () => {
   });
 
   it('names every engine gap code an attach can report, so none is missing from the table text', () => {
-    const codes: EngineGapCode[] = ['override_unmapped', 'rr_legs_not_run', 'third_place_not_run', 'edge_select_not_run', 'groups_not_created'];
+    const codes: EngineGapCode[] = ['override_unmapped', 'rr_legs_not_run', 'edge_select_not_run', 'groups_not_created'];
     expect([...ENGINE_GAP_ROWS].sort()).toEqual([...codes].sort());
     const text = row('format_studio_groups_legs_third_place').statement;
-    for (const gap of ['rr_legs_not_run', 'third_place_not_run', 'edge_select_not_run', 'groups_not_created']) expect(text).toContain(gap);
+    for (const gap of ['rr_legs_not_run', 'edge_select_not_run', 'groups_not_created']) expect(text).toContain(gap);
   });
 
   it('keys are unique and every statement is plain text the output schema accepts', () => {

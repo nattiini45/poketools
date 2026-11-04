@@ -81,7 +81,6 @@ export default defineDe<typeof en>()({
       override_unmapped:
         'Phase „{stage}“: Die Best-of-{best_of}-Ausnahme für Runde {round} passt zu keiner Runde der Phase und wird ignoriert.',
       rr_legs_not_run: 'Phase „{stage}“: Es wird nur ein Durchgang der Jeder-gegen-jeden-Runde gespielt ({legs} geplant).',
-      third_place_not_run: 'Phase „{stage}“: Das Spiel um Platz 3 wird nicht gespielt.',
       edge_select_not_run:
         'Aufstieg „{edge}“: Die Auswahl „{kind}“ wird nicht ausgeführt. Ein Admin verschiebt die Spieler von Hand.',
       groups_not_created: 'Phase „{stage}“: Die {count} Gruppen werden nicht automatisch angelegt.',

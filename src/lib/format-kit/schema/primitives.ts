@@ -133,12 +133,19 @@ export const rulesetSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('preset'), preset: keySchema }),
 ]);
 
+export const forfeitScoringSchema = z.strictObject({
+  win: numberAbs(SCORE_ABS_MAX),
+  loss: numberAbs(SCORE_ABS_MAX).default(0),
+  faint_bonus: z.boolean().default(false),
+});
+
 export const scoringSchema = z.strictObject({
   win: numberAbs(SCORE_ABS_MAX),
   loss: numberAbs(SCORE_ABS_MAX).default(0),
   bye: numberAbs(SCORE_ABS_MAX).default(0),
   draw: numberAbs(SCORE_ABS_MAX).optional(),
-  forfeit: numberAbs(SCORE_ABS_MAX).optional(),
+  forfeit: z.union([numberAbs(SCORE_ABS_MAX), forfeitScoringSchema]).optional(),
+  per_opponent_faint: z.number().min(0).max(SCORE_ABS_MAX).optional(),
 });
 
 export const participantsSchema = z.discriminatedUnion('from', [

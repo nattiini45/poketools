@@ -54,6 +54,7 @@ export default function HubPlayoffsPanel({ stages, copy, bracketCopy }: HubPlayo
                 matchRecords={records}
                 copy={bracketCopy}
                 bracketResetEnabled={stage.bracket_reset_enabled ?? true}
+                thirdPlaceEnabled={stage.third_place_enabled ?? false}
               />
             )}
           </div>

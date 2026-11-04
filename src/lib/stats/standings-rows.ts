@@ -1,5 +1,6 @@
 import { computeStandings, computeStandingsForFormat } from '@/lib/tournament/standings';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { ranksWithKit } from '@/lib/format-engine/context';
 import type { SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import type { StandingsRow } from '@/types/game';
@@ -10,7 +11,8 @@ import type { StandingsRow } from '@/types/game';
  *
  * `ranking` is the season's standings context. An Evolution Point Buy season ranks by its own chain (the stored
  * tiebreaker order, match points, evolution points), as its tables do; this list carries no battle stats, so a
- * kill difference step ties here, as in the season-wide table. Without a context, or for any other format, the
+ * kill difference step ties here, as in the season-wide table. A kit league ranks by its format (`ranking.kit`).
+ * Without a context, or for any other format, the
  * generic Swiss scoring ranks the rows exactly as it always did.
  */
 export function buildStandingsRowsFromMatchRecords(
@@ -36,7 +38,7 @@ export function buildStandingsRowsFromMatchRecords(
   }
 
   const standings =
-    ranking?.formatType && isEvolutionPointBuy(ranking.formatType)
+    ranking?.formatType && (isEvolutionPointBuy(ranking.formatType) || ranksWithKit(ranking.formatType, ranking.kit))
       ? computeStandingsForFormat(
           ranking.formatType,
           participantIds,
@@ -45,7 +47,7 @@ export function buildStandingsRowsFromMatchRecords(
           avatars,
           { byes: [...byes] },
           gymTypes,
-          { evolutionPoints: ranking.evolutionPoints, tiebreakerOrder: ranking.tiebreakerOrder },
+          { evolutionPoints: ranking.evolutionPoints, tiebreakerOrder: ranking.tiebreakerOrder, kit: ranking.kit },
         )
       : computeStandings(participantIds, names, matchRecords, avatars, { byes: [...byes] }, gymTypes);
 

@@ -66,6 +66,22 @@ export async function getSeasonFormatSummary(seasonId: string): Promise<SeasonFo
   return data ? toSummary(data as unknown as SummaryRow) : null;
 }
 
+/** Switch the engine that runs the league's attached format. Null when none is attached. */
+export async function setSeasonFormatEngine(
+  seasonId: string,
+  engine: SeasonFormatEngine,
+): Promise<SeasonFormatSummary | null> {
+  if (!isValidUuid(seasonId)) return null;
+  const { data, error } = await supabase
+    .from('season_formats')
+    .update({ engine })
+    .eq('season_id', seasonId)
+    .select(SUMMARY_COLUMNS)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toSummary(data as unknown as SummaryRow) : null;
+}
+
 /**
  * The rulesets the league's attach created for its rule-preset stages, as { preset id: ruleset id }; empty when no
  * format is attached or it has no preset stage.
@@ -172,6 +188,7 @@ export interface AttachStageRow {
   bo_overrides: Record<string, number>;
   is_doubles: boolean;
   bracket_reset_enabled: boolean;
+  third_place_enabled: boolean;
   stage_order: number;
   stage_spec: StageSpecSnapshot;
 }

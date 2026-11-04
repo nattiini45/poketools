@@ -8,9 +8,17 @@ import type { ApiErrorCode } from '@/i18n/messages/errors';
  */
 export type ExtensionErrorCode = string & { readonly __extensionErrorCode: true };
 
+/** A notice about a write that succeeded (the client words it from the code, like an error code). */
+export interface ApiWarning {
+  code: string;
+  params?: Record<string, string | number>;
+}
+
 export interface ApiResponse<T> {
   success: true;
   data: T;
+  /** Notices about the write (for example a Swiss round that could not avoid every rematch). */
+  warnings?: ApiWarning[];
 }
 
 export interface ApiError {

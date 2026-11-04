@@ -224,7 +224,18 @@ describe('removeAtPointer clears what the schema does not know', () => {
 });
 
 describe('METRIC_KEYS', () => {
-  it('lists the eight builtin metrics', () => {
-    expect([...METRIC_KEYS].sort()).toEqual(['buchholz', 'games_played', 'kill_differential', 'losses', 'points', 'rating', 'seed', 'wins']);
+  it('lists the ten builtin metrics', () => {
+    expect([...METRIC_KEYS].sort()).toEqual([
+      'buchholz',
+      'faints_dealt',
+      'faints_taken',
+      'games_played',
+      'kill_differential',
+      'losses',
+      'points',
+      'rating',
+      'seed',
+      'wins',
+    ]);
   });
 });

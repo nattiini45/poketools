@@ -4,6 +4,7 @@
  * code imports `client.ts`. Only server code (the Studio loader) imports this file.
  */
 export * from './types';
+export * from './scoring';
 export * from './limits';
 export * from '@/lib/studio-core/keys';
 export * from '@/lib/studio-core/json';

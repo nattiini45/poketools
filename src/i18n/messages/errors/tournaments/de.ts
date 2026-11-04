@@ -52,6 +52,12 @@ export default defineDe<typeof en>()({
   round_best_of_locked: 'Das Best-of lässt sich nur bei Runden ändern, die noch nicht begonnen haben.',
   rounds_round_robin_only: 'Alle Runden auf einmal lassen sich nur im Modus „Jeder gegen jeden“ erstellen.',
   rounds_all_generated: 'Alle Runden wurden bereits erstellt.',
+  rounds_manual_pairing: 'Diese Phase wird von Hand gepaart. Lege ihre Runden im Editor für manuelle Runden an.',
+  auto_advance_failed: 'Die Phase ist abgeschlossen, aber die Spieler konnten nicht in die nächste Phase übernommen werden. Übernimm sie von Hand.',
+  swiss_rematches: {
+    one: 'Diese Runde wiederholt {count} frühere Paarung: Es war kein anderer Gegner mehr frei.',
+    other: 'Diese Runde wiederholt {count} frühere Paarungen: Es waren keine anderen Gegner mehr frei.',
+  },
   rounds_round_already_written: '{round} gibt es schon mit ihren Matches. Lösche sie, um sie neu zu erstellen.',
   round_matches_unfinished: {
     one: '{round} hat noch {count} unfertiges Match. Schließe es ab oder beende die Runde trotzdem mit einer Begründung.',

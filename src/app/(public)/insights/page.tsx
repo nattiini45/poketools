@@ -40,8 +40,16 @@ interface PageProps {
 
 type InsightsScope = ReturnType<typeof parseScopeFromSearchParams>;
 
-/** The standings context of an Evolution Point Buy league, from the league's cached reads (30 s, season-tagged). */
-async function epbRanking(seasonId: string, formatType: string): Promise<SeasonStandingsContext> {
+/**
+ * The standings context of an Evolution Point Buy league (evolution points, stored order) or a kit league (its kit
+ * data), from the league's cached reads (30 s, season-tagged); undefined for every other league.
+ */
+async function leagueRanking(seasonId: string, formatType: string): Promise<SeasonStandingsContext | undefined> {
+  if (formatType === 'custom') {
+    const kit = await publicReads.seasonKitStandings(seasonId);
+    return kit ? { formatType, kit } : undefined;
+  }
+  if (!isEvolutionPointBuy(formatType)) return undefined;
   const [evolutionPoints, formatRules] = await Promise.all([
     publicReads.seasonEvolutionPoints(seasonId),
     publicReads.seasonFormatRules(seasonId),
@@ -86,11 +94,11 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
       tournament.bracket_type === 'swiss' && formatScoresByes(tournament.season_format_type)
         ? scoringByeRecords(tournament.bracket_type, await publicReads.tournamentRounds(scope.id))
         : [];
-    // A stage of an Evolution Point Buy league ranks like the league's tables: its stored tiebreaker order and the
-    // season's evolution points, from the league's cached entries. Any other tournament reads nothing more.
+    // A stage of an Evolution Point Buy or kit league ranks like the league's tables, from the league's cached
+    // entries. Any other tournament reads nothing more.
     const ranking =
-      tournament.season_id && tournament.season_format_type && isEvolutionPointBuy(tournament.season_format_type)
-        ? await epbRanking(tournament.season_id, tournament.season_format_type)
+      tournament.season_id && tournament.season_format_type
+        ? await leagueRanking(tournament.season_id, tournament.season_format_type)
         : undefined;
     return {
       title: tournament.name,
@@ -130,8 +138,8 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
     const readsByes = formatScoresByes(season.format_type) && stages.some((stage) => stage.bracket_type === 'swiss');
     const [byeRounds, ranking] = await Promise.all([
       readsByes ? publicReads.seasonByeRounds(scope.id) : [],
-      // An Evolution Point Buy league ranks by its stored tiebreaker order and evolution points, like its tables.
-      isEvolutionPointBuy(season.format_type) ? epbRanking(scope.id, season.format_type) : undefined,
+      // An Evolution Point Buy or kit league ranks like its tables.
+      leagueRanking(scope.id, season.format_type),
     ]);
     const byes = scoringByeRecordsForStages(stages, groupRoundsByStage(byeRounds));
     return {

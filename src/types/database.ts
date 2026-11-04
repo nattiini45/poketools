@@ -5631,6 +5631,7 @@ export type Database = {
           stage_spec: Json | null
           status: Database["public"]["Enums"]["tournament_status"]
           team_visibility: Database["public"]["Enums"]["team_visibility"]
+          third_place_enabled: boolean
           updated_at: string
         }
         Insert: {
@@ -5655,6 +5656,7 @@ export type Database = {
           stage_spec?: Json | null
           status?: Database["public"]["Enums"]["tournament_status"]
           team_visibility?: Database["public"]["Enums"]["team_visibility"]
+          third_place_enabled?: boolean
           updated_at?: string
         }
         Update: {
@@ -5679,6 +5681,7 @@ export type Database = {
           stage_spec?: Json | null
           status?: Database["public"]["Enums"]["tournament_status"]
           team_visibility?: Database["public"]["Enums"]["team_visibility"]
+          third_place_enabled?: boolean
           updated_at?: string
         }
         Relationships: [

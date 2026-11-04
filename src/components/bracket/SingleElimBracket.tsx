@@ -68,26 +68,31 @@ export default function SingleElimBracket({
                       const match = matches.find(
                         (m) => m.bracket_pos === slotDef.bracket_pos
                       );
-                      if (match) {
-                        return (
-                          <BracketMatchCard
-                            key={match.id}
-                            match={match}
-                            tournamentId={tournamentId}
-                            statusLabels={labels.matchStatus}
-                          />
-                        );
-                      }
                       const slot = slotLabels?.get(slotDef.slotKey);
-                      const matchNum = slotIndexByKey?.get(slotDef.slotKey);
-                      return (
+                      const card = match ? (
+                        <BracketMatchCard
+                          key={match.id}
+                          match={match}
+                          tournamentId={tournamentId}
+                          statusLabels={labels.matchStatus}
+                        />
+                      ) : (
                         <BracketSkeletonCard
                           key={slotDef.slotKey}
                           label1={slot ? translateEngineLabel('slot', slot.label1, locale) : labels.tbd}
                           label2={slot ? translateEngineLabel('slot', slot.label2, locale) : labels.tbd}
-                          matchNumber={matchNum}
+                          matchNumber={slotIndexByKey?.get(slotDef.slotKey)}
                           labels={labels}
                         />
+                      );
+                      if (!slotDef.isThirdPlace) return card;
+                      return (
+                        <div key={slotDef.slotKey} className="flex flex-col gap-1">
+                          <h4 className="text-xs font-heading font-semibold text-poke-text-muted text-center">
+                            {labels.thirdPlace}
+                          </h4>
+                          {card}
+                        </div>
                       );
                     })
                   : matches.map((match) => (

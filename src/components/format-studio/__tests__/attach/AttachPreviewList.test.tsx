@@ -183,11 +183,6 @@ describe('EngineGapList: one sentence per gap code', () => {
       en: 'Phase “Group stage”: only one round-robin leg is played (2 planned).',
       de: 'Phase „Group stage“: Es wird nur ein Durchgang der Jeder-gegen-jeden-Runde gespielt (2 geplant).',
     },
-    third_place_not_run: {
-      gap: { code: 'third_place_not_run', stage: 'finals', params: {} },
-      en: 'Phase “Finals”: the third-place match is not played.',
-      de: 'Phase „Finals“: Das Spiel um Platz 3 wird nicht gespielt.',
-    },
     edge_select_not_run: {
       gap: { code: 'edge_select_not_run', stage: 'group', edge: 'to_finals', params: { kind: 'wildcard' } },
       en: 'Advancement “to_finals”: the selection “wildcards” is not run. An admin moves the players by hand.',
@@ -227,7 +222,7 @@ describe('EngineGapList: one sentence per gap code', () => {
   });
 
   it('a phase the caller does not know is named by its key', () => {
-    const html = render(<EngineGapList gaps={[GAPS.third_place_not_run.gap]} stageNames={{}} />);
+    const html = render(<EngineGapList gaps={[GAPS.override_unmapped.gap]} stageNames={{}} />);
     expect(html).toContain('Phase “finals”');
   });
 

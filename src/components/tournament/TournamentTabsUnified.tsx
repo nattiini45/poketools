@@ -19,6 +19,7 @@ import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import type { TournamentReport } from '@/types/tournament-report';
 import type { KillRankingRow, PokemonUsageRow } from '@/types/game';
 import type { TiebreakerStep } from '@/types/format-rules';
+import type { KitStandingsData } from '@/lib/format-engine/context';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
 import { useLocale, useT } from '@/i18n/client';
 import type { Translator } from '@/i18n/core';
@@ -75,6 +76,8 @@ interface TournamentTabsUnifiedProps {
   evolutionPoints?: Record<string, number>;
   /** The season's stored tiebreaker order (evolution_point_buy seasons only); an unusable one falls back to the pack's */
   tiebreakerOrder?: readonly TiebreakerStep[];
+  /** A stage of a kit league: the kit's standings data of this stage (`kitForPhase`), no seed. */
+  kit?: KitStandingsData;
   /** 'tabs' (legacy single-panel) or 'sections' — anchored scrollworld. */
   layout?: 'tabs' | 'sections';
 }
@@ -165,6 +168,7 @@ export default function TournamentTabsUnified({
   seasonId = null,
   evolutionPoints,
   tiebreakerOrder,
+  kit,
   layout = 'tabs',
 }: TournamentTabsUnifiedProps) {
   const { data: session } = useSession();
@@ -224,8 +228,8 @@ export default function TournamentTabsUnified({
       battleStats,
       gamesByMatch,
       maxRound,
-    }, participantGymTypes, { evolutionPoints, tiebreakerOrder });
-  }, [bracketType, seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, battleStats, gamesByMatch, maxRound, participantGymTypes, evolutionPoints, tiebreakerOrder]);
+    }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit });
+  }, [bracketType, seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, battleStats, gamesByMatch, maxRound, participantGymTypes, evolutionPoints, tiebreakerOrder, kit]);
 
   const epbTiedPlayers = useMemo(() => {
     if (seasonFormatType !== 'evolution_point_buy') return [];

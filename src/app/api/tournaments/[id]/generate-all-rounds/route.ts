@@ -27,6 +27,13 @@ import {
 } from '@/lib/tournament/group-rounds';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
+import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
+import { loadKitPhase } from '@/lib/format-engine/load';
+import { kitStageRounds, legRoundRange, roundRobinLegRound } from '@/lib/format-engine/pairing';
+import { ensureKitPhaseGroups } from '@/lib/format-engine/groups';
+import { mirrorsLeagueGroups } from '@/lib/tournament/phase-week-plan';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import type { GeneratedRound } from '@/lib/tournament/types';
 import type { ApiResult } from '@/types/api';
 import type { Round } from '@/types/round';
 import type { Pairing } from '@/lib/tournament/types';
@@ -50,6 +57,7 @@ interface RouteParams {
  * planned and validated before the first one is written. A round and its matches are two writes: a written week
  * an interrupted call left without matches is filled by the next call (`roundsAwaitingMatches`), never skipped.
  * A phase without groups does the same for its circle-method rounds: a written round with no match is refilled.
+ * A phase of a kit league plays its stage's legs (`legs` times the circle schedule, later legs with sides swapped).
  *
  * Optional JSON body `{ "start_round": true }` starts the lowest-numbered round this call wrote (best effort: if
  * the start fails the round stays pending and the admin starts it by hand); the later rounds stay pending.
@@ -89,6 +97,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // A custom league without an attached format cannot start (as in generate-round); a kit phase plays its legs.
+    let kitPhase = null;
+    if (tournament.season_format_type === 'custom' && tournament.season_id) {
+      await assertSeasonFormatAttached(tournament.season_id);
+      kitPhase = await loadKitPhase(tournament.season_id, id);
+    }
+    if (kitPhase?.engine === 'kit' && kitPhase.stage.pairing.kind === 'manual') {
+      throw new UserFacingError('This phase is paired by hand. Create its rounds in the manual round editor.', {
+        code: 'rounds_manual_pairing',
+        status: 409,
+      });
+    }
+    const kitPairing =
+      kitPhase?.engine === 'kit' && kitPhase.stage.pairing.kind === 'round_robin' ? kitPhase.stage.pairing : null;
+
     const participants = await getParticipants(id);
     if (participants.length < 2) {
       return NextResponse.json<ApiResult<never>>(
@@ -99,9 +122,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const existingRounds = await getRoundsByTournament(id);
     // A phase of a league with groups mirrors them (rebuilt from the league groups while it has no round yet).
-    const groups = tournament.season_id
+    let groups = tournament.season_id
       ? await ensurePhaseGroupsFromLeague(tournament.season_id, tournament)
       : await getGroupsByTournament(id);
+    // A kit stage with groups forms them before its first round (league groups, when the league has any, win).
+    if (kitPairing && kitPhase && tournament.season_id && groups.length === 0) {
+      groups = await ensureKitPhaseGroups({
+        seasonId: tournament.season_id,
+        phaseId: id,
+        stage: kitPhase.stage,
+        seed: kitPhase.seed,
+      });
+    }
+    // A kit round robin plays each of its own groups as a round robin of the stage's legs; groups that mirror league
+    // groups keep the league week plan (cross-group weeks, placement weeks).
+    const kitGroups = kitPairing && groups.length > 0 && !mirrorsLeagueGroups(groups) ? groups : null;
 
     // Every week to write with its pairings, computed in full before the first write. `byePlayerIds` lists the
     // trainers the circle method seats out (a phase without groups); a grouped week has none: a trainer without an
@@ -110,7 +145,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Written rounds an interrupted write left without matches, keyed by round number; they are filled, not skipped.
     let emptyRounds = new Map<number, Round>();
 
-    if (groups.length > 0) {
+    if (groups.length > 0 && !kitGroups) {
       const context = { groups, rounds: existingRounds, matches: await getMatchesByTournament(id) };
       const plan = planPhaseWeeks(context);
       emptyRounds = roundsAwaitingMatches(context, plan);
@@ -126,8 +161,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     } else {
       // Every round of the circle method that has no round yet, or whose round an interrupted call wrote without
       // its matches (a round robin round of two or more trainers always has a pairing): filled, never skipped.
-      const totalRounds = getRoundRobinTotalRounds(participants.length);
       const participantIds = participants.map((p) => p.id);
+      // The players each circle schedule runs over: the whole phase, or each kit group in its seed order.
+      const circles = kitGroups
+        ? kitGroups.map((group) => [...group.members].sort((a, b) => a.seed - b.seed).map((member) => member.player_id))
+        : [participantIds];
+      const circleRounds = (ids: readonly string[]) =>
+        kitPairing ? (kitStageRounds(kitPairing, ids.length) ?? 0) : getRoundRobinTotalRounds(ids.length);
+      const totalRounds = Math.max(0, ...circles.map(circleRounds));
       const withMatches = new Set((await getMatchesByTournament(id)).map((match) => match.round_id));
       // The circle schedule is rebuilt from the current participant order. A rename or a substitute after the first
       // round can make a missing round repeat a pairing that is already scheduled (any status): refuse before the
@@ -137,9 +178,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const written = existingRounds.filter((round) => round.round_number === r);
         if (written.length > 0 && written.some((round) => withMatches.has(round.id))) continue;
         if (written.length > 0) emptyRounds.set(r, written[0]);
-        const generated = generateRoundRobinRound(participantIds, r);
-        assertNoScheduleDrift(`Round ${r}`, generated.pairings, scheduled, { ignoreRoundNumber: r });
-        weeksToWrite.push({ roundNumber: r, pairings: generated.pairings, byePlayerIds: generated.bye_player_ids });
+        const pairings: Pairing[] = [];
+        const byePlayerIds: string[] = [];
+        for (const ids of circles) {
+          // A smaller group has played all its rounds and rests while a larger one plays on.
+          if (r > circleRounds(ids)) continue;
+          const generated: GeneratedRound = kitPairing ? roundRobinLegRound(ids, kitPairing, r) : generateRoundRobinRound(ids, r);
+          // A later leg repeats the first leg's pairings on purpose: the drift guard looks inside the round's leg only.
+          const leg = kitPairing ? legRoundRange(ids.length, r) : null;
+          const members = new Set(ids);
+          const own = kitGroups ? scheduled.filter((m) => members.has(m.player_1_id) && members.has(m.player_2_id)) : scheduled;
+          const sameLeg = leg ? own.filter((m) => m.round_number >= leg.first && m.round_number <= leg.last) : own;
+          assertNoScheduleDrift(`Round ${r}`, generated.pairings, sameLeg, { ignoreRoundNumber: r });
+          pairings.push(...generated.pairings);
+          byePlayerIds.push(...generated.bye_player_ids);
+        }
+        weeksToWrite.push({ roundNumber: r, pairings, byePlayerIds });
       }
     }
 

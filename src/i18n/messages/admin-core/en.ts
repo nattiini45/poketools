@@ -112,6 +112,7 @@ const auditActions = {
   season__rebuild: 'Derived data rebuilt after a league delete or restore',
   season__format__attach: 'Format attached to a league',
   season__format__detach: 'Format detached from a league',
+  season__format__engine: 'League format engine switched',
   format__create: 'Format created',
   format__fork: 'Format copied',
   format__publish: 'Format version published',

@@ -66,6 +66,13 @@ export default {
   round_best_of_locked: 'Can only change best_of on pending rounds',
   rounds_round_robin_only: 'Generate-all-rounds is only supported for round_robin tournaments',
   rounds_all_generated: 'All rounds have already been generated',
+  rounds_manual_pairing: 'This phase is paired by hand. Create its rounds in the manual round editor.',
+  auto_advance_failed: 'The phase is completed, but moving players on to the next phase failed. Move them on by hand.',
+  /** A warning, not an error: the round was generated. */
+  swiss_rematches: {
+    one: 'This round repeats {count} earlier pairing: no other opponent was left.',
+    other: 'This round repeats {count} earlier pairings: no other opponents were left.',
+  },
   rounds_round_already_written: '{round} already exists with its matches. Delete it to generate it again.',
   round_matches_unfinished: {
     one: '{round} still has {count} unfinished match. Finish it, or complete the round anyway with a reason.',

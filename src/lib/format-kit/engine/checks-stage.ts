@@ -28,7 +28,8 @@ import { isElimination, isExact, type CountRange, type PlanBuild } from './plan'
 
 export type MetricProblem = 'unknown_metric' | 'needs_kill_stats' | 'needs_rating' | 'needs_opponents';
 
-const ALWAYS_PRODUCED: ReadonlySet<string> = new Set(['points', 'wins', 'losses', 'games_played', 'seed']);
+// Faints come from the `match_outcomes` tally that every completed match writes, so every stage produces them.
+const ALWAYS_PRODUCED: ReadonlySet<string> = new Set(['points', 'wins', 'losses', 'games_played', 'seed', 'faints_dealt', 'faints_taken']);
 
 /** Why a stage cannot produce a metric, or `null` when it can. The production table of the standings engine. */
 export function metricProblem(metric: string, stage: Stage | null, env: CompileEnv): MetricProblem | null {

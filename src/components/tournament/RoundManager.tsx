@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { Round, RoundStatus, RoundWithMatches } from '@/types/round';
 import type { PublicMatch } from '@/lib/match/public-match';
 import type { Tournament } from '@/types/tournament';
-import type { ApiResult } from '@/types/api';
+import type { ApiResult, ApiWarning } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Card from '@/components/ui/Card';
@@ -370,6 +370,8 @@ export default function RoundManager({
   );
   const [savingResetToggle, setSavingResetToggle] = useState(false);
   const [resetToggleInfo, setResetToggleInfo] = useState<'enabled' | 'disabled' | null>(null);
+  /** Notices the last round generation returned (codes, worded at render). */
+  const [generateWarnings, setGenerateWarnings] = useState<ApiWarning[]>([]);
   const [deadlineEditId, setDeadlineEditId] = useState<string | null>(null);
   const [deadlineDraft, setDeadlineDraft] = useState('');
   const [savingDeadlineId, setSavingDeadlineId] = useState<string | null>(null);
@@ -568,6 +570,7 @@ export default function RoundManager({
   async function generateNextRound() {
     setGenerating(true);
     setError(null);
+    setGenerateWarnings([]);
 
     try {
       const res = await fetch(
@@ -586,6 +589,7 @@ export default function RoundManager({
       }
 
       setRounds((prev) => [...prev, result.data]);
+      setGenerateWarnings(result.warnings ?? []);
     } catch {
       setError({ key: 'rounds.errors.generateRound' });
     } finally {
@@ -868,6 +872,11 @@ export default function RoundManager({
     <div className="space-y-4">
       {error &&<Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
       {repairInfo !== null && <Alert variant="success">{t('rounds.repaired', { count: repairInfo })}</Alert>}
+      {generateWarnings.map((warning) => (
+        <Alert key={warning.code} variant="warning">
+          {errorText({ code: warning.code, params: warning.params })}
+        </Alert>
+      ))}
       {resetToggleInfo && (
         <Alert variant="success">
           {resetToggleInfo === 'enabled' ? t('rounds.resetEnabled') : t('rounds.resetDisabled')}

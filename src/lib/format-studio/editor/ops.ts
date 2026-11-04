@@ -23,6 +23,7 @@ import {
   type AdvanceSelect,
   type Edge,
   type Fix,
+  type ForfeitScoring,
   type GroupsSpec,
   type JsonValue,
   type Pairing,
@@ -344,6 +345,31 @@ export function setRuleset(s: Stage, ref: RulesetRef): Stage {
 export function setScoreValue(s: Stage, key: 'win' | 'loss' | 'bye', n: number): Stage {
   if (!isFiniteNumber(n) || s.scoring[key] === n) return s;
   return { ...s, scoring: { ...s.scoring, [key]: n } };
+}
+
+/** Points per fainted opponent Pokémon; 0 or no value removes the field (absent means 0). */
+export function setPerOpponentFaint(s: Stage, n: number | undefined): Stage {
+  const current = s.scoring.per_opponent_faint;
+  if (n === undefined || n === 0) {
+    if (current === undefined) return s;
+    const scoring: Stage['scoring'] = { ...s.scoring };
+    delete scoring.per_opponent_faint;
+    return { ...s, scoring };
+  }
+  if (!isFiniteNumber(n) || current === n) return s;
+  return { ...s, scoring: { ...s.scoring, per_opponent_faint: n } };
+}
+
+/** Separate forfeit points, or none (a forfeit then scores like a win and a loss). */
+export function setForfeitScoring(s: Stage, forfeit: ForfeitScoring | undefined): Stage {
+  if (forfeit === undefined) {
+    if (s.scoring.forfeit === undefined) return s;
+    const scoring: Stage['scoring'] = { ...s.scoring };
+    delete scoring.forfeit;
+    return { ...s, scoring };
+  }
+  if (!isFiniteNumber(forfeit.win) || !isFiniteNumber(forfeit.loss)) return s;
+  return { ...s, scoring: { ...s.scoring, forfeit: { win: forfeit.win, loss: forfeit.loss, faint_bonus: forfeit.faint_bonus } } };
 }
 
 export function setDoubles(s: Stage, doubles: boolean): Stage {

@@ -8,6 +8,7 @@ import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
 import { scoringByeRecords } from '@/lib/tournament/byes';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { kitForPhase } from '@/lib/format-engine/context';
 import {
   resolveViewerWorld,
   getWorldByRouteThemeId,
@@ -108,6 +109,8 @@ export default async function TournamentPage({ params, searchParams }: PageProps
     ? await Promise.all([publicReads.seasonEvolutionPoints(season.id), publicReads.seasonFormatRules(season.id)])
     : [undefined, null];
   const tiebreakerOrder = formatRules?.tiebreaker_order;
+  // A stage of a kit league ranks by its own stage of the attached format (cached, season-tagged).
+  const kit = season?.format_type === 'custom' ? kitForPhase(await publicReads.seasonKitStandings(season.id), id) : undefined;
 
   // World-registered seasons wrap the tournament page in the season world
   // shell so world tokens carry over. B2: the viewer override is resolved
@@ -140,7 +143,7 @@ export default async function TournamentPage({ params, searchParams }: PageProps
   }
 
   const standings = !isRoundRobin
-    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, { byes: scoringByeRecords(tournament.bracket_type, rounds) }, participantGymTypes, { evolutionPoints, tiebreakerOrder })
+    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, { byes: scoringByeRecords(tournament.bracket_type, rounds) }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit })
     : [];
 
   const totalRounds = rounds.length > 0
@@ -161,6 +164,7 @@ export default async function TournamentPage({ params, searchParams }: PageProps
         participants={participants}
         matchRecords={matchRecords}
         bracketResetEnabled={tournament.bracket_reset_enabled ?? true}
+        thirdPlaceEnabled={tournament.third_place_enabled ?? false}
       />
     );
   } else if (tournament.bracket_type === 'swiss') {
@@ -240,6 +244,7 @@ export default async function TournamentPage({ params, searchParams }: PageProps
         seasonId={tournament.season_id}
         evolutionPoints={evolutionPoints}
         tiebreakerOrder={tiebreakerOrder}
+        kit={kit}
         layout="sections"
       />
     </PageContainer>

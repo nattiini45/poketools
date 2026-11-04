@@ -38,6 +38,7 @@ function toTournament(row: TournamentRow): Tournament {
     archived: row.archived,
     legacy: row.legacy,
     bracket_reset_enabled: row.bracket_reset_enabled,
+    third_place_enabled: row.third_place_enabled,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -248,6 +249,7 @@ export async function createTournament(input: TournamentFormData): Promise<Tourn
     stage_order: input.stage_order ?? 0,
     advancement_rule: (input.advancement_rule as Json) ?? null,
     bracket_reset_enabled: input.bracket_reset_enabled ?? true,
+    third_place_enabled: input.third_place_enabled ?? false,
   };
 
   const { data, error } = await supabase
@@ -365,6 +367,9 @@ export async function updateTournament(
   if (input.archived !== undefined) updates.archived = input.archived;
   if (input.bracket_reset_enabled !== undefined) {
     updates.bracket_reset_enabled = input.bracket_reset_enabled;
+  }
+  if (input.third_place_enabled !== undefined) {
+    updates.third_place_enabled = input.third_place_enabled;
   }
   if (input.enrollment_source !== undefined) {
     updates.enrollment_source = input.enrollment_source as Json;

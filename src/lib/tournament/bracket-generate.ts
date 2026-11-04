@@ -1,7 +1,7 @@
 import type { Tournament } from '@/types/tournament';
 import type { ParticipantWithSeed } from '@/types/tournament';
 import type { MatchWithPlayers } from '@/types/match';
-import { buildBracketStructureForParticipants } from './bracket-structure';
+import { bracketStructureOptionsOf, buildBracketStructureForParticipants } from './bracket-structure';
 import {
   buildSlotResolutionsFromMatches,
   materializeReadySlots,
@@ -48,7 +48,7 @@ export async function generateEliminationBracket(
   const structure = buildBracketStructureForParticipants(
     tournament.bracket_type,
     participants,
-    { bracketResetEnabled: tournament.bracket_reset_enabled ?? true }
+    bracketStructureOptionsOf(tournament)
   );
   if (!structure) {
     throw new UserFacingError('Need at least 2 participants', {

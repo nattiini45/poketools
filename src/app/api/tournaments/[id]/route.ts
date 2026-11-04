@@ -23,7 +23,9 @@ import {
 } from '@/lib/tournament/standalone-lock';
 import {
   syncBracketResetSetting,
+  syncThirdPlaceSetting,
   type BracketResetSyncResult,
+  type ThirdPlaceSyncResult,
 } from '@/lib/tournament/bracket-propagation';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
@@ -39,6 +41,7 @@ import {
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
+import { runAutoAdvance, type AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
 import type { ApiResult } from '@/types/api';
 import type { Tournament, TournamentWithDetails } from '@/types/tournament';
 import type { TournamentUpdateInput } from '@/lib/validation';
@@ -214,8 +217,46 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // Third-place toggle changed: same idea for a single-elimination bracket
+    // (delete a scheduled third-place match on disable; repair on enable).
+    const thirdPlaceToggleChanged =
+      body.third_place_enabled !== undefined &&
+      body.third_place_enabled !== (before.third_place_enabled ?? false);
+    let thirdPlaceSync: ThirdPlaceSyncResult | null = null;
+    let thirdPlaceSyncError: string | null = null;
+    if (thirdPlaceToggleChanged) {
+      try {
+        thirdPlaceSync = await syncThirdPlaceSetting(tournament, await getParticipants(id));
+      } catch (err) {
+        logger.error('api/tournaments', 'third-place sync failed after tournament update', {
+          tournamentId: id,
+          error: err,
+        });
+        thirdPlaceSyncError = 'third_place_sync_failed';
+      }
+    }
+
+    // A kit league phase that completes runs the `auto` edges out of it. Best effort: the status change stands, and a
+    // failed advance is logged, recorded in the audit entry and left to the admin's Advance button.
+    let autoAdvance: AutoAdvanceResult[] = [];
+    let autoAdvanceError: string | null = null;
+    if (
+      body.status === 'completed' &&
+      before.status !== 'completed' &&
+      before.season_id &&
+      before.season_format_type === 'custom'
+    ) {
+      try {
+        autoAdvance = await runAutoAdvance(before.season_id, id);
+      } catch (err) {
+        logger.error('api/tournaments', 'auto advance failed after phase completion', { tournamentId: id, error: err });
+        autoAdvanceError = err instanceof UserFacingError && err.code ? err.code : 'auto_advance_failed';
+      }
+      for (const entry of autoAdvance) expireTournamentReads(entry.target_phase_id, before.season_id);
+    }
+
     // Status, name and settings show on the next view of the public pages.
-    // Expired after the reset sync, which can add or delete a reset match.
+    // Expired after the reset and third-place syncs, which can add or delete a match.
     expireTournamentReads(id, before.season_id);
 
     // Audit log: record significant field changes
@@ -230,6 +271,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         before.bracket_reset_enabled ?? true,
         body.bracket_reset_enabled
       );
+    }
+    if (body.third_place_enabled !== undefined) {
+      diffField(changes, 'third_place_enabled', before.third_place_enabled ?? false, body.third_place_enabled);
     }
     // The description is never copied into the row.
     diffField(changes, 'bracket_type', before.bracket_type, body.bracket_type ?? before.bracket_type);
@@ -263,10 +307,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resource_name: tournament.name,
         changes,
         metadata:
-          bracketResetSync || bracketResetSyncError
+          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError
             ? {
-                bracket_reset_sync: bracketResetSync,
-                bracket_reset_sync_error: bracketResetSyncError,
+                ...(autoAdvance.length > 0 || autoAdvanceError
+                  ? { auto_advance: autoAdvance, auto_advance_error: autoAdvanceError }
+                  : {}),
+                ...(bracketResetSync || bracketResetSyncError
+                  ? { bracket_reset_sync: bracketResetSync, bracket_reset_sync_error: bracketResetSyncError }
+                  : {}),
+                ...(thirdPlaceSync || thirdPlaceSyncError
+                  ? { third_place_sync: thirdPlaceSync, third_place_sync_error: thirdPlaceSyncError }
+                  : {}),
               }
             : undefined,
       });

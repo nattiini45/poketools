@@ -20,7 +20,7 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
   "league_list": "fc651fc0f195c61c",
   "league_roster_get": "add928b9db920914",
   "outward_effects_preview": "42d9d32613845803",
-  "phase_create_preview": "5931551fd81d82bf",
+  "phase_create_preview": "80b5877f987e45b2",
   "phase_get": "fa328cdb2e79af19",
   "plan_create": "f8baf2ced2322259",
   "plan_get": "885df2cf79d8fb9c",
@@ -67,7 +67,7 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
   "ruleset_usage": "ab13629e73b6bccc",
   "ruleset_version_get": "1d4bee6955036a27",
   "tournament_bracket_preview": "787e4ba4b06b79e8",
-  "tournament_create_preview": "8e52f414f72d6829",
+  "tournament_create_preview": "22cbc3a8c8a67244",
   "tournament_get": "9fde1db03335621b",
   "tournament_list": "76b524313d08763e",
   "whoami": "dfe8f59aa5e853e9",
@@ -78,51 +78,51 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
 {
   "scoped:0": {
     "tools": 34,
-    "version": "4d050bc703c26663",
+    "version": "9524ca9673322729",
   },
   "scoped:1": {
     "tools": 41,
-    "version": "4f43aa0b0f2f1f3d",
+    "version": "238984dae1b3ade4",
   },
   "scoped:2": {
     "tools": 48,
-    "version": "b29b1747a61cea92",
+    "version": "098a62ae8bec0b7b",
   },
   "scoped:3": {
     "tools": 60,
-    "version": "0c1099dfb1142cae",
+    "version": "d659a8c6ec565d48",
   },
   "scoped:4": {
     "tools": 68,
-    "version": "4d252235e1c062dc",
+    "version": "2563c576f552e2f5",
   },
   "scoped:5": {
     "tools": 68,
-    "version": "4d252235e1c062dc",
+    "version": "2563c576f552e2f5",
   },
   "site:0": {
     "tools": 34,
-    "version": "4d050bc703c26663",
+    "version": "9524ca9673322729",
   },
   "site:1": {
     "tools": 41,
-    "version": "4f43aa0b0f2f1f3d",
+    "version": "238984dae1b3ade4",
   },
   "site:2": {
     "tools": 49,
-    "version": "fd6b546b7e8c52da",
+    "version": "eba8566c664c7576",
   },
   "site:3": {
     "tools": 61,
-    "version": "a7d45e172c71624c",
+    "version": "330ad38236e45334",
   },
   "site:4": {
     "tools": 69,
-    "version": "4443500eb7c4ee51",
+    "version": "39aebde16449e995",
   },
   "site:5": {
     "tools": 69,
-    "version": "4443500eb7c4ee51",
+    "version": "39aebde16449e995",
   },
 }
 `;

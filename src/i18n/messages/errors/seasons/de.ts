@@ -33,6 +33,8 @@ export default defineDe<typeof en>()({
   advance_needs_two_phases: 'Zum Weiterkommen braucht die Liga mindestens 2 Phasen.',
   advance_no_transition:
     'Kein gültiger Phasenübergang gefunden. Dafür braucht es eine abgeschlossene Phase, auf die eine kommende Phase folgt.',
+  advance_manual_list_required: 'Für dieses Weiterkommen braucht es die Liste der Spieler, die weiterkommen.',
+  advance_threshold_failed: 'Die Bedingung fürs Weiterkommen ließ sich nicht für jeden Spieler prüfen.',
   season_not_found: 'Saison nicht gefunden.',
   INVALID_SEASON_ID: 'Liga nicht gefunden.',
   INVALID_PHASE_ID: 'Phase nicht gefunden.',

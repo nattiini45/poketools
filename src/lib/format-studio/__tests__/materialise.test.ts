@@ -10,7 +10,7 @@ import {
 } from '@/lib/format-kit';
 import { ltext } from '@/lib/studio-core/ltext';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';
-import { STAGE_NAME_MAX_CHARS, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
+import { STAGE_NAME_MAX_CHARS, engineGaps, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
 
 const preset = (id: string): FormatDefinition => {
   const found = PRESETS.find((entry) => entry.id === id);
@@ -340,7 +340,7 @@ describe('planStages', () => {
       });
     });
 
-    it('reports legs, a third-place match and unrun edge selections', () => {
+    it('reports legs and edge selections the legacy engine does not run; a third-place match is no gap', () => {
       const definition = preset('cup');
       definition.stages[0].pairing = { kind: 'round_robin', legs: 2, mirror_legs: false };
       definition.stages[1].pairing = { kind: 'single_elim', third_place: true };
@@ -351,7 +351,7 @@ describe('planStages', () => {
       ];
       const { warnings } = plan(definition, {}, 16);
       expect(warnings).toContainEqual({ code: 'rr_legs_not_run', stage: 'groups', params: { legs: 2 } });
-      expect(warnings).toContainEqual({ code: 'third_place_not_run', stage: 'knockout', params: {} });
+      expect(warnings.map((w) => w.code)).not.toContain('third_place_not_run');
       expect(warnings).toContainEqual({ code: 'edge_select_not_run', stage: 'groups', edge: 'to_knockout', params: { kind: 'wildcard' } });
       expect(warnings).toContainEqual({ code: 'edge_select_not_run', stage: 'groups', edge: 'to_knockout', params: { kind: 'bottom_n' } });
       expect(warnings.filter((w) => w.code === 'edge_select_not_run')).toHaveLength(2);
@@ -362,7 +362,18 @@ describe('planStages', () => {
       definition.stages[1].pairing = { kind: 'single_elim', third_place: true };
       definition.edges[0].select = [{ kind: 'per_group', n: 2 }, { kind: 'wildcard', n: 1 }];
       const { warnings } = plan(definition, {}, 16);
-      expect(warnings.map((w) => w.code)).toEqual(['groups_not_created', 'third_place_not_run', 'edge_select_not_run']);
+      expect(warnings.map((w) => w.code)).toEqual(['groups_not_created', 'edge_select_not_run']);
+    });
+
+    it('drops what the kit engine runs for a kit league, keeps every gap for legacy and shadow', () => {
+      const definition = preset('cup');
+      definition.stages[0].pairing = { kind: 'round_robin', legs: 2, mirror_legs: false };
+      definition.edges[0].select = [{ kind: 'per_group', n: 2 }, { kind: 'wildcard', n: 1 }];
+      const { warnings } = plan(definition, {}, 16);
+      expect(warnings.map((w) => w.code)).toEqual(['rr_legs_not_run', 'groups_not_created', 'edge_select_not_run']);
+      expect(engineGaps(warnings, 'kit').map((w) => w.code)).toEqual(['groups_not_created']);
+      expect(engineGaps(warnings, 'shadow')).toEqual(warnings);
+      expect(engineGaps(warnings, 'legacy')).toEqual(warnings);
     });
 
     it('reports nothing for a format the engine runs completely', () => {

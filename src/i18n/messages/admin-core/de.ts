@@ -131,6 +131,7 @@ export default defineDe<typeof en>()({
     season__rebuild: 'Abgeleitete Daten nach dem Löschen oder Wiederherstellen einer Liga neu aufgebaut',
     season__format__attach: 'Format an eine Liga angehängt',
     season__format__detach: 'Format von einer Liga abgehängt',
+    season__format__engine: 'Format-Engine einer Liga umgestellt',
     format__create: 'Format erstellt',
     format__fork: 'Format kopiert',
     format__publish: 'Formatversion veröffentlicht',

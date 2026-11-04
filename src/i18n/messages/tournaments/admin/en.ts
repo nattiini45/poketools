@@ -69,6 +69,7 @@ export default {
     bestOfDefault: 'Best of (default)',
     doubles: 'Doubles format (enables Bring/Lead/Win tracking)',
     bracketReset: 'Grand Finals bracket reset (“if necessary” second set)',
+    thirdPlace: 'Third-place match (the semifinal losers play for third; 4+ players)',
     teamVisibility: 'Team Visibility',
     submit: 'Create Tournament',
     saveChanges: 'Save changes',

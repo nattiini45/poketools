@@ -2,10 +2,10 @@
  * Stage materialisation: how a format's stages become `tournaments` rows (one phase per kit stage) when a format
  * is attached to a custom league. Pure: no I/O, no clock, no randomness; the same input gives the same rows.
  *
- * What the legacy engine can run today decides what a stage maps to. The kit expresses more than that (several
- * round robin legs, a third-place match, wildcard or threshold selections, groups that the legacy phases create
- * themselves), so every stage property the engine cannot honour yet is returned as an `EngineGap` code with
- * params, never as text: the next PR renders them, and Phase 2b makes the engine run them.
+ * What the legacy engine can run decides what a stage maps to. The kit expresses more than that (several round
+ * robin legs, wildcard, threshold or bottom-N selections, groups), so every stage property the legacy engine cannot
+ * honour is returned as an `EngineGap` code with params, never as text. A league on the kit engine runs legs and
+ * every selection itself: `engineGaps` drops those for it.
  */
 import {
   type CountRange,
@@ -19,7 +19,7 @@ import { resolveLText } from '@/lib/studio-core/ltext';
 import type { Locale } from '@/i18n/config';
 import type { BracketType } from '@/types/tournament';
 import type { AttachStageRow } from '@/lib/supabase/queries/season-formats';
-import type { EngineGap, EngineGapCode, StageSpecSnapshot } from './library-types';
+import type { EngineGap, EngineGapCode, SeasonFormatEngine, StageSpecSnapshot } from './library-types';
 
 /**
  * The longest stage name a phase keeps (the documented cut). It equals `FIELD_LIMITS.TITLE`; the constant lives here
@@ -192,9 +192,6 @@ function stageWarnings(stage: Stage, unmapped: readonly SeriesOverride[]): Engin
   if (stage.pairing.kind === 'round_robin' && stage.pairing.legs > 1) {
     gaps.push(gap('rr_legs_not_run', { stage: stage.key }, { legs: stage.pairing.legs }));
   }
-  if (stage.pairing.kind === 'single_elim' && stage.pairing.third_place) {
-    gaps.push(gap('third_place_not_run', { stage: stage.key }));
-  }
   if (stage.groups !== undefined) {
     gaps.push(gap('groups_not_created', { stage: stage.key }, { count: stage.groups.count, method: stage.groups.method }));
   }
@@ -213,6 +210,14 @@ function edgeWarnings(edges: readonly Edge[]): EngineGap[] {
     }
   }
   return gaps;
+}
+
+/** The gaps the kit engine closes: it plays every round robin leg and runs every edge selection. */
+const KIT_RUNS: ReadonlySet<EngineGapCode> = new Set<EngineGapCode>(['rr_legs_not_run', 'edge_select_not_run']);
+
+/** The gaps that still apply to a league on `engine` (`shadow` schedules and advances like `legacy`). */
+export function engineGaps(gaps: readonly EngineGap[], engine: SeasonFormatEngine): EngineGap[] {
+  return engine === 'kit' ? gaps.filter((entry) => !KIT_RUNS.has(entry.code)) : [...gaps];
 }
 
 /**
@@ -253,6 +258,7 @@ export function planStages(input: PlanStagesInput): PlannedStages {
       bo_overrides: series.map,
       is_doubles: stage.doubles,
       bracket_reset_enabled: stage.pairing.kind === 'double_elim' ? stage.pairing.bracket_reset : true,
+      third_place_enabled: stage.pairing.kind === 'single_elim' && stage.pairing.third_place,
       stage_order: order,
       stage_spec: snapshot,
     });

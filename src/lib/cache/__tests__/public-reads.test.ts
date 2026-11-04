@@ -158,6 +158,15 @@ vi.mock('@/lib/profile/compose', () => ({
 vi.mock('@/lib/stats/standings-preview', () => ({
   getStandingsPreview: vi.fn(async () => [{ rank: 1, player_name: 'Mara', wins: 3, losses: 0 }]),
 }));
+vi.mock('@/lib/format-engine/load', () => ({
+  loadKitStandingsData: vi.fn(async () => ({
+    engine: 'kit',
+    stages: {},
+    stageOfMatch: {},
+    outcomes: {},
+    coinFlips: {},
+  })),
+}));
 vi.mock('@/lib/worlds/route-data', () => ({
   buildWorldRouteData: vi.fn(async () => ({ participants: [{ id: P, name: 'Mara', gym_type: 'fire' }] })),
 }));
@@ -218,6 +227,7 @@ const CALLS = {
   seasonEvolutionPoints: () => publicReads.seasonEvolutionPoints(S),
   seasonTrackers: () => publicReads.seasonTrackers(S),
   seasonFormatRules: () => publicReads.seasonFormatRules(S),
+  seasonKitStandings: () => publicReads.seasonKitStandings(S),
   seasonBattleStats: () => publicReads.seasonBattleStats(S),
   seasonByeRounds: () => publicReads.seasonByeRounds(S),
   seasonMatchRecords: () => publicReads.seasonMatchRecords(S),
@@ -404,6 +414,7 @@ describe('public read cache — the write-route helpers expire exactly the reads
     'seasonEvolutionPoints',
     'seasonTrackers',
     'seasonFormatRules',
+    'seasonKitStandings',
     'seasonBattleStats',
     'seasonByeRounds',
     'seasonMatchRecords',
@@ -663,8 +674,8 @@ describe('public read cache — no session data and no private player columns', 
     expect(names).toEqual({
       tournamentMatches: 'tournament-matches-public',
       tournamentHeadToHead: 'tournament-h2h-public',
-      worldRouteData: 'world-route-data-public-v5',
-      leagueSchedule: 'league-schedule-public-v4',
+      worldRouteData: 'world-route-data-public-v6',
+      leagueSchedule: 'league-schedule-public-v5',
     });
   });
 

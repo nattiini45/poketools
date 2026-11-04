@@ -81,6 +81,7 @@ export function toPhaseCreateBody(plan: PlanDocument, phase: PlanPhase): Body {
   body.is_doubles = phase.is_doubles;
   body.team_visibility = phase.team_visibility ?? 'hidden_until_match';
   put(body, 'bracket_reset_enabled', phase.bracket_reset_enabled);
+  put(body, 'third_place_enabled', phase.third_place_enabled);
   if (phase.advancement_rule) {
     body.advancement_rule = { type: 'top_n', count: phase.advancement_rule.count, per_group: phase.advancement_rule.per_group };
   }
@@ -124,5 +125,6 @@ export function toTournamentCreateBody(plan: PlanDocument, tournament: PlanTourn
   body.is_doubles = tournament.is_doubles;
   body.team_visibility = tournament.team_visibility;
   put(body, 'bracket_reset_enabled', tournament.bracket_reset_enabled);
+  put(body, 'third_place_enabled', tournament.third_place_enabled);
   return body;
 }

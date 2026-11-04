@@ -89,7 +89,6 @@ export default {
       override_unmapped:
         'Phase “{stage}”: the best-of-{best_of} exception for round {round} cannot be matched to a round of the phase and is ignored.',
       rr_legs_not_run: 'Phase “{stage}”: only one round-robin leg is played ({legs} planned).',
-      third_place_not_run: 'Phase “{stage}”: the third-place match is not played.',
       edge_select_not_run:
         'Advancement “{edge}”: the selection “{kind}” is not run. An admin moves the players by hand.',
       groups_not_created: 'Phase “{stage}”: the {count} groups are not created automatically.',

@@ -64,6 +64,7 @@ export const ROUTE_SCHEMA_PARITY = {
       is_doubles: { slot: 'phase', field: 'is_doubles' },
       team_visibility: { slot: 'phase', field: 'team_visibility' },
       bracket_reset_enabled: { slot: 'phase', field: 'bracket_reset_enabled' },
+      third_place_enabled: { slot: 'phase', field: 'third_place_enabled' },
       advancement_rule: { slot: 'phase', field: 'advancement_rule' },
     },
     excluded: {
@@ -84,6 +85,7 @@ export const ROUTE_SCHEMA_PARITY = {
       is_doubles: { slot: 'tournament', field: 'is_doubles' },
       team_visibility: { slot: 'tournament', field: 'team_visibility' },
       bracket_reset_enabled: { slot: 'tournament', field: 'bracket_reset_enabled' },
+      third_place_enabled: { slot: 'tournament', field: 'third_place_enabled' },
     },
     excluded: {
       season_id: 'Refused by the route (TOURNAMENT_SEASON_ID_DEPRECATED): a league phase is created through the phases route.',

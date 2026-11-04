@@ -86,8 +86,8 @@ describe('option lists match the manifest', () => {
   const stage = specOf('stage.define');
   const edge = specOf('advance.rule');
 
-  it('metrics are the eight builtin ones', () => {
-    expect(METRIC_KEYS).toHaveLength(8);
+  it('metrics are the ten builtin ones', () => {
+    expect(METRIC_KEYS).toHaveLength(10);
   });
 
   it('pairing kinds', () => {
