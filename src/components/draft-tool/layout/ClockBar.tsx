@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * The clock bar (draft-frontend §5.3, §5.5): round and pick (with the
- * make-up marker), who is on the clock, the timer, the extensions, who is
+ * The clock bar (draft-frontend §5.3, §5.5): round and pick within the round
+ * (with a seat track of the round and the make-up marker), the overall pick,
+ * who is on the clock, the timer, the extensions, who is
  * next, the bell, the players button and, for pool admins, the Admin button
  * (opens the room's admin sheet). States: pending, running, paused (frozen
  * time), complete (link to the tokens page). The paused banner always renders
@@ -21,7 +22,7 @@ import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import { draftSharedMessages } from '@/i18n/messages/draft/shared';
 import { glossaryMessages } from '@/i18n/messages/glossary';
 import { formatDuration, type ClockView } from '@/lib/draft-ui/clock';
-import type { DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
+import type { DraftViewModel, RoundSeatState } from '@/lib/draft-ui/snapshot-adapter';
 import type { ExtensionKind } from '@/lib/draft-ui/snapshot-types';
 import NotifyToggle from '../feedback/NotifyToggle';
 import type { NotifyState } from '../hooks/use-turn-watch';
@@ -55,6 +56,12 @@ export interface ClockBarProps {
 /** Tablet (768–1023 px): the order strip collapses into the clock bar as "Next 5" (§5.3). */
 export const NEXT_IN_CLOCK_BAR = 5;
 
+const SEAT_CLASS: Record<RoundSeatState, string> = {
+  done: styles.seatDone,
+  now: styles.seatNow,
+  upcoming: styles.seatUpcoming,
+};
+
 export default function ClockBar({
   vm,
   clock,
@@ -74,6 +81,7 @@ export default function ClockBar({
   const tGlossary = useT(glossaryMessages);
   const f = useFormatter();
   const slot = vm.activeSlot;
+  const progress = vm.roundProgress;
   const running = vm.status === 'in_progress';
   const me = vm.participants.find((p) => p.isViewer);
 
@@ -99,15 +107,37 @@ export default function ClockBar({
 
   return (
     <section className={styles.clockBar} aria-label={t('clock.label')}>
-      {slot && running ? (
-        <span className="flex items-center gap-2 text-sm font-semibold">
-          {t('clock.roundPick', { round: slot.round, pick: slot.pick_number })}
-          {slot.kind === 'makeup' ? (
-            <span className="rounded-full border border-[var(--draft-border)] px-2 py-0.5 text-xs font-medium text-[var(--draft-ink-2)]">
-              ↻ {tGlossary('draft.makeupPick')}
+      {slot && running && progress ? (
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+            {t('clock.roundOf', { round: progress.round, rounds: progress.roundsTotal, pick: progress.pickInRound, picks: progress.picksInRound })}
+            {progress.makeupForRound !== null ? (
+              <span className={styles.makeupBadge}>↻ {t('clock.makeupFor', { round: progress.makeupForRound })}</span>
+            ) : null}
+          </span>
+          <span className="flex items-center gap-2">
+            <span
+              role="img"
+              className={styles.seatTrack}
+              aria-label={t('clock.seatTrack', {
+                round: progress.round,
+                done: progress.seats.filter((s) => s.state === 'done').length,
+                total: progress.picksInRound,
+              })}
+            >
+              {progress.seats.map((seat, i) => (
+                <span
+                  key={i}
+                  className={`${styles.seat} ${SEAT_CLASS[seat.state]} ${seat.state === 'now' && vm.paused ? styles.seatPaused : ''}`}
+                  title={seat.name || undefined}
+                />
+              ))}
             </span>
-          ) : null}
-        </span>
+            <span className={`${styles.digits} text-xs font-medium text-[var(--draft-ink-2)]`}>
+              {t('clock.overall', { pick: progress.overallPick, total: progress.overallTotal })}
+            </span>
+          </span>
+        </div>
       ) : null}
 
       {status}
@@ -121,8 +151,9 @@ export default function ClockBar({
           {vm.viewerOnClock ? (
             <span className={`${styles.banner} ${styles.caps} text-sm`}>{tGlossary('draft.youOnClock')}</span>
           ) : (
-            <span className="min-w-0 truncate text-sm font-semibold" title={slot.playerName}>
-              {tGlossary('draft.playerOnClock', { name: slot.playerName })}
+            <span className={`${styles.onClockPill} min-w-0 text-sm`} title={slot.playerName}>
+              <span className={`${styles.liveDot} ${vm.paused ? styles.liveDotPaused : ''}`} aria-hidden="true" />
+              <span className="truncate">{tGlossary('draft.playerOnClock', { name: slot.playerName })}</span>
             </span>
           )}
           {clock ? (
@@ -180,7 +211,7 @@ export default function ClockBar({
       {running && vm.upcoming.length > 0 ? (
         <div className={styles.nextFive}>
           <span className="shrink-0 text-xs font-semibold text-[var(--draft-ink-2)]">{t('clock.nextFive', { n: NEXT_IN_CLOCK_BAR })}</span>
-          <UpcomingOrderStrip items={vm.upcoming} activeSlot={slot} makeupSeconds={makeupSeconds} limit={NEXT_IN_CLOCK_BAR} />
+          <UpcomingOrderStrip items={vm.upcoming} activeSlot={slot} makeupSeconds={makeupSeconds} limit={NEXT_IN_CLOCK_BAR} showNow={false} />
         </div>
       ) : null}
 

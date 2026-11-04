@@ -140,6 +140,7 @@ The data port. It exposes `fetchSnapshot(since)`, `fetchMyTurn`, `fetchIndex`, `
 Turns a `DraftSnapshotDTO` into the `DraftViewModel`:
 - the active slot and the viewer flags;
 - the upcoming order with round breaks and make-up slots;
+- `roundProgress`: the round the draft is in, the pick within that round (one seat per participant: `done`, `now` or `upcoming`), the overall pick, and `makeupForRound` when the active slot is a make-up pick. A make-up slot keeps the round and pick number of the pick it replaces but runs after later picks, so it never moves the draft back a round. The clock bar shows "Round 3 of 6 · Pick 2 of 6" with a seat track and "Pick 14 of 72"; the order strip opens with an "On the clock" chip, labels round breaks ("R4") and draws make-up chips dashed with a "Make-up" label;
 - the participants with their rosters;
 - the recent picks;
 - per-line card states (`available | drafted | blocked | mine`) with their reasons;

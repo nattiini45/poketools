@@ -69,7 +69,8 @@ describe('DraftToolScreen', () => {
   it('renders the on-clock banner in caps, the pinned line and its draftability reason (EN)', () => {
     const html = renderWithI18n(<DraftToolScreen {...props(snapshot())} />);
     expect(capsTexts(html)).toContain('You are on the clock');
-    expect(html).toContain('Round 2 · Pick 3');
+    expect(html).toContain('Round 2 of 9 · Pick 1 of 2');
+    expect(html).toContain('Pick 3 of 18');
     expect(html).toContain('Already drafted by Misty.');
     expect(html).toContain('Misty');
     expect(html).toContain('Next: Misty');
@@ -80,7 +81,7 @@ describe('DraftToolScreen', () => {
   it('renders the same screen in German', () => {
     const html = renderWithI18n(<DraftToolScreen {...props(snapshot())} />, { locale: 'de' });
     expect(capsTexts(html)).toContain('Du bist am Zug');
-    expect(html).toContain('Runde 2 · Pick 3');
+    expect(html).toContain('Runde 2 von 9 · Pick 1 von 2');
     expect(html).toContain('Bereits von Misty gedraftet.');
     expect(html).toContain('Danach: Misty');
     expect(html).not.toMatch(KILL_TOKEN);

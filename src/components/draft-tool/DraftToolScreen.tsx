@@ -307,7 +307,7 @@ export default function DraftToolScreen({
         />
       </div>
       <div className={styles.orderRow}>
-        <UpcomingOrderStrip items={vm.upcoming} activeSlot={vm.activeSlot} makeupSeconds={makeupSeconds} />
+        <UpcomingOrderStrip items={vm.upcoming} activeSlot={vm.activeSlot} makeupSeconds={makeupSeconds} paused={vm.paused} />
       </div>
 
       <div className={styles.stagePane}>
