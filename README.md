@@ -91,6 +91,7 @@ Recommended:
 | `BLUESKY_SERVICE_HOST_ALLOWLIST` | Optional. Extra Bluesky server hosts (comma-separated, besides `bsky.social`) that a Bluesky integration's `service_url` may name; unset means `bsky.social` only |
 | `SUPERADMIN_DISCORD_ID` / `SUPERADMIN_EMAIL` | Optional, and only for a deployment that uses Discord: the instance operator's Discord user ID, and optionally the email of their linked email login. The Discord account is treated as admin on every request; the email login only while its player is linked to that Discord ID. `SUPERADMIN_EMAIL` alone grants nothing, and neither variable is how you get a first admin (see "First run") |
 | `FORMAT_PACK` | Which format pack the build uses: unset (your own pack when present, else the example pack), `example` or `private`. Set `private` in Production, so a build that lost your pack fails instead of shipping the example rules. See "Format packs" below. |
+| `CSP_ENFORCE` | Optional. Pages carry a nonce-based Content-Security-Policy from the proxy (`src/proxy.ts`) as report-only by default: violations post to `/api/csp-report`, which logs one capped line and stores nothing. Set it to `1` to enforce the nonce policy instead; unset, empty, `0`, `false`, `off` and `no` keep it report-only. Soak the reports first: `/teambuilder` reports `script-src` eval-policy events after a team fork, because an editor dependency feature-detects `eval`. See [docs/security-patterns.md](docs/security-patterns.md). |
 
 Optional features (AI analysis, avatar generation and moderation, social publishing, the 3D world asset bucket, feature flags) have their own variables, all documented in `.env.example`. Runtime flags are described in [docs/feature-flags.md](docs/feature-flags.md).
 
@@ -110,7 +111,9 @@ Optional features (AI analysis, avatar generation and moderation, social publish
 
 ### 6. Deployment notes
 
-The app targets Vercel but runs anywhere Next.js 16 runs. Security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, and `X-Robots-Tag: noindex` on API routes) are set in `next.config.mjs`, and `poweredByHeader` is disabled. On your host, consider enabling firewall or bot protection, keeping build logs and source private, and alerting on function 5xx rates, latency regressions and usage spikes.
+The app targets Vercel but runs anywhere Next.js 16 runs. Security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, and `X-Robots-Tag: noindex` on API routes) are set in `next.config.mjs`, and `poweredByHeader` is disabled. Pages get a nonce-based Content-Security-Policy from the proxy (`src/proxy.ts`), report-only until `CSP_ENFORCE` is set; the static policy in `next.config.mjs` covers the routes and assets the proxy skips ([docs/security-patterns.md](docs/security-patterns.md)). On your host, consider enabling firewall or bot protection, keeping build logs and source private, and alerting on function 5xx rates, latency regressions and usage spikes.
+
+Logs are structured: `logger` (`src/lib/logger.ts`) writes one JSON line per event. An error response built by `safeErrorResponse()` carries an `x-request-id` header and logs the same `requestId`; an error return a handler writes by hand may carry neither. An unhandled error page shows a `digest` that the `request` log line repeats. Either value finds the line in the runtime logs, and [docs/operations-logging.md](docs/operations-logging.md) lists the fields and the operator grep recipes.
 
 Upgrading: read the [CHANGELOG](CHANGELOG.md) first. Each release lists its migrations and new environment variables under **Upgrade notes**; apply the migrations before you deploy the new code.
 
@@ -119,16 +122,24 @@ Backups depend on your Supabase plan, and the app's admin export is not a backup
 ## Development
 
 ```bash
-npm run dev       # Start dev server at http://localhost:3000
-npm run build     # Production build (Next.js build + type-check)
-npm test          # Run unit tests (vitest)
+npm run dev        # Start dev server at http://localhost:3000
+npm run build      # Production build (Next.js build + type-check)
+npm run lint       # ESLint only
+npm test           # Unit tests (vitest); no database
+npm run test:db    # Suites that need a real Postgres, against a local stack
+npm run test:e2e   # Playwright smoke suite (run `npm run build:e2e` first)
 npm run test:watch # Run tests in watch mode
-npm run lint      # ESLint only
 ```
 
 Notes:
 - `npm run lint` covers `src/` and `scripts/` and is not bundled into `npm run build`. `npm run typecheck` runs `tsc --noEmit`; `npm run typecheck:example` type-checks against the example format pack, as CI does.
-- Vitest seeds dummy Supabase env vars when unset, so unit tests do not require real secrets.
+
+### Testing
+
+- `npm test` never reaches a real database: the unit tests mock the Supabase client, and Vitest seeds dummy Supabase env vars when unset, so no secrets are needed.
+- `npm run test:db` runs only the suites that need a real Postgres (`*.local.test.ts`, `*.live-db.test.ts`), in a Vitest project (`db`) that no other run loads, against a local stack (`npx supabase start`, then `npx supabase migration up --local`). It takes the URL and keys from `supabase status -o env` when `NEXT_PUBLIC_SUPABASE_URL` is unset (an environment that already sets it is used as it is) and refuses any host that is not the loopback interface, so a hosted project is never reached. See [docs/supabase-environments.md](docs/supabase-environments.md#local-stack-suites-npm-run-testdb).
+- `npm run test:e2e` is the Playwright Chromium smoke suite. It serves the production build that `npm run build:e2e` makes against the local stack and starts its own server. A test fails on an uncaught error, any console error, a hydration warning or a request to Supabase; any other request that would leave the machine is intercepted, images answered with a blank PNG and the rest aborted, so the run stays hermetic (see [CONTRIBUTING.md](CONTRIBUTING.md#end-to-end-tests)).
+- In CI, `npm run test:coverage` is the required test gate: every Vitest project the checkout loads, plus the coverage floors in `vitest.config.ts`. The `database` and `e2e` jobs are advisory (never required checks, never in the main-protection ruleset): each starts its own ephemeral `supabase start` stack on the runner (loopback only, no Supabase secret, `LOCAL_STACK_CI=1`), the `database` job replays every migration and then runs the `db` project through `npm run test:db`, the `e2e` job builds and runs the Playwright suite, and a red job there is information, not a gate.
 
 ## Project Structure
 
