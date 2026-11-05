@@ -29,7 +29,15 @@ import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { loadKitPhase } from '@/lib/format-engine/load';
-import { kitStageRounds, legRoundRange, roundRobinLegRound } from '@/lib/format-engine/pairing';
+import {
+  filteredRoundRobinRound,
+  isChallengeLadder,
+  kitStageRounds,
+  legRoundRange,
+  roundRobinLegRound,
+  roundRobinOf,
+} from '@/lib/format-engine/pairing';
+import { loadPairingAids, openForbiddenPairingCheck, type PairingAids } from '@/lib/format-engine/pairing-server';
 import { ensureKitPhaseGroups } from '@/lib/format-engine/groups';
 import { mirrorsLeagueGroups } from '@/lib/tournament/phase-week-plan';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -109,8 +117,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         status: 409,
       });
     }
-    const kitPairing =
-      kitPhase?.engine === 'kit' && kitPhase.stage.pairing.kind === 'round_robin' ? kitPhase.stage.pairing : null;
+    if (kitPhase?.engine === 'kit' && isChallengeLadder(kitPhase.stage.pairing)) {
+      throw new UserFacingError('This phase is a challenge ladder: its matches come from accepted challenges. Create its rounds in the manual round editor.', {
+        code: 'rounds_challenge_ladder',
+        status: 409,
+      });
+    }
+    // A round robin, or a filter over one (the filter drops the rejected pairs from every round).
+    const kitPairing = kitPhase?.engine === 'kit' ? roundRobinOf(kitPhase.stage.pairing) : null;
+    const filtered = kitPhase?.engine === 'kit' && kitPhase.stage.pairing.kind === 'filter';
+    // Pairs the filter rejected, per round to write.
+    const forbiddenByRound = new Map<number, number>();
 
     const participants = await getParticipants(id);
     if (participants.length < 2) {
@@ -120,6 +137,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const aids: PairingAids =
+      filtered && kitPhase && tournament.season_id
+        ? await loadPairingAids({
+            seasonId: tournament.season_id,
+            stage: kitPhase.stage,
+            roundNumber: 1,
+            playerIds: participants.map((p) => p.id),
+          })
+        : {};
     const existingRounds = await getRoundsByTournament(id);
     // A phase of a league with groups mirrors them (rebuilt from the league groups while it has no round yet).
     let groups = tournament.season_id
@@ -157,7 +183,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         batch.push(week.week);
       }
       const { resolved } = await resolveWeekPairings(tournament.season_id, context, batch);
-      for (const { week, pairings } of resolved) weeksToWrite.push({ roundNumber: week.week, pairings, byePlayerIds: [] });
+      for (const { week, pairings } of resolved) {
+        // A filter over a round robin on league groups drops the rejected pairs from the week plan.
+        const allow = aids.allowPairFor?.(week.week);
+        const kept = allow ? pairings.filter((p) => allow(p.player_1_id, p.player_2_id)) : pairings;
+        if (kept.length < pairings.length) forbiddenByRound.set(week.week, pairings.length - kept.length);
+        weeksToWrite.push({ roundNumber: week.week, pairings: kept, byePlayerIds: [] });
+      }
     } else {
       // Every round of the circle method that has no round yet, or whose round an interrupted call wrote without
       // its matches (a round robin round of two or more trainers always has a pairing): filled, never skipped.
@@ -183,7 +215,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         for (const ids of circles) {
           // A smaller group has played all its rounds and rests while a larger one plays on.
           if (r > circleRounds(ids)) continue;
-          const generated: GeneratedRound = kitPairing ? roundRobinLegRound(ids, kitPairing, r) : generateRoundRobinRound(ids, r);
+          const allow = aids.allowPairFor?.(r);
+          const generated: GeneratedRound = !kitPairing
+            ? generateRoundRobinRound(ids, r)
+            : allow
+              ? filteredRoundRobinRound(ids, kitPairing, r, allow)
+              : roundRobinLegRound(ids, kitPairing, r);
+          if (generated.forbidden) forbiddenByRound.set(r, (forbiddenByRound.get(r) ?? 0) + generated.forbidden);
           // A later leg repeats the first leg's pairings on purpose: the drift guard looks inside the round's leg only.
           const leg = kitPairing ? legRoundRange(ids.length, r) : null;
           const members = new Set(ids);
@@ -272,6 +310,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     expireTournamentReads(id, tournament.season_id);
+
+    if (kitPhase?.engine === 'kit' && tournament.season_id) {
+      for (const [round, forbidden] of forbiddenByRound) {
+        await openForbiddenPairingCheck({ seasonId: tournament.season_id, stageKey: kitPhase.stage.key, round, forbidden });
+      }
+    }
 
     logAuditEvent({
       actor_id: admin.playerId,

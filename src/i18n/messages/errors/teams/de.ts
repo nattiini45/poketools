@@ -27,6 +27,8 @@ export default defineDe<typeof en>()({
   team_import_pokepaste_fetch_failed: 'pokepast.es konnte nicht abgerufen werden.',
   team_import_no_pokemon: 'Im Text wurde kein Pokémon erkannt.',
 
+  team_check_failed: 'Dieses Team erfüllt die Regeln dieser Liga nicht: {issues}',
+
   sample_sets_pokemon_required: 'Der Parameter pokemon fehlt.',
 
   match_prep_not_participant: 'Du bist an diesem Spiel nicht beteiligt.',

@@ -84,6 +84,12 @@ export default defineDe<typeof en>()({
       edge_select_not_run:
         'Aufstieg „{edge}“: Die Auswahl „{kind}“ wird nicht ausgeführt. Ein Admin verschiebt die Spieler von Hand.',
       groups_not_created: 'Phase „{stage}“: Die {count} Gruppen werden nicht automatisch angelegt.',
+      pairing_not_run:
+        'Phase „{stage}“: Die Paarung „{kind}“ wird gespeichert, erzeugt aber keine Runden. Ein Admin paart die Runden von Hand.',
+      constraints_not_run: 'Phase „{stage}“: Die {count} Teamregeln werden gespeichert und nicht gegen Teams geprüft.',
+      calendar_not_run: 'Phase „{stage}“: Der Kalender wird gespeichert. Runden und Fristen starten nicht von selbst.',
+      end_when_not_run: 'Phase „{stage}“: Die Endbedingung wird gespeichert und nicht geprüft. Ein Admin beendet die Phase von Hand.',
+      foreach_group_not_run: 'Phase „{stage}“: Die Wiederholung je Gruppe wird gespeichert und nicht ausgeführt.',
     },
     gapKinds: {
       wildcard: 'Wildcards',

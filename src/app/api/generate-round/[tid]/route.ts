@@ -47,9 +47,12 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
 import { loadKitPhase } from '@/lib/format-engine/load';
-import { kitPairsRounds, legRoundRange, pairNextRound } from '@/lib/format-engine/pairing';
+import { isChallengeLadder, kitPairsRounds, legRoundRange, pairNextRound, roundRobinOf } from '@/lib/format-engine/pairing';
+import { loadPairingAids, openForbiddenPairingCheck, type PairingAids } from '@/lib/format-engine/pairing-server';
 import { ensureKitPhaseGroups } from '@/lib/format-engine/groups';
 import { onRoundGenerated } from '@/lib/format-engine/runtime/hooks';
+import { fillRoundDeadline } from '@/lib/format-engine/runtime/calendar-server';
+import { assertStageNotEnded } from '@/lib/format-engine/runtime/stage-end-server';
 import { mirrorsLeagueGroups } from '@/lib/tournament/phase-week-plan';
 import type { ApiResult, ApiWarning } from '@/types/api';
 import type { Round } from '@/types/round';
@@ -111,6 +114,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    // A challenge ladder has no generated rounds: its matches come from accepted challenges.
+    if (kitPhase?.engine === 'kit' && isChallengeLadder(kitPhase.stage.pairing)) {
+      throw new UserFacingError('This phase is a challenge ladder: its matches come from accepted challenges. Create its rounds in the manual round editor.', {
+        code: 'rounds_challenge_ladder',
+        status: 409,
+      });
+    }
     if (tournament.status === 'completed') {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Tournament is already completed', code: 'tournament_already_completed' },
@@ -122,6 +132,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     //    Round Robin pairings are deterministic (circle method) and don't
     //    depend on results, so rounds can be generated in advance.
     const existingRounds = await getRoundsByTournament(tid);
+
+    // A stage that reached its end_when takes no further round.
+    if (kitPhase?.engine === 'kit' && tournament.season_id) {
+      await assertStageNotEnded({
+        seasonId: tournament.season_id,
+        phaseId: tid,
+        stage: kitPhase.stage,
+        currentRound: tournament.current_round,
+      });
+    }
 
     const isElimination =
       tournament.bracket_type === 'single_elim' ||
@@ -237,6 +257,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     let roundNumber = nextRoundNumber;
     // Swiss pairings of a kit stage that repeat an earlier pairing because no other pairing was left.
     let rematches = 0;
+    // Pairs a stage filter rejected that the round could not avoid (Swiss) or dropped from the schedule (round robin).
+    let forbidden = 0;
+    // The pair filter and the bipartite sides of a kit stage; read only for those two pairing kinds.
+    const aidsFor = (round: number): Promise<PairingAids> =>
+      kit && tournament.season_id
+        ? loadPairingAids({ seasonId: tournament.season_id, stage: kit.stage, roundNumber: round, playerIds: participantIds })
+        : Promise.resolve({});
 
     // A kit round robin pairs each of its own groups by the stage (legs included); groups that mirror league groups
     // keep the league week plan with its cross-group weeks.
@@ -258,9 +285,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const { resolved } = await resolveWeekPairings(tournament.season_id, context, [roundNumber]);
       allPairings = resolved[0].pairings;
       roundName = `Round ${roundNumber}`;
+      // A filter over a round robin on league groups drops the rejected pairs from the week plan.
+      const weekAids = await aidsFor(roundNumber);
+      if (weekAids.allowPair) {
+        const allow = weekAids.allowPair;
+        const kept = allPairings.filter((p) => allow(p.player_1_id, p.player_2_id));
+        forbidden += allPairings.length - kept.length;
+        allPairings = kept;
+      }
     } else if (groups.length > 0) {
       // Generate pairings within each group separately
       roundName = `Round ${nextRoundNumber}`;
+      const aids = await aidsFor(nextRoundNumber);
       for (const group of groups) {
         const groupPlayerIds = group.members.map((m) => m.player_id);
         const groupNames: Record<string, string> = {};
@@ -288,12 +324,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             roundNumber: nextRoundNumber,
             outcomes: kit.outcomes,
             seed: kit.seed,
+            allowPair: aids.allowPair,
+            sides: aids.sides,
           });
           // A group that has played all its rounds rests while a larger one plays on.
           if (result.kind !== 'round') continue;
           allPairings.push(...result.round.pairings);
           allByePlayerIds.push(...result.round.bye_player_ids);
           rematches += result.round.rematches ?? 0;
+          forbidden += result.round.forbidden ?? 0;
           continue;
         }
         const generated = generateRound(
@@ -314,6 +353,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         );
       }
     } else if (kit) {
+      const aids = await aidsFor(nextRoundNumber);
       const result = pairNextRound({
         stage: kit.stage,
         participantIds,
@@ -324,6 +364,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         roundNumber: nextRoundNumber,
         outcomes: kit.outcomes,
         seed: kit.seed,
+        allowPair: aids.allowPair,
+        sides: aids.sides,
       });
       if (result.kind !== 'round') {
         return NextResponse.json<ApiResult<never>>(
@@ -335,8 +377,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       allByePlayerIds = result.round.bye_player_ids;
       roundName = result.round.round_name;
       rematches = result.round.rematches ?? 0;
+      forbidden = result.round.forbidden ?? 0;
       // A later leg repeats the first leg's pairings on purpose: the drift guard looks inside this round's leg only.
-      if (kit.stage.pairing.kind === 'round_robin') {
+      if (roundRobinOf(kit.stage.pairing) !== null) {
         const leg = legRoundRange(participantIds.length, nextRoundNumber);
         assertNoScheduleDrift(
           roundName,
@@ -468,6 +511,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // A stage with a calendar gives the round its deadline (an admin's own deadline is never replaced).
+    if (kitPhase?.engine === 'kit' && tournament.season_id) {
+      round = await fillRoundDeadline({ seasonId: tournament.season_id, stage: kitPhase.stage, round });
+    }
+
     // The new pairings show on the next view of the public pages.
     expireTournamentReads(tid, tournament.season_id);
 
@@ -480,6 +528,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         rematches,
         startsPhase: tournament.status === 'upcoming',
       });
+      if (forbidden > 0 && tournament.season_id) {
+        await openForbiddenPairingCheck({ seasonId: tournament.season_id, stageKey: kitPhase.stage.key, round: roundNumber, forbidden });
+      }
     }
 
     logAuditEvent({
@@ -495,10 +546,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         matches: allPairings.length,
         byes: allByePlayerIds.length,
         started,
-        ...(kit ? { engine: 'kit', rematches } : {}),
+        ...(kit ? { engine: 'kit', rematches, ...(forbidden > 0 ? { forbidden } : {}) } : {}),
       },
     });
     if (rematches > 0) warnings.push({ code: 'swiss_rematches', params: { count: rematches } });
+    if (forbidden > 0) warnings.push({ code: 'pairing_forbidden', params: { count: forbidden } });
 
     // Discord + social notification (fire-and-forget)
     const roundPayload = {

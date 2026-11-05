@@ -122,7 +122,12 @@ export type EngineGapCode =
   | 'override_unmapped'
   | 'rr_legs_not_run'
   | 'edge_select_not_run'
-  | 'groups_not_created';
+  | 'groups_not_created'
+  | 'pairing_not_run'
+  | 'constraints_not_run'
+  | 'calendar_not_run'
+  | 'end_when_not_run'
+  | 'foreach_group_not_run';
 
 /** A part of the format the engine does not run yet; codes and params only, the UI words them. */
 export interface EngineGap {

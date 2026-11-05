@@ -10,12 +10,13 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
+import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import type { Tournament } from '@/types/tournament';
 import { planChecks, type CheckPlan } from './checks';
 import { openChecks } from './checks-server';
 import { fireEvent } from './fire';
 import { matchContext, playerContext } from './expr-env';
-import { envBaseOf, loadFreshKitContext, phaseById, type KitContext } from './load';
+import { envBaseOf, loadFreshKitContext, phaseById, type KitContext, type KitPhaseInfo } from './load';
 import { loadStageTable, playerRowsOf } from './stage-table';
 import { planTrackProgress } from './tracks';
 
@@ -57,10 +58,12 @@ export interface MatchCompletedInput {
 export async function onMatchCompleted(input: MatchCompletedInput): Promise<void> {
   const { tournament } = input;
   if (!isKitCandidate(tournament)) return;
+  const loaded: { value: { ctx: KitContext; phase: KitPhaseInfo } | null } = { value: null };
   await guarded('match completed', { matchId: input.matchId, tournamentId: tournament.id }, async () => {
     const ctx = await loadFreshKitContext(tournament.season_id);
     const phase = ctx === null ? undefined : phaseById(ctx, tournament.id);
     if (ctx === null || phase === undefined) return;
+    loaded.value = { ctx, phase };
     const [round, outcome] = await Promise.all([getRoundById(input.roundId), getMatchOutcome(input.matchId)]);
     const roundNumber = round?.round_number ?? 0;
     const forfeit = outcome?.kind === 'forfeit' || outcome?.kind === 'no_show';
@@ -104,6 +107,32 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<void
     checks.push(...exprChecks.checks);
     await open(tournament.season_id, checks);
   });
+  const ready = loaded.value;
+  if (ready !== null && ready.phase.stage.end_when !== undefined) await endStageIfDone(tournament, ready.ctx, ready.phase, input.roundId);
+}
+
+/**
+ * The stage's `end_when`, evaluated when the last open match of a round completes: when it holds, the phase completes
+ * through the same sequence as an admin's status change. Loaded on demand, so a stage without `end_when` costs nothing.
+ */
+async function endStageIfDone(
+  tournament: HookTournament & { season_id: string },
+  ctx: KitContext,
+  phase: KitPhaseInfo,
+  roundId: string,
+): Promise<void> {
+  await guarded('stage end', { tournamentId: tournament.id }, async () => {
+    const { checkStageEnd } = await import('./stage-end-server');
+    const check = await checkStageEnd(ctx, phase, roundId);
+    if (check === null || check.openInRound > 0) return;
+    if (check.issue !== undefined) {
+      logger.warn(TAG, 'end_when could not be evaluated', { tournamentId: tournament.id, stage: phase.stage.key, issue: check.issue });
+      return;
+    }
+    if (!check.met) return;
+    const { completePhaseAtStageEnd } = await import('./phase-complete');
+    await completePhaseAtStageEnd(tournament.id, `end_when:${phase.stage.key}`);
+  });
 }
 
 /** A replay ended in an engine tie and the match was disputed: open the `unresolved_outcome` checks. */
@@ -145,6 +174,14 @@ export async function onRoundGenerated(input: RoundGeneratedInput): Promise<void
   });
 }
 
+/** Whether every phase of the stage is completed: always for an ordinary stage, the phase itself being completed. */
+async function stageEnded(ctx: KitContext, phase: KitPhaseInfo): Promise<boolean> {
+  if (phase.stage.foreach_group === undefined) return true;
+  const siblings = ctx.phases.filter((other) => other.stage.key === phase.stage.key && other.id !== phase.id);
+  const rows = await Promise.all(siblings.map((sibling) => getTournamentById(sibling.id)));
+  return rows.every((row) => row === null || row.status === 'completed');
+}
+
 export interface PhaseStatusInput {
   tournament: HookTournament;
   from: string;
@@ -166,8 +203,11 @@ export async function onPhaseStatusChanged(input: PhaseStatusInput): Promise<voi
     const phase = ctx === null ? undefined : phaseById(ctx, tournament.id);
     if (ctx === null || phase === undefined) return;
     const stage = phase.stage.key;
-    const fired = await fireEvent(tournament.season_id, { event: started ? 'stage_start' : 'stage_end', stage }, null, { context: ctx });
-    for (const issue of fired?.issues ?? []) logger.warn(TAG, 'event effect skipped', { tournamentId: tournament.id, ...issue });
+    // A stage that repeats per group ends with its last group phase; its start is the first phase's (the key fires once).
+    if (started || (await stageEnded(ctx, phase))) {
+      const fired = await fireEvent(tournament.season_id, { event: started ? 'stage_start' : 'stage_end', stage }, null, { context: ctx });
+      for (const issue of fired?.issues ?? []) logger.warn(TAG, 'event effect skipped', { tournamentId: tournament.id, ...issue });
+    }
     if (!completed) return;
 
     ctx = await loadFreshKitContext(tournament.season_id);

@@ -36,7 +36,17 @@ import {
 } from './runtime-names';
 
 /** Where an expression sits; the renderer turns it into words. */
-type ExprContext = 'attr_assign' | 'metric' | 'track_step' | 'effect_target' | 'event_condition' | 'action_step' | 'check';
+export type ExprContext =
+  | 'attr_assign'
+  | 'metric'
+  | 'track_step'
+  | 'effect_target'
+  | 'event_condition'
+  | 'action_step'
+  | 'check'
+  | 'pair_filter'
+  | 'team_constraint'
+  | 'stage_end';
 
 interface Lookup {
   readonly def: FormatDefinition;
@@ -72,7 +82,7 @@ function duplicates<T>(out: Diagnostic[], scope: string, items: readonly T[] | u
   });
 }
 
-function checkExpr(
+export function checkExpr(
   out: Diagnostic[],
   expr: Expr,
   env: TypeEnv,

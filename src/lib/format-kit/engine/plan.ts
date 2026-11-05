@@ -9,10 +9,11 @@
  * - An elimination stage with a third-place match keeps it inside the final round: no extra round is counted.
  * - A double-elimination stage plays `2 * ceil(log2 n) - 1` rounds, plus one when the bracket reset is on.
  * - Round robin plays `legs * getRoundRobinTotalRounds(group size)` rounds (fewer than two players: none).
+ * - A filtered pairing plays the rounds of its base; bipartite and challenge stages play their `rounds`.
  * - Edge targets add up their incoming edges and assume the selections are disjoint.
  */
 import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
-import type { AdvanceSelect, FormatDefinition, Stage } from '../types';
+import type { AdvanceSelect, FormatDefinition, Pairing, Stage } from '../types';
 import { diag, ptr, type Diagnostic } from './diagnostics';
 import type { CompileEnv } from './env';
 import type { GraphBuild } from './graph';
@@ -125,8 +126,7 @@ function rosterCount(stage: Stage, env: CompileEnv): { count: CountRange; source
   return null;
 }
 
-function roundsOf(stage: Stage, participants: CountRange | null, groupSize: CountRange | null): CountRange | null {
-  const pairing = stage.pairing;
+function roundsOf(stage: Stage, pairing: Pairing, participants: CountRange | null, groupSize: CountRange | null): CountRange | null {
   switch (pairing.kind) {
     case 'round_robin': {
       const size = stage.groups ? groupSize : participants;
@@ -142,6 +142,11 @@ function roundsOf(stage: Stage, participants: CountRange | null, groupSize: Coun
       return participants
         ? mapRange(participants, (n) => (n < 2 ? 0 : 2 * ceilLog2(n) - 1 + (pairing.bracket_reset ? 1 : 0)))
         : null;
+    case 'bipartite':
+    case 'challenge':
+      return exact(pairing.rounds);
+    case 'filter':
+      return roundsOf(stage, pairing.base, participants, groupSize);
     default:
       return null;
   }
@@ -158,6 +163,24 @@ function bracketOf(participants: CountRange | null): { size: number | null; byes
   return { size: low === high ? low : null, byes: null };
 }
 
+/**
+ * The legacy bracket type a pairing runs on: bipartite pairs Swiss-style, a filter runs its base and a challenge ladder is
+ * played like a manual round robin.
+ */
+export function mappedBracketType(pairing: Pairing): StagePlan['mappedBracketType'] {
+  switch (pairing.kind) {
+    case 'manual':
+    case 'challenge':
+      return 'round_robin';
+    case 'bipartite':
+      return 'swiss';
+    case 'filter':
+      return pairing.base.kind;
+    default:
+      return pairing.kind;
+  }
+}
+
 function buildStagePlan(stage: Stage, participants: CountRange | null): StagePlan {
   let groupSize: CountRange | null = null;
   if (stage.groups && participants) {
@@ -165,15 +188,14 @@ function buildStagePlan(stage: Stage, participants: CountRange | null): StagePla
     groupSize = { min: Math.floor(participants.min / count), max: Math.ceil(participants.max / count) };
   }
   const bracket = isElimination(stage) ? bracketOf(participants) : { size: null, byes: null };
-  const kind = stage.pairing.kind;
   return {
     key: stage.key,
     participants,
     groupSize,
-    rounds: roundsOf(stage, participants, groupSize),
+    rounds: roundsOf(stage, stage.pairing, participants, groupSize),
     bracketSize: bracket.size,
     byes: bracket.byes,
-    mappedBracketType: kind === 'manual' ? 'round_robin' : kind,
+    mappedBracketType: mappedBracketType(stage.pairing),
   };
 }
 

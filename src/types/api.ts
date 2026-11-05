@@ -1,4 +1,5 @@
 import type { ApiErrorCode } from '@/i18n/messages/errors';
+import type { TeamValidationResult } from '@/types/team';
 
 /**
  * An error code of a pack extension's own routes (docs/format-packs.md, "Pack extensions").
@@ -36,6 +37,8 @@ export interface ApiError {
   params?: Record<string, string | number>;
   /** Parsed Showdown usernames when code is `name_mismatch`. */
   ps_usernames?: string[];
+  /** The full verdict when code is `team_check_failed`. */
+  team_check?: TeamValidationResult;
 }
 
 export type ApiResult<T> = ApiResponse<T> | ApiError;

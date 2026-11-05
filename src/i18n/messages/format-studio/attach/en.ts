@@ -92,6 +92,12 @@ export default {
       edge_select_not_run:
         'Advancement “{edge}”: the selection “{kind}” is not run. An admin moves the players by hand.',
       groups_not_created: 'Phase “{stage}”: the {count} groups are not created automatically.',
+      pairing_not_run:
+        'Phase “{stage}”: the pairing “{kind}” is recorded, but no round is generated for it. An admin pairs the rounds by hand.',
+      constraints_not_run: 'Phase “{stage}”: the {count} team rules are recorded and not checked against teams.',
+      calendar_not_run: 'Phase “{stage}”: the calendar is recorded. Rounds and deadlines do not start on their own.',
+      end_when_not_run: 'Phase “{stage}”: the end condition is recorded and not checked. An admin ends the phase by hand.',
+      foreach_group_not_run: 'Phase “{stage}”: the repeat per group is recorded and not run.',
     },
     gapKinds: {
       wildcard: 'wildcards',

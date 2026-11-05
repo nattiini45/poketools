@@ -68,6 +68,15 @@ export interface Stage {
   rank: RankStep[];
   /** 0..12 builtin metric keys, default [] */
   columns: Key[];
+  /**
+   * Phase 4 fields, all optional with no default so a stage without them keeps its content hash.
+   * 0..32 team constraints checked when a player saves or submits a team for this stage.
+   */
+  constraints?: TeamConstraint[];
+  calendar?: StageCalendar;
+  end_when?: EndWhen;
+  /** This stage repeats once per group of the earlier stage `from`; it has no `groups` of its own. */
+  foreach_group?: { from: Key };
 }
 
 export type ParticipantsSelector =
@@ -81,12 +90,49 @@ export interface GroupsSpec {
   method: 'serpentine' | 'straight' | 'random_seeded' | 'manual';
 }
 
+/** The pairings a `filter` can wrap: the two that pair a whole field every round. */
+export type FilterBase =
+  | { kind: 'swiss'; rounds: number | 'auto'; avoid_repeats: boolean }
+  | { kind: 'round_robin'; legs: number; mirror_legs: boolean };
+
 export type Pairing =
   | { kind: 'round_robin'; legs: number; mirror_legs: boolean }
   | { kind: 'swiss'; rounds: number | 'auto'; avoid_repeats: boolean }
   | { kind: 'single_elim'; third_place: boolean }
   | { kind: 'double_elim'; bracket_reset: boolean }
-  | { kind: 'manual' };
+  | { kind: 'manual' }
+  | {
+      kind: 'bipartite';
+      /** A player enum attribute that is not multi. */
+      attr: Key;
+      /** 1..32 values of the attribute. */
+      side_a: Key[];
+      /** 1..32 values of the attribute, none of them in side_a. */
+      side_b: Key[];
+      /** int 1..32 */
+      rounds: number;
+      /** default true */
+      avoid_repeats: boolean;
+    }
+  | {
+      kind: 'filter';
+      base: FilterBase;
+      /** boolean, pair env: a pair for which it is false is never paired. */
+      allow: Expr;
+    }
+  | {
+      kind: 'challenge';
+      /** int 1..64 */
+      rounds: number;
+      /** int 1..64: how many places above themselves a player may challenge. */
+      rank_range: number;
+      /** int 1..8, default 1 */
+      max_open: number;
+      /** int 0..16, default 1 */
+      cooldown_rounds: number;
+      /** int 1..336, default 72 */
+      accept_window_hours: number;
+    };
 
 export interface Series {
   /** int 1..15. An even number is representable; the compiler rejects it. */
@@ -342,7 +388,7 @@ export type EventSpec =
   | { event: 'match_completed'; stage?: Key }
   | { event: 'action_locked'; action: Key }
   | { event: 'stage_end'; stage?: Key }
-  /** Marks come from the calendar in Phase 4; until then admins fire them. */
+  /** Marks come from a stage calendar; an admin can also fire one by hand. */
   | { event: 'time'; mark: Key };
 
 export interface EffectTarget {
@@ -423,3 +469,97 @@ export interface AdjustRule {
 
 /** An entry of the open `rules` list. */
 export type RuleEntry = RuleCard | OnEventRule | PlayerActionRule | CheckRule | AdjustRule;
+
+// --- Phase 4: team constraints, calendar, stage end and per-group repetition -----------------------
+
+/** Where a count constraint looks: a domain, the player's own holdings of a resource, listed species, or a combination. */
+export type CountLeaf =
+  | { kind: 'domain'; domain: Key; /** default false */ unlocked_only: boolean }
+  | { kind: 'resource'; resource: Key }
+  | { kind: 'species'; /** 1..64 @pkmn species ids */ ids: Key[] };
+
+/**
+ * `any_of` and `not` nest at most `MAX_COUNT_SOURCE_DEPTH` (2) levels deep: the three types below are those levels, so a
+ * deeper source is not representable and the zod schema and the browser validator reject it the same way.
+ */
+export type CountSource2 = CountLeaf;
+export type CountSource1 = CountLeaf | { kind: 'any_of'; sources: CountSource2[] } | { kind: 'not'; source: CountSource2 };
+export type CountSource =
+  | CountLeaf
+  | { kind: 'any_of'; /** 2..6 */ sources: CountSource1[] }
+  | { kind: 'not'; source: CountSource1 };
+
+export type TeamConstraint =
+  | { kind: 'roster_size'; /** int 1..6 */ min: number; max: number; when?: Expr }
+  | { kind: 'count'; source: CountSource; /** int 0..6, at least one of the two */ min?: number; max?: number; when?: Expr }
+  | {
+      kind: 'distinct';
+      by: 'base_species' | 'species' | 'item' | 'type' | 'attr';
+      /** A non-multi entry attribute; `by: attr` only. */
+      attr?: Key;
+      /** int 1..6 */
+      max_per: number;
+      when?: Expr;
+    }
+  | {
+      kind: 'type_quota';
+      types: { source: 'fixed'; /** 1..18 type names */ types: string[] } | { source: 'player_attr'; attr: Key };
+      /** int 0..6 */
+      min_per_type: number;
+      /** default false: whether a type of a dual-typed Pokémon counts for both of its types */
+      allow_multi_count: boolean;
+      when?: Expr;
+    }
+  | {
+      kind: 'tera';
+      mode: 'banned' | 'stab' | 'any' | 'from_attr';
+      /** A player attribute; `from_attr` only. */
+      attr?: Key;
+      when?: Expr;
+    }
+  | {
+      kind: 'evolution_stage';
+      /** int 0..6, at least one of the three */
+      fully_evolved_max?: number;
+      nfe_max?: number;
+      lc_max?: number;
+      when?: Expr;
+    };
+
+/**
+ * Times are read in the league's time zone when the season has one, else UTC. Round n opens at
+ * `start + (n - 1) * every * cadence` and closes `round_window_hours` later.
+ */
+export interface StageCalendar {
+  start: { kind: 'season_start' } | { kind: 'date'; /** YYYY-MM-DD */ date: string };
+  /** HH:MM, default '18:00' */
+  time: string;
+  cadence: 'weekly' | 'days';
+  /** int 1..28, default 1 */
+  every: number;
+  /** int 1..672, default 168 */
+  round_window_hours: number;
+  /** 0..16, default []. Each fires the `time` event of its key. */
+  marks: CalendarMark[];
+  /** 0..8, default [] */
+  deadlines: DeadlinePolicy[];
+}
+
+export interface CalendarMark {
+  key: Key;
+  /** int 1..64 */
+  round: number;
+  /** int -672..672, relative to the opening of the round */
+  offset_hours: number;
+}
+
+export interface DeadlinePolicy {
+  applies: 'action' | 'match' | 'team';
+  /** A player.action id; required exactly when `applies` is 'action'. */
+  action?: Key;
+  /** int -672..672, relative to the round deadline (an action: to its window close mark if any, else the opening of round 1) */
+  offset_hours: number;
+  on_miss: 'forfeit' | 'admin_review' | 'auto_lock' | 'seeded_random_pick';
+}
+
+export type EndWhen = { kind: 'rounds'; /** int 1..64 */ rounds: number } | { kind: 'expr'; /** boolean, stage env */ when: Expr };

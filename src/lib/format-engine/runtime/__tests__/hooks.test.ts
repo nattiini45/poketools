@@ -10,14 +10,20 @@ vi.mock('@/lib/format-engine/runtime/checks-server', () => ({ openChecks: vi.fn(
 vi.mock('@/lib/format-engine/runtime/stage-table', () => ({ loadStageTable: vi.fn(), playerRowsOf: vi.fn(() => ({})) }));
 vi.mock('@/lib/supabase/queries/match-outcomes', () => ({ getMatchOutcome: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/stage-end-server', () => ({ checkStageEnd: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/phase-complete', () => ({ completePhaseAtStageEnd: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
+import { checkStageEnd } from '../stage-end-server';
+import { completePhaseAtStageEnd } from '../phase-complete';
 import { fireEvent } from '../fire';
 import { openChecks } from '../checks-server';
 import { loadFreshKitContext, type KitContext } from '../load';
 import { loadStageTable } from '../stage-table';
 import { getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
+import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { logger } from '@/lib/logger';
 import { isKitCandidate, onMatchCompleted, onMatchUnresolved, onPhaseStatusChanged, onRoundGenerated } from '../hooks';
 
@@ -138,9 +144,81 @@ describe('onPhaseStatusChanged', () => {
     expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'tie:main:p1,p2' })]);
   });
 
+  describe('a stage that repeats per group', () => {
+    const grouped = { ...stage, foreach_group: { from: 'groups' } };
+    const groupCtx = () => context({ phases: [{ id: 't-1', stage: grouped, members: PLAYERS }, { id: 't-2', stage: grouped, members: PLAYERS }] });
+
+    it('ends only with its last group phase', async () => {
+      vi.mocked(loadFreshKitContext).mockResolvedValue(groupCtx());
+      vi.mocked(getTournamentById).mockResolvedValue({ status: 'active' } as never);
+      await onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'active', to: 'completed' });
+      expect(fireEvent).not.toHaveBeenCalled();
+
+      vi.mocked(getTournamentById).mockResolvedValue({ status: 'completed' } as never);
+      await onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'active', to: 'completed' });
+      expect(vi.mocked(fireEvent).mock.calls.map((c) => c[1])).toEqual([{ event: 'stage_end', stage: 'main' }]);
+    });
+
+    it('starts with its first group phase', async () => {
+      vi.mocked(loadFreshKitContext).mockResolvedValue(groupCtx());
+      await onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'upcoming', to: 'active' });
+      expect(vi.mocked(fireEvent).mock.calls.map((c) => c[1])).toEqual([{ event: 'stage_start', stage: 'main' }]);
+    });
+  });
+
   it('never fails the caller', async () => {
     vi.mocked(loadFreshKitContext).mockRejectedValue(new Error('down'));
     await expect(onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'upcoming', to: 'active' })).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalled();
+  });
+});
+
+describe('onMatchCompleted: end_when', () => {
+  const input = { tournament: TOURNAMENT, matchId: 'm-1', roundId: 'r-1', player1Id: 'p1', player2Id: 'p2', winnerId: 'p1' };
+  const facts = { round: 3, rounds_played: 3, open_matches: 0, participants: 6 };
+  const withEnd = () =>
+    context({ phases: [{ id: 't-1', stage: { ...stage, end_when: { kind: 'rounds', rounds: 3 } }, members: PLAYERS }] });
+
+  beforeEach(() => {
+    vi.mocked(completePhaseAtStageEnd).mockResolvedValue('completed');
+  });
+
+  it('costs nothing for a stage without end_when', async () => {
+    await onMatchCompleted(input);
+    expect(checkStageEnd).not.toHaveBeenCalled();
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+  });
+
+  it('completes the phase when the condition holds and the round has no open match', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0 });
+    await onMatchCompleted(input);
+    expect(completePhaseAtStageEnd).toHaveBeenCalledWith('t-1', 'end_when:main');
+  });
+
+  it('waits while the round still has open matches or the condition is unmet', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 1 });
+    await onMatchCompleted(input);
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: false, facts, openInRound: 0 });
+    await onMatchCompleted(input);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+  });
+
+  it('warns and keeps the phase running when the expression cannot be evaluated', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: false, issue: 'expr_eval_failed', facts, openInRound: 0 });
+    await onMatchCompleted(input);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('format-engine/hooks', 'end_when could not be evaluated', expect.objectContaining({ issue: 'expr_eval_failed' }));
+  });
+
+  it('never fails the caller when completing the phase throws', async () => {
+    const boom = new Error('db down');
+    vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0 });
+    vi.mocked(completePhaseAtStageEnd).mockRejectedValue(boom);
+    await expect(onMatchCompleted(input)).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('stage end'), expect.objectContaining({ error: boom }));
   });
 });

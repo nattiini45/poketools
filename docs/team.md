@@ -10,6 +10,7 @@ src/lib/team/
 ├── check.server.ts  # The one server-side team check (checkTeam)
 ├── completed-match-lock.ts  # Teams linked to a completed match are immutable for non-admins
 ├── item-usage-cache.ts  # Expires the public cached reads built from a team roster
+├── kit-team-gate.ts  # Applies format-kit team constraints to the existing team-check verdict
 ├── page-loaders.ts, page-text.ts  # Library entry as a page renders it and the sets a visitor sees
 ├── public-team.ts  # Public team shape: the only team fields that may leave the server
 ├── showdown-set.ts  # Showdown paste text (always English)
@@ -50,7 +51,7 @@ const visibleTeams = await filterTeamVisibility(teams, ctx);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/team/__tests__/` (8 test files): `check.test.ts` and `parity.test.ts` (the one team check), `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts` and `visibility.test.ts`; `private-team-fields.ts` is the shared leak assertion
+- **Test Files**: `src/lib/team/__tests__/` (9 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts` and `visibility.test.ts`; `private-team-fields.ts` is the shared leak assertion
 - **Testing Approach**: Unit tests of every helper; the team API routes and pages run the leak assertion on their payloads.
 
 ## Related Modules

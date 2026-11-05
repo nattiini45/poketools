@@ -324,16 +324,21 @@ describe('reserved sections and kinds', () => {
   });
 
   it('every reserved stage field', () => {
-    for (const name of ['constraints', 'acquire', 'calendar', 'end_when', 'foreach_group']) {
+    for (const name of ['acquire']) {
       const issues = expectInvalid(setAt(minimalDoc(), ['stages', 0, name], { anything: [1] }));
       expect(issues).toEqual([{ code: 'not_available_yet', pointer: `/stages/0/${name}`, params: { what: name } }]);
     }
   });
 
-  it('every reserved pairing kind', () => {
+  it('the Phase 4 stage fields and pairing kinds are validated as themselves, never reported as not available', () => {
+    for (const name of ['constraints', 'calendar', 'end_when', 'foreach_group']) {
+      const issues = expectInvalid(setAt(minimalDoc(), ['stages', 0, name], { anything: [1] }));
+      expect(issues.some((issue) => issue.code === 'not_available_yet'), name).toBe(false);
+    }
     for (const tag of ['bipartite', 'filter', 'challenge']) {
       const issues = expectInvalid(setAt(minimalDoc(), ['stages', 0, 'pairing'], { kind: tag, junk: true }));
-      expect(issues).toEqual([{ code: 'not_available_yet', pointer: '/stages/0/pairing', params: { what: `pairing.${tag}` } }]);
+      expect(issues.some((issue) => issue.code === 'not_available_yet'), tag).toBe(false);
+      expect(codes(issues)).toContain('unknown_key /stages/0/pairing/junk');
     }
   });
 
@@ -349,8 +354,8 @@ describe('reserved sections and kinds', () => {
   });
 
   it('other parts of the document are still validated next to a reserved section', () => {
-    const doc = setAt(setAt(minimalDoc(), ['stages', 0, 'series', 'best_of'], 0), ['stages', 0, 'end_when'], {});
-    expect(codes(expectInvalid(doc))).toEqual(['not_available_yet /stages/0/end_when', 'range /stages/0/series/best_of']);
+    const doc = setAt(setAt(minimalDoc(), ['stages', 0, 'series', 'best_of'], 0), ['stages', 0, 'acquire'], {});
+    expect(codes(expectInvalid(doc))).toEqual(['not_available_yet /stages/0/acquire', 'range /stages/0/series/best_of']);
   });
 });
 

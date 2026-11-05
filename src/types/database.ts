@@ -2750,6 +2750,84 @@ export type Database = {
           },
         ]
       }
+      format_challenges: {
+        Row: {
+          challenger_id: string
+          created_at: string
+          defender_id: string
+          expires_at: string
+          id: string
+          match_id: string | null
+          phase_id: string
+          responded_at: string | null
+          round: number
+          season_id: string
+          status: string
+        }
+        Insert: {
+          challenger_id: string
+          created_at?: string
+          defender_id: string
+          expires_at: string
+          id?: string
+          match_id?: string | null
+          phase_id: string
+          responded_at?: string | null
+          round: number
+          season_id: string
+          status?: string
+        }
+        Update: {
+          challenger_id?: string
+          created_at?: string
+          defender_id?: string
+          expires_at?: string
+          id?: string
+          match_id?: string | null
+          phase_id?: string
+          responded_at?: string | null
+          round?: number
+          season_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_challenges_challenger_id_fkey"
+            columns: ["challenger_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_challenges_defender_id_fkey"
+            columns: ["defender_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_challenges_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_challenges_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_challenges_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       format_checks: {
         Row: {
           dedupe_key: string
@@ -6050,6 +6128,7 @@ export type Database = {
           current_round: number
           description: string
           enrollment_source: Json | null
+          format_group: number
           format_stage_key: string | null
           id: string
           is_doubles: boolean
@@ -6075,6 +6154,7 @@ export type Database = {
           current_round?: number
           description?: string
           enrollment_source?: Json | null
+          format_group?: number
           format_stage_key?: string | null
           id?: string
           is_doubles?: boolean
@@ -6100,6 +6180,7 @@ export type Database = {
           current_round?: number
           description?: string
           enrollment_source?: Json | null
+          format_group?: number
           format_stage_key?: string | null
           id?: string
           is_doubles?: boolean
@@ -7001,6 +7082,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      format__open_round: {
+        Args: { p_phase_id: string }
+        Returns: {
+          id: string
+          round_number: number
+        }[]
+      }
       format_action_save: {
         Args: {
           p_action_key: string
@@ -7084,6 +7172,87 @@ export type Database = {
           p_version_no: number
         }
         Returns: Json
+      }
+      format_challenge_cancel: {
+        Args: { p_challenge_id: string; p_player: string }
+        Returns: {
+          challenger_id: string
+          created_at: string
+          defender_id: string
+          expires_at: string
+          id: string
+          match_id: string | null
+          phase_id: string
+          responded_at: string | null
+          round: number
+          season_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "format_challenges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      format_challenge_create: {
+        Args: {
+          p_accept_window_hours: number
+          p_challenger: string
+          p_challenger_rank: number
+          p_cooldown_rounds: number
+          p_defender: string
+          p_defender_rank: number
+          p_max_open: number
+          p_phase_id: string
+          p_rank_range: number
+          p_season_id: string
+        }
+        Returns: {
+          challenger_id: string
+          created_at: string
+          defender_id: string
+          expires_at: string
+          id: string
+          match_id: string | null
+          phase_id: string
+          responded_at: string | null
+          round: number
+          season_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "format_challenges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      format_challenge_respond: {
+        Args: { p_accept: boolean; p_challenge_id: string; p_player: string }
+        Returns: {
+          challenger_id: string
+          created_at: string
+          defender_id: string
+          expires_at: string
+          id: string
+          match_id: string | null
+          phase_id: string
+          responded_at: string | null
+          round: number
+          season_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "format_challenges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      format_challenges_expire: {
+        Args: { p_season_id: string }
+        Returns: number
       }
       format_check_open: {
         Args: {

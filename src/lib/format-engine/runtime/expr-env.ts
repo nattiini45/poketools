@@ -17,6 +17,7 @@ import { evaluate } from '@/lib/format-kit/expr/eval';
 import { seededRand } from '@/lib/format-kit/expr/rand';
 import { attrExprType, attributeMap, PLAYER_ROW_FIELDS, relationKeys } from '@/lib/format-kit/engine/runtime-names';
 import type { AttributeDef, DomainEntry, FormatDefinition } from '@/lib/format-kit/types';
+import { isDomainUnlocked } from './domains';
 import { own, type AttrValue, type KitRuntimeState, type PlayerRow } from './types';
 
 export interface EnvBase {
@@ -181,4 +182,73 @@ export function entryContext(base: EnvBase, entry: DomainEntry): EvalContext {
 export function eventContext(base: EnvBase, round: number | undefined): EvalContext {
   const refs = new Map<string, ExprValue>([['round', round ?? 0], ...tunableRefs(base.def, base.state)]);
   return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+}
+
+/**
+ * The team env (`TeamConstraint.when`): `round`, `player`, `unlocked.<domain>` (the first declaration of a key wins, like
+ * the compiler's env), the player's `attr.*` and `tunable.*`. No `track.*`: the compiler's env has none.
+ */
+export function teamContext(base: EnvBase, playerId: string, round: number): EvalContext {
+  const refs = new Map<string, ExprValue>([['round', round], ['player', playerId]]);
+  for (const domain of base.def.domains ?? []) {
+    const name = `unlocked.${domain.key}`;
+    if (!refs.has(name)) refs.set(name, isDomainUnlocked(domain, base.state.flags));
+  }
+  for (const [name, value] of playerExtraRefMap(base, playerId)) {
+    if (name.startsWith('attr.') || name.startsWith('tunable.')) refs.set(name, value);
+  }
+  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+}
+
+/** What a stage's `end_when` reads about the phase: the numbers behind the stage env. */
+export interface StageFacts {
+  /** The highest round number that is complete (0 before the first). */
+  round: number;
+  /** How many rounds are complete. */
+  rounds_played: number;
+  /** Matches of the generated rounds that are not completed. */
+  open_matches: number;
+  participants: number;
+}
+
+/** The stage env (`EndWhen.when`): `round`, `rounds_played`, `open_matches`, `participants` and `tunable.*`. */
+export function stageContext(base: EnvBase, facts: StageFacts): EvalContext {
+  const refs = new Map<string, ExprValue>([
+    ['round', facts.round],
+    ['rounds_played', facts.rounds_played],
+    ['open_matches', facts.open_matches],
+    ['participants', facts.participants],
+    ...tunableRefs(base.def, base.state),
+  ]);
+  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+}
+
+/**
+ * The pair env (the `allow` of a filtered pairing): `a` and `b`, `round`, `a_attr.<key>` and `b_attr.<key>` of every
+ * player attribute that is not multi, and `tunable.*`. `attrsOf` answers a player's `attr.*` refs; pass a memoised one
+ * when evaluating many pairs of the same players.
+ */
+export function pairContext(
+  base: EnvBase,
+  facts: { a: string; b: string; round: number },
+  attrsOf: (playerId: string) => ReadonlyMap<string, ExprValue> = (playerId) => playerAttrRefs(base, playerId),
+): EvalContext {
+  const refs = new Map<string, ExprValue>([['a', facts.a], ['b', facts.b], ['round', facts.round], ...tunableRefs(base.def, base.state)]);
+  for (const [prefix, playerId] of [['a_attr.', facts.a], ['b_attr.', facts.b]] as const) {
+    for (const [name, value] of attrsOf(playerId)) refs.set(`${prefix}${name.slice('attr.'.length)}`, value);
+  }
+  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+}
+
+/** A memoised `attrsOf` for `pairContext`: each player's attributes are resolved once. */
+export function memoisedPlayerAttrs(base: EnvBase): (playerId: string) => ReadonlyMap<string, ExprValue> {
+  const cache = new Map<string, Map<string, ExprValue>>();
+  return (playerId) => {
+    let refs = cache.get(playerId);
+    if (refs === undefined) {
+      refs = playerAttrRefs(base, playerId);
+      cache.set(playerId, refs);
+    }
+    return refs;
+  };
 }

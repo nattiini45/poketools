@@ -131,7 +131,42 @@ describe('describePrimitive: labels and robustness', () => {
       expect(en).toContain('(Not available yet)');
       expect(de).toContain('(Noch nicht verfügbar)');
     }
-    expect(describePrimitive('pairing.bipartite', null, 'en')).toBe('Bipartite pairing (Not available yet)');
+    expect(describePrimitive('acquire.draft', null, 'en')).toBe('Draft (Not available yet)');
+  });
+
+  it('describes the Phase 4 kinds with their values, in both languages', () => {
+    const s = sampleNodes();
+    const text = (kind: PrimitiveKind, locale: Locale) => describePrimitive(kind, s[kind], locale);
+    expect(text('pairing.bipartite', 'en')).toBe(
+      'Bipartite pairing by house over 3 rounds: ember play tide and grove. Opponents never repeat.',
+    );
+    expect(text('pairing.bipartite', 'de')).toBe(
+      'Zweiseitige Paarung nach house über 3 Runden: ember spielen gegen tide und grove. Gegner wiederholen sich nie.',
+    );
+    expect(text('pairing.filter', 'en')).toBe(
+      'Swiss system over 4 rounds. A pair is allowed only when not rel(santa, a, b).',
+    );
+    expect(text('pairing.challenge', 'en')).toContain('Challenge pairing over 6 rounds. A player may challenge up to 3 places above them.');
+    expect(text('constraint.roster_size', 'en')).toBe('Team size: exactly 6 Pokémon.');
+    expect(text('constraint.roster_size', 'de')).toBe('Teamgröße: genau 6 Pokémon.');
+    expect(text('constraint.count', 'en')).toBe(
+      'A team may have at most 1 Pokémon from the combination of the list normal and the resource picks. This applies when round >= 2.',
+    );
+    expect(text('constraint.distinct', 'en')).toBe('A team may have at most 1 Pokémon with the same base species.');
+    expect(text('constraint.type_quota', 'en')).toBe('A team needs at least 1 Pokémon of each of the types fire and water.');
+    expect(text('constraint.tera', 'en')).toBe('Terastallization: not allowed.');
+    expect(text('constraint.tera', 'de')).toBe('Terakristallisierung: nicht erlaubt.');
+    expect(text('constraint.evolution_stage', 'en')).toBe(
+      'A team may have at most 4 fully evolved Pokémon and at most 2 Pokémon that can still evolve.',
+    );
+    expect(text('time.schedule', 'en')).toBe(
+      'Rounds start from 2026-12-01 at 18:00, every week, and each round lasts 168 hours. Named point in time: gift_deadline (round 1, -12 hours).',
+    );
+    expect(text('time.deadline_policy', 'en')).toBe(
+      'Deadline for matches: 0 hours relative to the round deadline. If it is missed: the match is forfeited.',
+    );
+    expect(text('stage.end_when', 'en')).toBe('The stage ends after 4 rounds.');
+    expect(text('stage.foreach_group', 'de')).toBe('Die Stage wird einmal für jede Gruppe der Stage groups gespielt.');
   });
 
   it('describes the Phase 3 kinds with their values, in both languages', () => {

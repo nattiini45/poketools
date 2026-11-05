@@ -491,6 +491,198 @@ export function giftExchangeDoc(): Json {
   };
 }
 
+/**
+ * The Wichtelcup reading of the Phase 4 kinds: every new pairing, constraint, stage field and calendar form. The
+ * constraint list of `cup` is the rule set of a gift cup; the other stages carry the kinds `cup` does not use.
+ */
+export function wichtelcupDoc(): Json {
+  const roundIs = (op: string, n: number): Json => cmp(op, ref('round', 'number'), num(n));
+  const lowerBound = (n: number) => ({ min: n, max: n });
+  return {
+    schema_version: 1,
+    identity: { name: lt('Gift Cup', 'Wichtelcup') },
+    stages: [
+      {
+        key: 'cup',
+        name: lt('Cup', 'Cup'),
+        participants: { from: 'roster', seeding: 'signup' },
+        pairing: {
+          kind: 'filter',
+          base: { kind: 'swiss', rounds: 4 },
+          allow: { k: 'not', a: { k: 'rel', relation: 'santa', a: ref('a', 'text'), b: ref('b', 'text') } },
+        },
+        series: { best_of: 1 },
+        scoring: { win: 3 },
+        rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }, { kind: 'coin_flip' }],
+        constraints: [
+          { kind: 'roster_size', ...lowerBound(6) },
+          { kind: 'distinct', by: 'base_species', max_per: 1 },
+          { kind: 'distinct', by: 'item', max_per: 1 },
+          { kind: 'tera', mode: 'banned' },
+          {
+            kind: 'count',
+            source: {
+              kind: 'not',
+              source: {
+                kind: 'any_of',
+                sources: [
+                  { kind: 'domain', domain: 'normal' },
+                  { kind: 'resource', resource: 'gifts_junk' },
+                  { kind: 'resource', resource: 'gifts_premium' },
+                  { kind: 'domain', domain: 'new_year', unlocked_only: true },
+                ],
+              },
+            },
+            max: 0,
+          },
+          { kind: 'count', source: { kind: 'resource', resource: 'gifts_junk' }, ...lowerBound(1), when: roundIs('==', 1) },
+          { kind: 'count', source: { kind: 'resource', resource: 'gifts_premium' }, max: 0, when: roundIs('<=', 2) },
+          {
+            kind: 'count',
+            source: { kind: 'resource', resource: 'gifts_junk' },
+            ...lowerBound(2),
+            when: { k: 'or', args: [roundIs('==', 2), roundIs('==', 3)] },
+          },
+          { kind: 'count', source: { kind: 'resource', resource: 'gifts_premium' }, ...lowerBound(1), when: roundIs('>=', 3) },
+          { kind: 'count', source: { kind: 'domain', domain: 'new_year' }, max: 2, when: roundIs('==', 4) },
+        ],
+        calendar: {
+          start: { kind: 'date', date: '2026-12-01' },
+          time: '19:30',
+          cadence: 'weekly',
+          round_window_hours: 120,
+          marks: [
+            { key: 'gift_deadline', round: 1, offset_hours: -12 },
+            { key: 'reveal', round: 3, offset_hours: 0 },
+          ],
+          deadlines: [
+            { applies: 'action', action: 'choose_gift', offset_hours: -24, on_miss: 'seeded_random_pick' },
+            { applies: 'match', offset_hours: 0, on_miss: 'forfeit' },
+            { applies: 'team', offset_hours: -48, on_miss: 'admin_review' },
+          ],
+        },
+        end_when: { kind: 'expr', when: cmp('>=', ref('rounds_played', 'number'), num(4)) },
+      },
+      {
+        key: 'houses',
+        name: lt('House duels', 'Hausduelle'),
+        participants: { from: 'roster', seeding: 'random' },
+        pairing: { kind: 'bipartite', attr: 'house', side_a: ['ember'], side_b: ['tide', 'grove'], rounds: 3 },
+        series: { best_of: 1 },
+        scoring: { win: 3 },
+        rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }, { kind: 'coin_flip' }],
+        constraints: [
+          { kind: 'type_quota', types: { source: 'fixed', types: ['Fire', 'water', 'grass'] }, min_per_type: 1, allow_multi_count: true },
+          { kind: 'tera', mode: 'from_attr', attr: 'house' },
+          { kind: 'distinct', by: 'type', max_per: 3 },
+        ],
+        end_when: { kind: 'rounds', rounds: 3 },
+      },
+      {
+        key: 'ladder',
+        name: lt('Ladder', 'Leiter'),
+        participants: { from: 'roster', seeding: 'rating' },
+        pairing: { kind: 'challenge', rounds: 6, rank_range: 3 },
+        series: { best_of: 1 },
+        scoring: { win: 3 },
+        rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }, { kind: 'coin_flip' }],
+        constraints: [
+          { kind: 'evolution_stage', fully_evolved_max: 4, nfe_max: 2, lc_max: 1 },
+          { kind: 'type_quota', types: { source: 'player_attr', attr: 'house' }, min_per_type: 0 },
+          { kind: 'distinct', by: 'attr', attr: 'role', max_per: 2 },
+          { kind: 'distinct', by: 'species', max_per: 1 },
+          { kind: 'count', source: { kind: 'species', ids: ['garchomp', 'blissey'] }, max: 1 },
+        ],
+      },
+      {
+        key: 'groups',
+        name: lt('Groups', 'Gruppen'),
+        participants: { from: 'roster', seeding: 'rating' },
+        groups: { count: 2, method: 'serpentine' },
+        pairing: { kind: 'round_robin' },
+        series: { best_of: 1 },
+        scoring: { win: 3 },
+        rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }, { kind: 'coin_flip' }],
+      },
+      {
+        key: 'per_group',
+        name: lt('Per group', 'Je Gruppe'),
+        participants: { from: 'edges', seeding: 'edge_order' },
+        pairing: { kind: 'round_robin' },
+        series: { best_of: 1 },
+        scoring: { win: 3 },
+        rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }, { kind: 'coin_flip' }],
+        foreach_group: { from: 'groups' },
+        end_when: { kind: 'rounds', rounds: 2 },
+      },
+    ],
+    edges: [{ key: 'to_groups', from: 'groups', to: 'per_group', select: [{ kind: 'per_group', n: 2 }] }],
+    attributes: [
+      {
+        key: 'house',
+        label: lt('House', 'Haus'),
+        on: 'player',
+        type: 'enum',
+        values: ['ember', 'tide', 'grove'],
+        assign: { kind: 'random_seeded' },
+      },
+      { key: 'role', label: lt('Role', 'Rolle'), on: 'entry', type: 'enum', values: ['attacker', 'support', 'tank'] },
+    ],
+    domains: [
+      {
+        key: 'normal',
+        label: lt('Normal pool', 'Normaler Pool'),
+        initially: 'unlocked',
+        visibility: 'public',
+        entries: [
+          { id: 'garchomp', attrs: [{ key: 'role', value: 'attacker' }] },
+          { id: 'blissey', attrs: [{ key: 'role', value: 'support' }] },
+        ],
+      },
+      {
+        key: 'new_year',
+        label: lt('New Year pool', 'Neujahrspool'),
+        initially: 'locked',
+        visibility: 'when_unlocked',
+        entries: [{ id: 'corviknight', attrs: [{ key: 'role', value: 'tank' }] }],
+      },
+    ],
+    relations: [
+      { key: 'santa', label: lt('Secret recipient', 'Geheimer Beschenkter'), shape: 'derangement' },
+    ],
+    resources: [
+      { key: 'gifts_junk', label: lt('Junk gifts', 'Krempelgeschenke'), holds: { kind: 'domain', domain: 'normal' }, capacity: 3 },
+      { key: 'gifts_premium', label: lt('Premium gifts', 'Premiumgeschenke'), holds: { kind: 'domain', domain: 'new_year' }, capacity: 1 },
+    ],
+    rules: [
+      {
+        kind: 'rule.on_event',
+        id: 'new_year',
+        on: { event: 'round_start', stage: 'cup', round: 4 },
+        effects: [{ effect: 'unlock_domain', domain: 'new_year' }],
+      },
+      {
+        kind: 'rule.on_event',
+        id: 'gift_deadline',
+        on: { event: 'time', mark: 'gift_deadline' },
+        effects: [{ effect: 'lock_action', action: 'choose_gift' }],
+      },
+      {
+        kind: 'player.action',
+        id: 'choose_gift',
+        label: lt('Choose a gift', 'Geschenk wählen'),
+        via: 'santa',
+        window: {
+          opens_on: { event: 'stage_start', stage: 'cup' },
+          closes_on: { event: 'round_start', stage: 'cup', round: 2 },
+        },
+        steps: [{ resource: 'gifts_junk', domain: 'normal', count: 1 }],
+        lock: 'on_close',
+      },
+    ],
+  };
+}
+
 export const VALID_DOCS: ReadonlyArray<{ id: string; build: () => Json }> = [
   { id: 'minimal', build: minimalDoc },
   { id: 'league', build: leagueDoc },
@@ -499,6 +691,7 @@ export const VALID_DOCS: ReadonlyArray<{ id: string; build: () => Json }> = [
   { id: 'kitchen-sink', build: kitchenSinkDoc },
   { id: 'degraded-rules', build: degradedRulesDoc },
   { id: 'gift-exchange', build: giftExchangeDoc },
+  { id: 'wichtelcup', build: wichtelcupDoc },
 ];
 
 /** One valid node per available primitive kind (values are what the validators produce, defaults included). */
@@ -636,5 +829,47 @@ export function sampleNodes(): Record<string, unknown> {
     },
     'check.assisted': { kind: 'check.assisted', id: 'ties', label: lt('Ties', 'Gleichstände'), source: { kind: 'standings_tie', stage: 'main' } },
     'adjust.manual': { kind: 'adjust.manual', id: 'admin_tools', allow: ['points', 'resource'] },
+    'pairing.bipartite': { kind: 'bipartite', attr: 'house', side_a: ['ember'], side_b: ['tide', 'grove'], rounds: 3, avoid_repeats: true },
+    'pairing.filter': {
+      kind: 'filter',
+      base: { kind: 'swiss', rounds: 4, avoid_repeats: true },
+      allow: { k: 'not', a: { k: 'rel', relation: 'santa', a: ref('a', 'text'), b: ref('b', 'text') } },
+    },
+    'pairing.challenge': {
+      kind: 'challenge',
+      rounds: 6,
+      rank_range: 3,
+      max_open: 1,
+      cooldown_rounds: 1,
+      accept_window_hours: 72,
+    },
+    'constraint.roster_size': { kind: 'roster_size', min: 6, max: 6 },
+    'constraint.count': {
+      kind: 'count',
+      source: { kind: 'any_of', sources: [{ kind: 'domain', domain: 'normal', unlocked_only: false }, { kind: 'resource', resource: 'picks' }] },
+      max: 1,
+      when: cmp('>=', ref('round', 'number'), num(2)),
+    },
+    'constraint.distinct': { kind: 'distinct', by: 'base_species', max_per: 1 },
+    'constraint.type_quota': {
+      kind: 'type_quota',
+      types: { source: 'fixed', types: ['fire', 'water'] },
+      min_per_type: 1,
+      allow_multi_count: false,
+    },
+    'constraint.tera': { kind: 'tera', mode: 'banned' },
+    'constraint.evolution_stage': { kind: 'evolution_stage', fully_evolved_max: 4, nfe_max: 2 },
+    'time.schedule': {
+      start: { kind: 'date', date: '2026-12-01' },
+      time: '18:00',
+      cadence: 'weekly',
+      every: 1,
+      round_window_hours: 168,
+      marks: [{ key: 'gift_deadline', round: 1, offset_hours: -12 }],
+      deadlines: [],
+    },
+    'time.deadline_policy': { applies: 'match', offset_hours: 0, on_miss: 'forfeit' },
+    'stage.end_when': { kind: 'rounds', rounds: 4 },
+    'stage.foreach_group': { from: 'groups' },
   };
 }

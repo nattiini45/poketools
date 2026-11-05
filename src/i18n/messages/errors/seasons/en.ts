@@ -134,6 +134,23 @@ export default {
   domain_amendment_locked: 'This list cannot be amended because an action that uses it is already locked.',
   reason_required: 'A reason is required for this adjustment.',
 
+  // Challenge ladder (format_challenges): the signals of format_challenge_*, and the checks of the engine.
+  challenge_self: 'You cannot challenge yourself.',
+  challenge_phase_not_found: 'This phase does not belong to the league.',
+  challenge_phase_closed: 'This phase is completed, so it takes no more challenges.',
+  challenge_not_participant: 'Both players have to take part in this phase.',
+  challenge_no_open_round: 'This phase has no open round yet. An admin has to open a round first.',
+  challenge_rank_range: 'You can only challenge a player ranked above you, within the range this ladder allows.',
+  challenge_max_open: 'You have reached the number of open challenges this ladder allows.',
+  challenge_already_open: 'There is already an open challenge between you and this player.',
+  challenge_cooldown: 'You challenged this player too recently. Wait a few rounds before you do it again.',
+  challenge_not_found: 'This challenge does not exist.',
+  challenge_not_defender: 'Only the challenged player can answer this challenge.',
+  challenge_not_challenger: 'Only the player who made this challenge can withdraw it.',
+  challenge_not_open: 'This challenge has already been answered, withdrawn or has expired.',
+  challenge_expired: 'The time to answer this challenge has run out.',
+  challenge_not_ladder: 'This phase is not a challenge ladder.',
+
   // League trash (src/lib/league-trash/errors.ts): the signals of league_trash_delete / league_trash_restore, the
   // restore of a league whose delete rebuild is still pending, and the junction blocks. The internal inventory
   // codes carry no table names (the details stay in the server log).

@@ -7,6 +7,7 @@ import { isCompletedMatchLocked } from '@/lib/team/completed-match-lock';
 import { resolveTeamVisibility, toVisibleTeam } from '@/lib/team/visibility';
 import { toPublicTeam, type PublicTeam } from '@/lib/team/public-team';
 import { expireItemUsageReads } from '@/lib/team/item-usage-cache';
+import { refuseInvalidKitTeam } from '@/lib/team/kit-team-gate';
 import type { ApiResult } from '@/types/api';
 import type { PokemonSet, Team, TeamImportSource } from '@/types/team';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -120,6 +121,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (!player.isAdmin && (await linkedToCompletedMatch(team))) {
       return completedMatchResponse();
+    }
+
+    // A kit league's phase holds the roster to its stage constraints and the owner's resources. An admin's rewrite of
+    // a match-linked roster is a correction (it may be a completed match's) and is not held to rules that have moved
+    // on since.
+    if (team.tournament_id && !(player.isAdmin && team.match_id)) {
+      const refusal = await refuseInvalidKitTeam({ tournament: team.tournament_id, playerId: team.player_id, pokemon: body.pokemon });
+      if (refusal) return refusal;
     }
 
     // The database refuses a completed match's roster for any non-correction

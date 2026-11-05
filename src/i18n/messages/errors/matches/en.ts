@@ -169,6 +169,11 @@ export default {
     one: 'Auto-confirm run finished with {count} failed match.',
     other: 'Auto-confirm run finished with {count} failed matches.',
   },
+  // format-engine cron: a league or the challenge sweep failed (details in the server log)
+  format_cron_partial_failure: {
+    one: 'Format engine cron run finished with {count} failure.',
+    other: 'Format engine cron run finished with {count} failures.',
+  },
   INVALID_GAME_ID: 'Game not found',
   INVALID_PROPOSAL_ID: 'Proposal not found',
 } as const;

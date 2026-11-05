@@ -6,6 +6,7 @@ The Tournament module provides pairing generation, standings/advancement logic, 
 ## File Structure
 ```
 src/lib/tournament/
+├── bipartite.ts             # Format-kit A-vs-B pairings with backtracking and byes
 ├── index.ts                 # Pairing dispatcher (Swiss/RR/legacy per-round SE/DE)
 ├── bracket-structure.ts     # Full SE/DE slot graph (Bracket Engine v2)
 ├── bracket-generate.ts      # Generate / regenerate all elimination rounds

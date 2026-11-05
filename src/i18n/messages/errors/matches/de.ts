@@ -122,6 +122,10 @@ export default defineDe<typeof en>()({
     one: 'Die automatische Bestätigung ist bei {count} Spiel fehlgeschlagen.',
     other: 'Die automatische Bestätigung ist bei {count} Spielen fehlgeschlagen.',
   },
+  format_cron_partial_failure: {
+    one: 'Der Zeitlauf der Format-Engine ist bei {count} Fall fehlgeschlagen.',
+    other: 'Der Zeitlauf der Format-Engine ist bei {count} Fällen fehlgeschlagen.',
+  },
   INVALID_GAME_ID: 'Partie nicht gefunden.',
   INVALID_PROPOSAL_ID: 'Terminvorschlag nicht gefunden.',
 });

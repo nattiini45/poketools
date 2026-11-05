@@ -17,7 +17,7 @@ import { cup } from '../../presets/cup';
 import { swissTopCut } from '../../presets/swiss-top-cut';
 import { ltext } from '@/lib/studio-core/ltext';
 import type { AdvanceSelect, Edge, FormatDefinition, Stage } from '../../types';
-import { giftExchangeDoc } from './docs';
+import { giftExchangeDoc, wichtelcupDoc } from './docs';
 
 /** A valid stage (a single-elimination stage fed by edges) with any field overridden. */
 export function makeStage(key: string, over: Partial<Stage> = {}): Stage {
@@ -183,6 +183,12 @@ const G: FormatDefinition = (() => {
   return definition;
 })();
 
+/** The Wichtelcup as a compiled definition: the base of the Phase 4 fixtures. */
+const W: FormatDefinition = (() => {
+  const { definition } = compile(wichtelcupDoc());
+  if (definition === null) throw new Error('the Wichtelcup fixture must compile');
+  return definition;
+})();
 const withSpecies = (ids: readonly string[]): CompileEnv => ({ ...CURRENT_ENV, speciesIds: new Set(ids) });
 const setRank = (steps: unknown[]): PatchOp => ({ op: 'replace', path: '/stages/0/rank', value: steps as JsonValue });
 const points = { kind: 'metric', metric: 'points', direction: 'desc' };
@@ -205,8 +211,8 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     '/identity/name',
     mutate(C, [{ op: 'replace', path: '/identity/name', value: { base: 'de', en: { v: 'Classic league', s: 'human' } } }]),
   ),
-  fx('error', 'schema-not-available-yet', 'schema_not_available_yet', '/stages/0/end_when', mutate(C, [{ op: 'add', path: '/stages/0/end_when', value: {} }]), {
-    params: { what: 'end_when' },
+  fx('error', 'schema-not-available-yet', 'schema_not_available_yet', '/stages/0/acquire', mutate(C, [{ op: 'add', path: '/stages/0/acquire', value: {} }]), {
+    params: { what: 'acquire' },
   }),
   fx('warning', 'rule-unknown-primitive', 'rule_unknown_primitive', '/rules/1', mutate(C, [
     { op: 'add', path: '/rules/-', value: { kind: 'custom.mystery', id: 'mystery' } },
@@ -541,7 +547,78 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'adjust-kind-duplicate', 'adjust_kind_duplicate', '/rules/11/allow/1', mutate(G, [
     { op: 'replace', path: '/rules/11/allow', value: ['points', 'points'] },
   ]), { params: { rule: 'admin_tools', adjust: 'points' } }),
-];
+  // Phase 4: pairings, team constraints, calendar and stage fields.
+  fx('error', 'bipartite-attr-invalid', 'bipartite_attr_invalid', '/stages/1/pairing/attr', mutate(W, [
+    { op: 'replace', path: '/stages/1/pairing/attr', value: 'role' },
+  ]), { params: { stage: 'houses', attr: 'role', reason: 'entry' } }),
+  fx('error', 'bipartite-value-unknown', 'bipartite_value_invalid', '/stages/1/pairing/side_a/1', mutate(W, [
+    { op: 'replace', path: '/stages/1/pairing/side_a', value: ['ember', 'meadow'] },
+  ]), { params: { stage: 'houses', attr: 'house', value: 'meadow', side: 'a', reason: 'unknown_value' } }),
+  fx('error', 'bipartite-value-duplicate', 'bipartite_value_invalid', '/stages/1/pairing/side_b/1', mutate(W, [
+    { op: 'replace', path: '/stages/1/pairing/side_b', value: ['tide', 'tide'] },
+  ]), { params: { stage: 'houses', attr: 'house', value: 'tide', side: 'b', reason: 'duplicate' } }),
+  fx('error', 'bipartite-sides-overlap', 'bipartite_sides_overlap', '/stages/1/pairing/side_b/0', mutate(W, [
+    { op: 'replace', path: '/stages/1/pairing/side_b', value: ['ember', 'tide'] },
+  ]), { params: { stage: 'houses', attr: 'house', value: 'ember' } }),
+  fx('error', 'filter-expr-unknown-relation', 'expr_invalid', '/stages/0/pairing/allow/a/relation', mutate(W, [
+    { op: 'replace', path: '/stages/0/pairing/allow/a/relation', value: 'nobody' },
+  ]), { params: { context: 'pair_filter', issue: 'expr_unknown_relation' } }),
+  fx('error', 'constraint-bounds-min-over-max', 'constraint_bounds_invalid', '/stages/0/constraints/5/min', mutate(W, [
+    { op: 'replace', path: '/stages/0/constraints/5/min', value: 3 },
+  ]), { params: { stage: 'cup', constraint: 'count', reason: 'min_over_max' } }),
+  fx('error', 'constraint-bounds-no-bound', 'constraint_bounds_invalid', '/stages/0/constraints/4/min', mutate(W, [
+    { op: 'remove', path: '/stages/0/constraints/4/max' },
+  ]), { params: { stage: 'cup', constraint: 'count', reason: 'no_bound' } }),
+  fx('error', 'constraint-attr-invalid', 'constraint_attr_invalid', '/stages/2/constraints/2/attr', mutate(W, [
+    { op: 'replace', path: '/stages/2/constraints/2/attr', value: 'house' },
+  ]), { params: { stage: 'ladder', constraint: 'distinct', attr: 'house', reason: 'player' } }),
+  fx('error', 'constraint-attr-usage', 'constraint_attr_usage', '/stages/0/constraints/3/attr', mutate(W, [
+    { op: 'add', path: '/stages/0/constraints/3/attr', value: 'house' },
+  ]), { params: { stage: 'cup', constraint: 'tera', reason: 'attr_unexpected' } }),
+  fx('error', 'constraint-type-unknown', 'constraint_type_invalid', '/stages/1/constraints/0/types/types/1', mutate(W, [
+    { op: 'replace', path: '/stages/1/constraints/0/types/types/1', value: 'Waterr' },
+  ]), { params: { stage: 'houses', constraint: 'type_quota', type: 'Waterr', reason: 'unknown_type' } }),
+  fx('error', 'constraint-type-duplicate', 'constraint_type_invalid', '/stages/1/constraints/0/types/types/2', mutate(W, [
+    { op: 'replace', path: '/stages/1/constraints/0/types/types/2', value: 'FIRE' },
+  ]), { params: { stage: 'houses', constraint: 'type_quota', type: 'FIRE', reason: 'duplicate' } }),
+  fx('error', 'constraint-source-counter', 'constraint_source_invalid', '/stages/0/constraints/5/source/resource', mutate(W, [
+    { op: 'add', path: '/resources/-', value: { key: 'coins', label: { base: 'en', en: { v: 'Coins', s: 'human' } }, holds: { kind: 'counter' } } },
+    { op: 'replace', path: '/stages/0/constraints/5/source/resource', value: 'coins' },
+  ]), { params: { stage: 'cup', resource: 'coins', reason: 'counter' } }),
+  fx('warning', 'constraint-species-unknown', 'constraint_species_unknown', '/stages/2/constraints/4/source/ids/1', mutate(W, []), {
+    env: withSpecies(['garchomp', 'corviknight']),
+    params: { stage: 'ladder', id: 'blissey' },
+  }),
+  fx('error', 'constraint-ref-unknown-domain', 'ref_unknown', '/stages/0/constraints/9/source/domain', mutate(W, [
+    { op: 'replace', path: '/stages/0/constraints/9/source/domain', value: 'nowhere' },
+  ]), { params: { ref: 'domain', key: 'nowhere', where: 'constraint' } }),
+  fx('error', 'constraint-when-unknown-ref', 'expr_invalid', '/stages/0/constraints/5/when/a/name', mutate(W, [
+    { op: 'replace', path: '/stages/0/constraints/5/when/a/name', value: 'missing' },
+  ]), { params: { context: 'team_constraint', issue: 'expr_unknown_ref' } }),
+  fx('error', 'calendar-invalid-date', 'calendar_invalid', '/stages/0/calendar/start/date', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/start/date', value: '2026-02-30' },
+  ]), { params: { stage: 'cup', reason: 'date' } }),
+  fx('error', 'calendar-mark-duplicate', 'key_duplicate', '/stages/0/calendar/marks/1/key', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/marks/1/key', value: 'gift_deadline' },
+  ]), { params: { scope: 'marks', key: 'gift_deadline' } }),
+  fx('error', 'deadline-policy-invalid', 'deadline_policy_invalid', '/stages/0/calendar/deadlines/1', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/deadlines/1/on_miss', value: 'auto_lock' },
+  ]), { params: { stage: 'cup', applies: 'match', on_miss: 'auto_lock', reason: 'action_only' } }),
+  fx('error', 'deadline-action-unknown', 'ref_unknown', '/stages/0/calendar/deadlines/0/action', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/deadlines/0/action', value: 'nowhere' },
+  ]), { params: { ref: 'action', key: 'nowhere', where: 'deadline' } }),
+  fx('error', 'end-when-unknown-ref', 'expr_invalid', '/stages/0/end_when/when/a/name', mutate(W, [
+    { op: 'replace', path: '/stages/0/end_when/when/a/name', value: 'missing' },
+  ]), { params: { context: 'stage_end', issue: 'expr_unknown_ref' } }),
+  fx('error', 'foreach-group-own-groups', 'foreach_group_invalid', '/stages/4/groups', mutate(W, [
+    { op: 'add', path: '/stages/4/groups', value: { count: 2, method: 'serpentine' } },
+  ]), { params: { stage: 'per_group', from_stage: 'groups', reason: 'own_groups' } }),
+  fx('error', 'foreach-group-not-earlier', 'foreach_group_invalid', '/stages/4/foreach_group/from', mutate(W, [
+    { op: 'replace', path: '/stages/4/foreach_group/from', value: 'houses' },
+  ]), { params: { stage: 'per_group', from_stage: 'houses', reason: 'no_groups' } }),
+  fx('error', 'foreach-group-unknown-stage', 'ref_unknown_stage', '/stages/4/foreach_group/from', mutate(W, [
+    { op: 'replace', path: '/stages/4/foreach_group/from', value: 'nowhere' },
+  ]), { params: { key: 'nowhere', where: 'foreach_group' } }),];
 
 /** The diagnostics a fixture is meant to produce: through `compile`, or straight from the engine for `engineOnly`. */
 export function fixtureDiagnostics(fixture: NegativeFixture): readonly Diagnostic[] {

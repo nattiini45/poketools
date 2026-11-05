@@ -60,7 +60,7 @@ export interface RuntimeAdjustment {
 
 export interface RuntimeCheck {
   id: string;
-  source: 'unresolved_outcome' | 'standings_tie' | 'pairing_rematch' | 'expr';
+  source: 'unresolved_outcome' | 'standings_tie' | 'pairing_rematch' | 'pairing_forbidden' | 'deadline_missed' | 'expr';
   rule_id: string;
   dedupe_key: string;
   subject: Json;

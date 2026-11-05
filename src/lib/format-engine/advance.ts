@@ -8,7 +8,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import { getKitPhases, getOutcomesByPhases, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
-import { resolveAdvancement, type AdvancedPlayer } from './advancement';
+import { playersOfGroup, resolveAdvancement, type AdvancedPlayer } from './advancement';
 import { standingAdjustments } from './runtime/adjustments';
 import { stageOf } from './load';
 import { coinFlipDraws, computeStageStandings, type KitOutcome } from './standings';
@@ -83,5 +83,6 @@ export async function kitAdvancingPlayers(input: KitAdvanceInput): Promise<Advan
       status: 422,
     });
   }
-  return result.players;
+  // A phase of a `foreach_group` stage takes the players of its own group only.
+  return (target.format_group ?? 0) > 0 ? playersOfGroup(result.players, input.groupOf, target.format_group ?? 0) : result.players;
 }

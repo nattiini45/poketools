@@ -45,6 +45,10 @@ export default {
   team_import_pokepaste_fetch_failed: 'Failed to fetch from pokepast.es',
   team_import_no_pokemon: 'Could not parse any Pokémon from the provided text',
 
+  // A team that breaks the rules of a custom-format league (`{issues}`: the English issue texts; the response also
+  // carries the whole verdict in `team_check`)
+  team_check_failed: 'This team does not meet the rules of this league: {issues}',
+
   // Sample sets (`/api/sample-sets`)
   sample_sets_pokemon_required: 'pokemon query param is required',
 

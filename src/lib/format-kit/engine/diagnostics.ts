@@ -105,6 +105,19 @@ export const DIAGNOSTIC_CODES = [
   'action_exceeds_capacity',
   'action_close_missing',
   'adjust_kind_duplicate',
+  // Phase 4 stage fields
+  'bipartite_attr_invalid',
+  'bipartite_value_invalid',
+  'bipartite_sides_overlap',
+  'constraint_bounds_invalid',
+  'constraint_attr_invalid',
+  'constraint_attr_usage',
+  'constraint_type_invalid',
+  'constraint_source_invalid',
+  'constraint_species_unknown',
+  'calendar_invalid',
+  'deadline_policy_invalid',
+  'foreach_group_invalid',
 ] as const;
 
 export type DiagnosticCode = (typeof DIAGNOSTIC_CODES)[number];
@@ -219,6 +232,17 @@ const ERROR_CODES: readonly DiagnosticCode[] = [
   'action_step_mismatch',
   'action_distinct_attr_invalid',
   'adjust_kind_duplicate',
+  'bipartite_attr_invalid',
+  'bipartite_value_invalid',
+  'bipartite_sides_overlap',
+  'constraint_bounds_invalid',
+  'constraint_attr_invalid',
+  'constraint_attr_usage',
+  'constraint_type_invalid',
+  'constraint_source_invalid',
+  'calendar_invalid',
+  'deadline_policy_invalid',
+  'foreach_group_invalid',
 ];
 
 const INFO_CODES: readonly DiagnosticCode[] = [

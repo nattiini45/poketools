@@ -69,6 +69,14 @@ export interface StageDescription {
   incoming: string[];
   /** One sentence per advancement rule that leaves this stage. */
   outgoing: string[];
+  /** One sentence per team constraint of the stage, in order. */
+  constraints: string[];
+  /** The calendar sentence followed by one sentence per deadline policy; empty without a calendar. */
+  schedule: string[];
+  /** When the stage ends early; null without an end condition. */
+  endWhen: string | null;
+  /** Which finished group stage this one repeats per group; null without one. */
+  foreachGroup: string | null;
 }
 
 export interface ModuleDescription {
@@ -151,7 +159,8 @@ function levelOf(kind: string): Bucket {
 
 /**
  * Counts the rule units of a definition. Per stage: one pairing, one series, one scoring, one groups unit when the
- * stage splits into groups, one per rank step and one when the stage names a ruleset (a stored one or a rule
+ * stage splits into groups, one per team constraint, one for a calendar plus one per deadline policy, one for an
+ * end condition, one for a per-group repeat, one per rank step and one when the stage names a ruleset (a stored one or a rule
  * preset). Per advancement rule: one per selection, `checked` under the `admin_confirm` gate and `auto` otherwise.
  * Per combined standings view: one. A rule counts by its kind's level (`rule.custom` is an `honor` unit, an unknown
  * kind too), each attribute, list, relation, resource and metric is one unit by its kind's level, and every module
@@ -168,6 +177,17 @@ export function computeCoverage(def: FormatDefinition): Coverage {
     cov[levelOf('series.rule')] += 1;
     cov[levelOf('score.match')] += 1;
     if (isRec(entry.groups)) cov[levelOf('group.form')] += 1;
+    for (const constraint of listOf(entry.constraints)) {
+      if (isRec(constraint)) cov[levelOf(`constraint.${strOf(constraint, 'kind') ?? 'count'}`)] += 1;
+    }
+    if (isRec(entry.calendar)) {
+      cov[levelOf('time.schedule')] += 1;
+      for (const policy of listOf(entry.calendar.deadlines)) {
+        if (isRec(policy)) cov[levelOf('time.deadline_policy')] += 1;
+      }
+    }
+    if (isRec(entry.end_when)) cov[levelOf('stage.end_when')] += 1;
+    if (isRec(entry.foreach_group)) cov[levelOf('stage.foreach_group')] += 1;
     for (const step of listOf(entry.rank)) {
       if (isRec(step)) cov[levelOf(`rank.${strOf(step, 'kind') ?? 'manual'}`)] += 1;
     }
@@ -366,6 +386,16 @@ function edgesOf(def: unknown): Rec[] {
   return listOf(recOf(def).edges).filter(isRec);
 }
 
+function scheduleSentences(stage: Rec, c: Ctx): string[] {
+  const calendar = stage.calendar;
+  if (!isRec(calendar)) return [];
+  const policies = listOf(calendar.deadlines).filter(isRec);
+  return [
+    describe('time.schedule', calendar, c.locale),
+    ...policies.map((policy) => describe('time.deadline_policy', policy, c.locale)),
+  ];
+}
+
 function buildStage(def: unknown, stage: Rec, key: string, c: Ctx, plan: StagePlan | undefined): StageDescription {
   const name = textOf(stage.name, c.locale) ?? key;
   const steps = listOf(stage.rank).filter(isRec);
@@ -387,6 +417,12 @@ function buildStage(def: unknown, stage: Rec, key: string, c: Ctx, plan: StagePl
     expected: expectedSentence(plan, c),
     incoming: edges.filter((edge) => strOf(edge, 'to') === key).map((edge) => edgeSentence(edge, c)),
     outgoing: edges.filter((edge) => strOf(edge, 'from') === key).map((edge) => edgeSentence(edge, c)),
+    constraints: listOf(stage.constraints)
+      .filter(isRec)
+      .map((entry) => describe(`constraint.${strOf(entry, 'kind') ?? 'count'}`, entry, c.locale)),
+    schedule: scheduleSentences(stage, c),
+    endWhen: isRec(stage.end_when) ? describe('stage.end_when', stage.end_when, c.locale) : null,
+    foreachGroup: isRec(stage.foreach_group) ? describe('stage.foreach_group', stage.foreach_group, c.locale) : null,
   };
 }
 
@@ -424,6 +460,10 @@ export function describeStage(
     expected: null,
     incoming: [],
     outgoing: [],
+    constraints: [],
+    schedule: [],
+    endWhen: null,
+    foreachGroup: null,
   };
   return safe(() => buildStage(def, stage, stageKey, makeCtx(def, locale, opts), planByKey(opts).get(stageKey)), empty);
 }
@@ -596,7 +636,17 @@ export function definitionToPlainText(d: DefinitionDescription): string {
     lines.push('', t('heading.stages'));
     for (const stage of d.stages) {
       lines.push(`- ${stage.summary}`);
-      for (const line of [stage.participants, stage.groups, stage.ruleset, stage.doubles, stage.expected]) {
+      for (const line of [
+        stage.participants,
+        stage.groups,
+        stage.ruleset,
+        stage.doubles,
+        stage.expected,
+        ...stage.constraints,
+        ...stage.schedule,
+        stage.endWhen,
+        stage.foreachGroup,
+      ]) {
         if (line !== null && line !== '') lines.push(`  ${line}`);
       }
     }

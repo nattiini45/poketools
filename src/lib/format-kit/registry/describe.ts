@@ -29,6 +29,10 @@ interface Described {
   /** Template key under `describe.`; defaults to the kind's own key. */
   key?: string;
   params: Params;
+  /** The condition a team constraint applies under: the sentence is wrapped in `describe.constraint_when`. */
+  when?: string;
+  /** Sentences that follow the main one. */
+  append?: readonly string[];
 }
 
 interface Ctx {
@@ -218,6 +222,69 @@ function actionStepItem(step: unknown, ctx: Ctx): string | null {
   const count = num(step, 'count');
   if (resource === null || domain === null || count === null) return null;
   return ctx.word('item', 'action_step', '', { resource, domain, count });
+}
+
+/** "no", "exactly 2", "1 to 2", "at least 1" or "at most 2": the bounds of a count constraint. */
+function limitPhrase(min: number | null, max: number | null, ctx: Ctx): string {
+  const low = min === 0 ? null : min;
+  if (low === null && max === 0) return ctx.word('item', 'limit_none', 'no');
+  if (low !== null && max !== null) {
+    return low === max
+      ? ctx.word('item', 'limit_exact', String(low), { n: low })
+      : ctx.word('item', 'limit_range', `${low}-${max}`, { min: low, max });
+  }
+  if (low !== null) return ctx.word('item', 'limit_min', String(low), { n: low });
+  return max === null ? '' : ctx.word('item', 'limit_max', String(max), { n: max });
+}
+
+/** The phrase of a count source ("any of the list normal, the picks gifts_junk"), or null for a source of the wrong shape. */
+function countSourcePhrase(source: unknown, ctx: Ctx): string | null {
+  if (!isRec(source)) return null;
+  switch (str(source, 'kind')) {
+    case 'domain': {
+      const domain = str(source, 'domain');
+      if (domain === null) return null;
+      return ctx.word('item', bool(source, 'unlocked_only') === true ? 'source_domain_unlocked' : 'source_domain', domain, { domain });
+    }
+    case 'resource': {
+      const resource = str(source, 'resource');
+      return resource === null ? null : ctx.word('item', 'source_resource', resource, { resource });
+    }
+    case 'species': {
+      const ids = Array.isArray(source.ids) ? source.ids.filter((id): id is string => typeof id === 'string') : [];
+      return ids.length === 0 ? null : ctx.word('item', 'source_species', '', { ids: ctx.list(ids) });
+    }
+    case 'any_of': {
+      const parts = Array.isArray(source.sources)
+        ? source.sources.map((inner) => countSourcePhrase(inner, ctx)).filter((s): s is string => s !== null)
+        : [];
+      return parts.length === 0 ? null : ctx.word('item', 'source_any_of', '', { list: ctx.list(parts) });
+    }
+    case 'not': {
+      const inner = countSourcePhrase(source.source, ctx);
+      return inner === null ? null : ctx.word('item', 'source_not', '', { inner });
+    }
+    default:
+      return null;
+  }
+}
+
+/** Signed hours ("+12", "-24", "0"), the way an offset reads in a sentence. */
+const signedHours = (hours: number): string => (hours > 0 ? `+${hours}` : String(hours));
+
+/** The condition of a constraint, as the `when` the renderer appends; absent when the node has none. */
+const conditionOf = (n: Rec): { when?: string } => {
+  const condition = exprText(n.when);
+  return condition === '' ? {} : { when: condition };
+};
+
+function markPhrase(mark: unknown, ctx: Ctx): string | null {
+  if (!isRec(mark)) return null;
+  const key = str(mark, 'key');
+  const round = num(mark, 'round');
+  const offset = num(mark, 'offset_hours');
+  if (key === null || round === null || offset === null) return null;
+  return ctx.word('item', 'calendar_mark', key, { key, round, offset: signedHours(offset) });
 }
 
 const d = (kind: AvailableKind, fn: Describer): [AvailableKind, Describer] => [kind, fn];
@@ -567,6 +634,167 @@ const DESCRIBERS: ReadonlyMap<AvailableKind, Describer> = new Map<AvailableKind,
       return { params: { allow: c.list(allow) } };
     },
   ),
+  d(
+    'pairing.bipartite',
+    (n, c): Described | null => {
+      const attr = str(n, 'attr');
+      const rounds = num(n, 'rounds');
+      if (attr === null || rounds === null || !Array.isArray(n.side_a) || !Array.isArray(n.side_b)) return null;
+      const side = (values: unknown[]) => c.list(values.filter((v): v is string => typeof v === 'string'));
+      return {
+        key: bool(n, 'avoid_repeats') === false ? undefined : 'pairing_bipartite_fresh',
+        params: { attr, side_a: side(n.side_a), side_b: side(n.side_b), count: rounds },
+      };
+    },
+  ),
+  d(
+    'pairing.filter',
+    (n, c): Described | null => {
+      const base = isRec(n.base) ? str(n.base, 'kind') : null;
+      if (base === null || !isRec(n.allow)) return null;
+      return { params: { base: c.child(`pairing.${base}`, n.base), condition: exprText(n.allow) } };
+    },
+  ),
+  d(
+    'pairing.challenge',
+    (n): Described | null => {
+      const rounds = num(n, 'rounds');
+      const rankRange = num(n, 'rank_range');
+      if (rounds === null || rankRange === null) return null;
+      return {
+        params: {
+          count: rounds,
+          rank_range: rankRange,
+          max_open: num(n, 'max_open') ?? 1,
+          cooldown_rounds: num(n, 'cooldown_rounds') ?? 1,
+          accept_window_hours: num(n, 'accept_window_hours') ?? 72,
+        },
+      };
+    },
+  ),
+  d(
+    'constraint.roster_size',
+    (n, c): Described | null => {
+      const min = num(n, 'min');
+      const max = num(n, 'max');
+      return min === null || max === null ? null : { params: { limit: limitPhrase(min, max, c) }, ...conditionOf(n) };
+    },
+  ),
+  d(
+    'constraint.count',
+    (n, c): Described | null => {
+      const source = countSourcePhrase(n.source, c);
+      const limit = limitPhrase(num(n, 'min'), num(n, 'max'), c);
+      return source === null || limit === '' ? null : { params: { limit, source }, ...conditionOf(n) };
+    },
+  ),
+  d(
+    'constraint.distinct',
+    (n, c): Described | null => {
+      const by = str(n, 'by');
+      const maxPer = num(n, 'max_per');
+      if (by === null || maxPer === null) return null;
+      const attr = str(n, 'attr') ?? '';
+      return { params: { max_per: maxPer, by: c.word('item', `by_${by}`, by, { attr }) }, ...conditionOf(n) };
+    },
+  ),
+  d(
+    'constraint.type_quota',
+    (n, c): Described | null => {
+      const min = num(n, 'min_per_type');
+      if (min === null || !isRec(n.types)) return null;
+      const source = str(n.types, 'source');
+      let types = '';
+      if (source === 'fixed' && Array.isArray(n.types.types)) {
+        types = c.word('item', 'quota_types_fixed', '', {
+          types: c.list(n.types.types.filter((t): t is string => typeof t === 'string')),
+        });
+      } else if (source === 'player_attr') {
+        types = c.word('item', 'quota_types_attr', '', { attr: str(n.types, 'attr') ?? '' });
+      }
+      if (types === '') return null;
+      return {
+        key: bool(n, 'allow_multi_count') === true ? 'constraint_type_quota_multi' : undefined,
+        params: { min_per_type: min, types },
+        ...conditionOf(n),
+      };
+    },
+  ),
+  d(
+    'constraint.tera',
+    (n, c): Described | null => {
+      const mode = str(n, 'mode');
+      if (mode === null) return null;
+      return { params: { mode: c.word('item', `tera_${mode}`, mode, { attr: str(n, 'attr') ?? '' }) }, ...conditionOf(n) };
+    },
+  ),
+  d(
+    'constraint.evolution_stage',
+    (n, c): Described | null => {
+      const limits: string[] = [];
+      for (const field of ['fully_evolved_max', 'nfe_max', 'lc_max'] as const) {
+        const value = num(n, field);
+        if (value !== null) limits.push(c.word('item', `evolution_${field}`, field, { n: value }));
+      }
+      return limits.length === 0 ? null : { params: { limits: c.list(limits) }, ...conditionOf(n) };
+    },
+  ),
+  d(
+    'time.schedule',
+    (n, c): Described | null => {
+      const start = isRec(n.start) ? str(n.start, 'kind') : null;
+      const time = str(n, 'time');
+      const cadence = str(n, 'cadence');
+      const every = num(n, 'every') ?? 1;
+      const window = num(n, 'round_window_hours');
+      if (start === null || time === null || cadence === null || window === null || !isRec(n.start)) return null;
+      const marks = Array.isArray(n.marks) ? n.marks.map((mark) => markPhrase(mark, c)).filter((s): s is string => s !== null) : [];
+      return {
+        params: {
+          start: c.word('item', `schedule_start_${start}`, start, { date: str(n.start, 'date') ?? '' }),
+          time,
+          cadence: c.word('item', `cadence_${cadence}`, cadence, { count: every }),
+          count: window,
+        },
+        append: marks.length === 0 ? [] : [c.word('item', 'calendar_marks', '', { count: marks.length, marks: c.list(marks) })],
+      };
+    },
+  ),
+  d(
+    'time.deadline_policy',
+    (n, c): Described | null => {
+      const applies = str(n, 'applies');
+      const onMiss = str(n, 'on_miss');
+      const offset = num(n, 'offset_hours');
+      if (applies === null || onMiss === null || offset === null) return null;
+      const action = str(n, 'action') ?? '';
+      return {
+        params: {
+          target: c.word('item', `deadline_${applies}`, applies, { action }),
+          offset: signedHours(offset),
+          on_miss: c.word('item', `on_miss_${onMiss}`, onMiss),
+        },
+      };
+    },
+  ),
+  d(
+    'stage.end_when',
+    (n): Described | null => {
+      const kind = str(n, 'kind');
+      if (kind === 'rounds') {
+        const rounds = num(n, 'rounds');
+        return rounds === null ? null : { params: { count: rounds } };
+      }
+      return kind === 'expr' && isRec(n.when) ? { key: 'stage_end_when_expr', params: { condition: exprText(n.when) } } : null;
+    },
+  ),
+  d(
+    'stage.foreach_group',
+    (n): Described | null => {
+      const from = str(n, 'from');
+      return from === null ? null : { params: { from } };
+    },
+  ),
 ]);
 
 function countOf(field: string): Describer {
@@ -597,7 +825,10 @@ function describeWith(kind: string, node: unknown, locale: Locale): string {
     };
     const described = describer(node, ctx);
     if (!described) return label;
-    return t.dynamic(`describe.${described.key ?? kindKey(kind)}`, described.params, label);
+    let text = t.dynamic(`describe.${described.key ?? kindKey(kind)}`, described.params, label);
+    if (described.append !== undefined) text = [text, ...described.append.filter((part) => part !== '')].join(' ');
+    if (described.when !== undefined) text = t.dynamic('describe.constraint_when', { rule: text, condition: described.when }, text);
+    return text;
   } catch {
     return label;
   }

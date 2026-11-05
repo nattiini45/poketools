@@ -273,7 +273,10 @@ export function setGroups(s: Stage, g: GroupsSpec | undefined): Stage {
   return { ...s, groups: { ...g } };
 }
 
-const PAIRING_DEFAULTS: { readonly [K in Pairing['kind']]: Extract<Pairing, { kind: K }> } = {
+/** Pairing kinds the form switches to with defaults; bipartite, filter and challenge need values the user chooses first. */
+type DefaultedPairingKind = Exclude<Pairing['kind'], 'bipartite' | 'filter' | 'challenge'>;
+
+const PAIRING_DEFAULTS: { readonly [K in DefaultedPairingKind]: Extract<Pairing, { kind: K }> } = {
   round_robin: { kind: 'round_robin', legs: 1, mirror_legs: true },
   swiss: { kind: 'swiss', rounds: 'auto', avoid_repeats: true },
   single_elim: { kind: 'single_elim', third_place: false },
@@ -283,7 +286,7 @@ const PAIRING_DEFAULTS: { readonly [K in Pairing['kind']]: Extract<Pairing, { ki
 
 export function setPairingKind(s: Stage, kind: Pairing['kind']): Stage {
   if (s.pairing.kind === kind || !hasOwn(PAIRING_DEFAULTS, kind)) return s;
-  return { ...s, pairing: { ...PAIRING_DEFAULTS[kind] } };
+  return { ...s, pairing: { ...PAIRING_DEFAULTS[kind as DefaultedPairingKind] } };
 }
 
 const PAIRING_MEMBERS: Readonly<Record<string, readonly string[]>> = {
@@ -292,6 +295,9 @@ const PAIRING_MEMBERS: Readonly<Record<string, readonly string[]>> = {
   single_elim: ['third_place'],
   double_elim: ['bracket_reset'],
   manual: [],
+  bipartite: ['attr', 'side_a', 'side_b', 'rounds', 'avoid_repeats'],
+  filter: ['allow'],
+  challenge: ['rounds', 'rank_range', 'max_open', 'cooldown_rounds', 'accept_window_hours'],
 };
 
 /** Sets members of the current pairing kind; members of another kind (and `kind` itself) are ignored. */

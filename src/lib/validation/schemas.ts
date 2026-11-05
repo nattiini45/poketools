@@ -1079,6 +1079,8 @@ export const validateTeamSchema = z.object({
   // This prevents the base 'Gen 9 RU' ruleset from being used for tournaments
   // of a league that has a dedicated custom ruleset.
   tournament_id: uuid.optional(),
+  // The round a custom-format league's team rules are checked for; omitted = the phase's current round.
+  round_number: z.number().int().min(1).max(500).optional(),
 });
 
 // ─── Pagination Query Schema ─────────────────────────────────────────

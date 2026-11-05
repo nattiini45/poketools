@@ -65,6 +65,17 @@ export default defineDe<typeof en>()({
         'Dein zugewiesener Core konnte nicht gelesen werden, daher konnten die Regeln, die von ihm abhängen, nicht geprüft werden. Versuche es gleich noch einmal',
       ruleset_load_failed:
         'Das Regelwerk für diese Prüfung konnte nicht verwendet werden, das Team wurde nur gegen das Format geprüft und ist für deine Liga nicht als legal bestätigt',
+      kit_roster_size: 'Teamgröße: Diese Liga verlangt {min} bis {max} Pokémon, du hast {have}',
+      kit_count_min: 'Teamregel: Du brauchst mindestens {min} Pokémon aus {source}, hast aber {have}',
+      kit_count_max: 'Teamregel: Aus {source} sind höchstens {max} Pokémon erlaubt, du hast {have}',
+      kit_distinct: 'Teamregel: Höchstens {max} Pokémon dürfen denselben Wert teilen ({by}: {value}), du hast {have}',
+      kit_type_quota: 'Typ-Quote: Du brauchst mindestens {min} Pokémon vom Typ {type}, hast aber {have}',
+      kit_tera_banned: 'Terakristallisierung ist in dieser Liga nicht erlaubt',
+      kit_tera_stab: 'Der Tera-Typ {type} muss ein Typ von {species} sein ({types})',
+      kit_tera_attr: 'Der Tera-Typ {type} muss dein zugewiesener Typ sein ({types})',
+      kit_evolution_stage:
+        'Entwicklungsregel: Von Stufe {stage} (fe: voll entwickelt, nfe: nicht voll entwickelt, lc: Erststufe) sind höchstens {max} Pokémon erlaubt, du hast {have}',
+      kit_constraint_expr: 'Die Ligaregel {index} konnte nicht geprüft werden ({reason})',
     },
   },
   speed: {

@@ -178,9 +178,11 @@ export async function getPublishedRulesetHeads(ids: readonly string[]): Promise<
   return heads;
 }
 
-/** One generated stage, as `format_attach_season` reads it (a `tournaments` row to upsert by `(season_id, key)`). */
+/** One generated stage, as `format_attach_season` reads it (a `tournaments` row to upsert by `(season_id, key, format_group)`). */
 export interface AttachStageRow {
   key: string;
+  /** 0 for an ordinary phase; N for the phase a `foreach_group` stage plays for group N. */
+  format_group: number;
   name: string;
   bracket_type: BracketType;
   ruleset_id: string;
@@ -207,7 +209,7 @@ export interface AttachRpcInput {
 
 export interface AttachRpcResult {
   replaced: boolean;
-  stages: { id: string; key: string }[];
+  stages: { id: string; key: string; group?: number }[];
   removed_stage_ids: string[];
   /** Rulesets the previous attach created that the new one no longer uses (deleted by the function). */
   removed_ruleset_ids: string[];
@@ -237,8 +239,10 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     removed_ruleset_ids?: unknown;
   };
   const stages = Array.isArray(result.stages)
-    ? (result.stages as Array<{ id?: unknown; key?: unknown }>).flatMap((stage) =>
-        typeof stage.id === 'string' && typeof stage.key === 'string' ? [{ id: stage.id, key: stage.key }] : [],
+    ? (result.stages as Array<{ id?: unknown; key?: unknown; group?: unknown }>).flatMap((stage) =>
+        typeof stage.id === 'string' && typeof stage.key === 'string'
+          ? [{ id: stage.id, key: stage.key, group: typeof stage.group === 'number' ? stage.group : 0 }]
+          : [],
       )
     : [];
   return {

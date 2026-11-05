@@ -134,7 +134,18 @@ export type ValidationIssueCode =
   | 'evolution_stage_cap'
   | 'not_in_roster'
   | 'ruleset_load_failed'
-  | 'core_load_failed';
+  | 'core_load_failed'
+  // Custom-format stage constraints (`src/lib/format-engine/runtime/team.ts`)
+  | 'kit_roster_size'
+  | 'kit_count_min'
+  | 'kit_count_max'
+  | 'kit_distinct'
+  | 'kit_type_quota'
+  | 'kit_tera_banned'
+  | 'kit_tera_stab'
+  | 'kit_tera_attr'
+  | 'kit_evolution_stage'
+  | 'kit_constraint_expr';
 
 /**
  * Params of a validation issue. Names follow the pkmn seam

@@ -7,6 +7,7 @@ import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { checkTeam } from '@/lib/team/check.server';
+import { kitTeamVerdict } from '@/lib/team/kit-team-gate';
 import type { ApiResult } from '@/types/api';
 import type { TeamValidationResult } from '@/types/team';
 
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
     // Evolution Point Buy rules (it is passed to the check as known; a client-chosen season could apply the rules of an
     // unrelated league). Without tournament context the check reads the season of the caller-supplied `season_id`.
     let tournamentBranchSeason: Awaited<ReturnType<typeof getSeasonById>> = null;
+    let kitTournament: Awaited<ReturnType<typeof getTournamentById>> = null;
     if (body.tournament_id) {
       const tournament = await getTournamentById(body.tournament_id);
       if (!tournament) {
@@ -59,6 +61,7 @@ export async function POST(request: NextRequest) {
       const season = tournament.season_id ? await getSeasonById(tournament.season_id) : null;
       if (season) resolvedSeasonId = season.id;
       tournamentBranchSeason = season;
+      kitTournament = tournament;
       ruleset = await getRulesetById(tournament.ruleset_id);
     } else {
       ruleset = await readExposedRuleset(body.ruleset_id);
@@ -71,13 +74,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await checkTeam({
-      pokemon: body.pokemon,
-      ruleset,
-      playerId: player.playerId,
-      seasonId: resolvedSeasonId,
-      season: body.tournament_id ? tournamentBranchSeason : undefined,
-    });
+    // A kit league's phase answers the ruleset check merged with its stage constraints and the player's resources
+    // (null for any other phase, which keeps the plain check below).
+    const kitResult = kitTournament
+      ? await kitTeamVerdict({
+          tournament: kitTournament,
+          playerId: player.playerId,
+          pokemon: body.pokemon,
+          roundNumber: body.round_number,
+          ruleset,
+        })
+      : null;
+
+    const result =
+      kitResult ??
+      (await checkTeam({
+        pokemon: body.pokemon,
+        ruleset,
+        playerId: player.playerId,
+        seasonId: resolvedSeasonId,
+        season: body.tournament_id ? tournamentBranchSeason : undefined,
+      }));
 
     return NextResponse.json<ApiResult<TeamValidationResult>>({ success: true, data: result });
   } catch (err) {

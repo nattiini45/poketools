@@ -62,6 +62,35 @@ export const MAX_STEP_COUNT = 16;
 export const MAX_EVENT_ROUND = 64;
 export const MAX_GRANT = 64;
 
+// Phase 4 primitives: bipartite, filter and challenge pairings, team constraints, calendars and stage ends.
+export const MAX_SIDE_VALUES = 32;
+export const MAX_BIPARTITE_ROUNDS = 32;
+export const MAX_CHALLENGE_ROUNDS = 64;
+export const MAX_CHALLENGE_RANK_RANGE = 64;
+export const MAX_CHALLENGE_OPEN = 8;
+export const MAX_CHALLENGE_COOLDOWN = 16;
+export const MAX_CHALLENGE_WINDOW_HOURS = 336;
+export const MAX_CONSTRAINTS = 32;
+/** Pokémon on one team. */
+export const MAX_TEAM_SIZE = 6;
+export const MAX_COUNT_SPECIES = 64;
+export const MIN_COUNT_ANY_OF = 2;
+export const MAX_COUNT_ANY_OF = 6;
+/** How many `any_of` / `not` levels a count source may nest (the types in `types.ts` have exactly this many). */
+export const MAX_COUNT_SOURCE_DEPTH = 2;
+export const MAX_QUOTA_TYPES = 18;
+export const MAX_TYPE_NAME_CHARS = 16;
+export const MAX_CALENDAR_EVERY = 28;
+export const MAX_CALENDAR_WINDOW_HOURS = 672;
+export const MAX_CALENDAR_MARKS = 16;
+export const MAX_CALENDAR_ROUND = 64;
+/** The longest text of a calendar date (YYYY-MM-DD) and of a time of day (HH:MM). */
+export const CALENDAR_DATE_CHARS = 10;
+export const CALENDAR_TIME_CHARS = 5;
+export const MAX_CALENDAR_OFFSET_HOURS = 672;
+export const MAX_DEADLINES = 8;
+export const MAX_END_ROUNDS = 64;
+
 export {
   COLLECTION_ASSUMED_MAX,
   EXPR_MAX_ARGS,
@@ -125,4 +154,28 @@ export const DOCUMENT_LIMITS = {
   maxStepCount: MAX_STEP_COUNT,
   maxEventRound: MAX_EVENT_ROUND,
   maxGrant: MAX_GRANT,
+  maxSideValues: MAX_SIDE_VALUES,
+  maxBipartiteRounds: MAX_BIPARTITE_ROUNDS,
+  maxChallengeRounds: MAX_CHALLENGE_ROUNDS,
+  maxChallengeRankRange: MAX_CHALLENGE_RANK_RANGE,
+  maxChallengeOpen: MAX_CHALLENGE_OPEN,
+  maxChallengeCooldown: MAX_CHALLENGE_COOLDOWN,
+  maxChallengeWindowHours: MAX_CHALLENGE_WINDOW_HOURS,
+  maxConstraints: MAX_CONSTRAINTS,
+  maxTeamSize: MAX_TEAM_SIZE,
+  maxCountSpecies: MAX_COUNT_SPECIES,
+  minCountAnyOf: MIN_COUNT_ANY_OF,
+  maxCountAnyOf: MAX_COUNT_ANY_OF,
+  maxCountSourceDepth: MAX_COUNT_SOURCE_DEPTH,
+  maxQuotaTypes: MAX_QUOTA_TYPES,
+  maxTypeNameChars: MAX_TYPE_NAME_CHARS,
+  maxCalendarEvery: MAX_CALENDAR_EVERY,
+  maxCalendarWindowHours: MAX_CALENDAR_WINDOW_HOURS,
+  maxCalendarMarks: MAX_CALENDAR_MARKS,
+  maxCalendarRound: MAX_CALENDAR_ROUND,
+  calendarDateChars: CALENDAR_DATE_CHARS,
+  calendarTimeChars: CALENDAR_TIME_CHARS,
+  maxCalendarOffsetHours: MAX_CALENDAR_OFFSET_HOURS,
+  maxDeadlines: MAX_DEADLINES,
+  maxEndRounds: MAX_END_ROUNDS,
 } as const;

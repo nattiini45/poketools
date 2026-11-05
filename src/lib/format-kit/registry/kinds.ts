@@ -1,6 +1,6 @@
 /**
- * Primitive kinds: the vocabulary of format building blocks. 40 are available today; 14 more are
- * reserved so documents can name them and fail with `not_available_yet` instead of being
+ * Primitive kinds: the vocabulary of format building blocks. 53 are available today; 1 more is
+ * reserved so documents can name it and fail with `not_available_yet` instead of being
  * misread. A kind is `<family>.<name>`; `kindKey` turns it into a catalog key segment.
  */
 
@@ -45,24 +45,22 @@ export const AVAILABLE_KINDS = [
   'score.placement',
   'check.assisted',
   'adjust.manual',
-] as const;
-
-export const RESERVED_KINDS = [
   'pairing.bipartite',
   'pairing.filter',
   'pairing.challenge',
+  'constraint.roster_size',
+  'constraint.count',
+  'constraint.distinct',
   'constraint.type_quota',
   'constraint.tera',
   'constraint.evolution_stage',
-  'constraint.count',
-  'constraint.distinct',
-  'constraint.roster_size',
-  'acquire.draft',
   'time.schedule',
   'time.deadline_policy',
   'stage.end_when',
   'stage.foreach_group',
 ] as const;
+
+export const RESERVED_KINDS = ['acquire.draft'] as const;
 
 export type AvailableKind = (typeof AVAILABLE_KINDS)[number];
 export type ReservedKind = (typeof RESERVED_KINDS)[number];

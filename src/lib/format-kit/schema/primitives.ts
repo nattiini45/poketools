@@ -10,12 +10,30 @@ import { z } from 'zod';
 import { exprSchemaFor } from '../expr/schema';
 import { LTEXT_MAX_CHARS } from '@/lib/studio-core/ltext';
 import {
+  CALENDAR_DATE_CHARS,
+  CALENDAR_TIME_CHARS,
   MAX_ACTION_STEPS,
   MAX_BEST_OF,
+  MAX_BIPARTITE_ROUNDS,
+  MAX_CALENDAR_EVERY,
+  MAX_CALENDAR_MARKS,
+  MAX_CALENDAR_OFFSET_HOURS,
+  MAX_CALENDAR_ROUND,
+  MAX_CALENDAR_WINDOW_HOURS,
   MAX_CAPACITY,
+  MAX_CHALLENGE_COOLDOWN,
+  MAX_CHALLENGE_OPEN,
+  MAX_CHALLENGE_RANK_RANGE,
+  MAX_CHALLENGE_ROUNDS,
+  MAX_CHALLENGE_WINDOW_HOURS,
   MAX_COLUMNS,
+  MAX_CONSTRAINTS,
+  MAX_COUNT_ANY_OF,
+  MAX_COUNT_SPECIES,
+  MAX_DEADLINES,
   MAX_DOMAIN_ENTRIES,
   MAX_EFFECTS,
+  MAX_END_ROUNDS,
   MAX_ENTRY_ATTRS,
   MAX_ENUM_VALUES,
   MAX_EVENT_ROUND,
@@ -31,13 +49,18 @@ import {
   MAX_OVERRIDES,
   MAX_PLACEMENT_POINTS,
   MAX_PLAYERS_PER_MATCH,
+  MAX_QUOTA_TYPES,
   MAX_RANK_STEPS,
   MAX_SELECTS,
+  MAX_SIDE_VALUES,
   MAX_STEP_COUNT,
   MAX_SWISS_ROUNDS,
   MAX_TABLE_VALUES,
+  MAX_TEAM_SIZE,
   MAX_TRACK_STEPS,
+  MAX_TYPE_NAME_CHARS,
   MAX_VIEW_STAGES,
+  MIN_COUNT_ANY_OF,
   MIN_GROUPS,
   MIN_PLAYERS_PER_MATCH,
   SCORE_ABS_MAX,
@@ -67,6 +90,28 @@ export const pairingDoubleElimSchema = z.strictObject({
   bracket_reset: z.boolean().default(false),
 });
 export const pairingManualSchema = z.strictObject({ kind: z.literal('manual') });
+export const pairingBipartiteSchema = z.strictObject({
+  kind: z.literal('bipartite'),
+  attr: keySchema,
+  side_a: boundedArray(keySchema, 1, MAX_SIDE_VALUES),
+  side_b: boundedArray(keySchema, 1, MAX_SIDE_VALUES),
+  rounds: intRange(1, MAX_BIPARTITE_ROUNDS),
+  avoid_repeats: z.boolean().default(true),
+});
+export const filterBaseSchema = z.discriminatedUnion('kind', [pairingSwissSchema, pairingRoundRobinSchema]);
+export const pairingFilterSchema = z.strictObject({
+  kind: z.literal('filter'),
+  base: filterBaseSchema,
+  allow: exprSchemaFor('boolean'),
+});
+export const pairingChallengeSchema = z.strictObject({
+  kind: z.literal('challenge'),
+  rounds: intRange(1, MAX_CHALLENGE_ROUNDS),
+  rank_range: intRange(1, MAX_CHALLENGE_RANK_RANGE),
+  max_open: intRange(1, MAX_CHALLENGE_OPEN).default(1),
+  cooldown_rounds: intRange(0, MAX_CHALLENGE_COOLDOWN).default(1),
+  accept_window_hours: intRange(1, MAX_CHALLENGE_WINDOW_HOURS).default(72),
+});
 
 export const pairingSchema = z.discriminatedUnion('kind', [
   pairingRoundRobinSchema,
@@ -74,6 +119,9 @@ export const pairingSchema = z.discriminatedUnion('kind', [
   pairingSingleElimSchema,
   pairingDoubleElimSchema,
   pairingManualSchema,
+  pairingBipartiteSchema,
+  pairingFilterSchema,
+  pairingChallengeSchema,
 ]);
 
 // --- Rank steps ---------------------------------------------------------------------------------
@@ -173,6 +221,134 @@ export const participantsSchema = z.discriminatedUnion('from', [
   }),
 ]);
 
+// --- Phase 4: team constraints, calendar, stage end -------------------------------------------------
+
+const countDomainSchema = z.strictObject({
+  kind: z.literal('domain'),
+  domain: keySchema,
+  unlocked_only: z.boolean().default(false),
+});
+const countResourceSchema = z.strictObject({ kind: z.literal('resource'), resource: keySchema });
+const countSpeciesSchema = z.strictObject({
+  kind: z.literal('species'),
+  ids: boundedArray(keySchema, 1, MAX_COUNT_SPECIES),
+});
+const anyOf = <T extends z.ZodType>(source: T) =>
+  z.strictObject({
+    kind: z.literal('any_of'),
+    sources: boundedArray(source, MIN_COUNT_ANY_OF, MAX_COUNT_ANY_OF),
+  });
+const notOf = <T extends z.ZodType>(source: T) => z.strictObject({ kind: z.literal('not'), source });
+
+// Written out level by level (MAX_COUNT_SOURCE_DEPTH levels) so the schema output is exactly the CountSource type.
+const countSource2Schema = z.discriminatedUnion('kind', [countDomainSchema, countResourceSchema, countSpeciesSchema]);
+const countSource1Schema = z.discriminatedUnion('kind', [
+  countDomainSchema,
+  countResourceSchema,
+  countSpeciesSchema,
+  anyOf(countSource2Schema),
+  notOf(countSource2Schema),
+]);
+export const countSourceSchema = z.discriminatedUnion('kind', [
+  countDomainSchema,
+  countResourceSchema,
+  countSpeciesSchema,
+  anyOf(countSource1Schema),
+  notOf(countSource1Schema),
+]);
+
+const teamSize = intRange(1, MAX_TEAM_SIZE);
+const teamCount = intRange(0, MAX_TEAM_SIZE);
+const constraintWhen = exprSchemaFor('boolean').optional();
+
+export const constraintRosterSizeSchema = z.strictObject({
+  kind: z.literal('roster_size'),
+  min: teamSize,
+  max: teamSize,
+  when: constraintWhen,
+});
+export const constraintCountSchema = z.strictObject({
+  kind: z.literal('count'),
+  source: countSourceSchema,
+  min: teamCount.optional(),
+  max: teamCount.optional(),
+  when: constraintWhen,
+});
+export const constraintDistinctSchema = z.strictObject({
+  kind: z.literal('distinct'),
+  by: z.enum(['base_species', 'species', 'item', 'type', 'attr']),
+  attr: keySchema.optional(),
+  max_per: teamSize,
+  when: constraintWhen,
+});
+export const constraintTypeQuotaSchema = z.strictObject({
+  kind: z.literal('type_quota'),
+  types: z.discriminatedUnion('source', [
+    z.strictObject({
+      source: z.literal('fixed'),
+      types: boundedArray(textString(1, MAX_TYPE_NAME_CHARS), 1, MAX_QUOTA_TYPES),
+    }),
+    z.strictObject({ source: z.literal('player_attr'), attr: keySchema }),
+  ]),
+  min_per_type: teamCount,
+  allow_multi_count: z.boolean().default(false),
+  when: constraintWhen,
+});
+export const constraintTeraSchema = z.strictObject({
+  kind: z.literal('tera'),
+  mode: z.enum(['banned', 'stab', 'any', 'from_attr']),
+  attr: keySchema.optional(),
+  when: constraintWhen,
+});
+export const constraintEvolutionStageSchema = z.strictObject({
+  kind: z.literal('evolution_stage'),
+  fully_evolved_max: teamCount.optional(),
+  nfe_max: teamCount.optional(),
+  lc_max: teamCount.optional(),
+  when: constraintWhen,
+});
+
+export const teamConstraintSchema = z.discriminatedUnion('kind', [
+  constraintRosterSizeSchema,
+  constraintCountSchema,
+  constraintDistinctSchema,
+  constraintTypeQuotaSchema,
+  constraintTeraSchema,
+  constraintEvolutionStageSchema,
+]);
+
+const offsetHours = intRange(-MAX_CALENDAR_OFFSET_HOURS, MAX_CALENDAR_OFFSET_HOURS);
+
+export const calendarMarkSchema = z.strictObject({
+  key: keySchema,
+  round: intRange(1, MAX_CALENDAR_ROUND),
+  offset_hours: offsetHours,
+});
+export const deadlinePolicySchema = z.strictObject({
+  applies: z.enum(['action', 'match', 'team']),
+  action: keySchema.optional(),
+  offset_hours: offsetHours,
+  on_miss: z.enum(['forfeit', 'admin_review', 'auto_lock', 'seeded_random_pick']),
+});
+export const stageCalendarSchema = z.strictObject({
+  start: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('season_start') }),
+    z.strictObject({ kind: z.literal('date'), date: textString(1, CALENDAR_DATE_CHARS) }),
+  ]),
+  time: textString(1, CALENDAR_TIME_CHARS).default('18:00'),
+  cadence: z.enum(['weekly', 'days']),
+  every: intRange(1, MAX_CALENDAR_EVERY).default(1),
+  round_window_hours: intRange(1, MAX_CALENDAR_WINDOW_HOURS).default(168),
+  marks: boundedArray(calendarMarkSchema, 0, MAX_CALENDAR_MARKS).default(() => []),
+  deadlines: boundedArray(deadlinePolicySchema, 0, MAX_DEADLINES).default(() => []),
+});
+
+export const endWhenSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('rounds'), rounds: intRange(1, MAX_END_ROUNDS) }),
+  z.strictObject({ kind: z.literal('expr'), when: exprSchemaFor('boolean') }),
+]);
+export const foreachGroupSchema = z.strictObject({ from: keySchema });
+
 export const stageSchema = z.strictObject({
   key: keySchema,
   name: ltextSchema,
@@ -186,6 +362,10 @@ export const stageSchema = z.strictObject({
   scoring: scoringSchema,
   rank: boundedArray(rankStepSchema, 0, MAX_RANK_STEPS).default(() => []),
   columns: boundedArray(keySchema, 0, MAX_COLUMNS).default(() => []),
+  constraints: boundedArray(teamConstraintSchema, 0, MAX_CONSTRAINTS).optional(),
+  calendar: stageCalendarSchema.optional(),
+  end_when: endWhenSchema.optional(),
+  foreach_group: foreachGroupSchema.optional(),
 });
 
 // --- Edge, views, rules, text, theme, modules ---------------------------------------------------
@@ -459,6 +639,9 @@ export const PRIMITIVE_NODE_SCHEMAS: ReadonlyMap<AvailableKind, z.ZodType<unknow
   ['pairing.single_elim', pairingSingleElimSchema],
   ['pairing.double_elim', pairingDoubleElimSchema],
   ['pairing.manual', pairingManualSchema],
+  ['pairing.bipartite', pairingBipartiteSchema],
+  ['pairing.filter', pairingFilterSchema],
+  ['pairing.challenge', pairingChallengeSchema],
   ['series.rule', seriesSchema],
   ['team.ruleset', rulesetSchema],
   ['score.match', scoringSchema],
@@ -492,4 +675,14 @@ export const PRIMITIVE_NODE_SCHEMAS: ReadonlyMap<AvailableKind, z.ZodType<unknow
   ['score.placement', scorePlacementSchema],
   ['check.assisted', checkRuleSchema],
   ['adjust.manual', adjustRuleSchema],
+  ['constraint.roster_size', constraintRosterSizeSchema],
+  ['constraint.count', constraintCountSchema],
+  ['constraint.distinct', constraintDistinctSchema],
+  ['constraint.type_quota', constraintTypeQuotaSchema],
+  ['constraint.tera', constraintTeraSchema],
+  ['constraint.evolution_stage', constraintEvolutionStageSchema],
+  ['time.schedule', stageCalendarSchema],
+  ['time.deadline_policy', deadlinePolicySchema],
+  ['stage.end_when', endWhenSchema],
+  ['stage.foreach_group', foreachGroupSchema],
 ]);

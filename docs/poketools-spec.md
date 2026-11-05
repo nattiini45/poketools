@@ -439,6 +439,7 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `format_track_progress` | Format runtime: the step each player reached on a progression track |
 | `format_checks` | Format runtime: assisted checks an admin confirms or rejects (unresolved outcome, standings tie, rematch, expression); deduplicated per league |
 | `format_adjustments` | Format runtime: admin corrections (points, resource, relation, outcome, action, domain, rank) with a required reason |
+| `format_challenges` | Format runtime: open, accepted, declined, expired or cancelled challenge-ladder challenges, with their expiry and accepted match (`20261106090000`) |
 | `tournaments` | Standalone tournaments and league phases (4.3) |
 | `tournament_participants` | Phase or tournament enrollment and seeds (4.3) |
 | `tournament_groups` | Groups of a group-stage phase (`season_group_id` links one to the league group it mirrors) |
@@ -1116,6 +1117,9 @@ GET  /api/cron/auto-confirm     Cron (15 min): confirms due pending_confirmation
                                 then heals completed matches whose finalize did not finish
                                 (finalized_at IS NULL, older than 10 min; replay-safe steps only).
                                 500 auto_confirm_partial_failure when any match failed
+GET  /api/cron/format-engine    Cron (15 min): fires due format calendar events, applies match/team deadline
+                                policies and expires challenges (at most 100 leagues per run); one league's failure
+                                is logged and skipped, with 500 format_cron_partial_failure when any league failed
 GET  /api/cron/process-aggregates  Cron (10 min): claims and applies queued aggregate jobs; 500 on a
                                 failed claim or queue write, or when jobs are stranded
 GET  /api/cron/expire-suspensions  Cron (15 min): lifts timed suspensions whose end has passed (one

@@ -240,6 +240,7 @@ describe('attachSeasonFormat', () => {
   const spec = { schema_version: 1 } as unknown as FormatDefinition;
   const stage: AttachStageRow = {
     key: 'groups',
+    format_group: 0,
     name: 'Groups',
     bracket_type: 'round_robin',
     ruleset_id: uuid(9),
@@ -264,11 +265,16 @@ describe('attachSeasonFormat', () => {
 
   it('calls format_attach_season with the frozen spec, hash, seed and stages', async () => {
     state.rpcReply = {
-      data: { replaced: true, stages: [{ id: 't1', key: 'groups' }], removed_stage_ids: ['t2'], removed_ruleset_ids: ['r1'] },
+      data: {
+        replaced: true,
+        stages: [{ id: 't1', key: 'groups' }, { id: 't3', key: 'finals', group: 2 }],
+        removed_stage_ids: ['t2'],
+        removed_ruleset_ids: ['r1'],
+      },
     };
     expect(await attachSeasonFormat(input)).toEqual({
       replaced: true,
-      stages: [{ id: 't1', key: 'groups' }],
+      stages: [{ id: 't1', key: 'groups', group: 0 }, { id: 't3', key: 'finals', group: 2 }],
       removed_stage_ids: ['t2'],
       removed_ruleset_ids: ['r1'],
     });

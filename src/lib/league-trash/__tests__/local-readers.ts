@@ -98,6 +98,7 @@ export const OWNED_SPECS: readonly TableSpec[] = [
   { table: 'format_track_progress', order: ['player_id', 'track_key'], by: [bySeason()] },
   { table: 'format_checks', order: ['id'], by: [bySeason()] },
   { table: 'format_adjustments', order: ['id'], by: [bySeason()] },
+  { table: 'format_challenges', order: ['id'], by: [bySeason()] },
 ];
 
 /** Deleted with the league but never captured: rebuilt by the app. */
@@ -115,6 +116,7 @@ const EXCLUDED: Readonly<Record<string, readonly string[]>> = {
   matches: ['auto_confirm_at'],
   rounds: ['deadline'],
   match_proposals: ['expires_at'],
+  format_challenges: ['expires_at'],
   games: ['aggregate_applied_at'],
 };
 
@@ -210,5 +212,6 @@ export async function readClocks(client: Client, ids: LeagueIds): Promise<Record
   await take('matches', 'auto_confirm_at', (r) => r.status === 'pending_confirmation');
   await take('match_proposals', 'expires_at', (r) => r.status === 'pending');
   await take('rounds', 'deadline', (r) => r.status !== 'completed');
+  await take('format_challenges', 'expires_at', (r) => r.status === 'open');
   return clocks;
 }

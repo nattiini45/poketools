@@ -30,7 +30,7 @@ export type FormatCheckRow = Tables<'format_checks'>;
 export type FormatAdjustmentRow = Tables<'format_adjustments'>;
 
 export type FormatAdjustmentKind = 'points' | 'resource' | 'relation' | 'outcome' | 'action' | 'domain' | 'rank';
-export type FormatCheckSource = 'unresolved_outcome' | 'standings_tie' | 'pairing_rematch' | 'expr';
+export type FormatCheckSource = 'unresolved_outcome' | 'standings_tie' | 'pairing_rematch' | 'pairing_forbidden' | 'deadline_missed' | 'expr';
 export type FormatSubmissionStatus = 'draft' | 'submitted' | 'locked';
 
 /**

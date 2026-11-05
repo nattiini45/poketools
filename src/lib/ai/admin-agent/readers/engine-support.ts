@@ -25,6 +25,11 @@ export const ENGINE_GAP_ROWS = [
   'edge_select_not_run',
   'override_unmapped',
   'groups_not_created',
+  'pairing_not_run',
+  'constraints_not_run',
+  'calendar_not_run',
+  'end_when_not_run',
+  'foreach_group_not_run',
 ] as const satisfies readonly EngineGapCode[];
 
 /**
@@ -68,6 +73,14 @@ export const ENGINE_SUPPORT_ROWS: readonly EngineSupportRow[] = [
     limit: null,
     statement:
       'A Format Studio format may declare groups, legs, a third-place match and bottom-N cuts. Every engine plays the third-place match; the kit engine also plays every leg and runs every cut. On the legacy or shadow engine attaching warns that legs and cuts are recorded and not run (rr_legs_not_run, edge_select_not_run); groups are never created by the attach (groups_not_created)',
+    offer: 'Say so before attaching and show the attach warnings',
+  },
+  {
+    key: 'format_studio_phase_four_kinds',
+    supported: false,
+    limit: null,
+    statement:
+      'A Format Studio format may declare bipartite, filter and challenge pairing, team rules, a calendar, an end condition and a repeat per group. They are recorded and not run: attaching warns pairing_not_run, constraints_not_run, calendar_not_run, end_when_not_run and foreach_group_not_run',
     offer: 'Say so before attaching and show the attach warnings',
   },
   {

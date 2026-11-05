@@ -91,8 +91,11 @@ describe('option lists match the manifest', () => {
   });
 
   it('pairing kinds', () => {
-    expect([...PAIRING_KINDS].sort()).toEqual(tags('pairing').sort());
-    expect([...PAIRING_KINDS].sort()).toEqual(enumOfUnionTags(field(stage, 'pairing')));
+    // The Phase 4 pairings need values the form cannot default (sides, a filter); the form does not offer them yet.
+    const notOffered = ['bipartite', 'filter', 'challenge'];
+    const offered = (all: readonly string[]) => all.filter((kind) => !notOffered.includes(kind)).sort();
+    expect([...PAIRING_KINDS].sort()).toEqual(offered(tags('pairing')));
+    expect([...PAIRING_KINDS].sort()).toEqual(offered(enumOfUnionTags(field(stage, 'pairing'))));
   });
 
   it('seeding of a stage fed by the roster or by edges', () => {

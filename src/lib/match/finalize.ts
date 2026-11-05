@@ -121,7 +121,8 @@ const NOT_RERUN_STEPS: FinalizeStep[] = FINALIZE_STEPS.filter(
 export interface AdminMatchOutcome {
   kind: AdminOutcomeKind;
   reason: string;
-  setBy: string;
+  /** The admin who set it; null when the system did (a format's deadline policy). */
+  setBy: string | null;
 }
 
 interface FinalizeMatchCompletionInput {

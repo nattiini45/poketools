@@ -7,7 +7,7 @@
  */
 import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { MAX_RANK_STEPS } from '../limits';
-import type { FormatDefinition, RankStep, Stage } from '../types';
+import type { FormatDefinition, Pairing, RankStep, Stage } from '../types';
 import { diag, ptr, type Diagnostic } from './diagnostics';
 import type { CompileEnv } from './env';
 import {
@@ -34,6 +34,20 @@ const ALWAYS_PRODUCED: ReadonlySet<string> = new Set(['points', 'wins', 'losses'
 
 const NO_CUSTOM_METRICS: ReadonlySet<string> = new Set();
 
+/** Whether a pairing puts players against each other in rounds (the table pairings and the ones built on them). */
+function pairsOpponents(pairing: Pairing): boolean {
+  switch (pairing.kind) {
+    case 'round_robin':
+    case 'swiss':
+    case 'bipartite':
+      return true;
+    case 'filter':
+      return pairsOpponents(pairing.base);
+    default:
+      return false;
+  }
+}
+
 /**
  * Why a stage cannot produce a metric, or `null` when it can. The production table of the standings engine.
  * `custom` holds the keys of the document's own player metrics and placement scores.
@@ -50,8 +64,7 @@ export function metricProblem(
   if (metric === 'buchholz') {
     // Without a stage (a view naming none that exists) there is nothing to judge the opponents by.
     if (stage === null) return null;
-    const opponents =
-      (stage.pairing.kind === 'round_robin' || stage.pairing.kind === 'swiss') && stage.players_per_match === 2;
+    const opponents = pairsOpponents(stage.pairing) && stage.players_per_match === 2;
     return opponents ? null : 'needs_opponents';
   }
   return 'unknown_metric';
@@ -280,14 +293,16 @@ export function checkStages(def: FormatDefinition, env: CompileEnv, plan: PlanBu
 
     // Repeats only matter when the pairing avoids them; a field of n can play getRoundRobinTotalRounds(n) rounds
     // (n - 1 for an even field, n for an odd one, because of the bye) before a pairing has to repeat.
-    if (stage.pairing.kind === 'swiss' && stage.pairing.rounds !== 'auto' && stage.pairing.avoid_repeats && participants) {
-      if (stage.pairing.rounds > getRoundRobinTotalRounds(participants.max)) {
+    const filtered = stage.pairing.kind === 'filter';
+    const swiss = stage.pairing.kind === 'filter' ? stage.pairing.base : stage.pairing;
+    if (swiss.kind === 'swiss' && swiss.rounds !== 'auto' && swiss.avoid_repeats && participants) {
+      if (swiss.rounds > getRoundRobinTotalRounds(participants.max)) {
         out.push(
           diag(
             'swiss_rounds_too_many',
-            ptr('stages', i, 'pairing', 'rounds'),
-            { stage: key, rounds: stage.pairing.rounds, participants: participants.max },
-            [fixSetSwissRoundsAuto(i)],
+            filtered ? ptr('stages', i, 'pairing', 'base', 'rounds') : ptr('stages', i, 'pairing', 'rounds'),
+            { stage: key, rounds: swiss.rounds, participants: participants.max },
+            [fixSetSwissRoundsAuto(i, filtered)],
           ),
         );
       }

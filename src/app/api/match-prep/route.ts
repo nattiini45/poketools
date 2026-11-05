@@ -14,6 +14,7 @@ import { upsertTeamForMatch } from '@/lib/supabase/queries/teams';
 import { expireItemUsageReads } from '@/lib/team/item-usage-cache';
 import { assertNoSuspendedLinesInTeam, assertEpbTeamCompliant } from '@/lib/draft/epb-team-validation';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { isKitTeamCandidate, refuseInvalidKitTeam } from '@/lib/team/kit-team-gate';
 import type { ApiResult } from '@/types/api';
 import type { MatchPrepTeam } from '@/types/match-prep';
 import type { PokemonSet } from '@/types/team';
@@ -133,6 +134,19 @@ export async function POST(request: NextRequest) {
           pokemon
         );
       }
+    }
+
+    // A kit league's stage constraints and the player's resources (rounds change what is allowed). A completed
+    // match's rewrite is an admin correction and is not held to rules that have moved on since.
+    if (isKitTeamCandidate(tournament) && match.status !== 'completed') {
+      const round = await getRoundById(match.round_id);
+      const refusal = await refuseInvalidKitTeam({
+        tournament,
+        playerId: targetPlayerId,
+        pokemon,
+        roundNumber: round?.round_number,
+      });
+      if (refusal) return refusal;
     }
 
     const prep = await upsertMatchPrepTeam(

@@ -73,7 +73,18 @@ export default function RulesText({ definition, plan, order, rulesets, parentLev
               <div key={stage.key} className="space-y-1">
                 <p className="font-medium">{stage.name}</p>
                 <p className="text-poke-text-secondary">
-                  {[stage.summary, stage.participants, stage.groups, stage.ruleset, stage.doubles, stage.expected]
+                  {[
+                    stage.summary,
+                    stage.participants,
+                    stage.groups,
+                    stage.ruleset,
+                    stage.doubles,
+                    stage.expected,
+                    ...stage.constraints,
+                    ...stage.schedule,
+                    stage.endWhen,
+                    stage.foreachGroup,
+                  ]
                     .filter((line): line is string => line !== null && line !== '')
                     .join(' ')}
                 </p>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Edge } from '@/lib/format-kit/types';
-import { resolveAdvancement } from '../advancement';
+import { playersOfGroup, resolveAdvancement } from '../advancement';
 import type { KitStanding } from '../standings';
 
 /** A ranked table: `p1` first, with points falling by 3 a place. */
@@ -105,5 +105,20 @@ describe('resolveAdvancement', () => {
       picked(resolveAdvancement({ edge: edge([{ kind: 'top_n', n: 6 }], 'random'), table: standings(8), seed }));
     expect(run('s')).toEqual(run('s'));
     expect([...run('s')].sort()).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6']);
+  });
+});
+
+describe('playersOfGroup', () => {
+  const players = [1, 2, 3, 4, 5].map((n) => ({ player_id: `p${n}`, seed: n, select: 0 }));
+  const groupOf = { p1: 1, p2: 2, p3: 1, p4: 2 };
+
+  it('keeps the players of one group in their order, re-seeded from 1', () => {
+    expect(playersOfGroup(players, groupOf, 1).map((p) => [p.player_id, p.seed])).toEqual([['p1', 1], ['p3', 2]]);
+    expect(playersOfGroup(players, groupOf, 2).map((p) => [p.player_id, p.seed])).toEqual([['p2', 1], ['p4', 2]]);
+  });
+
+  it('drops a player the source has no group for, and an unknown group is empty', () => {
+    expect(playersOfGroup(players, groupOf, 1).map((p) => p.player_id)).not.toContain('p5');
+    expect(playersOfGroup(players, groupOf, 3)).toEqual([]);
   });
 });

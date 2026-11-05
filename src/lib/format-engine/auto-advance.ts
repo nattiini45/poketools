@@ -24,7 +24,7 @@ export async function autoAdvanceTargets(seasonId: string, sourcePhaseId: string
   if (!source) return [];
   return format.spec.edges
     .filter((edge) => edge.from === source.format_stage_key && edge.gate === 'auto')
-    .flatMap((edge) => phases.find((phase) => phase.format_stage_key === edge.to)?.id ?? []);
+    .flatMap((edge) => phases.filter((phase) => phase.format_stage_key === edge.to).map((phase) => phase.id));
 }
 
 /**

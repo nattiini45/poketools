@@ -111,17 +111,17 @@ describe('the report', () => {
 
   it('reports a reserved field apart from the unknown members', () => {
     const doc = { ...minimalDoc(), extra: 1 } as Record<string, unknown>;
-    (doc.stages as Array<Record<string, unknown>>)[0].constraints = [];
+    (doc.stages as Array<Record<string, unknown>>)[0].acquire = {};
     const report = prepared(text(doc));
-    expect(report.reserved).toEqual(['/stages/0/constraints']);
+    expect(report.reserved).toEqual(['/stages/0/acquire']);
     expect(report.unknownFields).toEqual(['/extra']);
     expect(report.errorCount).toBe(0);
   });
 
   it('reports a reserved field of a stage', () => {
     const doc = minimalDoc();
-    (doc.stages as Array<Record<string, unknown>>)[0].constraints = [];
-    expect(prepared(text(doc)).reserved).toEqual(['/stages/0/constraints']);
+    (doc.stages as Array<Record<string, unknown>>)[0].acquire = {};
+    expect(prepared(text(doc)).reserved).toEqual(['/stages/0/acquire']);
   });
 
   it('counts real errors', () => {
@@ -147,7 +147,7 @@ describe('stripUnknownFields', () => {
   it('removes unknown members and reserved sections and leaves nothing unknown', () => {
     const doc = { ...minimalDoc(), extra: 1 } as Record<string, unknown>;
     (doc.stages as Array<Record<string, unknown>>)[0].mystery = true;
-    (doc.stages as Array<Record<string, unknown>>)[0].constraints = [];
+    (doc.stages as Array<Record<string, unknown>>)[0].acquire = {};
     const report = prepared(text(doc));
     const stripped = stripUnknownFields(report);
     expect(stripped).not.toHaveProperty('extra');

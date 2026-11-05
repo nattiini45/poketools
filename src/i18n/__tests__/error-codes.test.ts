@@ -47,6 +47,8 @@ const KEY = /^[A-Za-z0-9_]+$/;
  *   validators (an action submission's problems, a check expression that failed, a stored tunable that does not fit).
  *   They are data returned as a list next to `ok: false` or logged, rendered by the studio's own messages, and never
  *   the `code` of an HTTP error body.
+ * - `lib/format-engine/runtime/team.ts`: the `kit_*` issue codes of a team's league constraints. They land in a
+ *   TeamValidationResult and render from the `teambuilder` validation messages, never as the `code` of an error body.
  */
 const NOT_API_ERROR_FILES = new Set([
   'lib/draft/reconciliation-report.ts',
@@ -56,6 +58,7 @@ const NOT_API_ERROR_FILES = new Set([
   'lib/format-engine/runtime/actions-server.ts',
   'lib/format-engine/runtime/checks.ts',
   'lib/format-engine/runtime/tunables.ts',
+  'lib/format-engine/runtime/team.ts',
 ]);
 /**
  * Directories whose `code: '<x>'` literals are not API error codes, relative to src/.

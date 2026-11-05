@@ -42,6 +42,20 @@ describe('autoAdvanceTargets', () => {
     expect(await autoAdvanceTargets(SEASON, 'B')).toEqual([]);
   });
 
+  it('leads into every phase of a foreach_group stage', async () => {
+    vi.mocked(getKitPhases).mockResolvedValue([
+      { id: 'A', format_stage_key: 'groups', format_group: 0, stage_order: 1, stage_spec: null },
+      { id: 'B1', format_stage_key: 'playoffs', format_group: 1, stage_order: 2, stage_spec: null },
+      { id: 'B2', format_stage_key: 'playoffs', format_group: 2, stage_order: 2, stage_spec: null },
+    ]);
+    vi.mocked(getSeasonFormat).mockResolvedValue(format('kit', [edge('up', 'groups', 'playoffs', 'auto')]));
+    expect(await autoAdvanceTargets(SEASON, 'A')).toEqual(['B1', 'B2']);
+    expect(await runAutoAdvance(SEASON, 'A')).toEqual([
+      { target_phase_id: 'B1', enrolled_count: 4 },
+      { target_phase_id: 'B2', enrolled_count: 4 },
+    ]);
+  });
+
   it('runs nothing unless the league is on the kit engine', async () => {
     vi.mocked(getSeasonFormat).mockResolvedValue(format('shadow', [edge('up', 'groups', 'playoffs', 'auto')]));
     expect(await autoAdvanceTargets(SEASON, 'A')).toEqual([]);

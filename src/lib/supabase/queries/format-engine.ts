@@ -36,16 +36,18 @@ export async function getSeasonKitHead(seasonId: string): Promise<SeasonKitHead 
 export interface KitPhaseRow {
   id: string;
   format_stage_key: string;
+  /** 0 for an ordinary phase; N for the phase a `foreach_group` stage plays for group N. */
+  format_group?: number;
   stage_order: number | null;
   stage_spec: Json | null;
 }
 
-/** The phases the attached format generated (one per kit stage), in stage order. */
+/** The phases the attached format generated (one per kit stage, one per group for a `foreach_group` stage), in stage order. */
 export async function getKitPhases(seasonId: string): Promise<KitPhaseRow[]> {
   if (!isValidUuid(seasonId)) return [];
   const { data, error } = await supabase
     .from('tournaments')
-    .select('id, format_stage_key, stage_order, stage_spec')
+    .select('id, format_stage_key, format_group, stage_order, stage_spec')
     .eq('season_id', seasonId)
     .not('format_stage_key', 'is', null)
     .order('stage_order', { ascending: true })
@@ -54,7 +56,7 @@ export async function getKitPhases(seasonId: string): Promise<KitPhaseRow[]> {
   return (data ?? []).flatMap((row) =>
     row.format_stage_key === null
       ? []
-      : [{ id: row.id, format_stage_key: row.format_stage_key, stage_order: row.stage_order, stage_spec: row.stage_spec }],
+      : [{ id: row.id, format_stage_key: row.format_stage_key, format_group: row.format_group, stage_order: row.stage_order, stage_spec: row.stage_spec }],
   );
 }
 

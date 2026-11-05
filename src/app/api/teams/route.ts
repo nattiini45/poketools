@@ -12,7 +12,8 @@ import {
 } from '@/lib/supabase/queries/teams';
 import { getTournamentById, isPlayerTournamentParticipant } from '@/lib/supabase/queries/tournaments';
 import type { ApiResponse, ApiResult } from '@/types/api';
-import type { TeamFormData } from '@/types/team';
+import type { PokemonSet, TeamFormData } from '@/types/team';
+import { refuseInvalidKitTeam } from '@/lib/team/kit-team-gate';
 import { filterTeamVisibility } from '@/lib/team/visibility';
 import {
   toPublicTeam,
@@ -152,6 +153,14 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
+
+      // A kit league's phase also holds the team to its stage constraints and the player's resources.
+      const refusal = await refuseInvalidKitTeam({
+        tournament,
+        playerId: player.playerId,
+        pokemon: body.pokemon as PokemonSet[],
+      });
+      if (refusal) return refusal;
     }
     // null tournament_id = personal team, no tournament checks needed
 

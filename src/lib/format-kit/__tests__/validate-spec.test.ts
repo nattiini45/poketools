@@ -363,27 +363,26 @@ describe('prepareDocument', () => {
 
   it('copies on write and never mutates the input', () => {
     const doc = { ...minimalDoc(), rules: [{ kind: 'rule.future', id: 'x' }, { kind: 'rule.custom', id: 'y', text: lt('T') }] };
-    setAt(doc, ['stages', 0, 'constraints'], []);
-    setAt(doc, ['stages', 0, 'pairing'], { kind: 'filter' });
+    setAt(doc, ['stages', 0, 'acquire'], []);
     const before = canonicalizeJson(doc);
     const prepared = prepareDocument(doc);
     expect(canonicalizeJson(doc)).toBe(before);
     expect(prepared.doc).not.toBe(doc);
     const out = prepared.doc as Record<string, unknown>;
     const stage = (out.stages as Record<string, unknown>[])[0];
-    expect('constraints' in stage).toBe(false);
-    expect(stage.pairing).toEqual({ kind: 'manual' });
+    expect('acquire' in stage).toBe(false);
     expect((out.rules as Record<string, unknown>[])[1]).toBe((doc.rules as Record<string, unknown>[])[1]);
-    expect(prepared.issues.map((i) => `${i.code} ${i.pointer} ${String(i.params.what)}`).sort()).toEqual(
-      ['not_available_yet /stages/0/constraints constraints', 'not_available_yet /stages/0/pairing pairing.filter'].sort(),
-    );
+    expect(prepared.issues.map((i) => `${i.code} ${i.pointer} ${String(i.params.what)}`)).toEqual([
+      'not_available_yet /stages/0/acquire acquire',
+    ]);
     expect(prepared.notes).toEqual([{ code: 'unknown_primitive', pointer: '/rules/0', params: { kind: 'rule.future' } }]);
   });
 
-  it('covers every reserved pairing tag', () => {
-    for (const tag of RESERVED_PAIRING_TAGS) {
-      const prepared = prepareDocument(setAt(minimalDoc(), ['stages', 0, 'pairing'], { kind: tag }));
-      expect(prepared.issues).toHaveLength(1);
+  it('covers every reserved pairing tag (none is left: all pairing kinds are available)', () => {
+    expect(RESERVED_PAIRING_TAGS).toEqual([]);
+    for (const kind of ['bipartite', 'filter', 'challenge']) {
+      const prepared = prepareDocument(setAt(minimalDoc(), ['stages', 0, 'pairing'], { kind }));
+      expect(prepared.issues).toEqual([]);
     }
   });
 

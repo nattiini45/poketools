@@ -8,9 +8,11 @@ import {
   type SeriesOverride,
   type Stage,
 } from '@/lib/format-kit';
+import { wichtelcupDoc } from '@/lib/format-kit/__tests__/fixtures/docs';
 import { ltext } from '@/lib/studio-core/ltext';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';
-import { STAGE_NAME_MAX_CHARS, engineGaps, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
+import type { EngineGap } from '../library-types';
+import { STAGE_NAME_MAX_CHARS, engineGaps, groupPhaseName, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
 
 const preset = (id: string): FormatDefinition => {
   const found = PRESETS.find((entry) => entry.id === id);
@@ -376,6 +378,17 @@ describe('planStages', () => {
       expect(engineGaps(warnings, 'legacy')).toEqual(warnings);
     });
 
+    it('drops filter, bipartite and constraint gaps for a kit league but keeps a challenge ladder', () => {
+      const gaps: EngineGap[] = [
+        { code: 'pairing_not_run', stage: 'a', params: { kind: 'filter' } },
+        { code: 'pairing_not_run', stage: 'b', params: { kind: 'bipartite' } },
+        { code: 'pairing_not_run', stage: 'c', params: { kind: 'challenge' } },
+        { code: 'constraints_not_run', stage: 'a', params: { count: 3 } },
+      ];
+      expect(engineGaps(gaps, 'kit')).toEqual([gaps[2]]);
+      expect(engineGaps(gaps, 'shadow')).toEqual(gaps);
+    });
+
     it('reports nothing for a format the engine runs completely', () => {
       const definition = preset('swiss-top-cut');
       for (const stage of definition.stages) delete stage.groups;
@@ -387,5 +400,48 @@ describe('planStages', () => {
   it('is deterministic', () => {
     const definition = preset('swiss-top-cut');
     expect(plan(definition, {}, 16)).toEqual(plan(definition, {}, 16));
+  });
+});
+
+describe('foreach_group', () => {
+  const doc = wichtelcupDoc() as unknown as FormatDefinition;
+  const rows = plan(doc).stages;
+  const groupsStage = doc.stages.find((stage) => stage.groups !== undefined);
+  const repeated = doc.stages.find((stage) => stage.foreach_group !== undefined);
+
+  it('plans one phase per group of the source stage, named by group', () => {
+    expect(groupsStage?.groups).toBeDefined();
+    expect(repeated).toBeDefined();
+    const count = groupsStage?.groups?.count ?? 0;
+    const phases = rows.filter((row) => row.key === repeated?.key);
+    expect(phases.map((row) => row.format_group)).toEqual(Array.from({ length: count }, (_, i) => i + 1));
+    expect(phases.map((row) => row.name.split(' · ')[1])).toEqual(['Group A', 'Group B', 'Group C', 'Group D'].slice(0, count));
+    expect(new Set(phases.map((row) => row.stage_order)).size).toBe(1);
+  });
+
+  it('leaves every other stage as one phase with group 0', () => {
+    for (const row of rows.filter((entry) => entry.key !== repeated?.key)) expect(row.format_group).toBe(0);
+    expect(rows.filter((row) => row.key === groupsStage?.key)).toHaveLength(1);
+  });
+
+  it('is deterministic', () => {
+    expect(plan(doc).stages).toEqual(rows);
+  });
+
+  it('keeps the group suffix when the stage name is cut', () => {
+    const name = groupPhaseName('x'.repeat(STAGE_NAME_MAX_CHARS), 2);
+    expect(name.endsWith(' · Group B')).toBe(true);
+    expect(name.length).toBeLessThanOrEqual(STAGE_NAME_MAX_CHARS);
+  });
+
+  it('the kit engine runs it; the other engines still report it', () => {
+    const warnings = plan(doc).warnings;
+    const codes = (engine: 'kit' | 'shadow' | 'legacy') => engineGaps(warnings, engine).map((gap) => gap.code);
+    expect(codes('kit')).not.toContain('foreach_group_not_run');
+    expect(codes('kit')).not.toContain('calendar_not_run');
+    expect(codes('kit')).not.toContain('end_when_not_run');
+    expect(codes('legacy')).toContain('foreach_group_not_run');
+    expect(codes('legacy')).toContain('calendar_not_run');
+    expect(codes('legacy')).toContain('end_when_not_run');
   });
 });

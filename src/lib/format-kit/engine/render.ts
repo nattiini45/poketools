@@ -25,6 +25,7 @@ const CATALOG_PARAMS: ReadonlyMap<string, string> = new Map([
   ['issue', 'exprIssues'],
   ['ref', 'refKinds'],
   ['adjust', 'adjustKinds'],
+  ['constraint', 'constraintKinds'],
 ]);
 
 /**

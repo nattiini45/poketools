@@ -95,3 +95,30 @@ describe('kitAdvancingPlayers', () => {
     expect((await kitAdvancingPlayers({ ...INPUT, manualList: ['c', 'a'] }))?.map((p) => p.player_id)).toEqual(['c', 'a']);
   });
 });
+
+describe('kitAdvancingPlayers into a foreach_group phase', () => {
+  const groupOf = { a: 1, b: 2, c: 1, d: 2 };
+
+  function arrangeGroups() {
+    arrange([{ kind: 'per_group', n: 2 }]);
+    vi.mocked(getKitPhases).mockResolvedValue([
+      { id: 'src', format_stage_key: 'groups', format_group: 0, stage_order: 1, stage_spec: { v: 1, stage: stage('groups') } },
+      { id: 'tgt1', format_stage_key: 'finals', format_group: 1, stage_order: 2, stage_spec: { v: 1, stage: stage('finals') } },
+      { id: 'tgt2', format_stage_key: 'finals', format_group: 2, stage_order: 2, stage_spec: { v: 1, stage: stage('finals') } },
+    ] as never);
+  }
+
+  it('fills each group phase with the players of its own group, seeded from 1', async () => {
+    arrangeGroups();
+    const first = await kitAdvancingPlayers({ ...INPUT, targetPhaseId: 'tgt1', groupOf });
+    const second = await kitAdvancingPlayers({ ...INPUT, targetPhaseId: 'tgt2', groupOf });
+    expect(first?.map((p) => [p.player_id, p.seed])).toEqual([['a', 1], ['c', 2]]);
+    expect(second?.map((p) => [p.player_id, p.seed])).toEqual([['b', 1], ['d', 2]]);
+  });
+
+  it('is null for a phase the league does not have', async () => {
+    arrangeGroups();
+    const all = await kitAdvancingPlayers({ ...INPUT, targetPhaseId: 'tgt', groupOf });
+    expect(all).toBeNull();
+  });
+});

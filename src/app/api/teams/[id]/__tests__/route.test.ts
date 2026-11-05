@@ -32,6 +32,9 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentById: vi.fn(),
 }));
 
+// The kit-league gate has its own route tests (`kit-team.test.ts`); here it passes every team.
+vi.mock('@/lib/team/kit-team-gate', () => ({ refuseInvalidKitTeam: vi.fn().mockResolvedValue(null) }));
+
 vi.mock('@/lib/revalidation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/revalidation')>()),
   expirePublicTags: vi.fn(),

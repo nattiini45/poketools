@@ -500,6 +500,16 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
     { season_id: seasonId, kind: 'points', target: { stage: 'main', player_id: playerIds[0] }, delta: { points: 1 }, reason: 'late report', admin_id: adminId },
     { season_id: seasonId, kind: 'rank', target: { stage: 'main' }, delta: { order: [] }, reason: 'tie break by hand', admin_id: null },
   ]);
+  // Challenge ladder (20261106090000): an open challenge (its accept window shifts on restore), an accepted one that
+  // points at a scheduled match, and an expired one.
+  await insert(client, 'format_challenges', [
+    { season_id: seasonId, phase_id: phaseIds[0], challenger_id: playerIds[0], defender_id: playerIds[1], round: 1, expires_at: at(DAY) },
+    {
+      season_id: seasonId, phase_id: phaseIds[0], challenger_id: playerIds[2], defender_id: playerIds[3], round: 1, status: 'accepted',
+      expires_at: at(-DAY), responded_at: at(-DAY), match_id: scheduled[0]?.id ?? null,
+    },
+    { season_id: seasonId, phase_id: phaseIds[0], challenger_id: playerIds[1], defender_id: playerIds[2], round: 1, status: 'expired', expires_at: at(-DAY) },
+  ]);
 
   // Derived rows.
   const aggs = (scope_type: string, scope_id: string) => Array.from({ length: 20 }, (_, g) => ({ scope_type, scope_id, pokemon_name: `mon${g + 1}`, total_appearances: 10 }));

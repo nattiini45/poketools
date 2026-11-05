@@ -82,6 +82,18 @@ function fields(placed: Placed): Map<string, ExprValue> {
   ]);
 }
 
+/**
+ * The advanced players that belong to group `group` of the source stage, in their order and re-seeded from 1: what one
+ * phase of a `foreach_group` stage is filled with. A player the source has no group for belongs to no group phase.
+ */
+export function playersOfGroup(
+  players: readonly AdvancedPlayer[],
+  groupOf: Readonly<Record<string, number>>,
+  group: number,
+): AdvancedPlayer[] {
+  return players.filter((p) => groupOf[p.player_id] === group).map((p, i) => ({ ...p, seed: i + 1 }));
+}
+
 export function resolveAdvancement(input: AdvancementInput): AdvancementResult {
   const placed = placements(input);
   const picked = new Map<string, { at: Placed; select: number }>();

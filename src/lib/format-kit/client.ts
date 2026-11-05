@@ -26,6 +26,7 @@ export { USER_CHOICE_FIXES } from './engine/fixes';
 export type { CompileResult } from './engine/core';
 export type { StageGraph, StageNode } from './engine/graph';
 export type { CountRange, StagePlan } from './engine/plan';
+export { mappedBracketType } from './engine/plan';
 export { deriveCapabilities } from './engine/capabilities';
 export * from './engine/schedule';
 export { renderDiagnostic, renderFix, renderSeverity } from './engine/render';

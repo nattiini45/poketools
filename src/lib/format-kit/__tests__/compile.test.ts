@@ -88,9 +88,9 @@ describe('negative fixtures', () => {
   });
 
   it('reports a reserved stage field as not available yet and nothing else for it', () => {
-    const result = compile(mutate(classicLeague, [{ op: 'add', path: '/stages/0/end_when', value: { kind: 'later' } }]));
+    const result = compile(mutate(classicLeague, [{ op: 'add', path: '/stages/0/acquire', value: { kind: 'later' } }]));
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]).toMatchObject({ code: 'schema_not_available_yet', json_pointer: '/stages/0/end_when', params: { what: 'end_when' } });
+    expect(result.diagnostics[0]).toMatchObject({ code: 'schema_not_available_yet', json_pointer: '/stages/0/acquire', params: { what: 'acquire' } });
   });
 
   it('accepts the Phase 3 sections that used to be reserved', () => {

@@ -77,6 +77,18 @@ export default {
         'Your assigned core could not be read, so the rules that depend on it could not be checked. Try again in a moment',
       ruleset_load_failed:
         'The ruleset for this check could not be used, so the team was checked against the format only and is not confirmed legal for your league',
+      // Custom-format stage constraints; the English texts equal `constraintIssueText` (format-engine/runtime/team.ts)
+      kit_roster_size: 'Team size: this league needs {min} to {max} Pokémon, found {have}',
+      kit_count_min: 'Team rule: at least {min} Pokémon from {source} needed, found {have}',
+      kit_count_max: 'Team rule: at most {max} Pokémon from {source} allowed, found {have}',
+      kit_distinct: 'Team rule: at most {max} Pokémon may share the same {by} ({value}), found {have}',
+      kit_type_quota: 'Type quota: need at least {min} {type}-type Pokémon, have {have}',
+      kit_tera_banned: 'Terastallization is not allowed in this league',
+      kit_tera_stab: "Tera type {type} must be one of {species}'s types ({types})",
+      kit_tera_attr: 'Tera type {type} must be your assigned type ({types})',
+      kit_evolution_stage:
+        'Evolution stage rule: at most {max} Pokémon of stage {stage} (fe: fully evolved, nfe: not fully evolved, lc: first stage) allowed, found {have}',
+      kit_constraint_expr: 'League rule {index} could not be checked ({reason})',
     },
   },
   /** Outspeed solver notes (`api/pkmn/speed-calc` `impossible`); `{item}` is the localized Choice Scarf. */

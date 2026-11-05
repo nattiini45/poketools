@@ -58,9 +58,9 @@ function walk(spec: Spec, visit: (spec: Spec, fieldName: string | null, inOneof:
 }
 
 describe('kinds and manifest', () => {
-  it('lists 40 available and 14 reserved kinds without duplicates', () => {
-    expect(AVAILABLE_KINDS).toHaveLength(40);
-    expect(RESERVED_KINDS).toHaveLength(14);
+  it('lists 53 available and 1 reserved kind without duplicates', () => {
+    expect(AVAILABLE_KINDS).toHaveLength(53);
+    expect(RESERVED_KINDS).toHaveLength(1);
     expect(PRIMITIVE_KINDS).toHaveLength(54);
     expect(new Set(PRIMITIVE_KINDS).size).toBe(54);
     for (const kind of PRIMITIVE_KINDS) expect(kind).toMatch(/^[a-z]+\.[a-z_]+$/);
@@ -92,7 +92,7 @@ describe('kinds and manifest', () => {
 
   it('slot and tag are consistent with the kind', () => {
     for (const entry of MANIFEST) {
-      if (entry.slot === 'pairing' || entry.slot === 'rank') {
+      if (entry.slot === 'pairing' || entry.slot === 'rank' || entry.slot === 'constraint') {
         expect(entry.tag, entry.kind).not.toBeNull();
         expect(entry.kind).toBe(`${entry.slot}.${entry.tag}`);
       } else if (entry.slot === 'advance') {
@@ -105,10 +105,20 @@ describe('kinds and manifest', () => {
       }
     }
     expect(manifestEntry('pairing.swiss')).toMatchObject({ slot: 'pairing', tag: 'swiss' });
-    expect(manifestForSlot('pairing').map((e) => e.tag)).toEqual(['round_robin', 'swiss', 'single_elim', 'double_elim', 'manual']);
+    expect(manifestForSlot('pairing').map((e) => e.tag)).toEqual([
+      'round_robin',
+      'swiss',
+      'single_elim',
+      'double_elim',
+      'manual',
+      'bipartite',
+      'filter',
+      'challenge',
+    ]);
     expect(manifestForSlot('rank')).toHaveLength(5);
     expect(manifestForSlot('advance')).toHaveLength(7);
-    expect(manifestForSlot('reserved')).toHaveLength(14);
+    expect(manifestForSlot('reserved')).toHaveLength(1);
+    expect(manifestForSlot('constraint')).toHaveLength(6);
   });
 
   it('levels: rule.custom is the only honor kind, check.assisted and adjust.manual are checked, the rest of the available kinds are auto', () => {
@@ -121,7 +131,7 @@ describe('kinds and manifest', () => {
         const checked = entry.kind === 'check.assisted' || entry.kind === 'adjust.manual';
         expect(entry.level).toBe(entry.kind === 'rule.custom' ? 'honor' : checked ? 'checked' : 'auto');
         expect(entry.phase).toBeGreaterThanOrEqual(1);
-        expect(entry.phase).toBeLessThanOrEqual(3);
+        expect(entry.phase).toBeLessThanOrEqual(4);
       }
     }
   });

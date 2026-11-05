@@ -81,10 +81,10 @@ export function fixReduceGroups(stage: number, groups: number): Fix {
   ]);
 }
 
-export function fixSetSwissRoundsAuto(stage: number): Fix {
-  return fix('set_swiss_rounds_auto', {}, [
-    { op: 'replace', path: ptr('stages', stage, 'pairing', 'rounds'), value: 'auto' },
-  ]);
+/** `filtered` points at the swiss base of a filter pairing instead of the pairing itself. */
+export function fixSetSwissRoundsAuto(stage: number, filtered = false): Fix {
+  const path = filtered ? ptr('stages', stage, 'pairing', 'base', 'rounds') : ptr('stages', stage, 'pairing', 'rounds');
+  return fix('set_swiss_rounds_auto', {}, [{ op: 'replace', path, value: 'auto' }]);
 }
 
 export function fixUseSeasonRuleset(stage: number): Fix {

@@ -72,6 +72,8 @@ const PAIRING_DEFAULTS: Readonly<Record<string, Rec>> = {
   swiss: { avoid_repeats: true },
   single_elim: { third_place: false },
   double_elim: { bracket_reset: false },
+  bipartite: { avoid_repeats: true },
+  challenge: { max_open: 1, cooldown_rounds: 1, accept_window_hours: 72 },
 };
 
 function normalizePairing(pairing: Rec): Rec {

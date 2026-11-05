@@ -9,7 +9,13 @@
  *   player's `attr.*` and `tunable.*`;
  * - entry env: `id` and `attr.<key>` of every entry attribute that is not multi, plus `tunable.*`;
  * - event env: `round` (0 when the event has none) and `tunable.*`;
- * - assignment env: `player` and `tunable.*` only, so attribute assignments cannot depend on each other.
+ * - assignment env: `player` and `tunable.*` only, so attribute assignments cannot depend on each other;
+ * - pair env (the `allow` of a filtered pairing): `a` and `b` (the two player ids), `round`, `a_attr.<key>` and
+ *   `b_attr.<key>` for every player attribute that is not multi, and `tunable.*`;
+ * - team env (the `when` of a team constraint): `round`, `player`, `unlocked.<domain>` (whether the domain is
+ *   unlocked), `attr.<key>` of every player attribute that is not multi, and `tunable.*`;
+ * - stage env (the `when` of `end_when`): `round` (the last completed round), `rounds_played`, `open_matches`,
+ *   `participants` and `tunable.*`.
  *
  * Every relation key is usable in `rel(key, a, b)` in every env. Keys are looked up through Maps (first wins).
  */
@@ -144,4 +150,24 @@ export function eventEnv(def: FormatDefinition): TypeEnv {
 
 export function assignEnv(def: FormatDefinition): TypeEnv {
   return envOf(def, typed('text', 'player'), tunableRefs(def));
+}
+
+export function pairEnv(def: FormatDefinition): TypeEnv {
+  const sides = new Map<string, ExprType>();
+  for (const [name, type] of attrRefs(def, 'player')) {
+    const key = name.slice('attr.'.length);
+    sides.set(`a_attr.${key}`, type);
+    sides.set(`b_attr.${key}`, type);
+  }
+  return envOf(def, typed('text', 'a', 'b'), typed('number', 'round'), sides, tunableRefs(def));
+}
+
+export function teamEnv(def: FormatDefinition): TypeEnv {
+  const unlocked = new Map<string, ExprType>();
+  for (const domain of toMap(def.domains ?? [], (d) => d.key).values()) unlocked.set(`unlocked.${domain.key}`, 'boolean');
+  return envOf(def, typed('number', 'round'), typed('text', 'player'), unlocked, attrRefs(def, 'player'), tunableRefs(def));
+}
+
+export function stageEnv(def: FormatDefinition): TypeEnv {
+  return envOf(def, typed('number', 'round', 'rounds_played', 'open_matches', 'participants'), tunableRefs(def));
 }
