@@ -18,6 +18,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { mapFormatDbError } from '@/lib/format-studio/errors';
 import { parseDbError } from '@/lib/studio-core/db-errors';
 import { isValidUuid } from '@/lib/utils/uuid';
+import type { FormatOp, RuntimeCheck } from '@/lib/format-engine/runtime/types';
 
 export type FormatRelationLinkRow = Tables<'format_relation_links'>;
 export type FormatResourceItemRow = Tables<'format_resource_items'>;
@@ -30,36 +31,10 @@ export type FormatCheckRow = Tables<'format_checks'>;
 export type FormatAdjustmentRow = Tables<'format_adjustments'>;
 
 export type FormatAdjustmentKind = 'points' | 'resource' | 'relation' | 'outcome' | 'action' | 'domain' | 'rank';
-export type FormatCheckSource = 'unresolved_outcome' | 'standings_tie' | 'pairing_rematch' | 'pairing_forbidden' | 'deadline_missed' | 'expr';
+export type FormatCheckSource = RuntimeCheck['source'];
 export type FormatSubmissionStatus = 'draft' | 'submitted' | 'locked';
 
-/**
- * The op vocabulary `format__apply_ops` applies in order (the SQL function is its twin). The planner produces it;
- * a member the database does not know raises `invalid_op`.
- */
-export type FormatOp =
-  | { op: 'set_flag'; key: string; value: Json }
-  /** Inserts the links only when the relation has none yet; otherwise a no-op. */
-  | { op: 'set_relation'; relation: string; links: { from: string; to: string }[] }
-  | { op: 'reveal_relation'; relation: string }
-  | {
-      op: 'grant_item';
-      resource: string;
-      player_id: string;
-      item_id: string | null;
-      amount: number;
-      exclusive: boolean;
-      source: 'event' | 'adjustment';
-      source_ref: string | null;
-    }
-  /** Removes `amount` units of the matching rows, oldest first. */
-  | { op: 'revoke_item'; resource: string; player_id: string; item_id: string | null; amount: number }
-  | { op: 'set_attr'; player_id: string; attr: string; value: Json; source: string }
-  | { op: 'adjust_points'; stage: string; player_id: string; points: number; reason: string }
-  | { op: 'open_action'; action: string }
-  | { op: 'lock_action'; action: string }
-  /** Only ever raises the step. */
-  | { op: 'set_track'; track: string; player_id: string; step: number };
+export type { FormatOp };
 
 /** One item a submitted action grants to its target (or its actor when there is no target). */
 export interface FormatActionItem {
@@ -139,7 +114,16 @@ export async function getFormatRuntime(seasonId: string): Promise<FormatRuntime>
 // ---------------------------------------------------------------------------------------------------------------
 // Errors
 
-export const FORMAT_RUNTIME_ERROR_CODES = ['action_locked', 'resource_item_taken', 'domain_amendment_locked', 'reason_required'] as const;
+/** The longest adjustment reason (`format_adjustments_reason_length`: 1..500 characters after trimming). */
+export const FORMAT_ADJUSTMENT_REASON_MAX = 500;
+
+export const FORMAT_RUNTIME_ERROR_CODES = [
+  'action_locked',
+  'resource_item_taken',
+  'domain_amendment_locked',
+  'reason_required',
+  'reason_too_long',
+] as const;
 export type FormatRuntimeErrorCode = (typeof FORMAT_RUNTIME_ERROR_CODES)[number];
 
 const FORMAT_RUNTIME_ERROR_STATUS: { readonly [C in FormatRuntimeErrorCode]: number } = {
@@ -147,6 +131,7 @@ const FORMAT_RUNTIME_ERROR_STATUS: { readonly [C in FormatRuntimeErrorCode]: num
   resource_item_taken: 409,
   domain_amendment_locked: 409,
   reason_required: 400,
+  reason_too_long: 400,
 };
 
 /** A refusal of the runtime functions that the viewer can act on; `safeErrorResponse` passes its code and text. */
@@ -173,7 +158,40 @@ export function mapFormatRuntimeDbError(error: unknown): unknown {
   if (signal?.code === 'P0001' && signal.message !== undefined && isRuntimeCode(signal.message)) {
     return new FormatRuntimeError(signal.message);
   }
+  // A reason the application did not length-check (an op of a rule) reaches the table's check constraint.
+  if (signal?.code === '23514' && signal.constraint === 'format_adjustments_reason_length') {
+    return new FormatRuntimeError('reason_too_long');
+  }
   return mapFormatDbError(error);
+}
+
+/** The changes `format_apply_adjustment` refuses instead of recording them as done (the ops would skip them silently). */
+export const FORMAT_ADJUSTMENT_REFUSALS = ['relation_has_links', 'insufficient_holding'] as const;
+export type FormatAdjustmentRefusal = (typeof FORMAT_ADJUSTMENT_REFUSALS)[number];
+
+/**
+ * `format_apply_adjustment` refused the change under its own lock: a concurrent request took the relation's links or the
+ * units first, after the caller's snapshot was read. Nothing was written. `applyAdjustment` turns it into the matching
+ * `AdjustIssue`, so the route answers it like the check against the snapshot.
+ */
+export class FormatAdjustmentRefusedError extends Error {
+  constructor(readonly refusal: FormatAdjustmentRefusal) {
+    super(refusal);
+    this.name = 'FormatAdjustmentRefusedError';
+  }
+}
+
+/**
+ * `format_action_submit` was asked to write only over a draft (`onlyIfUnsubmitted`) and found a submitted pick: the player
+ * committed after the caller read its state. Nothing was written. A pick that is already locked (or a locked action)
+ * raises `action_locked` instead, because the function checks the lock first; the caller treats both as "left alone".
+ * Only the cron's deadline draw asks, so it never leaves the server as an API answer.
+ */
+export class FormatActionAlreadySubmittedError extends Error {
+  constructor() {
+    super('action_already_submitted');
+    this.name = 'FormatActionAlreadySubmittedError';
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -232,9 +250,17 @@ export interface SubmitFormatActionInput extends SaveFormatActionInput {
   items: readonly FormatActionItem[];
   /** True locks the submission at once (a `lock: on_submit` action). */
   lock: boolean;
+  /**
+   * True writes only over a draft or a fresh row; a pick already submitted or locked raises
+   * `FormatActionAlreadySubmittedError` under the action's lock (the cron's draw must not replace a player's choice).
+   */
+  onlyIfUnsubmitted?: boolean;
 }
 
-/** Submits a pick. Raises `action_locked` or `resource_item_taken` (nothing is written then). */
+/**
+ * Submits a pick. Raises `action_locked` or `resource_item_taken` (nothing is written then), and with `onlyIfUnsubmitted`
+ * a `FormatActionAlreadySubmittedError` when the pick is already submitted (a locked pick raises `action_locked`).
+ */
 export async function submitFormatAction(input: SubmitFormatActionInput): Promise<FormatActionSubmissionRow> {
   const { data, error } = await supabase.rpc('format_action_submit', {
     p_season_id: input.seasonId,
@@ -244,8 +270,13 @@ export async function submitFormatAction(input: SubmitFormatActionInput): Promis
     p_picks: input.picks,
     p_items: input.items as unknown as Json,
     p_lock: input.lock,
+    ...(input.onlyIfUnsubmitted === true ? { p_only_if_unsubmitted: true } : {}),
   });
-  if (error) throw mapFormatRuntimeDbError(error);
+  if (error) {
+    const signal = parseDbError(error);
+    if (signal?.code === 'P0001' && signal.message === 'action_already_submitted') throw new FormatActionAlreadySubmittedError();
+    throw mapFormatRuntimeDbError(error);
+  }
   return data;
 }
 
@@ -261,7 +292,10 @@ export interface ApplyFormatAdjustmentInput {
   guardActions: readonly string[];
 }
 
-/** Records an admin adjustment and applies its ops. Returns the adjustment id. */
+/**
+ * Records an admin adjustment and applies its ops. Returns the adjustment id. Raises `FormatAdjustmentRefusedError` when
+ * the relation already has links or the player holds fewer units than a revoke asks for (nothing is written then).
+ */
 export async function applyFormatAdjustment(input: ApplyFormatAdjustmentInput): Promise<string> {
   const { data, error } = await supabase.rpc('format_apply_adjustment', {
     p_season_id: input.seasonId,
@@ -273,7 +307,12 @@ export async function applyFormatAdjustment(input: ApplyFormatAdjustmentInput): 
     p_ops: input.ops as unknown as Json,
     p_guard_actions: [...input.guardActions],
   });
-  if (error) throw mapFormatRuntimeDbError(error);
+  if (error) {
+    const signal = parseDbError(error);
+    const refusal = FORMAT_ADJUSTMENT_REFUSALS.find((code) => code === signal?.message);
+    if (signal?.code === 'P0001' && refusal !== undefined) throw new FormatAdjustmentRefusedError(refusal);
+    throw mapFormatRuntimeDbError(error);
+  }
   return data;
 }
 
@@ -299,15 +338,18 @@ export async function openFormatCheck(input: OpenFormatCheckInput): Promise<stri
 }
 
 export interface ResolveFormatCheckInput {
+  /** The league the check belongs to: a check of another league resolves nothing. */
+  seasonId: string;
   checkId: string;
   status: 'confirmed' | 'rejected';
   adminId: string | null;
   note: string | null;
 }
 
-/** Resolves an open check. False when it was not open (already resolved, or unknown). */
+/** Resolves an open check of the league. False when it was not open (already resolved, unknown, or of another league). */
 export async function resolveFormatCheck(input: ResolveFormatCheckInput): Promise<boolean> {
   const { data, error } = await supabase.rpc('format_check_resolve', {
+    p_season_id: input.seasonId,
     p_check_id: input.checkId,
     p_status: input.status,
     p_admin: nullable(input.adminId),

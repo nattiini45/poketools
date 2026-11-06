@@ -538,6 +538,9 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'action-distinct-attr-invalid', 'action_distinct_attr_invalid', '/rules/6/steps/0/distinct_attr', mutate(G, [
     { op: 'replace', path: '/rules/6/steps/0/distinct_attr', value: 'house' },
   ]), { params: { action: 'choose_gift', attr: 'house', reason: 'player' } }),
+  fx('error', 'action-distinct-attr-missing', 'action_distinct_attr_missing', '/rules/6/steps/0/distinct_attr', mutate(G, [
+    { op: 'add', path: '/domains/0/entries/-', value: { id: 'mew', attrs: [{ key: 'bonus', value: 1 }] } },
+  ]), { params: { action: 'choose_gift', domain: 'pool', attr: 'role', count: 1, first: 'mew' } }),
   fx('warning', 'action-exceeds-capacity', 'action_exceeds_capacity', '/rules/6/steps', mutate(G, [
     { op: 'replace', path: '/rules/6/steps/0/count', value: 3 },
   ]), { params: { action: 'choose_gift', resource: 'picks', count: 3, capacity: 2 } }),
@@ -560,6 +563,11 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'bipartite-sides-overlap', 'bipartite_sides_overlap', '/stages/1/pairing/side_b/0', mutate(W, [
     { op: 'replace', path: '/stages/1/pairing/side_b', value: ['ember', 'tide'] },
   ]), { params: { stage: 'houses', attr: 'house', value: 'ember' } }),
+  // 16 players, all assigned a house and every house on a side: the larger side has at least 8, the stage plays 3 rounds.
+  fx('warning', 'bipartite-rounds-short', 'bipartite_rounds_short', '/stages/1/pairing/rounds', mutate(W, []), {
+    env: rosterEnv(16),
+    params: { stage: 'houses', attr: 'house', rounds: 3, needed: 8, players: 16 },
+  }),
   fx('error', 'filter-expr-unknown-relation', 'expr_invalid', '/stages/0/pairing/allow/a/relation', mutate(W, [
     { op: 'replace', path: '/stages/0/pairing/allow/a/relation', value: 'nobody' },
   ]), { params: { context: 'pair_filter', issue: 'expr_unknown_relation' } }),
@@ -585,6 +593,15 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     { op: 'add', path: '/resources/-', value: { key: 'coins', label: { base: 'en', en: { v: 'Coins', s: 'human' } }, holds: { kind: 'counter' } } },
     { op: 'replace', path: '/stages/0/constraints/5/source/resource', value: 'coins' },
   ]), { params: { stage: 'cup', resource: 'coins', reason: 'counter' } }),
+  fx('error', 'constraint-source-hidden-domain', 'constraint_source_hidden_domain', '/stages/0/constraints/9/source/domain', mutate(W, [
+    { op: 'replace', path: '/domains/1/visibility', value: 'admins' },
+  ]), { params: { stage: 'cup', constraint: 'count', domain: 'new_year' } }),
+  fx('error', 'constraint-source-hidden-domain-in-not', 'constraint_source_hidden_domain', '/stages/0/constraints/4/source/source/sources/0/domain', mutate(W, [
+    { op: 'replace', path: '/domains/0/visibility', value: 'admins' },
+  ]), { params: { stage: 'cup', constraint: 'count', domain: 'normal' } }),
+  fx('error', 'constraint-distinct-attr-hidden-domain', 'constraint_source_hidden_domain', '/stages/2/constraints/2/attr', mutate(W, [
+    { op: 'replace', path: '/domains/1/visibility', value: 'admins' },
+  ]), { params: { stage: 'ladder', constraint: 'distinct', domain: 'new_year' } }),
   fx('warning', 'constraint-species-unknown', 'constraint_species_unknown', '/stages/2/constraints/4/source/ids/1', mutate(W, []), {
     env: withSpecies(['garchomp', 'corviknight']),
     params: { stage: 'ladder', id: 'blissey' },
@@ -604,6 +621,9 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'deadline-policy-invalid', 'deadline_policy_invalid', '/stages/0/calendar/deadlines/1', mutate(W, [
     { op: 'replace', path: '/stages/0/calendar/deadlines/1/on_miss', value: 'auto_lock' },
   ]), { params: { stage: 'cup', applies: 'match', on_miss: 'auto_lock', reason: 'action_only' } }),
+  fx('error', 'deadline-random-pick-after-close', 'deadline_policy_invalid', '/stages/0/calendar/deadlines/0', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/deadlines/0/offset_hours', value: 0 },
+  ]), { params: { stage: 'cup', applies: 'action', on_miss: 'seeded_random_pick', reason: 'pick_after_close' } }),
   fx('error', 'deadline-action-unknown', 'ref_unknown', '/stages/0/calendar/deadlines/0/action', mutate(W, [
     { op: 'replace', path: '/stages/0/calendar/deadlines/0/action', value: 'nowhere' },
   ]), { params: { ref: 'action', key: 'nowhere', where: 'deadline' } }),

@@ -70,6 +70,7 @@ export default defineDe<typeof en>()({
       kit_roster_size: 'Teamgröße: Diese Liga verlangt {min} bis {max} Pokémon, du hast {have}',
       kit_count_min: 'Teamregel: Du brauchst mindestens {min} Pokémon aus {source}, hast aber {have}',
       kit_count_max: 'Teamregel: Aus {source} sind höchstens {max} Pokémon erlaubt, du hast {have}',
+      kit_not_allowed: '{species} gehört zu keinem Pool, den du in dieser Liga nutzen darfst',
       kit_distinct: 'Teamregel: Höchstens {max} Pokémon dürfen denselben Wert teilen ({by}: {value}), du hast {have}',
       kit_type_quota: 'Typ-Quote: Du brauchst mindestens {min} Pokémon vom Typ {type}, hast aber {have}',
       kit_tera_banned: 'Terakristallisierung ist in dieser Liga nicht erlaubt',
@@ -129,6 +130,8 @@ export default defineDe<typeof en>()({
       locked: 'Gesperrt',
       saving: 'Wird gespeichert …',
       saved: 'Gespeichert',
+      savedWithIssues: 'Gespeichert, Regeln nicht erfüllt',
+      savedUnchecked: 'Gespeichert, Regeln konnten nicht geprüft werden',
       saveFailed: 'Speichern fehlgeschlagen',
       unsaved: 'Nicht gespeichert',
     },
@@ -148,8 +151,10 @@ export default defineDe<typeof en>()({
   },
   mobile: {
     intel: 'Intel',
+    validation: 'Prüfen',
     ai: 'KI',
     intelSheet: 'Intel',
+    validationSheet: 'Prüfung',
     aiSheet: 'KI-Coach',
   },
   budgetMeter: {

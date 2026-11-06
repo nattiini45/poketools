@@ -22,6 +22,7 @@ import {
   MAX_CUSTOM_RULES_CHARS,
   MAX_ID_LENGTH,
   MAX_IDS_PER_LIST,
+  MAX_LEVEL_ENTRIES,
   MAX_NAME_CHARS,
 } from './limits';
 import {
@@ -346,7 +347,7 @@ function parseLevels(value: unknown, out: Collector): LevelRules | null | undefi
   let ok = true;
   if (policy !== 'exact' && policy !== 'max') { fail('policy'); ok = false; }
   if (!intInRange(defaultLevel, 1, 100)) { fail('default'); ok = false; }
-  if (!Array.isArray(rawEntries) || rawEntries.length > 256) {
+  if (!Array.isArray(rawEntries) || rawEntries.length > MAX_LEVEL_ENTRIES) {
     fail('entries');
     return undefined;
   }

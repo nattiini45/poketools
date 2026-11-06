@@ -23,6 +23,9 @@ import { describe, expect, it } from 'vitest';
  *    does not re-export it: consumers import `LText` and its helpers from `@/lib/studio-core/ltext` directly.
  *  - `@/lib/pkmn/ruleset-preset-catalog`: the dex-free rule preset catalog view `ruleset-presets.ts` reads; it walks to no
  *    dex, no server data and no `@pkmn` package (`src/lib/pkmn/__tests__/format-catalog-boundary.test.ts` proves it).
+ *  - `@/lib/pkmn/preset-data/wichtelcup` and `@/lib/pkmn/i18n/id`: the transcribed Wichtelcup species tables the
+ *    `wichtelcup` example is built from, and the id fold that maps their names to dex ids. Both are dex-free (the table
+ *    file has a type-only import, the id fold none by contract).
  */
 
 const KIT = path.resolve(__dirname, '..');
@@ -38,6 +41,8 @@ const ALLOWED_OUTSIDE = new Set([
   '@/lib/season/format-capabilities',
   '@/lib/tournament/round-robin',
   '@/lib/pkmn/ruleset-preset-catalog',
+  '@/lib/pkmn/preset-data/wichtelcup',
+  '@/lib/pkmn/i18n/id',
   '@/lib/pkmn/type-chart',
   '@/lib/studio-core/json',
   '@/lib/studio-core/keys',

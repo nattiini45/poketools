@@ -50,6 +50,8 @@ export interface LeagueHubCopy {
     matchup: string;
     teams: string;
     phasePage: string;
+    /** The player's page of a custom league (`/dashboard/leagues/{id}/play`). */
+    play: string;
   };
   table: {
     rank: string;

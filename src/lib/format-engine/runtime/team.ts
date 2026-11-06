@@ -50,6 +50,7 @@ export type ConstraintIssueCode = Extract<
   | 'kit_roster_size'
   | 'kit_count_min'
   | 'kit_count_max'
+  | 'kit_not_allowed'
   | 'kit_distinct'
   | 'kit_type_quota'
   | 'kit_tera_banned'
@@ -118,7 +119,8 @@ function sourceLabel(source: CountSource): string {
     case 'domain':
       return source.unlocked_only ? `domain ${source.domain} (when unlocked)` : `domain ${source.domain}`;
     case 'resource':
-      return `resource ${source.resource}`;
+      // The player's own holdings of a resource, read as a phrase (`junk_gifts` -> "your own junk gifts").
+      return `your own ${source.resource.replace(/_/g, ' ')}`;
     case 'species':
       return `species ${source.ids.join(', ')}`;
     case 'any_of':
@@ -189,6 +191,11 @@ function evolutionCaps(constraint: Extract<TeamConstraint, { kind: 'evolution_st
   ];
 }
 
+/** An allowlist: a count of the complement of some pools with a ceiling of zero and no floor. */
+function isAllowlist(constraint: Extract<TeamConstraint, { kind: 'count' }>): boolean {
+  return constraint.source.kind === 'not' && constraint.max === 0 && constraint.min === undefined;
+}
+
 function evaluateOne(constraint: TeamConstraint, index: number, input: ConstraintInput): ConstraintIssue[] {
   const { members } = input;
   const out: ConstraintIssue[] = [];
@@ -203,6 +210,11 @@ function evaluateOne(constraint: TeamConstraint, index: number, input: Constrain
       return out;
     case 'count': {
       const matches = indexesWhere(members, sourceMatcher(constraint.source, input));
+      if (isAllowlist(constraint)) {
+        // `not(...)` with a ceiling of zero is an allowlist: name each Pokémon that is outside it instead of a count.
+        for (const slot of matches) issue('kit_not_allowed', { species: members[slot]?.name ?? '' }, [slot]);
+        return out;
+      }
       const source = sourceLabel(constraint.source);
       if (constraint.min !== undefined && matches.length < constraint.min) {
         issue('kit_count_min', { source, min: constraint.min, have: matches.length });
@@ -295,6 +307,7 @@ const ENGLISH: Record<ConstraintIssueCode, string> = {
   kit_roster_size: 'Team size: this league needs {min} to {max} Pokémon, found {have}',
   kit_count_min: 'Team rule: at least {min} Pokémon from {source} needed, found {have}',
   kit_count_max: 'Team rule: at most {max} Pokémon from {source} allowed, found {have}',
+  kit_not_allowed: '{species} is not in any pool you may use in this league',
   kit_distinct: 'Team rule: at most {max} Pokémon may share the same {by} ({value}), found {have}',
   kit_type_quota: 'Type quota: need at least {min} {type}-type Pokémon, have {have}',
   kit_tera_banned: 'Terastallization is not allowed in this league',
@@ -309,10 +322,11 @@ export function constraintIssueText(code: ConstraintIssueCode, params: Validatio
   return ENGLISH[code].replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? ''));
 }
 
-const PER_SET: ReadonlySet<ConstraintIssueCode> = new Set(['kit_tera_banned', 'kit_tera_stab', 'kit_tera_attr']);
+const PER_SET: ReadonlySet<ConstraintIssueCode> = new Set(['kit_tera_banned', 'kit_tera_stab', 'kit_tera_attr', 'kit_not_allowed']);
 
 /**
- * Adds constraint issues to a team verdict: the Tera ones become errors of their set, every other one a team-wide
+ * Adds constraint issues to a team verdict: the Tera ones and the allowlist one (`kit_not_allowed`) become errors of
+ * their set (the slot of the Pokémon), every other one a team-wide
  * issue (its Pokémon slots stay in the server-side `ConstraintIssue`; the text names the shared value instead).
  */
 export function mergeConstraintIssues(

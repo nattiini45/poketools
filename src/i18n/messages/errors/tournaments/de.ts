@@ -53,7 +53,6 @@ export default defineDe<typeof en>()({
   rounds_round_robin_only: 'Alle Runden auf einmal lassen sich nur im Modus „Jeder gegen jeden“ erstellen.',
   rounds_all_generated: 'Alle Runden wurden bereits erstellt.',
   rounds_manual_pairing: 'Diese Phase wird von Hand gepaart. Lege ihre Runden im Editor für manuelle Runden an.',
-  rounds_pairing_unsupported: 'Diese Phase nutzt eine Paarungsart, die noch keine Runden erzeugen kann.',
   rounds_challenge_ladder:
     'Diese Phase ist eine Herausforderungsleiter: Ihre Matches entstehen aus angenommenen Herausforderungen. Lege ihre Runden im Editor für manuelle Runden an.',
   pairing_forbidden: {
@@ -62,6 +61,8 @@ export default defineDe<typeof en>()({
       'Diese Runde hat {count} Paarungen, die der Phasenfilter ablehnt: Andere Paarungen waren nicht möglich, oder sie wurden aus dem Spielplan gestrichen.',
   },
   rounds_stage_ended: 'Diese Phase hat ihre Endbedingung erreicht: Es können keine weiteren Runden erzeugt werden.',
+  format_not_ready:
+    'Diese Phase kann ihre erste Runde noch nicht starten: Eine Beziehung, die das Format braucht (zum Beispiel eine Auslosung), wurde nicht erstellt, oder Spieler schulden noch eine Aktion. Behebe das oder starte trotzdem mit force.',
   auto_advance_failed: 'Die Phase ist abgeschlossen, aber die Spieler konnten nicht in die nächste Phase übernommen werden. Übernimm sie von Hand.',
   swiss_rematches: {
     one: 'Diese Runde wiederholt {count} frühere Paarung: Es war kein anderer Gegner mehr frei.',

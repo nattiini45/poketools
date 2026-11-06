@@ -198,6 +198,13 @@ export default defineDe<typeof en>()({
         '{cascade} Danach wird der Turnierbaum aus den aktuellen Setzplätzen neu aufgebaut. Das lässt sich nicht rückgängig machen.',
       cascadeConfirm: 'Zurücksetzen und neu erstellen',
     },
+    forceStart: {
+      title: 'Trotzdem starten?',
+      message: '{reasons} Der Start wird im Audit-Log festgehalten.',
+      confirm: 'Trotzdem starten',
+      relationUndrawn: 'Die Auslosung, die das Format braucht, ist noch nicht erfolgt. Spieler ohne Zuordnung gehen dauerhaft leer aus.',
+      actionIncomplete: 'Einige Spieler schulden noch eine Aktion, die das Format verlangt.',
+    },
     deleteDialog: {
       title: 'Runde löschen',
       message:

@@ -11,6 +11,7 @@ export default {
     items: 'items',
     abilities: 'abilities',
     clauses: 'clauses',
+    levels: 'level rules',
   },
   code: {
     invalid_structure: 'The document has a structure problem: {issue}.',

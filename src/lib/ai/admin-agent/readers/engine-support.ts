@@ -43,7 +43,7 @@ function doubleRoundRobinRow(): EngineSupportRow {
       key: 'double_round_robin',
       supported: true,
       limit: circles,
-      statement: `A round robin may play up to ${circles} circles; a Format Studio legs value above that is recorded but not run`,
+      statement: `A round robin may play up to ${circles} circles; a Format Studio legs value above that is recorded but not run on the legacy or shadow engine`,
       offer: '',
     };
   }
@@ -52,7 +52,7 @@ function doubleRoundRobinRow(): EngineSupportRow {
     supported: false,
     limit: circles,
     statement:
-      'A round robin plays one circle only: with N players there are N-1 rounds (N for an odd count). A double round robin is refused as typed and legs 2 in a format is recorded but not run',
+      'A round robin plays one circle only: with N players there are N-1 rounds (N for an odd count). A double round robin is refused as typed; legs 2 in a format is recorded but not run on the legacy or shadow engine, the kit engine plays every leg',
     offer: 'Offer a single round robin',
   };
 }
@@ -72,7 +72,7 @@ export const ENGINE_SUPPORT_ROWS: readonly EngineSupportRow[] = [
     supported: false,
     limit: null,
     statement:
-      'A Format Studio format may declare groups, legs, a third-place match and bottom-N cuts. Every engine plays the third-place match; the kit engine also plays every leg and runs every cut. On the legacy or shadow engine attaching warns that legs and cuts are recorded and not run (rr_legs_not_run, edge_select_not_run); groups are never created by the attach (groups_not_created)',
+      'A Format Studio format may declare groups, legs, a third-place match and bottom-N cuts. Every engine plays the third-place match; the kit engine also plays every leg, runs every cut and forms the groups before the first round unless the spec is manual. The legacy and shadow engine warn rr_legs_not_run, edge_select_not_run and groups_not_created',
     offer: 'Say so before attaching and show the attach warnings',
   },
   {
@@ -80,7 +80,7 @@ export const ENGINE_SUPPORT_ROWS: readonly EngineSupportRow[] = [
     supported: false,
     limit: null,
     statement:
-      'A Format Studio format may declare bipartite, filter and challenge pairing, team rules, a calendar, an end condition and a repeat per group. They are recorded and not run: attaching warns pairing_not_run, constraints_not_run, calendar_not_run, end_when_not_run and foreach_group_not_run',
+      'A Format Studio format may declare bipartite, filter and challenge pairing, team rules, a calendar, an end condition and a repeat per group. The kit engine runs all of them. The legacy and shadow engine only record them: attaching warns pairing_not_run, constraints_not_run, calendar_not_run, end_when_not_run and foreach_group_not_run',
     offer: 'Say so before attaching and show the attach warnings',
   },
   {

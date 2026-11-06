@@ -6,7 +6,8 @@
  * What the legacy engine can run decides what a stage maps to. The kit expresses more than that (several round
  * robin legs, wildcard, threshold or bottom-N selections, groups), so every stage property the legacy engine cannot
  * honour is returned as an `EngineGap` code with params, never as text. A league on the kit engine runs legs and
- * every selection itself: `engineGaps` drops those for it.
+ * every selection itself and forms the groups of a stage before its first round (unless the groups are `manual`):
+ * `engineGaps` drops those for it.
  */
 import {
   mappedBracketType,
@@ -249,7 +250,7 @@ function edgeWarnings(edges: readonly Edge[]): EngineGap[] {
 /**
  * The gaps the kit engine closes: it plays every round robin leg, runs every edge selection, pairs filter and bipartite
  * stages, checks team constraints, follows the stage calendar and end condition, and repeats a `foreach_group` stage
- * per group.
+ * per group. It also forms the groups of a stage itself, except `manual` ones (see `kitRuns`).
  */
 const KIT_RUNS: ReadonlySet<EngineGapCode> = new Set<EngineGapCode>([
   'rr_legs_not_run',
@@ -261,9 +262,14 @@ const KIT_RUNS: ReadonlySet<EngineGapCode> = new Set<EngineGapCode>([
   'foreach_group_not_run',
 ]);
 
-/** A challenge ladder has its engine but no routes yet for players to issue and answer challenges. */
+/**
+ * Whether the kit engine closes this gap. A challenge ladder is closed too: players issue and answer challenges
+ * through the challenge routes and an accepted challenge becomes a match, so no round generator is involved. The kit
+ * engine forms a stage's groups before its first round (`ensureKitPhaseGroups`) by the spec's
+ * method; `manual` groups it cannot form, so that gap stays and tells the admin to set them up by hand.
+ */
 function kitRuns(entry: EngineGap): boolean {
-  if (entry.code === 'pairing_not_run' && entry.params.kind === 'challenge') return false;
+  if (entry.code === 'groups_not_created') return entry.params.method !== 'manual';
   return KIT_RUNS.has(entry.code);
 }
 

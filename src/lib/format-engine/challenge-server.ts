@@ -59,16 +59,24 @@ export async function makeChallenge(input: MakeChallengeInput): Promise<FormatCh
   });
 }
 
-/** The defender answers. An accepted challenge created a match, so the public pages of the phase are refreshed. */
-export async function answerChallenge(input: { challengeId: string; playerId: string; accept: boolean }): Promise<FormatChallengeRow> {
+/**
+ * The defender answers a challenge of the league `seasonId` (a challenge of another league is `challenge_not_found`).
+ * An accepted challenge created a match, so the public pages of the phase are refreshed.
+ */
+export async function answerChallenge(input: {
+  seasonId: string;
+  challengeId: string;
+  playerId: string;
+  accept: boolean;
+}): Promise<FormatChallengeRow> {
   const row = await respondToFormatChallenge(input);
   if (row.status === 'accepted') expireTournamentReads(row.phase_id, row.season_id);
   return row;
 }
 
-/** The challenger withdraws an open challenge (`playerId` null: an admin does it for them). */
-export function withdrawChallenge(challengeId: string, playerId: string | null): Promise<FormatChallengeRow> {
-  return cancelFormatChallenge(challengeId, playerId);
+/** The challenger withdraws an open challenge of the league (`playerId` null: an admin does it for them). */
+export function withdrawChallenge(seasonId: string, challengeId: string, playerId: string | null): Promise<FormatChallengeRow> {
+  return cancelFormatChallenge(seasonId, challengeId, playerId);
 }
 
 /**

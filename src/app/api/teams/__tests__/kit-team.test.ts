@@ -52,12 +52,13 @@ beforeEach(() => {
 });
 
 describe('POST /api/teams in a kit league', () => {
-  it('refuses a team that breaks the phase rules: 400 team_check_failed with the verdict, nothing stored', async () => {
+  it('stores a team that breaks the phase rules and answers 201 with the verdict as team_check.status unmet', async () => {
     const response = await POST(request());
     const body = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(body).toMatchObject({ success: false, code: 'team_check_failed', team_check: { valid: false } });
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({ success: true, team_check: { status: 'unmet', verdict: { valid: false } } });
+    expect(body.team_check.verdict.team_issue_details[0].code).toBe('kit_roster_size');
     expect(evaluateTeam).toHaveBeenCalledWith({
       seasonId: SEASON_ID,
       phaseId: TOURNAMENT_ID,
@@ -65,7 +66,8 @@ describe('POST /api/teams in a kit league', () => {
       roundNumber: 2,
       pokemon,
     });
-    expect(createTeam).not.toHaveBeenCalled();
+    expect(createTeam).toHaveBeenCalledTimes(1);
+    expectNoPrivateTeamData(body);
   });
 
   it('stores a team that passes, and no private team data leaves', async () => {
@@ -74,12 +76,16 @@ describe('POST /api/teams in a kit league', () => {
 
     expect(response.status).toBe(201);
     expect(createTeam).toHaveBeenCalledTimes(1);
-    expectNoPrivateTeamData(await response.json());
+    const body = await response.json();
+    expect(body).not.toHaveProperty('team_check');
+    expectNoPrivateTeamData(body);
   });
 
-  it('stores a team when the phase has no kit rules', async () => {
+  it('stores a team when the phase has no kit rules, with no team_check', async () => {
     vi.mocked(evaluateTeam).mockResolvedValue({ applies: false, result: { valid: true, issues: [], team_issues: [] } } as never);
-    expect((await POST(request())).status).toBe(201);
+    const response = await POST(request());
+    expect(response.status).toBe(201);
+    expect(await response.json()).not.toHaveProperty('team_check');
   });
 
   it.each(['singles', 'evolution_point_buy', 'round_robin'])('leaves a %s league untouched', async (format) => {
@@ -87,15 +93,19 @@ describe('POST /api/teams in a kit league', () => {
     const response = await POST(request());
 
     expect(response.status).toBe(201);
+    expect(await response.json()).not.toHaveProperty('team_check');
     expect(evaluateTeam).not.toHaveBeenCalled();
     expect(currentPhaseRound).not.toHaveBeenCalled();
   });
 
-  it('does not store the team when the check itself fails', async () => {
+  it('stores the team and answers team_check.status unavailable when the check itself fails', async () => {
     vi.mocked(evaluateTeam).mockRejectedValue(new Error('runtime read failed'));
     const response = await POST(request());
+    const body = await response.json();
 
-    expect(response.status).toBe(500);
-    expect(createTeam).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({ success: true, team_check: { status: 'unavailable' } });
+    expect(createTeam).toHaveBeenCalledTimes(1);
+    expectNoPrivateTeamData(body);
   });
 });

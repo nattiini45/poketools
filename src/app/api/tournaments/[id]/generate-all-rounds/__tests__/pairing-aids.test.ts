@@ -71,7 +71,7 @@ function phase(pairing: Pairing): KitPhase {
     rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }],
     columns: [],
   };
-  return { engine: 'kit', seed: 'seed-0123456789', stage, outcomes: {} };
+  return { engine: 'kit', seed: 'seed-0123456789', stage, outcomes: {}, tableExtras: {} };
 }
 
 /** The matches of each written round, in call order. */

@@ -44,6 +44,8 @@ export default {
     reattachBody:
       'Re-attaching replaces the current format. Phases that exist in both versions are kept; phases the new version no longer has are removed.',
     reattachConfirm: 'Re-attach',
+    clearTitle: 'Delete the league’s format data?',
+    clearConfirm: 'Delete it and continue',
     pickerLabel: 'Choose a published format',
     pickerPlaceholder: 'Choose a format…',
     group: {
@@ -160,12 +162,23 @@ export default {
       },
       waiting: 'The rulesets are checked once a format is attached.',
     },
+    calendar_start: {
+      met: 'The league has a start date, so the format’s calendar can run.',
+      unmet: {
+        zero: 'Set the league’s start date. The format’s calendar starts with it: without a date no round opens and no calendar mark fires.',
+        one: '{count} calendar mark is already due before the league starts. Due marks all fire together the next time the schedule runs, in calendar order. Move the start date if that is not what you want.',
+        other:
+          '{count} calendar marks are already due before the league starts. Due marks all fire together the next time the schedule runs, in calendar order. Move the start date if that is not what you want.',
+      },
+      waiting: 'The calendar is checked once a format is attached.',
+    },
     action: {
       format_attached: 'Attach a format',
       phases_created: 'Open the format',
       phases_manual: 'Open phases',
       roster_size: 'Open participants',
       rulesets: 'Choose another format',
+      calendar_start: 'Open settings',
     },
   },
   status: {

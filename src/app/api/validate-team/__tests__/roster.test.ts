@@ -4,6 +4,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/lib/utils/rate-limit', () => ({ checkRateLimit: vi.fn(async () => ({ allowed: true, remaining: 1, retryAfterSeconds: 0 })), rateLimitedResponse: vi.fn() }));
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: vi.fn(),
   AuthError: class AuthError extends Error {},

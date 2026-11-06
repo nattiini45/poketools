@@ -199,8 +199,8 @@ function draft(
   return { key, label, is_doubles, source: 'smogon-draft', family, universe, gens, searchShow: false, ...rest };
 }
 
-function community(key: string, label: string, gens: readonly number[]): TierDef {
-  return { key, label, gens, is_doubles: false, source: 'poketools', family: 'community', universe: 'national', searchShow: false, showdownId: () => null };
+function community(key: string, label: string, gens: readonly number[], rules?: TierDef['rules']): TierDef {
+  return { key, label, gens, is_doubles: false, source: 'poketools', family: 'community', universe: 'national', searchShow: false, showdownId: () => null, rules };
 }
 
 const ANYTHING_GOES = (gen: number) => `gen${gen}anythinggoes`;
@@ -317,7 +317,8 @@ const TIER_DEFS: readonly TierDef[] = [
     showdownId: () => 'gen9champions4v4doublesdraft',
     rules: () => ({ level: 50, minTeamSize: 6, pickedTeamSize: 4, itemClauseLimit: 1, unmodelled: ['champions_move_legality'] }),
   }),
-  community('natdexwichtelcup', 'Wichtelcup', [9]),
+  // "Exactly six Pokémon" per weekly team (documented fact; the cup's per-player team check owns the count).
+  community('natdexwichtelcup', 'Wichtelcup', [9], () => ({ minTeamSize: 6, pickedTeamSize: 6 })),
 ];
 
 const TIER_MAP = new Map<string, TierDef>(TIER_DEFS.map((t) => [t.key, t]));
@@ -408,7 +409,8 @@ export function clausesForTier(tier: string, gen: number): string[] {
     case 'nationaldexag':
       return ['Endless Battle Clause'];
     case 'natdexwichtelcup':
-      return ['Species Clause', 'Item Clause', 'Terastal Clause'];
+      // No Mega Evolution: the Mega Stones are banned, and Mega Rayquaza (no stone) is closed by its clause.
+      return ['Species Clause', 'Item Clause', 'Terastal Clause', 'Mega Rayquaza Clause'];
     case 'nationaldexdoublesubers':
       return [...DOUBLES_CLAUSES];
     case 'draft':

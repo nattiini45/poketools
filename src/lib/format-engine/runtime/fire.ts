@@ -3,7 +3,10 @@
  * transaction; the event key makes a second call a no-op), then expire the public reads. Server only.
  *
  * A `lock_action` op locks the action, which is itself an event (`action_locked`, for a relation's `reveal_on` and any
- * rule on it): it is fired right after, up to `MAX_CASCADE` levels deep. Callers that add their own ops to the same
+ * rule on it): it is fired right after, up to `MAX_CASCADE` levels deep. The cascade is a second transaction, so it can be
+ * lost (a crash between the two, a manual lock by an adjustment). The flag is the truth: `fireLockedActionEvents` fires
+ * `action_locked` for every action whose flag is `"locked"` and whose event has not fired, and runs when an event that
+ * had fired before is fired again (a retry) and in every cron pass. Callers that add their own ops to the same
  * transaction (track progress of a completed match) pass them in `options.ops`.
  */
 import 'server-only';
@@ -13,9 +16,10 @@ import { fireFormatEvent } from '@/lib/supabase/queries/format-runtime';
 import type { Json } from '@/types/database';
 import { eventKey, type KitEvent } from './events';
 import { eventNeedsRows, planEffects, type PlannedNotification } from './effects';
-import { loadFreshKitContext, phaseOfStageKey, rosterOf, type KitContext } from './load';
-import { loadStageTable, playerRowsOf } from './stage-table';
-import type { FormatOp, PlayerRow, RuntimeIssue } from './types';
+import { actionFlagKey } from './actions';
+import { loadFreshKitContext, rosterOf, type KitContext } from './load';
+import { loadStageRows } from './stage-table';
+import { own, type FormatOp, type PlayerRow, type RuntimeIssue } from './types';
 
 const MAX_CASCADE = 3;
 
@@ -51,6 +55,36 @@ function payloadOf(event: KitEvent): Json {
   };
 }
 
+/** The actions whose flag says locked but whose `action_locked` event has not fired. */
+export function pendingLockEvents(ctx: Pick<KitContext, 'def' | 'state'>): string[] {
+  const out: string[] = [];
+  for (const rule of ctx.def.rules) {
+    if (rule.kind !== 'player.action' || out.includes(rule.id)) continue;
+    if (own(ctx.state.flags, actionFlagKey(rule.id)) !== 'locked') continue;
+    if (!ctx.state.firedEventKeys.includes(eventKey({ event: 'action_locked', action: rule.id }))) out.push(rule.id);
+  }
+  return out;
+}
+
+/**
+ * Fires the `action_locked` event of every locked action that has none yet (see the header). Returns the event keys that
+ * fired now, including the ones they cascaded to. `context` must be fresh.
+ */
+export async function fireLockedActionEvents(
+  seasonId: string,
+  firedBy: string | null,
+  options: { context?: KitContext; depth?: number } = {},
+): Promise<string[]> {
+  const ctx = options.context ?? (await loadFreshKitContext(seasonId));
+  if (ctx === null) return [];
+  const fired: string[] = [];
+  for (const action of pendingLockEvents(ctx)) {
+    const result = await fireEvent(seasonId, { event: 'action_locked', action }, firedBy, { depth: (options.depth ?? 0) + 1 });
+    if (result?.fired) fired.push(result.eventKey, ...result.cascaded);
+  }
+  return fired;
+}
+
 /** Null when the league does not run a kit format. */
 export async function fireEvent(
   seasonId: string,
@@ -62,14 +96,15 @@ export async function fireEvent(
   if (ctx === null) return null;
   const key = eventKey(event);
   const empty: FireResult = { eventKey: key, fired: false, ops: [], notifications: [], issues: [], cascaded: [] };
-  if (ctx.state.firedEventKeys.includes(key)) return empty;
-
-  let rows: Record<string, PlayerRow> | undefined;
-  if (eventNeedsRows(ctx.def, event)) {
-    const phase = event.stage === undefined ? ctx.phases[0] : phaseOfStageKey(ctx, event.stage);
-    const table = phase === undefined ? null : await loadStageTable(ctx, phase.id);
-    rows = table === null ? undefined : playerRowsOf(table);
+  const depth = options.depth ?? 0;
+  if (ctx.state.firedEventKeys.includes(key)) {
+    // A retry of an event whose own transaction committed: its lock cascade may be what was lost.
+    if (depth < MAX_CASCADE) return { ...empty, cascaded: await fireLockedActionEvents(seasonId, firedBy, { context: ctx, depth }) };
+    return empty;
   }
+
+  // A `foreach_group` stage is several phases under one key: every group's table feeds the rows.
+  const rows: Record<string, PlayerRow> | undefined = eventNeedsRows(ctx.def, event) ? await loadStageRows(ctx, event.stage) : undefined;
   const plan = planEffects(ctx.def, event, ctx.state, rosterOf(ctx, event.stage), ctx.seed, { rows });
   const ops = [...plan.ops, ...(options.ops ?? [])];
   const fired = await fireFormatEvent({ seasonId, eventKey: key, event: event.event, payload: payloadOf(event), ops, firedBy });
@@ -78,7 +113,6 @@ export async function fireEvent(
   expireSeasonReads(seasonId, ctx.phases.map((phase) => phase.id));
 
   const cascaded: string[] = [];
-  const depth = options.depth ?? 0;
   if (depth < MAX_CASCADE) {
     for (const op of ops) {
       if (op.op !== 'lock_action') continue;

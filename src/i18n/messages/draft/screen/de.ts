@@ -46,7 +46,6 @@ export default defineDe<typeof en>()({
     overall: 'Pick {pick} von {total}',
     seatTrack: 'Runde {round}: {done} von {total} Picks gemacht',
     makeupFor: 'Nachhol-Pick (Runde {round})',
-    onClockAria: '{player} ist am Zug',
     next: 'Danach: {player}',
     nextFive: 'Nächste {n}:',
     complete: 'Draft abgeschlossen',

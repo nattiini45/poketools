@@ -373,20 +373,31 @@ describe('planStages', () => {
       definition.edges[0].select = [{ kind: 'per_group', n: 2 }, { kind: 'wildcard', n: 1 }];
       const { warnings } = plan(definition, {}, 16);
       expect(warnings.map((w) => w.code)).toEqual(['rr_legs_not_run', 'groups_not_created', 'edge_select_not_run']);
-      expect(engineGaps(warnings, 'kit').map((w) => w.code)).toEqual(['groups_not_created']);
+      expect(engineGaps(warnings, 'kit')).toEqual([]);
       expect(engineGaps(warnings, 'shadow')).toEqual(warnings);
       expect(engineGaps(warnings, 'legacy')).toEqual(warnings);
     });
 
-    it('drops filter, bipartite and constraint gaps for a kit league but keeps a challenge ladder', () => {
+    it('keeps the groups gap for a kit league only when the groups are manual', () => {
+      const groupsGap = (method: string): EngineGap => ({ code: 'groups_not_created', stage: 'groups', params: { count: 4, method } });
+      for (const method of ['serpentine', 'straight', 'random_seeded']) {
+        expect(engineGaps([groupsGap(method)], 'kit'), method).toEqual([]);
+        expect(engineGaps([groupsGap(method)], 'shadow'), method).toEqual([groupsGap(method)]);
+      }
+      expect(engineGaps([groupsGap('manual')], 'kit')).toEqual([groupsGap('manual')]);
+      expect(engineGaps([groupsGap('manual')], 'legacy')).toEqual([groupsGap('manual')]);
+    });
+
+    it('drops filter, bipartite, challenge and constraint gaps for a kit league and keeps them on shadow and legacy', () => {
       const gaps: EngineGap[] = [
         { code: 'pairing_not_run', stage: 'a', params: { kind: 'filter' } },
         { code: 'pairing_not_run', stage: 'b', params: { kind: 'bipartite' } },
         { code: 'pairing_not_run', stage: 'c', params: { kind: 'challenge' } },
         { code: 'constraints_not_run', stage: 'a', params: { count: 3 } },
       ];
-      expect(engineGaps(gaps, 'kit')).toEqual([gaps[2]]);
+      expect(engineGaps(gaps, 'kit')).toEqual([]);
       expect(engineGaps(gaps, 'shadow')).toEqual(gaps);
+      expect(engineGaps(gaps, 'legacy')).toEqual(gaps);
     });
 
     it('reports nothing for a format the engine runs completely', () => {

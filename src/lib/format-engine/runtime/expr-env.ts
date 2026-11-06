@@ -11,6 +11,12 @@
  * A player attribute resolves to the stored value (`format_player_attrs`), else to its assignment (`random_seeded`
  * from the season seed, or an expression over `player` and `tunable.*`), else to the type's neutral value. Every
  * relation of the format answers `rel(key, a, b)` from the state's links. Pure and client-safe.
+ *
+ * `rand('key')` draws from (season seed, scope, key) and its key is a literal, so two evaluations that share a scope draw
+ * alike. The scope of an env that has a subject therefore names it: the player (player, match and team env), the entry
+ * (entry env) or the pair (pair env, order-free). Each subject then gets its own draw from the same expression, and the
+ * draw never changes between evaluations. An env without a subject (event, stage) keeps the caller's scope: there the
+ * draw is one value per event or stage.
  */
 import type { EvalContext, ExprValue } from '@/lib/format-kit/expr/ast';
 import { evaluate } from '@/lib/format-kit/expr/eval';
@@ -135,7 +141,7 @@ export function playerExtraRefMap(base: EnvBase, playerId: string): Map<string, 
 export function playerContext(base: EnvBase, playerId: string, row: PlayerRow = {}, participants = 0): EvalContext {
   const refs = new Map<string, ExprValue>(PLAYER_ROW_FIELDS.map((field) => [field, field === 'participants' ? participants : (row as Record<string, number | undefined>)[field] ?? 0]));
   for (const [name, value] of playerExtraRefMap(base, playerId)) refs.set(name, value);
-  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: `${base.scope}:${playerId}` };
 }
 
 export interface MatchFacts {
@@ -160,7 +166,7 @@ export function matchContext(base: EnvBase, playerId: string, match: MatchFacts)
     ['opponent', match.opponent],
     ...playerBoundRefs(base, playerId),
   ]);
-  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: `${base.scope}:${playerId}` };
 }
 
 /** The value of an entry attribute as an expression reads it; a missing or mismatching value is the neutral one. */
@@ -175,7 +181,7 @@ export function entryContext(base: EnvBase, entry: DomainEntry): EvalContext {
   for (const attr of attributeMap(base.def).values()) {
     if (attr.on === 'entry' && attr.multi !== true) refs.set(`attr.${attr.key}`, entryAttrValue(attr, entry));
   }
-  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: `${base.scope}:${entry.id}` };
 }
 
 /** The event env (`OnEventRule.when`): the round of the event (0 when it has none) and the tunables. */
@@ -197,7 +203,7 @@ export function teamContext(base: EnvBase, playerId: string, round: number): Eva
   for (const [name, value] of playerExtraRefMap(base, playerId)) {
     if (name.startsWith('attr.') || name.startsWith('tunable.')) refs.set(name, value);
   }
-  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: `${base.scope}:${playerId}` };
 }
 
 /** What a stage's `end_when` reads about the phase: the numbers behind the stage env. */
@@ -237,7 +243,9 @@ export function pairContext(
   for (const [prefix, playerId] of [['a_attr.', facts.a], ['b_attr.', facts.b]] as const) {
     for (const [name, value] of attrsOf(playerId)) refs.set(`${prefix}${name.slice('attr.'.length)}`, value);
   }
-  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: base.scope };
+  // A pair has no order (the filter holds when either order does), so its scope names the two players sorted.
+  const [first, second] = facts.a < facts.b ? [facts.a, facts.b] : [facts.b, facts.a];
+  return { refs, collections: NO_COLLECTIONS, relations: relationFns(base.def, base.state), seed: base.seed, scope: `${base.scope}:${first}:${second}` };
 }
 
 /** A memoised `attrsOf` for `pairContext`: each player's attributes are resolved once. */

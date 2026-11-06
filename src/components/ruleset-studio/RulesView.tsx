@@ -27,7 +27,7 @@ export default function RulesView({ rules, lang, headingLevel = 3 }: RulesViewPr
           ))}
         </section>
       ))}
-      <ShowdownChallenge value={rules.showdownChallenge} />
+      <ShowdownChallenge value={rules.showdownChallenge} headingLevel={headingLevel} />
       <p className="text-xs font-semibold text-poke-text-muted">{rules.coverage}</p>
     </div>
   );

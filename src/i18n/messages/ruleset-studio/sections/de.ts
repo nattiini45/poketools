@@ -212,8 +212,11 @@ export default defineDe<typeof en>()({
     status: 'Status',
     experimental: 'Experimentell',
     approved: 'Freigegeben',
+    newSpecies: 'Neues Pokémon (Pokémon-ID)',
     add: 'Pokémon-Level hinzufügen',
     remove: 'Entfernen',
+    removeEntry: 'Level-Regel für {species} entfernen',
+    capReached: 'Höchstens {max} Pokémon können ein eigenes Level haben.',
   },
   challenge: {
     heading: 'Pokémon-Showdown-Herausforderung',
@@ -221,6 +224,8 @@ export default defineDe<typeof en>()({
     label: 'Showdown-Herausforderungsregeln',
     copy: 'Herausforderungsregeln kopieren',
     copied: 'Kopiert.',
+    copyFailed: 'Kopieren fehlgeschlagen. Markiere den Text und kopiere ihn von Hand.',
+    limits: 'Die Herausforderung enthält die Listen für Pokémon, Attacken, Items und Fähigkeiten sowie die Klauseln. Level-Regeln, Teamregeln und das genaue Muster einer kosmetischen Form (Vivillon-Muster, Jahreszeiten-Formen) kann sie nicht enthalten: Nur der Teamcheck auf dieser Seite setzt sie durch.',
   },
   notes: {
     intro: 'Eigene Regeln und Notizen. Sie stehen auf der Regelseite und werden nie durchgesetzt.',

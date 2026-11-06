@@ -83,6 +83,7 @@ export default {
       kit_roster_size: 'Team size: this league needs {min} to {max} Pokémon, found {have}',
       kit_count_min: 'Team rule: at least {min} Pokémon from {source} needed, found {have}',
       kit_count_max: 'Team rule: at most {max} Pokémon from {source} allowed, found {have}',
+      kit_not_allowed: '{species} is not in any pool you may use in this league',
       kit_distinct: 'Team rule: at most {max} Pokémon may share the same {by} ({value}), found {have}',
       kit_type_quota: 'Type quota: need at least {min} {type}-type Pokémon, have {have}',
       kit_tera_banned: 'Terastallization is not allowed in this league',
@@ -144,6 +145,8 @@ export default {
       locked: 'Locked',
       saving: 'Saving…',
       saved: 'Saved',
+      savedWithIssues: 'Saved, rules not met',
+      savedUnchecked: 'Saved, rules could not be checked',
       saveFailed: 'Save failed',
       unsaved: 'Unsaved',
     },
@@ -163,8 +166,10 @@ export default {
   },
   mobile: {
     intel: 'Intel',
+    validation: 'Validate',
     ai: 'AI',
     intelSheet: 'Intel',
+    validationSheet: 'Validation',
     aiSheet: 'AI Coach',
   },
   budgetMeter: {

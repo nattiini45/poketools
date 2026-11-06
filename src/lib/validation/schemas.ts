@@ -1079,8 +1079,12 @@ export const validateTeamSchema = z.object({
   // This prevents the base 'Gen 9 RU' ruleset from being used for tournaments
   // of a league that has a dedicated custom ruleset.
   tournament_id: uuid.optional(),
-  // The round a custom-format league's team rules are checked for; omitted = the phase's current round.
+  // The round a custom-format league's team rules are checked for; omitted = the phase's current round. Honoured only
+  // without `match_id`: a match names its own round.
   round_number: z.number().int().min(1).max(500).optional(),
+  // The match the team is being built for (needs `tournament_id`). Its round decides which round-gated team rules apply,
+  // so a week-3 match opened in week 4 is still checked as week 3.
+  match_id: uuid.optional(),
 });
 
 // ─── Pagination Query Schema ─────────────────────────────────────────

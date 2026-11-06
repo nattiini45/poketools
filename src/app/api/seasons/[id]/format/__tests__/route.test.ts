@@ -89,6 +89,7 @@ const outcome = (overrides: Partial<AttachOutcome> = {}): AttachOutcome => ({
   spec_hash: 'a'.repeat(64),
   touched_stage_ids: [STAGE_A, STAGE_B, STAGE_OLD],
   rulesets_changed: false,
+  cleared: null,
   ...overrides,
 });
 
@@ -102,6 +103,8 @@ const post = (body: unknown) =>
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 const del = () => new NextRequest(`http://localhost/api/seasons/${SEASON_ID}/format`, { method: 'DELETE' });
+const delWithBody = (body: unknown) =>
+  new NextRequest(`http://localhost/api/seasons/${SEASON_ID}/format`, { method: 'DELETE', body: JSON.stringify(body) });
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -218,7 +221,13 @@ describe('POST /api/seasons/[id]/format', () => {
       stages: outcome().stages,
       warnings: outcome().warnings,
     });
-    expect(attachFormatToSeason).toHaveBeenCalledWith({ actor: admin, seasonId: SEASON_ID, definitionId: DEFINITION_ID, versionNo: 2 });
+    expect(attachFormatToSeason).toHaveBeenCalledWith({
+      actor: admin,
+      seasonId: SEASON_ID,
+      definitionId: DEFINITION_ID,
+      versionNo: 2,
+      confirmClear: false,
+    });
     expect(checkRateLimit).toHaveBeenCalledWith('format-attach', admin.playerId, { limit: 30, windowSeconds: 3600 });
 
     const expired = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
@@ -242,6 +251,51 @@ describe('POST /api/seasons/[id]/format', () => {
     const response = await POST(post({ definition_id: DEFINITION_ID }), params());
     expect(response.status).toBe(200);
     expect(vi.mocked(attachFormatToSeason).mock.calls[0][0].versionNo).toBeUndefined();
+  });
+
+  it('passes confirm_clear to the attach and records it in the audit event', async () => {
+    vi.mocked(attachFormatToSeason).mockResolvedValue(outcome({ replaced: true }));
+    const response = await POST(post({ definition_id: DEFINITION_ID, confirm_clear: true }), params());
+    expect(response.status).toBe(200);
+    expect(vi.mocked(attachFormatToSeason).mock.calls[0][0].confirmClear).toBe(true);
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'season.format.attach', metadata: expect.objectContaining({ replaced: true, confirm_clear: true }) }),
+    );
+  });
+
+  it('does not record confirm_clear when the body leaves it out or sets it to false', async () => {
+    vi.mocked(attachFormatToSeason).mockResolvedValue(outcome());
+    await POST(post({ definition_id: DEFINITION_ID, confirm_clear: false }), params());
+    expect(vi.mocked(attachFormatToSeason).mock.calls[0][0].confirmClear).toBe(false);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).not.toHaveProperty('confirm_clear');
+  });
+
+  it('records how many runtime rows a confirmed replace deleted in the audit event', async () => {
+    const cleared = { links: 12, items: 12, submissions: 3, adjustments: 2 };
+    vi.mocked(attachFormatToSeason).mockResolvedValue(outcome({ replaced: true, cleared }));
+    await POST(post({ definition_id: DEFINITION_ID, confirm_clear: true }), params());
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'season.format.attach', metadata: expect.objectContaining({ confirm_clear: true, cleared }) }),
+    );
+  });
+
+  it('leaves the cleared counts out of the audit event of a first attach', async () => {
+    vi.mocked(attachFormatToSeason).mockResolvedValue(outcome());
+    await POST(post({ definition_id: DEFINITION_ID }), params());
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).not.toHaveProperty('cleared');
+  });
+
+  it('answers 409 format_runtime_has_data with the counts in params and writes nothing when the replace would delete the draw', async () => {
+    vi.mocked(attachFormatToSeason).mockRejectedValue(
+      new FormatStudioError('format_runtime_has_data', { links: 10, items: 4, submissions: 3, adjustments: 0 }),
+    );
+    const response = await POST(post({ definition_id: DEFINITION_ID }), params());
+    const body = await response.json();
+    expect(response.status).toBe(409);
+    expect(body.code).toBe('format_runtime_has_data');
+    expect(body.params).toEqual({ links: 10, items: 4, submissions: 3, adjustments: 0 });
+    expect(revalidateTag).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   it('does not put the seed or the spec in the answer', async () => {
@@ -272,6 +326,7 @@ describe('POST /api/seasons/[id]/format', () => {
     ['a definition id that is not a uuid', { definition_id: 'abc' }],
     ['version 0', { definition_id: DEFINITION_ID, version_no: 0 }],
     ['an unknown member', { definition_id: DEFINITION_ID, season_id: SEASON_ID }],
+    ['confirm_clear that is not a boolean', { definition_id: DEFINITION_ID, confirm_clear: 'yes' }],
   ])('answers 400 validation_failed for %s', async (_label, body) => {
     const response = await POST(post(body), params());
     expect(response.status).toBe(400);
@@ -298,13 +353,13 @@ describe('POST /api/seasons/[id]/format', () => {
 
 describe('DELETE /api/seasons/[id]/format', () => {
   it('detaches: 200 with the removed ids, expires them and audits', async () => {
-    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A, STAGE_B], removed_ruleset_ids: [] });
+    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A, STAGE_B], removed_ruleset_ids: [], cleared: null });
     const response = await DELETE(del(), params());
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, data: { removed_stage_ids: [STAGE_A, STAGE_B] } });
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID);
+    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: false });
     expect(checkRateLimit).toHaveBeenCalledWith('format-attach', admin.playerId, { limit: 30, windowSeconds: 3600 });
     const expired = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
     expect(expired).toEqual(expect.arrayContaining([`season:${SEASON_ID}`, `tournament:${STAGE_A}`, `tournament:${STAGE_B}`]));
@@ -314,13 +369,47 @@ describe('DELETE /api/seasons/[id]/format', () => {
   });
 
   it('refreshes the ruleset list when the detach removed the rulesets the attach had created', async () => {
-    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A], removed_ruleset_ids: [STAGE_OLD] });
+    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A], removed_ruleset_ids: [STAGE_OLD], cleared: null });
     const response = await DELETE(del(), params());
     expect(response.status).toBe(200);
     expect(revalidatePath).toHaveBeenCalledWith('/admin/rulesets');
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'season.format.detach', metadata: { removed_stage_count: 1, removed_ruleset_count: 1 } }),
     );
+  });
+
+  it('passes confirm_clear of the body to the detach and records it and the deleted counts in the audit event', async () => {
+    const cleared = { links: 12, items: 12, submissions: 3, adjustments: 2 };
+    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A], removed_ruleset_ids: [], cleared });
+    const response = await DELETE(delWithBody({ confirm_clear: true }), params());
+    expect(response.status).toBe(200);
+    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: true });
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'season.format.detach', metadata: expect.objectContaining({ confirm_clear: true, cleared }) }),
+    );
+  });
+
+  it('answers 409 format_runtime_has_data with the counts in params and removes nothing without the confirmation', async () => {
+    vi.mocked(detachFormatFromSeason).mockRejectedValue(
+      new FormatStudioError('format_runtime_has_data', { links: 10, items: 0, submissions: 0, adjustments: 2 }),
+    );
+    const response = await DELETE(del(), params());
+    const body = await response.json();
+    expect(response.status).toBe(409);
+    expect(body.code).toBe('format_runtime_has_data');
+    expect(body.params).toEqual({ links: 10, items: 0, submissions: 0, adjustments: 2 });
+    expect(revalidateTag).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an unknown member', { confirm_clear: true, force: true }],
+    ['confirm_clear that is not a boolean', { confirm_clear: 1 }],
+  ])('answers 400 validation_failed for %s and detaches nothing', async (_label, body) => {
+    const response = await DELETE(delWithBody(body), params());
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe('validation_failed');
+    expect(detachFormatFromSeason).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -224,13 +224,13 @@ describe('format gallery: examples', () => {
   it.each([
     ['en', '>Example<', 'Examples'],
     ['de', '>Beispiel<', 'Beispiele'],
-  ] as const)('shows the three examples with the example label in %s', async (locale, label, heading) => {
+  ] as const)('shows the four examples with the example label in %s', async (locale, label, heading) => {
     mocks.locale = locale;
     mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
     const out = html(await FormatsGalleryPage());
     expect(out).toContain(heading);
-    expect(out.split(label)).toHaveLength(4);
-    for (const id of ['classic-league', 'cup', 'swiss-top-cut']) {
+    expect(out.split(label)).toHaveLength(5);
+    for (const id of ['classic-league', 'cup', 'swiss-top-cut', 'wichtelcup']) {
       expect(out).toContain(`href="/admin/formats/example/${id}"`);
     }
     expect(out).not.toMatch(/undefined|\{[a-z_]+\}/);
@@ -371,7 +371,7 @@ describe('format gallery: the New format action', () => {
     expect(out).toContain('New format');
     expect(mocks.dialogProps).toHaveBeenCalledTimes(1);
     const data = mocks.dialogProps.mock.calls[0][0].data;
-    expect(data.examples.map((e: { id: string }) => e.id)).toEqual(['classic-league', 'cup', 'swiss-top-cut']);
+    expect(data.examples.map((e: { id: string }) => e.id)).toEqual(['classic-league', 'cup', 'swiss-top-cut', 'wichtelcup']);
     expect(data.examples.every((e: { name: string }) => e.name.length > 0)).toBe(true);
     expect(data.gallery).toEqual([{ id: 'g1', name: 'Autumn Cup', version: 3 }]);
     expect(data.leagues).toEqual([{ id: 's1', name: 'Open League' }]);

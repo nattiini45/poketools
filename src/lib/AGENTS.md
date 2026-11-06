@@ -17,7 +17,7 @@ Module rules for `src/lib/` (265 source files). Load when a task touches domain 
 
 ## Audit logging
 
-- `src/lib/audit/log.ts` is a fire-and-forget audit-trail writer — never `await` it in the main write path; errors are swallowed by design. It records who changed what, and is not a runtime-diagnostics route.
+- `src/lib/audit/log.ts` is a fire-and-forget audit-trail writer — never `await` it in the main write path; errors are swallowed by design. The one exception is `logAuditEventStrict`, which awaits and rejects on failure; only the unmask read of hidden Secret Santa relations uses it, so that read fails closed (do not turn it back into fire-and-forget). It records who changed what, and is not a runtime-diagnostics route.
 
 ## i18n
 

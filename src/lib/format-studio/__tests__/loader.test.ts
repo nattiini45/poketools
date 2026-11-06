@@ -357,9 +357,9 @@ describe('loadLeagueFormatSummaries', () => {
 });
 
 describe('presetViews', () => {
-  it('gives the three presets as ok views, in gallery order', () => {
+  it('gives the four presets as ok views, in gallery order', () => {
     const views = presetViews();
-    expect(views.map((v) => v.id)).toEqual(['classic-league', 'cup', 'swiss-top-cut']);
+    expect(views.map((v) => v.id)).toEqual(['classic-league', 'cup', 'swiss-top-cut', 'wichtelcup']);
     for (const { view } of views) {
       expect(view.ok).toBe(true);
       expect(view.definition).not.toBeNull();

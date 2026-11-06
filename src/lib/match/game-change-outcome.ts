@@ -58,6 +58,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * saved; something after it needs the admin's attention), as catalogue codes:
  *   - `evolution_recheck_failed: true` → `admin_game_evolution_recheck_failed`
  *     (run Repair in Record Reconciliation).
+ *   - `format_revert_failed: true` → `admin_game_format_revert_failed`
+ *     (the league's format effects of the old result were not taken back).
  * Unknown or malformed fields are ignored: `data` comes from our own API, and
  * a missing flag means "nothing to warn about".
  */
@@ -66,6 +68,9 @@ export function gameChangeWarnings(data: unknown): ApiErrorLike[] {
   const warnings: ApiErrorLike[] = [];
   if (data.evolution_recheck_failed === true) {
     warnings.push({ code: 'admin_game_evolution_recheck_failed' });
+  }
+  if (data.format_revert_failed === true) {
+    warnings.push({ code: 'admin_game_format_revert_failed' });
   }
   return warnings;
 }

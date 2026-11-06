@@ -439,7 +439,7 @@ export function validateTeam(
 
     // Approved per-species rules replace the configured default. Experimental entries are visible but not enforced.
     const levelRules = rules.levels;
-    if (levelRules !== null && (set.level === undefined || set.level === null || (typeof set.level === 'number' && Number.isInteger(set.level) && set.level >= 1 && set.level <= 100))) {
+    if (levelRules != null && (set.level === undefined || set.level === null || (typeof set.level === 'number' && Number.isInteger(set.level) && set.level >= 1 && set.level <= 100))) {
       const override = levelRules.entries.find((entry) => entry.status === 'approved' && entry.id === toID(species.name));
       const required = override?.level ?? levelRules.default;
       const actual = typeof set.level === 'number' ? set.level : 100;

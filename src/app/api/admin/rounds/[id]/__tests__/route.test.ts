@@ -170,6 +170,40 @@ describe('DELETE /api/admin/rounds/[id]', () => {
     expect(vi.mocked(deleteMatchesByRound).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(deleteRound).mock.invocationCallOrder[0]);
   });
 
+  it('still deletes the round and reports format_revert_failed when a reset could not take back the format effects', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);
+    vi.mocked(getMatchesByRound).mockResolvedValue([
+      { id: 'match-1', status: 'completed' },
+      { id: 'match-2', status: 'completed' },
+    ] as never);
+    vi.mocked(getGamesByMatch).mockResolvedValue([] as never);
+    vi.mocked(resetMatch)
+      .mockResolvedValueOnce({ games_deleted: 1 } as never)
+      .mockResolvedValueOnce({ games_deleted: 1, format_revert_failed: true } as never);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+    const body = await res.json();
+
+    expect(body.success).toBe(true);
+    expect(body.data).toEqual({ deleted: true, format_revert_failed: true });
+    expect(deleteMatchesByRound).toHaveBeenCalled();
+    expect(deleteRound).toHaveBeenCalled();
+    expect(vi.mocked(logAuditEvent).mock.calls.at(-1)?.[0].metadata).toMatchObject({ format_revert_failed: true });
+  });
+
+  it('does not add format_revert_failed when every reset reverted cleanly', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);
+    vi.mocked(getMatchesByRound).mockResolvedValue([{ id: 'match-1', status: 'completed' }] as never);
+    vi.mocked(getGamesByMatch).mockResolvedValue([] as never);
+    vi.mocked(resetMatch).mockResolvedValueOnce({ games_deleted: 1 } as never);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect((await res.json()).data).toEqual({ deleted: true });
+  });
+
   it('stops when the matches cannot be released and deleted: the round and the tournament stay as they were', async () => {
     vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);

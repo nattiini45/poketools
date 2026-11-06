@@ -270,6 +270,7 @@ describe('attachSeasonFormat', () => {
         stages: [{ id: 't1', key: 'groups' }, { id: 't3', key: 'finals', group: 2 }],
         removed_stage_ids: ['t2'],
         removed_ruleset_ids: ['r1'],
+        cleared: { links: 12, items: 12, submissions: 3, adjustments: 2 },
       },
     };
     expect(await attachSeasonFormat(input)).toEqual({
@@ -277,6 +278,7 @@ describe('attachSeasonFormat', () => {
       stages: [{ id: 't1', key: 'groups', group: 0 }, { id: 't3', key: 'finals', group: 2 }],
       removed_stage_ids: ['t2'],
       removed_ruleset_ids: ['r1'],
+      cleared: { links: 12, items: 12, submissions: 3, adjustments: 2 },
     });
     expect(state.rpcCalls).toEqual([
       {
@@ -290,14 +292,42 @@ describe('attachSeasonFormat', () => {
           p_seed: 'abcdef12',
           p_stages: [stage],
           p_preset_rulesets: { gen9ou: uuid(7) },
+          p_confirm_clear: false,
         },
       },
     ]);
   });
 
+  it('sends the confirmation of a replace that may delete the runtime data', async () => {
+    state.rpcReply = { data: { replaced: true, stages: [], removed_stage_ids: [], removed_ruleset_ids: [] } };
+    await attachSeasonFormat({ ...input, confirmClear: true });
+    expect(state.rpcCalls[0].args).toMatchObject({ p_confirm_clear: true });
+  });
+
+  it('maps FORMAT_RUNTIME_HAS_DATA to format_runtime_has_data with the four counts', async () => {
+    state.rpcReply = {
+      error: {
+        code: 'P0001',
+        message: 'FORMAT_RUNTIME_HAS_DATA',
+        details: '{"links":10,"items":4,"submissions":3,"adjustments":1}',
+      },
+    };
+    await expect(attachSeasonFormat(input)).rejects.toMatchObject({
+      code: 'format_runtime_has_data',
+      statusCode: 409,
+      params: { links: 10, items: 4, submissions: 3, adjustments: 1 },
+    });
+  });
+
   it('reads a malformed function result as an empty one', async () => {
     state.rpcReply = { data: { stages: [{ id: 1 }, 'x'], removed_stage_ids: [1, 'a'] } };
-    expect(await attachSeasonFormat(input)).toEqual({ replaced: false, stages: [], removed_stage_ids: ['a'], removed_ruleset_ids: [] });
+    expect(await attachSeasonFormat(input)).toEqual({
+      replaced: false,
+      stages: [],
+      removed_stage_ids: ['a'],
+      removed_ruleset_ids: [],
+      cleared: null,
+    });
   });
 
   it.each([
@@ -333,9 +363,28 @@ describe('attachSeasonFormat', () => {
 
 describe('detachSeasonFormat', () => {
   it('calls format_detach_season and returns the removed stage and ruleset ids', async () => {
-    state.rpcReply = { data: { removed_stage_ids: ['a', 'b'], removed_ruleset_ids: ['r'] } };
-    expect(await detachSeasonFormat(SEASON)).toEqual({ removed_stage_ids: ['a', 'b'], removed_ruleset_ids: ['r'] });
-    expect(state.rpcCalls).toEqual([{ name: 'format_detach_season', args: { p_season_id: SEASON } }]);
+    state.rpcReply = {
+      data: { removed_stage_ids: ['a', 'b'], removed_ruleset_ids: ['r'], cleared: { links: 1, items: 2, submissions: 3, adjustments: 4 } },
+    };
+    expect(await detachSeasonFormat(SEASON)).toEqual({
+      removed_stage_ids: ['a', 'b'],
+      removed_ruleset_ids: ['r'],
+      cleared: { links: 1, items: 2, submissions: 3, adjustments: 4 },
+    });
+    expect(state.rpcCalls).toEqual([{ name: 'format_detach_season', args: { p_season_id: SEASON, p_confirm_clear: false } }]);
+  });
+
+  it('sends the confirmation and maps the refusal over runtime data with its counts', async () => {
+    state.rpcReply = { data: { removed_stage_ids: [], removed_ruleset_ids: [] } };
+    await detachSeasonFormat(SEASON, true);
+    expect(state.rpcCalls[0]).toEqual({ name: 'format_detach_season', args: { p_season_id: SEASON, p_confirm_clear: true } });
+    state.rpcReply = {
+      error: { code: 'P0001', message: 'FORMAT_RUNTIME_HAS_DATA', details: '{"links":2,"items":0,"submissions":5,"adjustments":0}' },
+    };
+    await expect(detachSeasonFormat(SEASON)).rejects.toMatchObject({
+      code: 'format_runtime_has_data',
+      params: { links: 2, items: 0, submissions: 5, adjustments: 0 },
+    });
   });
 
   it('maps nothing attached, started and a team that still points at a stage', async () => {

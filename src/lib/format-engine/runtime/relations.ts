@@ -79,7 +79,7 @@ export interface VisibleLink {
  * public; before that the `to` side (the target) is seen per `visibility.to` and the `from` side (the source) per
  * `visibility.from`: `all` everyone, `own` only the other end of the link (the source sees the target, the target
  * sees the source), `hidden` nobody. A link shows up only when the viewer may learn one of its sides; the viewer's own
- * id on the other side is filled in, as they know it anyway.
+ * id on the other side is filled in, as they know it anyway. The result is sorted by the visible fields only.
  */
 export function visibleLinks(
   relation: Pick<RelationDef, 'visibility'>,
@@ -100,5 +100,81 @@ export function visibleLinks(
       revealed: link.revealed,
     });
   }
-  return out;
+  return out.sort(compareVisible);
+}
+
+/**
+ * Orders links by what the viewer sees of them and nothing else. Links are generated and stored sorted by `from`, so
+ * the order in which they arrive would give a hidden `from` away by position (the n-th target belongs to the n-th
+ * player). A viewer's list is therefore sorted on the visible fields only (a hidden side sorts as empty).
+ */
+function compareVisible(x: VisibleLink, y: VisibleLink): number {
+  const key = (link: VisibleLink): string => `${link.from ?? ''}\u0000${link.to ?? ''}\u0000${link.revealed ? 1 : 0}`;
+  const a = key(x);
+  const b = key(y);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The `[from, to]` pairs of a relation that anybody may see whole, with no account: what a public surface (the public
+ * standings table) may let `rel()` answer from. A link with a hidden side is left out, so `rel()` answers false for it.
+ */
+export function publicLinkPairs(
+  relation: Pick<RelationDef, 'visibility'>,
+  links: readonly { from: string; to: string; revealed: boolean }[],
+): [string, string][] {
+  const pairs: [string, string][] = [];
+  for (const link of visibleLinks(relation, links, { playerId: null, admin: false })) {
+    if (link.from !== null && link.to !== null) pairs.push([link.from, link.to]);
+  }
+  return pairs;
+}
+
+/**
+ * Whether `links` is an acceptable hand-set link list for a relation of `shape` over `roster` (an admin sets links with
+ * a `relation` adjustment). The common rules guard what the table's keys and checks would otherwise answer with a raw
+ * database error: every end is on the roster, nobody links to themself, each player gives at most once and receives at
+ * most once. On top of that:
+ * - `derangement`: a permutation of the whole roster in a single cycle (what `generateRelationLinks` draws), so every
+ *   player gives and receives once and the chain closes; with fewer than two players there are no links;
+ * - `pairs`: every link has its reverse, and at most one player of the roster is left without a partner;
+ * - `manual`: nothing more.
+ * An empty list is valid for `manual` and where the generator itself would draw none (fewer than two players).
+ */
+export function validateRelationLinks(
+  shape: RelationDef['shape'],
+  roster: readonly string[],
+  links: readonly LinkPair[],
+): boolean {
+  const members = new Set(roster);
+  const nextOf = new Map<string, string>();
+  const receivers = new Set<string>();
+  for (const { from, to } of links) {
+    if (from === to || !members.has(from) || !members.has(to)) return false;
+    if (nextOf.has(from) || receivers.has(to)) return false;
+    nextOf.set(from, to);
+    receivers.add(to);
+  }
+  switch (shape) {
+    case 'manual':
+      return true;
+    case 'derangement': {
+      if (members.size < 2) return links.length === 0;
+      if (links.length !== members.size) return false;
+      // Every player gives once (unique `from` over a full-size list), so following the chain from any player must
+      // visit the whole roster before it closes.
+      const start = [...members][0];
+      let at = start;
+      for (let visited = 1; visited < members.size; visited += 1) {
+        at = nextOf.get(at) ?? '';
+        if (at === start || !members.has(at)) return false;
+      }
+      return nextOf.get(at) === start;
+    }
+    case 'pairs': {
+      if (members.size < 2) return links.length === 0;
+      if (members.size - links.length !== (members.size % 2)) return false;
+      return links.every((link) => nextOf.get(link.to) === link.from);
+    }
+  }
 }

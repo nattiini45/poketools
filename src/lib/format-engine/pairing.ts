@@ -24,7 +24,7 @@ import { generateBipartiteRound } from '@/lib/tournament/bipartite';
 import { generateRoundRobinRound, getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { generateSwissRound } from '@/lib/tournament/swiss';
 import type { ByeRecord, GeneratedRound, MatchRecord } from '@/lib/tournament/types';
-import { computeStageStandings, type KitOutcome } from './standings';
+import { computeStageStandings, type KitOutcome, type StageTableExtras } from './standings';
 
 type RoundRobinPairing = Extract<Pairing, { kind: 'round_robin' }>;
 type SwissPairing = Extract<Pairing, { kind: 'swiss' }>;
@@ -133,6 +133,12 @@ export interface KitPairingInput {
   outcomes?: Readonly<Record<string, KitOutcome>>;
   seed?: string | null;
   /**
+   * What the stage's table reads besides matches, byes and outcomes (point adjustments, the admin's order, custom metrics,
+   * seeds, ratings): `KitPhase.tableExtras`. Swiss and bipartite rank the players by that table, so without it a custom
+   * metric or an adjustment would not steer the pairing the way it steers the standings.
+   */
+  tableExtras?: StageTableExtras;
+  /**
    * Filter pairing: whether two players may be paired (the `allow` expression over the pair env). A filter stage without
    * it is a caller bug and throws, so a filter is never silently skipped.
    */
@@ -176,6 +182,7 @@ export function pairNextRound(input: KitPairingInput): KitPairingResult {
     outcomes: input.outcomes,
     byes: input.byeHistory,
     seed: input.seed,
+    ...input.tableExtras,
   });
   const ranked = table.map((row) => row.player_id);
 

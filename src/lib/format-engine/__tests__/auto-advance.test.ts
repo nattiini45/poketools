@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonFormat: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-engine', () => ({ getKitPhases: vi.fn() }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn() }));
@@ -12,7 +13,9 @@ import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import type { Edge } from '@/lib/format-kit/types';
 import type { SeasonFormatRow } from '@/lib/format-studio/library-types';
-import { autoAdvanceTargets, runAutoAdvance } from '../auto-advance';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { logger } from '@/lib/logger';
+import { AutoAdvanceError, autoAdvanceTargets, runAutoAdvance } from '../auto-advance';
 
 const SEASON = 's-1';
 const edge = (key: string, from: string, to: string, gate: Edge['gate']): Edge =>
@@ -69,6 +72,53 @@ describe('runAutoAdvance', () => {
     vi.mocked(getSeasonFormat).mockResolvedValue(format('kit', [edge('up', 'groups', 'playoffs', 'auto')]));
     expect(await runAutoAdvance(SEASON, 'A')).toEqual([{ target_phase_id: 'B', enrolled_count: 4 }]);
     expect(syncStandingsEnrollment).toHaveBeenCalledWith(SEASON, 'B', { source_phase_id: 'A' });
+  });
+
+  describe('when a target fails', () => {
+    const twoTargets = () => {
+      vi.mocked(getKitPhases).mockResolvedValue([
+        { id: 'A', format_stage_key: 'groups', format_group: 0, stage_order: 1, stage_spec: null },
+        { id: 'B1', format_stage_key: 'playoffs', format_group: 1, stage_order: 2, stage_spec: null },
+        { id: 'B2', format_stage_key: 'playoffs', format_group: 2, stage_order: 2, stage_spec: null },
+      ]);
+      vi.mocked(getSeasonFormat).mockResolvedValue(format('kit', [edge('up', 'groups', 'playoffs', 'auto')]));
+    };
+
+    it('still advances the other targets, then reports both with the original error logged', async () => {
+      twoTargets();
+      const boom = new Error('db down');
+      vi.mocked(syncStandingsEnrollment).mockRejectedValueOnce(boom).mockResolvedValueOnce({ enrolled_count: 5 } as never);
+
+      const error = await runAutoAdvance(SEASON, 'A').catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(AutoAdvanceError);
+      const failure = error as AutoAdvanceError;
+      expect(failure.results).toEqual([{ target_phase_id: 'B2', enrolled_count: 5 }]);
+      expect(failure.failures).toEqual([{ target_phase_id: 'B1', error: boom }]);
+      expect(failure.code).toBeUndefined();
+      expect(syncStandingsEnrollment).toHaveBeenCalledTimes(2);
+      expect(logger.error).toHaveBeenCalledWith('format-engine/auto-advance', expect.any(String), expect.objectContaining({ targetId: 'B1', error: boom }));
+    });
+
+    it('exposes the code of a user-facing refusal', async () => {
+      twoTargets();
+      const refusal = new UserFacingError('needs a list', { code: 'advance_manual_list_required', status: 409 });
+      vi.mocked(syncStandingsEnrollment).mockRejectedValueOnce(refusal).mockResolvedValueOnce({ enrolled_count: 5 } as never);
+
+      const error = (await runAutoAdvance(SEASON, 'A').catch((err: unknown) => err)) as AutoAdvanceError;
+
+      expect(error.code).toBe('advance_manual_list_required');
+    });
+
+    it('reports a failed target read like a failed enrollment', async () => {
+      twoTargets();
+      vi.mocked(getTournamentById).mockRejectedValueOnce(new Error('read failed')).mockResolvedValueOnce({ status: 'upcoming' } as never);
+
+      const error = (await runAutoAdvance(SEASON, 'A').catch((err: unknown) => err)) as AutoAdvanceError;
+
+      expect(error.results).toEqual([{ target_phase_id: 'B2', enrolled_count: 4 }]);
+      expect(error.failures.map((f) => f.target_phase_id)).toEqual(['B1']);
+    });
   });
 
   it('leaves a target that already started alone', async () => {

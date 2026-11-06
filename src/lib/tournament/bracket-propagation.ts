@@ -396,11 +396,32 @@ export async function syncBracketResetSetting(
   };
 }
 
+/**
+ * Whether the round of a single-elimination bracket's final is completed or its final match was played: the
+ * third-place match belongs to that round, so it can no longer be added.
+ */
+async function finalRoundCompleted(tournament: Tournament, participants: ParticipantWithSeed[]): Promise<boolean> {
+  const structure = buildBracketStructureForParticipants('single_elim', participants, { thirdPlaceEnabled: true });
+  const thirdPlace = structure?.slots.find((slot) => slot.isThirdPlace);
+  if (!structure || !thirdPlace) return false;
+  const rounds = await getRoundsByTournament(tournament.id);
+  const finalRound = rounds.find((round) => round.round_number === thirdPlace.global_round_number);
+  if (finalRound?.status === 'completed') return true;
+  if (!finalRound) return false;
+  const finalSlot = structure.slots.find((slot) => slot.global_round_number === thirdPlace.global_round_number && !slot.isThirdPlace);
+  const finalMatch = finalSlot
+    ? findMatchForSlot(await getMatchesByTournament(tournament.id), new Map([[finalRound.round_number, finalRound.id]]), finalSlot)
+    : undefined;
+  return finalMatch?.status === 'completed';
+}
+
 export interface ThirdPlaceSyncResult {
   /** The scheduled (unplayed) third-place match removed after disabling. */
   third_place_matches_removed: number;
   /** Matches materialized after enabling (via the repair path). */
   slots_materialized: number;
+  /** Enabling did nothing: the final round is already completed, so a new match would sit in a finished round. */
+  skipped_final_completed?: true;
 }
 
 /**
@@ -408,7 +429,9 @@ export interface ThirdPlaceSyncResult {
  * bracket. Disabling deletes a scheduled zero-game third-place match; enabling
  * runs the repair path, so the match appears at once when both semifinals are
  * decided. A played third-place match is never removed. Non-single-elim
- * brackets are a no-op.
+ * brackets are a no-op, and so is enabling once the final round is completed:
+ * the match would be added to a finished round, so nothing is materialized and
+ * `skipped_final_completed` says why (the setting itself stays saved).
  */
 export async function syncThirdPlaceSetting(
   tournament: Tournament,
@@ -419,6 +442,9 @@ export async function syncThirdPlaceSetting(
   }
 
   if (tournament.third_place_enabled ?? false) {
+    if (await finalRoundCompleted(tournament, participants)) {
+      return { third_place_matches_removed: 0, slots_materialized: 0, skipped_final_completed: true };
+    }
     const repaired = await repairBracket(tournament, participants);
     return { third_place_matches_removed: 0, slots_materialized: repaired.slots_materialized };
   }

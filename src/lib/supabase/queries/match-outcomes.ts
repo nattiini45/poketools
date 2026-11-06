@@ -12,9 +12,6 @@ type MatchOutcomeRow = Tables<'match_outcomes'>;
 
 const COLUMNS = 'match_id, kind, p1_faints, p2_faints, source, reason, set_by, set_at';
 
-/** Ids per `.in()` read: keeps the request URL short and every page far below `max_rows`. */
-const IN_CHUNK = 150;
-
 function toMatchOutcome(row: MatchOutcomeRow): MatchOutcome {
   if (!isMatchOutcomeKind(row.kind)) throw new Error(`match_outcomes ${row.match_id}: unknown kind ${row.kind}`);
   if (!isMatchOutcomeSource(row.source)) throw new Error(`match_outcomes ${row.match_id}: unknown source ${row.source}`);
@@ -36,19 +33,6 @@ export async function getMatchOutcome(matchId: string): Promise<MatchOutcome | n
   return data ? toMatchOutcome(data) : null;
 }
 
-/** The outcomes of the given matches (a match without a row is absent from the result). */
-export async function getMatchOutcomesByMatchIds(matchIds: readonly string[]): Promise<MatchOutcome[]> {
-  const unique = [...new Set(matchIds)];
-  const out: MatchOutcome[] = [];
-  for (let i = 0; i < unique.length; i += IN_CHUNK) {
-    const chunk = unique.slice(i, i + IN_CHUNK);
-    const { data, error } = await supabase.from('match_outcomes').select(COLUMNS).in('match_id', chunk);
-    if (error) throw error;
-    for (const row of data ?? []) out.push(toMatchOutcome(row));
-  }
-  return out;
-}
-
 export interface RecordMatchOutcomeInput {
   matchId: string;
   kind: MatchOutcomeKind;
@@ -59,6 +43,8 @@ export interface RecordMatchOutcomeInput {
   setBy: string | null;
   /** Admin writes replace any row; other writes never replace an admin row. */
   force: boolean;
+  /** Write only while the match is not completed (an admin outcome staged before the status flip); answers `kept` otherwise. */
+  openOnly?: boolean;
 }
 
 export type RecordMatchOutcomeResult = 'written' | 'kept';
@@ -75,15 +61,22 @@ export async function recordMatchOutcome(input: RecordMatchOutcomeInput): Promis
     p_p2_faints: input.p2Faints ?? undefined,
     p_reason: input.reason ?? undefined,
     p_set_by: input.setBy ?? undefined,
+    p_open_only: input.openOnly ?? undefined,
   });
   if (error) throw error;
   if (data !== 'written' && data !== 'kept') throw new Error(`match_outcome_record returned ${String(data)}`);
   return data;
 }
 
-/** Removes a match's outcome (reset, reopen, a lost compare-and-set). Returns the rows deleted. */
-export async function deleteMatchOutcome(matchId: string): Promise<number> {
-  const { error, count } = await supabase.from('match_outcomes').delete({ count: 'exact' }).eq('match_id', matchId);
+/**
+ * Removes a match's outcome (reset, reopen, a lost compare-and-set). Returns the rows deleted. With `onlyIfSetAt` the
+ * row goes only while it still carries that `set_at` (the row the caller itself wrote), so a row another writer
+ * replaced meanwhile is left alone.
+ */
+export async function deleteMatchOutcome(matchId: string, options: { onlyIfSetAt?: string } = {}): Promise<number> {
+  let query = supabase.from('match_outcomes').delete({ count: 'exact' }).eq('match_id', matchId);
+  if (options.onlyIfSetAt !== undefined) query = query.eq('set_at', options.onlyIfSetAt);
+  const { error, count } = await query;
   if (error) throw error;
   return count ?? 0;
 }

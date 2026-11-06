@@ -44,15 +44,19 @@ import { emitSocialEvent } from '@/lib/social/notify';
 import { triggerTournamentReport } from '@/lib/ai/trigger';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
-import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
-import { loadKitPhase } from '@/lib/format-engine/load';
-import { isChallengeLadder, kitPairsRounds, legRoundRange, pairNextRound, roundRobinOf } from '@/lib/format-engine/pairing';
-import { loadPairingAids, openForbiddenPairingCheck, type PairingAids } from '@/lib/format-engine/pairing-server';
-import { ensureKitPhaseGroups } from '@/lib/format-engine/groups';
-import { onRoundGenerated } from '@/lib/format-engine/runtime/hooks';
-import { fillRoundDeadline } from '@/lib/format-engine/runtime/calendar-server';
-import { assertStageNotEnded } from '@/lib/format-engine/runtime/stage-end-server';
+import { kitPairsRounds, legRoundRange, pairNextRound, roundRobinOf } from '@/lib/format-engine/pairing';
+import { loadPairingAids, type PairingAids } from '@/lib/format-engine/pairing-server';
+import { assertKitGroupsFormed, ensureKitPhaseGroups } from '@/lib/format-engine/groups';
+import {
+  announceKitRound,
+  assertPhaseGenerates,
+  assertPhaseOpenForRounds,
+  assertPhaseReadyForFirstRound,
+  fillKitRoundDeadline,
+  loadKitPhaseOfTournament,
+  wantsForcedStart,
+} from '@/lib/format-engine/route-guards';
 import { mirrorsLeagueGroups } from '@/lib/tournament/phase-week-plan';
 import type { ApiResult, ApiWarning } from '@/types/api';
 import type { Round } from '@/types/round';
@@ -93,34 +97,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // A custom league without an attached format cannot start: refuse before any round is written. The season
-    // type is already joined onto the tournament, so every other league type takes no extra read.
-    if (tournament.season_format_type === 'custom' && tournament.season_id) {
-      await assertSeasonFormatAttached(tournament.season_id);
-    }
     // A phase of a kit league pairs by its own stage: Swiss ranks by the stage's scoring and chain and stops after its
-    // rounds; a round robin plays its legs. Shadow and legacy leagues keep the legacy pairing.
-    const kitPhase =
-      tournament.season_format_type === 'custom' && tournament.season_id
-        ? await loadKitPhase(tournament.season_id, tid)
-        : null;
+    // rounds; a round robin plays its legs. Shadow and legacy leagues keep the legacy pairing. A custom league without
+    // an attached format cannot start: refused before any round is written.
+    const kitPhase = await loadKitPhaseOfTournament(tournament);
     const kit = kitPhase?.engine === 'kit' && kitPairsRounds(kitPhase.stage) ? kitPhase : null;
     const warnings: ApiWarning[] = [];
-    // A manual stage is paired by hand (the manual round editor); no generator may pair it.
-    if (kitPhase?.engine === 'kit' && kitPhase.stage.pairing.kind === 'manual') {
-      throw new UserFacingError('This phase is paired by hand. Create its rounds in the manual round editor.', {
-        code: 'rounds_manual_pairing',
-        status: 409,
-      });
-    }
-
-    // A challenge ladder has no generated rounds: its matches come from accepted challenges.
-    if (kitPhase?.engine === 'kit' && isChallengeLadder(kitPhase.stage.pairing)) {
-      throw new UserFacingError('This phase is a challenge ladder: its matches come from accepted challenges. Create its rounds in the manual round editor.', {
-        code: 'rounds_challenge_ladder',
-        status: 409,
-      });
-    }
+    // A manual stage is paired by hand and a challenge ladder takes its matches from accepted challenges: no generator
+    // may pair either.
+    assertPhaseGenerates(kitPhase);
     if (tournament.status === 'completed') {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Tournament is already completed', code: 'tournament_already_completed' },
@@ -134,14 +119,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const existingRounds = await getRoundsByTournament(tid);
 
     // A stage that reached its end_when takes no further round.
-    if (kitPhase?.engine === 'kit' && tournament.season_id) {
-      await assertStageNotEnded({
-        seasonId: tournament.season_id,
-        phaseId: tid,
-        stage: kitPhase.stage,
-        currentRound: tournament.current_round,
-      });
-    }
+    await assertPhaseOpenForRounds(tournament, kitPhase);
+    // The first round waits for the format's own set-up (a draw, the actions players owe); an admin may force it. The
+    // forced start is audited once the round is written (`announceKitRound`), not before the request can still be refused.
+    const forcedStart = await assertPhaseReadyForFirstRound(tournament, kitPhase, {
+      force: wantsForcedStart(request),
+      actor: { id: admin.playerId, name: admin.name },
+    });
 
     const isElimination =
       tournament.bracket_type === 'single_elim' ||
@@ -219,6 +203,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // A kit stage with groups forms them before its first round (league groups, when the league has any, win).
     if (kit && tournament.season_id && groups.length === 0) {
       groups = await ensureKitPhaseGroups({ seasonId: tournament.season_id, phaseId: tid, stage: kit.stage, seed: kit.seed });
+    } else if (kit && tournament.season_id) {
+      // Groups another request has inserted but not filled yet (409 groups_forming_in_progress, never an empty round).
+      assertKitGroupsFormed(groups, kit.stage);
     }
 
     // 5. Generate pairings (group-scoped if groups exist)
@@ -323,6 +310,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             byeHistory: groupByes,
             roundNumber: nextRoundNumber,
             outcomes: kit.outcomes,
+            tableExtras: kit.tableExtras,
             seed: kit.seed,
             allowPair: aids.allowPair,
             sides: aids.sides,
@@ -363,6 +351,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         byeHistory,
         roundNumber: nextRoundNumber,
         outcomes: kit.outcomes,
+        tableExtras: kit.tableExtras,
         seed: kit.seed,
         allowPair: aids.allowPair,
         sides: aids.sides,
@@ -512,26 +501,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // A stage with a calendar gives the round its deadline (an admin's own deadline is never replaced).
-    if (kitPhase?.engine === 'kit' && tournament.season_id) {
-      round = await fillRoundDeadline({ seasonId: tournament.season_id, stage: kitPhase.stage, round });
-    }
+    round = await fillKitRoundDeadline(tournament, kitPhase, round);
 
     // The new pairings show on the next view of the public pages.
     expireTournamentReads(tid, tournament.season_id);
 
     // A kit league's format reacts to the new round (stage_start for the first one, round_start, rematch checks). Best
     // effort and logged inside: the hook never fails the write.
-    if (kitPhase?.engine === 'kit') {
-      await onRoundGenerated({
-        tournament,
-        roundNumber,
-        rematches,
-        startsPhase: tournament.status === 'upcoming',
-      });
-      if (forbidden > 0 && tournament.season_id) {
-        await openForbiddenPairingCheck({ seasonId: tournament.season_id, stageKey: kitPhase.stage.key, round: roundNumber, forbidden });
-      }
-    }
+    await announceKitRound(tournament, kitPhase, { roundNumber, rematches, forbidden }, tournament.status === 'upcoming', forcedStart);
 
     logAuditEvent({
       actor_id: admin.playerId,

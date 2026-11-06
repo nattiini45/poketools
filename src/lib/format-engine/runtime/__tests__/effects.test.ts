@@ -13,7 +13,10 @@ describe('eventKey and eventMatches', () => {
     expect(eventKey({ event: 'round_start', stage: 'main', round: 2 })).toBe('round_start:main:2');
     expect(eventKey({ event: 'match_completed', match_id: 'm1' })).toBe('match_completed:m1');
     expect(eventKey({ event: 'action_locked', action: 'choose_gift' })).toBe('action_locked:choose_gift');
-    expect(eventKey({ event: 'time', mark: 'gift_deadline' })).toBe('time:gift_deadline');
+    expect(eventKey({ event: 'time', mark: 'gift_deadline' })).toBe('time:-:gift_deadline');
+    expect(eventKey({ event: 'time', stage: 'cup', mark: 'kickoff' })).toBe('time:cup:kickoff');
+    // The same mark key in two stages is two events.
+    expect(eventKey({ event: 'time', stage: 'groups', mark: 'kickoff' })).not.toBe(eventKey({ event: 'time', stage: 'cup', mark: 'kickoff' }));
     expect(eventKey({ event: 'stage_end' })).toBe('stage_end:-');
   });
 

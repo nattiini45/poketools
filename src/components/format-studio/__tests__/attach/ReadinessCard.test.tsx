@@ -266,3 +266,32 @@ describe('ReadinessCard with the real checklist computation', () => {
     expect(render(readiness)).toContain('All set. You can start the league.');
   });
 });
+
+describe('ReadinessCard calendar_start item', () => {
+  const calendar = (params: ReadinessItem['params']): ReadinessResult => ({
+    applicable: true,
+    ready: false,
+    blockedReason: null,
+    items: [item('format_attached', 'met'), item('calendar_start', 'unmet', params, { tab: 'settings' })],
+  });
+
+  it('asks for a start date in both languages and links to the settings tab', () => {
+    const en = render(calendar({ reason: 'missing', count: 0 }));
+    expect(en).toContain(esc('Set the league’s start date'));
+    expect(en).toContain(`/admin/leagues/${S1}?tab=settings`);
+    expect(en).toContain('Open settings');
+    expectNoLeftovers(en);
+    const de = render(calendar({ reason: 'missing', count: 0 }), 'de');
+    expect(de).toContain('Lege das Startdatum der Liga fest');
+    expect(de).toContain('Einstellungen öffnen');
+    expectNoLeftovers(de);
+  });
+
+  it('names the number of marks that are already due, singular and plural', () => {
+    expect(render(calendar({ reason: 'marks_past', count: 1 }))).toContain('1 calendar mark is already due');
+    expect(render(calendar({ reason: 'marks_past', count: 3 }))).toContain('3 calendar marks are already due');
+    expect(render(calendar({ reason: 'marks_past', count: 1 }), 'de')).toContain('1 Kalendermarke ist schon fällig');
+    expect(render(calendar({ reason: 'marks_past', count: 3 }), 'de')).toContain('3 Kalendermarken sind schon fällig');
+    expectNoLeftovers(render(calendar({ reason: 'marks_past', count: 3 }), 'de'));
+  });
+});

@@ -4,12 +4,31 @@
 --                            the stage it repeats over. A kit stage then maps to one phase per group, all with the same
 --                            format_stage_key, so the key alone no longer identifies a phase: (season_id,
 --                            format_stage_key, format_group) does.
+-- tournament_groups          unique (tournament_id, group_number): concurrent group forming collides instead of duplicating.
 -- format_attach_season()     reads format_group from each stage row (absent: 0), upserts by the three-part key and
 --                            removes the phases whose (key, group) left the spec (a stage that now repeats over fewer
---                            groups, or no longer repeats). Same signature and result as the 20261104100000 body, and
+--                            groups, or no longer repeats). Same result as the 20261104100000 body with one new
+--                            argument, p_confirm_clear (see Reset guard below), and
 --                            each entry of `stages` carries its `group` besides `id` and `key`.
 --
--- Service-role only, like the function it replaces (src/lib/supabase/__tests__/migration-api-grants.test.ts).
+-- Runtime state (20261105090000): an attach that REPLACES a format and a detach empty the nine format_* runtime tables of the
+-- league (format__clear_runtime). The league has not started (both refuse first), but players may already have saved picks,
+-- an admin may have adjusted, a time mark may have fired: all of it belongs to the spec that is going away, and a stale
+-- event key ("already fired") or a locked action flag would block the new spec's events. format_detach_season() is
+-- redefined here for that (its body is 20261026090000's plus the clear).
+--
+-- Reset guard: the clear above is silent, but "the league has not started" does not mean "nothing happened": the draw
+-- of a Secret Santa, the locked premium reservations and the gifts all live in a phase that counts as not started. A
+-- replace or a detach whose league holds relation links, resource items, action submissions or adjustments therefore
+-- refuses with FORMAT_RUNTIME_HAS_DATA (DETAIL {links, items, submissions, adjustments}) unless the caller passes
+-- p_confirm_clear = true. A first attach and a league without such rows are unaffected. The new argument is a new
+-- signature, so the two old ones are dropped first (format__guard_runtime_clear is the shared check).
+--
+-- What the clear deleted: the guard always counts the four tables and returns {links, items, submissions, adjustments},
+-- confirmed or not. A replace (not a first attach) and a detach return them as `cleared`, so the audit entry of a
+-- confirmed clear can say how much was destroyed (the adjustment rows carry the reasons, and they go with the clear).
+--
+-- Service-role only, like the functions it replaces (src/lib/supabase/__tests__/migration-api-grants.test.ts).
 -- Deploy order: before the code.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
@@ -25,9 +44,45 @@ DROP INDEX public.uq_tournaments_season_format_stage;
 CREATE UNIQUE INDEX uq_tournaments_season_format_stage ON public.tournaments (season_id, format_stage_key, format_group)
   WHERE format_stage_key IS NOT NULL;
 
+-- A phase has one group per number. Two requests that form the groups of a phase at the same moment (the first round of a
+-- kit stage with groups, from two tabs or a retry) each insert 1..N; the second insert now fails with 23505, which the
+-- engine answers as 409 groups_forming_in_progress, instead of leaving a duplicate set of groups. Every writer deletes a
+-- phase's groups before it inserts a new layout, so no existing flow collides.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tournament_groups_tournament_group_number
+  ON public.tournament_groups (tournament_id, group_number);
+
+DROP FUNCTION IF EXISTS public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb);
+DROP FUNCTION IF EXISTS public.format_detach_season(uuid);
+
+-- Internal. Returns the four counts {links, items, submissions, adjustments} of the runtime rows a clear would delete
+-- and refuses (FORMAT_RUNTIME_HAS_DATA, DETAIL = the same counts) when there are any and the caller has not confirmed.
+-- Counts only the rows a person or a draw produced (links, items, submissions, adjustments); flags, events, checks,
+-- attributes and track progress follow from them or are rebuilt by the new spec.
+CREATE OR REPLACE FUNCTION public.format__guard_runtime_clear(p_season_id uuid, p_confirm boolean)
+RETURNS jsonb
+LANGUAGE plpgsql STABLE SET search_path = public, pg_temp AS $$
+DECLARE
+  v_links       integer;
+  v_items       integer;
+  v_submissions integer;
+  v_adjustments integer;
+  v_counts      jsonb;
+BEGIN
+  SELECT count(*) INTO v_links       FROM public.format_relation_links     WHERE season_id = p_season_id;
+  SELECT count(*) INTO v_items       FROM public.format_resource_items     WHERE season_id = p_season_id;
+  SELECT count(*) INTO v_submissions FROM public.format_action_submissions WHERE season_id = p_season_id;
+  SELECT count(*) INTO v_adjustments FROM public.format_adjustments        WHERE season_id = p_season_id;
+  v_counts := jsonb_build_object('links', v_links, 'items', v_items, 'submissions', v_submissions,
+                                 'adjustments', v_adjustments);
+  IF NOT p_confirm AND v_links + v_items + v_submissions + v_adjustments > 0 THEN
+    RAISE EXCEPTION 'FORMAT_RUNTIME_HAS_DATA' USING ERRCODE = 'P0001', DETAIL = v_counts::text;
+  END IF;
+  RETURN v_counts;
+END $$;
+
 CREATE OR REPLACE FUNCTION public.format_attach_season(
   p_season_id uuid, p_definition_id uuid, p_version_no integer, p_spec jsonb, p_spec_hash text, p_seed text, p_stages jsonb,
-  p_preset_rulesets jsonb DEFAULT '{}'::jsonb)
+  p_preset_rulesets jsonb DEFAULT '{}'::jsonb, p_confirm_clear boolean DEFAULT false)
 RETURNS jsonb
 LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
@@ -38,6 +93,7 @@ DECLARE
   v_stages           jsonb;
   v_previous         jsonb;
   v_removed_rulesets uuid[];
+  v_cleared          jsonb;
 BEGIN
   IF p_stages IS NULL OR jsonb_typeof(p_stages) <> 'array' THEN
     RAISE EXCEPTION 'format_attach_season: p_stages must be a json array' USING ERRCODE = '22023';
@@ -64,6 +120,10 @@ BEGIN
 
   SELECT f.preset_rulesets INTO v_previous FROM public.season_formats f WHERE f.season_id = p_season_id;
   v_replaced := FOUND;
+  IF v_replaced THEN
+    v_cleared := public.format__guard_runtime_clear(p_season_id, coalesce(p_confirm_clear, false));
+    PERFORM public.format__clear_runtime(p_season_id);
+  END IF;
   INSERT INTO public.season_formats AS f (season_id, definition_id, version_no, spec, spec_hash, seed, preset_rulesets)
   VALUES (p_season_id, p_definition_id, p_version_no, p_spec, p_spec_hash, p_seed, p_preset_rulesets)
   ON CONFLICT (season_id) DO UPDATE
@@ -110,10 +170,53 @@ BEGIN
 
   RETURN jsonb_build_object(
     'replaced', v_replaced, 'stages', v_stages,
-    'removed_stage_ids', to_jsonb(v_removed), 'removed_ruleset_ids', to_jsonb(v_removed_rulesets));
+    'removed_stage_ids', to_jsonb(v_removed), 'removed_ruleset_ids', to_jsonb(v_removed_rulesets),
+    'cleared', v_cleared);
 END $$;
 
-REVOKE ALL ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb) TO service_role;
+-- Detach: one transaction. Returns {removed_stage_ids, removed_ruleset_ids, cleared} (cleared: the counts the clear deleted).
+--   FORMAT_SEASON_NOT_FOUND / FORMAT_NOTHING_ATTACHED / FORMAT_SEASON_STARTED / FORMAT_RUNTIME_HAS_DATA
+CREATE OR REPLACE FUNCTION public.format_detach_season(p_season_id uuid, p_confirm_clear boolean DEFAULT false) RETURNS jsonb
+LANGUAGE plpgsql SET search_path = public AS $$
+DECLARE
+  v_removed          uuid[];
+  v_recorded         jsonb;
+  v_removed_rulesets uuid[];
+  v_cleared          jsonb;
+BEGIN
+  PERFORM 1 FROM public.seasons s WHERE s.id = p_season_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'FORMAT_SEASON_NOT_FOUND' USING ERRCODE = 'P0001';
+  END IF;
+  SELECT f.preset_rulesets INTO v_recorded FROM public.season_formats f WHERE f.season_id = p_season_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'FORMAT_NOTHING_ATTACHED' USING ERRCODE = 'P0001';
+  END IF;
+  IF public.format_season_started(p_season_id) THEN
+    RAISE EXCEPTION 'FORMAT_SEASON_STARTED' USING ERRCODE = 'P0001';
+  END IF;
+  v_cleared := public.format__guard_runtime_clear(p_season_id, coalesce(p_confirm_clear, false));
+  -- A teams row that points at a stage raises 23503 here and rolls everything back.
+  WITH gone AS (
+    DELETE FROM public.tournaments t
+     WHERE t.season_id = p_season_id AND t.format_stage_key IS NOT NULL
+    RETURNING t.id)
+  SELECT coalesce(array_agg(g.id), ARRAY[]::uuid[]) INTO v_removed FROM gone g;
+  PERFORM public.format__clear_runtime(p_season_id);
+  DELETE FROM public.season_formats f WHERE f.season_id = p_season_id;
+  v_removed_rulesets := public.format_delete_unused_preset_rulesets(v_recorded, '{}'::jsonb);
+  RETURN jsonb_build_object('removed_stage_ids', to_jsonb(v_removed), 'removed_ruleset_ids', to_jsonb(v_removed_rulesets),
+                            'cleared', v_cleared);
+END $$;
+
+REVOKE ALL ON FUNCTION public.format__guard_runtime_clear(uuid, boolean) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.format__guard_runtime_clear(uuid, boolean) TO service_role;
+REVOKE ALL ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean) TO service_role;
+REVOKE ALL ON FUNCTION public.format_detach_season(uuid, boolean) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.format_detach_season(uuid, boolean) TO service_role;
+
+COMMENT ON FUNCTION public.format__guard_runtime_clear(uuid, boolean) IS
+  'Internal: returns {links, items, submissions, adjustments} for the league and raises FORMAT_RUNTIME_HAS_DATA (same DETAIL) when it has such runtime rows and the clear is not confirmed.';
 
 COMMIT;

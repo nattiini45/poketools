@@ -66,15 +66,54 @@ function sitOutSets(surplus: readonly string[], count: number, history: PairingH
   return sets;
 }
 
+/** One round of a pre-generated bipartite schedule: side A is always the first of a pair. */
+export interface BipartiteScheduleRound {
+  pairs: Array<[string, string]>;
+  /** Players of the larger side without an opponent this round. */
+  sitting: string[];
+}
+
+/**
+ * The full A x B schedule (a cyclic Latin rectangle): `max(|A|, |B|)` rounds in which every player of the smaller
+ * side plays every round and every pair (a, b) meets exactly once. In round `r` the `i`-th player of the smaller side
+ * meets the `(i + r) mod m`-th of the larger side (`m` = its size); the larger side's players not reached sit out.
+ * The sides are taken in the order given (callers pass seed order), never re-ranked, so the schedule is the same in
+ * every round of a stage and its guarantee ("every A meets every B") cannot be broken by moving standings. Pure and
+ * deterministic: no randomness. Duplicates in a side are dropped (first kept); an empty side yields no rounds.
+ */
+export function buildBipartiteSchedule(sideA: readonly string[], sideB: readonly string[]): BipartiteScheduleRound[] {
+  const a = [...new Set(sideA)];
+  const b = [...new Set(sideB)];
+  if (a.length === 0 || b.length === 0) return [];
+  const aSmaller = a.length <= b.length;
+  const small = aSmaller ? a : b;
+  const large = aSmaller ? b : a;
+  const m = large.length;
+  return Array.from({ length: m }, (_, r): BipartiteScheduleRound => ({
+    pairs: small.map((s, i): [string, string] => {
+      const l = large[(i + r) % m];
+      return aSmaller ? [s, l] : [l, s];
+    }),
+    // Large index j plays in round r when (j - r) mod m is below |small|.
+    sitting: large.filter((_, j) => (((j - r) % m) + m) % m >= small.length),
+  }));
+}
+
 /**
  * Bipartite pairing: every round pairs a player of side A against a player of side B (the first one is `player_1_id`).
- * Both sides are ranked by `ranked` (best first) and paired nearest rank to nearest rank, never repeating a pairing
- * when any pairing of the round avoids it (the search backtracks). When one side is larger, its surplus players sit
- * out and get the bye: the lowest-ranked who have not had one (`byeHistory` lists the byes of earlier rounds) whose
- * absence still leaves a rematch-free pairing; with none, the fewest-rematches pairing of the first candidates.
+ *
+ * The rounds come from the pre-generated schedule of `buildBipartiteSchedule` (built from the sides in the order given,
+ * so every A meets every B exactly once over `max(|A|, |B|)` rounds whatever the standings do). Round `roundNumber` is
+ * schedule round `(roundNumber - 1) mod m`; if one of its pairs was already paired (a skipped, re-run or hand-made
+ * round) the next schedule round without a rematch is used instead. The surplus players of the larger side sit out
+ * (the bye) as the schedule says. Past the last schedule round, or when no schedule round is rematch-free, every
+ * meeting has happened: the standings-based search takes over and pairs nearest rank to nearest rank with the fewest
+ * rematches (an explicit extra meeting, reported in `rematches`).
  *
  * `pairedMatches` feeds only the no-rematch history (every match already paired, whatever its status); it defaults to
- * `matchHistory`. A player in neither side plays no round and is not given a bye. Pure.
+ * `matchHistory`. With an empty history the schedule is simply cycled. `ranked` orders the fallback only; `byeHistory`
+ * lists the byes of earlier rounds and steers the fallback's choice of who sits out. A player in neither side plays no
+ * round and is not given a bye. Pure and deterministic.
  */
 export function generateBipartiteRound(
   sideA: readonly string[],
@@ -108,6 +147,19 @@ export function generateBipartiteRound(
   const orient = (matching: BipartiteMatching): Array<[string, string]> =>
     matching.pairs.map(([x, y]) => (a === smaller ? [x, y] : [y, x]));
 
+  if (smaller.length > 0) {
+    const scheduled = pickScheduledRound(sideA, sideB, history, roundNumber);
+    if (scheduled !== null) {
+      return {
+        round_number: roundNumber,
+        round_name: `Round ${roundNumber}`,
+        pairings: scheduled.pairs.map(([player_1_id, player_2_id]): Pairing => ({ player_1_id, player_2_id })),
+        bye_player_ids: scheduled.sitting,
+        rematches: 0,
+      };
+    }
+  }
+
   const budget = { steps: options.stepLimit ?? BIPARTITE_SEARCH_STEP_LIMIT };
   let chosen: { sitting: string[]; matching: BipartiteMatching } | null = null;
   for (const sitting of sets) {
@@ -131,6 +183,27 @@ export function generateBipartiteRound(
     bye_player_ids: chosen.sitting,
     rematches: chosen.matching.rematches,
   };
+}
+
+/**
+ * The schedule round to play as round `roundNumber`: the nominal one, else the next without a rematch against the
+ * history. Null when there is none (every meeting is done, or an earlier hand-made round broke every schedule round).
+ */
+function pickScheduledRound(
+  sideA: readonly string[],
+  sideB: readonly string[],
+  history: PairingHistory,
+  roundNumber: number,
+): BipartiteScheduleRound | null {
+  const schedule = buildBipartiteSchedule(sideA, sideB);
+  const m = schedule.length;
+  if (m === 0) return null;
+  const start = (((roundNumber - 1) % m) + m) % m;
+  for (let k = 0; k < m; k += 1) {
+    const round = schedule[(start + k) % m];
+    if (!round.pairs.some(([x, y]) => havePlayed(history, x, y))) return round;
+  }
+  return null;
 }
 
 /** Rank against rank, rematches or not: the answer when the bounded search found nothing. */

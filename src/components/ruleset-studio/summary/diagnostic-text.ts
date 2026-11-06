@@ -21,7 +21,9 @@ export function diagnosticText(
   const params = diagnostic.params ?? {};
   const id = typeof params.id === 'string' ? params.id : '';
   const category = params.category;
-  const name = isCategory(category) ? nameOf(category, id) : clauseName(id);
+  // Level rules are keyed by species, so their entry name is the Pokémon name; `levels` is a diagnostic category, not a
+  // list category.
+  const name = isCategory(category) ? nameOf(category, id) : category === 'levels' ? nameOf('pokemon', id) : clauseName(id);
   const issue = typeof params.issue === 'string' ? params.issue : '';
   return t.dynamic(`code.${diagnostic.code}`, {
     name,

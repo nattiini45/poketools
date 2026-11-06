@@ -61,10 +61,11 @@ describe('the Wichtelcup community preset', () => {
     expect(new Set(cup.pokemon.ids).size).toBe(141);
     expect(cup.pokemon.ids).toEqual(expect.arrayContaining(['vivillonicysnow', 'deerlingwinter', 'sawsbuckwinter', 'necrozma', 'rayquaza']));
     expect(cup.pokemon.ids).not.toContain('garchomp');
-    expect(cup.moves).toEqual({ mode: 'block', ids: [] });
-    expect(cup.items.ids).toEqual(expect.arrayContaining(['lightclay', 'normaliumz', 'charizarditex', 'ultranecroziumz']));
+    // Dragon Ascent is the only route to Mega Rayquaza (no stone), so the move is banned with the stones.
+    expect(cup.moves).toEqual({ mode: 'block', ids: ['dragonascent'] });
+    expect(cup.items.ids).toEqual(expect.arrayContaining(['lightclay', 'normaliumz', 'charizarditex', 'ultranecroziumz', 'redorb', 'adamantcrystal', 'lustrousglobe']));
     expect(cup.abilities.ids).toEqual(['moody', 'snowcloak']);
-    expect(cup.clauses).toEqual(['speciesclause', 'itemclause', 'terastalclause']);
+    expect(cup.clauses).toEqual(['speciesclause', 'itemclause', 'terastalclause', 'megarayquazaclause']);
     expect(cup.clauses).not.toEqual(expect.arrayContaining(['sleepclausemod', 'ohkoclause', 'evasionclause']));
     expect([WICHTELCUP_NORMAL.length, WICHTELCUP_JUNK.length, WICHTELCUP_PREMIUM.length, WICHTELCUP_NEW_YEAR.length]).toEqual([64, 30, 23, 24]);
   });

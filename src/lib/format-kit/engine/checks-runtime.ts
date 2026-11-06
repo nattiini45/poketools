@@ -368,6 +368,22 @@ function checkStep(out: Diagnostic[], lookup: Lookup, action: PlayerActionRule, 
     const reason = attr === undefined ? 'unknown' : attr.on !== 'entry' ? 'player' : attr.multi === true ? 'multi' : null;
     if (reason !== null) {
       out.push(diag('action_distinct_attr_invalid', `${pointer}/distinct_attr`, { action: action.id, attr: step.distinct_attr, reason }));
+    } else {
+      // An entry without the attribute is skipped by the "different values" rule at pick time, so a player could pick
+      // two of them. One diagnostic per step: how many entries lack it and the first one.
+      const wanted = step.distinct_attr;
+      const missing = (lookup.domains.get(step.domain)?.entries ?? []).filter((entry) => !entry.attrs.some((a) => a.key === wanted));
+      if (missing.length > 0) {
+        out.push(
+          diag('action_distinct_attr_missing', `${pointer}/distinct_attr`, {
+            action: action.id,
+            domain: step.domain,
+            attr: wanted,
+            count: missing.length,
+            first: missing[0].id,
+          }),
+        );
+      }
     }
   }
 }

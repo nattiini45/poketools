@@ -78,7 +78,8 @@ export interface EditorState {
   draft: DraftEditorContext | null;
 
   // ── Save status ─────────────────────────────────────────────────────
-  saveStatus: 'idle' | 'saving' | 'saved' | 'error';
+  /** `warned`: saved, but the league rules are not met; `unchecked`: saved, the rules could not be checked. */
+  saveStatus: 'idle' | 'saving' | 'saved' | 'warned' | 'unchecked' | 'error';
 }
 
 // ============================================================

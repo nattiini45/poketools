@@ -14,10 +14,21 @@ vi.mock('@/lib/auth/helpers', () => ({
 }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
 vi.mock('@/lib/format-engine/shadow', () => ({ loadShadowDiff: vi.fn() }));
+vi.mock('@/lib/utils/rate-limit', () => ({
+  checkRateLimit: vi.fn(),
+  rateLimitedResponse: vi.fn(
+    (seconds: number) =>
+      new Response(JSON.stringify({ success: false, code: 'rate_limited', params: { seconds } }), {
+        status: 429,
+        headers: { 'content-type': 'application/json' },
+      }),
+  ),
+}));
 
 import { AuthError, requireResourceAdmin } from '@/lib/auth/helpers';
 import { loadShadowDiff, type ShadowDiffReport } from '@/lib/format-engine/shadow';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
 import type { SessionPlayer } from '@/types/auth';
 import type { Season } from '@/types/season';
@@ -46,6 +57,7 @@ beforeEach(() => {
   vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'x', name: 'Admin' } as SessionPlayer);
   vi.mocked(getSeasonById).mockResolvedValue({ id: SEASON_ID, format_type: 'custom' } as Season);
   vi.mocked(loadShadowDiff).mockResolvedValue(report);
+  vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, remaining: 59, retryAfterSeconds: 0 } as never);
 });
 
 describe('GET /api/seasons/[id]/format/shadow', () => {
@@ -58,9 +70,21 @@ describe('GET /api/seasons/[id]/format/shadow', () => {
     expectNoPrivatePlayerData(body);
   });
 
+  it('limits the reads per admin and answers 429 before reading the league', async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue({ allowed: false, remaining: 0, retryAfterSeconds: 120 } as never);
+
+    const response = await GET(request(), params);
+
+    expect(response.status).toBe(429);
+    expect(checkRateLimit).toHaveBeenCalledWith('format-shadow', 'x', { limit: 60, windowSeconds: 3600 });
+    expect(getSeasonById).not.toHaveBeenCalled();
+    expect(loadShadowDiff).not.toHaveBeenCalled();
+  });
+
   it('answers 403 to an admin of another league before reading the league', async () => {
     vi.mocked(requireResourceAdmin).mockRejectedValue(new AuthError('Admin access required', 403, 'forbidden'));
     expect((await GET(request(), params)).status).toBe(403);
+    expect(checkRateLimit).not.toHaveBeenCalled();
     expect(loadShadowDiff).not.toHaveBeenCalled();
   });
 

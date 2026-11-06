@@ -28,6 +28,51 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   both blank for email and password only (one without the other stops the server at startup). Existing deployments
   that set both see no change. A local `supabase start` stack now requires email confirmation like the hosted project;
   after pulling, restart it (`npx supabase stop && npx supabase start`) so `supabase/config.toml` takes effect.
+- **Apply the six format-engine migrations, in this order, BEFORE deploying the code.** All are service-role only (RLS on,
+  no policy, functions revoked from `PUBLIC`, `anon` and `authenticated`), none is `SECURITY DEFINER`, and every function
+  sets its `search_path`.
+  1. `20261104090000_match_outcomes.sql`: `match_outcomes` (how a match ended) and `match_outcome_record()`, classified
+     in the league recycle bin.
+  2. `20261104100000_third_place_match.sql`: `tournaments.third_place_enabled` (default false) and `format_attach_season`
+     reading it.
+  3. `20261104100100_season_format_engine_backfill.sql`: data only. **Every league that already has an attached format
+     moves to `season_formats.engine = 'legacy'`**, so nothing changes under it until an admin switches it (Format tab,
+     through `shadow` first); a league attached after this migration starts on `kit`. It also rewrites the
+     `season_formats` rows captured in the league trash, so a restored pre-release league does not come back on `kit`.
+  4. `20261105090000_format_runtime.sql`: the nine runtime tables (`format_relation_links`, `format_resource_items`,
+     `format_action_submissions`, `format_event_log`, `format_flags`, `format_player_attrs`, `format_track_progress`,
+     `format_checks`, `format_adjustments`) and their writer functions. Edited in place on this branch: the signature of
+     `format_check_resolve` is now `(p_season_id, p_check_id, p_status, p_admin, p_note)` (a check id of another league
+     resolves nothing), and the helpers `format__lock_action` (one advisory lock for save, submit and the lock op of an
+     action) and `format__clear_runtime` are new.
+  5. `20261105120000_format_foreach_group.sql`: `tournaments.format_group`, the unique index
+     `uq_tournaments_season_format_stage` on `(season_id, format_stage_key, format_group)`, and the unique index
+     **`uq_tournament_groups_tournament_group_number`** on `tournament_groups (tournament_id, group_number)`. The index
+     **fails to build if a phase already has two groups with the same number**: check
+     `SELECT tournament_id, group_number FROM tournament_groups GROUP BY 1, 2 HAVING count(*) > 1;` first (none is expected,
+     because the group editors write one set). It also drops and recreates `format_attach_season` and
+     `format_detach_season` with a new `p_confirm_clear` argument and adds the helper `format__guard_runtime_clear`.
+  6. `20261106090000_format_challenges.sql`: `format_challenges` and its functions. Edited in place:
+     `format_challenge_respond(p_season_id, p_challenge_id, p_player, p_accept)` and
+     `format_challenge_cancel(p_season_id, p_challenge_id, p_player)` take the league id, and the `format_checks.source`
+     check gains `pairing_forbidden`, `deadline_missed` and `team_audit`. `league_trash__inventory()` now lists 61 owned
+     tables.
+
+  The migrations were edited in place because none of them had shipped: a development or preview database that applied an
+  earlier revision of these files has to be reset (`supabase db reset` locally), or have the changed functions re-created
+  (a function whose argument list changed, `match_outcome_record`, also needs its old 8-argument form dropped by hand);
+  there is nothing to run on a database that has not applied them. The cron `GET /api/cron/format-engine` was already in
+  `vercel.json` (it needs `CRON_SECRET` like the others). No new environment variable.
+- **Switching a league to the kit engine applies its whole history.** The cron fires `match_completed` for every completed
+  match of a league that was on `legacy` or `shadow` (up to 25 per run and 10 per league, so a long history takes several
+  15-minute runs), including points, grants, track progress, expression checks and team-audit checks (each old match is
+  audited against today's team rows and format, so teams edited since the match can open Team rule review checks; the
+  shadow list does not preview these). Matches completed before
+  `match_outcomes` existed have no outcome row and score as `played` with 0 faints, so per-faint points are 0 for them.
+  Check the shadow list (`GET .../format/shadow`) before the switch.
+- **`notify` effects are not delivered yet.** A format's `notify` effect is planned and returned by the event runner, but
+  nothing stores it or sends it to a player or admin (no notice, push, Discord post or email). The shipped Wichtelcup
+  carries two such rules; the organizer announces the gift form and week 4 outside the app.
 
 ### Added
 
@@ -62,6 +107,70 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
     leagues, tournaments, Go-live executions and pin targets (the ruleset and format limits are reserved).
 - Evaluation harness `scripts/admin-agent-eval.ts`: plan, executor and end-to-end stages, the last two against a local
   Supabase stack only.
+- **The format kit now runs a league (Format Studio phases 2b to 4).** A custom-format league on the `kit` engine is
+  scheduled, scored, advanced and run by `src/lib/format-engine` and its `runtime/` folder; the old statement that "the
+  engine does not run kit definitions" is gone from the docs. Details in [docs/format-kit.md](docs/format-kit.md).
+  - **Engine (phase 2b):** stage standings from the kit's scoring and rank chain (forfeits and per-opponent-faint points
+    from `match_outcomes`, head to head, a coin flip from the season seed, manual order, decision-match flags, custom
+    metrics, `seed` and `rating` metrics, cross-stage views), Swiss and round robin pairing with legs, group formation,
+    advancement along edges (`top_n`, `per_group`, wildcard, threshold, bottom N, manual list; rank, cross-group, random
+    and manual seeding) and `auto` edges that advance when the source phase completes. `PUT /api/seasons/[id]/format/engine`
+    switches a league between `legacy`, `shadow` and `kit` (audit `season.format.engine`); `GET .../format/shadow` lists
+    the rows whose place or points would change. A manual-pairing phase refuses generated rounds (409
+    `rounds_manual_pairing`).
+  - **Runtime (phase 3):** attributes, domains, relations (a Secret Santa), resources, metrics, tunables, `rule.on_event`
+    with effects, player actions, assisted checks, manual adjustments, track progression and placement points, with the
+    nine `format_*` tables and one SQL function per write. The six new document sections are optional, so stored formats
+    keep their hash and the golden snapshots did not move. 26 new compiler diagnostics.
+  - **Phase 4 primitives:** `pairing.bipartite` (a pre-generated A x B schedule, a cyclic Latin rectangle in seed order, so
+    every A meets every B once), `pairing.filter`, `pairing.challenge`, team constraints, the stage calendar with marks and
+    deadline policies, `stage.end_when` and `stage.foreach_group`. 100 diagnostic codes in all; the new
+    `bipartite_rounds_short` warns when a bipartite stage has fewer rounds than the larger side needs, and
+    `deadline_policy_invalid` with reason `pick_after_close` refuses a random pick that could never be made.
+  - **Cron `GET /api/cron/format-engine`** (every 15 minutes): fires calendar marks, applies match, team and action
+    deadline policies (forfeit, admin review, auto lock, seeded random pick; action policies also run for an `upcoming`
+    phase), expires challenges, fires lost `action_locked` events and backfills `match_completed` for finalized matches whose
+    event never fired. A run handles at most 100 leagues in a window that moves on every 15-minute slot and stops starting
+    leagues after 240 seconds; the summary reports `completions_backfilled` and `deferred`. It answers 500
+    `format_cron_partial_failure` when a league failed. The README lists seven crons now.
+- **Third-place match.** A single-elimination phase with four or more players can play a match for third place between
+  the semifinal losers in the final's round (`tournaments.third_place_enabled`, the create form, the settings editor and
+  `PATCH /api/tournaments/[id]`; a format stage with `pairing.third_place` sets it). Enabling it after the final round is
+  completed does nothing (`skipped_final_completed` in the sync result), because a new match would sit in a finished round.
+- **Match outcomes.** `match_outcomes` records how every completed match ended (played with each side's faints, forfeit,
+  no-show, unresolved) and an admin can settle a result as a forfeit or no-show (`POST /api/admin/matches/[id]/result`,
+  `outcome`). See Changed for the replay-tie behaviour. The format kit's environment allows forfeits (draws stay off).
+- **Draft room: whose turn it is.** The clock bar reads "Round 3 of 6 - Pick 2 of 6" with a seat track, the player on
+  the clock in an accent pill, make-up picks labelled, and round breaks in the order strip.
+- **Guarded routes and two surfaces for a running kit league.** Players: `/dashboard/leagues/[id]/play`
+  (action forms with draft, review and submit, items, relations, challenge ladders), linked from the league hub of every
+  custom league. League admins: a **Live** tab (checks inbox, manual adjustments with a required reason and history,
+  Open and Lock for actions, relations with an audited "show hidden sides", challenges). Routes under
+  `/api/seasons/[id]/format/`: `me`, `actions/[actionId]` (PUT) and `.../submit`, `challenges`, `challenges/[challengeId]`
+  (DELETE) and `.../answer`, `adjustments` (GET, POST), `checks` and `checks/[checkId]/resolve`, `relations/unmask`.
+  Season-scoped ids, strict zod, nine rate-limit buckets (`format-challenge-make` and `format-adjust` fail closed), audit
+  actions `season.format.action.submit`, `.challenge.make`, `.challenge.answer`, `.challenge.withdraw`, `.adjustment`,
+  `.check.resolve` and `.relations.view_hidden`, EN and DE text (the German is unreviewed by a native speaker), and the
+  privacy contract in [docs/format-kit.md](docs/format-kit.md#live-format-routes): a hidden relation side, another
+  player's pick or a team-audit subject is never serialised to a player, and a relation draw is stored only as a link count.
+- **Team rule audit.** A played team that breaks the stage's team constraints, differs from the replay or
+  could not be audited opens a **Team rule review** check (`team_audit`, admin-only subject); a reset closes it. See Changed.
+- **Wichtelcup.** A fourth shipped example format, `wichtelcup` (a Secret Santa cup written with kit
+  primitives only: per-player pools, the player's own gifts, a New Year pool that opens in week 4, weekly obligations from
+  the round) and the rule preset `gen9natdexwichtelcup` it uses (141 exact species/forms, item and ability bans including the
+  forme-forcing items and Dragon Ascent, Species, Item, Terastal and Mega Rayquaza clauses, exactly six Pokémon). The
+  organizer draws the Secret Santa with a confirmed admin action; the first round waits for the draw and the gift checks.
+  The shipped example count is four.
+- **Rule levels.** A ruleset document can carry `levels` (a policy `exact` or `max`, a default and per-species entries, each
+  `experimental` or `approved`); `validateTeam` enforces approved entries (a missing Level line means 100), the Ruleset
+  Studio has a Levels section, and the teambuilder validation panel shows the level requirements. `levels: null` is left
+  out of every hashed form, so published rulesets keep their `content_hash` and `resolved_hash` and a no-op edit of an old
+  ruleset is still "nothing new".
+- **Showdown challenge string.** The read-only ruleset page shows a copyable `<format> @@@ <rules>` custom-rules string on
+  the least restrictive Showdown format of the ruleset's generation, universe and game type (not a hard-coded National
+  Dex format), with every entry written with its kind (`-item:metronome`, `-move:metronome`), explicit forme bans where an
+  allowlisted base species would otherwise allow every forme, and cosmetic formes written as their base species. The page
+  says that the string cannot carry level rules, team constraints or per-player pools.
 
 ### Changed
 
@@ -74,6 +183,44 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 - The build no longer needs `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` (CI dropped its placeholders).
 - **CI runs the Vitest suite and the type-check once, with a 30 minute timeout and no lint warnings allowed**
   (`npm run lint` passes `--max-warnings=0`). `legacy-peer-deps` is gone from `.npmrc`.
+- **Teams in kit leagues are no longer refused for breaking the stage rules.** `POST /api/teams`,
+  `PATCH /api/teams/[id]` and `POST /api/match-prep` save the team and the success body carries the verdict as
+  `team_check` (absent: no kit rules or rules met; `{ status: 'unmet', verdict }`; `{ status: 'unavailable' }` when the
+  verdict could not be computed). **API contract change for external clients:** `team_check` moves from the error body to
+  the success body with this new shape, and the 400 `team_check_failed` is no longer returned. Breaks of the phase's
+  ruleset are advisory as well, as in the classic leagues. A match-bound team is judged at its match's round;
+  `POST /api/validate-team` takes an optional `match_id` (with `tournament_id`; 404 `match_not_found`, 403
+  `match_prep_not_participant`) and is rate limited to 240 per minute and player (429 `rate_limited`).
+- **An engine tie in a Showdown replay no longer ends as a plain 400, for every league.** The match goes
+  to `disputed` with an `unresolved` outcome, is never scored, is audited as `match.replay_unresolved` and answers 409
+  `match_replay_unresolved`; a log without a winner and without a tie stays 400 `replay_winner_unknown`. `match_outcomes` is
+  written for every completed match of every league type. A reset, a reopen or a deleted last game removes the row.
+- **The first round of a kit league whose format has a draw or a gift form is refused until it is ready** (409
+  `format_not_ready`: `relation_undrawn`, `action_incomplete`); a league admin can start anyway with `?force=true`, audited
+  as `season.format.round.force_start`. The readiness checklist gains a calendar start item.
+- **Re-attaching or detaching a format over a draw, gifts, submitted picks or adjustments is refused** (409
+  `format_runtime_has_data`, with the counts) unless the request carries `confirm_clear: true`; a confirmed replace or
+  detach empties the league's nine runtime tables, so stale "already fired" event keys and locked actions cannot block the
+  new format.
+- **Round routes.** `generate-all-rounds` and `rounds/manual` now fire `stage_start` and `round_start`, persist the stage
+  calendar's deadline and open the pairing checks, like `generate-round` already did (a kit phase used to be activated
+  without them). `generate-round` passes the table extras (adjustments, custom metrics, seeds, ratings) to the pairing, so
+  Swiss ranks by the table the public sees.
+- **Relation adjustments are validated.** Links must fit the roster and the relation's shape (`invalid_links`), a rank order
+  must be the full roster (`invalid_order`), a revoke beyond the holding is refused (`insufficient_holding`), an item
+  outside the domain as amended is refused, and a relation adjustment that asks for nothing is `invalid_links`; the history
+  row of a relation adjustment keeps `link_count` instead of the pairs. A reason over 500 characters is a 400, not a 500.
+- **A reset or reopen takes back what a completion applied.** Granted items are revoked and awarded points cancelled when a
+  completed match of a kit league is reset or reopened, and its next completion is a new event
+  (`match_reverted:<id>:<n>`, `match_completed:<id>:<n>`). A failed revert makes the reopen incomplete (500
+  `match_reopen_incomplete`, failed step `format`) instead of success with an audit flag.
+- **Admin settle writes the outcome first.** `POST /api/admin/matches/[id]/result` stores the admin's forfeit, no-show or
+  played outcome before the status flip and removes it again when the flip loses, so a completed match can no longer lose a
+  forfeit to a retried `played` row; the cron's deadline forfeit uses the same order.
+- **A save over a submitted pick** (the narrow race the route does not close) demotes it to a draft, releases the exclusive
+  items it granted and clears `submitted_at`; the lock then skips it and a deadline policy sees a player who has not submitted.
+- **Rulesets:** the teambuilder shows level rules from the shared team check (`level_rules`), and `levels: null` no longer
+  changes the hash of an existing ruleset (see Added).
 
 ### Removed
 
@@ -90,6 +237,42 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   error message (`https://<project>.supabase.co/...`) for a baked Storage bucket. It now needs a real host.
 - `scripts/route-manifest.mjs` held a raw NUL byte, so git treated it as binary and its diff was hidden; a NUL byte in
   a tracked source file now fails `src/lib/__tests__/source-line-endings.test.ts`.
+- **Format engine review follow-ups.** Rank steps at an advancement cut and in the pairing use the same table as the public
+  page (custom metrics, placements, point adjustments and the admin order were ignored there); a `foreach_group` stage keeps
+  every group's adjustments; byes score only in a Swiss stage; an exclusive grant respects the resource's capacity; the
+  `match_completed` hook never fires with zero faints after a failed `outcome` step (the finalize step is blocked, and the
+  heal retries); `rel()` in a metric answers from the publicly visible links; the visible links of a relation are ordered by
+  visible fields only, so the hidden side cannot be recovered by position; time marks are keyed by stage
+  (`time:<stage>:<mark>`, a mark key is unique only within its stage); a lost `action_locked` cascade is repaired by the
+  next retry or cron pass; a bipartite stage guarantees every A meets every B; two concurrent first-round generations can
+  no longer duplicate a phase's groups; auto-advance continues with the other targets when one fails; the cron no longer
+  starves leagues beyond the first 100 or ignores its time budget; an unevaluable `allow` expression of a filter is a 422
+  instead of a generic 500.
+- **Format runtime privacy and consistency (second review).**
+  - A player's submission against a hidden pool (an `admins` domain, or a `when_unlocked` domain still locked) is
+    answered with `domain_locked` alone, with no per-pick answer, so it can no longer tell a member id from a non-member.
+    The cron's deadline pick keeps every check.
+  - The `taken` flag of an action step is sent for any globally exclusive resource whatever its visibility, with no holder
+    and no moment. The Wichtelcup premium step now shows taken species; the junk step shows none.
+  - New compiler error `constraint_source_hidden_domain` (100 codes in all): a count source over an `admins` domain, or a
+    `distinct by attr` rule over an `admins` domain whose entries carry the attribute, would leak the hidden pool through
+    a verdict. A stored draft or fork that does this now fails to compile; no shipped example does.
+  - The play page `/dashboard/leagues/[id]/play` applies the good-standing rule: a banned or suspended player (not a site
+    admin) gets the "not a member" notice and no league data is read, like `GET .../format/me`.
+  - `POST .../format/relations/unmask` writes and awaits its audit entry before it builds the body
+    (`logAuditEventStrict`); when the write fails the answer is a 503 with no data.
+  - The checks inbox shows redacted wording for a team audit whose subject is hidden from the viewer, instead of an empty
+    rules or species list (EN and DE).
+  - `POST /api/admin/matches/[id]/result` answers 409 `match_state_changed` with `params.status` `disputed` when the match
+    is disputed and already has its `unresolved` outcome row (nothing is staged, no status flip); a lost race on a
+    disputed match writes that row back instead of leaving the match without it. The cron's deadline forfeit skips such
+    a match quietly.
+  - The format cron retries a failed revert (a reset or reopen that left `match_completed` applied): per league and run it
+    re-reverts up to 10 matches (25 per run) whose current completion key is fired but which are no longer completed.
+    Limits stay: a match completed again before the retry keeps the old effects, and a hard-deleted match cannot be
+    reverted.
+  - Known limit: the locked action card shows the giver's stored picks ("Your pick"), not the recipient's current
+    holdings, so an admin resource adjustment does not change it.
 - **Admin Assistant review follow-ups.** A refused fact check other than "not found" or "forbidden" now reads as
   unavailable instead of "it does not exist"; a precondition read that fails stops a Build under its own code
   (`precondition_read_failed`) instead of "the situation changed"; an older card is retired before its replacement is

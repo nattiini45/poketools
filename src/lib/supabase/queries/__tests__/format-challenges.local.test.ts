@@ -206,13 +206,13 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
 
     it('counts an answered challenge in the cooldown but not a withdrawn one', async () => {
       const declined = await create();
-      await ladder.respondToFormatChallenge({ challengeId: declined.id, playerId: ids.pTop, accept: false });
+      await ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: declined.id, playerId: ids.pTop, accept: false });
       await expect(create({ cooldownRounds: 1 })).rejects.toMatchObject({ code: 'challenge_cooldown' });
     });
 
     it('lets the same pair play again at once when the earlier challenge was withdrawn', async () => {
       const withdrawn = await create();
-      await ladder.cancelFormatChallenge(withdrawn.id, ids.pChallenger);
+      await ladder.cancelFormatChallenge(ids.season, withdrawn.id, ids.pChallenger);
 
       await expect(create({ cooldownRounds: 1 })).resolves.toMatchObject({ status: 'open' });
       expect(await stored()).toHaveLength(2);
@@ -237,7 +237,7 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
     it('accepts: one scheduled match in the open round, the challenger as player 1', async () => {
       const row = await create();
 
-      const answered = await ladder.respondToFormatChallenge({ challengeId: row.id, playerId: ids.pTop, accept: true });
+      const answered = await ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true });
 
       expect(answered).toMatchObject({ id: row.id, status: 'accepted' });
       expect(answered.status).toBe('accepted');
@@ -259,7 +259,7 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
     it('declines without creating a match', async () => {
       const row = await create();
 
-      const answered = await ladder.respondToFormatChallenge({ challengeId: row.id, playerId: ids.pTop, accept: false });
+      const answered = await ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: false });
 
       expect(answered.status).toBe('declined');
       expect(answered.responded_at).not.toBeNull();
@@ -271,7 +271,7 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
       const row = await create({ acceptWindowHours: 1 });
       await lapse(row.id);
 
-      await expect(ladder.respondToFormatChallenge({ challengeId: row.id, playerId: ids.pTop, accept: true })).rejects.toMatchObject({
+      await expect(ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true })).rejects.toMatchObject({
         code: 'challenge_expired',
         statusCode: 409,
       });
@@ -283,47 +283,66 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
     it('asks only the defender, only while the challenge is open, and only in an open phase', async () => {
       const row = await create();
       await expect(
-        ladder.respondToFormatChallenge({ challengeId: row.id, playerId: ids.pChallenger, accept: true }),
+        ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pChallenger, accept: true }),
       ).rejects.toMatchObject({ code: 'challenge_not_defender' });
-      await expect(ladder.respondToFormatChallenge({ challengeId: randomUUID(), playerId: ids.pTop, accept: true })).rejects.toMatchObject({
+      await expect(ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: randomUUID(), playerId: ids.pTop, accept: true })).rejects.toMatchObject({
         code: 'challenge_not_found',
       });
 
       // A completed phase takes no accepted challenge (the match would land in a closed phase).
       await run('phase completed', client.from('tournaments').update({ status: 'completed' }).eq('id', ids.phase));
-      await expect(ladder.respondToFormatChallenge({ challengeId: row.id, playerId: ids.pTop, accept: true })).rejects.toMatchObject({
+      await expect(ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true })).rejects.toMatchObject({
         code: 'challenge_phase_closed',
       });
       expect(await matchesOf()).toEqual([]);
 
       // Declining stays possible in a closed phase, and a second answer is refused.
       await run('phase active', client.from('tournaments').update({ status: 'active' }).eq('id', ids.phase));
-      await ladder.respondToFormatChallenge({ challengeId: row.id, playerId: ids.pTop, accept: false });
-      await expect(ladder.respondToFormatChallenge({ challengeId: row.id, playerId: ids.pTop, accept: false })).rejects.toMatchObject({
+      await ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: false });
+      await expect(ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: false })).rejects.toMatchObject({
         code: 'challenge_not_open',
       });
+    });
+  });
+
+  describe('format_challenge_respond across leagues', () => {
+    it('does not reach a challenge of another league, even for its defender', async () => {
+      const row = await create();
+      await expect(
+        ladder.respondToFormatChallenge({ seasonId: randomUUID(), challengeId: row.id, playerId: ids.pTop, accept: true }),
+      ).rejects.toMatchObject({ code: 'challenge_not_found' });
+      expect((await rowOf(row.id))?.status).toBe('open');
+      expect(await matchesOf()).toEqual([]);
     });
   });
 
   describe('format_challenge_cancel', () => {
     it('lets the challenger withdraw, and an admin with a NULL player', async () => {
       const own = await create();
-      const withdrawn = await ladder.cancelFormatChallenge(own.id, ids.pChallenger);
+      const withdrawn = await ladder.cancelFormatChallenge(ids.season, own.id, ids.pChallenger);
       expect(withdrawn.status).toBe('cancelled');
       expect(withdrawn.responded_at).not.toBeNull();
 
       const byAdmin = await create();
-      expect((await ladder.cancelFormatChallenge(byAdmin.id, null)).status).toBe('cancelled');
+      expect((await ladder.cancelFormatChallenge(ids.season, byAdmin.id, null)).status).toBe('cancelled');
     });
 
     it('refuses anyone else, an unknown challenge, and a challenge that is no longer open', async () => {
       const row = await create();
-      await expect(ladder.cancelFormatChallenge(row.id, ids.pTop)).rejects.toMatchObject({ code: 'challenge_not_challenger' });
-      await expect(ladder.cancelFormatChallenge(randomUUID(), ids.pChallenger)).rejects.toMatchObject({ code: 'challenge_not_found' });
+      await expect(ladder.cancelFormatChallenge(ids.season, row.id, ids.pTop)).rejects.toMatchObject({ code: 'challenge_not_challenger' });
+      await expect(ladder.cancelFormatChallenge(ids.season, randomUUID(), ids.pChallenger)).rejects.toMatchObject({ code: 'challenge_not_found' });
 
-      await ladder.cancelFormatChallenge(row.id, ids.pChallenger);
-      await expect(ladder.cancelFormatChallenge(row.id, ids.pChallenger)).rejects.toMatchObject({ code: 'challenge_not_open' });
+      await ladder.cancelFormatChallenge(ids.season, row.id, ids.pChallenger);
+      await expect(ladder.cancelFormatChallenge(ids.season, row.id, ids.pChallenger)).rejects.toMatchObject({ code: 'challenge_not_open' });
       expect((await rowOf(row.id))?.status).toBe('cancelled');
+    });
+
+    it('does not reach a challenge of another league, for the challenger or for an admin', async () => {
+      const row = await create();
+      const elsewhere = randomUUID();
+      await expect(ladder.cancelFormatChallenge(elsewhere, row.id, ids.pChallenger)).rejects.toMatchObject({ code: 'challenge_not_found' });
+      await expect(ladder.cancelFormatChallenge(elsewhere, row.id, null)).rejects.toMatchObject({ code: 'challenge_not_found' });
+      expect((await rowOf(row.id))?.status).toBe('open');
     });
   });
 

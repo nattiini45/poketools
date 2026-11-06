@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DomainEntry } from '@/lib/format-kit/types';
 import { amendEntries, domainView, findDomainView, visibleEntries } from '../domains';
-import { resolveTunables } from '../tunables';
+import { isTunableEditable, lockedTunableKeys, resolveTunables, tunableEditContext } from '../tunables';
 import { giftDef } from './helpers';
 
 describe('resolveTunables', () => {
@@ -44,6 +44,35 @@ describe('resolveTunables', () => {
     const a = resolveTunables(def, undefined).values.curve as number[];
     a.push(7);
     expect(resolveTunables(def, undefined).values.curve).toEqual([3, 2, 1]);
+  });
+});
+
+describe('editable_until', () => {
+  const def = giftDef();
+  const current = resolveTunables(def, undefined).values;
+  const before = { started: false, actionLocked: false };
+  const started = { started: true, actionLocked: false };
+  const locked = { started: true, actionLocked: true };
+
+  it('start closes at the start of the league, lock at the first locked action, always never', () => {
+    expect(isTunableEditable({ editable_until: 'start' }, before)).toBe(true);
+    expect(isTunableEditable({ editable_until: 'start' }, started)).toBe(false);
+    expect(isTunableEditable({ editable_until: 'lock' }, started)).toBe(true);
+    expect(isTunableEditable({ editable_until: 'lock' }, locked)).toBe(false);
+    expect(isTunableEditable({ editable_until: 'always' }, locked)).toBe(true);
+  });
+
+  it('reads the lock from the action flags', () => {
+    expect(tunableEditContext(true, { flags: { 'action:choose_gift': 'locked' } })).toEqual(locked);
+    expect(tunableEditContext(true, { flags: { 'action:choose_gift': 'open', 'domain:pool': 'locked' } })).toEqual(started);
+  });
+
+  it('names the closed tunables a change would touch, and ignores unchanged values and unknown keys', () => {
+    const changes = { base_level: 5, mode: 'fierce', open: false, curve: [3, 2, 1], nope: 1 };
+    expect(lockedTunableKeys(def, current, changes, before)).toEqual([]);
+    expect(lockedTunableKeys(def, current, changes, started)).toEqual(['base_level']);
+    expect(lockedTunableKeys(def, current, changes, locked)).toEqual(['base_level', 'mode']);
+    expect(lockedTunableKeys(def, current, { base_level: current.base_level }, locked)).toEqual([]);
   });
 });
 

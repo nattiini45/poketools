@@ -94,7 +94,7 @@ function stage(pairing: Pairing): Stage {
 }
 
 function phase(pairing: Pairing): KitPhase {
-  return { engine: 'kit', seed: 'seed-0123456789', stage: stage(pairing), outcomes: {} };
+  return { engine: 'kit', seed: 'seed-0123456789', stage: stage(pairing), outcomes: {}, tableExtras: {} };
 }
 
 function tournament(bracket_type: 'swiss' | 'round_robin', current_round: number, formatType = 'custom') {

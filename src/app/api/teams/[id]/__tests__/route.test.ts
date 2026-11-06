@@ -32,8 +32,8 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentById: vi.fn(),
 }));
 
-// The kit-league gate has its own route tests (`kit-team.test.ts`); here it passes every team.
-vi.mock('@/lib/team/kit-team-gate', () => ({ refuseInvalidKitTeam: vi.fn().mockResolvedValue(null) }));
+// The kit-league advisory has its own route tests (`kit-team.test.ts`); here it has nothing to say.
+vi.mock('@/lib/team/kit-team-gate', () => ({ adviseKitTeam: vi.fn().mockResolvedValue({}) }));
 
 vi.mock('@/lib/revalidation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/revalidation')>()),
@@ -56,6 +56,7 @@ import {
 import { getMatchesByPlayer } from '@/lib/supabase/queries/matches';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { expirePublicTags } from '@/lib/revalidation';
+import { adviseKitTeam } from '@/lib/team/kit-team-gate';
 import { REDACTED_POKEMON } from '@/lib/team/visibility';
 import { expectNoPrivateTeamData, teamRowWithShareSecrets } from '@/lib/team/__tests__/private-team-fields';
 import { TeamMatchCompletedError } from '@/lib/team/completed-match-lock';
@@ -300,6 +301,24 @@ describe('PATCH /api/teams/[id]', () => {
 
     expect(res.status).toBe(200);
     expectNoPrivateTeamData(await res.json());
+  });
+
+  it('saves the roster and carries the league-rules advisory next to it, for the owner of the team', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'player-1' } as never);
+    vi.mocked(getTeamById).mockResolvedValue(mockTeam as never);
+    vi.mocked(updateTeamPokemon).mockResolvedValue(teamRowWithShareSecrets({ id: 'a270be7b-7033-4b49-808c-bf2d5ef8e0ed', player_id: 'player-1' }));
+    vi.mocked(adviseKitTeam).mockResolvedValueOnce({ team_check: { status: 'unavailable' } });
+
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'manual' }), routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.team_check).toEqual({ status: 'unavailable' });
+    expect(adviseKitTeam).toHaveBeenCalledWith(
+      expect.objectContaining({ tournament: 'tourney-1', playerId: 'player-1' }),
+      { tournamentId: 'tourney-1', playerId: 'player-1' },
+    );
+    expectNoPrivateTeamData(json);
   });
 
   it('editing a match-linked team expires the cached item usage of its scopes (H9)', async () => {

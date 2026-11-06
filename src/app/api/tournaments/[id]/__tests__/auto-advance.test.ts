@@ -31,14 +31,17 @@ vi.mock('@/lib/audit/log', () => ({
     if (before !== after) changes[field] = { before, after };
   },
 }));
-vi.mock('@/lib/format-engine/auto-advance', () => ({ runAutoAdvance: vi.fn() }));
+vi.mock('@/lib/format-engine/auto-advance', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format-engine/auto-advance')>()),
+  runAutoAdvance: vi.fn(),
+}));
 vi.mock('@/lib/format-engine/runtime/hooks', () => ({ onPhaseStatusChanged: vi.fn() }));
 
 import { PATCH } from '@/app/api/tournaments/[id]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { logAuditEvent } from '@/lib/audit/log';
-import { runAutoAdvance } from '@/lib/format-engine/auto-advance';
+import { AutoAdvanceError, runAutoAdvance } from '@/lib/format-engine/auto-advance';
 import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
@@ -96,6 +99,26 @@ describe('PATCH /api/tournaments/[id]: auto advance', () => {
     expect(res.status).toBe(200);
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({
       auto_advance: [],
+      auto_advance_error: 'advance_manual_list_required',
+    });
+  });
+
+  it('keeps the targets that advanced when another target failed: audit entry and cache expiry', async () => {
+    vi.mocked(runAutoAdvance).mockRejectedValue(
+      new AutoAdvanceError(
+        [{ target_phase_id: TARGET, enrolled_count: 8 }],
+        [
+          {
+            target_phase_id: 'other',
+            error: new UserFacingError('This advancement needs the list of players who move on.', { code: 'advance_manual_list_required', status: 409 }),
+          },
+        ],
+      ),
+    );
+    const res = await patch({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({
+      auto_advance: [{ target_phase_id: TARGET, enrolled_count: 8 }],
       auto_advance_error: 'advance_manual_list_required',
     });
   });

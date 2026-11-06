@@ -183,18 +183,18 @@ describe('the RPC wrappers', () => {
 
   it('answers a challenge and returns the accepted row', async () => {
     state.rpcReply = { data: row({ status: 'accepted', match_id: 'm-1', responded_at: 't3' }) };
-    await expect(respondToFormatChallenge({ challengeId: CHALLENGE, playerId: P2, accept: true })).resolves.toMatchObject({
+    await expect(respondToFormatChallenge({ seasonId: SEASON, challengeId: CHALLENGE, playerId: P2, accept: true })).resolves.toMatchObject({
       status: 'accepted',
       match_id: 'm-1',
     });
     expect(state.rpcCalls).toEqual([
-      { name: 'format_challenge_respond', args: { p_challenge_id: CHALLENGE, p_player: P2, p_accept: true } },
+      { name: 'format_challenge_respond', args: { p_season_id: SEASON, p_challenge_id: CHALLENGE, p_player: P2, p_accept: true } },
     ]);
   });
 
   it('raises challenge_expired for a response after the accept window (the row is stored as expired)', async () => {
     state.rpcReply = { data: row({ status: 'expired', responded_at: 't3' }) };
-    await expect(respondToFormatChallenge({ challengeId: CHALLENGE, playerId: P2, accept: true })).rejects.toMatchObject({
+    await expect(respondToFormatChallenge({ seasonId: SEASON, challengeId: CHALLENGE, playerId: P2, accept: true })).rejects.toMatchObject({
       name: 'FormatChallengeError',
       code: 'challenge_expired',
       statusCode: 409,
@@ -203,11 +203,12 @@ describe('the RPC wrappers', () => {
 
   it('cancels for the challenger, and for an admin with a NULL player', async () => {
     state.rpcReply = { data: row({ status: 'cancelled' }) };
-    await expect(cancelFormatChallenge(CHALLENGE, P1)).resolves.toMatchObject({ status: 'cancelled' });
-    await expect(cancelFormatChallenge(CHALLENGE, null)).resolves.toMatchObject({ status: 'cancelled' });
+    await expect(cancelFormatChallenge(SEASON, CHALLENGE, P1)).resolves.toMatchObject({ status: 'cancelled' });
+    await expect(cancelFormatChallenge(SEASON, CHALLENGE, null)).resolves.toMatchObject({ status: 'cancelled' });
+    // The league is part of the call: a challenge id of another league is challenge_not_found.
     expect(state.rpcCalls.map((call) => call.args)).toEqual([
-      { p_challenge_id: CHALLENGE, p_player: P1 },
-      { p_challenge_id: CHALLENGE, p_player: null },
+      { p_season_id: SEASON, p_challenge_id: CHALLENGE, p_player: P1 },
+      { p_season_id: SEASON, p_challenge_id: CHALLENGE, p_player: null },
     ]);
   });
 
@@ -220,7 +221,7 @@ describe('the RPC wrappers', () => {
 
   it('maps a refusal of the cancel, not just of the create', async () => {
     state.rpcReply = { error: signal('challenge_not_challenger') };
-    await expect(cancelFormatChallenge(CHALLENGE, P2)).rejects.toMatchObject({ code: 'challenge_not_challenger', statusCode: 403 });
+    await expect(cancelFormatChallenge(SEASON, CHALLENGE, P2)).rejects.toMatchObject({ code: 'challenge_not_challenger', statusCode: 403 });
   });
 });
 

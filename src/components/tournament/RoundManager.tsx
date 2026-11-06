@@ -30,6 +30,7 @@ import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin
 import { bestOfChoices } from '@/lib/tournament/best-of';
 import { buildStartupChecklist, nextRoundToStart } from '@/lib/tournament/startup-checklist';
 import { apiFailure, type UiError } from './ui-error';
+import { formatNotReadyReasons, type FormatNotReadyReason } from './force-start';
 import type { ParticipantsSummary } from './participants-events';
 import { StartupChecklistView, STARTUP_CHECKLIST_REGION_ID_PREFIX, type StartupChecklistLinks } from './StartupChecklist';
 import { useParticipantsSummary } from './useParticipantsSummary';
@@ -66,6 +67,20 @@ export function generateRequestInit(startNow: boolean): RequestInit | undefined 
     body: JSON.stringify({ start_round: true }),
   };
 }
+
+/** The generate routes a Generate call can reach. */
+export type GenerateKind = 'next' | 'all';
+
+/**
+ * The URL of a Generate call. `force` adds `?force=true`, the league admin's audited override of the first-round guard
+ * (`wantsForcedStart` in src/lib/format-engine/route-guards.ts): the routes read it from the query.
+ */
+export function generateEndpoint(tournamentId: string, kind: GenerateKind, force = false): string {
+  const base = kind === 'next' ? `/api/generate-round/${tournamentId}` : `/api/tournaments/${tournamentId}/generate-all-rounds`;
+  return force ? `${base}?force=true` : base;
+}
+
+export { formatNotReadyReasons, type FormatNotReadyReason } from './force-start';
 
 export type RoundMatchesLoad =
   | { ok: true; matches: PublicMatch[] }
@@ -329,6 +344,8 @@ export default function RoundManager({
   // "Start the new round right away" on Generate. Off on every visit: starting is a deliberate step.
   const [startNow, setStartNow] = useState(false);
   const [startingRoundId, setStartingRoundId] = useState<string | null>(null);
+  // Set when the server refused the first round with 409 `format_not_ready`: the dialog offers the audited force start.
+  const [forceStart, setForceStart] = useState<{ kind: GenerateKind; reasons: FormatNotReadyReason[] } | null>(null);
   // Set when the server answered `rounds_all_generated` for this many rounds (grouped phases, unknown count).
   const [allGeneratedAtCount, setAllGeneratedAtCount] = useState<number | null>(null);
   const startNowHintId = useId();
@@ -567,14 +584,15 @@ export default function RoundManager({
     }
   }
 
-  async function generateNextRound() {
+  /** `force`: start anyway after the admin confirmed a 409 `format_not_ready` (audited by the server). */
+  async function generateNextRound(force = false) {
     setGenerating(true);
     setError(null);
     setGenerateWarnings([]);
 
     try {
       const res = await fetch(
-        `/api/generate-round/${tournament.id}`,
+        generateEndpoint(tournament.id, 'next', force),
         generateRequestInit(startNow) ?? { method: 'POST' },
       );
       const result: ApiResult<Round> = await res.json();
@@ -584,6 +602,8 @@ export default function RoundManager({
           setAllGeneratedAtCount(rounds.length);
           return;
         }
+        const reasons = formatNotReadyReasons(result);
+        if (reasons !== null && !force) setForceStart({ kind: 'next', reasons });
         setError(apiFailure(result));
         return;
       }
@@ -597,13 +617,13 @@ export default function RoundManager({
     }
   }
 
-  async function generateAllRounds() {
+  async function generateAllRounds(force = false) {
     setGeneratingAll(true);
     setError(null);
 
     try {
       const res = await fetch(
-        `/api/tournaments/${tournament.id}/generate-all-rounds`,
+        generateEndpoint(tournament.id, 'all', force),
         generateRequestInit(startNow) ?? { method: 'POST' },
       );
       const result: ApiResult<Round[]> = await res.json();
@@ -613,6 +633,8 @@ export default function RoundManager({
           setAllGeneratedAtCount(rounds.length);
           return;
         }
+        const reasons = formatNotReadyReasons(result);
+        if (reasons !== null && !force) setForceStart({ kind: 'all', reasons });
         setError(apiFailure(result));
         return;
       }
@@ -936,7 +958,7 @@ export default function RoundManager({
           <Button
             variant="secondary"
             size="sm"
-            onClick={generateNextRound}
+            onClick={() => void generateNextRound()}
             disabled={!canGenerate || showManualForm || isBusy || generateBlocked || Boolean(roundRobin?.pastLast)}
             aria-describedby={checklistDescribes}
             loading={generating}
@@ -948,7 +970,7 @@ export default function RoundManager({
           <Button
             variant="secondary"
             size="sm"
-            onClick={generateAllRounds}
+            onClick={() => void generateAllRounds()}
             disabled={!canGenerate || showManualForm || isBusy || generateBlocked}
             aria-describedby={generateBlocked ? checklistDescribes : undefined}
             loading={generatingAll}
@@ -1221,6 +1243,24 @@ export default function RoundManager({
           regenNeedsCascade ? t('rounds.regenerateDialog.cascadeConfirm') : t('rounds.regenerateDialog.confirm')
         }
         loading={regeneratingBracket}
+      />
+      <ConfirmDialog
+        open={forceStart !== null}
+        onClose={() => setForceStart(null)}
+        onConfirm={() => {
+          const pending = forceStart;
+          setForceStart(null);
+          if (pending?.kind === 'all') void generateAllRounds(true);
+          else if (pending !== null) void generateNextRound(true);
+        }}
+        title={t('rounds.forceStart.title')}
+        message={t('rounds.forceStart.message', {
+          reasons: (forceStart?.reasons ?? [])
+            .map((reason) => (reason === 'relation_undrawn' ? t('rounds.forceStart.relationUndrawn') : t('rounds.forceStart.actionIncomplete')))
+            .join(' '),
+        })}
+        confirmLabel={t('rounds.forceStart.confirm')}
+        confirmVariant="primary"
       />
       <ConfirmDialog
         open={deleteRoundId !== null}

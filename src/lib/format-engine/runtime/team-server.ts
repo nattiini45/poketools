@@ -15,12 +15,15 @@ import { getNationalSpecies, getSpecies } from '@/lib/pkmn/dex';
 import { toID } from '@/lib/pkmn/i18n/id';
 import { readSet } from '@/lib/pkmn/validation';
 import { checkTeam } from '@/lib/team/check.server';
+import { getKitPhases, getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { stageOf } from '../load';
+import { calendarRoundAt } from './calendar';
 import { loadFreshKitContext, phaseById, type KitContext, type KitPhaseInfo } from './load';
-import { evaluateConstraints, mergeConstraintIssues, type EvolutionClass, type TeamMember } from './team';
+import { evaluateConstraints, mergeConstraintIssues, type ConstraintIssue, type EvolutionClass, type TeamMember } from './team';
 
 export interface EvaluateTeamInput {
   seasonId: string;
@@ -79,10 +82,66 @@ export function resolveTeamMembers(pokemon: readonly PokemonSet[], gen: number, 
   return members;
 }
 
-/** The round a team is checked for outside a match: the phase's latest round, or 1 before it has one. */
-export async function currentPhaseRound(phaseId: string): Promise<number> {
+/**
+ * The round a team is checked for outside a match: the phase's latest round, or 1 before it has one. When the stage has a
+ * readable calendar and a later round than the calendar's has already been generated (an admin generated round 4 early),
+ * the calendar's round wins, so the early round does not apply its rules to players who are still in week 3. A match-bound
+ * check does not come here: it uses the round of its match.
+ */
+export async function currentPhaseRound(phaseId: string, now: Date = new Date()): Promise<number> {
   const rounds = await getRoundsByTournament(phaseId);
-  return rounds.reduce((latest, round) => Math.max(latest, round.round_number), 1);
+  const latest = rounds.reduce((highest, round) => Math.max(highest, round.round_number), 1);
+  // The calendar can only lower a round beyond 1, so there is nothing to read before then.
+  if (latest === 1) return latest;
+  const calendarRound = await calendarRoundOfPhase(phaseId, now);
+  return calendarRound === null ? latest : Math.min(latest, calendarRound);
+}
+
+/**
+ * The round the calendar of the phase's stage is in, or null when the phase has no readable calendar. It reads the engine,
+ * the phase rows and the season only (the stage is frozen into the phase row), not the whole kit context: the caller's
+ * `evaluateTeam` loads that context itself right after, and loading it here would read every `format_*` table twice.
+ */
+async function calendarRoundOfPhase(phaseId: string, now: Date): Promise<number | null> {
+  const phase = await getTournamentById(phaseId);
+  if (!phase?.season_id) return null;
+  const [head, phaseRows, season] = await Promise.all([getSeasonKitHead(phase.season_id), getKitPhases(phase.season_id), getSeasonById(phase.season_id)]);
+  // Only a league that runs on the kit engine has a calendar to apply (as `loadFreshKitContext`).
+  if (head?.engine !== 'kit') return null;
+  const row = phaseRows.find((candidate) => candidate.id === phaseId);
+  const calendar = row === undefined ? undefined : (await stageOf(row)).calendar;
+  if (calendar === undefined) return null;
+  return calendarRoundAt(calendar, { seasonStart: season?.start_date ?? null }, now);
+}
+
+export interface EvaluateKitConstraintsInput {
+  ctx: KitContext;
+  phase: KitPhaseInfo;
+  playerId: string;
+  roundNumber: number;
+  pokemon: PokemonSet[];
+  /** The phase's pinned ruleset, read for the generation and universe only; null reads the team as gen 9, regional. */
+  ruleset: Ruleset | null;
+}
+
+/**
+ * The stage's team constraints evaluated against a team, and nothing else: no ruleset or learnset check, no core,
+ * roster or season read. Pure over its input. `evaluateTeam` adds the ruleset verdict on top; the post-match audit
+ * (`team-audit-server.ts`) uses this alone.
+ */
+export function evaluateKitConstraints(input: EvaluateKitConstraintsInput): { issues: ConstraintIssue[]; members: TeamMember[] } {
+  const { ctx, phase, ruleset } = input;
+  const members = resolveTeamMembers(input.pokemon, ruleset?.gen ?? 9, ruleset?.rules.universe === 'national');
+  const issues = evaluateConstraints({
+    constraints: phase.stage.constraints ?? [],
+    def: ctx.def,
+    state: ctx.state,
+    seed: ctx.seed,
+    playerId: input.playerId,
+    round: input.roundNumber,
+    members,
+  });
+  return { issues, members };
 }
 
 export async function evaluateTeam(input: EvaluateTeamInput): Promise<EvaluateTeamResult> {
@@ -104,20 +163,19 @@ export async function evaluateTeam(input: EvaluateTeamInput): Promise<EvaluateTe
     season,
   });
 
-  const members = resolveTeamMembers(input.pokemon, ruleset?.gen ?? 9, ruleset?.rules.universe === 'national');
-  const issues = evaluateConstraints({
-    constraints: phase.stage.constraints ?? [],
-    def: ctx.def,
-    state: ctx.state,
-    seed: ctx.seed,
+  const { issues, members } = evaluateKitConstraints({
+    ctx,
+    phase,
     playerId: input.playerId,
-    round: input.roundNumber,
-    members,
+    roundNumber: input.roundNumber,
+    pokemon: input.pokemon,
+    ruleset,
   });
   return { applies: true, result: mergeConstraintIssues(base, issues, members) };
 }
 
-async function readPhaseRuleset(phaseId: string): Promise<Ruleset | null> {
+/** The ruleset a phase pins, or null when the phase or its ruleset does not exist. */
+export async function readPhaseRuleset(phaseId: string): Promise<Ruleset | null> {
   const phase = await getTournamentById(phaseId);
   return phase ? getRulesetById(phase.ruleset_id) : null;
 }

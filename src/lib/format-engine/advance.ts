@@ -9,9 +9,8 @@ import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import { getKitPhases, getOutcomesByPhases, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import { playersOfGroup, resolveAdvancement, type AdvancedPlayer } from './advancement';
-import { standingAdjustments } from './runtime/adjustments';
-import { stageOf } from './load';
-import { coinFlipDraws, computeStageStandings, type KitOutcome } from './standings';
+import { loadStageTableExtras, stageOf } from './load';
+import { coinFlipDraws, computeStageStandings, kitOutcomesByMatch } from './standings';
 
 export interface KitAdvanceInput {
   seasonId: string;
@@ -47,19 +46,27 @@ export async function kitAdvancingPlayers(input: KitAdvanceInput): Promise<Advan
     getOutcomesByPhases([source.id]),
     getStandingAdjustments(input.seasonId),
   ]);
-  const { adjustments, manualOrder } = standingAdjustments(adjustmentRows, new Map([[stage.key, source.id]]));
-  const outcomes: Record<string, KitOutcome> = {};
-  for (const row of outcomeRows) outcomes[row.match_id] = { kind: row.kind, p1_faints: row.p1_faints, p2_faints: row.p2_faints };
+  // The same extras the public table ranks with (custom metrics, seeds, ratings, adjustments, the admin's order): a cut
+  // by a custom metric must see the values the standings page shows.
+  const extras = await loadStageTableExtras({
+    seasonId: input.seasonId,
+    phase: source,
+    stage,
+    seed: format.seed,
+    playerIds: input.participantIds,
+    format,
+    adjustmentRows,
+  });
   const table = computeStageStandings({
     stage,
     participantIds: input.participantIds,
     participantNames: input.participantNames,
     matches: input.matches,
-    outcomes,
+    outcomes: kitOutcomesByMatch(outcomeRows),
     byes: input.byes,
     coinFlips: coinFlipDraws(format.seed, stage.key, input.participantIds),
-    pointAdjustments: adjustments[source.id],
-    manualOrder: manualOrder[source.id],
+    seed: format.seed,
+    ...extras,
   });
 
   const result = resolveAdvancement({

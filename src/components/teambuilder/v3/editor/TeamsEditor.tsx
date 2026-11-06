@@ -15,6 +15,7 @@ import IntelPanel from '../intel/IntelPanel';
 import OpponentPanel from '../intel/OpponentPanel';
 import FormatPicker from './FormatPicker';
 import MobileTabBar from './MobileTabBar';
+import SaveStatusChips from './SaveStatusChips';
 import { useDraftContext } from '../hooks/useDraftContext';
 import type { PokemonSet, TeamImportSource } from '@/types/team';
 import { useT } from '@/i18n/client';
@@ -209,31 +210,7 @@ export default function TeamsEditor({
               })}
             </span>
           )}
-          {state.locked && (
-            <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded">
-              {t('editor.status.locked')}
-            </span>
-          )}
-          {state.saveStatus === 'saving' && (
-            <span className="text-xs text-poke-text-muted bg-poke-surface px-2 py-0.5 rounded">
-              {t('editor.status.saving')}
-            </span>
-          )}
-          {state.saveStatus === 'saved' && !state.dirty && (
-            <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded">
-              {t('editor.status.saved')}
-            </span>
-          )}
-          {state.saveStatus === 'error' && (
-            <span className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded">
-              {t('editor.status.saveFailed')}
-            </span>
-          )}
-          {state.dirty && !state.locked && state.saveStatus !== 'saving' && (
-            <span className="text-xs text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded">
-              {t('editor.status.unsaved')}
-            </span>
-          )}
+          <SaveStatusChips saveStatus={state.saveStatus} dirty={state.dirty} locked={state.locked} />
           <div className="flex-1" />
           {/* Right panel tabs */}
           <div className="hidden lg:flex gap-1">
@@ -302,6 +279,7 @@ export default function TeamsEditor({
                 {state.rightPanelTab === 'validation' && (
                   <ValidationPanel
                     validation={state.validation}
+                    seasonId={state.seasonId}
                     onJumpToIssue={(issueId) => dispatch({ type: 'JUMP_TO_ISSUE', issueId })}
                   />
                 )}
@@ -385,7 +363,11 @@ export default function TeamsEditor({
         )}
 
         {/* ── Mobile tab bar (lg hidden) ──────────────────────────── */}
-        <MobileTabBar />
+        <MobileTabBar
+          validation={state.validation}
+          seasonId={state.seasonId}
+          onJumpToIssue={(issueId) => dispatch({ type: 'JUMP_TO_ISSUE', issueId })}
+        />
 
         {/* ── Dialogs ─────────────────────────────────────────────── */}
         <ImportDialog

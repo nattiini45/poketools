@@ -135,6 +135,23 @@ describe('checkTeam: the layers are unioned', () => {
   });
 });
 
+describe('checkTeam: level requirements', () => {
+  it('returns the ruleset level requirements and enforces them through the union', async () => {
+    const levels = { policy: 'exact' as const, default: 50, entries: [{ id: 'garchomp', level: 60, status: 'approved' as const }] };
+    const ruleset = makeRuleset({ base_format: 'gen9ou', rules: { levels } });
+    const result = await checkTeam({ pokemon: [makeSet('Garchomp', { level: 100 })], ruleset });
+    // The check adds the English species name for the panel (the browser has no id-to-name table).
+    expect(result.level_rules).toEqual({ ...levels, entries: [{ ...levels.entries[0], name: 'Garchomp' }] });
+    expect(result.valid).toBe(false);
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: 'level_exact', params: { level: 60, value: 100 } }));
+  });
+
+  it('reports no level requirements when the ruleset has none', async () => {
+    const result = await checkTeam({ pokemon: [makeSet('Garchomp')], ruleset: OU });
+    expect(result.level_rules ?? null).toBeNull();
+  });
+});
+
 describe('checkTeam: the drafted roster of a legacy draft league', () => {
   const team = [makeSet('Garchomp'), makeSet('Dragonite', { ability: 'Multiscale' })];
 

@@ -37,6 +37,8 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 import {
+  FormatActionAlreadySubmittedError,
+  FormatAdjustmentRefusedError,
   FormatRuntimeError,
   applyFormatAdjustment,
   fireFormatEvent,
@@ -164,6 +166,33 @@ describe('the RPC wrappers', () => {
     ]);
   });
 
+  it('submitFormatAction asks the database to write only over a draft when told to, and leaves the argument out otherwise', async () => {
+    state.rpcReply = { data: { id: 'sub' } };
+    const base = { seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [] };
+    await submitFormatAction({ ...base, onlyIfUnsubmitted: true });
+    await submitFormatAction({ ...base, onlyIfUnsubmitted: false });
+    expect(state.rpcCalls[0].args).toMatchObject({ p_only_if_unsubmitted: true });
+    expect(state.rpcCalls[1].args).not.toHaveProperty('p_only_if_unsubmitted');
+  });
+
+  it('submitFormatAction turns the database refusal action_already_submitted into a FormatActionAlreadySubmittedError', async () => {
+    state.rpcReply = { error: { code: 'P0001', message: 'action_already_submitted', details: '{"action":"pick"}' } };
+    const error = await submitFormatAction({
+      seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [], onlyIfUnsubmitted: true,
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(FormatActionAlreadySubmittedError);
+    // The other signals still map, and a look-alike with another SQLSTATE is left alone.
+    state.rpcReply = { error: { code: 'P0001', message: 'action_locked', details: '{}' } };
+    await expect(
+      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [] }),
+    ).rejects.toMatchObject({ code: 'action_locked' });
+    const lookAlike = { code: '23505', message: 'action_already_submitted' };
+    state.rpcReply = { error: lookAlike };
+    await expect(
+      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [] }),
+    ).rejects.toBe(lookAlike);
+  });
+
   it('applyFormatAdjustment passes the guard actions and returns the id', async () => {
     state.rpcReply = { data: 'adj-1' };
     await expect(
@@ -180,15 +209,37 @@ describe('the RPC wrappers', () => {
     });
   });
 
+  it.each(['relation_has_links', 'insufficient_holding'] as const)('applyFormatAdjustment turns the database refusal %s into a FormatAdjustmentRefusedError', async (code) => {
+    state.rpcReply = { error: { code: 'P0001', message: code, details: '{}' } };
+    const error = await applyFormatAdjustment({
+      seasonId: SEASON, kind: 'relation', target: {}, delta: {}, reason: 'draw', adminId: P1, ops, guardActions: [],
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(FormatAdjustmentRefusedError);
+    expect(error).toMatchObject({ refusal: code });
+  });
+
+  it('applyFormatAdjustment still maps the other signals, and leaves a look-alike with another SQLSTATE alone', async () => {
+    state.rpcReply = { error: { code: 'P0001', message: 'domain_amendment_locked', details: '{}' } };
+    await expect(
+      applyFormatAdjustment({ seasonId: SEASON, kind: 'domain', target: {}, delta: {}, reason: 'r', adminId: P1, ops, guardActions: ['pick'] }),
+    ).rejects.toMatchObject({ code: 'domain_amendment_locked' });
+    const lookAlike = { code: '23505', message: 'relation_has_links' };
+    state.rpcReply = { error: lookAlike };
+    await expect(
+      applyFormatAdjustment({ seasonId: SEASON, kind: 'relation', target: {}, delta: {}, reason: 'r', adminId: P1, ops, guardActions: [] }),
+    ).rejects.toBe(lookAlike);
+  });
+
   it('openFormatCheck returns null for a duplicate, resolveFormatCheck the boolean', async () => {
     state.rpcReply = { data: null };
     await expect(openFormatCheck({ seasonId: SEASON, source: 'standings_tie', ruleId: 'tie', dedupeKey: 'tie:1', subject: {} })).resolves.toBeNull();
     state.rpcReply = { data: 'chk-1' };
     await expect(openFormatCheck({ seasonId: SEASON, source: 'expr', ruleId: 'r', dedupeKey: 'r:1', subject: { a: 1 } })).resolves.toBe('chk-1');
     state.rpcReply = { data: true };
-    await expect(resolveFormatCheck({ checkId: 'chk-1', status: 'confirmed', adminId: null, note: null })).resolves.toBe(true);
+    await expect(resolveFormatCheck({ seasonId: SEASON, checkId: 'chk-1', status: 'confirmed', adminId: null, note: null })).resolves.toBe(true);
     expect(state.rpcCalls.map((c) => c.name)).toEqual(['format_check_open', 'format_check_open', 'format_check_resolve']);
-    expect(state.rpcCalls[2].args).toEqual({ p_check_id: 'chk-1', p_status: 'confirmed', p_admin: null, p_note: null });
+    // The league is part of the call: a check id of another league resolves nothing.
+    expect(state.rpcCalls[2].args).toEqual({ p_season_id: SEASON, p_check_id: 'chk-1', p_status: 'confirmed', p_admin: null, p_note: null });
   });
 });
 
@@ -200,12 +251,20 @@ describe('error mapping', () => {
     ['resource_item_taken', 409],
     ['domain_amendment_locked', 409],
     ['reason_required', 400],
+    ['reason_too_long', 400],
   ] as const)('maps %s to a FormatRuntimeError with that code', (code, status) => {
     const mapped = mapFormatRuntimeDbError(signal(code));
     expect(mapped).toBeInstanceOf(FormatRuntimeError);
     expect(mapped).toBeInstanceOf(UserFacingError);
     expect(mapped).toMatchObject({ code, statusCode: status });
     expect((mapped as Error).message.length).toBeGreaterThan(0);
+  });
+
+  it('maps the reason length constraint to reason_too_long (an op whose reason the planner did not measure)', () => {
+    const violation = { code: '23514', message: 'new row for relation "format_adjustments" violates check constraint "format_adjustments_reason_length"' };
+    expect(mapFormatRuntimeDbError(violation)).toMatchObject({ name: 'FormatRuntimeError', code: 'reason_too_long', statusCode: 400 });
+    const other = { code: '23514', message: 'new row violates check constraint "format_checks_status_check"' };
+    expect(mapFormatRuntimeDbError(other)).toBe(other);
   });
 
   it('throws the mapped error out of every wrapper', async () => {

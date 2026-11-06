@@ -112,7 +112,7 @@ export default function RulesInspector({ doc, diagnostics, authorBase, onChange,
               {t('inspector.rules.honorCards')}
             </h3>
             <p className="text-sm text-poke-text-secondary">{t('inspector.rules.honorIntro')}</p>
-            {cards.length === 0 && <p className="text-sm text-poke-text-muted">{t('inspector.rules.honorNone')}</p>}
+            {!cards.some((card) => card.kind === 'rule.custom') && <p className="text-sm text-poke-text-muted">{t('inspector.rules.honorNone')}</p>}
             <ol className="space-y-3" aria-label={t('inspector.rules.honorCards')}>
               {cards.map((card, i) => {
                 // Rules of other kinds have no editor yet; they stay in the document untouched.

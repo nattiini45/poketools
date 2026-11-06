@@ -3,12 +3,15 @@ import { makeSet } from '@/test/team-fixtures';
 import { makeRuleset } from '@/test/ruleset-fixtures';
 import type { TeamValidationResult } from '@/types/team';
 
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+
 vi.mock('@/lib/format-engine/runtime/team-server', () => ({ evaluateTeam: vi.fn(), currentPhaseRound: vi.fn() }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn() }));
 
 import { currentPhaseRound, evaluateTeam } from '@/lib/format-engine/runtime/team-server';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { isKitTeamCandidate, kitTeamRefusal, kitTeamVerdict, refuseInvalidKitTeam } from '../kit-team-gate';
+import { logger } from '@/lib/logger';
+import { adviseKitTeam, isKitTeamCandidate, kitTeamVerdict } from '../kit-team-gate';
 
 const KIT = { id: 'cup-1', season_id: 's-1', season_format_type: 'custom' };
 const pokemon = [makeSet('Garchomp')];
@@ -74,41 +77,35 @@ describe('kitTeamVerdict', () => {
   });
 });
 
-describe('refuseInvalidKitTeam', () => {
-  it('answers 400 team_check_failed with the English texts and the whole verdict', async () => {
-    const response = await refuseInvalidKitTeam({ tournament: KIT, playerId: 'p1', pokemon });
-    expect(response?.status).toBe(400);
-    const body = await response?.json();
-    const issues = 'Team size: this league needs 6 to 6 Pokémon, found 1 | Garchomp: Terastallization is not allowed in this league';
-    expect(body).toEqual({
-      success: false,
-      error: `This team does not meet the rules of this league: ${issues}`,
-      code: 'team_check_failed',
-      params: { issues },
-      team_check: INVALID,
-    });
+describe('adviseKitTeam', () => {
+  const context = { tournamentId: 'cup-1', playerId: 'p1' };
+
+  it('is empty for a league that is not custom, without evaluating anything', async () => {
+    expect(await adviseKitTeam({ tournament: { ...KIT, season_format_type: 'swiss' }, playerId: 'p1', pokemon }, context)).toEqual({});
+    expect(evaluateTeam).not.toHaveBeenCalled();
   });
 
-  it('lets a team that passes through', async () => {
+  it('is empty for a team that meets the rules and for a phase with nothing to enforce', async () => {
     vi.mocked(evaluateTeam).mockResolvedValue({ applies: true, result: VALID });
-    expect(await refuseInvalidKitTeam({ tournament: KIT, playerId: 'p1', pokemon })).toBeNull();
+    expect(await adviseKitTeam({ tournament: KIT, playerId: 'p1', pokemon }, context)).toEqual({});
+    vi.mocked(evaluateTeam).mockResolvedValue({ applies: false, result: INVALID });
+    expect(await adviseKitTeam({ tournament: KIT, playerId: 'p1', pokemon }, context)).toEqual({});
   });
 
-  it('lets a phase without kit rules through', async () => {
-    vi.mocked(evaluateTeam).mockResolvedValue({ applies: false, result: VALID });
-    expect(await refuseInvalidKitTeam({ tournament: KIT, playerId: 'p1', pokemon })).toBeNull();
+  it('answers unmet with the whole verdict for a team that breaks the rules, and never refuses', async () => {
+    expect(await adviseKitTeam({ tournament: KIT, playerId: 'p1', pokemon }, context)).toEqual({ team_check: { status: 'unmet', verdict: INVALID } });
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('propagates a failed check instead of waving the team through', async () => {
-    vi.mocked(evaluateTeam).mockRejectedValue(new Error('runtime read failed'));
-    await expect(refuseInvalidKitTeam({ tournament: KIT, playerId: 'p1', pokemon })).rejects.toThrow('runtime read failed');
+  it('answers unavailable and logs the original error when the verdict cannot be computed', async () => {
+    const failure = new Error('runtime read failed');
+    vi.mocked(evaluateTeam).mockRejectedValue(failure);
+    expect(await adviseKitTeam({ tournament: KIT, playerId: 'p1', pokemon }, context)).toEqual({ team_check: { status: 'unavailable' } });
+    expect(logger.error).toHaveBeenCalledWith('api/team-check', 'Team advisory could not be computed', { ...context, error: failure });
   });
-});
 
-describe('kitTeamRefusal', () => {
-  it('is a plain 400 built from the verdict', async () => {
-    const response = kitTeamRefusal(INVALID, { tournamentId: 'cup-1' });
-    expect(response.status).toBe(400);
-    expect((await response.json()).team_check).toEqual(INVALID);
+  it('answers unavailable when the phase cannot be read', async () => {
+    vi.mocked(getTournamentById).mockRejectedValue(new Error('db down'));
+    expect(await adviseKitTeam({ tournament: 'cup-1', playerId: 'p1', pokemon }, context)).toEqual({ team_check: { status: 'unavailable' } });
   });
 });

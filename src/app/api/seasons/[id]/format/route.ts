@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { readBoundedJson } from '@/lib/format-studio/api-body';
+import { readBoundedJson, readBoundedJsonOrEmpty } from '@/lib/format-studio/api-body';
 import {
   seasonFormatAttachSchema,
   seasonFormatQuerySchema,
@@ -25,6 +26,14 @@ interface RouteParams {
 }
 
 const ATTACH_LIMIT = { limit: 30, windowSeconds: 60 * 60 } as const;
+
+/**
+ * `confirm_clear: true` is the admin's confirmation that replacing or detaching a format may delete the league's
+ * runtime data (relation links such as a Secret Santa draw, items such as gifts, submissions, adjustments). Without it
+ * such a replace or detach answers 409 `format_runtime_has_data` with the counts.
+ */
+const attachBodySchema = seasonFormatAttachSchema.extend({ confirm_clear: z.boolean().optional() });
+const detachBodySchema = z.strictObject({ confirm_clear: z.boolean().optional() });
 
 export interface SeasonFormatState {
   /** `not_custom`: the league uses a legacy type; `unattached`: custom without a format; `attached`. */
@@ -91,7 +100,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * League admin (or site admin). Attaches a published format version to a custom league that has not started:
  * freezes the spec and creates one phase per format stage (and one ruleset per distinct rule preset the
  * stages name). 201 for a first attach, 200 when it replaced an earlier one. `warnings` lists what the engine
- * does not run yet (codes and params).
+ * does not run yet (codes and params). A replace over runtime data (draw, gifts, adjustments) answers 409
+ * `format_runtime_has_data` with the counts in `params` until the body carries `confirm_clear: true`.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -101,7 +111,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const rate = await checkRateLimit('format-attach', admin.playerId, ATTACH_LIMIT);
     if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
 
-    const parsed = seasonFormatAttachSchema.safeParse(await readBoundedJson(request));
+    const parsed = attachBodySchema.safeParse(await readBoundedJson(request));
     if (!parsed.success) return validationFailedResponse(parsed.error);
 
     const outcome = await attachFormatToSeason({
@@ -109,6 +119,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       seasonId: id,
       definitionId: parsed.data.definition_id,
       versionNo: parsed.data.version_no,
+      confirmClear: parsed.data.confirm_clear === true,
     });
     expireSeasonReads(id, outcome.touched_stage_ids);
     if (outcome.rulesets_changed) revalidatePath('/admin/rulesets');
@@ -125,6 +136,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         spec_hash: outcome.spec_hash,
         stage_count: outcome.stages.length,
         replaced: outcome.replaced,
+        // The admin confirmed deleting the league's runtime data; the flag is recorded even when nothing was there.
+        ...(parsed.data.confirm_clear === true ? { confirm_clear: true } : {}),
+        // What a replace deleted (the adjustment rows with their reasons go too), so the other admins can tell 3 gifts from 300.
+        ...(outcome.cleared !== null ? { cleared: outcome.cleared } : {}),
       },
     });
 
@@ -145,9 +160,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  *
  * League admin (or site admin). Detaches the format from a league that has not started and removes the phases it
  * created, and the rulesets it created for rule-preset stages that nothing else points at. 404
- * `format_nothing_attached`, 409 `format_season_started`, 409 `format_detach_blocked` (teams still point at a phase).
+ * `format_nothing_attached`, 409 `format_season_started`, 409 `format_detach_blocked` (teams still point at a phase),
+ * 409 `format_runtime_has_data` (counts in `params`) unless the optional body `{ confirm_clear: true }` is sent.
  */
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const admin = await requireResourceAdmin('season', id);
@@ -155,7 +171,11 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const rate = await checkRateLimit('format-attach', admin.playerId, ATTACH_LIMIT);
     if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
 
-    const { removed_stage_ids, removed_ruleset_ids } = await detachFormatFromSeason(id);
+    const parsed = detachBodySchema.safeParse(await readBoundedJsonOrEmpty(request));
+    if (!parsed.success) return validationFailedResponse(parsed.error);
+
+    const confirmClear = parsed.data.confirm_clear === true;
+    const { removed_stage_ids, removed_ruleset_ids, cleared } = await detachFormatFromSeason(id, { confirmClear });
     expireSeasonReads(id, removed_stage_ids);
     if (removed_ruleset_ids.length > 0) revalidatePath('/admin/rulesets');
 
@@ -165,7 +185,12 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       actor_name: admin.name,
       resource_type: 'season',
       resource_id: id,
-      metadata: { removed_stage_count: removed_stage_ids.length, removed_ruleset_count: removed_ruleset_ids.length },
+      metadata: {
+        removed_stage_count: removed_stage_ids.length,
+        removed_ruleset_count: removed_ruleset_ids.length,
+        ...(confirmClear ? { confirm_clear: true } : {}),
+        ...(cleared !== null ? { cleared } : {}),
+      },
     });
 
     return NextResponse.json<ApiResult<{ removed_stage_ids: string[] }>>({

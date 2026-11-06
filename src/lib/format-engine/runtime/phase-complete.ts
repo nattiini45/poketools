@@ -10,31 +10,50 @@ import { emitDiscordEvent } from '@/lib/discord/notify';
 import { logger } from '@/lib/logger';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { emitSocialEvent } from '@/lib/social/notify';
-import { getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
-import { runAutoAdvance } from '../auto-advance';
+import { completeTournamentIfActive, getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { AutoAdvanceError, runAutoAdvance, type AutoAdvanceResult } from '../auto-advance';
 import { isKitCandidate, onPhaseStatusChanged } from './hooks';
 
 const TAG = 'format-engine/stage-end';
 
-/** `completed` when this call moved the phase, `skipped` when it was not active (already completed, or not started). */
-export async function completePhaseAtStageEnd(tournamentId: string, reason: string): Promise<'completed' | 'skipped'> {
+/**
+ * `completed` when this call moved the phase, `skipped` when it did not (not active, or another call moved it), and
+ * `reaction_failed` when the phase is completed but the format's reaction to it (the `stage_end` event, the tie and
+ * expression checks) did not apply: the caller reports a failed step so that its retry (the match finalize heal) calls
+ * this again. A call that finds the phase already completed repeats only that reaction, which is idempotent by event and
+ * check keys; the status write, the auto edges, the audit entry and the announcements are not repeated.
+ */
+export async function completePhaseAtStageEnd(
+  tournamentId: string,
+  reason: string,
+): Promise<'completed' | 'skipped' | 'reaction_failed'> {
   const before = await getTournamentById(tournamentId);
-  if (before === null || before.status !== 'active' || !isKitCandidate(before)) return 'skipped';
+  if (before === null || !isKitCandidate(before)) return 'skipped';
+  if (before.status === 'completed') {
+    // A reaction that failed after the flip left nothing else to run it: every later call lands here.
+    const reacted = await onPhaseStatusChanged({ tournament: before, from: 'active', to: 'completed' });
+    return reacted ? 'skipped' : 'reaction_failed';
+  }
+  if (before.status !== 'active') return 'skipped';
 
-  const tournament = await updateTournament(tournamentId, { status: 'completed' });
+  // Compare-and-set: of two last matches finishing together, only the call that moved the row runs the rest.
+  const tournament = await completeTournamentIfActive(tournamentId);
+  if (tournament === null) return 'skipped';
 
   let autoAdvanceError: string | null = null;
-  let advanced = 0;
+  let results: AutoAdvanceResult[] = [];
   try {
-    const results = await runAutoAdvance(before.season_id, tournamentId);
-    advanced = results.length;
-    for (const entry of results) expireTournamentReads(entry.target_phase_id, before.season_id);
+    results = await runAutoAdvance(before.season_id, tournamentId);
   } catch (error) {
     logger.error(TAG, 'auto advance failed after the stage ended', { tournamentId, error });
     autoAdvanceError = 'auto_advance_failed';
+    // The targets that did advance still show on their pages and in the audit entry.
+    if (error instanceof AutoAdvanceError) results = error.results;
   }
+  const advanced = results.length;
+  for (const entry of results) expireTournamentReads(entry.target_phase_id, before.season_id);
 
-  await onPhaseStatusChanged({ tournament: before, from: before.status, to: 'completed' });
+  const reacted = await onPhaseStatusChanged({ tournament: before, from: before.status, to: 'completed' });
   expireTournamentReads(tournamentId, before.season_id);
 
   logAuditEvent({
@@ -56,5 +75,5 @@ export async function completePhaseAtStageEnd(tournamentId: string, reason: stri
   };
   void emitDiscordEvent(payload);
   void emitSocialEvent(payload);
-  return 'completed';
+  return reacted ? 'completed' : 'reaction_failed';
 }

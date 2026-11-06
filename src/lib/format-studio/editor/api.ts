@@ -117,19 +117,35 @@ export function createFormatRequest(
 
 // ─── Attach routes ───────────────────────────────────────────────────────────────────────────────
 
-/** `POST /api/seasons/{id}/format`: attach (or re-attach) a published version to a custom league. */
+/**
+ * `POST /api/seasons/{id}/format`: attach (or re-attach) a published version to a custom league. A replace over the
+ * league's runtime data (links, items, submissions, adjustments) answers 409 `format_runtime_has_data` unless
+ * `confirmClear` is true: the admin has seen the counts and agreed to delete them.
+ */
 export function attachFormatRequest(
   seasonId: string,
   definitionId: string,
   versionNo: number,
   f?: FetchLike,
+  confirmClear = false,
 ): Promise<ApiOutcome<SeasonFormatAttachResponse>> {
-  return request(f, 'POST', `/api/seasons/${enc(seasonId)}/format`, { definition_id: definitionId, version_no: versionNo });
+  return request(f, 'POST', `/api/seasons/${enc(seasonId)}/format`, {
+    definition_id: definitionId,
+    version_no: versionNo,
+    ...(confirmClear ? { confirm_clear: true } : {}),
+  });
 }
 
-/** `DELETE /api/seasons/{id}/format`: remove the attached format and the phases it created. */
-export function detachFormatRequest(seasonId: string, f?: FetchLike): Promise<ApiOutcome<{ removed_stage_ids: string[] }>> {
-  return request(f, 'DELETE', `/api/seasons/${enc(seasonId)}/format`);
+/**
+ * `DELETE /api/seasons/{id}/format`: remove the attached format and the phases it created. `confirmClear` is the same
+ * confirmation as for the attach; without it the request carries no body.
+ */
+export function detachFormatRequest(
+  seasonId: string,
+  f?: FetchLike,
+  confirmClear = false,
+): Promise<ApiOutcome<{ removed_stage_ids: string[] }>> {
+  return request(f, 'DELETE', `/api/seasons/${enc(seasonId)}/format`, confirmClear ? { confirm_clear: true } : undefined);
 }
 
 // ─── Error classes ───────────────────────────────────────────────────────────────────────────────
@@ -169,6 +185,7 @@ const FORMAT_CODE_KINDS: Readonly<Record<FormatErrorCode, ApiErrorKind>> = {
   format_not_attached: 'blocked',
   format_nothing_attached: 'not_found',
   format_detach_blocked: 'blocked',
+  format_runtime_has_data: 'blocked',
   season_format_type_locked: 'blocked',
 };
 

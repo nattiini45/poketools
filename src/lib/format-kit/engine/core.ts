@@ -90,7 +90,7 @@ export function analyzeDefinition(def: FormatDefinition, env: CompileEnv): Analy
   diagnostics.push(...checkStages(def, env, planBuild));
   diagnostics.push(...checkEdges(def, env, graphBuild, planBuild));
   diagnostics.push(...checkRuntime(def, env));
-  diagnostics.push(...checkPhase4(def, env));
+  diagnostics.push(...checkPhase4(def, env, planBuild.byKey));
   diagnostics.push(...checkLTextCoverage(def));
   return {
     diagnostics,

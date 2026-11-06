@@ -95,14 +95,14 @@ describe('NewFormatForm: example', () => {
   it.each([
     ['en', 'Examples, not categories'],
     ['de', 'Beispiele, keine Kategorien'],
-  ] as const)('shows the caption in %s and lists the three shipped examples', async (locale, caption) => {
+  ] as const)('shows the caption in %s and lists the four shipped examples', async (locale, caption) => {
     const { container, choose } = open({ locale });
     await choose('example');
     expect(screen.getByText(caption)).toBeTruthy();
     const select = byId(container, 'fe-new-example') as HTMLSelectElement;
     expect(optionsOf(select)).toEqual(PRESETS.map((preset) => `preset:${preset.id}`));
     expect(select.querySelectorAll('optgroup')).toHaveLength(1);
-    expect(select.options).toHaveLength(3);
+    expect(select.options).toHaveLength(4);
     expectLabelledControls(container.innerHTML);
   });
 

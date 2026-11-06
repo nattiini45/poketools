@@ -205,6 +205,12 @@ export interface AttachRpcInput {
   stages: AttachStageRow[];
   /** { preset id: ruleset id } of the rule-preset stages; `{}` when the spec has none. */
   presetRulesets: Readonly<Record<string, string>>;
+  /**
+   * True when the admin confirmed that a replace may delete the league's runtime rows (links, items, submissions,
+   * adjustments). Without it a replace over such rows is refused (`format_runtime_has_data`); a first attach never
+   * needs it.
+   */
+  confirmClear?: boolean;
 }
 
 export interface AttachRpcResult {
@@ -213,6 +219,25 @@ export interface AttachRpcResult {
   removed_stage_ids: string[];
   /** Rulesets the previous attach created that the new one no longer uses (deleted by the function). */
   removed_ruleset_ids: string[];
+  /** What a replace deleted (null for a first attach); see `RuntimeCleared`. */
+  cleared: RuntimeCleared | null;
+}
+
+/** The counts of the league's runtime rows a replace or detach deleted (the 409 `format_runtime_has_data` counts). */
+export interface RuntimeCleared {
+  links: number;
+  items: number;
+  submissions: number;
+  adjustments: number;
+}
+
+function runtimeCleared(value: unknown): RuntimeCleared | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const count = (key: string): number => {
+    const n = (value as Record<string, unknown>)[key];
+    return typeof n === 'number' && Number.isFinite(n) ? n : 0;
+  };
+  return { links: count('links'), items: count('items'), submissions: count('submissions'), adjustments: count('adjustments') };
 }
 
 function stringArray(value: unknown): string[] {
@@ -230,6 +255,7 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     p_seed: input.seed,
     p_stages: input.stages as unknown as Json,
     p_preset_rulesets: input.presetRulesets as unknown as Json,
+    p_confirm_clear: input.confirmClear === true,
   });
   if (error) throw mapFormatDbError(error);
   const result = (data ?? {}) as {
@@ -237,6 +263,7 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     stages?: unknown;
     removed_stage_ids?: unknown;
     removed_ruleset_ids?: unknown;
+    cleared?: unknown;
   };
   const stages = Array.isArray(result.stages)
     ? (result.stages as Array<{ id?: unknown; key?: unknown; group?: unknown }>).flatMap((stage) =>
@@ -250,6 +277,7 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     stages,
     removed_stage_ids: stringArray(result.removed_stage_ids),
     removed_ruleset_ids: stringArray(result.removed_ruleset_ids),
+    cleared: runtimeCleared(result.cleared),
   };
 }
 
@@ -257,15 +285,24 @@ export interface DetachRpcResult {
   removed_stage_ids: string[];
   /** The rulesets the attach had created that nothing points at any more (deleted by the function). */
   removed_ruleset_ids: string[];
+  /** What the detach deleted of the league's runtime rows. */
+  cleared: RuntimeCleared | null;
 }
 
-/** Remove the attached format, the phases created from it and the rulesets it created, one transaction. */
-export async function detachSeasonFormat(seasonId: string): Promise<DetachRpcResult> {
-  const { data, error } = await supabase.rpc('format_detach_season', { p_season_id: seasonId });
+/**
+ * Remove the attached format, the phases created from it and the rulesets it created, one transaction. Refused with
+ * `format_runtime_has_data` while the league holds links, items, submissions or adjustments, unless `confirmClear`.
+ */
+export async function detachSeasonFormat(seasonId: string, confirmClear = false): Promise<DetachRpcResult> {
+  const { data, error } = await supabase.rpc('format_detach_season', {
+    p_season_id: seasonId,
+    p_confirm_clear: confirmClear === true,
+  });
   if (error) throw mapFormatDbError(error);
-  const result = (data ?? {}) as { removed_stage_ids?: unknown; removed_ruleset_ids?: unknown };
+  const result = (data ?? {}) as { removed_stage_ids?: unknown; removed_ruleset_ids?: unknown; cleared?: unknown };
   return {
     removed_stage_ids: stringArray(result.removed_stage_ids),
     removed_ruleset_ids: stringArray(result.removed_ruleset_ids),
+    cleared: runtimeCleared(result.cleared),
   };
 }

@@ -386,6 +386,23 @@ export async function updateTournament(
   return toTournament(data);
 }
 
+/**
+ * Compare-and-set of the status: `active` to `completed`. `null` when the tournament was no longer active (another
+ * writer completed it first), so exactly one of two concurrent callers gets the row back.
+ */
+export async function completeTournamentIfActive(id: string): Promise<Tournament | null> {
+  const { data, error } = await supabase
+    .from('tournaments')
+    .update({ status: 'completed' })
+    .eq('id', id)
+    .eq('status', 'active')
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data === null ? null : toTournament(data);
+}
+
 export async function archiveTournamentsBySeason(seasonId: string, archived: boolean): Promise<void> {
   const { error } = await supabase
     .from('tournaments')

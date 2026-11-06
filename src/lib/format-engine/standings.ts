@@ -30,6 +30,18 @@ import type { MatchOutcome } from '@/types/match-outcome';
 /** The public part of a `match_outcomes` row: what standings read. */
 export type KitOutcome = Pick<MatchOutcome, 'kind' | 'p1_faints' | 'p2_faints'>;
 
+/** The standings part of an outcome row (`match_outcomes`, or any row that carries the same three columns). */
+export function toKitOutcome(row: KitOutcome): KitOutcome {
+  return { kind: row.kind, p1_faints: row.p1_faints, p2_faints: row.p2_faints };
+}
+
+/** Outcome rows as the by-match-id record `StageStandingsInput.outcomes` takes. */
+export function kitOutcomesByMatch(rows: readonly (KitOutcome & { match_id: string })[]): Record<string, KitOutcome> {
+  const out: Record<string, KitOutcome> = {};
+  for (const row of rows) out[row.match_id] = toKitOutcome(row);
+  return out;
+}
+
 export interface KitStanding extends Standing {
   /** Place in the table, 1-based. Rows still tied after the whole chain have different places in participant order. */
   rank: number;
@@ -75,8 +87,12 @@ export interface StageStandingsInput {
   gamesByMatch?: Readonly<Record<string, readonly string[]>>;
   /** Only matches, byes and stats up to this round. */
   maxRound?: number;
-  /** Seed per player (1 = first); a player without one sorts after every seeded player. */
+  /**
+   * Seed per player in this stage (1 = first); a player without one sorts after every seeded player. The `seed` metric
+   * (a rank step, a column) reads it: callers feed it from the phase's participants, or the metric ties everyone.
+   */
   seeds?: Readonly<Record<string, number>>;
+  /** Rating per player (`player_ratings.rating`). The `rating` metric reads it; callers feed it, else it is 0 for all. */
   ratings?: Readonly<Record<string, number>>;
   /**
    * The coin flip's draw per player (lower ranks first), precomputed on the server with `coinFlipDraws`. The season
@@ -101,12 +117,27 @@ export interface StageStandingsInput {
   /**
    * The refs a metric expression reads besides the row, per player: `attr.*`, `tunable.*`, `track.*`
    * (`runtime/expr-env.ts` `playerExtraRefMap`). `player` is added here. `rank` and `group_rank` read 0 while the
-   * metrics are evaluated (the table is not ranked yet), and `rel()` answers false: the hidden links stay server-side.
+   * metrics are evaluated (the table is not ranked yet).
    */
   playerRefs?: Readonly<Record<string, Readonly<Record<string, ExprValue>>>>;
+  /**
+   * The links `rel(key, a, b)` of a metric expression answers true for, per relation key, as `[from, to]` pairs. Only
+   * links a viewer without an account sees whole belong here (`publicLinkPairs`): a hidden side never reaches the
+   * public table. A relation without pairs answers false.
+   */
+  relations?: Readonly<Record<string, readonly (readonly [string, string])[]>>;
   /** `score.placement` metrics of this stage: set on the ranked rows (a stage cannot rank by its own placement). */
   placements?: readonly StandingsPlacement[];
 }
+
+/**
+ * What a phase's table reads besides its matches, byes and outcomes. Loaded on the server (`loadStageTableExtras`) and
+ * handed to every consumer that ranks the stage (advancement, pairing, the runtime), so they rank like the public table.
+ */
+export type StageTableExtras = Pick<
+  StageStandingsInput,
+  'pointAdjustments' | 'manualOrder' | 'metricDefs' | 'placements' | 'playerRefs' | 'relations' | 'seeds' | 'ratings'
+>;
 
 /** The order a stage without a rank chain uses: the legacy table's sort. */
 export const LEGACY_RANK_CHAIN: readonly RankStep[] = [
@@ -392,6 +423,11 @@ export function computeStageStandings(input: StageStandingsInput): KitStanding[]
 function attachCustomMetrics(rows: KitStanding[], input: StageStandingsInput): void {
   const defs = input.metricDefs ?? [];
   if (defs.length === 0 && input.customMetrics === undefined) return;
+  const relations = new Map<string, (a: string, b: string) => boolean>();
+  for (const [key, pairs] of Object.entries(input.relations ?? {})) {
+    const linked = new Set(pairs.map(([from, to]) => `${from}\u0000${to}`));
+    relations.set(key, (a, b) => linked.has(`${a}\u0000${b}`));
+  }
   for (const row of rows) {
     const given = input.customMetrics?.[row.player_id];
     if (defs.length === 0 && given === undefined) continue;
@@ -404,7 +440,8 @@ function attachCustomMetrics(rows: KitStanding[], input: StageStandingsInput): v
       refs.set('group_rank', 0);
       refs.set('player', row.player_id);
       for (const [name, value] of Object.entries(input.playerRefs?.[row.player_id] ?? {})) refs.set(name, value);
-      const ctx = { refs, collections: new Map(), relations: new Map(), seed: input.seed ?? '', scope: `metric:${input.stage.key}` };
+      // The scope names the player: `rand('k')` takes a literal key, so without the player every row would draw alike.
+      const ctx = { refs, collections: new Map(), relations, seed: input.seed ?? '', scope: `metric:${input.stage.key}:${row.player_id}` };
       for (const def of defs) {
         const result = evaluate(def.expr, ctx, 'number');
         metrics[def.key] = result.ok && typeof result.value === 'number' ? result.value : 0;

@@ -34,26 +34,36 @@ describe('availableLeagueAdminTabs (from getFormatCapabilities)', () => {
     ]);
   });
 
-  it('Evolution Point Buy gets all eight, in display order', () => {
-    expect(availableLeagueAdminTabs('evolution_point_buy')).toEqual([...LEAGUE_ADMIN_TABS]);
-    expect(LEAGUE_ADMIN_TABS).toHaveLength(8);
+  it('Evolution Point Buy gets every tab but live, in display order', () => {
+    expect(availableLeagueAdminTabs('evolution_point_buy')).toEqual(LEAGUE_ADMIN_TABS.filter((tab) => tab !== 'live'));
+    expect(LEAGUE_ADMIN_TABS).toHaveLength(9);
   });
 
-  it('a custom league gets the singles-like set: no draft, no rules', () => {
+  it('a custom league gets the singles-like set plus live: no draft, no rules', () => {
     expect(availableLeagueAdminTabs('custom')).toEqual([
       'overview',
       'participants',
       'phases',
       'format',
+      'live',
       'settings',
       'danger',
     ]);
   });
 
-  it('the format tab sits between rules and settings and every format has it', () => {
+  it('the live tab exists for custom leagues only and sits between format and settings', () => {
+    for (const format of ['singles', 'doubles', 'draft', 'evolution_point_buy'] as const) {
+      expect(availableLeagueAdminTabs(format), format).not.toContain('live');
+    }
+    expect(availableLeagueAdminTabs('custom')).toContain('live');
+    const order = [...LEAGUE_ADMIN_TABS];
+    expect(order.indexOf('live')).toBe(order.indexOf('format') + 1);
+    expect(order.indexOf('settings')).toBe(order.indexOf('live') + 1);
+  });
+
+  it('the format tab sits right after rules and every format has it', () => {
     const order = [...LEAGUE_ADMIN_TABS];
     expect(order.indexOf('format')).toBe(order.indexOf('rules') + 1);
-    expect(order.indexOf('settings')).toBe(order.indexOf('format') + 1);
     for (const format of ['singles', 'doubles', 'draft', 'evolution_point_buy', 'custom'] as const) {
       expect(availableLeagueAdminTabs(format), format).toContain('format');
     }
@@ -66,6 +76,12 @@ describe('parseLeagueAdminTab', () => {
 
   it('accepts an available tab', () => {
     for (const tab of epb) expect(parseLeagueAdminTab(tab, epb)).toBe(tab);
+  });
+
+  it('opens the live tab for a custom league and falls back to the overview for any other', () => {
+    expect(parseLeagueAdminTab('live', availableLeagueAdminTabs('custom'))).toBe('live');
+    expect(parseLeagueAdminTab('live', singles)).toBe('overview');
+    expect(parseLeagueAdminTab('live', epb)).toBe('overview');
   });
 
   it('falls back to the overview for a missing, repeated, unknown or unavailable tab', () => {
@@ -96,5 +112,6 @@ describe('leagueAdminHref', () => {
     expect(leagueAdminHref('s1', 'danger')).toBe('/admin/leagues/s1?tab=danger');
     expect(leagueAdminHref('s1', 'phases')).toBe('/admin/leagues/s1?tab=phases');
     expect(leagueAdminHref('s1', 'format')).toBe('/admin/leagues/s1?tab=format');
+    expect(leagueAdminHref('s1', 'live')).toBe('/admin/leagues/s1?tab=live');
   });
 });

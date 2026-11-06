@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerActionRule, StageCalendar } from '@/lib/format-kit/types';
 import {
   actionPolicyAt,
+  calendarRoundAt,
   dueMarks,
   markAt,
   roundDeadlineAt,
@@ -93,6 +94,18 @@ describe('deadlines, marks and policies', () => {
     expect(dueMarks(marked, clock, new Date('2026-04-30T00:00:00Z')).map((m) => m.key)).toEqual(['early', 'later']);
   });
 
+  it('lists due marks in calendar order, not declaration order (ties keep the declaration order)', () => {
+    const marked = calendar({
+      marks: [
+        { key: 'close', round: 1, offset_hours: 24 },
+        { key: 'open', round: 1, offset_hours: 0 },
+        { key: 'tie_b', round: 1, offset_hours: 24 },
+        { key: 'next_round', round: 2, offset_hours: -48 },
+      ],
+    });
+    expect(dueMarks(marked, clock, new Date('2030-01-01T00:00:00Z')).map((m) => m.key)).toEqual(['open', 'close', 'tie_b', 'next_round']);
+  });
+
   it('has no due marks when the calendar cannot be read', () => {
     const seasonal = calendar({ start: { kind: 'season_start' }, marks: [{ key: 'a', round: 1, offset_hours: 0 }] });
     expect(dueMarks(seasonal, clock, new Date('2030-01-01T00:00:00Z'))).toEqual([]);
@@ -116,5 +129,37 @@ describe('deadlines, marks and policies', () => {
     expect(iso(actionPolicyAt(marked, policy, action(), clock))).toBe('2026-03-22T17:00:00.000Z');
     expect(iso(actionPolicyAt(marked, policy, action({ event: 'time', mark: 'unknown' }), clock))).toBe('2026-03-22T17:00:00.000Z');
     expect(iso(actionPolicyAt(marked, policy, null, clock))).toBe('2026-03-22T17:00:00.000Z');
+  });
+});
+
+describe('calendarRoundAt', () => {
+  const at = (text: string) => new Date(text);
+
+  it('is round 1 before the first round opens, and from the moment it does', () => {
+    expect(calendarRoundAt(calendar(), clock, at('2026-01-01T00:00:00Z'))).toBe(1);
+    expect(calendarRoundAt(calendar(), clock, at('2026-03-23T17:00:00Z'))).toBe(1);
+  });
+
+  it('counts the rounds that have opened, a round changing at its own instant', () => {
+    // Round 2 opens 2026-03-30 18:00 Berlin = 16:00Z (CEST).
+    expect(calendarRoundAt(calendar(), clock, at('2026-03-30T15:59:59Z'))).toBe(1);
+    expect(calendarRoundAt(calendar(), clock, at('2026-03-30T16:00:00Z'))).toBe(2);
+    expect(calendarRoundAt(calendar(), clock, at('2026-04-14T00:00:00Z'))).toBe(4);
+  });
+
+  it('follows the cadence and the season start date', () => {
+    const daily = calendar({ start: { kind: 'season_start' }, cadence: 'days', every: 2 });
+    const seasonClock = { timeZone: 'Europe/Berlin', seasonStart: '2026-03-23' };
+    expect(calendarRoundAt(daily, seasonClock, at('2026-03-26T00:00:00Z'))).toBe(2);
+    expect(calendarRoundAt(daily, seasonClock, at('2026-03-28T00:00:00Z'))).toBe(3);
+  });
+
+  it('is capped at the highest round number the API accepts', () => {
+    expect(calendarRoundAt(calendar(), clock, at('2099-01-01T00:00:00Z'))).toBe(500);
+  });
+
+  it('is null when the calendar cannot be read', () => {
+    expect(calendarRoundAt(calendar({ start: { kind: 'season_start' } }), clock, at('2026-04-14T00:00:00Z'))).toBeNull();
+    expect(calendarRoundAt(calendar({ time: '25:00' }), clock, at('2026-04-14T00:00:00Z'))).toBeNull();
   });
 });

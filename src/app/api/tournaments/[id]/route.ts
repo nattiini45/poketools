@@ -41,7 +41,7 @@ import {
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
-import { runAutoAdvance, type AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
+import { AutoAdvanceError, runAutoAdvance, type AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
 import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
 import type { ApiResult } from '@/types/api';
 import type { Tournament, TournamentWithDetails } from '@/types/tournament';
@@ -251,7 +251,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         autoAdvance = await runAutoAdvance(before.season_id, id);
       } catch (err) {
         logger.error('api/tournaments', 'auto advance failed after phase completion', { tournamentId: id, error: err });
-        autoAdvanceError = err instanceof UserFacingError && err.code ? err.code : 'auto_advance_failed';
+        if (err instanceof AutoAdvanceError) {
+          // The targets that did advance still get their cache expiry and their audit entry.
+          autoAdvance = err.results;
+          autoAdvanceError = err.code ?? 'auto_advance_failed';
+        } else {
+          autoAdvanceError = err instanceof UserFacingError && err.code ? err.code : 'auto_advance_failed';
+        }
       }
       for (const entry of autoAdvance) expireTournamentReads(entry.target_phase_id, before.season_id);
     }

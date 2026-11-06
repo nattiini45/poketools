@@ -34,10 +34,17 @@ describe('planTrackProgress', () => {
 
 describe('planChecks', () => {
   it('opens one unresolved check per match', () => {
-    const out = planChecks(def, { source: 'unresolved_outcome', matchId: 'm1', players: ['p1', 'p2'] });
+    const out = planChecks(def, { source: 'unresolved_outcome', matchId: 'm1', players: ['p1', 'p2'], generation: 0 });
     expect(out.checks).toEqual([
-      { source: 'unresolved_outcome', rule_id: 'unresolved', dedupe_key: 'unresolved:m1', subject: { match_id: 'm1', players: ['p1', 'p2'] } },
+      { source: 'unresolved_outcome', rule_id: 'unresolved', dedupe_key: 'unresolved:m1:0', subject: { match_id: 'm1', players: ['p1', 'p2'] } },
     ]);
+  });
+
+  it('keys an unresolved check by the completion generation, so a later dispute opens a new check', () => {
+    const first = planChecks(def, { source: 'unresolved_outcome', matchId: 'm1', players: ['p1', 'p2'], generation: 0 });
+    const second = planChecks(def, { source: 'unresolved_outcome', matchId: 'm1', players: ['p1', 'p2'], generation: 1 });
+    expect(first.checks[0].dedupe_key).not.toBe(second.checks[0].dedupe_key);
+    expect(second.checks[0].dedupe_key).toBe('unresolved:m1:1');
   });
 
   it('opens a tie check per tied group, keyed by the sorted players', () => {
@@ -67,5 +74,21 @@ describe('planChecks', () => {
     expect(out.issues).toEqual([]);
     expect(out.checks.map((c) => c.dedupe_key)).toEqual(['expr:vets:p1']);
     expect(planChecks(def, { source: 'expr', of: 'match', subjects }).checks).toEqual([]);
+  });
+
+  it('keys a match-level expression check by the completion generation, a player-level one not', () => {
+    const matchDef = {
+      ...def,
+      rules: [
+        ...def.rules,
+        { kind: 'check.assisted' as const, id: 'big_win', source: { kind: 'expr' as const, of: 'match' as const, when: { k: 'ref' as const, name: 'won', t: 'boolean' as const } } },
+      ],
+    };
+    const b = envBase(matchDef, stateFor(matchDef), SEED);
+    const subjects = [{ id: 'm1', ctx: matchSide(b, 'p1', { round: 1, won: true }).ctx }];
+    expect(planChecks(matchDef, { source: 'expr', of: 'match', subjects }).checks.map((c) => c.dedupe_key)).toEqual(['expr:big_win:m1:0']);
+    expect(planChecks(matchDef, { source: 'expr', of: 'match', subjects, generation: 2 }).checks.map((c) => c.dedupe_key)).toEqual(['expr:big_win:m1:2']);
+    const players = PLAYERS.slice(0, 1).map((id) => ({ id, ctx: matchSide(envBase(matchDef, stateFor(matchDef, { attrs: { p1: { veteran: true } } }), SEED), id, { round: 1, won: true }).ctx }));
+    expect(planChecks(matchDef, { source: 'expr', of: 'player', subjects: players, generation: 2 }).checks.map((c) => c.dedupe_key)).toEqual(['expr:vets:p1']);
   });
 });

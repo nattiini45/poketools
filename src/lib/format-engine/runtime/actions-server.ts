@@ -3,7 +3,8 @@
  * window is open, the actor has a link); a submission passes the whole `validateActionSubmission`. Both end in one SQL
  * function (`format_action_save` / `format_action_submit`), which re-checks the lock and, for a submission, the
  * exclusive items under a row lock. A refusal of the database (`action_locked`, `resource_item_taken`) leaves as a
- * `FormatRuntimeError`. Server only.
+ * `FormatRuntimeError`; a submit that asked to write only over a draft (`onlyIfUnsubmitted`) and met a submitted pick
+ * leaves as a `FormatActionAlreadySubmittedError`. Server only.
  */
 import 'server-only';
 
@@ -19,9 +20,11 @@ import {
   isActionWindowOpen,
   resolveActionTarget,
   validateActionSubmission,
+  type ActionAudience,
   type ActionIssue,
 } from './actions';
 import { loadFreshKitContext, rosterOf } from './load';
+import { refuse } from './refusal';
 import type { ActionPick } from './types';
 
 export interface ActionRequest {
@@ -29,6 +32,14 @@ export interface ActionRequest {
   actionId: string;
   actorId: string;
   picks: readonly ActionPick[];
+  /** Default `player`; the cron's deadline pick passes `system` (see `validateActionSubmission`). */
+  audience?: ActionAudience;
+  /**
+   * Submit only over a draft: a pick that is already submitted or locked when the database takes the action's lock is
+   * left alone and the call raises `FormatActionAlreadySubmittedError`. The cron's deadline draw sets it (a player's
+   * deliberate choice must never be replaced by a draw). Ignored by `saveAction`.
+   */
+  onlyIfUnsubmitted?: boolean;
 }
 
 export type ActionWrite = { ok: true; submission: FormatActionSubmissionRow } | { ok: false; issues: ActionIssue[] };
@@ -51,6 +62,13 @@ export async function saveAction(request: ActionRequest): Promise<ActionWrite> {
   }
   if (issues.length > 0 || !access.ok) return { ok: false, issues };
 
+  // A submitted pick is not demoted by a save: the database would turn it into a draft and drop the items it granted, and
+  // a stale tab or a direct call must not be able to do that. The player submits again to change it. (A submit that lands
+  // between this read and the call below can still be demoted; that needs two requests of one account in the same few
+  // milliseconds and ends in a draft the player can submit again.)
+  if (ctx.state.submissions.some((s) => s.action === request.actionId && s.actor === request.actorId && s.status === 'submitted')) {
+    throw refuse('format_action_already_submitted');
+  }
   const submission = await saveFormatAction({
     seasonId: request.seasonId,
     actionKey: request.actionId,
@@ -66,7 +84,7 @@ export async function submitAction(request: ActionRequest): Promise<ActionWrite>
   const ctx = await loadFreshKitContext(request.seasonId);
   if (ctx === null) return { ok: false, issues: [{ code: 'format_not_running' }] };
   const rule = findAction(ctx.def, request.actionId);
-  const checked = validateActionSubmission(ctx.def, request.actionId, request.actorId, request.picks, ctx.state, rosterOf(ctx), ctx.seed);
+  const checked = validateActionSubmission(ctx.def, request.actionId, request.actorId, request.picks, ctx.state, rosterOf(ctx), ctx.seed, { audience: request.audience });
   if (!checked.ok || rule === null) return { ok: false, issues: checked.ok ? [{ code: 'action_unknown' }] : checked.issues };
 
   const submission = await submitFormatAction({
@@ -77,6 +95,7 @@ export async function submitAction(request: ActionRequest): Promise<ActionWrite>
     picks: picksJson(request.picks),
     items: checked.items.map((item) => ({ resource: item.resource, item_id: item.item_id, exclusive: item.exclusive })),
     lock: rule.lock === 'on_submit',
+    onlyIfUnsubmitted: request.onlyIfUnsubmitted,
   });
   expireSeasonReads(request.seasonId, ctx.phases.map((phase) => phase.id));
   return { ok: true, submission };

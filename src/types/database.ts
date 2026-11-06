@@ -7069,6 +7069,14 @@ export type Database = {
         Args: { p_ops: Json; p_season_id: string }
         Returns: undefined
       }
+      format__clear_runtime: {
+        Args: { p_season_id: string }
+        Returns: undefined
+      }
+      format__guard_runtime_clear: {
+        Args: { p_confirm: boolean; p_season_id: string }
+        Returns: Json
+      }
       format__insert_item: {
         Args: {
           p_amount: number
@@ -7080,6 +7088,10 @@ export type Database = {
           p_source: string
           p_source_ref: string
         }
+        Returns: undefined
+      }
+      format__lock_action: {
+        Args: { p_action_key: string; p_season_id: string }
         Returns: undefined
       }
       format__open_round: {
@@ -7123,6 +7135,7 @@ export type Database = {
           p_actor: string
           p_items: Json
           p_lock: boolean
+          p_only_if_unsubmitted?: boolean
           p_picks: Json
           p_season_id: string
           p_target: string
@@ -7162,6 +7175,7 @@ export type Database = {
       }
       format_attach_season: {
         Args: {
+          p_confirm_clear?: boolean
           p_definition_id: string
           p_preset_rulesets?: Json
           p_season_id: string
@@ -7174,7 +7188,7 @@ export type Database = {
         Returns: Json
       }
       format_challenge_cancel: {
-        Args: { p_challenge_id: string; p_player: string }
+        Args: { p_challenge_id: string; p_player: string; p_season_id: string }
         Returns: {
           challenger_id: string
           created_at: string
@@ -7229,7 +7243,12 @@ export type Database = {
         }
       }
       format_challenge_respond: {
-        Args: { p_accept: boolean; p_challenge_id: string; p_player: string }
+        Args: {
+          p_accept: boolean
+          p_challenge_id: string
+          p_player: string
+          p_season_id: string
+        }
         Returns: {
           challenger_id: string
           created_at: string
@@ -7269,6 +7288,7 @@ export type Database = {
           p_admin: string
           p_check_id: string
           p_note: string
+          p_season_id: string
           p_status: string
         }
         Returns: boolean
@@ -7277,7 +7297,10 @@ export type Database = {
         Args: { p_kept: Json; p_recorded: Json }
         Returns: string[]
       }
-      format_detach_season: { Args: { p_season_id: string }; Returns: Json }
+      format_detach_season: {
+        Args: { p_confirm_clear?: boolean; p_season_id: string }
+        Returns: Json
+      }
       format_fire_event: {
         Args: {
           p_event: string
@@ -7455,6 +7478,7 @@ export type Database = {
           p_force: boolean
           p_kind: string
           p_match_id: string
+          p_open_only?: boolean
           p_p1_faints?: number
           p_p2_faints?: number
           p_reason?: string

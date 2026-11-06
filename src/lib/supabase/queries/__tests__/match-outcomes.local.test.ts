@@ -119,19 +119,74 @@ describe.skipIf(!optIn)('match_outcome_record (local stack)', () => {
     expect(await outcomes.getMatchOutcome(ids.match)).toMatchObject({ kind: 'no_show', set_by: ids.p2 });
   });
 
+  it('does not stage an open-only admin write over a completed match, and keeps its row', async () => {
+    const staged = (kind: 'forfeit' | 'played', reason: string) => ({
+      matchId: ids.other, kind, p1Faints: null, p2Faints: null, source: 'admin' as const,
+      reason, setBy: ids.p1, force: true, openOnly: true,
+    });
+    // Open match: lands.
+    await expect(outcomes.recordMatchOutcome(staged('forfeit', 'No show'))).resolves.toBe('written');
+
+    const complete = await client.from('matches').update({ status: 'completed', winner_id: ids.p1 }).eq('id', ids.other);
+    expect(complete.error).toBeNull();
+    // The completing request's finalize step rewrites the row with faints (a plain forced write).
+    await expect(
+      outcomes.recordMatchOutcome({
+        matchId: ids.other, kind: 'played', p1Faints: 3, p2Faints: 1, source: 'admin',
+        reason: 'Agreed outside the app', setBy: ids.p1, force: true,
+      }),
+    ).resolves.toBe('written');
+
+    // A loser staging after the completion is skipped and the finalized row is untouched.
+    await expect(outcomes.recordMatchOutcome(staged('forfeit', 'Late duplicate'))).resolves.toBe('kept');
+    expect(await outcomes.getMatchOutcome(ids.other)).toMatchObject({
+      kind: 'played', p1_faints: 3, p2_faints: 1, reason: 'Agreed outside the app',
+    });
+
+    await outcomes.deleteMatchOutcome(ids.other);
+    await client.from('matches').update({ status: 'in_progress', winner_id: null }).eq('id', ids.other);
+  });
+
+  it('open-only is a check inside its own call: a completion after it leaves the staged admin row for the caller to take back', async () => {
+    // The share lock ends with the call, so it cannot make the staged row atomic with the caller's later status update.
+    // This pins the contract the callers rely on (they discard their own staged row by set_at when their update loses).
+    await expect(
+      outcomes.recordMatchOutcome({
+        matchId: ids.other, kind: 'forfeit', p1Faints: null, p2Faints: null, source: 'admin',
+        reason: 'No show', setBy: ids.p1, force: true, openOnly: true,
+      }),
+    ).resolves.toBe('written');
+    const staged = await outcomes.getMatchOutcome(ids.other);
+    expect(staged).toMatchObject({ kind: 'forfeit', source: 'admin' });
+
+    // A player's confirmation completes the match in between; its finalize write (not forced) cannot replace the admin row.
+    const complete = await client.from('matches').update({ status: 'completed', winner_id: ids.p2 }).eq('id', ids.other);
+    expect(complete.error).toBeNull();
+    await expect(outcomes.recordMatchOutcome({ ...played(2, 3), matchId: ids.other })).resolves.toBe('kept');
+    expect(await outcomes.getMatchOutcome(ids.other)).toMatchObject({ kind: 'forfeit', source: 'admin', set_at: staged?.set_at });
+
+    // So the staging request takes its row back (by its set_at) and the played row can then be written.
+    await expect(outcomes.deleteMatchOutcome(ids.other, { onlyIfSetAt: staged!.set_at })).resolves.toBe(1);
+    await expect(outcomes.recordMatchOutcome({ ...played(2, 3), matchId: ids.other })).resolves.toBe('written');
+    expect(await outcomes.getMatchOutcome(ids.other)).toMatchObject({ kind: 'played', p1_faints: 2, p2_faints: 3, source: 'replay' });
+
+    await outcomes.deleteMatchOutcome(ids.other);
+    await client.from('matches').update({ status: 'in_progress', winner_id: null }).eq('id', ids.other);
+  });
+
   it('refuses an unknown kind or source', async () => {
     await expect(outcomes.recordMatchOutcome({ ...played(0, 0), matchId: ids.other, kind: 'draw' as never })).rejects.toBeTruthy();
     await expect(outcomes.recordMatchOutcome({ ...played(0, 0), matchId: ids.other, source: 'robot' as never })).rejects.toBeTruthy();
     expect(await outcomes.getMatchOutcome(ids.other)).toBeNull();
   });
 
-  it('reads several matches at once and deletes one row', async () => {
+  it('reads each match by id and deletes one row', async () => {
     await outcomes.recordMatchOutcome({
       matchId: ids.other, kind: 'unresolved', p1Faints: null, p2Faints: null, source: 'replay',
       reason: 'replay_engine_tie', setBy: null, force: false,
     });
-    const rows = await outcomes.getMatchOutcomesByMatchIds([ids.match, ids.other, ids.other]);
-    expect(rows.map((row) => row.match_id).sort()).toEqual([ids.match, ids.other].sort());
+    expect((await outcomes.getMatchOutcome(ids.match))?.match_id).toBe(ids.match);
+    expect((await outcomes.getMatchOutcome(ids.other))?.match_id).toBe(ids.other);
 
     await expect(outcomes.deleteMatchOutcome(ids.other)).resolves.toBe(1);
     await expect(outcomes.deleteMatchOutcome(ids.other)).resolves.toBe(0);

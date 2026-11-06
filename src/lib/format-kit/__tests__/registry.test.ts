@@ -121,18 +121,28 @@ describe('kinds and manifest', () => {
     expect(manifestForSlot('constraint')).toHaveLength(6);
   });
 
-  it('levels: rule.custom is the only honor kind, check.assisted and adjust.manual are checked, the rest of the available kinds are auto', () => {
+  it('levels: rule.custom is the only honor kind, check.assisted, adjust.manual and the team constraints are checked, the rest of the available kinds are auto', () => {
     for (const entry of MANIFEST) {
       if (entry.availability === 'reserved') {
         expect(entry.level).toBe('honor');
         expect(entry.slot).toBe('reserved');
         expect(entry.phase).toBeGreaterThanOrEqual(4);
       } else {
-        const checked = entry.kind === 'check.assisted' || entry.kind === 'adjust.manual';
+        const checked = entry.kind === 'check.assisted' || entry.kind === 'adjust.manual' || entry.slot === 'constraint';
         expect(entry.level).toBe(entry.kind === 'rule.custom' ? 'honor' : checked ? 'checked' : 'auto');
         expect(entry.phase).toBeGreaterThanOrEqual(1);
         expect(entry.phase).toBeLessThanOrEqual(4);
       }
+    }
+  });
+
+  it('every team constraint is checked (advisory feedback plus the post-match audit) and a phase 4 kind', () => {
+    const constraints = MANIFEST.filter((entry) => entry.slot === 'constraint');
+    expect(constraints.length).toBeGreaterThan(0);
+    for (const entry of constraints) {
+      expect(entry.kind.startsWith('constraint.')).toBe(true);
+      expect(entry.level).toBe('checked');
+      expect(entry.phase).toBe(4);
     }
   });
 

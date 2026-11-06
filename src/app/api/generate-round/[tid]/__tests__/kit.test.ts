@@ -45,6 +45,10 @@ vi.mock('@/lib/feature-flags', () => ({ ENABLE_KALE_CABBAGE: false }));
 vi.mock('@/lib/format-studio/attach', () => ({ assertSeasonFormatAttached: vi.fn() }));
 vi.mock('@/lib/format-engine/load', () => ({ loadKitPhase: vi.fn() }));
 vi.mock('@/lib/format-engine/runtime/hooks', () => ({ onRoundGenerated: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format-engine/runtime/load')>()),
+  loadFreshKitContext: vi.fn(),
+}));
 
 import { POST } from '@/app/api/generate-round/[tid]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
@@ -62,12 +66,33 @@ import { generateRound } from '@/lib/tournament';
 import { logAuditEvent } from '@/lib/audit/log';
 import { loadKitPhase, type KitPhase } from '@/lib/format-engine/load';
 import { onRoundGenerated } from '@/lib/format-engine/runtime/hooks';
+import { loadFreshKitContext } from '@/lib/format-engine/runtime/load';
 import { generateRoundRobinRound } from '@/lib/tournament/round-robin';
 import type { Pairing, Stage } from '@/lib/format-kit/types';
 
 const TID = 'ae13bc20-d43b-42b5-8de0-4944cb4025e3';
 const routeParams = { params: Promise.resolve({ tid: TID }) };
 const request = {} as NextRequest;
+const forced = { url: 'https://example.test/api/generate-round/x?force=true' } as NextRequest;
+
+/** A league whose action runs via the `santa` relation, drawn or not, with the checks the admin left open. */
+function santaContext(opts: { drawn?: boolean; openChecks?: number } = {}) {
+  const links = opts.drawn === true ? ['p1', 'p2', 'p3', 'p4'].map((from, i, all) => ({ relation: 'santa', from, to: all[(i + 1) % all.length], revealed: false })) : [];
+  const checks = Array.from({ length: opts.openChecks ?? 0 }, (_, i) => ({
+    id: `c-${i}`,
+    source: 'deadline_missed',
+    rule_id: 'deadline:cup:0',
+    dedupe_key: `deadline:cup:0:choose_gifts:p${i}`,
+    subject: { applies: 'action', action: 'choose_gifts', player_id: `p${i}` },
+    status: 'open',
+    note: null,
+  }));
+  return {
+    def: { rules: [{ kind: 'player.action', id: 'choose_gifts', via: 'santa' }] },
+    state: { links, checks },
+    phases: [{ id: 'ph-1', stage: { key: 'cup' }, members: ['p1', 'p2', 'p3', 'p4'] }],
+  } as never;
+}
 const PLAYERS = ['p1', 'p2', 'p3', 'p4'];
 
 function stage(pairing: Pairing): Stage {
@@ -87,7 +112,7 @@ function stage(pairing: Pairing): Stage {
 }
 
 function phase(pairing: Pairing, engine: KitPhase['engine'] = 'kit'): KitPhase {
-  return { engine, seed: 'seed-0123456789', stage: stage(pairing), outcomes: {} };
+  return { engine, seed: 'seed-0123456789', stage: stage(pairing), outcomes: {}, tableExtras: {} };
 }
 
 const record = (p1: string, p2: string, winner: string | null, round: number) => ({
@@ -119,6 +144,7 @@ function writtenPairs(): string[] {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
+  vi.mocked(loadFreshKitContext).mockResolvedValue(null);
   vi.mocked(getParticipants).mockResolvedValue(PLAYERS.map((id) => ({ id, name: id.toUpperCase() })) as never);
   vi.mocked(getCompletedMatchRecords).mockResolvedValue([] as never);
   vi.mocked(getPairedMatchRecords).mockResolvedValue([] as never);
@@ -149,6 +175,24 @@ describe('generate-round on a kit phase', () => {
     expect(pairs).toEqual(['p1-p3', 'p2-p4']);
     expect(body.warnings).toBeUndefined();
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ engine: 'kit', rematches: 0 });
+  });
+
+  it('pairs by the table the public sees: point adjustments steer the pairing (tableExtras)', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament('swiss', 1) as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([{ round_number: 1, status: 'completed', bye_player_ids: [] }] as never);
+    vi.mocked(loadKitPhase).mockResolvedValue({
+      ...phase({ kind: 'swiss', rounds: 3, avoid_repeats: true }),
+      tableExtras: { pointAdjustments: { p4: 10 } },
+    });
+    const history = [record('p1', 'p2', 'p1', 1), record('p3', 'p4', 'p3', 1)];
+    vi.mocked(getCompletedMatchRecords).mockResolvedValue(history as never);
+    vi.mocked(getPairedMatchRecords).mockResolvedValue(history as never);
+
+    const response = await POST(request, routeParams);
+
+    expect(response.status).toBe(201);
+    // p4 is first with the adjustment and has met p3, so it meets p1; without the extras the pairs are p1-p3 and p2-p4.
+    expect(writtenPairs().map((pair) => pair.split('-').sort().join('-')).sort()).toEqual(['p1-p4', 'p2-p3']);
   });
 
   it('stops after the stage rounds', async () => {
@@ -297,5 +341,91 @@ describe('generate-round on a kit phase', () => {
     ]);
     expect(writtenPairs().map((pair) => pair.split('-').sort().join('-')).sort()).toEqual(['p1-p4', 'p2-p3']);
     expect(generateRound).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 groups_forming_in_progress for groups another request has inserted but not filled yet', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament('round_robin', 0) as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
+    vi.mocked(getParticipants).mockResolvedValue(PLAYERS.map((id, i) => ({ id, name: id.toUpperCase(), seed: i + 1 })) as never);
+    const kitPhase = phase({ kind: 'round_robin', legs: 1, mirror_legs: true });
+    kitPhase.stage.groups = { count: 2, method: 'serpentine' };
+    vi.mocked(loadKitPhase).mockResolvedValue(kitPhase);
+    vi.mocked(seasonHasGroups).mockResolvedValue(false);
+    const now = new Date().toISOString();
+    const empty = [
+      { id: 'g1', group_number: 1, name: 'Group A', season_group_id: null, created_at: now, members: [] },
+      { id: 'g2', group_number: 2, name: 'Group B', season_group_id: null, created_at: now, members: [] },
+    ];
+    vi.mocked(getGroupsByTournament).mockResolvedValue(empty as never);
+
+    const response = await POST(request, routeParams);
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('groups_forming_in_progress');
+    expect(createRound).not.toHaveBeenCalled();
+    expect(createMatchBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('generate-round: the first round of a kit phase waits for the format set-up', () => {
+  beforeEach(() => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament('swiss', 0) as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(loadKitPhase).mockResolvedValue(phase({ kind: 'swiss', rounds: 3, avoid_repeats: true }));
+  });
+
+  it('refuses with 409 format_not_ready while the relation is undrawn, before any round is written', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext({ openChecks: 2 }));
+
+    const response = await POST(request, routeParams);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.code).toBe('format_not_ready');
+    expect(body.params).toMatchObject({ reasons: 'relation_undrawn,action_incomplete', open_checks: 2 });
+    expect(createRound).not.toHaveBeenCalled();
+    expect(createMatchBatch).not.toHaveBeenCalled();
+  });
+
+  it('writes the round once the relation is drawn and no check is open', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext({ drawn: true }));
+
+    expect((await POST(request, routeParams)).status).toBe(201);
+    expect(createRound).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets an admin start anyway with ?force=true and audits it', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext());
+
+    expect((await POST(forced, routeParams)).status).toBe(201);
+
+    expect(createRound).toHaveBeenCalledTimes(1);
+    const actions = vi.mocked(logAuditEvent).mock.calls.map((call) => call[0].action);
+    expect(actions).toContain('season.format.round.force_start');
+    expect(vi.mocked(logAuditEvent).mock.calls.find((call) => call[0].action === 'season.format.round.force_start')?.[0]).toMatchObject({
+      actor_id: 'admin-1',
+      resource_id: TID,
+      metadata: { reasons: ['relation_undrawn'], relations: ['santa'] },
+    });
+  });
+
+  it('audits no forced start when the request is refused after the guard (too few players): no round was forced', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext());
+    vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1', name: 'P1' }] as never);
+
+    const response = await POST(forced, routeParams);
+
+    expect(response.status).toBe(400);
+    expect(createRound).not.toHaveBeenCalled();
+    expect(vi.mocked(logAuditEvent).mock.calls.map((call) => call[0].action)).not.toContain('season.format.round.force_start');
+  });
+
+  it('does not look at a later round', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament('swiss', 1) as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([{ round_number: 1, status: 'completed', bye_player_ids: [] }] as never);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext());
+
+    expect((await POST(request, routeParams)).status).toBe(201);
+    expect(loadFreshKitContext).not.toHaveBeenCalled();
   });
 });

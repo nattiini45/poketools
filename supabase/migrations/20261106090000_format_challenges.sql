@@ -10,12 +10,13 @@
 --                           cooldown_rounds, accept_window_hours)
 --       Under an advisory lock on the phase. Lapsed open challenges of the phase are expired first. The ranks are the
 --       players' places in the stage standings (computed by the app: the standings are not SQL).
---   format_challenge_respond(challenge, player, accept)
---       Only the defender, only while open. Accept inserts a `scheduled` match (challenger = player 1) into the phase's
---       highest round that is not completed. A response after `expires_at` stores `expired` and returns that row (the app
+--   format_challenge_respond(season, challenge, player, accept)
+--       Only the defender, only while open; a challenge id of another league is challenge_not_found. Accept inserts a
+--       `scheduled` match (challenger = player 1) into the phase's highest round that is not completed. A response after `expires_at` stores `expired` and returns that row (the app
 --       raises challenge_expired; the status is kept, which a RAISE would roll back).
---   format_challenge_cancel(challenge, player)
---       The challenger (player NULL = an admin acting for them) withdraws an open challenge.
+--   format_challenge_cancel(season, challenge, player)
+--       The challenger (player NULL = an admin acting for them) withdraws an open challenge of that league: a challenge
+--       id of another league is challenge_not_found, so an admin route scoped to one league cannot reach another's.
 --   format_challenges_expire(season)
 --       Marks every open challenge past `expires_at` (of one league, or of all when NULL) expired; returns how many.
 --
@@ -26,7 +27,8 @@
 -- challenge_not_defender, challenge_not_challenger, challenge_not_open (DETAIL {"status"}).
 --
 -- format_checks.source gains 'pairing_forbidden' (a filtered round paired or dropped pairs the filter rejects) and
--- 'deadline_missed' (a deadline policy fired for a missed match, team or action).
+-- 'deadline_missed' (a deadline policy fired for a missed match, team or action) and 'team_audit' (a played team broke
+-- the stage's team rules, differs from the replay, or could not be audited).
 --
 -- League recycle bin: format_challenges is owned (season_id = $1) and cascades with the league. It points at tournaments
 -- (the phase), players and matches, so it restores after the matches (step 109). Deleting a match keeps the challenge
@@ -67,7 +69,7 @@ COMMENT ON TABLE public.format_challenges IS
 
 ALTER TABLE public.format_checks DROP CONSTRAINT format_checks_source_check;
 ALTER TABLE public.format_checks ADD CONSTRAINT format_checks_source_check CHECK (
-  source IN ('unresolved_outcome', 'standings_tie', 'pairing_rematch', 'pairing_forbidden', 'deadline_missed', 'expr')
+  source IN ('unresolved_outcome', 'standings_tie', 'pairing_rematch', 'pairing_forbidden', 'deadline_missed', 'team_audit', 'expr')
 );
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -164,7 +166,13 @@ BEGIN
   RETURN v_row;
 END $$;
 
-CREATE OR REPLACE FUNCTION public.format_challenge_respond(p_challenge_id uuid, p_player uuid, p_accept boolean)
+-- An earlier revision of this file defined respond (challenge, player, accept) and cancel (challenge, player), which
+-- found a challenge by id alone. A new argument is an overload, not a replacement, so the old signatures (and their
+-- service_role grants) are dropped explicitly.
+DROP FUNCTION IF EXISTS public.format_challenge_respond(uuid, uuid, boolean);
+DROP FUNCTION IF EXISTS public.format_challenge_cancel(uuid, uuid);
+
+CREATE OR REPLACE FUNCTION public.format_challenge_respond(p_season_id uuid, p_challenge_id uuid, p_player uuid, p_accept boolean)
 RETURNS public.format_challenges
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
@@ -176,7 +184,7 @@ BEGIN
   IF p_accept IS NULL THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'challenge')::text;
   END IF;
-  SELECT * INTO v_row FROM public.format_challenges WHERE id = p_challenge_id FOR UPDATE;
+  SELECT * INTO v_row FROM public.format_challenges WHERE id = p_challenge_id AND season_id = p_season_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'challenge_not_found' USING ERRCODE = 'P0001';
   END IF;
@@ -214,12 +222,12 @@ BEGIN
   RETURN v_row;
 END $$;
 
-CREATE OR REPLACE FUNCTION public.format_challenge_cancel(p_challenge_id uuid, p_player uuid)
+CREATE OR REPLACE FUNCTION public.format_challenge_cancel(p_season_id uuid, p_challenge_id uuid, p_player uuid)
 RETURNS public.format_challenges
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_row public.format_challenges;
 BEGIN
-  SELECT * INTO v_row FROM public.format_challenges WHERE id = p_challenge_id FOR UPDATE;
+  SELECT * INTO v_row FROM public.format_challenges WHERE id = p_challenge_id AND season_id = p_season_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'challenge_not_found' USING ERRCODE = 'P0001';
   END IF;
@@ -247,15 +255,15 @@ END $$;
 REVOKE ALL ON FUNCTION
   public.format__open_round(uuid),
   public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer),
-  public.format_challenge_respond(uuid, uuid, boolean),
-  public.format_challenge_cancel(uuid, uuid),
+  public.format_challenge_respond(uuid, uuid, uuid, boolean),
+  public.format_challenge_cancel(uuid, uuid, uuid),
   public.format_challenges_expire(uuid)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION
   public.format__open_round(uuid),
   public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer),
-  public.format_challenge_respond(uuid, uuid, boolean),
-  public.format_challenge_cancel(uuid, uuid),
+  public.format_challenge_respond(uuid, uuid, uuid, boolean),
+  public.format_challenge_cancel(uuid, uuid, uuid),
   public.format_challenges_expire(uuid)
   TO service_role;
 
@@ -263,10 +271,10 @@ COMMENT ON FUNCTION public.format__open_round(uuid) IS
   'Internal: the highest round of a phase that is not completed (id, round_number), or no row.';
 COMMENT ON FUNCTION public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer) IS
   'Creates a challenge in the phase''s open round under a per-phase lock, enforcing rank_range, max_open, the cooldown and one open challenge per pair. Raises the challenge_* codes (P0001).';
-COMMENT ON FUNCTION public.format_challenge_respond(uuid, uuid, boolean) IS
-  'The defender accepts (a scheduled match is inserted into the open round) or declines an open challenge. After expires_at it stores and returns status expired.';
-COMMENT ON FUNCTION public.format_challenge_cancel(uuid, uuid) IS
-  'The challenger (or an admin, player NULL) withdraws an open challenge.';
+COMMENT ON FUNCTION public.format_challenge_respond(uuid, uuid, uuid, boolean) IS
+  'The defender accepts (a scheduled match is inserted into the open round) or declines an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired.';
+COMMENT ON FUNCTION public.format_challenge_cancel(uuid, uuid, uuid) IS
+  'The challenger (or an admin, player NULL) withdraws an open challenge of the given league; a challenge of another league is challenge_not_found.';
 COMMENT ON FUNCTION public.format_challenges_expire(uuid) IS
   'Marks open challenges past expires_at expired, for one league or (NULL) all; returns how many. Called by the cron pass.';
 

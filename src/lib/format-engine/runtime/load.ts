@@ -18,6 +18,7 @@ import type { EnvBase } from './expr-env';
 import { buildRuntimeState } from './state';
 import type { TunableIssue } from './tunables';
 import type { KitRuntimeState } from './types';
+import type { MaskContext } from './views';
 
 export interface KitPhaseInfo {
   id: string;
@@ -42,8 +43,9 @@ export function rosterOf(ctx: Pick<KitContext, 'phases'>, stageKey?: string): st
   return [...new Set(phases.flatMap((phase) => phase.members))].sort();
 }
 
-export function phaseOfStageKey(ctx: Pick<KitContext, 'phases'>, stageKey: string): KitPhaseInfo | undefined {
-  return ctx.phases.find((phase) => phase.stage.key === stageKey);
+/** Every phase of a stage key: one, or one per group for a `foreach_group` stage. */
+export function phasesOfStageKey(ctx: Pick<KitContext, 'phases'>, stageKey: string): KitPhaseInfo[] {
+  return ctx.phases.filter((phase) => phase.stage.key === stageKey);
 }
 
 export function phaseById(ctx: Pick<KitContext, 'phases'>, phaseId: string): KitPhaseInfo | undefined {
@@ -76,3 +78,18 @@ export async function loadFreshKitContext(seasonId: string): Promise<KitContext 
 }
 
 export const loadKitContext = cache(loadFreshKitContext);
+
+/**
+ * What the masks of the admin reads need (`MaskContext`) for a league with an attached format on ANY engine, or null (no
+ * format). `loadFreshKitContext` is null for `legacy` and `shadow`, but the checks and adjustments a kit run wrote survive
+ * an engine switch, so a read of them must still know who plays and which relations are hidden: otherwise switching the
+ * engine would lift the masks without the audited unmask.
+ */
+export async function loadMaskContext(seasonId: string): Promise<MaskContext | null> {
+  const format = await getSeasonFormat(seasonId);
+  if (format === null) return null;
+  const [phaseRows, runtime] = await Promise.all([getKitPhases(seasonId), getFormatRuntime(seasonId)]);
+  const members = await getPhaseMembers(phaseRows.map((row) => row.id));
+  const { state } = buildRuntimeState(format.spec, runtime, { tunables: format.tunables as Json, amendments: format.amendments as Json });
+  return { def: format.spec, state, phases: phaseRows.map((row) => ({ members: members.filter((m) => m.tournament_id === row.id).map((m) => m.player_id) })) };
+}

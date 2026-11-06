@@ -28,6 +28,11 @@ export interface KitStageMetrics {
   placements: StandingsPlacement[];
   /** `attr.*`, `tunable.*`, `track.*` per player id. */
   playerRefs: Record<string, Record<string, ExprValue>>;
+  /**
+   * What `rel()` answers true for in a metric, per relation key: only links whose two sides anybody may see
+   * (`publicLinkPairs`). Absent when no metric calls `rel()` or no link is public.
+   */
+  relations?: Record<string, [string, string][]>;
 }
 
 export interface KitStandingsData {
@@ -46,6 +51,10 @@ export interface KitStandingsData {
   adjustments?: Record<string, Record<string, number>>;
   /** Custom metrics per phase id; absent when the format defines none that the phase's stage uses. */
   metrics?: Record<string, KitStageMetrics>;
+  /** Seed per phase id and player id (`tournament_participants.seed`); absent unless a stage ranks by or shows `seed`. */
+  seeds?: Record<string, Record<string, number>>;
+  /** `player_ratings.rating` per player id; absent unless a stage ranks by or shows `rating`. */
+  ratings?: Record<string, number>;
 }
 
 /** Whether a standings call of a league should rank with the kit. */
@@ -77,6 +86,8 @@ export function kitForPhase(kit: KitStandingsData | null | undefined, phaseId: s
     ...(kit.manualOrder?.[phaseId] ? { manualOrder: { [phaseId]: kit.manualOrder[phaseId] } } : {}),
     ...(kit.adjustments?.[phaseId] ? { adjustments: { [phaseId]: kit.adjustments[phaseId] } } : {}),
     ...(kit.metrics?.[phaseId] ? { metrics: { [phaseId]: kit.metrics[phaseId] } } : {}),
+    ...(kit.seeds?.[phaseId] ? { seeds: { [phaseId]: kit.seeds[phaseId] } } : {}),
+    ...(kit.ratings ? { ratings: kit.ratings } : {}),
   };
 }
 
@@ -142,7 +153,11 @@ export function kitStandings(
       coinFlips: kit.coinFlips[phase],
       manualOrder: kit.manualOrder?.[phase],
       pointAdjustments: kit.adjustments?.[phase],
-      ...(metrics ? { metricDefs: metrics.defs, placements: metrics.placements, playerRefs: metrics.playerRefs } : {}),
+      seeds: kit.seeds?.[phase],
+      ratings: kit.ratings,
+      ...(metrics
+        ? { metricDefs: metrics.defs, placements: metrics.placements, playerRefs: metrics.playerRefs, relations: metrics.relations }
+        : {}),
     });
   }
   const first = Object.values(kit.stages)[0];

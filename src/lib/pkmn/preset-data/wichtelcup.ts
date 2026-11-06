@@ -63,9 +63,63 @@ const Z_CRYSTALS_AND_MEGA_STONES = [
   'Zeraorite', 'Zygardite',
 ] as const;
 
+/**
+ * Items that change a pool species into a forme the pool does not list (Primal Groudon, the Origin formes). The cup allows
+ * only "base form" entries, and the allowlist alone cannot see an in-battle or item-forced change, so the items are banned.
+ */
+const FORME_ITEMS = ['Red Orb', 'Adamant Crystal', 'Lustrous Globe'] as const;
+
+/**
+ * "Rayquaza (base form; no Mega)": Mega Rayquaza needs no Mega Stone, only Dragon Ascent, which is why the move is banned
+ * here (the team check cannot see a battle action). The Mega Rayquaza Clause (clausesForTier) says the same in battle.
+ */
+const MEGA_RAYQUAZA_MOVES = ['Dragon Ascent'] as const;
+
 export const WICHTELCUP_BANS: RuleNames = {
   pokemon: [],
-  moves: [],
-  items: ['Light Clay', ...Z_CRYSTALS_AND_MEGA_STONES],
+  moves: [...MEGA_RAYQUAZA_MOVES],
+  items: ['Light Clay', ...FORME_ITEMS, ...Z_CRYSTALS_AND_MEGA_STONES],
   abilities: ['Moody', 'Snow Cloak'],
+};
+
+/** The six primary roles of the junk-gift pool (rules text, section 7). */
+export type WichtelcupRole = 'hazard_removal' | 'hazard_setter' | 'wall_stall' | 'support' | 'weather_setter' | 'attacker';
+
+/**
+ * The reviewed primary role of every junk-gift species (rules text, section 7: exactly one per species, 4 + 6 + 6 + 5 + 3 + 6).
+ * Only the primary role is binding: a giver picks two junk gifts with different primary roles. The secondary roles of the
+ * text are non-binding notes and are not transcribed. Keyed by the same display names as `WICHTELCUP_JUNK`, so a species
+ * missing here is a compile error.
+ */
+export const WICHTELCUP_JUNK_ROLES: Readonly<Record<(typeof WICHTELCUP_JUNK)[number], WichtelcupRole>> = {
+  Bergmite: 'hazard_removal',
+  'Mr. Mime-Galar': 'hazard_removal',
+  Prinplup: 'hazard_removal',
+  Staryu: 'hazard_removal',
+  Delibird: 'hazard_setter',
+  Sudowoodo: 'hazard_setter',
+  Swinub: 'hazard_setter',
+  Snorunt: 'hazard_setter',
+  Rolycoly: 'hazard_setter',
+  Kricketune: 'hazard_setter',
+  Bronzor: 'wall_stall',
+  Sealeo: 'wall_stall',
+  Wooloo: 'wall_stall',
+  Spheal: 'wall_stall',
+  Phantump: 'wall_stall',
+  Milcery: 'wall_stall',
+  Chingling: 'support',
+  Litwick: 'support',
+  Mareep: 'support',
+  Impidimp: 'support',
+  Fidough: 'support',
+  Snover: 'weather_setter',
+  Amaura: 'weather_setter',
+  Castform: 'weather_setter',
+  'Darumaka-Galar': 'attacker',
+  Lampent: 'attacker',
+  Swirlix: 'attacker',
+  Cubchoo: 'attacker',
+  Stufful: 'attacker',
+  Stantler: 'attacker',
 };

@@ -111,3 +111,50 @@ describe('describeTeamRules', () => {
   });
 });
 
+describe('describeRuleset: level rules and the Showdown challenge', () => {
+  const levels = {
+    policy: 'exact' as const,
+    default: 50,
+    entries: [
+      { id: 'dialga', level: 90, status: 'approved' as const },
+      { id: 'palkia', level: 85, status: 'experimental' as const },
+    ],
+  };
+
+  it('has no levels section without level rules', () => {
+    expect(section(describeRuleset(rulesFromBans({ gen: 9 }), 'en', { presetName: null }), 'levels')).toBeUndefined();
+  });
+
+  it('writes the default, every entry with its status, and the note for experimental entries', () => {
+    const text = describeRuleset(rulesFromBans({ gen: 9, levels }), 'en', { presetName: null, nameOf: (_c, id) => id.toUpperCase() });
+    expect(text.sections.map((s) => s.id)).toEqual(['base', 'clauses', 'pokemon', 'moves', 'items', 'abilities', 'constraints', 'levels', 'notes']);
+    expect(section(text, 'levels')?.lines).toEqual([
+      'Pokémon default to exactly level 50. A missing Level line means level 100.',
+      'DIALGA: exactly level 90 (approved).',
+      'PALKIA: exactly level 85 (experimental).',
+      'Experimental entries are shown for review but are not enforced until approved.',
+    ]);
+  });
+
+  it('writes the maximum policy, in German too, and no experimental note when all entries are approved', () => {
+    const max = { policy: 'max' as const, default: 100, entries: [{ id: 'dialga', level: 90, status: 'approved' as const }] };
+    const en = describeRuleset(rulesFromBans({ gen: 9, levels: max }), 'en', { presetName: null });
+    expect(section(en, 'levels')?.lines).toEqual([
+      'Pokémon default to a maximum level of 100. A missing Level line means level 100.',
+      'dialga: maximum level 90 (approved).',
+    ]);
+    const de = describeRuleset(rulesFromBans({ gen: 9, levels: max }), 'de', { presetName: null });
+    expect(section(de, 'levels')?.lines).toHaveLength(2);
+    expect(section(de, 'levels')?.lines[0]).toContain('100');
+  });
+
+  it('carries the Showdown challenge, with the forme facts a caller supplies', () => {
+    const rules = rulesFromBans({ gen: 9, universe: 'national', allow: { pokemon: ['rayquaza'] } });
+    expect(describeRuleset(rules, 'en', { presetName: null }).showdownChallenge).toBe('gen9nationaldexag @@@ -All Pokemon, +pokemon:rayquaza');
+    const withFormes = describeRuleset(rules, 'en', {
+      presetName: null,
+      challengeSpecies: (id) => (id === 'rayquaza' ? { cosmeticOf: null, formes: ['rayquazamega'] } : null),
+    });
+    expect(withFormes.showdownChallenge).toBe('gen9nationaldexag @@@ -All Pokemon, +pokemon:rayquaza, -pokemon:rayquazamega');
+  });
+});

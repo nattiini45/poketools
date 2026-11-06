@@ -201,6 +201,14 @@ export default {
       cascadeMessage: '{cascade} Then the bracket will be rebuilt from current seeds. This cannot be undone.',
       cascadeConfirm: 'Reset and Regenerate',
     },
+    /** The audited override of the first-round guard (409 `format_not_ready`); `{reasons}` joins the sentences below. */
+    forceStart: {
+      title: 'Start anyway?',
+      message: '{reasons} Starting anyway is recorded in the audit log.',
+      confirm: 'Start anyway',
+      relationUndrawn: 'The draw the format needs has not been made yet. Players without a link get nothing for good.',
+      actionIncomplete: 'Some players still owe an action the format asks for.',
+    },
     deleteDialog: {
       title: 'Delete Round',
       message:

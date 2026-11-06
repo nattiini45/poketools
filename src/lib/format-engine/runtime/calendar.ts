@@ -65,6 +65,27 @@ export function roundOpensAt(calendar: StageCalendar, round: number, clock: Cale
   );
 }
 
+/** The highest round `calendarRoundAt` answers: the round number the API accepts. */
+const MAX_CALENDAR_ROUND = 500;
+
+/**
+ * The round the calendar is in at `now`: the number of rounds that have opened (round 1 before the first one does), or
+ * null when the calendar cannot be read (no start date, bad text). Round openings only move forward, so this is a binary
+ * search over `roundOpensAt`.
+ */
+export function calendarRoundAt(calendar: StageCalendar, clock: CalendarClock, now: Date): number | null {
+  if (roundOpensAt(calendar, 1, clock) === null) return null;
+  let low = 1;
+  let high = MAX_CALENDAR_ROUND;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    const opens = roundOpensAt(calendar, mid, clock);
+    if (opens !== null && opens.getTime() <= now.getTime()) low = mid;
+    else high = mid - 1;
+  }
+  return low;
+}
+
 /** The deadline of round `round`: its opening plus the window. */
 export function roundDeadlineAt(calendar: StageCalendar, round: number, clock: CalendarClock): Date | null {
   const opens = roundOpensAt(calendar, round, clock);
@@ -77,12 +98,19 @@ export function markAt(calendar: StageCalendar, mark: CalendarMark, clock: Calen
   return opens === null ? null : new Date(opens.getTime() + mark.offset_hours * HOUR_MS);
 }
 
-/** The marks whose instant has come, in calendar order. A calendar that cannot be read has none. */
+/**
+ * The marks whose instant has come, in calendar order: by instant, marks at the same instant in declaration order.
+ * Sorted here because the declaration order is the author's (a fork may list `gifts_close` before `gifts_open`), and a
+ * cron pass that fires several due marks at once must replay them chronologically: an `open_action` that ran after the
+ * `lock_action` of a later mark would reopen a window for good. A calendar that cannot be read has none.
+ */
 export function dueMarks(calendar: StageCalendar, clock: CalendarClock, now: Date): CalendarMark[] {
-  return calendar.marks.filter((mark) => {
+  const due: { mark: CalendarMark; at: number; index: number }[] = [];
+  calendar.marks.forEach((mark, index) => {
     const at = markAt(calendar, mark, clock);
-    return at !== null && at.getTime() <= now.getTime();
+    if (at !== null && at.getTime() <= now.getTime()) due.push({ mark, at: at.getTime(), index });
   });
+  return due.sort((a, b) => a.at - b.at || a.index - b.index).map((entry) => entry.mark);
 }
 
 /**

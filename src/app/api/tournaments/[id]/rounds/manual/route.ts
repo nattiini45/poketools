@@ -14,6 +14,14 @@ import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
 import { assertLegacyEliminationRoundSettled } from '@/lib/tournament/previous-round-guard';
 import { expireTournamentReads } from '@/lib/revalidation';
+import {
+  announceKitRound,
+  assertPhaseOpenForRounds,
+  assertPhaseReadyForFirstRound,
+  fillKitRoundDeadline,
+  loadKitPhaseOfTournament,
+  wantsForcedStart,
+} from '@/lib/format-engine/route-guards';
 import type { ApiResult } from '@/types/api';
 import type { Round } from '@/types/round';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -26,12 +34,14 @@ interface RouteParams {
  * POST /api/tournaments/[id]/rounds/manual
  *
  * Admin: Create a round with manually specified matchups.
- * Bypasses the pairing algorithm entirely.
+ * Bypasses the pairing algorithm entirely. The round of a kit league's phase is written like a generated one: a stage
+ * that reached its end is refused (409 `rounds_stage_ended`), the stage calendar gives the round its deadline and the
+ * format reacts (`stage_start` for the first round, `round_start`).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireResourceAdmin('tournament', id);
+    const admin = await requireResourceAdmin('tournament', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_TOURNAMENT_ID');
     if (invalidId) return invalidId;
 
@@ -80,6 +90,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 409 }
       );
     }
+
+    // A custom league without an attached format cannot start; a kit phase whose stage reached its end takes no round.
+    const kitPhase = await loadKitPhaseOfTournament(tournament);
+    await assertPhaseOpenForRounds(tournament, kitPhase);
+    // The first round waits for the format's own set-up (a draw, the actions players owe); an admin may force it. The
+    // forced start is audited once the round is written (`announceKitRound`), not before the request can still be refused.
+    const forcedStart = await assertPhaseReadyForFirstRound(tournament, kitPhase, {
+      force: wantsForcedStart(request),
+      actor: { id: admin.playerId, name: admin.name },
+    });
 
     // 3. Validate current round is completed (if any)
     //    Round Robin pairings are deterministic, so skip this check for RR.
@@ -217,7 +237,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const roundBestOf =
       body.best_of ?? tournament.bo_overrides[roundName] ?? tournament.best_of_default;
 
-    const round = await createRound({
+    let round = await createRound({
       tournament_id: id,
       name: roundName,
       round_number: nextRoundNumber,
@@ -245,7 +265,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         current_round: nextRoundNumber,
       });
     }
+    round = await fillKitRoundDeadline(tournament, kitPhase, round);
     expireTournamentReads(id, tournament.season_id);
+    await announceKitRound(tournament, kitPhase, { roundNumber: nextRoundNumber }, tournament.status === 'upcoming', forcedStart);
 
     return NextResponse.json<ApiResult<Round>>(
       { success: true, data: round },

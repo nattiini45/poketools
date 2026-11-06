@@ -5,14 +5,43 @@
  */
 import 'server-only';
 
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { logger } from '@/lib/logger';
 import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import { getKitPhases } from '@/lib/supabase/queries/format-engine';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 
+const TAG = 'format-engine/auto-advance';
+
 export interface AutoAdvanceResult {
   target_phase_id: string;
   enrolled_count: number;
+}
+
+export interface AutoAdvanceTargetFailure {
+  target_phase_id: string;
+  error: unknown;
+}
+
+/**
+ * One or more targets of an `auto` advance failed. The other targets were still advanced: `results` lists them, so the
+ * caller expires their caches and audits them although the run as a whole failed.
+ */
+export class AutoAdvanceError extends Error {
+  constructor(
+    readonly results: AutoAdvanceResult[],
+    readonly failures: AutoAdvanceTargetFailure[],
+  ) {
+    super(`auto advance failed for ${failures.length} target phase(s); ${results.length} advanced`, { cause: failures[0]?.error });
+    this.name = 'AutoAdvanceError';
+  }
+
+  /** The code of the first failure when it is a user-facing one (the enrollment guard's refusals). */
+  get code(): string | undefined {
+    const first = this.failures[0]?.error;
+    return first instanceof UserFacingError && first.code ? first.code : undefined;
+  }
 }
 
 /** The phases the `auto` edges of a kit league lead into from `sourcePhaseId`; empty for any other league. */
@@ -29,16 +58,26 @@ export async function autoAdvanceTargets(seasonId: string, sourcePhaseId: string
 
 /**
  * Runs every `auto` edge out of a phase that just completed into a target that has not started. A target that is
- * already running keeps its players (the enrollment guard refuses it). Errors propagate: the caller logs them and
- * the admin advances by hand (a `manual_list` edge always needs the admin's list).
+ * already running keeps its players (the enrollment guard refuses it). A target that fails does not stop the others:
+ * every target is tried, then an `AutoAdvanceError` carries the targets that advanced and the ones that did not
+ * (each failure is logged here with its original error). The caller reports it and the admin advances the failed
+ * targets by hand (a `manual_list` edge always needs the admin's list). Errors before the first target (the format
+ * or the phases cannot be read) propagate unchanged.
  */
 export async function runAutoAdvance(seasonId: string, sourcePhaseId: string): Promise<AutoAdvanceResult[]> {
   const out: AutoAdvanceResult[] = [];
+  const failures: AutoAdvanceTargetFailure[] = [];
   for (const targetId of await autoAdvanceTargets(seasonId, sourcePhaseId)) {
-    const target = await getTournamentById(targetId);
-    if (!target || target.status !== 'upcoming') continue;
-    const result = await syncStandingsEnrollment(seasonId, targetId, { source_phase_id: sourcePhaseId });
-    out.push({ target_phase_id: targetId, enrolled_count: result.enrolled_count });
+    try {
+      const target = await getTournamentById(targetId);
+      if (!target || target.status !== 'upcoming') continue;
+      const result = await syncStandingsEnrollment(seasonId, targetId, { source_phase_id: sourcePhaseId });
+      out.push({ target_phase_id: targetId, enrolled_count: result.enrolled_count });
+    } catch (error) {
+      logger.error(TAG, 'auto advance failed for a target phase', { seasonId, sourcePhaseId, targetId, error });
+      failures.push({ target_phase_id: targetId, error });
+    }
   }
+  if (failures.length > 0) throw new AutoAdvanceError(out, failures);
   return out;
 }

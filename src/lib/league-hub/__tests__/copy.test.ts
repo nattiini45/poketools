@@ -159,6 +159,11 @@ describe('leagueHubCopy', () => {
     expect(de.links.draft).toBe('Draft-Raum');
     expect(en.links.draft).toBe('Draft room');
   });
+
+  it('labels the player page link of a custom league in both languages', () => {
+    expect(en.links.play).toBe('Your moves');
+    expect(de.links.play).toBe('Deine Aktionen');
+  });
 });
 
 describe('hubSharedLabels', () => {

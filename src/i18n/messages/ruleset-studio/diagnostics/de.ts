@@ -9,6 +9,7 @@ export default defineDe<typeof en>()({
     items: 'Items',
     abilities: 'Fähigkeiten',
     clauses: 'Klauseln',
+    levels: 'Level-Regeln',
   },
   code: {
     invalid_structure: 'Das Dokument hat ein Strukturproblem: {issue}.',

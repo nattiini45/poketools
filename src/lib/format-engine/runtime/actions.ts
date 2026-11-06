@@ -6,7 +6,13 @@
  *
  * Window: the flag `action:<id>` is `"locked"` (closed), `"open"` (open) or absent, in which case the action is open
  * unless its window names an `opens_on` event that has not fired. An admin opens or locks by hand through the same flag.
- * Pure and client-safe.
+ *
+ * Audience: a player picks only from what they may see. `validateActionSubmission` takes `audience: 'player'` by default,
+ * and then a step whose pool the player may not see (a domain with `visibility: 'admins'`, or a `when_unlocked` domain
+ * that is still locked) is answered with `domain_locked` ALONE and no per-pick check at all: a pick is never told that
+ * it is, or is not, a member of a hidden pool (`item_outside_domain`, `where_false`, `resource_item_taken` and the rest
+ * would otherwise let a player probe the pool id by id). The system (the deadline pick of the cron, which draws from the
+ * full list) passes `audience: 'system'` and gets the full per-pick checks. Pure and client-safe.
  */
 import { evaluate } from '@/lib/format-kit/expr/eval';
 import type { DomainEntry, FormatDefinition, PlayerActionRule } from '@/lib/format-kit/types';
@@ -73,6 +79,14 @@ export function resolveActionTarget(
   return link === undefined ? { ok: false } : { ok: true, target: link.to };
 }
 
+/** Who is picking: a `player` sees what `visibleEntries` lets them, the `system` (a deadline pick) the whole list. */
+export type ActionAudience = 'player' | 'system';
+
+export interface ValidateActionOptions {
+  /** Default `player`. */
+  audience?: ActionAudience;
+}
+
 export function validateActionSubmission(
   def: FormatDefinition,
   actionId: string,
@@ -81,7 +95,9 @@ export function validateActionSubmission(
   state: KitRuntimeState,
   roster: readonly string[],
   seed = '',
+  options: ValidateActionOptions = {},
 ): ActionValidation {
+  const audience: ActionAudience = options.audience ?? 'player';
   const rule = findAction(def, actionId);
   if (rule === null) return { ok: false, issues: [{ code: 'action_unknown' }] };
   const issues: ActionIssue[] = [];
@@ -119,7 +135,11 @@ export function validateActionSubmission(
       issues.push({ code: 'domain_unknown', step: index });
       return;
     }
-    if (!domain.unlocked) issues.push({ code: 'domain_locked', step: index });
+    // A pool the player may not see (an `admins` domain, or a `when_unlocked` one that is still locked) is refused with
+    // `domain_locked` alone: no per-pick answer, so the refusal never says which ids belong to the hidden pool.
+    const hiddenPool = audience === 'player' && (domain.visibility === 'admins' || (domain.visibility === 'when_unlocked' && !domain.unlocked));
+    if (hiddenPool || !domain.unlocked) issues.push({ code: 'domain_locked', step: index });
+    if (hiddenPool) return;
     const entries = new Map<string, DomainEntry>(domain.entries.map((e) => [e.id, e]));
     const distinct = step.distinct_attr === undefined ? undefined : attributes.get(step.distinct_attr);
     const seen = new Set<string>();

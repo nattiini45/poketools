@@ -36,6 +36,8 @@ export default defineDe<typeof en>()({
     reattachBody:
       'Beim erneuten Anhängen wird das aktuelle Format ersetzt. Phasen, die in beiden Versionen vorkommen, bleiben erhalten; Phasen, die die neue Version nicht mehr hat, werden entfernt.',
     reattachConfirm: 'Neu anhängen',
+    clearTitle: 'Formatdaten der Liga löschen?',
+    clearConfirm: 'Löschen und fortfahren',
     pickerLabel: 'Veröffentlichtes Format auswählen',
     pickerPlaceholder: 'Format auswählen …',
     group: {
@@ -152,12 +154,23 @@ export default defineDe<typeof en>()({
       },
       waiting: 'Die Regelwerke werden geprüft, sobald ein Format angehängt ist.',
     },
+    calendar_start: {
+      met: 'Die Liga hat ein Startdatum, der Kalender des Formats kann laufen.',
+      unmet: {
+        zero: 'Lege das Startdatum der Liga fest. Der Kalender des Formats beginnt damit: Ohne Datum öffnet sich keine Runde und keine Kalendermarke löst aus.',
+        one: '{count} Kalendermarke ist schon fällig, bevor die Liga startet. Fällige Marken lösen beim nächsten Durchlauf alle zusammen aus, in Kalenderreihenfolge. Verschiebe das Startdatum, wenn du das nicht willst.',
+        other:
+          '{count} Kalendermarken sind schon fällig, bevor die Liga startet. Fällige Marken lösen beim nächsten Durchlauf alle zusammen aus, in Kalenderreihenfolge. Verschiebe das Startdatum, wenn du das nicht willst.',
+      },
+      waiting: 'Der Kalender wird geprüft, sobald ein Format angehängt ist.',
+    },
     action: {
       format_attached: 'Format anhängen',
       phases_created: 'Format öffnen',
       phases_manual: 'Phasen öffnen',
       roster_size: 'Teilnehmer öffnen',
       rulesets: 'Anderes Format wählen',
+      calendar_start: 'Einstellungen öffnen',
     },
   },
   status: {

@@ -17,7 +17,20 @@ import type { ApiErrorLike } from '@/i18n/api-errors';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-export type ApiOutcome<T> = { ok: true; data: T } | { ok: false; status: number; error: ApiErrorLike };
+/**
+ * `E` is the error shape of a route that answers with more than `{ error, code, params }` (a validation list, say); the
+ * default is the plain `ApiErrorLike`. A route's own members come from its `extras` hook (see `request`).
+ */
+export type ApiOutcome<T, E extends ApiErrorLike = ApiErrorLike> =
+  | { ok: true; data: T }
+  | { ok: false; status: number; error: E };
+
+/**
+ * Reads the route-specific members of a failed response body (`body.issues`, say) and returns only the ones that have
+ * the right type. It runs on a body of any shape, so it must check what it reads. It never overrides `error`, `code` or
+ * `params`: those come from the shared reader.
+ */
+export type ErrorExtras<E extends ApiErrorLike = ApiErrorLike> = (body: unknown) => Partial<E>;
 
 function defaultFetch(input: string, init?: RequestInit): Promise<Response> {
   return fetch(input, init);
@@ -33,7 +46,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** The `error`, `code` and `params` members of an API error body that have the right type (as `toApiErrorLike`). */
-export function errorLikeOf(body: unknown): ApiErrorLike {
+function baseErrorLikeOf(body: unknown): ApiErrorLike {
   if (!isRecord(body)) return {};
   const out: ApiErrorLike = {};
   if (typeof body.error === 'string') out.error = body.error;
@@ -48,9 +61,21 @@ export function errorLikeOf(body: unknown): ApiErrorLike {
   return out.error !== undefined || out.code !== undefined ? out : {};
 }
 
-/** The error of a failed response: the server's code and params, else a code derived from the status. */
-export function failureOf(response: Response, body: unknown): ApiErrorLike {
-  const parsed = errorLikeOf(body);
+/**
+ * The `error`, `code` and `params` members of an API error body that have the right type. An optional `extras` hook adds
+ * the route's own members to the result (it can never replace the three shared ones).
+ */
+export function errorLikeOf<E extends ApiErrorLike = ApiErrorLike>(body: unknown, extras?: ErrorExtras<E>): E {
+  const base = baseErrorLikeOf(body);
+  return (extras === undefined ? base : { ...extras(body), ...base }) as E;
+}
+
+/**
+ * The error of a failed response: the server's code and params, else a code derived from the status. The `extras`
+ * members of the body (see `errorLikeOf`) are kept on every branch.
+ */
+export function failureOf<E extends ApiErrorLike = ApiErrorLike>(response: Response, body: unknown, extras?: ErrorExtras<E>): E {
+  const parsed = errorLikeOf<E>(body, extras);
   if (parsed.code !== undefined && parsed.code !== null) return parsed;
   if (response.status === 401) return { ...parsed, code: 'unauthenticated' };
   if (response.status === 429) {
@@ -63,12 +88,17 @@ export function failureOf(response: Response, body: unknown): ApiErrorLike {
   return { ...parsed, code: 'unknown_error' };
 }
 
-export async function request<T>(
+/**
+ * Sends one request. `extras` (optional, last) reads the route's own members of a failed body into the error, for the
+ * routes whose failures carry more than a code (for example a list of validation issues); a success never calls it.
+ */
+export async function request<T, E extends ApiErrorLike = ApiErrorLike>(
   f: FetchLike | undefined,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
-): Promise<ApiOutcome<T>> {
+  extras?: ErrorExtras<E>,
+): Promise<ApiOutcome<T, E>> {
   const init: RequestInit = { method };
   if (body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' };
@@ -78,13 +108,13 @@ export async function request<T>(
   try {
     response = await (f ?? defaultFetch)(path, init);
   } catch {
-    return { ok: false, status: 0, error: { code: 'network_error' } };
+    return { ok: false, status: 0, error: { code: 'network_error' } as E };
   }
   const parsed: unknown = await response.json().catch(() => null);
   if (response.ok && isRecord(parsed) && (parsed as Envelope).success === true) {
     return { ok: true, data: (parsed as Envelope).data as T };
   }
-  return { ok: false, status: response.status, error: failureOf(response, parsed) };
+  return { ok: false, status: response.status, error: failureOf<E>(response, parsed, extras) };
 }
 
 // ─── Error classes ───────────────────────────────────────────────────────────────────────────────

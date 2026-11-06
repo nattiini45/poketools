@@ -59,7 +59,13 @@ describe.each(SUBJECTS)('%s', (_name, definition, result) => {
     ['en', en],
     ['de', de],
   ] as const)('renders cleanly in %s', (_locale, description) => {
-    const all = strings(description);
+    // A rule that is not a card (an event rule, a player action, a check, an adjustment) has no verification and no
+    // timing line: those two fields are empty by design.
+    const cards = new Set(definition.rules.filter((rule) => rule.kind === 'rule.custom').map((rule) => rule.id));
+    const all = strings({
+      ...description,
+      rules: description.rules.map((rule) => (cards.has(rule.id) ? rule : { ...rule, verify: undefined, when: undefined })),
+    });
     expect(all.length).toBeGreaterThan(10);
     for (const text of all) {
       expect(text, 'empty string').not.toBe('');
@@ -136,6 +142,19 @@ describe('coverage', () => {
     def.stages[1].ruleset = { kind: 'ruleset', id: '00000000-0000-4000-8000-000000000001' };
     def.views.push({ key: 'total', label: ltext('en', 'Total'), stages: ['league', 'playoffs'], metric: 'points', combine: 'sum' });
     expect(computeCoverage(def)).toEqual({ auto: 14, checked: 1, honor: 1, legacy: 0, total: 16 });
+  });
+
+  it('counts each team constraint as checked', () => {
+    const base = computeCoverage(classicLeague);
+    const def = clone(classicLeague);
+    def.stages[0].constraints = [
+      { kind: 'roster_size', min: 6, max: 6 },
+      { kind: 'tera', mode: 'banned' },
+    ] as unknown as typeof def.stages[0]['constraints'];
+    const withConstraints = computeCoverage(def);
+    expect(withConstraints.checked).toBe(base.checked + 2);
+    expect(withConstraints.auto).toBe(base.auto);
+    expect(withConstraints.total).toBe(base.total + 2);
   });
 
   it('counts a rule preset like a named ruleset', () => {

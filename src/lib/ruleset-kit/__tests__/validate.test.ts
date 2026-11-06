@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ltext } from '@/lib/studio-core/ltext';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
-import { MAX_IDS_PER_LIST, MAX_CUSTOM_RULES_CHARS } from '../limits';
+import { MAX_IDS_PER_LIST, MAX_CUSTOM_RULES_CHARS, MAX_LEVEL_ENTRIES } from '../limits';
 import { readRulesetIdentityTexts, validateRulesetDocument } from '../validate';
 
 const valid = () => structuredClone(newRulesetDocument('Spring OU', 'en', 'gen9ou')) as unknown as Record<string, unknown>;
@@ -12,6 +12,16 @@ function issuesOf(input: unknown): string[] {
 }
 
 describe('validateRulesetDocument', () => {
+  it('accepts MAX_LEVEL_ENTRIES level entries and rejects one more', () => {
+    const entriesOf = (count: number) => Array.from({ length: count }, (_, i) => ({ id: `mon${i}`, level: 50, status: 'approved' }));
+    const atCap = valid();
+    atCap.levels = { policy: 'max', default: 100, entries: entriesOf(MAX_LEVEL_ENTRIES) };
+    expect(issuesOf(atCap)).toEqual([]);
+    const over = valid();
+    over.levels = { policy: 'max', default: 100, entries: entriesOf(MAX_LEVEL_ENTRIES + 1) };
+    expect(issuesOf(over)).toEqual(['bad_levels@/levels/entries']);
+  });
+
   it('accepts a fresh document and returns an equal copy that shares no array with the input', () => {
     const input = valid();
     const result = validateRulesetDocument(input);

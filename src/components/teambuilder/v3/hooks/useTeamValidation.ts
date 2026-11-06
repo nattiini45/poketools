@@ -18,13 +18,15 @@ export function useTeamValidation(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Stable ref to rulesetId/seasonId/tournamentId so the effect only re-runs on team/dirty changes
+  // Stable ref to rulesetId/seasonId/tournamentId/matchId so the effect only re-runs on team/dirty changes
   const rulesetIdRef = useRef(state.rulesetId);
   const seasonIdRef = useRef(state.seasonId);
   const tournamentIdRef = useRef(state.tournamentId);
+  const matchIdRef = useRef(state.matchId);
   useEffect(() => { rulesetIdRef.current = state.rulesetId; }, [state.rulesetId]);
   useEffect(() => { seasonIdRef.current = state.seasonId; }, [state.seasonId]);
   useEffect(() => { tournamentIdRef.current = state.tournamentId; }, [state.tournamentId]);
+  useEffect(() => { matchIdRef.current = state.matchId; }, [state.matchId]);
 
   useEffect(() => {
     if (!state.dirty || !state.rulesetId) return;
@@ -49,6 +51,9 @@ export function useTeamValidation(
             ruleset_id: rulesetIdRef.current,
             ...(seasonIdRef.current ? { season_id: seasonIdRef.current } : {}),
             ...(tournamentIdRef.current ? { tournament_id: tournamentIdRef.current } : {}),
+            // A team built for a match is checked by the rules of that match's round (the API refuses a match_id
+            // without its tournament).
+            ...(tournamentIdRef.current && matchIdRef.current ? { match_id: matchIdRef.current } : {}),
           }),
           signal: abortRef.current.signal,
         });
@@ -68,7 +73,7 @@ export function useTeamValidation(
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-    // Re-run when team content or dirty flag changes; rulesetId/seasonId/tournamentId via refs
+    // Re-run when team content or dirty flag changes; rulesetId/seasonId/tournamentId/matchId via refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.team, state.dirty, dispatch]);
 }

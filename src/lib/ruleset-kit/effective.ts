@@ -199,7 +199,7 @@ export function diffResolved(from: ResolvedRules, to: ResolvedRules): RulesDiffe
       from.min_shared_type_pct !== to.min_shared_type_pct ||
       from.custom_rules !== to.custom_rules ||
       JSON.stringify(from.team_constraints) !== JSON.stringify(to.team_constraints) ||
-      JSON.stringify(from.levels) !== JSON.stringify(to.levels) ||
+      JSON.stringify(from.levels ?? null) !== JSON.stringify(to.levels ?? null) ||
       JSON.stringify(from.added_pokemon) !== JSON.stringify(to.added_pokemon),
   };
 }

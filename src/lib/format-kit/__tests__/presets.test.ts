@@ -18,13 +18,26 @@ function nodesOf(def: FormatDefinition): [PrimitiveKind, unknown][] {
     out.push([`pairing.${stage.pairing.kind}` as PrimitiveKind, stage.pairing]);
     if (stage.groups) out.push(['group.form', stage.groups]);
     for (const step of stage.rank) out.push([`rank.${step.kind === 'metric' ? 'metric' : step.kind}` as PrimitiveKind, step]);
+    for (const constraint of stage.constraints ?? []) out.push([`constraint.${constraint.kind}` as PrimitiveKind, constraint]);
+    if (stage.calendar) {
+      out.push(['time.schedule', stage.calendar]);
+      for (const deadline of stage.calendar.deadlines) out.push(['time.deadline_policy', deadline]);
+    }
+    if (stage.end_when) out.push(['stage.end_when', stage.end_when]);
   }
   for (const edge of def.edges) {
     out.push(['advance.rule', edge]);
     for (const select of edge.select) out.push([`advance.${select.kind}` as PrimitiveKind, select]);
   }
   for (const view of def.views) out.push(['standings.view', view]);
-  for (const rule of def.rules) out.push(['rule.custom', rule]);
+  for (const rule of def.rules) {
+    out.push([rule.kind, rule]);
+    if (rule.kind === 'rule.on_event') for (const effect of rule.effects) out.push(['effect.apply', effect]);
+  }
+  for (const attribute of def.attributes ?? []) out.push(['attr.define', attribute]);
+  for (const domain of def.domains ?? []) out.push(['domain.define', domain]);
+  for (const relation of def.relations ?? []) out.push(['relation.define', relation]);
+  for (const resource of def.resources ?? []) out.push(['resource.define', resource]);
   for (const section of def.text.sections) out.push(['text.rules', section]);
   out.push(['theme.hint', def.theme]);
   for (const legacy of def.modules) out.push(['module.legacy', legacy]);
@@ -34,7 +47,7 @@ function nodesOf(def: FormatDefinition): [PrimitiveKind, unknown][] {
 describe('presets', () => {
   it('has unique, slug-valid ids', () => {
     const ids = PRESETS.map((p) => p.id);
-    expect(ids).toEqual(['classic-league', 'cup', 'swiss-top-cut']);
+    expect(ids).toEqual(['classic-league', 'cup', 'swiss-top-cut', 'wichtelcup']);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(SLUG_PATTERN.test(id), id).toBe(true);
   });

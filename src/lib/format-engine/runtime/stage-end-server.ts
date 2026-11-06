@@ -7,6 +7,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Stage } from '@/lib/format-kit/types';
 import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { currentCompletionKeyOf } from './events';
 import { envBaseOf, loadFreshKitContext, phaseById, type KitContext, type KitPhaseInfo } from './load';
 import { evaluateEndWhen, roundsBoundReached, stageFactsOf, type StageFacts } from './stage-end';
 
@@ -15,17 +16,31 @@ export interface StageEndCheck {
   /** The code of the expression issue when the condition could not be evaluated. */
   issue?: string;
   facts: StageFacts;
-  /** Matches of the round named by the caller that are still open (0 when none was named). */
+  /**
+   * Matches of the round named by the caller that are still open (0 when none was named): not completed, or completed
+   * with a winner while their current `match_completed` event has not fired yet (the finalize is in flight, failed and
+   * waits for the heal, or the cron backfill has not reached it). The phase must not end before those effects exist.
+   */
   openInRound: number;
 }
 
-/** Null when the phase's stage has no `end_when`. `roundId` names the round whose open matches `openInRound` counts. */
+/**
+ * Null when the phase's stage has no `end_when`. `roundId` names the round whose open matches `openInRound` counts;
+ * `ctx` must have been loaded after the caller's own `match_completed` event fired, or that match counts as open.
+ */
 export async function checkStageEnd(ctx: KitContext, phase: KitPhaseInfo, roundId?: string): Promise<StageEndCheck | null> {
   const endWhen = phase.stage.end_when;
   if (endWhen === undefined) return null;
   const [rounds, matches] = await Promise.all([getRoundsByTournament(phase.id), getMatchesByTournament(phase.id)]);
   const facts = stageFactsOf(rounds, matches, phase.members.length);
-  const openInRound = roundId === undefined ? 0 : matches.filter((match) => match.round_id === roundId && match.status !== 'completed').length;
+  const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
+  const fired = new Set(ctx.state.firedEventKeys);
+  const openInRound =
+    roundId === undefined
+      ? 0
+      : matches.filter(
+          (match) => match.round_id === roundId && (match.status !== 'completed' || (match.winner_id !== null && !fired.has(keyOf(match.id)))),
+        ).length;
   const result = evaluateEndWhen(endWhen, facts, envBaseOf(ctx, `stage_end:${phase.stage.key}`));
   return { met: result.met, ...(result.issue !== undefined ? { issue: result.issue } : {}), facts, openInRound };
 }

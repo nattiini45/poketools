@@ -201,6 +201,13 @@ export default {
     levelApproved: 'approved',
     levelExperimental: 'experimental',
     noIssues: 'No issues found. Good to go!',
+    auditNote: 'This stage rule is advisory here and checked again after the match. Banned Pokémon, items and formes are not re-checked.',
+    advisoryNote: 'League rules are advisory here. Banned Pokémon, items and formes are not re-checked after the match.',
+    pools: {
+      title: 'Your pools this week',
+      domainUnlocked: '{pool}: open',
+      domainLocked: '{pool}: not open yet',
+    },
   },
   teamCard: {
     addToSlot: 'Add Pokémon to slot {n}',

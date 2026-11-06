@@ -3,10 +3,14 @@
  * turns one observation into the checks to open; each carries a dedupe key, so observing the same situation twice opens
  * one check (`format_check_open` ignores a key that exists). Keys:
  *
- * - unresolved outcome: `unresolved:<matchId>`
+ * - unresolved outcome: `unresolved:<matchId>:<completion generation>`
  * - standings tie: `tie:<stageKey>:<ids of the tied players, sorted, joined by ,>` (stage completed, chain ends in a decision match)
  * - pairing rematch: `rematch:<stageKey>:<round>`
- * - expression: `expr:<ruleId>:<player or match id>`
+ * - expression: `expr:<ruleId>:<player id>`, or `expr:<ruleId>:<match id>:<completion generation>` over a match
+ *
+ * A match-level key carries the completion generation of the match (`hooks.ts`, `completionGeneration`): a result that is
+ * reverted (reset, reopened, a game deleted or edited, a dispute reopened) advances it and closes the checks of the old
+ * one, so the next completion or dispute opens its own check instead of hitting an old, possibly decided, key.
  *
  * Pure and client-safe.
  */
@@ -32,10 +36,16 @@ export interface TieRow {
 }
 
 export type ChecksInput =
-  | { source: 'unresolved_outcome'; matchId: string; players: readonly string[] }
+  | { source: 'unresolved_outcome'; matchId: string; players: readonly string[]; generation: number }
   | { source: 'standings_tie'; stage: string; table: readonly TieRow[] }
   | { source: 'pairing_rematch'; stage: string; round: number; rematches: number }
-  | { source: 'expr'; of: 'player' | 'match'; subjects: readonly { id: string; ctx: EvalContext }[] };
+  | {
+      source: 'expr';
+      of: 'player' | 'match';
+      subjects: readonly { id: string; ctx: EvalContext }[];
+      /** The completion generation of the match; part of the key of a match-level check (0 when omitted). */
+      generation?: number;
+    };
 
 export interface ChecksPlan {
   checks: CheckPlan[];
@@ -61,7 +71,7 @@ export function planChecks(def: Pick<FormatDefinition, 'rules'>, input: ChecksIn
         add({
           source: input.source,
           rule_id: rule.id,
-          dedupe_key: `unresolved:${input.matchId}`,
+          dedupe_key: `unresolved:${input.matchId}:${input.generation}`,
           subject: { match_id: input.matchId, players: [...input.players] },
         });
         break;
@@ -104,7 +114,7 @@ export function planChecks(def: Pick<FormatDefinition, 'rules'>, input: ChecksIn
             add({
               source: input.source,
               rule_id: rule.id,
-              dedupe_key: `expr:${rule.id}:${subject.id}`,
+              dedupe_key: input.of === 'match' ? `expr:${rule.id}:${subject.id}:${input.generation ?? 0}` : `expr:${rule.id}:${subject.id}`,
               subject: { of: input.of, id: subject.id },
             });
           }

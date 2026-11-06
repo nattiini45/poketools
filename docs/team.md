@@ -10,7 +10,8 @@ src/lib/team/
 ├── check.server.ts  # The one server-side team check (checkTeam)
 ├── completed-match-lock.ts  # Teams linked to a completed match are immutable for non-admins
 ├── item-usage-cache.ts  # Expires the public cached reads built from a team roster
-├── kit-team-gate.ts  # Applies format-kit team constraints to the existing team-check verdict
+├── kit-team-gate.ts  # Advisory verdict of a kit league's team rules (adviseKitTeam, kitTeamVerdict); never refuses a team
+├── match-round.ts  # The round a match-bound team is judged at (match round, else the phase's current round)
 ├── page-loaders.ts, page-text.ts  # Library entry as a page renders it and the sets a visitor sees
 ├── public-team.ts  # Public team shape: the only team fields that may leave the server
 ├── showdown-set.ts  # Showdown paste text (always English)
@@ -23,6 +24,12 @@ src/lib/team/
 - **File**: `visibility.ts`
 - **Purpose**: Evaluate whether full team data should be visible
 - **Key Methods**: `canViewTeamPokemon()`, `filterTeamVisibility()`
+
+### Kit league team rules (advisory)
+- **File**: `kit-team-gate.ts` (the name is kept from the old hard gate)
+- **Behaviour (chosen for this release)**: in a custom-format league on the kit engine the stage's team rules are **advisory plus audited**. `POST /api/teams`, `PATCH /api/teams/[id]` and `POST /api/match-prep` never refuse a team for them (the old 400 `team_check_failed` is gone); the success body carries the typed field `team_check`: absent when the league has no kit rules or the team meets them, `{ status: 'unmet', verdict }` with the full `TeamValidationResult` (the client words it from the issue codes, no English prose rides in the envelope), or `{ status: 'unavailable' }` when the verdict could not be computed (logged with the original error through `adviseKitTeam`, which never throws, and never reported as "meets the rules"). `POST /api/validate-team` is unchanged except for the optional `match_id` and a 240 per minute rate limit; the teambuilder shows the same issues live.
+- **Round**: a match-bound team (`PATCH /api/teams/[id]` of a team linked to a match, `POST /api/match-prep`) is judged at its match's round; without a match the check uses the lowest of the latest generated round and the calendar round when the stage has a calendar.
+- **Audit**: after every completed match the engine audits the played teams against the stage's constraints and opens a `team_audit` review check for an admin when a side broke them, differs from the replay or could not be audited ([Format Kit](./format-kit.md#format-engine-and-runtime), Team rules, for the key, the reasons and the limits).
 
 ## Data Flows
 - **Input**: Team rows + viewer context
@@ -51,7 +58,7 @@ const visibleTeams = await filterTeamVisibility(teams, ctx);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/team/__tests__/` (9 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts` and `visibility.test.ts`; `private-team-fields.ts` is the shared leak assertion
+- **Test Files**: `src/lib/team/__tests__/` (10 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts` (the advisory verdict), `match-round.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts` and `visibility.test.ts`; `private-team-fields.ts` is the shared leak assertion
 - **Testing Approach**: Unit tests of every helper; the team API routes and pages run the leak assertion on their payloads.
 
 ## Related Modules

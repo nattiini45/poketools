@@ -16,6 +16,8 @@ import { USER_CHOICE_FIXES } from '../engine/fixes';
 import { classicLeague } from '../presets/classic-league';
 import { cup } from '../presets/cup';
 import { swissTopCut } from '../presets/swiss-top-cut';
+import { wichtelcup } from '../presets';
+import { wichtelcupDoc } from './fixtures/docs';
 import { fixtureDiagnostics, mutate, NEGATIVE_FIXTURES, rosterEnv } from './fixtures/negative';
 
 const codesOf = (input: unknown, env = CURRENT_ENV) => compile(input, env).diagnostics.map((d) => `${d.code}@${d.json_pointer}`);
@@ -26,10 +28,10 @@ const fixture = (id: string) => {
 };
 
 describe('diagnostic vocabulary', () => {
-  it('lists 97 distinct codes', () => {
-    expect(DIAGNOSTIC_CODES).toHaveLength(97);
+  it('lists 100 distinct codes', () => {
+    expect(DIAGNOSTIC_CODES).toHaveLength(100);
     expect(new Set(DIAGNOSTIC_CODES).size).toBe(DIAGNOSTIC_CODES.length);
-    expect(DIAGNOSTIC_SEVERITY.size).toBe(97);
+    expect(DIAGNOSTIC_SEVERITY.size).toBe(100);
   });
 
   it('has at least one negative fixture for every code, and none for an unknown code', () => {
@@ -294,5 +296,43 @@ describe('threshold expressions', () => {
 describe('fix catalog', () => {
   it('only the documented user-choice fixes may be empty', () => {
     expect(USER_CHOICE_FIXES).toEqual([]);
+  });
+});
+
+describe('constraint_source_hidden_domain', () => {
+  const hiddenCodes = (input: unknown) => compile(input).diagnostics.filter((d) => d.code === 'constraint_source_hidden_domain');
+
+  it('is an error: the advisory verdict of such a rule is an oracle of the hidden pool', () => {
+    expect(DIAGNOSTIC_SEVERITY.get('constraint_source_hidden_domain')).toBe('error');
+    const input = fixture('constraint-source-hidden-domain').input;
+    expect(compile(input).ok).toBe(false);
+  });
+
+  it('names the hidden domain of every count source that reads it, also inside any_of / not', () => {
+    const hidden = hiddenCodes(fixture('constraint-source-hidden-domain-in-not').input);
+    expect(hidden.map((d) => d.json_pointer)).toContain('/stages/0/constraints/4/source/source/sources/0/domain');
+    expect(hidden.every((d) => d.params.domain === 'normal')).toBe(true);
+  });
+
+  it('does not fire for a public or when_unlocked domain, nor for a resource that holds a hidden one', () => {
+    expect(hiddenCodes(wichtelcupDoc())).toEqual([]);
+    const resourceOnly = mutate(compile(wichtelcupDoc()).definition!, [{ op: 'replace', path: '/domains/1/visibility', value: 'admins' }]);
+    // new_year is read by two `domain` sources of the cup and by `distinct by role` of the ladder: only those fire, not the resource sources.
+    const pointers = hiddenCodes(resourceOnly).map((d) => d.json_pointer);
+    expect(pointers).toContain('/stages/0/constraints/9/source/domain');
+    expect(pointers.some((p) => p.includes('/resource'))).toBe(false);
+  });
+
+  it('does not flag a distinct-by-attr rule whose attribute no hidden domain carries', () => {
+    const input = mutate(compile(wichtelcupDoc()).definition!, [
+      { op: 'replace', path: '/domains/1/visibility', value: 'admins' },
+      { op: 'replace', path: '/domains/1/entries/0/attrs', value: [] },
+    ]);
+    expect(hiddenCodes(input).map((d) => d.json_pointer)).not.toContain('/stages/2/constraints/2/attr');
+  });
+
+  it('compiles the shipped Wichtelcup preset without that error', () => {
+    const result = compile(wichtelcup);
+    expect(result.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
   });
 });

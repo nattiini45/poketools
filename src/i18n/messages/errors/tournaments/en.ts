@@ -67,10 +67,11 @@ export default {
   rounds_round_robin_only: 'Generate-all-rounds is only supported for round_robin tournaments',
   rounds_all_generated: 'All rounds have already been generated',
   rounds_manual_pairing: 'This phase is paired by hand. Create its rounds in the manual round editor.',
-  rounds_pairing_unsupported: 'This phase uses a pairing kind that cannot generate rounds yet.',
   rounds_challenge_ladder:
     'This phase is a challenge ladder: its matches come from accepted challenges. Create its rounds in the manual round editor.',
   rounds_stage_ended: 'This phase has reached its end condition: no more rounds can be generated.',
+  format_not_ready:
+    'This phase cannot start its first round yet: a relation the format needs (for example a draw) has not been made, or players still owe an action. Fix it, or start anyway with force.',
   auto_advance_failed: 'The phase is completed, but moving players on to the next phase failed. Move them on by hand.',
   /** A warning, not an error: the round was generated. */
   swiss_rematches: {

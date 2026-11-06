@@ -34,6 +34,10 @@ vi.mock('@/lib/supabase/queries/season-groups', () => ({ getSeasonGroups: vi.fn(
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/lib/format-studio/attach', () => ({ assertSeasonFormatAttached: vi.fn() }));
 vi.mock('@/lib/format-engine/load', () => ({ loadKitPhase: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format-engine/runtime/load')>()),
+  loadFreshKitContext: vi.fn(),
+}));
 
 import { POST } from '@/app/api/tournaments/[id]/generate-all-rounds/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
@@ -43,10 +47,32 @@ import { createMatchBatch, getMatchesByTournament, getPairedMatchRecords } from 
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { loadKitPhase, type KitPhase } from '@/lib/format-engine/load';
+import { loadFreshKitContext } from '@/lib/format-engine/runtime/load';
+import { logAuditEvent } from '@/lib/audit/log';
 import type { Pairing, Stage } from '@/lib/format-kit/types';
 
 const ID = 'a5cb20ac-a127-482d-855d-d802e29185bc';
 const routeParams = { params: Promise.resolve({ id: ID }) };
+const forced = { url: 'https://example.test/api/tournaments/x/generate-all-rounds?force=true' } as NextRequest;
+
+/** A league whose action runs via the `santa` relation, drawn or not, with the checks the admin left open. */
+function santaContext(opts: { drawn?: boolean; openChecks?: number } = {}) {
+  const links = opts.drawn === true ? ['p1', 'p2', 'p3', 'p4'].map((from, i, all) => ({ relation: 'santa', from, to: all[(i + 1) % all.length], revealed: false })) : [];
+  const checks = Array.from({ length: opts.openChecks ?? 0 }, (_, i) => ({
+    id: `c-${i}`,
+    source: 'deadline_missed',
+    rule_id: 'deadline:cup:0',
+    dedupe_key: `deadline:cup:0:choose_gifts:p${i}`,
+    subject: { applies: 'action', action: 'choose_gifts', player_id: `p${i}` },
+    status: 'open',
+    note: null,
+  }));
+  return {
+    def: { rules: [{ kind: 'player.action', id: 'choose_gifts', via: 'santa' }] },
+    state: { links, checks },
+    phases: [{ id: 'ph-1', stage: { key: 'cup' }, members: ['p1', 'p2', 'p3', 'p4'] }],
+  } as never;
+}
 
 function phase(pairing: Pairing): KitPhase {
   const stage: Stage = {
@@ -62,7 +88,7 @@ function phase(pairing: Pairing): KitPhase {
     rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }],
     columns: [],
   };
-  return { engine: 'kit', seed: 'seed-0123456789', stage, outcomes: {} };
+  return { engine: 'kit', seed: 'seed-0123456789', stage, outcomes: {}, tableExtras: {} };
 }
 
 const group = (id: string, n: number, players: string[]) => ({
@@ -82,6 +108,7 @@ function written(): string[][] {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
+  vi.mocked(loadFreshKitContext).mockResolvedValue(null);
   vi.mocked(getTournamentById).mockResolvedValue({
     id: ID,
     name: 'League',
@@ -140,5 +167,45 @@ describe('generate-all-rounds on a kit phase', () => {
     expect(all.slice(1).flat().some((pair) => pair.includes('d') || pair.includes('e'))).toBe(false);
     // Three players play three rounds: one sits out each round.
     expect(rounds.every((round) => (round.bye_player_ids ?? []).length === 1)).toBe(true);
+  });
+});
+
+describe('generate-all-rounds: the first rounds of a kit phase wait for the format set-up', () => {
+  beforeEach(() => {
+    vi.mocked(getParticipants).mockResolvedValue(['p1', 'p2', 'p3', 'p4'].map((id) => ({ id })) as never);
+    vi.mocked(loadKitPhase).mockResolvedValue(phase({ kind: 'round_robin', legs: 1, mirror_legs: true }));
+    vi.mocked(getGroupsByTournament).mockResolvedValue([group('g1', 1, ['p1', 'p4']), group('g2', 2, ['p2', 'p3'])] as never);
+  });
+
+  it('refuses with 409 format_not_ready while the relation is undrawn, before any round is written', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext({ openChecks: 1 }));
+
+    const res = await POST({} as NextRequest, routeParams);
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe('format_not_ready');
+    expect(body.params).toMatchObject({ reasons: 'relation_undrawn,action_incomplete', open_checks: 1 });
+    expect(createRound).not.toHaveBeenCalled();
+  });
+
+  it('writes the rounds once the relation is drawn', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext({ drawn: true }));
+
+    expect((await POST({} as NextRequest, routeParams)).status).toBe(201);
+    expect(createRound).toHaveBeenCalled();
+  });
+
+  it('lets an admin start anyway with ?force=true and audits it', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext());
+
+    expect((await POST(forced, routeParams)).status).toBe(201);
+
+    expect(createRound).toHaveBeenCalled();
+    expect(vi.mocked(logAuditEvent).mock.calls.find((call) => call[0].action === 'season.format.round.force_start')?.[0]).toMatchObject({
+      actor_id: 'admin-1',
+      resource_id: ID,
+      metadata: { reasons: ['relation_undrawn'], relations: ['santa'] },
+    });
   });
 });

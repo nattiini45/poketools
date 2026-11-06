@@ -37,9 +37,10 @@ export interface ResolveCheckRequest {
   note: string | null;
 }
 
-/** False when the check was not open (already resolved, or not a check). */
+/** False when the check was not open (already resolved, not a check, or a check of another league). */
 export async function resolveCheck(request: ResolveCheckRequest): Promise<boolean> {
   const resolved = await resolveFormatCheck({
+    seasonId: request.seasonId,
     checkId: request.checkId,
     status: request.status,
     adminId: request.adminId,

@@ -94,4 +94,12 @@ describe('RulesInspector', () => {
     expect(html).toContain('No honor rules yet.');
     expect(html).toContain('No rules text sections yet.');
   });
+
+  it('says there are no honor rules when every card is of a kind with no editor yet', () => {
+    const opaque = { kind: 'rule.on_event', id: 'r1' } as unknown as DraftDocument['rules'][number];
+    const doc: DraftDocument = { ...presetDoc(), rules: [opaque] };
+    const html = render(doc, 'en', 'rules');
+    expect(html).toContain('No honor rules yet.');
+    expect(html).not.toContain('>Honor system<');
+  });
 });

@@ -8,9 +8,34 @@
  */
 import type { Json } from '@/types/database';
 import type { DomainEntry } from '@/lib/format-kit/types';
-import type { FormatOp } from '@/lib/supabase/queries/format-runtime';
 
-export type { FormatOp };
+/**
+ * The op vocabulary `format__apply_ops` applies in order (the SQL function is its twin). The planner produces it;
+ * a member the database does not know raises `invalid_op`.
+ */
+export type FormatOp =
+  | { op: 'set_flag'; key: string; value: Json }
+  /** Inserts the links only when the relation has none yet; otherwise a no-op. */
+  | { op: 'set_relation'; relation: string; links: { from: string; to: string }[] }
+  | { op: 'reveal_relation'; relation: string }
+  | {
+      op: 'grant_item';
+      resource: string;
+      player_id: string;
+      item_id: string | null;
+      amount: number;
+      exclusive: boolean;
+      source: 'event' | 'adjustment';
+      source_ref: string | null;
+    }
+  /** Removes `amount` units of the matching rows, oldest first. */
+  | { op: 'revoke_item'; resource: string; player_id: string; item_id: string | null; amount: number }
+  | { op: 'set_attr'; player_id: string; attr: string; value: Json; source: string }
+  | { op: 'adjust_points'; stage: string; player_id: string; points: number; reason: string }
+  | { op: 'open_action'; action: string }
+  | { op: 'lock_action'; action: string }
+  /** Only ever raises the step. */
+  | { op: 'set_track'; track: string; player_id: string; step: number };
 
 export type AttrValue = string | number | boolean;
 /** A resolved tunable: a number[] only for a table, a Key for an enum. */
@@ -58,9 +83,23 @@ export interface RuntimeAdjustment {
   created_at: string;
 }
 
+/**
+ * Every source a `format_checks` row can carry: the single list the state whitelist, the query types and the migration's
+ * CHECK (`format_checks_source_check`) are all held to (a test compares it with the migration).
+ */
+export const FORMAT_CHECK_SOURCES = [
+  'unresolved_outcome',
+  'standings_tie',
+  'pairing_rematch',
+  'pairing_forbidden',
+  'deadline_missed',
+  'team_audit',
+  'expr',
+] as const;
+
 export interface RuntimeCheck {
   id: string;
-  source: 'unresolved_outcome' | 'standings_tie' | 'pairing_rematch' | 'pairing_forbidden' | 'deadline_missed' | 'expr';
+  source: (typeof FORMAT_CHECK_SOURCES)[number];
   rule_id: string;
   dedupe_key: string;
   subject: Json;

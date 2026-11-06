@@ -19,6 +19,7 @@ const summary = (over: Partial<FormatCronSummary> = {}): FormatCronSummary => ({
   checks: 0,
   locks: 0,
   picks: 0,
+  completions_backfilled: 0,
   challenges_expired: 0,
   failures: 0,
   ...over,

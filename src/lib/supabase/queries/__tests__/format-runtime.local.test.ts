@@ -220,6 +220,66 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       await expect(rt.saveFormatAction(input({ actionKey: 'quick', actorId: ids.p2 }))).resolves.toMatchObject({ status: 'draft' });
     });
 
+    it('with onlyIfUnsubmitted leaves a submitted pick alone (already submitted) and refuses a locked one (action_locked)', async () => {
+      const action = 'drawn';
+      // A draft (and a first-time row) is written over by the draw's picks, as the cron's deadline draw needs.
+      await rt.saveFormatAction(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'draft' }] }));
+      await expect(
+        rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'own' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
+      ).resolves.toMatchObject({ status: 'submitted', picks: [{ item_id: 'own' }] });
+      // The pick is submitted now: the second draw is refused and nothing changes.
+      await expect(
+        rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'drawn' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
+      ).rejects.toBeInstanceOf(rt.FormatActionAlreadySubmittedError);
+      expect(await submissionOf(action, ids.p2)).toMatchObject({ status: 'submitted', picks: [{ item_id: 'own' }] });
+
+      // A locked pick (lock: true, the 'on_submit' kind) raises action_locked, not action_already_submitted: the lock
+      // check comes first, so a caller that leaves a submitted player alone has to leave a locked one alone too.
+      await rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p3, picks: [{ item_id: 'own' }] }), items: [], lock: true });
+      await expect(
+        rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p3, picks: [{ item_id: 'drawn' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
+      ).rejects.toMatchObject({ code: 'action_locked' });
+      expect(await submissionOf(action, ids.p3)).toMatchObject({ status: 'locked', picks: [{ item_id: 'own' }] });
+    });
+
+    it('turns a submitted pick back into a draft on a save, releasing its items and its submitted_at', async () => {
+      const action = 'revise';
+      const draft = await rt.saveFormatAction(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'x' }] }));
+      const submitted = await rt.submitFormatAction({
+        ...input({ actionKey: action, actorId: ids.p2 }), items: [{ resource: 'gift2', item_id: 'x', exclusive: true }], lock: false,
+      });
+      expect(submitted).toMatchObject({ id: draft.id, status: 'submitted' });
+      expect((await held('gift2', ids.p2)).map((r) => r.item_id)).toEqual(['x']);
+
+      const revised = await rt.saveFormatAction(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'y' }] }));
+      expect(revised).toMatchObject({ id: draft.id, status: 'draft', submitted_at: null, locked_at: null });
+      expect(await held('gift2', ids.p2)).toEqual([]);
+
+      // The exclusive item is free again, the lock leaves the draft alone, and a resubmit takes the item once more.
+      await fire([grant('gift2', ids.p3, 'x', { exclusive: true })]);
+      await fire([{ op: 'lock_action', action }]);
+      expect(await submissionOf(action, ids.p2)).toMatchObject({ status: 'draft' });
+    });
+
+    it('never leaves a submitted pick behind a locked action, however save/submit and the lock interleave', async () => {
+      const keys = Array.from({ length: 12 }, (_, i) => `race${i}`);
+      await Promise.all(
+        keys.flatMap((action) => [
+          rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p1 }), items: [], lock: false }).catch((error) => {
+            if (error?.code !== 'action_locked') throw error;
+          }),
+          fire([{ op: 'lock_action', action }]),
+        ]),
+      );
+      const flags = new Map((await rows('flags')).map((f) => [f.key, f.value]));
+      const subs = (await rows('actionSubmissions')).filter((sub) => keys.includes(sub.action_key));
+      for (const sub of subs) {
+        expect(flags.get(`action:${sub.action_key}`)).toBe('locked');
+        // A submission that landed in the window between the flag check and the lock would stay 'submitted' here.
+        expect(sub.status).not.toBe('submitted');
+      }
+    });
+
     it('opens an action by flag', async () => {
       await fire([{ op: 'open_action', action: 'pick' }]);
       expect((await rows('flags')).find((f) => f.key === 'action:pick')?.value).toBe('open');
@@ -250,6 +310,60 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       await fire([{ op: 'adjust_points', stage: 'main', player_id: ids.p2, points: -1, reason: 'penalty' }]);
       const op = (await rows('adjustments')).find((a) => a.reason === 'penalty');
       expect(op).toMatchObject({ kind: 'points', target: { stage: 'main', player_id: ids.p2 }, delta: { points: -1 }, admin_id: null });
+    });
+
+    it('refuses a second set_relation and a revoke over a short holding without writing a history row', async () => {
+      const ring = [[ids.p1, ids.p2], [ids.p2, ids.p3], [ids.p3, ids.p1]].map(([from, to]) => ({ from, to }));
+      const other = [[ids.p1, ids.p3], [ids.p3, ids.p2], [ids.p2, ids.p1]].map(([from, to]) => ({ from, to }));
+      const setRelation = (links: typeof ring) =>
+        adjust({ kind: 'relation', target: { relation: 'adj_ring' }, delta: { link_count: links.length }, ops: [{ op: 'set_relation', relation: 'adj_ring', links }] });
+
+      const before = (await rows('adjustments')).length;
+      await setRelation(ring);
+      expect((await rows('adjustments')).length).toBe(before + 1);
+      await expect(setRelation(other)).rejects.toMatchObject({ name: 'FormatAdjustmentRefusedError', refusal: 'relation_has_links' });
+      expect((await rows('adjustments')).length).toBe(before + 1);
+      const links = (await rows('relationLinks')).filter((l) => l.relation_key === 'adj_ring');
+      expect(links.map((l) => `${l.from_player_id}>${l.to_player_id}`).sort()).toEqual(ring.map((l) => `${l.from}>${l.to}`).sort());
+
+      // Two requests that both passed their snapshot check: exactly one lands, the other is refused (not a silent no-op).
+      const fresh = [[ids.p1, ids.p2], [ids.p2, ids.p1]].map(([from, to]) => ({ from, to }));
+      const setFresh = (relation: string) =>
+        adjust({ kind: 'relation', target: { relation }, delta: { link_count: 2 }, ops: [{ op: 'set_relation', relation, links: fresh }] });
+      const settled = await Promise.allSettled([setFresh('adj_race'), setFresh('adj_race')]);
+      expect(settled.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(settled.filter((r) => r.status === 'rejected')).toHaveLength(1);
+      expect((await rows('relationLinks')).filter((l) => l.relation_key === 'adj_race')).toHaveLength(2);
+      expect((await rows('adjustments')).filter((a) => (a.target as { relation?: string }).relation === 'adj_race')).toHaveLength(1);
+
+      // An event that draws the relation racing an adjustment that draws it: the event path takes the same lock, so
+      // neither dies on the primary key. The event is logged and returns, the adjustment lands or is refused cleanly.
+      for (let round = 0; round < 3; round++) {
+        const relation = `adj_event_race_${round}`;
+        const key = `event-race-${round}`;
+        const [eventRes, adjRes] = await Promise.allSettled([
+          fire([{ op: 'set_relation', relation, links: fresh }], key),
+          adjust({ kind: 'relation', target: { relation }, delta: { link_count: 2 }, ops: [{ op: 'set_relation', relation, links: fresh }] }),
+        ]);
+        expect(eventRes.status).toBe('fulfilled');
+        if (adjRes.status === 'rejected') {
+          expect(adjRes.reason).toMatchObject({ name: 'FormatAdjustmentRefusedError', refusal: 'relation_has_links' });
+        }
+        expect((await rows('eventLog')).filter((e) => e.event_key === key)).toHaveLength(1);
+        expect((await rows('relationLinks')).filter((l) => l.relation_key === relation)).toHaveLength(2);
+      }
+
+      // A revoke needs the units: one is held, two are asked for.
+      await fire([grant('adj_coins', ids.p1, null, { amount: 1 })]);
+      const revoke = (amount: number) =>
+        adjust({ kind: 'resource', target: { resource: 'adj_coins', player_id: ids.p1, item_id: null }, delta: { amount: -amount },
+          ops: [{ op: 'revoke_item', resource: 'adj_coins', player_id: ids.p1, item_id: null, amount }] });
+      const adjustments = (await rows('adjustments')).length;
+      await expect(revoke(2)).rejects.toMatchObject({ name: 'FormatAdjustmentRefusedError', refusal: 'insufficient_holding' });
+      expect((await rows('adjustments')).length).toBe(adjustments);
+      expect((await held('adj_coins', ids.p1)).reduce((sum, r) => sum + r.amount, 0)).toBe(1);
+      await revoke(1);
+      expect(await held('adj_coins', ids.p1)).toHaveLength(0);
     });
 
     it('requires a reason and writes nothing without one', async () => {
@@ -297,11 +411,16 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       await expect(rt.openFormatCheck(open)).resolves.toBeNull();
       expect((await rows('checks')).filter((c) => c.dedupe_key === 'tie:main:1')).toHaveLength(1);
 
-      await expect(rt.resolveFormatCheck({ checkId: id as string, status: 'confirmed', adminId: null, note: 'looks right' })).resolves.toBe(true);
-      await expect(rt.resolveFormatCheck({ checkId: id as string, status: 'rejected', adminId: null, note: null })).resolves.toBe(false);
+      await expect(rt.resolveFormatCheck({ seasonId: ids.season, checkId: id as string, status: 'confirmed', adminId: null, note: 'looks right' })).resolves.toBe(true);
+      await expect(rt.resolveFormatCheck({ seasonId: ids.season, checkId: id as string, status: 'rejected', adminId: null, note: null })).resolves.toBe(false);
       expect((await rows('checks')).find((c) => c.id === id)).toMatchObject({ status: 'confirmed', note: 'looks right' });
 
-      await expect(rt.resolveFormatCheck({ checkId: randomUUID(), status: 'confirmed', adminId: null, note: null })).resolves.toBe(false);
+      await expect(rt.resolveFormatCheck({ seasonId: ids.season, checkId: randomUUID(), status: 'confirmed', adminId: null, note: null })).resolves.toBe(false);
+      // A check of this league is not resolved through another league's id: the league is part of the key.
+      const foreign = await rt.openFormatCheck({ seasonId: ids.season, source: 'expr', ruleId: 'r', dedupeKey: 'foreign:1', subject: {} });
+      await expect(rt.resolveFormatCheck({ seasonId: randomUUID(), checkId: foreign as string, status: 'confirmed', adminId: null, note: null })).resolves.toBe(false);
+      expect((await rows('checks')).find((c) => c.id === foreign)).toMatchObject({ status: 'open', resolved_at: null });
+      await expect(rt.resolveFormatCheck({ seasonId: ids.season, checkId: foreign as string, status: 'rejected', adminId: null, note: null })).resolves.toBe(true);
       // A new check under the same key is still deduplicated after the first one resolved.
       await expect(rt.openFormatCheck(open)).resolves.toBeNull();
     });
@@ -309,13 +428,13 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
     it('refuses an unknown source and an unknown status', async () => {
       await expect(rt.openFormatCheck({ seasonId: ids.season, source: 'vibes' as never, ruleId: 'r', dedupeKey: 'k', subject: {} })).rejects.toBeTruthy();
       const id = await rt.openFormatCheck({ seasonId: ids.season, source: 'expr', ruleId: 'r', dedupeKey: 'expr:1', subject: {} });
-      await expect(rt.resolveFormatCheck({ checkId: id as string, status: 'open' as never, adminId: null, note: null })).rejects.toMatchObject({ message: 'invalid_op' });
+      await expect(rt.resolveFormatCheck({ seasonId: ids.season, checkId: id as string, status: 'open' as never, adminId: null, note: null })).rejects.toMatchObject({ message: 'invalid_op' });
     });
   });
 
   it('reads the whole runtime back and removes it with the league', async () => {
     const runtime = await rt.getFormatRuntime(ids.season);
-    expect(runtime.relationLinks).toHaveLength(3);
+    expect(runtime.relationLinks.filter((l) => l.relation_key === 'santa')).toHaveLength(3);
     expect(runtime.eventLog.length).toBeGreaterThan(5);
     expect(runtime.flags.length).toBeGreaterThan(1);
     expect(runtime.adjustments.length).toBeGreaterThan(1);

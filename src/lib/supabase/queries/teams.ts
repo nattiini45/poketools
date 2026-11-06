@@ -142,13 +142,24 @@ export interface TeamMatchRef {
 }
 
 /**
+ * Two rows for one slot of a match (two rows linked to it, or two planned rows for its tournament): a data error that
+ * `getPlayerTeamForMatch` throws, a class of its own so a caller can tell it from a database failure.
+ */
+export class TeamRowConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TeamRowConflictError';
+  }
+}
+
+/**
  * The team a player brings to `match`: the row linked to that match
  * (`teams.match_id`, written by match-prep) when there is one, else the
  * player's planned row for the match's tournament (no `match_id`). Rows
  * linked to OTHER matches are never returned.
  *
  * Two rows for the same slot (two linked to this match, or two planned rows)
- * are a data error and throw, like `maybeSingle` would.
+ * are a data error and throw a `TeamRowConflictError`, like `maybeSingle` would.
  */
 export async function getPlayerTeamForMatch(
   playerId: string,
@@ -168,7 +179,7 @@ export async function getPlayerTeamForMatch(
   const linked = rows.filter((row) => row.match_id === match.id);
   const planned = rows.filter((row) => row.match_id === null);
   if (linked.length > 1 || (linked.length === 0 && planned.length > 1)) {
-    throw new Error(
+    throw new TeamRowConflictError(
       `getPlayerTeamForMatch: player ${playerId} has ${linked.length > 1 ? linked.length : planned.length} ${linked.length > 1 ? 'rows linked to match' : 'planned rows for the tournament of match'} ${match.id}`
     );
   }

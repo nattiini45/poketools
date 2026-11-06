@@ -94,7 +94,64 @@ describe('validateActionSubmission', () => {
   });
 
   it('reports every problem, not the first', () => {
-    const result = run([pick('mew')], open({ flags: {} }));
-    expect(codes(result)).toEqual(expect.arrayContaining(['window_closed', 'domain_locked', 'item_outside_domain', 'wrong_count']));
+    const result = run([pick('mew')], open({ flags: { 'action:choose_gift': 'locked', 'domain:pool': 'unlocked' } }));
+    expect(codes(result)).toEqual(expect.arrayContaining(['window_closed', 'item_outside_domain', 'wrong_count']));
+  });
+});
+
+describe('validateActionSubmission audience', () => {
+  const adminsDef = { ...def, domains: (def.domains ?? []).map((d) => (d.key === 'pool' ? { ...d, visibility: 'admins' as const } : d)) };
+  const unlocked = stateFor(adminsDef, { flags: { 'action:choose_gift': 'open', 'domain:pool': 'unlocked' }, links: [link('p1', 'p2')] });
+  const picks = [pick('garchomp'), pick('blissey')];
+
+  it('answers a domain only admins see with domain_locked alone: a real id and an unknown one get the same answer', () => {
+    const real = validateActionSubmission(adminsDef, 'choose_gift', 'p1', picks, unlocked, PLAYERS, SEED);
+    expect(real).toEqual({ ok: false, issues: [{ code: 'domain_locked', step: 0 }] });
+    const unknown = validateActionSubmission(adminsDef, 'choose_gift', 'p1', [pick('mew'), pick('mewtwo')], unlocked, PLAYERS, SEED);
+    expect(unknown).toEqual(real);
+  });
+
+  it('never names a pick of a hidden pool: no item_outside_domain, where_false, duplicate or taken, whatever the ids', () => {
+    const held = stateFor(adminsDef, {
+      flags: { 'action:choose_gift': 'open', 'domain:pool': 'unlocked' },
+      links: [link('p1', 'p2')],
+      items: [item({ resource: 'picks', player_id: 'p5', item_id: 'blissey', exclusive: true })],
+    });
+    const result = validateActionSubmission(adminsDef, 'choose_gift', 'p1', [pick('blissey'), pick('blissey'), pick('mew')], held, PLAYERS, SEED);
+    expect(result).toEqual({ ok: false, issues: [{ code: 'wrong_count', step: 0 }, { code: 'domain_locked', step: 0 }] });
+    expect(JSON.stringify(result)).not.toContain('blissey');
+    expect(JSON.stringify(result)).not.toContain('mew');
+  });
+
+  it('accepts the same ids for the system (a deadline pick draws from the whole list)', () => {
+    const result = validateActionSubmission(adminsDef, 'choose_gift', 'p1', picks, unlocked, PLAYERS, SEED, { audience: 'system' });
+    expect(result.ok).toBe(true);
+  });
+
+  it('keeps a public and a when_unlocked domain as they are for a player', () => {
+    expect(run(picks).ok).toBe(true);
+    const publicDef = { ...def, domains: (def.domains ?? []).map((d) => (d.key === 'pool' ? { ...d, visibility: 'public' as const } : d)) };
+    const publicState = stateFor(publicDef, { flags: { 'action:choose_gift': 'open', 'domain:pool': 'unlocked' }, links: [link('p1', 'p2')] });
+    expect(validateActionSubmission(publicDef, 'choose_gift', 'p1', picks, publicState, PLAYERS, SEED).ok).toBe(true);
+  });
+
+  it('reports a locked when_unlocked domain as domain_locked alone, not as item_outside_domain', () => {
+    const result = run(picks, open({ flags: { 'action:choose_gift': 'open' } }));
+    expect(codes(result)).toEqual(['domain_locked']);
+  });
+
+  it('does not say whether a pick belongs to a locked pool: a member and a non-member get the same answer', () => {
+    const lockedState = open({ flags: { 'action:choose_gift': 'open' } });
+    const member = run(picks, lockedState);
+    const nonMember = run([pick('mew'), pick('mewtwo')], lockedState);
+    expect(member).toEqual({ ok: false, issues: [{ code: 'domain_locked', step: 0 }] });
+    expect(nonMember).toEqual(member);
+    expect(JSON.stringify(nonMember)).not.toContain('mew');
+  });
+
+  it('still runs the per-pick checks for the system on a locked pool', () => {
+    const lockedState = open({ flags: { 'action:choose_gift': 'open' } });
+    const result = validateActionSubmission(def, 'choose_gift', 'p1', [pick('garchomp'), pick('mew')], lockedState, PLAYERS, SEED, { audience: 'system' });
+    expect(result.ok ? [] : result.issues.map((i) => i.code)).toEqual(['domain_locked', 'item_outside_domain']);
   });
 });

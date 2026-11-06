@@ -15,7 +15,7 @@ import type { Locale } from '@/i18n/config';
 import { rulesetStudioDescribeMessages } from '@/i18n/messages/ruleset-studio/describe';
 import { clauseName, getClause, isEnforcedClause } from '@/lib/pkmn/clauses';
 import { localizeType } from '@/lib/pkmn/i18n/names/misc';
-import { toShowdownChallenge } from '@/lib/pkmn/showdown-challenge';
+import { toShowdownChallenge, type ChallengeSpeciesLookup } from '@/lib/pkmn/showdown-challenge';
 import { RULESET_CATEGORIES, type ResolvedList, type ResolvedRules, type RulesetCategory } from './types';
 
 export type DescribedSectionId = 'base' | 'clauses' | RulesetCategory | 'constraints' | 'levels' | 'notes';
@@ -45,6 +45,12 @@ export interface DescribeOptions {
   maxNames?: number;
   /** The reader's data locale for type names; defaults to `locale`. */
   dataLocale?: Locale;
+  /**
+   * The dex's forme facts for the Showdown challenge (`challengeSpeciesLookup`, server only). Without it the challenge is the
+   * plain per-entry list: right for a ruleset without formes, but an allowed base species would also allow its Megas, so a page
+   * that SHOWS the challenge passes it.
+   */
+  challengeSpecies?: ChallengeSpeciesLookup;
 }
 
 const DEFAULT_MAX_NAMES = 12;
@@ -175,7 +181,7 @@ export function describeRuleset(rules: ResolvedRules, locale: Locale, options: D
   return {
     sections,
     entryCount,
-    showdownChallenge: toShowdownChallenge(rules),
+    showdownChallenge: toShowdownChallenge(rules, options.challengeSpecies),
     coverage: t('coverage.join', {
       bans: t('coverage.bans', { count: entryCount }),
       clauses: t('coverage.clauses', { count: rules.clauses.length }),

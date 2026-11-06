@@ -36,7 +36,7 @@ export interface LeagueFormatState {
 
 const UNNAMED: LText = { base: 'en' };
 
-export async function loadLeagueFormatState(league: SeasonWithDetails): Promise<LeagueFormatState | null> {
+export async function loadLeagueFormatState(league: SeasonWithDetails, now: Date = new Date()): Promise<LeagueFormatState | null> {
   if (league.format_type !== 'custom') return null;
   const [row, manualPhaseCount, signals] = await Promise.all([
     getSeasonFormat(league.id),
@@ -52,6 +52,8 @@ export async function loadLeagueFormatState(league: SeasonWithDetails): Promise<
     attached: row === null ? null : { version_no: row.version_no, spec: row.spec },
     phaseCount: league.tournament_count,
     manualPhaseCount,
+    seasonStartDate: league.start_date,
+    now,
   });
   // Only these fields leave the loader: the spec and the seed stay here.
   const attached: AttachedFormatInfo | null =

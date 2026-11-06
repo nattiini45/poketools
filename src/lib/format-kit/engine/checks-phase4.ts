@@ -24,6 +24,7 @@ import type {
 import { checkExpr } from './checks-runtime';
 import { diag, ptr, type Diagnostic } from './diagnostics';
 import type { CompileEnv } from './env';
+import type { StagePlan } from './plan';
 import { attributeMap, pairEnv, stageEnv, teamEnv } from './runtime-names';
 
 const TYPE_NAMES: ReadonlySet<string> = new Set(TYPES.map((name) => name.toLowerCase()));
@@ -71,7 +72,41 @@ function playerEnumProblem(attr: AttributeDef | undefined): string | null {
 
 // --- Pairings -----------------------------------------------------------------------------------
 
-function checkBipartite(out: Diagnostic[], lookup: Lookup, stage: Stage, i: number): void {
+/**
+ * Every A meets every B only when the stage has a round for each player of the larger side (a player plays once per
+ * round). The sides are filled at run time, so their sizes are knowable in one case only: the attribute is assigned to
+ * every player (`random_seeded` or an expression, not by hand) and the two sides name every value of it, so all `n`
+ * players of the stage (of one group) sit on a side and the larger side has at least `ceil(n / 2)` of them. `n` is the
+ * smallest count the plan allows. A hand-assigned attribute, a side that leaves a value out or an unknown player count
+ * says nothing about the sides, so nothing is reported.
+ */
+function checkBipartiteRounds(
+  out: Diagnostic[],
+  stage: Stage,
+  i: number,
+  attr: AttributeDef | undefined,
+  plan: StagePlan | undefined,
+): void {
+  const pairing = stage.pairing;
+  if (pairing.kind !== 'bipartite' || attr === undefined || attr.assign === undefined || attr.assign.kind === 'manual') return;
+  const onSide = new Set([...pairing.side_a, ...pairing.side_b]);
+  if (!(attr.values ?? []).every((value) => onSide.has(value))) return;
+  const players = (stage.groups === undefined ? plan?.participants : plan?.groupSize)?.min;
+  if (players === undefined || players < 2) return;
+  const needed = Math.ceil(players / 2);
+  if (pairing.rounds >= needed) return;
+  out.push(
+    diag('bipartite_rounds_short', ptr('stages', i, 'pairing', 'rounds'), {
+      stage: stage.key,
+      attr: pairing.attr,
+      rounds: pairing.rounds,
+      needed,
+      players,
+    }),
+  );
+}
+
+function checkBipartite(out: Diagnostic[], lookup: Lookup, stage: Stage, i: number, plan?: StagePlan): void {
   const pairing = stage.pairing;
   if (pairing.kind !== 'bipartite') return;
   const attr = lookup.attrs.get(pairing.attr);
@@ -99,6 +134,7 @@ function checkBipartite(out: Diagnostic[], lookup: Lookup, stage: Stage, i: numb
   pairing.side_b.forEach((value, j) => {
     if (sideA.has(value)) out.push(diag('bipartite_sides_overlap', at('side_b', j), { stage: stage.key, attr: pairing.attr, value }));
   });
+  checkBipartiteRounds(out, stage, i, attr, plan);
 }
 
 function checkFilter(out: Diagnostic[], lookup: Lookup, stage: Stage, i: number): void {
@@ -108,11 +144,21 @@ function checkFilter(out: Diagnostic[], lookup: Lookup, stage: Stage, i: number)
 
 // --- Team constraints ---------------------------------------------------------------------------
 
-function checkCountSource(out: Diagnostic[], lookup: Lookup, stage: Stage, source: CountSource, pointer: string): void {
+/**
+ * A team rule reads a pool only admins may see. The team advice and the post-match audit are shown to any signed-in player,
+ * so the verdict of such a rule would answer "is this species in the hidden pool" for any species the player tries.
+ */
+function hiddenDomainDiag(pointer: string, stage: Stage, constraint: TeamConstraint, domain: string): Diagnostic {
+  return diag('constraint_source_hidden_domain', pointer, { stage: stage.key, constraint: constraint.kind, domain });
+}
+
+function checkCountSource(out: Diagnostic[], lookup: Lookup, stage: Stage, constraint: TeamConstraint, source: CountSource, pointer: string): void {
   switch (source.kind) {
     case 'domain':
       if (!lookup.domains.has(source.domain)) {
         out.push(diag('ref_unknown', `${pointer}/domain`, { ref: 'domain', key: source.domain, where: 'constraint' }));
+      } else if (lookup.domains.get(source.domain)?.visibility === 'admins') {
+        out.push(hiddenDomainDiag(`${pointer}/domain`, stage, constraint, source.domain));
       }
       return;
     case 'resource': {
@@ -139,10 +185,10 @@ function checkCountSource(out: Diagnostic[], lookup: Lookup, stage: Stage, sourc
       return;
     }
     case 'any_of':
-      source.sources.forEach((inner, j) => checkCountSource(out, lookup, stage, inner, `${pointer}/sources/${j}`));
+      source.sources.forEach((inner, j) => checkCountSource(out, lookup, stage, constraint, inner, `${pointer}/sources/${j}`));
       return;
     case 'not':
-      checkCountSource(out, lookup, stage, source.source, `${pointer}/source`);
+      checkCountSource(out, lookup, stage, constraint, source.source, `${pointer}/source`);
       return;
   }
 }
@@ -184,7 +230,7 @@ function checkConstraint(out: Diagnostic[], lookup: Lookup, stage: Stage, constr
       return;
     case 'count':
       checkBounds(out, stage, constraint, at('min'), constraint.min, constraint.max, constraint.min === undefined && constraint.max === undefined);
-      checkCountSource(out, lookup, stage, constraint.source, at('source'));
+      checkCountSource(out, lookup, stage, constraint, constraint.source, at('source'));
       return;
     case 'distinct': {
       if (constraint.by !== 'attr') {
@@ -198,6 +244,15 @@ function checkConstraint(out: Diagnostic[], lookup: Lookup, stage: Stage, constr
       const attr = lookup.attrs.get(constraint.attr);
       const reason = attr === undefined ? 'unknown' : attr.on !== 'entry' ? 'player' : attr.multi === true ? 'multi' : null;
       attrProblem(out, stage, constraint, at('attr'), constraint.attr, reason);
+      if (reason === null) {
+        // The groups are read from the entries of every domain, so an attribute carried by a hidden pool shows its members.
+        const attrKey = constraint.attr;
+        for (const domain of lookup.domains.values()) {
+          if (domain.visibility === 'admins' && domain.entries.some((entry) => entry.attrs.some((a) => a.key === attrKey))) {
+            out.push(hiddenDomainDiag(at('attr'), stage, constraint, domain.key));
+          }
+        }
+      }
       return;
     }
     case 'type_quota': {
@@ -252,6 +307,20 @@ function isRealDate(text: string): boolean {
   return day <= days;
 }
 
+/**
+ * A `seeded_random_pick` is due at the action's closing event plus `offset_hours`. The closing event locks the action
+ * (and `submit` refuses a locked one), so a pick due at or after that instant could never be made: every player who
+ * missed would end up in an admin check. Only closing events the policy is anchored to are judged (a mark of this
+ * calendar, the opening of a round of this stage); any other closing event has no instant to compare with.
+ */
+function picksAfterClose(lookup: Lookup, stage: Stage, calendar: StageCalendar, policy: DeadlinePolicy): boolean {
+  if (policy.applies !== 'action' || policy.on_miss !== 'seeded_random_pick' || policy.action === undefined || policy.offset_hours < 0) return false;
+  const closes = lookup.actions.get(policy.action)?.window.closes_on;
+  if (closes === undefined) return false;
+  if (closes.event === 'time') return calendar.marks.some((mark) => mark.key === closes.mark);
+  return closes.event === 'round_start' && (closes.stage === undefined || closes.stage === stage.key);
+}
+
 function deadlineReason(policy: DeadlinePolicy): string | null {
   if (policy.applies === 'action' && policy.action === undefined) return 'action_required';
   if (policy.applies !== 'action' && policy.action !== undefined) return 'action_unexpected';
@@ -273,7 +342,7 @@ function checkCalendar(out: Diagnostic[], lookup: Lookup, stage: Stage, calendar
     keys.add(mark.key);
   });
   calendar.deadlines.forEach((policy, j) => {
-    const reason = deadlineReason(policy);
+    const reason = deadlineReason(policy) ?? (picksAfterClose(lookup, stage, calendar, policy) ? 'pick_after_close' : null);
     if (reason !== null) {
       out.push(diag('deadline_policy_invalid', at('deadlines', j), { stage: stage.key, applies: policy.applies, on_miss: policy.on_miss, reason }));
     }
@@ -301,11 +370,11 @@ function checkForeachGroup(out: Diagnostic[], lookup: Lookup, stage: Stage, i: n
   }
 }
 
-export function checkPhase4(def: FormatDefinition, env: CompileEnv): Diagnostic[] {
+export function checkPhase4(def: FormatDefinition, env: CompileEnv, plan: ReadonlyMap<string, StagePlan> = new Map()): Diagnostic[] {
   const out: Diagnostic[] = [];
   const lookup = buildLookup(def, env);
   def.stages.forEach((stage, i) => {
-    checkBipartite(out, lookup, stage, i);
+    checkBipartite(out, lookup, stage, i, plan.get(stage.key));
     checkFilter(out, lookup, stage, i);
     (stage.constraints ?? []).forEach((constraint, j) => {
       checkConstraint(out, lookup, stage, constraint, ptr('stages', i, 'constraints', j));

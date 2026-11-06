@@ -138,9 +138,9 @@ describe('makeChallenge', () => {
 
 describe('answerChallenge', () => {
   it('expires the phase’s public reads when the defender accepts (a match was created)', async () => {
-    const row = await answerChallenge({ challengeId: 'c-1', playerId: P1, accept: true });
+    const row = await answerChallenge({ seasonId: SEASON, challengeId: 'c-1', playerId: P1, accept: true });
 
-    expect(respondToFormatChallenge).toHaveBeenCalledWith({ challengeId: 'c-1', playerId: P1, accept: true });
+    expect(respondToFormatChallenge).toHaveBeenCalledWith({ seasonId: SEASON, challengeId: 'c-1', playerId: P1, accept: true });
     expect(row).toMatchObject({ status: 'accepted' });
     expect(expireTournamentReads).toHaveBeenCalledTimes(1);
     expect(expireTournamentReads).toHaveBeenCalledWith(PHASE, SEASON);
@@ -149,22 +149,37 @@ describe('answerChallenge', () => {
   it('expires nothing when the defender declines', async () => {
     vi.mocked(respondToFormatChallenge).mockResolvedValue(challengeRow({ status: 'declined', responded_at: 't' }) as never);
 
-    await expect(answerChallenge({ challengeId: 'c-1', playerId: P1, accept: false })).resolves.toMatchObject({ status: 'declined' });
+    await expect(answerChallenge({ seasonId: SEASON, challengeId: 'c-1', playerId: P1, accept: false })).resolves.toMatchObject({ status: 'declined' });
+    expect(expireTournamentReads).not.toHaveBeenCalled();
+  });
+
+  it('passes the league to the database, so a challenge of another league is challenge_not_found', async () => {
+    vi.mocked(respondToFormatChallenge).mockRejectedValue(new FormatChallengeError('challenge_not_found'));
+
+    await expect(answerChallenge({ seasonId: 'season-2', challengeId: 'c-1', playerId: P1, accept: true })).rejects.toMatchObject({
+      code: 'challenge_not_found',
+    });
+    expect(respondToFormatChallenge).toHaveBeenCalledWith(expect.objectContaining({ seasonId: 'season-2' }));
     expect(expireTournamentReads).not.toHaveBeenCalled();
   });
 
   it('expires nothing when the response is refused (a late answer is challenge_expired)', async () => {
     vi.mocked(respondToFormatChallenge).mockRejectedValue(new FormatChallengeError('challenge_expired'));
 
-    await expect(answerChallenge({ challengeId: 'c-1', playerId: P1, accept: true })).rejects.toMatchObject({ code: 'challenge_expired' });
+    await expect(answerChallenge({ seasonId: SEASON, challengeId: 'c-1', playerId: P1, accept: true })).rejects.toMatchObject({ code: 'challenge_expired' });
     expect(expireTournamentReads).not.toHaveBeenCalled();
   });
 });
 
 describe('withdrawChallenge and expireChallenges', () => {
   it('passes a NULL player for an admin withdrawal', async () => {
-    await withdrawChallenge('c-1', null);
-    expect(cancelFormatChallenge).toHaveBeenCalledWith('c-1', null);
+    await withdrawChallenge(SEASON, 'c-1', null);
+    expect(cancelFormatChallenge).toHaveBeenCalledWith(SEASON, 'c-1', null);
+  });
+
+  it('passes the league and the withdrawing player to the database', async () => {
+    await withdrawChallenge(SEASON, 'c-1', P2);
+    expect(cancelFormatChallenge).toHaveBeenCalledWith(SEASON, 'c-1', P2);
   });
 
   it('expires every lapsed challenge of all leagues by default, or of one league', async () => {

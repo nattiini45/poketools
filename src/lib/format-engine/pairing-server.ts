@@ -8,6 +8,7 @@ import 'server-only';
 import { attributeMap } from '@/lib/format-kit/engine/runtime-names';
 import { evaluate } from '@/lib/format-kit/expr/eval';
 import type { Stage } from '@/lib/format-kit/types';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logger } from '@/lib/logger';
 import { openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { memoisedPlayerAttrs, pairContext, playerAttrValue } from './runtime/expr-env';
@@ -16,10 +17,18 @@ import { planForbiddenPairingCheck } from './runtime/pairing-checks';
 
 const TAG = 'format-engine/pairing';
 
-/** The `allow` expression of a filter could not be evaluated for a pair: the round is not paired on a guess. */
-export class PairingExprError extends Error {
-  constructor(readonly code: string, readonly pair: readonly [string, string]) {
-    super(`filter pairing: the allow expression failed for ${pair[0]} / ${pair[1]} (${code})`);
+/**
+ * The `allow` expression of a filter could not be evaluated for a pair: the round is not paired on a guess. A user-facing
+ * 422 (the stage's expression is the admin's to fix), so the generate routes answer it instead of a generic 500. The
+ * player ids stay on the error for the log and never enter the message.
+ */
+export class PairingExprError extends UserFacingError<'pairing_expr_failed'> {
+  constructor(readonly exprCode: string, readonly pair: readonly [string, string]) {
+    super('The filter of this stage could not be evaluated for a pair of players, so the round was not paired.', {
+      code: 'pairing_expr_failed',
+      params: { issue: exprCode },
+      status: 422,
+    });
     this.name = 'PairingExprError';
   }
 }

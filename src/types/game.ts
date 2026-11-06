@@ -245,6 +245,12 @@ export interface DeleteGameResult {
    */
   evolution_recheck_failed?: boolean;
   /**
+   * True when the change is saved but taking back the custom league's format effects of the completed match it moved
+   * out of `completed` failed (logged server-side; the format cron retries it unless the match was completed again first). Clients show the catalogue warning
+   * `admin_game_format_revert_failed`.
+   */
+  format_revert_failed?: boolean;
+  /**
    * Impossible lineups surfaced by the EPB evolution rebuild
    * (`repairSeasonEvolution`). Present only for evolution_point_buy seasons;
    * legacy seasons leave this undefined.
@@ -268,6 +274,12 @@ export interface ResetMatchResult {
    * show the catalogue warning `admin_game_evolution_recheck_failed`.
    */
   evolution_recheck_failed?: boolean;
+  /**
+   * True when the change is saved but taking back the custom league's format effects of the completed match it moved
+   * out of `completed` failed (logged server-side; the format cron retries it unless the match was completed again first). Clients show the catalogue warning
+   * `admin_game_format_revert_failed`.
+   */
+  format_revert_failed?: boolean;
   /**
    * Per-type summary of the match-derived children cleaned by
    * `cleanMatchChildren` (prep teams, proposals, moments, animation views,
@@ -295,6 +307,8 @@ export interface ResetRoundResult {
   evolution_events: EvolutionEvent[];
   /** True when any reset match reported `evolution_recheck_failed`. */
   evolution_recheck_failed?: boolean;
+  /** True when any reset match reported `format_revert_failed`. */
+  format_revert_failed?: boolean;
 }
 
 export interface EditGameInput {
@@ -345,6 +359,12 @@ export interface EditGameResult {
    * show the catalogue warning `admin_game_evolution_recheck_failed`.
    */
   evolution_recheck_failed?: boolean;
+  /**
+   * True when the change is saved but taking back the custom league's format effects of the completed match it moved
+   * out of `completed` failed (logged server-side; the format cron retries it unless the match was completed again first). Clients show the catalogue warning
+   * `admin_game_format_revert_failed`.
+   */
+  format_revert_failed?: boolean;
 }
 
 // ─── Match Analysis (AI) ────────────────────────────────────────────

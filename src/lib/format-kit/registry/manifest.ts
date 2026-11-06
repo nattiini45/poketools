@@ -4,10 +4,13 @@
  * built from it) and for the Studio forms later; the server twin is `server.ts` (zod params
  * schemas, one per available kind).
  *
- * Levels state the INTENDED enforcement of a primitive ("auto" the engine runs it, "checked" an
- * admin confirms a computed result, "honor" a rule card nobody enforces). Nothing executes in this
- * release; the badge is metadata. Reserved kinds are listed so a document that names them fails
- * with `not_available_yet`.
+ * Levels state the enforcement of a primitive ("auto" the engine runs it, "checked" an admin
+ * confirms a computed result, "honor" a rule card nobody enforces). The badge is metadata here; the
+ * kit engine (`src/lib/format-engine`, `src/lib/format-engine/runtime`) is what runs the "auto" kinds
+ * of a league attached on it. A team constraint is "checked": the app evaluates it as advisory feedback
+ * while a team is built and saved and audits the team a player played (a `team_audit` check); nothing
+ * refuses a team, an admin confirms the audit's result. Reserved kinds are listed so a document that
+ * names them fails with `not_available_yet`.
  *
  * Adding a primitive: one entry here, its zod params schema in `schema/primitives.ts`, its
  * describe function in `describe.ts`, its catalog keys in `format-studio/primitives`, and tests.
@@ -664,13 +667,17 @@ const PAIRING_ENTRIES: readonly ManifestEntry[] = [
   available('pairing.filter', 'pairing', 'filter', FILTER, { phase: 4 }),
   available('pairing.challenge', 'pairing', 'challenge', CHALLENGE, { phase: 4 }),
 ];
+/** A team constraint: advisory feedback plus the post-match audit, so an admin confirms the result (Checked). */
+function constraint(kind: Extract<AvailableKind, `constraint.${string}`>, tag: string, spec: Spec): ManifestEntry {
+  return available(kind, 'constraint', tag, spec, { phase: 4, level: 'checked' });
+}
 const CONSTRAINT_ENTRIES: readonly ManifestEntry[] = [
-  available('constraint.roster_size', 'constraint', 'roster_size', CONSTRAINT_ROSTER_SIZE, { phase: 4 }),
-  available('constraint.count', 'constraint', 'count', CONSTRAINT_COUNT, { phase: 4 }),
-  available('constraint.distinct', 'constraint', 'distinct', CONSTRAINT_DISTINCT, { phase: 4 }),
-  available('constraint.type_quota', 'constraint', 'type_quota', CONSTRAINT_TYPE_QUOTA, { phase: 4 }),
-  available('constraint.tera', 'constraint', 'tera', CONSTRAINT_TERA, { phase: 4 }),
-  available('constraint.evolution_stage', 'constraint', 'evolution_stage', CONSTRAINT_EVOLUTION_STAGE, { phase: 4 }),
+  constraint('constraint.roster_size', 'roster_size', CONSTRAINT_ROSTER_SIZE),
+  constraint('constraint.count', 'count', CONSTRAINT_COUNT),
+  constraint('constraint.distinct', 'distinct', CONSTRAINT_DISTINCT),
+  constraint('constraint.type_quota', 'type_quota', CONSTRAINT_TYPE_QUOTA),
+  constraint('constraint.tera', 'tera', CONSTRAINT_TERA),
+  constraint('constraint.evolution_stage', 'evolution_stage', CONSTRAINT_EVOLUTION_STAGE),
 ];
 const RANK_ENTRIES: readonly ManifestEntry[] = [
   available('rank.metric', 'rank', 'metric', RANK_METRIC),

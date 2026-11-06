@@ -107,7 +107,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('returns 400 when pairings empty', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
 
     const res = await POST(makeRequest({ pairings: [] }), routeParams);
     const json = await res.json();
@@ -118,7 +118,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('returns 404 when tournament not found', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(null);
 
     const res = await POST(
@@ -133,7 +133,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('returns 400 when tournament is completed', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, status: 'completed' } as never);
 
     const res = await POST(
@@ -148,7 +148,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('returns 400 when current round not completed (non-RR)', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
       { round_number: 1, status: 'active' },
@@ -166,7 +166,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('returns 400 when player paired against themselves', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
       { round_number: 1, status: 'completed' },
@@ -185,7 +185,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('returns 400 when non-participant in pairing', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
       { round_number: 1, status: 'completed' },
@@ -205,7 +205,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('returns 400 when player appears in multiple pairings', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
       { round_number: 1, status: 'completed' },
@@ -229,7 +229,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('returns 400 when too many participants unpaired', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
       { round_number: 1, status: 'completed' },
@@ -258,7 +258,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     };
 
     beforeEach(() => {
-      vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
       vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
       vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
       vi.mocked(createRound).mockResolvedValue({ id: 'round-1', round_number: 1, name: 'Round 1' } as never);
@@ -337,7 +337,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('creates a manual round successfully', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([
       { round_number: 1, status: 'completed' },
@@ -368,7 +368,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('answers 409 rounds_round_already_written, writing no match, when a concurrent call took the round number', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([{ round_number: 1, status: 'completed' }] as never);
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
@@ -407,7 +407,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     ];
 
     async function post(bracketType: string, roster: Array<{ id: string }>) {
-      vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
       vi.mocked(getTournamentById).mockResolvedValue({
         ...mockTournament,
         bracket_type: bracketType,
@@ -454,7 +454,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   it.each(['single_elim', 'double_elim'])(
     'answers 400 BRACKET_V2_REQUIRED for a first manual %s round and writes nothing',
     async (bracketType) => {
-      vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
       vi.mocked(getTournamentById).mockResolvedValue({
         ...mockTournament,
         bracket_type: bracketType,
@@ -485,7 +485,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     ];
 
     function arrange(bracketType: string, matchStatuses: string[]) {
-      vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
       vi.mocked(getTournamentById).mockResolvedValue({
         ...mockTournament,
         bracket_type: bracketType,
@@ -539,7 +539,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it.each(['swiss', 'round_robin'])('still lets a first manual %s round through', async (bracketType) => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({
       ...mockTournament,
       bracket_type: bracketType,
@@ -559,7 +559,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
   });
 
   it('activates upcoming tournament when creating first round', async () => {
-    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({
       ...mockTournament,
       status: 'upcoming',

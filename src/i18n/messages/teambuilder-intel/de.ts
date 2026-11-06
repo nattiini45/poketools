@@ -193,6 +193,13 @@ export default defineDe<typeof en>()({
     levelApproved: 'freigegeben',
     levelExperimental: 'experimentell',
     noIssues: 'Keine Probleme gefunden. Alles startklar!',
+    auditNote: 'Diese Stage-Regel ist hier ein Hinweis und wird nach dem Match noch einmal geprüft. Gesperrte Pokémon, Items und Formen werden nicht erneut geprüft.',
+    advisoryNote: 'Die Ligaregeln sind hier ein Hinweis. Gesperrte Pokémon, Items und Formen werden nach dem Match nicht erneut geprüft.',
+    pools: {
+      title: 'Deine Pools diese Woche',
+      domainUnlocked: '{pool}: offen',
+      domainLocked: '{pool}: noch nicht offen',
+    },
   },
   teamCard: {
     addToSlot: 'Pokémon zu Slot {n} hinzufügen',

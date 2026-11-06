@@ -24,7 +24,7 @@ const DATA_HASHES: Readonly<Record<string, string>> = {
   '2026-10-26.1': '2523ad1f88146ea0499a6015b2038746d3ffdb475e499405cdbfd94a631fb6c5',
   '2026-10-27.1': 'add971e53efe718d833a820650dd45185199de513dc278134320cbac6c3f0afa',
   '2026-10-27.2': 'c2665cb8ee8c068c193d3b00af1aabe6d14fb98e3186aae2cefc2f2b29ea2507',
-  '2026-11-05.1': 'f41365f1e4e0d1f35d8a1187c218616f32721d4604f1c2efd142d00fb6b4d99c',
+  '2026-11-05.1': '99371dcf363a121cf0877fa1c9f8176a7d15ab1fc41a605945c329dc64301a5e',
 };
 
 function canonical(value: unknown): unknown {
@@ -149,7 +149,7 @@ describe('every name in the tables exists in the dex of its generation and unive
     // National Dex universe readers omit them. Validate the authored ids directly, like the Champions roster check.
     const dex = Dex.forGen(9);
     expect(wichtelcup.WICHTELCUP_SPECIES.filter((name) => !dex.species.get(name).exists)).toEqual([]);
-    for (const [kind, names] of [['items', wichtelcup.WICHTELCUP_BANS.items], ['abilities', wichtelcup.WICHTELCUP_BANS.abilities]] as const) {
+    for (const [kind, names] of [['moves', wichtelcup.WICHTELCUP_BANS.moves], ['items', wichtelcup.WICHTELCUP_BANS.items], ['abilities', wichtelcup.WICHTELCUP_BANS.abilities]] as const) {
       expect(names.filter((name) => !dex[kind].get(name).exists)).toEqual([]);
     }
     expect(wichtelcup.WICHTELCUP_SPECIES).toHaveLength(141);

@@ -11,7 +11,10 @@
 --                           Standings read faints from here, never from battle_stats at read time. An unresolved row
 --                           belongs to a disputed match and is never scored.
 --   match_outcome_record()  The only writer. A finalize write (source replay / manual) never replaces an admin row; an
---                           admin write (p_force) always does. Returns 'written' or 'kept'.
+--                           admin write (p_force) always does, except a staged one (p_open_only) for a match that is
+--                           already completed. Returns 'written' or 'kept'. p_open_only is a check made inside this
+--                           one call: it is NOT atomic with the caller's later status update (a separate request), so
+--                           a caller whose status update then loses must take its own staged row back itself.
 --
 -- League recycle bin: match_outcomes is an owned table (match_id IN {matches}), restored after matches; set_by points at
 -- players, which the 'players' junction already protects. Grants: service_role only.
@@ -43,6 +46,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.match_outcomes TO service_r
 COMMENT ON TABLE public.match_outcomes IS
   'How a match ended (played / forfeit / no_show / unresolved) with the faint tally per side. Written only through match_outcome_record(). Service-role only. No RLS policies by design.';
 
+-- An earlier revision of this file defined the 8-argument form; CREATE OR REPLACE with a longer argument list would leave
+-- it behind as a second overload (PostgREST: PGRST203 on every call that omits p_open_only), so drop it first.
+DROP FUNCTION IF EXISTS public.match_outcome_record(uuid, text, text, boolean, smallint, smallint, text, uuid);
+
 CREATE OR REPLACE FUNCTION public.match_outcome_record(
   p_match_id  uuid,
   p_kind      text,
@@ -51,11 +58,24 @@ CREATE OR REPLACE FUNCTION public.match_outcome_record(
   p_p1_faints smallint DEFAULT NULL,
   p_p2_faints smallint DEFAULT NULL,
   p_reason    text DEFAULT NULL,
-  p_set_by    uuid DEFAULT NULL
+  p_set_by    uuid DEFAULT NULL,
+  p_open_only boolean DEFAULT false
 ) RETURNS text
 LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE v_rows integer;
 BEGIN
+  -- p_open_only (an admin result staged BEFORE the status flip): never write for a match that is already completed,
+  -- the completing request owns the row. The share lock makes the check-then-write below atomic against a completion
+  -- that is mid-transaction right now (its update waits for this call, or has committed and the row no longer
+  -- qualifies). It is released when this call returns, so it does NOT make the staged row atomic with the caller's
+  -- status update, which is a separate request: a completion that commits in between (a player's confirmation) leaves
+  -- the staged row behind, and a finalize write never replaces an admin row. The caller therefore takes its staged row
+  -- back itself when its status update loses (keyed by set_at, see stageAdminOutcome).
+  IF p_open_only THEN
+    PERFORM 1 FROM public.matches m WHERE m.id = p_match_id AND m.status <> 'completed' FOR SHARE;
+    IF NOT FOUND THEN RETURN 'kept'; END IF;
+  END IF;
+
   IF p_force THEN
     INSERT INTO public.match_outcomes AS o (match_id, kind, p1_faints, p2_faints, source, reason, set_by, set_at)
     VALUES (p_match_id, p_kind, p_p1_faints, p_p2_faints, p_source, p_reason, p_set_by, now())
@@ -74,10 +94,10 @@ BEGIN
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   RETURN CASE WHEN v_rows > 0 THEN 'written' ELSE 'kept' END;
 END $$;
-REVOKE ALL ON FUNCTION public.match_outcome_record(uuid, text, text, boolean, smallint, smallint, text, uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.match_outcome_record(uuid, text, text, boolean, smallint, smallint, text, uuid) TO service_role;
-COMMENT ON FUNCTION public.match_outcome_record(uuid, text, text, boolean, smallint, smallint, text, uuid) IS
-  'The only writer of match_outcomes. p_force=false (finalize, replay engine) never replaces an admin row; p_force=true (admin) always writes. Returns written | kept.';
+REVOKE ALL ON FUNCTION public.match_outcome_record(uuid, text, text, boolean, smallint, smallint, text, uuid, boolean) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.match_outcome_record(uuid, text, text, boolean, smallint, smallint, text, uuid, boolean) TO service_role;
+COMMENT ON FUNCTION public.match_outcome_record(uuid, text, text, boolean, smallint, smallint, text, uuid, boolean) IS
+  'The only writer of match_outcomes. p_force=false (finalize, replay engine) never replaces an admin row; p_force=true (admin) always writes; p_open_only=true writes only while the match is not completed (checked inside this call, not atomic with a later status update). Returns written | kept.';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- The recycle bin classifies match_outcomes. These definitions replace 20261026091000's; the inventory test reads the

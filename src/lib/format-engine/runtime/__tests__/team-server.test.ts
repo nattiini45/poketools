@@ -12,6 +12,7 @@ vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
   loadFreshKitContext: vi.fn(),
 }));
 vi.mock('@/lib/team/check.server', () => ({ checkTeam: vi.fn() }));
+vi.mock('@/lib/supabase/queries/format-engine', () => ({ getKitPhases: vi.fn(), getSeasonKitHead: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({ getRulesetById: vi.fn() }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
@@ -19,11 +20,12 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn(
 
 import { loadFreshKitContext, type KitContext } from '../load';
 import { checkTeam } from '@/lib/team/check.server';
+import { getKitPhases, getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { currentPhaseRound, evaluateTeam, resolveTeamMembers } from '../team-server';
+import { currentPhaseRound, evaluateKitConstraints, evaluateTeam, readPhaseRuleset, resolveTeamMembers } from '../team-server';
 
 function wichtelDef(): FormatDefinition {
   const result = compile(wichtelcupDoc());
@@ -142,7 +144,7 @@ describe('evaluateTeam', () => {
     expect(checkTeam).toHaveBeenCalledWith(expect.objectContaining({ ruleset: own }));
     // Round 4: the New Year cap applies and the junk-gift rule of round 1 does not.
     const min = out.result.team_issue_details?.filter((d) => d.code === 'kit_count_min').map((d) => d.params?.source);
-    expect(min).toEqual(['resource gifts_premium']);
+    expect(min).toEqual(['your own gifts premium']);
   });
 
   it('is invalid when a Tera type is chosen, and the issue sits on its set', async () => {
@@ -162,7 +164,7 @@ describe('evaluateTeam', () => {
     });
     vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state }));
     const out = await evaluateTeam(input(team('Wobbuffet')));
-    expect(out.result.team_issue_details?.some((d) => d.code === 'kit_count_min' && d.params?.source === 'resource gifts_junk')).toBe(false);
+    expect(out.result.team_issue_details?.some((d) => d.code === 'kit_count_min' && d.params?.source === 'your own gifts junk')).toBe(false);
   });
 });
 
@@ -172,5 +174,111 @@ describe('currentPhaseRound', () => {
     expect(await currentPhaseRound('cup-1')).toBe(3);
     vi.mocked(getRoundsByTournament).mockResolvedValue([]);
     expect(await currentPhaseRound('cup-1')).toBe(1);
+  });
+
+  describe('with a stage calendar', () => {
+    // Weekly from Monday 2026-03-23 18:00 Berlin: round 3 opens 2026-04-06 16:00Z, round 4 on 2026-04-13 16:00Z.
+    const calendar = {
+      start: { kind: 'season_start' as const },
+      time: '18:00',
+      cadence: 'weekly' as const,
+      every: 1,
+      round_window_hours: 168,
+      marks: [],
+      deadlines: [],
+    };
+    // The calendar is read from the phase row (the stage frozen into it), not from the kit context.
+    const withStage = (stage: unknown) =>
+      vi.mocked(getKitPhases).mockResolvedValue([{ id: 'cup-1', format_stage_key: DEF.stages[0].key, stage_order: 0, stage_spec: { stage } }] as never);
+    const withCalendar = (over: Partial<typeof calendar> = {}) => withStage({ ...DEF.stages[0], calendar: { ...calendar, ...over } });
+    const generated = (...numbers: number[]) =>
+      vi.mocked(getRoundsByTournament).mockResolvedValue(numbers.map((round_number) => ({ round_number })) as never);
+    const asOf = (text: string) => new Date(text);
+
+    beforeEach(() => {
+      vi.mocked(getTournamentById).mockResolvedValue({ id: 'cup-1', ruleset_id: 'rs-1', season_id: 's-1' } as never);
+      vi.mocked(getSeasonById).mockResolvedValue({ id: 's-1', start_date: '2026-03-23' } as never);
+      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED });
+    });
+
+    it('answers the calendar round when a later round was generated early', async () => {
+      withCalendar();
+      generated(1, 2, 3, 4);
+      expect(await currentPhaseRound('cup-1', asOf('2026-04-08T00:00:00Z'))).toBe(3);
+    });
+
+    it('answers the latest generated round when the calendar is ahead of the admin', async () => {
+      withCalendar();
+      generated(1, 2);
+      expect(await currentPhaseRound('cup-1', asOf('2026-04-20T00:00:00Z'))).toBe(2);
+    });
+
+    it('answers the latest round when the stage has no calendar or its calendar cannot be read', async () => {
+      generated(1, 2, 3, 4);
+      withStage({ ...DEF.stages[0], calendar: undefined });
+      expect(await currentPhaseRound('cup-1', asOf('2026-04-08T00:00:00Z'))).toBe(4);
+
+      withCalendar();
+      vi.mocked(getSeasonById).mockResolvedValue({ id: 's-1', start_date: null } as never);
+      expect(await currentPhaseRound('cup-1', asOf('2026-04-08T00:00:00Z'))).toBe(4);
+    });
+
+    it('reads no calendar before the phase has a second round', async () => {
+      withCalendar();
+      generated(1);
+      expect(await currentPhaseRound('cup-1', asOf('2026-01-01T00:00:00Z'))).toBe(1);
+      expect(getTournamentById).not.toHaveBeenCalled();
+      expect(getKitPhases).not.toHaveBeenCalled();
+    });
+
+    it('does not load the whole kit context (evaluateTeam does, right after)', async () => {
+      withCalendar();
+      generated(1, 2, 3, 4);
+      await currentPhaseRound('cup-1', asOf('2026-04-08T00:00:00Z'));
+      expect(loadFreshKitContext).not.toHaveBeenCalled();
+    });
+
+    it('answers the latest round for a league that does not run on the kit engine, or a phase it did not generate', async () => {
+      withCalendar();
+      generated(1, 2, 3, 4);
+      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'legacy', seed: SEED });
+      expect(await currentPhaseRound('cup-1', asOf('2026-04-08T00:00:00Z'))).toBe(4);
+      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED });
+      vi.mocked(getKitPhases).mockResolvedValue([{ id: 'other', format_stage_key: 'x', stage_order: 0, stage_spec: null }] as never);
+      expect(await currentPhaseRound('cup-1', asOf('2026-04-08T00:00:00Z'))).toBe(4);
+    });
+  });
+});
+
+describe('evaluateKitConstraints', () => {
+  it('is the constraint part of evaluateTeam for the same input and reads nothing', async () => {
+    const pokemon = team('Garchomp', 'Blissey');
+    const ctx = context();
+    const phase = ctx.phases[0];
+    const direct = evaluateKitConstraints({ ctx, phase, playerId: 'p1', roundNumber: 1, pokemon, ruleset: RULESET });
+    expect(getRulesetById).not.toHaveBeenCalled();
+    expect(checkTeam).not.toHaveBeenCalled();
+    expect(direct.members).toHaveLength(2);
+
+    const merged = await evaluateTeam(input(pokemon));
+    const mergedCodes = merged.result.team_issue_details?.map((d) => d.code) ?? [];
+    expect(mergedCodes).toEqual(direct.issues.map((i) => i.code).filter((code) => code === 'kit_roster_size' || code === 'kit_count_min'));
+    expect(direct.issues.map((i) => i.code)).toEqual(['kit_roster_size', 'kit_count_min']);
+  });
+
+  it('reads the team as gen 9 regional without a ruleset', () => {
+    const ctx = context();
+    const out = evaluateKitConstraints({ ctx, phase: ctx.phases[0], playerId: 'p1', roundNumber: 1, pokemon: team('Garchomp'), ruleset: null });
+    expect(out.members[0]).toMatchObject({ species: 'garchomp' });
+  });
+});
+
+describe('readPhaseRuleset', () => {
+  it('is the ruleset the phase pins, or null for a missing phase or ruleset', async () => {
+    expect(await readPhaseRuleset('cup-1')).toBe(RULESET);
+    vi.mocked(getRulesetById).mockResolvedValue(null);
+    expect(await readPhaseRuleset('cup-1')).toBeNull();
+    vi.mocked(getTournamentById).mockResolvedValue(null);
+    expect(await readPhaseRuleset('cup-1')).toBeNull();
   });
 });

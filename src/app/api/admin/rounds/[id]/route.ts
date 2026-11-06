@@ -80,8 +80,13 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     }
 
     const nonScheduled = matches.filter((m) => m.status !== 'scheduled');
+    // A kit league's format effects of a completed result are taken back inside `resetMatch`. When that fails it is
+    // reported, not thrown, and the format cron cannot retry it once the match row is gone (it sweeps `matches`), so
+    // the delete goes ahead and the admin is told through the response (`admin_game_format_revert_failed`).
+    let formatRevertFailed = false;
     for (const match of nonScheduled) {
-      await resetMatch(match.id, player.playerId);
+      const reset = await resetMatch(match.id, player.playerId);
+      if (reset?.format_revert_failed) formatRevertFailed = true;
     }
 
     // Through the query layer: it releases the matches' team rows first, so a match-prep row never survives as a second
@@ -117,12 +122,15 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       resource_type: 'round',
       resource_id: id,
       resource_name: round.name,
-      metadata: { tournament_id: round.tournament_id },
+      metadata: {
+        tournament_id: round.tournament_id,
+        ...(formatRevertFailed ? { format_revert_failed: true } : {}),
+      },
     });
 
-    return NextResponse.json<ApiResult<{ deleted: true }>>({
+    return NextResponse.json<ApiResult<{ deleted: true; format_revert_failed?: boolean }>>({
       success: true,
-      data: { deleted: true },
+      data: { deleted: true, ...(formatRevertFailed ? { format_revert_failed: true } : {}) },
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to delete round');

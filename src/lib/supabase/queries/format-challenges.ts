@@ -157,6 +157,8 @@ export async function createFormatChallenge(input: CreateFormatChallengeInput): 
 }
 
 export interface RespondFormatChallengeInput {
+  /** The league the challenge belongs to: a challenge of another league is `challenge_not_found`. */
+  seasonId: string;
   challengeId: string;
   /** The signed-in defender. */
   playerId: string;
@@ -164,12 +166,14 @@ export interface RespondFormatChallengeInput {
 }
 
 /**
- * The defender accepts (a scheduled match is created in the open round) or declines. Raises `challenge_not_found`,
+ * The defender accepts (a scheduled match is created in the open round) or declines. A challenge of another league is
+ * `challenge_not_found`, so a route scoped to one league cannot reach the challenges of another. Raises `challenge_not_found`,
  * `challenge_not_defender`, `challenge_not_open`, `challenge_phase_closed`, `challenge_no_open_round`, and
  * `challenge_expired` when the accept window had run out (the challenge is stored as expired).
  */
 export async function respondToFormatChallenge(input: RespondFormatChallengeInput): Promise<FormatChallengeRow> {
   const { data, error } = await supabase.rpc('format_challenge_respond', {
+    p_season_id: input.seasonId,
     p_challenge_id: input.challengeId,
     p_player: input.playerId,
     p_accept: input.accept,
@@ -179,9 +183,13 @@ export async function respondToFormatChallenge(input: RespondFormatChallengeInpu
   return data;
 }
 
-/** The challenger (or an admin, `playerId` null) withdraws an open challenge. */
-export async function cancelFormatChallenge(challengeId: string, playerId: string | null): Promise<FormatChallengeRow> {
+/**
+ * The challenger (or an admin, `playerId` null) withdraws an open challenge of the league. A challenge of another league
+ * is `challenge_not_found`, so a route scoped to one league cannot reach the challenges of another.
+ */
+export async function cancelFormatChallenge(seasonId: string, challengeId: string, playerId: string | null): Promise<FormatChallengeRow> {
   const { data, error } = await supabase.rpc('format_challenge_cancel', {
+    p_season_id: seasonId,
     p_challenge_id: challengeId,
     p_player: nullable(playerId),
   });

@@ -8,6 +8,7 @@ import type { Json } from '@/types/database';
 import type { DomainEntry, FormatDefinition } from '@/lib/format-kit/types';
 import { resolveTunables, type TunableIssue } from './tunables';
 import {
+  FORMAT_CHECK_SOURCES,
   emptyRuntimeState,
   type ActionPick,
   type AttrValue,
@@ -52,7 +53,7 @@ function parsePicks(raw: Json): ActionPick[] {
 
 const SUBMISSION_STATUSES: ReadonlySet<string> = new Set(['draft', 'submitted', 'locked']);
 const ITEM_SOURCES: ReadonlySet<string> = new Set(['event', 'action', 'adjustment']);
-const CHECK_SOURCES: ReadonlySet<string> = new Set(['unresolved_outcome', 'standings_tie', 'pairing_rematch', 'pairing_forbidden', 'deadline_missed', 'expr']);
+const CHECK_SOURCES: ReadonlySet<string> = new Set(FORMAT_CHECK_SOURCES);
 const CHECK_STATUSES: ReadonlySet<string> = new Set(['open', 'confirmed', 'rejected']);
 
 export interface BuiltRuntimeState {

@@ -6,11 +6,11 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
   "dex_lookup": "fcc7d6379b3c6078",
   "draft_pool_state_get": "36b101d95bddff31",
   "draft_setup_get": "25795142e0ba421c",
-  "engine_support": "215fc1b0ea93f835",
+  "engine_support": "69a739700993a91b",
   "format_catalog": "0a1ca5a64c1399aa",
   "format_create": "e6fdae4139089ebb",
   "format_fork": "f35bccb06af68a0b",
-  "format_fork_preset": "b12d9f067e65bce8",
+  "format_fork_preset": "4cad1eb1c910e978",
   "format_get": "a8adf065efa66583",
   "format_list": "defc560e80c32438",
   "format_save_draft": "2c3ac4d331a90ee4",
@@ -78,51 +78,51 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
 {
   "scoped:0": {
     "tools": 34,
-    "version": "8d1c87b35e21e7d5",
+    "version": "755436c3ef041685",
   },
   "scoped:1": {
     "tools": 41,
-    "version": "78ce2515ec02efa7",
+    "version": "db1ca65c009e0a39",
   },
   "scoped:2": {
     "tools": 48,
-    "version": "5a69c15004102d03",
+    "version": "823bf2d3d2c010f0",
   },
   "scoped:3": {
     "tools": 60,
-    "version": "59abdd76d25c6fad",
+    "version": "507b333bb58356eb",
   },
   "scoped:4": {
     "tools": 68,
-    "version": "0a2d97afd0be8d1d",
+    "version": "a85eb8adfe6366d0",
   },
   "scoped:5": {
     "tools": 68,
-    "version": "0a2d97afd0be8d1d",
+    "version": "a85eb8adfe6366d0",
   },
   "site:0": {
     "tools": 34,
-    "version": "8d1c87b35e21e7d5",
+    "version": "755436c3ef041685",
   },
   "site:1": {
     "tools": 41,
-    "version": "78ce2515ec02efa7",
+    "version": "db1ca65c009e0a39",
   },
   "site:2": {
     "tools": 49,
-    "version": "4e16655a33e7bfe2",
+    "version": "2d64d097f45b8fd6",
   },
   "site:3": {
     "tools": 61,
-    "version": "9aaf2ede391e4e8c",
+    "version": "09b6054c7b1ae1d6",
   },
   "site:4": {
     "tools": 69,
-    "version": "7948a09aab7dcde0",
+    "version": "5944c7752dd5f8b9",
   },
   "site:5": {
     "tools": 69,
-    "version": "7948a09aab7dcde0",
+    "version": "5944c7752dd5f8b9",
   },
 }
 `;

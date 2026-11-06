@@ -69,6 +69,7 @@ vi.mock('../_components/panels/ParticipantsPanel', () => ({ participantsPanel: m
 vi.mock('../_components/panels/DraftPanel', () => ({ draftPanel: mocks.otherPanel }));
 vi.mock('../_components/panels/PhasesPanel', () => ({ phasesPanel: mocks.otherPanel }));
 vi.mock('../_components/panels/RulesPanel', () => ({ rulesPanel: mocks.otherPanel }));
+vi.mock('../_components/panels/LivePanel', () => ({ formatLivePanel: mocks.otherPanel }));
 vi.mock('../_components/panels/SettingsPanel', () => ({ settingsPanel: mocks.otherPanel }));
 vi.mock('../_components/panels/DangerPanel', () => ({ dangerPanel: mocks.otherPanel }));
 

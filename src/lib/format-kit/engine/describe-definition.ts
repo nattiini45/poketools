@@ -11,10 +11,11 @@
  *   not exist gives `null`, a node of the wrong shape gives its key or its kind label), nothing is mutated, and
  *   the output holds plain strings, numbers and booleans only.
  * - Coverage (`computeCoverage`) is locale-free: it counts the rule units of a definition by how they are
- *   enforced. `auto` units are run by the engine, `checked` units compute a result an admin confirms, `honor`
- *   units are rule cards nobody enforces and `legacy` units are modules that carry data of an existing format.
- *   Nothing executes in this release, so the buckets state the intended enforcement of each primitive
- *   (`manifestEntry(kind).level`).
+ *   enforced. `auto` units are run by the engine, `checked` units compute a result an admin confirms (every team
+ *   constraint: advisory feedback plus the post-match team audit), `honor` units are rule cards nobody enforces and
+ *   `legacy` units are modules that carry data of an existing format.
+ *   The buckets mirror `manifestEntry(kind).level`: the kit engine (`src/lib/format-engine`) runs the `auto` kinds of a
+ *   league whose `season_formats.engine` is `kit`, and a team constraint is `checked`.
  */
 import type { Locale } from '@/i18n/config';
 import { createTranslator, type Translator } from '@/i18n/core';

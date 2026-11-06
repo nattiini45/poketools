@@ -125,6 +125,9 @@ export default {
   // Admin game edit/delete/match reset warning (sent with a 200 in the result's evolution_recheck_failed): the change is saved, the EPB evolution recheck failed (details in the server log)
   admin_game_evolution_recheck_failed:
     'The game change was saved, but re-checking the evolution progress failed. The failure was logged; run Repair in Record Reconciliation (admin data tools) to fix the evolution state.',
+  // Admin game edit/delete/match reset warning (sent with a 200 in the result's format_revert_failed): the change is saved, taking back the league format's effects of the old result failed (details in the server log)
+  admin_game_format_revert_failed:
+    "The game change was saved, but the league format's effects of the match's old result (item grants, points) could not be taken back. The failure was logged. The league's format check normally retries this on its own on its next pass. Until it is taken back, the old result's effects stay and the next result's are not applied. If the match is completed again before that retry, reopen it (the reopen takes the old effects back) and complete it once more.",
   // Admin match reset: a game rollback lost a race after {count} sibling game(s) were already removed; the match fields were not reset (409, retry finishes it)
   admin_match_reset_partial: {
     one: "The reset stopped because another admin changed one of this match's games at the same moment. {count} game was already removed (its statistics rolled back); the match itself was not reset. Reload the match and reset it again.",

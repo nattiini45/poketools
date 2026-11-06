@@ -213,8 +213,11 @@ export default {
     status: 'Status',
     experimental: 'Experimental',
     approved: 'Approved',
+    newSpecies: 'Species to add (Pokémon ID)',
     add: 'Add species level',
     remove: 'Remove',
+    removeEntry: 'Remove level rule for {species}',
+    capReached: 'At most {max} species can have their own level.',
   },
   challenge: {
     heading: 'Pokémon Showdown challenge',
@@ -222,6 +225,8 @@ export default {
     label: 'Showdown challenge rules',
     copy: 'Copy challenge rules',
     copied: 'Copied.',
+    copyFailed: 'Copying failed. Select the text and copy it by hand.',
+    limits: 'The challenge carries the Pokémon, move, item and ability lists and the clauses. It cannot carry level rules, team rules or the exact pattern of a cosmetic forme (Vivillon patterns, seasonal forms): only the team check on this site enforces those.',
   },
   notes: {
     intro: 'Custom rules and notes. They are shown on the rules page and never enforced.',

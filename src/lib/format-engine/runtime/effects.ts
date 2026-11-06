@@ -114,8 +114,9 @@ class Planner {
         this.issue('resource_item_taken', `${effect.resource}:${item}`);
         continue;
       }
-      const room = resource.capacity === undefined ? effect.amount : resource.capacity - this.units(effect.resource, playerId);
-      const amount = exclusive ? 1 : Math.min(effect.amount, room);
+      // The capacity caps an exclusive grant (one unit) like any other.
+      const room = resource.capacity === undefined ? Infinity : resource.capacity - this.units(effect.resource, playerId);
+      const amount = Math.min(exclusive ? 1 : effect.amount, room);
       if (amount < 1) {
         this.issue('capacity_reached', `${effect.resource}:${playerId}`);
         continue;

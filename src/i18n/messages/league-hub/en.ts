@@ -44,6 +44,7 @@ export default {
     matchup: 'Matchup analysis',
     teams: 'Teams & progress',
     phasePage: 'Open phase page',
+    play: 'Your moves',
   },
   table: {
     rank: '#',

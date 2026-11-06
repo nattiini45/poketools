@@ -33,8 +33,26 @@ export function eventKey(event: KitEvent): string {
     case 'action_locked':
       return `action_locked:${event.action ?? '-'}`;
     case 'time':
-      return `time:${event.mark ?? '-'}`;
+      // A mark is unique only within its stage's calendar, so the stage is part of the key.
+      return `time:${event.stage ?? '-'}:${event.mark ?? '-'}`;
   }
+}
+
+/**
+ * The event key of the current completion of a match, like `onMatchCompleted` builds it: `match_completed:<id>` for the
+ * first completion, `match_completed:<id>:<n>` after n reverts (`match_reverted:<id>:<n>` events). The returned lookup
+ * is built once from the fired keys. Kept in step with `completionGeneration` in hooks.ts.
+ */
+export function currentCompletionKeyOf(firedKeys: readonly string[]): (matchId: string) => string {
+  const reverts = new Map<string, number>();
+  for (const key of firedKeys) {
+    const found = /^match_reverted:(.+):\d+$/.exec(key);
+    if (found !== null) reverts.set(found[1], (reverts.get(found[1]) ?? 0) + 1);
+  }
+  return (matchId) => {
+    const generation = reverts.get(matchId) ?? 0;
+    return eventKey({ event: 'match_completed', match_id: generation === 0 ? matchId : `${matchId}:${generation}` });
+  };
 }
 
 /** Whether `spec` (a rule's trigger) is satisfied by `event`. */
@@ -51,6 +69,7 @@ export function eventMatches(spec: EventSpec, event: KitEvent): boolean {
     case 'action_locked':
       return spec.action === event.action;
     case 'time':
+      // The spec names a mark only: a rule on `kickoff` reacts to the mark of every stage that has one.
       return spec.mark === event.mark;
   }
 }

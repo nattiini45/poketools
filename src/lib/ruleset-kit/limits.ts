@@ -8,5 +8,7 @@ export const MAX_CLAUSE_IDS = 64;
 export const MAX_NAME_CHARS = 120;
 export const MAX_CUSTOM_RULES_CHARS = 5000;
 export const MAX_BASED_ON_CHARS = 64;
+/** Entries in the level rules' per-species list (the editor stops adding at this count; the validator rejects more). */
+export const MAX_LEVEL_ENTRIES = 256;
 /** Canonical JSON bytes of a whole document (the same cap as a format document and the database CHECKs). */
 export const MAX_DOCUMENT_BYTES = 262_144;

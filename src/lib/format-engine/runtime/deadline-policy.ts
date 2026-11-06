@@ -41,7 +41,7 @@ export interface MatchPolicyInput {
   policy: Pick<DeadlinePolicy, 'applies' | 'on_miss'>;
   round: number;
   match: PolicyMatch;
-  /** The players of the match that registered a team for it. */
+  /** The players of the match with a registered team: one linked to the match, else their planned one (`getPlayerTeamForMatch`). */
   teamed: ReadonlySet<string>;
 }
 

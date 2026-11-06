@@ -946,6 +946,39 @@ describe('third-place match', () => {
     expect(findMatchByPlayers(store, 'p4', 'p2')).toBeDefined();
   });
 
+  it('syncThirdPlaceSetting does not add a third-place match to a final round that is completed', async () => {
+    const { store, tournament, participants } = await playSemis(false);
+    const final = findMatchByPlayers(store, 'p1', 'p3')!;
+    await completeAndPropagate(store, final.id, 'p1', tournament, participants);
+    store.rounds.find((round) => round.round_number === 2)!.status = 'completed';
+
+    const on = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: true }, participants);
+
+    expect(on).toEqual({ third_place_matches_removed: 0, slots_materialized: 0, skipped_final_completed: true });
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeUndefined();
+  });
+
+  it('syncThirdPlaceSetting does not add a third-place match once the final was played, even if its round is not marked completed', async () => {
+    const { store, tournament, participants } = await playSemis(false);
+    const final = findMatchByPlayers(store, 'p1', 'p3')!;
+    await completeAndPropagate(store, final.id, 'p3', tournament, participants);
+
+    const on = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: true }, participants);
+
+    expect(on.skipped_final_completed).toBe(true);
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeUndefined();
+  });
+
+  it('syncThirdPlaceSetting still materializes while the final is open', async () => {
+    const { store, tournament, participants } = await playSemis(false);
+    store.rounds.find((round) => round.round_number === 2)!.status = 'active';
+
+    const on = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: true }, participants);
+
+    expect(on).toEqual({ third_place_matches_removed: 0, slots_materialized: 1 });
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeDefined();
+  });
+
   it('syncThirdPlaceSetting keeps a third-place match that is under way', async () => {
     const { store, tournament, participants } = await playSemis(true);
     const match = findMatchByPlayers(store, 'p4', 'p2')!;

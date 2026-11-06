@@ -75,13 +75,13 @@ describe('evaluateConstraints: the Wichtelcup reading', () => {
 
   it('asks for the junk gift in round 1', () => {
     const issues = evaluateConstraints(input({ round: 1, members: normals(...NORMAL_FIVE, 'dragonite') }));
-    expect(issues).toEqual([{ code: 'kit_count_min', constraint_index: 5, params: { source: 'resource gifts_junk', min: 1, have: 0 } }]);
+    expect(issues).toEqual([{ code: 'kit_count_min', constraint_index: 5, params: { source: 'your own gifts junk', min: 1, have: 0 } }]);
   });
 
   it('does not count the gifts of other players', () => {
     const state = stateFor(DEF, { amendments: [POOL], items: [item({ resource: 'gifts_junk', player_id: 'p2', item_id: 'wobbuffet' })] });
     const issues = evaluateConstraints(input({ round: 1, state, members: [...normals(...NORMAL_FIVE), member('wobbuffet')] }));
-    expect(codes(issues)).toEqual(['kit_count_max#4', 'kit_count_min#5']);
+    expect(codes(issues)).toEqual(['kit_not_allowed#4', 'kit_count_min#5']);
     expect(issues[0].pokemon_indexes).toEqual([5]);
   });
 
@@ -92,7 +92,7 @@ describe('evaluateConstraints: the Wichtelcup reading', () => {
     });
     const issues = evaluateConstraints(input({ round: 1, state, members: [...normals(...NORMAL_FIVE.slice(0, 4)), member('wobbuffet'), member('smeargle')] }));
     expect(issues).toEqual([
-      { code: 'kit_count_max', constraint_index: 5, pokemon_indexes: [4, 5], params: { source: 'resource gifts_junk', max: 1, have: 2 } },
+      { code: 'kit_count_max', constraint_index: 5, pokemon_indexes: [4, 5], params: { source: 'your own gifts junk', max: 1, have: 2 } },
     ]);
   });
 
@@ -130,11 +130,11 @@ describe('evaluateConstraints: the Wichtelcup reading', () => {
     const members = normals(...NORMAL_FIVE, 'dragapult');
     const base = { amendments: [POOL, NEW_YEAR], items: [item({ resource: 'gifts_junk', player_id: 'p1', item_id: 'wobbuffet' })] };
     const locked = evaluateConstraints(input({ round: 4, state: stateFor(DEF, base), members }));
-    expect(codes(locked)).toContain('kit_count_max#4');
-    expect(locked.find((i) => i.constraint_index === 4)?.pokemon_indexes).toEqual([5]);
+    expect(codes(locked)).toContain('kit_not_allowed#4');
+    expect(locked.find((i) => i.constraint_index === 4)).toEqual({ code: 'kit_not_allowed', constraint_index: 4, pokemon_indexes: [5], params: { species: 'dragapult' } });
 
     const unlocked = evaluateConstraints(input({ round: 4, state: stateFor(DEF, { ...base, flags: UNLOCKED }), members }));
-    expect(codes(unlocked)).not.toContain('kit_count_max#4');
+    expect(codes(unlocked)).not.toContain('kit_not_allowed#4');
   });
 
   it('caps the New Year picks at two in round 4', () => {
@@ -203,6 +203,90 @@ describe('species matching', () => {
 
     const removed = stateFor(DEF, { amendments: [{ domain: 'new_year', remove: ['corviknight'] }] });
     expect(evaluateConstraints(input({ constraints: domain(false), members, state: removed }))).toEqual([]);
+  });
+});
+
+describe('the allowlist rule (kit_not_allowed)', () => {
+  const allowlist = (over: Partial<Extract<TeamConstraint, { kind: 'count' }>> = {}): TeamConstraint[] => [
+    {
+      kind: 'count',
+      source: { kind: 'not', source: { kind: 'any_of', sources: [{ kind: 'domain', domain: 'normal', unlocked_only: false }, { kind: 'resource', resource: 'gifts_junk' }] } },
+      max: 0,
+      ...over,
+    },
+  ];
+
+  it('names every offending Pokémon on its own slot and not as a team-wide count', () => {
+    const state = stateFor(DEF, { amendments: [POOL], items: [item({ resource: 'gifts_junk', player_id: 'p1', item_id: 'wobbuffet' })] });
+    const members = [member('garchomp'), member('dragapult'), member('wobbuffet'), member('gholdengo')];
+    const issues = evaluateConstraints(input({ constraints: allowlist(), state, members }));
+    expect(issues).toEqual([
+      { code: 'kit_not_allowed', constraint_index: 0, pokemon_indexes: [1], params: { species: 'dragapult' } },
+      { code: 'kit_not_allowed', constraint_index: 0, pokemon_indexes: [3], params: { species: 'gholdengo' } },
+    ]);
+  });
+
+  it('does not count the gifts of another player as allowed', () => {
+    const state = stateFor(DEF, { amendments: [POOL], items: [item({ resource: 'gifts_junk', player_id: 'p2', item_id: 'wobbuffet' })] });
+    const issues = evaluateConstraints(input({ constraints: allowlist(), state, members: [member('garchomp'), member('wobbuffet')] }));
+    expect(issues).toEqual([{ code: 'kit_not_allowed', constraint_index: 0, pokemon_indexes: [1], params: { species: 'wobbuffet' } }]);
+  });
+
+  it('accepts a team that stays inside the pools', () => {
+    const state = stateFor(DEF, { amendments: [POOL], items: [item({ resource: 'gifts_junk', player_id: 'p1', item_id: 'wobbuffet' })] });
+    expect(evaluateConstraints(input({ constraints: allowlist(), state, members: [member('garchomp'), member('wobbuffet')] }))).toEqual([]);
+  });
+
+  it('keeps the count wording for a not() source that is not a ceiling of zero', () => {
+    const members = [member('garchomp'), member('dragapult'), member('gholdengo')];
+    const capped = evaluateConstraints(input({ constraints: allowlist({ max: 1 }), members }));
+    expect(capped).toMatchObject([
+      { code: 'kit_count_max', pokemon_indexes: [1, 2], params: { source: 'not (any of (domain normal; your own gifts junk))', max: 1, have: 2 } },
+    ]);
+    const withFloor = evaluateConstraints(input({ constraints: allowlist({ min: 1, max: 0 }), members }));
+    expect(withFloor.map((i) => i.code)).toEqual(['kit_count_max']);
+  });
+
+  it('keeps the count wording for a plain domain ceiling of zero', () => {
+    const constraints: TeamConstraint[] = [{ kind: 'count', source: { kind: 'domain', domain: 'new_year', unlocked_only: false }, max: 0 }];
+    expect(codes(evaluateConstraints(input({ constraints, members: normals('corviknight') })))).toEqual(['kit_count_max#0']);
+  });
+
+  it('puts the issue on the set of the Pokémon with the English text of the catalog', () => {
+    const members = [member('garchomp', { name: 'Garchomp' }), member('dragapult', { name: 'Dragapult' })];
+    const issues = evaluateConstraints(input({ constraints: allowlist(), members, state: stateFor(DEF, { amendments: [POOL] }) }));
+    const merged = mergeConstraintIssues({ valid: true, issues: [], team_issues: [], team_issue_details: [] }, issues, members);
+    expect(merged.valid).toBe(false);
+    expect(merged.team_issues).toEqual([]);
+    expect(merged.issues).toEqual([
+      {
+        pokemon_index: 1,
+        species: 'Dragapult',
+        issue: 'Dragapult is not in any pool you may use in this league',
+        severity: 'error',
+        code: 'kit_not_allowed',
+        params: { species: 'Dragapult' },
+      },
+    ]);
+    const en = createTranslator(teambuilderMessages, 'en');
+    expect(Object.keys(merged.issues[0].params ?? {})).toEqual(['species']);
+    expect(en.dynamic('validation.issue.kit_not_allowed', { species: 'Dragapult' })).toBe(merged.issues[0].issue);
+  });
+});
+
+describe('the label of a resource source', () => {
+  it("reads as the player's own holdings, with underscores as spaces", () => {
+    const constraints: TeamConstraint[] = [{ kind: 'count', source: { kind: 'resource', resource: 'gifts_premium' }, min: 1 }];
+    const issues = evaluateConstraints(input({ constraints, members: normals('garchomp') }));
+    expect(issues).toEqual([{ code: 'kit_count_min', constraint_index: 0, params: { source: 'your own gifts premium', min: 1, have: 0 } }]);
+    expect(constraintIssueText('kit_count_min', issues[0].params)).toBe('Team rule: at least 1 Pokémon from your own gifts premium needed, found 0');
+  });
+
+  it('leaves the other source labels as they were', () => {
+    const species: TeamConstraint[] = [{ kind: 'count', source: { kind: 'species', ids: ['garchomp', 'blissey'] }, min: 3 }];
+    expect(evaluateConstraints(input({ constraints: species, members: normals('garchomp') }))[0].params.source).toBe('species garchomp, blissey');
+    const domain: TeamConstraint[] = [{ kind: 'count', source: { kind: 'domain', domain: 'new_year', unlocked_only: true }, min: 1 }];
+    expect(evaluateConstraints(input({ constraints: domain, members: normals('garchomp') }))[0].params.source).toBe('domain new_year (when unlocked)');
   });
 });
 
@@ -348,7 +432,7 @@ describe('the team verdict', () => {
     const de = createTranslator(teambuilderMessages, 'de');
     const params = { min: 1, max: 2, have: 3, source: 'domain x', by: 'item', value: 'Leftovers', type: 'Fire', species: 'Garchomp', types: 'Fire/Flying', stage: 'fe', index: 2, reason: 'expr_unknown_ref' };
     for (const code of [
-      'kit_roster_size', 'kit_count_min', 'kit_count_max', 'kit_distinct', 'kit_type_quota', 'kit_tera_banned',
+      'kit_roster_size', 'kit_count_min', 'kit_count_max', 'kit_not_allowed', 'kit_distinct', 'kit_type_quota', 'kit_tera_banned',
       'kit_tera_stab', 'kit_tera_attr', 'kit_evolution_stage', 'kit_constraint_expr',
     ] as const) {
       expect(constraintIssueText(code, params)).toBe(en.dynamic(`validation.issue.${code}`, params));

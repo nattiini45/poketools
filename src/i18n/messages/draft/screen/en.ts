@@ -61,7 +61,6 @@ export default {
     overall: 'Pick {pick} of {total}',
     seatTrack: 'Round {round}: {done} of {total} picks made',
     makeupFor: 'Make-up pick (round {round})',
-    onClockAria: '{player} is on the clock',
     next: 'Next: {player}',
     nextFive: 'Next {n}:',
     complete: 'Draft complete',

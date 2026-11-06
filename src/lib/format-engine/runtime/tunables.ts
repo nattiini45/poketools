@@ -2,11 +2,18 @@
  * Tunables of an attached format: the document's defaults overridden by the values an admin stored in
  * `season_formats.tunables`. A stored value that does not fit its definition (type, range, enum values, table size) is
  * ignored, the default stays, and the problem is reported so the admin view can show it. Pure and client-safe.
+ *
+ * Who may still change a tunable: `editable_until` of its definition. `start` is open until the league starts, `lock`
+ * until the first action of the format is locked (the picks that read the numbers are then final), `always` never closes.
+ * `lockedTunableKeys` answers for a set of keys. NOT WIRED YET: no code writes `season_formats.tunables` today (the
+ * column is read, never edited), so `editable_until` is enforced nowhere. The route or query that first writes tunables
+ * must call `lockedTunableKeys` before storing and refuse the locked keys.
  */
 import type { Json } from '@/types/database';
 import type { FormatDefinition, TunableDef } from '@/lib/format-kit/types';
+import { own } from './types';
 import { toMap } from '@/lib/studio-core/keys';
-import type { TunableValue } from './types';
+import type { KitRuntimeState, TunableValue } from './types';
 
 export type TunableIssueCode = 'unknown_key' | 'wrong_type' | 'out_of_range' | 'not_in_values' | 'bad_table';
 
@@ -65,4 +72,49 @@ export function resolveTunables(def: Pick<FormatDefinition, 'tunables'>, stored:
     else issues.push({ key, code: checked.code });
   }
   return { values, issues };
+}
+
+export interface TunableEditContext {
+  /** The league has started (`format_season_started`). */
+  started: boolean;
+  /** Some action of the format is locked. */
+  actionLocked: boolean;
+}
+
+/** The edit context of a league: `started` comes from the league, the lock from the runtime flags. */
+export function tunableEditContext(started: boolean, state: Pick<KitRuntimeState, 'flags'>): TunableEditContext {
+  const actionLocked = Object.keys(state.flags).some((key) => key.startsWith('action:') && own(state.flags, key) === 'locked');
+  return { started, actionLocked };
+}
+
+export function isTunableEditable(def: Pick<TunableDef, 'editable_until'>, context: TunableEditContext): boolean {
+  switch (def.editable_until) {
+    case 'always':
+      return true;
+    case 'lock':
+      return !context.actionLocked;
+    case 'start':
+      return !context.started;
+  }
+}
+
+/**
+ * The keys of `changes` whose tunable is closed for editing (`editable_until`) and whose value would differ from the stored
+ * one. An unknown key is not judged here (`resolveTunables` reports it); a value equal to the stored (or default) one is not
+ * a change.
+ */
+export function lockedTunableKeys(
+  def: Pick<FormatDefinition, 'tunables'>,
+  current: Readonly<Record<string, TunableValue>>,
+  changes: Readonly<Record<string, unknown>>,
+  context: TunableEditContext,
+): string[] {
+  const defs = toMap(def.tunables ?? [], (t) => t.key);
+  const out: string[] = [];
+  for (const [key, value] of Object.entries(changes)) {
+    const tunable = defs.get(key);
+    if (tunable === undefined || isTunableEditable(tunable, context)) continue;
+    if (JSON.stringify(own(current, key)) !== JSON.stringify(value)) out.push(key);
+  }
+  return out;
 }
