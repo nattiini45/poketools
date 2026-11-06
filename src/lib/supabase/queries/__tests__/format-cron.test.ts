@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase/client', () => ({
       const call = { table, steps: [] as [string, ...unknown[]][] };
       state.calls.push(call);
       const chain: Record<string, unknown> = {};
-      for (const name of ['select', 'eq', 'neq', 'in', 'not', 'order', 'range']) {
+      for (const name of ['select', 'eq', 'neq', 'in', 'not', 'or', 'order', 'range']) {
         chain[name] = (...args: unknown[]) => {
           call.steps.push([name, ...args]);
           return chain;
@@ -30,7 +30,7 @@ vi.mock('@/lib/supabase/client', () => ({
   },
 }));
 
-import { listFinalizedMatches, listKitSeasonIds, listUncompletedMatches, UNCOMPLETED_MATCH_CHUNK } from '../format-cron';
+import { listFinalizedMatches, listKitIdleSeasonIds, listKitSeasonIds, listUncompletedMatches, UNCOMPLETED_MATCH_CHUNK } from '../format-cron';
 
 const stepsOf = (call: { steps: Step[] }, name: string) => call.steps.filter(([step]) => step === name);
 
@@ -58,6 +58,24 @@ describe('listKitSeasonIds', () => {
   it('propagates a database error', async () => {
     state.reply = { data: [], error: new Error('db') };
     await expect(listKitSeasonIds()).rejects.toThrow('db');
+  });
+});
+
+describe('listKitIdleSeasonIds', () => {
+  it('reads the completed or archived leagues on the kit engine, whatever else they are', async () => {
+    state.reply = { data: [{ id: 's-9' }], error: null };
+    await expect(listKitIdleSeasonIds()).resolves.toEqual(['s-9']);
+    const [call] = state.calls;
+    expect(call.table).toBe('seasons');
+    expect(stepsOf(call, 'or')).toEqual([['or', 'status.eq.completed,archived.eq.true']]);
+    expect(stepsOf(call, 'eq')).toEqual([['eq', 'season_formats.engine', 'kit']]);
+    expect(stepsOf(call, 'in')).toEqual([]);
+    expect(stepsOf(call, 'order')).toEqual([['order', 'id', { ascending: true }]]);
+  });
+
+  it('propagates a database error', async () => {
+    state.reply = { data: [], error: new Error('db') };
+    await expect(listKitIdleSeasonIds()).rejects.toThrow('db');
   });
 });
 

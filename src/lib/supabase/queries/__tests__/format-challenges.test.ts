@@ -73,6 +73,7 @@ const EXPECTED_STATUS: Record<FormatChallengeErrorCode, number> = {
   challenge_not_challenger: 403,
   challenge_not_open: 409,
   challenge_expired: 409,
+  challenge_player_not_enrolled: 409,
   challenge_not_ladder: 409,
 };
 
@@ -197,6 +198,15 @@ describe('the RPC wrappers', () => {
     await expect(respondToFormatChallenge({ seasonId: SEASON, challengeId: CHALLENGE, playerId: P2, accept: true })).rejects.toMatchObject({
       name: 'FormatChallengeError',
       code: 'challenge_expired',
+      statusCode: 409,
+    });
+  });
+
+  it('raises challenge_player_not_enrolled for an acceptance that came back cancelled (a player left the phase)', async () => {
+    state.rpcReply = { data: row({ status: 'cancelled', responded_at: 't3' }) };
+    await expect(respondToFormatChallenge({ seasonId: SEASON, challengeId: CHALLENGE, playerId: P2, accept: true })).rejects.toMatchObject({
+      name: 'FormatChallengeError',
+      code: 'challenge_player_not_enrolled',
       statusCode: 409,
     });
   });

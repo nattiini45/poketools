@@ -8,12 +8,18 @@
 --
 --   format_challenge_create(season, phase, challenger, defender, challenger_rank, defender_rank, rank_range, max_open,
 --                           cooldown_rounds, accept_window_hours)
---       Under an advisory lock on the phase. Lapsed open challenges of the phase are expired first. The ranks are the
---       players' places in the stage standings (computed by the app: the standings are not SQL).
+--       Under an advisory lock on the phase. Lapsed open challenges of the phase are expired first, and open ones whose
+--       challenger or defender is no longer enrolled in the phase are cancelled (they would otherwise count against
+--       max_open and block the pair). The ranks are the players' places in the stage standings (computed by the app: the
+--       standings are not SQL).
 --   format_challenge_respond(season, challenge, player, accept)
 --       Only the defender, only while open; a challenge id of another league is challenge_not_found. Accept inserts a
 --       `scheduled` match (challenger = player 1) into the phase's highest round that is not completed. A response after `expires_at` stores `expired` and returns that row (the app
 --       raises challenge_expired; the status is kept, which a RAISE would roll back).
+--       Accept rechecks the enrollment: both players must still be in tournament_participants of the phase (the rows are
+--       locked FOR KEY SHARE, so a concurrent removal waits for the match insert and cannot slip in between). When one of them
+--       was removed, the challenge is stored as `cancelled` (responded_at set, no match) and returned; the app raises
+--       challenge_player_not_enrolled. A decline needs no enrollment: it only closes the challenge.
 --   format_challenge_cancel(season, challenge, player)
 --       The challenger (player NULL = an admin acting for them) withdraws an open challenge of that league: a challenge
 --       id of another league is challenge_not_found, so an admin route scoped to one league cannot reach another's.
@@ -26,7 +32,8 @@
 -- challenge_phase_not_found, challenge_phase_closed, challenge_not_participant (DETAIL {"player_id"}),
 -- challenge_no_open_round, challenge_rank_range (DETAIL {"rank_range", "distance"}), challenge_max_open
 -- (DETAIL {"max_open"}), challenge_already_open, challenge_cooldown (DETAIL {"cooldown_rounds"}), challenge_not_found,
--- challenge_not_defender, challenge_not_challenger, challenge_not_open (DETAIL {"status"}).
+-- challenge_not_defender, challenge_not_challenger, challenge_not_open (DETAIL {"status"}). challenge_player_not_enrolled
+-- is not a RAISE: respond stores and returns the cancelled row (see above), and the application raises it.
 --
 -- format_checks.source gains 'pairing_forbidden' (a filtered round paired or dropped pairs the filter rejects) and
 -- 'deadline_missed' (a deadline policy fired for a missed match, team or action) and 'team_audit' (a played team broke
@@ -140,6 +147,13 @@ BEGIN
   UPDATE public.format_challenges SET status = 'expired'
    WHERE phase_id = p_phase_id AND status = 'open' AND expires_at <= now();
 
+  -- Nor is an open challenge of a player who has since left the phase (removed or swapped out): it is cancelled, which the
+  -- cooldown ignores, like a withdrawal. Both players of this call are enrolled (checked above).
+  UPDATE public.format_challenges c SET status = 'cancelled', responded_at = now()
+   WHERE c.phase_id = p_phase_id AND c.status = 'open'
+     AND (NOT EXISTS (SELECT 1 FROM public.tournament_participants tp WHERE tp.tournament_id = c.phase_id AND tp.player_id = c.challenger_id)
+          OR NOT EXISTS (SELECT 1 FROM public.tournament_participants tp WHERE tp.tournament_id = c.phase_id AND tp.player_id = c.defender_id));
+
   IF EXISTS (
     SELECT 1 FROM public.format_challenges
      WHERE phase_id = p_phase_id AND status = 'open'
@@ -182,6 +196,7 @@ DECLARE
   v_status   public.tournament_status;
   v_round_id uuid;
   v_match_id uuid;
+  v_enrolled integer;
 BEGIN
   IF p_accept IS NULL THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'challenge')::text;
@@ -207,10 +222,28 @@ BEGIN
     RETURN v_row;
   END IF;
 
-  SELECT t.status INTO v_status FROM public.tournaments t WHERE t.id = v_row.phase_id;
+  -- KEY SHARE on the phase row waits for a running enrollment replace (which holds it FOR UPDATE and deletes and re-inserts
+  -- the participants), so the enrollment read below never sees its half-done state.
+  SELECT t.status INTO v_status FROM public.tournaments t WHERE t.id = v_row.phase_id FOR KEY SHARE;
   IF v_status IS NULL OR v_status = 'completed' THEN
     RAISE EXCEPTION 'challenge_phase_closed' USING ERRCODE = 'P0001';
   END IF;
+
+  -- The challenge was checked against the enrollment when it was made; either player may have left the phase since. Both
+  -- enrollment rows are locked FOR KEY SHARE until the end of the transaction, so a removal cannot slip in between this
+  -- check and the match insert (it waits, and then finds the match). A void challenge is cancelled, not left to linger;
+  -- like an expiry the status is stored and returned (a RAISE would roll it back) and the application raises
+  -- challenge_player_not_enrolled for it.
+  SELECT count(*) INTO v_enrolled FROM (
+    SELECT 1 FROM public.tournament_participants tp
+     WHERE tp.tournament_id = v_row.phase_id AND tp.player_id IN (v_row.challenger_id, v_row.defender_id)
+       FOR KEY SHARE
+  ) enrolled;
+  IF v_enrolled < 2 THEN
+    UPDATE public.format_challenges SET status = 'cancelled', responded_at = now() WHERE id = v_row.id RETURNING * INTO v_row;
+    RETURN v_row;
+  END IF;
+
   SELECT o.id INTO v_round_id FROM public.format__open_round(v_row.phase_id) o;
   IF v_round_id IS NULL THEN
     RAISE EXCEPTION 'challenge_no_open_round' USING ERRCODE = 'P0001';
@@ -280,9 +313,9 @@ GRANT EXECUTE ON FUNCTION
 COMMENT ON FUNCTION public.format__open_round(uuid) IS
   'Internal: the highest round of a phase that is not completed (id, round_number), or no row.';
 COMMENT ON FUNCTION public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer) IS
-  'Creates a challenge in the phase''s open round under a per-phase lock, enforcing rank_range, max_open, the cooldown and one open challenge per pair. Raises the challenge_* codes (P0001).';
+  'Creates a challenge in the phase''s open round under a per-phase lock, enforcing rank_range, max_open, the cooldown and one open challenge per pair; open challenges of players who left the phase are cancelled first. Raises the challenge_* codes (P0001).';
 COMMENT ON FUNCTION public.format_challenge_respond(uuid, uuid, uuid, boolean) IS
-  'The defender accepts (a scheduled match is inserted into the open round) or declines an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired.';
+  'The defender accepts (a scheduled match is inserted into the open round) or declines an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired. An accept rechecks that both players are still enrolled in the phase (rows locked FOR KEY SHARE); when one is not, it stores and returns status cancelled and inserts no match.';
 COMMENT ON FUNCTION public.format_challenge_cancel(uuid, uuid, uuid) IS
   'The challenger (or an admin, player NULL) withdraws an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired (which the cooldown counts) instead of cancelled.';
 COMMENT ON FUNCTION public.format_challenges_expire(uuid) IS

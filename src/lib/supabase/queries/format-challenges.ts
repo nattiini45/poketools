@@ -5,6 +5,8 @@
  * code) leave this module as `FormatChallengeError`; anything else goes through `mapFormatRuntimeDbError` and is
  * rethrown unchanged when it is not a format signal. A response after the accept window is not an error of the
  * database: it stores `expired` and returns that row, and `respondToFormatChallenge` raises `challenge_expired` for it.
+ * An acceptance after a player left the phase works the same way: the row comes back `cancelled` (no match) and
+ * `respondToFormatChallenge` raises `challenge_player_not_enrolled`.
  * A withdrawal after the accept window does the same (`cancelFormatChallenge`): the challenge is stored as expired, which
  * the cooldown counts, never as cancelled, which it ignores.
  */
@@ -37,6 +39,7 @@ export const FORMAT_CHALLENGE_ERROR_CODES = [
   'challenge_not_challenger',
   'challenge_not_open',
   'challenge_expired',
+  'challenge_player_not_enrolled',
   'challenge_not_ladder',
 ] as const;
 export type FormatChallengeErrorCode = (typeof FORMAT_CHALLENGE_ERROR_CODES)[number];
@@ -56,6 +59,7 @@ const FORMAT_CHALLENGE_ERROR_STATUS: { readonly [C in FormatChallengeErrorCode]:
   challenge_not_challenger: 403,
   challenge_not_open: 409,
   challenge_expired: 409,
+  challenge_player_not_enrolled: 409,
   challenge_not_ladder: 409,
 };
 
@@ -171,7 +175,9 @@ export interface RespondFormatChallengeInput {
  * The defender accepts (a scheduled match is created in the open round) or declines. A challenge of another league is
  * `challenge_not_found`, so a route scoped to one league cannot reach the challenges of another. Raises `challenge_not_found`,
  * `challenge_not_defender`, `challenge_not_open`, `challenge_phase_closed`, `challenge_no_open_round`, and
- * `challenge_expired` when the accept window had run out (the challenge is stored as expired).
+ * `challenge_expired` when the accept window had run out (the challenge is stored as expired), and
+ * `challenge_player_not_enrolled` when an acceptance finds the challenger or the defender no longer enrolled in the phase
+ * (the challenge is stored as cancelled and no match is made).
  */
 export async function respondToFormatChallenge(input: RespondFormatChallengeInput): Promise<FormatChallengeRow> {
   const { data, error } = await supabase.rpc('format_challenge_respond', {
@@ -182,6 +188,8 @@ export async function respondToFormatChallenge(input: RespondFormatChallengeInpu
   });
   if (error) throw mapFormatChallengeDbError(error);
   if (data.status === 'expired') throw new FormatChallengeError('challenge_expired');
+  // Only an acceptance can come back cancelled (a decline is `declined`): one of the players left the phase.
+  if (data.status === 'cancelled') throw new FormatChallengeError('challenge_player_not_enrolled');
   return data;
 }
 

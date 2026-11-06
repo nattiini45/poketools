@@ -1,7 +1,7 @@
 /**
  * The reads behind the format engine's cron pass: the phases of running kit leagues whose stage has a calendar, the
- * running kit leagues with or without one, and the finalized matches of a league's phases (the `match_completed`
- * backfill). Server only.
+ * running kit leagues with or without one, the completed or archived kit leagues (for the pending-revert heal only), and
+ * the finalized matches of a league's phases (the `match_completed` backfill). Server only.
  */
 import 'server-only';
 
@@ -90,6 +90,26 @@ export async function listKitSeasonIds(): Promise<string[]> {
         .order('id', { ascending: true })
         .range(from, to) as unknown as PromiseLike<{ data: SeasonIdRow[] | null; error: unknown }>,
     { label: 'format-cron kit seasons' },
+  );
+  return rows.map((row) => row.id);
+}
+
+/**
+ * The kit leagues the running lists leave out: completed or archived. An admin can still reopen or reset a match there,
+ * and when the revert of that moment fails (a transient error) only the cron's pending-revert heal repairs it, so the
+ * heal visits these leagues too (and nothing else: no phase, deadline or backfill work). Paged under `max_rows`.
+ */
+export async function listKitIdleSeasonIds(): Promise<string[]> {
+  const { rows } = await readBoundedPages<SeasonIdRow>(
+    (from, to) =>
+      supabase
+        .from('seasons')
+        .select('id, season_formats!inner ( engine )')
+        .or('status.eq.completed,archived.eq.true')
+        .eq('season_formats.engine', 'kit')
+        .order('id', { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{ data: SeasonIdRow[] | null; error: unknown }>,
+    { label: 'format-cron idle kit seasons' },
   );
   return rows.map((row) => row.id);
 }

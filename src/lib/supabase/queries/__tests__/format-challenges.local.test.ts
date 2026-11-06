@@ -84,6 +84,16 @@ const lapse = async (id: string) => {
   if (error) throw new Error(`[lapse ${id}] ${JSON.stringify(error)}`);
 };
 
+/** Takes a player out of the ladder phase's enrollment for the duration of `fn` and puts them back, whatever happens. */
+const withoutEnrollment = async (playerId: string, fn: () => Promise<void>) => {
+  await run('unenroll', client.from('tournament_participants').delete().eq('tournament_id', ids.phase).eq('player_id', playerId));
+  try {
+    await fn();
+  } finally {
+    await run('re-enroll', client.from('tournament_participants').insert({ tournament_id: ids.phase, player_id: playerId }));
+  }
+};
+
 const run = async (label: string, op: PromiseLike<{ error: unknown }>) => {
   const { error } = await op;
   if (error) throw new Error(`[seed ${label}] ${JSON.stringify(error)}`);
@@ -236,6 +246,17 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
       await expect(ladder.cancelFormatChallenge(ids.season, lapsed.id, null)).rejects.toMatchObject({ code: 'challenge_not_open' });
     });
 
+    it('cancels an open challenge of a player who left the phase, so it neither counts against max_open nor lingers', async () => {
+      const stale = await create({ maxOpen: 1 });
+      await withoutEnrollment(ids.pTop, async () => {
+        // maxOpen 1 would refuse a second challenge while the first, against the removed player, still counted.
+        const fresh = await create({ maxOpen: 1, defenderId: ids.pDefender, defenderRank: RANK.get(ids.pDefender) as number });
+        expect(fresh.status).toBe('open');
+        expect(await rowOf(stale.id)).toMatchObject({ status: 'cancelled', match_id: null });
+        expect((await rowOf(stale.id))?.responded_at).not.toBeNull();
+      });
+    });
+
     it('refuses a phase of another league, a completed phase, a non-participant and a phase without a round', async () => {
       await expect(create({ seasonId: randomUUID() })).rejects.toMatchObject({ code: 'challenge_phase_not_found' });
 
@@ -272,6 +293,40 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
       expect(answered.match_id).toBe(matches[0].id);
       // The match, not a round of its own: the challenge plays inside the open round.
       expect(matches[0].round_id).not.toBe(ids.roundDone);
+    });
+
+    it('cancels instead of accepting when the defender or the challenger left the phase since', async () => {
+      for (const leaver of [ids.pTop, ids.pChallenger]) {
+        const row = await create();
+        await withoutEnrollment(leaver, async () => {
+          await expect(
+            ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true }),
+          ).rejects.toMatchObject({ code: 'challenge_player_not_enrolled', statusCode: 409 });
+        });
+        // The status is kept (a RAISE would have rolled it back): cancelled, no match, answered at a moment.
+        expect(await rowOf(row.id)).toMatchObject({ status: 'cancelled', match_id: null });
+        expect((await rowOf(row.id))?.responded_at).not.toBeNull();
+        expect(await matchesOf()).toEqual([]);
+        // A second answer finds it no longer open.
+        await expect(
+          ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true }),
+        ).rejects.toMatchObject({ code: 'challenge_not_open' });
+        await run('reset challenges', client.from('format_challenges').delete().eq('season_id', ids.season));
+      }
+    });
+
+    it('lets the defender decline after the challenger left the phase, and accepts once both are enrolled again', async () => {
+      const declined = await create();
+      await withoutEnrollment(ids.pChallenger, async () => {
+        await expect(
+          ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: declined.id, playerId: ids.pTop, accept: false }),
+        ).resolves.toMatchObject({ status: 'declined' });
+      });
+      const row = await create();
+      await expect(
+        ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true }),
+      ).resolves.toMatchObject({ status: 'accepted' });
+      expect(await matchesOf()).toHaveLength(1);
     });
 
     it('declines without creating a match', async () => {

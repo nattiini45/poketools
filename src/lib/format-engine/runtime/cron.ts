@@ -19,7 +19,10 @@
  * the reverts that never applied (`healPendingReverts`, bounded the same way): a match that left `completed` (reset,
  * reopened, a game deleted or edited) whose current `match_completed` key is still the fired one, because the
  * `onMatchReverted` call of that moment failed and only reported it. Its grants and points would stand for a result that
- * no longer exists. The limits of the repair: a match that was completed again before the retry finds the old key fired,
+ * no longer exists. The heal also visits the completed and archived kit leagues (`listKitIdleSeasonIds`), where an admin can
+ * still reopen a match: only the heal runs there, never a phase, a deadline or a backfill, in a window of
+ * `FORMAT_CRON_IDLE_LEAGUE_LIMIT` leagues per run that moves on with the clock, after the running leagues and within the same
+ * revert budget and time budget. The limits of the repair: a match that was completed again before the retry finds the old key fired,
  * so its new completion applied nothing and the old effects stand (an admin sees the failed revert in the logs only), and a
  * match row that has been deleted cannot be reverted from here (the sweep reads matches).
  *
@@ -47,6 +50,7 @@ import { expireSeasonReads, revalidateMatchPages } from '@/lib/revalidation';
 import {
   listFinalizedMatches,
   listKitCronPhases,
+  listKitIdleSeasonIds,
   listKitSeasonIds,
   listUncompletedMatches,
   type KitCronPhase,
@@ -103,6 +107,9 @@ export const FORMAT_CRON_REVERT_PER_LEAGUE = 10;
 
 /** Matches per league and run whose completion key is checked for a pending revert; the window moves on per slot. */
 export const FORMAT_CRON_REVERT_SCAN_LIMIT = 500;
+
+/** Completed or archived leagues whose pending reverts one run checks (each costs a context load); the window moves on per slot. */
+export const FORMAT_CRON_IDLE_LEAGUE_LIMIT = 10;
 
 /** The runs are 15 minutes apart (vercel.json); the window moves on once per slot of that length. */
 const CRON_SLOT_MS = 15 * 60_000;
@@ -546,15 +553,24 @@ export function currentlyCompletedMatchIds(firedKeys: readonly string[]): string
  * original one, or repeats, applies nothing twice; each match is read again right before it, so one completed again in
  * the meantime is left alone. The scan covers `FORMAT_CRON_REVERT_SCAN_LIMIT` matches per league and run in a window
  * that moves on per slot, and at most `FORMAT_CRON_REVERT_PER_LEAGUE` reverts per league and what is left of the run's
- * budget are made. A failed revert counts a failure and is tried again by the next run. Returns whether anything was
+ * budget are made. With `scanAll` (a completed or archived league) every candidate is scanned instead: such a league is
+ * visited only every few slots, so its slot parity is fixed and a slot-keyed window could land on the same offset at every
+ * visit and never reach part of a large league; the scan is a chunked indexed read and the window of idle leagues is small. A failed revert counts a failure and is tried again by the next run. Returns whether anything was
  * reverted (the context is stale then).
  */
-async function healPendingReverts(ctx: KitContext, now: Date, budget: BackfillBudget, summary: FormatCronSummary): Promise<boolean> {
+async function healPendingReverts(
+  ctx: KitContext,
+  now: Date,
+  budget: BackfillBudget,
+  summary: FormatCronSummary,
+  scanAll: boolean = false,
+): Promise<boolean> {
   if (budget.reverts <= 0 || ctx.phases.length === 0) return false;
   const candidates = currentlyCompletedMatchIds(ctx.state.firedEventKeys);
   if (candidates.length === 0) return false;
-  const start = cronWindowStart(now, candidates.length, FORMAT_CRON_REVERT_SCAN_LIMIT);
-  const scanned = [...candidates.slice(start), ...candidates.slice(0, start)].slice(0, FORMAT_CRON_REVERT_SCAN_LIMIT);
+  const start = scanAll ? 0 : cronWindowStart(now, candidates.length, FORMAT_CRON_REVERT_SCAN_LIMIT);
+  const rotated = [...candidates.slice(start), ...candidates.slice(0, start)];
+  const scanned = scanAll ? rotated : rotated.slice(0, FORMAT_CRON_REVERT_SCAN_LIMIT);
   const pending = (await listUncompletedMatches(ctx.phases.map((phase) => phase.id), scanned)).slice(
     0,
     Math.min(budget.reverts, FORMAT_CRON_REVERT_PER_LEAGUE),
@@ -578,6 +594,16 @@ async function healPendingReverts(ctx: KitContext, now: Date, budget: BackfillBu
     }
   }
   return applied;
+}
+
+/**
+ * A completed or archived league: nothing runs there but the pending-revert heal (a match reopened after the season closed
+ * whose revert failed would otherwise keep its grants and points for ever).
+ */
+async function runIdleLeague(seasonId: string, now: Date, summary: FormatCronSummary, budget: BackfillBudget): Promise<void> {
+  const ctx = await loadFreshKitContext(seasonId);
+  if (ctx === null) return;
+  await healPendingReverts(ctx, now, budget, summary, true);
 }
 
 async function runLeague(
@@ -662,6 +688,31 @@ export async function runFormatCronPass(now: Date = new Date(), options: FormatC
       } else {
         summary.failures += 1;
         logger.error(TAG, 'league cron pass failed', { seasonId, error });
+      }
+    }
+  }
+
+  // The completed and archived leagues come last: the heal only, in a small window, while revert budget and time are left.
+  let idle: string[] = [];
+  try {
+    const running = new Set(bySeason.keys());
+    idle = (await listKitIdleSeasonIds()).filter((seasonId) => !running.has(seasonId)).sort();
+  } catch (error) {
+    summary.failures += 1;
+    logger.error(TAG, 'could not list the completed or archived leagues', { error });
+  }
+  const idleStart = cronWindowStart(now, idle.length, FORMAT_CRON_IDLE_LEAGUE_LIMIT);
+  const idleWindow = [...idle.slice(idleStart), ...idle.slice(0, idleStart)].slice(0, FORMAT_CRON_IDLE_LEAGUE_LIMIT);
+  for (const seasonId of idleWindow) {
+    if (backfill.reverts <= 0 || clock() >= deadline) break;
+    try {
+      await runIdleLeague(seasonId, now, summary, backfill);
+    } catch (error) {
+      if (isFormatContextStale(error)) {
+        logger.warn(TAG, 'the format changed during the pass; the league is retried next pass', { seasonId });
+      } else {
+        summary.failures += 1;
+        logger.error(TAG, 'completed league revert heal failed', { seasonId, error });
       }
     }
   }

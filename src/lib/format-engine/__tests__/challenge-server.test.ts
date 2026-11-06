@@ -163,6 +163,15 @@ describe('answerChallenge', () => {
     expect(expireTournamentReads).not.toHaveBeenCalled();
   });
 
+  it('expires nothing when an acceptance finds a player no longer enrolled (no match was made)', async () => {
+    vi.mocked(respondToFormatChallenge).mockRejectedValue(new FormatChallengeError('challenge_player_not_enrolled'));
+
+    await expect(answerChallenge({ seasonId: SEASON, challengeId: 'c-1', playerId: P1, accept: true })).rejects.toMatchObject({
+      code: 'challenge_player_not_enrolled',
+    });
+    expect(expireTournamentReads).not.toHaveBeenCalled();
+  });
+
   it('expires nothing when the response is refused (a late answer is challenge_expired)', async () => {
     vi.mocked(respondToFormatChallenge).mockRejectedValue(new FormatChallengeError('challenge_expired'));
 

@@ -158,6 +158,7 @@ export default {
   challenge_not_challenger: 'Only the player who made this challenge can withdraw it.',
   challenge_not_open: 'This challenge has already been answered, withdrawn or has expired.',
   challenge_expired: 'The time to answer this challenge has run out.',
+  challenge_player_not_enrolled: 'One of the two players is no longer part of this phase, so the challenge was cancelled.',
   challenge_not_ladder: 'This phase is not a challenge ladder.',
 
   // Live format surface (api/seasons/[id]/format/{me,actions,challenges,adjustments,checks,relations}): the refusals of

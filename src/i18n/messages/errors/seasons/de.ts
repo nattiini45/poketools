@@ -139,6 +139,7 @@ export default defineDe<typeof en>()({
   challenge_not_challenger: 'Nur der Spieler, der diese Herausforderung gestellt hat, kann sie zurückziehen.',
   challenge_not_open: 'Diese Herausforderung wurde schon beantwortet oder zurückgezogen oder ist abgelaufen.',
   challenge_expired: 'Die Zeit zum Beantworten dieser Herausforderung ist abgelaufen.',
+  challenge_player_not_enrolled: 'Einer der beiden Spieler gehört nicht mehr zu dieser Phase, deshalb wurde die Herausforderung abgebrochen.',
   challenge_not_ladder: 'Diese Phase ist keine Herausforderungsleiter.',
   format_not_running: 'Diese Liga läuft gerade nicht mit einem eigenen Format.',
   format_not_participant: 'Du nimmst an dieser Liga nicht teil.',

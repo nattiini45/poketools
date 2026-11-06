@@ -279,6 +279,19 @@ describe('20261106090000 challenges', () => {
     expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*format_challenge_respond\(uuid, uuid, uuid, boolean\)[\s\S]*TO service_role/);
   });
 
+  it('locks the phase row and both enrollment rows before the match insert, so a removal cannot slip in between', () => {
+    const start = text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_respond(');
+    const respond = text.slice(start, text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_cancel(', start));
+    const phaseLock = respond.search(/FROM public\.tournaments t WHERE t\.id = v_row\.phase_id FOR KEY SHARE;/);
+    const enrolled = respond.search(/FROM public\.tournament_participants tp\s+WHERE tp\.tournament_id = v_row\.phase_id AND tp\.player_id IN \(v_row\.challenger_id, v_row\.defender_id\)\s+FOR KEY SHARE/);
+    const insert = respond.indexOf('INSERT INTO public.matches');
+    expect(phaseLock).toBeGreaterThan(-1);
+    expect(enrolled).toBeGreaterThan(phaseLock);
+    expect(insert).toBeGreaterThan(enrolled);
+    // a challenge whose player left is cancelled before any match is made
+    expect(respond.slice(enrolled, insert)).toMatch(/IF v_enrolled < 2 THEN[\s\S]*SET status = 'cancelled'[\s\S]*RETURN v_row;/);
+  });
+
   it('stores a withdrawal of a lapsed challenge as expired, which the cooldown counts, never as cancelled', () => {
     const cancel = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_cancel('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenges_expire('));
     const lapsed = cancel.indexOf('IF v_row.expires_at <= now() THEN');

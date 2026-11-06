@@ -12,6 +12,7 @@ vi.mock('@/lib/format-engine/challenge-server', () => ({ expireChallenges: vi.fn
 vi.mock('@/lib/supabase/queries/format-cron', () => ({
   listKitCronPhases: vi.fn(),
   listKitSeasonIds: vi.fn(),
+  listKitIdleSeasonIds: vi.fn(),
   listFinalizedMatches: vi.fn(),
   listUncompletedMatches: vi.fn(),
 }));
@@ -36,6 +37,7 @@ import {
   currentlyCompletedMatchIds,
   FORMAT_CRON_BACKFILL_LIMIT,
   FORMAT_CRON_BACKFILL_PER_LEAGUE,
+  FORMAT_CRON_IDLE_LEAGUE_LIMIT,
   FORMAT_CRON_LEAGUE_LIMIT,
   FORMAT_CRON_REVERT_LIMIT,
   FORMAT_CRON_REVERT_PER_LEAGUE,
@@ -49,7 +51,7 @@ import { discardStagedAdminOutcome, finalizeMatchCompletion, stageAdminOutcome }
 import { StagedOutcomeBlockedError } from '@/lib/match/staged-outcome';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
-import { listFinalizedMatches, listKitCronPhases, listKitSeasonIds, listUncompletedMatches } from '@/lib/supabase/queries/format-cron';
+import { listFinalizedMatches, listKitCronPhases, listKitIdleSeasonIds, listKitSeasonIds, listUncompletedMatches } from '@/lib/supabase/queries/format-cron';
 import { FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament, updateMatchStatus } from '@/lib/supabase/queries/matches';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
@@ -100,6 +102,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(listKitCronPhases).mockResolvedValue([cronPhase()]);
   vi.mocked(listKitSeasonIds).mockResolvedValue([]);
+  vi.mocked(listKitIdleSeasonIds).mockResolvedValue([]);
   vi.mocked(listFinalizedMatches).mockResolvedValue([]);
   vi.mocked(onMatchCompleted).mockResolvedValue(true);
   vi.mocked(listUncompletedMatches).mockResolvedValue([]);
@@ -899,6 +902,119 @@ describe('pending match_reverted', () => {
     await runFormatCronPass(AFTER_DEADLINE);
     const [, scanned] = vi.mocked(listUncompletedMatches).mock.calls[0];
     expect(scanned).toHaveLength(FORMAT_CRON_REVERT_SCAN_LIMIT);
+  });
+});
+
+describe('pending match_reverted in completed or archived leagues', () => {
+  const open = (id: string) => ({ id, tournament_id: PHASE, status: 'in_progress' });
+  const withFired = (fired: string[]) => context(calendar([]), { firedEventKeys: fired });
+
+  it('retries a failed revert of a match reopened after the season completed, and runs nothing else there', async () => {
+    vi.mocked(listKitCronPhases).mockResolvedValue([]);
+    vi.mocked(listKitIdleSeasonIds).mockResolvedValue(['s-done']);
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...withFired(['match_completed:m-1']), seasonId: 's-done' });
+    vi.mocked(listUncompletedMatches).mockResolvedValue([open('m-1')]);
+    vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'in_progress' } as never);
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(loadFreshKitContext).toHaveBeenCalledWith('s-done');
+    expect(revertMatchCompletion).toHaveBeenCalledWith({ tournamentId: PHASE, matchId: 'm-1', report: { stale: false, failed: false } });
+    // the heal only: no lost-lock repair, no backfill, no calendar work; the league is not a running one
+    expect(fireLockedActionEvents).not.toHaveBeenCalled();
+    expect(listFinalizedMatches).not.toHaveBeenCalled();
+    expect(fireEvent).not.toHaveBeenCalled();
+    expect(summary).toMatchObject({ leagues: 0, failures: 0 });
+  });
+
+  it('scans every currently-completed match of a completed league, not a slot-keyed window, so no part of a large league is skipped', async () => {
+    // 1000 candidates: slot * 500 % 1000 is the same offset at every visit of a league that is only visited on one slot parity
+    const ids = Array.from({ length: FORMAT_CRON_REVERT_SCAN_LIMIT * 2 }, (_, i) => `m-${String(i).padStart(4, '0')}`);
+    vi.mocked(listKitCronPhases).mockResolvedValue([]);
+    vi.mocked(listKitIdleSeasonIds).mockResolvedValue(['s-done']);
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...withFired(ids.map((id) => `match_completed:${id}`)), seasonId: 's-done' });
+    for (const slot of [7000, 7002, 7004]) {
+      vi.mocked(listUncompletedMatches).mockClear();
+      await runFormatCronPass(new Date(slot * 15 * 60_000));
+      const [, scanned] = vi.mocked(listUncompletedMatches).mock.calls[0];
+      expect([...scanned].sort()).toEqual(ids);
+    }
+  });
+
+  it('counts a revert that fails again, and the next run retries it', async () => {
+    vi.mocked(listKitCronPhases).mockResolvedValue([]);
+    vi.mocked(listKitIdleSeasonIds).mockResolvedValue(['s-done']);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(withFired(['match_completed:m-1']));
+    vi.mocked(listUncompletedMatches).mockResolvedValue([open('m-1')]);
+    vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'in_progress' } as never);
+    vi.mocked(revertMatchCompletion).mockResolvedValue(false);
+    expect((await runFormatCronPass(AFTER_DEADLINE)).failures).toBe(1);
+    expect((await runFormatCronPass(AFTER_DEADLINE)).failures).toBe(1);
+    expect(revertMatchCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  it('visits the running leagues first and shares their revert budget', async () => {
+    const ids = Array.from({ length: 40 }, (_, i) => `m-${String(i).padStart(2, '0')}`);
+    vi.mocked(listKitIdleSeasonIds).mockResolvedValue(['s-done']);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(withFired(ids.map((id) => `match_completed:${id}`)));
+    vi.mocked(listUncompletedMatches).mockResolvedValue(ids.map((id) => open(id)));
+    vi.mocked(getMatchById).mockResolvedValue({ id: 'x', status: 'in_progress' } as never);
+    vi.mocked(listKitCronPhases).mockResolvedValue(['s-1', 's-2'].map((id, i) => ({ ...cronPhase(), id: `t-${i}`, season_id: id })));
+    await runFormatCronPass(AFTER_DEADLINE);
+    // 2 running leagues take 10 each; the idle one only gets what is left of the run's 25
+    expect(revertMatchCompletion).toHaveBeenCalledTimes(FORMAT_CRON_REVERT_LIMIT);
+    expect(vi.mocked(loadFreshKitContext).mock.calls.map(([id]) => id).at(-1)).toBe('s-done');
+
+    // with three running leagues the budget is spent before the idle one is reached
+    vi.mocked(loadFreshKitContext).mockClear();
+    vi.mocked(listKitCronPhases).mockResolvedValue(['s-1', 's-2', 's-3'].map((id, i) => ({ ...cronPhase(), id: `t-${i}`, season_id: id })));
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(vi.mocked(loadFreshKitContext).mock.calls.map(([id]) => id)).not.toContain('s-done');
+  });
+
+  it('checks a bounded window of them per run that moves on, so every one is reached', async () => {
+    const total = FORMAT_CRON_IDLE_LEAGUE_LIMIT * 3 + 4;
+    vi.mocked(listKitCronPhases).mockResolvedValue([]);
+    vi.mocked(listKitIdleSeasonIds).mockResolvedValue(Array.from({ length: total }, (_, i) => `s-${String(i).padStart(3, '0')}`));
+    vi.mocked(loadFreshKitContext).mockResolvedValue(null);
+    const seen = new Set<string>();
+    for (let n = 0; n < 4; n += 1) {
+      vi.mocked(loadFreshKitContext).mockClear();
+      await runFormatCronPass(new Date((7000 + n) * 15 * 60_000));
+      expect(loadFreshKitContext).toHaveBeenCalledTimes(FORMAT_CRON_IDLE_LEAGUE_LIMIT);
+      for (const [id] of vi.mocked(loadFreshKitContext).mock.calls) seen.add(id);
+    }
+    expect(seen.size).toBe(total);
+  });
+
+  it('never visits a running league as an idle one, and starts none once the time budget is used up', async () => {
+    vi.mocked(listKitSeasonIds).mockResolvedValue([SEASON]);
+    vi.mocked(listKitIdleSeasonIds).mockResolvedValue([SEASON, 's-done']);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(null);
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(vi.mocked(loadFreshKitContext).mock.calls.map(([id]) => id)).toEqual([SEASON, 's-done']);
+
+    vi.mocked(loadFreshKitContext).mockClear();
+    let time = 0;
+    await runFormatCronPass(AFTER_DEADLINE, {
+      budgetMs: 1000,
+      clock: () => {
+        time += 600;
+        return time;
+      },
+    });
+    expect(vi.mocked(loadFreshKitContext).mock.calls.map(([id]) => id)).not.toContain('s-done');
+  });
+
+  it('counts a failing listing or a failing league without stopping the pass', async () => {
+    vi.mocked(listKitCronPhases).mockResolvedValue([]);
+    vi.mocked(listKitIdleSeasonIds).mockRejectedValueOnce(new Error('db'));
+    expect((await runFormatCronPass(AFTER_DEADLINE)).failures).toBe(1);
+
+    vi.mocked(listKitIdleSeasonIds).mockResolvedValue(['s-a', 's-b']);
+    vi.mocked(loadFreshKitContext).mockRejectedValueOnce(new Error('load')).mockResolvedValue(null);
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(summary.failures).toBe(1);
+    expect(vi.mocked(loadFreshKitContext).mock.calls.map(([id]) => id)).toEqual(['s-a', 's-b']);
+    expect(expireChallenges).toHaveBeenCalled();
   });
 });
 

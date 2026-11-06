@@ -145,6 +145,7 @@ const FORMAT_RUNTIME_CODE_KINDS: Readonly<Record<FormatRuntimeApiCode, ApiErrorK
   domain_amendment_locked: 'conflict',
   challenge_not_open: 'conflict',
   challenge_expired: 'conflict',
+  challenge_player_not_enrolled: 'conflict',
   challenge_not_found: 'conflict',
   challenge_no_open_round: 'conflict',
   challenge_phase_closed: 'conflict',
