@@ -1,3 +1,5 @@
+import type { LevelRules } from '@/lib/ruleset-kit/types';
+
 import type { Enums } from './database';
 
 // ── Stat spread ──────────────────────────────────────────────────────
@@ -122,6 +124,8 @@ export type ValidationIssueCode =
   | 'ev_stat_invalid'
   | 'iv_range'
   | 'level_range'
+  | 'level_exact'
+  | 'level_max'
   // Team-wide (`TeamIssue`)
   | 'team_empty'
   | 'team_too_large'
@@ -200,6 +204,8 @@ export interface TeamValidationResult {
   team_issue_details?: TeamIssue[];
   /** Which rules the server enforced (set by the shared server-side check; absent from the bare `validateTeam`). */
   ruleset_source?: RulesetSource;
+  /** Level requirements of the enforced ruleset, for the teambuilder's validation panel. */
+  level_rules?: LevelRules | null;
 }
 
 export interface ValidateTeamRequest {

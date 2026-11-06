@@ -199,6 +199,17 @@ function checkClauses(doc: RulesetDocument, out: RulesetDiagnostic[]): void {
   });
 }
 
+function checkLevels(doc: RulesetDocument, ctx: CompileContext, out: RulesetDiagnostic[]): void {
+  if (doc.levels === null) return;
+  const seen = new Set<string>();
+  doc.levels.entries.forEach((entry, index) => {
+    const path = `/levels/entries/${index}/id`;
+    if (seen.has(entry.id)) out.push(diag('duplicate_entry', path, { id: entry.id, category: 'levels' }, [{ op: 'remove', path: `/levels/entries/${index}` }]));
+    seen.add(entry.id);
+    if (ctx.known?.pokemon !== undefined && !ctx.known.pokemon.has(entry.id)) out.push(diag('unknown_entry', path, { id: entry.id, category: 'pokemon' }));
+  });
+}
+
 /** One `clause_informational` info per effective clause the validator does not enforce. */
 function informationalClauses(resolved: ResolvedRules, out: RulesetDiagnostic[]): void {
   for (const id of resolved.clauses) {
@@ -236,6 +247,7 @@ export function compileRuleset(input: unknown, ctx: CompileContext): CompileResu
   }
   checkClauses(doc, diagnostics);
   for (const category of RULESET_CATEGORIES) checkList(doc, category, ctx, diagnostics);
+  checkLevels(doc, ctx, diagnostics);
 
   const ok = diagnostics.every((d) => d.severity !== 'error');
   if (!ok) return { ok: false, diagnostics, document: doc, resolved: null, content_hash: null, resolved_hash: null };

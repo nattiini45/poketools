@@ -127,6 +127,7 @@ export function rulesetForFormat(format: string): { ruleset: Ruleset; source: Ru
       added_pokemon: [],
       min_shared_type_pct: 0,
       team_constraints: null,
+      levels: null,
       custom_rules: '',
     };
     const blockIds = (list: ResolvedRules['pokemon']) => (list.mode === 'block' ? [...list.ids] : []);

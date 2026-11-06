@@ -1,4 +1,5 @@
 import type { DescribedRuleset } from '@/lib/ruleset-kit/describe';
+import ShowdownChallenge from './ShowdownChallenge';
 
 interface RulesViewProps {
   rules: DescribedRuleset;
@@ -26,6 +27,7 @@ export default function RulesView({ rules, lang, headingLevel = 3 }: RulesViewPr
           ))}
         </section>
       ))}
+      <ShowdownChallenge value={rules.showdownChallenge} />
       <p className="text-xs font-semibold text-poke-text-muted">{rules.coverage}</p>
     </div>
   );

@@ -15,9 +15,10 @@ import type { Locale } from '@/i18n/config';
 import { rulesetStudioDescribeMessages } from '@/i18n/messages/ruleset-studio/describe';
 import { clauseName, getClause, isEnforcedClause } from '@/lib/pkmn/clauses';
 import { localizeType } from '@/lib/pkmn/i18n/names/misc';
+import { toShowdownChallenge } from '@/lib/pkmn/showdown-challenge';
 import { RULESET_CATEGORIES, type ResolvedList, type ResolvedRules, type RulesetCategory } from './types';
 
-export type DescribedSectionId = 'base' | 'clauses' | RulesetCategory | 'constraints' | 'notes';
+export type DescribedSectionId = 'base' | 'clauses' | RulesetCategory | 'constraints' | 'levels' | 'notes';
 
 export interface DescribedSection {
   id: DescribedSectionId;
@@ -31,6 +32,8 @@ export interface DescribedRuleset {
   coverage: string;
   /** Total number of banned (block mode) or allowed (allow mode) entries across the four lists. */
   entryCount: number;
+  /** Custom-rules challenge string for Pokémon Showdown. */
+  showdownChallenge: string;
 }
 
 export interface DescribeOptions {
@@ -151,6 +154,20 @@ export function describeRuleset(rules: ResolvedRules, locale: Locale, options: D
   const rule = describeTeamRules(rules, locale, dataLocale);
   sections.push({ id: 'constraints', heading: t('heading.constraints'), lines: rule.length === 0 ? [t('constraints.none')] : rule });
 
+  if (rules.levels !== null) {
+    const levels = rules.levels;
+    const lines = [t(levels.policy === 'exact' ? 'levels.defaultExact' : 'levels.defaultMax', { level: levels.default })];
+    for (const entry of levels.entries) {
+      lines.push(t(levels.policy === 'exact' ? 'levels.entryExact' : 'levels.entryMax', {
+        species: nameOf('pokemon', entry.id),
+        level: entry.level,
+        status: t(entry.status === 'approved' ? 'levels.approved' : 'levels.experimental'),
+      }));
+    }
+    if (levels.entries.some((entry) => entry.status === 'experimental')) lines.push(t('levels.experimentalNote'));
+    sections.push({ id: 'levels', heading: t('heading.levels'), lines });
+  }
+
   // Notes.
   const notes = rules.custom_rules.trim();
   sections.push({ id: 'notes', heading: t('heading.notes'), lines: [notes === '' ? t('notes.none') : notes] });
@@ -158,6 +175,7 @@ export function describeRuleset(rules: ResolvedRules, locale: Locale, options: D
   return {
     sections,
     entryCount,
+    showdownChallenge: toShowdownChallenge(rules),
     coverage: t('coverage.join', {
       bans: t('coverage.bans', { count: entryCount }),
       clauses: t('coverage.clauses', { count: rules.clauses.length }),

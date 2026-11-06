@@ -38,7 +38,7 @@ export interface RulesetPresetGroup {
   presets: readonly RulesetPresetEntry[];
 }
 
-const SOURCE_ORDER: readonly PresetSource[] = ['showdown', 'smogon-draft'];
+const SOURCE_ORDER: readonly PresetSource[] = ['showdown', 'smogon-draft', 'poketools'];
 const FAMILY_ORDER: ReadonlyMap<PresetFamily, number> = new Map(PRESET_FAMILIES.map((family, index) => [family.key, index]));
 const GENERATION_LABELS: ReadonlyMap<number, string> = new Map(GENERATIONS.map((generation) => [generation.num, generation.label]));
 const FAMILY_LABELS: ReadonlyMap<PresetFamily, string> = new Map(PRESET_FAMILIES.map((family) => [family.key, family.label]));
@@ -92,7 +92,7 @@ export function isRulesetPresetId(id: unknown): id is Key {
 
 /** The words a preset is found by: its name, id, tier, generation, family and source, lower-cased and split at anything that is not a letter or a digit. */
 function searchWords(entry: RulesetPresetEntry): string[] {
-  const source = entry.source === 'showdown' ? 'showdown ladder' : 'smogon draft league';
+  const source = entry.source === 'showdown' ? 'showdown ladder' : entry.source === 'poketools' ? 'poketools community' : 'smogon draft league';
   const text = `${entry.name} ${entry.id} ${entry.tierLabel} ${entry.genLabel} ${FAMILY_LABELS.get(entry.family) ?? ''} ${source}`;
   return text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word !== '');
 }

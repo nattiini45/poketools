@@ -16,6 +16,7 @@ src/lib/pkmn/
 ├── format-id.ts  # The one format-id parser (gen + one digit + tier key: gen91v1 is generation 9)
 ├── clauses.ts  # Clause catalog by id; which clauses are enforced (Species, Item) and which informational
 ├── preset-rules.ts, preset-rules.server.ts  # The rules a preset resolves to (types; per-mod resolution against the dex)
+├── showdown-challenge.ts  # Copyable gen9nationaldexag custom-rules string of a frozen ruleset
 ├── known-ids.server.ts  # Dex id sets per category, generation and universe (the unknown_entry warning)
 ├── seed-format-ids.ts  # The frozen 88 ids POST /api/seed-rulesets seeds
 ├── preset-data/  # Transcribed rule tables, the generated Champions roster, the Smogon tour overlay, pin.ts (data pins and PRESET_RULES_VERSION)

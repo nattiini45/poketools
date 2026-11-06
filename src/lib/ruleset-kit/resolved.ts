@@ -5,7 +5,7 @@
  * `Error` instead of guessing. Pure and client-safe.
  */
 import type { TeamConstraints } from '@/types/ruleset';
-import type { ResolvedList, ResolvedRules, RulesetUniverse } from './types';
+import type { LevelRules, ResolvedList, ResolvedRules, RulesetUniverse } from './types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -36,6 +36,8 @@ export function readResolvedRules(value: unknown): ResolvedRules {
   const pct = value.min_shared_type_pct;
   if (typeof pct !== 'number' || !Number.isFinite(pct)) throw new Error('resolved rules: min_shared_type_pct must be a number');
   const constraints = value.team_constraints;
+  const levels = value.levels;
+  if (levels !== null && levels !== undefined && !isRecord(levels)) throw new Error('resolved rules: levels must be an object or null');
   if (constraints !== null && constraints !== undefined && !isRecord(constraints)) {
     throw new Error('resolved rules: team_constraints must be an object or null');
   }
@@ -53,6 +55,7 @@ export function readResolvedRules(value: unknown): ResolvedRules {
     added_pokemon: value.added_pokemon === undefined ? [] : stringArray(value.added_pokemon, 'added_pokemon'),
     min_shared_type_pct: pct,
     team_constraints: (constraints ?? null) as TeamConstraints | null,
+    levels: (levels ?? null) as LevelRules | null,
     custom_rules: typeof value.custom_rules === 'string' ? value.custom_rules : '',
   };
 }

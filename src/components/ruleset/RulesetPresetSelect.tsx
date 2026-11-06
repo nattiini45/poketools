@@ -19,11 +19,13 @@ const FAMILY_KEY: Readonly<Record<PresetFamily, string>> = {
   'draft-national': 'draftNational',
   'draft-doubles': 'draftDoubles',
   'draft-champions': 'draftChampions',
+  community: 'community',
 };
 
 const SOURCE_KEY: Readonly<Record<PresetSource, string>> = {
   showdown: 'showdown',
   'smogon-draft': 'smogonDraft',
+  poketools: 'community',
 };
 
 interface RulesetPresetSelectProps {

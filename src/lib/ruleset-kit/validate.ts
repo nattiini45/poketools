@@ -34,6 +34,7 @@ import {
   type RulesetDocument,
   type RulesetIdentity,
   type RulesetUniverse,
+  type LevelRules,
 } from './types';
 
 export type StructureIssueCode =
@@ -48,6 +49,7 @@ export type StructureIssueCode =
   | 'bad_id'
   | 'bad_percent'
   | 'bad_team_constraints'
+  | 'bad_levels'
   | 'bad_custom_rules';
 
 export interface StructureIssue {
@@ -71,6 +73,7 @@ const TOP_KEYS = [
   'abilities',
   'min_shared_type_pct',
   'team_constraints',
+  'levels',
   'custom_rules',
 ] as const;
 const TIER_KEYS: ReadonlySet<string> = new Set(SINGLES_TIER_ORDER);
@@ -327,6 +330,40 @@ function parseTeamConstraints(value: unknown, out: Collector): TeamConstraints |
   return ok ? result : undefined;
 }
 
+/** `null`: no level rules; `undefined`: invalid (an issue was recorded). Missing levels of older drafts mean null. */
+function parseLevels(value: unknown, out: Collector): LevelRules | null | undefined {
+  if (value === null || value === undefined) return null;
+  const path = '/levels';
+  const fail = (sub: string): void => out.add('bad_levels', `${path}/${sub}`);
+  if (!isRecord(value)) {
+    fail('');
+    return undefined;
+  }
+  for (const key of unknownKeys(value, ['policy', 'default', 'entries'])) fail(key);
+  const policy = own(value, 'policy');
+  const defaultLevel = own(value, 'default');
+  const rawEntries = own(value, 'entries');
+  let ok = true;
+  if (policy !== 'exact' && policy !== 'max') { fail('policy'); ok = false; }
+  if (!intInRange(defaultLevel, 1, 100)) { fail('default'); ok = false; }
+  if (!Array.isArray(rawEntries) || rawEntries.length > 256) {
+    fail('entries');
+    return undefined;
+  }
+  const entries: LevelRules['entries'] = [];
+  rawEntries.forEach((raw, index) => {
+    if (!isRecord(raw)) { fail(`entries/${index}`); ok = false; return; }
+    for (const key of unknownKeys(raw, ['id', 'level', 'status'])) fail(`entries/${index}/${key}`);
+    const id = own(raw, 'id');
+    const level = own(raw, 'level');
+    const status = own(raw, 'status');
+    const valid = typeof id === 'string' && ID_PATTERN.test(id) && id.length <= MAX_ID_LENGTH && intInRange(level, 1, 100) && (status === 'experimental' || status === 'approved');
+    if (!valid) { fail(`entries/${index}`); ok = false; return; }
+    entries.push({ id, level, status });
+  });
+  return ok ? { policy: policy as 'exact' | 'max', default: defaultLevel as number, entries } : undefined;
+}
+
 /**
  * `identity.name` and `identity.summary` of a document read with the validator's own text rule, each null when absent or
  * not a valid text. The Ruleset Studio's list columns follow these, so a document this validator accepts always yields
@@ -374,6 +411,7 @@ export function validateRulesetDocument(input: unknown): ValidateResult {
   const pct = own(input, 'min_shared_type_pct');
   if (!intInRange(pct, 0, 100)) out.add('bad_percent', '/min_shared_type_pct');
   const constraints = parseTeamConstraints(own(input, 'team_constraints'), out);
+  const levels = parseLevels(own(input, 'levels'), out);
   const rules = own(input, 'custom_rules');
   if (typeof rules !== 'string' || rules.length > MAX_CUSTOM_RULES_CHARS || unstorable(rules)) out.add('bad_custom_rules', '/custom_rules');
 
@@ -386,7 +424,8 @@ export function validateRulesetDocument(input: unknown): ValidateResult {
     categories.moves === undefined ||
     categories.items === undefined ||
     categories.abilities === undefined ||
-    constraints === undefined
+    constraints === undefined ||
+    levels === undefined
   ) {
     return { ok: false, issues: out.issues.length > 0 ? out.issues : rootNotObject() };
   }
@@ -403,6 +442,7 @@ export function validateRulesetDocument(input: unknown): ValidateResult {
       abilities: categories.abilities,
       min_shared_type_pct: pct as number,
       team_constraints: constraints,
+      levels,
       custom_rules: rules as string,
     },
   };

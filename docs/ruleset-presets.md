@@ -25,6 +25,7 @@ src/lib/pkmn/
 ├── ruleset-preset-catalog.ts  The picker view of the catalog shared by both studios: entries, getRulesetPreset, isRulesetPresetId, search, grouping (client-safe)
 ├── preset-rules.ts            Shapes a preset resolves to (types only, client-safe)
 ├── preset-rules.server.ts     resolvePresetRules(id), resolveTourOverlay(id): per-mod resolution against the dex; memoised per process
+├── showdown-challenge.ts      toShowdownChallenge(resolved): copyable gen9nationaldexag custom-rules challenge string
 ├── known-ids.server.ts        knownIds(kind, gen, universe), presetKnownIds(preset, kind): the id sets behind the unknown_entry warning
 ├── seed-format-ids.ts         The frozen list of 88 ids POST /api/seed-rulesets creates site rulesets for
 ├── catalog-index(.server).ts  The entry catalog the pickers read (GET /api/pkmn/catalog/[kind])
@@ -34,6 +35,7 @@ src/lib/pkmn/
     ├── standard.ts            Move, item and ability bans of the ladder tier families, Little Cup, Monotype, 1v1, the National Dex family, doubles
     ├── draft.ts               Bans of the draft formats, tier bans (Gen 3 Draft bans the Uber tier), combination bans the app lists but does not model
     ├── champions.ts           The Champions roster by category, from the generated lists
+    ├── wichtelcup.ts          The approved Wichtelcup pools (141 exact species/forms) and item/ability bans
     ├── champions-roster.generated.ts   Written by scripts/ruleset-presets/generate-champions-roster.mjs
     └── tour-overlay.ts        Documented Smogon tournament extras per draft preset
 ```
@@ -46,6 +48,9 @@ A preset belongs to a **source** and a **family**, which is how the pickers grou
 |---|---|
 | Pokémon Showdown (`showdown`) | Singles, Doubles, National Dex, Other (Monotype, 1v1) |
 | Smogon draft leagues (`smogon-draft`) | Draft (generations 3 to 9), NatDex Draft (including NatDex LC Draft), Doubles Draft (6v6 and 4v4, also NatDex), Champions Draft (including NatDex and 4v4 doubles) |
+| PokéTools (`poketools`) | Community: organizer-owned formats such as the Wichtelcup |
+
+`gen9natdexwichtelcup` starts from a blank Gen 9 National Dex ruleset, not a tier: its allowlist is exactly the 64 normal, 30 junk, 23 premium and 24 New Year species/forms (141 total). It bans Light Clay, every Z-crystal and Mega Stone, Moody and Snow Cloak, and carries only Species, Item and Terastal clauses; it inherits no Sleep, OHKO, Evasion or tier bans.
 
 Draft presets are not on Showdown's ladder search (`searchShow: false`). **Only the 88 standard Showdown formats** of `SEED_FORMAT_IDS` become shared site rulesets (`POST /api/seed-rulesets`); the other presets are starting points: a league or admin makes its own ruleset from one. Seeding a new preset is a decision, made by adding its id to that list.
 

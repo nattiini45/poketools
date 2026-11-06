@@ -193,6 +193,13 @@ export default {
     warnings: { one: '/ {count} warning', other: '/ {count} warnings' },
     teamIssues: 'Team Issues',
     slot: 'Slot {n}: {species}',
+    levelRules: 'Level rules',
+    levelDefaultExact: 'Default: exactly level {level}',
+    levelDefaultMax: 'Default: maximum level {level}',
+    levelEntryExact: '{species}: exactly {level} ({status})',
+    levelEntryMax: '{species}: maximum {level} ({status})',
+    levelApproved: 'approved',
+    levelExperimental: 'experimental',
     noIssues: 'No issues found. Good to go!',
   },
   teamCard: {

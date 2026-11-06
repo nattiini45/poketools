@@ -36,6 +36,7 @@ export default defineDe<typeof en>()({
     bad_id: 'eine Id mit nicht erlaubten Zeichen',
     bad_percent: 'ein Prozentwert außerhalb von 0 bis 100',
     bad_team_constraints: 'ungültige Team-Bedingungen',
+    bad_levels: 'ungültige Level-Regeln',
     bad_custom_rules: 'ungültige Notizen',
   },
   fix: {

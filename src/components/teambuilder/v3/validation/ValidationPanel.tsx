@@ -68,6 +68,26 @@ export default function ValidationPanel({
         )}
       </div>
 
+      {validation.level_rules && (
+        <div className="mb-3 rounded bg-poke-elevated/40 px-2 py-2">
+          <p className="text-[10px] uppercase text-poke-text-muted/60 mb-1 tracking-wider">{t('validation.levelRules')}</p>
+          <p className="text-[11px] text-poke-text-secondary">
+            {t(validation.level_rules.policy === 'exact' ? 'validation.levelDefaultExact' : 'validation.levelDefaultMax', { level: validation.level_rules.default })}
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {validation.level_rules.entries.map((entry) => (
+              <li key={entry.id} className="text-[11px] text-poke-text-secondary">
+                {t(validation.level_rules?.policy === 'exact' ? 'validation.levelEntryExact' : 'validation.levelEntryMax', {
+                  species: localizeSpecies(entry.id, dl),
+                  level: entry.level,
+                  status: t(entry.status === 'approved' ? 'validation.levelApproved' : 'validation.levelExperimental'),
+                })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Team-level issues (by code; English text when the API sent none) */}
       {teamIssues.length > 0 && (
         <div className="mb-3">

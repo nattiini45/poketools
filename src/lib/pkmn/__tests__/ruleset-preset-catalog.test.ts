@@ -38,16 +38,18 @@ describe('the rule preset list', () => {
     expect(getRulesetPreset('gen9doublesdraft')).toMatchObject({ doubles: true, source: 'smogon-draft', name: 'Gen 9 6v6 Doubles Draft' });
   });
 
-  it('lists the Showdown formats first, then the Smogon drafts, newest generation first in each', () => {
+  it('lists Showdown, Smogon draft and PokéTools sources in order, newest generation first in each', () => {
     const entries = listRulesetPresets();
-    const firstDraft = entries.findIndex((entry) => entry.source === 'smogon-draft');
-    expect(firstDraft).toBeGreaterThan(0);
-    expect(entries.slice(0, firstDraft).every((entry) => entry.source === 'showdown')).toBe(true);
-    expect(entries.slice(firstDraft).every((entry) => entry.source === 'smogon-draft')).toBe(true);
-    const showdownGens = entries.slice(0, firstDraft).map((entry) => entry.gen);
-    expect(showdownGens).toEqual([...showdownGens].sort((a, b) => b - a));
-    const draftGens = entries.slice(firstDraft).map((entry) => entry.gen);
-    expect(draftGens).toEqual([...draftGens].sort((a, b) => b - a));
+    const sources = ['showdown', 'smogon-draft', 'poketools'] as const;
+    expect(new Set(entries.map((entry) => entry.source))).toEqual(new Set(sources));
+    for (const source of sources) {
+      const own = entries.filter((entry) => entry.source === source);
+      expect(own.length).toBeGreaterThan(0);
+      expect(entries.indexOf(own[0])).toBeGreaterThanOrEqual(0);
+      expect(own.map((entry) => entry.gen)).toEqual([...own.map((entry) => entry.gen)].sort((a, b) => b - a));
+    }
+    expect(entries.findIndex((entry) => entry.source === 'smogon-draft')).toBeGreaterThan(entries.findLastIndex((entry) => entry.source === 'showdown'));
+    expect(entries.findIndex((entry) => entry.source === 'poketools')).toBeGreaterThan(entries.findLastIndex((entry) => entry.source === 'smogon-draft'));
     expect(DEFAULT_RULESET_PRESET).toBe('gen9ou');
     expect(entries[0].id).toBe(DEFAULT_RULESET_PRESET);
   });

@@ -48,6 +48,8 @@ export default {
       ev_stat_invalid: '{stat} EVs ({value}) must be a whole number from 0 to 252',
       iv_range: '{stat} IVs ({value}) must be a whole number from 0 to 31',
       level_range: 'Level ({value}) must be a whole number from 1 to 100',
+      level_exact: 'Level ({value}) must be exactly {level}',
+      level_max: 'Level ({value}) exceeds the maximum of {level}',
       malformed_set: 'This set is incomplete or malformed',
       duplicate_move: '{move} is listed more than once',
       move_illegal: '{species} cannot legally learn {move}',

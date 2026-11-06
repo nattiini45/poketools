@@ -7,7 +7,7 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
   "draft_pool_state_get": "36b101d95bddff31",
   "draft_setup_get": "25795142e0ba421c",
   "engine_support": "215fc1b0ea93f835",
-  "format_catalog": "84fcc49d5aa09182",
+  "format_catalog": "0a1ca5a64c1399aa",
   "format_create": "e6fdae4139089ebb",
   "format_fork": "f35bccb06af68a0b",
   "format_fork_preset": "b12d9f067e65bce8",
@@ -78,51 +78,51 @@ exports[`the frozen tool set > keeps the tool text and shape stable: per-tool ha
 {
   "scoped:0": {
     "tools": 34,
-    "version": "9524ca9673322729",
+    "version": "8d1c87b35e21e7d5",
   },
   "scoped:1": {
     "tools": 41,
-    "version": "238984dae1b3ade4",
+    "version": "78ce2515ec02efa7",
   },
   "scoped:2": {
     "tools": 48,
-    "version": "098a62ae8bec0b7b",
+    "version": "5a69c15004102d03",
   },
   "scoped:3": {
     "tools": 60,
-    "version": "d659a8c6ec565d48",
+    "version": "59abdd76d25c6fad",
   },
   "scoped:4": {
     "tools": 68,
-    "version": "2563c576f552e2f5",
+    "version": "0a2d97afd0be8d1d",
   },
   "scoped:5": {
     "tools": 68,
-    "version": "2563c576f552e2f5",
+    "version": "0a2d97afd0be8d1d",
   },
   "site:0": {
     "tools": 34,
-    "version": "9524ca9673322729",
+    "version": "8d1c87b35e21e7d5",
   },
   "site:1": {
     "tools": 41,
-    "version": "238984dae1b3ade4",
+    "version": "78ce2515ec02efa7",
   },
   "site:2": {
     "tools": 49,
-    "version": "eba8566c664c7576",
+    "version": "4e16655a33e7bfe2",
   },
   "site:3": {
     "tools": 61,
-    "version": "330ad38236e45334",
+    "version": "9aaf2ede391e4e8c",
   },
   "site:4": {
     "tools": 69,
-    "version": "39aebde16449e995",
+    "version": "7948a09aab7dcde0",
   },
   "site:5": {
     "tools": 69,
-    "version": "39aebde16449e995",
+    "version": "7948a09aab7dcde0",
   },
 }
 `;

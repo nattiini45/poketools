@@ -36,6 +36,8 @@ export default defineDe<typeof en>()({
       ev_stat_invalid: '{stat}-EVs ({value}) müssen eine ganze Zahl von 0 bis 252 sein',
       iv_range: '{stat}-IVs ({value}) müssen eine ganze Zahl von 0 bis 31 sein',
       level_range: 'Das Level ({value}) muss eine ganze Zahl von 1 bis 100 sein',
+      level_exact: 'Das Level ({value}) muss genau {level} sein',
+      level_max: 'Das Level ({value}) liegt über dem Maximum von {level}',
       malformed_set: 'Dieses Set ist unvollständig oder fehlerhaft',
       duplicate_move: '{move} ist mehrfach aufgeführt',
       move_illegal: '{species} kann {move} nicht legal erlernen',

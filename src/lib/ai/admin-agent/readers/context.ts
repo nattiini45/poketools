@@ -170,7 +170,7 @@ const FAMILY_KEYS = PRESET_FAMILIES.map((family) => family.key) as [string, ...s
 const formatCatalogArgs = z.strictObject({
   query: z.string().trim().max(60).optional().describe('Words to match, each against the start of a name or tier word (up to 60 characters)'),
   gen: intArg('Generation', 1, 9).optional(),
-  source: z.enum(['showdown', 'smogon-draft']).optional(),
+  source: z.enum(['showdown', 'smogon-draft', 'poketools']).optional(),
   family: z.enum(FAMILY_KEYS).optional(),
 });
 export type FormatCatalogArgs = z.output<typeof formatCatalogArgs>;
@@ -216,7 +216,7 @@ export const formatCatalog = defineRunnable('any', {
         id: code(),
         name: dexName(),
         gen: z.number().int(),
-        source: z.enum(['showdown', 'smogon-draft']),
+        source: z.enum(['showdown', 'smogon-draft', 'poketools']),
         family: code(),
         tier: code(),
         doubles: z.boolean(),
@@ -329,7 +329,7 @@ export const rulesetPresetGet = defineRunnable('any', {
         id: code(),
         name: dexName(),
         gen: z.number().int(),
-        source: z.enum(['showdown', 'smogon-draft']),
+        source: z.enum(['showdown', 'smogon-draft', 'poketools']),
         universe: z.enum(['standard', 'national']),
         doubles: z.boolean(),
         clauses: z.array(code()),

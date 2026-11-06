@@ -185,6 +185,13 @@ export default defineDe<typeof en>()({
     warnings: { one: '/ {count} Warnung', other: '/ {count} Warnungen' },
     teamIssues: 'Team-Probleme',
     slot: 'Slot {n}: {species}',
+    levelRules: 'Level-Regeln',
+    levelDefaultExact: 'Standard: genau Level {level}',
+    levelDefaultMax: 'Standard: höchstens Level {level}',
+    levelEntryExact: '{species}: genau {level} ({status})',
+    levelEntryMax: '{species}: höchstens {level} ({status})',
+    levelApproved: 'freigegeben',
+    levelExperimental: 'experimentell',
     noIssues: 'Keine Probleme gefunden. Alles startklar!',
   },
   teamCard: {

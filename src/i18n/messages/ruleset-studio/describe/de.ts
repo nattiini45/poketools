@@ -11,6 +11,7 @@ export default defineDe<typeof en>()({
     items: 'Items',
     abilities: 'Fähigkeiten',
     constraints: 'Teamregeln',
+    levels: 'Level',
     notes: 'Notizen',
   },
   base: {
@@ -59,6 +60,15 @@ export default defineDe<typeof en>()({
     evolutionUncapped: 'Entwicklungsstufe: nur nicht voll entwickelte Pokémon, dazu beliebig viele voll entwickelte.',
     eviolite: 'Evolith ist auf Pokémon bis Tier {tier} beschränkt.',
     none: 'Es gibt keine Teamregeln.',
+  },
+  levels: {
+    defaultExact: 'Pokémon haben standardmäßig genau Level {level}. Eine fehlende Level-Zeile bedeutet Level 100.',
+    defaultMax: 'Pokémon haben standardmäßig höchstens Level {level}. Eine fehlende Level-Zeile bedeutet Level 100.',
+    entryExact: '{species}: genau Level {level} ({status}).',
+    entryMax: '{species}: höchstens Level {level} ({status}).',
+    approved: 'freigegeben',
+    experimental: 'experimentell',
+    experimentalNote: 'Experimentelle Einträge werden angezeigt, aber erst nach ihrer Freigabe erzwungen.',
   },
   notes: {
     none: 'Es gibt keine Notizen.',

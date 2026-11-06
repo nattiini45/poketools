@@ -5,6 +5,7 @@ import { getBannedPokemonForTier } from '../tiers';
 import { presetBanNames, resolvePresetRules, resolveTourOverlay } from '../preset-rules.server';
 import { CHAMPIONS_ITEMS, CHAMPIONS_MOVES, CHAMPIONS_SPECIES_MEGA, CHAMPIONS_SPECIES_SELECTABLE } from '../preset-data/champions-roster.generated';
 import { PRESET_RULES_VERSION } from '../preset-data/pin';
+import { WICHTELCUP_JUNK, WICHTELCUP_NEW_YEAR, WICHTELCUP_NORMAL, WICHTELCUP_PREMIUM } from '../preset-data/wichtelcup';
 
 // Real-dex tests (no mocks), like dex.test.ts. The facts are the V3 corrections of the draft research
 // (per-mod resolution) and the National Dex fixes, each checked against the pinned Showdown source.
@@ -47,6 +48,25 @@ describe('resolvePresetRules', () => {
         expect(ids.every((id) => /^[a-z0-9]+$/.test(id)), `${preset.id} ${category} ids`).toBe(true);
       }
     }
+  });
+});
+
+describe('the Wichtelcup community preset', () => {
+  it('allows exactly the 141 authored species/forms and inherits no tier bans or competitive clauses', () => {
+    const cup = rules('gen9natdexwichtelcup');
+    expect(cup.source).toBe('poketools');
+    expect(cup.universe).toBe('national');
+    expect(cup.pokemon.mode).toBe('allow');
+    expect(cup.pokemon.ids).toHaveLength(141);
+    expect(new Set(cup.pokemon.ids).size).toBe(141);
+    expect(cup.pokemon.ids).toEqual(expect.arrayContaining(['vivillonicysnow', 'deerlingwinter', 'sawsbuckwinter', 'necrozma', 'rayquaza']));
+    expect(cup.pokemon.ids).not.toContain('garchomp');
+    expect(cup.moves).toEqual({ mode: 'block', ids: [] });
+    expect(cup.items.ids).toEqual(expect.arrayContaining(['lightclay', 'normaliumz', 'charizarditex', 'ultranecroziumz']));
+    expect(cup.abilities.ids).toEqual(['moody', 'snowcloak']);
+    expect(cup.clauses).toEqual(['speciesclause', 'itemclause', 'terastalclause']);
+    expect(cup.clauses).not.toEqual(expect.arrayContaining(['sleepclausemod', 'ohkoclause', 'evasionclause']));
+    expect([WICHTELCUP_NORMAL.length, WICHTELCUP_JUNK.length, WICHTELCUP_PREMIUM.length, WICHTELCUP_NEW_YEAR.length]).toEqual([64, 30, 23, 24]);
   });
 });
 

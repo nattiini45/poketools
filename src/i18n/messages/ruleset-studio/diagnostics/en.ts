@@ -38,6 +38,7 @@ export default {
     bad_id: 'an id with characters that are not allowed',
     bad_percent: 'a percentage outside 0 to 100',
     bad_team_constraints: 'invalid team constraints',
+    bad_levels: 'invalid level rules',
     bad_custom_rules: 'invalid notes',
   },
   fix: {
